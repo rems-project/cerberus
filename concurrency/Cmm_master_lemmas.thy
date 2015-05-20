@@ -5,7 +5,7 @@ Main
 "_bin/Cmm_master"
 begin
 
-(* Auxiliaries ------------------------------------------------------------------------------- *)
+section {* Auxiliaries *}
 
 lemma defToElim:
   assumes "left = right"
@@ -35,9 +35,9 @@ lemmas I [intro?] = defToIntro[OF _def]
 lemmas E [elim?] = defToElim[OF _def]
 *)
 
-(* Lemmas for relation.lem -------------------------------------------------------------------- *)
+section {* Lemmas for relation.lem *}
 
-(* isIrreflexive *)
+subsubsection {* isIrreflexive *}
 
 lemmas irreflI [intro?] = defToIntro[OF irrefl_def]
 
@@ -95,7 +95,7 @@ using assms
 unfolding irrefl_def
 by auto
 
-(* acyclic *)
+subsubsection {* acyclic *}
 
 lemmas acyclicI [intro?] = defToIntro[OF acyclic_def]
 
@@ -119,7 +119,7 @@ lemma acyclic_empty [simp]:
 unfolding acyclic_def
 by simp
 
-(* isTransitive *)
+subsubsection {* isTransitive *}
 
 lemmas transI [intro?] = defToIntro[OF trans_def]
 
@@ -148,7 +148,7 @@ proof
     qed
 qed auto
 
-(* Trancl *)
+subsubsection {* Trancl *}
 
 lemma trancl_mono2:
   assumes "x \<subseteq> y"
@@ -168,7 +168,7 @@ proof -
   thus ?thesis by auto
 qed
 
-(* isStrictPartialOrder *)
+subsubsection {* isStrictPartialOrder *}
 
 lemmas isStrictPartialOrderI [intro?] = defToIntro[OF isStrictPartialOrder_def]
 
@@ -185,7 +185,7 @@ lemma isStrictPartialOrder_empty [simp]:
 unfolding isStrictPartialOrder_def
 by simp
 
-(* relDomain *)
+subsubsection {* relDomain *}
 
 lemma relDomain_cross_id [simp]:
   shows "Domain (s \<times> s) = s"
@@ -195,7 +195,7 @@ by auto
 declare Domain_Un_eq [simp]
 thm Domain_Un_eq
 
-(* relRange *)
+subsubsection {* relRange *}
 
 lemma relRange_cross_id [simp]:
   shows "Range (s \<times> s) = s"
@@ -205,7 +205,7 @@ by auto
 declare Range_Un_eq [simp]
 thm Range_Un_eq
 
-(* relOver *)
+subsubsection {* relOver *}
 
 lemma relOverI [intro?]:
   assumes "\<And>a b. (a, b) \<in> r \<Longrightarrow> a \<in> s \<and> b \<in> s"
@@ -265,7 +265,7 @@ using assms
 unfolding relOver_def
 by auto
 
-(* relRestrict *)
+subsubsection {* relRestrict *}
 
 lemmas relRestrictI [intro?] = relToIntro[OF relRestrict_def]
 
@@ -358,7 +358,7 @@ using assms
 unfolding finite_prefixes_def relRestrict_def
 by auto
 
-(* Supremum *)
+subsubsection {* Supremum *}
 
 lemma supremum_partial_order:
   assumes finite:    "finite A"
@@ -431,21 +431,23 @@ proof -
     using x that by auto
 qed
 
-(* Cmm: 1 - Relational definitions ------------------------------------------------------------ *)
+section {* Cmm: 1 - Relational definitions *}
+
+subsubsection {* relation_over *}
 
 (* We simplify relation_over_def to its official Lem counterpart. *)
 
 declare relation_over_def [simp]
 thm relation_over_def
 
-(* inj_on *)
+subsubsection {* inj_on *}
 
 lemma inj_on_empty [simp]:
   shows "inj_on f {}"
 unfolding inj_on_def
 by simp
 
-(* adjacent_less_than *)
+subsubsection {* adjacent_less_than *}
 
 lemmas adjacent_less_thanI [intro?] = defToIntro[OF adjacent_less_than_def]
 
@@ -460,7 +462,7 @@ using assms
 unfolding adjacent_less_than_def
 by simp
 
-(* finite_prefixes *)
+subsubsection {* finite_prefixes *}
 
 lemmas finite_prefixesI [intro?] = defToIntro[OF finite_prefixes_def]
 
@@ -526,11 +528,13 @@ proof
     using `finite {a. (a, b) \<in> r}` by (metis rev_finite_subset)
 qed
 
-(* Cmm: 2 - Type definitions and projections---------------------------------------------------- *)
+section {* Cmm: 2 - Type definitions and projections *}
+
+subsubsection {* apply_tree *}
 
 termination apply_tree by lexicographic_order
 
-(* empty_witness *)
+subsubsection {* empty_witness *}
 
 lemma empty_witness_simps [simp]:
   shows "rf empty_witness = {}"
@@ -541,7 +545,7 @@ lemma empty_witness_simps [simp]:
 unfolding empty_witness_def
 by simp_all
 
-(* Behaviour *)
+subsubsection {* behaviour *}
 
 lemma behaviour_memory_model_eq [case_names Consistency Undef Sublanguage]:
   fixes m1 m2 opsem_t p cons1 rel1 cons2 rel2
@@ -579,7 +583,7 @@ proof -
     by simp
 qed
 
-(* Simplifications for projection functions *)
+subsubsection {* Simplifications for projection functions *}
 
 declare aid_of.simps [simp]
 declare tid_of.simps [simp]
@@ -650,6 +654,8 @@ unfolding actions_respect_location_kinds_def
           is_at_atomic_location_def
 by (cases a) auto
 
+subsubsection {* threadwise *}
+
 lemmas threadwiseI [intro?] = defToIntro[OF threadwise_def]
 
 lemma threadwiseE [elim?]:
@@ -664,6 +670,8 @@ lemma threadwise_empty [simp]:
   shows "threadwise s {}"
 unfolding threadwise_def
 by simp
+
+subsubsection {* interthread *}
 
 lemmas interthreadI [intro?] = defToIntro[OF interthread_def]
 
@@ -680,6 +688,8 @@ lemma interthread_empty [simp]:
 unfolding interthread_def
 by simp
 
+subsubsection {* locationwise *}
+
 lemmas locationwiseI [intro?] = defToIntro[OF locationwise_def]
 
 lemma locationwiseE [elim?]:
@@ -695,6 +705,8 @@ lemma locationwise_empty [simp]:
 unfolding locationwise_def
 by simp
 
+subsubsection {* actions_respect_location_kinds *}
+
 declare action_respects_location_kinds.simps [simp]
 
 lemmas actions_respect_location_kindsI [intro?] = defToIntro[OF actions_respect_location_kinds_def]
@@ -705,7 +717,7 @@ lemma actions_respect_location_kinds_empty [simp]:
 unfolding actions_respect_location_kinds_def
 by simp
 
-(* The standard intro and elim are less powerfull than the following ones. *)
+subsubsection {* is_at_xxx_location *}
 
 lemma same_loc_atomic_location:
   assumes "is_at_atomic_location lk1 a"
@@ -759,9 +771,17 @@ by (elim is_at_atomic_locationE is_at_mutex_locationE) auto
 
 declare well_formed_action.simps [simp]
 
-(* Predicate "assumptions" *)
+subsubsection {* assumptions *}
 
-lemmas assumptionsI [intro?] = defToIntro[OF assumptions.simps]
+lemma assumptionsI [intro?]:
+  assumes "finite_prefixes (rf wit) (actions0 pre)"
+          "finite_prefixes (mo wit) (actions0 pre)"
+          "finite_prefixes (sc wit) (actions0 pre)"
+          "finite_prefixes (lo wit) (actions0 pre)"
+  shows   "assumptions (pre, wit, rel)"
+using assms
+unfolding assumptions.simps
+by simp
 
 lemma assumptionsE [elim]:
   assumes "assumptions (pre, wit, rel)"
@@ -778,7 +798,7 @@ lemma rel_list_assumptions [simp]:
   shows   "assumptions (pre, wit, rel) = assumptions (pre, wit,[])"
 unfolding assumptions.simps ..
 
-(* Blocking observed *)
+subsubsection {* blocking_observed *}
 
 lemma blocking_observed_empty [simp]:
   shows "blocking_observed {} r"
@@ -786,7 +806,7 @@ lemma blocking_observed_empty [simp]:
 unfolding blocking_observed_def
 by simp_all
 
-(* Indeterminate sequencing *)
+subsubsection {* indeterminate_sequencing *}
 
 lemmas indeterminate_sequencingI [intro?] = defToIntro[OF indeterminate_sequencing_def]
 
@@ -803,16 +823,35 @@ using assms
 unfolding indeterminate_sequencing_def
 by auto
 
-(* Disjoint allocs *)
+subsubsection {* disjoint_allocs *}
 
 lemma disjoint_allocs_empty [simp]:
   shows "disjoint_allocs {}"
 unfolding disjoint_allocs_def
 by simp
 
-(* well_formed_threads *)
+subsubsection {* well_formed_threads *}
 
-lemmas well_formed_threadsI [intro?] = defToIntro[OF well_formed_threads.simps]
+lemma well_formed_threadsI [intro?]:
+  assumes "actions_respect_location_kinds (actions0 pre) (lk pre)"  
+      and "blocking_observed (actions0 pre) (sb pre)"  
+      and "inj_on aid_of (actions0 pre)"  
+      and "relation_over (actions0 pre) (sb pre)"  
+      and "relation_over (actions0 pre) (asw pre) "  
+      and "threadwise (actions0 pre) (sb pre)"  
+      and "interthread (actions0 pre) (asw pre)"  
+      and "isStrictPartialOrder (sb pre)"  
+      and "isStrictPartialOrder (dd pre)"  
+      and "(dd pre) \<subseteq> (sb pre)"  
+      and "indeterminate_sequencing pre"  
+      and "irrefl (sbasw pre)"  
+      and "finite_prefixes (sbasw pre) (actions0 pre)"  
+      and "disjoint_allocs (actions0 pre)"
+      and "\<And>a. a \<in> actions0 pre \<Longrightarrow> well_formed_action a"
+  shows   "well_formed_threads (pre, wit, rel)"
+using assms
+unfolding well_formed_threads.simps
+by auto
 
 lemma  well_formed_threadsE [elim]:
   assumes "well_formed_threads (pre, wit, rel)"
@@ -852,7 +891,7 @@ lemma witness_well_formed_threads [simp]:
   shows   "well_formed_threads (pre, wit, []) = well_formed_threads (pre, empty_witness, [])"
 unfolding well_formed_threads.simps ..
 
-(* downclosed *)
+subsubsection {* downclosed *}
 
 lemmas downclosedI [intro?] = defToIntro[OF downclosed_def]
 
@@ -909,9 +948,9 @@ using assms
 unfolding downclosed_def
 by auto
 
-(* Cmm: 3 - Memory_Model simplified, single thread, no atomics -------------------------------- *)
+section {* Cmm: 3 - Single thread, no atomics *}
 
-(* Visible side effect set. *)
+subsubsection {* visible_side_effect_set *}
 
 lemmas visible_side_effect_setI [intro?] = relToIntro[OF visible_side_effect_set_def]
 
@@ -950,16 +989,6 @@ lemma exists_vse_hb:
   shows   "  (\<exists>w\<in>actions0 pre. (w, r) \<in> visible_side_effect_set (actions0 pre) hb)
            = (\<exists>w\<in>actions0 pre. (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r)" 
 proof auto
-(*
-  fix w
-  assume w: "w \<in> actions0 pre"
-     and    "(w, r) \<in> visible_side_effect_set (actions0 pre) hb"
-  hence "(w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r"
-    unfolding visible_side_effect_set_def by auto
-  thus "\<exists>w\<in>actions0 pre. (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r" 
-    using w by auto
-next
-*)
   let ?S = "{w | w. w \<in> actions0 pre \<and> (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r}"
   fix w
   assume w: "w \<in> actions0 pre" "(w, r) \<in> hb" "is_write w" "loc_of w = loc_of r"
@@ -982,9 +1011,17 @@ next
     using v by auto
 qed
 
-(* det_read *)
+subsubsection {* det_read *}
 
-lemmas det_readI [intro?] = defToIntro[OF det_read.simps(3)]
+lemma det_readI [intro?]:
+  assumes "\<And>r.    r \<in> actions0 pre
+               \<Longrightarrow> is_load r 
+               \<Longrightarrow>   (\<exists>w \<in>actions0 pre. (w,  r) \<in> vse) 
+                   = (\<exists>w'\<in>actions0 pre. (w', r) \<in> rf wit)"
+  shows "det_read (pre, wit, (''hb'', hb)#(''vse'', vse)#rel)"
+using assms
+unfolding det_read.simps
+by auto
   
 lemma det_readE_vse [elim]:
   assumes "det_read (pre, wit, (''hb'', hb)#(''vse'', vse)#rel)"
@@ -1014,9 +1051,17 @@ lemma rel_list_det_read [simp]:
            = det_read (pre, wit, [(''hb'', hb),(''vse'', vse)])"     
 unfolding det_read.simps ..
 
-(* det_read_alt *)
+subsubsection {* det_read_alt *}
 
-lemmas det_read_altI [intro?] = defToIntro[OF det_read_alt.simps(2)]
+lemma det_read_altI [intro?]:
+  assumes "\<And>r.    r \<in> actions0 pre
+               \<Longrightarrow> is_load r 
+               \<Longrightarrow>   (\<exists>w \<in>actions0 pre. (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r) 
+                   = (\<exists>w'\<in>actions0 pre. (w', r) \<in> rf wit)"
+  shows "det_read_alt (pre, wit, (''hb'', hb)#rel)"
+using assms
+unfolding det_read_alt.simps
+by auto
   
 lemma det_read_altE_vse [elim]:
   assumes "det_read_alt (pre, wit, (''hb'', hb)#rel)"
@@ -1059,20 +1104,18 @@ lemma det_read_simp:
   shows   "  det_read (pre, wit, [(''hb'', hb),(''vse'', vse)])
            = det_read_alt (pre, wit, [(''hb'', hb)])"
 proof -
-  (* Slightly tasteless *)
-  have eqBallImpEqI: "\<And>A R P Q S.
-            (\<And>x. x \<in> A \<Longrightarrow> R x \<Longrightarrow> P x = Q x)
-        \<Longrightarrow> (\<forall>x\<in>A. R x \<longrightarrow> P x = S x) = (\<forall>x\<in>A. R x \<longrightarrow> Q x = S x)"
-    by auto
-  show ?thesis
-    unfolding det_read.simps det_read_alt.simps vse_def
-    apply simp
-    apply (intro eqBallImpEqI)
+  have "\<And>r.    r \<in> actions0 pre
+            \<Longrightarrow> is_load r
+            \<Longrightarrow>   (\<exists>w\<in>actions0 pre. (w, r) \<in> visible_side_effect_set (actions0 pre) hb) 
+                = (\<exists>w\<in>actions0 pre. (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r)"
     using exists_vse_hb[OF conshb] is_readI
+    by auto
+  thus ?thesis
+    unfolding det_read.simps det_read_alt.simps vse_def
     by auto
 qed
 
-(* consistent_non_atomic_rf *)
+subsubsection {* consistent_non_atomic_rf *}
 
 lemmas consistent_non_atomic_rfI [intro?] = defToIntro[OF consistent_non_atomic_rf.simps(3)]
 
@@ -1091,9 +1134,20 @@ lemma rel_list_consistent_non_atomic_rf [simp]:
             = consistent_non_atomic_rf (pre, wit, [(''hb'', hb),(''vse'', vse)])"    
 unfolding consistent_non_atomic_rf.simps ..
 
-(* well_formed_rf *)
+subsubsection {* well_formed_rf *}
 
-lemmas well_formed_rfI [intro?] = defToIntro[OF well_formed_rf.simps]
+lemma well_formed_rfI [intro?]:
+  assumes "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> a \<in> actions0 pre"
+      and "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> b \<in> actions0 pre"
+      and "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> loc_of a = loc_of b"
+      and "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> is_write a"
+      and "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> is_read b "
+      and "\<And>a b. (a, b) \<in> rf wit \<Longrightarrow> value_read_by b = value_written_by a"
+      and "\<And>a a' b. (a, b) \<in> rf wit \<Longrightarrow> (a', b) \<in> rf wit \<Longrightarrow> a = a'"
+  shows "well_formed_rf (pre, wit, rel)"
+using assms
+unfolding well_formed_rf.simps 
+by auto
 
 lemma well_formed_rfE [elim]:
   assumes "well_formed_rf (pre, wit, rel)"
@@ -1128,7 +1182,7 @@ lemma rel_list_well_formed_rf [simp]:
   shows   "well_formed_rf (pre, wit, rel) = well_formed_rf (pre, wit, [])"
 unfolding well_formed_rf.simps ..
 
-(* tot_empty *)
+subsubsection {* tot_empty *}
 
 lemmas tot_emptyI [intro?] = defToIntro[OF tot_empty.simps]
 lemmas tot_emptyE [elim] = defToElim[OF tot_empty.simps]
@@ -1138,7 +1192,9 @@ lemma rel_list_tot_empty [simp]:
   shows   "tot_empty (pre, wit, rel) = tot_empty (pre, wit,[])"
 unfolding tot_empty.simps ..
 
-(* Cmm: 4 - Memory_Model simplified, multi-thread, no atomics, yes locks ----------------------- *)
+section {* Cmm: 4 - Locks, multi-thread, no atomics *}
+
+subsubsection {* locks_only_relations *}
 
 lemma locks_only_relations_simp:
   shows "locks_only_relations = locks_only_relations_alt"
@@ -1155,7 +1211,7 @@ lemma locks_only_relations_non_empty [simp]:
   shows "locks_only_relations pre wit \<noteq> []"
 unfolding locks_only_relations_def Let_def by simp
 
-(* locks_only_consistent_lo *)
+subsubsection {* locks_only_consistent_lo *}
 
 lemmas locks_only_consistent_loI [intro?] = defToIntro[OF locks_only_consistent_lo.simps(2)]
 
@@ -1220,7 +1276,7 @@ lemma rel_list_locks_only_consistent_lo [simp]:
            = locks_only_consistent_lo (pre, wit, [(''hb'', hb)])"
 unfolding locks_only_consistent_lo.simps ..
 
-(* locks_only_consistent_locks *)
+subsubsection {* locks_only_consistent_locks *}
 
 lemmas locks_only_consistent_locksI [intro?] = defToIntro[OF locks_only_consistent_locks.simps]
 
@@ -1242,7 +1298,7 @@ lemma rel_list_locks_only_consistent_locks [simp]:
   shows   "locks_only_consistent_locks (pre, wit, rel) = locks_only_consistent_locks (pre, wit, [])"
 unfolding locks_only_consistent_locks.simps ..
 
-(* consistent_hb *)
+subsubsection {* consistent_hb *}
 
 lemmas consistent_hbI [intro?] = defToIntro[OF consistent_hb.simps(2)]
 
@@ -1271,7 +1327,7 @@ lemma rel_list_consistent_hb [simp]:
             = consistent_hb (pre, wit, [(''hb'', hb)])"      
 unfolding consistent_hb.simps ..
 
-(* locks_only_undefined_behaviour *)
+subsubsection {* locks_only_undefined_behaviour *}
 
 lemma locks_only_undefined_behaviour_simp:
   shows "  (locks_only_undefined_behaviour_alt ex = []) 
@@ -1282,9 +1338,9 @@ unfolding locks_only_undefined_behaviour_alt_def
           Let_def
 by simp
 
-(* Cmm: 4 - relaxed - no sc, consumes, release or acquire ------------------------------------- *)
+section {* Cmm: 5 - relaxed - no sc, consumes, release or acquire *}
 
-(* consistent_atomic_rf *)
+subsubsection {* consistent_atomic_rf *}
 
 lemmas consistent_atomic_rfI [intro?] = defToIntro[OF consistent_atomic_rf.simps(2)]
 
@@ -1304,9 +1360,18 @@ lemma rel_list_consistent_atomic_rf [simp]:
            = consistent_atomic_rf (pre, wit, [(''hb'', hb)])"      
 unfolding consistent_atomic_rf.simps ..
 
-(* rmw_atomicity *)
+subsubsection {* rmw_atomicity *}
 
-lemmas rmw_atomicityI [intro?] = defToIntro[OF rmw_atomicity.simps]
+lemma rmw_atomicityI [intro?]:
+  assumes "\<And>a b.    a \<in> actions0 pre
+                 \<Longrightarrow> b \<in> actions0 pre
+                 \<Longrightarrow> is_RMW b
+                 \<Longrightarrow>   adjacent_less_than (mo wit) (actions0 pre) a b
+                     = ((a, b) \<in> rf wit)"
+  shows "rmw_atomicity (pre, wit, rel)"
+using assms
+unfolding rmw_atomicity.simps
+by auto
 
 lemma rmw_atomicityE1 [elim]:
   assumes "rmw_atomicity (pre, wit, rel)"
@@ -1335,7 +1400,7 @@ lemma rel_list_rmw_atomicity [simp]:
   shows   "rmw_atomicity (pre, wit, rel) = rmw_atomicity (pre, wit, [])"     
 unfolding rmw_atomicity.simps ..
 
-(* coherent_memory_use *)
+subsubsection {* coherent_memory_use *}
 
 lemmas coherent_memory_useI [intro?] = defToIntro[OF coherent_memory_use.simps(2)]
 
@@ -1387,9 +1452,58 @@ lemma rel_list_coherent_memory_use [simp]:
              coherent_memory_use (pre, wit, [(''hb'', hb)])"      
 unfolding coherent_memory_use.simps ..
 
-(* consistent_mo *)
+subsubsection {* consistent_mo *}
 
-lemmas consistent_moI [intro?] = defToIntro[OF consistent_mo.simps]
+definition sameLocAtWrites :: "pre_execution \<Rightarrow> action \<Rightarrow> action \<Rightarrow> bool" where
+  "sameLocAtWrites pre a b \<equiv>   a \<in> actions0 pre
+                              \<and> b \<in> actions0 pre
+                              \<and> a \<noteq> b
+                              \<and> loc_of a = loc_of b
+                              \<and> is_write a
+                              \<and> is_write b
+                              \<and> (   is_at_atomic_location (lk pre) a 
+                                  \<or> is_at_atomic_location (lk pre) b)"
+
+lemma consistent_moI [intro?]:
+  assumes at_writes: "\<And>a b. (a, b) \<in> mo wit \<Longrightarrow> sameLocAtWrites pre a b"
+      and trans:     "\<And>a b c.    (a, b) \<in> mo wit
+                              \<Longrightarrow> (b, c) \<in> mo wit
+                              \<Longrightarrow> (a, c) \<in> mo wit"
+      and in_mo:     "\<And>a b.    a \<in> actions0 pre
+                            \<Longrightarrow> b \<in> actions0 pre
+                            \<Longrightarrow> a \<noteq> b
+                            \<Longrightarrow> loc_of a = loc_of b
+                            \<Longrightarrow> is_write a
+                            \<Longrightarrow> is_write b
+                            \<Longrightarrow> is_at_atomic_location (lk pre) a
+                            \<Longrightarrow> is_at_atomic_location (lk pre) b
+                            \<Longrightarrow> ((a, b) \<in> mo wit \<or> (b, a) \<in> mo wit)"
+  shows "consistent_mo (pre, wit, rel)"
+proof -
+  have at_loc2: "\<And>a b.     (a, b) \<in> mo wit
+                        \<Longrightarrow>   is_at_atomic_location (lk pre) b
+                            \<and> is_at_atomic_location (lk pre) a"
+    using at_writes same_loc_atomic_location
+    unfolding sameLocAtWrites_def
+    by metis
+  have "relOver (mo wit) (actions0 pre)"
+    using at_writes unfolding sameLocAtWrites_def relOver_def by auto
+  moreover have "trans (mo wit)"
+    using trans unfolding trans_def by metis
+  moreover have "irrefl (mo wit)"
+    using at_writes unfolding sameLocAtWrites_def irrefl_def by auto
+  moreover have "\<forall>a\<in>actions0 pre. \<forall>b\<in>actions0 pre. 
+                      ((a, b) \<in> mo wit \<or> (b, a) \<in> mo wit) 
+                    = (   a \<noteq> b \<and> is_write a \<and> is_write b 
+                        \<and> loc_of a = loc_of b 
+                        \<and> is_at_atomic_location (lk pre) a)"
+    using at_writes at_loc2 in_mo same_loc_atomic_location
+    unfolding sameLocAtWrites_def 
+    by auto blast
+  ultimately show ?thesis
+    unfolding consistent_mo.simps
+    by simp
+qed
 
 lemma consistent_moE_rel [elim]:
   assumes "consistent_mo (pre, wit, rel)"
@@ -1448,7 +1562,9 @@ lemma rel_list_consistent_mo [simp]:
   shows   "consistent_mo (pre, wit, rel) = consistent_mo (pre, wit, [])"
 unfolding consistent_mo.simps ..
 
-(* Cmm: 6 - release, acquire; no sc, consume or relaxed ---------------------------------------- *)
+section {* Cmm: 6 - release, acquire; no sc, consume or relaxed *}
+
+subsubsection {* sw_asw *}
 
 lemmas sw_aswI = relToIntro[OF sw_asw_def]
 
@@ -1461,6 +1577,8 @@ lemma sw_aswE [elim]:
 using assms
 unfolding sw_asw_def
 by simp
+
+subsubsection {* sw_lock *}
 
 lemmas sw_lockI = relToIntro[OF sw_lock_def]
 
@@ -1476,6 +1594,8 @@ using assms
 unfolding sw_lock_def
 by simp
 
+subsubsection {* sw_rel_acq *}
+
 lemmas sw_rel_acqI = relToIntro[OF sw_rel_acq_def]
 
 lemma sw_rel_acqE [elim]:
@@ -1489,6 +1609,8 @@ lemma sw_rel_acqE [elim]:
 using assms
 unfolding sw_rel_acq_def
 by simp
+
+subsubsection {* release_acquire_synchronizes_with_set *}
 
 (* This is an unsafe elim, since the extra assumptions might not be provable when the conclusion is
 provable. *)
@@ -1512,6 +1634,8 @@ unfolding release_acquire_synchronizes_with_set_def
           sw_rel_acq_def
 by (auto simp add: release_acquire_synchronizes_with_def)
 
+subsubsection {* release_acquire_relations *}
+
 lemma release_acquire_relations_simp:
   shows "release_acquire_relations = release_acquire_relations_alt"
 apply (rule ext)+
@@ -1527,7 +1651,9 @@ lemma release_acquire_relations_non_empty [simp]:
   shows "release_acquire_relations pre wit \<noteq> []"
 unfolding release_acquire_relations_def Let_def by simp
 
-(* Cmm: 7 - release, acquire, relaxed; no sc or consume ---------------------------------------- *)
+section {* Cmm: 7 - release, acquire, relaxed; no sc or consume *}
+
+subsubsection {* sw_rel_acq_rs *}
 
 lemmas sw_rel_acq_rsI = relToIntro[OF sw_rel_acq_rs_def]
 
@@ -1566,6 +1692,8 @@ using assms
 unfolding sw_rel_acq_rs_def
 by auto
 
+subsubsection {* release_acquire_relaxed_synchronizes_with_set *}
+
 (* This is an unsafe elim, since the extra assumptions might not be provable when the conclusion is
 provable. *)
 lemma release_acquire_relaxed_swIE [consumes, case_names asw lock rel_acq_rs]:
@@ -1592,6 +1720,8 @@ unfolding release_acquire_relaxed_synchronizes_with_set_def
           release_sequence_set_alt_def
 by (auto simp add: release_acquire_relaxed_synchronizes_with_def)  
 
+subsubsection {* release_acquire_relaxed_relations *}
+
 lemma release_acquire_relaxed_relations_simp:
   shows "release_acquire_relaxed_relations = release_acquire_relaxed_relations_alt"
 apply (rule ext)+
@@ -1608,7 +1738,9 @@ lemma release_acquire_relaxed_relations_non_empty [simp]:
   shows "release_acquire_relaxed_relations pre wit \<noteq> []"
 unfolding release_acquire_relaxed_relations_def Let_def by simp
 
-(* Cmm: 8 - release, acquire, fenced; no sc or consume ----------------------------------------- *)
+section {* Cmm: 8 - release, acquire, fenced; no sc or consume *}
+
+subsubsection {* sw_fence_sb_hrs_rf_sb *}
 
 lemma sw_fence_sb_hrs_rf_sbIE [consumes 1, case_names fence]:
   assumes "(a, b) \<in> sw_fence_sb_hrs_rf_sb pre wit"
@@ -1640,6 +1772,8 @@ using assms
 unfolding sw_fence_sb_hrs_rf_sb_def
 by blast
 
+subsubsection {* sw_fence_sb_hrs_rf *}
+
 lemma sw_fence_sb_hrs_rfIE [consumes 1, case_names fence]:
   assumes "(a, b) \<in> sw_fence_sb_hrs_rf pre wit"
       and "\<And>x y.     a \<in> actions0 pre
@@ -1665,6 +1799,8 @@ using assms
 unfolding sw_fence_sb_hrs_rf_def
 by auto
 
+subsubsection {* sw_fence_rs_rf_sb *}
+
 lemma sw_fence_rs_rf_sbIE [consumes 1, case_names fence]:
   assumes "(a, b) \<in> sw_fence_rs_rf_sb pre wit"
       and "\<And>x y.     a \<in> actions0 pre
@@ -1689,6 +1825,8 @@ lemma sw_fence_rs_rf_sbIE [consumes 1, case_names fence]:
 using assms
 unfolding sw_fence_rs_rf_sb_def
 by auto
+
+subsubsection {* release_acquire_fenced_synchronizes_with_set *}
 
 (* This is an unsafe elim, since the extra assumptions might not be provable when the conclusion is
 provable. *)
@@ -1746,6 +1884,8 @@ next
     by (auto simp add: release_acquire_fenced_synchronizes_with_def)
 qed
 
+subsubsection {* release_acquire_fenced_relations *}
+
 lemma release_acquire_fenced_relations_simp:
   shows "release_acquire_fenced_relations = release_acquire_fenced_relations_alt"
 apply (rule ext)+
@@ -1763,9 +1903,9 @@ lemma release_acquire_fenced_relations_non_empty [simp]:
   shows "release_acquire_fenced_relations pre wit \<noteq> []"
 unfolding release_acquire_fenced_relations_def Let_def by simp
 
-(* Cmm: 9 - sc, no sc fences ------------------------------------------------------------------ *)
+section {* Cmm: 9 - sc, no sc fences *}
 
-(* sc_accesses_consistent_sc *)
+subsubsection {* sc_accesses_consistent_sc *}
 
 lemmas sc_accesses_consistent_scI [intro?] = defToIntro[OF sc_accesses_consistent_sc.simps(2)]
 
@@ -1825,7 +1965,7 @@ lemma rel_list_sc_accesses_consistent_sc [simp]:
            = sc_accesses_consistent_sc (pre, wit, [(''hb'', hb)])"
 unfolding sc_accesses_consistent_sc.simps ..
 
-(* sc_accesses_sc_reads_restricted *)
+subsubsection {* sc_accesses_sc_reads_restricted *}
 
 lemmas sc_accesses_sc_reads_restrictedI [intro?] 
        = defToIntro[OF sc_accesses_sc_reads_restricted.simps(2)]
@@ -1839,9 +1979,9 @@ lemma rel_list_sc_accesses_sc_reads_restricted [simp]:
            = sc_accesses_sc_reads_restricted (pre, wit, [(''hb'', hb)])"  
 unfolding sc_accesses_sc_reads_restricted.simps ..
 
-(* Cmm: 10 - sc_fences, no consume ------------------------------------------------------------ *)
+section {* Cmm: 10 - sc_fences, no consume *}
 
-(* sc_fenced_sc_fences_heeded *)
+subsubsection {* sc_fenced_sc_fences_heeded *}
 
 lemmas sc_fenced_sc_fences_heededI [intro?] = defToIntro[OF sc_fenced_sc_fences_heeded.simps]
 lemmas sc_fenced_sc_fences_heededE [elim] = defToElim[OF sc_fenced_sc_fences_heeded.simps]
@@ -1851,13 +1991,17 @@ lemma rel_list_sc_fenced_sc_fences_heeded [simp]:
   shows   "sc_fenced_sc_fences_heeded (pre, wit, rel) = sc_fenced_sc_fences_heeded (pre, wit, [])"  
 unfolding sc_fenced_sc_fences_heeded.simps ..
 
-(* Cmm: 11 - with consume -------------------------------------------------------------------- *)
+section {* Cmm: 11 - with consume *}
+
+subsubsection {* compose *}
 
 (* We simplify compose0 to its official counterpart in the LEM library *)
 lemma compose_simp [simp]:
   shows "compose0 a b = relcomp a b"
 unfolding compose0_def relcomp_def 
 by force
+
+subsubsection {* inter_thread_happens_before *}
 
 lemma inter_thread_happens_before_simp:
   shows "  inter_thread_happens_before 
@@ -1879,6 +2023,8 @@ unfolding inter_thread_happens_before_alt_def
           with_consume_cad_set_alt_def
 by auto
 
+subsubsection {* with_consume_relations *}
+
 lemma with_consume_relations_simp:
   shows "with_consume_relations = with_consume_relations_alt"
 apply (rule ext)+
@@ -1899,7 +2045,9 @@ lemma with_consume_relations_non_empty [simp]:
   shows "with_consume_relations pre wit \<noteq> []"
 unfolding with_consume_relations_def Let_def by simp
 
-(* Cmm: 12 - the standard model -------------------------------------------------------------- *)
+section {* Cmm: 12 - the standard model *}
+
+subsubsection {* standard_vsses *}
 
 lemma standard_vssesE [elim]:
   assumes "(a, b) \<in> standard_vsses_alt pre wit"
@@ -1924,6 +2072,8 @@ unfolding standard_vsses_alt_def
           standard_vsses_def
 by auto
 
+subsubsection {* standard_relations *}
+
 lemma standard_relations_simp:
   shows "standard_relations = standard_relations_alt"
 apply (rule ext)+
@@ -1944,6 +2094,8 @@ by auto
 lemma standard_relations_non_empty [simp]:
   shows "standard_relations pre wit \<noteq> []"
 unfolding standard_relations_def Let_def by simp
+
+subsubsection {* standard_consistent_atomic_rf *}
 
 lemma standard_consistent_atomic_rf_simp:
   fixes pre wit
@@ -2120,6 +2272,8 @@ next
     qed
 qed
 
+subsubsection {* standard_memory_model *}
+
 lemma standard_memory_model_simps [simp]:
   shows "consistent standard_memory_model = standard_consistent_execution"
         "relation_calculation standard_memory_model = standard_relations"
@@ -2127,7 +2281,7 @@ lemma standard_memory_model_simps [simp]:
 unfolding standard_memory_model_def
 by simp_all
 
-(* Composite elims ---------------------------------------------------------------------------- *)
+section {* Composite elims *}
 
 lemma rmw_atomicityE1_consistent_mo [elim]:
   assumes rmw_at:  "rmw_atomicity (pre, wit, rel)"
@@ -2196,9 +2350,9 @@ qed
 thm consistent_non_atomic_rfE
 *)
 
-(* Extra lemmas for standard-relations -------------------------------------------------------- *)
+section {* Extra lemmas for standard-relations *}
 
-(* Visible side effects *)
+subsubsection {* with_consume_vse *}
 
 lemma with_consume_vseE [elim]:
   assumes "(a, b) \<in> with_consume_vse pre wit"
@@ -2207,7 +2361,7 @@ using assms
 unfolding with_consume_vse_def
 by auto
 
-(* Simplification of the relation_calculation *)
+subsubsection {* Simplification of the relation_calculation *}
 
 lemma rel_list_coherent_memory_use_standard [simp]:
   shows   "  coherent_memory_use (pre, wit, standard_relations pre wit) 
