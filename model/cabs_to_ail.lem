@@ -190,43 +190,54 @@ end
 (* STD §6.6#8 *)
 val is_arithmetic_constant_expression: expression unit -> E.t bool
 let is_arithmetic_constant_expression ((AnnotatedExpression () expr) as a_expr) =
-  (* TODO: floating constants, enumeration constant *)
+  (* TODO: enumeration constant *)
   match expr with
     | AilEconst (ConstantInteger _) ->
         E.return true
-    | AilEconst (ConstantArray _) ->
+    | AilEconst (ConstantFloating _) ->
         E.return true
+    | AilEconst (ConstantCharacter _) ->
+        E.return true
+(*
+    | AilEconst (ConstantArray _) ->
+        (* NOTE: is Ail specific *)
+        E.return true
+*)
     | AilEsizeof _ ty ->
+        (* TODO: sizeof expressions whose results are integer constants *)
         E.return (AilTypesAux.is_vla ty)
     | AilEalignof _ _ ->
         E.return true
     | AilEcast _ ty e ->
-        Boot.assert_false "WIP is_arithmetic_constant_expression AilEcast: annoying ==> need to typecheck e..."
+        if not (AilTypesAux.is_arithmetic ty) then
+          E.return false
+        else
+          let () = Boot.print_debug 0 "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e..." in
+          E.return true
         
     | _ ->
-        E.return true
+        E.return false
 
   end
 (*
-An arithmetic constant expression shall have arithmetic type and
+  An arithmetic constant expression shall have arithmetic type and
 
-shall only have operands that are
+  shall only have operands that are:
   
-  integer constants,
-  
-  floating constants,
-  
-  enumeration constants,
-  
-  character constants,
-  
-  sizeof expressions whose results are integer constants,
-  
-  and _Alignof expressions.
+    - integer constants,
+    - floating constants,
+    - enumeration constants,
+    - character constants,
+    - sizeof expressions whose results are integer constants,
+    - and _Alignof expressions.
   
   Cast operators in an arithmetic constant expression shall only convert arithmetic types to arithmetic types,
   except as part of an operand to a sizeof or _Alignof operator.
+
 *)
+
+
+
 (* WIP
 val     is_arithmetic_constant_expression: expression unit -> E.t bool
 let rec is_arithmetic_constant_expression expr =
@@ -2451,9 +2462,9 @@ let desugar_and_register_external_declaration edecl =
     end
 
 
-val desugar: string -> translation_unit -> Exception.t (UniqueId.supply Symbol.t * program unit) Errors.t
-let desugar startup_str (TUnit edecls) =
-  E.eval (
+val desugar: nat -> string -> translation_unit -> Exception.t (UniqueId.supply Symbol.t * program unit) Errors.t
+let desugar sym_counter startup_str (TUnit edecls) =
+  E.eval sym_counter (
     E.with_scope E.Scope_file (
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str

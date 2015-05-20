@@ -282,10 +282,10 @@ let with_scope scope m =
 
 
 (* ========================================================================== *)
-val initial_state: state
-let initial_state = <|
+val initial_state: nat -> state
+let initial_state n = <|
   aux_supply=                  UniqueId.new_supply;
-  symbol_supply=               UniqueId.new_supply;
+  symbol_supply=               UniqueId.new_supply_from n;
   registered_identifiers=      Scope_table.empty;
 (*  registered_tag_declarations= Scope_table.empty;*)
   tag_definitions= Map.empty;
@@ -308,13 +308,13 @@ let initial_state = <|
   is_inside_switch= false;
 |>
 
-val eval: forall 'a. t 'a -> Exception.t (UniqueId.supply Symbol.t * 'a) Errors.t
-let eval m =
+val eval: forall 'a. nat -> t 'a -> Exception.t (UniqueId.supply Symbol.t * 'a) Errors.t
+let eval n m =
   State_exception.eval (
     m                                                 >>= fun res    ->
     State_exception.read (fun st -> st.symbol_supply) >>= fun supply ->
     return (supply, res)
-    ) initial_state
+    ) (initial_state n)
 
 
 
