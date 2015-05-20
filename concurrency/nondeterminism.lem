@@ -49,6 +49,3 @@ let bindExhaustive m f =
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind = bindExhaustive
-
-val mem : forall 'a. Eq 'a => 'a -> t 'a -> bool
-let mem x m = List.elem x (forget m)

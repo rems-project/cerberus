@@ -11,35 +11,35 @@ begin
 (* Section 1 - Auxilaries ---------------------------------------------------------------------- *)
 
 (*
-lemma incWitRestrict_equality:
-  shows "(incWitRestrict wit2 actions = wit) = (relRestrict2 (mo wit2) actions = mo wit \<and>
+lemma witnessRestrict_equality:
+  shows "(witnessRestrict wit2 actions = wit) = (relRestrict2 (mo wit2) actions = mo wit \<and>
                                                  relRestrict (rf wit2) actions = rf wit \<and>
                                                  relRestrict (sc wit2) actions = sc wit \<and>
                                                  relRestrict (lo wit2) actions = lo wit \<and>
                                                  relRestrict (ao wit2) actions = ao wit \<and>
                                                  relRestrict (tot wit2) actions = tot wit)"
-unfolding incWitRestrict_def
+unfolding witnessRestrict_def
 by auto
 
-lemma incWitRestrictI []:
+lemma witnessRestrictI []:
   assumes "relRestrict2 (mo wit2) actions = mo wit"
           "relRestrict (rf wit2) actions = rf wit"
           "relRestrict (sc wit2) actions = sc wit"
           "relRestrict (lo wit2) actions = lo wit"
           "relRestrict (ao wit2) actions = ao wit"
           "relRestrict (tot wit2) actions = tot wit"
-  shows "incWitRestrict wit2 actions = wit"
-unfolding incWitRestrict_def using assms by auto
+  shows "witnessRestrict wit2 actions = wit"
+unfolding witnessRestrict_def using assms by auto
 
-lemma incWitRestrictE []:
-  assumes "incWitRestrict wit2 actions = wit"
+lemma witnessRestrictE []:
+  assumes "witnessRestrict wit2 actions = wit"
   shows   "relRestrict2 (mo wit2) actions = mo wit"
           "relRestrict (rf wit2) actions = rf wit"
           "relRestrict (sc wit2) actions = sc wit"
           "relRestrict (lo wit2) actions = lo wit"
           "relRestrict (ao wit2) actions = ao wit"
           "relRestrict (tot wit2) actions = tot wit"
-unfolding incWitRestrict_def using assms by auto
+unfolding witnessRestrict_def using assms by auto
 
 lemma relRestrict_step:
   assumes "relRestrict r actions = r"
@@ -57,8 +57,8 @@ lemma relRestrict2_step:
           "relRestrict2 r2 (insert a actions) = r2"
 using assms unfolding relRestrict2_def by auto
 
-lemma incWitRestrict_step [consumes 3, case_names mo rf sc lo ao tot]:
-  assumes "incWitRestrict wit actions = wit"
+lemma witnessRestrict_step [consumes 3, case_names mo rf sc lo ao tot]:
+  assumes "witnessRestrict wit actions = wit"
           "a \<notin> actions"
           "actions2 = insert a actions"
           "mo wit \<subseteq> mo wit2 \<and> mo wit2 - mo wit \<subseteq> {a} \<times> insert a actions"
@@ -67,146 +67,146 @@ lemma incWitRestrict_step [consumes 3, case_names mo rf sc lo ao tot]:
           "lo wit \<subseteq> lo wit2 \<and> lo wit2 - lo wit \<subseteq> {a} \<times> insert a actions \<union> insert a actions \<times> {a}"
           "ao wit \<subseteq> ao wit2 \<and> ao wit2 - ao wit \<subseteq> {a} \<times> insert a actions \<union> insert a actions \<times> {a}"
           "tot wit \<subseteq> tot wit2 \<and> tot wit2 - tot wit \<subseteq> {a} \<times> insert a actions \<union> insert a actions \<times> {a}"
-  shows   "incWitRestrict wit2 actions = wit \<and> incWitRestrict wit2 actions2 = wit2"
+  shows   "witnessRestrict wit2 actions = wit \<and> witnessRestrict wit2 actions2 = wit2"
 oops
 *)
 
 (* Section 2 - Soundness ----------------------------------------------------------------------- *)
 
 lemma soundness_relPerformLoad:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformLoad pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_load a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_load a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step unfolding relPerformLoad_def by simp_all
 
-(* This is the start of the proof the incWitRestrict ... holds. When it is finished, we do not need
+(* This is the start of the proof the witnessRestrict ... holds. When it is finished, we do not need
    to assert it in the opsem anymore. *)
 (*
-lemma incWitRestrict_relPerformLoad:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and wit:       "incWitRestrict (incWit s1) (incCommitted s1) = incWit s1"
+lemma witnessRestrict_relPerformLoad:
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and wit:       "witnessRestrict (exWitness s1) (committed s1) = exWitness s1"
       and step:      "relPerformLoad pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "a \<notin> incCommitted s1"
-  shows  "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1 \<and> 
-          incWitRestrict (incWit s2) (incCommitted s2) = incWit s2"
-using wit a incCommitted
-proof (cases rule: incWitRestrict_step)
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "a \<notin> committed s1"
+  shows  "witnessRestrict (exWitness s2) (committed s1) = exWitness s1 \<and> 
+          witnessRestrict (exWitness s2) (committed s2) = exWitness s2"
+using wit a committed
+proof (cases rule: witnessRestrict_step)
   case mo
-  show "mo (incWit s1) \<subseteq> mo (incWit s2) \<and> mo (incWit s2) - mo (incWit s1) \<subseteq> {a} \<times> insert a (incCommitted s1)"
+  show "mo (exWitness s1) \<subseteq> mo (exWitness s2) \<and> mo (exWitness s2) - mo (exWitness s1) \<subseteq> {a} \<times> insert a (committed s1)"
     using step unfolding relPerformLoad_def by auto
 next
   case rf
-  show "rf (incWit s1) \<subseteq> rf (incWit s2) \<and> rf (incWit s2) - rf (incWit s1) \<subseteq> {a} \<times> insert a (incCommitted s1) \<union> insert a (incCommitted s1) \<times> {a}"
+  show "rf (exWitness s1) \<subseteq> rf (exWitness s2) \<and> rf (exWitness s2) - rf (exWitness s1) \<subseteq> {a} \<times> insert a (committed s1) \<union> insert a (committed s1) \<times> {a}"
     using step unfolding relPerformLoad_def rf_step_load_def 
-    apply (cases "\<exists>w\<in>actions0 pre. (w, a) \<in> getVse pre (incWit s2)") apply auto
+    apply (cases "\<exists>w\<in>actions0 pre. (w, a) \<in> getVse pre (exWitness s2)") apply auto
 oops
 *)
 
 lemma soundness_relPerformStore:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformStore pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_store a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_store a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformStore_def 
 by simp_all
 
 lemma soundness_relPerformRmw:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformRmw pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_RMW a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_RMW a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformRmw_def 
 by simp_all
 
 lemma soundness_relPerformBlocked_rmw:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformBlocked_rmw pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_blocked_rmw a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_blocked_rmw a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformBlocked_rmw_def 
 by simp_all
 
 lemma soundness_relPerformLock:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformLock pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_lock a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_lock a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformLock_def 
 by simp_all
 
 lemma soundness_relPerformUnlock:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformUnlock pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_unlock a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_unlock a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformUnlock_def 
 by simp_all
 
 lemma soundness_relPerformFence:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformFence pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_fence a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_fence a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformFence_def 
 by simp_all
 
 lemma soundness_relPerformAlloc:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformAlloc pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_alloc a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_alloc a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformAlloc_def 
 by simp_all
 
 lemma soundness_relPerformDealloc:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relPerformDealloc pre s1 s2 a"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_dealloc a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
-  shows  "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
-         "incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_dealloc a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
+  shows  "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
+         "witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
 using step
 unfolding relPerformDealloc_def 
 by simp_all
 
 lemma soundness_step:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "relOpsemStep pre s1 s2 a"
   shows              "minOpsemStep pre s1 s2 a"
 proof -
-  have a: "a \<in> actions0 pre \<and> a \<notin> incCommitted s1 \<and> incCommitted s2 = insert a (incCommitted s1)"
+  have a: "a \<in> actions0 pre \<and> a \<notin> committed s1 \<and> committed s2 = insert a (committed s1)"
     using step unfolding relOpsemStep_def by simp
   have order: "isInOpsemOrder_step pre s1 s2 a"
     using step unfolding relOpsemStep_def by simp
-  have definedness: "stateIsDefined s2 = exIsDefined (pre, incWit s2, getRelations pre (incWit s2))"
+  have definedness: "stateIsDefined s2 = exIsDefined (pre, exWitness s2, getRelations pre (exWitness s2))"
     using step unfolding relOpsemStep_def by simp
-  have "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2)) \<and> 
-        incWitRestrict (incWit s2) (incCommitted s1) = incWit s1"
+  have "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2)) \<and> 
+        witnessRestrict (exWitness s2) (committed s1) = exWitness s1"
     proof (cases a)
       case Load
       hence "is_load a" by auto
@@ -385,7 +385,7 @@ next
   case (relOpsemStep pre x y z a)
   have x: "x = initialState pre" using relOpsemStep by auto
   have minTrace: "minOpsemTrace pre x y" using relOpsemStep by auto
-  have cons: "exIsConsistent_op (incCommitted y) (pre, incWit y, getRelations pre (incWit y))"
+  have cons: "exIsConsistent_op (committed y) (pre, exWitness y, getRelations pre (exWitness y))"
     using EquivalenceMinimalOpsem.consistencySpecTrace[OF minTrace x] .    
   have "minOpsemStep pre y z a" 
     using soundness_step[OF cons] relOpsemStep by auto
@@ -403,7 +403,7 @@ using assms soundnessRelTrace_aux by simp
 (* mo-order *)
 
 lemma consistent_mo_aux1:
-  assumes cons:   "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:   "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and ab_def: "a \<in> actions0 pre \<and>
                    b \<in> actions0 pre \<and>
                    a \<noteq> b \<and>
@@ -422,7 +422,7 @@ proof -
 qed
 
 lemma consistent_mo_aux2:
-  assumes cons:  "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:  "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and in_mo: "(a, b) \<in> mo wit"
     shows        "a \<in> actions0 pre \<and>
                   b \<in> actions0 pre \<and>
@@ -455,95 +455,95 @@ proof -
 qed
 
 lemma step_mo_not_atomic_write:
-  assumes cons:      "axsimpConsistent (pre, wit', getRelations pre wit')"
-      and wit:       "wit = incWitRestrict wit' (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
+  assumes cons:      "exIsConsistent_op (committed s') (pre, wit', getRelations pre wit')"
+      and wit:       "wit = witnessRestrict wit' (committed s)"
+      and committed: "committed s' = insert a (committed s)"
       and a:         "is_at_non_atomic_location (lk pre) a \<or> \<not> is_write a"
   shows              "mo wit' = mo wit"
 proof (intro Set.equalityI subsetI, auto)
   fix b c
   assume "(b, c) \<in> mo wit"
-  hence "(b, c) \<in> mo (incWitRestrict wit' (incCommitted s))" using wit by simp
+  hence "(b, c) \<in> mo (witnessRestrict wit' (committed s))" using wit by simp
   thus "(b, c) \<in> mo wit'" by simp
 next
   fix b c
   assume in_mo: "(b, c) \<in> mo wit'"
-  have b: "b \<in> insert a (incCommitted s)"
-    using cons in_mo consistent_mo_aux2 incCommitted by metis
+  have b: "b \<in> insert a (committed s)"
+    using cons in_mo consistent_mo_aux2 committed by metis
   have "is_at_atomic_location (lk pre) b \<and> is_write b"
     using cons in_mo consistent_mo_aux2 by metis
   hence "a \<noteq> b" using a at_implies_not_na by auto
-  hence "b \<in> incCommitted s" using b by simp
-  hence "(b, c) \<in> mo (incWitRestrict wit' (incCommitted s))" 
+  hence "b \<in> committed s" using b by simp
+  hence "(b, c) \<in> mo (witnessRestrict wit' (committed s))" 
     using `(b, c) \<in> mo wit'` by simp
   thus "(b, c) \<in> mo wit" using wit by simp
 qed
 
 lemma step_mo_atomic_write:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "is_at_atomic_location (lk pre) a \<and> is_write a \<and> a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "is_at_atomic_location (lk pre) a \<and> is_write a \<and> a \<in> actions0 pre \<and> a \<notin> committed s"
   shows          "mo_step_atomic_write pre s s' a"
 unfolding mo_step_atomic_write_def Let_def
 proof -
-  let ?succ     = "Pair a ` {x \<in> actions0 pre. x \<notin> incCommitted s \<and> x \<noteq> a \<and> is_write x \<and> loc_of x = loc_of a}"
-  let ?new_mo   = "mo (incWit s) \<union> ?succ"
-  show "mo (incWit s')  = ?new_mo"
+  let ?succ     = "Pair a ` {x \<in> actions0 pre. x \<notin> committed s \<and> x \<noteq> a \<and> is_write x \<and> loc_of x = loc_of a}"
+  let ?new_mo   = "mo (exWitness s) \<union> ?succ"
+  show "mo (exWitness s')  = ?new_mo"
     proof (intro equalityI subsetI)
       fix x
-      assume "x \<in> mo (incWit s')"
-      then obtain b c where "(b, c) = x" "(b, c) \<in> mo (incWit s')" by (cases x) fast
+      assume "x \<in> mo (exWitness s')"
+      then obtain b c where "(b, c) = x" "(b, c) \<in> mo (exWitness s')" by (cases x) fast
       have "(b, c) \<in> ?new_mo"
         proof (cases "b = a")
         next
           assume "b = a"
-          have not_in_mo_bc: "(b, c) \<notin> mo (incWit s)" using a wit `b = a` by auto
-          have "(c, b) \<notin> mo (incWit s')" 
-            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by simp
-          hence not_in_mo_cb: "(c, b) \<notin> mo (incWit s)" using wit by auto 
-          have "c \<notin> incCommitted s"
+          have not_in_mo_bc: "(b, c) \<notin> mo (exWitness s)" using a wit `b = a` by auto
+          have "(c, b) \<notin> mo (exWitness s')" 
+            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (exWitness s')`] by simp
+          hence not_in_mo_cb: "(c, b) \<notin> mo (exWitness s)" using wit by auto 
+          have "c \<notin> committed s"
             proof
-              assume "c \<in> incCommitted s"
+              assume "c \<in> committed s"
               have "b \<in> actions0 pre \<and> c \<in> actions0 pre \<and> b \<noteq> c \<and> 
                     is_write b \<and> is_write c \<and> loc_of b = loc_of c \<and> 
                     is_at_atomic_location (lk pre) b"
-                using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted
+                using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (exWitness s')`] committed
                 by auto
-              hence "(b, c) \<in> mo (incWit s) \<or> (c, b) \<in> mo (incWit s)"
-                using `c \<in> incCommitted s` consistent_mo_aux1[OF cons1] by auto
+              hence "(b, c) \<in> mo (exWitness s) \<or> (c, b) \<in> mo (exWitness s)"
+                using `c \<in> committed s` consistent_mo_aux1[OF cons1] by auto
               thus False using not_in_mo_bc not_in_mo_cb by simp
               qed
           hence "(b, c) \<in> ?succ"
-            using `b = a` consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by auto
+            using `b = a` consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (exWitness s')`] by auto
           thus "(b, c) \<in> ?new_mo" by simp
         next
           assume "b \<noteq> a"
-          hence "b \<in> incCommitted s" 
-            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted by auto  
-          hence "(b, c) \<in> mo (incWit s)"
-            using wit `(b, c) \<in> mo (incWit s')` by auto
+          hence "b \<in> committed s" 
+            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (exWitness s')`] committed by auto  
+          hence "(b, c) \<in> mo (exWitness s)"
+            using wit `(b, c) \<in> mo (exWitness s')` by auto
           thus "(b, c) \<in> ?new_mo" by simp
         qed
       thus "x \<in> ?new_mo" using `(b, c) = x` by simp
     next
       fix x
       assume "x \<in> ?new_mo"
-      show "x \<in> mo (incWit s')"
+      show "x \<in> mo (exWitness s')"
         using `x \<in> ?new_mo`
         proof (elim UnE)
-          assume "x \<in> mo (incWit s)" 
-          thus "x \<in> mo (incWit s')" using wit by auto
+          assume "x \<in> mo (exWitness s)" 
+          thus "x \<in> mo (exWitness s')" using wit by auto
         next
           assume "x \<in> ?succ"
           then obtain b c where "(b, c) = x" "(b, c) \<in> ?succ" by (cases x) fast
-          hence "(c, b) \<notin> mo (incWit s')" using consistent_mo_aux2[OF cons2] incCommitted by fast
-          hence "(b, c) \<in> mo (incWit s')"
-            using `(b, c) \<in> ?succ` a cons2 incCommitted 
-            using consistent_mo_aux1[where a=a and b=c and wit="incWit s'"] 
+          hence "(c, b) \<notin> mo (exWitness s')" using consistent_mo_aux2[OF cons2] committed by fast
+          hence "(b, c) \<in> mo (exWitness s')"
+            using `(b, c) \<in> ?succ` a cons2 committed 
+            using consistent_mo_aux1[where a=a and b=c and wit="exWitness s'"] 
             by auto
-          thus "x \<in> mo (incWit s')" using `(b, c) = x` by simp
+          thus "x \<in> mo (exWitness s')" using `(b, c) = x` by simp
         qed
     qed
 qed
@@ -551,7 +551,7 @@ qed
 (* rf-order *)
 
 lemma well_formed_rf_aux:
-  assumes cons:  "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:  "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and in_rf: "(a, b) \<in> rf wit"
   shows          "a \<in> actions0 pre \<and>
                   b \<in> actions0 pre \<and> 
@@ -585,7 +585,7 @@ proof -
 qed
 
 lemma well_formed_rf_aux2:
-  assumes cons:  "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:  "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and in_rf: "(a, c) \<in> rf wit"
                  "(b, c) \<in> rf wit"
   shows          "a = b"
@@ -601,7 +601,7 @@ proof -
 qed
 
 lemma det_read_aux:
-  assumes cons: "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons: "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and b:    "is_load b \<and> b \<in> actions"
     shows       "(\<exists>a.   (a, b) \<in> getHb pre wit \<and> is_write a \<and> loc_of a = loc_of b) 
                       = (\<exists>a'. (a', b) \<in> rf wit)"
@@ -638,7 +638,7 @@ next
 qed
 
 lemma rmw_atomicity_aux:
-  assumes cons: "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons: "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and b:    "is_RMW b \<and> b \<in> actions"
     shows       "adjacent_less_than (mo wit) (actions0 pre) a b = ((a, b) \<in> rf wit)"
 proof 
@@ -665,79 +665,79 @@ next
 qed
 
 lemma step_rf_aux:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
       and order:     "isInOpsemOrder_step pre s s' a"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and in_rf:     "(b, c) \<in> rf (incWit s')"
-  shows              "(b, c) \<in> rf (incWit s ) \<or> (c = a)"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and in_rf:     "(b, c) \<in> rf (exWitness s')"
+  shows              "(b, c) \<in> rf (exWitness s ) \<or> (c = a)"
 proof (intro disjCI)
   assume "c \<noteq> a"
-  hence b: "b \<in> insert a (incCommitted s)" and c: "c \<in> incCommitted s"
-    using in_rf well_formed_rf_aux[OF cons2] incCommitted by auto
+  hence b: "b \<in> insert a (committed s)" and c: "c \<in> committed s"
+    using in_rf well_formed_rf_aux[OF cons2] committed by auto
   have "c \<in> actions0 pre" 
     using well_formed_rf_aux[OF cons2 in_rf] by simp
-  hence "(a, c) \<notin> opsemOrder (pre, (incWit s'), getRelations pre (incWit s'))"
-    using order `c \<in> incCommitted s` unfolding isInOpsemOrder_step_def by auto
-  hence "(a, c) \<notin> rf (incWit s')"
+  hence "(a, c) \<notin> opsemOrder (pre, (exWitness s'), getRelations pre (exWitness s'))"
+    using order `c \<in> committed s` unfolding isInOpsemOrder_step_def by auto
+  hence "(a, c) \<notin> rf (exWitness s')"
     unfolding opsemOrder.simps by auto
   hence "a \<noteq> b" using in_rf by auto
-  hence "b \<in> incCommitted s" using b by simp
-  hence "(b, c) \<in> rf (incWitRestrict (incWit s') (incCommitted s))" using in_rf c by simp
-  thus "(b, c) \<in> rf (incWit s)" using wit by simp
+  hence "b \<in> committed s" using b by simp
+  hence "(b, c) \<in> rf (witnessRestrict (exWitness s') (committed s))" using in_rf c by simp
+  thus "(b, c) \<in> rf (exWitness s)" using wit by simp
 qed  
 
 lemma step_rf_aux2:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
       and order:     "isInOpsemOrder_step pre s s' a"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and in_rf:     "(w, a) \<in> rf (incWit s')"
-  shows              "rf (incWit s') = insert (w, a) (rf (incWit s))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and in_rf:     "(w, a) \<in> rf (exWitness s')"
+  shows              "rf (exWitness s') = insert (w, a) (rf (exWitness s))"
 (* TODO: remove applies *)
 apply (intro equalityI subsetI) apply clarify defer apply clarsimp apply (elim disjE)
 proof -
   fix b c
   assume "b = w \<and> c = a"
-  thus "(b, c) \<in> rf (incWit s')" using in_rf by simp
+  thus "(b, c) \<in> rf (exWitness s')" using in_rf by simp
 next
   fix b c
-  assume "(b, c) \<in> rf (incWit s)"
-  thus "(b, c) \<in> rf (incWit s')" using wit by auto
+  assume "(b, c) \<in> rf (exWitness s)"
+  thus "(b, c) \<in> rf (exWitness s')" using wit by auto
 next
   fix b c
-  assume bc_in_rf2:  "(b, c) \<in> rf (incWit s')"
-     and bc_nin_rf1: "(b, c) \<notin> rf (incWit s)"
-  have "(b, c) \<in> rf (incWit s) \<or> (c = a)"
-    using step_rf_aux[OF cons1 cons2 order wit incCommitted bc_in_rf2] .
+  assume bc_in_rf2:  "(b, c) \<in> rf (exWitness s')"
+     and bc_nin_rf1: "(b, c) \<notin> rf (exWitness s)"
+  have "(b, c) \<in> rf (exWitness s) \<or> (c = a)"
+    using step_rf_aux[OF cons1 cons2 order wit committed bc_in_rf2] .
   hence "c = a" using bc_nin_rf1 by simp
   thus "b = w \<and> c = a" using bc_in_rf2 well_formed_rf_aux2[OF cons2 in_rf] by simp
 qed
 
 lemma step_rf_non_read:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
       and order:     "isInOpsemOrder_step pre s s' a"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
       and a:         "\<not> is_read a"
-  shows              "rf (incWit s') = rf (incWit s)"
+  shows              "rf (exWitness s') = rf (exWitness s)"
 proof (intro Set.equalityI subsetI, auto)
   fix b c
-  assume "(b, c) \<in> rf (incWit s)"
-  hence "(b, c) \<in> rf (incWitRestrict (incWit s') (incCommitted s))" using wit by simp
-  thus "(b, c) \<in> rf (incWit s')" by simp
+  assume "(b, c) \<in> rf (exWitness s)"
+  hence "(b, c) \<in> rf (witnessRestrict (exWitness s') (committed s))" using wit by simp
+  thus "(b, c) \<in> rf (exWitness s')" by simp
 next
   fix b c
-  assume in_rf: "(b, c) \<in> rf (incWit s')"
+  assume in_rf: "(b, c) \<in> rf (exWitness s')"
   have "is_read c"
     using well_formed_rf_aux[OF cons2 in_rf] by simp
   hence "a \<noteq> c" using a by auto
-  have "(b, c) \<in> rf (incWit s) \<or> (c = a)"
-    using step_rf_aux[OF cons1 cons2 order wit incCommitted in_rf] .
-  thus "(b, c) \<in> rf (incWit s)" using `a \<noteq> c` by simp
+  have "(b, c) \<in> rf (exWitness s) \<or> (c = a)"
+    using step_rf_aux[OF cons1 cons2 order wit committed in_rf] .
+  thus "(b, c) \<in> rf (exWitness s)" using `a \<noteq> c` by simp
 qed
 
 (* TODO: refactor *)
@@ -749,109 +749,109 @@ unfolding RelationalOpsem.getHb_def
 by auto
 
 lemma step_rf_load:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
       and order:     "isInOpsemOrder_step pre s s' a"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
       and a:         "is_load a \<and> a \<in> actions0 pre"
   shows              "rf_step_load pre s s' a"
 unfolding rf_step_load_def
 proof auto
   fix b c
-  assume "(b, c) \<in> rf (incWit s)"
-  thus "(b, c) \<in> rf (incWit s')" using wit by auto
+  assume "(b, c) \<in> rf (exWitness s)"
+  thus "(b, c) \<in> rf (exWitness s')" using wit by auto
 next
   fix b c
-  assume in_rf:  "(b, c) \<in> rf (incWit s')"
+  assume in_rf:  "(b, c) \<in> rf (exWitness s')"
      and no_vse: "     \<forall>w\<in>actions0 pre. is_write w
-                   \<longrightarrow> (w, a) \<in> EquivalenceMinimalOpsem.getHb pre (incWit s')
+                   \<longrightarrow> (w, a) \<in> EquivalenceMinimalOpsem.getHb pre (exWitness s')
                    \<longrightarrow> loc_of w \<noteq> loc_of a"
-  have "det_read_op (incCommitted s') (pre, incWit s', getRelations pre (incWit s'))"
+  have "det_read_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
     using cons2 unfolding exIsConsistent_op_def by simp
-  hence "  (\<exists>w\<in>actions0 pre. (w, a) \<in> getHb pre (incWit s') \<and> is_write w \<and> loc_of w = loc_of a) 
-         = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf (incWit s'))"
-    using a incCommitted 
+  hence "  (\<exists>w\<in>actions0 pre. (w, a) \<in> getHb pre (exWitness s') \<and> is_write w \<and> loc_of w = loc_of a) 
+         = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf (exWitness s'))"
+    using a committed 
     apply simp
     unfolding det_read_op.simps 
     by auto
-  hence no_rf: "\<forall>w\<in>actions0 pre. (w, a) \<notin> rf (incWit s')"
+  hence no_rf: "\<forall>w\<in>actions0 pre. (w, a) \<notin> rf (exWitness s')"
     using no_vse by auto    
   have "b \<in> actions0 pre" using well_formed_rf_aux[OF cons2 in_rf] by simp
-  hence "(b, a) \<notin> rf (incWit s')" using no_rf by simp
+  hence "(b, a) \<notin> rf (exWitness s')" using no_rf by simp
   hence "c \<noteq> a" using in_rf by auto
-  have "(b, c) \<in> rf (incWit s) \<or> (c = a)"
-    using step_rf_aux[OF cons1 cons2 order wit incCommitted in_rf] .
-  thus "(b, c) \<in> rf (incWit s)" using `c \<noteq> a` by simp
+  have "(b, c) \<in> rf (exWitness s) \<or> (c = a)"
+    using step_rf_aux[OF cons1 cons2 order wit committed in_rf] .
+  thus "(b, c) \<in> rf (exWitness s)" using `c \<noteq> a` by simp
 next
   fix w'
   assume "w' \<in> actions0 pre" 
-         "(w', a) \<in> getHb pre (incWit s')"
+         "(w', a) \<in> getHb pre (exWitness s')"
          "is_write w'" "loc_of w' = loc_of a"
-  hence "\<exists>w. (w, a) \<in> rf (incWit s')" using det_read_aux[OF cons2] a incCommitted by auto
-  then obtain w where w_in_rf: "(w, a) \<in> rf (incWit s')" by fast
-  have w: "w \<in> actions0 pre \<and> w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
+  hence "\<exists>w. (w, a) \<in> rf (exWitness s')" using det_read_aux[OF cons2] a committed by auto
+  then obtain w where w_in_rf: "(w, a) \<in> rf (exWitness s')" by fast
+  have w: "w \<in> actions0 pre \<and> w \<in> committed s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
             value_written_by w = value_read_by a"
-    using well_formed_rf_aux[OF cons2 w_in_rf] incCommitted by auto
-  have "rf (incWit s') = insert (w, a) (rf (incWit s))"
-    using step_rf_aux2[OF cons1 cons2 order wit incCommitted w_in_rf] .
-  thus "\<exists>w\<in>actions0 pre. w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
+    using well_formed_rf_aux[OF cons2 w_in_rf] committed by auto
+  have "rf (exWitness s') = insert (w, a) (rf (exWitness s))"
+    using step_rf_aux2[OF cons1 cons2 order wit committed w_in_rf] .
+  thus "\<exists>w\<in>actions0 pre. w \<in> committed s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
         value_written_by w = value_read_by a \<and> 
-        rf (incWit s') = insert (w, a) (rf (incWit s))"
+        rf (exWitness s') = insert (w, a) (rf (exWitness s))"
      using w by auto
 qed
 
 lemma step_rf_rmw:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
       and order:     "isInOpsemOrder_step pre s s' a"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "is_RMW a \<and> a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "is_RMW a \<and> a \<in> actions0 pre \<and> a \<notin> committed s"
   shows              "rf_step_rmw pre s s' a"
 proof -
-  let ?same_loc_writes = "{x \<in> incCommitted s. x \<in> actions0 pre \<and> is_write x \<and> loc_of x = loc_of a}"
+  let ?same_loc_writes = "{x \<in> committed s. x \<in> actions0 pre \<and> is_write x \<and> loc_of x = loc_of a}"
   show ?thesis
     proof (cases "?same_loc_writes = {}")
       assume empty: "?same_loc_writes = {}"
-      have "rf (incWit s') = rf (incWit s)"
+      have "rf (exWitness s') = rf (exWitness s)"
         proof (auto)
           fix b c
-          assume "(b, c) \<in> rf (incWit s)"
-          thus "(b, c) \<in> rf (incWit s')" using wit by auto
+          assume "(b, c) \<in> rf (exWitness s)"
+          thus "(b, c) \<in> rf (exWitness s')" using wit by auto
         next
           fix b c
-          assume in_rf: "(b, c) \<in> rf (incWit s')"
-          have no_mo: "\<forall>w. w \<in> incCommitted s \<longrightarrow> w \<in> actions0 pre \<longrightarrow> is_write w \<longrightarrow> loc_of w \<noteq> loc_of a"
+          assume in_rf: "(b, c) \<in> rf (exWitness s')"
+          have no_mo: "\<forall>w. w \<in> committed s \<longrightarrow> w \<in> actions0 pre \<longrightarrow> is_write w \<longrightarrow> loc_of w \<noteq> loc_of a"
             using empty by auto
-          have "b =  a \<or> b \<in> incCommitted s" using well_formed_rf_aux[OF cons2 in_rf] incCommitted by simp
-          hence "(b, a) \<notin> mo (incWit s')"
+          have "b =  a \<or> b \<in> committed s" using well_formed_rf_aux[OF cons2 in_rf] committed by simp
+          hence "(b, a) \<notin> mo (exWitness s')"
             proof
               assume "b = a"
-              thus "(b, a) \<notin> mo (incWit s')" using consistent_mo_aux2[OF cons2] by auto
+              thus "(b, a) \<notin> mo (exWitness s')" using consistent_mo_aux2[OF cons2] by auto
             next
-              assume "b \<in> incCommitted s"
+              assume "b \<in> committed s"
               have "is_write b" "b \<in> actions0 pre" using well_formed_rf_aux[OF cons2 in_rf] by simp_all
-              hence "loc_of b \<noteq> loc_of a" using no_mo `b \<in> incCommitted s` by simp
-              thus "(b, a) \<notin> mo (incWit s')" using consistent_mo_aux2[OF cons2] by auto
+              hence "loc_of b \<noteq> loc_of a" using no_mo `b \<in> committed s` by simp
+              thus "(b, a) \<notin> mo (exWitness s')" using consistent_mo_aux2[OF cons2] by auto
             qed
-          hence "\<not> adjacent_less_than (mo (incWit s')) (actions0 pre) b a"
+          hence "\<not> adjacent_less_than (mo (exWitness s')) (actions0 pre) b a"
             unfolding adjacent_less_than_def by simp
-          hence "(b, a) \<notin> rf (incWit s')" 
-            using rmw_atomicity_aux[OF cons2] a incCommitted by auto
+          hence "(b, a) \<notin> rf (exWitness s')" 
+            using rmw_atomicity_aux[OF cons2] a committed by auto
           hence "c \<noteq> a" using in_rf by auto
-          have "(b, c) \<in> rf (incWit s) \<or> (c = a)"
-            using step_rf_aux[OF cons1 cons2 order wit incCommitted in_rf] .
-          thus "(b, c) \<in> rf (incWit s)" using `c \<noteq> a` by simp
+          have "(b, c) \<in> rf (exWitness s) \<or> (c = a)"
+            using step_rf_aux[OF cons1 cons2 order wit committed in_rf] .
+          thus "(b, c) \<in> rf (exWitness s)" using `c \<noteq> a` by simp
         qed
       thus ?thesis unfolding rf_step_rmw_def using empty by auto
     next
       assume not_empty: "?same_loc_writes \<noteq> {}"
-      let ?S = "{w. w \<in> actions0 pre \<and> (w, a) \<in> mo (incWit s')}"
+      let ?S = "{w. w \<in> actions0 pre \<and> (w, a) \<in> mo (exWitness s')}"
       have eq_sets: "?S = ?same_loc_writes"
         proof (intro equalityI subsetI, simp_all)
           fix w'
-          assume w': "w' \<in> incCommitted s \<and> w' \<in> actions0 pre \<and> is_write w' \<and> loc_of w' = loc_of a"
+          assume w': "w' \<in> committed s \<and> w' \<in> actions0 pre \<and> is_write w' \<and> loc_of w' = loc_of a"
           have "is_write a" using a by (cases a) auto
           have "w' \<noteq> a" using a w' by auto
           have "actions_respect_location_kinds (actions0 pre) (lk pre)"
@@ -859,45 +859,45 @@ proof -
           hence "is_at_atomic_location (lk pre) a"
             unfolding actions_respect_location_kinds_def is_at_atomic_location_def
             using a by (cases a) auto
-          hence mo_related: "(w', a) \<in> mo (incWit s) \<or> (a, w') \<in> mo (incWit s)" 
+          hence mo_related: "(w', a) \<in> mo (exWitness s) \<or> (a, w') \<in> mo (exWitness s)" 
             using consistent_mo_aux1[OF cons1, where a=a and b=w']
-            using w' a incCommitted `is_write a` `w' \<noteq> a` 
+            using w' a committed `is_write a` `w' \<noteq> a` 
             by auto
-          have "(a, w') \<notin> mo (incWit s)"
+          have "(a, w') \<notin> mo (exWitness s)"
             using consistent_mo_aux2[OF cons1] a by auto 
-          hence "(w', a) \<in> mo (incWit s)" using mo_related by simp
-          thus "(w', a) \<in> mo (incWit s')" using wit by simp
+          hence "(w', a) \<in> mo (exWitness s)" using mo_related by simp
+          thus "(w', a) \<in> mo (exWitness s')" using wit by simp
         next
           fix w'
-          assume "w' \<in> actions0 pre \<and> (w', a) \<in> mo (incWit s')"
-          thus "w' \<in> incCommitted s \<and> is_write w' \<and> loc_of w' = loc_of a"
-            using consistent_mo_aux2[OF cons2, where a=w' and b=a] incCommitted 
+          assume "w' \<in> actions0 pre \<and> (w', a) \<in> mo (exWitness s')"
+          thus "w' \<in> committed s \<and> is_write w' \<and> loc_of w' = loc_of a"
+            using consistent_mo_aux2[OF cons2, where a=w' and b=a] committed 
             by auto
         qed
       hence non_empty: "?S \<noteq> {}" using not_empty by simp
-      have "assumptions (pre, incWit s' , [])" 
+      have "assumptions (pre, exWitness s' , [])" 
         using cons2 unfolding exIsConsistent_op_def by simp
-      hence "finite_prefixes (mo (incWit s')) (actions0 pre)"
+      hence "finite_prefixes (mo (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?S"
         unfolding finite_prefixes_def using a by fast
-      hence "irrefl (mo (incWit s')) \<and> trans (mo (incWit s'))"
+      hence "irrefl (mo (exWitness s')) \<and> trans (mo (exWitness s'))"
         using cons2 unfolding exIsConsistent_op_def consistent_mo_op.simps by auto
-      hence isOrder: "isStrictPartialOrder (mo (incWit s'))" unfolding isStrictPartialOrder_def .
-      obtain w where "w \<in> ?S \<and> (\<forall>y. y \<in> ?S \<longrightarrow> (w, y) \<notin> mo (incWit s'))"
+      hence isOrder: "isStrictPartialOrder (mo (exWitness s'))" unfolding isStrictPartialOrder_def .
+      obtain w where "w \<in> ?S \<and> (\<forall>y. y \<in> ?S \<longrightarrow> (w, y) \<notin> mo (exWitness s'))"
         using supremum_partial_order[OF finite non_empty isOrder] by auto
-      hence w:    "w \<in> actions0 pre \<and> (w, a) \<in> mo (incWit s')"
+      hence w:    "w \<in> actions0 pre \<and> (w, a) \<in> mo (exWitness s')"
       and   w2:   "w \<in> ?same_loc_writes"
-      and   max:  "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> mo (incWit s') \<longrightarrow> (w, y) \<notin> mo (incWit s')"
+      and   max:  "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> mo (exWitness s') \<longrightarrow> (w, y) \<notin> mo (exWitness s')"
         using eq_sets by auto
-      have max2: "\<forall>y. y \<in> ?same_loc_writes \<longrightarrow> (w, y) \<notin> mo (incWit s)"
+      have max2: "\<forall>y. y \<in> ?same_loc_writes \<longrightarrow> (w, y) \<notin> mo (exWitness s)"
         using max wit eq_sets by auto
-      have adjacent: "adjacent_less_than (mo (incWit s')) (actions0 pre) w a"
+      have adjacent: "adjacent_less_than (mo (exWitness s')) (actions0 pre) w a"
         using w max unfolding adjacent_less_than_def by auto
-      hence w_in_rf: "(w, a) \<in> rf (incWit s')"
-        using cons2 a w incCommitted unfolding exIsConsistent_op_def rmw_atomicity_op.simps by auto
-      have "rf (incWit s') = insert (w, a) (rf (incWit s))"
-        using step_rf_aux2[OF cons1 cons2 order wit incCommitted w_in_rf] .
+      hence w_in_rf: "(w, a) \<in> rf (exWitness s')"
+        using cons2 a w committed unfolding exIsConsistent_op_def rmw_atomicity_op.simps by auto
+      have "rf (exWitness s') = insert (w, a) (rf (exWitness s))"
+        using step_rf_aux2[OF cons1 cons2 order wit committed w_in_rf] .
       thus ?thesis unfolding rf_step_rmw_def using not_empty w2 max2 by auto
     qed
 qed
@@ -905,7 +905,7 @@ qed
 (* sc-order *)
 
 lemma consistent_sc_aux1:
-  assumes cons:     "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:     "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and in_sc:    "(b, c) \<in> sc wit"
   shows             "is_seq_cst b \<and> 
                      is_seq_cst c \<and> 
@@ -929,7 +929,7 @@ proof -
 qed
 
 lemma consistent_sc_aux2:
-  assumes cons:     "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:     "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and ab_def:   "is_seq_cst b \<and> 
                      is_seq_cst c \<and> 
                      b \<in> actions \<and> 
@@ -949,189 +949,189 @@ proof -
 qed
 
 lemma consistent_sc_aux3:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and in_sc:     "(b, c) \<in> sc (incWit s')"
-  shows              "b = a \<or> c = a \<or> (b, c) \<in> sc (incWit s)"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and in_sc:     "(b, c) \<in> sc (exWitness s')"
+  shows              "b = a \<or> c = a \<or> (b, c) \<in> sc (exWitness s)"
 proof auto
-  assume "b \<noteq> a" and n_in_sc: "(b, c) \<notin> sc (incWit s)"
-  have "b \<in> incCommitted s'" "c \<in> incCommitted s'"
+  assume "b \<noteq> a" and n_in_sc: "(b, c) \<notin> sc (exWitness s)"
+  have "b \<in> committed s'" "c \<in> committed s'"
     using consistent_sc_aux1[OF cons2 in_sc] by simp_all
-  hence "b \<in> incCommitted s" using incCommitted `b \<noteq> a` by simp
-  hence "c \<notin> incCommitted s" using in_sc n_in_sc wit by simp_all
-  thus "c = a" using `c \<in> incCommitted s'` incCommitted by simp
+  hence "b \<in> committed s" using committed `b \<noteq> a` by simp
+  hence "c \<notin> committed s" using in_sc n_in_sc wit by simp_all
+  thus "c = a" using `c \<in> committed s'` committed by simp
 qed
 
 lemma step_sc_isnot_sc:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "a \<in> actions0 pre \<and> a \<notin> committed s"
       and n_sc:      "\<not> is_seq_cst a"
-  shows              "sc (incWit s') = sc (incWit s)"
+  shows              "sc (exWitness s') = sc (exWitness s)"
 unfolding sc_step_def
 proof auto
   fix b c
-  assume "(b, c) \<in> sc (incWit s)"
-  thus "(b, c) \<in> sc (incWit s')" using wit by simp
+  assume "(b, c) \<in> sc (exWitness s)"
+  thus "(b, c) \<in> sc (exWitness s')" using wit by simp
 next
   fix b c
-  assume in_sc: "(b, c) \<in> sc (incWit s')"
+  assume in_sc: "(b, c) \<in> sc (exWitness s')"
   have "is_seq_cst b" "is_seq_cst c" using consistent_sc_aux1[OF cons2 in_sc] by simp_all
   hence "b \<noteq> a" "c \<noteq> a" using n_sc by auto
-  thus "(b, c) \<in> sc (incWit s)" 
-    using consistent_sc_aux3[OF cons1 cons2 wit incCommitted in_sc] by simp
+  thus "(b, c) \<in> sc (exWitness s)" 
+    using consistent_sc_aux3[OF cons1 cons2 wit committed in_sc] by simp
 qed
 
 lemma step_sc_is_sc:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "a \<in> actions0 pre \<and> a \<notin> committed s"
       and is_sc:     "is_seq_cst a"
   shows              "sc_step pre s s' a"
 unfolding sc_step_def
 proof auto
-  let ?sc_set = "{x \<in> incCommitted s. is_seq_cst x \<and> x \<in> actions0 pre}"
-  show "expandsOrder ?sc_set a (sc (incWit s)) (sc (incWit s'))"
-    proof (cases "\<exists>b. (b, a) \<in> sc (incWit s')")
-      assume max: "\<not> (\<exists>b. (b, a) \<in> sc (incWit s'))"
-      have "sc (incWit s') = sc (incWit s) \<union> Pair a ` ?sc_set"
+  let ?sc_set = "{x \<in> committed s. is_seq_cst x \<and> x \<in> actions0 pre}"
+  show "expandsOrder ?sc_set a (sc (exWitness s)) (sc (exWitness s'))"
+    proof (cases "\<exists>b. (b, a) \<in> sc (exWitness s')")
+      assume max: "\<not> (\<exists>b. (b, a) \<in> sc (exWitness s'))"
+      have "sc (exWitness s') = sc (exWitness s) \<union> Pair a ` ?sc_set"
         proof auto
           fix c
-          assume c: "c \<in> incCommitted s" "is_seq_cst c" "c \<in> actions0 pre"
+          assume c: "c \<in> committed s" "is_seq_cst c" "c \<in> actions0 pre"
           hence "c \<noteq> a" using a by auto
-          hence "(a, c) \<in> sc (incWit s') \<or> (c, a) \<in> sc (incWit s')"
-            using consistent_sc_aux2[OF cons2] a c incCommitted is_sc 
+          hence "(a, c) \<in> sc (exWitness s') \<or> (c, a) \<in> sc (exWitness s')"
+            using consistent_sc_aux2[OF cons2] a c committed is_sc 
             by auto
-          thus "(a, c) \<in> sc (incWit s')" using max by auto
+          thus "(a, c) \<in> sc (exWitness s')" using max by auto
         next
           fix b c
-          assume "(b, c) \<in> sc (incWit s)"
-          thus "(b, c) \<in> sc (incWit s')" using wit by simp
+          assume "(b, c) \<in> sc (exWitness s)"
+          thus "(b, c) \<in> sc (exWitness s')" using wit by simp
         next
           fix b c
-          assume in_sc: "(b, c) \<in> sc (incWit s')"
-             and not_new: "(b, c) \<notin> Pair a ` {x \<in> incCommitted s. is_seq_cst x \<and> x \<in> actions0 pre}"
+          assume in_sc: "(b, c) \<in> sc (exWitness s')"
+             and not_new: "(b, c) \<notin> Pair a ` {x \<in> committed s. is_seq_cst x \<and> x \<in> actions0 pre}"
           have "c \<noteq> a" using in_sc max by auto
-          hence "c \<in> incCommitted s" "is_seq_cst c" "c \<in> actions0 pre"
-            using consistent_sc_aux1[OF cons2 in_sc] incCommitted by auto
+          hence "c \<in> committed s" "is_seq_cst c" "c \<in> actions0 pre"
+            using consistent_sc_aux1[OF cons2 in_sc] committed by auto
           hence "b \<noteq> a" using not_new by auto
-          thus "(b, c) \<in> sc (incWit s)" 
-            using consistent_sc_aux3[OF cons1 cons2 wit incCommitted in_sc] `c \<noteq> a` by simp
+          thus "(b, c) \<in> sc (exWitness s)" 
+            using consistent_sc_aux3[OF cons1 cons2 wit committed in_sc] `c \<noteq> a` by simp
         qed
       thus ?thesis unfolding expandsOrder_def by auto
     next
-      assume "\<exists>b'. (b', a) \<in> sc (incWit s')"
-      then obtain b' where b': "(b', a) \<in> sc (incWit s')" by fast
+      assume "\<exists>b'. (b', a) \<in> sc (exWitness s')"
+      then obtain b' where b': "(b', a) \<in> sc (exWitness s')" by fast
 
-      let ?sc_set2 = "{x. x \<in> actions0 pre \<and> (x, a) \<in> sc (incWit s')}"
+      let ?sc_set2 = "{x. x \<in> actions0 pre \<and> (x, a) \<in> sc (exWitness s')}"
   
       have "b' \<in> actions0 pre" using consistent_sc_aux1[OF cons2 b'] by simp
       hence "b' \<in> ?sc_set2" using b' by simp
       hence non_empty: "?sc_set2 \<noteq> {}" by fast
-      have "assumptions (pre, incWit s' , [])" 
+      have "assumptions (pre, exWitness s' , [])" 
         using cons2 unfolding exIsConsistent_op_def by simp
-      hence "finite_prefixes (sc (incWit s')) (actions0 pre)"
+      hence "finite_prefixes (sc (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?sc_set2"
         unfolding finite_prefixes_def using a by fast
-      hence irreflexive: "irrefl (sc (incWit s'))"
-      and   transitive:  "trans (sc (incWit s'))"
+      hence irreflexive: "irrefl (sc (exWitness s'))"
+      and   transitive:  "trans (sc (exWitness s'))"
         using cons2 
         unfolding exIsConsistent_op_def 
         by (auto simp add: sc_accesses_consistent_sc_op.simps)
-      hence isOrder: "isStrictPartialOrder (sc (incWit s'))" 
+      hence isOrder: "isStrictPartialOrder (sc (exWitness s'))" 
         unfolding isStrictPartialOrder_def by simp
-      obtain b where "b \<in> ?sc_set2 \<and> (\<forall>y. y \<in> ?sc_set2 \<longrightarrow> (b, y) \<notin> sc (incWit s'))"
+      obtain b where "b \<in> ?sc_set2 \<and> (\<forall>y. y \<in> ?sc_set2 \<longrightarrow> (b, y) \<notin> sc (exWitness s'))"
         using supremum_partial_order[OF finite non_empty isOrder] by auto
-      hence b:   "b \<in> actions0 pre \<and> (b, a) \<in> sc (incWit s')"
-      and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> sc (incWit s') \<longrightarrow> (b, y) \<notin> sc (incWit s')"
+      hence b:   "b \<in> actions0 pre \<and> (b, a) \<in> sc (exWitness s')"
+      and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> sc (exWitness s') \<longrightarrow> (b, y) \<notin> sc (exWitness s')"
         by auto
 
-      have b2: "b \<in> incCommitted s" "is_seq_cst b" "b \<noteq> a"
-        using b incCommitted consistent_sc_aux1[OF cons2] by fast+
+      have b2: "b \<in> committed s" "is_seq_cst b" "b \<noteq> a"
+        using b committed consistent_sc_aux1[OF cons2] by fast+
 
-      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> incCommitted s. is_seq_cst x \<and>
-                                   x \<in> actions0 pre \<and> (x, b) \<in> sc (incWit s)}"
-      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> incCommitted s. is_seq_cst x \<and> 
-                                   x \<in> actions0 pre \<and> (b, x) \<in> sc (incWit s)}"
+      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> committed s. is_seq_cst x \<and>
+                                   x \<in> actions0 pre \<and> (x, b) \<in> sc (exWitness s)}"
+      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> committed s. is_seq_cst x \<and> 
+                                   x \<in> actions0 pre \<and> (b, x) \<in> sc (exWitness s)}"
 
-      have "sc (incWit s) \<subseteq> sc (incWit s')" using wit by auto 
-      moreover have "?prev \<subseteq> sc (incWit s')"
+      have "sc (exWitness s) \<subseteq> sc (exWitness s')" using wit by auto 
+      moreover have "?prev \<subseteq> sc (exWitness s')"
         proof auto
           fix c
-          assume "(c, b) \<in> sc (incWit s)"
-          hence "(c, b) \<in> sc (incWit s')" using wit by auto
-          thus "(c, a) \<in> sc (incWit s')" using transitive_simp[OF transitive] b by fast
+          assume "(c, b) \<in> sc (exWitness s)"
+          hence "(c, b) \<in> sc (exWitness s')" using wit by auto
+          thus "(c, a) \<in> sc (exWitness s')" using transitive_simp[OF transitive] b by fast
         qed
-      moreover have "?succ \<subseteq> sc (incWit s')"
+      moreover have "?succ \<subseteq> sc (exWitness s')"
         proof auto
           fix c
-          assume in_sc: "(b, c) \<in> sc (incWit s)"
-          hence c: "c \<in> actions0 pre" "c \<in> incCommitted s" "is_seq_cst c"
+          assume in_sc: "(b, c) \<in> sc (exWitness s)"
+          hence c: "c \<in> actions0 pre" "c \<in> committed s" "is_seq_cst c"
             using consistent_sc_aux1[OF cons1] by fast+
-          have in_sc2: "(b, c) \<in> sc (incWit s')" using in_sc wit by auto
-          have "(c, a) \<notin> sc (incWit s')" using max in_sc2 c by fast
-          thus "(a, c) \<in> sc (incWit s')" 
-            using consistent_sc_aux2[OF cons2] c a incCommitted is_sc by auto
+          have in_sc2: "(b, c) \<in> sc (exWitness s')" using in_sc wit by auto
+          have "(c, a) \<notin> sc (exWitness s')" using max in_sc2 c by fast
+          thus "(a, c) \<in> sc (exWitness s')" 
+            using consistent_sc_aux2[OF cons2] c a committed is_sc by auto
         qed
-      moreover have "sc (incWit s') \<subseteq> sc (incWit s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
+      moreover have "sc (exWitness s') \<subseteq> sc (exWitness s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
         proof clarify
           fix c d
-          assume in_sc2: "(c, d) \<in> sc (incWit s')"
-             and nin_sc1: "(c, d) \<notin> sc (incWit s)"
+          assume in_sc2: "(c, d) \<in> sc (exWitness s')"
+             and nin_sc1: "(c, d) \<notin> sc (exWitness s)"
              and nin_prev: "(c, d) \<notin> ?prev"
              and nin_succ: "(c, d) \<notin> ?succ"
-          have d: "d \<in> incCommitted s'" "is_seq_cst d" "d \<in> actions0 pre" "d \<noteq> c"
+          have d: "d \<in> committed s'" "is_seq_cst d" "d \<in> actions0 pre" "d \<noteq> c"
             using consistent_sc_aux1[OF cons2 in_sc2] by auto
-          have c: "c \<in> incCommitted s'" "is_seq_cst c" "c \<in> actions0 pre" "d \<noteq> c"
+          have c: "c \<in> committed s'" "is_seq_cst c" "c \<in> actions0 pre" "d \<noteq> c"
             using consistent_sc_aux1[OF cons2 in_sc2] by auto
           have "c \<noteq> a"
             proof
               assume "c = a"
-              hence d2: "d \<in> incCommitted s" using d incCommitted by simp
-              have "(b, d) \<in> sc (incWit s')" 
+              hence d2: "d \<in> committed s" using d committed by simp
+              have "(b, d) \<in> sc (exWitness s')" 
                 using transitive_simp[OF transitive] b in_sc2 `c = a` by fast
-              hence "(b, d) \<in> sc (incWit s)" using b2 d2 wit by auto
+              hence "(b, d) \<in> sc (exWitness s)" using b2 d2 wit by auto
               hence "(c, d) \<in> ?succ" using d d2 `c = a` by auto
               thus False using nin_succ by simp
             qed
           hence "d = a" 
-            using consistent_sc_aux3[OF cons1 cons2 wit incCommitted in_sc2] nin_sc1 by simp
-          hence c2: "c \<in> incCommitted s" using c incCommitted by simp
-          have bc_nin_sc: "(b, c) \<notin> sc (incWit s')" using max c in_sc2 `d = a` by simp
-          have "(c, b) \<notin> sc (incWit s)" using nin_prev `d = a` c c2 by auto
-          hence "(c, b) \<notin> sc (incWit s')" using b2 c2 wit by auto
+            using consistent_sc_aux3[OF cons1 cons2 wit committed in_sc2] nin_sc1 by simp
+          hence c2: "c \<in> committed s" using c committed by simp
+          have bc_nin_sc: "(b, c) \<notin> sc (exWitness s')" using max c in_sc2 `d = a` by simp
+          have "(c, b) \<notin> sc (exWitness s)" using nin_prev `d = a` c c2 by auto
+          hence "(c, b) \<notin> sc (exWitness s')" using b2 c2 wit by auto
           hence "c = b" 
-            using consistent_sc_aux2[OF cons2] bc_nin_sc b b2 c incCommitted by auto
+            using consistent_sc_aux2[OF cons2] bc_nin_sc b b2 c committed by auto
           thus "c = b \<and> d = a" using `d = a` by simp
         qed
-      ultimately have "sc (incWit s') = sc (incWit s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
+      ultimately have "sc (exWitness s') = sc (exWitness s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
         using b by auto        
       thus ?thesis using b b2 unfolding expandsOrder_def by auto
     qed
 qed
 
 corollary step_sc:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "a \<in> actions0 pre \<and> a \<notin> incCommitted s"
-  shows              "if is_seq_cst a then sc_step pre s s' a else sc (incWit s') = sc (incWit s)"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "a \<in> actions0 pre \<and> a \<notin> committed s"
+  shows              "if is_seq_cst a then sc_step pre s s' a else sc (exWitness s') = sc (exWitness s)"
 proof (cases "is_seq_cst a")
   assume "is_seq_cst a"
   thus ?thesis 
-    using step_sc_is_sc[OF cons1 cons2 wit incCommitted] a by simp
+    using step_sc_is_sc[OF cons1 cons2 wit committed] a by simp
 next
   assume "\<not>is_seq_cst a"
   thus ?thesis 
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp
 qed
 
 (* lo-order *)
@@ -1139,7 +1139,7 @@ qed
 (* TODO: lo is a duplicate of sc *)
 
 lemma consistent_lo_aux1:
-  assumes cons:     "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:     "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and in_lo:    "(b, c) \<in> lo wit"
   shows             "(is_lock b \<or> is_unlock b) \<and> 
                      (is_lock c \<or> is_unlock c) \<and> 
@@ -1166,7 +1166,7 @@ proof -
 qed
 
 lemma consistent_lo_aux2:
-  assumes cons:     "axsimpConsistent (pre, wit, getRelations pre wit)"
+  assumes cons:     "exIsConsistent_op actions (pre, wit, getRelations pre wit)"
       and ab_def:   "(is_lock b \<or> is_unlock b) \<and> 
                      (is_lock c \<or> is_unlock c) \<and> 
                      loc_of b = loc_of c \<and>
@@ -1188,183 +1188,183 @@ proof -
 qed
 
 lemma consistent_lo_aux3:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and in_lo:     "(b, c) \<in> lo (incWit s')"
-  shows              "b = a \<or> c = a \<or> (b, c) \<in> lo (incWit s)"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and in_lo:     "(b, c) \<in> lo (exWitness s')"
+  shows              "b = a \<or> c = a \<or> (b, c) \<in> lo (exWitness s)"
 proof auto
-  assume "b \<noteq> a" and n_in_lo: "(b, c) \<notin> lo (incWit s)"
-  have "b \<in> incCommitted s'" "c \<in> incCommitted s'"
+  assume "b \<noteq> a" and n_in_lo: "(b, c) \<notin> lo (exWitness s)"
+  have "b \<in> committed s'" "c \<in> committed s'"
     using consistent_lo_aux1[OF cons2 in_lo] by simp_all
-  hence "b \<in> incCommitted s" using incCommitted `b \<noteq> a` by simp
-  hence "c \<notin> incCommitted s" using in_lo n_in_lo wit by simp_all
-  thus "c = a" using `c \<in> incCommitted s'` incCommitted by simp
+  hence "b \<in> committed s" using committed `b \<noteq> a` by simp
+  hence "c \<notin> committed s" using in_lo n_in_lo wit by simp_all
+  thus "c = a" using `c \<in> committed s'` committed by simp
 qed
 
 lemma step_lo_not_lock_unlock:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "a \<in> actions0 pre \<and> a \<notin> incCommitted s \<and> \<not>is_lock a \<and> \<not>is_unlock a"
-  shows              "lo (incWit s') = lo (incWit s)"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "a \<in> actions0 pre \<and> a \<notin> committed s \<and> \<not>is_lock a \<and> \<not>is_unlock a"
+  shows              "lo (exWitness s') = lo (exWitness s)"
 proof (intro equalityI subsetI, auto)
   fix b c
-  assume "(b, c) \<in> lo (incWit s)"
-  thus "(b, c) \<in> lo (incWit s')" using wit by simp
+  assume "(b, c) \<in> lo (exWitness s)"
+  thus "(b, c) \<in> lo (exWitness s')" using wit by simp
 next
   fix b c
-  assume in_lo: "(b, c) \<in> lo (incWit s')"
+  assume in_lo: "(b, c) \<in> lo (exWitness s')"
   have "(is_lock b \<or> is_unlock b)" "(is_lock c \<or> is_unlock c)"
     using consistent_lo_aux1[OF cons2 in_lo] by simp_all
   hence "b \<noteq> a" "c \<noteq> a" using a by auto
-  thus "(b, c) \<in> lo (incWit s)"
-    using consistent_lo_aux3[OF cons1 cons2 wit incCommitted in_lo] by simp
+  thus "(b, c) \<in> lo (exWitness s)"
+    using consistent_lo_aux3[OF cons1 cons2 wit committed in_lo] by simp
 qed
 
 lemma step_lo_lock_unlock:
-  assumes cons1:     "axsimpConsistent (pre, incWit s , getRelations pre (incWit s ))"
-      and cons2:     "axsimpConsistent (pre, incWit s', getRelations pre (incWit s'))"
-      and wit:       "incWit s = incWitRestrict (incWit s') (incCommitted s)"
-      and committed: "incCommitted s' = insert a (incCommitted s)"
-      and a:         "a \<in> actions0 pre \<and> a \<notin> incCommitted s \<and> (is_lock a \<or> is_unlock a)"
+  assumes cons1:     "exIsConsistent_op (committed s ) (pre, exWitness s , getRelations pre (exWitness s ))"
+      and cons2:     "exIsConsistent_op (committed s') (pre, exWitness s', getRelations pre (exWitness s'))"
+      and wit:       "exWitness s = witnessRestrict (exWitness s') (committed s)"
+      and committed: "committed s' = insert a (committed s)"
+      and a:         "a \<in> actions0 pre \<and> a \<notin> committed s \<and> (is_lock a \<or> is_unlock a)"
   shows              "lo_step_lock_unlock pre s s' a"
 (* TODO: this lemma is a clone of step_sc. *)
 unfolding lo_step_lock_unlock_def
 proof auto
-  let ?lo_set = " {x \<in> incCommitted s. x \<in> actions0 pre \<and> (is_lock x \<or> is_unlock x) \<and> loc_of x = loc_of a}"
+  let ?lo_set = " {x \<in> committed s. x \<in> actions0 pre \<and> (is_lock x \<or> is_unlock x) \<and> loc_of x = loc_of a}"
   have "actions_respect_location_kinds (actions0 pre) (lk pre)"
     using cons1 unfolding exIsConsistent_op_def well_formed_threads.simps by simp
   hence mutex: "is_at_mutex_location (lk pre) a"
     unfolding actions_respect_location_kinds_def is_at_mutex_location_def
     using a by (cases a) auto
-  show "expandsOrder ?lo_set a (lo (incWit s)) (lo (incWit s'))"
-    proof (cases "\<exists>b. (b, a) \<in> lo (incWit s')")
-      assume max: "\<not> (\<exists>b. (b, a) \<in> lo (incWit s'))"
-      have "lo (incWit s') = lo (incWit s) \<union> Pair a ` ?lo_set"
+  show "expandsOrder ?lo_set a (lo (exWitness s)) (lo (exWitness s'))"
+    proof (cases "\<exists>b. (b, a) \<in> lo (exWitness s')")
+      assume max: "\<not> (\<exists>b. (b, a) \<in> lo (exWitness s'))"
+      have "lo (exWitness s') = lo (exWitness s) \<union> Pair a ` ?lo_set"
         proof auto
           fix c
-          assume c: "c \<in> incCommitted s" "c \<in> actions0 pre" "loc_of c = loc_of a" "is_lock c"
+          assume c: "c \<in> committed s" "c \<in> actions0 pre" "loc_of c = loc_of a" "is_lock c"
           hence "c \<noteq> a" using a by auto
-          hence "(a, c) \<in> lo (incWit s') \<or> (c, a) \<in> lo (incWit s')"
-            using consistent_lo_aux2[OF cons2] a mutex c incCommitted  
+          hence "(a, c) \<in> lo (exWitness s') \<or> (c, a) \<in> lo (exWitness s')"
+            using consistent_lo_aux2[OF cons2] a mutex c committed  
             by auto
-          thus "(a, c) \<in> lo (incWit s')" using max by auto
+          thus "(a, c) \<in> lo (exWitness s')" using max by auto
         next
           fix c
-          assume c: "c \<in> incCommitted s" "c \<in> actions0 pre" "loc_of c = loc_of a" "is_unlock c"
+          assume c: "c \<in> committed s" "c \<in> actions0 pre" "loc_of c = loc_of a" "is_unlock c"
           hence "c \<noteq> a" using a by auto
-          hence "(a, c) \<in> lo (incWit s') \<or> (c, a) \<in> lo (incWit s')"
-            using consistent_lo_aux2[OF cons2] a mutex c incCommitted  
+          hence "(a, c) \<in> lo (exWitness s') \<or> (c, a) \<in> lo (exWitness s')"
+            using consistent_lo_aux2[OF cons2] a mutex c committed  
             by auto
-          thus "(a, c) \<in> lo (incWit s')" using max by auto
+          thus "(a, c) \<in> lo (exWitness s')" using max by auto
         next
           fix b c
-          assume "(b, c) \<in> lo (incWit s)"
-          thus "(b, c) \<in> lo (incWit s')" using wit by simp
+          assume "(b, c) \<in> lo (exWitness s)"
+          thus "(b, c) \<in> lo (exWitness s')" using wit by simp
         next
           fix b c
-          assume in_lo: "(b, c) \<in> lo (incWit s')"
+          assume in_lo: "(b, c) \<in> lo (exWitness s')"
              and not_new: "(b, c) \<notin> Pair a ` ?lo_set"
           have "c \<noteq> a" using in_lo max by auto
-          hence "c \<in> incCommitted s" "c \<in> actions0 pre" "loc_of c = loc_of b" "is_lock c \<or> is_unlock c"
-            using consistent_lo_aux1[OF cons2 in_lo] incCommitted by auto
+          hence "c \<in> committed s" "c \<in> actions0 pre" "loc_of c = loc_of b" "is_lock c \<or> is_unlock c"
+            using consistent_lo_aux1[OF cons2 in_lo] committed by auto
           hence "b \<noteq> a" using not_new by auto
-          thus "(b, c) \<in> lo (incWit s)" 
-            using consistent_lo_aux3[OF cons1 cons2 wit incCommitted in_lo] `c \<noteq> a` by simp
+          thus "(b, c) \<in> lo (exWitness s)" 
+            using consistent_lo_aux3[OF cons1 cons2 wit committed in_lo] `c \<noteq> a` by simp
         qed
       thus ?thesis unfolding expandsOrder_def by auto
     next
-      assume "\<exists>b'. (b', a) \<in> lo (incWit s')"
-      then obtain b' where b': "(b', a) \<in> lo (incWit s')" by fast
+      assume "\<exists>b'. (b', a) \<in> lo (exWitness s')"
+      then obtain b' where b': "(b', a) \<in> lo (exWitness s')" by fast
 
-      let ?lo_set2 = "{x. x \<in> actions0 pre \<and> (x, a) \<in> lo (incWit s')}"
+      let ?lo_set2 = "{x. x \<in> actions0 pre \<and> (x, a) \<in> lo (exWitness s')}"
   
       have "b' \<in> actions0 pre" using consistent_lo_aux1[OF cons2 b'] by simp
       hence "b' \<in> ?lo_set2" using b' by simp
       hence non_empty: "?lo_set2 \<noteq> {}" by fast
-      have "assumptions (pre, incWit s' , [])" 
+      have "assumptions (pre, exWitness s' , [])" 
         using cons2 unfolding exIsConsistent_op_def by simp
-      hence "finite_prefixes (lo (incWit s')) (actions0 pre)"
+      hence "finite_prefixes (lo (exWitness s')) (actions0 pre)"
         unfolding assumptions.simps by simp
       hence finite: "finite ?lo_set2"
         unfolding finite_prefixes_def using a by fast
-      hence irreflexive: "irrefl (lo (incWit s'))"
-      and   transitive:  "trans (lo (incWit s'))"
+      hence irreflexive: "irrefl (lo (exWitness s'))"
+      and   transitive:  "trans (lo (exWitness s'))"
         using cons2 
         unfolding exIsConsistent_op_def   
         by (auto simp add: locks_only_consistent_lo_op.simps)
-      hence isOrder: "isStrictPartialOrder (lo (incWit s'))" 
+      hence isOrder: "isStrictPartialOrder (lo (exWitness s'))" 
         unfolding isStrictPartialOrder_def by simp
-      obtain b where "b \<in> ?lo_set2 \<and> (\<forall>y. y \<in> ?lo_set2 \<longrightarrow> (b, y) \<notin> lo (incWit s'))"
+      obtain b where "b \<in> ?lo_set2 \<and> (\<forall>y. y \<in> ?lo_set2 \<longrightarrow> (b, y) \<notin> lo (exWitness s'))"
         using supremum_partial_order[OF finite non_empty isOrder] by auto
-      hence b:   "b \<in> actions0 pre" and b_in_lo: "(b, a) \<in> lo (incWit s')"
-      and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> lo (incWit s') \<longrightarrow> (b, y) \<notin> lo (incWit s')"
+      hence b:   "b \<in> actions0 pre" and b_in_lo: "(b, a) \<in> lo (exWitness s')"
+      and   max: "\<forall>y. y \<in> actions0 pre \<and> (y, a) \<in> lo (exWitness s') \<longrightarrow> (b, y) \<notin> lo (exWitness s')"
         by auto
 
-      have b2: "b \<in> incCommitted s" "b \<noteq> a" "loc_of a = loc_of b" 
+      have b2: "b \<in> committed s" "b \<noteq> a" "loc_of a = loc_of b" 
                "is_lock b \<or> is_unlock b" "is_at_mutex_location (lk pre) b"
-        using incCommitted consistent_lo_aux1[OF cons2 b_in_lo] by auto
+        using committed consistent_lo_aux1[OF cons2 b_in_lo] by auto
 
-      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> ?lo_set. (x, b) \<in> lo (incWit s)}"
-      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> ?lo_set. (b, x) \<in> lo (incWit s)}"
+      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> ?lo_set. (x, b) \<in> lo (exWitness s)}"
+      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> ?lo_set. (b, x) \<in> lo (exWitness s)}"
 
-      have "lo (incWit s) \<subseteq> lo (incWit s')" using wit by auto 
-      moreover have "?prev \<subseteq> lo (incWit s')" 
+      have "lo (exWitness s) \<subseteq> lo (exWitness s')" using wit by auto 
+      moreover have "?prev \<subseteq> lo (exWitness s')" 
         proof clarify
           fix c
-          assume "(c, b) \<in> lo (incWit s)"
-          hence "(c, b) \<in> lo (incWit s')" using wit by auto
-          thus "(c, a) \<in> lo (incWit s')" using transitive_simp[OF transitive] b_in_lo by fast
+          assume "(c, b) \<in> lo (exWitness s)"
+          hence "(c, b) \<in> lo (exWitness s')" using wit by auto
+          thus "(c, a) \<in> lo (exWitness s')" using transitive_simp[OF transitive] b_in_lo by fast
         qed
-      moreover have "?succ \<subseteq> lo (incWit s')"
+      moreover have "?succ \<subseteq> lo (exWitness s')"
         proof clarify
           fix c
-          assume in_lo: "(b, c) \<in> lo (incWit s)"
-          have c: "c \<in> actions0 pre" "c \<in> incCommitted s" "loc_of c = loc_of b" "is_lock c \<or> is_unlock c"
+          assume in_lo: "(b, c) \<in> lo (exWitness s)"
+          have c: "c \<in> actions0 pre" "c \<in> committed s" "loc_of c = loc_of b" "is_lock c \<or> is_unlock c"
             using consistent_lo_aux1[OF cons1 in_lo] by auto
-          have in_lo2: "(b, c) \<in> lo (incWit s')" using in_lo wit by auto
-          have "(c, a) \<notin> lo (incWit s')" using max in_lo2 c by fast
-          thus "(a, c) \<in> lo (incWit s')" 
-            using consistent_lo_aux2[OF cons2, where b=a and c=c] c a mutex b2 incCommitted by auto
+          have in_lo2: "(b, c) \<in> lo (exWitness s')" using in_lo wit by auto
+          have "(c, a) \<notin> lo (exWitness s')" using max in_lo2 c by fast
+          thus "(a, c) \<in> lo (exWitness s')" 
+            using consistent_lo_aux2[OF cons2, where b=a and c=c] c a mutex b2 committed by auto
         qed
-      moreover have "lo (incWit s') \<subseteq> lo (incWit s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
+      moreover have "lo (exWitness s') \<subseteq> lo (exWitness s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
         proof clarify
           fix c d
-          assume in_lo2: "(c, d) \<in> lo (incWit s')"
-             and nin_lo1: "(c, d) \<notin> lo (incWit s)"
+          assume in_lo2: "(c, d) \<in> lo (exWitness s')"
+             and nin_lo1: "(c, d) \<notin> lo (exWitness s)"
              and nin_prev: "(c, d) \<notin> ?prev"
              and nin_succ: "(c, d) \<notin> ?succ"
-          have d: "d \<in> incCommitted s'" "d \<in> actions0 pre" "d \<noteq> c" 
+          have d: "d \<in> committed s'" "d \<in> actions0 pre" "d \<noteq> c" 
                   "loc_of c = loc_of d" "is_lock d \<or> is_unlock d"
             using consistent_lo_aux1[OF cons2 in_lo2] by auto
-          have c: "c \<in> incCommitted s'" "c \<in> actions0 pre" "d \<noteq> c" 
+          have c: "c \<in> committed s'" "c \<in> actions0 pre" "d \<noteq> c" 
                   "loc_of c = loc_of d" "is_lock c \<or> is_unlock c"
             using consistent_lo_aux1[OF cons2 in_lo2] by auto
           have "c \<noteq> a"
             proof
               assume "c = a"
-              hence d2: "d \<in> incCommitted s" using d incCommitted by simp
-              have "(b, d) \<in> lo (incWit s')" 
+              hence d2: "d \<in> committed s" using d committed by simp
+              have "(b, d) \<in> lo (exWitness s')" 
                 using transitive_simp[OF transitive] b_in_lo in_lo2 `c = a` by fast
-              hence "(b, d) \<in> lo (incWit s)" using b2 d2 wit by auto
+              hence "(b, d) \<in> lo (exWitness s)" using b2 d2 wit by auto
               hence "(c, d) \<in> ?succ" using d d2 `c = a` by auto
               thus False using nin_succ by simp
             qed
           hence "d = a" 
-            using consistent_lo_aux3[OF cons1 cons2 wit incCommitted in_lo2] nin_lo1 by simp
-          hence c2: "c \<in> incCommitted s" using c incCommitted by simp
-          have bc_nin_lo: "(b, c) \<notin> lo (incWit s')" using max c in_lo2 `d = a` by simp
+            using consistent_lo_aux3[OF cons1 cons2 wit committed in_lo2] nin_lo1 by simp
+          hence c2: "c \<in> committed s" using c committed by simp
+          have bc_nin_lo: "(b, c) \<notin> lo (exWitness s')" using max c in_lo2 `d = a` by simp
           have loc: "loc_of b = loc_of c" using b2 c `d = a` by auto
-          have "(c, b) \<notin> lo (incWit s)" using nin_prev `d = a` c c2 by auto
-          hence "(c, b) \<notin> lo (incWit s')" using b2 c2 wit by auto
+          have "(c, b) \<notin> lo (exWitness s)" using nin_prev `d = a` c c2 by auto
+          hence "(c, b) \<notin> lo (exWitness s')" using b2 c2 wit by auto
           hence "c = b" 
-            using consistent_lo_aux2[OF cons2] bc_nin_lo b b2 c incCommitted loc by fast
+            using consistent_lo_aux2[OF cons2] bc_nin_lo b b2 c committed loc by fast
           thus "c = b \<and> d = a" using `d = a` by simp
         qed
-      ultimately have "lo (incWit s') = lo (incWit s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
+      ultimately have "lo (exWitness s') = lo (exWitness s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
         using b b_in_lo by auto        
       thus ?thesis using b b2 unfolding expandsOrder_def Let_def by auto
     qed
@@ -1373,49 +1373,49 @@ qed
 (* Section X - Completeness -------------------------------------------------------------------- *)
 
 lemma completeness_relPerformLoad:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_load a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_load a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformLoad pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have rf: "rf_step_load pre s1 s2 a"
-    using step_rf_load[OF cons1 cons2 order wit incCommitted] a by simp
-  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (incWit s2) = sc (incWit s1)"
-    using step_sc[OF cons1 cons2 wit incCommitted] a by simp      
+    using step_rf_load[OF cons1 cons2 order wit committed] a by simp
+  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformLoad_def
     using cons2 wit rf mo lo sc tot by auto
 qed   
 
 lemma completeness_relPerformStore:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_store a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_store a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformStore pre s1 s2 a"
 proof -
   have mo: "if is_at_atomic_location (lk pre) a then 
                mo_step_atomic_write pre s1 s2 a 
             else 
-               mo (incWit s2) = mo (incWit s1)"
+               mo (exWitness s2) = mo (exWitness s1)"
     proof (cases "is_at_atomic_location (lk pre) a")
       assume loc: "is_at_atomic_location (lk pre) a"
       have "is_write a" using a by (cases a) auto
-      thus ?thesis using loc step_mo_atomic_write[OF cons1 cons2 wit incCommitted] a by simp
+      thus ?thesis using loc step_mo_atomic_write[OF cons1 cons2 wit committed] a by simp
     next
       assume loc: "\<not>is_at_atomic_location (lk pre) a"
       have "actions_respect_location_kinds (actions0 pre) (lk pre)"
@@ -1425,31 +1425,31 @@ proof -
         using loc a 
         unfolding is_at_atomic_location_def is_at_non_atomic_location_def
         by (cases a) auto
-      thus ?thesis using loc step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+      thus ?thesis using loc step_mo_not_atomic_write[OF cons2 wit committed] a by simp
     qed      
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
-  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (incWit s2) = sc (incWit s1)"
-    using step_sc[OF cons1 cons2 wit incCommitted] a by simp      
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
+  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformStore_def 
     using cons2 wit rf mo lo sc tot by metis
 qed   
 
 lemma completeness_relPerformRmw:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_RMW a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_RMW a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformRmw pre s1 s2 a"
 proof -
   have "actions_respect_location_kinds (actions0 pre) (lk pre)"
@@ -1460,209 +1460,209 @@ proof -
     using a by (cases a) auto
   have "is_write a" using a by (cases a) auto
   hence mo: "mo_step_atomic_write pre s1 s2 a"
-    using step_mo_atomic_write[OF cons1 cons2 wit incCommitted] loc a by simp 
+    using step_mo_atomic_write[OF cons1 cons2 wit committed] loc a by simp 
   have rf: "rf_step_rmw pre s1 s2 a"
-    using step_rf_rmw[OF cons1 cons2 order wit incCommitted] a by simp
-  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (incWit s2) = sc (incWit s1)"
-    using step_sc[OF cons1 cons2 wit incCommitted] a by simp      
+    using step_rf_rmw[OF cons1 cons2 order wit committed] a by simp
+  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformRmw_def
     using cons2 wit rf mo lo sc tot by metis
 qed   
 
 lemma completeness_relPerformBlocked_rmw:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_blocked_rmw a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_blocked_rmw a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformBlocked_rmw pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
   have "\<not> is_seq_cst a" using a by (cases a) auto
-  hence sc: "sc (incWit s2) = sc (incWit s1)"
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp      
+  hence sc: "sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformBlocked_rmw_def
     using cons2 wit rf mo lo sc tot by metis
 qed   
 
 lemma completeness_relPerformLock:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_lock a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_lock a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformLock pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
   have "\<not> is_seq_cst a" using a by (cases a) auto
-  hence sc: "sc (incWit s2) = sc (incWit s1)"
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp  
+  hence sc: "sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp  
   hence lo: "lo_step_lock_unlock pre s1 s2 a" 
-    using step_lo_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+    using step_lo_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformLock_def
     using cons2 wit rf mo lo sc tot by metis
 qed   
 
 lemma completeness_relPerformUnlock:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_unlock a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_unlock a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformUnlock pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
   have "\<not> is_seq_cst a" using a by (cases a) auto
-  hence sc: "sc (incWit s2) = sc (incWit s1)"
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp  
+  hence sc: "sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp  
   hence lo: "lo_step_lock_unlock pre s1 s2 a" 
-    using step_lo_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+    using step_lo_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformUnlock_def
     using cons2 wit rf mo lo sc tot by metis
 qed 
 
 lemma completeness_relPerformFence:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_fence a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_fence a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformFence pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
-  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (incWit s2) = sc (incWit s1)"
-    using step_sc[OF cons1 cons2 wit incCommitted] a by simp     
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
+  have sc: "if is_seq_cst a then sc_step pre s1 s2 a else sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc[OF cons1 cons2 wit committed] a by simp     
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformFence_def
     using cons2 wit rf mo lo sc tot by metis
 qed  
 
 lemma completeness_relPerformAlloc:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_alloc a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_alloc a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformAlloc pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
   have "\<not> is_seq_cst a" using a by (cases a) auto
-  hence sc: "sc (incWit s2) = sc (incWit s1)"
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp      
+  hence sc: "sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformAlloc_def
     using cons2 wit rf mo lo sc tot by metis
 qed  
 
 lemma completeness_relPerformDealloc:
-  assumes cons1:     "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
-      and cons2:     "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  assumes cons1:     "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
+      and cons2:     "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
       and order:     "isInOpsemOrder_step pre s1 s2 a"
-      and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
-      and committed: "incCommitted s2 = insert a (incCommitted s1)"
-      and a:         "is_dealloc a \<and> a \<notin> incCommitted s1 \<and> a \<in> actions0 pre"
+      and wit:       "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
+      and committed: "committed s2 = insert a (committed s1)"
+      and a:         "is_dealloc a \<and> a \<notin> committed s1 \<and> a \<in> actions0 pre"
   shows              "relPerformDealloc pre s1 s2 a"
 proof -
   have "\<not> is_write a" using a by (cases a) auto
-  hence mo: "mo (incWit s2) = mo (incWit s1)" 
-    using step_mo_not_atomic_write[OF cons2 wit incCommitted] a by simp
+  hence mo: "mo (exWitness s2) = mo (exWitness s1)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
   have "\<not> is_read a" using a by (cases a) auto
-  hence rf: "rf (incWit s2) = rf (incWit s1)" 
-    using step_rf_non_read[OF cons1 cons2 order wit incCommitted] a by simp
+  hence rf: "rf (exWitness s2) = rf (exWitness s1)" 
+    using step_rf_non_read[OF cons1 cons2 order wit committed] a by simp
   have "\<not> is_seq_cst a" using a by (cases a) auto
-  hence sc: "sc (incWit s2) = sc (incWit s1)"
-    using step_sc_isnot_sc[OF cons1 cons2 wit incCommitted] a by simp      
+  hence sc: "sc (exWitness s2) = sc (exWitness s1)"
+    using step_sc_isnot_sc[OF cons1 cons2 wit committed] a by simp      
   have "\<not>is_lock a \<and> \<not>is_unlock a" using a by (cases a) auto
-  hence lo: "lo (incWit s2) = lo (incWit s1)" 
-    using step_lo_not_lock_unlock[OF cons1 cons2 wit incCommitted] a by simp
-  have "tot_empty (pre, incWit s1, [])" "tot_empty (pre, incWit s2, [])"
+  hence lo: "lo (exWitness s2) = lo (exWitness s1)" 
+    using step_lo_not_lock_unlock[OF cons1 cons2 wit committed] a by simp
+  have "tot_empty (pre, exWitness s1, [])" "tot_empty (pre, exWitness s2, [])"
     using cons1 cons2 unfolding exIsConsistent_op_def by simp_all
-  hence tot: "tot (incWit s2) = tot (incWit s1)" unfolding tot_empty.simps by simp
+  hence tot: "tot (exWitness s2) = tot (exWitness s1)" unfolding tot_empty.simps by simp
   show ?thesis
     unfolding relPerformDealloc_def
     using cons2 wit rf mo lo sc tot by metis
 qed    
 
 lemma completeness_step:
-  assumes cons:      "exIsConsistent_op (incCommitted s1) (pre, incWit s1, getRelations pre (incWit s1))"
+  assumes cons:      "exIsConsistent_op (committed s1) (pre, exWitness s1, getRelations pre (exWitness s1))"
       and step:      "minOpsemStep pre s1 s2 a"
   shows              "relOpsemStep pre s1 s2 a"
 proof -
-  have a: "a \<in> actions0 pre \<and> a \<notin> incCommitted s1 \<and> incCommitted s2 = insert a (incCommitted s1)"
+  have a: "a \<in> actions0 pre \<and> a \<notin> committed s1 \<and> committed s2 = insert a (committed s1)"
     using step unfolding minOpsemStep_def Let_def by simp
-  have order: "\<forall>b\<in>actions0 pre. (b, a) \<in> opsemOrderAlt pre (incWit s2) \<longrightarrow> b \<in> (incCommitted s1)"
+  have order: "\<forall>b\<in>actions0 pre. (b, a) \<in> opsemOrderAlt pre (exWitness s2) \<longrightarrow> b \<in> (committed s1)"
     using step unfolding minOpsemStep_def Let_def by simp
   have order2: "isInOpsemOrder_step pre s1 s2 a"
     using step unfolding minOpsemStep_def isInOpsemOrder_step_def Let_def by simp
-  have definedness: "stateIsDefined s2 = exIsDefined (pre, incWit s2, getRelations pre (incWit s2))"
+  have definedness: "stateIsDefined s2 = exIsDefined (pre, exWitness s2, getRelations pre (exWitness s2))"
     using step unfolding minOpsemStep_def Let_def by simp
-  have cons2: "exIsConsistent_op (incCommitted s2) (pre, incWit s2, getRelations pre (incWit s2))"
+  have cons2: "exIsConsistent_op (committed s2) (pre, exWitness s2, getRelations pre (exWitness s2))"
     using step unfolding minOpsemStep_def Let_def by blast (* TODO: why does auto loop? *)
-  have wit: "incWit s1 = incWitRestrict (incWit s2) (incCommitted s1)"
+  have wit: "exWitness s1 = witnessRestrict (exWitness s2) (committed s1)"
     using step unfolding minOpsemStep_def Let_def by auto
   show ?thesis
     proof (cases a)
@@ -1731,7 +1731,7 @@ next
   case (minOpsemStep pre x y z a)
   have x: "x = initialState pre" using minOpsemStep by auto
   have minTrace: "minOpsemTrace pre x y" using minOpsemStep by auto
-  have cons: "exIsConsistent_op (incCommitted y) (pre, incWit y, getRelations pre (incWit y))"
+  have cons: "exIsConsistent_op (committed y) (pre, exWitness y, getRelations pre (exWitness y))"
     using EquivalenceMinimalOpsem.consistencySpecTrace[OF minTrace x] .    
   have "relOpsemStep pre y z a" 
     using completeness_step[OF cons] minOpsemStep by auto

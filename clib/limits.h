@@ -12,7 +12,7 @@
 #define SHRT_MAX   __cerbvar_SHRT_MAX
 #define USHRT_MAX  __cerbvar_USHRT_MAX
 #define INT_MIN    __cerbvar_INT_MIN
-#define INT_MAX    __cerbvar_INT_MAS
+#define INT_MAX    __cerbvar_INT_MAX
 #define UINT_MAX   __cerbvar_UINT_MAX
 #define LONG_MIN   __cerbvar_LONG_MIN
 #define LONG_MAX   __cerbvar_LONG_MAX
