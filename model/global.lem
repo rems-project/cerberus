@@ -1,0 +1,310 @@
+open import Pervasives
+import Map
+
+
+class (Default 'a)
+  val default: 'a
+end
+
+instance (Default unit)
+  let default = ()
+end
+
+
+(*
+(* TODO: hack *)
+val assert_false_: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false_ = `Boot_ocaml.assert_false`
+*)
+
+
+
+val     numerote_: forall 'a. nat -> list 'a -> list (nat * 'a)
+let rec numerote_ n l =
+  match l with
+    | []    -> []
+    | x::xs -> (n,x) :: numerote_ (n+1) xs
+  end
+let numerote l = numerote_ 1 l
+
+
+
+let inline (-|) f g x = f (g x)
+let inline (|-) g f x = f (g x)
+(* TODO: ask change in lem to be able to have
+         the traditional |> *)
+let inline (>|>) x f = f x
+let inline (>?>) x b f g = if b then f x else g x
+
+
+(* TODO: move into Lem's libary *)
+let rec nub' l acc =
+  match l with
+    | []    -> []
+    | x::xs -> if List.elem x acc then nub' xs acc
+                                  else x :: nub' xs (x::acc)
+  end
+let nub l = nub' l []
+
+
+let rec or_list l =
+  match l with
+    | []    -> false
+    | x::xs -> x || or_list xs
+  end
+
+
+(*
+TODO
+let list_diff eq = List.fold_left (fun x y -> delete eq y x)
+*)
+
+
+(* TODO: move into Lem's libary *)
+val     zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
+let rec zip3 xs ys zs =
+  match (xs, ys, zs) with
+    | (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
+    | _                        -> []
+  end
+
+(* TODO: move into Lem's libary *)
+val     zip4: forall 'a 'b 'c 'd. list 'a -> list 'b -> list 'c -> list 'd -> list ('a * 'b * 'c * 'd)
+let rec zip4 xs ys zs us =
+  match (xs, ys, zs, us) with
+    | (x::xs', y::ys', z::zs', u::us') -> (x,y,z,u) :: zip4 xs' ys' zs' us'
+    | _                                -> []
+  end
+
+(* TODO: move into Lem's libary *)
+val unzip3: forall 'a 'b 'c. list ('a * 'b * 'c) -> (list 'a * list 'b * list 'c)
+let unzip3 xyzs = foldr (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) ([],[],[]) xyzs
+
+
+
+(* TODO: move into Lem's libary *)
+val foldl2: forall 'a 'b 'c. ('a -> 'b -> 'c -> 'a) -> 'a -> list 'b -> list 'c -> 'a
+let rec foldl2 f z xs ys =
+  match (xs, ys) with
+    | ([],[]) ->
+        z
+    | (a::xs', b::ys') ->
+        foldl2 f (f z a b) xs' ys'
+    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
+  end
+
+
+(* TODO: get rid of this for the Coq backend *)
+val     map2: forall 'a 'b 'c. ('a -> 'b -> 'c) -> list 'a -> list 'b -> list 'c
+let rec map2_ f xs ys acc =
+  match (xs, ys) with
+    | (x::xs', y::ys') ->
+        map2_ f xs' ys' (f x y :: acc)
+    | ([],[]) ->
+        acc
+    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
+  end
+let map2 f xs ys = map2_ f xs ys []
+
+let fromJust = function
+  | Just x -> x
+  (* | Nothing   -> assert_false_ "[Global.fromJust] found a Nothing" *)
+end
+
+
+
+
+let rec filter_opt l = 
+  match l with
+    | [] -> []
+    | (Just z) :: xs -> z :: filter_opt xs
+    | Nothing  :: xs ->      filter_opt xs
+  end
+
+let rec set_from_options xs =
+  match xs with
+    | []            -> {}
+    | Just x  :: xs' -> {x} union set_from_options xs'
+    | Nothing :: xs' -> set_from_options xs'
+end
+
+
+
+(* TODO: user List.update instead *)
+let rec list_update a v xs =
+  match xs with
+    | []         -> []
+    | (x,xv)::xs' -> (if x = a then (a,v) :: xs' else (x,xv) :: list_update a v xs' )
+  end
+
+
+(* 'optimised' implementation of [\f -> unzip . map f] *)
+val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
+let rec mapUnzip_ f (xs, ys) mylist =
+  match mylist with
+    | []      -> (xs, ys)
+    | (l::ls) -> let (x,y) = f l in mapUnzip_ f (x::xs, y::ys) ls
+  end
+let mapUnzip f l =
+  let (xs, ys) = mapUnzip_ f ([],[]) l in
+  (reverse xs, reverse ys)
+
+
+
+(* BEGIN: stolen from cpp *)
+val     map_option: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> list 'b
+let rec map_option f xs = 
+  match xs with 
+    | [] ->
+        []
+    | x::xs ->
+        match f x with 
+          | Nothing -> map_option f xs 
+          | Just x  -> x :: (map_option f xs)
+        end
+  end
+
+(* needs to be applied to a acyclic transitive relation *)
+val transitive_reduction: forall 'a. Eq 'a => list ('a * 'a) -> maybe (list ('a * 'a))
+let transitive_reduction r =
+  let transitive_pairs =
+    List.concat $
+      List.map (fun (a1,a2) -> 
+        map_option (fun (a1',a2') -> if a2 = a1' then Just (a1,a2') else Nothing) r
+      ) r in
+  (* a partial check for cycles *)
+  if any (fun (a1,a2) -> a1=a2) (r ++ transitive_pairs) then 
+    Nothing
+  else Just (List.filter (fun (a1,a2) -> not (elem (a1,a2) transitive_pairs)) r)
+
+val is_transitive: forall 'a. Eq 'a => list ('a * 'a) -> bool
+let is_transitive r =
+  let two_step_edges =
+    List.concat $
+      List.map (fun (n,n') -> 
+        map_option (fun (n'',n''') -> if n'=n'' then Just (n,n''') else Nothing) r
+      ) r in
+  all (fun (n,n''') -> elem (n,n''') r) two_step_edges
+
+
+let try_to_transitive_reduce rel =
+  if is_transitive rel then
+    match transitive_reduction rel with
+      | Just rel' -> rel'
+      | Nothing   -> rel
+    end
+  else
+    rel
+(* END: stolen from cpp *)
+
+(* this will blow up on cyclic relations *)
+let step s rel =
+  foldl (fun acc (a,b) ->
+    if elem a s && not (elem b acc) then
+      b :: acc
+    else
+      acc
+  ) s rel
+
+let rec replicate_list_ x (n: nat) acc =
+  if n > 0 then
+    replicate_list_ x (n-1) (x :: acc)
+  else
+    acc
+
+val replicate_list: forall 'a. 'a -> nat -> list 'a
+let replicate_list x n =
+  replicate_list_ x n []
+
+val uncurry: forall 'a 'b 'c. ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
+let uncurry f =
+  fun (x, y) -> f x y
+
+
+val eq_pair: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('a * 'b -> 'a * 'b -> bool)
+let eq_pair eqA eqB = fun (a1, b1) (a2, b2) ->
+  eqA a1 a2 && eqB b1 b2
+
+val eq_triple: forall 'a 'b 'c. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('c -> 'c -> bool) -> ('a * 'b * 'c -> 'a * 'b * 'c -> bool)
+let eq_triple eqA eqB eqC = fun (a1, b1, c1) (a2, b2, c2) ->
+  eqA a1 a2 && eqB b1 b2 && eqC c1 c2
+
+
+
+(* insert in an association list *)
+val     assoc_insert: forall 'a 'b. Eq 'a => 'a -> 'b -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_insert k v = function
+  |  [] ->
+      [(k, v)]
+  | (k',v') :: xs ->
+      if k = k' then
+        (k, v) :: xs
+      else
+        (k', v') :: assoc_insert k v xs
+end
+
+
+val     assoc_remove: forall 'a 'b. Eq 'a => 'a -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_remove k = function
+  |  [] ->
+      []
+  | (k',v') :: xs ->
+      if k = k' then
+        xs
+      else
+        (k', v') :: assoc_remove k xs
+end
+
+
+val     assoc_adjust: forall 'a 'b. Eq 'a => ('b -> 'b) -> 'a -> list ('a * 'b) -> list ('a * 'b)
+let rec assoc_adjust f k = function
+  | [] ->
+      []
+  | (k',v) :: xs ->
+      if k = k' then
+        (k, f v) :: xs
+      else
+        (k', v) :: assoc_adjust f k xs
+end
+
+
+(* insert the element to the list only if it isn't already there. O(n) *)
+val list_insert: forall 'a. Eq 'a => 'a -> list 'a -> list 'a
+let list_insert x xs =
+  if List.elem x xs then
+    xs
+  else
+    x :: xs
+
+
+val     mapi_aux: forall 'a 'b. (nat -> 'a -> 'b) -> nat -> list 'b -> list 'a -> list 'b
+let rec mapi_aux f n acc = function
+  | [] ->
+      acc
+  | x::xs ->
+      mapi_aux f (n+1) (f n x :: acc) xs
+end
+
+val mapi: forall 'a 'b. (nat -> 'a -> 'b) -> list 'a -> list 'b
+let mapi f xs =
+  mapi_aux f 0 [] xs
+
+
+val     takeWhile: forall 'a. ('a -> bool) -> list 'a -> list 'a
+let rec takeWhile pred = function
+  | [] ->
+      []
+  | x::xs ->
+      if pred x then x :: takeWhile pred xs else []
+end
+
+
+
+
+val first: forall 'a 'b 'c . ('a -> 'b) -> 'a * 'c -> 'b * 'c
+let first f (x, y) =
+  (f x, y)
+
+val second: forall 'a 'b 'c . ('a -> 'b) -> 'c * 'a -> 'c * 'b
+let second f (x, y) =
+  (x, f y)

@@ -1,0 +1,420 @@
+(* An operational semantics of concurrent C11, Kyndylan Nienhuis *)
+
+(* The goal of this semantics is to have an operational semantics
+   whose equivalence proof with the axiomatic model is as simple as
+   possible. *)
+
+open import Pervasives Show Show_extra
+open import Cmm_aux
+open import Cmm_master
+
+(* The target model and sublanguage ------------------------------------------------------------- *)
+
+(* The following parameters denote which model and sublanguage we use
+   in the opsem. If the model satisfies certain properties (see the
+   Isabelle proofs), the operational semantics will be equivalent to
+   the axiomatic model. These properties hold for some models
+   (probably rel-acq-rlx-sc, rel-acq-rlx-sc-fences and the full
+   model), but not all models. *)
+
+(* We currently use the sc_fenced model, which includes all fences,
+   locks, non-atomics and atomics, except for consumes. *)
+
+val sublanguage: condition_t
+let inline sublanguage = true_condition
+
+val memory_model: memory_model
+let inline memory_model = with_consume_memory_model
+
+val getRelations: pre_execution -> execution_witness -> relation_list
+let inline getRelations = with_consume_relations
+
+(* We give structure to the types of undefinedness *)
+
+type definedness = 
+  | Defined2            (* Defined is already declared somewhere *)
+  | DataRaces of set (action * action)
+  | UnsequencedRaces of set (action * action)
+  | IndeterminateReads of set action
+  | BadMutexes of set action
+  | NotInSublanguage    (* e.g. a fence in the lock-only model *)
+
+instance (Show definedness)
+  let show d = 
+    match d with
+    | Defined2             -> "defined"
+    | DataRaces s          -> "data races: " ^ show (aid_of_rel2 s)
+    | UnsequencedRaces s   -> "unsequenced races: " ^ show (aid_of_rel2 s)
+    | IndeterminateReads s -> "indeterminate reads: " ^ show (Set.map aid_of s)
+    | BadMutexes s         -> "bad mutexes: " ^ show (Set.map aid_of s)
+    | NotInSublanguage     -> "not in sublanguage"
+    end
+end
+
+val getDefinedness: candidate_execution -> definedness
+let getDefinedness ex =
+  let data_races = data_races ex in
+  if not (Set.null data_races) then
+    DataRaces data_races
+  else 
+  let unseq_races = unsequenced_races ex in
+  if not (Set.null unseq_races) then
+    UnsequencedRaces unseq_races
+  else
+  let indet_reads = indeterminate_reads ex in
+  if not (Set.null indet_reads) then
+    IndeterminateReads indet_reads
+  else
+  let bad_mutexes = locks_only_bad_mutexes ex in
+  if not (Set.null bad_mutexes) then
+    BadMutexes bad_mutexes
+  else
+  let in_sublanguage = sublanguage {ex} in
+  if not in_sublanguage then
+    NotInSublanguage
+  else
+    Defined2
+
+(* Abbreviations that use the the memory_model *)
+
+val exIsConsistent: candidate_execution -> bool
+let exIsConsistent ex = apply_tree memory_model.consistent ex
+
+val exIsDefined: candidate_execution -> bool
+let exIsDefined ex = 
+  (getDefinedness ex = Defined2)
+
+(* Abbreviations for axiomatic behaviour *)
+
+val axiomConsistent: opsem_t -> program -> candidate_execution -> bool
+let axiomConsistent opsem_t p (Xo, Xw, rl) =
+  opsem_t p Xo &&
+  apply_tree memory_model.consistent (Xo,Xw,rl) &&
+  rl = memory_model.relation_calculation Xo Xw
+
+val axiomUndefined: opsem_t -> program -> candidate_execution -> bool
+let axiomUndefined opsem_t p ex =
+  axiomConsistent opsem_t p ex && not (exIsDefined ex)
+
+(* axiomBehaviourAux is equivalent to axiomBehaviour. The first is
+   easier to use in proofs, while the latter is the official
+   definition used in the axiomatic model. *)
+
+val axiomBehaviourAux: opsem_t -> program -> Cmm_master.program_behaviours
+let ~{ocaml} axiomBehaviourAux opsem_t p = 
+  if (exists ex. axiomUndefined opsem_t p ex)
+  then Undefined
+  else Defined {(pre, wit) | forall pre wit rel | axiomConsistent opsem_t p (pre, wit, rel)}
+
+val axiomBehaviour: opsem_t -> program -> Cmm_master.program_behaviours
+let ~{ocaml} axiomBehaviour = 
+  behaviour memory_model sublanguage
+
+(* Restrictions of execution witnesses ---------------------------------------------------------- *)
+
+(* The operational model constructs the execution_witness step by
+   step. In this section we define the needed operations on
+   execution_witnesses *)
+
+val initialWitness: execution_witness
+let initialWitness = 
+<| rf = {};
+   mo = {};
+   sc = {};
+   lo = {};
+   tot = {};
+|>
+
+val relRestrict2: forall 'a. SetType 'a, Eq 'a => Relation.rel 'a 'a -> set 'a -> Relation.rel 'a 'a
+let relRestrict2 rel s = 
+  Relation.relFromSet { (a, b) | forall ((a, b) IN rel) | a IN s}
+
+(* witnessRestrict restricts the witness to the set of committed
+   actions. For some relations this differs from the restriction to
+   the set committed times committed. *)
+
+val witnessRestrict: execution_witness -> set action -> execution_witness
+let witnessRestrict wit actions = 
+<| rf = Relation.relRestrict wit.rf actions;
+   mo = relRestrict2 wit.mo actions;
+   sc = Relation.relRestrict wit.sc actions;
+   lo = Relation.relRestrict wit.lo actions;
+   tot = Relation.relRestrict wit.tot actions;
+|>
+
+(* Execution order of the operational semantics ----------------------------------------------------- *)
+
+(* To show completeness, we will commit the actions of a pre_execution
+   in a certain order. In this section we define the properties that
+   we require of that order. *)
+
+val is_na_or_non_write: pre_execution -> action -> bool
+let is_na_or_non_write pre a = not (is_write a) || is_at_non_atomic_location pre.lk a
+
+(* TODO: find a better name *)
+val hbMinus: candidate_execution -> set (action * action)
+let hbMinus (pre,wit,("hb",hb)::_) = 
+  {(a, b) | forall ((a, b) IN hb) | is_na_or_non_write pre b} 
+
+val opsemOrder: candidate_execution -> set (action * action)
+let opsemOrder (pre, wit, rel) =
+  Relation.transitiveClosure (Set.(union) (hbMinus (pre, wit, rel)) (Set.(union) wit.rf wit.mo))
+
+(* The consistency predicates of the operational semantics -------------------------------------- *)
+
+(* For certain consistency predicates of the axiomatic model, we
+   define an operational variant that takes into account which actions
+   have been committed. They can be recognized by the postfix _op. *)
+
+val consistent_mo_op: set action -> candidate_execution -> bool
+let consistent_mo_op committed (Xo,Xw,_) =
+    relation_over Xo.actions Xw.mo &&
+    Relation.isTransitive Xw.mo &&
+    Relation.isIrreflexive Xw.mo &&
+    forall (a IN Xo.actions) (b IN Xo.actions).
+       ((a,b) IN Xw.mo --> a IN committed) &&
+       ((a,b) IN Xw.mo || (b,a) IN Xw.mo)
+       = ( (not (a = b)) &&
+          is_write a && is_write b &&
+          (loc_of a = loc_of b) &&
+          is_at_atomic_location Xo.lk a &&
+          (a IN committed || b IN committed))
+
+val det_read_op: set action -> candidate_execution -> bool
+let det_read_op committed (Xo,Xw,("hb",hb)::_) =
+    forall (r IN Xo.actions).
+      is_load r && r IN committed -->
+      (exists (w IN Xo.actions).  (w,r)  IN hb && is_write w && (loc_of w = loc_of r)) =
+      (exists (w' IN Xo.actions). (w',r) IN Xw.rf)
+
+val isInOpsemOrder: set action -> candidate_execution -> bool
+let isInOpsemOrder committed ex =
+  downclosed committed (opsemOrder ex)
+
+val locks_only_consistent_lo_op: set action -> candidate_execution -> bool
+let locks_only_consistent_lo_op committed (Xo,Xw,("hb",hb)::_) =
+    relation_over Xo.actions Xw.lo &&
+    Relation.isTransitive Xw.lo &&
+    Relation.isIrreflexive Xw.lo &&
+    forall (a IN Xo.actions) (b IN Xo.actions).
+      ((a,b) IN Xw.lo --> not ((b,a) IN hb)) &&
+      ( ((a,b) IN Xw.lo || (b,a) IN Xw.lo)
+        =
+        ( (not (a = b)) &&
+          (is_lock a || is_unlock a) &&
+          (is_lock b || is_unlock b) &&
+          (loc_of a = loc_of b) &&
+          is_at_mutex_location Xo.lk a &&
+          a IN committed && b IN committed
+        )
+      )
+
+val locks_only_consistent_locks_op: set action -> candidate_execution -> bool
+let locks_only_consistent_locks_op committed (Xo,Xw,_) =
+    (forall ((a,c) IN Xw.lo). 
+      is_successful_lock a && is_successful_lock c && c IN committed 
+      --> 
+      (exists (b IN Xo.actions). is_unlock b && (a,b) IN Xw.lo && (b,c) IN Xw.lo))
+
+val rmw_atomicity_op: set action -> candidate_execution -> bool
+let rmw_atomicity_op committed (Xo,Xw,_) =
+    forall (b IN Xo.actions) (a IN Xo.actions).
+      is_RMW b && b IN committed --> (adjacent_less_than Xw.mo Xo.actions a b = ((a,b) IN Xw.rf))
+
+val sc_accesses_consistent_sc_op: set action -> candidate_execution -> bool
+let sc_accesses_consistent_sc_op committed (Xo,Xw,("hb",hb)::_) =
+    relation_over Xo.actions Xw.sc &&
+    Relation.isTransitive Xw.sc &&
+    Relation.isIrreflexive Xw.sc &&
+    forall (a IN Xo.actions) (b IN Xo.actions).
+      ((a,b) IN Xw.sc --> not ((b,a) IN hb union Xw.mo)) &&
+      ( ((a,b) IN Xw.sc || (b,a) IN Xw.sc) =
+        ( (not (a = b)) && is_seq_cst a && is_seq_cst b && a IN committed && b IN committed)
+      )
+
+val well_formed_rf_op: set action -> candidate_execution -> bool
+let well_formed_rf_op committed (Xo,Xw,_) =
+    forall ((a,b) IN Xw.rf).
+      a IN Xo.actions && b IN Xo.actions &&
+      a IN committed && b IN committed &&
+      loc_of a = loc_of b &&
+      is_write a && is_read b &&
+      value_read_by b = value_written_by a &&
+      forall (a' IN Xo.actions). (a',b) IN Xw.rf --> a = a'
+
+(* Top level consistency predicate *)
+
+val exIsConsistent_op: set action -> candidate_execution -> bool
+let exIsConsistent_op committed ex =
+  assumptions ex &&
+  det_read_op committed ex &&
+  coherent_memory_use ex &&
+  consistent_atomic_rf ex &&
+  consistent_hb ex &&
+  consistent_mo_op committed ex &&
+  consistent_non_atomic_rf ex &&
+  locks_only_consistent_lo_op committed ex &&
+  locks_only_consistent_locks_op committed ex &&
+  rmw_atomicity_op committed ex &&
+  sc_accesses_consistent_sc_op committed ex &&
+  sc_accesses_sc_reads_restricted ex &&
+  sc_fenced_sc_fences_heeded ex &&
+  tot_empty ex &&
+  well_formed_rf_op committed ex &&
+  well_formed_threads ex
+
+(* The state of the operational semantics ------------------------------------------------------- *)
+
+type state = 
+<| exWitness:      execution_witness;
+   committed:      set action;
+   stateIsDefined: bool;
+|>
+
+val initialState: pre_execution -> state
+let initialState pre = 
+<| exWitness      = initialWitness;
+   committed      = {};
+   stateIsDefined = exIsDefined (pre, initialWitness, getRelations pre initialWitness);
+|>
+
+(* The operational semantics ------------------------------------------------------------------- *)
+
+val minOpsemStep: pre_execution -> state -> state -> action -> bool
+let minOpsemStep pre s1 s2 a =
+
+  let rel = getRelations pre s2.exWitness in
+
+  (* The action that is committed in this step hasn't already been committed *)
+  a IN pre.actions &&
+  a NIN s1.committed &&
+  s2.committed = Set.insert a s1.committed &&  
+
+  (* Actions are committed in opsemOrder. *)
+  (forall (b IN pre.actions).
+    (b IN s1.committed --> (a, b) NIN opsemOrder (pre, s2.exWitness, rel)) &&
+    ((b, a) IN opsemOrder (pre, s2.exWitness, rel) --> b IN s1.committed)) &&
+
+  (* The new execution_witness extends the previous (only new
+  relations are added, and new relations are from or to the committed
+  action). *)
+   witnessRestrict s2.exWitness s1.committed = s1.exWitness &&
+
+  (* The new execution satisfies the consistency predicates. *)
+  exIsConsistent_op s2.committed (pre, s2.exWitness, rel) &&
+
+  (* We calculate whether the execution is defined or not *)
+  s2.stateIsDefined = exIsDefined (pre, s2.exWitness, rel)
+
+
+(* minOpsemTrace is the transitive closure of minOpsemStep, except
+   that in the reflexive case we require that the consistency
+   predicate hold. This is needed for the opsem to be sound. *)
+
+indreln
+[minOpsemTrace: pre_execution -> state -> state -> bool]
+
+minOpsemReflexive: forall pre s. 
+  exIsConsistent_op s.committed (pre, s.exWitness, getRelations pre s.exWitness)
+==>
+  minOpsemTrace pre s s
+
+and
+minOpsemStep: forall pre x y z a.
+  minOpsemTrace pre x y && 
+  minOpsemStep pre y z a
+==>
+  minOpsemTrace pre x z
+
+
+val minOpsemConsistent: opsem_t -> program -> observable_execution -> bool
+let ~{ocaml} minOpsemConsistent opsem_t p ex =
+  exists s. 
+  opsem_t p (fst ex) &&
+  minOpsemTrace (fst ex) (initialState (fst ex)) s &&
+  s.exWitness = snd ex &&
+  s.committed = (fst ex).actions
+
+val minOpsemUndefined: opsem_t -> program -> observable_execution -> bool
+let ~{ocaml} minOpsemUndefined opsem_t p ex =
+  exists s. 
+  opsem_t p (fst ex) &&
+  minOpsemTrace (fst ex) (initialState (fst ex)) s &&
+  s.exWitness = snd ex &&
+  s.committed = (fst ex).actions &&
+  not s.stateIsDefined
+
+val minOpsemBehaviour: opsem_t -> program -> Cmm_master.program_behaviours
+let ~{ocaml} minOpsemBehaviour opsem_t p = 
+  if (exists ex. minOpsemUndefined opsem_t p ex)
+  then Undefined
+  else Defined {ex | minOpsemConsistent opsem_t p ex}
+
+
+
+
+
+
+
+
+(* Auxilary definitions used in the equivalence proof ---------------------------------------------- *)
+
+(* downclosed is defined in cmm *)
+
+val selective_downclosed: (action -> bool) -> set action -> set (action * action) -> bool
+let selective_downclosed f s r = forall ((a, b) IN r). b IN s && f b --> a IN s
+
+(* Conditions on happens-before calculation -------------------------------------------------------- *)
+
+(* The following conditions should hold for getHb for the operational
+   semantics to be complete. We state them here parametric to a
+   hbCalculation, so we can prove the conditions for multiple
+   models. *)
+
+type hbCalculation = pre_execution -> execution_witness -> set (action * action)
+
+val extractHb: (pre_execution -> execution_witness -> relation_list) -> hbCalculation
+let extractHb relCalc pre wit =
+  match relCalc pre wit with
+  | ("hb", hb)::_ -> hb
+  | _             -> {}
+  end
+
+val hbCalcIsMonotonic: hbCalculation -> bool
+let ~{ocaml} hbCalcIsMonotonic hbCalc =
+  forall pre wit actions. downclosed actions wit.mo -->
+     Set.isSubsetOf (hbCalc pre (witnessRestrict wit actions)) (hbCalc pre wit)
+
+val prefixes_are_final: set action -> set (action * action) -> set (action * action) -> bool
+let prefixes_are_final s r r' =
+  forall ((a, b) IN r). b IN s --> (a, b) IN r'
+
+val selective_prefixes_are_final: (action -> bool) -> set action -> set (action * action) -> 
+                                  set (action * action) -> bool
+let selective_prefixes_are_final f s r r' =
+  forall ((a, b) IN r). b IN s && f b --> (a, b) IN r'
+
+(* TODO: find a better name *)
+val sbMinus: pre_execution -> set (action * action) -> set (action * action)
+let sbMinus pre rel = 
+  {(a, b) | forall ((a, b) IN rel) | is_na_or_non_write pre b} 
+
+val hbCalcIsFinalForPrefixes: hbCalculation -> bool
+let ~{ocaml} hbCalcIsFinalForPrefixes hbCalc =
+  forall pre wit actions. downclosed actions wit.rf && 
+                          downclosed actions wit.mo && 
+                          downclosed actions (sbMinus pre pre.sb) &&
+                          Relation.isTransitive pre.sb &&
+                          pre.dd subset pre.sb &&
+                          selective_downclosed (is_na_or_non_write pre) actions (hbCalc pre wit) -->
+     selective_prefixes_are_final (is_na_or_non_write pre)
+                                  actions
+                                  (hbCalc pre wit) 
+                                  (hbCalc pre (witnessRestrict wit actions))
+
+val hbCalcRespectsSyncingLocks: hbCalculation -> bool
+let ~{ocaml} hbCalcRespectsSyncingLocks hbCalc =
+  forall pre wit. well_formed_threads (pre, wit, []) -->
+                  locks_only_consistent_lo (pre, wit, [("hb", hbCalc pre wit)]) -->
+                  (forall a b. is_unlock a && is_lock b && (a, b) IN wit.lo --> (a, b) IN hbCalc pre wit)
+

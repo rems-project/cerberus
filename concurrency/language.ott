@@ -1,0 +1,49 @@
+metavar variable, v ::= {{lex alphanum}} {{lem string}} {{lemvar "[[variable]]" }} {{ocaml string}}
+
+metavar number, n   ::= {{lex numeral}} {{lem int}} {{ocaml int}}
+
+indexvar index, k   ::= {{lex numeral}} {{lem int}} {{ocaml int}}
+
+grammar
+
+command, c :: 'c_' ::= 
+  | skip                      ::   :: Skip
+  | store v e mo              ::   :: Store
+  | let v1 := load v2 mo in c ::   :: Load
+  | if be c1 else c2          ::   :: If
+  | if be c1                  :: S :: IfThen {{ichlo S_Cond [[be]] [[c1]] S_Skip}}
+  | { c1 ; c2 }               ::   :: Seq
+  | { c1 || c2 }              ::   :: Par
+
+memoryOrder, mo :: 'mo_' ::=
+  | na      :: :: Na
+  | acquire :: :: Acquire
+  | release :: :: Release
+  | seq_cst :: :: Seq_cst
+  | relaxed :: :: Relaxed
+  
+booleanExpression, be :: 'be_' ::=                              {{com boolean expression}}
+  | true                   ::   :: True
+  | false                  ::   :: False
+  | e1 == e2               ::   :: Eq        
+  | e1 >= e2               ::   :: Geq 
+  | ~ be                   ::   :: Not       
+  | ( be1 /\ be2 )         ::   :: And
+  | ( be1 \/ be2 )         ::   :: Or
+
+expression, e :: 'e_' ::=                                {{com numeric expression}}
+  | v                      ::   :: Var
+  | n                      ::   :: Int
+  | ( e1 + e2 )            ::   :: Plus
+  | ( e1 - e2 )            ::   :: Minus 
+
+terminals :: terminals_ ::=
+  | /\                   ::   :: wedge         {{ tex \wedge       }}
+  | \/                   ::   :: vee           {{ tex \vee         }}
+  | ~                    ::   :: not           {{ tex \sim         }}
+  | (                    ::   :: lparen        {{ tex \texttt{(}   }}
+  | )                    ::   :: rparen        {{ tex \texttt{)}   }}
+  | '{'                  ::   :: lbrace        {{ tex \texttt{\{ } }}
+  | '}'                  ::   :: rbrace        {{ tex \texttt{\} } }}
+  | ';'                  ::   :: semi          {{ tex \texttt{;}   }}
+  | ==                   ::   :: eq            {{ tex \texttt{==}  }}
