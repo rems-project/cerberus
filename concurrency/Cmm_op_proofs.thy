@@ -2473,6 +2473,8 @@ qed
 
 section {* The monadic model *}
 
+subsubsection {* monInvariant *}
+
 definition monInvariant :: "pre_execution \<Rightarrow> incState \<Rightarrow> bool" where
   "monInvariant pre s \<equiv> 
         axsimpConsistentAlt (preRestrict pre (incCommitted s)) (incWit s)
@@ -2634,11 +2636,15 @@ subsection {* Elims of monStep *}
 lemma monStepE_action [elim]:
   assumes monStep:  "(a, s2) [\<in>] monStep pre s1"
       and inv:  "monInvariant pre s"
-  obtains "a \<in> actions0 pre" "a \<notin> incCommitted s1"
+  obtains "a \<in> actions0 pre" 
+          "a \<in> incCommitted s2"
+          "a \<notin> incCommitted s1"
 proof -
   have "finite (actions0 pre)"
     using inv by auto
-  hence "a \<in> actions0 pre" "a \<notin> incCommitted s1"
+  hence "a \<in> actions0 pre" 
+        "a \<in> incCommitted s2"
+        "a \<notin> incCommitted s1"
     using monStep
     unfolding monStep_def Let_def
     by auto
@@ -2660,6 +2666,8 @@ lemmas monPerformActions_def =
   monPerformRmw_def
   monPerformFence_def
   monPerformBlocked_rmw_def
+
+subsubsection {* rf *}
 
 lemma monStepE_rf [elim?, consumes 1]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2690,6 +2698,27 @@ next
   case 3
   thus ?thesis using that by auto
 qed
+
+lemma monStepE_rf_pair [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+      and in_rf:   "(x, y) \<in> rf (incWit s2)"
+  obtains "y = a"
+          "x \<in> sameLocWrites (incCommitted s1) a"
+        | "(x, y) \<in> rf (incWit s1)"
+          "x \<in> incCommitted s1"
+          "y \<in> incCommitted s1"
+proof -
+  have cons_rf: "well_formed_rf (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv by auto
+  hence incCom_s1: "(x, y) \<in> rf (incWit s1) \<Longrightarrow> x \<in> incCommitted s1 \<and> y \<in> incCommitted s1"
+    by auto
+  show ?thesis
+    using incCom_s1 in_rf that
+    by (cases rule: monStepE_rf2[OF monStep inv]) auto
+qed
+
+subsubsection {* mo *}
 
 lemma monStepE_mo [elim?]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2768,6 +2797,71 @@ proof -
     qed
 qed
 
+lemma monStepE_mo_pair [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+      and in_mo:   "(x, y) \<in> mo (incWit s2)"
+  obtains "x \<in> actions0 pre" 
+          "x \<in> incCommitted s1"
+          "y \<in> actions0 pre"
+          "y \<in> incCommitted s2"
+          "y \<notin> incCommitted s1"
+          "y = a"
+          "x \<noteq> a"
+          "loc_of x = loc_of y"
+          "is_write x"
+          "is_write y"
+          "is_at_atomic_location (lk pre) x"
+          "is_at_atomic_location (lk pre) y"
+        | "(x, y) \<in> mo (incWit s1)"
+          "x \<in> actions0 pre" 
+          "x \<in> incCommitted s1"
+          "y \<in> actions0 pre"
+          "y \<in> incCommitted s1"
+          "x \<noteq> y"
+          "loc_of x = loc_of y"
+          "is_write x"
+          "is_write y"
+          "is_at_atomic_location (lk pre) x"
+          "is_at_atomic_location (lk pre) y"
+proof -
+  have cons_mo: "consistent_mo (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv by auto
+  show ?thesis
+    proof (cases "(x, y) \<in> mo (incWit s1)")
+      case True
+      thus ?thesis
+        using cons_mo in_mo that
+        by auto
+    next
+      case False
+      hence "mo (incWit s2) \<noteq> mo (incWit s1)"
+        using in_mo by auto
+      hence a:     "is_write a" "is_at_atomic_location (lk pre) a"
+        and mo_s2: "mo (incWit s2) = mo (incWit s1) \<union> (\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s1) a"           
+        by (auto intro: monStepE_mo2[OF monStep inv])
+      hence x: "x \<in> sameLocWrites (incCommitted s1) a" 
+        and y: "y = a"
+        using False in_mo by auto
+      hence x2: "is_write x" 
+                "x \<in> incCommitted s1" 
+                "loc_of x = loc_of y" 
+                "x \<in> actions0 pre"
+        using inv by auto
+      hence x3: "is_at_atomic_location (lk pre) x"
+        using a y same_loc_atomic_location by metis
+      have a2: "a \<in> incCommitted s2" 
+               "a \<in> actions0 pre" 
+               "a \<notin> incCommitted s1"
+        using monStep inv by auto
+      show ?thesis
+        using a a2 x x2 x3 y that
+        by auto
+    qed
+qed
+
+subsubsection {* lo *}
+
 lemma monStepE_lo [elim?]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
   obtains (lock)  "is_lock a \<or> is_unlock a" 
@@ -2779,6 +2873,8 @@ using assms
 unfolding monStep_def monPerformActions_def Let_def
 by (cases a) auto
 
+subsubsection {* sc *}
+
 lemma monStepE_sc [elim?]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
   obtains (sc)    "is_seq_cst a" 
@@ -2789,6 +2885,8 @@ using assms
 unfolding monStep_def monPerformActions_def Let_def 
 apply (cases a, auto)
 by (cases "is_seq_cst a", auto)+
+
+subsubsection {* tot *}
 
 lemma monStepE_tot [elim?]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2820,14 +2918,14 @@ by simp
 
 subsection {* Soundness *}
 
-(* assumptions *)
+subsubsection {* assumptions *}
 
 lemma monStep_assumptions:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
       and inv:     "monInvariant pre s1"
   shows   "assumptions (incToEx pre s2)" 
-unfolding incToEx_def Let_def assumptions.simps
-proof auto
+unfolding incToEx_def Let_def
+proof (intro assumptionsI, simp)
   have rf: "finite_prefixes (rf (incWit s1)) (actions0 (preRestrict pre (incCommitted s1)))"
     using inv by blast
   show "finite_prefixes (rf (incWit s2)) (actions0 pre \<inter> incCommitted s2)"
@@ -2840,7 +2938,7 @@ proof auto
     qed
 oops
 
-(* tot_empty *)
+subsubsection {* tot_empty *}
 
 lemma monStep_tot_empty:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2855,7 +2953,7 @@ proof -
     by auto
 qed
 
-(* well_formed_threads_opsem *)
+subsubsection {* well_formed_threads_opsem *}
 
 lemma monStep_well_formed_threads_opsem:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2871,7 +2969,7 @@ proof -
     by (cases "incWit s2 = empty_witness") auto
 qed
 
-(* well_formed_rf *)
+subsubsection {* well_formed_rf *}
 
 lemma monStep_well_formed_rf_aux:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
@@ -2902,8 +3000,7 @@ lemma well_formed_rfIE:
                     "value_read_by r = value_written_by w"
       and r_is_new: "r \<notin> actions0 pre"
   shows   "well_formed_rf (pre', wit', rel')"
-unfolding well_formed_rf.simps 
-proof auto
+proof (intro well_formed_rfI)
   fix a b
   assume in_rf: "(a, b) \<in> rf wit'"
   thus "a \<in> actions0 pre'"
@@ -2993,35 +3090,144 @@ proof -
     qed
 qed
 
-(* locks_only_consistent_locks *)
+subsubsection {* locks_only_consistent_locks *}
 
-(* locks_only_consistent_lo *)
+subsubsection {* locks_only_consistent_lo *}
 
-(* consistent_mo *)
+subsubsection {* consistent_mo *}
 
-(* sc_accesses_consistent_sc *)
+lemma monStep_consistent_mo:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "consistent_mo (incToEx pre s2)"
+unfolding incToEx_def Let_def
+proof (intro consistent_moI, simp_all)
+  have cons_mo: "consistent_mo (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv by auto
+  have a: "a \<notin> incCommitted s1" "a \<in> actions0 pre"
+    using monStep inv by auto
+  fix x y
+  assume in_mo_s2: "(x, y) \<in> mo (incWit s2)"
+  show "sameLocAtWrites (preRestrict pre (incCommitted s2)) x y"
+    unfolding sameLocAtWrites_def
+    using a monStep
+    by (cases rule: monStepE_mo_pair[OF monStep inv in_mo_s2]) auto
+  fix z
+  assume yz_in_mo_s2: "(y, z) \<in> mo (incWit s2)"
+  have z: "is_write z" "is_at_atomic_location (lk pre) z"
+    using monStepE_mo_pair[OF monStep inv yz_in_mo_s2] by auto
+  hence z2: "is_store z \<or> is_RMW z"
+    by (cases z) auto
+  have "y \<in> incCommitted s1" "loc_of y = loc_of z"
+    using monStepE_mo_pair[OF monStep inv yz_in_mo_s2] by auto
+  hence x: "x \<in> incCommitted s1" 
+           "(x, y) \<in> mo (incWit s1)"
+           "x \<in> actions0 pre"
+           "is_write x"
+           "loc_of x = loc_of z"
+    using monStepE_mo_pair[OF monStep inv in_mo_s2] by auto
+  hence x2: "x \<in> sameLocWrites (incCommitted s1) z"
+    unfolding sameLocWrites_def by auto
+  show "(x, z) \<in> mo (incWit s2)"
+    proof (cases "z = a")
+      assume "z = a"
+      hence "  mo (incWit s2)
+             = mo (incWit s1) \<union> (\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s1) a"
+        using z z2 monStepE_mo2[OF monStep inv] by metis
+      thus ?thesis using x2 `z = a` by auto
+    next
+      assume "z \<noteq> a"
+      hence "(y, z) \<in> mo (incWit s1)"
+        using monStepE_mo_pair[OF monStep inv yz_in_mo_s2] by auto
+      hence "(x, z) \<in> mo (incWit s1)"
+        using x cons_mo
+        unfolding consistent_mo.simps trans_def
+        by metis
+      thus ?thesis
+        using monStepE_mo2[OF monStep inv] by fast
+    qed
+next
+  have cons_mo: "consistent_mo (preRestrict pre (incCommitted s1), incWit s1, [])"
+    using inv by auto
+  fix x y
+  assume xy: "x \<in> actions0 pre \<and> x \<in> incCommitted s2"
+             "y \<in> actions0 pre \<and> y \<in> incCommitted s2"
+             "x \<noteq> y"
+             "loc_of x = loc_of y"
+             "is_write x"
+             "is_write y"
+             "is_at_atomic_location (lk pre) x"
+             "is_at_atomic_location (lk pre) y"
+  hence x2: "is_store x \<or> is_RMW x"
+    by (cases x) auto
+  have y2: "is_store y \<or> is_RMW y" 
+    using xy by (cases y) auto
+  show "(x, y) \<in> mo (incWit s2) \<or> (y, x) \<in> mo (incWit s2)"
+    proof (cases "x = a")
+      assume "x = a"
+      hence mo_s2: "  mo (incWit s2)
+                    = mo (incWit s1) \<union> (\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s1) a"
+        using xy x2 monStepE_mo2[OF monStep inv] by metis
+      have "y \<in> incCommitted s1"
+        using xy `x = a` monStep by auto
+      hence "y \<in> sameLocWrites (incCommitted s1) x"
+        using xy unfolding sameLocWrites_def by auto
+      hence "(y, x) \<in> mo (incWit s2)"
+        using `x = a` mo_s2 by auto
+      thus ?thesis by auto
+    next
+      assume "x \<noteq> a"
+      have x3: "x \<in> incCommitted s1"
+        using xy `x \<noteq> a` monStep by auto
+      show ?thesis
+        proof (cases "y = a")
+          assume "y = a"
+          hence mo_s2: "  mo (incWit s2)
+                        = mo (incWit s1) \<union> (\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s1) a"
+            using xy y2 monStepE_mo2[OF monStep inv] by metis
+          have "x \<in> incCommitted s1"
+            using xy `y = a` monStep by auto
+          hence "x \<in> sameLocWrites (incCommitted s1) y"
+            using xy unfolding sameLocWrites_def by auto
+          hence "(x, y) \<in> mo (incWit s2)"
+            using `y = a` mo_s2 by auto
+          thus ?thesis by auto
+        next
+          assume "y \<noteq> a"
+          have y3: "y \<in> incCommitted s1"
+            using xy `y \<noteq> a` monStep by auto
+          have "(x, y) \<in> mo (incWit s1) \<or> (y, x) \<in> mo (incWit s1)"
+            using cons_mo xy x3 y3
+            unfolding consistent_mo.simps
+            by auto
+          thus ?thesis
+            using monStepE_mo2[OF monStep inv] by fast
+        qed
+    qed
+qed
 
-(* sc_fenced_sc_fences_heeded *)
+subsubsection {* sc_accesses_consistent_sc *}
 
-(* consistent_hb *)
+subsubsection {* sc_fenced_sc_fences_heeded *}
 
-(* det_read_alt *)
+subsubsection {* consistent_hb *}
 
-(* consistent_non_atomic_rf *)
+subsubsection {* det_read_alt *}
 
-(* consistent_atomic_rf *)
+subsubsection {* consistent_non_atomic_rf *}
 
-(* coherent_memory_use *)
+subsubsection {* consistent_atomic_rf *}
 
-(* rmw_atomicity *)
+subsubsection {* coherent_memory_use *}
+
+subsubsection {* rmw_atomicity *}
 
 lemma monStep_rmw_atomicity:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
       and inv:     "monInvariant pre s1"
   shows   "rmw_atomicity (incToEx pre s2)"
 unfolding incToEx_def Let_def
-unfolding rmw_atomicity.simps
-proof clarsimp
+proof (intro rmw_atomicityI, clarsimp)
   have cons_rf: "well_formed_rf (preRestrict pre (incCommitted s1), incWit s1, [])"
     using inv by auto
   have cons_mo: "consistent_mo (preRestrict pre (incCommitted s1), incWit s1, [])"
@@ -3174,9 +3380,9 @@ proof clarsimp
     qed
 qed
 
-(* sc_accesses_sc_reads_restricted *)
+subsubsection {* sc_accesses_sc_reads_restricted *}
 
-(* Invariant *)
+subsubsection {* Invariant *}
 
 lemma monStepInvariant:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
