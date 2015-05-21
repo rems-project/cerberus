@@ -9,6 +9,10 @@ val new_supply: forall 'a. Enum 'a => supply 'a
 let new_supply =
   toEnum 0
 
+val new_supply_from: forall 'a. Enum 'a => nat -> supply 'a
+let new_supply_from n =
+  toEnum n
+
 
 val fresh_id: forall 'a. Enum 'a => supply 'a -> t 'a * supply 'a
 let fresh_id supl =
