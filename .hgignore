@@ -1,0 +1,24 @@
+syntax: glob
+
+_ocaml_generated/**
+_lem/**
+_coq/**
+_coq-orig/**
+_coq-patched/**
+testsuite/gcc.c-torture
+
+parsers/coreparser/core_parser.ml
+parsers/coreparser/core_parser.mli
+
+parsers/coreparser/*.conflicts
+parsers/cparser/*.conflicts
+
+
+dependencies/**
+*.cmx
+*.cmi
+*.o
+
+.DS_Store
+
+cerberus

@@ -1,0 +1,393 @@
+open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
+open import GenTypes Implementation
+import AilTypesAux AilTyping
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
+
+
+(* == constructor predicates on ctypes =========================================================== *)
+val is_array: genType -> bool
+let is_array = function
+  | GenArray _ _ ->
+      true
+  | GenBuiltin "jmp_buf" ->
+      true
+  | GenBuiltin "fpos_t" ->
+      false
+  | _ ->
+      false
+end
+
+val is_function: genType -> bool
+let is_function = function
+  | GenFunction _ _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_integer: genType -> bool
+let is_integer = function
+  | GenBasic (GenInteger _) ->
+      true
+  | _ ->
+      false
+end
+
+val is_floating: genType -> bool
+let is_floating = function
+  | GenBasic (GenFloating _) ->
+      true
+  | _ ->
+      false
+end
+
+val is_pointer: genType -> bool
+let is_pointer = function
+  | GenPointer _ _ ->
+      true
+  | _ ->
+      false
+  end
+
+val is_void: genType -> bool
+let void = function
+  | GenVoid ->
+      true
+  | _ ->
+      false
+end
+
+
+
+
+
+
+
+
+
+
+
+(* == generic predicates on ctypes ============================================================== *)
+(* TODO: we be moved to Ctype.lem to be function working on all instanced of the class Ctype *)
+(* STD §6.2.5#18, sentence 1 *)
+val is_arithmetic: genType -> bool
+let is_arithmetic gty =
+  is_integer gty || is_floating gty
+
+(* STD §6.2.5#21, sentence 1 *)
+val is_scalar: genType -> bool
+let is_scalar gty =
+  is_pointer gty || is_arithmetic gty
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let real gt : bool = is_integer gt
+
+
+
+
+
+
+
+
+
+
+
+
+(* following (§6.3.2.1)#3 *)
+let array_coercion = function
+  | GenArray ty _ -> GenPointer no_qualifiers ty
+  | gty           -> gty
+  end
+
+(* following (§6.3.2.1)#4 *)
+let function_coercion = function
+  | GenFunction ty qs is_variadic -> GenPointer no_qualifiers (Function ty qs is_variadic)
+  | gty                           -> gty
+  end
+
+(* following (§6.3.2.1)#3 and #4 *)
+let rvalue_coercion gty : genType =
+  if is_array gty then
+    array_coercion gty
+  else if is_function gty then
+    function_coercion gty
+  else
+    gty
+
+
+
+
+
+val is_pointer_to_complete_object: forall 'a. sigma 'a -> genType -> bool
+let is_pointer_to_complete_object S = function
+  | GenPointer _ ty ->
+      AilTypesAux.is_complete S ty
+  | _ ->
+      false
+end
+
+val are_pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> genType -> genType -> bool
+let are_pointers_to_compatible_complete_objects S gty1 gty2 =
+  match (gty1, gty2) with
+    | (GenPointer _ ty1, GenPointer _ ty2) ->
+        AilTypesAux.is_complete S ty1 && AilTypesAux.is_complete S ty2 && AilTypesAux.compatible ty1 ty2
+    | _ ->
+        false
+  end
+
+val are_pointers_to_compatible_objects: genType -> genType -> bool
+let are_pointers_to_compatible_objects gty1 gty2 =
+  match (gty1, gty2) with
+  | (GenPointer _ ty1, GenPointer _ ty2) ->
+      AilTypesAux.is_object ty1 && AilTypesAux.is_object ty2 && AilTypesAux.compatible ty1 ty2
+    | _ ->
+        false
+  end  
+
+val is_pointer_to_object: genType -> bool
+let is_pointer_to_object = function
+  | GenPointer _ ty ->
+      AilTypesAux.is_object ty
+  | _ ->
+      false
+end
+
+val is_pointer_to_void: genType -> bool
+let is_pointer_to_void = function
+  | GenPointer _ Void ->
+      true
+  | _ ->
+      false
+end
+
+val are_pointers_to_compatible_types: genType -> genType -> bool
+let are_pointers_to_compatible_types gty1 gty2 =
+  match (gty1, gty2) with
+    | (GenPointer _ ty1, GenPointer _ ty2) ->
+        AilTypesAux.compatible ty1 ty2
+    | _ ->
+        false
+  end
+
+val composite_pointer: genType -> genType -> maybe genType
+let composite_pointer gty1 gty2 =
+  match (gty1, gty2) with
+  | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
+      if AilTypesAux.compatible ty1 ty2 then
+        Maybe.map (GenPointer (AilTypesAux.combine_qualifiers qs1 qs2)) (AilTypesAux.composite ty1 ty2)
+      else
+        Nothing
+  | _ ->
+      Nothing
+  end
+
+(* Sound but not principal. *)
+let integer_promotion git : genIntegerType =
+  Promote git
+
+let promotion gt : maybe genType =
+  match gt with
+  | GenBasic (GenInteger git) -> Just (GenBasic (GenInteger (integer_promotion git)))
+  | _                         -> Nothing
+  end
+
+(* Sound but not principal. *)
+let usual_arithmetic_promoted_integer git1 git2 : genIntegerType =
+  Usual git1 git2
+
+let usual_arithmetic_integer git1 git2 : genIntegerType =
+  usual_arithmetic_promoted_integer
+    (integer_promotion git1)
+    (integer_promotion git2)
+
+let usual_arithmetic gt1 gt2 =
+  match (gt1, gt2) with
+  | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) -> Just (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
+  | (_ , _) -> Nothing
+  end
+
+let rec interpret_genIntegerType P git : errorM integerType =
+  match git with
+  | Concrete ity ->
+      return ity
+  | SizeT ->
+      return P.Implementation.size_t
+  | PtrdiffT ->
+      return P.Implementation.ptrdiff_t
+  | Unknown ic ->
+      AilTyping.type_of_constant P ic
+  | Promote git ->
+      interpret_genIntegerType P git >>= fun ity ->
+      return (AilTypesAux.integer_promotion P ity)
+  | Usual git1 git2 ->
+      interpret_genIntegerType P git1 >>= fun ity1 ->
+      interpret_genIntegerType P git2 >>= fun ity2 ->
+      return (AilTypesAux.usual_arithmetic_integer P ity1 ity2)
+  end
+
+val interpret_genBasicType: implementation -> genBasicType -> errorM basicType
+let interpret_genBasicType impl = function
+  | GenInteger gity ->
+      interpret_genIntegerType impl gity >>= fun ity ->
+      return (Integer ity)
+  | GenFloating fty ->
+      return (Floating fty)
+end
+
+val interpret_genType: implementation -> genType -> errorM ctype
+let interpret_genType impl = function
+  | GenVoid ->
+      return Void
+  | GenBasic gbty ->
+      interpret_genBasicType impl gbty >>= fun bty ->
+      return (Basic bty)
+  | GenArray ty n ->
+      return (Array ty n)
+  | GenFunction ty params is_variadic ->
+      return (Function ty params is_variadic)
+  | GenPointer qs ty ->
+      return (Pointer qs ty)
+  | GenStruct tag ->
+      return (Struct tag)
+  | GenUnion tag ->
+      return (Union tag)
+  | GenBuiltin str ->
+      return (Builtin str)
+  | GenAtomic ty ->
+      return (Atomic ty)
+  end
+
+val interpret_genTypeCategory: implementation -> genTypeCategory -> errorM typeCategory
+let interpret_genTypeCategory impl = function
+  | GenRValueType gty ->
+      RValueType <$> interpret_genType impl gty
+  | GenLValueType qs ty ->
+      return (LValueType qs ty)
+end
+
+val signed_integerSuffix: integerSuffix -> bool
+let signed_integerSuffix = function
+  |  L  -> true
+  |  LL -> true
+  | U   -> false
+  | UL  -> false
+  | ULL -> false
+end
+
+(* TODO: this dead and incorrect code
+
+let signed_integerConstant (ic : integerConstant) : bool =
+  match snd ic with
+  | Nothing -> true
+  | Just s  -> signed_integerSuffix s
+  end
+*)
+
+val min_interpret_integerSuffix: integerSuffix -> integerBaseType
+let min_interpret_integerSuffix = function
+  | L   -> Long
+  | LL  -> LongLong
+  | U   -> Int_
+  | UL  -> Long
+  | ULL -> LongLong
+end
+
+val min_interpret_optionIntegerSuffix: maybe integerSuffix -> integerBaseType
+let min_interpret_optionIntegerSuffix = function
+  | Nothing ->
+      Int_
+  | Just suff ->
+      min_interpret_integerSuffix suff
+end
+
+val min_interpret_integerConstant: integerConstant -> integerBaseType
+let min_interpret_integerConstant (IConstant _ _ suff) =
+  min_interpret_optionIntegerSuffix suff
+
+
+
+
+
+
+
+
+
+let unatomic = function
+  | GenAtomic ty ->
+      inject_type ty
+  | gty ->
+      gty
+end
+
+(* TODO: check *)
+val is_complete: forall 'a. sigma 'a -> genType -> bool
+let is_complete sigm gty =
+  match unatomic gty with
+   | GenVoid ->
+       false
+   | GenBasic _ ->
+       true
+   | GenArray _ _ ->
+       true
+   | GenFunction _ _ _ ->
+       false (* TODO: check *)
+   | GenPointer _ _ ->
+       true
+   | GenStruct sym ->
+       match Context.lookup (=) sigm.tag_definitions sym with
+         | Just (StructDef _) ->
+             true
+         | _ ->
+             let _ = print_debug 5 ("GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+             false
+       end
+   | GenUnion sym ->
+       match Context.lookup (=) sigm.tag_definitions sym with
+         | Just (UnionDef _) ->
+             true
+         | _ ->
+             false
+       end
+  | GenBuiltin "cnd_t" ->
+      true
+  | GenBuiltin "fpos_t" ->
+      true
+  | GenBuiltin "mtx_t" ->
+      true
+  | GenBuiltin "once_flag" ->
+      true
+  | GenBuiltin "thrd_t" ->
+      true
+  | GenBuiltin "tss_t" ->
+      true
+  | GenBuiltin "va_list" ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO *)
+val is_incomplete: forall 'a. sigma 'a -> genType -> bool
+let is_incomplete sigm gty =
+  not (is_complete sigm gty)

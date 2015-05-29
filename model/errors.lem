@@ -1,0 +1,325 @@
+open import Global Cabs AilSyntax (* Core *)
+import Loc TypingError
+
+
+
+type desugar_cause =
+  | Desugar_NoStartup of string
+  | Desugar_ConstraintViolation of string
+  | Desugar_OtherViolation of string
+
+(* TODO: move these to Desugar_ConstraintViolation *)
+  | Desugar_ExternalObjectRedefinition of identifier
+  | Desugar_FunctionRedefinition of identifier
+  | Desugar_BlockScoped_Thread_local_alone
+(*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)
+(*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
+  | Desugar_NotConstantExpression
+(*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
+  | Desugar_MultipleDeclaration of cabs_identifier
+
+
+  | Desugar_NonvoidReturn (* §6.8.6.4#1, 2nd sentence *)
+
+
+  | Desugar_Redefinition of identifier
+
+
+  | Desugar_NeverSupported of string
+
+  | Desugar_NotyetSupported of string
+
+
+  | Desugar_TODOCTOR of string
+  
+  | Desugar_impossible
+
+
+(*  | Desugar_DUPLICATED_LABEL *)                    
+(*  | Desugar_UNDECLARED_IDENTIFIER of string *)     
+(*  | Desugar_UNDECLARED_TYPENAME of string *)       
+(*  | Desugar_MULTIPLE_STORAGE_CLASS *)              
+(*  | Desugar_ITERATION_DECLARATON_WRONG_STORAGE *)  
+
+
+
+
+
+
+type cause =
+  | CSEM_NOT_SUPPORTED of string
+  | CSEM_HIP of string (* this is for features we plan to support,
+			  but that does not work yet *)
+  
+  
+  | Desugar_cause of desugar_cause
+
+  (* Constraint violation *)
+
+(*
+§6.4#2      1 sentence
+§6.4.3#2    1 sentence
+§6.4.4#2    1 sentence
+§6.4.4.4#9  1 sentence
+§6.4.5#2    1 sentence
+§6.5.1.1#2  5 sentence
+
+§6.5.2.1#1  1 sentence
+
+§6.5.2.2#1  1 sentence
+§6.5.2.2#2  2 sentence
+
+§6.5.2.3#1  1 sentence
+§6.5.2.3#2  1 sentence
+
+§6.5.2.4#1  1 sentence
+
+§6.5.2.5#1  1 sentence
+§6.5.2.5#1  1 sentence
+
+§6.5.3.1#1  1 sentence
+
+§6.5.3.2#1  1 sentence
+§6.5.3.2#2  1 sentence
+
+§6.5.3.3#1  1 sentence
+
+§6.5.3.4#1  2 sentence
+
+§6.5.4#2  1 sentence
+§6.5.4#3  1 sentence
+§6.5.4#4  2 sentence
+
+§6.5.5#2  2 sentence TYPING
+
+§6.5.6#2  1 sentence TYPING
+§6.5.6#3  n sentence TYPING
+
+§6.5.7#2  1 sentence TYPING
+
+§6.5.8#2  3 sentence TYPING
+
+§6.5.9#2  n sentence TYPING
+
+§6.5.10#2  1 sentence TYPING
+
+§6.5.11#2  1 sentence TYPING
+
+§6.5.12#2  1 sentence TYPING
+
+§6.5.13#2  1 sentence TYPING
+
+§6.5.14#2  1 sentence TYPING
+
+§6.5.15#2  1 sentence TYPING
+§6.5.15#3  n sentence TYPING
+
+§6.5.16#2  1 sentence TYPING
+
+§6.5.16.1#1  n sentence TYPING
+
+§6.5.16.2#1  1 sentence TYPING
+§6.5.16.2#2  1 sentence TYPING
+
+§6.6#3  1 sentence
+§6.6#4  1 sentence
+
+§6.7#2  1 sentence
+§6.7#3  n sentence
+§6.7#4  1 sentence
+
+§6.7.1#2  1 sentence
+§6.7.1#3  2 sentence
+§6.7.1#4  1 sentence
+
+§6.7.2#2  n sentence
+§6.7.2#3  1 sentence
+
+§6.7.2.1#2  1 sentence
+§6.7.2.1#3  1 sentence
+§6.7.2.1#4  2 sentence
+§6.7.2.1#5  2 sentence TYPING
+
+§6.7.2.2#2  1 sentence
+
+§6.7.2.3#1  1 sentence
+§6.7.2.3#2  1 sentence
+§6.7.2.3#3  1 sentence
+
+§6.7.2.4#2  1 sentence
+§6.7.2.4#3  1 sentence
+
+§6.7.3#2  1 sentence
+§6.7.3#3  1 sentence
+
+§6.7.4#2  1 sentence
+§6.7.4#3  1 sentence
+§6.7.4#4  1 sentence
+
+§6.7.5#2  1 sentence
+§6.7.5#3  1 sentence
+§6.7.5#4  1 sentence
+
+§6.7.6.2#1  5 sentence
+§6.7.6.2#2  2 sentence
+
+§6.7.6.3#1  1 sentence
+§6.7.6.3#2  1 sentence
+§6.7.6.3#3  1 sentence
+§6.7.6.3#4  1 sentence
+
+§6.7.8#2  1 sentence
+
+§6.7.9#2  1 sentence
+§6.7.9#3  1 sentence
+§6.7.9#4  1 sentence
+§6.7.9#5  1 sentence
+§6.7.9#6  2 sentence
+§6.7.9#7  1 sentence
+
+§6.7.10#1  1 sentence
+
+§6.8.1#2  2 sentence
+§6.8.1#3  1 sentence
+
+§6.8.4.1#1  1 sentence
+
+§6.8.4.2#1  1 sentence
+§6.8.4.2#2  1 sentence
+§6.8.4.2#3  2 sentence
+
+§6.8.5#2  1 sentence
+§6.8.5#3  1 sentence
+
+§6.8.6.1#1  2 sentence
+
+§6.8.6.2#1  1 sentence
+
+§6.8.6.3#1  1 sentence
+
+§6.8.6.4#1  2 sentence
+
+§6.9#2  1 sentence
+§6.9#3  2 sentence
+
+§6.9.1#2  1 sentence
+§6.9.1#3  1 sentence TYPING
+§6.9.1#4  1 sentence
+§6.9.1#5  2 sentence
+§6.9.1#6  2 sentence
+
+
+*)
+
+
+
+  | CONSTRAINT_6_6__3
+  
+  
+  | AIL_TYPING of TypingError.typing_error
+(*
+  | AIL_TYPECHECK_CALL_RETURN
+  | AIL_TYPECHECK_CALL_ARGUMENTS_ASSIGNABLE
+  | AIL_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS
+  | AIL_TYPECHECK_CALL_FUNCTION_POINTER
+  | AIL_TYPECHECK_INCR_LVALUE
+  | AIL_TYPECHECK_INCR_REAL_OR_POINTER
+  | AIL_TYPECHECK_ADDRESS_FUNCTION_OR_LVALUE
+  | AIL_TYPECHECK_INDIRECTION_POINTER
+  | AIL_TYPECHECK_MINUS_ARITHMETIC
+  | AIL_TYPECHECK_PLUS_ARITHMETIC
+  | AIL_TYPECHECK_BNOT_INTEGER
+  | AIL_TYPECHECK_SIZEOF_INCOMPLETE
+  | AIL_TYPECHECK_SIZEOF_FUNCTION
+  | AIL_TYPECHECK_ALIGNOF_INCOMPLETE
+  | AIL_TYPECHECK_CAST_NAME_SCALAR
+  | AIL_TYPECHECK_CAST_OPERAND_SCALAR
+  | AIL_TYPECHECK_MUL_ARITHMETIC
+  | AIL_TYPECHECK_MOD_INTEGER
+  | AIL_TYPECHECK_ADD_POINTER_INTEGER
+  | AIL_TYPECHECK_ADD_INTEGER_POINTER
+  | AIL_TYPECHECK_ADD_ALL
+  | AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_FIRST
+  | AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT_SECOND
+  | AIL_TYPECHECK_SUB_COMPATIBLE_POINTERS
+  | AIL_TYPECHECK_SUB_POINTER_TO_COMPLETE_OBJECT
+  | AIL_TYPECHECK_SUB_INTEGER_OR_POINTER
+  | AIL_TYPECHECK_SUB_ALL
+  | AIL_TYPECHECK_SHR_INTEGER_FIRST
+  | AIL_TYPECHECK_SHR_INTEGER_SECOND
+  | AIL_TYPECHECK_GE_COMPATIBLE
+  | AIL_TYPECHECK_GE_POINTER_TO_OBJECT_FIRST
+  | AIL_TYPECHECK_GE_POINTER_TO_OBJECT_SECOND
+  | AIL_TYPECHECK_GE_REAL
+  | AIL_TYPECHECK_GE_ALL
+  | AIL_TYPECHECK_NE_POINTERS
+  | AIL_TYPECHECK_NE_NULL_POINTER_CONSTANT_FIRST
+  | AIL_TYPECHECK_NE_NULL_POINTER_CONSTANT_SECOND
+  | AIL_TYPECHECK_NE_ARITHMETIC
+  | AIL_TYPECHECK_NE_ALL
+  | AIL_TYPECHECK_BAND_INTEGER
+  | AIL_TYPECHECK_XOR_INTEGER
+  | AIL_TYPECHECK_BOR_INTEGER
+  | AIL_TYPECHECK_AND_SCALAR
+  | AIL_TYPECHECK_OR_SCALAR
+  | AIL_TYPECHECK_CONDITIONAL_SCALAR_FIRST
+  | AIL_TYPECHECK_CONDITIONAL_NULL_POINTER_CONSTANT_SECOND
+  | AIL_TYPECHECK_CONDITIONAL_NULL_POINTER_CONSTANT_THIRD
+  | AIL_TYPECHECK_CONDITIONAL_POINTERS
+  | AIL_TYPECHECK_CONDITIONAL_ARITHMETIC_SECOND
+  | AIL_TYPECHECK_CONDITIONAL_STRUCTURE_OR_UNION
+  | AIL_TYPECHECK_CONDITIONAL_COMPATIBLE_POINTERS
+  | AIL_TYPECHECK_CONDITIONAL_ALL
+  | AIL_TYPECHECK_ASSIGN_LVALUE
+  | AIL_TYPECHECK_ASSIGN_STRUCTURE_OR_UNION
+  | AIL_TYPECHECK_ASSIGN_VOID_POINTER_QUALIFIERS
+  | AIL_TYPECHECK_ASSIGN_VOID_POINTER_FIRST
+  | AIL_TYPECHECK_ASSIGN_VOID_POINTER_SECOND
+  | AIL_TYPECHECK_ASSIGN_NULL_POINTER_CONSTANT
+  | AIL_TYPECHECK_ASSIGN_POINTER_QUALIFIERS
+  | AIL_TYPECHECK_ASSIGN_COMPATIBLE_POINTERS
+  | AIL_TYPECHECK_ASSIGN_POINTERS
+  | AIL_TYPECHECK_ASSIGN_ALL
+  | AIL_TYPECHECK_ASSIGN_SUB_POINTER
+  | AIL_TYPECHECK_ASSIGN_SUB_ARITHMETIC
+  | AIL_TYPECHECK_ASSIGN_SUB_ALL
+  | AIL_TYPECHECK_ASSIGN_OTHER_ARITHMETIC
+  | AIL_TYPECHECK_IF_SCALAR
+  | AIL_TYPECHECK_WHILE_SCALAR
+  | AIL_TYPECHECK_DO_SCALAR
+  | AIL_TYPECHECK_SWITCH_INTEGER
+  | AIL_TYPECHECK_LVALUE_UNDEFINED
+  | AIL_TYPECHECK_UNSUPPORTED of string
+ *)
+  
+  | CASE_OUTSIDE_SWITCH
+  | DEFAULT_OUTSIDE_SWITCH
+  | UNSUPPORTED of string
+  
+(*
+  | CORE_TYPECHECK_INCORRECT_EXPECTED of core_type * core_type * string
+  | CORE_TYPECHECK_IF_BRANCHES
+  
+  | CORE_TYPECHECK_GET_FAILURE
+  | CORE_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS of nat * nat
+  | CORE_TYPECHECK_CALL_ARGUMENT_EFFECT
+  | CORE_TYPECHECK_LET_EFFECT
+  | CORE_TYPECHECK_LET_TUPLE
+  | CORE_TYPECHECK_SEQ_PURE
+  | CORE_TYPECHECK_SEQ_INCOMPATIBLE_ARITY of nat * nat
+  | CORE_TYPECHECK_UNSEQ_PURE of string
+  | CORE_TYPECHECK_UNDECLARED_FUNCTION of sym
+  | CORE_TYPECHECK_UNDECLARED_SYMBOL of sym
+  
+  | CORE_TYPECHECK of string
+*)
+  
+  | CORE_UNDEF of list Undefined.undefined_behaviour
+  
+  | PARSER of string
+  | OTHER of string
+
+type t = Loc.t * cause
+
+
+

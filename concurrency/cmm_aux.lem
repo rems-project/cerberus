@@ -1,0 +1,81 @@
+(* The types and functions defined in this file are parameters to the
+   axiomatic model: users of the axiomatic model can implement them
+   however they wish by building the model with their own version of
+   cmm_aux.lem. *)
+
+open import Pervasives Show Show_extra
+
+type aid_impl = string
+type program_impl = nat
+type tid_impl = Tid_hol of nat
+type location_impl = Loc_hol of nat
+type cvalue_impl = Cvalue_hol of nat
+
+instance (SetType location_impl)
+  let setElemCompare = defaultCompare
+end
+
+instance (Show tid_impl)
+  let show tid = 
+    match tid with
+    | Tid_hol n -> show n
+    end
+end
+
+instance (Show location_impl)
+  let show location = 
+    match location with
+    | Loc_hol n -> show n
+    end
+end
+
+instance (Show cvalue_impl)
+  let show cvalue = 
+    match cvalue with
+    | Cvalue_hol n -> show n
+    end
+end
+
+type footprint_impl = set location_impl
+
+val footprint_of_loc_impl: location_impl -> footprint_impl
+let footprint_of_loc_impl loc = {loc}
+
+val footprint_empty_impl: footprint_impl
+(* We also annotate the type in the let to avoid the Ocaml-error
+"contains type variables that cannot be generalized" *)
+let footprint_empty_impl: footprint_impl = Set.empty
+
+val footprint_leq_impl: footprint_impl -> footprint_impl -> bool
+let footprint_leq_impl = Set.isSubsetOf
+
+val footprint_is_empty_impl: footprint_impl -> bool
+let footprint_is_empty_impl f = Set.null f
+
+val footprint_difference_impl: footprint_impl -> footprint_impl -> footprint_impl
+let footprint_difference_impl = Set.difference
+
+val footprint_intersection_impl: footprint_impl -> footprint_impl -> footprint_impl
+let footprint_intersection_impl = Set.intersection
+
+val footprint_bigunion_impl: set footprint_impl -> footprint_impl
+(* We annotate the type in the let to avoid the Ocaml-error "contains
+   type variables that cannot be generalized". We explicitely give the
+   function a parameter "s" because otherwise the generated
+   isabelle-code is invalid (it becomes 
+     "footprint_bigunion_impl = ( ⋃ )"
+   ) *) 
+let footprint_bigunion_impl (s:set footprint_impl) : footprint_impl = Set.bigunion s
+
+(* The implementation of combine_cvalues_impl should satisfy 
+
+     combine_cvalues {value_written_by w, footprint_of w, footprint_of w} = value_written_by w
+
+   for all actions w. *)
+
+(* The first footprint is the original footprint of the write that
+   wrote the value, the second footprint is the part that we read (and
+   that should be combined with the other parts. *)
+val combine_cvalues_impl: set (cvalue_impl * footprint_impl * footprint_impl) -> maybe cvalue_impl
+let combine_cvalues_impl s = (* TODO *) Nothing
+

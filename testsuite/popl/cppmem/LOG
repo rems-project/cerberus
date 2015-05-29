@@ -1,0 +1,16 @@
+                           RUNTIME    STATUS
+======================================================================
+MP_na_rel+acq_na           9s         OK
+MP_na_sc+sc_na             10s        OK
+MP_rlx_rlx+rlx_rlx         58s        OK
+SB+rel_acq+rel_acq         49s        KO (0,0 execution missing)
+SB+rlx_rlx+rlx_rlx         48s        KO (0,0 execution missing)
+SB+sc_sc+sc_sc             1m10       OK
+WRC+rel_acq_rel+acq_rlx    24m56s     OK
+
+
+LB+ctrldata+ctrl-double               (bug)
+LB+ctrldata+ctrl-single               OK
+LB+ctrldata+po                        OK
+LB+datas                              OK
+LB                                    OK

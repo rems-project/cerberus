@@ -1,0 +1,127 @@
+open import Pervasives
+
+open import Show Show_extra Enum
+import UniqueId
+
+val debug_level: unit -> nat
+declare ocaml target_rep function debug_level = `Debug.get_debug_level`
+
+val assert_false: forall 'a. string -> 'a
+declare ocaml target_rep function assert_false = `Debug.assert_false`
+
+
+type t =
+  Symbol of nat * maybe string
+
+let symbol_eq (Symbol n1 str_opt1) (Symbol n2 str_opt2) =
+  if debug_level () >= 5 then
+    n1 = n2 && str_opt1 = str_opt2
+  else
+    n1 = n2
+
+instance (Eq t)
+  let (=) = symbol_eq
+  let (<>) sym1 sym2 =
+    not (symbol_eq sym1 sym2)
+end
+
+
+
+instance (Ord t)
+  let compare sym1 sym2 =
+    let (Symbol n1 str_opt1) = sym1 in
+    let (Symbol n2 str_opt2) = sym2 in
+(*
+    if debug_level () >= 5 then
+      match compare n1 n2 with
+        | Basic_classes.EQ ->
+            if str_opt1 = str_opt2 then
+              Basic_classes.EQ
+            else
+              assert_false ("Symbol generation problem: (" ^
+                            show n1 ^ ", " ^ maybe "<>" id str_opt1 ^ "), (" ^
+                            show n2 ^ ", " ^ maybe "<>" id str_opt2 ^ ")\n\n" ^
+                            (if n1 = n2 then "true" else "false"))
+        | z ->
+            z
+      end
+    else
+*)
+      compare n1 n2
+  let (<) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 < n2
+  let (<=) sym1 sym2 = 
+    let (Symbol n1 str_opt1) = sym1 in
+    let (Symbol n2 str_opt2) = sym2 in
+    if debug_level () >= 5 then
+      (n1, str_opt1) = (n2, str_opt2) || n1 < n2
+    else
+    n1 <= n2
+  let (>) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 > n2
+  let (>=) sym1 sym2 = 
+    let (Symbol n1 str_opt1) = sym1 in
+    let (Symbol n2 str_opt2) = sym2 in
+    if debug_level () >= 5 then
+      (n1, str_opt1) = (n2, str_opt2) || n1 > n2
+    else
+    n1 >= n2
+end
+
+instance (Enum t)
+  let toEnum n =
+    Symbol n Nothing
+  let fromEnum sym =
+    let (Symbol n _) = sym in n
+  let succ sym =
+    let (Symbol n str_opt) = sym in 
+    Symbol (n+1) str_opt
+end
+
+instance (SetType t)
+  let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+end
+
+instance (Show t)
+  let show sym =
+    let (Symbol n str_opt) = sym in
+    match str_opt with
+      | Just str ->
+          str ^ "{" ^ show n  ^ "}"
+      | Nothing ->
+          "a_" ^ show n
+    end
+end
+
+
+
+
+
+val fresh: State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh =
+  UniqueId.fresh_id
+
+val fresh_pretty : string -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty str =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just str)
+  )
+
+
+val fresh_pretty_with_id : (nat -> string) -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_pretty_with_id mkStr =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just (mkStr id))
+  )
+
+
+val fresh_fancy : maybe string -> State.t (UniqueId.t t) (UniqueId.supply t)
+let fresh_fancy = function
+  | Just str -> fresh_pretty str
+  | Nothing  -> fresh
+end
+
