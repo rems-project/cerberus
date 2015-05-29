@@ -1,5 +1,6 @@
 open import Pervasives Common AilTypes Context
-import Symbol Loc ErrorMonad Cmm_master
+open import Loc
+import Symbol ErrorMonad Cmm_master
 
 (* module Cmm = Cmm_master *)
 
@@ -63,6 +64,7 @@ type constant [name = "c*"] =
  | ConstantFloating      of floatingConstant
  | ConstantCharacter     of characterConstant
  | ConstantArray         of list constant
+ | ConstantStruct        of identifier * list (Cabs.cabs_identifier * constant)
 
 (* 
  (* TODO: this is a kind of integer constant, may need to update some predicates *)
@@ -133,7 +135,14 @@ and generic_association 'A =
   | AilGAdefault of expression 'A
 
 and expression 'A [name = "e*"] =
-  | AnnotatedExpression of 'A * expression' 'A
+  | AnnotatedExpression of 'A * Loc.t * expression' 'A
+
+instance forall 'a. (Located (expression 'a))
+  let locOf a_expr =
+    let (AnnotatedExpression _ loc _) = a_expr in
+    loc
+end
+
 
 (* the storage duration must be Nothing iff the identifier is that of a function *)
 type bindings (*[name="b*"]*) = list (identifier * (maybe storageDuration * qualifiers * ctype))
@@ -371,11 +380,24 @@ let stringLiteralEqual =
   eq_pair (eq_option encodingPrefixEqual) (=)
 
 
-let constantEqual c1 c2 =
+let rec constantEqual c1 c2 =
   match (c1, c2) with
-    | (ConstantInteger   ic1, ConstantInteger   ic2) -> integerConstantEqual   ic1 ic2
-    | (ConstantCharacter cc1, ConstantCharacter cc2) -> characterConstantEqual cc1 cc2
-    | (_                    , _                    ) -> false
+    | (ConstantIndeterminate ty1, ConstantIndeterminate ty2) ->
+        ty1 = ty2
+    | (ConstantNull, ConstantNull) ->
+        true
+    | (ConstantInteger ic1, ConstantInteger ic2) ->
+        integerConstantEqual   ic1 ic2
+    | (ConstantFloating fc1, ConstantFloating fc2) ->
+        fc1 = fc2
+    | (ConstantCharacter cc1, ConstantCharacter cc2) ->
+        characterConstantEqual cc1 cc2
+    | (ConstantArray cs1, ConstantArray cs2) ->
+        eq_list constantEqual cs1 cs2
+    | (ConstantStruct tag_sym1 xs1, ConstantStruct tag_sym2 xs2) ->
+        tag_sym1 = tag_sym2 && eq_list (eq_pair (=) constantEqual) xs1 xs2
+    | _ ->
+        false
   end
 
 let unaryOperatorEqual u1 u2 =
@@ -459,7 +481,7 @@ let rec expressionEqual' eq_A e1 e2 =
   end
 and expressionEqual eq_A e1 e2 =
   match (e1, e2) with
-    | (AnnotatedExpression a1 e1, AnnotatedExpression a2 e2) ->
+    | (AnnotatedExpression a1 _ e1, AnnotatedExpression a2 _ e2) ->
         eq_A a1 a2 && expressionEqual' eq_A e1 e2
   end
 
@@ -695,7 +717,7 @@ let rec equiv_expression' e1 e2 =
   end
 and equiv_expression e1 e2 =
   match (e1, e2) with
-  | (AnnotatedExpression _ e1, AnnotatedExpression _ e2) -> equiv_expression' e1 e2
+  | (AnnotatedExpression _ _ e1, AnnotatedExpression _ _ e2) -> equiv_expression' e1 e2
   end
 
 let equiv_arguments a1 a2 =

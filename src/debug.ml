@@ -16,7 +16,14 @@ let print msg = if debug then
 let error msg = print_endline ("\x1b[31m[ERROR] " ^ msg ^ "\x1b[0m"); exit 1
 *)
 
+let assert_false str =
+  failwith str
+
+
 let debug_level = ref 0
+
+let get_debug_level () =
+  !debug_level
 
 let print_success msg =
   if !debug_level > 0 then

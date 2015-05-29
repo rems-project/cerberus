@@ -11,7 +11,7 @@ let make_annotation add_type get_type = <|
 |>
 
 let type_of (A : annotation 'A1 'A2) (e : expression 'A2) =
-  let (AnnotatedExpression a _) = e in
+  let (AnnotatedExpression a _ _) = e in
   A.get_type a
 
 let concrete_annotation : annotation unit genTypeCategory = <|

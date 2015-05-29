@@ -47,6 +47,29 @@ instance (Eq identifier_kind)
   let (<>) = unsafe_structural_inequality
 end
 
+instance (Show identifier_kind)
+  let show = function
+    | Kind_object false ->
+        "object"
+    | Kind_object true ->
+        "parameter"
+    | Kind_function ->
+        "function"
+    | Kind_tag ->
+        "tag"
+    | Kind_member Kind_struct ->
+        "struct_member"
+    | Kind_member Kind_union ->
+        "union_member"
+    | Kind_member Kind_enum ->
+        "enum_member"
+    | Kind_typedef ->
+        "typedef"
+    | Kind_label ->
+        "label"
+  end
+end
+
 instance (SetType identifier_kind)
   let setElemCompare = defaultCompare
 end
@@ -68,10 +91,12 @@ end
 
 
 (* STD §6.2.1#2 *)
+type block_id = nat
+
 type scope =
   | Scope_function
   | Scope_file
-  | Scope_block
+  | Scope_block of block_id
   | Scope_prototype
 
 instance (Eq scope)
@@ -86,10 +111,17 @@ let string_of_scope = function
       "function"
   | Scope_file ->
       "file"
-  | Scope_block ->
-      "block"
+  | Scope_block n ->
+      "block(" ^ show n ^ ")"
   | Scope_prototype ->
       "prototype"
+end
+
+let is_block_scope = function
+  | Scope_block _ ->
+      true
+  | _ ->
+      false
 end
 
 
@@ -101,6 +133,19 @@ type namespace =
   | Namespace_tag
   | Namespace_member of cabs_identifier (* NOTE: theses are only struct/union members *)
   | Namespace_ordinary (* NOTE: enum members go here *)
+
+instance (Show namespace)
+  let show = function
+    | Namespace_label ->
+        "label"
+    | Namespace_tag ->
+        "tag"
+    | Namespace_member ident ->
+        "member{" ^ show ident ^ "}"
+    | Namespace_ordinary ->
+        "ordinary"
+  end
+end
 
 instance (SetType namespace)
   let setElemCompare ns1 ns2 =
@@ -326,7 +371,12 @@ let freshify (CabsIdentifier loc str) =
     (CabsIdentifier loc (str ^ show n), <| st with aux_supply= aux_supply' |>)
   )
 
-
+val fresh_block_scope: t scope
+let fresh_block_scope =
+  State_exception.modify (fun st ->
+    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
+    (Scope_block n, <| st with aux_supply= aux_supply' |>)
+  )
 
 
 
@@ -349,6 +399,15 @@ let ident_is_in_current_scope ident namespace =
 (* NOTE: this function shouldn't be called outside of the current module *)
 val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
 let _register_identifier ident namespace kind link =
+  get_scope >>= fun sc ->
+  return (
+    Boot.print_debug 7 ("DESUGARING, attempting to register identifier `" ^ show ident ^
+                        "' with scope= " ^ string_of_scope sc ^
+                        " with namespace= " ^ show namespace ^
+                        ", kind= " ^ show kind ^
+                        ", linkage= " ^ show link)
+  ) >>
+  
   let do_fresh =
     (* generates a fresh symbol *)
     State_exception.modify (fun st ->
@@ -365,7 +424,7 @@ let _register_identifier ident namespace kind link =
   State_exception.read (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   ) >>= function
-    | Just (_, (sym, kind', link')) ->
+    | Just (scope, (sym, kind', link')) ->
         (* TODO: need to check that the kind/link match up *)
         if link = Linkage_none then
           (* §6.7#3 "except that ..." *)
@@ -375,10 +434,20 @@ let _register_identifier ident namespace kind link =
             (* TODO: multiple definition are not allowed *)
             return sym
           else
-            (* TODO: location *)
-            fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+            (* TODO: check *)
+            current_scope_is scope >>= function
+              | true ->
+                  (* TODO: location *)
+                  fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+              | false ->
+                  do_fresh
+            end
         else
-          do_fresh
+          (* TODO: check *)
+          if kind = kind' && link = link' then
+            return sym
+          else
+            Boot.assert_false "Cabs_to_ail_effect._register_identifier"
     | Nothing ->
         do_fresh
   end
@@ -428,7 +497,7 @@ _STD "§6.2.2#5, sentence 2" $
 _STD "§6.2.2#6" $
         if    not (is_object_kind kind || kind = Kind_function)
            || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
-           || scope = Scope_block && is_object_kind kind && storage_class <> [SC_extern] then
+           || is_block_scope scope && is_object_kind kind && storage_class <> [SC_extern] then
           return Linkage_none
         else
           Boot.assert_false "[Cabs_to_ail_effect.determinate_linkage] unknown case"
@@ -492,6 +561,13 @@ let resolve_tag_definition tag_sym =
     | Nothing ->
         Boot.assert_false "TODO: resolve_tag_definition: Nothing" (* TODO: is probably a possible/valid situation *)
   end
+
+
+val get_tag_definitions: t (map A.identifier tag_definition)
+let get_tag_definitions =
+  State_exception.read (fun st ->
+    st.tag_definitions
+  )
 
 
 
@@ -649,15 +725,19 @@ let function_is_defined sym =
   )
 
 
-val register_function_declaration: A.identifier -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> t unit
-let register_function_declaration sym decl =
+val register_function_declaration: Loc.t -> A.identifier -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> t unit
+let register_function_declaration loc sym decl =
+  (* DEBUG *)
+  let string_of_decl (ty, xs, _, _, _) =
+    Boot.pp_ail_ctype ty ^ "(" ^ stringFromList (stringFromPair (fun _ -> "") Boot.pp_ail_ctype) xs ^ ")" in
+  
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
           (* TODO: msg and location *)
-          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a function with a different type")
+          fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^ show sym ^ ", old decl= " ^ string_of_decl decl' ^ " --- vs --- " ^ string_of_decl decl))
         else
           return ()
     | Nothing ->
@@ -670,6 +750,10 @@ let register_function_declaration sym decl =
 (* TODO: the redeclaration check don't mix external/internal declarations *)
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
 let register_external_object_declaration sym decl =
+  return (
+    Boot.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
+  ) >>
+  
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
@@ -678,6 +762,7 @@ let register_external_object_declaration sym decl =
           (* TODO: msg and location *)
           fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
+          let _ = Boot.print_debug 7 ("DESUGARING found a valid redeclaration of `" ^ show sym ^ "'") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->

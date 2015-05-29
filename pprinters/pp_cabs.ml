@@ -604,7 +604,22 @@ let pp_cabs_string_literal (pref_opt, strs) =
   P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
 
 
-let rec pp_cabs_expression p (CabsExpression (_, expr)) =
+(* DEBUG *)
+let pp_comment str = if !isatty then pp_ansi_format [Red] !^ str else !^ str
+
+(*
+let pp_loc (start_p, _) =
+  pp_comment (
+   "/* " ^ Lexing.(
+    String.concat ":" [start_p.pos_fname;
+                       string_of_int start_p.pos_lnum;
+                       string_of_int (start_p.pos_cnum - start_p.pos_bol)
+                      ]
+  ) ^ " */"
+)
+*)
+
+let rec pp_cabs_expression p (CabsExpression (loc, expr)) =
   let p' = precedence expr in
   let f = P.group -| pp_cabs_expression p' in
   (if lt_precedence p' p then fun x -> x else P.parens) $
@@ -1010,7 +1025,7 @@ and pp_initializer_list inits =
   ) inits
 
 
-let rec pp_cabs_statement (CabsStatement (_, stmt_)) =
+let rec pp_cabs_statement (CabsStatement (loc, stmt_)) =
   match stmt_ with
   | CabsSlabel (id, s) ->
       pp_ctor "CabsSlabel" ^^ P.brackets (pp_colour_label id ^^ P.comma ^^^ pp_cabs_statement s)

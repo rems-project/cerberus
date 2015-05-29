@@ -272,8 +272,15 @@ let pp_memop = function
       !^ "\"ptreq\""
   | Mem.Ptrdiff ->
       !^ "\"ptrdiff\""
-  | Mem.Intptr ->
-      !^ "\"intptr\""
+  | Mem.IntFromPtr ->
+      !^ "\"intfromptr\""
+  | Mem.PtrFromInt ->
+      !^ "\"ptrfromint\""
+  | Mem.PtrLt ->
+      !^ "\"ptrlt\""
+  | Mem.PtrValidForDeref ->
+      !^ "\"ptrvalidforderef\""
+
 
 let rec pp_value = function
   | Vunit ->
@@ -454,14 +461,22 @@ let rec pp_expr = function
         | Ewseq ([], e1, e2) ->
             pp e1 ^^ P.semi ^^ P.break 1 ^^ pp e2
 *)
+  | Ewseq (([] as _as), e1, e2)
+  | Ewseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
+      pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
+      pp_expr e2
   | Ewseq (_as, e1, e2) ->
       pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-      P.nest 2 (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
-  | Esseq (_as, e1, e2) ->
+      (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+  | Esseq (([] as _as), e1, e2)
+  | Esseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
+      pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
+      pp_expr e2
+  | Esseq (_as, e1, e2) -> 
       pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-      P.nest 2 (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+      (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
   | Easeq (None, act1, pact2) ->
       pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
       pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
@@ -580,6 +595,23 @@ let pp_fun_map funs =
   ) funs P.empty
 
 
+let pp_impl impl =
+  Pmap.fold (fun iCst iDecl acc ->
+    acc ^^
+    match iDecl with
+      | Def (bty, pe) ->
+          pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+          
+      | IFun (bTy, params, pe) ->
+          pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          P.colon ^^ P.equals ^^
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+  ) impl P.empty
+  
+
+
+
 let pp_file file =
   let pp_glob acc (sym, coreTy, e) =
     acc ^^
@@ -588,6 +620,19 @@ let pp_file file =
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
   
   isatty := Unix.isatty Unix.stdout;
+  
+  !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
+  pp_fun_map file.stdlib ^^ P.break 1 ^^
+  !^ "-- END STDLIB" ^^ P.break 1 ^^
+  !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
+(*  pp_impl file.impl ^^ P.break 1 ^^ *)
+  !^ "-- END IMPL" ^^ P.break 1 ^^
+
+
+  
+  
+  
+  
   !^ "{-" ^^ P.break 1 ^^
   pp_tagDefinitions file.tagDefinitions0 ^^ P.break 1 ^^
   !^ "-}" ^^ P.break 1 ^^

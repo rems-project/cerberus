@@ -736,6 +736,11 @@ let rec stringFromMemValue mem_val =
 
 val combineWrites: mem_read_request -> list mem_write -> memM mem_value
 let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
+(*
+  let () = output_debug 4 $
+    show (List.map (fun MemWrite (ptr_val, ty, mem_val) -> "WRITE[" ^ show ptr_val ^ ", " ^ string_of_ctype ty ^ ", " ^ show mem_val ^ "]") ws)
+  in
+*)
   catMaybes <$> SEU.mapM (getAffection r) ws >>= function
     | [] ->
         SEU.fail $ MerrOther ("myCombineWrites: uninit ==> " ^ show (r, ws))
@@ -749,7 +754,8 @@ let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
           match getSubValue wVal wOff wFp with
             | Nothing ->
                 SEU.fail $ MerrOther ("myCombineWrites: some footprint was too big: " ^
-                                      stringFromMemValue wVal ^ ", " ^ stringFromList string_of_ctype wOff ^ ", " ^ stringFromList string_of_ctype wFp)
+                                      stringFromMemValue wVal ^ ", " ^ stringFromList string_of_ctype wOff ^ ", " ^
+                                      stringFromList string_of_ctype wFp)
 
             | Just mval ->
                 SEU.return $ setValue tagDefs acc (List.deletes wOff rOff) mval
@@ -783,9 +789,11 @@ let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
 (* Memory layout model API ================================================== *)
 type memop =
   | Ptreq
-  | Ptrdiff (* (address, address) -> integer *)
-  | Intptr  (* address -> integer *)
+  | Ptrdiff     (* (address, address) -> integer *)
+  | IntFromPtr  (* (ctype, ctype, address) -> integer *) (* first type is that of the referenced type, second on is type of integer *)
+  | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
   | PtrLt
+  | PtrValidForDeref (* address -> boolean *)
 
 
 val runMem: forall 'a. memM 'a -> mem_state -> either mem_error ('a * mem_state)
@@ -825,6 +833,104 @@ val symb_from_mem_value: mem_value -> maybe Symbolic.symbolic
 
 
 
+(* memops *)
+val ptr_eq: pointer_value -> pointer_value -> bool (* TODO: no effect ? *)
+val ptr_diff: pointer_value -> pointer_value -> integer_value (* TODO: no effect ? *)
+val int_from_ptr: Core_ctype.ctype -> Core_ctype.ctype -> pointer_value -> integer_value (* TODO: no effect ? *)
+val ptr_from_int: Core_ctype.ctype -> Core_ctype.ctype -> integer_value -> pointer_value (* TODO: no effect ? *)
+val ptr_lt: pointer_value -> pointer_value -> bool (* TODO: no effect ? *)
+val ptr_valid_for_deref: pointer_value -> bool
+
+(* first type is that of integer, second on is type of reference *)
+
+
+(* STD §6.5.9#6 *)
+let ptr_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (PVnull _, PVnull _) ->
+        (* STD "both are null pointers" *)
+        true
+    | (PVobject oid1 sh1, PVobject oid2 sh2) ->
+        (* STD "both are pointers to the same object (including a pointer to an
+                object and a subobject at its beginning)" *)
+        if oid1 = oid2 then
+          if List.null sh1 then
+            match sh2 with
+              | [(_, n)] ->
+                  n = 0
+              | _ ->
+                sh1 = sh2
+           end
+         else if List.null sh2 then
+            match sh1 with
+              | [(_, n)] ->
+                  n = 0
+              | _ ->
+                sh1 = sh2
+           end
+         else
+           sh1 = sh2
+(*
+          match (sh1, sh2) with
+            (* the two following cases correspond to one of the pointer pointing
+               to an object and the other to a subobject at its beginning *)
+            | ([], [(_, 0)]) ->
+                true
+            | ([(_, 0)], []) ->
+                true
+            | _ ->
+                sh1 = sh2
+          end
+*)
+        else
+          false
+  | (PVfunction sym1, PVfunction sym2) ->
+      (* STD "both are pointers to the same [...] function" *)
+      sym1 = sym2
+(* TODO: Two pointers compare equal if and only if
+  
+  * both are pointers to one past the last element of the same array object, or
+  * one is a pointer to one past the end of one array object and the other is a pointer to the start of a different array object that happens to immediately follow the first array object in the address space.
+*)
+  | _ ->
+      false
+end
+
+
+
+
+
+
+
+
+
+let int_from_ptr ref_ty ty = function
+  | PVnull _ ->
+      IVinteger 0 (* TODO: check, impl-choice here? *)
+  | ptr_val ->
+      (* TODO: check *)
+      IVintptr ptr_val
+end
+
+let ptr_from_int ty ref_ty = function
+  | IVinteger n ->
+      if n = 0 then
+        PVnull ref_ty
+      else
+        assert_false "WIP: Mem.ptr_from_int 1"
+  | IVintptr ptr_val ->
+      ptr_val
+  | _ ->
+      assert_false "WIP: Mem.ptr_from_int 2"
+end
+
+let ptr_valid_for_deref = function
+  | PVnull _ ->
+      false
+  | _ ->
+      (* TODO: allows to much *)
+      true
+end
 
 
 
@@ -863,12 +969,18 @@ let allocate_object tid pref ty =
   SEU.return $ PVobject oid []
 
 
-let load ty ptr_val =
-  begin_timing "Mem.load" >>
-  SEU.read (fun st -> st.memWrites) >>=
-    combineWrites (MemReadRequest ptr_val ty) >>= fun ret ->
-  end_timing () >>
-  SEU.return ret
+let load ty = function
+  | PVnull _ ->
+      SEU.fail $ MerrOther "Mem.load saw a null pointer"
+  | ptr_val ->
+      begin_timing "Mem.load" >>
+      SEU.read (fun st -> st.memWrites) >>=
+      combineWrites (MemReadRequest ptr_val ty) >>= fun ret ->
+      end_timing () >>
+      SEU.return ret
+end
+
+
 
 
 let store ty ptr_val mem_val =

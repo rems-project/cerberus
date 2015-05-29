@@ -1569,7 +1569,7 @@ subsubsection {* sw_asw *}
 lemmas sw_aswI = relToIntro[OF sw_asw_def]
 
 lemma sw_aswE [elim]:
-  assumes "(a, b) \<in> sw_asw pre"
+  assumes "(a, b) \<in> sw_asw pre wit"
   obtains "a \<in> actions0 pre"
       and "b \<in> actions0 pre"
       and "tid_of a \<noteq> tid_of b"
@@ -1616,7 +1616,7 @@ subsubsection {* release_acquire_synchronizes_with_set *}
 provable. *)
 lemma release_acquire_swIE:
   assumes "(a, b) \<in> release_acquire_synchronizes_with_set_alt pre wit"
-      and "(a, b) \<in> sw_asw pre \<Longrightarrow> (a, b) \<in> sw_asw pre2"
+      and "(a, b) \<in> sw_asw pre wit \<Longrightarrow> (a, b) \<in> sw_asw pre2 wit2"
       and "(a, b) \<in> sw_lock pre wit \<Longrightarrow> (a, b) \<in> sw_lock pre2 wit2"
       and "(a, b) \<in> sw_rel_acq pre wit \<Longrightarrow> (a, b) \<in> sw_rel_acq pre2 wit2"
   shows   "(a, b) \<in> release_acquire_synchronizes_with_set_alt pre2 wit2"
@@ -1698,7 +1698,7 @@ subsubsection {* release_acquire_relaxed_synchronizes_with_set *}
 provable. *)
 lemma release_acquire_relaxed_swIE [consumes, case_names asw lock rel_acq_rs]:
   assumes "(a, b) \<in> release_acquire_relaxed_synchronizes_with_set_alt pre wit"
-      and "(a, b) \<in> sw_asw pre \<Longrightarrow> (a, b) \<in> sw_asw pre2"
+      and "(a, b) \<in> sw_asw pre wit \<Longrightarrow> (a, b) \<in> sw_asw pre2 wit2"
       and "(a, b) \<in> sw_lock pre wit \<Longrightarrow> (a, b) \<in> sw_lock pre2 wit2"
       and "(a, b) \<in> sw_rel_acq_rs pre wit \<Longrightarrow> (a, b) \<in> sw_rel_acq_rs pre2 wit2"
   shows   "(a, b) \<in> release_acquire_relaxed_synchronizes_with_set_alt pre2 wit2"
@@ -1832,7 +1832,7 @@ subsubsection {* release_acquire_fenced_synchronizes_with_set *}
 provable. *)
 lemma release_acquire_fenced_swIE [consumes 1, case_names asw lock rel_acq fence1 fence2 fence3]:
   assumes "(a, b) \<in> release_acquire_fenced_synchronizes_with_set_alt pre wit"
-      and "(a, b) \<in> sw_asw pre \<Longrightarrow> (a, b) \<in> sw_asw pre2"
+      and "(a, b) \<in> sw_asw pre wit \<Longrightarrow> (a, b) \<in> sw_asw pre2 wit2"
       and "(a, b) \<in> sw_lock pre wit \<Longrightarrow> (a, b) \<in> sw_lock pre2 wit2"
       and "(a, b) \<in> sw_rel_acq_rs pre wit \<Longrightarrow> (a, b) \<in> sw_rel_acq_rs pre2 wit2"
       and "(a, b) \<in> sw_fence_sb_hrs_rf_sb pre wit \<Longrightarrow> (a, b) \<in> sw_fence_sb_hrs_rf_sb pre2 wit2"

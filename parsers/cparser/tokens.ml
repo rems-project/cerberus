@@ -45,13 +45,13 @@ type token =
   | THREAD_LOCAL
   | ATOMIC_LPAREN (* this is a hack to solve a grammar ambiguity (see Lexer.mll) *)
   
-  | VAR_NAME     of (Cabs.cabs_identifier * Pre_parser_aux.identifier_type ref)
-  | TYPEDEF_NAME of (Cabs.cabs_identifier * Pre_parser_aux.identifier_type ref)
-  | UNKNOWN_NAME of (Cabs.cabs_identifier * Pre_parser_aux.identifier_type ref)
+  | VAR_NAME     of (string * Pre_parser_aux.identifier_type ref)
+  | TYPEDEF_NAME of (string * Pre_parser_aux.identifier_type ref)
+  | UNKNOWN_NAME of (string * Pre_parser_aux.identifier_type ref)
   
-  | VAR_NAME2     of Cabs.cabs_identifier
-  | TYPEDEF_NAME2 of Cabs.cabs_identifier
-  | OTHER_NAME    of Cabs.cabs_identifier
+  | VAR_NAME2     of string
+  | TYPEDEF_NAME2 of string
+  | OTHER_NAME    of string
   
   
   | CONSTANT of Cabs.cabs_constant
@@ -168,12 +168,12 @@ let string_of_token = function
   | STATIC_ASSERT -> "STATIC_ASSERT"
   | THREAD_LOCAL -> "THREAD_LOCAL"
   | ATOMIC_LPAREN -> "ATOMIC_LPAREN"
-  | VAR_NAME (Cabs.CabsIdentifier (_, str), id_ty) -> "VAR_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
-  | TYPEDEF_NAME (Cabs.CabsIdentifier (_, str), id_ty) -> "TYPEDEF_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
-  | UNKNOWN_NAME (Cabs.CabsIdentifier (_, str), id_ty) -> "UNKNOWN_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
-  | VAR_NAME2 (Cabs.CabsIdentifier (_, str)) -> "VAR_NAME2(" ^ str ^ ")"
-  | TYPEDEF_NAME2 (Cabs.CabsIdentifier (_, str)) -> "TYPEDEF_NAME2(" ^ str ^ ")"
-  | OTHER_NAME (Cabs.CabsIdentifier (_, str)) -> "OTHER_NAME(" ^ str ^ ")"
+  | VAR_NAME (str, id_ty) -> "VAR_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | TYPEDEF_NAME (str, id_ty) -> "TYPEDEF_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | UNKNOWN_NAME (str, id_ty) -> "UNKNOWN_NAME(" ^ str ^ ", " ^ string_of_identifier_type !id_ty ^ ")"
+  | VAR_NAME2 str -> "VAR_NAME2(" ^ str ^ ")"
+  | TYPEDEF_NAME2 str -> "TYPEDEF_NAME2(" ^ str ^ ")"
+  | OTHER_NAME str -> "OTHER_NAME(" ^ str ^ ")"
   | CONSTANT _ -> "CONSTANT"
   | STRING_LITERAL _ -> "STRING_LITERAL"
   | LBRACKET -> "LBRACKET"

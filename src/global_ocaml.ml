@@ -36,6 +36,11 @@ let string_of_language = function
       "core"
 
 
+type error_verbosity =
+  | Basic    (* similar to a normal compiler *)
+  | RefStd   (* add an std reference to Basic *)
+  | QuoteStd (* print a full quote of the std text *)
+
 type cerberus_conf = {
   cpp_cmd:           string;
   pps:               language list;
@@ -47,6 +52,7 @@ type cerberus_conf = {
   no_rewrite:        bool;
   concurrency:       bool;
   preEx:             bool;
+  error_verbosity:   error_verbosity;
 }
 
 let (!!) z = !z()
@@ -64,7 +70,7 @@ let current_execution_mode () =
   !cerb_exec_mode_opt
 
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress no_rewrite concurrency preEx =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser progress no_rewrite concurrency preEx error_verbosity =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -77,6 +83,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl exec exec_mode core_parser p
     no_rewrite=    no_rewrite;
     concurrency=   concurrency || preEx;
     preEx=         preEx;
+    error_verbosity= error_verbosity;
   }
 
 

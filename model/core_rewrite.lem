@@ -465,18 +465,18 @@ let rec flatten_seqs expr =
     | Ewseq _as e1 e2 ->
         match (flatten_seqs e1, flatten_seqs e2) with
           | (Ewseq _bs e1' e2', e3') ->
-              Ewseq _bs e1' (Ewseq _as e2' e3')
+              Ewseq _bs e1' (flatten_seqs (Ewseq _as e2' e3'))
           | (Esseq _bs e1' e2', e3') ->
-              Esseq _bs e1' (Ewseq _as e2' e3')
+              Esseq _bs e1' (flatten_seqs (Ewseq _as e2' e3'))
           | (e1', e2') ->
               Ewseq _as e1' e2'
         end
     | Esseq _as e1 e2 ->
         match (flatten_seqs e1, flatten_seqs e2) with
           | (Ewseq _bs e1' e2', e3') ->
-              Ewseq _bs e1' (Esseq _as e2' e3')
+              Ewseq _bs e1' (flatten_seqs (Esseq _as e2' e3'))
           | (Esseq _bs e1' e2', e3') ->
-              Esseq _bs e1' (Esseq _as e2' e3')
+              Esseq _bs e1' (flatten_seqs (Esseq _as e2' e3'))
           | (e1', e2') ->
               Esseq _as e1' e2'
         end
@@ -734,7 +734,7 @@ let rec sequentialise_creates_kills expr =
 (* sequentialise unseq with independant  *)
 
 
-
+(*
 let rec pure_propagation expr =
   match expr with
     | Elet sym pe1 e2 ->
@@ -796,6 +796,103 @@ let rec pure_propagation expr =
     | _ ->
         expr
   end
+*)
+
+
+
+
+
+let rec pure_propagation2 expr =
+  let to_pure' e =
+    match to_pure e with
+      | Just (PEundef _) ->
+          Nothing
+      | Just (PEerror _) ->
+          Nothing
+      | Just pe ->
+          Just pe
+      | Nothing ->
+          Nothing
+    end in
+  
+  let to_pures' es =
+    List.foldr (fun e acc_opt ->
+      match (to_pure' e, acc_opt) with
+        | (Just pe, Just acc) ->
+            Just (pe :: acc)
+        | _ ->
+            Nothing
+      end) (Just []) es in
+  
+  match expr with
+    | Elet sym pe1 e2 ->
+        let e2' = pure_propagation2 e2 in
+        match to_pure' e2' with
+          | Just pe2 ->
+              Epure (PElet sym pe1 pe2)
+          | Nothing ->
+              Elet sym pe1 e2'
+        end
+    | Eif pe1 e2 e3 ->
+        let e2' = pure_propagation2 e2 in
+        let e3' = pure_propagation2 e3 in
+        match (to_pure' e2', to_pure' e3') with
+          | (Just pe2, Just pe3) ->
+              Epure (PEif pe1 pe2 pe3)
+          | (Just pe2, Nothing) ->
+              Eif pe1 (Epure pe2) e3'
+          | (Nothing, Just pe3) ->
+              Eif pe1 e2' (Epure pe3)
+          | (Nothing, Nothing) ->
+              Eif pe1 e2' e3'
+        end
+    | Eunseq es ->
+        (* TODO: do better *)
+        let es' = List.map pure_propagation2 es in
+        match to_pures' es' with
+          | Just pes ->
+              Epure (PEtuple pes)
+          | Nothing ->
+              Eunseq es'
+        end
+    | Ewseq _as e1 e2 ->
+        let e1' = pure_propagation2 e1 in
+        match to_pure' e1' with
+          | Just pe1 ->
+              pure_propagation2 (subst_syms _as pe1 e2)
+          | Nothing ->
+              Ewseq _as e1' (pure_propagation2 e2)
+       end
+    | Esseq _as e1 e2 ->
+        let e1' = pure_propagation2 e1 in
+        match to_pure' e1' with
+          | Just pe1 ->
+              pure_propagation2 (subst_syms _as pe1 e2)
+          | Nothing ->
+              Esseq _as e1' (pure_propagation2 e2)
+       end
+    | Eindet e ->
+        Eindet (pure_propagation2 e)
+    | Ebound n e ->
+        Ebound n (pure_propagation2 e)
+    | Esave sym sym_tys e ->
+        Esave sym sym_tys (pure_propagation2 e)
+    | End es ->
+        End (List.map pure_propagation2 es)
+    | Epar es ->
+        Epar (List.map pure_propagation2 es)
+    | _ ->
+        expr
+  end
+
+
+
+
+
+
+
+
+
 
 
 
@@ -812,7 +909,7 @@ let rewrite_pexpr pexpr =
   remove_conv_int_pexpr pexpr
 
 let rewrite_expr expr =
-  ((* pure_propagation -| *) remove_conv_int -|
+  (pure_propagation2 -| remove_conv_int -| flatten_seqs -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
 

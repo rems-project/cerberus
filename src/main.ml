@@ -238,7 +238,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
   
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx (* TODO *) RefStd;
   
 (*
   if !!cerb_conf.concurrency_tests then
@@ -255,7 +255,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
     | Some file ->
         match pipeline file args with
           | Exception.Exception err ->
-              prerr_endline ("ERROR: " ^ Pp_errors.to_string err);
+              prerr_endline (Pp_errors.to_string err);
               if progress then
                 exit !progress_sofar
               else

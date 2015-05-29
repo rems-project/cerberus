@@ -1190,3 +1190,14 @@ val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
 let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
   (* TODO: the qualified unqualified part *)
   List.any (compatible ty) tys
+
+
+val referenced_type: ctype -> maybe ctype
+let referenced_type ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Pointer _ ty' ->
+      Just ty'
+  | _ ->
+      Nothing
+end

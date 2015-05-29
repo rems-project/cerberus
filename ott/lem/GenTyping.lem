@@ -1,6 +1,6 @@
 open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf TypingError
 open import GenTypes GenTypesAux Annotation
-open import Std
+open import Std Loc
 
 import Builtins
 
@@ -147,6 +147,9 @@ let well_typed_assignment S ty1 gty2 null2 =
           else
             let _ = output_string "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
             E.return false
+      | (Pointer ref_qs1 ref_ty1, _) ->
+          (* §6.5.16.1#1, bullet 5 *)
+          E.return null2
       | _ ->
           let _ = output_string "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
           E.return false
@@ -250,7 +253,7 @@ let annotate_assignee_aux S annotate_rvalue ty1 e2 =
     | true ->
         E.return e2
     | false ->
-        E.fail Loc.unknown (TError "§6.5.16.1#1")
+        E.fail (locOf e2) (TError "§6.5.16.1#1")
   end
 
 val annotate_arguments_aux: forall 'A1 'A2.
@@ -376,7 +379,7 @@ let rec are_all_eq xs =
         x=y && are_all_eq (y::xs')
   end
 
-let rec annotate_expression' annot sigm (gamm: gamma) expr =
+let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
   let annotate_expression = annotate_expression annot sigm gamm                                in
   let annotate_rvalue     = annotate_rvalue_aux sigm annot annotate_expression                 in
   let annotate_assignee   = annotate_assignee_aux sigm annotate_rvalue                         in
@@ -475,7 +478,7 @@ let rec annotate_expression' annot sigm (gamm: gamma) expr =
               (* TODO: is_inline, is_Noreturn *)
               E.return (AilEident v, GenRValueType (inject_type (Function ret_ty params is_variadic)))
           | _ ->
-              E.fail Loc.unknown (TError_TODO 13)
+              E.fail loc (TError_TODO 13)
         end
 (* TODO(clean)
         tryM (lookup G v)
@@ -529,7 +532,7 @@ OLD(sigma_declaration)
           | GenRValueType (GenFunction ty p b) ->
               E.return (AilEunary Address e, GenRValueType (GenPointer no_qualifiers (Function ty p b)))
           | _ ->
-              E.fail Loc.unknown (TError_TODO 14)
+              E.fail (locOf e) (TError_TODO 14)
         end
     
     | AilEunary (Plus as uop) e ->
@@ -543,7 +546,7 @@ OLD(sigma_declaration)
                 E.return (AilEunary uop e', GenRValueType gty')
           end
         else
-          E.fail Loc.unknown (TError "§6.5.3.3#1, sentence 1")
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
     
     | AilEunary (Minus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
@@ -556,7 +559,7 @@ OLD(sigma_declaration)
                 E.return (AilEunary uop e', GenRValueType gty')
           end
         else
-          E.fail Loc.unknown (TError "§6.5.3.3#1, sentence 1")
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
     
     | AilEunary Bnot e ->
         (* STD §6.5.3.3#1, sentence 2 *)
@@ -569,7 +572,7 @@ OLD(sigma_declaration)
                 E.return (AilEunary Bnot e', GenRValueType gty')
           end
         else
-          E.fail Loc.unknown (TError "§6.5.3.3#1, sentence 2")
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 2")
     
     | AilEunary Indirection e ->
         annotate_rvalue e >>= fun (e', gty) ->
@@ -609,13 +612,13 @@ OLD(sigma_declaration)
         end
      
      (* TODO: it may be to restrictive to only direct left-expressions for atomic functions *)
-     | AilEcall (AnnotatedExpression _ (AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
+     | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
          annotate_rvalue object_e >>= fun (object_e', object_gty) ->
          annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
          match (object_gty, order_gty) with
            | (GenPointer qs object_ty, GenBasic (GenInteger _ (* TODO: need to enforce enum *))) ->
 (*               if AilTypesAux.is_atomic object_ty then *)
-                 E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unatomic object_ty))
+                 E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) loc' (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unatomic object_ty))
 (*
                else
                  assert_false "WIP: typing of atomic_load_explicit 2"
@@ -624,12 +627,12 @@ OLD(sigma_declaration)
                assert_false "WIP: typing of atomic_load_explicit"
          end
 
-     | AilEcall (AnnotatedExpression _ (AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
+     | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
          annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
          annotate_rvalue order_e  >>= fun (desired_e', desired_gty) ->
          annotate_rvalue order_e  >>= fun (order_e',   order_gty)   ->
          
-         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
+         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) loc' (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
                    GenRValueType GenVoid)
 (*
          match (object_gty, desired_e; order_gty) with
@@ -845,7 +848,7 @@ TODO
                 assert_false "usual_arithmetic failed on two valid genTypes."
           end
         else
-          E.fail Loc.unknown (TError_TODO 29)
+          E.fail loc (TError_TODO 29)
     | AilEbinary e1 (Arithmetic (Div  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
@@ -1111,7 +1114,7 @@ _STD "§6.5.2.1#1" $
       annotate_stringLiteral lit
   (* TODO: maybe look at the type of inside? *)
   | AilEannot ty e ->
-      annotate_expression e >>= fun (AnnotatedExpression _ e') ->
+      annotate_expression e >>= fun (AnnotatedExpression _ _ e') ->
       E.return (e', GenRValueType (inject_type ty))
   end
 
@@ -1129,9 +1132,9 @@ end
 
 
 
-and annotate_expression A S G (AnnotatedExpression a e) =
-  annotate_expression' A S G e >>= fun (e, gty) ->
-  E.return (AnnotatedExpression (A.Annotation.add_type gty a) e)
+and annotate_expression A S G (AnnotatedExpression a loc e) =
+  annotate_expression' loc A S G e >>= fun (e, gty) ->
+  E.return (AnnotatedExpression (A.Annotation.add_type gty a) loc e)
 
 let annotate_rvalue A S G =
   annotate_rvalue_aux S A (annotate_expression A S G)
@@ -1465,13 +1468,32 @@ TODO: static asserts
 val annotate_program: annotation unit genTypeCategory -> program unit -> E.t (program genTypeCategory)
 let annotate_program annot (startup, sigm) =
   match Context.lookup identifierEqual sigm.declarations startup with
-    | Just (Decl_function ret_ty _ (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
+    | Just (Decl_function ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
+        
+        (* §5.1.2.2.1 *)
+        (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
+        match qs_tys with
+          | [] ->
+              (* TODO: not sure if really allowed by the std, clearly used a lot *)
+              E.return ()
+          | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Void)] ->
+              E.return ()
+          | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Basic (Integer (Signed Int_)));
+             (<| const= false; restrict= false; volatile= false; atomic= false |>,
+              Pointer <| const= false; restrict= false; volatile= false; atomic= false |>
+                (Pointer <| const= false; restrict= false; volatile= false; atomic= false |> (Basic (Integer Char))))] ->
+              E.return ()
+          | _ ->
+              E.fail Loc.unknown (TError_main_params qs_tys)
+        end >>
+        
+        
         (* TODO: check arguments *)
         if ret_ty = Basic (Integer (Signed Int_)) then
           annotate_sigma annot sigm >>= fun sigm' ->
           E.return (startup, sigm')
         else
-          E.fail Loc.unknown (TError_TODO 1067)
+          E.fail Loc.unknown TError_main_return_type
     | _ ->
         E.fail Loc.unknown (TError_TODO 67) (* TODO: this is not realy a type error, but more an csem internal one. *)
   end

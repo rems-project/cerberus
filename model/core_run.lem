@@ -79,7 +79,10 @@ let call_proc file psym cvals =
   match params_body_opt with
     | Just (params, body) ->
         if List.length params <> List.length cvals then
-          Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
+          Boot.assert_false $ "[Core_run.call_proc] wrong number of args applied to `" ^ show psym  ^ "' |args|=" ^
+          show (List.length cvals) ^ "expecting: " ^ show (List.length params)
+
+(* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
         else
           Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym sym (PEval cval) acc) body params cvals)
     | Nothing ->
@@ -389,7 +392,47 @@ let rec core_eval file inside_if = function
                     end in
                     EU.return (Econst (Mem.MVinteger (Symbolic.make_op op symb1 symb2)))
 *)
+(*
+| PEmemop of Mem.memop * list pexpr
+*)
+  | PEmemop memop pes ->
+      EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+      match (memop, to_values pes') with
+        | (Ptreq, Just [Vpointer ptr_val1; Vpointer ptr_val2]) ->
+            EU.return $ PEval
+              (if Mem.ptr_eq ptr_val1 ptr_val2 then
+                Vtrue
+              else
+                Vfalse)
+        | (IntFromPtr, Just [Vctype ref_ty; Vctype ty; Vpointer ptr_val]) ->
+            EU.return $
+              PEval (Vinteger (Mem.int_from_ptr ref_ty ty ptr_val))
+        | (PtrFromInt, Just [Vctype ty; Vctype ref_ty; Vinteger ival]) ->
+            EU.return $
+              PEval (Vpointer (Mem.ptr_from_int ty ref_ty ival))
 
+        | (PtrValidForDeref, Just [Vpointer ptr_val]) ->
+            EU.return $ PEval
+              (if Mem.ptr_valid_for_deref ptr_val then
+                Vtrue
+              else
+                Vfalse)
+
+        
+        | (_, Just _) ->
+            Boot.assert_false "WIP: Core_run.core_eval PEmemop _"
+        
+        | (_, Nothing) ->
+            EU.return $ PEmemop memop pes'
+      end
+(*
+  | Ptreq
+  | Ptrdiff     (* (address, address) -> integer *)
+  | PtrLt
+*)
+
+
+  
   | PEtuple pes ->
       EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
       EU.return $ match to_values pes' with
@@ -515,7 +558,12 @@ let rec core_eval file inside_if = function
             EU.fail $ Illformed_program "PEis_unsigned: operand should be a ctype"
         | Nothing ->
             EU.return $ PEis_unsigned pe'
-      end
+end
+
+
+  | pe ->
+    Boot.assert_false (">>> " ^ Boot.pp_core_expr (Epure pe : expr unit))
+
 end
 
 
@@ -714,8 +762,16 @@ let runMem m =
         | Exception.Result (Undefined.Error str, mem_st') ->
             Boot.assert_false ("Core_run.runMem error: " ^ str)
         
-        | _ ->
-            Boot.assert_false "Core_run.runMem other"
+        | Exception.Exception err ->
+            let str = match err with
+              | Mem.MerrUnitialised _ ->
+                  "MerrUnitialised"
+              | Mem.MerrInternal str ->
+                  "(MerrInternal '" ^ str ^ "'"
+              | Mem.MerrOther str ->
+                  "(MerrOther '" ^ str ^ "'"
+            end in
+            Boot.assert_false ("Core_run.runMem other: " ^ str)
       end
     )
   )

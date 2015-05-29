@@ -1,5 +1,6 @@
 %{
 open Cabs
+open Location_ocaml
 
 let id =
   fun z -> z
@@ -18,15 +19,6 @@ let empty_specs = {
 }
 
 
-(* TODO: debug *)
-let dummy_loc =
-  let p = {
-    Lexing.pos_fname= "hello.c";
-    Lexing.pos_lnum=  42;
-    Lexing.pos_bol=   120;
-    Lexing.pos_cnum=  120;
-  } in
-  (p, p)
 
 %}
 
@@ -40,7 +32,7 @@ let dummy_loc =
   ATOMIC_LPAREN (* this is a hack to solve a grammar ambiguity (see Lexer.mll) *)
 
 (* §6.4.2 Identifiers *)
-%token<Cabs.cabs_identifier> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
+%token<string> VAR_NAME2 TYPEDEF_NAME2 OTHER_NAME
 
 (* §6.4.4 Constants *)
 %token<Cabs.cabs_constant> CONSTANT
@@ -62,6 +54,14 @@ let dummy_loc =
 (* LBRACES PIPES RBRACES *)
 
 %token EOF
+
+
+
+
+%nonassoc THEN
+%nonassoc ELSE
+
+
 
 (* ========================================================================== *)
 
@@ -198,11 +198,8 @@ let dummy_loc =
   static_assert_declaration
 
 %type<Cabs.cabs_statement>
-  statement_dangerous statement_safe  labeled_statement(statement_safe)
-  labeled_statement(statement_dangerous) iteration_statement(statement_safe)
-  iteration_statement(statement_dangerous) compound_statement
-  expression_statement selection_statement_dangerous selection_statement_safe
-  iteration_statement(last_statement) jump_statement
+  statement labeled_statement compound_statement expression_statement
+  selection_statement iteration_statement jump_statement
 
 %type<Cabs.cabs_statement list>
   block_item_list
@@ -239,18 +236,18 @@ translation_unit_file: (* NOTE: this is not present in the standard *)
 
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
-| cst= VAR_NAME2
-    { cst }
+| str= VAR_NAME2
+    { CabsIdentifier (Loc_point $startpos, str) }
 
 
 (* §6.5.1 Primary expressions *)
 primary_expression:
-| id= VAR_NAME2
-    { CabsExpression (($startpos, $endpos), CabsEident id) }
+| str= VAR_NAME2
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEident (CabsIdentifier (Loc_point $startpos(str), str))) }
 | cst= CONSTANT
-    { CabsExpression (($startpos, $endpos), CabsEconst cst) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEconst cst) }
 | lit= STRING_LITERAL
-    { CabsExpression (($startpos, $endpos), CabsEstring lit) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEstring lit) }
 | LPAREN expr= expression RPAREN
     { expr }
 | gs= generic_selection
@@ -260,7 +257,7 @@ primary_expression:
 (* §6.5.1.1 Generic selection *)
 generic_selection:
 | GENERIC LPAREN expr= assignment_expression COMMA gas= generic_assoc_list RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEgeneric (expr, gas)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEgeneric (expr, gas)) }
 
 generic_assoc_list: (* NOTE: the list is in reverse *)
 | ga= generic_association
@@ -280,25 +277,25 @@ postfix_expression:
 | expr= primary_expression
     { expr }
 | expr1= postfix_expression LBRACKET expr2= expression RBRACKET
-    { CabsExpression (($startpos, $endpos), CabsEsubscript (expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEsubscript (expr1, expr2)) }
 | expr= postfix_expression LPAREN exprs_opt= argument_expression_list? RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEcall (expr, option [] List.rev exprs_opt)) }
-| expr= postfix_expression DOT id= OTHER_NAME
-    { CabsExpression (($startpos, $endpos), CabsEmemberof (expr, id)) }
-| expr= postfix_expression MINUS_GT id= OTHER_NAME
-    { CabsExpression (($startpos, $endpos), CabsEmemberofptr (expr, id)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEcall (expr, option [] List.rev exprs_opt)) }
+| expr= postfix_expression DOT str= OTHER_NAME
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEmemberof (expr, CabsIdentifier (Loc_point $startpos(str), str))) }
+| expr= postfix_expression MINUS_GT str= OTHER_NAME
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEmemberofptr (expr, CabsIdentifier (Loc_point $startpos(str), str))) }
 | expr= postfix_expression PLUS_PLUS
-    { CabsExpression (($startpos, $endpos), CabsEpostincr expr) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEpostincr expr) }
 | expr= postfix_expression MINUS_MINUS
-    { CabsExpression (($startpos, $endpos), CabsEpostdecr expr) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEpostdecr expr) }
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list RBRACE
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA RBRACE
-    { CabsExpression (($startpos, $endpos), CabsEcompound (ty, List.rev inits)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEcompound (ty, List.rev inits)) }
 (* TODO: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEassert expr) }
-| OFFSETOF LPAREN ty= type_name COMMA id= OTHER_NAME RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEoffsetof (ty, id)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEassert expr) }
+| OFFSETOF LPAREN ty= type_name COMMA str= OTHER_NAME RPAREN
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEoffsetof (ty, CabsIdentifier (Loc_point $startpos(str), str))) }
 
 
 argument_expression_list: (* NOTE: the list is in reverse *)
@@ -313,17 +310,17 @@ unary_expression:
 | expr= postfix_expression
     { expr }
 | PLUS_PLUS expr= unary_expression
-    { CabsExpression (($startpos, $endpos), CabsEpreincr expr) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEpreincr expr) }
 | MINUS_MINUS expr= unary_expression
-    { CabsExpression (($startpos, $endpos), CabsEpredecr expr) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEpredecr expr) }
 | op= unary_operator expr= cast_expression
-    { CabsExpression (($startpos, $endpos), CabsEunary (op, expr)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEunary (op, expr)) }
 | SIZEOF expr= unary_expression
-    { CabsExpression (($startpos, $endpos), CabsEsizeof_expr expr) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEsizeof_expr expr) }
 | SIZEOF LPAREN ty= type_name RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEsizeof_type ty) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEsizeof_type ty) }
 | ALIGNOF LPAREN ty= type_name RPAREN
-    { CabsExpression (($startpos, $endpos), CabsEalignof ty) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEalignof ty) }
 
 unary_operator:
 | AMPERSAND
@@ -345,7 +342,7 @@ cast_expression:
 | expr= unary_expression
     { expr }
 | LPAREN ty= type_name RPAREN expr= cast_expression
-    { CabsExpression (($startpos, $endpos), CabsEcast (ty, expr)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEcast (ty, expr)) }
 
 
 (* §6.5.5 Multiplicative operators *)
@@ -353,11 +350,11 @@ multiplicative_expression:
 | expr= cast_expression
     { expr }
 | expr1= multiplicative_expression STAR expr2= cast_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsMul, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsMul, expr1, expr2)) }
 | expr1= multiplicative_expression SLASH expr2= cast_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsDiv, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsDiv, expr1, expr2)) }
 | expr1= multiplicative_expression PERCENT expr2= cast_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsMod, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsMod, expr1, expr2)) }
 
 
 (* §6.5.6 Additive operators *)
@@ -365,9 +362,9 @@ additive_expression:
 | expr= multiplicative_expression
     { expr }
 | expr1= additive_expression PLUS expr2= multiplicative_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsAdd, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsAdd, expr1, expr2)) }
 | expr1= additive_expression MINUS expr2= multiplicative_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsSub, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsSub, expr1, expr2)) }
 
 
 (* §6.5.7 Bitwise shift operators *)
@@ -375,9 +372,9 @@ shift_expression:
 | expr= additive_expression
     { expr }
 | expr1= shift_expression LT_LT expr2= additive_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsShl, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsShl, expr1, expr2)) }
 | expr1= shift_expression GT_GT expr2= additive_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsShr, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsShr, expr1, expr2)) }
 
 
 (* §6.5.8 Relational operators *)
@@ -385,13 +382,13 @@ relational_expression:
 | expr= shift_expression
     { expr }
 | expr1= relational_expression LT expr2= shift_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsLt, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsLt, expr1, expr2)) }
 | expr1= relational_expression GT expr2= shift_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsGt, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsGt, expr1, expr2)) }
 | expr1= relational_expression LT_EQ expr2= shift_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsLe, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsLe, expr1, expr2)) }
 | expr1= relational_expression GT_EQ expr2= shift_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsGe, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsGe, expr1, expr2)) }
 
 
 (* §6.5.9 Equality operators *)
@@ -399,9 +396,9 @@ equality_expression:
 | expr= relational_expression
     { expr }
 | expr1= equality_expression EQ_EQ expr2= relational_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsEq, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsEq, expr1, expr2)) }
 | expr1= equality_expression BANG_EQ expr2= relational_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsNe, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsNe, expr1, expr2)) }
 
 
 (* §6.5.10 Bitwise AND operator *)
@@ -409,7 +406,7 @@ _AND_expression:
 | expr= equality_expression
     { expr }
 | expr1= _AND_expression AMPERSAND expr2= equality_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsBand, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsBand, expr1, expr2)) }
 
 
 (* §6.5.11 Bitwise exclusive OR operator *)
@@ -417,7 +414,7 @@ exclusive_OR_expression:
 | expr= _AND_expression
     { expr }
 | expr1= exclusive_OR_expression CARET expr2= _AND_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsBxor, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsBxor, expr1, expr2)) }
 
 
 (* §6.5.12 Bitwise inclusive OR operator *)
@@ -425,7 +422,7 @@ inclusive_OR_expression:
 | expr= exclusive_OR_expression
     { expr }
 | expr1= inclusive_OR_expression PIPE expr2= exclusive_OR_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsBor, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsBor, expr1, expr2)) }
 
 
 (* §6.5.13 Logical AND operator *)
@@ -433,7 +430,7 @@ logical_AND_expression:
 | expr= inclusive_OR_expression
     { expr }
 | expr1= logical_AND_expression AMPERSAND_AMPERSAND expr2= inclusive_OR_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsAnd, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsAnd, expr1, expr2)) }
 
 
 (* §6.5.14 Logical OR operator *)
@@ -441,7 +438,7 @@ logical_OR_expression:
 | expr= logical_AND_expression
     { expr }
 | expr1= logical_OR_expression PIPE_PIPE expr2= logical_AND_expression
-    { CabsExpression (($startpos, $endpos), CabsEbinary (CabsOr, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEbinary (CabsOr, expr1, expr2)) }
 
 
 (* §6.5.15 Conditional operator *)
@@ -449,7 +446,7 @@ conditional_expression:
 | expr= logical_OR_expression
     { expr }
 | expr1= logical_OR_expression QUESTION expr2= expression COLON expr3= conditional_expression
-    { CabsExpression (($startpos, $endpos), CabsEcond (expr1, expr2, expr3)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEcond (expr1, expr2, expr3)) }
 
 
 (* §6.5.16 Assignment operators *)
@@ -457,7 +454,7 @@ assignment_expression:
 | expr= conditional_expression
     { expr }
 | expr1= unary_expression op= assignment_operator expr2= assignment_expression
-    { CabsExpression (($startpos, $endpos), CabsEassign (op, expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos(op)), CabsEassign (op, expr1, expr2)) }
 
 assignment_operator:
 | EQ
@@ -489,7 +486,7 @@ expression:
 | expr= assignment_expression
     { expr }
 | expr1= expression COMMA expr2= assignment_expression
-    { CabsExpression (($startpos, $endpos), CabsEcomma (expr1, expr2)) }
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEcomma (expr1, expr2)) }
 
 
 (* §6.6 Constant expressions *)
@@ -586,16 +583,17 @@ type_specifier:
     { spec }
 | spec= enum_specifier
     { spec }
-| id= TYPEDEF_NAME2
-    { TSpec_name id }
+| str= TYPEDEF_NAME2
+    { TSpec_name (CabsIdentifier (Loc_point $startpos(str), str)) }
 
 
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
-| ctor= struct_or_union id_opt= OTHER_NAME? LBRACE rev_decls= struct_declaration_list RBRACE
-    {  ctor id_opt (Some (List.rev rev_decls)) }
-| ctor= struct_or_union id= OTHER_NAME
-    { ctor (Some id) None }
+| ctor= struct_or_union str_opt= OTHER_NAME? LBRACE rev_decls= struct_declaration_list RBRACE
+    { let ident_opt = option None (fun str -> Some (CabsIdentifier (Loc_point $startpos(str_opt), str))) str_opt in
+      ctor ident_opt (Some (List.rev rev_decls)) }
+| ctor= struct_or_union str= OTHER_NAME
+    { ctor (Some (CabsIdentifier (Loc_point $startpos(str), str))) None }
 
 struct_or_union:
 | STRUCT
@@ -643,11 +641,12 @@ struct_declarator:
 
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
-| ENUM id_opt= OTHER_NAME? LBRACE enums= enumerator_list RBRACE
-| ENUM id_opt= OTHER_NAME? LBRACE enums= enumerator_list COMMA RBRACE
-    { TSpec_enum (id_opt, Some (List.rev enums)) }
-| ENUM id= OTHER_NAME
-    { TSpec_enum (Some id, None)  }
+| ENUM str_opt= OTHER_NAME? LBRACE enums= enumerator_list RBRACE
+| ENUM str_opt= OTHER_NAME? LBRACE enums= enumerator_list COMMA RBRACE
+    { let ident_opt = option None (fun str -> Some (CabsIdentifier (Loc_point $startpos(str_opt), str))) str_opt in
+      TSpec_enum (ident_opt, Some (List.rev enums)) }
+| ENUM str= OTHER_NAME
+    { TSpec_enum (Some (CabsIdentifier (Loc_point $startpos(str), str)), None)  }
 
 enumerator_list: (* NOTE: the list is in reverse *)
 | enum= enumerator
@@ -702,18 +701,18 @@ declarator:
     { Declarator (ptr_opt, ddecltor) }
 
 direct_declarator:
-| id= VAR_NAME2
-    { DDecl_identifier id }
+| str= VAR_NAME2
+    { DDecl_identifier (CabsIdentifier (Loc_point $startpos(str), str)) }
 | LPAREN decltor= declarator RPAREN
     { DDecl_declarator decltor }
 | ddecltor= direct_declarator LBRACKET tquals_opt= type_qualifier_list? expr_opt= assignment_expression? RBRACKET
-    { DDecl_array (ddecltor, ADecl (($startpos, $endpos), option [] List.rev tquals_opt, false, option None (fun z -> Some (ADeclSize_expression z)) expr_opt)) }
+    { DDecl_array (ddecltor, ADecl (Loc_region ($startpos, $endpos, None), option [] List.rev tquals_opt, false, option None (fun z -> Some (ADeclSize_expression z)) expr_opt)) }
 | ddecltor= direct_declarator LBRACKET STATIC tquals_opt= type_qualifier_list? expr= assignment_expression RBRACKET
-    { DDecl_array (ddecltor, ADecl (dummy_loc, option [] List.rev tquals_opt, true, Some (ADeclSize_expression expr))) }
+    { DDecl_array (ddecltor, ADecl (Loc_unknown, option [] List.rev tquals_opt, true, Some (ADeclSize_expression expr))) }
 | ddecltor= direct_declarator LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
-    { DDecl_array (ddecltor, ADecl (dummy_loc, List.rev tquals, true, Some (ADeclSize_expression expr))) }
+    { DDecl_array (ddecltor, ADecl (Loc_unknown, List.rev tquals, true, Some (ADeclSize_expression expr))) }
 | ddecltor= direct_declarator LBRACKET tquals_opt= type_qualifier_list? STAR RBRACKET
-    { DDecl_array (ddecltor, ADecl (dummy_loc, option [] List.rev tquals_opt, false, Some ADeclSize_asterisk)) }
+    { DDecl_array (ddecltor, ADecl (Loc_unknown, option [] List.rev tquals_opt, false, Some ADeclSize_asterisk)) }
 | ddecltor= direct_declarator LPAREN param_tys= parameter_type_list RPAREN
     { DDecl_function (ddecltor, param_tys) }
 (* TODO this is hack, while we don't support identifier_list *)
@@ -777,40 +776,40 @@ direct_abstract_declarator:
     { DAbs_abs_declarator abs_decltor }
 (* direct_abstract_declarator? LBRACKET type_qualifier_list? assignment_expression? RBRACKET *)
 | dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list expr= assignment_expression RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, tquals, false, Some (ADeclSize_expression expr))) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, tquals, false, Some (ADeclSize_expression expr))) }
 | dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, tquals, false, None)) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, tquals, false, None)) }
 | dabs_decltor= direct_abstract_declarator LBRACKET expr= assignment_expression RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, [], false, Some (ADeclSize_expression expr))) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, [], false, Some (ADeclSize_expression expr))) }
 | dabs_decltor= direct_abstract_declarator LBRACKET RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, [], false, None)) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, [], false, None)) }
 | LBRACKET tquals= type_qualifier_list expr= assignment_expression RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, tquals, false, Some (ADeclSize_expression expr))) }
+    { DAbs_array (None, ADecl (Loc_unknown, tquals, false, Some (ADeclSize_expression expr))) }
 | LBRACKET expr= assignment_expression RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, [], false, Some (ADeclSize_expression expr))) }
+    { DAbs_array (None, ADecl (Loc_unknown, [], false, Some (ADeclSize_expression expr))) }
 | LBRACKET tquals= type_qualifier_list RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, tquals, false, None)) }
+    { DAbs_array (None, ADecl (Loc_unknown, tquals, false, None)) }
 | LBRACKET RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, [], false, None)) }
+    { DAbs_array (None, ADecl (Loc_unknown, [], false, None)) }
 (* direct_abstract_declarator? LBRACKET STATIC type_qualifier_list? assignment_expression RBRACKET *)
 | dabs_decltor= direct_abstract_declarator LBRACKET STATIC tquals= type_qualifier_list expr= assignment_expression RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, tquals, true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, tquals, true, Some (ADeclSize_expression expr))) }
 | LBRACKET STATIC tquals= type_qualifier_list expr= assignment_expression RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, tquals, true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (None, ADecl (Loc_unknown, tquals, true, Some (ADeclSize_expression expr))) }
 | dabs_decltor= direct_abstract_declarator LBRACKET STATIC expr= assignment_expression RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, [], true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, [], true, Some (ADeclSize_expression expr))) }
 | LBRACKET STATIC expr= assignment_expression RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, [], true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (None, ADecl (Loc_unknown, [], true, Some (ADeclSize_expression expr))) }
 (* direct_abstract_declarator? LBRACKET type_qualifier_list STATIC assignment_expression RBRACKET *)
 | dabs_decltor= direct_abstract_declarator LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, tquals, true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, tquals, true, Some (ADeclSize_expression expr))) }
 | LBRACKET tquals= type_qualifier_list STATIC expr= assignment_expression RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, tquals, true, Some (ADeclSize_expression expr))) }
+    { DAbs_array (None, ADecl (Loc_unknown, tquals, true, Some (ADeclSize_expression expr))) }
 (* direct_abstract_declarator? LBRACKET STAR RBRACKET *)
 | dabs_decltor= direct_abstract_declarator LBRACKET STAR RBRACKET
-    { DAbs_array (Some dabs_decltor, ADecl (dummy_loc, [], false, Some ADeclSize_asterisk)) }
+    { DAbs_array (Some dabs_decltor, ADecl (Loc_unknown, [], false, Some ADeclSize_asterisk)) }
 | LBRACKET STAR RBRACKET
-    { DAbs_array (None, ADecl (dummy_loc, [], false, Some ADeclSize_asterisk)) }
+    { DAbs_array (None, ADecl (Loc_unknown, [], false, Some ADeclSize_asterisk)) }
 (* direct_abstract_declarator? LPAREN parameter_type_list? RPAREN *)
 | dabs_decltor= direct_abstract_declarator LPAREN param_tys_opt= parameter_type_list? RPAREN
     { DAbs_function (Some dabs_decltor, option (Params ([], false)) (fun z -> z) param_tys_opt) }
@@ -852,8 +851,8 @@ designator_list: (* NOTE: the list is in reverse *)
 designator:
 | LBRACKET expr= constant_expression RBRACKET
     { Desig_array expr }
-| DOT id= OTHER_NAME
-    { Desig_member id }
+| DOT str= OTHER_NAME
+    { Desig_member (CabsIdentifier (Loc_point $startpos(str), str)) }
 
 
 (* §6.7.10 Static assertions *)
@@ -863,45 +862,31 @@ static_assert_declaration:
 
 
 (* §6.8 Statements and blocks *)
-statement_dangerous:
-| stmt= labeled_statement(statement_dangerous)
+statement:
+| stmt= labeled_statement
 | stmt= compound_statement
-| stmt= expression_statement
-| stmt= selection_statement_dangerous
-| stmt= iteration_statement(statement_dangerous)
-| stmt= jump_statement
-    { stmt }
-
-statement_safe:
-| stmt= labeled_statement(statement_safe)
-| stmt= compound_statement
-| stmt= expression_statement
-| stmt= selection_statement_safe
-| stmt= iteration_statement(statement_safe)
-| stmt= jump_statement
-    { stmt }
-
+| stmt=  expression_statement
+| stmt=  selection_statement
+| stmt=  iteration_statement
+| stmt=  jump_statement
+  { stmt }
+;
 
 (* §6.8.1 Labeled statements *)
-labeled_statement(last_statement):
-| id= OTHER_NAME COLON stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsSlabel (id, stmt)) }
-| CASE expr= constant_expression COLON stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsScase (expr, stmt)) }
-| DEFAULT COLON stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsSdefault stmt) }
-
+labeled_statement:
+| str= OTHER_NAME COLON stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSlabel (CabsIdentifier (Loc_point $startpos(str), str), stmt)) }
+| CASE expr= constant_expression COLON stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsScase (expr, stmt)) }
+| DEFAULT COLON stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSdefault stmt) }
+;
 
 (* §6.8.2 Compound statement *)
 compound_statement:
 | LBRACE bis_opt= block_item_list? RBRACE
-    { CabsStatement (($startpos, $endpos), CabsSblock (option [] List.rev bis_opt)) }
-(* NON-STD cppmem syntax *)
-(*
-| LBRACES ss= separated_nonempty_list(PIPES, compound_statement) RBRACES
-    (* TODO: the locations are messed up *)
-    { CabsStatement (($startpos, $endpos), CabsSpar (List.rev ss)) }
-*)
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSblock (option [] List.rev bis_opt)) }
+;
 
 block_item_list: (* NOTE: the list is in reverse *)
 | stmt= block_item
@@ -911,55 +896,59 @@ block_item_list: (* NOTE: the list is in reverse *)
 
 block_item:
 | decl= declaration
-    { CabsStatement (($startpos, $endpos), CabsSdecl decl) }
-| stmt= statement_dangerous
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSdecl decl) }
+| stmt= statement
     { stmt }
-
+;
 
 (* §6.8.3 Expression and null statements *)
 expression_statement:
 | expr_opt= expression? SEMICOLON
-    { CabsStatement (($startpos, $endpos), option CabsSnull (fun z -> CabsSexpr z) expr_opt) }
+    { CabsStatement (Loc_region ($startpos, $endpos, None), option CabsSnull (fun z -> CabsSexpr z) expr_opt) }
+;
 
 
 (* §6.8.4 Selection statements *)
-selection_statement_dangerous:
-| IF LPAREN expr= expression RPAREN stmt= statement_dangerous
-    { CabsStatement (($startpos, $endpos), CabsSif (expr, stmt, None)) }
-| IF LPAREN expr= expression RPAREN stmt1= statement_safe ELSE stmt2= statement_dangerous
-    { CabsStatement (($startpos, $endpos), CabsSif (expr, stmt1, Some stmt2)) }
-| SWITCH LPAREN expr= expression RPAREN stmt= statement_dangerous
-    { CabsStatement (($startpos, $endpos), CabsSswitch (expr, stmt)) }
-
-selection_statement_safe:
-| IF LPAREN expr= expression RPAREN stmt1= statement_safe ELSE stmt2= statement_safe
-    { CabsStatement (($startpos, $endpos), CabsSif (expr, stmt1, Some stmt2)) }
-| SWITCH LPAREN expr= expression RPAREN stmt= statement_safe
-    { CabsStatement (($startpos, $endpos), CabsSswitch (expr, stmt)) }
-
+selection_statement:
+| IF LPAREN expr= expression RPAREN stmt= statement %prec THEN
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSif (expr, stmt, None)) }
+| IF LPAREN expr= expression RPAREN stmt1= statement ELSE stmt2= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSif (expr, stmt1, Some stmt2)) }
+| SWITCH LPAREN expr= expression RPAREN stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSswitch (expr, stmt)) }
+;
 
 (* §6.8.5 Iteration statements *)
-iteration_statement(last_statement):
-| WHILE LPAREN expr= expression RPAREN stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsSwhile (expr, stmt)) }
-| DO stmt= statement_dangerous WHILE LPAREN expr= expression RPAREN SEMICOLON
-    { CabsStatement (($startpos, $endpos), CabsSdo (expr, stmt)) }
-| FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsSfor (option None (fun z -> Some (FC_expr z)) expr1_opt, expr2_opt, expr3_opt, stmt)) }
-| FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= last_statement
-    { CabsStatement (($startpos, $endpos), CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
-
+iteration_statement:
+| WHILE LPAREN expr= expression RPAREN stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSwhile (expr, stmt)) }
+| DO stmt= statement WHILE LPAREN expr= expression RPAREN SEMICOLON
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSdo (expr, stmt)) }
+| FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSfor (option None (fun z -> Some (FC_expr z)) expr1_opt, expr2_opt, expr3_opt, stmt)) }
+| FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON expr3_opt= expression? RPAREN stmt= statement
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
+;
 
 (* §6.8.6 Jump statements *)
 jump_statement:
-| GOTO id= OTHER_NAME SEMICOLON
-    { CabsStatement (($startpos, $endpos), CabsSgoto id) }
+| GOTO str= OTHER_NAME SEMICOLON
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSgoto (CabsIdentifier (Loc_point $startpos(str), str))) }
 | CONTINUE SEMICOLON
-    { CabsStatement (($startpos, $endpos), CabsScontinue) }
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsScontinue) }
 | BREAK SEMICOLON
-    { CabsStatement (($startpos, $endpos), CabsSbreak) }
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSbreak) }
 | RETURN expr_opt= expression? SEMICOLON
-    { CabsStatement (($startpos, $endpos), CabsSreturn expr_opt) }
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSreturn expr_opt) }
+;
+
+
+
+
+
+
+
+
 
 
 (* §6.9 External definitions *)

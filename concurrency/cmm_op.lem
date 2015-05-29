@@ -118,47 +118,6 @@ let incWitRestrict wit actions =
 (* To show completeness, we will commit the actions of a pre_execution
    in a certain order, which we define here. *)
 
-val pre_hb: pre_execution -> set (action * action)
-let ~{ocaml} pre_hb pre = 
-  pre.sb union (sw_asw pre)
-
-val wit_hb: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} wit_hb pre wit = 
-        (sw_lock pre wit)
-  union (sw_rel_acq_rs pre wit) 
-  union (sw_fence_sb_hrs_rf_sb pre wit)
-  union (sw_fence_sb_hrs_rf pre wit)
-  union (sw_fence_rs_rf_sb pre wit)
-
-val sb_r_f: pre_execution -> execution_witness -> set (action * action)
-let sb_r_f pre wit = 
-  {(a, b) | forall ((a, b) IN pre.sb) 
-  |    is_at_atomic_location pre.lk a 
-    && is_read a
-    && is_fence b
-    && is_acquire b}
-
-val sb_f_w: pre_execution -> execution_witness -> set (action * action)
-let sb_f_w pre wit = 
-  {(a, b) | forall ((a, b) IN pre.sb) 
-  |    is_fence a
-    && is_release a
-    && is_at_atomic_location pre.lk b 
-    && is_write b}
-
-val incCom2_step: candidate_execution -> set (action * action)
-let incCom2_step (pre, wit, rel) =
-        wit.mo
-  union wit.rf
-  union (sb_r_f pre wit)
-  union (sb_f_w pre wit)
-
-val incCom2: candidate_execution -> set (action * action)
-let incCom2 ex =
-  Relation.transitiveClosure (incCom2_step ex)
-
-(* The old order *)
-
 val is_na_or_non_write: pre_execution -> action -> bool
 let is_na_or_non_write pre a = 
   not (is_write a) || is_at_non_atomic_location pre.lk a

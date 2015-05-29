@@ -40,11 +40,11 @@ let oneAil' =
 
 val zeroAil: expression unit
 let zeroAil =
-  AnnotatedExpression () zeroAil'
+  AnnotatedExpression () Loc.unknown zeroAil'
 
 val oneAil: expression unit
 let oneAil =
-  AnnotatedExpression () oneAil'
+  AnnotatedExpression () Loc.unknown oneAil'
 
 
 
@@ -97,6 +97,86 @@ end
 
 
 
+(*
+
+(* STD: sort of defined at §6.6#3 *)
+val is_constant_expression: expression unit -> E.t bool
+let rec is_constant_expression (AnnotatedExpression () loc expr) =
+  match expr with
+    | AilEassign _ _ ->
+        false
+    | AilEcompoundAssign _ _ _ ->
+        false
+    | AilEunary PostfixIncr _ ->
+        false
+    | AilEunary PostfixDecr _ ->
+        false
+    | AilEcall _ _ ->
+        false
+    | AilEbinary _ Comma _ ->
+        false
+    
+    | AilEunary _ e ->
+        is_constant_expression e
+    | AilEbinary e1 _ e2 ->
+        is_constant_expression e1 && is_constant_expression e2
+    | AilEcond e1 e2 e3 ->
+        is_constant_expression e1 && is_constant_expression e2 && is_constant_expression e3
+
+
+
+  end
+
+    | AilEcast of qualifiers * ctype * expression 'A
+
+
+  | AilEassert of expression 'A
+  | AilEoffsetof of ctype * Cabs.cabs_identifier
+  | AilEgeneric of expression 'A * list (generic_association 'A)
+  
+  (* TODO: hackish? *)
+  (* TODO: these two don't exist in C (apart from in decl) *)
+  | AilEarray of ctype * list (maybe (expression 'A))
+  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *)
+  
+  (* NOTE: the expression obviously need to match the type, and will typically be
+           a AilEarray or AilEstruct *)
+  | AilEcompound of ctype * expression 'A
+  
+  
+  | AilEmemberof of expression 'A * Cabs.cabs_identifier
+  | AilEmemberofptr of expression 'A * Cabs.cabs_identifier
+  
+  | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
+  
+  | AilEstr of stringLiteral
+  | AilEconst of constant
+  | AilEident of identifier
+  | AilEsizeof of qualifiers * ctype
+  | AilEsizeof_expr of expression 'A
+  | AilEalignof of qualifiers * ctype
+  
+  (* NOTE: type annotation on expression, used to remember the type of desugared
+           enumeration constants *)
+  | AilEannot of ctype * (expression 'A)
+
+
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (*
@@ -121,7 +201,7 @@ except as part of an operand to the sizeof or _Alignof operator.
 (* see §6.6#6 *)
 (* TODO: make the function pure, when complete *)
 val     is_integer_constant_expression: expression unit -> E.t bool
-let rec is_integer_constant_expression (AnnotatedExpression () expr) =
+let rec is_integer_constant_expression (AnnotatedExpression () loc expr) =
   match expr with
     | AilEunary uop e ->
         match uop with
@@ -157,10 +237,10 @@ let rec is_integer_constant_expression (AnnotatedExpression () expr) =
     
     | AilEcond _ _ _ ->
         (* TODO: location *)
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "conditional operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotyetSupported "conditional operator in `integer constant expressions'")
     
     | AilEcast _ _ _ ->
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "cast operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotyetSupported "cast operator in `integer constant expressions'")
     
     | AilEcall _ _ ->
         E.return false
@@ -178,18 +258,19 @@ let rec is_integer_constant_expression (AnnotatedExpression () expr) =
         E.return false
     
     | AilEsizeof _ _ ->
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sizeof operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotyetSupported "sizeof operator in `integer constant expressions'")
 
     | AilEalignof _ _ ->
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "_Alignof operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotyetSupported "_Alignof operator in `integer constant expressions'")
 end
 
 
 
 
 (* STD §6.6#8 *)
-val is_arithmetic_constant_expression: expression unit -> E.t bool
-let is_arithmetic_constant_expression ((AnnotatedExpression () expr) as a_expr) =
+(* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
+val     is_arithmetic_constant_expression: expression unit -> E.t bool
+let rec is_arithmetic_constant_expression ((AnnotatedExpression () loc expr) as a_expr) =
   (* TODO: enumeration constant *)
   match expr with
     | AilEconst (ConstantInteger _) ->
@@ -203,6 +284,15 @@ let is_arithmetic_constant_expression ((AnnotatedExpression () expr) as a_expr) 
         (* NOTE: is Ail specific *)
         E.return true
 *)
+
+    | AilEunary _ e ->
+        is_arithmetic_constant_expression e
+
+    | AilEbinary e1 _ e2 ->
+        is_arithmetic_constant_expression e1 >>= fun b1 ->
+        is_arithmetic_constant_expression e2 >>= fun b2 ->
+        E.return (b1 && b2)
+
     | AilEsizeof _ ty ->
         (* TODO: sizeof expressions whose results are integer constants *)
         E.return (AilTypesAux.is_vla ty)
@@ -247,18 +337,59 @@ let rec is_arithmetic_constant_expression expr =
 *)
 
 
+val     is_lvalue_to_static_object: expression unit -> E.t bool
+let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
+  match expr with
+    | AilEident sym ->
+        E.fetch_object_declaration sym >>= fun (dur, _, _) ->
+        match dur with
+          | ATypes.Static ->
+              E.return true
+          | _ ->
+              E.return false
+        end
+
+
+(* The array-subscript [] and member-access . and -> operators, the address & and indirection * unary operators, and pointer casts may be used in the creation of an address constant, but the value of an object shall not be accessed by use of these operators. *)
+    | AilEbinary e1 (Arithmetic Add) e2 ->
+        (* NOTE: this case corresponds to array-subcript *)
+        is_lvalue_to_static_object e1        >>= fun b11 ->
+        is_arithmetic_constant_expression e1 >>= fun b12 ->
+        is_lvalue_to_static_object e2        >>= fun b21 ->
+        is_arithmetic_constant_expression e2 >>= fun b22 ->
+        E.return (b11 && b22 || b12 && b21)
+(* TODO
+    | AilEmemberof e ident ->
+        
+    | AilEmemberofptr e ident ->
+*)
+    | _ ->
+        E.return false
+  end
+
+
+
 (* STD §6.6#9 *)
 val is_address_constant: expression unit -> E.t bool
-let is_address_constant ((AnnotatedExpression () expr) as a_expr) =
+let is_address_constant a_expr =
+  (* TODO: not sure is_null_pointer_constant is the right predicate *)
   (* An address constant (...) *)
   if AilSyntaxAux.is_null_pointer_constant a_expr then
     (* (...) is a null pointer, *)
     E.return true
   
-  else match expr with
+  else match a_expr with
+    | AnnotatedExpression () loc (AilEunary Address expr) ->
+        is_lvalue_to_static_object expr
+    | _ ->
+        E.return false
+  end
+
+(*
+match expr with
     (* (...) a pointer to an lvalue designating an object of static storage
        duration, or a pointer to a function designator; (...) *)
-    | AilEunary Address (AnnotatedExpression () (AilEident sym)) ->
+    | AilEunary Address (AnnotatedExpression () loc' (AilEident sym)) ->
         (* (...) it shall be created explicitly using the unary & operator (...) *)
         E.fetch_object_declaration sym >>= fun (dur, _, _) ->
         match dur with
@@ -268,7 +399,7 @@ let is_address_constant ((AnnotatedExpression () expr) as a_expr) =
               E.return false
         end
     
-    | AilEcast _ ty (AnnotatedExpression () (AilEconst (ConstantInteger _))) ->
+    | AilEcast _ ty (AnnotatedExpression () loc' (AilEconst (ConstantInteger _))) ->
         (* (...) an integer constant cast to pointer type, (...) *)
         E.return (AilTypesAux.is_pointer ty)
     
@@ -282,10 +413,11 @@ The array-subscript [] and member-access . and -> operators, the address & and i
 *)
 
   end
+*)
 
 
 (* STD §6.6#7 *)
-(* TODO: check the "or evaluate to" *)
+(* TODO: "or evaluate to" *)
 val is_initializer_constant_expression: expression unit -> E.t bool
 let is_initializer_constant_expression a_expr =
   is_arithmetic_constant_expression a_expr >>= fun b1 ->
@@ -294,13 +426,13 @@ let is_initializer_constant_expression a_expr =
     E.return true
   
   else match a_expr with
-    | AnnotatedExpression () (AilEbinary e1 (Arithmetic Add) e2) ->
+    | AnnotatedExpression () loc (AilEbinary e1 (Arithmetic Add) e2) ->
         is_address_constant e1            >>= fun b11 ->
         is_integer_constant_expression e2 >>= fun b12 ->
         is_address_constant e2            >>= fun b21 ->
         is_integer_constant_expression e1 >>= fun b22 ->
         E.return (b11 && b12 || b21 && b22)
-    | AnnotatedExpression () (AilEbinary e1 (Arithmetic Sub) e2) ->
+    | AnnotatedExpression () loc (AilEbinary e1 (Arithmetic Sub) e2) ->
         is_address_constant e1            >>= fun b11 ->
         is_integer_constant_expression e2 >>= fun b12 ->
         is_address_constant e2            >>= fun b21 ->
@@ -385,7 +517,7 @@ val desugar_for_clause:                 for_clause -> E.t unit (* TODO *)
 
 (* TODO: WIP *)
 val wip_desugar_initializer_: ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.t (expression unit)
-val static_thread_implicit_initializer: ATypes.ctype -> constant
+val static_thread_implicit_initializer: map identifier E.tag_definition -> ATypes.ctype -> constant
 
 
 
@@ -463,7 +595,7 @@ let desugar_character_constant (pref_opt, str) =
 
 (* TODO: this is very partial for now *)
 val     evaluate_integer_constant_expression: Loc.t -> expression unit -> E.t integerConstant
-let rec evaluate_integer_constant_expression loc (AnnotatedExpression () expr) =
+let rec evaluate_integer_constant_expression loc (AnnotatedExpression () _(*TODO: get rid of the other loc? *) expr) =
   match expr with
     | AilEunary uop e ->
 (*
@@ -596,14 +728,14 @@ end
 
 
 
-val desugar_cabs_constant: forall 'a. cabs_constant -> E.t constant
-let desugar_cabs_constant = function
+val desugar_cabs_constant: Loc.t -> cabs_constant -> E.t constant
+let desugar_cabs_constant loc = function
   | CabsInteger_const iCst ->
       E.return (ConstantInteger (translate_integer_constant iCst))
   | CabsFloating_const str ->
       E.return (ConstantFloating str)
   | CabsEnumeration_const ->
-      E.fail Loc.unknown (Errors.Desugar_NotyetSupported "WIP: desugar_cabs_constant, CabsEnumeration_const")
+      E.fail loc (Errors.Desugar_NotyetSupported "WIP: desugar_cabs_constant, CabsEnumeration_const")
   | CabsCharacter_const cCst ->
       desugar_character_constant cCst >>= fun d_cCst ->
       E.return (ConstantCharacter d_cCst)
@@ -647,7 +779,7 @@ let register_simple_enumerators ty enums =
       let expr =
         let basis = if n = 0 then Octal else Decimal in
         AilEannot ty (
-          AnnotatedExpression () (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
+          AnnotatedExpression () Loc.unknown(* TODO *) (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
         ) in
       
       E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
@@ -1061,7 +1193,7 @@ int ( * const [])(unsigned int, ...)    array of an unspecified number of consta
 
 (* val     desugar_expression: cabs_expression -> E.t (expression unit) *)
 and desugar_expression (CabsExpression loc expr) =
-  AnnotatedExpression () <$>
+  AnnotatedExpression () loc <$>
   match expr with
     | CabsEident ident ->
         let (CabsIdentifier _ str) = ident in (* DEBUG *)
@@ -1088,7 +1220,7 @@ _STD "§6.5.1#2" $
         end
     
     | CabsEconst cst ->
-        AilEconst <$> desugar_cabs_constant cst
+        AilEconst <$> desugar_cabs_constant loc cst
     | CabsEstring lit ->
         E.return (AilEstr $ translate_cabs_string_literal lit)
     | CabsEgeneric e gas ->
@@ -1098,7 +1230,7 @@ _STD "§6.5.1#2" $
     | CabsEsubscript e1 e2 ->
 _STD "§6.5.2.1#2, sentence 2" $
         AilEunary Indirection <$> (
-          AnnotatedExpression () <$>
+          AnnotatedExpression () loc <$>
           (AilEbinary <$> desugar_expression e1
                       <*> E.return (Arithmetic Add)
                       <*> desugar_expression e2)
@@ -1203,7 +1335,7 @@ and desugar_specifiers decl_ctxt scope specifs =
 _STD "§6.7.1#2" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#2")
   
-  else if not (decl_ctxt = Object_decl_context && scope = E.Scope_block &&
+  else if not (decl_ctxt = Object_decl_context && E.is_block_scope scope &&
                List.elem SC_Thread_local scs -->
                  (List.elem SC_static scs || List.elem SC_extern scs)
               ) then
@@ -1214,7 +1346,7 @@ _STD "§6.7.1#3, sentence 1" $
 _STD "§6.7.1#4" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#4")
   
-  else if not (decl_ctxt = Function_decl_context && scope = E.Scope_block -->
+  else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
 _STD "§6.7.1#7" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#7")
@@ -1333,7 +1465,13 @@ and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype ->
           ) xs
         ) >>
         (* TODO: check *)
-        E.return (ident, fun ty -> mk_ty (ATypes.Function ty (List.map snd xs) is_variadic))
+        let params = match List.map snd xs with
+          | [(_, ATypes.Void)] ->
+              []
+          | qs_tys ->
+              qs_tys
+        end in
+        E.return (ident, fun ty -> mk_ty (ATypes.Function ty params is_variadic))
 
 (*
         E.register_identifier ident
@@ -1530,7 +1668,9 @@ OTHER
 
 
 
-and static_thread_implicit_initializer ty =
+and static_thread_implicit_initializer tagDefs ty =
+  let _ = Boot.print_debug 8 ("ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Boot.pp_ail_ctype ty) in
+
   match ty with
     | ATypes.Pointer _ _ ->
         ConstantNull
@@ -1538,16 +1678,24 @@ and static_thread_implicit_initializer ty =
         if AilTypesAux.is_arithmetic ty then
           ConstantInteger (IConstant 0 Octal Nothing)
         else
-          Boot.assert_false "type error"
+          Boot.assert_false ("type error 1: " ^ Boot.pp_ail_ctype ty)
     | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
-              ConstantArray (Global.replicate_list (static_thread_implicit_initializer elem_ty) (natFromInteger n))
+              ConstantArray (Global.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
           | Nothing ->
               Boot.assert_false "type error, (TODO find quote): subarray with no size"
         end
+
+    | ATypes.Struct tag_sym ->
+        let Just (E.Struct_definition xs) = Map.lookup tag_sym tagDefs in
+        ConstantStruct tag_sym $
+          List.map (fun (ident, ty) ->
+            (ident, static_thread_implicit_initializer tagDefs ty)
+          ) xs
+
     | _ ->
-        Boot.assert_false "type error"
+        Boot.assert_false ("type error 2: " ^ Boot.pp_ail_ctype ty)
 (*
     | Function ty qs_tys is_variadic ->
         
@@ -1587,17 +1735,18 @@ and wip_desugar_initializer_ dur current_ty = function
       end
   
   | Init_list desigs_opt_inits ->
+      E.get_tag_definitions >>= fun tagDefs ->
       match current_ty with
         | ATypes.Array elem_ty (Just n) ->
             (* STD §6.7.9#10 *)
-            let implicit = AnnotatedExpression () $ AilEconst match dur with
+            let implicit = AnnotatedExpression () Loc.unknown (* TODO *) $ AilEconst match dur with
               | ATypes.Automatic ->
                   ConstantIndeterminate elem_ty
               | ATypes.Allocated ->
                   Boot.assert_false "not possible"
               (* Static | Thread *)
               | _ ->
-                  static_thread_implicit_initializer elem_ty
+                  static_thread_implicit_initializer tagDefs elem_ty
             end in
             
             E.foldlM (fun (desigs_opt, init) (i, acc) ->
@@ -1633,7 +1782,7 @@ and wip_desugar_initializer_ dur current_ty = function
               end
             ) desigs_opt_inits (0, []) >>= fun (_, xs) ->
             E.return $
-              AnnotatedExpression ()
+              AnnotatedExpression () Loc.unknown(* TODO *)
                 (* TODO: should use ConstantArray when possible *)
                 (AilEarray elem_ty (List.reverse (Global.replicate_list (Just implicit) (natFromInteger n - List.length xs) ++ xs)))
             
@@ -1665,7 +1814,7 @@ and wip_desugar_initializer_ dur current_ty = function
                     ) desigs_opt_inits [] >>= fun xs ->
                     
                     E.return $
-                      AnnotatedExpression () (
+                      AnnotatedExpression () Loc.unknown(* TODO *) (
                         AilEstruct tag (List.map (fun (ident, _) -> (ident, List.lookup ident xs)) ident_tys)
                       )
                   
@@ -1680,7 +1829,7 @@ and wip_desugar_initializer_ dur current_ty = function
                     ) (List.zip ident_tys desigs_opt_inits) [] >>= fun xs_rev ->
                     
                     E.return $
-                      AnnotatedExpression () (
+                      AnnotatedExpression () Loc.unknown(* TODO *) (
                         AilEstruct tag (List.reverse xs_rev)
                       )
                   
@@ -1871,7 +2020,7 @@ let desugar_declaration_base specifs idecltors =
         | ATypes.Function return_ty params is_variadic ->
             E.register_identifier ident
               E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
-            E.register_function_declaration sym (
+            E.register_function_declaration (Loc.locOf ident) sym (
               return_ty,
               params,
               is_variadic,
@@ -2038,14 +2187,15 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
-          E.with_scope E.Scope_block (
+          E.fresh_block_scope >>= fun scope ->
+          E.with_scope scope (
             E.mapM desugar_statement ss
           ) >>= fun (bs, d_ss) ->
           
           (* this is removing unnecessary blocks introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
           let d_ss' =
-            List.foldr (fun z acc ->
+            List.foldl (fun acc z ->
               match z with
                 | (CabsStatement _ (CabsSblock _), AnnotatedStatement _ (AilSblock _ _)) ->
                     (* this is the case of a block already present in the Cabs code. *)
@@ -2100,7 +2250,8 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
           (* TODO: this is not really a block scope (...) *)
-          E.with_scope E.Scope_block (
+          E.fresh_block_scope >>= fun scope ->
+          E.with_scope scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), _ty) ->
             E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs ->
             
@@ -2187,7 +2338,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                 E.return (AilSblock [] [d_s_e1; AnnotatedStatement loc $ AilSwhile d_e2 d_s_body])
             
             | (Just (FC_decl (Declaration_base _ _)), Just e3) ->
-                E.fail Loc.unknown Errors.Desugar_impossible
+                E.fail loc Errors.Desugar_impossible
             
             | (Just (FC_decl (Declaration_static_assert sa_decl)), Just e3) ->
                 desugar_and_register_static_assert_declaration sa_decl >>
@@ -2228,7 +2379,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
             | true ->
                 E.return AilScontinue
             | false ->
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.8.6.2#1")
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.2#1")
           end
       
       | CabsSbreak ->
@@ -2237,20 +2388,20 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           if b1 || b2 then
             E.return AilSbreak
           else
-            E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
       
       | CabsSreturn Nothing ->
           E.get_current_return_type >>= function
             | ATypes.Void ->
                 E.return AilSreturnVoid
             | _ ->
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.8.6.4#1, 2nd sentence")
+                E.fail loc Errors.Desugar_NonvoidReturn
           end
       
       | CabsSreturn (Just e) ->
           E.get_current_return_type >>= function
             | ATypes.Void ->
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.8.6.4#1, 1st sentence")
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.4#1, 1st sentence")
             | _ ->
                 AilSreturn <$> desugar_expression e
           end
@@ -2335,7 +2486,8 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
           
           E.void (E.with_scope E.Scope_function (
             register_labels s >>
-            E.void (E.with_scope E.Scope_block (
+            E.fresh_block_scope >>= fun scope ->
+            E.void (E.with_scope scope (
               match params with
                 | [(x_opt, (qs, ATypes.Void))] ->
                     if isJust x_opt then
@@ -2358,7 +2510,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
                     ) params
               end >>= fun bindings ->
               
-              E.register_function_declaration fun_sym (
+              E.register_function_declaration (Loc.locOf fun_ident) fun_sym (
                 return_ty,
                 List.map snd bindings,
                 is_variadic,
@@ -2436,7 +2588,7 @@ let desugar_and_register_external_declaration edecl =
                 | ATypes.Function return_ty params is_variadic ->
                     E.register_identifier ident
                       E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
-                    E.register_function_declaration sym (
+                    E.register_function_declaration (Loc.locOf ident) sym (
                       return_ty,
                       params,
                       is_variadic,

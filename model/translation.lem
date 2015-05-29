@@ -48,7 +48,6 @@ val translate_function_designator:
   E.t (C.expr unit)
 
 val translate_expression:
-  bool (* is_lvalue *)                                            ->
   map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))   ->
   C.fun_map unit -> A.program GenTypes.genTypeCategory            ->
   A.expression GenTypes.genTypeCategory                           ->
@@ -161,7 +160,7 @@ end
 *)
 
 
-let rec translate_function_designator (A.AnnotatedExpression _ expr) =
+let rec translate_function_designator (A.AnnotatedExpression _ loc expr) =
   match expr with
     | A.AilEident fid ->
         E.return $
@@ -171,10 +170,9 @@ let rec translate_function_designator (A.AnnotatedExpression _ expr) =
   end
 
 
-and translate_expression is_lvalue tagDefs stdlib program a_expr =
+and translate_expression tagDefs stdlib program a_expr =
   let sigm = snd program in
-  let translate_lvalue e     = translate_expression true  tagDefs stdlib program e in
-  let translate_expression e = translate_expression false tagDefs stdlib program e in
+  let translate_expression = translate_expression tagDefs stdlib program in
   let mk_stdcall fname = mk_stdcall stdlib fname in
   let bitwise_AND      = mk_stdcall "bitwise_AND"      in
   let bitwise_XOR      = mk_stdcall "bitwise_XOR"      in
@@ -192,12 +190,13 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
   
   
   (* TODO: we do a match instead of a let, because of a bug in Lem *)
-  let result_ty = ctype_of a_expr in
+  let result_ty = ctype_of a_expr  in
+  let is_lvalue = is_lvalue a_expr in
   
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
     E.return $ C.Epure (C.PEval (C.Vpointer (Mem.null_pointer (Caux.proj_ctype result_ty))))
   else
-    let A.AnnotatedExpression annot expr = a_expr in
+    let A.AnnotatedExpression annot loc expr = a_expr in
     match expr with
       (* TODO: integer promotion *)
       | A.AilEunary A.Plus e ->
@@ -228,9 +227,9 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
       
       (* TODO: promotion? + atomicity *)
       | A.AilEunary A.PostfixIncr e ->
-          E.fresh_symbol     >>= fun sym_lvalue ->
-          E.fresh_symbol     >>= fun sym_load   ->
-          translate_lvalue e >>= fun core_e     ->
+          E.fresh_symbol         >>= fun sym_lvalue ->
+          E.fresh_symbol         >>= fun sym_load   ->
+          translate_expression e >>= fun core_e     ->
           (* TODO: qualifiers temporarily not dealt with *)
           let core_ty_e = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           E.return $
@@ -247,9 +246,9 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
       
       (* TODO: promotion? + atomicity *)
       | A.AilEunary A.PostfixDecr e ->
-          E.fresh_symbol     >>= fun sym_lvalue ->
-          E.fresh_symbol     >>= fun sym_load   ->
-          translate_lvalue e >>= fun core_e     ->
+          E.fresh_symbol         >>= fun sym_lvalue ->
+          E.fresh_symbol         >>= fun sym_load   ->
+          translate_expression e >>= fun core_e     ->
           let core_ty_e = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           E.return $
             C.Ewseq [Just sym_lvalue] core_e
@@ -464,16 +463,29 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
       
       
       
-      | A.AilEunary A.Address (A.AnnotatedExpression _ (A.AilEunary A.Indirection e)) ->
+      | A.AilEunary A.Address (A.AnnotatedExpression _ _ (A.AilEunary A.Indirection e)) ->
+          (* NOTE: footnote 102 makes clear that is valid even if 'e' evaluates to a null pointer *)
           translate_expression e
       
       | A.AilEunary A.Address e ->
           if AilTypesAux.is_object result_ty then
-             translate_lvalue e
+             translate_expression e
           else
             translate_function_designator e
       
       | A.AilEunary A.Indirection e ->
+(* TODO: check !!! *)
+          E.fresh_symbol         >>= fun sym_e  ->
+          translate_expression e >>= fun core_e ->
+          E.return $
+            C.Ewseq [Just sym_e] core_e
+              (C.Eif (C.PEmemop Mem.PtrValidForDeref [C.PEsym sym_e])
+                 (Caux.pload (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA)
+(*                          (C.PEsym sym_e) *)
+                 (C.Epure (C.PEundef Undefined.Indirection_invalid_value))
+              )
+
+(*
           if is_lvalue then
             translate_expression e
           else
@@ -484,6 +496,7 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
             E.return $
               C.Ewseq [Just sym_e] core_e
                 (Caux.pload (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA)
+*)
       
       | A.AilEbinary e1 (A.Arithmetic A.Add) e2 ->
           let ty1 = exp_type_of e1 in
@@ -510,8 +523,12 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2])
           else
             (* otherwise, we have some pointer arithmetic *)
+            translate_expression e1 >>= fun core_e1 ->
+            translate_expression e2 >>= fun core_e2 ->
+(*
             (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
             (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
+*)
             (* TODO: check *)
             (* TODO: do something with the qualifiers *)
             match (AilTypesAux.lvalue_coercion sigm ty1, AilTypesAux.lvalue_coercion sigm ty2) with
@@ -569,8 +586,12 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEop C.OpSub conv_e1 conv_e2])
           else
             (* otherwise, we have some pointer arithmetic *)
+            translate_expression e1 >>= fun core_e1 ->
+            translate_expression e2 >>= fun core_e2 ->
+(*
             (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
             (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
+*)
             (* TODO: check *)
             (* TODO: do something with the qualifiers *)
             match (AilTypesAux.lvalue_coercion sigm ty1, AilTypesAux.lvalue_coercion sigm ty2) with
@@ -809,7 +830,7 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
       | A.AilEassign e1 e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
-          translate_lvalue e1     >>= fun core_e1 ->
+          translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
           let core_ty_pe1 = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           E.return $
@@ -828,8 +849,8 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
       | A.AilEcompoundAssign e1 aop e2 ->
 (*          Boot.assert_false $ "TODO: compound assign: " ^ (Boot.pp_ail_expr a_expr) *)
           (* TODO: this is a TEMPORARY HACK *)
-          let A.AnnotatedExpression annot2 _ = e2 in
-          translate_expression $ A.AnnotatedExpression annot (A.AilEassign e1 (A.AnnotatedExpression annot2 (A.AilEbinary e1 (A.Arithmetic aop) e2)))
+          let A.AnnotatedExpression annot2 loc' _ = e2 in
+          translate_expression $ A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
       
       (* TODO: conv_int on e2 and e2 !!!!!!! *)
       
@@ -852,14 +873,28 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
 *)
       
       | A.AilEcast _ ty e ->
-          let translate =
-            if is_lvalue then translate_lvalue else translate_expression in
-          
-          E.fresh_symbol >>= fun sym_e  ->
-          translate e    >>= fun core_e ->
+          E.fresh_symbol         >>= fun sym_e  ->
+          translate_expression e >>= fun core_e ->
           E.return $
             C.Ewseq [Just sym_e] core_e
-              (C.Epure $ conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.PEsym sym_e])
+              (* TODO: check typing stuff *)
+              (C.Epure
+                 begin
+                   let e_ty = exp_type_of e in
+                   if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
+                     (* making a pointer from an integer *)
+                     let Just ref_ty = AilTypesAux.referenced_type ty in
+                     C.PEmemop Mem.PtrFromInt [Caux.mk_ctype e_ty; Caux.mk_ctype ref_ty; C.PEsym sym_e]
+                     
+                   else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
+                     (* making an integer from a pointer *)
+                     let Just ref_ty = AilTypesAux.referenced_type e_ty in
+                     C.PEmemop Mem.IntFromPtr [Caux.mk_ctype ref_ty; Caux.mk_ctype ty; C.PEsym sym_e]
+                   else
+                      (* TODO: check *)
+                      conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.PEsym sym_e]
+                 end
+              )
       
 (*
       (* TODO: a bit hackish *)
@@ -874,9 +909,9 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
           end
 *)
       
-     | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
          let mo = match order_e with
-           | A.AnnotatedExpression _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
+           | A.AnnotatedExpression _ _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
                match natFromInteger n with
                  | 0 -> Cmm.Relaxed
                  | 1 -> Cmm.Consume
@@ -905,9 +940,9 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
            C.Ewseq [Just sym_object; Just sym_desired] (C.Eunseq [core_object_e; core_desired_e])
              (C.Eaction (C.Paction C.Pos (C.Action () (C.Store (Caux.mk_ctype ty) (C.PEsym sym_object) (C.PEsym sym_desired) mo))))
 
-     | A.AilEcall (A.AnnotatedExpression _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
          let mo = match order_e with
-           | A.AnnotatedExpression _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
+           | A.AnnotatedExpression _ _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
                match natFromInteger n with
                  | 0 -> Cmm.Relaxed
                  | 1 -> Cmm.Consume
@@ -943,7 +978,7 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
 (*          E.fresh_symbol         >>= fun sym_e  -> *)
           translate_expression e >>= fun core_e ->
           match e with
-            | A.AnnotatedExpression _ (A.AilEident fid) ->
+            | A.AnnotatedExpression _ _ (A.AilEident fid) ->
                 (* If the function is just declared in a prototype but not defined,
                    assume it is provided by the implementation. *)
                 let fname =
@@ -1100,8 +1135,8 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
             | Aty.Union tag_sym ->
                 tag_sym
           end in
-          E.fresh_symbol     >>= fun sym_e  ->
-          translate_lvalue e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)
+          E.fresh_symbol         >>= fun sym_e  ->
+          translate_expression e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)
           if is_lvalue then
             E.return $
               C.Esseq [Just sym_e] core_e
@@ -1123,8 +1158,8 @@ and translate_expression is_lvalue tagDefs stdlib program a_expr =
           end in
 
           (* TODO: check, looks fishy *)
-          E.fresh_symbol     >>= fun sym_e  ->
-          translate_lvalue e >>= fun core_e ->
+          E.fresh_symbol         >>= fun sym_e  ->
+          translate_expression e >>= fun core_e ->
           E.return $ 
             C.Esseq [Just sym_e] core_e
               (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
@@ -1272,7 +1307,7 @@ a
       
       | A.AilEsizeof_expr e ->
           (* TODO: check qualifiers *)
-          translate_expression (A.AnnotatedExpression annot (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
+          translate_expression (A.AnnotatedExpression annot loc (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
       
       | A.AilEalignof _ ty ->
           E.return $
@@ -1395,7 +1430,7 @@ let collect_cases s =
 open Operators
 
 let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) =
-  let translate_expression e = translate_expression false tagDefs stdlib program e                        in
+  let translate_expression e = translate_expression tagDefs stdlib program e                              in
   let translate_stmt_ s      = translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break s in
   let mk_stdcall fname       = mk_stdcall stdlib fname                                                    in
   let conv_int               = mk_stdcall "conv_int"                                                      in
@@ -1407,7 +1442,7 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
         translate_expression e
     
     | A.AilSblock binds ss ->
-        let ids = [id | forall ((id, _) MEM binds) | true] in
+(*        let ids = [id | forall ((id, _) MEM binds) | true] in *)
         let decls = [(id,ty) | forall ((id, (dur, qs, ty)) MEM binds) | true] in
         
         (* the symbolic names and create actions for the local variables *)
@@ -1416,8 +1451,11 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
             let c_ty = Caux.mk_ctype ty in
             (Just a, Caux.pcreate (Caux.alignof c_ty) c_ty [f; a])
           ) decls in
+
+        let _ = Boot.print_debug 2 ("AilSblock CREATES for: " ^ show a_ids) in (* DEBUG *)
         
-        E.push_block_objects ids >>
+        
+        E.push_block_objects (List.map (fun (sym, (_, _, ty)) -> (sym, ty)) binds) >>
         
         (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
                  but it may be nasty to the check.
@@ -1554,7 +1592,7 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
         core_e     <- translate_expression e;
         a_e        <- E.fresh_symbol;
         visible_as <- E.get_visible_objects; in
-          let A.AnnotatedExpression ty _ = e in
+(*           let A.AnnotatedExpression ty _ = e in *)
           let return_ty = match Context.lookup (=) (snd program).A.declarations f with
             | Just (A.Decl_function return_ty _ _ _ _) ->
                 return_ty
@@ -1633,13 +1671,13 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
     
     | A.AilSdeclaration defns ->
         (* This pass translate the declarations *)
-        E.mapM (fun (id, e) -> do E
-          a      <- E.fresh_symbol;
-          core_e <- translate_expression e; in
-          let ty = exp_type_of e in
-          let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym a] else C.PEsym a in
-            E.return $ C.Esseq [Just a] core_e
-                         (Caux.pstore (Caux.mk_ctype ty) (C.PEsym id) expr Cmm.NA) end
+        E.mapM (fun (sym, e) ->
+          E.fresh_symbol            >>= fun sym_e  ->
+          translate_expression e    >>= fun core_e ->
+          E.resolve_object_type sym >>= fun ty     ->
+          let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
+          E.return $ C.Esseq [Just sym_e] core_e
+                       (Caux.pstore (Caux.mk_ctype ty) (C.PEsym sym) expr Cmm.NA)
 
 
 (*
@@ -1690,11 +1728,13 @@ let translate_program tagDefs stdlib ((startup_sym, sigm) as program) =
           let core_create = Caux.pcreate (Caux.alignof core_ty) core_ty [sym] in
           E.fresh_symbol >>= fun a_global ->
           
+          let _ = Boot.print_debug 2 ("(translate_program) CREATE for " ^ show a_global) in (* DEBUG *)
+          
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Just expr ->
                 (* if the global has an initialisation *)
-                E.fresh_symbol                                         >>= fun a_e      ->
-                translate_expression false tagDefs stdlib program expr >>= fun core_e   ->
+                E.fresh_symbol                                   >>= fun a_e      ->
+                translate_expression tagDefs stdlib program expr >>= fun core_e   ->
                 let core_init_e =
                   if AilTypesAux.is_integer ty then
                     conv_int [core_ty; C.PEsym a_e]

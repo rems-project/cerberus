@@ -25,6 +25,10 @@ type language =
 
 (* val string_of_language: language -> string *)
 
+type error_verbosity =
+  | Basic    (* similar to a normal compiler *)
+  | RefStd   (* add an std reference to Basic *)
+  | QuoteStd (* print a full quote of the std text *)
 
 type cerberus_conf = {
   cpp_cmd:       string;
@@ -37,6 +41,7 @@ type cerberus_conf = {
   no_rewrite:    bool;
   concurrency:   bool;
   preEx:         bool;
+  error_verbosity: error_verbosity;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -61,6 +66,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     bool ->
+    error_verbosity ->
     unit
 
 val progress_sofar: int ref

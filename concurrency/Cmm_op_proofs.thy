@@ -549,7 +549,7 @@ subsubsection {* Empty hb *}
 (* Empty hb in the with_consume fragment *)
 
 lemma sw_asw_empty [simp]:
-  shows "sw_asw (preRestrict pre {}) = {}"
+  shows "sw_asw (preRestrict pre {}) empty_witness = {}"
 unfolding sw_asw_def
 by simp
 
@@ -1091,10 +1091,10 @@ unfolding release_sequence_set_alt_def
 by auto
 
 lemma final_sw_asw:
-  assumes "(a, b) \<in> sw_asw pre"
+  assumes "(a, b) \<in> sw_asw pre wit"
       and "a \<in> actions" 
       and "b \<in> actions"
-  shows   "(a, b) \<in> sw_asw (preRestrict pre actions)"
+  shows   "(a, b) \<in> sw_asw (preRestrict pre actions) (incWitRestrict wit actions)"
 using assms
 unfolding sw_asw_def
 by auto

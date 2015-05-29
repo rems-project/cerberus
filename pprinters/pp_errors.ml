@@ -1,3 +1,9 @@
+open Global_ocaml
+open Location_ocaml
+
+open Lexing
+
+
 open Errors
 open TypingError
 
@@ -11,18 +17,122 @@ type kind =
 
 let string_of_kind = function
   | Error ->
-      ansi_format [Bold; Red] "error"
+      ansi_format [Bold; Red] "error:"
   | Warning ->
-      ansi_format [Bold; Magenta] "warning"
+      ansi_format [Bold; Magenta] "warning:"
   | Note ->
-      ansi_format [Bold; Black] "note"
+      ansi_format [Bold; Black] "note:"
 
 
-let make_message (start_p, _) k str =
+
+
+let get_line n ic =
+  seek_in ic 0;
+  let rec aux = function
+    | 1 -> input_line ic
+    | n -> let _ = input_line ic in
+           aux (n-1) in
+  aux n
+
+
+let string_of_pos pos =
+  ansi_format [Bold] (
+    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
+  )
+
+
+let string_at_line fname lnum =
+  if Sys.file_exists fname then
+    let ic = open_in fname in
+    let l =
+      let l_ = get_line lnum ic in
+      if String.length l_ > 100 then
+        String.sub l_ 0 100 ^ " ... "
+      else
+        l_ in
+    close_in ic;
+    Some l
+  else
+    None
+(*
+ ^ "\n" ^
+    ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+  else
+    ""
+*)
+
+
+
+let make_message loc k str =
+  begin
+    fun z -> match loc with
+      | Loc_unknown ->
+          "unknown location " ^ z
+      | Loc_point pos ->
+          Printf.sprintf "%s %s\n" (string_of_pos pos) z ^
+          (match string_at_line pos.pos_fname pos.pos_lnum with
+            | Some l ->
+                let cpos = pos.pos_cnum - pos.pos_bol in
+                l ^ "\n" ^
+                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+            | None ->
+                "")
+      | Loc_region (start_p, end_p, cursor_p_opt) ->
+          let cpos1 = start_p.pos_cnum - start_p.pos_bol in
+          Printf.sprintf "%s %s\n" (string_of_pos start_p) z ^
+          (match string_at_line start_p.pos_fname start_p.pos_lnum with
+            | Some l ->
+                let cpos2 =
+                  if start_p.pos_lnum = end_p.pos_lnum then
+                    end_p.pos_cnum - end_p.pos_bol
+                  else
+                    String.length l in
+                let cursor = match cursor_p_opt with
+                  | Some cursor_p ->
+                      cursor_p.pos_cnum - cursor_p.pos_bol 
+                  | None ->
+                      cpos1 in
+                l ^ "\n" ^
+                ansi_format [Bold; Green] (String.init (cpos2 + 1)
+                                             (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
+                                          )
+
+
+
+
+            | None ->
+                "")
+
+
+(* TODO *)
+(*
+        Printf.sprintf "%s %s\n%s" (string_of_pos start_p) z
+            (string_at_pos start_p.pos_fname start_p.pos_lnum (start_p.pos_cnum - start_p.pos_bol))
+*)
+  end (string_of_kind k ^ " " ^ ansi_format [Bold] str)
+  
+(*
   Lexing.(
-    ansi_format [Bold] (String.concat ":" [(* Filename.basename *) start_p.pos_fname; string_of_int start_p.pos_lnum; string_of_int (start_p.pos_cnum - start_p.pos_bol)] ^ ": ")
-  ) ^ string_of_kind k ^ ": " ^ ansi_format [Bold] str
-
+    let cpos = start_p.pos_cnum - start_p.pos_bol in
+    ansi_format [Bold] (
+      Printf.sprintf "%s:%d:%d: " start_p.pos_fname start_p.pos_lnum (cpos+1)
+    ) ^ string_of_kind k ^ " " ^ ansi_format [Bold] str ^
+    
+    if Sys.file_exists start_p.pos_fname then
+      let ic = open_in start_p.pos_fname in
+      let l =
+        let l_ = get_line start_p.pos_lnum ic in
+        if String.length l_ > 100 then
+          String.sub l_ 0 100 ^ " ... "
+        else
+          l_ in
+      close_in ic;
+      "\n" ^ l ^ "\n" ^
+      ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+    else
+      ""
+  )
+*)
 
 
 (*
@@ -38,15 +148,18 @@ let location_to_string  = function
 *)
 
 
-let location_to_string (start_p, end_p) =
-  Lexing.(
-    "[lnum= " ^ string_of_int start_p.pos_lnum ^ ", " ^
-    "bol= " ^ string_of_int start_p.pos_bol ^ ", " ^
-    "cnum= " ^ string_of_int start_p.pos_cnum ^ " - " ^
-    "lnum= " ^ string_of_int end_p.pos_lnum ^ ", " ^
-    "bol= " ^ string_of_int end_p.pos_bol ^ ", " ^
-    "cnum= " ^ string_of_int end_p.pos_cnum ^ "]"
-  )
+let location_to_string loc =
+  let string_of_pos pos =
+    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+  
+  match loc with
+    | Loc_unknown ->
+        "unknown location"
+    | Loc_point pos ->
+        string_of_pos pos
+    | Loc_region (pos, _, _) ->
+        (* TODO *)
+        string_of_pos pos
 
 
 
@@ -119,12 +232,81 @@ let desugar_cause_to_string = function
 
 
 
-let to_string ((start_p, end_p) as loc, c) =
+let std_ref = function
+  | Desugar_cause Desugar_NonvoidReturn ->
+    "§6.8.6.4#1, 2nd sentence"
+
+  | AIL_TYPING TError_main_return_type ->
+      "§5.1.2.2.1#1, 2nd sentence"
+  | AIL_TYPING (TError_TODO n) ->
+      "Ail typing error (TODO " ^ string_of_int n ^ ")"
+  | Desugar_cause (Desugar_ConstraintViolation str) ->
+      str
+  | _ ->
+      "TODO"
+
+
+
+let short_message = function
+  | Desugar_cause (Desugar_MultipleDeclaration (CabsIdentifier (_, str))) ->
+      "redeclaration of '" ^ str ^ "'"
+  | Desugar_cause (Desugar_NoStartup str) ->
+      "expecting declaration of a startup function '" ^ str ^ "'"
+  
+  | Desugar_cause Desugar_NonvoidReturn ->
+(*      "non-void function 'main' should return a value" *)
+      "non-void function should return a value" 
+
+  | Desugar_cause dcause ->
+      "[During desugaring] " ^ desugar_cause_to_string dcause
+
+
+  | AIL_TYPING TError_main_return_type ->
+      "return type of 'main' should be 'int'"
+
+  | AIL_TYPING (TError_main_params qs_tys) ->
+      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty) -> String_ail.string_of_ctype ty) qs_tys) ^ ")"
+
+      
+      | CSEM_NOT_SUPPORTED msg ->
+          "Csem doesn't yet support `" ^ msg ^"'"
+      
+      | CSEM_HIP msg ->
+          "HIP, this doesn't work yet: `" ^ msg ^ "'"
+      
+      (* Cabs0_to_ail *)
+      | CONSTRAINT_6_6__3 ->
+          "Violation of constraint 6.6#3 [Constant expressions] `Constant \
+           expressions shall not contain assignment, increment, decrement, \
+           function-call, or comma operators, except when they are contained \
+           within a subexpression that is not evaluated.'\n"
+
+    | AIL_TYPING (TError std) ->
+        "[Ail typing error] (" ^ std ^ ")\n \"" ^ Pp_std.quote std ^ "\""
+
+    | AIL_TYPING (TError_lvalue_coercion ty) ->
+        "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype ty) ^ "\""
+
+    | _ ->
+        "TODO ERROR MESSAGE"
+
+
+
+let to_string (loc, err) =
   make_message loc Error
   begin
-    match c with
-      | Desugar_cause (Desugar_MultipleDeclaration (CabsIdentifier (_, str))) ->
-          "multiple declaration of '" ^ str ^ "'"
+    match !!cerb_conf.error_verbosity with
+      | Basic ->
+          short_message err
+      | RefStd ->
+          short_message err ^ ". (" ^ std_ref err ^ ")"
+      | QuoteStd ->
+          failwith "TODO"
+  end
+
+(*
+  begin
+    match err with
       
       | Desugar_cause dcause ->
           "[During desugaring] " ^ desugar_cause_to_string dcause
@@ -143,12 +325,11 @@ let to_string ((start_p, end_p) as loc, c) =
            within a subexpression that is not evaluated.'\n"
     
 
+(*
+    | AIL_TYPING (TError_main_return_type) ->
+        
+*)
 
-    
-
-
-    | AIL_TYPING (TError_TODO n) ->
-        "Ail typing error (TODO " ^ string_of_int n ^ ")"
 
     | AIL_TYPING (TError std) ->
         "[Ail typing error] (" ^ std ^ ")\n \"" ^ Pp_std.quote std ^ "\""
@@ -602,4 +783,5 @@ let to_string ((start_p, end_p) as loc, c) =
     String.make (start_p.pos_cnum - start_p.pos_bol) ' ' ^
     ansi_format [Bold; Green] "^"
   )
+*)
 *)

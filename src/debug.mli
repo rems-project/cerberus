@@ -1,6 +1,8 @@
 
-val debug_level: int ref
+val assert_false: string -> 'a
 
+val debug_level: int ref
+val get_debug_level: unit -> int
 
 val print_success: string -> unit
 val print_debug: int -> string -> unit

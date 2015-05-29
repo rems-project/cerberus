@@ -4,11 +4,11 @@
   let set_id_type (z,r) t =
     r := t
 
-  let declare_varname (i,_) =
-    !declare_varname i
+  let declare_varname (str, _) =
+    !declare_varname str
 
-  let declare_typename (i,_) =
-    !declare_typename i
+  let declare_typename (str, _) =
+    !declare_typename str
 %}
 
 
@@ -24,7 +24,7 @@
 
 
 (* §6.4.2 Identifiers *)
-%token<Cabs.cabs_identifier * Pre_parser_aux.identifier_type ref>
+%token<string * Pre_parser_aux.identifier_type ref>
   VAR_NAME TYPEDEF_NAME UNKNOWN_NAME
 
 (* §6.4.4 Constants *)
@@ -47,6 +47,9 @@
 (* LBRACES PIPES RBRACES *)
 
 %token EOF
+
+%nonassoc THEN
+%nonassoc ELSE
 
 
 (* These precedences declarations solve the conflict in the following declaration :
@@ -636,33 +639,25 @@ static_assert_declaration:
 
 
 (* §6.8 Statements and blocks *)
-(* TODO: documentation (differ from STD) *)
-statement_dangerous:
-| labeled_statement(statement_dangerous)
-| in_context(compound_statement)
+statement:
+| labeled_statement
+| compound_statement
 | expression_statement
-| selection_statement_dangerous
-| iteration_statement(statement_dangerous)
+| selection_statement
+| iteration_statement
 | jump_statement
     {}
-
-statement_safe:
-| labeled_statement(statement_safe)
-| in_context(compound_statement)
-| expression_statement
-| selection_statement_safe
-| iteration_statement(statement_safe)
-| jump_statement
-    {}
+;
 
 
 (* §6.8.1 Labeled statements *)
-labeled_statement(last_statement):
-| id= general_identifier COLON last_statement
+labeled_statement:
+| id= general_identifier COLON statement
     { set_id_type id (OtherId "labeled_statement") }
-| CASE constant_expression COLON last_statement
-| DEFAULT COLON last_statement
+| CASE constant_expression COLON statement
+| DEFAULT COLON statement
     {}
+;
 
 
 (* §6.8.2 Compound statement *)
@@ -680,7 +675,7 @@ block_item_list:
 
 block_item:
 | declaration
-| statement_dangerous
+| statement
     {}
 
 
@@ -691,24 +686,20 @@ expression_statement:
 
 
 (* §6.8.4 Selection statements *)
-selection_statement_dangerous:
-| IF LPAREN expression RPAREN statement_dangerous
-| IF LPAREN expression RPAREN statement_safe ELSE statement_dangerous
-| SWITCH LPAREN expression RPAREN statement_dangerous
+selection_statement:
+| IF LPAREN expression RPAREN statement  %prec THEN
+| IF LPAREN expression RPAREN statement ELSE statement
+| SWITCH LPAREN expression RPAREN statement
     {}
-
-selection_statement_safe:
-| IF LPAREN expression RPAREN statement_safe ELSE statement_safe
-| SWITCH LPAREN expression RPAREN statement_safe
-    {}
+;
 
 
 (* §6.8.5 Iteration statements *)
-iteration_statement(last_statement):
-| WHILE LPAREN expression RPAREN last_statement
-| DO statement_dangerous WHILE LPAREN expression RPAREN SEMICOLON
-| FOR LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN last_statement
-| FOR LPAREN declaration expression? SEMICOLON expression? RPAREN last_statement
+iteration_statement:
+| WHILE LPAREN expression RPAREN statement
+| DO statement WHILE LPAREN expression RPAREN SEMICOLON
+| FOR LPAREN expression? SEMICOLON expression? SEMICOLON expression? RPAREN statement
+| FOR LPAREN declaration expression? SEMICOLON expression? RPAREN statement
     {}
 
 
@@ -748,7 +739,7 @@ function_definition_begin:
 	    | None -> ()
 	    | Some i -> declare_varname i
 	  ) l;
-	declare_varname (CabsIdentifier (Location_ocaml.unknown, "__func__"), ())
+	declare_varname ("__func__", ())
     }
 
 (* TODO: declaration_list (this is old K&R ??) *)

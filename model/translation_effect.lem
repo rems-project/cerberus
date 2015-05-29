@@ -1,12 +1,13 @@
 (* Effects for Translation: state + exception *)
 open import Pervasives Global Show Show_extra
-import Boot UniqueId Symbol Undefined Core_ctype
+import Boot UniqueId Symbol Undefined Core_ctype AilTypes
 
 open import Core
 
 
 type state = <|
   symbol_supply:   UniqueId.supply Symbol.t; (* counter for Core's symbolic names (all of them) *)
+  visible_objects_types: map Symbol.t AilTypes.ctype;
   visible_objects: list (list Symbol.t);     (* visible C objects with scoping (used to properly
                                                 annotate Esave/Erun ctors) *)
   
@@ -72,6 +73,7 @@ let replicateM n x = sequence (replicate n x)
 val init: UniqueId.supply Symbol.t -> state
 let init suppl = <|
   symbol_supply=   suppl;
+  visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];
 |>
@@ -90,9 +92,12 @@ let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
   Undefined.return (sym, <| st with symbol_supply= suppl' |>)
 
 (* register C objects from block scope. *)
-val push_block_objects: list Symbol.t -> t unit
-let push_block_objects _as = fun st ->
-  Undefined.return ((), <| st with visible_objects= _as :: st.visible_objects |>)
+val push_block_objects: list (Symbol.t * AilTypes.ctype) -> t unit
+let push_block_objects binds = fun st ->
+  Undefined.return ((), <| st with
+    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |>)
 
 (* forget C objects from the most recent block. *)
 val pop_block_objects: t unit
@@ -107,12 +112,14 @@ let pop_block_objects = fun st ->
 let inline (>>=)    = bind
 let inline (>>) m f = bind m (fun _ -> f)
 
-val with_block_objects: forall 'a. list Symbol.t -> t 'a -> t 'a
-let with_block_objects syms m =
-  push_block_objects syms >>
-  m                       >>= fun ret ->
-  pop_block_objects       >>
+(* TODO: UNUSED
+val with_block_objects: forall 'a. list (Symbol.t * AilTypes.ctype) -> t 'a -> t 'a
+let with_block_objects binds m =
+  push_block_objects binds >>
+  m                        >>= fun ret ->
+  pop_block_objects        >>
   return ret
+*)
 
 (* returns the list of all the C objects in scope. *)
 val get_visible_objects: t (list Symbol.t)
@@ -130,3 +137,12 @@ let register_string_literal a ty pe = fun st ->
 val get_string_literals: t (list (sym * Core_ctype.ctype * pexpr))
 let get_string_literals = fun st ->
   Undefined.return (st.string_literals, st)
+
+
+
+val resolve_object_type: sym -> t AilTypes.ctype
+let resolve_object_type sym = fun st ->
+  match Map.lookup sym st.visible_objects_types with
+    | Just ty ->
+        Undefined.return (ty, st)
+  end

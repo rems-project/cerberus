@@ -586,8 +586,10 @@ let pp_string_literal (pref_opt, str) =
 
 
 
+
+
 let rec pp_expression a_expr =
-  let rec pp p (AnnotatedExpression (_, expr)) =
+  let rec pp p (AnnotatedExpression (_, loc, expr)) =
     let p' = precedence expr in
     let pp z = P.group (pp p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)

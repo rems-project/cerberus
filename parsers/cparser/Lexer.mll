@@ -98,6 +98,7 @@ let init filename channel: Lexing.lexbuf =
       | t::q -> List.iter (Hashtbl.remove lexicon) t
   end;
   
+(*
  declare_varname := begin fun (Cabs.CabsIdentifier (_, str) as id) ->
     Hashtbl.add lexicon str (VAR_NAME (id, ref VarId));
     match !contexts with
@@ -107,6 +108,20 @@ let init filename channel: Lexing.lexbuf =
   
   declare_typename := begin fun (Cabs.CabsIdentifier (_, str) as id) ->
     Hashtbl.add lexicon str (TYPEDEF_NAME (id, ref TypedefId));
+    match !contexts with
+      | [] -> ()
+      | t::q -> contexts := (str::t)::q
+  end;
+*)
+ declare_varname := begin fun str ->
+    Hashtbl.add lexicon str (VAR_NAME (str, ref VarId));
+    match !contexts with
+      | [] -> ()
+      | t::q -> contexts := (str::t)::q
+  end;
+  
+  declare_typename := begin fun str ->
+    Hashtbl.add lexicon str (TYPEDEF_NAME (str, ref TypedefId));
     match !contexts with
       | [] -> ()
       | t::q -> contexts := (str::t)::q
@@ -496,12 +511,12 @@ hash lexbuf;
           let pref_ty  = "__cerbty_"  in
           if    String.length id > String.length pref_ty
              && String.sub id 0 (String.length pref_ty) = pref_ty then
-            TYPEDEF_NAME (Cabs.CabsIdentifier (mk_loc lexbuf, id), ref TypedefId)
+            TYPEDEF_NAME (id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref TypedefId)
           else if    String.length id > String.length pref_var
                   && String.sub id 0 (String.length pref_var) = pref_var then
-            VAR_NAME (Cabs.CabsIdentifier (mk_loc lexbuf, id), ref VarId)
+            VAR_NAME (id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref VarId)
           else
-            UNKNOWN_NAME(Cabs.CabsIdentifier (mk_loc lexbuf, id), ref (OtherId "Lexer.mll"))
+            UNKNOWN_NAME(id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref (OtherId "Lexer.mll"))
       }
   
   | eof

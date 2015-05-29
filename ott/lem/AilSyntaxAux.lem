@@ -5,6 +5,8 @@ open import Pervasives Common AilTypes AilTypesAux AilSyntax
 val is_null_pointer_constant: forall 'a. expression 'a -> bool
 let rec is_null_pointer_constant' e =
   match e with
+    | AilEconst ConstantNull ->
+        true
     | AilEconst (ConstantInteger (IConstant n _ _)) ->
         n = 0
     | AilEcast cast_qs (Pointer referenced_qs Void) e ->
@@ -14,7 +16,7 @@ let rec is_null_pointer_constant' e =
   end
 and is_null_pointer_constant e =
   match e with
-    | AnnotatedExpression _ e ->
+    | AnnotatedExpression _ _ e ->
         is_null_pointer_constant' e
   end
 
@@ -46,7 +48,7 @@ let rec fv' v (e : expression' 'A) : bool =
   end
 and fv v e : bool =
   match e with
-  | AnnotatedExpression _ e -> fv' v e
+  | AnnotatedExpression _ _ e -> fv' v e
   end
 
 (* TODO: doc *)

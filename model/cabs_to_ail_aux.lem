@@ -16,6 +16,17 @@ instance (Eq linkage)
   let (<>) = unsafe_structural_inequality
 end
 
+instance (Show linkage)
+  let show = function
+    | Linkage_external ->
+        "external"
+    | Linkage_internal ->
+        "internal"
+    | Linkage_none ->
+        "none"
+  end
+end
+
 instance (SetType linkage)
   let setElemCompare = defaultCompare
 end

@@ -135,7 +135,7 @@ end
 
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
-  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _) -> (qs, ty)
+  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _ _) -> (qs, ty)
   | _ -> Boot.assert_false "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
 
@@ -165,6 +165,15 @@ let ctype_of a_expr =
     | _ -> Boot.assert_false "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
+
+val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
+let is_lvalue a_expr =
+  match Annotation.type_of Annotation.concrete_annotation a_expr with
+    | GenTypes.GenLValueType _ _ ->
+        true
+    | GenTypes.GenRValueType _ ->
+        false
+  end
 
 val is_defined_ail_function: forall 'A. AilSyntax.identifier -> AilSyntax.program 'A -> bool
 let is_defined_ail_function sym (_, sigm) =

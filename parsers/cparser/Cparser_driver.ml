@@ -2,12 +2,17 @@ open Parser
 open Tokens
 open Pre_parser_aux
 
-(*
-type input = in_channel
-val read : (input -> 'a) -> t -> 'a
-*)
+
+let string_of_pos pos =
+  Lexing.(
+    Printf.sprintf "<%s:%d:%d>" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
+  )
 
 
+
+
+
+(* TODO: get rid of that *)
 exception NonStandard_string_concatenation
 
 
@@ -37,16 +42,20 @@ let parse input : Cabs.translation_unit =
     (* This wrapper is feed to the pre_parser and incrementaly save the list of tokens *)
     let lexer_wrapper lexbuf =
       let tok = Lexer.initial lexbuf in
-      saved_tokens := tok :: !saved_tokens;
+      saved_tokens := (tok, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) :: !saved_tokens;
       tok in
     
     let hack lexbuf =
       match !saved_tokens with
+(*
         | [] ->
             EOF
-        | tk :: tks ->
-            saved_tokens := tks;
-            tk in
+*)
+        | (tok, (start_p, end_p)) :: xs ->
+            saved_tokens := xs;
+            lexbuf.Lexing.lex_start_p <- start_p;
+            lexbuf.Lexing.lex_curr_p <- end_p;
+            tok in
     
     let modify_tokens () =
       let modify = function
@@ -61,9 +70,9 @@ let parse input : Cabs.translation_unit =
             end
         | tok -> tok in
       
-      let (_, tks') =
-        List.fold_left (fun (str_acc, acc) tk ->
-          match (str_acc, tk) with
+      let (_, xs') =
+        List.fold_left (fun (str_acc, acc) (tok, loc) ->
+          match (str_acc, tok) with
 (*
             | (Some (str, loc), STRING_LITERAL (str', loc')) -> (Some (str' ^ str, loc'), acc)
             | (None           , STRING_LITERAL (str, loc)  ) -> (Some (str, loc), acc)
@@ -73,43 +82,32 @@ let parse input : Cabs.translation_unit =
             (* STD §6.4.5#5 *)
             (* TODO: this is partial + we only allow the concatenation of identically prefixed literals,
                      but it is impl-def whether more concatenations are allowed ... *)
-            | (Some (pref1_opt, str1), STRING_LITERAL (pref2_opt, str2)) ->
+            | (Some ((pref1_opt, str1), lit_loc), STRING_LITERAL (pref2_opt, str2)) ->
                 (* we don't support non-standard concatenation for now (neither gcc nor clang seems to do either) *)
                 (match merge_encoding_prefixes pref1_opt pref2_opt with
-                  | Some pref_opt -> (Some (pref_opt, str2 @ str1), acc)
+                  | Some pref_opt -> (Some ((pref_opt, str2 @ str1), lit_loc), acc)
                   | None          -> raise NonStandard_string_concatenation)
             | (None, STRING_LITERAL lit) ->
-                (Some lit, acc)
-            | (Some lit, _) ->
-                (None, modify tk :: STRING_LITERAL lit :: acc)
+                (Some (lit, loc), acc)
+            | (Some (lit, lit_loc), _) ->
+                (None, (modify tok, loc) :: (STRING_LITERAL lit, lit_loc) :: acc)
             | (None, _) ->
-                (None, modify tk :: acc)
+                (None, (modify tok, loc) :: acc)
         ) (None, []) !saved_tokens in
-      saved_tokens := tks' in
+      saved_tokens := xs' in
     
     try
-(*
-      print_endline "RUNNING pre_parser";
-*)
       Pre_parser.translation_unit_file lexer_wrapper lexbuf;
+      
 (*
-      print_endline "DONE";
-      
-      print_endline "=== TOKENS before ===";
-      List.iter (fun tk -> print_endline (string_of_token tk)) (List.rev !saved_tokens);
+      print_endline "==== BEFORE LEXER HACK ====";
+      List.iter (fun (tok, loc) ->
+        Printf.printf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc)
+      ) (List.rev !saved_tokens);
+      print_endline "===========================";
 *)
-      
       
       modify_tokens ();
-      
-      
-(*
-      print_newline ();
-      print_endline "=== TOKENS after ===";
-      List.iter (fun tk -> print_endline (string_of_token tk)) !saved_tokens;
-*)
-      
-      
       Parser.translation_unit_file hack (Lexing.from_string "")
     with
       | Failure msg -> raise (Failure msg)

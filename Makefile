@@ -206,14 +206,37 @@ coreparser:
 CMXS=\
   $(patsubst %.ml, %.cmx, $(shell ocamldep -sort $(patsubst %.cmx, %.ml, $(wildcard $(addsuffix /*.cmx, $(OCAML_DIRS))))))
 
-foo:
-	echo $(CMXS)
+CMOS=\
+  $(patsubst %.ml, %.cmo, $(shell ocamldep -sort $(patsubst %.cmo, %.ml, $(wildcard $(addsuffix /*.cmo, $(OCAML_DIRS))))))
+
 
 ocaml_native: | depend dependencies
 # TODO: surely this is wrong ...
+#	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
+#	TIME=`date "+%y/%m/%d@%H:%M"`
+#	@echo $(TIME)
+#	@$(shell sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(echo `hg id` \(\) | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\\&/g')/g" src/main.ml)
 	make src/main.cmx
 	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
 	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(CMXS) -o cerberus
+#	mv src/main.ml.sed src/main.ml
+
+
+
+native: src/main.cmx | depend dependencies
+	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
+	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(filter-out src/main.cmx, $(CMXS)) src/main.cmx -o cerberus
+
+
+byte: src/main.cmo | depend dependencies
+	ocamlc unix.cma str.cma nums.cma -cclib "-L./dependencies/zarith-1.3" \
+	$(wildcard $(addsuffix /*.cma, $(OCAML_LIBS))) $(filter-out src/main.cmo, $(CMOS)) src/main.cmo -o cerberus.byte
+
+
+
+_wip: src/wip.ml
+	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
+	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(filter-out src/main.cmx src/wip.cmx, $(CMXS)) src/wip.cmx -o wip
 
 
 

@@ -1578,8 +1578,8 @@ let release_acquire_synchronizes_with_set actions sb asw rf lo =
     { (a,b) | forall (a IN actions) (b IN actions) |
        release_acquire_synchronizes_with actions sb asw rf lo a b}
 
-val sw_asw: pre_execution -> set (action * action)
-let ~{ocaml} sw_asw Xo =
+val sw_asw: pre_execution -> execution_witness -> set (action * action)
+let ~{ocaml} sw_asw Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
@@ -1601,7 +1601,7 @@ let ~{ocaml} sw_rel_acq Xo Xw =
 
 val release_acquire_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_synchronizes_with_set_alt Xo Xw =
-  (sw_asw Xo) union (sw_lock Xo Xw) union (sw_rel_acq Xo Xw)
+  (sw_asw Xo Xw) union (sw_lock Xo Xw) union (sw_rel_acq Xo Xw)
 
 val release_acquire_hb: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_hb Xo Xw =
@@ -1736,7 +1736,7 @@ let ~{ocaml} sw_rel_acq_rs Xo Xw =
 
 val release_acquire_relaxed_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_relaxed_synchronizes_with_set_alt Xo Xw =
-  (sw_asw Xo) union (sw_lock Xo Xw) union (sw_rel_acq_rs Xo Xw)
+  (sw_asw Xo Xw) union (sw_lock Xo Xw) union (sw_rel_acq_rs Xo Xw)
 
 val release_acquire_relaxed_hb: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_relaxed_hb Xo Xw =
@@ -1886,7 +1886,7 @@ let ~{ocaml} sw_fence_rs_rf_sb Xo Xw =
 
 val release_acquire_fenced_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_fenced_synchronizes_with_set_alt Xo Xw =
-  (sw_asw Xo) union (sw_lock Xo Xw) union (sw_rel_acq_rs Xo Xw) union
+  (sw_asw Xo Xw) union (sw_lock Xo Xw) union (sw_rel_acq_rs Xo Xw) union
   (sw_fence_sb_hrs_rf_sb Xo Xw) union (sw_fence_sb_hrs_rf Xo Xw) union (sw_fence_rs_rf_sb Xo Xw)
 
 val release_acquire_fenced_hb: pre_execution -> execution_witness -> set (action * action)

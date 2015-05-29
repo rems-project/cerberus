@@ -19,6 +19,9 @@ type desugar_cause =
   | Desugar_MultipleDeclaration of cabs_identifier
 
 
+  | Desugar_NonvoidReturn (* §6.8.6.4#1, 2nd sentence *)
+
+
   | Desugar_Redefinition of identifier
 
 

@@ -1,5 +1,8 @@
 type t =
-  Lexing.position * Lexing.position
+  | Loc_unknown
+  | Loc_point of Lexing.position
+    (* start, end, cursor *)
+  | Loc_region of Lexing.position * Lexing.position * Lexing.position option
 
 let unknown =
-  (Lexing.dummy_pos, Lexing.dummy_pos)
+  Loc_unknown
