@@ -11,26 +11,49 @@ type tid_impl = Tid_hol of nat
 type location_impl = Loc_hol of nat
 type cvalue_impl = Cvalue_hol of nat
 
+instance (Eq tid_impl)
+  let (=) x y = unsafe_structural_equality x y
+  let (<>) x y = not (unsafe_structural_equality x y)
+end
+
+instance (SetType tid_impl)
+  let setElemCompare x y = defaultCompare x y
+end
+
+instance (Eq location_impl)
+  let (=) x y = unsafe_structural_equality x y
+  let (<>) x y = not (unsafe_structural_equality x y)
+end
+
 instance (SetType location_impl)
   let setElemCompare = defaultCompare
 end
 
+instance (Eq cvalue_impl)
+  let (=) x y = unsafe_structural_equality x y
+  let (<>) x y = not (unsafe_structural_equality x y)
+end
+
+instance (SetType cvalue_impl)
+  let setElemCompare x y = defaultCompare x y
+end
+
 instance (Show tid_impl)
-  let show tid = 
+  let show tid =
     match tid with
     | Tid_hol n -> show n
     end
 end
 
 instance (Show location_impl)
-  let show location = 
+  let show location =
     match location with
     | Loc_hol n -> show n
     end
 end
 
 instance (Show cvalue_impl)
-  let show cvalue = 
+  let show cvalue =
     match cvalue with
     | Cvalue_hol n -> show n
     end

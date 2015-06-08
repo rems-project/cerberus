@@ -204,17 +204,17 @@ type memory_order =
   | Consume
   | Acq_rel
 
-instance (Eq memory_order)                (* CSEM *)
-  let (=)  = unsafe_structural_equality   (* CSEM *)
-  let (<>) = unsafe_structural_inequality (* CSEM *)
-end                                       (* CSEM *)
+instance (Eq memory_order)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
-instance (SetType memory_order)       (* CSEM *)
-  let setElemCompare = defaultCompare (* CSEM *)
-end                                   (* CSEM *)
+instance (SetType memory_order)
+  let setElemCompare = defaultCompare
+end
 
 instance (Show memory_order)
-  let show mo = 
+  let show mo =
     match mo with
     | NA      -> "NA"
     | Seq_cst -> "Seq_cst"
@@ -223,28 +223,28 @@ instance (Show memory_order)
     | Acquire -> "Acquire"
     | Consume -> "Consume"
     | Acq_rel -> "Acq_rel"
-    end    
+    end
 end
 
 type lock_outcome =
     Locked
   | Blocked
 
-instance (Eq lock_outcome)                (* CSEM *)
-  let (=)  = unsafe_structural_equality   (* CSEM *)
-  let (<>) = unsafe_structural_inequality (* CSEM *)
-end                                       (* CSEM *)
+instance (Eq lock_outcome)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
-instance (SetType lock_outcome)       (* CSEM *)
-  let setElemCompare = defaultCompare (* CSEM *)
-end                                   (* CSEM *)
+instance (SetType lock_outcome)
+  let setElemCompare = defaultCompare
+end
 
 instance (Show lock_outcome)
-  let show lo = 
+  let show lo =
     match lo with
     | Locked  -> "Locked"
     | Blocked -> "Blocked"
-    end    
+    end
 end
 
 type action =
@@ -286,6 +286,8 @@ instance (SetType action)                                        (* CSEM *)
   let setElemCompare x y = setElemCompare (aid_of x) (aid_of y)  (* CSEM *)
 end                                                              (* CSEM *)
 
+
+
 instance (Show action)
   let show a =
     match a with
@@ -326,14 +328,14 @@ type location_kind =
   | Non_Atomic
   | Atomic
 
-instance (Eq location_kind)               (* CSEM *)
-  let (=)  = unsafe_structural_equality   (* CSEM *)
-  let (<>) = unsafe_structural_inequality (* CSEM *)
-end                                       (* CSEM *)
+instance (Eq location_kind)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
-instance (SetType location_kind)      (* CSEM *)
-  let setElemCompare = defaultCompare (* CSEM *)
-end                                   (* CSEM *)
+instance (SetType location_kind)
+  let setElemCompare = defaultCompare
+end
 
 instance (Show location_kind)
   let show loc = 
@@ -353,6 +355,11 @@ type pre_execution =
       dd      : set (action * action) ;
   |>
 
+val action_rel_tostring: set (action * action) -> string
+let action_rel_tostring rel =
+  let aid_of_rel = Set.map (fun (a, b) -> (aid_of a, aid_of b)) rel in
+  Show_extra.stringFromRelation show aid_of_rel
+
 (* The name aid_or_rel clashes with something in Isabelle *)
 val aid_of_rel2: set (action * action) -> set (aid * aid)
 let aid_of_rel2 s =
@@ -363,10 +370,50 @@ instance (Show pre_execution)
     "actions: " ^ show pre.actions ^ 
     ", threads: " ^ show pre.threads ^
     ", lk: " ^ "?" ^
-    ", sb: " ^ show (aid_of_rel2 pre.sb) ^
-    ", asw: " ^ show (aid_of_rel2 pre.asw) ^ 
-    ", dd: " ^ show (aid_of_rel2 pre.dd)
+    ", sb: " ^ action_rel_tostring pre.sb ^
+    ", asw: " ^ action_rel_tostring pre.asw ^ 
+    ", dd: " ^ action_rel_tostring pre.dd
 end
+
+(* this is wrong by design: we can't write a compare function for lk *)
+let pre_execution_setElemCompare cmpa cmpb cmpc x y =
+  pairCompare
+    cmpa
+    (pairCompare
+       cmpb
+       (pairCompare
+          cmpc
+          (pairCompare
+             cmpc
+             cmpc)))
+    (x.actions, (x.threads, (x.sb, (x.asw, x.dd))))
+    (y.actions, (y.threads, (y.sb, (y.asw, y.dd))))
+
+
+
+
+
+val pre_execution_equal: pre_execution -> pre_execution -> bool (* CSEM *)
+let {ocaml} pre_execution_equal pre1 pre2 =                     (* CSEM *)
+  Set.setEqual pre1.actions pre2.actions &&                     (* CSEM *)
+  Set.setEqual pre1.threads pre2.threads &&                     (* CSEM *)
+  (*  Set.setEqual pre1.lk pre2.lk && *) (* TODO *)             (* CSEM *)
+  Set.setEqual pre1.sb pre2.sb &&                               (* CSEM *)
+  Set.setEqual pre1.asw pre2.asw &&                             (* CSEM *)
+  Set.setEqual pre1.dd pre2.dd                                  (* CSEM *)
+
+let inline ~{ocaml} pre_execution_equal pre1 pre2 = (* CSEM *)
+  unsafe_structural_equality pre1 pre2              (* CSEM *)
+
+instance (Eq pre_execution)                                       (* CSEM *)
+  let (=)  = pre_execution_equal                                  (* CSEM *)
+  let (<>) = fun pre1 pre2 -> not (pre_execution_equal pre1 pre2) (* CSEM *)
+ end                                                              (* CSEM *)
+
+instance (SetType pre_execution)      (* CSEM *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end                                   (* CSEM *)
+
 
 type order_kind =
      Global_order
@@ -389,12 +436,47 @@ type execution_witness =
 
 instance (Show execution_witness)
   let show wit =
-    "rf: "    ^ show (aid_of_rel2 wit.rf) ^ 
-    ", mo: "  ^ show (aid_of_rel2 wit.mo) ^ 
-    ", sc: "  ^ show (aid_of_rel2 wit.sc) ^ 
-    ", lo: "  ^ show (aid_of_rel2 wit.lo) ^ 
-    ", tot: " ^ show (aid_of_rel2 wit.tot)
+    "rf: "    ^ action_rel_tostring wit.rf ^ 
+    ", mo: "  ^ action_rel_tostring wit.mo ^ 
+    ", sc: "  ^ action_rel_tostring wit.sc ^ 
+    ", lo: "  ^ action_rel_tostring wit.lo ^ 
+    ", tot: " ^ action_rel_tostring wit.tot
 end
+
+let execution_witness_setElemCompare cmp x y =
+  pairCompare
+    cmp
+    (pairCompare
+       cmp
+       (pairCompare
+          cmp
+          (pairCompare
+             cmp
+             cmp)))
+    (x.rf, (x.mo, (x.sc, (x.lo, x.tot))))
+    (y.rf, (y.mo, (y.sc, (y.lo, y.tot))))
+
+instance (SetType execution_witness)  (* CSEM *) (* WIP *)
+  let setElemCompare = defaultCompare (* CSEM *)
+end                                   (* CSEM *)
+
+
+val execution_witness_equal: execution_witness -> execution_witness -> bool (* CSEM *)
+let {ocaml} execution_witness_equal wit1 wit2 =                             (* CSEM *)
+  Set.setEqual wit1.rf wit2.rf &&                                           (* CSEM *)
+  Set.setEqual wit1.mo wit2.mo &&                                           (* CSEM *)
+  Set.setEqual wit1.sc wit2.sc &&                                           (* CSEM *)
+  Set.setEqual wit1.lo wit2.lo &&                                           (* CSEM *)
+  Set.setEqual wit1.tot wit2.tot                                            (* CSEM *)
+
+let inline ~{ocaml} execution_witness_equal wit1 wit2 = (* CSEM *)
+  unsafe_structural_equality wit1 wit2                  (* CSEM *)
+
+instance (Eq execution_witness)                        (* CSEM *)
+  let (=) = execution_witness_equal                    (* CSEM *)
+  let (<>) w1 w2 = not (execution_witness_equal w1 w2) (* CSEM *)
+ end                                                   (* CSEM *)
+
 
 val empty_witness: execution_witness
 let empty_witness = 
@@ -407,7 +489,22 @@ let empty_witness =
 
 type relation_list = list (string * set (action * action))
 
+(* The following instance gives an error, because relation_list is a
+type synonym. *)
+(* 
+instance (Show relation_list)
+  let show l = ""
+end *)
+
+val relation_list_tostring: relation_list -> string
+let relation_list_tostring l = 
+  stringFromList (stringFromPair show action_rel_tostring) l 
+
 type candidate_execution = (pre_execution * execution_witness * relation_list)
+
+val candidate_execution_tostring: candidate_execution -> string
+let candidate_execution_tostring (pre, wit, rel) = 
+  "(" ^ show pre ^ ", " ^ show wit ^ ", " ^ relation_list_tostring rel ^ ")"
 
 type observable_execution = (pre_execution * execution_witness)
 
@@ -415,11 +512,38 @@ type program_behaviours =
     Defined of set (observable_execution)
   | Undefined
 
+let program_behaviours_eq x y =
+  match (x, y) with
+  | (Defined s1, Defined s2) -> s1 = s2
+  | (Undefined, Undefined) -> true
+  | _ -> false
+  end
+
+instance (Eq program_behaviours)          (* CSEM *) (* WIP *)
+  let (=)  = unsafe_structural_equality   (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end                                       (* CSEM *)
+
+
+
 type rf_observable_execution = (pre_execution * set (action * action))
 
 type rf_program_behaviours =
     rf_Defined of set (rf_observable_execution)
   | rf_Undefined
+
+let rf_program_behaviours_eq x y =
+  match (x, y) with
+  | (rf_Defined s1, rf_Defined s2) -> s1 = s2
+  | (rf_Undefined, rf_Undefined) -> true
+  | _ -> false
+  end
+
+instance (Eq rf_program_behaviours)       (* CSEM *) (* WIP *)
+  let (=)  = unsafe_structural_equality   (* CSEM *)
+  let (<>) = unsafe_structural_inequality (* CSEM *)
+end                                       (* CSEM *)
+
 
 type named_predicate_tree =
     Leaf of (candidate_execution -> bool)
@@ -525,60 +649,6 @@ let each_empty faults_list X =
         One (_name,setgen) -> null (setgen X)
       | Two (_name,setgen) -> null (setgen X) end in
     List.all faults_empty faults_list
-
-
-val pre_execution_equal: pre_execution -> pre_execution -> bool (* CSEM *)
-let {ocaml} pre_execution_equal pre1 pre2 =                     (* CSEM *)
-  Set.setEqual pre1.actions pre2.actions &&                     (* CSEM *)
-  Set.setEqual pre1.threads pre2.threads &&                     (* CSEM *)
-  (*  Set.setEqual pre1.lk pre2.lk && *) (* TODO *)             (* CSEM *)
-  Set.setEqual pre1.sb pre2.sb &&                               (* CSEM *)
-  Set.setEqual pre1.asw pre2.asw &&                             (* CSEM *)
-  Set.setEqual pre1.dd pre2.dd                                  (* CSEM *)
-
-let inline ~{ocaml} pre_execution_equal pre1 pre2 = (* CSEM *)
-  unsafe_structural_equality pre1 pre2              (* CSEM *)
-
-instance (Eq pre_execution)                                       (* CSEM *)
-  let (=)  = pre_execution_equal                                  (* CSEM *)
-  let (<>) = fun pre1 pre2 -> not (pre_execution_equal pre1 pre2) (* CSEM *)
- end                                                              (* CSEM *)
-
-val execution_witness_equal: execution_witness -> execution_witness -> bool (* CSEM *)
-let {ocaml} execution_witness_equal wit1 wit2 =                             (* CSEM *)
-  Set.setEqual wit1.rf wit2.rf &&                                           (* CSEM *)
-  Set.setEqual wit1.mo wit2.mo &&                                           (* CSEM *)
-  Set.setEqual wit1.sc wit2.sc &&                                           (* CSEM *)
-  Set.setEqual wit1.lo wit2.lo &&                                           (* CSEM *)
-  Set.setEqual wit1.tot wit2.tot                                            (* CSEM *)
-
-let inline ~{ocaml} execution_witness_equal wit1 wit2 = (* CSEM *)
-  unsafe_structural_equality wit1 wit2                  (* CSEM *)
-
-instance (Eq execution_witness)                        (* CSEM *)
-  let (=) = execution_witness_equal                    (* CSEM *)
-  let (<>) w1 w2 = not (execution_witness_equal w1 w2) (* CSEM *)
- end                                                   (* CSEM *)
-
-instance (Eq program_behaviours)          (* CSEM *) (* WIP *)
-  let (=)  = unsafe_structural_equality   (* CSEM *)
-  let (<>) = unsafe_structural_inequality (* CSEM *)
-end                                       (* CSEM *)
-
-instance (Eq rf_program_behaviours)       (* CSEM *) (* WIP *)
-  let (=)  = unsafe_structural_equality   (* CSEM *)
-  let (<>) = unsafe_structural_inequality (* CSEM *)
-end                                       (* CSEM *)
-
-
-instance (SetType execution_witness)  (* CSEM *) (* WIP *)
-  let setElemCompare = defaultCompare (* CSEM *)
-end                                   (* CSEM *)
-
-instance (SetType pre_execution)      (* CSEM *)
-  let setElemCompare = defaultCompare (* CSEM *)
-end                                   (* CSEM *)
-
 
 
 val statically_satisfied : forall. condition_t -> opsem_t -> program -> bool
@@ -3068,6 +3138,23 @@ instance (Show execution_witness_fp)
     ", tot: " ^ show (aid_of_rel2 wit.tot_fp)
 end
 
+let execution_witness_fp_setElemCompare cmpa cmpb x y =
+  pairCompare
+    cmpa
+    (pairCompare
+       cmpb
+       (pairCompare
+          cmpb
+          (pairCompare
+             cmpb
+             cmpb)))
+    (x.rf_fp, (x.mo_fp, (x.sc_fp, (x.lo_fp, x.tot_fp))))
+    (y.rf_fp, (y.mo_fp, (y.sc_fp, (y.lo_fp, y.tot_fp))))
+
+instance (SetType execution_witness_fp)
+  let setElemCompare x y = execution_witness_fp_setElemCompare setElemCompare setElemCompare x y
+end
+
 val project_witness_fp: execution_witness_fp -> execution_witness
 let project_witness_fp wit =
   <| rf = Set.map (fun (w, f, r) -> (w, r)) wit.rf_fp;
@@ -3084,6 +3171,21 @@ type relation_list_fp =
      vse_fp : set (action * footprint * action);
      rest : relation_list; (* TODO: find a better name *)
   |>
+
+let relation_list_fp_eq x y =
+  (x.hb_fp, (x.vse_fp, x.rest)) = (y.hb_fp, (y.vse_fp, y.rest))
+
+instance (Eq relation_list_fp)
+  let (=) x y = relation_list_fp_eq x y
+  let (<>) x y = not (relation_list_fp_eq x y)
+end
+
+let relation_list_fp_setElemCompare cmp x y =
+  cmp (x.hb_fp, (x.vse_fp, x.rest)) (y.hb_fp, (y.vse_fp, y.rest))
+
+instance (SetType relation_list_fp)
+  let setElemCompare x y = relation_list_fp_setElemCompare setElemCompare x y
+end
 
 val project_relation_list_fp: relation_list_fp -> relation_list
 let project_relation_list_fp l =

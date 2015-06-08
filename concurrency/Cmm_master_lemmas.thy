@@ -2,7 +2,7 @@ theory "Cmm_master_lemmas"
 
 imports 
 Main
-"_bin/Cmm_master"
+"_bin/Cmm_csem"
 begin
 
 section {* Auxiliaries *}
@@ -1552,6 +1552,26 @@ proof -
     using assms
     by (auto elim: relOverE)
   ultimately show ?thesis
+    using assms that
+    unfolding consistent_mo.simps
+    by auto
+qed
+
+lemma consistent_moE_inv:
+  assumes "consistent_mo (pre, wit, rel)"
+      and "a \<in> actions0 pre" 
+      and "b \<in> actions0 pre"
+      and "a \<noteq> b"
+      and "loc_of a = loc_of b"
+      and "is_write a"
+      and "is_write b"
+      and "is_at_atomic_location (lk pre) a \<or> is_at_atomic_location (lk pre) b"
+      and "(b, a) \<notin> mo wit"
+  obtains "(a, b) \<in> mo wit"
+proof -
+  have "is_at_atomic_location (lk pre) a" 
+    using assms same_loc_atomic_location by metis
+  thus ?thesis
     using assms that
     unfolding consistent_mo.simps
     by auto

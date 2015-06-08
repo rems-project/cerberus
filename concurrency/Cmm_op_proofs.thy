@@ -2084,7 +2084,7 @@ proof -
     using assms incPreRestrict_sbasw_subset
     unfolding well_formed_threads.simps
     unfolding blocking_observed_def
-              Cmm_master.inj_on_def
+              Cmm_csem.inj_on_def
               threadwise_def
               interthread_def
               isStrictPartialOrder_def
@@ -3410,7 +3410,7 @@ by auto
 
 subsection {* Completeness *}
 
-(* modification order *)
+subsubsection {* modification order *}
 
 lemma step_mo_not_atomic_write:
   assumes cons:      "axsimpConsistentAlt pre' wit'"
@@ -3428,77 +3428,84 @@ proof auto
     using b c committed by auto
 qed
 
-(*
 lemma step_mo_atomic_write:
-  assumes cons1:     "axsimpConsistentAlt pre  wit"
-      and cons2:     "axsimpConsistentAlt pre' wit'"
-      and wit:       "wit = incWitRestrict wit' (actions0 pre)"
-      and committed: "actions0 pre' = insert a (actions0 pre)"
-      and a:         "  is_at_atomic_location (lk pre') a \<and> is_write a 
-                      \<and> a \<in> actions0 pre \<and> a \<notin> incCommitted s"
+  assumes cons1:      "axsimpConsistentAlt pre  (incWit s)"
+      and cons2:      "axsimpConsistentAlt pre' wit'"
+      and wit:        "(incWit s) = incWitRestrict wit' (incCommitted s)"
+      and committed:  "actions0 pre' = insert a (incCommitted s)"
+      and downclosed: "downclosed (incCommitted s) (mo wit')"
+      and a:          "  is_at_atomic_location (lk pre') a \<and> is_write a 
+                       \<and> a \<in> actions0 pre' \<and> a \<notin> incCommitted s"
   shows   "mo wit' [\<in>] monAddToMo pre a s"
 unfolding monAddToMo_def Let_def
 proof simp
-  let ?succ     = "(\<lambda>b. (b, a)) ` {x \<in> actions0 pre. x \<in> incCommitted s \<and> x \<noteq> a \<and> is_write x \<and> loc_of x = loc_of a}"
+  let ?succ     = "(\<lambda>b. (b, a)) ` sameLocWrites (incCommitted s) a"
   let ?new_mo   = "mo (incWit s) \<union> ?succ"
-  show "mo (incWit s')  = ?new_mo"
+  show "mo wit' = ?new_mo"
     proof (intro equalityI subsetI)
       fix x
-      assume "x \<in> mo (incWit s')"
-      then obtain b c where "(b, c) = x" "(b, c) \<in> mo (incWit s')" by (cases x) fast
+      assume "x \<in> mo wit'"
+      then obtain b c where x:     "(b, c) = x" 
+                        and in_mo: "(b, c) \<in> mo wit'" by (cases x) fast
       have "(b, c) \<in> ?new_mo"
-        proof (cases "b = a")
+        proof (cases "c = a")
         next
-          assume "b = a"
-          have not_in_mo_bc: "(b, c) \<notin> mo (incWit s)" using a wit `b = a` by auto
-          have "(c, b) \<notin> mo (incWit s')" 
-            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by simp
-          hence not_in_mo_cb: "(c, b) \<notin> mo (incWit s)" using wit by auto 
-          have "c \<notin> incCommitted s"
-            proof
-              assume "c \<in> incCommitted s"
-              have "b \<in> actions0 pre \<and> c \<in> actions0 pre \<and> b \<noteq> c \<and> 
-                    is_write b \<and> is_write c \<and> loc_of b = loc_of c \<and> 
-                    is_at_atomic_location (lk pre) b"
-                using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted
-                by auto
-              hence "(b, c) \<in> mo (incWit s) \<or> (c, b) \<in> mo (incWit s)"
-                using `c \<in> incCommitted s` consistent_mo_aux1[OF cons1] by auto
-              thus False using not_in_mo_bc not_in_mo_cb by simp
-              qed
-          hence "(b, c) \<in> ?succ"
-            using `b = a` consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] by auto
-          thus "(b, c) \<in> ?new_mo" by simp
+          assume "c = a"
+          hence b: "is_write b" 
+                   "loc_of b = loc_of a" 
+                   "b \<in> actions0 pre'" 
+                   "b \<noteq> a"
+            using in_mo cons2 by auto
+          hence "b \<in> incCommitted s" using committed by auto
+          hence "b \<in> sameLocWrites (incCommitted s) a"
+            unfolding sameLocWrites_def using b by auto
+          thus "(b, c) \<in> ?new_mo" using `c = a` by simp
         next
-          assume "b \<noteq> a"
+          assume "c \<noteq> a"
+          have "c \<in> actions0 pre'" using in_mo cons2 by auto
+          hence c: "c \<in> incCommitted s" using committed `c \<noteq> a` by simp
           hence "b \<in> incCommitted s" 
-            using consistent_mo_aux2[OF cons2 `(b, c) \<in> mo (incWit s')`] incCommitted by auto  
-          hence "(b, c) \<in> mo (incWit s)"
-            using wit `(b, c) \<in> mo (incWit s')` by auto
+            using downclosed in_mo by (auto elim: downclosedE)
+          hence "(b, c) \<in> mo (incWit s)" using wit in_mo c by auto
           thus "(b, c) \<in> ?new_mo" by simp
         qed
-      thus "x \<in> ?new_mo" using `(b, c) = x` by simp
+      thus "x \<in> ?new_mo" using x by simp
     next
       fix x
       assume "x \<in> ?new_mo"
-      show "x \<in> mo (incWit s')"
-        using `x \<in> ?new_mo`
+      then obtain b c where x:     "(b, c) = x" 
+                        and in_mo: "(b, c) \<in> ?new_mo" by (cases x) fast
+      have "(b, c) \<in> mo wit'"
+        using in_mo
         proof (elim UnE)
-          assume "x \<in> mo (incWit s)" 
-          thus "x \<in> mo (incWit s')" using wit by auto
+          assume "(b, c) \<in> mo (incWit s)" 
+          thus "(b, c) \<in> mo wit'" using wit by auto
         next
-          assume "x \<in> ?succ"
-          then obtain b c where "(b, c) = x" "(b, c) \<in> ?succ" by (cases x) fast
-          hence "(c, b) \<notin> mo (incWit s')" using consistent_mo_aux2[OF cons2] incCommitted by fast
-          hence "(b, c) \<in> mo (incWit s')"
-            using `(b, c) \<in> ?succ` a cons2 incCommitted 
-            using consistent_mo_aux1[where a=a and b=c and wit="incWit s'"] 
+          assume "(b, c)  \<in> ?succ"
+          hence bc: "c = a" 
+                    "loc_of b = loc_of c" 
+                    "is_write b" 
+                    "b \<in> incCommitted s"
             by auto
-          thus "x \<in> mo (incWit s')" using `(b, c) = x` by simp
+          hence bc2: "b \<noteq> c" 
+                     "is_write c" 
+                     "is_at_atomic_location (lk pre') c"
+                     "c \<in> actions0 pre'"
+                     "b \<in> actions0 pre'"
+                     "c \<notin> incCommitted s"
+            using a committed by auto
+          hence "(c, b) \<notin> mo wit'"
+            using downclosed bc by (auto elim: downclosedE)
+          thus "(b, c) \<in> mo wit'" 
+            using cons2 bc bc2 by (auto elim: consistent_moE_inv)
         qed
+      thus "x \<in> mo wit'" using x by simp
     qed
 qed
-*)
+
+subsubsection {* reads-from *}
+
+
 
 
 
