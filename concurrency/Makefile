@@ -6,18 +6,18 @@ CPP_SRC_DIR         = ../../../rsem/cpp/src
 CPP_INTEGRATION_DIR = cppmem-integration
 
 CMM_MODEL_LEM_EXT = \
-  cmm_master.lem \
+  cmm_csem.lem \
   cmm_aux.lem \
 
 CMM_MODEL_LEM = \
-  cmm_master.lem \
+  cmm_csem.lem \
   cmm_aux.lem \
 
 # Ocaml and isa variants of CMM_MODEL_LEM
 CMM_MODEL_GEN = \
-  Cmm_master.thy \
+  Cmm_csem.thy \
   Cmm_aux.thy \
-  cmm_master.ml \
+  cmm_csem.ml \
   cmm_aux.ml \
 
 AXIOM_BEH_LEM = \
@@ -53,8 +53,10 @@ default: $(BUILD_DIR)/Cmm_op.thy \
 update_dependencies: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) \
                      $(BUILD_DIR)
         # Copy the cmm model files to the top level directory
+	cd $(CMM_MODEL_DIR); make cmm_csem.lem
 	@echo COPYING $(CMM_MODEL_LEM_EXT)
 	@cp $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM_EXT)) .
+	chmod u+w cmm_csem.lem
 
 # Generate byte files from ml
 $(BUILD_DIR)/main.byte: $(addprefix $(BUILD_DIR)/, $(OPSEM_GEN)) \
