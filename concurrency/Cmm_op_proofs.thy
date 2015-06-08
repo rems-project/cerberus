@@ -3429,8 +3429,7 @@ proof auto
 qed
 
 lemma step_mo_atomic_write:
-  assumes cons1:      "axsimpConsistentAlt pre  (incWit s)"
-      and cons2:      "axsimpConsistentAlt pre' wit'"
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
       and wit:        "(incWit s) = incWitRestrict wit' (incCommitted s)"
       and committed:  "actions0 pre' = insert a (incCommitted s)"
       and downclosed: "downclosed (incCommitted s) (mo wit')"
@@ -3505,6 +3504,128 @@ qed
 
 subsubsection {* reads-from *}
 
+lemma step_rf_aux:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and downclosed: "downclosed committed (rf wit')"
+      and wit:        "wit = incWitRestrict wit' committed"
+      and committed:  "actions0 pre' = insert a committed"
+      and a:          "a \<notin> committed"
+      and in_rf:      "(b, c) \<in> rf wit'"
+  shows               "(b, c) \<in> rf wit \<or> (c = a)"
+proof (intro disjCI)
+  assume "c \<noteq> a"
+  have "b \<in> actions0 pre'" "c \<in> actions0 pre'"
+    using in_rf cons2 by auto
+  hence b: "b \<in> insert a committed" 
+    and c: "c \<in> committed"
+    using `c \<noteq> a` committed by auto
+  hence "b \<in> committed" 
+    using in_rf downclosed
+    unfolding downclosed_def 
+    by auto
+  hence "(b, c) \<in> rf (incWitRestrict wit' committed)" 
+    using in_rf c by simp
+  thus "(b, c) \<in> rf wit" using wit by simp
+qed  
+
+lemma step_rf_aux2:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and downclosed: "downclosed committed (rf wit')"
+      and wit:        "wit = incWitRestrict wit' committed"
+      and committed:  "actions0 pre' = insert a committed"
+      and a:          "a \<notin> committed"
+      and in_rf:      "(w, a) \<in> rf wit'"
+  shows               "rf wit' = insert (w, a) (rf wit)"
+using in_rf
+proof auto
+  fix b c
+  assume "(b, c) \<in> rf wit"
+  thus "(b, c) \<in> rf wit'" using wit by auto
+next
+  fix b c
+  assume bc_in_rf2:  "(b, c) \<in> rf wit'"
+     and bc_nin_rf1: "(b, c) \<notin> rf wit"
+  have "(b, c) \<in> rf wit \<or> (c = a)"
+    using step_rf_aux[OF cons2 downclosed wit committed a bc_in_rf2] .
+  thus "c = a" using bc_nin_rf1 by simp
+  thus "b = w" using bc_in_rf2 cons2 in_rf by auto
+qed
+
+lemma step_rf_non_read:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and downclosed: "downclosed committed (rf wit')"
+      and wit:        "wit = incWitRestrict wit' committed"
+      and committed:  "actions0 pre' = insert a committed"
+      and a:          "\<not> is_read a" "a \<notin> committed"
+  shows               "rf wit' = rf wit"
+proof (intro Set.equalityI subsetI, auto)
+  fix b c
+  assume "(b, c) \<in> rf wit"
+  hence "(b, c) \<in> rf (incWitRestrict wit' committed)" using wit by simp
+  thus "(b, c) \<in> rf wit'" by simp
+next
+  fix b c
+  assume in_rf: "(b, c) \<in> rf wit'"
+  have "is_read c" using cons2 in_rf by auto
+  hence "a \<noteq> c" using a by auto
+  have "(b, c) \<in> rf wit \<or> (c = a)"
+    using step_rf_aux[OF cons2 downclosed wit committed a(2) in_rf] .
+  thus "(b, c) \<in> rf wit" using `a \<noteq> c` by simp
+qed
+
+(*
+lemma step_rf_load:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and downclosed: "downclosed (incCommitted s) (rf wit')"
+      and wit:        "incWit s = incWitRestrict wit' (incCommitted s)"
+      and committed:  "actions0 pre' = insert a (incCommitted s)"
+      and a:          "is_load a" "a \<in> actions0 pre'" "a \<notin> (incCommitted s)"
+  shows               "rf wit' [\<in>] monAddToRfLoad pre a s"
+unfolding monAddToRfLoad_def auxAddToRfLoad_def
+proof auto
+  fix b c
+  assume "(b, c) \<in> rf wit"
+  thus "(b, c) \<in> rf wit'" using wit by auto
+next
+  fix b c
+  assume in_rf:  "(b, c) \<in> rf wit'"
+     and no_vse: "     \<forall>w\<in>actions0 pre. is_write w
+                   \<longrightarrow> (w, a) \<in> EquivalenceMinimalOpsem.getHb pre wit'
+                   \<longrightarrow> loc_of w \<noteq> loc_of a"
+  have "det_read_op (incCommitted s') (pre, wit', getRelations pre wit')"
+    using cons2 unfolding exIsConsistent_op_def by simp
+  hence "  (\<exists>w\<in>actions0 pre. (w, a) \<in> getHb pre wit' \<and> is_write w \<and> loc_of w = loc_of a) 
+         = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf wit')"
+    using a incCommitted 
+    apply simp
+    unfolding det_read_op.simps 
+    by auto
+  hence no_rf: "\<forall>w\<in>actions0 pre. (w, a) \<notin> rf wit'"
+    using no_vse by auto    
+  have "b \<in> actions0 pre" using well_formed_rf_aux[OF cons2 in_rf] by simp
+  hence "(b, a) \<notin> rf wit'" using no_rf by simp
+  hence "c \<noteq> a" using in_rf by auto
+  have "(b, c) \<in> rf wit \<or> (c = a)"
+    using step_rf_aux[OF cons1 cons2 order wit incCommitted in_rf] .
+  thus "(b, c) \<in> rf wit" using `c \<noteq> a` by simp
+next
+  fix w'
+  assume "w' \<in> actions0 pre" 
+         "(w', a) \<in> getHb pre wit'"
+         "is_write w'" "loc_of w' = loc_of a"
+  hence "\<exists>w. (w, a) \<in> rf wit'" using det_read_aux[OF cons2] a incCommitted by auto
+  then obtain w where w_in_rf: "(w, a) \<in> rf wit'" by fast
+  have w: "w \<in> actions0 pre \<and> w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
+            value_written_by w = value_read_by a"
+    using well_formed_rf_aux[OF cons2 w_in_rf] incCommitted by auto
+  have "rf wit' = insert (w, a) (rf wit)"
+    using step_rf_aux2[OF cons1 cons2 order wit incCommitted w_in_rf] .
+  thus "\<exists>w\<in>actions0 pre. w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
+        value_written_by w = value_read_by a \<and> 
+        rf wit' = insert (w, a) (rf wit)"
+     using w by auto
+qed
+*)
 
 
 
