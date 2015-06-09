@@ -2517,6 +2517,34 @@ using assms
 unfolding sameLocWrites_def
 by auto
 
+lemma sameLocInMo:
+  assumes sameLoc:    "w \<in> sameLocWritesSet committed a"
+      and cons2:      "axsimpConsistentAlt pre wit"
+      and committed:  "actions0 pre = insert a (set committed)"
+      and downclosed: "downclosed (set committed) (mo wit)"
+      and a:          "is_at_atomic_location (lk pre) a"
+                      "is_write a"
+                      "a \<in> actions0 pre"
+                      "a \<notin> set committed"
+  shows   "(w, a) \<in> mo wit"
+proof -  
+  have bc: "loc_of w = loc_of a" 
+           "is_write w" 
+           "w \<in> set committed"
+    using sameLoc by auto
+  hence bc2: "w \<noteq> a" 
+             "is_write a" 
+             "is_at_atomic_location (lk pre) a"
+             "w \<in> actions0 pre"
+             "a \<in> actions0 pre"
+             "a \<notin> set committed"
+    using a committed by auto
+  hence "(a, w) \<notin> mo wit"
+    using downclosed bc by (auto elim: downclosedE)
+  thus "(w, a) \<in> mo wit" 
+    using cons2 bc bc2 by (auto elim: consistent_moE_inv)
+qed
+
 lemma sameLocLocksUnlocksE [elim]:
   assumes "x \<in> set (sameLocLocksUnlocks actions a)"
   obtains "x \<in> set actions" "is_lock x \<or> is_unlock x" "loc_of x = loc_of a"
@@ -3432,8 +3460,10 @@ lemma step_mo_atomic_write:
       and wit:        "(incWit s) = incWitRestrict wit' (incCommittedSet s)"
       and committed:  "actions0 pre' = insert a (incCommittedSet s)"
       and downclosed: "downclosed (incCommittedSet s) (mo wit')"
-      and a:          "  is_at_atomic_location (lk pre') a \<and> is_write a 
-                       \<and> a \<in> actions0 pre' \<and> a \<notin> incCommittedSet s"
+      and a:          "is_at_atomic_location (lk pre') a"
+                      "is_write a"
+                      "a \<in> actions0 pre'"
+                      "a \<notin> incCommittedSet s"
   shows   "mo wit' [\<in>] monAddToMo pre a s"
 unfolding monAddToMo_def Let_def
 proof simp
@@ -3480,22 +3510,9 @@ proof simp
           thus "(b, c) \<in> mo wit'" using wit by auto
         next
           assume "(b, c)  \<in> ?succ"
-          hence bc: "c = a" 
-                    "loc_of b = loc_of c" 
-                    "is_write b" 
-                    "b \<in> incCommittedSet s"
+          thus ?thesis
+            using sameLocInMo[OF _ cons2 committed downclosed a]
             by auto
-          hence bc2: "b \<noteq> c" 
-                     "is_write c" 
-                     "is_at_atomic_location (lk pre') c"
-                     "c \<in> actions0 pre'"
-                     "b \<in> actions0 pre'"
-                     "c \<notin> incCommittedSet s"
-            using a committed by auto
-          hence "(c, b) \<notin> mo wit'"
-            using downclosed bc by (auto elim: downclosedE)
-          thus "(b, c) \<in> mo wit'" 
-            using cons2 bc bc2 by (auto elim: consistent_moE_inv)
         qed
       thus "x \<in> mo wit'" using x by simp
     qed
@@ -3508,7 +3525,6 @@ lemma step_rf_aux:
       and downclosed: "downclosed committed (rf wit')"
       and wit:        "wit = incWitRestrict wit' committed"
       and committed:  "actions0 pre' = insert a committed"
-      and a:          "a \<notin> committed"
       and in_rf:      "(b, c) \<in> rf wit'"
   shows               "(b, c) \<in> rf wit \<or> (c = a)"
 proof (intro disjCI)
@@ -3527,29 +3543,40 @@ proof (intro disjCI)
   thus "(b, c) \<in> rf wit" using wit by simp
 qed  
 
-(*
 lemma step_rf_aux2:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
       and downclosed: "downclosed committed (rf wit')"
       and wit:        "wit = incWitRestrict wit' committed"
       and committed:  "actions0 pre' = insert a committed"
-      and a:          "a \<notin> committed"
-      and in_rf:      "(w, a) \<in> rf wit'"
-  shows               "rf wit' = insert (w, a) (rf wit)"
-using in_rf
-proof auto
-  fix b c
-  assume "(b, c) \<in> rf wit"
-  thus "(b, c) \<in> rf wit'" using wit by auto
+  obtains         "rf wit' = rf wit"
+        | w where "rf wit' = insert (w, a) (rf wit)"
+proof (cases "rf wit' = rf wit")
+  case True
+  thus ?thesis using that by auto
 next
-  fix b c
-  assume bc_in_rf2:  "(b, c) \<in> rf wit'"
-     and bc_nin_rf1: "(b, c) \<notin> rf wit"
-  have "(b, c) \<in> rf wit \<or> (c = a)"
-    using step_rf_aux[OF cons2 downclosed wit committed a bc_in_rf2] .
-  thus "c = a" using bc_nin_rf1 by simp
-  thus "b = w" using bc_in_rf2 cons2 in_rf by auto
-qed *)
+  case False
+  have "rf wit \<subseteq> rf wit'"
+    using wit by auto
+  then obtain x y where in_rf:  "(x, y) \<in> rf wit'" 
+                    and nin_rf: "(x, y) \<notin> rf wit"
+    using False by auto
+  hence "(x, a) \<in> rf wit'" 
+    using step_rf_aux[OF cons2 downclosed wit committed]
+    by auto
+  hence "rf wit' = insert (x, a) (rf wit)"
+    using `rf wit \<subseteq> rf wit'`
+    proof auto
+      fix u v
+      assume "(u, v) \<in> rf wit'" "(u, v) \<notin> rf wit"
+      thus "v = a"
+        using step_rf_aux[OF cons2 downclosed wit committed] by auto
+      thus "u = x"
+        using `(x, a) \<in> rf wit'` `(u, v) \<in> rf wit'`
+        using cons2
+        by auto
+    qed
+  thus ?thesis using that by auto
+qed
 
 lemma step_rf_non_read:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
@@ -3558,20 +3585,13 @@ lemma step_rf_non_read:
       and committed:  "actions0 pre' = insert a committed"
       and a:          "\<not> is_read a" "a \<notin> committed"
   shows               "rf wit' = rf wit"
-proof (intro Set.equalityI subsetI, auto)
-  fix b c
-  assume "(b, c) \<in> rf wit"
-  hence "(b, c) \<in> rf (incWitRestrict wit' committed)" using wit by simp
-  thus "(b, c) \<in> rf wit'" by simp
-next
-  fix b c
-  assume in_rf: "(b, c) \<in> rf wit'"
-  have "is_read c" using cons2 in_rf by auto
-  hence "a \<noteq> c" using a by auto
-  have "(b, c) \<in> rf wit \<or> (c = a)"
-    using step_rf_aux[OF cons2 downclosed wit committed a(2) in_rf] .
-  thus "(b, c) \<in> rf wit" using `a \<noteq> c` by simp
-qed
+proof (cases rule: step_rf_aux2[OF cons2 downclosed wit committed])
+  case (2 w)
+  hence "(w, a) \<in> rf wit'" by simp
+  hence "is_read a" using cons2 by auto
+  hence False using a by auto
+  thus ?thesis by simp
+qed 
 
 lemma step_rf_auxAddPairToRf:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
@@ -3609,7 +3629,7 @@ proof -
       assume bc_in_rf2:  "(b, c) \<in> rf wit'"
          and bc_nin_rf1: "(b, c) \<notin> rf wit"
       have "(b, c) \<in> rf wit \<or> (c = a)"
-        using step_rf_aux[OF cons2 downclosed wit committed a bc_in_rf2] .
+        using step_rf_aux[OF cons2 downclosed wit committed bc_in_rf2] .
       thus "c = a" using bc_nin_rf1 by simp
       thus "b = w" using bc_in_rf2 cons2 in_rf by auto
     qed
@@ -3638,20 +3658,13 @@ lemma step_rf_load:
       and committed:  "actions0 pre' = insert a (incCommittedSet s)"
       and a:          "is_load a" "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
   shows               "rf wit' [\<in>] monAddToRfLoad pre a s"
-proof (cases "rf wit' = rf (incWit s)")
-  case True
+proof (cases rule: step_rf_aux2[OF cons2 downclosed wit committed])
+  case 1
   thus ?thesis
     unfolding monAddToRfLoad_def auxAddToRfLoad_def
     by auto
 next
-  case False
-  have "rf (incWit s) \<subseteq> rf wit'"
-    using wit by auto
-  then obtain x y where "(x, y) \<in> rf wit'" "(x, y) \<notin> rf (incWit s)"
-    using False by auto
-  hence "(x, a) \<in> rf wit'"
-    using step_rf_aux[OF cons2 downclosed wit committed a(3)]
-    by auto
+  case (2 x)
   then obtain value0 
         where "x \<in> sameLocWritesSet (incCommitted s) a"
               "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf (incWit s)) x a op ="
@@ -3659,6 +3672,94 @@ next
     by auto
   thus ?thesis
     unfolding monAddToRfLoad_def auxAddToRfLoad_def
+    by auto
+qed
+
+lemma step_rf_rmw:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and downclosed_mo: "downclosed (incCommittedSet s) (mo wit')"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and a:             "is_RMW a" "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+  shows                  "rf wit' [\<in>] monAddToRfRmw pre a s"
+proof (cases "sameLocWrites (incCommitted s) a = []")
+  case True
+  hence "\<not> (\<exists>w. (w, a) \<in> rf wit')" 
+    using step_rf_auxAddPairToRf[OF cons2 downclosed_rf wit committed a(3)]
+    by auto
+  hence "rf (incWit s) = rf wit'"
+    using step_rf_aux2[OF cons2 downclosed_rf wit committed] by auto
+  thus ?thesis
+    unfolding monAddToRfRmw_def auxAddToRfRmw_def Let_def
+    using True
+    by auto
+next
+  let ?same_loc_writes = "sameLocWritesSet (incCommitted s) a"
+  let ?S = "{w. w \<in> actions0 pre' \<and> (w, a) \<in> mo wit'}"
+  have "actions_respect_location_kinds (actions0 pre') (lk pre')"
+    using cons2 by auto
+  hence a2: "is_at_atomic_location (lk pre') a" "is_write a"
+    using a(1) is_RMWE_location_kind[OF a(1) a(2)] by auto
+  have eq_sets: "?S = ?same_loc_writes"
+    proof auto
+      fix w'
+      assume w': "w' \<in> sameLocWritesSet (incCommitted s) a"
+      show ca_in_mo: "(w', a) \<in> mo wit'"
+        using sameLocInMo[OF w' cons2 committed downclosed_mo] a a2
+        by auto
+      thus "w' \<in> actions0 pre'" using cons2 by auto
+    next
+      fix w'
+      assume "w' \<in> actions0 pre'" "(w', a) \<in> mo wit'"
+      thus "w' \<in> sameLocWritesSet (incCommitted s) a"
+        unfolding sameLocWritesSet_def
+        using committed cons2
+        by auto
+    qed
+  case False
+  then obtain w' where "w' \<in> ?same_loc_writes" by auto
+  hence non_empty: "?S \<noteq> {}" using eq_sets by auto
+  have "assumptions (pre', wit' , [])" 
+    using cons2 by auto
+  hence "finite_prefixes (mo wit') (actions0 pre')"
+    unfolding assumptions.simps by simp
+  hence finite: "finite ?S"
+    unfolding finite_prefixes_def using a by fast
+  hence "irrefl (mo wit') \<and> trans (mo wit')"
+    using cons2 by auto
+  hence isOrder: "isStrictPartialOrder (mo wit')" unfolding isStrictPartialOrder_def .
+  obtain w where w:   "w \<in> ?S" 
+             and max: "(\<forall>y. y \<in> ?S \<longrightarrow> (w, y) \<notin> mo wit')"
+    using supremum_partial_order[OF finite non_empty isOrder] .
+  have adjacent: "adjacent_less_than (mo wit') (actions0 pre') w a"
+    using w max unfolding adjacent_less_than_def by auto
+  hence in_rf: "(w, a) \<in> rf wit'"
+    using cons2 a by auto
+  then obtain value0 
+        where w:  "w \<in> sameLocWritesSet (incCommitted s) a"
+          and rf: "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
+    using step_rf_auxAddPairToRf[OF cons2 downclosed_rf wit committed a(3)] by auto
+  have max: "\<forall>c\<in>sameLocWritesSet (incCommitted s) a. (w, c) \<notin> mo (incWit s)" 
+    (* TODO: use max to prove this quicker. *)
+    proof 
+      fix c
+      assume sameLoc: "c \<in> sameLocWritesSet (incCommitted s) a"
+      have "actions_respect_location_kinds (actions0 pre') (lk pre')"
+        using cons2 by auto
+      hence "is_at_atomic_location (lk pre') a" "is_write a"
+        using a(1) is_RMWE_location_kind[OF a(1) a(2)] by auto
+      hence ca_in_mo: "(c, a) \<in> mo wit'"
+        using sameLocInMo[OF sameLoc cons2 committed downclosed_mo] a
+        by auto
+      hence "c \<in> actions0 pre'" using cons2 by auto
+      hence "(w, c) \<notin> mo wit'"
+        using adjacent ca_in_mo unfolding adjacent_less_than_def by auto
+      thus "(w, c) \<notin> mo (incWit s)" using wit by auto
+    qed
+  thus ?thesis
+    unfolding monAddToRfRmw_def auxAddToRfRmw_def Let_def
+    using w rf False
     by auto
 qed
 
