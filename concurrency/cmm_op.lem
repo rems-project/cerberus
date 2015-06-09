@@ -94,6 +94,15 @@ let ~{ocaml} axsimpBehaviour opsem_t p =
 
 (* The incremental model ----------------------------------------------- *)
 
+val (MEM) [`listMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
+let inline (MEM) = List.elem  
+
+(* I don't have a clue why the following does not work. *)
+
+(*
+val (NMEM) [`notListMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
+let inline notListMember e l = not (e MEM l) *)
+
 val preRestrict: pre_execution -> set action -> pre_execution
 let preRestrict pre actions = 
 <| actions = pre.actions inter actions;
@@ -175,29 +184,32 @@ let incCom (pre, wit, rel) =
     (Set.(union) (hbMinus (pre, wit, rel)) 
                  (Set.(union) wit.rf wit.mo))
 
-val respectsCom: set action -> set action -> set (action * action) -> action -> bool
+val respectsCom: set action -> list action -> set (action * action) -> action -> bool
 let respectsCom actions committed comOrder a = 
   (forall (b IN actions).
-    (b IN committed --> (a, b) NIN comOrder) &&
-    ((b, a) IN comOrder --> b IN committed))
+    (b MEM committed --> (a, b) NIN comOrder) &&
+    ((b, a) IN comOrder --> b MEM committed))
   
 
 (* The state of the incremental model *)
 
 type incState = 
 <| incWit:       execution_witness;
-   incCommitted: set action;
+   incCommitted: list action;
 |>
+
+val incCommittedSet: incState -> set action
+let inline incCommittedSet s = Set.fromList s.incCommitted
 
 val incInitialState: pre_execution -> incState
 let incInitialState _ = 
 <| incWit       = empty_witness;
-   incCommitted = {};
+   incCommitted = [];
 |>
 
 val incToEx: pre_execution -> incState -> candidate_execution
 let incToEx pre s = 
-  let pre_res = preRestrict pre s.incCommitted in
+  let pre_res = preRestrict pre (incCommittedSet s) in
   let wit     = s.incWit in
   let rel     = getRelations pre_res wit in
   (pre_res, wit, rel)
@@ -207,15 +219,18 @@ let incToEx pre s =
 val incStep: pre_execution -> incState -> incState -> action -> bool
 let incStep pre s1 s2 a =
 
+  (*
   let s2_pre = preRestrict pre s2.incCommitted in
   let rel   = getRelations s2_pre s2.incWit in
-  let s2_ex = (s2_pre, s2.incWit, rel) in
+  let s2_ex = (s2_pre, s2.incWit, rel) in *)
+
+  let s2_ex = incToEx pre s2 in
   let com   = incCom s2_ex in
 
   (* The action that is committed in this step hasn't already been committed *)
   a IN pre.actions &&
-  a NIN s1.incCommitted &&
-  s2.incCommitted = Set.insert a s1.incCommitted &&  
+  not (a MEM s1.incCommitted) &&
+  s2.incCommitted = a::s1.incCommitted &&  
 
   (* Actions are committed in the right order. *)
   respectsCom pre.actions s1.incCommitted com a &&
@@ -223,7 +238,7 @@ let incStep pre s1 s2 a =
   (* The new execution_witness extends the previous (only new
   relations are added, and new relations are from or to the committed
   action). *)
-  incWitRestrict s2.incWit s1.incCommitted = s1.incWit &&
+  incWitRestrict s2.incWit (incCommittedSet s1) = s1.incWit &&
 
   (* The new execution satisfies the consistency predicates. *)
   axsimpConsistent s2_ex
@@ -255,7 +270,7 @@ let ~{ocaml} incConsistent (pre, wit, rel) =
   exists s. 
   incTrace pre (incInitialState pre) s &&
   s.incWit = wit &&
-  s.incCommitted = pre.actions
+  incCommittedSet s = pre.actions
 
 
 
@@ -274,35 +289,38 @@ let inline (>>) m1 m2 = Nondeterminism.bindExhaustive m1 (fun _ -> m2)
 
 (* Auxiliaries *)
 
-val sameLocWrites: set action -> action -> set action
+val sameLocWrites: list action -> action -> list action
 let sameLocWrites actions a =
-  {b | forall (b IN actions) | is_write b && loc_of b = loc_of a}
+  [b | forall (b MEM actions) | is_write b && loc_of b = loc_of a]
 
-val sameLocLocksUnlocks: set action -> action -> set action
+val sameLocLocksUnlocks: list action -> action -> list action
 let sameLocLocksUnlocks actions a =
-  {b | forall (b IN actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a}
+  [b | forall (b MEM actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a]
 
-val scActions: set action -> set action
+val scActions: list action -> list action
 let scActions actions =
-  {b | forall (b IN actions) | is_seq_cst b}
+  [b | forall (b MEM actions) | is_seq_cst b]
 
 (* Methods for updating the execution witness *)
 
-val addToTransitiveOrder: set action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
+val addToTransitiveOrder: list action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
 let addToTransitiveOrder domain a r =
   Nondeterminism.mplus
   (* We insert the action before all other actions *)
-  (Nondeterminism.return (Set.(union) r {(a, b) | forall (b IN domain) | true}))
+  (Nondeterminism.return (Set.(union) r (Set.fromList [(a, b) | forall (b MEM domain) | true])))
   (* We choose an action, and insert 'a' directly after it *)
-  (Nondeterminism.pick (Set_extra.toList domain) >>= fun b ->
-    let prev = {(c, a) | forall (c IN domain) | (c, b) IN r} in
-    let succ = {(a, c) | forall (c IN domain) | (b, c) IN r} in
-    Nondeterminism.return (Set.(union) r (Set.insert (b, a) (Set.(union) prev succ))))
+  (Nondeterminism.pick domain >>= fun b ->
+    let prev = [(c, a) | forall (c MEM domain) | (c, b) IN r] in
+    let succ = [(a, c) | forall (c MEM domain) | (b, c) IN r] in
+    Nondeterminism.return (Set.(union) r 
+                                       (Set.insert (b, a) 
+                                                   (Set.(union) (Set.fromList prev) 
+                                                                (Set.fromList succ)))))
 
 val monAddToMo: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
 let monAddToMo pre a s =
-  let prev = {(b, a) | forall (b IN sameLocWrites s.incCommitted a) | true} in
-  Nondeterminism.return (Set.(union) s.incWit.mo prev)
+  let prev = [(b, a) | forall (b MEM sameLocWrites s.incCommitted a) | true] in
+  Nondeterminism.return (Set.(union) s.incWit.mo (Set.fromList prev))
 
 val auxAddPairToRf: set (action * action) -> action -> action -> 
                     (cvalue -> cvalue -> bool) ->
@@ -336,7 +354,7 @@ let auxAddToRfLoad pre a s eq =
   (Nondeterminism.return (s.incWit.rf, Nothing))
   (* We add an rf-edge. *)
   (Nondeterminism.pick 
-    (Set_extra.toList (sameLocWrites s.incCommitted a)) 
+    (sameLocWrites s.incCommitted a) 
     >>= fun w ->
     auxAddPairToRf s.incWit.rf w a eq)
 
@@ -355,13 +373,12 @@ val auxAddToRfRmw: pre_execution -> action -> incState ->
                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
 let auxAddToRfRmw pre a s eq =
   let mo_actions = sameLocWrites s.incCommitted a in
-  if mo_actions = {} then
+  if List.null mo_actions then
     Nondeterminism.return (s.incWit.rf, Nothing)
   else
     Nondeterminism.pick 
-      (Set_extra.toList 
-        {w | forall (w IN mo_actions) 
-           | forall (c IN mo_actions). (w, c) NIN s.incWit.mo})
+        [w | forall (w MEM mo_actions) 
+           | forall (c MEM mo_actions). (w, c) NIN s.incWit.mo]
     >>= fun w ->
     auxAddPairToRf s.incWit.rf w a eq    
 
@@ -390,7 +407,7 @@ let monCheckWitRestrict new_wit committed old_wit =
   Nondeterminism.guard (incWitRestrict new_wit committed = old_wit) 
            (Nondeterminism.Error "\"witnessRestrict new committed = old\" should hold by construction.")
 
-val monCheckCommitmentOrder: set action -> candidate_execution -> set action
+val monCheckCommitmentOrder: set action -> candidate_execution -> list action
                              -> action -> Nondeterminism.t unit
 let monCheckCommitmentOrder actions (pre, wit, rel) committed a = 
   let order = incCom (pre, wit, rel) in
@@ -465,7 +482,8 @@ val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
 let monStep pre s =
 
   let uncommitted_actions = 
-    Set_extra.toList (Set.difference pre.actions s.incCommitted) in
+    [a | forall (a MEM Set_extra.toList pre.actions) | not (a MEM s.incCommitted)] in
+    (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
   Nondeterminism.pick uncommitted_actions >>= fun a ->
 
   match a with
@@ -480,14 +498,14 @@ let monStep pre s =
   | Dealloc _ _ _     -> Nondeterminism.kill (Nondeterminism.Error "Deallocs not supported")
   end                         >>= fun new_wit ->
 
-  let new_committed = Set.insert a s.incCommitted in
-  let new_pre = preRestrict pre new_committed in
+  let new_committed = a::s.incCommitted in
+  let new_pre = preRestrict pre (Set.fromList new_committed) in
   let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
 
   (* TODO: break down the consistency predicates in stepwise predicates *)
   (* monCheckConsistency new_ex                          >> *)
   (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
+  monCheckWitRestrict new_wit (incCommittedSet s) s.incWit >>
 
   monCheckCommitmentOrder pre.actions new_ex s.incCommitted a     >>
 
@@ -528,7 +546,7 @@ let standardEqualityCvalue left right =
 type symState =
 <| symPre:            pre_execution; 
    symWit:            execution_witness;
-   symCommitted:      set action;
+   symCommitted:      list action;
    symEqualityCvalue: equalityCvalue;
    symUndefinedness:  list undefinedness;
 |>
@@ -537,7 +555,7 @@ instance (Show symState)
   let show state =
     "(pre_ex: " ^ show (Set.map aid_of state.symPre.actions) ^  
     ", wit: " ^ show state.symWit ^
-    ", committed: " ^ show (Set.map aid_of state.symCommitted) ^ 
+    ", committed: " ^ show (List.map aid_of state.symCommitted) ^ 
     ", eq: " ^ "TODO" ^ ")"
 end
 
@@ -558,7 +576,7 @@ val symInitialState: pre_execution -> symState
 let symInitialState pre = 
   <| symPre = pre;
      symWit = empty_witness;
-     symCommitted = {};
+     symCommitted = [];
      symEqualityCvalue = initialEqualityCvalue;
      (* TODO: not true! *)
      symUndefinedness = [];
