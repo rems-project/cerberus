@@ -2494,17 +2494,6 @@ using assms
 unfolding monInvariant_def
 by simp
 
-(*
-lemma monInvariantE_incCommittedFinite [elim]:
-  assumes "monInvariant pre s"
-  obtains "finite (incCommitted s)"
-proof -
-  have "incCommitted s \<subseteq> actions0 pre" "finite (actions0 pre)"
-    using assms by auto
-  thus ?thesis using that finite_subset by auto
-qed
-*)
-
 subsection {* Elims of auxiliaries *}
 
 abbreviation "sameLocWritesSet actions a \<equiv> set (sameLocWrites actions a)"
@@ -2521,12 +2510,6 @@ lemma setFoldr_map_simp [simp]:
          = f ` (set l)"
 by (induct l) auto
 
-lemma setSameLocWrites_simp:
-  shows "  set (sameLocWrites actions a) 
-         = {x. x \<in> set actions \<and> is_write x \<and> loc_of x = loc_of a}"
-unfolding sameLocWrites_def
-by simp
-
 lemma sameLocWritesE [elim]:
   assumes "x \<in> set (sameLocWrites actions a)"
   obtains "x \<in> set actions" "is_write x" "loc_of x = loc_of a"
@@ -2534,33 +2517,12 @@ using assms
 unfolding sameLocWrites_def
 by auto
 
-(*
-lemma sameLocWrites_finite:
-  assumes "finite actions"
-  obtains "finite (sameLocWrites actions a)"
-using assms
-unfolding sameLocWrites_def
-by auto
-*)
-
-lemma setSameLocLocksUnlocks_simp:
-  shows "  set (sameLocLocksUnlocks actions a) 
-         = {x. x \<in> set actions \<and> (is_lock x \<or> is_unlock x) \<and> loc_of x = loc_of a}"
-unfolding sameLocLocksUnlocks_def
-by simp
-
 lemma sameLocLocksUnlocksE [elim]:
   assumes "x \<in> set (sameLocLocksUnlocks actions a)"
   obtains "x \<in> set actions" "is_lock x \<or> is_unlock x" "loc_of x = loc_of a"
 using assms
 unfolding sameLocLocksUnlocks_def
 by auto
-
-lemma setScActions_simp:
-  shows "  set (scActions actions) 
-         = {x. x \<in> set actions \<and> is_seq_cst x}"
-unfolding scActions_def
-by simp
 
 lemma scActionsE [elim]:
   assumes "x \<in> set (scActions actions)"
@@ -2595,7 +2557,7 @@ by (cases "value_read_by r", auto)
 lemma auxAddToRfLoadE [elim?]:
   assumes step: "(rel, v) [\<in>] auxAddToRfLoad pre a s eq"
       and inv:  "monInvariant pre s"
-  obtains w where "w \<in> set (sameLocWrites (incCommitted s) a)" 
+  obtains w where "w \<in> sameLocWritesSet (incCommitted s) a" 
                   "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
         | "rel = rf (incWit s)"
 proof (cases "rel = rf (incWit s)")
@@ -2603,7 +2565,7 @@ proof (cases "rel = rf (incWit s)")
   thus ?thesis using that by metis
 next
   case False
-  then obtain w where w: "w \<in> set (sameLocWrites (incCommitted s) a)"
+  then obtain w where w: "w \<in> sameLocWritesSet (incCommitted s) a"
                          "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
     using step 
     unfolding auxAddToRfLoad_def
@@ -2614,7 +2576,7 @@ qed
 lemma monAddToRfLoadE [elim?]:
   assumes step: "rel [\<in>] monAddToRfLoad pre a s"
       and inv:  "monInvariant pre s"
-  obtains w v where "w \<in> set (sameLocWrites (incCommitted s) a)" 
+  obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
                     "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
         | "rel = rf (incWit s)"
 proof -
@@ -2630,8 +2592,8 @@ qed
 lemma auxAddToRfRmwE [elim?]:
   assumes step: "(rel, v) [\<in>] auxAddToRfRmw pre a s eq"
       and inv:  "monInvariant pre s"
-  obtains w where "w \<in> set (sameLocWrites (incCommitted s) a)"
-                  "\<forall>w' \<in> set (sameLocWrites (incCommitted s) a). (w, w') \<notin> mo (incWit s)"
+  obtains w where "w \<in> sameLocWritesSet (incCommitted s) a"
+                  "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                   "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
         | "sameLocWrites (incCommitted s) a = []"
           "rel = rf (incWit s)"
@@ -2641,8 +2603,8 @@ proof (cases "sameLocWrites (incCommitted s) a = []")
     using step that unfolding auxAddToRfRmw_def by auto
 next
   case False
-  then obtain w where w: "w \<in> set (sameLocWrites (incCommitted s) a)"
-                         "\<forall>w' \<in> set (sameLocWrites (incCommitted s) a). (w, w') \<notin> mo (incWit s)"
+  then obtain w where w: "w \<in> sameLocWritesSet (incCommitted s) a"
+                         "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                          "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
     using step False
     unfolding auxAddToRfRmw_def Let_def
@@ -2653,8 +2615,8 @@ qed
 lemma monAddToRfRmwE [elim?]:
   assumes step: "rel [\<in>] monAddToRfRmw pre a s"
       and inv:  "monInvariant pre s"
-  obtains w v where "w \<in> set (sameLocWrites (incCommitted s) a)" 
-                    "\<forall>w' \<in> set (sameLocWrites (incCommitted s) a). (w, w') \<notin> mo (incWit s)"
+  obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
+                    "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                     "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
         | "sameLocWrites (incCommitted s) a = []"
           "rel = rf (incWit s)"
@@ -3565,6 +3527,7 @@ proof (intro disjCI)
   thus "(b, c) \<in> rf wit" using wit by simp
 qed  
 
+(*
 lemma step_rf_aux2:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
       and downclosed: "downclosed committed (rf wit')"
@@ -3586,7 +3549,7 @@ next
     using step_rf_aux[OF cons2 downclosed wit committed a bc_in_rf2] .
   thus "c = a" using bc_nin_rf1 by simp
   thus "b = w" using bc_in_rf2 cons2 in_rf by auto
-qed
+qed *)
 
 lemma step_rf_non_read:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
@@ -3610,60 +3573,94 @@ next
   thus "(b, c) \<in> rf wit" using `a \<noteq> c` by simp
 qed
 
-(*
+lemma step_rf_auxAddPairToRf:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and downclosed: "downclosed (set committed) (rf wit')"
+      and wit:        "wit = incWitRestrict wit' (set committed)"
+      and committed:  "actions0 pre' = insert a (set committed)"
+      and a:          "a \<notin> (set committed)"
+      and in_rf:      "(w, a) \<in> rf wit'"
+  obtains value0
+          where "w \<in> sameLocWritesSet committed a"
+                "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf wit) w a op ="
+proof -
+  have "is_write w" using in_rf cons2 by auto
+  then obtain value_w where value_w: "value_written_by w = Some value_w"
+    by (cases w) auto
+  have "is_read a" using in_rf cons2 by auto
+  then obtain value_a where value_a: "value_read_by a = Some value_a"
+    by (cases a) auto
+  have "value_read_by a = value_written_by w"
+    using in_rf cons2 
+    (* For some reason, auto can't find the proof unless we increase the bounds, or unfold the
+    definition. *)  
+    unfolding axsimpConsistentAlt_def 
+    by auto
+  hence "value_w = value_a"
+    using value_w value_a by auto
+  have "rf wit' = insert (w, a) (rf wit)"
+    using in_rf
+    proof auto
+      fix b c
+      assume "(b, c) \<in> rf wit"
+      thus "(b, c) \<in> rf wit'" using wit by auto
+    next
+      fix b c
+      assume bc_in_rf2:  "(b, c) \<in> rf wit'"
+         and bc_nin_rf1: "(b, c) \<notin> rf wit"
+      have "(b, c) \<in> rf wit \<or> (c = a)"
+        using step_rf_aux[OF cons2 downclosed wit committed a bc_in_rf2] .
+      thus "c = a" using bc_nin_rf1 by simp
+      thus "b = w" using bc_in_rf2 cons2 in_rf by auto
+    qed
+  hence inAddPair: "(rf wit', Some (value_w, value_w)) [\<in>] auxAddPairToRf (rf wit) w a op ="
+    using value_w value_a `value_w = value_a`
+    unfolding auxAddPairToRf_def
+    by simp
+  have "w \<in> actions0 pre'" "w \<noteq> a"
+    using in_rf cons2 
+    apply (metis axsimpConsistentE well_formed_rfE)
+    using in_rf cons2 
+    by (metis axsimpConsistentE irreflRf)
+  hence "w \<in> set committed" using committed by auto
+  hence "w \<in> sameLocWritesSet committed a"
+    unfolding sameLocWritesSet_def
+    using in_rf cons2
+    by auto
+  thus thesis
+    using that inAddPair by metis
+qed
+
 lemma step_rf_load:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
-      and downclosed: "downclosed (incCommitted s) (rf wit')"
-      and wit:        "incWit s = incWitRestrict wit' (incCommitted s)"
-      and committed:  "actions0 pre' = insert a (incCommitted s)"
-      and a:          "is_load a" "a \<in> actions0 pre'" "a \<notin> (incCommitted s)"
+      and downclosed: "downclosed (incCommittedSet s) (rf wit')"
+      and wit:        "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:  "actions0 pre' = insert a (incCommittedSet s)"
+      and a:          "is_load a" "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
   shows               "rf wit' [\<in>] monAddToRfLoad pre a s"
-unfolding monAddToRfLoad_def auxAddToRfLoad_def
-proof auto
-  fix b c
-  assume "(b, c) \<in> rf wit"
-  thus "(b, c) \<in> rf wit'" using wit by auto
-next
-  fix b c
-  assume in_rf:  "(b, c) \<in> rf wit'"
-     and no_vse: "     \<forall>w\<in>actions0 pre. is_write w
-                   \<longrightarrow> (w, a) \<in> EquivalenceMinimalOpsem.getHb pre wit'
-                   \<longrightarrow> loc_of w \<noteq> loc_of a"
-  have "det_read_op (incCommitted s') (pre, wit', getRelations pre wit')"
-    using cons2 unfolding exIsConsistent_op_def by simp
-  hence "  (\<exists>w\<in>actions0 pre. (w, a) \<in> getHb pre wit' \<and> is_write w \<and> loc_of w = loc_of a) 
-         = (\<exists>w'\<in>actions0 pre. (w', a) \<in> rf wit')"
-    using a incCommitted 
-    apply simp
-    unfolding det_read_op.simps 
+proof (cases "rf wit' = rf (incWit s)")
+  case True
+  thus ?thesis
+    unfolding monAddToRfLoad_def auxAddToRfLoad_def
     by auto
-  hence no_rf: "\<forall>w\<in>actions0 pre. (w, a) \<notin> rf wit'"
-    using no_vse by auto    
-  have "b \<in> actions0 pre" using well_formed_rf_aux[OF cons2 in_rf] by simp
-  hence "(b, a) \<notin> rf wit'" using no_rf by simp
-  hence "c \<noteq> a" using in_rf by auto
-  have "(b, c) \<in> rf wit \<or> (c = a)"
-    using step_rf_aux[OF cons1 cons2 order wit incCommitted in_rf] .
-  thus "(b, c) \<in> rf wit" using `c \<noteq> a` by simp
 next
-  fix w'
-  assume "w' \<in> actions0 pre" 
-         "(w', a) \<in> getHb pre wit'"
-         "is_write w'" "loc_of w' = loc_of a"
-  hence "\<exists>w. (w, a) \<in> rf wit'" using det_read_aux[OF cons2] a incCommitted by auto
-  then obtain w where w_in_rf: "(w, a) \<in> rf wit'" by fast
-  have w: "w \<in> actions0 pre \<and> w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
-            value_written_by w = value_read_by a"
-    using well_formed_rf_aux[OF cons2 w_in_rf] incCommitted by auto
-  have "rf wit' = insert (w, a) (rf wit)"
-    using step_rf_aux2[OF cons1 cons2 order wit incCommitted w_in_rf] .
-  thus "\<exists>w\<in>actions0 pre. w \<in> incCommitted s \<and> is_write w \<and> loc_of w = loc_of a \<and> 
-        value_written_by w = value_read_by a \<and> 
-        rf wit' = insert (w, a) (rf wit)"
-     using w by auto
+  case False
+  have "rf (incWit s) \<subseteq> rf wit'"
+    using wit by auto
+  then obtain x y where "(x, y) \<in> rf wit'" "(x, y) \<notin> rf (incWit s)"
+    using False by auto
+  hence "(x, a) \<in> rf wit'"
+    using step_rf_aux[OF cons2 downclosed wit committed a(3)]
+    by auto
+  then obtain value0 
+        where "x \<in> sameLocWritesSet (incCommitted s) a"
+              "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf (incWit s)) x a op ="
+    using step_rf_auxAddPairToRf[OF cons2 downclosed wit committed a(3)]
+    by auto
+  thus ?thesis
+    unfolding monAddToRfLoad_def auxAddToRfLoad_def
+    by auto
 qed
-*)
-
 
 
 

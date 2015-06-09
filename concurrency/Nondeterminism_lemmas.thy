@@ -115,4 +115,11 @@ lemma member_if [simp]:
   shows "x [\<in>] (if b then m1 else m2) = (if b then x [\<in>] m1 else x [\<in>] m2)"
 by auto
 
+(* I don't know how to treat all the "case of" at once. The following only proves what I want in
+   case of the option type. *)
+lemma member_cases_maybe [simp]:
+  shows "  x [\<in>] (case w of None \<Rightarrow> m1 | Some v \<Rightarrow> m2 v) 
+         = (case w of None \<Rightarrow> x [\<in>] m1 | Some v \<Rightarrow> x [\<in>] m2 v)"
+by (cases w) auto
+
 end
