@@ -3855,8 +3855,7 @@ proof -
 
       let ?sc_set2 = "{x. (x, a) \<in> sc wit'}"
   
-      have "b' \<in> actions0 pre'" using cons2 b' by auto
-      hence "b' \<in> ?sc_set2" using b' by simp
+      have "b' \<in> ?sc_set2" using b' by simp
       hence non_empty: "?sc_set2 \<noteq> {}" by fast
       have "finite_prefixes (sc wit') (actions0 pre')"
         using cons2 by auto
@@ -3957,5 +3956,187 @@ next
     using step_sc_isnot_sc[OF cons2 wit committed] a by simp
 qed
 
+subsubsection {* lo-order *}
+
+lemma step_lo_not_lock_unlock:
+  assumes cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed: "actions0 pre' = insert a (incCommittedSet s)"
+      and a:         "a \<notin> incCommittedSet s \<and> \<not>is_lock a \<and> \<not>is_unlock a"
+  shows              "lo wit' = lo (incWit s)"
+proof (intro equalityI subsetI, auto)
+  fix b c
+  assume "(b, c) \<in> lo (incWit s)"
+  thus "(b, c) \<in> lo wit'" using wit by simp
+next
+  fix b c
+  assume in_lo: "(b, c) \<in> lo wit'"
+  have "(is_lock b \<or> is_unlock b)" "b \<in> actions0 pre'" 
+       "(is_lock c \<or> is_unlock c)" "c \<in> actions0 pre'"
+    using cons2 in_lo by auto
+  hence "b \<in> incCommittedSet s" "c \<in> incCommittedSet s"
+     using cons2 a in_lo committed by auto
+  thus "(b, c) \<in> lo (incWit s)"
+    using cons2 wit committed in_lo by auto
+qed
+
+
+lemma step_lo_lock_unlock:
+  assumes cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed: "actions0 pre' = insert a (incCommittedSet s)"
+      and a:         "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and is_lo_ulo: "is_lock a \<or> is_unlock a"
+  shows              "lo wit' [\<in>] monAddToLo pre a s"
+(* TODO: this lemma is an almost-clone of step_sc_is_sc. *)
+unfolding monAddToLo_def
+proof -
+  let ?lo_list = "sameLocLocksUnlocks (incCommitted s) a"
+  let ?lo_set  = "sameLocLocksUnlocksSet (incCommitted s) a"
+  have "actions_respect_location_kinds (actions0 pre') (lk pre')"
+    using cons2 by auto
+  hence mutex: "is_at_mutex_location (lk pre') a"
+    unfolding actions_respect_location_kinds_def is_at_mutex_location_def
+    using a is_lo_ulo by (cases a) auto
+  show "lo wit' [\<in>] addToTransitiveOrder ?lo_list a (lo (incWit s))"
+    proof (cases "\<exists>b. (b, a) \<in> lo wit'")
+      assume max: "\<not> (\<exists>b. (b, a) \<in> lo wit')"
+      have "lo wit' = lo (incWit s) \<union> Pair a ` ?lo_set"
+        proof auto
+          fix c
+          assume "c \<in> sameLocLocksUnlocksSet (incCommitted s) a"
+          hence c: "c \<in> incCommittedSet s" 
+                   "loc_of a = loc_of c" 
+                   "is_lock c \<or> is_unlock c" 
+                   "c \<in> actions0 pre'"
+            using committed by auto
+          hence "a \<noteq> c" using a by auto
+          have "(c, a) \<notin> lo wit'" using max by auto
+          thus "(a, c) \<in> lo wit'"
+            using cons2 a(1) c is_lo_ulo `a \<noteq> c` mutex by auto
+          fix c
+        next
+          fix b c
+          assume "(b, c) \<in> lo (incWit s)"
+          thus "(b, c) \<in> lo wit'" using wit by simp
+        next
+          fix b c
+          assume in_lo: "(b, c) \<in> lo wit'"
+             and not_new: "(b, c) \<notin> Pair a ` ?lo_set"
+          have "c \<noteq> a" using in_lo max by auto
+          have c: "loc_of b = loc_of c" "is_lock c \<or> is_unlock c"
+                  "c \<in> actions0 pre'" "b \<in> actions0 pre'"
+            using cons2 in_lo by auto
+          hence "c \<in> incCommittedSet s"
+            using `c \<noteq> a` committed by auto
+          hence "b \<noteq> a \<or> loc_of c \<noteq> loc_of a"
+            using not_new
+            unfolding sameLocLocksUnlocksSet_def
+            using c by auto
+          hence "b \<noteq> a" using c by auto
+          hence "b \<in> incCommittedSet s"
+            using committed `b \<in> actions0 pre'` by auto          
+          thus "(b, c) \<in> lo (incWit s)" 
+            using wit in_lo `c \<in> incCommittedSet s` by auto
+        qed
+      thus ?thesis unfolding addToTransitiveOrder_def by auto
+    next
+      assume "\<exists>b'. (b', a) \<in> lo wit'"
+      then obtain b' where b': "(b', a) \<in> lo wit'" by fast
+
+      let ?lo_set2 = "{x. (x, a) \<in> lo wit'}"
+  
+      have "b' \<in> ?lo_set2" using b' by simp
+      hence non_empty: "?lo_set2 \<noteq> {}" by fast
+      hence "finite_prefixes (lo wit') (actions0 pre')"
+        using cons2 by auto
+      hence finite: "finite ?lo_set2"
+        unfolding finite_prefixes_def using a by fast
+      hence irreflexive: "irrefl (lo wit')"
+      and   transitive:  "trans (lo wit')"
+        using cons2 by auto 
+      hence isOrder: "isStrictPartialOrder (lo wit')" 
+        unfolding isStrictPartialOrder_def by simp
+      obtain b where b:   "b \<in> ?lo_set2"
+                 and max: "(\<forall>y. y \<in> ?lo_set2 \<longrightarrow> (b, y) \<notin> lo wit')"
+        using supremum_partial_order[OF finite non_empty isOrder] by auto
+      have b2: "b \<in> actions0 pre'" using b cons2 by auto
+      hence b3: "b \<in> incCommittedSet s" "b \<noteq> a" "loc_of b = loc_of a" 
+               "is_lock b \<or> is_unlock b" "is_at_mutex_location (lk pre') b"
+        using b cons2 unfolding committed by auto
+
+      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> ?lo_set. (x, b) \<in> lo (incWit s)}"
+      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> ?lo_set. (b, x) \<in> lo (incWit s)}"
+
+      have "lo (incWit s) \<subseteq> lo wit'" using wit by auto 
+      moreover have "?prev \<subseteq> lo wit'" 
+        proof clarify
+          fix c
+          assume "(c, b) \<in> lo (incWit s)"
+          hence "(c, b) \<in> lo wit'" using wit by auto
+          thus "(c, a) \<in> lo wit'" using transitive b transE by auto
+        qed
+      moreover have "?succ \<subseteq> lo wit'"
+        proof auto
+          fix c
+          assume sameLoc: "c \<in> sameLocLocksUnlocksSet (incCommitted s) a"
+          assume in_sc: "(b, c) \<in> lo (incWit s)"
+          hence c: "c \<in> actions0 pre'" 
+                   "c \<in> incCommittedSet s" 
+                   "loc_of a = loc_of c" 
+                   "is_lock c \<or> is_unlock c"
+            using cons2 wit a sameLoc by auto
+          have "(b, c) \<in> lo wit'" using in_sc wit by auto
+          hence "(c, a) \<notin> lo wit'" using max c by auto
+          thus "(a, c) \<in> lo wit'" 
+            using sameLoc cons2 c a is_lo_ulo mutex by auto
+        qed
+      moreover have "lo wit' \<subseteq> lo (incWit s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
+        proof auto
+          fix c d
+          assume in_lo2: "(c, d) \<in> lo wit'"
+             and nin_lo1: "(c, d) \<notin> lo (incWit s)"
+             and nin_prev: "(c, d) \<notin> ?prev"
+             and nin_succ: "(c, d) \<notin> ?succ"
+          have d: "d \<in> actions0 pre'" "d \<noteq> c" 
+                  "loc_of c = loc_of d" "is_lock d \<or> is_unlock d"
+            using cons2 in_lo2 by auto
+          have c: "c \<in> actions0 pre'" "d \<noteq> c" 
+                  "loc_of c = loc_of d" "is_lock c \<or> is_unlock c"
+            using cons2 in_lo2 by auto
+          have "c \<noteq> a"
+            proof
+              assume "c = a"
+              hence d2: "d \<in> incCommittedSet s" using d committed by simp
+              have "(b, d) \<in> lo wit'" 
+                using transE[OF transitive] b in_lo2 `c = a` by auto
+              hence "(b, d) \<in> lo (incWit s)" using b3 d2 wit by auto
+              hence "(c, d) \<in> ?succ" 
+                unfolding sameLocLocksUnlocksSet_def
+                using d d2 `c = a` 
+                by auto
+              thus False using nin_succ by simp
+            qed
+          hence c2: "c \<in> incCommittedSet s" using c committed by auto
+          thus "d = a" 
+            using d committed in_lo2 nin_lo1 wit by auto
+          have bc_nin_lo: "(b, c) \<notin> lo wit'" using max c in_lo2 `d = a` by simp
+          have loc: "loc_of b = loc_of c" using b3 c `d = a` by auto
+          have "(c, b) \<notin> lo (incWit s)"
+            using nin_prev `d = a` c c2
+            unfolding sameLocLocksUnlocksSet_def 
+            by auto
+          hence "(c, b) \<notin> lo wit'" using b3 c2 wit by auto
+          thus "c = b" 
+            using cons2 bc_nin_lo b2 b3(4) b3(5) c(1) c(4) loc by auto
+        qed
+      ultimately have "lo wit' = lo (incWit s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
+        using b by auto             
+      thus ?thesis
+        using b b3 
+        unfolding addToTransitiveOrder_def sameLocLocksUnlocksSet_def Let_def
+        by auto
+    qed
+qed
 
 end

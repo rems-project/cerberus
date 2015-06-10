@@ -1270,6 +1270,24 @@ proof -
     by auto
 qed
 
+lemma locks_only_consistent_loE2_inv [elim]:
+  assumes "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
+      and "a \<in> actions0 pre"
+      and "b \<in> actions0 pre"
+      and "a \<noteq> b"
+      and "loc_of a = loc_of b" 
+      and "is_lock a \<or> is_unlock a"
+      and "is_lock b \<or> is_unlock b"
+      and "is_at_mutex_location (lk pre) a"
+      and "(b, a) \<notin> lo wit"
+  obtains "(a, b) \<in> lo wit" 
+proof -
+  show ?thesis
+    using assms that
+    unfolding locks_only_consistent_lo.simps
+    by auto
+qed
+
 lemma rel_list_locks_only_consistent_lo [simp]:
   assumes "rel \<noteq> []"
   shows   "  locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel) 
@@ -1979,7 +1997,7 @@ proof -
     by auto
 qed
 
-lemma sc_accesses_consistent_inv [elim]:
+lemma sc_accesses_consistent_scE2_inv [elim]:
   assumes "sc_accesses_consistent_sc (pre, wit, (''hb'', hb)#rel)"
       and "a \<in> actions0 pre"
       and "b \<in> actions0 pre"
