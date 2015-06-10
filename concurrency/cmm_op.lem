@@ -425,8 +425,8 @@ let monPerformLoad pre s a =
    else
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
   monAddToRfLoad pre a s       >>= fun new_rf ->
-  let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; rf = new_rf; |>)
 
 val monPerformStore: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformStore pre s a =
@@ -438,8 +438,8 @@ let monPerformStore pre s a =
      monAddToMo pre a s
    else
      Nondeterminism.return s.incWit.mo)    >>= fun new_mo ->
-  let new_wit = <| s.incWit with sc = new_sc; mo = new_mo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; mo = new_mo; |>)
 
 val monPerformRmw: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformRmw pre s a =
@@ -449,25 +449,20 @@ let monPerformRmw pre s a =
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
   monAddToRfRmw pre a s        >>= fun new_rf ->
   monAddToMo pre a s           >>= fun new_mo ->
-  let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; mo = new_mo; |> in
-  Nondeterminism.return new_wit
-
-val monPerformBlocked_rmw: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
-let monPerformBlocked_rmw pre s a =
-  let new_wit = s.incWit in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; rf = new_rf; mo = new_mo; |>)
 
 val monPerformLock: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformLock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
-  let new_wit = <| s.incWit with lo = new_lo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with lo = new_lo; |>)
 
 val monPerformUnlock: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformUnlock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
-  let new_wit = <| s.incWit with lo = new_lo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with lo = new_lo; |>)
 
 val monPerformFence: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformFence pre s a =
@@ -475,8 +470,22 @@ let monPerformFence pre s a =
      monAddToSc pre a s
    else
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
-  let new_wit = <| s.incWit with sc = new_sc; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; |>)
+
+val monPerformAction: pre_execution -> incState -> action  -> Nondeterminism.t execution_witness
+let monPerformAction pre s a =
+  match a with
+  | Lock _ _ _ _      -> monPerformLock pre s a
+  | Unlock _ _ _      -> monPerformUnlock pre s a
+  | Load _ _ _ _ _    -> monPerformLoad pre s a
+  | Store _ _ _ _ _   -> monPerformStore pre s a
+  | RMW _ _ _ _ _ _   -> monPerformRmw pre s a
+  | Fence _ _ _       -> monPerformFence pre s a
+  | Blocked_rmw _ _ _ -> Nondeterminism.return s.incWit
+  | Alloc _ _ _       -> Nondeterminism.return s.incWit
+  | Dealloc _ _ _     -> Nondeterminism.return s.incWit
+  end
 
 val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
 let monStep pre s =
@@ -486,17 +495,7 @@ let monStep pre s =
     (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
   Nondeterminism.pick uncommitted_actions >>= fun a ->
 
-  match a with
-  | Lock _ _ _ _      -> monPerformLock pre s a
-  | Unlock _ _ _      -> monPerformUnlock pre s a
-  | Load _ _ _ _ _    -> monPerformLoad pre s a
-  | Store _ _ _ _ _   -> monPerformStore pre s a
-  | RMW _ _ _ _ _ _   -> monPerformRmw pre s a
-  | Fence _ _ _       -> monPerformFence pre s a
-  | Blocked_rmw _ _ _ -> monPerformBlocked_rmw pre s a
-  | Alloc _ _ _       -> Nondeterminism.kill (Nondeterminism.Error "Allocs not supported")
-  | Dealloc _ _ _     -> Nondeterminism.kill (Nondeterminism.Error "Deallocs not supported")
-  end                         >>= fun new_wit ->
+  monPerformAction pre s a >>= fun new_wit ->
 
   let new_committed = a::s.incCommitted in
   let new_pre = preRestrict pre (Set.fromList new_committed) in

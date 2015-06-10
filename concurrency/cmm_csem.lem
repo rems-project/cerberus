@@ -2206,6 +2206,26 @@ let {hol; isabelle; tex} sc_fenced_behaviour opsem (p : program) =
 (* 11 - with consume *)
 (*********************************************** *)
 
+val with_consume_condition : forall. condition_t
+
+(* For backward compatibility we inline "true_condition" for non-csem
+   users. *)
+
+let with_consume_condition (Xs:set candidate_execution) = (* CSEM *)
+  forall ((Xo,Xw,rl) IN Xs).                              (* CSEM *)
+    forall (a IN Xo.actions).                             (* CSEM *)
+      match a with                                        (* CSEM *)
+      | Lock _ _ _ _            -> true                   (* CSEM *)
+      | Unlock _ _ _            -> true                   (* CSEM *)
+      | Load _ _ mo _ _         -> true                   (* CSEM *)
+      | Store _ _ mo _ _        -> true                   (* CSEM *)
+      | RMW _ _ mo _ _ _        -> true                   (* CSEM *)
+      | Fence _ _ mo            -> true                   (* CSEM *)
+      | Blocked_rmw _ _ _       -> true                   (* CSEM *)
+      | Alloc _ _ _             -> false                  (* CSEM *)
+      | Dealloc _ _ _           -> false                  (* CSEM *)
+      end                                                 (* CSEM *)
+
 let with_consume_cad_set actions sb dd rf = transitiveClosure ( (rf inter sb) union dd )
 
 val with_consume_cad_set_alt: pre_execution -> execution_witness -> set (action * action)
@@ -2343,7 +2363,7 @@ let with_consume_memory_model =
 
 val with_consume_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} with_consume_behaviour opsem (p : program) =
-  behaviour with_consume_memory_model true_condition opsem p
+  behaviour with_consume_memory_model with_consume_condition opsem p
 
 
 
@@ -2458,7 +2478,7 @@ let standard_memory_model =
 
 val standard_behaviour : forall. opsem_t -> program -> program_behaviours
 let {hol; isabelle; tex} standard_behaviour opsem (p : program) =
-  behaviour standard_memory_model true_condition opsem p
+  behaviour standard_memory_model with_consume_condition opsem p
 
 
 
