@@ -1,3 +1,4 @@
+(*<*)
 theory Cmm_op_proofs
 
 imports
@@ -6,10 +7,11 @@ Main
 Cmm_master_lemmas
 Nondeterminism_lemmas  
 begin
+(*>*)
 
 section {* The axiomatic model *}
 
-abbreviation "sublanguage \<equiv> true_condition"
+abbreviation "sublanguage \<equiv> with_consume_condition"
 abbreviation "memory_model \<equiv> standard_memory_model"
 abbreviation "axBehaviour \<equiv> standard_behaviour"
 abbreviation "axUndefined \<equiv> locks_only_undefined_behaviour_alt"
@@ -19,7 +21,7 @@ abbreviation "getVse \<equiv> with_consume_vse"
 abbreviation "axConsistent ex \<equiv> apply_tree standard_consistent_execution ex"
 abbreviation "axConsistentAlt pre wit \<equiv> axConsistent (pre, wit, getRelations pre wit)"
 
-lemmas sublanguage_def = true_condition_def
+lemmas sublanguage_def = with_consume_condition_def
 lemmas memory_model_def = with_consume_memory_model_def
 lemmas axBehaviour_def = standard_behaviour_def
 lemmas axUndefined_def = locks_only_undefined_behaviour_alt_def
@@ -2701,13 +2703,13 @@ unfolding monStep_def Let_def
 by auto
 
 lemmas monPerformActions_def = 
+  monPerformAction_def
   monPerformLock_def
   monPerformUnlock_def
   monPerformLoad_def
   monPerformStore_def
   monPerformRmw_def
   monPerformFence_def
-  monPerformBlocked_rmw_def
 
 subsubsection {* rf *}
 
@@ -3456,9 +3458,11 @@ subsubsection {* modification order *}
 
 lemma step_mo_not_atomic_write:
   assumes cons:      "axsimpConsistentAlt pre' wit'"
+      and wit:       "(incWit s) = incWitRestrict wit' committed"
       and committed: "actions0 pre' = insert a committed"
       and a:         "is_at_non_atomic_location (lk pre') a \<or> \<not> is_write a"
-  shows              "mo wit' = mo (incWitRestrict wit' committed)"
+  shows              "mo wit' = mo (incWit s)"
+unfolding wit
 proof auto
   fix b c
   assume in_mo: "(b, c) \<in> mo wit'"
@@ -4139,4 +4143,333 @@ proof -
     qed
 qed
 
+subsubsection {* tot-order *}
+
+lemma step_tot:
+  assumes cons2: "axsimpConsistentAlt pre' wit'"
+      and wit:   "incWit s = incWitRestrict wit' (incCommittedSet s)"
+  shows          "tot wit' = tot (incWit s)"
+proof -
+  have "tot wit' = {}"
+    using cons2 by auto
+  thus "tot wit' = tot (incWit s)"
+    using wit by auto
+qed
+
+subsubsection {* Perform action *}
+
+lemma completeness_monPerformLoad:
+  assumes cons2:      "axsimpConsistentAlt pre' wit'"
+      and wit:        "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:  "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed: "downclosed (incCommittedSet s) (rf wit')"
+      and a:          "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:         "is_load a"
+  shows               "wit' [\<in>] monPerformLoad pre s a"
+proof -
+  have "\<not> is_write a" using a2 by (cases a) auto
+  hence mo: "mo wit' = mo (incWit s)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
+  have rf: "rf wit' [\<in>] monAddToRfLoad pre a s"
+    using step_rf_load[OF cons2 downclosed wit committed] a a2 by simp
+  have sc: "if is_seq_cst a 
+            then sc wit' [\<in>] monAddToSc pre a s 
+            else sc wit' = sc (incWit s)"
+    using step_sc[OF cons2 wit committed] a by simp      
+  have "\<not>is_lock a \<and> \<not>is_unlock a" using a2 by (cases a) auto
+  hence lo: "lo wit' = lo (incWit s)" 
+    using step_lo_not_lock_unlock[OF cons2 wit committed] a by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformLoad_def
+    using cons2 rf mo lo sc tot
+    apply auto
+    (* TODO: don't know why auto can't figure this out. *)
+    apply (intro exI[where x="sc wit'"])
+    by auto
+qed   
+
+lemma completeness_monPerformStore:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_mo: "downclosed (incCommittedSet s) (mo wit')"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and lk:            "case loc_of a of None \<Rightarrow> true | Some v \<Rightarrow> (lk pre') v = (lk pre) v"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "is_store a"
+  shows                  "wit' [\<in>] monPerformStore pre s a"
+proof -
+  have mo: "if is_at_atomic_location (lk pre) a
+            then mo wit' [\<in>] monAddToMo pre a s 
+            else mo wit' = mo (incWit s)"
+    proof 
+      assume "is_at_atomic_location (lk pre) a"
+      hence loc: "is_at_atomic_location (lk pre') a"
+        unfolding is_at_atomic_location_def 
+        using lk
+        by (cases "loc_of a") auto
+      have "is_write a" using a2 by (cases a) auto
+      thus "mo wit' [\<in>] monAddToMo pre a s"
+        using loc step_mo_atomic_write[OF cons2 wit committed downclosed_mo] a a2
+        by simp
+    next
+      assume loc: "\<not>is_at_atomic_location (lk pre) a"
+      hence loc: "\<not>is_at_atomic_location (lk pre') a" 
+        unfolding is_at_atomic_location_def 
+        using lk
+        by (cases "loc_of a") auto
+      have "actions_respect_location_kinds (actions0 pre') (lk pre')"
+        using cons2 by auto
+      hence "is_at_non_atomic_location (lk pre') a"
+        unfolding actions_respect_location_kinds_def 
+        using loc a a2
+        unfolding is_at_atomic_location_def is_at_non_atomic_location_def
+        by (cases a) auto
+      thus "mo wit' = mo (incWit s)"
+        using loc step_mo_not_atomic_write[OF cons2 wit committed] by auto
+    qed      
+  have "\<not> is_read a" using a2 by (cases a) auto
+  hence rf: "rf wit' = rf (incWit s)" 
+    using step_rf_non_read[OF cons2 downclosed_rf wit committed] a by simp
+  have sc: "if is_seq_cst a 
+            then sc wit' [\<in>] monAddToSc pre a s 
+            else sc wit' = sc (incWit s)"
+    using step_sc[OF cons2 wit committed] a by simp             
+  have "\<not>is_lock a \<and> \<not>is_unlock a" using a2 by (cases a) auto
+  hence lo: "lo wit' = lo (incWit s)" 
+    using step_lo_not_lock_unlock[OF cons2 wit committed] a by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformStore_def 
+    using cons2 rf mo lo sc tot
+    apply auto
+    (* TODO: don't know why auto can't figure this out. *)
+    apply (intro exI[where x="sc wit'"])
+    by auto
+qed   
+
+lemma completeness_monPerformRmw:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_mo: "downclosed (incCommittedSet s) (mo wit')"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "is_RMW a"
+  shows                  "wit' [\<in>] monPerformRmw pre s a"
+proof -
+  have loc: "is_at_atomic_location (lk pre') a"
+    using is_RMWE_location_kind[OF a2 a(1)] cons2 by auto
+  have "is_write a" using a2 by (cases a) auto
+  hence mo: "mo wit' [\<in>] monAddToMo pre a s"
+    using loc step_mo_atomic_write[OF cons2 wit committed downclosed_mo] a a2
+    by simp
+  have rf: "rf wit' [\<in>] monAddToRfRmw pre a s"
+    using step_rf_rmw[OF cons2 downclosed_rf downclosed_mo wit committed] a a2 by simp
+  have sc: "if is_seq_cst a 
+            then sc wit' [\<in>] monAddToSc pre a s 
+            else sc wit' = sc (incWit s)"
+    using step_sc[OF cons2 wit committed] a by simp             
+  have "\<not>is_lock a \<and> \<not>is_unlock a" using a2 by (cases a) auto
+  hence lo: "lo wit' = lo (incWit s)" 
+    using step_lo_not_lock_unlock[OF cons2 wit committed] a by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformRmw_def 
+    using cons2 rf mo lo sc tot
+    apply simp
+    (* TODO: don't know why auto can't figure this out. *)
+    apply (intro exI[where x="sc wit'"])
+    apply auto
+    apply (intro exI[where x="rf wit'"])
+    defer
+    apply (intro exI[where x="rf wit'"])
+    by auto
+qed
+
+lemma completeness_monPerformLock:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "is_lock a"
+  shows                  "wit' [\<in>] monPerformLock pre s a"
+proof -
+  have "\<not> is_write a" using a2 by (cases a) auto
+  hence mo: "mo wit' = mo (incWit s)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
+  have "\<not> is_read a" using a2 by (cases a) auto
+  hence rf: "rf wit' = rf (incWit s)" 
+    using step_rf_non_read[OF cons2 downclosed_rf wit committed] a by simp
+  have "\<not> is_seq_cst a" using a2 by (cases a) auto
+  hence sc: "sc wit' = sc (incWit s)"
+    using step_sc_isnot_sc[OF cons2 wit committed] a by simp          
+  hence lo: "lo wit' [\<in>] monAddToLo pre a s" 
+    using step_lo_lock_unlock[OF cons2 wit committed] a a2 by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformLock_def
+    using cons2 rf mo lo sc tot
+    by auto
+qed   
+
+lemma completeness_monPerformUnlock:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "is_unlock a"
+  shows                  "wit' [\<in>] monPerformUnlock pre s a"
+proof -
+  have "\<not> is_write a" using a2 by (cases a) auto
+  hence mo: "mo wit' = mo (incWit s)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
+  have "\<not> is_read a" using a2 by (cases a) auto
+  hence rf: "rf wit' = rf (incWit s)" 
+    using step_rf_non_read[OF cons2 downclosed_rf wit committed] a by simp
+  have "\<not> is_seq_cst a" using a2 by (cases a) auto
+  hence sc: "sc wit' = sc (incWit s)"
+    using step_sc_isnot_sc[OF cons2 wit committed] a by simp          
+  hence lo: "lo wit' [\<in>] monAddToLo pre a s" 
+    using step_lo_lock_unlock[OF cons2 wit committed] a a2 by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformUnlock_def
+    using cons2 rf mo lo sc tot
+    by auto
+qed   
+
+lemma completeness_monPerformFence:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "is_fence a"
+  shows                  "wit' [\<in>] monPerformFence pre s a"
+proof -
+  have "\<not> is_write a" using a2 by (cases a) auto
+  hence mo: "mo wit' = mo (incWit s)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a by simp
+  have "\<not> is_read a" using a2 by (cases a) auto
+  hence rf: "rf wit' = rf (incWit s)" 
+    using step_rf_non_read[OF cons2 downclosed_rf wit committed] a by simp
+  have sc: "if is_seq_cst a 
+            then sc wit' [\<in>] monAddToSc pre a s 
+            else sc wit' = sc (incWit s)"
+    using step_sc[OF cons2 wit committed] a by simp         
+  have "\<not>is_lock a \<and> \<not>is_unlock a" using a2 by (cases a) auto
+  hence lo: "lo wit' = lo (incWit s)" 
+    using step_lo_not_lock_unlock[OF cons2 wit committed] a by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    unfolding monPerformFence_def
+    using cons2 rf mo lo sc tot
+    by auto
+qed     
+
+lemma completeness_ignore_action:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and a2:            "\<not> is_write a" 
+                         "\<not> is_read a" 
+                         "\<not> is_seq_cst a" 
+                         "\<not>is_lock a" 
+                         "\<not>is_unlock a"
+  shows                  "wit' = incWit s"
+proof -
+  have mo: "mo wit' = mo (incWit s)" 
+    using step_mo_not_atomic_write[OF cons2 wit committed] a2 by simp
+  have rf: "rf wit' = rf (incWit s)" 
+    using step_rf_non_read[OF cons2 downclosed_rf wit committed] a a2 by simp
+  have sc: "sc wit' = sc (incWit s)"
+    using step_sc_isnot_sc[OF cons2 wit committed] a a2 by simp          
+  have lo: "lo wit' = lo (incWit s)" 
+    using step_lo_not_lock_unlock[OF cons2 wit committed] a a2 by simp
+  have tot: "tot wit' = tot (incWit s)" 
+    using step_tot[OF cons2 wit] by simp
+  show ?thesis
+    using cons2 rf mo lo sc tot
+    by auto
+qed
+
+lemma completeness_monPerformAction:
+  assumes cons2:         "axsimpConsistentAlt pre' wit'"
+      and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed:     "actions0 pre' = insert a (incCommittedSet s)"
+      and downclosed_rf: "downclosed (incCommittedSet s) (rf wit')"
+      and downclosed_mo: "downclosed (incCommittedSet s) (mo wit')"
+      and lk:            "case loc_of a of None \<Rightarrow> true | Some v \<Rightarrow> (lk pre') v = (lk pre) v"
+      and a:             "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+  shows                  "wit' [\<in>] monPerformAction pre s a"
+proof (cases a)
+  case Load
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformLoad[OF cons2 wit committed downclosed_rf a]
+    by auto
+next
+  case Store
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformStore[OF cons2 wit committed downclosed_mo downclosed_rf lk a]
+    by auto
+next
+  case RMW
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformRmw[OF cons2 wit committed downclosed_mo downclosed_rf a]
+    by auto
+next
+  case Lock
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformLock[OF cons2 wit committed downclosed_rf a] 
+    by auto
+next
+  case Unlock
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformUnlock[OF cons2 wit committed downclosed_rf a] 
+    by auto
+next
+  case Fence
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_monPerformFence[OF cons2 wit committed downclosed_rf a] 
+    by auto
+next
+  case Blocked_rmw
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    by auto
+next
+  case Alloc
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    by auto
+next
+  case Dealloc
+  thus ?thesis
+    unfolding monPerformAction_def
+    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    by auto
+qed
+
+(*<*)
 end
+(*>*)

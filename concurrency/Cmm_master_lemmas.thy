@@ -7,6 +7,13 @@ begin
 
 section {* Auxiliaries *}
 
+lemma IfI [intro?]:
+  assumes "P \<Longrightarrow> Q"
+      and "\<not>P \<Longrightarrow> R"
+  shows   "if P then Q else R"
+using assms
+by auto
+
 lemma defToElim:
   assumes "left = right"
       and "left"
