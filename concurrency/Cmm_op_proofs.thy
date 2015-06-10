@@ -2496,19 +2496,23 @@ by simp
 
 subsection {* Elims of auxiliaries *}
 
-abbreviation "sameLocWritesSet actions a \<equiv> set (sameLocWrites actions a)"
-
-lemmas sameLocWritesSet_def = sameLocWrites_def
+subsubsection {* list comprehensions *}
 
 lemma setFoldr_filter_simp [simp]:
-  shows "  set (foldr (\<lambda>e x2. if P e then e # x2 else x2) l [])
-         = {e. e \<in> set l \<and> P e}"
+  shows "  set (foldr (\<lambda>e x2. if P e then f e # x2 else x2) l [])
+         = f ` {e. e \<in> set l \<and> P e}"
 by (induct l) auto
 
 lemma setFoldr_map_simp [simp]:
   shows "  set (foldr (\<lambda>b. op # (f b)) l [])
          = f ` (set l)"
 by (induct l) auto
+
+subsubsection {* sameLocWrites *}
+
+abbreviation "sameLocWritesSet actions a \<equiv> set (sameLocWrites actions a)"
+
+lemmas sameLocWritesSet_def = sameLocWrites_def
 
 lemma sameLocWritesE [elim]:
   assumes "x \<in> set (sameLocWrites actions a)"
@@ -2545,12 +2549,24 @@ proof -
     using cons2 bc bc2 by (auto elim: consistent_moE_inv)
 qed
 
+subsubsection {* sameLocLocksUnlocks *}
+
+abbreviation "sameLocLocksUnlocksSet actions a \<equiv> set (sameLocLocksUnlocks actions a)"
+
+lemmas sameLocLocksUnlocksSet_def = sameLocLocksUnlocks_def
+
 lemma sameLocLocksUnlocksE [elim]:
   assumes "x \<in> set (sameLocLocksUnlocks actions a)"
   obtains "x \<in> set actions" "is_lock x \<or> is_unlock x" "loc_of x = loc_of a"
 using assms
 unfolding sameLocLocksUnlocks_def
 by auto
+
+subsubsection {* scActions *}
+
+abbreviation "scActionsSet actions \<equiv> set (scActions actions)"
+
+lemmas scActionsSet_def = scActions_def
 
 lemma scActionsE [elim]:
   assumes "x \<in> set (scActions actions)"
@@ -2564,7 +2580,6 @@ subsection {* Elims of relation constructions *}
 lemma monAddToMoE [elim?]:
   assumes step: "rel [\<in>] monAddToMo pre a s"
       and inv:  "monInvariant pre s"
-  (* TODO: opschonen *)
   obtains "rel = mo (incWit s) \<union> (\<lambda>b. (b, a)) ` sameLocWritesSet (incCommitted s) a"
 using assms
 unfolding monAddToMo_def Let_def 
@@ -3763,6 +3778,184 @@ next
     by auto
 qed
 
+subsubsection {* sc-order*}
+
+lemma step_sc_isnot_sc:
+  assumes cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed: "actions0 pre' = insert a (incCommittedSet s)"
+      and n_sc:      "\<not> is_seq_cst a"
+  shows              "sc wit'= sc (incWit s)"
+proof auto
+  fix b c
+  assume "(b, c) \<in> sc (incWit s)"
+  thus "(b, c) \<in> sc wit'" using wit by simp
+next
+  fix b c
+  assume in_sc: "(b, c) \<in> sc wit'"
+  hence "is_seq_cst b" "b \<in> actions0 pre'" 
+        "is_seq_cst c" "c \<in> actions0 pre'"
+     using cons2 by auto
+  hence "b \<in> incCommittedSet s" "c \<in> incCommittedSet s"
+     using cons2 n_sc in_sc committed by auto
+  thus "(b, c) \<in> sc (incWit s)" 
+    using cons2 committed in_sc wit by auto
+qed
+
+lemma step_sc_is_sc:
+  assumes cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed: "actions0 pre' = insert a (incCommittedSet s)"
+      and a:         "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+      and is_sc:     "is_seq_cst a"
+  shows              "sc wit' [\<in>] monAddToSc pre a s"
+unfolding monAddToSc_def 
+proof -
+  let ?sc_list = "scActions (incCommitted s)"
+  let ?sc_set  = "scActionsSet (incCommitted s)"
+  show "sc wit' [\<in>] addToTransitiveOrder ?sc_list a (sc (incWit s))"
+    proof (cases "\<exists>b. (b, a) \<in> sc wit'")
+      assume max: "\<not> (\<exists>b. (b, a) \<in> sc wit')"
+      have "sc wit' = sc (incWit s) \<union> Pair a ` ?sc_set"
+        proof auto
+          fix c
+          assume "c \<in> scActionsSet (incCommitted s)"
+          hence c: "c \<in> incCommittedSet s" "is_seq_cst c" "c \<in> actions0 pre'"
+            using committed by auto
+          hence "c \<noteq> a" using a by auto
+          have "(c, a) \<notin> sc wit'" using max by auto
+          thus "(a, c) \<in> sc wit'"
+            using cons2 a(1) c is_sc `c \<noteq> a` by auto
+        next
+          fix b c
+          assume "(b, c) \<in> sc (incWit s)"
+          thus "(b, c) \<in> sc wit'" using wit by simp
+        next
+          fix b c
+          assume in_sc: "(b, c) \<in> sc wit'"
+             and not_new: "(b, c) \<notin> Pair a ` scActionsSet (incCommitted s)"
+          have "c \<noteq> a" using in_sc max by auto
+          have c: "is_seq_cst c" "c \<in> actions0 pre'" "b \<in> actions0 pre'"
+            using cons2 in_sc by auto
+          hence "c \<in> incCommittedSet s"
+            using `c \<noteq> a` committed by auto
+          hence "c \<in> scActionsSet (incCommitted s)"
+            unfolding scActionsSet_def
+            using c by auto
+          hence "b \<noteq> a" using not_new by auto
+          hence "b \<in> incCommittedSet s"
+            using committed `b \<in> actions0 pre'` by auto          
+          thus "(b, c) \<in> sc (incWit s)" 
+            using wit in_sc `c \<in> incCommittedSet s` by auto
+        qed
+      thus ?thesis unfolding addToTransitiveOrder_def by auto
+    next
+      assume "\<exists>b'. (b', a) \<in> sc wit'"
+      then obtain b' where b': "(b', a) \<in> sc wit'" by fast
+
+      let ?sc_set2 = "{x. (x, a) \<in> sc wit'}"
+  
+      have "b' \<in> actions0 pre'" using cons2 b' by auto
+      hence "b' \<in> ?sc_set2" using b' by simp
+      hence non_empty: "?sc_set2 \<noteq> {}" by fast
+      have "finite_prefixes (sc wit') (actions0 pre')"
+        using cons2 by auto
+      hence finite: "finite ?sc_set2"
+        unfolding finite_prefixes_def using a by fast
+      have irreflexive: "irrefl (sc wit')"
+      and   transitive:  "trans (sc wit')"
+        using cons2 by auto 
+      hence isOrder: "isStrictPartialOrder (sc wit')" 
+        unfolding isStrictPartialOrder_def by simp
+      obtain b where b:   "b \<in> ?sc_set2" 
+                 and max: "(\<forall>y. y \<in> ?sc_set2 \<longrightarrow> (b, y) \<notin> sc wit')"
+        using supremum_partial_order[OF finite non_empty isOrder] by auto
+      have b2: "b \<in> actions0 pre'" using b cons2 by auto
+      hence b3: "b \<in> incCommittedSet s" "is_seq_cst b" "b \<noteq> a"
+        using b committed cons2 by auto
+
+      let ?prev = "(\<lambda>c. (c, a)) ` {x \<in> incCommittedSet s. is_seq_cst x \<and>
+                                   (x, b) \<in> sc (incWit s)}"
+      let ?succ = "(\<lambda>c. (a, c)) ` {x \<in> incCommittedSet s. is_seq_cst x \<and> 
+                                   (b, x) \<in> sc (incWit s)}"
+
+      have "sc (incWit s) \<subseteq> sc wit'" using wit by auto 
+      moreover have "?prev \<subseteq> sc wit'"
+        proof auto
+          fix c
+          assume "(c, b) \<in> sc (incWit s)"
+          hence "(c, b) \<in> sc wit'" using wit by auto
+          thus "(c, a) \<in> sc wit'" using transitive b transE by auto
+        qed
+      moreover have "?succ \<subseteq> sc wit'"
+        proof auto
+          fix c
+          assume in_sc: "(b, c) \<in> sc (incWit s)"
+          hence c: "c \<in> incCommittedSet s" 
+                   "c \<in> actions0 pre'" 
+                   "is_seq_cst c" 
+            using cons2 wit a by auto
+          have "(b, c) \<in> sc wit'" using in_sc wit by auto
+          hence "(c, a) \<notin> sc wit'" using max c by auto
+          thus "(a, c) \<in> sc wit'" 
+            using cons2 c a is_sc by auto
+        qed
+      moreover have "sc wit' \<subseteq> sc (incWit s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
+        proof auto
+          fix c d
+          assume in_sc2: "(c, d) \<in> sc wit'"
+             and nin_sc1: "(c, d) \<notin> sc (incWit s)"
+             and nin_prev: "(c, d) \<notin> ?prev"
+             and nin_succ: "(c, d) \<notin> ?succ"
+          have d: "is_seq_cst d" "d \<in> actions0 pre'" "d \<noteq> c"
+            using cons2 in_sc2 by auto
+          have c:  "is_seq_cst c" "c \<in> actions0 pre'" "d \<noteq> c"
+            using cons2 in_sc2 by auto
+          have "c \<noteq> a"
+            proof
+              assume "c = a"
+              hence d2: "d \<in> incCommittedSet s" using d committed by simp
+              have "(b, d) \<in> sc wit'" 
+                using transE[OF transitive] b in_sc2 `c = a` by auto
+              hence "(b, d) \<in> sc (incWit s)" using b3 d2 wit by auto
+              hence "(c, d) \<in> ?succ" using d d2 `c = a` by auto
+              thus False using nin_succ by simp
+            qed
+          hence c2: "c \<in> incCommittedSet s" using c committed by auto
+          thus "d = a" 
+            using d committed in_sc2 nin_sc1 wit by auto
+          have bc_nin_sc: "(b, c) \<notin> sc wit'" using max c in_sc2 `d = a` by simp
+          have "(c, b) \<notin> sc (incWit s)" using nin_prev `d = a` c c2 by auto
+          hence "(c, b) \<notin> sc wit'" using b3 c2 wit by auto
+          thus "c = b" 
+            using cons2 bc_nin_sc b2 b3(2) c(1) c(2) by auto
+        qed
+      ultimately have "sc wit' = sc (incWit s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
+        using b by auto        
+      thus ?thesis
+        using b b3 
+        unfolding addToTransitiveOrder_def scActionsSet_def
+        by auto
+    qed
+qed
+
+corollary step_sc:
+  assumes cons2:     "axsimpConsistentAlt pre' wit'"
+      and wit:       "incWit s = incWitRestrict wit' (incCommittedSet s)"
+      and committed: "actions0 pre' = insert a (incCommittedSet s)"
+      and a:         "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
+  shows              "if is_seq_cst a 
+                      then sc wit' [\<in>] monAddToSc pre a s 
+                      else sc wit' = sc (incWit s)"
+proof (cases "is_seq_cst a")
+  assume "is_seq_cst a"
+  thus ?thesis 
+    using step_sc_is_sc[OF cons2 wit committed] a by simp
+next
+  assume "\<not>is_seq_cst a"
+  thus ?thesis 
+    using step_sc_isnot_sc[OF cons2 wit committed] a by simp
+qed
 
 
 end

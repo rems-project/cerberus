@@ -1979,6 +1979,22 @@ proof -
     by auto
 qed
 
+lemma sc_accesses_consistent_inv [elim]:
+  assumes "sc_accesses_consistent_sc (pre, wit, (''hb'', hb)#rel)"
+      and "a \<in> actions0 pre"
+      and "b \<in> actions0 pre"
+      and "a \<noteq> b"
+      and "is_seq_cst a"
+      and "is_seq_cst b"
+      and "(b, a) \<notin> sc wit"
+  obtains "(a, b) \<in> sc wit" 
+proof -
+  show ?thesis
+    using assms that
+    unfolding sc_accesses_consistent_sc.simps
+    by auto
+qed
+
 lemma rel_list_sc_accesses_consistent_sc [simp]:
   assumes "rel \<noteq> []"
   shows   "  sc_accesses_consistent_sc (pre, wit, (''hb'', hb)#rel) 
