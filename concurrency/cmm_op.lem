@@ -264,14 +264,18 @@ incStep: forall pre x y z a.
   incTrace pre x z
 
 
-val incConsistent: candidate_execution -> bool
-let ~{ocaml} incConsistent (pre, wit, rel) =
+val consistencyFromTrace: (pre_execution -> incState -> incState -> bool) ->
+                          candidate_execution -> bool
+let ~{ocaml} consistencyFromTrace trace (pre, wit, rel) =
   rel = getRelations pre wit &&
   exists s. 
-  incTrace pre (incInitialState pre) s &&
+  trace pre (incInitialState pre) s &&
   s.incWit = wit &&
   incCommittedSet s = pre.actions
 
+val incConsistent: candidate_execution -> bool
+let ~{ocaml} incConsistent =
+  consistencyFromTrace incTrace
 
 
 (* The monadic model --------------------------------------------------- *)
@@ -400,7 +404,17 @@ let monAddToSc pre a s =
 
 val monCheckConsistency: candidate_execution -> Nondeterminism.t unit
 let monCheckConsistency ex =
-  Nondeterminism.guard (axsimpConsistent ex) (Nondeterminism.Other "Inconsistent")
+  Nondeterminism.guard (assumptions ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (locks_only_consistent_locks ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (locks_only_consistent_lo ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_accesses_consistent_sc ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_fenced_sc_fences_heeded ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_hb ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (det_read_alt ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_non_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (coherent_memory_use ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_accesses_sc_reads_restricted ex) (Nondeterminism.Other "Inconsistent")
 
 val monCheckWitRestrict: execution_witness -> set action -> execution_witness -> Nondeterminism.t unit
 let monCheckWitRestrict new_wit committed old_wit =
@@ -502,7 +516,8 @@ let monStep pre s =
   let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
 
   (* TODO: break down the consistency predicates in stepwise predicates *)
-  (* monCheckConsistency new_ex                          >> *)
+  monCheckConsistency new_ex >>
+
   (* TODO: prove instead of assert that the following always holds *)  
   monCheckWitRestrict new_wit (incCommittedSet s) s.incWit >>
 
@@ -531,6 +546,10 @@ monStep: forall pre x y z a.
   Nondeterminism.mem (a, z) (monStep pre y)
 ==>
   monTrace pre x z
+
+val monConsistent: candidate_execution -> bool
+let ~{ocaml} monConsistent =
+  consistencyFromTrace monTrace
 
 
 

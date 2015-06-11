@@ -38,11 +38,7 @@ lemmas getRelations_simp = standard_relations_simp
 
 section {* The simplified axiomatic model *}
 
-abbreviation "axsimpConsistent ex \<equiv> apply_tree axsimpConsistentExecution ex"
-abbreviation "axsimpConsistentAlt pre wit \<equiv> axsimpConsistent (pre, wit, getRelations pre wit)"
-
-lemmas axsimpConsistent_def = axsimpConsistentExecution_def
-lemmas axsimpConsistentAlt_def = axsimpConsistent_def
+subsection {* well_formed_threads_opsem *}
 
 lemma rel_list_well_formed_threads_opsem [simp]:
   assumes "rel \<noteq> []"
@@ -85,6 +81,38 @@ using assms
 unfolding well_formed_threads_opsem_eq
 by auto
 
+subsection {* axsimpConsistent *}
+
+abbreviation "axsimpConsistent ex \<equiv> apply_tree axsimpConsistentExecution ex"
+abbreviation "axsimpConsistentAlt pre wit \<equiv> axsimpConsistent (pre, wit, getRelations pre wit)"
+
+lemmas axsimpConsistent_def = axsimpConsistentExecution_def
+lemmas axsimpConsistentAlt_def = axsimpConsistent_def
+
+lemma axsimpConsistentI [intro?]: 
+  assumes "assumptions (pre, wit, [])"
+      and "tot_empty (pre, wit, [])"
+      and "well_formed_threads_opsem (pre, wit, [])"
+      and "well_formed_rf (pre, wit, [])"
+      and "locks_only_consistent_locks (pre, wit, [])"
+      and "locks_only_consistent_lo (pre, wit, [(''hb'', getHb pre wit)])"
+      and "consistent_mo (pre, wit, [])"
+      and "sc_accesses_consistent_sc (pre, wit, [(''hb'', getHb pre wit)])"
+      and "sc_fenced_sc_fences_heeded (pre, wit, [])"
+      and "consistent_hb (pre, wit, [(''hb'', getHb pre wit)])"
+      and "det_read_alt (pre, wit, [(''hb'', getHb pre wit)])"
+      and "consistent_non_atomic_rf (pre, wit, [(''hb'', getHb pre wit), 
+                                                (''vse'', getVse pre wit)])"
+      and "consistent_atomic_rf (pre, wit, [(''hb'', getHb pre wit)])"
+      and "coherent_memory_use (pre, wit, [(''hb'', getHb pre wit)])"
+      and "rmw_atomicity (pre, wit, [])"
+      and "sc_accesses_sc_reads_restricted (pre, wit, [(''hb'', getHb pre wit)])"
+  shows   "axsimpConsistentAlt pre wit"
+using assms
+unfolding axsimpConsistent_def
+          memory_model_def
+by simp_all
+
 lemma axsimpConsistentE [elim]: 
   assumes "axsimpConsistentAlt pre wit"
   obtains "assumptions (pre, wit, [])"
@@ -123,6 +151,8 @@ unfolding axsimpConsistent_def
           ex_def 
 by simp metis
 
+subsection {* axsimpMemoryModel *}
+
 lemma axsimpMemoryModel_simps [simp]:
   shows "consistent axsimpMemoryModel = axsimpConsistentExecution"
         "relation_calculation axsimpMemoryModel = standard_relations"
@@ -149,14 +179,14 @@ qed *)
 
 section {* The incremental model *}
 
+subsection {* Simplifications *}
+
 abbreviation "hbMinusAlt pre wit \<equiv> hbMinus (pre,wit, getRelations pre wit)"
 abbreviation "incComAlt pre wit \<equiv> incCom (pre,wit, getRelations pre wit)"
 abbreviation "incCommittedSet s \<equiv> set (incCommitted s)"
 
 lemmas hbMinusAlt_def = hbMinus.simps
 lemmas incComAlt_def = incCom.simps
-
-subsection {* Simplifications *}
 
 lemma incPreRestrict_simps [simp]:
   shows "actions0 (preRestrict pre actions) = actions0 pre \<inter> actions "
@@ -2326,7 +2356,8 @@ proof -
   then obtain s where trace: "incTrace pre (incInitialState pre) s"
                   and   wit: "incWit s = wit"
                   and   com: "incCommittedSet s = actions0 pre"
-    unfolding incConsistent.simps by auto
+    unfolding incConsistent_def consistencyFromTrace.simps
+    by auto
   thus "axsimpConsistent (pre, wit, getRelations pre wit)" 
     using incTraceConsistency[OF trace] preRestrict_id wit
     by metis
@@ -2342,13 +2373,7 @@ lemma existenceIncTrace:
   shows   "\<exists> s. incTrace pre (incInitialState pre) s \<and> 
                 incWit s = incWitRestrict wit actions \<and> 
                 incCommittedSet s = actions"
-proof (rule finite_downclosedsubset_induct[where R="(incComAlt pre wit)" and B="actions0 pre"])
-  show "finite actions" using finite .
-next
-  show "actions \<subseteq> actions0 pre" using universe .
-next
-  show "downclosed actions (incComAlt pre wit)" using downclosed .
-next
+proof (rule finite_downclosedsubset_induct[OF finite universe downclosed])
   show "acyclic (incComAlt pre wit)"
     using opsemOrder_isStrictPartialOrder[OF cons]
     unfolding isStrictPartialOrder_def acyclic_def irrefl_def
@@ -2473,9 +2498,18 @@ proof -
     using existenceIncTrace[OF cons finite _ downclosed]
     by auto
   thus ?thesis
-    unfolding incConsistent.simps using wit_restrict by auto
+    unfolding incConsistent_def consistencyFromTrace.simps
+    using wit_restrict
+    by auto
 qed
 
+subsection {* Equivalence *}
+
+corollary incConsistentEquivalence:
+  shows "  incConsistent (pre, wit, getRelations pre wit)
+         = axsimpConsistent (pre, wit, getRelations pre wit)"
+using incConsistentSoundness incConsistentCompleteness
+by metis
 
 
 section {* The monadic model *}
@@ -2943,12 +2977,6 @@ by (cases a) auto
 
 subsection {* Simps of checkXxx predicates *}
 
-lemma monCheckConsistency_simp [simp]:
-  shows "  x [\<in>] monCheckConsistency (pre, wit, getRelations pre wit)
-         = axsimpConsistentAlt pre wit"
-unfolding monCheckConsistency_def
-by simp
-
 lemma monCheckWitRestrict_simp [simp]:
   shows "  x [\<in>] monCheckWitRestrict wit1 committed wit2
          = (incWitRestrict wit1 committed = wit2)"
@@ -2975,13 +3003,14 @@ proof (intro assumptionsI, simp)
     using inv by blast
   show "finite_prefixes (rf (incWit s2)) (actions0 pre \<inter> incCommittedSet s2)"
     proof (cases rule: monStepE_rf2[OF monStep inv])
+oops (*
       case 1
-      show ?thesis sorry
+      show ?thesis 
     next
       case 2
-      show ?thesis sorry
+      show ?thesis 
     qed
-oops
+oops *)
 
 subsubsection {* tot_empty *}
 
@@ -3434,13 +3463,28 @@ lemma monStepInvariant:
       and inv:     "monInvariant pre s1"
   shows   "monInvariant pre s2"
 proof -
-  have "finite (actions0 pre)"
+  have finite: "finite (actions0 pre)"
     using inv by auto
+  have committed: "incCommittedSet s2 \<subseteq> actions0 pre"
+    using monStep finite inv
+    unfolding monStep_def Let_def monInvariant_def 
+    by auto
+  have cons: "() [\<in>] monCheckConsistency (incToEx pre s2)"
+    using monStep  
+    unfolding monStep_def Let_def incToEx_def
+    by auto
+  hence "axsimpConsistentAlt (preRestrict pre (incCommittedSet s2)) (incWit s2)"
+    using monStep_tot_empty[OF monStep inv]
+    using monStep_well_formed_threads_opsem[OF monStep inv]
+    using monStep_well_formed_rf[OF monStep inv]
+    using monStep_consistent_mo[OF monStep inv]
+    using monStep_rmw_atomicity[OF monStep inv]
+    unfolding incToEx_def Let_def monCheckConsistency_def
+    by (intro axsimpConsistentI) auto
   thus ?thesis
-    using monStep inv
+    using inv committed
     unfolding monInvariant_def
-    unfolding monStep_def Let_def
-    apply auto sorry (* Not true yet *)
+    by auto
 qed
 
 lemma monTraceInvariant:
@@ -4577,9 +4621,13 @@ proof -
   have performAction: "incWit s2 [\<in>] monPerformAction pre s1 a"
     using monPerformActionCompleteness[OF cons wit committed2 downclosed_rf 
                                            downclosed_mo lk a2 a(2)] .
+  have cons2: "() [\<in>] monCheckConsistency (?pre', incWit s2, getRelations ?pre' (incWit s2))"
+    unfolding monCheckConsistency_def
+    using cons
+    by auto
   show ?thesis
     unfolding monStep_def Let_def
-    using wit committed performAction order a finite
+    using wit committed performAction order a finite cons2
     apply auto
     apply (intro exI[where x=a])
     by auto
@@ -4618,6 +4666,27 @@ corollary monTraceEquivalence:
          = incTrace pre (incInitialState pre) s"
 using monTraceSoundness monTraceCompleteness
 by metis
+
+lemma consistencyFromTraceEq:
+  assumes "\<And>pre s.  trace pre (incInitialState pre) s
+                   = trace' pre (incInitialState pre) s"
+  shows "consistencyFromTrace trace = consistencyFromTrace trace'"
+apply (intro ext, clarify)
+unfolding consistencyFromTrace.simps
+using assms
+by auto
+
+corollary monConsistentEquivalence:  
+  shows "  monConsistent (pre, wit, getRelations pre wit)
+         = axsimpConsistent (pre, wit, getRelations pre wit)"
+proof -
+  have "monConsistent = incConsistent"
+    unfolding monConsistent_def incConsistent_def
+    using consistencyFromTraceEq monTraceEquivalence
+    by metis
+  thus ?thesis
+    using incConsistentEquivalence by auto
+qed
 
 (*<*)
 end
