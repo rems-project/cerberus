@@ -4386,8 +4386,8 @@ lemma completeness_ignore_action:
       and a2:            "\<not> is_write a" 
                          "\<not> is_read a" 
                          "\<not> is_seq_cst a" 
-                         "\<not>is_lock a" 
-                         "\<not>is_unlock a"
+                         "\<not> is_lock a" 
+                         "\<not> is_unlock a"
   shows                  "wit' = incWit s"
 proof -
   have mo: "mo wit' = mo (incWit s)" 
@@ -4467,6 +4467,79 @@ next
   thus ?thesis
     unfolding monPerformAction_def
     using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    by auto
+qed
+
+subsubsection {* monStep, monTrace *}
+
+lemma completeness_step:
+  assumes step:      "incStep pre s1 s2 a"
+      and finite:    "finite (actions0 pre)"
+      and invariant: "incCommittedSet s1 \<subseteq> actions0 pre"
+  shows              "(a, s2) [\<in>] monStep pre s1"
+proof -
+  let ?pre' = "preRestrict pre (incCommittedSet s2)"
+  have cons:      "axsimpConsistentAlt ?pre' (incWit s2)"
+   and a:         "a \<in> actions0 pre" "a \<notin> incCommittedSet s1"
+   and committed: "incCommitted s2 = a # (incCommitted s1)"
+   and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommittedSet s1)"
+   and order:     "respectsCom (actions0 pre) (incCommitted s1) (incComAlt ?pre' (incWit s2)) a"
+    using step unfolding incStep_def Let_def incToEx_def by auto
+  have committed2: "actions0 ?pre' = insert a (incCommittedSet s1)"
+    using committed a invariant by auto
+  have lk: "case loc_of a of 
+              None \<Rightarrow> True 
+            | Some v \<Rightarrow> lk (preRestrict pre (incCommittedSet s2)) v = lk pre v"
+    by (cases "loc_of a") simp_all
+  have a2: "a \<in> actions0 ?pre'"
+    using a committed by auto    
+  have downclosed_rf: "downclosed (incCommittedSet s1) (rf (incWit s2))"
+    unfolding downclosed_def
+    proof auto
+      fix x y
+      assume y:     "y \<in> incCommittedSet s1" 
+         and in_rf: "(x, y) \<in> rf (incWit s2)"
+      have "y \<in> actions0 ?pre'" using cons in_rf by blast
+      hence "y \<in> actions0 pre" by simp
+      hence "(a, y) \<notin> incComAlt ?pre' (incWit s2)"
+        using in_rf order y
+        unfolding respectsCom_def
+        by auto
+      hence "(a, y) \<notin> rf (incWit s2)"
+        unfolding incComAlt_def by auto
+      hence "x \<noteq> a" using in_rf by auto
+      have "x \<in> actions0 ?pre'" using cons in_rf by blast
+      hence "x \<in> incCommittedSet s2" by simp
+      thus "x \<in> incCommittedSet s1" using `x \<noteq> a` committed by simp
+    qed
+  have downclosed_mo: "downclosed (incCommittedSet s1) (mo (incWit s2))"
+    (* TODO: Clone of the proof of downclosed_rf. *)
+    unfolding downclosed_def
+    proof auto
+      fix x y
+      assume y:     "y \<in> incCommittedSet s1" 
+         and in_rf: "(x, y) \<in> mo (incWit s2)"
+      have "y \<in> actions0 ?pre'" using cons in_rf by blast
+      hence "y \<in> actions0 pre" by simp
+      hence "(a, y) \<notin> incComAlt ?pre' (incWit s2)"
+        using in_rf order y
+        unfolding respectsCom_def
+        by auto
+      hence "(a, y) \<notin> mo (incWit s2)"
+        unfolding incComAlt_def by auto
+      hence "x \<noteq> a" using in_rf by auto
+      have "x \<in> actions0 ?pre'" using cons in_rf by blast
+      hence "x \<in> incCommittedSet s2" by simp
+      thus "x \<in> incCommittedSet s1" using `x \<noteq> a` committed by simp
+    qed
+  have performAction: "incWit s2 [\<in>] monPerformAction pre s1 a"
+    using completeness_monPerformAction[OF cons wit committed2 downclosed_rf 
+                                           downclosed_mo lk a2 a(2)] .
+  show ?thesis
+    unfolding monStep_def Let_def
+    using wit committed performAction order a finite
+    apply auto
+    apply (intro exI[where x=a])
     by auto
 qed
 
