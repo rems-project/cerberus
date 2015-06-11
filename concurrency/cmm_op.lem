@@ -513,6 +513,26 @@ let monStep pre s =
   Nondeterminism.return (a, new_state)
 
 
+(* monTrace is the transitive closure of monStep, except that in the
+   reflexive case we require that the consistency predicate hold. This
+   is needed for soundness. *)
+
+indreln
+[monTrace: pre_execution -> incState -> incState -> bool]
+
+monReflexive: forall pre s. 
+  well_formed_threads_opsem (pre, empty_witness, [])
+==>
+  monTrace pre s s
+
+and
+monStep: forall pre x y z a.
+  monTrace pre x y && 
+  Nondeterminism.mem (a, z) (monStep pre y)
+==>
+  monTrace pre x z
+
+
 
 (* The symbolic model -------------------------------------------------- *)
 
