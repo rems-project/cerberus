@@ -2309,7 +2309,8 @@ lemma incTraceConsistency:
   assumes "incTrace pre r s"
           "r = incInitialState pre"
   shows   "  axsimpConsistentAlt (preRestrict pre (incCommittedSet s)) (incWit s)
-           \<and> well_formed_threads_opsem (pre, empty_witness, [])"
+           \<and> well_formed_threads_opsem (pre, empty_witness, [])
+           \<and> incCommittedSet s \<subseteq> actions0 pre"
 using assms 
 proof induct
   case incStep
@@ -3442,6 +3443,24 @@ proof -
     apply auto sorry (* Not true yet *)
 qed
 
+lemma monTraceInvariant:
+  assumes monTrace: "monTrace pre s1 s2"
+      and init:     "s1 = incInitialState pre"
+  shows   "monInvariant pre s2"
+using assms
+proof induct
+  case (monReflexive pre s)
+  thus "monInvariant pre s"
+    unfolding monInvariant_def
+    by auto
+next
+  case (monStep pre x y z a)
+  thus "monInvariant pre z"
+    using monStepInvariant by auto
+qed
+
+subsubsection {* Soundness *}
+
 lemma monStepSoundness:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
       and inv:     "monInvariant pre s1"
@@ -3451,6 +3470,29 @@ using monStepInvariant[OF monStep inv]
 unfolding monInvariant_def
           monStep_def Let_def incStep_def incToEx_def
 by auto
+
+lemma monTraceSoundness_aux:
+  assumes monTrace: "monTrace pre s1 s2"
+      and init:     "s1 = incInitialState pre"
+  shows   "incTrace pre s1 s2"
+using assms
+proof induct
+  case (monReflexive pre s)
+  thus "incTrace pre s s"
+    using incReflexive by auto
+next
+  case (monStep pre x y z a)
+  hence "incStep pre y z a" 
+    using monStepSoundness monTraceInvariant
+    by auto
+  thus "incTrace pre x z"
+    using monStep incStep by auto
+qed
+
+corollary monTraceSoundness:
+  assumes "monTrace pre (incInitialState pre) s"
+  shows   "incTrace pre (incInitialState pre) s"
+using assms monTraceSoundness_aux by simp
 
 subsection {* Completeness *}
 
@@ -4158,7 +4200,7 @@ qed
 
 subsubsection {* Perform action *}
 
-lemma completeness_monPerformLoad:
+lemma monPerformLoadCompleteness:
   assumes cons2:      "axsimpConsistentAlt pre' wit'"
       and wit:        "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:  "actions0 pre' = insert a (incCommittedSet s)"
@@ -4190,7 +4232,7 @@ proof -
     by auto
 qed   
 
-lemma completeness_monPerformStore:
+lemma monPerformStoreCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4251,7 +4293,7 @@ proof -
     by auto
 qed   
 
-lemma completeness_monPerformRmw:
+lemma monPerformRmwCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4291,7 +4333,7 @@ proof -
     by auto
 qed
 
-lemma completeness_monPerformLock:
+lemma monPerformLockCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4319,7 +4361,7 @@ proof -
     by auto
 qed   
 
-lemma completeness_monPerformUnlock:
+lemma monPerformUnlockCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4347,7 +4389,7 @@ proof -
     by auto
 qed   
 
-lemma completeness_monPerformFence:
+lemma monPerformFenceCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4377,7 +4419,7 @@ proof -
     by auto
 qed     
 
-lemma completeness_ignore_action:
+lemma ignoreActionCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4405,7 +4447,7 @@ proof -
     by auto
 qed
 
-lemma completeness_monPerformAction:
+lemma monPerformActionCompleteness:
   assumes cons2:         "axsimpConsistentAlt pre' wit'"
       and wit:           "incWit s = incWitRestrict wit' (incCommittedSet s)"
       and committed:     "actions0 pre' = insert a (incCommittedSet s)"
@@ -4418,61 +4460,61 @@ proof (cases a)
   case Load
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformLoad[OF cons2 wit committed downclosed_rf a]
+    using monPerformLoadCompleteness[OF cons2 wit committed downclosed_rf a]
     by auto
 next
   case Store
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformStore[OF cons2 wit committed downclosed_mo downclosed_rf lk a]
+    using monPerformStoreCompleteness[OF cons2 wit committed downclosed_mo downclosed_rf lk a]
     by auto
 next
   case RMW
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformRmw[OF cons2 wit committed downclosed_mo downclosed_rf a]
+    using monPerformRmwCompleteness[OF cons2 wit committed downclosed_mo downclosed_rf a]
     by auto
 next
   case Lock
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformLock[OF cons2 wit committed downclosed_rf a] 
+    using monPerformLockCompleteness[OF cons2 wit committed downclosed_rf a] 
     by auto
 next
   case Unlock
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformUnlock[OF cons2 wit committed downclosed_rf a] 
+    using monPerformUnlockCompleteness[OF cons2 wit committed downclosed_rf a] 
     by auto
 next
   case Fence
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_monPerformFence[OF cons2 wit committed downclosed_rf a] 
+    using monPerformFenceCompleteness[OF cons2 wit committed downclosed_rf a] 
     by auto
 next
   case Blocked_rmw
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    using ignoreActionCompleteness[OF cons2 wit committed downclosed_rf a]
     by auto
 next
   case Alloc
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    using ignoreActionCompleteness[OF cons2 wit committed downclosed_rf a]
     by auto
 next
   case Dealloc
   thus ?thesis
     unfolding monPerformAction_def
-    using completeness_ignore_action[OF cons2 wit committed downclosed_rf a]
+    using ignoreActionCompleteness[OF cons2 wit committed downclosed_rf a]
     by auto
 qed
 
 subsubsection {* monStep, monTrace *}
 
-lemma completeness_step:
+lemma monStepCompleteness:
   assumes step:      "incStep pre s1 s2 a"
       and finite:    "finite (actions0 pre)"
       and invariant: "incCommittedSet s1 \<subseteq> actions0 pre"
@@ -4533,7 +4575,7 @@ proof -
       thus "x \<in> incCommittedSet s1" using `x \<noteq> a` committed by simp
     qed
   have performAction: "incWit s2 [\<in>] monPerformAction pre s1 a"
-    using completeness_monPerformAction[OF cons wit committed2 downclosed_rf 
+    using monPerformActionCompleteness[OF cons wit committed2 downclosed_rf 
                                            downclosed_mo lk a2 a(2)] .
   show ?thesis
     unfolding monStep_def Let_def
@@ -4542,6 +4584,40 @@ proof -
     apply (intro exI[where x=a])
     by auto
 qed
+
+lemma monTraceCompleteness_aux:
+  assumes "incTrace pre r s"
+          "r = incInitialState pre"
+  shows   "monTrace pre r s"
+using assms
+proof induct
+  case (incReflexive pre s)
+  thus "monTrace pre s s"
+    using monReflexive by auto
+next
+  case (incStep pre x y z a)
+  have finite: "finite (actions0 pre)"
+    using incStep incTraceConsistency by auto
+  have inv: "incCommittedSet y \<subseteq> actions0 pre"
+    using incStep incTraceConsistency by auto
+  have "(a, z) [\<in>] monStep pre y" 
+    using monStepCompleteness[OF _ finite inv] incStep by auto
+  thus "monTrace pre x z"
+    using incStep monStep by auto
+qed
+
+corollary monTraceCompleteness:
+  assumes "incTrace pre (incInitialState pre) s"
+  shows   "monTrace pre (incInitialState pre) s"
+using assms monTraceCompleteness_aux by simp
+
+subsection {* Equivalence *}
+
+corollary monTraceEquivalence:
+  shows "  monTrace pre (incInitialState pre) s 
+         = incTrace pre (incInitialState pre) s"
+using monTraceSoundness monTraceCompleteness
+by metis
 
 (*<*)
 end
