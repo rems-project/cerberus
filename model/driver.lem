@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode
-open import Show Core_run Core_run_aux Cmm_op Cmm_master
+open import Show Core_run Core_run_aux Cmm_op Cmm_csem
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
@@ -11,8 +11,7 @@ import Naive_memory
 
 module Mem = Naive_memory
 
-module Cmm = Cmm_master
-
+module Cmm = Cmm_csem
 
 (* The indirection is required because of a bug in Lem *)
 module U = Undefined
@@ -386,7 +385,7 @@ let runCore m dr_st =
 (* Returns the number of uncommitted action in the concurency memory model state *)
 val number_of_uncommitted: symState -> nat
 let number_of_uncommitted concur_st =
-  Set.size concur_st.symPre.actions - Set.size concur_st.symCommitted
+  Set.size concur_st.symPre.actions - List.length concur_st.symCommitted
 
 
 (* TODO: debug *)
@@ -603,7 +602,7 @@ let action_request_sequential dr_st request =
 
 
 (*
-val     driver_sequential: driver_state -> ND.t (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
+val     driver_sequential: driver_state -> ND.t (bool * Cmm.pre_execution * Core.expr core_run_annotation)
 *)
 val     driver: bool -> driver_state -> ND.t driver_state
 let rec driver with_concurrency _dr_st =

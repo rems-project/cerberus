@@ -7,7 +7,7 @@ open Core_parser_util
 
 module Mem = Naive_memory
 
-module Cmm = Cmm_master
+module Cmm = Cmm_csem
 
 let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method

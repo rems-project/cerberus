@@ -14,7 +14,7 @@ LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err
 #CMM_MODEL_DIR=../cpp/axiomatic/ntc
 CMM_MODEL_DIR=concurrency
 CMM_MODEL_LEM =\
-  cmm_master.lem
+  cmm_csem.lem
 
 #CMM_EXEC_DIR=../cpp/newmm_op
 CMM_EXEC_DIR=concurrency
