@@ -2612,6 +2612,14 @@ using assms
 unfolding scActions_def
 by auto
 
+subsubsection {* checkValuesAreEqual *}
+
+lemmas checkValuesAreEqual.simps [simp]
+
+lemma checkValuesAreEqual_simp [simp]:
+  shows "() [\<in>] checkValuesAreEqual b = (b = None \<or> (\<exists>a. b = Some (a, a)))"
+by (cases b) auto
+
 subsection {* Elims of relation constructions *}
 
 lemma monAddToMoE [elim?]:
@@ -2623,30 +2631,36 @@ unfolding monAddToMo_def Let_def
 by auto
 
 lemma auxAddPairToRfE [elim]: 
-  assumes step: "(rel', v) [\<in>] auxAddPairToRf rel w r eq"
-  obtains v_w v_r where "rel' = insert (w, r) rel"
-                        "v = Some (v_w, v_r)"
-                        "value_written_by w = Some v_w"
-                        "value_read_by r = Some v_r"
-                        "eq v_w v_r"
+  assumes step: "(rel', v_w, v_r) [\<in>] auxAddPairToRf rel w r "
+  obtains "rel' = insert (w, r) rel"
+          "value_written_by w = Some v_w"
+          "value_read_by r = Some v_r"
 using assms
 unfolding auxAddPairToRf_def
 apply (cases "value_written_by w", auto)
 by (cases "value_read_by r", auto)
 
 lemma auxAddToRfLoadE [elim?]:
-  assumes step: "(rel, v) [\<in>] auxAddToRfLoad pre a s eq"
+  assumes step: "(rel, v) [\<in>] auxAddToRfLoad pre a s"
       and inv:  "monInvariant pre s"
-  obtains w where "w \<in> sameLocWritesSet (incCommitted s) a" 
-                  "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
+  obtains w v_w v_r where "w \<in> sameLocWritesSet (incCommitted s) a" 
+                          "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                          "v = Some (v_w, v_r)"
         | "rel = rf (incWit s)"
-proof (cases "rel = rf (incWit s)")
+          "v = None"
+proof (cases "v = None")
   case True
-  thus ?thesis using that by metis
+  hence "rel = rf (incWit s)"
+    using step 
+    unfolding auxAddToRfLoad_def
+    by auto
+  thus ?thesis using True that by metis
 next
   case False
-  then obtain w where w: "w \<in> sameLocWritesSet (incCommitted s) a"
-                         "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
+  then obtain w v_w v_r 
+        where w: "w \<in> sameLocWritesSet (incCommitted s) a"
+                 "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                 "v = Some (v_w, v_r)"
     using step 
     unfolding auxAddToRfLoad_def
     by auto
@@ -2657,39 +2671,58 @@ lemma monAddToRfLoadE [elim?]:
   assumes step: "rel [\<in>] monAddToRfLoad pre a s"
       and inv:  "monInvariant pre s"
   obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
-                    "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
+                    "(rel, v, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
         | "rel = rf (incWit s)"
 proof -
-  obtain v where v: "(rel, v) [\<in>] auxAddToRfLoad pre a s op ="
+  obtain vs where vs: "(rel, vs) [\<in>] auxAddToRfLoad pre a s"
+              and eq: "() [\<in>] checkValuesAreEqual vs"
     using step
     unfolding monAddToRfLoad_def
     by auto
   thus ?thesis
-    using that auxAddToRfLoadE[OF v inv]
-    by (cases "rel = rf (incWit s)") metis+
+    proof (cases "vs = None")
+      case True
+      hence "rel = rf (incWit s)"
+        using that auxAddToRfLoadE[OF vs inv]
+        by auto
+      thus ?thesis using that by metis
+    next
+      case False
+      then obtain w v_w v_r 
+            where w: "w \<in> sameLocWritesSet (incCommitted s) a" 
+                     "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                     "vs = Some (v_w, v_r)"
+        using auxAddToRfLoadE[OF vs inv] by auto
+      hence "v_w = v_r" using eq by auto
+      thus ?thesis using that w by auto
+    qed
 qed
 
 lemma auxAddToRfRmwE [elim?]:
-  assumes step: "(rel, v) [\<in>] auxAddToRfRmw pre a s eq"
+  assumes step: "(rel, v) [\<in>] auxAddToRfRmw pre a s"
       and inv:  "monInvariant pre s"
-  obtains w where "w \<in> sameLocWritesSet (incCommitted s) a"
-                  "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
-                  "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
+  obtains w v_w v_r where "w \<in> sameLocWritesSet (incCommitted s) a"
+                          "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
+                          "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                          "v = Some (v_w, v_r)"
         | "sameLocWrites (incCommitted s) a = []"
           "rel = rf (incWit s)"
+          "v = None"
 proof (cases "sameLocWrites (incCommitted s) a = []")
   case True
   thus ?thesis 
     using step that unfolding auxAddToRfRmw_def by auto
 next
   case False
-  then obtain w where w: "w \<in> sameLocWritesSet (incCommitted s) a"
-                         "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
-                         "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a eq"
-    using step False
+  then obtain w v_w v_r 
+        where w: "w \<in> sameLocWritesSet (incCommitted s) a"
+                 "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
+                 "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                 "v = Some (v_w, v_r)"
+    using step 
     unfolding auxAddToRfRmw_def Let_def
     by auto
-  thus ?thesis using w that by auto
+  thus ?thesis using w that by metis
 qed
 
 lemma monAddToRfRmwE [elim?]:
@@ -2697,17 +2730,34 @@ lemma monAddToRfRmwE [elim?]:
       and inv:  "monInvariant pre s"
   obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
                     "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
-                    "(rel, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
+                    "(rel, v, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
         | "sameLocWrites (incCommitted s) a = []"
           "rel = rf (incWit s)"
 proof -
-  obtain v where v: "(rel, v) [\<in>] auxAddToRfRmw pre a s op ="
+  obtain vs where vs: "(rel, vs) [\<in>] auxAddToRfRmw pre a s"
+              and eq: "() [\<in>] checkValuesAreEqual vs"
     using step
     unfolding monAddToRfRmw_def
     by auto
   thus ?thesis
-    using that auxAddToRfRmwE[OF v inv]
-    by (cases "rel = rf (incWit s)") metis+
+    proof (cases "vs = None")
+      case True
+      hence "rel = rf (incWit s)" 
+            "sameLocWrites (incCommitted s) a = []"
+        using auxAddToRfRmwE[OF vs inv]
+        by auto
+      thus ?thesis using that by metis
+    next
+      case False
+      then obtain w v_w v_r 
+            where w: "w \<in> sameLocWritesSet (incCommitted s) a" 
+                     "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
+                     "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
+                     "vs = Some (v_w, v_r)"
+        using auxAddToRfRmwE[OF vs inv] by auto
+      hence "v_w = v_r" using eq by auto
+      thus ?thesis using that w by auto
+    qed
 qed
 
 subsection {* Elims of monStep *}
@@ -3707,7 +3757,7 @@ lemma step_rf_auxAddPairToRf:
       and in_rf:      "(w, a) \<in> rf wit'"
   obtains value0
           where "w \<in> sameLocWritesSet committed a"
-                "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf wit) w a op ="
+                "(rf wit', value0, value0) [\<in>] auxAddPairToRf (rf wit) w a"
 proof -
   have "is_write w" using in_rf cons2 by auto
   then obtain value_w where value_w: "value_written_by w = Some value_w"
@@ -3738,7 +3788,7 @@ proof -
       thus "c = a" using bc_nin_rf1 by simp
       thus "b = w" using bc_in_rf2 cons2 in_rf by auto
     qed
-  hence inAddPair: "(rf wit', Some (value_w, value_w)) [\<in>] auxAddPairToRf (rf wit) w a op ="
+  hence inAddPair: "(rf wit', value_w, value_w) [\<in>] auxAddPairToRf (rf wit) w a"
     using value_w value_a `value_w = value_a`
     unfolding auxAddPairToRf_def
     by simp
@@ -3772,7 +3822,7 @@ next
   case (2 x)
   then obtain value0 
         where "x \<in> sameLocWritesSet (incCommitted s) a"
-              "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf (incWit s)) x a op ="
+              "(rf wit', value0, value0) [\<in>] auxAddPairToRf (rf (incWit s)) x a"
     using step_rf_auxAddPairToRf[OF cons2 downclosed wit committed a(3)]
     by auto
   thus ?thesis
@@ -3843,7 +3893,7 @@ next
     using cons2 a by auto
   then obtain value0 
         where w:  "w \<in> sameLocWritesSet (incCommitted s) a"
-          and rf: "(rf wit', Some (value0, value0)) [\<in>] auxAddPairToRf (rf (incWit s)) w a op ="
+          and rf: "(rf wit', value0, value0) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
     using step_rf_auxAddPairToRf[OF cons2 downclosed_rf wit committed a(3)] by auto
   have max: "\<forall>c\<in>sameLocWritesSet (incCommitted s) a. (w, c) \<notin> mo (incWit s)" 
     (* TODO: use max to prove this quicker. *)
