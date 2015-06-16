@@ -303,7 +303,7 @@ let rec stepConcurrency n dr_st =
         | _ ->
             ND.pick concur_steps
       end >>= *)
-    (symStep dr_st.concurrency_state initialEqualityCvalue >>= 
+    (symStep dr_st.concurrency_state >>= 
      function
         | ConcurrencyTau performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)

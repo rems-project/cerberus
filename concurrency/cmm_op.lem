@@ -563,29 +563,6 @@ let ~{ocaml} monConsistent =
 
 (* The symbolic model -------------------------------------------------- *)
 
-(* The symbolic model uses a custom equality over cvalues *)
-
-type threeStateBoolean = 
-  | TTrue
-  | TUnknown
-  | TFalse
-
-instance (Eq threeStateBoolean)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-type equalityCvalue =
-  cvalue -> cvalue -> threeStateBoolean
-
-val initialEqualityCvalue: equalityCvalue
-let initialEqualityCvalue left right =
-  if left = right then TTrue else TUnknown
-
-val standardEqualityCvalue: equalityCvalue
-let standardEqualityCvalue left right =
-  if left = right then TTrue else TFalse
-
 (* We have a different type of state, because pre-executions and the
    equality over cvalues can be updated. *)
 
@@ -593,7 +570,6 @@ type symState =
 <| symPre:            pre_execution; 
    symWit:            execution_witness;
    symCommitted:      list action;
-   symEqualityCvalue: equalityCvalue;
    symUndefinedness:  list undefinedness;
 |>
 
@@ -604,8 +580,7 @@ instance (Show symState)
   let show state =
     "(pre_ex: " ^ show (Set.map aid_of state.symPre.actions) ^  
     ", wit: " ^ show state.symWit ^
-    ", committed: " ^ show (List.map aid_of state.symCommitted) ^ 
-    ", eq: " ^ "TODO" ^ ")"
+    ", committed: " ^ show (List.map aid_of state.symCommitted) ^ ")"
 end
 
 val defaultLk: location_kind
@@ -626,7 +601,6 @@ let symInitialState pre =
   <| symPre = pre;
      symWit = empty_witness;
      symCommitted = [];
-     symEqualityCvalue = initialEqualityCvalue;
      (* TODO: not true! *)
      symUndefinedness = [];
   |>
@@ -794,8 +768,8 @@ let symPerformAction s a =
   | Dealloc _ _ _     -> Nondeterminism.return (s.symWit, Nothing)
   end
 
-val symStep: symState -> equalityCvalue -> Nondeterminism.t symStep
-let symStep s eq =
+val symStep: symState -> Nondeterminism.t symStep
+let symStep s =
 
   let uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList s.symPre.actions) | not (a MEM s.symCommitted)] in
