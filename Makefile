@@ -115,7 +115,13 @@ OCAML_DIRS=\
 
 default: lem_model ocaml_native
 
-
+rebuild:
+	make clear
+	make lem_model
+	make dependencies
+	rm depend
+	make depend
+	make ocaml_native; make ocaml_native
 
 # Create the directory where ocamlbuild will be called, and copy the OCaml library files from Lem.
 $(BUILD_DIR):
