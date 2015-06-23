@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId Decode
+import Core Core_aux Core_ctype Boot UniqueId Decode
 open import Show Core_run Core_run_aux Cmm_op Cmm_csem
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
@@ -311,11 +311,17 @@ let rec stepConcurrency n dr_st =
             ND.return  <| dr_st with concurrency_state= concur_st' |>
         
         (* TODO: the variables names seems completely messed up here *)
-        | ReadsFrom v w performed_act concur_st' ->
+        | ReadsFrom w v performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act) in (\* DEBUG *\) *)
             ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n") >>                            (* DEBUG *)
             (* TODO: v is the new concrete value, w is the symbolic value from the read *)
-            let Mem.MVinteger (Mem.IVsymbolic v_symb) = v in
+            let v_symb = match v with
+              | Mem.MVinteger (Mem.IVsymbolic z) ->
+                  z
+              | _ ->
+                  Boot.assert_false ("BUG DRIVER: " ^ Boot.pp_core_expr (Core.Epure (Core.PEval (Core_aux.toCoreValue v)) : Core.expr unit ))
+            end in
+(*            let Mem.MVinteger (Mem.IVsymbolic v_symb) = v in *)
             
             match w with
               | Mem.MVinteger (Mem.IVsymbolic (Symbolic.SYMBsym _ write_sym)) -> 
@@ -491,6 +497,7 @@ let update_core_run_state run_st dr_st =
 
 val action_request_concurrency: driver_state -> action_request -> driver_state
 let action_request_concurrency dr_st request =
+  (* let _ = Boot.output_string "USING action_request_concurrency" in *)
   let (preEx_step, dr_st') =
     match request with
       | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
@@ -701,16 +708,18 @@ let rec driver with_concurrency _dr_st =
       process_core_step
 
 
-val     hack: Core.file core_run_annotation -> Core.pexpr -> Core.value
-let rec hack core_file pexpr =
+val     hack: string -> Core.file core_run_annotation -> Core.pexpr -> Core.value
+let rec hack str core_file pexpr =
   match core_eval core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.to_value pexpr' with
           | Just cval ->
               cval
           | Nothing ->
-              hack core_file pexpr'
+              hack str core_file pexpr'
         end
+    | _ ->
+        Boot.assert_false ("Driver.hack, UNDEF/ERROR: [" ^ str ^"] " ^ Boot.pp_core_expr (Core.Epure pexpr : Core.expr unit))
 (*
     | _ ->
         (* TODO: this is wrong *)
@@ -722,8 +731,8 @@ end
 let finalize_constraints core_file (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
     | Symbolic.SYMBop op symb1 symb2 ->
-        let Core.Vinteger (Mem.IVsymbolic symb1') = hack core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb1))) in
-        let Core.Vinteger (Mem.IVsymbolic symb2') = hack core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb2))) in
+        let Core.Vinteger (Mem.IVsymbolic symb1') = hack "fina_constr1" core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb1))) in
+        let Core.Vinteger (Mem.IVsymbolic symb2') = hack "fina_constr2" core_file (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb2))) in
         Symbolic.SYMBop op symb1' symb2'
     | symb ->
         symb
@@ -736,7 +745,7 @@ val finalize: driver_state -> (string * (bool * symState * Core.value) * (nat * 
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        let v = hack dr_st.core_file
+        let v = hack "fina" dr_st.core_file
             match Core_aux.to_pure th_st.arena with
               | Just (Core.PEval (Core.Vinteger (Mem.IVsymbolic symb))) ->
                   Core_aux.unsymbolify symb

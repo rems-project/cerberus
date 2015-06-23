@@ -287,6 +287,11 @@ let rec core_eval file inside_if = function
         | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             Boot.assert_false "WIP equality between complex integer_value"
 *)
+
+        | (OpEq, Just (Vinteger (Mem.IVsymbolic symb)), Just (Vinteger (Mem.IVinteger n))) ->
+            EU.return $ PEval (Vinteger (Mem.IVsymbolic (Symbolic.make_op Symbolic.Eq symb (Symbolic.SYMBconst n))))
+
+
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
         
@@ -1060,8 +1065,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                   update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
                 )
 
-(* TODO: bring these back ?
-          | Just (Vsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
+          | Just (Vinteger (Mem.IVsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 symb2))) ->
               ND.msum [
                 ND.bind (ND.add_constraint (Constraints.assert_eq symb1 symb2)) (fun _ ->
                 ND.return (
@@ -1079,6 +1083,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
                 ))
               ]
+(* TODO: bring these back
           | Just (Vsymbolic (Symbolic.SYMBop Symbolic.Lt symb1 symb2)) ->
               ND.msum [
                 ND.bind (ND.add_constraint (Constraints.assert_lt symb1 symb2)) (fun _ ->
