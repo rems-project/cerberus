@@ -1,5 +1,0 @@
-open import Pervasives
-open import Language
-
-val exampleProgram: command
-let exampleProgram = [[ {{store x 5 na; store x 4 release}||store x 2 na} ]]
