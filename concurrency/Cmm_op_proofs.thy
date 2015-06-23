@@ -2620,7 +2620,44 @@ lemma checkValuesAreEqual_simp [simp]:
   shows "() [\<in>] checkValuesAreEqual b = (b = None \<or> (\<exists>a. b = Some (a, a)))"
 by (cases b) auto
 
+subsubsection {* addToTransitiveOrder *}
+
+lemma addToTransitiveOrderE [elim?]:
+  assumes "rel' [\<in>] addToTransitiveOrder domain a rel"
+  obtains y where "y \<in> set domain"
+                  "rel' = insert (y, a) 
+                                 (   rel 
+                                   \<union> (\<lambda>c. (c, a)) ` {c \<in> set domain. (c, y) \<in> rel}
+                                   \<union> Pair a ` {c \<in> set domain. (y, c) \<in> rel}
+                                 )"
+        | "rel' = rel \<union> Pair a ` set domain"
+using assms
+unfolding addToTransitiveOrder_def
+by auto
+
+lemma addToTransitiveOrderE_elem [elim?]:
+  assumes "rel' [\<in>] addToTransitiveOrder domain a rel"
+      and "(x, y) \<in> rel'"
+  obtains "(x, y) \<in> rel"
+        | "x = a" "y \<in> set domain"
+        | "y = a" "x \<in> set domain"
+using assms
+unfolding addToTransitiveOrder_def
+by auto
+
+(*
+lemma addToTransitiveOrderE_elem2 [elim?]:
+  assumes "rel' [\<in>] addToTransitiveOrder domain a rel"
+      and "(x, y) \<in> rel"
+  obtains "(x, y) \<in> rel'"
+using assms
+unfolding addToTransitiveOrder_def
+by auto
+*)
+
 subsection {* Elims of relation constructions *}
+
+subsubsection {* mo *}
 
 lemma monAddToMoE [elim?]:
   assumes step: "rel [\<in>] monAddToMo pre a s"
@@ -2629,6 +2666,8 @@ lemma monAddToMoE [elim?]:
 using assms
 unfolding monAddToMo_def Let_def 
 by auto
+
+subsubsection {* rf *}
 
 lemma auxAddPairToRfE [elim]: 
   assumes step: "(rel', v_w, v_r) [\<in>] auxAddPairToRf rel w r "
@@ -2642,7 +2681,6 @@ by (cases "value_read_by r", auto)
 
 lemma auxAddToRfLoadE [elim?]:
   assumes step: "(rel, v) [\<in>] auxAddToRfLoad pre a s"
-      and inv:  "monInvariant pre s"
   obtains w v_w v_r where "w \<in> sameLocWritesSet (incCommitted s) a" 
                           "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
                           "v = Some (v_w, v_r)"
@@ -2669,7 +2707,6 @@ qed
 
 lemma monAddToRfLoadE [elim?]:
   assumes step: "rel [\<in>] monAddToRfLoad pre a s"
-      and inv:  "monInvariant pre s"
   obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
                     "(rel, v, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
         | "rel = rf (incWit s)"
@@ -2683,7 +2720,7 @@ proof -
     proof (cases "vs = None")
       case True
       hence "rel = rf (incWit s)"
-        using that auxAddToRfLoadE[OF vs inv]
+        using that auxAddToRfLoadE[OF vs]
         by auto
       thus ?thesis using that by metis
     next
@@ -2692,7 +2729,7 @@ proof -
             where w: "w \<in> sameLocWritesSet (incCommitted s) a" 
                      "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
                      "vs = Some (v_w, v_r)"
-        using auxAddToRfLoadE[OF vs inv] by auto
+        using auxAddToRfLoadE[OF vs] by auto
       hence "v_w = v_r" using eq by auto
       thus ?thesis using that w by auto
     qed
@@ -2700,7 +2737,6 @@ qed
 
 lemma auxAddToRfRmwE [elim?]:
   assumes step: "(rel, v) [\<in>] auxAddToRfRmw pre a s"
-      and inv:  "monInvariant pre s"
   obtains w v_w v_r where "w \<in> sameLocWritesSet (incCommitted s) a"
                           "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                           "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
@@ -2727,7 +2763,6 @@ qed
 
 lemma monAddToRfRmwE [elim?]:
   assumes step: "rel [\<in>] monAddToRfRmw pre a s"
-      and inv:  "monInvariant pre s"
   obtains w v where "w \<in> sameLocWritesSet (incCommitted s) a" 
                     "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                     "(rel, v, v) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
@@ -2744,7 +2779,7 @@ proof -
       case True
       hence "rel = rf (incWit s)" 
             "sameLocWrites (incCommitted s) a = []"
-        using auxAddToRfRmwE[OF vs inv]
+        using auxAddToRfRmwE[OF vs]
         by auto
       thus ?thesis using that by metis
     next
@@ -2754,11 +2789,38 @@ proof -
                      "\<forall>w' \<in> sameLocWritesSet (incCommitted s) a. (w, w') \<notin> mo (incWit s)"
                      "(rel, v_w, v_r) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
                      "vs = Some (v_w, v_r)"
-        using auxAddToRfRmwE[OF vs inv] by auto
+        using auxAddToRfRmwE[OF vs] by auto
       hence "v_w = v_r" using eq by auto
       thus ?thesis using that w by auto
     qed
 qed
+
+subsubsection {* sc *}
+
+subsubsection {* lo *}
+
+lemma monAddToLoE [elim?]:
+  assumes "rel' [\<in>] monAddToLo pre a s"
+  obtains y where "y \<in> sameLocLocksUnlocksSet (incCommitted s) a"
+                  "rel' = insert (y, a) 
+                                 (   lo (incWit s) 
+                                   \<union> (\<lambda>c. (c, a)) ` {c \<in> sameLocLocksUnlocksSet (incCommitted s) a. (c, y) \<in> lo (incWit s)}
+                                   \<union> Pair a ` {c \<in> sameLocLocksUnlocksSet (incCommitted s) a. (y, c) \<in> lo (incWit s)}
+                                 )"
+        | "rel' = lo (incWit s) \<union> Pair a ` (sameLocLocksUnlocksSet (incCommitted s) a)"
+using assms
+unfolding monAddToLo_def
+by (elim addToTransitiveOrderE) auto
+
+lemma monAddToLoE_elem [elim?]:
+  assumes "rel' [\<in>] monAddToLo pre a s"
+      and "(x, y) \<in> rel'"
+  obtains "(x, y) \<in> lo (incWit s)"
+        | "x = a" "y \<in> sameLocLocksUnlocksSet (incCommitted s) a"
+        | "y = a" "x \<in> sameLocLocksUnlocksSet (incCommitted s) a"
+using assms
+unfolding monAddToLo_def
+by (elim addToTransitiveOrderE_elem) auto
 
 subsection {* Elims of monStep *}
 
@@ -2809,7 +2871,6 @@ by (cases a) auto
 
 lemma monStepE_rf2 [elim?]:
   assumes monStep: "(a, s2) [\<in>] monStep pre s1"
-      and inv:     "monInvariant pre s1"
   obtains w where "rf (incWit s2) = insert (w, a) (rf (incWit s1))"
                   "w \<in> sameLocWritesSet (incCommitted s1) a"
         | "rf (incWit s2) = rf (incWit s1)"
@@ -2817,12 +2878,12 @@ proof (cases rule: monStepE_rf[OF monStep])
   case 1
   thus ?thesis
     using that
-    by (cases rule: monAddToRfLoadE[OF 1(2) inv]) auto
+    by (cases rule: monAddToRfLoadE[OF 1(2)]) auto
 next
   case 2
   thus ?thesis
     using that
-    by (cases rule: monAddToRfRmwE[OF 2(2) inv]) auto
+    by (cases rule: monAddToRfRmwE[OF 2(2)]) auto
 next
   case 3
   thus ?thesis using that by auto
@@ -2844,7 +2905,7 @@ proof -
     by auto
   show ?thesis
     using incCom_s1 in_rf that
-    by (cases rule: monStepE_rf2[OF monStep inv]) auto
+    by (cases rule: monStepE_rf2[OF monStep]) auto
 qed
 
 subsubsection {* mo *}
@@ -3002,6 +3063,189 @@ using assms
 unfolding monStep_def monPerformActions_def Let_def
 by (cases a) auto
 
+lemma monStepE_lo2 [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+  obtains (lock1) y 
+    where "is_lock a \<or> is_unlock a" 
+          "y \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+          "lo (incWit s2) = insert (y, a) 
+                                   (   lo (incWit s1) 
+                                     \<union> (\<lambda>c. (c, a)) ` {c \<in> sameLocLocksUnlocksSet (incCommitted s1) a. (c, y) \<in> lo (incWit s1)}
+                                     \<union> Pair a ` {c \<in> sameLocLocksUnlocksSet (incCommitted s1) a. (y, c) \<in> lo (incWit s1)}
+                                   )"
+        | (lock2) "is_lock a \<or> is_unlock a" 
+                  "lo (incWit s2) = lo (incWit s1) \<union> Pair a ` (sameLocLocksUnlocksSet (incCommitted s1) a)"
+        | (other) "\<not>is_lock a" 
+                  "\<not>is_unlock a" 
+                  "lo (incWit s2) = lo (incWit s1)"
+proof (cases rule: monStepE_lo[OF monStep])
+  case 1
+  show ?thesis
+    using that 1(1)
+    by (cases rule: monAddToLoE[OF 1(2)]) auto
+next
+  case 2
+  thus ?thesis using that by auto
+qed
+
+lemma monStepE_lo3 [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  obtains "lo (incWit s1) = relRestrict (lo (incWit s2)) (incCommittedSet s1)"
+proof -
+  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
+                                           incWit s1, 
+                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
+    using inv by auto
+  hence s1: "lo (incWit s1) = relRestrict (lo (incWit s1)) (incCommittedSet s1)" by auto
+  show ?thesis
+    proof (cases rule: monStepE_lo2[OF monStep])
+      case 1
+      have "a \<notin> incCommittedSet s1" using monStep inv by auto
+      hence "  relRestrict (lo (incWit s2)) (incCommittedSet s1)
+             = relRestrict (lo (incWit s1)) (incCommittedSet s1)"
+        using 1 by auto
+      thus ?thesis using 1 s1 that by auto
+    next
+      case 2
+      have "a \<notin> incCommittedSet s1" using monStep inv by auto
+      hence "  relRestrict (lo (incWit s2)) (incCommittedSet s1)
+             = relRestrict (lo (incWit s1)) (incCommittedSet s1)"
+        unfolding 2(2) by auto
+      thus ?thesis using 2 s1 that by auto
+    next
+      case 3
+      thus ?thesis using s1 that by auto
+    qed
+qed
+
+lemma monStepE_lo_pair [elim?]:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+      and in_lo:   "(x, y) \<in> lo (incWit s2)"
+  obtains "(x, y) \<notin> lo (incWit s1)"
+          "x \<in> actions0 pre" 
+          "x \<in> incCommittedSet s2"
+          "x \<notin> incCommittedSet s1"
+          "y \<in> actions0 pre"
+          "y \<in> incCommittedSet s1"
+          "x = a"
+          "y \<noteq> a"
+          "loc_of x = loc_of y"
+          "is_lock x \<or> is_unlock x"
+          "is_lock y \<or> is_unlock y"
+          "is_at_mutex_location (lk pre) x"
+          "is_at_mutex_location (lk pre) y"
+        | "(x, y) \<notin> lo (incWit s1)"
+          "x \<in> actions0 pre" 
+          "x \<in> incCommittedSet s1"
+          "y \<in> actions0 pre"
+          "y \<in> incCommittedSet s2"
+          "y \<notin> incCommittedSet s1"
+          "y = a"
+          "x \<noteq> a"
+          "loc_of x = loc_of y"
+          "is_lock x \<or> is_unlock x"
+          "is_lock y \<or> is_unlock y"
+          "is_at_mutex_location (lk pre) x"
+          "is_at_mutex_location (lk pre) y"
+        | "(x, y) \<in> lo (incWit s1)"
+          "x \<in> actions0 pre" 
+          "x \<in> incCommittedSet s1"
+          "y \<in> actions0 pre"
+          "y \<in> incCommittedSet s1"
+          "x \<noteq> y"
+          "x \<noteq> a"
+          "y \<noteq> a"
+          "loc_of x = loc_of y"
+          "is_lock x \<or> is_unlock x"
+          "is_lock y \<or> is_unlock y"
+          "is_at_mutex_location (lk pre) x"
+          "is_at_mutex_location (lk pre) y"
+proof -
+
+  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
+                                           incWit s1, 
+                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
+    using inv by auto
+  have loc_kinds: "actions_respect_location_kinds (actions0 pre) (lk pre)"
+    using inv by auto
+  have a2: "a \<in> incCommittedSet s2" 
+           "a \<in> actions0 pre" 
+           "a \<notin> incCommittedSet s1"
+    using monStep inv by auto
+  show ?thesis
+    proof (cases "(x, y) \<in> lo (incWit s1)")
+      case True
+      hence "x \<in> incCommittedSet s1" "y \<in> incCommittedSet s1" using cons_lo by auto
+      hence "x \<noteq> a" "y \<noteq> a" using monStep inv by auto
+      thus ?thesis 
+        using True cons_lo that(3) by auto
+    next
+      case False
+      hence "lo (incWit s2) \<noteq> lo (incWit s1)"
+        using in_lo by auto
+      thus ?thesis
+        proof (cases rule: monStepE_lo2[OF monStep])
+          case (1 z)
+          hence z: "z \<in> actions0 pre" using inv by auto
+          hence loc_z: "is_at_mutex_location (lk pre) z" 
+            using loc_kinds 1(2)
+            unfolding actions_respect_location_kinds_def is_at_mutex_location_def
+            by (cases z) auto
+          hence loc_a: "is_at_mutex_location (lk pre) a"
+            using 1(2) unfolding is_at_mutex_location_def by auto
+          show ?thesis 
+            using 1(3) in_lo False 
+            proof auto
+              assume "y = a" "x = z"
+              have "y \<notin> incCommittedSet s1" using `y = a` monStep inv by auto
+              hence "(x, y) \<notin> lo (incWit s1)" using cons_lo by auto
+              thus ?thesis 
+                using a2 1(1) 1(2) z loc_z loc_a that(2) `y = a` `x = z`
+                unfolding sameLocLocksUnlocksSet_def
+                by auto
+            next
+              assume xy: "y = a" "x \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+              hence x2: "x \<in> actions0 pre" "is_at_mutex_location (lk pre) x" 
+                using inv loc_a unfolding is_at_mutex_location_def by auto
+              have "y \<notin> incCommittedSet s1" using `y = a` monStep inv by auto
+              hence "(x, y) \<notin> lo (incWit s1)" using cons_lo by auto
+              thus ?thesis 
+                using xy x2 a2 1(1) loc_a that(2)
+                unfolding sameLocLocksUnlocksSet_def
+                by auto
+            next
+              assume xy: "x = a" "y \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+              hence y2: "y \<in> actions0 pre" "is_at_mutex_location (lk pre) y" 
+                using inv loc_a unfolding is_at_mutex_location_def by auto
+              have "x \<notin> incCommittedSet s1" using `x = a` monStep inv by auto
+              hence "(x, y) \<notin> lo (incWit s1)" using cons_lo by auto
+              thus ?thesis 
+                using xy y2 a2 1(1) loc_a that(1)
+                unfolding sameLocLocksUnlocksSet_def
+                by auto
+            qed
+        next
+          case 2
+          hence xy: "x = a" "y \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+            using False in_lo by auto
+          hence loc_a: "is_at_mutex_location (lk pre) a"
+            using a2 2(1) loc_kinds
+            unfolding actions_respect_location_kinds_def is_at_mutex_location_def
+            by (cases a) auto
+          hence y2: "y \<in> actions0 pre" "is_at_mutex_location (lk pre) y" 
+            using xy inv unfolding is_at_mutex_location_def by auto
+          have "x \<notin> incCommittedSet s1" using `x = a` monStep inv by auto
+          hence "(x, y) \<notin> lo (incWit s1)" using cons_lo by auto
+          thus ?thesis 
+            using xy y2 a2 2(1) loc_a that(1)
+            unfolding sameLocLocksUnlocksSet_def
+            by auto
+        qed simp
+    qed
+qed
+
 subsubsection {* sc *}
 
 lemma monStepE_sc [elim?]:
@@ -3052,7 +3296,7 @@ proof (intro assumptionsI, simp)
   have rf: "finite_prefixes (rf (incWit s1)) (actions0 (preRestrict pre (incCommittedSet s1)))"
     using inv by blast
   show "finite_prefixes (rf (incWit s2)) (actions0 pre \<inter> incCommittedSet s2)"
-    proof (cases rule: monStepE_rf2[OF monStep inv])
+    proof (cases rule: monStepE_rf2[OF monStep])
 oops (*
       case 1
       show ?thesis 
@@ -3169,7 +3413,7 @@ proof -
       case 1 (* load *)
       hence "is_read a" by (intro is_readI) auto
       show ?thesis
-        proof (cases rule: monAddToRfLoadE[OF 1(2) inv])
+        proof (cases rule: monAddToRfLoadE[OF 1(2)])
           case (1 w) 
           hence wit: "rf (incWit s2) = insert (w, a) (rf (incWit s1))"
             by auto
@@ -3189,7 +3433,7 @@ proof -
       case 2 (* rmw *)
       hence "is_read a" by auto
       show ?thesis
-        proof (cases rule: monAddToRfRmwE[OF 2(2) inv])
+        proof (cases rule: monAddToRfRmwE[OF 2(2)])
           case (1 w)
           hence wit: "rf (incWit s2) = insert (w, a) (rf (incWit s1))"
             by auto
@@ -3214,9 +3458,219 @@ proof -
     qed
 qed
 
-subsubsection {* locks_only_consistent_locks *}
-
 subsubsection {* locks_only_consistent_lo *}
+
+lemma monStep_locks_only_consistent_lo:
+  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
+      and inv:     "monInvariant pre s1"
+  shows   "locks_only_consistent_lo (incToEx pre s2)"
+unfolding incToEx_def Let_def getRelations_simp
+proof (intro locks_only_consistent_loI, simp_all)
+  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
+                                           incWit s1, 
+                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
+    using inv by auto
+  hence trans: "trans (lo (incWit s1))" by auto
+  have a: "a \<notin> incCommittedSet s1" "a \<in> actions0 pre"
+    using monStep inv by auto
+  fix x y
+  assume in_lo_s2: "(x, y) \<in> lo (incWit s2)"
+  show "sameLocLocksUnlocks_cond (preRestrict pre (incCommittedSet s2)) x y"
+    unfolding sameLocLocksUnlocks_cond_def
+    using a monStep
+    by (cases rule: monStepE_lo_pair[OF monStep inv in_lo_s2]) auto
+  show "(y, x) \<notin> getHb (preRestrict pre (incCommittedSet s2)) (incWit s2)"
+    sorry
+  fix z
+  assume yz_in_lo_s2: "(y, z) \<in> lo (incWit s2)"
+  have x: "x \<in> insert a (incCommittedSet s1)"
+          "is_lock x \<or> is_unlock x"
+    using monStepE_lo_pair[OF monStep inv in_lo_s2]
+    by auto
+  have y: "y \<in> insert a (incCommittedSet s1)"
+          "is_lock y \<or> is_unlock y"
+          "loc_of x = loc_of y"
+    using monStepE_lo_pair[OF monStep inv in_lo_s2]
+    by auto
+  have z: "z \<in> insert a (incCommittedSet s1)"
+          "is_lock z \<or> is_unlock z"
+          "loc_of y = loc_of z"
+    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2]
+    by auto
+  show "(x, z) \<in> lo (incWit s2)"
+    proof (cases "x = a \<or> y = a \<or> z = a")
+      case False
+      hence "x \<in> incCommittedSet s1"
+            "y \<in> incCommittedSet s1"
+            "z \<in> incCommittedSet s1"
+        using x y z by auto
+      hence "(x, y) \<in> relRestrict (lo (incWit s2)) (incCommittedSet s1)"
+            "(y, z) \<in> relRestrict (lo (incWit s2)) (incCommittedSet s1)"
+        using in_lo_s2 yz_in_lo_s2 
+        by auto
+      hence "(x, y) \<in> lo (incWit s1)"
+            "(y, z) \<in> lo (incWit s1)"
+        using monStepE_lo3[OF monStep inv] by blast+
+      hence "(x, z) \<in> lo (incWit s1)"
+        using x cons_lo
+        unfolding locks_only_consistent_lo.simps trans_def
+        by metis
+      thus ?thesis
+        using monStepE_lo3[OF monStep inv] by fast
+    next
+      case True
+      show ?thesis
+        proof (cases rule: monStepE_lo2[OF monStep])
+          case (1 w)
+          show ?thesis 
+            proof (cases "x = a")
+              assume "x = a"
+              hence y2: "(w, y) \<in> lo (incWit s1)" "y \<noteq> a" 
+                using in_lo_s2 1(2) 1(3) a cons_lo by auto
+              hence "y \<noteq> w" using cons_lo by auto
+              have "z \<noteq> a"
+                proof
+                  assume "z = a"
+                  hence "(y, z) \<notin> lo (incWit s1)"
+                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] by auto
+                  hence "(y, w) \<in> lo (incWit s1)"
+                    using yz_in_lo_s2 1(3) `y \<noteq> w` a(1) y2 by auto
+                  hence "(w, w) \<in> lo (incWit s1)"
+                    using transE[OF trans] y2 by auto
+                  thus False using cons_lo by auto
+                qed
+              hence "(y, z) \<in> lo (incWit s1)"
+                using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `y \<noteq> a` by auto
+              hence wz_in_lo_s1: "(w, z) \<in> lo (incWit s1)"
+                using transE[OF trans] y2 by auto
+              have "z \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+                unfolding sameLocLocksUnlocksSet_def 
+                using wz_in_lo_s1 cons_lo y(3) z(3) `x = a` 
+                by auto             
+              thus ?thesis using wz_in_lo_s1 `x = a` 1 by auto
+            next 
+              assume "x \<noteq> a"
+              show ?thesis
+                proof (cases "y = a")
+                  assume "y = a"
+                  have "(x, y) \<notin> lo (incWit s1)"
+                    using monStepE_lo_pair[OF monStep inv in_lo_s2] `y = a` by auto
+                  hence x: "(x, w) \<in> lo (incWit s1) \<or> (x = w)"
+                    using 1(3) in_lo_s2 `y = a` `x \<noteq> a` by auto
+                  have "(y, z) \<notin> lo (incWit s1)"
+                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `y = a` by auto
+                  hence "(w, z) \<in> lo (incWit s1)"
+                    using 1(2) 1(3) yz_in_lo_s2 `y = a` a by auto
+                  hence "(x, z) \<in> lo (incWit s1)"
+                    using x transE[OF trans] by auto 
+                  thus ?thesis using 1 by auto
+                next 
+                  assume "y \<noteq> a"
+                  hence "z = a" using `x \<noteq> a` True by auto
+                  have xy_in_lo_s1: "(x, y) \<in> lo (incWit s1)"
+                    using monStepE_lo_pair[OF monStep inv in_lo_s2] 
+                    using `x \<noteq> a` `y \<noteq> a` 
+                    by metis
+                  have "(y, z) \<notin> lo (incWit s1)"
+                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `z = a` by auto
+                  hence "(y, w) \<in> lo (incWit s1) \<or> (y = w)"
+                    using yz_in_lo_s2 `z = a` `y \<noteq> a` 1(3) by auto
+                  hence xw_in_lo_s1: "(x, w) \<in> lo (incWit s1)"
+                    using xy_in_lo_s1 using transE[OF trans] by auto 
+                  have "x \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+                    unfolding sameLocLocksUnlocksSet_def 
+                    using xy_in_lo_s1 cons_lo y(3) z(3) `z = a` 
+                    by auto
+                  thus ?thesis using xw_in_lo_s1 `z = a` 1 by auto
+                qed
+            qed
+        next
+          case 2
+          have mo1: "lo (incWit s1) = relRestrict (lo (incWit s2)) (incCommittedSet s1)"
+            using monStepE_lo3[OF monStep inv] by auto
+          have "y \<noteq> a" "z \<noteq> a"
+            using in_lo_s2 yz_in_lo_s2 a
+            unfolding 2(2) 
+            using mo1
+            by auto
+          hence "x = a" using True by auto
+          hence "loc_of a = loc_of z"
+            using y z by auto
+          hence "z \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+            unfolding sameLocLocksUnlocksSet_def
+            using z `z \<noteq> a`
+            by auto
+          thus ?thesis using 2(2) `x = a` by auto
+        next
+          case 3
+          hence False using True x y z by auto
+          thus ?thesis by auto
+        qed
+    qed
+next
+  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
+                                           incWit s1, 
+                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
+    using inv by auto
+  fix x y
+  assume xy: "x \<in> actions0 pre \<and> x \<in> incCommittedSet s2"
+             "y \<in> actions0 pre \<and> y \<in> incCommittedSet s2"
+             "x \<noteq> y"
+             "loc_of x = loc_of y"
+             "is_lock x \<or> is_unlock x"
+             "is_lock y \<or> is_unlock y"
+             "is_at_mutex_location (lk pre) x"
+             "is_at_mutex_location (lk pre) y"
+  show "(x, y) \<in> lo (incWit s2) \<or> (y, x) \<in> lo (incWit s2)"
+    proof (cases "x = a \<or> y = a", simp_all)
+      assume "x = a \<or> y = a"
+      hence monAddToLo: "lo (incWit s2) [\<in>] monAddToLo pre a s1"
+        using monStepE_lo[OF monStep] xy by auto
+      have loc: "is_at_mutex_location (lk pre) a"
+        using `x = a \<or> y = a` xy by auto
+      let ?x2 = "if x = a then x else y"
+      let ?y2 = "if x = a then y else x"
+      have x2: "?x2 = a"                 
+        using `x = a \<or> y = a` by auto
+      hence "?y2 \<in> incCommittedSet s1"
+        using xy monStep by auto
+      hence y2: "?y2 \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
+        using x2 xy unfolding sameLocLocksUnlocksSet_def by (cases "x = a") auto
+      have "(?x2, ?y2) \<in> lo (incWit s2) \<or> (?y2, ?x2) \<in> lo (incWit s2)"
+        using monAddToLo
+        proof (cases rule: monAddToLoE)
+          case (1 z)
+          hence loc_z: "is_at_mutex_location (lk pre) z"
+            unfolding sameLocLocksUnlocksSet_def
+            using same_loc_mutex_location[OF loc, where b=z] 
+            by simp blast
+          have "z \<in> actions0 pre"
+            using 1 inv by auto
+          hence "(?y2, z) \<notin> lo (incWit s1) \<Longrightarrow> ?y2 \<noteq> z \<Longrightarrow> (z, ?y2) \<in> lo (incWit s1)"
+            using 1(1) y2 loc_z xy(1) xy(2)
+            unfolding sameLocLocksUnlocksSet_def
+            by (cases rule: locks_only_consistent_loE2_inv[OF cons_lo]) auto
+          thus ?thesis using 1 x2 y2 by blast
+        next
+          case 2
+          thus ?thesis using x2 y2 by auto
+        qed
+      thus ?thesis by (cases "x = a") auto
+    next
+      assume "x \<noteq> a \<and> y \<noteq> a"
+      hence xy2: "x \<in> incCommittedSet s1" 
+                 "y \<in> incCommittedSet s1"
+        using xy monStep by auto
+      have "(x, y) \<in> lo (incWit s1) \<or> (y, x) \<in> lo (incWit s1)"
+        using cons_lo xy xy2
+        unfolding locks_only_consistent_lo.simps
+        by auto
+      thus ?thesis
+        using monStepE_lo3[OF monStep inv] by fast
+    qed
+qed
+
+subsubsection {* locks_only_consistent_locks *}
 
 subsubsection {* consistent_mo *}
 
@@ -3369,7 +3823,7 @@ proof (intro rmw_atomicityI, clarsimp)
     using cons_rf by auto
   hence "(a, r) \<notin> rf (incWit s2)"
     using a
-    by (cases rule: monStepE_rf2[OF monStep inv]) auto
+    by (cases rule: monStepE_rf2[OF monStep]) auto
   have "(a, r) \<notin> mo (incWit s1)"
     using a cons_mo by auto
   hence "(a, r) \<notin> mo (incWit s2)"
@@ -3410,7 +3864,7 @@ proof (intro rmw_atomicityI, clarsimp)
             using cons_rmw w w2 r r2 by auto
           also have "... = ((w, r) \<in> rf (incWit s2))"
             using `r \<noteq> a`
-            by (cases rule: monStepE_rf2[OF monStep inv]) auto
+            by (cases rule: monStepE_rf2[OF monStep]) auto
           finally show ?thesis .
         next
           assume "r = a"
@@ -3426,7 +3880,7 @@ proof (intro rmw_atomicityI, clarsimp)
               assume w_not_same_loc: "w \<notin> sameLocWritesSet (incCommitted s1) a"
               hence "(w, a) \<notin> rf (incWit s2)"
                 using `(w, a) \<notin> rf (incWit s1)` 
-                by (cases rule: monAddToRfRmwE[OF rmw_step inv]) auto
+                by (cases rule: monAddToRfRmwE[OF rmw_step]) auto
               have "(w, a) \<notin> mo (incWit s1)"
                 using a cons_mo by auto
               hence "(w, a) \<notin> mo (incWit s2)"
@@ -3441,7 +3895,7 @@ proof (intro rmw_atomicityI, clarsimp)
                                and w'_max: "\<forall>w''\<in>sameLocWritesSet (incCommitted s1) a. 
                                                   (w', w'') \<notin> mo (incWit s1)"
                                and rf_s2:  "rf (incWit s2) = insert (w', a) (rf (incWit s1))"
-                by (cases rule: monAddToRfRmwE[OF rmw_step inv]) auto
+                by (cases rule: monAddToRfRmwE[OF rmw_step]) auto
               have w'_a_in_mo: "(w', a) \<in> mo (incWit s2)"
                 using w' mo_s2 by auto
               show ?thesis
@@ -4153,7 +4607,8 @@ proof -
           hence "a \<noteq> c" using a by auto
           have "(c, a) \<notin> lo wit'" using max by auto
           thus "(a, c) \<in> lo wit'"
-            using cons2 a(1) c is_lo_ulo `a \<noteq> c` mutex by auto
+            using cons2 a(1) c is_lo_ulo `a \<noteq> c` mutex 
+            by (auto elim: locks_only_consistent_loE2_inv)
           fix c
         next
           fix b c
@@ -4229,7 +4684,8 @@ proof -
           have "(b, c) \<in> lo wit'" using in_sc wit by auto
           hence "(c, a) \<notin> lo wit'" using max c by auto
           thus "(a, c) \<in> lo wit'" 
-            using sameLoc cons2 c a is_lo_ulo mutex by auto
+            using sameLoc cons2 c a is_lo_ulo mutex
+            by (auto elim: locks_only_consistent_loE2_inv)
         qed
       moreover have "lo wit' \<subseteq> lo (incWit s) \<union> {(b, a)} \<union> ?prev \<union> ?succ"
         proof auto
@@ -4268,7 +4724,8 @@ proof -
             by auto
           hence "(c, b) \<notin> lo wit'" using b3 c2 wit by auto
           thus "c = b" 
-            using cons2 bc_nin_lo b2 b3(4) b3(5) c(1) c(4) loc by auto
+            using cons2 bc_nin_lo b2 b3(4) b3(5) c(1) c(4) loc 
+            by (auto elim: locks_only_consistent_loE2_inv)
         qed
       ultimately have "lo wit' = lo (incWit s) \<union> ?prev \<union> ?succ \<union> {(b, a)}" 
         using b by auto             

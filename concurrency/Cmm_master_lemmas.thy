@@ -37,6 +37,11 @@ lemma relToIntro:
 using assms
 by (rule ssubst)
 
+lemma obtainToShow:
+  assumes "\<And>Q. (P \<Longrightarrow> Q) \<Longrightarrow> Q"
+  shows   "P"
+using assms by auto
+
 (* 
 lemmas I [intro?] = defToIntro[OF _def]
 lemmas E [elim?] = defToElim[OF _def]
@@ -734,6 +739,22 @@ using assms
 unfolding is_at_atomic_location_def
 by auto
 
+lemma same_loc_non_atomic_location:
+  assumes "is_at_non_atomic_location lk1 a"
+      and "loc_of a = loc_of b"
+  obtains "is_at_non_atomic_location lk1 b"
+using assms
+unfolding is_at_non_atomic_location_def
+by auto
+
+lemma same_loc_mutex_location:
+  assumes "is_at_mutex_location lk1 a"
+      and "loc_of a = loc_of b"
+  obtains "is_at_mutex_location lk1 b"
+using assms
+unfolding is_at_mutex_location_def
+by auto
+
 lemma is_at_mutex_locationE [elim]:
   assumes "is_at_mutex_location lk1 a"
   obtains l where "loc_of a = Some l" "lk1 l = Mutex"
@@ -1220,7 +1241,66 @@ unfolding locks_only_relations_def Let_def by simp
 
 subsubsection {* locks_only_consistent_lo *}
 
-lemmas locks_only_consistent_loI [intro?] = defToIntro[OF locks_only_consistent_lo.simps(2)]
+(* TODO: find better name. The name without the postfix _cond clashes with something else. *)
+
+definition sameLocLocksUnlocks_cond :: "pre_execution \<Rightarrow> action \<Rightarrow> action \<Rightarrow> bool" where
+  "sameLocLocksUnlocks_cond pre a b \<equiv>   a \<in> actions0 pre
+                                 \<and> b \<in> actions0 pre
+                                 \<and> a \<noteq> b
+                                 \<and> loc_of a = loc_of b
+                                 \<and> (is_lock a \<or> is_unlock a)
+                                 \<and> (is_lock b \<or> is_unlock b)
+                                 \<and> (   is_at_mutex_location (lk pre) a 
+                                     \<or> is_at_mutex_location (lk pre) b)"
+
+lemma locks_only_consistent_loI [intro?]:
+  assumes same_loc_lu: "\<And>a b. (a, b) \<in> lo wit \<Longrightarrow> sameLocLocksUnlocks_cond pre a b"
+      and not_hb:      "\<And>a b. (a, b) \<in> lo wit \<Longrightarrow> (b, a) \<notin> hb"
+      and trans:       "\<And>a b c.    (a, b) \<in> lo wit
+                                \<Longrightarrow> (b, c) \<in> lo wit
+                                \<Longrightarrow> (a, c) \<in> lo wit"
+      and in_mo:       "\<And>a b.    a \<in> actions0 pre
+                              \<Longrightarrow> b \<in> actions0 pre
+                              \<Longrightarrow> a \<noteq> b
+                              \<Longrightarrow> loc_of a = loc_of b
+                              \<Longrightarrow> is_lock a \<or> is_unlock a
+                              \<Longrightarrow> is_lock b \<or> is_unlock b
+                              \<Longrightarrow> is_at_mutex_location (lk pre) a
+                              \<Longrightarrow> is_at_mutex_location (lk pre) b
+                              \<Longrightarrow> ((a, b) \<in> lo wit \<or> (b, a) \<in> lo wit)"
+  shows "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
+proof -
+  have at_loc2: "\<And>a b.     (a, b) \<in> lo wit
+                        \<Longrightarrow>   is_at_mutex_location (lk pre) b
+                            \<and> is_at_mutex_location (lk pre) a"
+    using same_loc_lu same_loc_mutex_location
+    unfolding sameLocLocksUnlocks_cond_def
+    by metis
+  hence "\<forall>a\<in>actions0 pre. \<forall>b\<in>actions0 pre. 
+                        ((a, b) \<in> lo wit \<or> (b, a) \<in> lo wit) 
+                    \<longrightarrow> (   a \<noteq> b \<and> (is_lock a \<or> is_unlock a) \<and> (is_lock b \<or> is_unlock b)
+                         \<and> loc_of a = loc_of b 
+                         \<and> is_at_mutex_location (lk pre) a)"
+    using same_loc_lu same_loc_mutex_location
+    unfolding sameLocLocksUnlocks_cond_def 
+    by auto 
+  moreover have "\<forall>a\<in>actions0 pre. \<forall>b\<in>actions0 pre. 
+                       (   a \<noteq> b \<and> (is_lock a \<or> is_unlock a) \<and> (is_lock b \<or> is_unlock b)
+                        \<and> loc_of a = loc_of b 
+                        \<and> is_at_mutex_location (lk pre) a)
+                  \<longrightarrow> ((a, b) \<in> lo wit \<or> (b, a) \<in> lo wit)"
+    using same_loc_mutex_location in_mo by blast  
+  moreover have "relOver (lo wit) (actions0 pre)"
+    using same_loc_lu unfolding sameLocLocksUnlocks_cond_def relOver_def by auto
+  moreover have "trans (lo wit)"
+    using trans unfolding trans_def by metis
+  moreover have "irrefl (lo wit)"
+    using same_loc_lu unfolding sameLocLocksUnlocks_cond_def irrefl_def by auto
+  ultimately show ?thesis
+    unfolding locks_only_consistent_lo.simps
+    using not_hb
+    by auto
+qed
 
 lemma locks_only_consistent_loE1 [elim]:
   assumes "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
@@ -1277,7 +1357,7 @@ proof -
     by auto
 qed
 
-lemma locks_only_consistent_loE2_inv [elim]:
+lemma locks_only_consistent_loE2_inv [elim?]:
   assumes "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
       and "a \<in> actions0 pre"
       and "b \<in> actions0 pre"
