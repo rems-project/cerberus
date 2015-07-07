@@ -19,7 +19,7 @@ LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err -wl_pat_exh
 #CMM_MODEL_DIR=../cpp/axiomatic/ntc
 CMM_MODEL_DIR=concurrency
 CMM_MODEL_LEM =\
-  cmm_master.lem
+  cmm_csem.lem
 
 #CMM_EXEC_DIR=../cpp/newmm_op
 CMM_EXEC_DIR=concurrency
@@ -125,7 +125,13 @@ OCAML_DIRS=\
 
 default: lem_model ocaml_native
 
-
+rebuild:
+	make clear
+	make lem_model
+	make dependencies
+	rm depend
+	make depend
+	make ocaml_native; make ocaml_native
 
 # Create the directory where ocamlbuild will be called, and copy the OCaml library files from Lem.
 $(BUILD_DIR):

@@ -4,7 +4,7 @@
 (* --------------------------------------------------------------------- *)
 
 open import Pervasives Show Show_extra
-open import Cmm_aux Cmm_master
+open import Cmm_aux Cmm_csem
 
 
 
@@ -94,6 +94,15 @@ let ~{ocaml} axsimpBehaviour opsem_t p =
 
 (* The incremental model ----------------------------------------------- *)
 
+val (MEM) [`listMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
+let inline (MEM) = List.elem  
+
+(* I don't have a clue why the following does not work. *)
+
+(*
+val (NMEM) [`notListMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
+let inline notListMember e l = not (e MEM l) *)
+
 val preRestrict: pre_execution -> set action -> pre_execution
 let preRestrict pre actions = 
 <| actions = pre.actions inter actions;
@@ -118,6 +127,47 @@ let incWitRestrict wit actions =
 (* To show completeness, we will commit the actions of a pre_execution
    in a certain order, which we define here. *)
 
+val pre_hb: pre_execution -> set (action * action)
+let ~{ocaml} pre_hb pre = 
+  pre.sb union (sw_asw pre)
+
+val wit_hb: pre_execution -> execution_witness -> set (action * action)
+let ~{ocaml} wit_hb pre wit = 
+        (sw_lock pre wit)
+  union (sw_rel_acq_rs pre wit) 
+  union (sw_fence_sb_hrs_rf_sb pre wit)
+  union (sw_fence_sb_hrs_rf pre wit)
+  union (sw_fence_rs_rf_sb pre wit)
+
+val sb_r_f: pre_execution -> execution_witness -> set (action * action)
+let sb_r_f pre wit = 
+  {(a, b) | forall ((a, b) IN pre.sb) 
+  |    is_at_atomic_location pre.lk a 
+    && is_read a
+    && is_fence b
+    && is_acquire b}
+
+val sb_f_w: pre_execution -> execution_witness -> set (action * action)
+let sb_f_w pre wit = 
+  {(a, b) | forall ((a, b) IN pre.sb) 
+  |    is_fence a
+    && is_release a
+    && is_at_atomic_location pre.lk b 
+    && is_write b}
+
+val incCom2_step: candidate_execution -> set (action * action)
+let incCom2_step (pre, wit, rel) =
+        wit.mo
+  union wit.rf
+  union (sb_r_f pre wit)
+  union (sb_f_w pre wit)
+
+val incCom2: candidate_execution -> set (action * action)
+let incCom2 ex =
+  Relation.transitiveClosure (incCom2_step ex)
+
+(* The old order *)
+
 val is_na_or_non_write: pre_execution -> action -> bool
 let is_na_or_non_write pre a = 
   not (is_write a) || is_at_non_atomic_location pre.lk a
@@ -134,29 +184,32 @@ let incCom (pre, wit, rel) =
     (Set.(union) (hbMinus (pre, wit, rel)) 
                  (Set.(union) wit.rf wit.mo))
 
-val respectsCom: set action -> set action -> set (action * action) -> action -> bool
+val respectsCom: set action -> list action -> set (action * action) -> action -> bool
 let respectsCom actions committed comOrder a = 
   (forall (b IN actions).
-    (b IN committed --> (a, b) NIN comOrder) &&
-    ((b, a) IN comOrder --> b IN committed))
+    (b MEM committed --> (a, b) NIN comOrder) &&
+    ((b, a) IN comOrder --> b MEM committed))
   
 
 (* The state of the incremental model *)
 
 type incState = 
 <| incWit:       execution_witness;
-   incCommitted: set action;
+   incCommitted: list action;
 |>
+
+val incCommittedSet: incState -> set action
+let inline incCommittedSet s = Set.fromList s.incCommitted
 
 val incInitialState: pre_execution -> incState
 let incInitialState _ = 
 <| incWit       = empty_witness;
-   incCommitted = {};
+   incCommitted = [];
 |>
 
 val incToEx: pre_execution -> incState -> candidate_execution
 let incToEx pre s = 
-  let pre_res = preRestrict pre s.incCommitted in
+  let pre_res = preRestrict pre (incCommittedSet s) in
   let wit     = s.incWit in
   let rel     = getRelations pre_res wit in
   (pre_res, wit, rel)
@@ -166,15 +219,18 @@ let incToEx pre s =
 val incStep: pre_execution -> incState -> incState -> action -> bool
 let incStep pre s1 s2 a =
 
+  (*
   let s2_pre = preRestrict pre s2.incCommitted in
   let rel   = getRelations s2_pre s2.incWit in
-  let s2_ex = (s2_pre, s2.incWit, rel) in
+  let s2_ex = (s2_pre, s2.incWit, rel) in *)
+
+  let s2_ex = incToEx pre s2 in
   let com   = incCom s2_ex in
 
   (* The action that is committed in this step hasn't already been committed *)
   a IN pre.actions &&
-  a NIN s1.incCommitted &&
-  s2.incCommitted = Set.insert a s1.incCommitted &&  
+  not (a MEM s1.incCommitted) &&
+  s2.incCommitted = a::s1.incCommitted &&  
 
   (* Actions are committed in the right order. *)
   respectsCom pre.actions s1.incCommitted com a &&
@@ -182,7 +238,7 @@ let incStep pre s1 s2 a =
   (* The new execution_witness extends the previous (only new
   relations are added, and new relations are from or to the committed
   action). *)
-  incWitRestrict s2.incWit s1.incCommitted = s1.incWit &&
+  incWitRestrict s2.incWit (incCommittedSet s1) = s1.incWit &&
 
   (* The new execution satisfies the consistency predicates. *)
   axsimpConsistent s2_ex
@@ -208,14 +264,18 @@ incStep: forall pre x y z a.
   incTrace pre x z
 
 
-val incConsistent: candidate_execution -> bool
-let ~{ocaml} incConsistent (pre, wit, rel) =
+val consistencyFromTrace: (pre_execution -> incState -> incState -> bool) ->
+                          candidate_execution -> bool
+let ~{ocaml} consistencyFromTrace trace (pre, wit, rel) =
   rel = getRelations pre wit &&
   exists s. 
-  incTrace pre (incInitialState pre) s &&
+  trace pre (incInitialState pre) s &&
   s.incWit = wit &&
-  s.incCommitted = pre.actions
+  incCommittedSet s = pre.actions
 
+val incConsistent: candidate_execution -> bool
+let ~{ocaml} incConsistent =
+  consistencyFromTrace incTrace
 
 
 (* The monadic model --------------------------------------------------- *)
@@ -233,47 +293,56 @@ let inline (>>) m1 m2 = Nondeterminism.bindExhaustive m1 (fun _ -> m2)
 
 (* Auxiliaries *)
 
-val sameLocWrites: set action -> action -> set action
+val sameLocWrites: list action -> action -> list action
 let sameLocWrites actions a =
-  {b | forall (b IN actions) | is_write b && loc_of b = loc_of a}
+  [b | forall (b MEM actions) | is_write b && loc_of b = loc_of a]
 
-val sameLocLocksUnlocks: set action -> action -> set action
+val sameLocLocksUnlocks: list action -> action -> list action
 let sameLocLocksUnlocks actions a =
-  {b | forall (b IN actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a}
+  [b | forall (b MEM actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a]
 
-val scActions: set action -> set action
+val scActions: list action -> list action
 let scActions actions =
-  {b | forall (b IN actions) | is_seq_cst b}
+  [b | forall (b MEM actions) | is_seq_cst b]
+
+val checkValuesAreEqual: maybe (cvalue * cvalue) -> Nondeterminism.t unit
+let checkValuesAreEqual v =
+  match v with
+  | Just (value_w, value_r) -> 
+         Nondeterminism.guard (value_w = value_r) 
+                              (Nondeterminism.Other ("The value written (" ^ show value_w ^ 
+                                                     ") and the value read ( " ^ show value_r ^ 
+                                                     ") cannot be matched"))
+  | _ -> Nondeterminism.return ()
+  end
 
 (* Methods for updating the execution witness *)
 
-val addToTransitiveOrder: set action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
+val addToTransitiveOrder: list action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
 let addToTransitiveOrder domain a r =
   Nondeterminism.mplus
   (* We insert the action before all other actions *)
-  (Nondeterminism.return (Set.(union) r {(a, b) | forall (b IN domain) | true}))
+  (Nondeterminism.return (Set.(union) r (Set.fromList [(a, b) | forall (b MEM domain) | true])))
   (* We choose an action, and insert 'a' directly after it *)
-  (Nondeterminism.pick (Set_extra.toList domain) >>= fun b ->
-    let prev = {(c, a) | forall (c IN domain) | (c, b) IN r} in
-    let succ = {(a, c) | forall (c IN domain) | (b, c) IN r} in
-    Nondeterminism.return (Set.(union) r (Set.insert (b, a) (Set.(union) prev succ))))
+  (Nondeterminism.pick domain >>= fun b ->
+    let prev = [(c, a) | forall (c MEM domain) | (c, b) IN r] in
+    let succ = [(a, c) | forall (c MEM domain) | (b, c) IN r] in
+    Nondeterminism.return (Set.(union) r 
+                                       (Set.insert (b, a) 
+                                                   (Set.(union) (Set.fromList prev) 
+                                                                (Set.fromList succ)))))
 
 val monAddToMo: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
 let monAddToMo pre a s =
-  let prev = {(b, a) | forall (b IN sameLocWrites s.incCommitted a) | true} in
-  Nondeterminism.return (Set.(union) s.incWit.mo prev)
+  let prev = [(b, a) | forall (b MEM sameLocWrites s.incCommitted a) | true] in
+  Nondeterminism.return (Set.(union) s.incWit.mo (Set.fromList prev))
 
 val auxAddPairToRf: set (action * action) -> action -> action -> 
-                    (cvalue -> cvalue -> bool) ->
-                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
-let auxAddPairToRf old_rf w r eq =
+                    Nondeterminism.t (set (action * action) * cvalue * cvalue)
+let auxAddPairToRf old_rf w r =
   match (value_written_by w, value_read_by r) with
   | (Just value_w, Just value_r) -> 
-      Nondeterminism.guard (eq value_w value_r) 
-               (Nondeterminism.Other ("The value written (" ^ show value_w ^ 
-                          ") and the value read ( " ^ show value_r ^ 
-                          ") cannot be matched")) >> 
-      Nondeterminism.return ((Set.insert (w, r) old_rf), Just (value_w, value_r))
+      Nondeterminism.return ((Set.insert (w, r) old_rf), value_w, value_r)
   | _ -> 
       Nondeterminism.kill (Nondeterminism.Error "A write-read pair doesn't contain the values written and read")
   end  
@@ -282,27 +351,27 @@ let auxAddPairToRf old_rf w r eq =
    checked for det_read. Because the resulting state is not visible at 
    this point, we can't check that here. The top-level semantics is sound, 
    because in all calling fuctions we do check det_read *)
-(* The parameter eq is used to compare cvalues. *)
 (* The return type is the new rf-relation, and Nothing if no new edge
    has been added, and otherwise Just a b with a b the values of the
    read and write of the new rf-edge. *)
 val auxAddToRfLoad: pre_execution -> action -> incState -> 
-                    (cvalue -> cvalue -> bool) ->
                     Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
-let auxAddToRfLoad pre a s eq =
+let auxAddToRfLoad pre a s =
   Nondeterminism.mplus
   (* We do not add an rf-edge. This should happen when there is no vse-edge in the resulting state. *)
   (Nondeterminism.return (s.incWit.rf, Nothing))
   (* We add an rf-edge. *)
-  (Nondeterminism.pick 
-    (Set_extra.toList (sameLocWrites s.incCommitted a)) 
-    >>= fun w ->
-    auxAddPairToRf s.incWit.rf w a eq)
+  (Nondeterminism.pick (sameLocWrites s.incCommitted a) 
+   >>= fun w ->
+   auxAddPairToRf s.incWit.rf w a
+   >>= fun (new_rf, value_w, value_r) ->
+   Nondeterminism.return (new_rf, Just (value_w, value_r)))
 
 val monAddToRfLoad: pre_execution -> action -> incState -> 
                     Nondeterminism.t (set (action * action))
 let monAddToRfLoad pre a s =
-  auxAddToRfLoad pre a s (fun a b -> a = b) >>= fun (new_rf, _) ->
+  auxAddToRfLoad pre a s >>= fun (new_rf, v) -> 
+  checkValuesAreEqual v  >>
   Nondeterminism.return new_rf
 
 (* The parameter eq is used to compare cvalues. *)
@@ -310,24 +379,25 @@ let monAddToRfLoad pre a s =
    has been added, and otherwise Just a b with a b the values of the
    read and write of the new rf-edge. *)
 val auxAddToRfRmw: pre_execution -> action -> incState -> 
-                   (cvalue -> cvalue -> bool) ->
                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
-let auxAddToRfRmw pre a s eq =
+let auxAddToRfRmw pre a s =
   let mo_actions = sameLocWrites s.incCommitted a in
-  if mo_actions = {} then
+  if List.null mo_actions then
     Nondeterminism.return (s.incWit.rf, Nothing)
   else
     Nondeterminism.pick 
-      (Set_extra.toList 
-        {w | forall (w IN mo_actions) 
-           | forall (c IN mo_actions). (w, c) NIN s.incWit.mo})
+        [w | forall (w MEM mo_actions) 
+           | forall (c MEM mo_actions). (w, c) NIN s.incWit.mo]
     >>= fun w ->
-    auxAddPairToRf s.incWit.rf w a eq    
+    auxAddPairToRf s.incWit.rf w a  
+    >>= fun (new_rf, value_w, value_r) ->
+    Nondeterminism.return (new_rf, Just (value_w, value_r))   
 
 val monAddToRfRmw: pre_execution -> action -> incState -> 
                    Nondeterminism.t (set (action * action))
 let monAddToRfRmw pre a s =
-  auxAddToRfRmw pre a s (fun a b -> a = b) >>= fun (new_rf, _) ->
+  auxAddToRfRmw pre a s >>= fun (new_rf, v) ->
+  checkValuesAreEqual v >>
   Nondeterminism.return new_rf
 
 val monAddToLo: pre_execution -> action -> incState -> Nondeterminism.t (set (action * action))
@@ -342,14 +412,24 @@ let monAddToSc pre a s =
 
 val monCheckConsistency: candidate_execution -> Nondeterminism.t unit
 let monCheckConsistency ex =
-  Nondeterminism.guard (axsimpConsistent ex) (Nondeterminism.Other "Inconsistent")
+  Nondeterminism.guard (assumptions ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (locks_only_consistent_locks ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (locks_only_consistent_lo ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_accesses_consistent_sc ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_fenced_sc_fences_heeded ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_hb ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (det_read_alt ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_non_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (consistent_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (coherent_memory_use ex) (Nondeterminism.Other "Inconsistent") >>
+  Nondeterminism.guard (sc_accesses_sc_reads_restricted ex) (Nondeterminism.Other "Inconsistent")
 
 val monCheckWitRestrict: execution_witness -> set action -> execution_witness -> Nondeterminism.t unit
 let monCheckWitRestrict new_wit committed old_wit =
   Nondeterminism.guard (incWitRestrict new_wit committed = old_wit) 
            (Nondeterminism.Error "\"witnessRestrict new committed = old\" should hold by construction.")
 
-val monCheckCommitmentOrder: set action -> candidate_execution -> set action
+val monCheckCommitmentOrder: set action -> candidate_execution -> list action
                              -> action -> Nondeterminism.t unit
 let monCheckCommitmentOrder actions (pre, wit, rel) committed a = 
   let order = incCom (pre, wit, rel) in
@@ -367,8 +447,8 @@ let monPerformLoad pre s a =
    else
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
   monAddToRfLoad pre a s       >>= fun new_rf ->
-  let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; rf = new_rf; |>)
 
 val monPerformStore: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformStore pre s a =
@@ -380,8 +460,8 @@ let monPerformStore pre s a =
      monAddToMo pre a s
    else
      Nondeterminism.return s.incWit.mo)    >>= fun new_mo ->
-  let new_wit = <| s.incWit with sc = new_sc; mo = new_mo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; mo = new_mo; |>)
 
 val monPerformRmw: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformRmw pre s a =
@@ -391,25 +471,20 @@ let monPerformRmw pre s a =
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
   monAddToRfRmw pre a s        >>= fun new_rf ->
   monAddToMo pre a s           >>= fun new_mo ->
-  let new_wit = <| s.incWit with sc = new_sc; rf = new_rf; mo = new_mo; |> in
-  Nondeterminism.return new_wit
-
-val monPerformBlocked_rmw: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
-let monPerformBlocked_rmw pre s a =
-  let new_wit = s.incWit in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; rf = new_rf; mo = new_mo; |>)
 
 val monPerformLock: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformLock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
-  let new_wit = <| s.incWit with lo = new_lo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with lo = new_lo; |>)
 
 val monPerformUnlock: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformUnlock pre s a =
   monAddToLo pre a s          >>= fun new_lo ->
-  let new_wit = <| s.incWit with lo = new_lo; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with lo = new_lo; |>)
 
 val monPerformFence: pre_execution -> incState -> action -> Nondeterminism.t execution_witness
 let monPerformFence pre s a =
@@ -417,16 +492,11 @@ let monPerformFence pre s a =
      monAddToSc pre a s
    else
      Nondeterminism.return s.incWit.sc)    >>= fun new_sc ->
-  let new_wit = <| s.incWit with sc = new_sc; |> in
-  Nondeterminism.return new_wit
+  (* Without the extra brackets the generated isabelle code is invalid. *)
+  Nondeterminism.return (<| s.incWit with sc = new_sc; |>)
 
-val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
-let monStep pre s =
-
-  let uncommitted_actions = 
-    Set_extra.toList (Set.difference pre.actions s.incCommitted) in
-  Nondeterminism.pick uncommitted_actions >>= fun a ->
-
+val monPerformAction: pre_execution -> incState -> action  -> Nondeterminism.t execution_witness
+let monPerformAction pre s a =
   match a with
   | Lock _ _ _ _      -> monPerformLock pre s a
   | Unlock _ _ _      -> monPerformUnlock pre s a
@@ -434,19 +504,30 @@ let monStep pre s =
   | Store _ _ _ _ _   -> monPerformStore pre s a
   | RMW _ _ _ _ _ _   -> monPerformRmw pre s a
   | Fence _ _ _       -> monPerformFence pre s a
-  | Blocked_rmw _ _ _ -> monPerformBlocked_rmw pre s a
-  | Alloc _ _ _       -> Nondeterminism.kill (Nondeterminism.Error "Allocs not supported")
-  | Dealloc _ _ _     -> Nondeterminism.kill (Nondeterminism.Error "Deallocs not supported")
-  end                         >>= fun new_wit ->
+  | Blocked_rmw _ _ _ -> Nondeterminism.return s.incWit
+  | Alloc _ _ _       -> Nondeterminism.return s.incWit
+  | Dealloc _ _ _     -> Nondeterminism.return s.incWit
+  end
 
-  let new_committed = Set.insert a s.incCommitted in
-  let new_pre = preRestrict pre new_committed in
+val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
+let monStep pre s =
+
+  let uncommitted_actions = 
+    [a | forall (a MEM Set_extra.toList pre.actions) | not (a MEM s.incCommitted)] in
+    (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
+  Nondeterminism.pick uncommitted_actions >>= fun a ->
+
+  monPerformAction pre s a >>= fun new_wit ->
+
+  let new_committed = a::s.incCommitted in
+  let new_pre = preRestrict pre (Set.fromList new_committed) in
   let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
 
   (* TODO: break down the consistency predicates in stepwise predicates *)
-  (* monCheckConsistency new_ex                          >> *)
+  monCheckConsistency new_ex >>
+
   (* TODO: prove instead of assert that the following always holds *)  
-  monCheckWitRestrict new_wit s.incCommitted s.incWit >>
+  monCheckWitRestrict new_wit (incCommittedSet s) s.incWit >>
 
   monCheckCommitmentOrder pre.actions new_ex s.incCommitted a     >>
 
@@ -455,31 +536,32 @@ let monStep pre s =
   Nondeterminism.return (a, new_state)
 
 
+(* monTrace is the transitive closure of monStep, except that in the
+   reflexive case we require that the consistency predicate hold. This
+   is needed for soundness. *)
+
+indreln
+[monTrace: pre_execution -> incState -> incState -> bool]
+
+monReflexive: forall pre s. 
+  well_formed_threads_opsem (pre, empty_witness, [])
+==>
+  monTrace pre s s
+
+and
+monStep: forall pre x y z a.
+  monTrace pre x y && 
+  Nondeterminism.mem (a, z) (monStep pre y)
+==>
+  monTrace pre x z
+
+val monConsistent: candidate_execution -> bool
+let ~{ocaml} monConsistent =
+  consistencyFromTrace monTrace
+
+
 
 (* The symbolic model -------------------------------------------------- *)
-
-(* The symbolic model uses a custom equality over cvalues *)
-
-type threeStateBoolean = 
-  | TTrue
-  | TUnknown
-  | TFalse
-
-instance (Eq threeStateBoolean)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-type equalityCvalue =
-  cvalue -> cvalue -> threeStateBoolean
-
-val initialEqualityCvalue: equalityCvalue
-let initialEqualityCvalue left right =
-  if left = right then TTrue else TUnknown
-
-val standardEqualityCvalue: equalityCvalue
-let standardEqualityCvalue left right =
-  if left = right then TTrue else TFalse
 
 (* We have a different type of state, because pre-executions and the
    equality over cvalues can be updated. *)
@@ -487,17 +569,18 @@ let standardEqualityCvalue left right =
 type symState =
 <| symPre:            pre_execution; 
    symWit:            execution_witness;
-   symCommitted:      set action;
-   symEqualityCvalue: equalityCvalue;
+   symCommitted:      list action;
    symUndefinedness:  list undefinedness;
 |>
+
+val symCommittedSet: symState -> set action
+let inline symCommittedSet s = Set.fromList s.symCommitted
 
 instance (Show symState)
   let show state =
     "(pre_ex: " ^ show (Set.map aid_of state.symPre.actions) ^  
     ", wit: " ^ show state.symWit ^
-    ", committed: " ^ show (Set.map aid_of state.symCommitted) ^ 
-    ", eq: " ^ "TODO" ^ ")"
+    ", committed: " ^ show (List.map aid_of state.symCommitted) ^ ")"
 end
 
 val defaultLk: location_kind
@@ -517,8 +600,7 @@ val symInitialState: pre_execution -> symState
 let symInitialState pre = 
   <| symPre = pre;
      symWit = empty_witness;
-     symCommitted = {};
-     symEqualityCvalue = initialEqualityCvalue;
+     symCommitted = [];
      (* TODO: not true! *)
      symUndefinedness = [];
   |>
@@ -607,26 +689,111 @@ let actionOf step =
   | ReadsFrom _ _ a _  -> a
   end
 
-val symPerformLoad: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+(* Methods for updating the execution witness *)
 
-val symPerformStore: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+val symToIncState: symState -> incState
+let symToIncState s =
+  <| incWit = s.symWit; 
+     incCommitted = s.symCommitted; |>
 
-val symPerformRmw: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+val symAddToRfLoad: symState -> action ->  
+                    Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
+let symAddToRfLoad s a = 
+  auxAddToRfLoad s.symPre a (symToIncState s)
 
-val symPerformBlocked_rmw: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+val symAddToRfRmw: symState -> action ->  
+                   Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
+let symAddToRfRmw s a = 
+  auxAddToRfRmw s.symPre a (symToIncState s)
 
-val symPerformLock: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+(* The semantics of performing an action *)
 
-val symPerformUnlock: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+val symPerformLoad: symState -> action ->  
+                    Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformLoad s a =
+  (if is_seq_cst a then
+     monAddToSc s.symPre a (symToIncState s)
+   else
+     Nondeterminism.return s.symWit.sc)    >>= fun new_sc ->
+  symAddToRfLoad s a                       >>= fun (new_rf, values) ->
+  Nondeterminism.return (<| s.symWit with sc = new_sc; rf = new_rf; |>, values)
 
-val symPerformFence: symState -> action -> equalityCvalue -> Nondeterminism.t symStep
+val symPerformStore: symState -> action -> 
+                     Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformStore s a =
+  monPerformStore s.symPre (symToIncState s) a >>= fun wit -> 
+  Nondeterminism.return (wit, Nothing)
 
-val symStep: symState -> equalityCvalue -> Nondeterminism.t symStep
-let symStep s eq =
-  (* TODO: this is not correct! *)
-  let incState = <| incWit = s.symWit; 
-                    incCommitted = s.symCommitted; |> in
-  monStep s.symPre incState >>= fun (a, newIncState) ->
-  let newSymState = <| s with symWit = newIncState.incWit;
-                              symCommitted = newIncState.incCommitted; |> in
-  Nondeterminism.return (ConcurrencyTau a newSymState)
+val symPerformRmw: symState -> action -> 
+                   Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformRmw s a =
+  (if is_seq_cst a then
+     monAddToSc s.symPre a (symToIncState s)
+   else
+     Nondeterminism.return s.symWit.sc)    >>= fun new_sc ->
+  symAddToRfRmw s a                        >>= fun (new_rf, values) ->
+  monAddToMo s.symPre a (symToIncState s)  >>= fun new_mo ->
+  Nondeterminism.return (<| s.symWit with sc = new_sc; rf = new_rf; mo = new_mo; |>, values)
+
+val symPerformLock: symState -> action -> 
+                    Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformLock s a =
+  monPerformLock s.symPre (symToIncState s) a >>= fun wit -> 
+  Nondeterminism.return (wit, Nothing)
+
+val symPerformUnlock: symState -> action -> 
+                      Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformUnlock s a =
+  monPerformUnlock s.symPre (symToIncState s) a >>= fun wit -> 
+  Nondeterminism.return (wit, Nothing)
+
+val symPerformFence: symState -> action -> 
+                     Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformFence s a =
+  monPerformFence s.symPre (symToIncState s) a >>= fun wit -> 
+  Nondeterminism.return (wit, Nothing)
+
+val symPerformAction: symState -> action -> 
+                      Nondeterminism.t (execution_witness * maybe (cvalue * cvalue))
+let symPerformAction s a =
+  match a with
+  | Lock _ _ _ _      -> symPerformLock s a
+  | Unlock _ _ _      -> symPerformUnlock s a
+  | Load _ _ _ _ _    -> symPerformLoad s a
+  | Store _ _ _ _ _   -> symPerformStore s a
+  | RMW _ _ _ _ _ _   -> symPerformRmw s a
+  | Fence _ _ _       -> symPerformFence s a
+  | Blocked_rmw _ _ _ -> Nondeterminism.return (s.symWit, Nothing)
+  | Alloc _ _ _       -> Nondeterminism.return (s.symWit, Nothing)
+  | Dealloc _ _ _     -> Nondeterminism.return (s.symWit, Nothing)
+  end
+
+val symStep: symState -> Nondeterminism.t symStep
+let symStep s =
+
+  let uncommitted_actions = 
+    [a | forall (a MEM Set_extra.toList s.symPre.actions) | not (a MEM s.symCommitted)] in
+    (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
+  Nondeterminism.pick uncommitted_actions >>= fun a ->
+
+  symPerformAction s a >>= fun (new_wit, values) ->
+
+  let new_committed = a::s.symCommitted in
+  let new_pre = preRestrict s.symPre (Set.fromList new_committed) in
+  let new_ex = (new_pre, new_wit, getRelations new_pre new_wit) in
+
+  (* TODO: break down the consistency predicates in stepwise predicates *)
+  monCheckConsistency new_ex >>
+
+  (* TODO: prove instead of assert that the following always holds *)  
+  monCheckWitRestrict new_wit (symCommittedSet s) s.symWit >>
+
+  monCheckCommitmentOrder s.symPre.actions new_ex s.symCommitted a     >>
+
+  let new_state = <| s with
+                     symWit = new_wit;
+                     symCommitted = new_committed; |> in
+  match values with
+  | Just (v, w) -> Nondeterminism.return (ReadsFrom v w a new_state)
+  | Nothing     -> Nondeterminism.return (ConcurrencyTau a new_state)
+  end

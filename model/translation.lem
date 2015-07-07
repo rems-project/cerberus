@@ -4,7 +4,7 @@
 open import Pervasives Global Implementation_ Loc String_extra
 import State State_operators Translation_effect
 open import Translation_aux
-import Cmm_master Mem
+import Cmm_csem Mem
 
 import Decode
 
@@ -21,7 +21,7 @@ module Cty  = Core_ctype
 module Caux = Core_aux
 module U    = Undefined
 
-module Cmm = Cmm_master
+module Cmm = Cmm_csem
 
 
 module E = Translation_effect

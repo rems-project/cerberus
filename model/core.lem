@@ -1,10 +1,10 @@
 open import Pervasives String_extra Global
-import Symbol AilTypes Implementation_ Undefined Cmm_master
+import Symbol AilTypes Implementation_ Undefined Cmm_csem
 import Mem
 
 open import Thread Core_ctype
 
-module Cmm = Cmm_master
+module Cmm = Cmm_csem
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
