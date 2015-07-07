@@ -2505,11 +2505,18 @@ qed
 
 subsection {* Equivalence *}
 
-corollary incConsistentEquivalence:
+corollary incConsistentEquivalence_aux:
   shows "  incConsistent (pre, wit, getRelations pre wit)
          = axsimpConsistent (pre, wit, getRelations pre wit)"
 using incConsistentSoundness incConsistentCompleteness
 by metis
+
+corollary incConsistentEquivalence:
+  shows "  incConsistent (pre, wit, getRelations pre wit)
+         = (axConsistent (pre, wit, getRelations pre wit) \<and> finite (actions0 pre))"
+using incConsistentEquivalence_aux axsimpConsistentEq
+by metis
+
 
 
 section {* The monadic model *}
@@ -5192,7 +5199,7 @@ by metis
 corollary monConsistentEquivalence:  
   shows "  monConsistent (pre, wit, getRelations pre wit)
          = (axConsistent (pre, wit, getRelations pre wit) \<and> finite (actions0 pre))"
-using monConsistentEquivalence_aux incConsistentEquivalence axsimpConsistentEq
+using monConsistentEquivalence_aux incConsistentEquivalence 
 by metis
 
 (*<*)
