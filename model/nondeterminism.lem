@@ -232,7 +232,7 @@ let alpha_eq_nd_state a s =
 val mem : forall 'a. Eq 'a => 'a -> t 'a -> bool
 let mem x m = 
   match m with
-  | ND l -> List.any (alpha_eq_nd_state x) l
+  | ND l -> List.any (fun (_, z) -> alpha_eq_nd_state x z) l
   end
 
 module Operators = struct
