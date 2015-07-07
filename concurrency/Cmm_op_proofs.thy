@@ -5183,17 +5183,17 @@ unfolding consistencyFromTrace.simps
 using assms
 by auto
 
+lemma monConsistentEquivalence_aux:  
+  shows "monConsistent = incConsistent"
+unfolding monConsistent_def incConsistent_def
+using consistencyFromTraceEq monTraceEquivalence
+by metis
+
 corollary monConsistentEquivalence:  
   shows "  monConsistent (pre, wit, getRelations pre wit)
-         = axsimpConsistent (pre, wit, getRelations pre wit)"
-proof -
-  have "monConsistent = incConsistent"
-    unfolding monConsistent_def incConsistent_def
-    using consistencyFromTraceEq monTraceEquivalence
-    by metis
-  thus ?thesis
-    using incConsistentEquivalence by auto
-qed
+         = (axConsistent (pre, wit, getRelations pre wit) \<and> finite (actions0 pre))"
+using monConsistentEquivalence_aux incConsistentEquivalence axsimpConsistentEq
+by metis
 
 (*<*)
 end
