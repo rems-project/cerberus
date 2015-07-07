@@ -832,7 +832,7 @@ let rec hack core_file pexpr =
               hack core_file pexpr'
         end
     | _ ->
-        Boot.assert_false ("Driver.hack, UNDEF/ERROR:" ^ Boot.pp_core_expr (Core.Epure pexpr : Core.expr unit))
+        error ("Driver.hack, UNDEF/ERROR:" ^ Boot.pp_core_expr (Core.Epure pexpr : Core.expr unit))
 (*
     | _ ->
         (* TODO: this is wrong *)
@@ -868,7 +868,7 @@ val finalize: driver_state -> (string * (bool * Cmm_op.symState * Core.value) * 
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        let v = hack "fina" dr_st.core_file
+        let v = hack dr_st.core_file
             match Core_aux.to_pure th_st.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
