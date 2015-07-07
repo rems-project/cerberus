@@ -16,7 +16,10 @@ let print msg = if debug then
 let error msg = print_endline ("\x1b[31m[ERROR] " ^ msg ^ "\x1b[0m"); exit 1
 *)
 
-let assert_false str =
+let assert_false () =
+  assert false
+
+let error str =
   failwith str
 
 

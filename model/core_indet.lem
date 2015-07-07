@@ -391,6 +391,8 @@ let rec hack expr =
   match expr with
     | Core.Epure _ ->
         expr
+    | Core.Ememop _ _ ->
+        expr
     | Core.Eraise _ ->
         expr
     | Core.Eregister _ _ ->

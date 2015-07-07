@@ -1,12 +1,7 @@
 open import Pervasives
 import Core
 
-(* Error messages for impossible situations *)
-val outOfHomeomorphism: forall 'a. string -> 'a
 
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
-declare coq   target_rep function assert_false = `DAEMON`
 
 
 (*

@@ -1,6 +1,6 @@
 (* Effects for Translation: state + exception *)
 open import Pervasives Global Show Show_extra
-import Boot UniqueId Symbol Undefined Core_ctype AilTypes
+import UniqueId Symbol Undefined Core_ctype AilTypes
 
 open import Core
 
@@ -45,7 +45,7 @@ let rec foldlM f z0 xs =
 
 val foldl1M: forall 'a. ('a -> 'a -> t 'a) -> list 'a -> t 'a
 let foldl1M f = function
-  | []    -> Boot.assert_false "[Translation_effect.E.foldl1M] called on an empty list"
+  | []    -> error "[Translation_effect.E.foldl1M] called on an empty list"
   | x::xs -> foldlM f x xs
 end
 
@@ -105,7 +105,7 @@ let pop_block_objects = fun st ->
   Undefined.return ((), <| st with visible_objects=
       match st.visible_objects with
         | _ :: xs -> xs
-        | _       -> Boot.assert_false "[Translation.E.pop_block_objects] found an ill-formed scope stack."
+        | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
       end |>)
 
 
@@ -145,4 +145,6 @@ let resolve_object_type sym = fun st ->
   match Map.lookup sym st.visible_objects_types with
     | Just ty ->
         Undefined.return (ty, st)
+    | Nothing ->
+        assert_false ()
   end

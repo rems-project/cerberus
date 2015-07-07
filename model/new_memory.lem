@@ -8,12 +8,9 @@
 
 *)
 
-open import Pervasives
+open import Pervasives Global
 import New_memory_effect Symbolic State_exception AilTypes
 
-(* TODO: temporary hack *)
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 
 (*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
@@ -197,7 +194,7 @@ let create_sao tid ty ty_size ty_alignment = do E
     match allocator with
     (* a completely concrete next-address allocator (with no reuse on free)*)
     | Trivial next_address -> 
-        let next_address' = assert_false "...round up next_address modulo ty_align" in
+        let next_address' = error "...round up next_address modulo ty_align" in
         E.return (next_address', Trivial (next_address' + ty_size))
 
     (* the most semantically general allocator: taking a new
@@ -606,7 +603,7 @@ val memcmp
 
 val gen_symbolic_address: t address
 let gen_symbolic_address =
-  assert_false "WIP"
+  error "WIP"
 (*
   State_exception.modify (fun st ->
     (st.mem_symbol_counter, <| st with mem_symbol_counter= st.mem_symbol_counter + 1 |>)
@@ -615,7 +612,7 @@ let gen_symbolic_address =
 
 val gen_mem_object_id: t mem_object_id
 let gen_mem_object_id =
-  assert_false "WIP"
+  error "WIP"
 
 
 
@@ -636,7 +633,7 @@ let create ty =
 
 
 let store ty ptr v =
-  assert_false "WIP"
+  error "WIP"
 
 
 
@@ -655,4 +652,4 @@ let pointer_eq ptr1 ptr2 =
     (* STD §6.3.2.3#3, sentence 2 *)
     E.return false
   else
-    assert_false "WIP"
+    error "WIP"

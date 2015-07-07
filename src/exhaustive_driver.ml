@@ -7,7 +7,7 @@ open Pp_run
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
-let (>>=) = SEU.bind4
+let (>>=) = SEU.bind9
 
 
 (*
@@ -77,14 +77,14 @@ let drive file args =
 *)
 
 let isActive = function
-  | ND.Active _ ->
+  | (_, ND.Active _) ->
       true
   | _ ->
       false
 
 
 
-type execution_result = (Core.pexpr list, Errors.t9) Exception.t3
+type execution_result = (Core.pexpr list, Errors.t6) Exception.t3
 
 let drive sym_supply file args with_concurrency : execution_result =
   let main_body = 
@@ -113,7 +113,7 @@ let drive sym_supply file args with_concurrency : execution_result =
   let ky  = ref [] in
   let ret = ref [] in
   
-  List.iteri (fun n exec ->
+  List.iteri (fun n (_, exec) ->
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
           let str_v = String_core.string_of_pexpr pe in
@@ -157,4 +157,4 @@ let drive sym_supply file args with_concurrency : execution_result =
               n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log)))
           )
   ) vs;
-  Exception.return0 !ret
+  Exception.return2 !ret

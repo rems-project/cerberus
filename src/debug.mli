@@ -1,5 +1,5 @@
-
-val assert_false: string -> 'a
+val assert_false: unit -> 'a
+val error: string -> 'a
 
 val debug_level: int ref
 val get_debug_level: unit -> int

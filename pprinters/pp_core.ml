@@ -6,23 +6,12 @@ open Either
 
 open Colour
 
-module P = PPrint
+open Pp_prelude
 
 let isatty = ref false
 
 
 
-
-let (!^ ) = P.(!^)
-let (^^)  = P.(^^)
-let (^/^) = P.(^/^)
-
-let (^^^) x y = x ^^ P.space ^^ y
-let comma_list f = P.separate_map (P.comma ^^ P.space) f
-
-
-
-module Mem = Naive_memory
 
 
 let precedence = function
@@ -52,7 +41,8 @@ let precedence = function
   | PEcons _
   | PEcase_list _
   | PEcase_ctype _
-  | PEshift _
+  | PEarray_shift _
+  | PEmember_shift _
   | PEnot _
   | PEtuple _
   | PEarray _
@@ -116,10 +106,6 @@ let pp_ctype ty =
 
 
 
-(* Qualification prefix for memory addresses *)
-let rec pp_prefix = function
-  | []    -> P.empty
-  | x::xs -> pp_symbol x ^^ P.dot ^^ pp_prefix xs
 
 
 let pp_polarity = function
@@ -130,77 +116,10 @@ let pp_name = function
   | Sym a  -> pp_symbol a
   | Impl i -> pp_impl i
 
-let pp_symbolic_name = function
-  | Symbolic.SYMBfsym a -> pp_symbol a
-  | Symbolic.SYMBimpl i -> pp_impl i
-
-let rec pp_symbolic = function
-  | Symbolic.SYMBtrue ->
-      !^ "true"
-  | Symbolic.SYMBfalse ->
-      !^ "false"
-  | Symbolic.SYMBconst n ->
-      !^ (Nat_big_num.to_string n)
-  | Symbolic.SYMBctype ty ->
-      pp_ctype ty
-  | Symbolic.SYMBsym (_, sym) ->
-      pp_symbol sym
-  | Symbolic.SYMBop (op, symb1, symb2) ->
-      let str_opt = match op with
-        | Symbolic.Add -> "+"
-        | Symbolic.Sub -> "-"
-        | Symbolic.Mul -> "*"
-        | Symbolic.Div -> "/"
-        | Symbolic.Mod -> "mod"
-        | Symbolic.Exp -> "exp"
-        | Symbolic.Eq  -> "=="
-        | Symbolic.Neq -> "/="
-        | Symbolic.Lt  -> "<"
-        | Symbolic.Ge  -> ">="
-        | Symbolic.And -> "and"
-        | Symbolic.Or  -> "or" in
-      P.parens (!^ str_opt ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2)
-  | Symbolic.SYMBite (symb1, symb2, symb3) ->
-      P.parens (!^ "ite" ^^^ pp_symbolic symb1 ^^^ pp_symbolic symb2 ^^^ pp_symbolic symb3)
-  | Symbolic.SYMBcall (symb_nm, symbs) ->
-      P.parens (!^ "call" ^^^ pp_symbolic_name symb_nm ^^^ P.separate_map (P.space) pp_symbolic symbs)
-
-
-
-let rec pp_prefix = function
-  | [] ->
-      P.empty
-  | sym :: pref ->
-      !^ (Pp_symbol.to_string_pretty sym) ^^ P.dot ^^ pp_prefix pref
-
-let pp_pointer_shift ptr_sh =
-  let rec aux = function
-    | [] ->
-        P.empty
-    | (ty, n) :: ptr_sh' ->
-        Pp_core_ctype.pp_ctype ty ^^^ !^ "x" ^^^ !^ (Nat_big_num.to_string n) ^^ P.comma ^^^
-        aux ptr_sh'
-  in
-  P.brackets (aux ptr_sh)
 
 
 
 
-
-(*
-  | Mem.MVpointer (Mem.Pointer_function f) ->
-      !^ "TODO(MVpointer(function))"
-*)
-(*
-  | Mem.MVstruct _ ->
-      !^ "TODO(MVstruct)"
-  | Mem.MVunion _ ->
-      !^ "TODO(MVunion)"
-  | Mem.MVpointer_byte _ ->
-      !^ "TODO(MVpointer_byte)"
-  | Mem.MVunspecified ty ->
-      !^ "unspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-*)
 
 let pp_memory_order = function
   | Cmm.NA      -> !^ "NA"
@@ -220,7 +139,7 @@ let pp_mem_addr (pref, addr) =
   in
   P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ pp addr)
 *)
-  P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ (!^ "TODO"))
+  P.at ^^ P.braces (Pp_symbol.pp_prefix pref ^^ P.colon ^^^ (!^ "TODO"))
 
 
 let pp_thread_id n =
@@ -247,39 +166,7 @@ let pp_pointer_action = function
       pp_keyword "pointer_shift"
 *)
 
-let rec pp_mem_value = function
-  | Mem.MVunspecified ty ->
-      !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-  | Mem.MVinteger (Mem.IVinteger n) ->
-      !^ (Nat_big_num.to_string n)
-  | Mem.MVinteger _ ->
-      !^ "TODO(MVinteger SYMB_integer_value)"
-  | Mem.MVfloating str ->
-      !^ ("TODO(MVfloation " ^ str ^ ")")
-  | Mem.MVpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
-      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
-  | Mem.MVpointer ptr_val ->
-      !^ "TODO(MVpointer)" 
-  | Mem.MVarray vs_opt ->
-      pp_const "array" ^^ P.parens (comma_list pp_mem_value vs_opt)
-  | Mem.MVstruct (tag, ident_vs) ->
-      P.parens (!^ "struct" ^^^ pp_symbol tag) ^^^ P.braces (comma_list (fun (ident, mem_val) -> P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp_mem_value mem_val) ident_vs)
-   | Mem.MVunion (sym_tag, sym_member, mem_val) ->
-       !^ "TODO(MVunion)"
 
-let pp_memop = function
-  | Mem.Ptreq ->
-      !^ "\"ptreq\""
-  | Mem.Ptrdiff ->
-      !^ "\"ptrdiff\""
-  | Mem.IntFromPtr ->
-      !^ "\"intfromptr\""
-  | Mem.PtrFromInt ->
-      !^ "\"ptrfromint\""
-  | Mem.PtrLt ->
-      !^ "\"ptrlt\""
-  | Mem.PtrValidForDeref ->
-      !^ "\"ptrvalidforderef\""
 
 
 let rec pp_value = function
@@ -297,22 +184,18 @@ let rec pp_value = function
       P.dquotes (Pp_core_ctype.pp_ctype ty)
   | Vunspecified ty ->
       pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
-  | Vinteger (Mem.IVinteger n) ->
-      !^ (Nat_big_num.to_string n)
   | Vinteger ival ->
-      !^ "TODO(Vinteger SYMB_integer_value)"
+      Mem.case_integer_value0 ival
+        (fun n -> !^ (Nat_big_num.to_string n))
+        (fun () -> Pp_mem.pp_integer_value ival)
   | Vfloating str ->
       !^ str
-(*
   | Vsymbolic symb ->
-      !^ "SYMB" ^^ P.parens (pp_symbolic symb)
-*)
-  | Vpointer (Mem.PVobject ((n, pref), ptr_sh)) ->
-      !^ ("@" ^ string_of_int n) ^^ pp_pointer_shift ptr_sh ^^ P.braces (pp_prefix pref)
-  | Vpointer _ ->
-      !^ "TODO(MVpointer)" 
-  | Varray mem_vals ->
-      pp_const "array" ^^ P.parens (comma_list pp_mem_value mem_vals)
+      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic symb)
+  | Vpointer ptr_val ->
+      Pp_mem.pp_pointer_value ptr_val
+  | Varray cvals ->
+      pp_const "array" ^^ P.parens (comma_list pp_value cvals)
   | Vstruct (sym, xs) ->
       !^ "TODO(Vstruct)" 
       (* pp_const "struct" ^^ P.parens *)
@@ -353,17 +236,27 @@ let pp_pexpr pe =
               pp_name nm4 ^^ P.comma ^^^ pp_name nm5 ^^ P.comma ^^^ pp_name nm6 ^^ P.comma ^^^
               pp_name nm7 ^^ P.comma ^^^ pp_name nm8 ^^ P.comma
             )
+(*
         | PEshift (pe, ty_pes) ->
             pp_keyword "shift" ^^ P.parens (
               pp pe ^^ P.comma ^^^
               P.braces (comma_list (fun (ty, pe) -> P.parens (pp_ctype ty ^^ P.comma ^^^ pp pe)) ty_pes)
             )
+*)
+        | PEarray_shift (pe1, ty, pe2) ->
+            pp_keyword "array_shift" ^^ P.parens (
+              pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
+            )
+        | PEmember_shift (pe, tag_sym, memb_ident) ->
+            pp_keyword "member_shift" ^^ P.parens (
+              pp pe ^^ P.comma ^^^ pp_symbol tag_sym ^^ Pp_cabs.pp_cabs_identifier memb_ident
+            )
         | PEnot pe ->
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
-        | PEmemop (memop, pes) ->
-            pp_keyword "memop" ^^ P.parens (pp_memop memop ^^ P.comma ^^^ comma_list pp pes)
+        | PEmemop (pure_memop, pes) ->
+            pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
         | PEtuple pes ->
             P.parens (comma_list pp pes)
         | PEarray pes ->
@@ -412,6 +305,8 @@ let pp_pexpr pe =
 let rec pp_expr = function
   | Epure pe ->
       pp_pexpr pe
+  | Ememop (memop, pes) ->
+      pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
   | Eraise str ->
       pp_keyword "raise" ^^ P.parens (!^ str)
   | Eregister (str, nm) ->
@@ -634,7 +529,7 @@ let pp_file file =
   
   
   !^ "{-" ^^ P.break 1 ^^
-  pp_tagDefinitions file.tagDefinitions0 ^^ P.break 1 ^^
+  pp_tagDefinitions file.tagDefinitions ^^ P.break 1 ^^
   !^ "-}" ^^ P.break 1 ^^
   
   List.fold_left pp_glob P.empty file.globs ^^

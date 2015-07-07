@@ -1,10 +1,6 @@
 open import Pervasives Global Show
 import Symbol (* Symbolic *) AilTypes
 
-(* TODO: temporary hack *)
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
-
 
 (*
 val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
@@ -338,4 +334,13 @@ let is_atomic = function
      true
  | _ ->
      false
+end
+
+
+val unatomic: ctype -> ctype
+let unatomic = function
+  | Atomic ty ->
+      ty
+  | ty ->
+      ty
 end

@@ -47,18 +47,8 @@ let string_of_memory_order = function
       "acq_rel"
 
 
-module Mem = Naive_memory
-
-
-let string_of_location (Mem.PVobject ((n, pref), ptr_sh)) =
-  "@" ^ string_of_int n ^ (Pp_utils.to_plain_string (Pp_core.pp_pointer_shift ptr_sh)) ^ "{" ^ Mem.string_of_prefix pref ^ "}"
-
-let string_of_cvalue = function
-  | Mem.MVinteger (Mem.IVinteger n) ->
-      Nat_big_num.to_string n
-  | Mem.MVinteger ival ->
-      (* "SYMB(" ^ Pp_utils.to_plain_string (Pp_core.pp_symbolic symb) ^ ")" *)
-      "SYMB(integer_value)"
+let string_of_location ptr_val = Pp_utils.to_plain_string (Pp_mem.pp_pointer_value ptr_val)
+let string_of_cvalue mval = Pp_utils.to_plain_string (Pp_mem.pp_mem_value mval)
 
 
 let string_of_action_aux = function

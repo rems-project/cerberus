@@ -106,7 +106,8 @@ let keywords =
       ("wait", T.WAIT);
 
      
-      ("shift", T.SHIFT);
+      ("array_shift", T.ARRAY_SHIFT);
+      ("member_shift", T.MEMBER_SHIFT);
       
       (* for Core.action_ *)
       ("create",                  T.CREATE                 );

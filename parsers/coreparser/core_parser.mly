@@ -5,8 +5,6 @@ open Global
 
 open Core_parser_util
 
-module Mem = Naive_memory
-
 module Cmm = Cmm_master
 
 let symbol_compare =
@@ -41,7 +39,7 @@ type expr =
   | PEcase_list of expr (* pexpr *) * expr (* pexpr *) * name
   | PEcase_ctype of expr (* pexpr *) * expr (* pexpr *) * name * name * name * name *
                     name * name * name * name
-  | PEshift of expr (* pexpr *) * (Core_ctype.ctype0 * expr (* pexpr *)) list
+  | PEarray_shift of expr (* pexpr *) * Core_ctype.ctype0 * expr (* pexpr *)
   | PEnot of expr (* pexpr *)
   | PEop of Core.binop * expr (* pexpr *) * expr (* pexpr *)
   | PEtuple of expr list (* pexpr *)
@@ -133,7 +131,7 @@ let register_cont_symbols expr =
     | PEcons _
     | PEcase_list _
     | PEcase_ctype _
-    | PEshift _
+    | PEarray_shift _
     | PEnot _
     | PEop _
     | PEtuple _
@@ -253,7 +251,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
     | Vunspecified ty ->
         Value (Core.Vunspecified ty)
     | Vinteger n ->
-        Value (Core.Vinteger (Mem.mk_integer_value n))
+        Value (Core.Vinteger (Mem.integer_ival0 n))
     | Vfloating str ->
         Value (Core.Vfloating str)
     | PEundef ub ->
@@ -282,7 +280,13 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Pure (Core.PEcase_ctype (pe1, pe2, fnm nm1, fnm nm2, fnm nm3, fnm nm4, fnm nm5, fnm nm6, fnm nm7, fnm nm8))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEcase_ctype")
-    | PEshift (_e1, ty_es) ->
+    | PEarray_shift (_e1, ty, _e2) ->
+        (match to_pure (f st _e1), to_pure (f st _e2) with
+          | Left pe1, Left pe2 ->
+              Pure (Core.PEarray_shift (pe1, ty, pe2))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEarray_shift")
+(*
         let ty_es_opt = List.fold_right (fun (ty, _e) acc_opt ->
           match to_pure (f st _e), acc_opt with
             | Left pe, Some acc ->
@@ -295,6 +299,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Pure (Core.PEshift (pe1, ty_pes))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEshift")
+*)
     | PEnot _e ->
         (match to_pure (f st _e) with
           | Left pe ->
@@ -968,7 +973,7 @@ let subst name =
 
 (* Core constant keywords *)
 %token CONS ARRAY TRUE FALSE
-%token SHIFT
+%token ARRAY_SHIFT MEMBER_SHIFT
 %token UNDEF ERROR
 %token<string> STRING
 %token SKIP IF THEN ELSE
@@ -1394,8 +1399,16 @@ expr:
 | CASE_CTYPE LPAREN _e1= expr COMMA _e2= expr COMMA nm1= name COMMA nm2= name COMMA nm3= name COMMA
     nm4= name COMMA nm5= name COMMA nm6= name COMMA nm7= name COMMA nm8= name RPAREN
     { PEcase_ctype (_e1, _e2, nm1, nm2, nm3, nm4, nm5, nm6, nm7, nm8) }
+(*
 | SHIFT LPAREN _e= expr COMMA sh= delimited(LBRACE, separated_nonempty_list(COMMA, shift_elem), RBRACE) RPAREN
     { PEshift (_e, sh) }
+*)
+| ARRAY_SHIFT LPAREN e1= expr COMMA ty= delimited(DQUOTE, ctype, DQUOTE) COMMA e2= expr RPAREN
+    { PEarray_shift (e1, ty, e2) }
+(*
+| MEMBER_SHIFT LPAREN e= expr COMMA sym= SYM COMMA e2= expr RPAREN
+    { PEarray_shift (e1, ty, e2) }
+*)
 | NOT _e= delimited(LPAREN, expr, RPAREN)
     { PEnot _e }
 (* some sugar *)
@@ -1470,11 +1483,12 @@ WIP  | Ewait of Thread.thread_id
     { _e }
 ;
 
+(*
 shift_elem:
 | LPAREN ty= delimited(DQUOTE, ctype, DQUOTE) COMMA _e= expr RPAREN
   { (ty, _e) }
 ;
-
+*)
 
 
 

@@ -171,7 +171,8 @@ type token =
   | PAR
   | ND
   | WAIT
-  | SHIFT
+  | ARRAY_SHIFT
+  | MEMBER_SHIFT
 
 
 (*

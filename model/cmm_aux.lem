@@ -1,8 +1,6 @@
 open import Pervasives
 
-import Driver_util Naive_memory
-
-module Mem = Naive_memory
+import Driver_util Mem
 
 
 type program_impl  = nat

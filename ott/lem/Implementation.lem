@@ -1,4 +1,4 @@
-open import Pervasives Common Global Range AilTypes
+open import Pervasives Global Common Global Range AilTypes
 
 
 type binaryMode =
@@ -30,7 +30,7 @@ let min_precision = function
   | IBBuiltin "int16_t" -> 16
   | IBBuiltin "int32_t" -> 32
   | IBBuiltin "int64_t" -> 64
-  | IBBuiltin str -> assert_false ("WIP min_precision: " ^ str)
+  | IBBuiltin str -> error ("WIP min_precision: " ^ str)
 end
 
 type implementation = <|
@@ -91,7 +91,7 @@ let min_integer_range = function
   | Bool          -> make_range 0 1
   | Unsigned ibty -> min_range_unsigned ibty
   | Signed   ibty -> min_range_signed   ibty
-  | IBuiltin str -> assert_false ("WIP min_integer_range: " ^ str)
+  | IBuiltin str -> error ("WIP min_integer_range: " ^ str)
   (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
   | Enum _ -> min_range_signed Int_
 end
@@ -105,7 +105,7 @@ let min_implementation_signed_char =
 	| Signed   _ -> true
         | Bool       -> false
 	| Unsigned _ -> false
-        | IBuiltin str -> assert_false ("WIP: min_implementation_signed_char 1" ^ str)
+        | IBuiltin str -> error ("WIP: min_implementation_signed_char 1" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> true
       end
@@ -129,16 +129,16 @@ let min_implementation_signed_char =
         | Signed (IBBuiltin "int32_t") -> 31
         | Signed (IBBuiltin "int64_t") -> 63
 
-        | Signed (IBBuiltin str) -> assert_false ("WIP min_implementation_signed_char 2: signed " ^ str)
+        | Signed (IBBuiltin str) -> error ("WIP min_implementation_signed_char 2: signed " ^ str)
 
         | Unsigned (IBBuiltin "int8_t") -> 8
         | Unsigned (IBBuiltin "int16_t") -> 17
         | Unsigned (IBBuiltin "int32_t") -> 32
         | Unsigned (IBBuiltin "int64_t") -> 64
         
-        | Unsigned (IBBuiltin str) -> assert_false ("WIP min_implementation_signed_char 3: unsigned" ^ str)
+        | Unsigned (IBBuiltin str) -> error ("WIP min_implementation_signed_char 3: unsigned" ^ str)
         
-        | IBuiltin str -> assert_false ("WIP: min_implementation_signed_char 4" ^ str)
+        | IBuiltin str -> error ("WIP: min_implementation_signed_char 4" ^ str)
         
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> 15
@@ -156,7 +156,7 @@ let min_implementation_unsigned_char =
         | Char       -> false
 	| Bool       -> false
 	| Unsigned _ -> false
-        | IBuiltin str -> assert_false ("WIP min_implementation_unsigned_char 1:" ^ str)
+        | IBuiltin str -> error ("WIP min_implementation_unsigned_char 1:" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> true
       end
@@ -180,16 +180,16 @@ let min_implementation_unsigned_char =
         | Signed (IBBuiltin "int32_t") -> 31
         | Signed (IBBuiltin "int64_t") -> 63
 
-        | Signed (IBBuiltin str) -> assert_false ("WIP min_implementation_unsigned_char 2: signed " ^ str)
+        | Signed (IBBuiltin str) -> error ("WIP min_implementation_unsigned_char 2: signed " ^ str)
 
         | Unsigned (IBBuiltin "int8_t") -> 8
         | Unsigned (IBBuiltin "int16_t") -> 17
         | Unsigned (IBBuiltin "int32_t") -> 32
         | Unsigned (IBBuiltin "int64_t") -> 64
         
-        | Unsigned (IBBuiltin str) -> assert_false ("WIP min_implementation_unsigned_char 3: unsigned " ^ str)
+        | Unsigned (IBBuiltin str) -> error ("WIP min_implementation_unsigned_char 3: unsigned " ^ str)
 
-        | IBuiltin str -> assert_false ("WIP: min_implementation_unsigned_char 4" ^ str)
+        | IBuiltin str -> error ("WIP: min_implementation_unsigned_char 4" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> 15
       end

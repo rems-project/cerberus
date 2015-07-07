@@ -1,13 +1,11 @@
 open import Pervasives
 
-open import Show Show_extra Enum
+open import Global Show Show_extra Enum
 import UniqueId
 
 val debug_level: unit -> nat
 declare ocaml target_rep function debug_level = `Debug.get_debug_level`
 
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Debug.assert_false`
 
 
 type t =

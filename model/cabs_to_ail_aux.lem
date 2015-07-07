@@ -1,5 +1,5 @@
 open import Pervasives
-open import Boot Cabs
+open import Global Cabs
 
 import AilTypes
 
@@ -61,4 +61,4 @@ let determinate_storage_duration link scs =
     ATypes.Automatic
   
   else
-    Boot.assert_false "determinate_storage_duration"
+    error "determinate_storage_duration"

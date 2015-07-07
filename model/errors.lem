@@ -1,5 +1,5 @@
 open import Global Cabs AilSyntax (* Core *)
-import Loc TypingError
+import Loc TypingError Undefined
 
 
 

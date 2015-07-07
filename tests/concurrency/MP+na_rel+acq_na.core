@@ -24,7 +24,7 @@ fun main () : [integer] :=
   kill(y);
   ret a2
 -}
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("signed int"), "signed int") in
   let strong _ = store("signed int", x, 0) in
   let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
