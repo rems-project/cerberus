@@ -1,8 +1,8 @@
 open import Pervasives Common AilTypes Context
 open import Loc
-import Symbol ErrorMonad Cmm_master
+import Symbol ErrorMonad Cmm_csem
 
-(* module Cmm = Cmm_master *)
+(* module Cmm = Cmm_csem *)
 
 
 (* == Ail syntax datatypes ================================================== *)

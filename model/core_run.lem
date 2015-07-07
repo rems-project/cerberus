@@ -3,7 +3,7 @@ open import Pervasives String_extra Global Core Core_ctype Core_aux Show Show_ex
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
-import Cmm_master Mem Mem_common Mem_aux
+import Cmm_csem Mem Mem_common Mem_aux
 import AilTypes AilTypesAux
 import Dlist
 
@@ -13,7 +13,7 @@ open import Thread Driver_util Core_run_aux
 (* import Output *)
 
 
-module Cmm = Cmm_master
+module Cmm = Cmm_csem
 
 
 module U   = Undefined

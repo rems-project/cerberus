@@ -222,6 +222,19 @@ let bind m f =
         bindRandom m f
   end
 
+val alpha_eq_nd_state: forall 'a. Eq 'a => 'a -> nd_state 'a -> bool
+let alpha_eq_nd_state a s =
+  match s with
+  | Active _ _ v -> v = a
+  | _            -> false
+  end
+
+val mem : forall 'a. Eq 'a => 'a -> t 'a -> bool
+let mem x m = 
+  match m with
+  | ND l -> List.any (alpha_eq_nd_state x) l
+  end
+
 module Operators = struct
   let inline (>>=)      = bind
   let inline (>>) m1 m2 = bind m1 (fun _ -> m2)

@@ -2,7 +2,7 @@ open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode
 open import Global Show Core_run Core_run_aux
-import Cmm_op Cmm_master
+import Cmm_op Cmm_csem
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
@@ -13,8 +13,7 @@ import Mem Mem_aux
 import Driver_effect
 (* module E = Driver_effect *)
 
-module Cmm = Cmm_master
-
+module Cmm = Cmm_csem
 
 (* The indirection is required because of a bug in Lem *)
 module U = Undefined
@@ -319,7 +318,7 @@ let rec stepConcurrency n dr_st =
         | _ ->
             ND.pick concur_steps
       end >>= *)
-    (Cmm_op.symStep dr_st.concurrency_state Cmm_op.initialEqualityCvalue >>= 
+    (Cmm_op.symStep dr_st.concurrency_state >>= 
      function
         | Cmm_op.ConcurrencyTau performed_act concur_st' ->
             (* let _ = Boot.output_string ("Performed action " ^ aid_to_string performed_act ^ "\n") in (\* DEBUG *\) *)
@@ -411,7 +410,7 @@ let runCore m dr_st =
 (* Returns the number of uncommitted action in the concurency memory model state *)
 val number_of_uncommitted: Cmm_op.symState -> nat
 let number_of_uncommitted concur_st =
-  Set.size concur_st.Cmm_op.symPre.Cmm.actions - Set.size concur_st.Cmm_op.symCommitted
+  Set.size concur_st.Cmm_op.symPre.Cmm.actions - List.length concur_st.Cmm_op.symCommitted
 
 
 (* TODO: debug *)
@@ -668,7 +667,7 @@ end
 
 
 (*
-val     driver_sequential: driver_state -> ND.t (bool * Cmm_master.pre_execution * Core.expr core_run_annotation)
+val     driver_sequential: driver_state -> ND.t (bool * Cmm.pre_execution * Core.expr core_run_annotation)
 *)
 (*
 val driver2: bool -> driverM ()
@@ -832,6 +831,8 @@ let rec hack core_file pexpr =
           | Nothing ->
               hack core_file pexpr'
         end
+    | _ ->
+        Boot.assert_false ("Driver.hack, UNDEF/ERROR:" ^ Boot.pp_core_expr (Core.Epure pexpr : Core.expr unit))
 (*
     | _ ->
         (* TODO: this is wrong *)
@@ -867,7 +868,7 @@ val finalize: driver_state -> (string * (bool * Cmm_op.symState * Core.value) * 
 let finalize dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        let v = hack dr_st.core_file
+        let v = hack "fina" dr_st.core_file
             match Core_aux.to_pure th_st.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
