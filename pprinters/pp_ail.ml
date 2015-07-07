@@ -491,20 +491,20 @@ let string_of_octal_big_int n =
     "0"
   else
     let l = string_of_big_int_with_basis n (Nat_big_num.of_int 8) in
-    let ret = String.create (List.length l+1) in
-    ret.[0] <- '0';
+    let ret = Bytes.create (List.length l+1) in
+    Bytes.set ret 0 '0';
     List.iteri (fun i c ->
-      ret.[i+1] <- c
+      Bytes.set ret (i+1) c
     ) l;
     ret
 
 let string_of_hexadecimal_big_int n =
   let l = string_of_big_int_with_basis n (Nat_big_num.of_int 16) in
-  let ret = String.create (List.length l + 2) in
-  ret.[0] <- '0';
-  ret.[1] <- 'x';
+  let ret = Bytes.create (List.length l + 2) in
+  Bytes.set ret 0 '0';
+  Bytes.set ret 1 'x';
   List.iteri (fun i c ->
-    ret.[i+2] <- c
+    Bytes.set ret (i+2) c
   ) l;
   ret
 
@@ -520,6 +520,9 @@ let pp_integerConstant = function
          )  ^^ (P.optional pp_integerSuffix suff_opt)
   | IConstantMax ity ->
       !^ "TODO[IConstantMax]"
+  | IConstantMin ity ->
+      !^ "TODO[IConstantMin]"
+
 
 let pp_floatingConstant str =
   !^ str
@@ -562,6 +565,8 @@ let rec pp_constant = function
       pp_characterConstant cc
  | ConstantArray csts ->
      P.braces (comma_list pp_constant csts)
+ | ConstantStruct (tag_sym, xs) ->
+     !^ "TODO[ConstantStruct]"
 (*
   | CONST_FLOAT fc -> !^ fc
   | CONST_CHAR cc  -> pp_character_constant cc
@@ -631,6 +636,8 @@ let rec pp_expression a_expr =
             P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
         | AilEstruct (tag_sym, xs) ->
             P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
+        | AilEcompound (ty, e) ->
+            P.parens (pp_ctype ty) ^^ P.braces (pp e)
         | AilEbuiltin str ->
             !^ str
         | AilEstr lit ->
@@ -810,7 +817,7 @@ let pp_program (startup, sigm) =
   P.separate_map (P.break 1 ^^ P.break 1) pp_static_assertion sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   (* Tag declarations *)
-  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions0 ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   List.fold_left (fun acc (sym, decl) ->
     match decl with

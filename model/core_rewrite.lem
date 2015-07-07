@@ -1,8 +1,7 @@
 open import Pervasives
 
 open import Global Core Core_aux Core_ctype
-import Symbol Symbolic AilTypes
-module Mem = Naive_memory
+import Symbol Symbolic AilTypes Mem
 
 module ATypes = AilTypes
 
@@ -549,8 +548,10 @@ let rec remove_conv_int_pexpr pexpr =
         PEcase_list (remove_conv_int_pexpr pe) nm1 nm2
     | PEcase_ctype pe nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9 ->
         PEcase_ctype (remove_conv_int_pexpr pe) nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9
-    | PEshift pe sh ->
-        PEshift (remove_conv_int_pexpr pe) sh
+    | PEarray_shift pe1 ty pe2 ->
+        PEarray_shift (remove_conv_int_pexpr pe1) ty (remove_conv_int_pexpr pe2)
+    | PEmember_shift pe tag_sym memb_ident ->
+        PEmember_shift (remove_conv_int_pexpr pe) tag_sym memb_ident
     | PEnot pe ->
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
@@ -570,12 +571,17 @@ let rec remove_conv_int_pexpr pexpr =
         match (nm, pes') with
           (* TODO: hack !!!!!!!!! *)
           | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
-              match (to_value pe_ty, to_value pe_n) with
-                | (Just (Vctype ty), Just ((Vinteger (Mem.IVinteger n)) as cval)) ->
-                    if in_minimal_range ty n then
-                      PEval cval
-                    else
-                      PEcall nm pes'
+              match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
+                | (Just (Vctype ty), Just ((Vinteger ival) as cval)) ->
+                    match Mem_aux.integerFromIntegerValue ival with
+                      | Just n ->
+                          if in_minimal_range ty n then
+                            PEval cval
+                          else
+                            PEcall nm pes'
+                      | Nothing ->
+                          PEcall nm pes'
+                    end
                 | _ ->
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
@@ -601,6 +607,8 @@ let rec remove_conv_int expr =
   match expr with
     | Epure pe ->
         Epure (remove_conv_int_pexpr pe)
+    | Ememop memop pes ->
+        Ememop memop (List.map remove_conv_int_pexpr pes)
     | Eraise _ ->
         expr
     | Eregister _ _ ->

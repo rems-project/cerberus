@@ -1,8 +1,5 @@
 open Core
 
-val pp_pointer_shift: (Core_ctype.ctype0 * Nat_big_num.num) list -> PPrint.document
-
-
 val pp_value: value -> PPrint.document
 val pp_params: (Symbol.t2 * core_base_type) list -> PPrint.document
 val pp_pexpr: pexpr -> PPrint.document

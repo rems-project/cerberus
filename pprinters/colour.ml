@@ -1,5 +1,3 @@
-open Global
-
 module P = PPrint
 let (!^ ) = P.(!^)
 let (^^)  = P.(^^)

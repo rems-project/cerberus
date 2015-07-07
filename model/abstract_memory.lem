@@ -5,7 +5,7 @@ module C    = Core
 module Caux = Core_aux
 
 (* TEMPORARY *)
-let todo s = assert_false $ "[TODO] " ^ s
+let todo s = error $ "[TODO] " ^ s
 
 
 (* Ctype functions (for the Core variant) *)
@@ -463,7 +463,7 @@ TODO
     | C.STRUCT _ membrs -> List.exist (fun (x, _) -> m_id = x) membrs
     | C.UNION _ membrs  -> List.exist (fun (x, _) -> m_id = x) membrs
 *)
-    | _                 -> assert_false "TODO: message"
+    | _                 -> error "TODO: message"
   end
 
 
@@ -475,7 +475,7 @@ let rec check_prefixes xs ys m_id =
           | (C.MEMBER ty1, C.MEMBER ty2)                 -> compatible ty1 ty2
           | (C.BITFIELD ty1 n1 p1, C.BITFIELD ty2 n2 p2) -> compatible ty1 ty2 && n1 = n2 && p1 = p2
         end && (if idx = m_id && idy = m_id then true else check_prefixes xs ys m_id)
-    | _ -> assert_false "TODO message"
+    | _ -> error "TODO message"
   end
 
 (* Check whether the two first argument have isomorphic prefix up to the third argument.
@@ -491,7 +491,7 @@ TODO
     | (C.UNION _ membrs1, C.UNION _ membrs2) ->
         check_prefixes membrs1 membrs2 m_id
 *)
-    | _ -> assert_false "TODO message"
+    | _ -> error "TODO message"
   end 
 
 
@@ -504,7 +504,7 @@ let rec members_one_to_one membrs1 membrs2 =
     | ((C.MEMBER ty1) :: xs, (C.MEMBER ty2) :: ys) -> compatible ty1 ty2
     (* TODO!!! currently not looking at the packing flag *)
     | ((C.BITFIELD ty1 n1 _) :: xs, (C.BITFIELD ty2 n2 _) :: ys) ->
-        compatible ty1 ty2 && assert_false "TODO"
+        compatible ty1 ty2 && error "TODO"
   end
 
 
@@ -528,7 +528,7 @@ TODO
       | (C.STRUCT (* qs1 *) tag1 membrs1, C.STRUCT (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
       | (C.UNION  (* qs1 *) tag1 membrs1, C.UNION  (* qs2 *) tag2 membrs2) -> ((* qs1, *) tag1, membrs1, (* qs2, *) tag2, membrs2)
 *)
-      | _ -> Boot.assert_false "TODO message"
+      | _ -> Boot.error "TODO message"
     end
   (* If one is declared with a tag, the other shall be declared with the same tag. *)
   in if tag1 <> tag2 then
@@ -536,7 +536,7 @@ TODO
   else
     (* If both are completed anywhere within their respective translation units, then the following
        additional requirements apply: *)
-    assert_false "TODO"
+    error "TODO"
 
 
 
@@ -562,13 +562,13 @@ TODO
 TODO
           | C.STRUCT tag' membrs' ->
               if tag <> tag' then
-                assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
+                error "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
                 (* P: later the above check will have to be conditionally-on-flags more liberal, to support
                 interchangeability of structs with the same prefix *)
               else
                 todo "get from the memory state the type of the member `m' in the struct type `tag'"
 *)
-          | _ -> assert_false "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
+          | _ -> error "[Memory.outermost_dynamic_type, Unary (Struct_offset _ _) _] ill-formed pointer_expression"
         end
     | Unary (Array_offset ty n) pe -> ty (* NOTE: so we assume that pe was well-formed *)
     | Unary (Cast ty) _ -> ty (* NOTE: the same *)
@@ -600,7 +600,7 @@ let wf_pointer_expression_unary pop p =
             
             | C.ATOMIC _ -> false (* is undefined according to §6.5.2.3#5 *)
             
-            | _ -> assert_false "[Memory.wf_pointer_expression_unary] illformed `Struct_or_union' ctor"
+            | _ -> error "[Memory.wf_pointer_expression_unary] illformed `Struct_or_union' ctor"
            end
         then
           false
@@ -612,12 +612,12 @@ let wf_pointer_expression_unary pop p =
           let p_ty = outermost_dynamic_type p in
           match p_ty with
             | C.STRUCT _ _ ->
-                if assert_false "not semantics_options.isomorphic_stuct_are_compatible" then
+                if error "not semantics_options.isomorphic_stuct_are_compatible" then
                   compatible s_ty p_ty
                 else
-                  assert_false "structs_are_isomorphic s_ty p_ty"
+                  error "structs_are_isomorphic s_ty p_ty"
             | C.UNION _ _ ->
-                if assert_false "not semantics_options.isomorphic_union_are_compatible" then
+                if error "not semantics_options.isomorphic_union_are_compatible" then
                   compatible s_ty p_ty
                 else
                   todo "Ail_typing_aux.unions_are_isomorphic s_ty p_ty"
@@ -633,11 +633,11 @@ let wf_pointer_expression_unary pop p =
               todo "...check we're in bounds (or plus one)"
               todo "...think about whether we have to check the arrays have the same length (maybe we just check that at cast point)"
           
-(*          | FUNCTION _ _ -> assert_false "TODO CHECK: if it's a function type, fail miserably" *)
-          | _ -> assert_false "TODO CHECK"
+(*          | FUNCTION _ _ -> error "TODO CHECK: if it's a function type, fail miserably" *)
+          | _ -> error "TODO CHECK"
         end
       
-    | Cast p_ty -> assert_false "Ail_typing_aux.compatible s_ty p_ty && todo 'and the alignment is ok'"
+    | Cast p_ty -> error "Ail_typing_aux.compatible s_ty p_ty && todo 'and the alignment is ok'"
   end
 
 let rec wf_pointer_expression (p:pointer_expression) =
@@ -726,7 +726,7 @@ let rec project_ft fty =
               todo "get from environment the type of the member x and return that"
           | Ail.UNION  qs x ->
               todo "the same"
-          | _ -> assert_false "[Memory.projectfy] found an ill-formed fancy_type"
+          | _ -> error "[Memory.projectfy] found an ill-formed fancy_type"
         end
     | Type ty -> ty
   end
@@ -896,7 +896,7 @@ val get_block: block_id -> MM.t block
 let get_block bid =
   MM.get >>= fun s ->
   if not (Pmap.mem bid s.block_id_environment) then
-    assert_false "[Memory.get_block] unregistered block id"
+    error "[Memory.get_block] unregistered block id"
   else
     MM.return (Pmap.find bid s.block_id_environment)
   
@@ -1172,7 +1172,7 @@ let pointer_plus_number p n =
   
     (* K: being std strict for now *)
   | Specified Function_pointer ->
-      assert_false "[Memory.pointer_plus_number] found a function pointer,\ 
+      error "[Memory.pointer_plus_number] found a function pointer,\ 
                     something must be wrong with the Ail typecheck."
    end
 
@@ -1230,7 +1230,7 @@ let get_pointer_array_position p =
     end in
   match p.address with
     | Specified Null ->
-        assert_false "[Memory.get_pointer_array_position] called on a null \ 
+        error "[Memory.get_pointer_array_position] called on a null \ 
                       pointer."
     | Specified (Block_path bid mapath) ->
         get_block bid >>= fun block ->
@@ -1270,11 +1270,11 @@ let get_pointer_array_position p =
              Just (bid, One_past)
        ) >>= MM.return -| filter_opt
     | Specified (Function_pointer) ->
-        assert_false "[Memory.get_pointer_array_position] called on a function \ 
+        error "[Memory.get_pointer_array_position] called on a function \ 
                       pointer."
     
     (* TODO: what about Indet pointers? *)
-    | _ -> assert_false "[Memory.get_pointer_array_position] called a non `Specified' pointer"
+    | _ -> error "[Memory.get_pointer_array_position] called a non `Specified' pointer"
   end
 
 (*

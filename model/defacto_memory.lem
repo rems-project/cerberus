@@ -1,5 +1,24 @@
 (* De-facto C11 memory model *)
-open import Core_ctype
+open import Pervasives
+import Set_helpers (* fold *)
+
+open import Global Core_ctype
+
+import Symbolic Thread Cabs AilTypes
+
+open import Mem_common
+
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
+
+val stringFromCtype: ctype -> string
+declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
+
+
+
+
 
 
 (* Semantic switches *)
@@ -10,80 +29,1397 @@ type mode =
   | Mode_Defacto of bool * bool * bool
 
 
-(* Basic representation: 
-   
+(* Basic representation:
      assuming 8-bit bytes and two's complement arithmetic.
  *)
 
 
+type mem_flags =
+  | Mem_flags_TODO
 
-type provenance_id = allocation_id
 
+
+
+
+(* TODO *)
+type allocation_id = nat
+
+type provenance_id = nat
+
+
+
+(* A 'provenance' keeps track of a how a pointer value was constructed *)
 type provenance =
+    (* the associated pointer do reference something but we don't know anything
+       about the associated allocation (e.g. the pointer was build using scanf()) *)
   | Prov_wildcard
+  
+    (* the associated pointer do not reference anything (e.g. null pointer, function pointers) *)
   | Prov_none
+  
+    (* the associated pointer was create using a provenance-less integer value
+       within the memory range reserved for devices *)
+  | Prov_device
+    
+    (* in this case we know of at least one allocation event *)
   | Prov_some of set provenance_id (* INVARIANT: non empty set *)
 
 
-type address = Symbolic.symbolic (* a normal symbolic expression that will resolve to a number, maybe with disjointness and adjacency constraints (kept elsewhere) *)
-
-(* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_member with the struct/union type. *)
-type shift_path_element = 
-  | SPE_member of ctype * integer (*TODO: bring back symbolic *)
-  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
-
-type shift_path = list shift_path_element
 
 
-type pointer_value_aux =
-  | PVnull of ctype  
-     (* the lvalue type of the pointer object we stored a NULL to *) 
-     (*always with Prov_none *)
-  | PVbase of allocation_id  
+type address = Symbol.t (* a normal symbolic expression that will resolve to a number, maybe with disjointness and adjacency constraints (kept elsewhere) *)
+
+
+
+
+(*** Pointer value ****************************************************************************** *)
+type pointer_value =
+    (* pointer values are annotated with a provenance *)
+  | PV of provenance * pointer_value_aux
+
+and pointer_value_aux =
+    (* a null pointer constructed with an expression of the given ctype. *)
+  | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
      (* the result of a dynamic or automatic/static/thread-local allocation *)
      (* generated (and perhaps always?) with Prov_some with the singleton set of its allocation_id  *)
-  | PVshift of pointer_value_aux * shift_path
+  
+  | PVfunction of Symbol.t (* INVARIANT: the associated provenance must be Prov_none *)
+  
+  | PVbase of allocation_id
      (* shift_path used to be a list of (ctype,int) pairs.  
         now the int should be the naive_memory.lem integer_value 
 *)
-  | PVfromint of integer_value (* never a null pointer *)
-
+  | PVshift of pointer_value_aux * shift_path (* INVARIANT: the first parameter must not be a PVshift *)
+  | PVfromint of integer_value_aux (* INVARIANT: never a null pointer *)
 (* in memory-value, kayvan wants byte-n-of-memory-value too *)
 
-type pointer_value =
-  provenance * pointer_value_aux
+
+(* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
+and shift_path_element =
+  | SPE_array of ctype * integer_value_aux
+(*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
+  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+ 
+and shift_path =
+  list shift_path_element
 
 
-type integer_value_aux =
-  | IVconcrete of Symbolic.symbolic
-  | IVfromptr of pointer_value_aux
-  | IVop of ivop * list integer_value_aux
-
-type integer_value =
-  provenance * integer_value_aux
 
 
+and integer_value_aux =
+  | IVconcrete of integer (* of Symbolic.symbolic *)
+  | IVfromptr of ctype * pointer_value_aux (* the first parameter is the referenced type of the pointer value *)
+  | IVop of integer_operator * list integer_value_aux
+  | IVsizeof of ctype
+  | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+  | IVptrdiff of pointer_value_aux * pointer_value_aux
 
-(* TODO: split it *)
-type allocation = <|
-  is_dynamic: bool;
-  allocated_type: maybe ctype; (* only for static *)
-  address: address_id;
-|>
+and integer_value =
+  IV of provenance (* * AilTypes.integerType *) * integer_value_aux
 
 
-type memory_state = <|
-  allocations: map allocation_id allocation;
-  allocation_constaints: something; (* might need to be in driver_state *)
+
+(* The mem_value represents what can be stored in memory. *)
+type mem_value =
+  | MVsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+  | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *)
+  | MVinteger of AilTypes.integerType * integer_value
+  | MVfloating of AilTypes.floatingType * string
+  | MVpointer of ctype * pointer_value (* the first parameter is the referenced type of the pointer value *)
+  | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
+  | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+
+(*  
+  | MVmodified of list (shift_path * mem_value) * mem_value (* this is for when an object is modified as an
+                                                               uchar array (or the generalisation to other types of that) *)
+*)
   
+(*  | MVbytes of byte_mask * mem_value * mem_value *)
+
+
+type address_id = nat
+
+
+type allocation =
+  | Alloc_static  of ctype * address_id
+  | Alloc_dynamic of integer_value_aux * address_id
+
+
+(*
+(* TODO: tentative *)
+type address_constraint =
+    (* the first address is distinct for the addresses in the set *)
+  | AC_distinct of address_id * set address_id
+    (* the address is equal to a specific integer value *)
+  | AC_equals of address_id * integer_value_aux
+*)
+
+
+type mem_constraint =
+  | MC_eqIV of integer_value_aux * integer_value_aux (* equality between integer values *)
+  | MC_neIV of integer_value_aux * integer_value_aux (* non-equality between integer values *)
+  | MC_leIV of integer_value_aux * integer_value_aux
+
+  | MC_addr_distinct of address_id * set address_id  (* the first address is distinct for the addresses in the set *)
+  | MC_addr_equals of address_id * integer_value_aux (* the address is equal to a specific integer value *)
+
+
+
+type write_event =
+  WriteEvent of ctype * pointer_value * mem_value
+
+
+type mem_state = <|
+  (* this is read only *)
+  tag_definitions: tag_definitions;
+  flags: mem_flags;
+  
+  (* machinery stuff *)
+  allocation_id_suppl: UniqueId.supply allocation_id;
+  address_id_suppl:    UniqueId.supply address_id;
+  
+  (* the semantic stuff starts here *)
+  allocations:         map allocation_id allocation;
+  dead_allocations:    set allocation_id;
+  
+  addresses:           map address_id address;
+  
+(*  address_constraints: list address_constraint; (* might need to be in driver_state *) *)
+  constraints: list mem_constraint;
+  
+(*
+  writes: list write_event;
+*)
+  objects: map allocation_id mem_value;
 |>
+
+
+(* TODO: only for the concurrency *)
+let fake_pointer_value_eq (PV _ ptr_val_1) (PV _ ptr_val_2) =
+  match (ptr_val_1, ptr_val_2) with
+    | (PVbase alloc_id1, PVbase alloc_id2) ->
+        alloc_id1 = alloc_id2
+    | _ ->
+        error "DON'T USE Eq for pointer_value"
+  end
+instance (Eq pointer_value)
+  let (=) = fake_pointer_value_eq
+  let (<>) ptr_val1 ptr_val2 = not (fake_pointer_value_eq ptr_val1 ptr_val2)
+end
+
+let rec fake_mem_value_eq mval1 mval2 =
+  match (mval1, mval2) with
+    | (MVsymbolic symb1, MVsymbolic symb2) ->
+        symb1 = symb2
+    | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
+        n1 = n2
+    | (MVarray mvals1, MVarray mvals2) ->
+        List.all (uncurry fake_mem_value_eq) (zip mvals1 mvals2)
+    | _ ->
+        error "DON'T USE Eq for mem_value"
+
+(*
+    | MVsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+    | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *)
+    | MVinteger of AilTypes.integerType * integer_value
+    | MVfloating of AilTypes.floatingType * string
+    | MVpointer of ctype * pointer_value (* the first parameter is the referenced type of the pointer value *)
+    | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
+    | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
+    | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+*)
+end
+
+instance (Eq mem_value)
+  let (=) = fake_mem_value_eq
+  let (<>) mval1 mval2 = not (fake_mem_value_eq mval1 mval2)
+end
+
+
+(* BEGIN string conversion functions ============================================================ *)
+instance (Show mem_value)
+  let show x = "WIP: show mem_value"
+end
+
+instance (Show pointer_value)
+  let show x = "WIP: show pointer_value"
+end
+
+let stringFromProvenance = function
+  | Prov_wildcard ->
+      "Prov_wildcard"
+  | Prov_none ->
+      "Prov_none"
+  | Prov_device ->
+      "Prov_device"
+  | Prov_some prov_ids ->
+      "Prov_some (" ^ show prov_ids ^ ")"
+end
+
+let rec stringFromPointer_value ptr_val =
+  match ptr_val with
+    | PV prov ptr_val_ ->
+        "PV (" ^ stringFromProvenance prov ^ ", " ^ stringFromPointer_value_aux ptr_val_ ^ ")"
+  end
+
+and stringFromPointer_value_aux ptr_val_ =
+  match ptr_val_ with
+  | PVnull ty ->
+      "PVnull ("^ stringFromCtype ty ^ ")"
+  | PVfunction sym ->
+      "PVfunction (" ^ show sym ^ ")"
+  | PVbase alloc_id ->
+      "PVbase (" ^ show alloc_id ^ ")"
+  | PVshift ptr_val_' sh ->
+      "PVshift (" ^ stringFromPointer_value_aux ptr_val_' ^ ", " ^ stringFromList stringFromShift_path_element sh ^ ")"
+  | PVfromint ival_ ->
+      "PVfrompint (" ^ stringFromInteger_value_aux ival_ ^ ")"
+  end
+
+and stringFromShift_path_element spe =
+  match spe with
+    | SPE_array ty ival_ ->
+        "SPE_array (" ^ stringFromCtype ty ^ ", " ^ stringFromInteger_value_aux ival_ ^ ")"
+    | SPE_post_padding tag_sym memb_ident ->
+        "SPE_post_padding (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
+  end
+
+and stringFromInteger_value_aux ival_ =
+  match ival_ with
+    | IVconcrete symb ->
+        "IVconcrete (" ^ show symb ^ ")"
+    | IVfromptr ref_ty ptr_val_ ->
+        "IVfromptr (" ^ stringFromCtype ref_ty ^ ", " ^ stringFromPointer_value_aux ptr_val_ ^ ")"
+    | IVop iop ival_s ->
+        "IVop (" ^ stringFromInteger_operator iop ^ ", " ^
+                   List.foldr (fun ival_ acc -> stringFromInteger_value_aux ival_ ^ ", " ^ acc) ")" ival_s
+    | IVsizeof ty ->
+        "IVsizeof (" ^ stringFromCtype ty ^ ")"
+    | IVoffsetof tag_sym memb_ident ->
+        "IVoffsetof (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
+    | IVptrdiff ptr_val_1 ptr_val_2 ->
+        "IVptrdiff (" ^ stringFromPointer_value_aux ptr_val_1 ^ ", " ^ stringFromPointer_value_aux ptr_val_2 ^ ")"
+end
+
+and stringFromInteger_value (IV prov ival_) =
+  "(" ^ stringFromProvenance prov ^ ", " ^ stringFromInteger_value_aux ival_ ^ ")"
+
+
+let rec stringFromMem_value mval =
+  match mval with
+    | MVunspecified ty ->
+        "MVunspecified (" ^ stringFromCtype ty  ^ ")"
+    | MVinteger ity ival ->
+        "MVinteger (" ^ stringFromCtype (Basic (AilTypes.Integer ity)) ^ ", " ^ stringFromInteger_value ival ^ ")"
+    | MVfloating fty str ->
+        "MVfloating (" ^ stringFromCtype (Basic (AilTypes.Floating fty)) ^ ", " ^ show str ^ ")"
+    | MVpointer ref_ty ptr_val ->
+        "MVpointer (" ^ stringFromCtype ref_ty ^ ", " ^ stringFromPointer_value ptr_val ^ ")"
+    | MVarray mvals ->
+        "MVarray (" ^ stringFromList stringFromMem_value mvals ^ ")"
+    | MVstruct tag_sym xs ->
+        "MVstruct (" ^ show tag_sym ^ ", " ^
+                       stringFromList (stringFromPair show stringFromMem_value) xs ^ ")"
+    | MVunion tag_sym memb_ident mval' ->
+        "MVunion (" ^ show tag_sym ^ ", " ^ show memb_ident ^ stringFromMem_value mval' ^ ")"
+  end
+
+
+
+
+
+
+
+
+
+
+(* BEGIN effect ================================================================================= *)
+
+(*
+type memM_action 'a =
+  | MemMval of 'a * mem_state
+  | MemMerr of mem_error
+  | MemMif of Symbolic.symbolic * memM_action 'a * memM_action 'a
+  | MemMnd of list (maybe Symbolic.symbolic * memM_action 'a)
+
+type memM 'a =
+  mem_state -> memM_action 'a
+*)
+
+
+
+
+
+
+
+
+type memM 'a =
+  | MemM of (mem_state -> list (either mem_error ('a * mem_state)))
+
+
+
+val return: forall 'a. 'a -> memM 'a
+let return x =
+  MemM (fun st -> [Right (x, st)])
+
+
+val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
+let bind (MemM m) f =
+  MemM (
+    fun st ->
+      concatMap (
+        either
+          (fun err -> [Left err])
+          (fun (z, st') ->  let MemM m' = f z in m' st')
+      ) (m st)
+  )
+
+(*
+  fun st ->
+    concatMap (either (fun z -> [Left z]) (fun (z, st') -> f z st')) (m st)
+*)
+
+let inline (>>=)      = bind
+let inline (>>) m1 m2 = bind m1 (fun _ -> m2)
+
+let inline (<$>) f m =
+  m >>= return -| f
+
+
+(* TODO: debug *)
+val wip: forall 'a. string -> memM 'a (* DEBUG *)
+let wip str =                         (* DEBUG *)
+  MemM (                              (* DEBUG *)
+    fun _ ->                          (* DEBUG *)
+      [Left (MerrWIP str)]            (* DEBUG *)
+  )                                   (* DEBUG *)
+
+
+val fail: forall 'a. mem_error -> memM 'a
+let fail err =
+  MemM (fun st -> [Left err])
+
+
+val get: memM mem_state
+let get =
+  MemM (fun st -> [Right (st, st)])
+
+val put: mem_state -> memM unit
+let put st =
+  MemM (fun _ -> [Right ((), st)])
+
+
+
+
+val fresh_address_id: memM address_id
+let fresh_address_id =
+  get >>= fun mem_st ->
+  let (id, suppl') = UniqueId.fresh_id mem_st.address_id_suppl in
+  put <| mem_st with address_id_suppl= suppl' |> >>
+  return id
+
+
+val fresh_allocation_id: memM allocation_id
+let fresh_allocation_id =
+  get >>= fun mem_st ->
+  let (id, suppl') = UniqueId.fresh_id mem_st.allocation_id_suppl in
+  put <| mem_st with allocation_id_suppl= suppl' |> >>
+  return id
+
+
+val register_allocation: allocation_id -> allocation -> memM unit
+let register_allocation alloc_id alloc =
+  get >>= fun mem_st ->
+  put <| mem_st with allocations=
+    Map.insert alloc_id alloc mem_st.allocations
+  |>
+
+
+val allocation_is_dead: allocation_id -> memM bool
+let allocation_is_dead alloc_id =
+  get >>= fun mem_st ->
+  return (alloc_id IN mem_st.dead_allocations)
+
+val resolve_allocation: allocation_id -> memM allocation
+let resolve_allocation alloc_id =
+  get >>= fun mem_st ->
+  maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
+    (Map.lookup alloc_id mem_st.allocations)
+
+(* END effect =================================================================================== *)
+
+val mzero: forall 'a. memM 'a
+let mzero =
+  MemM (fun st -> [])
+
+
+val constraints_are_unsat: memM bool
+let constraints_are_unsat =
+  return false (* TODO *)
+
+
+
+
+
+val add_constraints: list mem_constraint -> memM unit
+let add_constraints xs =
+  get >>= fun st ->
+  put <| st with constraints= xs ++ st.constraints |> >>
+  constraints_are_unsat >>= function
+    | true  -> mzero
+    | false -> return ()
+  end
+
+
+let integer_value_auxSimpl ival_ =
+  ival_
+
+let integer_value_auxEquality ival_1 ival_2 =
+  Nothing
+
+
+
+
+
+
+
+
+val     simplify_integer_value_aux: integer_value_aux -> integer_value_aux
+let rec simplify_integer_value_aux ival_ =
+  match ival_ with
+    | IVconcrete _ ->
+        ival_
+    
+    | IVop iop ival_s ->
+        let op = match iop with
+          | IntAdd ->
+              fun x y -> x + y
+          | IntSub ->
+              fun x y -> x - y
+          | IntMul ->
+              fun x y -> x * y
+          | IntDiv ->
+              fun x y -> if y = 0 then 0 else x / y
+          | IntMod ->
+              fun x y -> if y = 0 then 0 else x mod y
+          | IntExp ->
+              fun x y -> x ** natFromInteger y
+        end in
+        match (iop, List.map simplify_integer_value_aux ival_s) with
+          | (_, [IVconcrete n1; IVconcrete n2]) ->
+              IVconcrete (op n1 n2)
+          
+          | (IntAdd, ([IVconcrete n; ival_2'] as ival_s')) -> if n = 0 then ival_2' else IVop iop ival_s'
+          | (IntAdd, ([ival_1'; IVconcrete n] as ival_s')) -> if n = 0 then ival_1' else IVop iop ival_s'
+          | (IntSub, ([IVconcrete n; ival_2'] as ival_s')) -> if n = 0 then ival_2' else IVop iop ival_s'
+          | (IntSub, ([ival_1'; IVconcrete n] as ival_s')) -> if n = 0 then ival_1' else IVop iop ival_s'
+          
+          | (IntMul, ([IVconcrete n; ival_2'] as ival_s')) -> if n = 0 then IVconcrete 0 else if n = 1 then ival_2' else IVop iop ival_s'
+          | (IntMul, ([ival_1'; IVconcrete n] as ival_s')) -> if n = 0 then IVconcrete 0 else if n = 1 then ival_1' else IVop iop ival_s'
+          | (IntDiv, ([ival_1'; IVconcrete n] as ival_s')) -> if n = 0 then IVconcrete 0 else if n = 1 then ival_1' else IVop iop ival_s'
+          
+          | (IntDiv, ([IVconcrete n; _] as ival_s')) -> if n = 0 then IVconcrete 0 else IVop iop ival_s'
+          
+          | (_, ival_s') ->
+              simplify_integer_value_aux $ IVop iop ival_s'
+        end
+    | IVfromptr ref_ty (PVfromint ival_') ->
+        ival_'
+    
+    (* TODO: this is clearly not enough *)
+    | IVptrdiff (PVshift (PVbase alloc_id1) [SPE_array ty1 ival_1]) (PVshift (PVbase alloc_id2) [SPE_array ty2 ival_2])->
+        if alloc_id1 <> alloc_id2 then
+          ival_
+        else
+          if ty1 <> ty2 then
+            error "simplify_integer_value_aux: found IVptrdiff between two SPE_array with different element type"
+          else
+            simplify_integer_value_aux $
+              IVop IntSub [ival_1; ival_2]
+    | _ ->
+        ival_
+  end
+
+
+
+
+
+val ifM: forall 'a. mem_constraint -> memM 'a -> memM 'a -> memM 'a
+let ifM constr m_then m_else =
+  match constr with
+(*
+    | MC_eqIV of integer_value_aux * integer_value_aux (* equality between integer values *)
+    | MC_neIV of integer_value_aux * integer_value_aux (* non-equality between integer values *)
+ *)
+
+    (* TODO: this is hacky ... *)
+    | MC_leIV ival_1 ival_2 ->
+        match (simplify_integer_value_aux ival_1, simplify_integer_value_aux ival_2) with
+          | (IVconcrete n1, IVconcrete n2) ->
+              if n1 <= n2 then m_then else m_else
+          | (IVconcrete n, IVsizeof _) ->
+              if n = 0 then
+                m_then
+              else
+                error "WIP ifM (MC_leIV): n <= sizeof(ty)"
+          | (IVsizeof ty1, IVsizeof (Array ty2 (Just n))) ->
+              if ty1 = ty2 then
+                m_then
+              else
+                error "WIP ifM (MC_leIV): sizeof(ty) <= sizeof(ty[n])"
+          | (ival_1', ival_2') ->
+              error ("WIP ifM (MC_leIV): " ^ stringFromInteger_value_aux ival_1' ^ ", " ^
+                                             stringFromInteger_value_aux ival_2')
+        end
+
+(*
+    | MC_addr_distinct of address_id * set address_id  (* the first address is distinct for the addresses in the set *)
+    | MC_addr_equals of address_id * integer_value_aux (* the address is equal to a specific integer value *)
+*)
+  end
+
+val condM: mem_constraint -> memM bool
+let condM constr =
+  ifM constr (return true) (return false)
+
+(*
+  match constr with
+    | MC_eqIV ival_1 ival_2 ->
+        let ival_1' = integer_value_auxSimpl ival_1 in
+        let ival_2' = integer_value_auxSimpl ival_2 in
+        match integer_value_auxEquality ival_1' ival_2' with
+          | Just b ->
+              if b then m_then else m_else
+          | Nothing ->
+              mplus
+                (with_constraints [MC_eqIV ival_1' ival_2'] m_then)
+                (with_constraints [MC_neIV ival_1' ival_2'] m_else)
+
+
+              fun st ->
+                let (xs1, z1) = m_then st in
+                let (xs2, z2) = m_else st in
+                [ (MC_eqIV ival_1' ival_2' :: xs1, z1)
+                ; (MC_neIV ival_1' ival_2' :: xs2, z2)
+                ]
+        end
+  end
+*)
+
+
+
+
+(* ============================================================================================== *)
+
+val print_debugM: nat -> string -> memM unit
+let print_debugM n str =
+  MemM (fun st ->
+    let _ = print_debug n str in
+    [Right ((), st)]
+  )
+
+
+
+val debug_check: string -> bool -> memM unit
+let debug_check str = function
+  | true ->
+      return ()
+  | false ->
+      fail (MerrInternal ("debug_check failed ==> " ^ str))
+end
+
+
+
+
+
+
+(*
+  | Prov_wildcard
+  | Prov_none
+  | Prov_device
+  | Prov_some of set provenance_id (* INVARIANT: non empty set *)
+*)
+(*
+val share_common: provenance -> provenance -> bool
+let share_common prov1 prov2 =
+  match (prov1, prov2) with
+    | 
+  end
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* TODO: (not sure at all) currently Prov_some has priority *)
+val prov_union: provenance -> provenance -> provenance
+let prov_union prov1 prov2 =
+  match (prov1, prov2) with
+    | (Prov_some ids1, Prov_some ids2) ->
+        Prov_some (ids1 union ids2)
+    | (Prov_some ids, _) ->
+        Prov_some ids
+    | (_, Prov_some ids) ->
+        Prov_some ids
+    | (Prov_none, Prov_none) ->
+        Prov_none
+(*
+    | (Prov_none, Prov_some ids) ->
+        Prov_some ids
+    | (Prov_some ids, Prov_some ids) ->
+        Prov_some ids
+*)
+    | _ ->
+        error "WIP: prov_union"
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+(* Wellformedness predicates (following the comments in the definitions of the related types). *)
+val wf_pointer_value: pointer_value -> bool
+let wf_pointer_value = function
+  | PV Prov_none (PVnull _) ->
+      true
+  | PV _ (PVnull _) ->
+      false
+  | _ ->
+      true (* TODO !!!! error "WIP: wf_pointer_value" *)
+end
+
+
+
+
+
+(* Returns whether a given allocation has reached the end of its lifetime *)
+val is_dead: allocation_id -> memM bool
+let is_dead alloc_id =
+  get >>= fun mem_st ->
+  return (Set.member alloc_id mem_st.dead_allocations)
+
+
+val     explicitAllocationIdFromPointer_value_aux: pointer_value_aux -> memM (maybe allocation_id)
+let rec explicitAllocationIdFromPointer_value_aux ptr_val_ =
+  match ptr_val_ with
+    | PVnull _ ->
+        return Nothing
+    | PVfunction _ ->
+        return Nothing
+    | PVbase alloc_id ->
+        return (Just alloc_id)
+    | PVshift ptr_val_' _ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_'
+    | PVfromint ival_ ->
+        explicitAllocationIdFromInteger_value_aux ival_
+  end
+
+and explicitAllocationIdFromInteger_value_aux  ival_ =
+  match ival_ with
+    | IVconcrete n ->
+        return Nothing
+    | IVfromptr _ ptr_val_ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_
+    | IVop iop ival_s ->
+        return Nothing
+    | IVsizeof ty ->
+        return Nothing
+    | IVoffsetof tag_sym memb_ident ->
+        return Nothing
+  end
+
+
+
+
+val integer_value_auxFromShift_path: shift_path -> integer_value_aux
+let integer_value_auxFromShift_path sh =
+  List.foldl (fun acc spe ->
+    let spe_ival_ = match spe with
+      | SPE_array ty ival_ ->
+          IVop IntMul [IVsizeof ty; ival_]
+      | SPE_post_padding tag_sym memb_ident ->
+          IVoffsetof tag_sym memb_ident
+    end in
+    IVop IntAdd [spe_ival_; acc]
+  ) (IVconcrete 0) sh
+
+
+
+
+
+
+(*
+  | IVconcrete of integer (* of Symbolic.symbolic *)
+  | IVfromptr of ctype * pointer_value_aux (* the first parameter is the referenced type of the pointer value *)
+  | IVop of integer_operator * list integer_value_aux
+  | IVsizeof of ctype
+  | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+  | IVptrdiff of pointer_value_aux * pointer_value_aux
+*)
+
+
+
+(* Decide whether a given pointer value can be use to perform a store *)
+val can_store: pointer_value -> memM (maybe allocation_id)
+let can_store (PV prov ptr_val_ as ptr_val) =
+  debug_check "can_store.wf_ptr" (wf_pointer_value ptr_val) >> (* DEBUG (to remove when things start working) *)
+  
+  match ptr_val_ with
+    | PVnull _ ->
+        return Nothing
+    | PVfunction _ ->
+        return Nothing
+    | PVbase alloc_id ->
+        is_dead alloc_id >>= function
+          | true ->
+              return Nothing
+          | false ->
+              return (Just alloc_id)
+        end
+    | PVshift ptr_val_' sh ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_' >>= function
+          | Just alloc_id ->
+              allocation_is_dead alloc_id >>= function
+                | true ->
+                    return Nothing
+                | false ->
+                    resolve_allocation alloc_id >>= function
+                      | Alloc_static ty addr_id ->
+                          ifM (MC_leIV (integer_value_auxFromShift_path sh) (IVsizeof ty))
+                              (* then *)
+                              (return (Just alloc_id))
+                              (* else *)
+                              (return Nothing)
+(*
+                    wip "WIP: can_store, static" (* ifM (KKKK) *)
+*)
+                      | Alloc_dynamic ival_ addr_id ->
+                          wip "WIP: can_store, dynamic"
+                    end
+              end
+          | Nothing ->
+              wip "WIP: can_store, shift 2"
+        end
+    | _ ->
+        wip "WIP: can_store, others"
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+let prettyStringFromMem_value mval =
+  error "WIP: prettyStringFromMem_value"
+
+
+
+(*
+type memM 'a =
+  mem_state -> list (list Symbolic.symbolic * either mem_error ('a * mem_state))
+*)
+let runMem (MemM m) st =
+  m st
+
+
+let initial_mem_stateWithTagDefinitions tagDefs = <|
+  tag_definitions= tagDefs;
+  flags= Mem_flags_TODO;
+  allocation_id_suppl= UniqueId.new_supply;
+  address_id_suppl= UniqueId.new_supply;
+  
+  allocations= Map.empty;
+  dead_allocations= Set.empty;
+  addresses= Map.empty;
+  constraints= [];
+(*  writes= []; *)
+  objects= Map.empty;
+|>
+
+
+
+
+val get_allocation_id: pointer_value_aux -> maybe allocation_id
+let rec get_allocation_id ptr_val_ =
+  match ptr_val_ with
+    | PVnull ty ->
+        Nothing
+    | PVbase alloc_id ->
+        Just alloc_id
+    | PVshift ptr_val_' _ ->
+        get_allocation_id ptr_val_'
+    | PVfromint (IVfromptr ref_ty ptr_val_') ->
+        get_allocation_id ptr_val_'
+  end
+
+
+
+(* Make a given address disjoint to all other existing address *)
+val register_distinctness_constraints: address_id -> memM unit
+let register_distinctness_constraints addr_id =
+  get >>= fun mem_st ->
+  add_constraints [MC_addr_distinct addr_id (Set.filter (fun addr_id' -> addr_id <> addr_id') (Map.domain mem_st.addresses))]
+
+
+
+
+
+
+val     mkUnspec: tag_definitions -> ctype -> mem_value
+let rec mkUnspec tagDefs ty =
+  match ty with
+    | (Basic _ as ty) ->
+        MVunspecified ty
+    | Array ty (Just n) ->
+        MVarray $ replicate (natFromInteger n) (mkUnspec tagDefs ty)
+    | (Pointer _ _ as ty) ->
+        MVunspecified ty
+    | (Atomic _ as ty) ->
+        MVunspecified ty
+    | Struct tag ->
+        let (Just ident_tys) = Map.lookup tag tagDefs in
+        MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec tagDefs ty)) ident_tys
+    | (Union _ as ty) ->
+        MVunspecified ty
+    | (Builtin _ as ty) ->
+        MVunspecified ty
+    | _ ->
+        error "Mem.mkUnspec: invalid type"
+  end
+
+
+
+val     traverse_with_shift_path: tag_definitions -> mem_value -> shift_path -> (mem_value -> mem_value)
+let rec traverse_with_shift_path tagDefs mval sh =
+  match (mval, sh) with
+    | (_, []) ->
+        fun z -> z
+    | (MVarray mvals, (SPE_array _ ival_) :: sh') ->
+        match simplify_integer_value_aux ival_ with
+          | IVconcrete n ->
+              (* TODO: check here for ooba? *)
+              fun z ->
+                MVarray (list_index_update (natFromInteger n) (fun x -> traverse_with_shift_path tagDefs x sh' z) mvals)
+          | _ ->
+              error "traverse_with_shift_path: non-concrete array shift"
+        end
+(*
+    | (MVstruct mval_tag_sym xs, (SPE_post_padding spe_tag_sym memb_ident) :: sh') ->
+        if mval_tag_sym = spe_tag_sym then
+          let Just ident_tys = Map.lookup mval_tag_sym tagDefs in
+          
+        else
+          error "traverse_with_shift_path: wrong struct tag"
+*)
+    | _ ->
+        error ("traverse_with_shift_path: " ^ stringFromMem_value mval ^ ", " ^ stringFromList stringFromShift_path_element sh)
+end
+
+
+(*
+and shift_path_element =
+  | SPE_array of ctype * integer_value_aux
+(*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
+  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+ 
+and shift_path =
+  list shift_path_element
+*)
+
+
+
+
+val update_mem_value: tag_definitions -> write_event -> mem_value -> mem_value
+let update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_) mval') mval =
+  match ptr_val_ with
+    | PVbase _ ->
+        mval'
+    | PVshift _ sh ->
+        traverse_with_shift_path tagDefs mval sh mval'
+    
+    | _ ->
+        mval (* TODO *)
+  end
+
+
+
+val register_write_event: allocation_id -> write_event -> memM unit
+let register_write_event alloc_id (WriteEvent _ _ mval as w) =
+  get >>= fun st ->
+  put <| st with objects=
+    match Map.lookup alloc_id st.objects with
+      | Just mval ->
+          Map.insert alloc_id (update_mem_value st.tag_definitions w mval) st.objects
+      | Nothing ->
+          Map.insert alloc_id mval st.objects (* TODO: Map.insert alloc_id (update_mem_value (MVunspecified *)
+    end
+  |>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let allocate_static tid prefix ty =
+  (* the allocated object is given a new address (distinct from all other
+     existing addresses) *)
+  fresh_address_id >>= fun addr_id ->
+  register_distinctness_constraints addr_id >>
+  
+  fresh_allocation_id >>= fun alloc_id ->
+  register_allocation alloc_id (Alloc_static ty addr_id) >>
+
+  (* TODO: maybe bad ? *)
+  get >>= fun mem_st ->
+  put <| mem_st with objects= Map.insert alloc_id (mkUnspec mem_st.tag_definitions ty) mem_st.objects  |> >>
+
+  
+  let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id) in
+  print_debugM 4 ("Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  
+  return ptr_val
+
+
+let allocate_dynamic tid prefix ival =
+  wip "WIP: allocate_dynamic"
+
+
+
+
+
+
+
+
+(* TODO: temporary *)
+let structural_equality_provenance prov1 prov2 =
+  match (prov1, prov2) with
+    | (Prov_wildcard, Prov_wildcard) ->
+        true
+    | (Prov_none, Prov_none) ->
+        true
+    | (Prov_device, Prov_device) ->
+        true
+    | (Prov_some ids1, Prov_some ids2) ->
+        ids1 = ids2
+    | _ ->
+        false
+  end
+
+let rec structural_equality_pointer_value (PV prov1 ptr_val_1) (PV prov2 ptr_val_2) =
+  structural_equality_provenance prov1 prov2 && structural_equality_pointer_value_aux ptr_val_1 ptr_val_2
+
+and structural_equality_pointer_value_aux ptr_val_1 ptr_val_2 =
+  match (ptr_val_1, ptr_val_2) with
+    | (PVnull ty1, PVnull ty2) ->
+        ty1 = ty2
+    | (PVfunction sym1, PVfunction sym2) ->
+        sym1 = sym2
+    | (PVbase alloc_id1, PVbase alloc_id2) ->
+        alloc_id1 = alloc_id2
+    | (PVshift ptr_val_1' sh1, PVshift ptr_val_2' sh2) ->
+        structural_equality_pointer_value_aux ptr_val_1' ptr_val_2' && sh1 = sh2
+    | (PVfromint ival_1, PVfromint ival_2) ->
+        structural_equality_integer_value_aux ival_1 ival_2
+    | _ ->
+        false
+  end
+
+and structural_equality_shift_path_element spe1 spe2 =
+  match (spe1, spe2) with
+    | (SPE_array ty1 ival_1, SPE_array ty2 ival_2) ->
+        ty1 = ty2 && structural_equality_integer_value_aux ival_1 ival_2
+    | (SPE_post_padding tag_sym1 memb_ident1, SPE_post_padding tag_sym2 memb_ident2) ->
+        tag_sym1 = tag_sym2 && memb_ident1 = memb_ident2
+    | _ ->
+        false
+ end
+ 
+and structural_equality_shift_path sh1 sh2 =
+  List.all (uncurry structural_equality_shift_path_element) (zip sh1 sh2)
+
+and structural_equality_integer_value_aux _ _ =
+  error "structural_equality_integer_value_aux"
+
+
+
+
+val is_affecting: write_event -> ctype -> pointer_value -> memM bool
+let is_affection (WriteEvent w_ty w_ptr_val mval) r_ty r_ptr_val =
+(*
+  get_allocation_id r_ptr_val >>= fun r_alloc_id_opt ->
+  get_allocation_id w_ptr_val >>= fun w_alloc_id_opt ->
+  match (r_alloc_id_opt, w_alloc_id_opt) with
+    | (Just r_alloc_id, Just w_alloc_id) ->
+        if r_alloc_id = w_alloc_id then
+          condM (MC_conj (MC_le_ival_ (offset_ival_ w_ptr_val) (offset_ival_ r_ptr_val))
+                         (MC_le_ival_ () ())
+        else
+          wip "is_affecting 1"
+        condM (offset_ival 
+  end
+*)
+  error "is_affecting"
+
+
+
+
+
+
+(*
+val find_allocation_id: pointer_value -> memM allocation_id
+let find_allocation_id (PV 
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val     fetch_first_write_event: (write_event -> bool) -> memM (maybe write_event)
+let rec fetch_first_write_event_aux pred = function
+  | [] ->
+      Nothing
+  | x :: xs ->
+      if pred x then Just x else fetch_first_write_event_aux pred xs
+end
+let fetch_first_write_event pred =
+  wip "fetch_frist_write_event"
+(*
+  get >>= fun st ->
+  return (fetch_first_write_event_aux pred st.writes)
+*)
+
+
+let load ty (PV _ ptr_val_ as ptr_val) : memM mem_value =
+  explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+    | Just alloc_id ->
+        get >>= fun mem_st ->
+        match Map.lookup alloc_id mem_st.objects with
+          | Just mval ->
+              print_debugM 5 ("Loading [" ^ stringFromCtype ty ^ "]: " ^ stringFromMem_value mval  ^ " with pointer: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+              return mval
+          | Nothing ->
+              fail (MerrUnitialised (stringFromPointer_value ptr_val))
+        end
+    | Nothing ->
+        wip "TODO: load"
+  end
+  
+  
+
+(*
+  (* TODO: this just find the latest store done with exactly the same pointer value *)
+  fetch_first_write_event (fun (WriteEvent _ ptr_val' _) -> structural_equality_pointer_value ptr_val ptr_val') >>= function
+    | Just (WriteEvent _ _ mval) ->
+        print_debugM 4 ("Loading [" ^ stringFromCtype ty ^ "]: "^ stringFromMem_value mval ^ " from: " ^ stringFromPointer_value ptr_val) >>
+        return mval
+    | Nothing ->
+        fail (MerrWIP "load failed")
+  end
+*)
+
+
+
+
+
+
+let store ty ptr_val mval =
+  print_debugM 5 ("Storing [" ^ stringFromCtype ty ^ "]: " ^ stringFromMem_value mval ^ ", with pointer: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  can_store ptr_val >>= function
+    | Just alloc_id ->
+        register_write_event alloc_id (WriteEvent ty ptr_val mval)
+    | Nothing ->
+        fail (MerrWIP $ "attempted to store with pointer: " ^ stringFromPointer_value ptr_val)
+  end
+
+
+let null_ptrval ty =
+  PV Prov_none (PVnull ty)
+
+let fun_ptrval sym =
+  PV Prov_none (PVfunction sym)
+
+
+(*
+val to_shift_path: tag_definitions -> list (Core_ctype.ctype * integer_value) -> shift_path
+let to_shift_path tagDefs xs =
+*)
+
+
+
+let internal_shift_ptrval ptr_val spe : pointer_value =
+  match ptr_val with
+(*
+    | PV Prov_none _ ->
+        Left (MerrOther "attempted to shift a pointer value with no provenance")
+*)
+    | PV prov ptr_val_ ->
+        match get_allocation_id ptr_val_ with
+          | Just alloc_id ->
+              (* TODO: there should a be check for when we go out of an object *)
+              let (ptr_val_', sh') = match ptr_val_ with
+                | PVshift ptr_val_' sh ->
+                    (ptr_val_', sh ++ [spe])
+                | _ ->
+                    (ptr_val_, [spe])
+              end in
+              PV prov (PVshift ptr_val_' sh')
+          | Nothing ->
+              error "TODO internal_shift_ptrval: shift 2"
+        end
+  end
+
+let array_shift_ptrval ptr_val ty (IV _ ival_) =
+  internal_shift_ptrval ptr_val (SPE_array ty ival_)
+
+let member_shift_ptrval ptr_val tag_sym memb_ident =
+  internal_shift_ptrval ptr_val (SPE_post_padding tag_sym memb_ident)
+
+
+
+
+
+
+let integer_ival n =
+  IV Prov_none (IVconcrete n)
+
+
+let op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
+  IV (prov_union prov1 prov2) (IVop iop [ival_1; ival_2])
+
+let case_integer_value (IV _ ival) fint fother =
+  match ival with
+    | IVconcrete n ->
+        fint n
+    | _ ->
+        fother ()
+  end
+
+let is_concrete_ival ival =
+  error "WIP: is_concrete_ival"
+
+
+(* Memory value constructors *)
+let symbolic_mval symb =
+  MVsymbolic symb
+
+let unspecified_mval ty =
+  MVunspecified ty
+
+let integer_value_mval ity ival =
+  MVinteger ity ival
+
+let floating_mval fty str =
+  MVfloating fty str
+
+let pointer_mval ref_ty ptr_val =
+  MVpointer ref_ty ptr_val
+
+let array_mval = function
+  | [] ->
+      error "Defacto_memory.array_mval, given an empty list"
+  | mvals ->
+      MVarray mvals
+end
+
+let struct_mval tag_sym xs =
+  if List.null xs then
+    error "Defacto_memory.struct_mval, given an empty list of member values"
+  else
+    MVstruct tag_sym xs
+
+let union_mval tag_sym memb_ident mval =
+  MVunion tag_sym memb_ident mval
+
+
+(* Memory value destructor *)
+let case_mem_value mval fsymb funspec fival ffval fptrval farr fstruct funion =
+  match mval with
+    | MVsymbolic symb ->
+        fsymb symb
+    | MVunspecified ty ->
+        funspec ty
+    | MVinteger ity ival ->
+        fival ity ival
+    | MVfloating fty str ->
+        ffval fty str
+    | MVpointer ref_ty ptr_val ->
+        fptrval ref_ty ptr_val
+    | MVarray mvals ->
+        farr mvals
+    | MVstruct tag_sym xs ->
+        fstruct tag_sym xs
+    | MVunion tag_sym memb_ident mval ->
+        funion tag_sym memb_ident mval
+  end
+
+
+(* WIP *)
+let eq_ptrval eqs ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (PV prov1 ptr_val1_, PV prov2 ptr_val2_) ->
+        match (ptr_val1_, ptr_val2_) with
+          | (PVnull _, PVnull _) ->
+              (* STD §6.5.9#6 *)
+              return true
+          | (PVfunction sym1, PVfunction sym2) ->
+              return (sym1 = sym2)
+          | _ ->
+              wip "eq_ptrval"
+        end
+  end
+
+
+
+
+
+let ne_ptrval eqs ptr_val1 ptr_val2 =
+  error "WIP: ne_ptrval"
+let lt_ptrval eqs ptr_val1 ptr_val2 =
+  error "WIP: lt_ptrval"
+let gt_ptrval eqs ptr_val1 ptr_val2 =
+  error "WIP: gt_ptrval"
+let le_ptrval eqs ptr_val1 ptr_val2 =
+  error "WIP: le_ptrval"
+let ge_ptrval eqs ptr_val1 ptr_val2 =
+  error "WIP: ge_ptrval"
+
+
+
+let diff_ptrval (PV prov1 ptr_val_1) (PV prov2 ptr_val_2) : integer_value =
+  (* TODO: too permissive for now *)
+  let prov = match (prov1, prov2) with
+    | (Prov_none, Prov_none) ->
+        Prov_none
+    | (Prov_some _, Prov_none) ->
+        prov1
+    | (Prov_none, Prov_some _) ->
+        prov2
+    | (Prov_some ids1, Prov_some ids2) ->
+        (* NOTE: note30 only seem to be thinking about the case where both
+           pointers have single provenance, so need to see if this
+           generalisation is what we want. *)
+        Prov_some (Set.difference (ids1 union ids2) (Set.intersection ids1 ids2))
+    | _ ->
+        error "WIP: diff_ptrval, wildcard/device provenance"
+  end in
+  IV prov (IVptrdiff ptr_val_1 ptr_val_2)
+
+(*
+  match (ptr_val1, ptr_val2) with
+    | (PV prov1 ptr_val1_, PV prov2 ptr_val2_) ->
+        (* TODO: we probably want to preserve the other kind of provenance
+           (other then None) in some cases? *)
+        let prov' = match (prov1, prov2) with
+          | (Prov_some ids1, Prov_some ids2) ->
+              
+          end
+          if share_common prov1 prov2 then 
+          
+        else
+  end
+*)
+
+
+
+    
+(* TODO: looks too simple to be true *)
+let intcast_ptrval ref_ty ity (PV prov ptr_val_) =
+  IV Prov_none (IVfromptr ref_ty ptr_val_)
+
+let validForDeref_ptrval ptr_val =
+  error "WIP: validForDeref_ptrval"
+
+let eq_ival eqs (IV _ ival_1) (IV _ ival_2) =
+  (* TODO: use the eqs *)
+  match (simplify_integer_value_aux ival_1, simplify_integer_value_aux ival_2) with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 = n2)
+    | _ ->
+        Nothing
+  end
+
+let lt_ival eqs (IV _ ival_1) (IV _ ival_2) =
+  (* TODO: use the eqs *)
+  match (simplify_integer_value_aux ival_1, simplify_integer_value_aux ival_2) with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 < n2)
+    | _ ->
+        Nothing
+  end
+
+
+
+let ptrcast_ival int_ty ref_ty ival =
+  (* TODO: for integer_value with no provenance, this is define only if the value is within
+           the range of "device memory addresses" and the resulting pointer_value has Prov_device *)
+  error "WIP: ptrcast_ival"
+
+
 
 
 (* API *)
+(*
 val ptr_eq: pointer_value -> pointer_value -> memM bool
 val ptr_add: pointer_value -> integer_value -> memM pointer_value
 val ptr_diff: pointer_value -> pointer_value -> memM integer_value
 val ptr_fromint: integer_value -> memM pointer_value (* cast from scalar to pointer value *)
+*)
 
 
 (* TODO: is it unclear how to decide if ptr_diff in intra or inter object *)
@@ -124,4 +1460,50 @@ STATIC_ALLOCATION:
 
 
 
+*)
+
+
+(*
+val normalise_pointer_value_aux: pointer_value_aux -> pointer_value_aux
+let rec normalise_pointer_value_aux = function
+  | PVnull ty ->
+      PVnull ty
+  | PVbase of allocation_id
+     (* shift_path used to be a list of (ctype,int) pairs.  
+        now the int should be the naive_memory.lem integer_value 
+*)
+  | PVshift of pointer_value_aux * shift_path
+  | PVfromint of integer_value (* never a null pointer *)
+end
+*)
+
+
+
+(*
+val referenced_entity: pointer_value ->
+let referenced_entity (PV prov ptrval) =
+  match ptrval with
+    | 
+  end
+*)
+
+
+
+(* STD §6.5.9#6 *)
+val iso_ptrval_eq: pointer_value -> pointer_value -> memM bool
+(*
+let iso_ptrval_eq ptr_val1 ptr_val2 =
+  outer_object (referenced_entity ptr_val1) >>= fun obj1 ->
+  outer_object (referenced_entity ptr_val2) >>= fun obj2 ->
+  
+  return $
+       is_nullptr ptr_val1 && is_nullptr ptr_val2
+    || obj1 = obj2
+
+  if is_null_ptrval ptr_val1 && is_null_ptrval ptr_val2 then
+    true
+  else if raise_object (referenced_object ptr_val1) = raise_object (referenced_object ptr_val2) then
+    true
+  else
+    
 *)

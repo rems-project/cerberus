@@ -6,6 +6,8 @@ import Symbol Symbolic Core_ctype Thread
 
 import Map_extra (* DEBUG *)
 
+open import Mem_common
+
 
 module SEU = State_exception_undefined
   let inline (>>=)      = SEU.bind
@@ -14,9 +16,6 @@ module SEU = State_exception_undefined
 
 
 
-(* TODO: debug *)
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 (* TODO: debug *)
 val output_debug: nat -> string -> unit
@@ -66,13 +65,6 @@ type pointer_value =
   | PVobject of object_id * pointer_shift
   | PVfunction of Symbol.t
 
-type integer_operator =
-  | IntAdd
-  | IntSub
-  | IntMul
-  | IntDiv
-  | IntMod
-  | IntExp
 
 type integer_value =
   (* TODO: merge the two kind of symbolics *)
@@ -110,12 +102,11 @@ type mem_state = <|
   memWrites: list mem_write
 |>
 
-type mem_error =
-  | MerrUnitialised of mem_read_request
-  | MerrInternal of string
-  | MerrOther of string
 
 type memM 'a = SEU.t 'a mem_state mem_error
+
+let return = SEU.return
+let bind = SEU.bind
 
 
 (* BEGIN CLASS ======================================================================== *)
@@ -168,14 +159,14 @@ let rec mem_valueCompare mem_val1 mem_val2 =
     | (MVarray mem_vals1, MVarray mem_vals2) ->
         lexicographicCompareBy mem_valueCompare mem_vals1 mem_vals2
     | (MVstruct tag1 ident_vs1, MVstruct tag2 ident_vs2) ->
-        assert_false "WIP: mem_valueCompare, MVstruct"
+        error "WIP: mem_valueCompare, MVstruct"
 (*
         pairCompare setElemCompare
           (lexicographicCompare (pairCompare setElemCompare mem_valueCompare))
           (tag1, sym_vs1) (tag2, sym_vs2)
 *)
     | (MVunion tag1 sym1 mem_val1, MVunion tag2 sym2 mem_val2) ->
-        assert_false "WIP: mem_valueCompare, MVunion"
+        error "WIP: mem_valueCompare, MVunion"
   end
 
 let mem_valueEquals mem_val1 mem_val2 =
@@ -457,7 +448,7 @@ let setValue tagDefs mval off mval' =
     
         
     | _ ->
-        assert_false "Mem.setValue: error case"
+        error "Mem.setValue: error case"
   end
 
 
@@ -602,7 +593,7 @@ let rec offsetFromShift_aux xs =
         else if n > 0 then
           Just (ty, (ty, n-1) :: sh')
         else
-          assert_false "[Memory.offsetFromShift_aux] found a negative shift"
+          error "[Memory.offsetFromShift_aux] found a negative shift"
   end
 
 let offsetFromShift tagDefs ptr_sh =
@@ -644,7 +635,7 @@ let decider (rOffset, rFootprint) (wOffset, wFootprint) wVal =
   match foo rOffset wOffset with
     | Nothing ->
         (* some type in the read / write offsets didn't match *)
-        assert_false "Mem.decider: type problem"
+        error "Mem.decider: type problem"
     | Just (Left rOffset') ->
         (* the read offset is larger than that of the write *)
         match foo rOffset' wFootprint with
@@ -660,7 +651,7 @@ let decider (rOffset, rFootprint) (wOffset, wFootprint) wVal =
         (* the read offset is shorter than that of the write *)
         match foo rFootprint wOffset' with
           | Nothing ->
-              assert_false "Mem.decider: type problem"
+              error "Mem.decider: type problem"
           | Just (Left rFootprint') ->
               Just ([], rFootprint', wVal)
           
@@ -685,7 +676,7 @@ let getAffection r w =
           offsetFromShift tagDefs <$> mkShiftToEnd wTy >>= fun wFootprint ->
           SEU.return $ decider (rOffset, rFootprint) (wOffset, wFootprint) wVal
     | _ ->
-        assert_false "Mem.getAffection"
+        error "Mem.getAffection"
   end
 
 
@@ -708,7 +699,7 @@ let rec mkUnspec tagDefs ty =
     | (Core_ctype.Builtin _ as ty) ->
         MVunspecified ty
     | _ ->
-        assert_false "Mem.mkUnspec: invalid type"
+        error "Mem.mkUnspec: invalid type"
   end
 
 
@@ -787,16 +778,9 @@ let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
 
 
 (* Memory layout model API ================================================== *)
-type memop =
-  | Ptreq
-  | Ptrdiff     (* (address, address) -> integer *)
-  | IntFromPtr  (* (ctype, ctype, address) -> integer *) (* first type is that of the referenced type, second on is type of integer *)
-  | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
-  | PtrLt
-  | PtrValidForDeref (* address -> boolean *)
 
 
-val runMem: forall 'a. memM 'a -> mem_state -> either mem_error ('a * mem_state)
+
 
 val initial_mem_stateWithTagDefinitions: tag_definitions -> mem_state
 
@@ -811,23 +795,23 @@ val allocate_object:    Thread.thread_id  (* the allocating thread *)
 val load: Core_ctype.ctype -> pointer_value -> memM mem_value
 val store: Core_ctype.ctype -> pointer_value -> mem_value -> memM unit
 
-val shift_pointer_value: pointer_value -> list (Core_ctype.ctype * integer_value) -> pointer_value
 
 
 (* TODO: change the name *)
-val mk_integer_value: integer -> integer_value
 val mk_integer_op: integer_operator -> integer_value -> integer_value -> integer_value
 
-val mk_unspecified: Core_ctype.ctype -> mem_value
-val mk_integer: integer -> mem_value
-val mk_floating: string -> mem_value
-val mk_pointer: pointer_value -> mem_value
-val mk_array: list mem_value -> mem_value
+val unspecified_mval: Core_ctype.ctype -> mem_value
+val integer_value_mval: integer_value -> mem_value
+val floating_mval: string -> mem_value
+val pointer_mval: pointer_value -> mem_value
+val array_mval: list mem_value -> mem_value
+val struct_mval: Symbol.t -> list (Cabs.cabs_identifier * mem_value) -> mem_value
+val union_mval: Symbol.t -> Cabs.cabs_identifier -> mem_value -> mem_value
+
 
 val mk_ptrdiff: pointer_value -> pointer_value -> mem_value
 
-val null_pointer: Core_ctype.ctype -> pointer_value
-val function_pointer: Symbol.t -> pointer_value
+
 val ptr_from_mem_value: mem_value -> maybe pointer_value
 val symb_from_mem_value: mem_value -> maybe Symbolic.symbolic
 
@@ -917,11 +901,11 @@ let ptr_from_int ty ref_ty = function
       if n = 0 then
         PVnull ref_ty
       else
-        assert_false "WIP: Mem.ptr_from_int 1"
+        error "WIP: Mem.ptr_from_int 1"
   | IVintptr ptr_val ->
       ptr_val
   | _ ->
-      assert_false "WIP: Mem.ptr_from_int 2"
+      error "WIP: Mem.ptr_from_int 2"
 end
 
 let ptr_valid_for_deref = function
@@ -997,7 +981,43 @@ let store ty ptr_val mem_val =
 *)
 
 
-let shift_pointer_value ptr_val ptr_sh' =
+let eq_ptrval eqs ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (PVnull _, PVnull _) ->
+        Just true
+    | (PVobject oid1 sh1, PVobject oid2 sh2) ->
+        (* TODO: this equates two invalid pointers beyond a same object by the same shift *)
+        Just (oid1 = oid2 && sh1 = sh2)
+    | (PVfunction sym1, PVfunction sym2) ->
+        Just (sym1 = sym2)
+  end
+
+let ne_ptrval eqs ptr_val1 ptr_val2 =
+  maybe Nothing (Just -| not) (eq_ptrval eqs ptr_val1 ptr_val2)
+
+let lt_ptrval _ _ _ =
+  Nothing
+let gt_ptrval _ _ _ =
+  Nothing
+let le_ptrval _ _ _ =
+  Nothing
+let ge_ptrval _ _ _ =
+  Nothing
+let diff_ptrval _ _ =
+  error "Naive memory doesn't support pointer diffs"
+let intcast_ptrval _ _ _ =
+  error "Naive memory doesn't support pointer to int casts"
+let validForDeref_ptrval = function
+  | PVnull _ ->
+      false
+  | PVobject _ _ ->
+      true (* TODO: this is too permissive *)
+  | PVfunction _ ->
+      false
+end
+
+
+let shift_ptrval ptr_val ptr_sh' =
   (* TODO: forcing concrete offsets for now *)
   let ptr_sh' = map (fun (id, IVinteger n) -> (id, n)) ptr_sh' in
   match ptr_val with
@@ -1006,26 +1026,39 @@ let shift_pointer_value ptr_val ptr_sh' =
   end
 
 
-let mk_integer_value n =
-  IVinteger n
+let integer_ival n = IVinteger n
 
+let symbolic_ival symb = IVsymbolic symb
 
-let mk_integer_op op ival1 ival2 =
-  match (op, ival1, ival2) with
-    | (IntAdd, IVinteger n1, IVinteger n2) ->
-        IVinteger (n1 + n2)
-    | (IntSub, IVinteger n1, IVinteger n2) ->
-        IVinteger (n1 - n2)
-    | (IntMul, IVinteger n1, IVinteger n2) ->
-        IVinteger (n1 * n2)
-    | (IntDiv, IVinteger n1, IVinteger n2) ->
-        IVinteger (if n2 = 0 then 0 else n1 / n2)
-    | (IntMod, IVinteger n1, IVinteger n2) ->
-        IVinteger (if n2 = 0 then 0 else n1 mod n2)
-    | (IntExp, IVinteger n1, IVinteger n2) ->
-        IVinteger (n1 ** natFromInteger n2)
+let inline op_ival iop ival1 ival2 =
+  let fop n1 n2 = match iop with
+    | IntAdd ->
+        n1 + n2
+    | IntSub ->
+        n1 - n2
+    | IntMul ->
+        n1 * n2
+    | IntDiv ->
+        if n2 = 0 then 0 else n1 / n2
+    | IntMod ->
+        if n2 = 0 then 0 else n1 mod n2
+    | IntExp ->
+        n1 ** natFromInteger n2
+  end in
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        IVinteger (fop n1 n2)
     | _ ->
-        IVop op ival1 ival2
+        IVop iop ival1 ival2
+  end
+
+
+let case_integer_value ival finteger fdefault =
+  match ival with
+    | IVinteger n ->
+        finteger n
+    | _ ->
+        fdefault ()
   end
 
 
@@ -1035,31 +1068,43 @@ let mk_integer_symbolic symb =
 
 
 
-let mk_unspecified ty =
-  MVunspecified ty
+let unspecified_mval ty = MVunspecified ty
+let integer_value_mval ival = MVinteger ival
+let floating_mval str = MVfloating str
+let pointer_mval ptr_val = MVpointer ptr_val
+let array_mval mem_vals = MVarray mem_vals (* TODO: assert mem_vals <> [] *)
+let struct_mval tag_sym xs = MVstruct tag_sym xs
+let union_mval tag_sym mem_ident mem_val = MVunion tag_sym mem_ident mem_val
+
+
+let case_mem_value mem_val funspec fival ffloat fptr farray fstruct funion =
+  match mem_val with
+    | MVunspecified ty ->
+        funspec ty
+    | MVinteger ival ->
+        fival ival
+    | MVfloating str ->
+        ffloat str
+    | MVpointer ptr_val ->
+        fptr ptr_val
+    | MVarray mem_vals ->
+        farray mem_vals
+    | MVstruct tag_sym xs ->
+        fstruct tag_sym xs
+    | MVunion tag_sym mem_ident mem_val ->
+        funion tag_sym mem_ident mem_val
+  end
 
 
 
-let mk_integer n =
-  MVinteger (IVinteger n)
-
-let mk_floating str =
-  MVfloating str
-
-let mk_pointer ptr_val =
-  MVpointer ptr_val
-
-let mk_array mem_vals =
-  (* TODO: assert mem_vals <> [] *)
-  MVarray mem_vals
 
 let mk_ptrdiff ptr_val1 ptr_val2 =
   MVinteger (IVptrdiff ptr_val1 ptr_val2)
 
-let null_pointer ty =
+let null_ptrval ty =
   PVnull ty
 
-let function_pointer fsym =
+let fun_ptrval fsym =
   PVfunction fsym
 
 let ptr_from_mem_value = function
@@ -1081,8 +1126,54 @@ end
 
 
 (* TODO: move up to API *)
-val integer_value_is_concrete: integer_value -> bool
-let integer_value_is_concrete = function
+let rec eq_ival eqs ival1 ival2 =
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        Just (n1 = n2)
+    | (IVsymbolic symb1, IVsymbolic symb2) ->
+        (* NOTE: this is checking for syntactic equality of the symbolic expressions *)
+        if symb1 = symb2 then
+          Just true
+        else
+          Nothing
+    | (IVptrdiff ptr_val11 ptr_val12, IVptrdiff ptr_val21 ptr_val22) ->
+        if ptr_val11 = ptr_val21 && ptr_val12 = ptr_val22 then
+          Just true
+        else
+          Nothing
+    | (IVintptr ptr_val1, IVintptr ptr_val2) ->
+        if ptr_val1 = ptr_val2 then
+          Just true
+        else
+          Nothing (* TODO: or false? *)
+    | (IVop iop1 ival11 ival12, IVop iop2 ival21 ival22) ->
+        if iop1 = iop2 then
+          match (eq_ival eqs ival11 ival21, eq_ival eqs ival12 ival22) with
+            | (Just true, Just true) ->
+                Just true
+            | _ ->
+                Nothing (* TODO: could be more precise here ... *)
+          end
+        else
+          Nothing
+     | _ ->
+         Nothing
+  end
+
+let lt_ival _ ival1 ival2 =
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        Just (n1 < n2)
+    | _ ->
+        Nothing
+  end
+
+let ptrcast_ival _ _ _ =
+  error "Naive memory doesn't support integer to pointer casts"
+
+
+
+let is_concrete_ival = function
   | IVsymbolic _ ->
       false
   | _ ->
@@ -1094,14 +1185,14 @@ val     symbolify_mem_value: mem_value -> Symbolic.symbolic
 let rec symbolify_mem_value mem_val =
   match mem_val with
     | MVpointer ptr_val ->
-        assert_false "TODO: Core_aux.symbolify_mem_value: MVpointer"
+        error "TODO: Core_aux.symbolify_mem_value: MVpointer"
 (*
         Symbolic.SYMBptr ptr_val
 *)
     | MVinteger ival ->
-        assert_false "TODO: symbolify integer_value"
+        error "TODO: symbolify integer_value"
     | MVarray mem_vals ->
-        assert_false "TODO: Core_aux.symbolify_mem_value: MVarray"
+        error "TODO: Core_aux.symbolify_mem_value: MVarray"
 (*
         Symbolic.SYMBarray (List.map symbolic_mem_value mem_vals)
 *)

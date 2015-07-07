@@ -74,7 +74,7 @@ let c_frontend f =
         error "the C preprocessor failed";
       Input.file temp_name in
     
-       Exception.return0 (c_preprocessing f)
+       Exception.return2 (c_preprocessing f)
     |> Exception.fmap Cparser_driver.parse
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
@@ -86,9 +86,9 @@ let c_frontend f =
     |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
     
     |> Exception.rbind (fun (counter, z) ->
-          Exception.bind0 (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
+          Exception.bind2 (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
-          (fun z -> Exception.return0 (counter, z)))
+          (fun z -> Exception.return2 (counter, z)))
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
@@ -108,19 +108,19 @@ let c_frontend f =
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *)
 *)
 
-let (>>=) = Exception.bind0
+let (>>=) = Exception.bind2
 
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Rfile (sym_main, globs, funs) ->
-        Exception.return0 (Symbol.Symbol (!core_sym_counter, None), {
+        Exception.return2 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;
            Core.impl=   !!cerb_conf.core_impl;
            Core.globs=  globs;
            Core.funs=   funs;
-           Core.tagDefinitions0 = Pmap.empty Symbol.instance_Basic_classes_SetType_Symbol_t_dict.setElemCompare_method;
+           Core.tagDefinitions = Pmap.empty Symbol.instance_Basic_classes_SetType_Symbol_t_dict.setElemCompare_method;
          })
     
     | Rstd _ ->
@@ -186,7 +186,7 @@ let pipeline filename args =
        Debug.print_debug 2 "Using the Core frontend";
        core_frontend f
       ) else
-       Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
+       Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
   (* TODO: for now assuming a single order comes from indet expressions *)
@@ -207,7 +207,7 @@ let pipeline filename args =
    );
   
   
-  Exception.return0 (backend sym_supply rewritten_core_file args)
+  Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress no_rewrite concurrency preEx args =

@@ -1,6 +1,6 @@
 (* Symbols table with stacked scopes *)
 open import Pervasives Global Symbol
-import Boot Set_extra
+import Global Set_extra
 
 type t 'scope 'ident 'a = list ('scope * map 'ident 'a)
 
@@ -14,7 +14,7 @@ let register ident a = function
   | (scope, m) :: ms ->
       (scope, Map.insert ident a m) :: ms
   | _ ->
-      Boot.assert_false "`Scope_table.register' called on a table without any opened scope"
+      error "`Scope_table.register' called on a table without any opened scope"
 end
 
 
@@ -46,7 +46,7 @@ let is_in_current_scope ident t =
 val symbols: forall 'scope 'ident 'a. MapKeyType 'ident, SetType 'ident, SetType 'a => t 'scope 'ident 'a -> list 'a
 let symbols = function
   | m::_ -> map snd $ Set_extra.toList (Map.toSet m)
-  | _ -> Boot.assert_false "[Scope_table.symbols] the table is empty."
+  | _ -> error "[Scope_table.symbols] the table is empty."
 end
 *)
 
@@ -61,7 +61,7 @@ let destroy_scope = function
   | (_ ,m) :: ms ->
       (m, ms)
   | _ ->
-      Boot.assert_false "[Scope_table.destroy_scope] the table is empty."
+      error "[Scope_table.destroy_scope] the table is empty."
 end
 
 
@@ -70,7 +70,7 @@ let return_scope = function
   | m :: _ ->
       [m]
   | _ ->
-      Boot.assert_false "[Scope_table.return_scope] the table is empty."
+      error "[Scope_table.return_scope] the table is empty."
 end
 
 
@@ -84,5 +84,5 @@ let current_scope_is = function
   | (scope, _) :: _ ->
       scope
   | _ ->
-      Boot.assert_false "[Scope_table.current_scope_is] the table is empty."
+      error "[Scope_table.current_scope_is] the table is empty."
 end      

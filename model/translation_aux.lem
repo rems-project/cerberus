@@ -1,7 +1,7 @@
 open import Pervasives Global Translation_effect Symbol Show Show_extra
 import Core Core_aux
 import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
-import Map_extra
+import Boot Map_extra
 
 module C    = Core
 module Caux = Core_aux
@@ -21,7 +21,7 @@ val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.pexpr) -> Co
 let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
     | Just (f, _) -> Core.PEcall (Core.Sym f)
-    | Nothing     -> Boot.assert_false $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+    | Nothing     -> error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
 
 
@@ -127,7 +127,7 @@ end
 
 let function_return_type = function
   | Function ty _ _ -> ty
-  | _ -> Boot.assert_false "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
+  | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 
 (* TODO: check with J *)
@@ -136,7 +136,7 @@ end
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
   | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _ _) -> (qs, ty)
-  | _ -> Boot.assert_false "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
+  | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
 
 
@@ -146,7 +146,7 @@ let exp_type_of a_expr =
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
     | Right (AilTypes.LValueType _ ty) -> (* unqualify *) ty
     | Right (AilTypes.RValueType   ty) -> ty
-    | _ -> Boot.assert_false "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
+    | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
   end
 
 
@@ -156,13 +156,13 @@ let ctype_of a_expr =
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
     | Right (AilTypes.LValueType _ ty) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
-    | Left (loc, TypingError.TError_TODO n) ->
-        Boot.assert_false $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
+    | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
+        error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
                             (Boot.pp_ail_expr a_expr)
-    | Left (loc, TypingError.TError_integerConstant_too_large n) ->
-        Boot.assert_false $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
+    | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
+        error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
                             show n
-    | _ -> Boot.assert_false "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
+    | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
 
@@ -179,3 +179,28 @@ val is_defined_ail_function: forall 'A. AilSyntax.identifier -> AilSyntax.progra
 let is_defined_ail_function sym (_, sigm) =
   (* NOTE: the `Nothing' case could technically also mean that [sym] is not event registered *)
   isJust (Context.lookup (=) sigm.AilSyntax.function_definitions sym)
+
+
+
+
+
+
+
+
+
+
+(* STD §6.3.1.8#1 *)
+val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> AilTypes.ctype * C.pexpr -> AilTypes.ctype * C.pexpr -> C.pexpr
+let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
+  let longDouble_ty = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.LongDouble)) in
+  let double_ty      = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))     in
+  let float_ty       = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Float))      in
+  
+  if AilTypesAux.corresponding_real_type ty1 = Just longDouble_ty || AilTypesAux.corresponding_real_type ty2 = Just longDouble_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, long double case"
+  else if AilTypesAux.corresponding_real_type ty1 = Just double_ty || AilTypesAux.corresponding_real_type ty2 = Just double_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, double case"    
+  else if AilTypesAux.corresponding_real_type ty1 = Just float_ty || AilTypesAux.corresponding_real_type ty2 = Just float_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, float case"
+  else
+    error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!"

@@ -1,3 +1,8 @@
+BOLD="\x1b[1m"
+NOCOLOUR="\x1b[0m"
+
+
+
 # Looking for Lem
 ifdef LEM_PATH
   LEMDIR=$(LEM_PATH)
@@ -6,7 +11,7 @@ else
 endif
 
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err
+LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err -wl_pat_exh warn
 
 
 
@@ -81,9 +86,14 @@ CERBERUS_LEM=\
   symbol.lem \
   undefined.lem \
   core_ctype.lem \
+  defacto_memory.lem \
   naive_memory.lem \
+  mem.lem \
+  mem_aux.lem \
+  mem_common.lem \
   symbolic.lem \
   driver_util.lem \
+  driver_effect.lem \
   driver.lem \
   exception_undefined.lem \
   state_exception_undefined.lem \
@@ -181,15 +191,15 @@ OCAML_LIBS=\
 
 
 %.cmi: %.mli
-	@echo OCAMLC $<
+	@echo ${BOLD}OCAMLC${NOCOLOUR}"   "$<
 	@ocamlc -c $(LIBS) $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS)) $<
 
 %.cmx: %.ml
-	@echo OCAMLOPT $<
-	ocamlopt -c $(LIBS) $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS)) $<
+	@echo ${BOLD}OCAMLOPT${NOCOLOUR} $<
+	@ocamlopt -c $(LIBS) $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS)) $<
 
 %.ml %.mli: %.mll
-	@echo OCAMLLEX $<
+	@echo ${BOLD}OCAMLLEX${NOCOLOUR} $<
 	@ocamllex $<
 
 
@@ -198,7 +208,7 @@ cparser:
 	make -C parsers/cparser
 
 coreparser:
-	@echo MENHIR parsers/coreparser/core_parser.mly
+	@echo ${BOLD}MENHIR{NOCOLOUR} parsers/coreparser/core_parser.mly
 	@menhir --external-tokens Core_parser_util --strict --explain --infer --ocamlc "ocamlc $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS))" parsers/coreparser/core_parser.mly
 
 
@@ -238,6 +248,14 @@ _wip: src/wip.ml
 	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
 	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(filter-out src/main.cmx src/wip.cmx, $(CMXS)) src/wip.cmx -o wip
 
+
+
+memory_test: wip/memory_test.cmx
+	rm -f _ocaml_generated/{mem_aux.cmx,mem.cmx}
+	make _ocaml_generated/mem_aux.cmx
+	make _ocaml_generated/mem.cmx
+	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
+	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) _ocaml_generated/nat_num.cmx _ocaml_generated/nat_big_num.cmx _ocaml_generated/lem_bool.cmx _ocaml_generated/lem.cmx _ocaml_generated/lem_basic_classes.cmx _ocaml_generated/lem_num.cmx _ocaml_generated/lem_function.cmx _ocaml_generated/lem_maybe.cmx _ocaml_generated/lem_tuple.cmx _ocaml_generated/lem_list.cmx _ocaml_generated/lem_word.cmx _ocaml_generated/xstring.cmx _ocaml_generated/lem_string.cmx _ocaml_generated/lem_show.cmx _ocaml_generated/pset.cmx _ocaml_generated/lem_set_helpers.cmx _ocaml_generated/lem_set.cmx _ocaml_generated/pmap.cmx _ocaml_generated/lem_map.cmx _ocaml_generated/either.cmx _ocaml_generated/lem_either.cmx _ocaml_generated/lem_pervasives.cmx _ocaml_generated/enum.cmx _ocaml_generated/uniqueId.cmx _ocaml_generated/thread.cmx pprinters/colour.cmx src/debug.cmx _ocaml_generated/global.cmx _ocaml_generated/state.cmx _ocaml_generated/lem_show_extra.cmx _ocaml_generated/symbol.cmx _ocaml_generated/lem_assert_extra.cmx _ocaml_generated/lem_list_extra.cmx _ocaml_generated/lem_string_extra.cmx _ocaml_generated/implementation_.cmx _ocaml_generated/ailTypes.cmx _ocaml_generated/core_ctype.cmx _ocaml_generated/symbolic.cmx src/location_ocaml.cmx _ocaml_generated/loc.cmx _ocaml_generated/cabs.cmx _ocaml_generated/mem_common.cmx pprinters/pp_utils.cmx pprinters/pp_prelude.cmx pprinters/pp_symbol.cmx pprinters/pp_cabs.cmx _ocaml_generated/typingError.cmx _ocaml_generated/exception.cmx _ocaml_generated/errorMonad.cmx _ocaml_generated/common.cmx _ocaml_generated/context.cmx _ocaml_generated/range.cmx _ocaml_generated/implementation.cmx _ocaml_generated/ailSyntax.cmx _ocaml_generated/ailTypesAux.cmx pprinters/pp_ail.cmx pprinters/pp_core_ctype.cmx pprinters/pp_defacto_memory.cmx pprinters/pp_mem.cmx pprinters/string_core_ctype.cmx _ocaml_generated/defacto_memory.cmx _ocaml_generated/mem.cmx _ocaml_generated/mem_aux.cmx wip/memory_test.cmx -o memory_test
 
 
 

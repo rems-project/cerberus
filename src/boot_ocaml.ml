@@ -1,8 +1,6 @@
 open Global
 
 
-let assert_false str =
-  failwith str
 (*
   print_endline ("ERROR>\n" ^ str);
   exit (-1)

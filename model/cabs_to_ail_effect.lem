@@ -1,9 +1,9 @@
 open import Pervasives Cabs Std Show Show_extra
+open import Global
 import Boot Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
 
-import Global
 import AilSyntax AilTypes
 
 import Map_extra
@@ -265,7 +265,7 @@ val guard: forall 'a. t bool -> string -> t 'a -> t 'a
 let guard m_pred err_msg m =
   m_pred >>= function
     | true  -> m
-    | false -> Boot.assert_false ("[Cabs_to_ail_effect] failed guard: " ^ err_msg ^ ".")
+    | false -> error ("[Cabs_to_ail_effect] failed guard: " ^ err_msg ^ ".")
   end
 
 
@@ -429,7 +429,7 @@ let _register_identifier ident namespace kind link =
         if link = Linkage_none then
           (* §6.7#3 "except that ..." *)
           if kind = Kind_typedef then
-            Boot.assert_false "WIP Kind_typedef"
+            error "WIP Kind_typedef"
           else if kind = Kind_tag then
             (* TODO: multiple definition are not allowed *)
             return sym
@@ -447,7 +447,7 @@ let _register_identifier ident namespace kind link =
           if kind = kind' && link = link' then
             return sym
           else
-            Boot.assert_false "Cabs_to_ail_effect._register_identifier"
+            error "Cabs_to_ail_effect._register_identifier"
     | Nothing ->
         do_fresh
   end
@@ -500,7 +500,7 @@ _STD "§6.2.2#6" $
            || is_block_scope scope && is_object_kind kind && storage_class <> [SC_extern] then
           return Linkage_none
         else
-          Boot.assert_false "[Cabs_to_ail_effect.determinate_linkage] unknown case"
+          error "[Cabs_to_ail_effect.determinate_linkage] unknown case"
   end
 
 
@@ -559,7 +559,7 @@ let resolve_tag_definition tag_sym =
     | Just tag_decl ->
         return tag_decl
     | Nothing ->
-        Boot.assert_false "TODO: resolve_tag_definition: Nothing" (* TODO: is probably a possible/valid situation *)
+        error "TODO: resolve_tag_definition: Nothing" (* TODO: is probably a possible/valid situation *)
   end
 
 
@@ -673,7 +673,7 @@ let register_declaration decl =
     | A.SDecl_global ident _ ->
         ident
     | _ ->
-        Boot.assert_false "register_declaration: found a static_assert"
+        error "register_declaration: found a static_assert"
   end in
   
   (* TODO: detect multiple definitions *)
@@ -897,7 +897,7 @@ let resolve_typedef sym =
   State_exception.read (fun st ->
     match Map.lookup sym st.typedef_definitions with
       | Just qs_ty -> qs_ty
-      | _ -> Boot.assert_false "TODO msg"
+      | _ -> error "TODO msg"
     end
   )
 
@@ -960,7 +960,7 @@ let fetch_object_declaration sym =
     | Just decl ->
         return decl
     | Nothing ->
-        Boot.assert_false "TODO: failed to fetch object declaration"
+        error "TODO: failed to fetch object declaration"
   end
 
 

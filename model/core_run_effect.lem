@@ -305,14 +305,14 @@ val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_i
 let get_proc psym = fun st ->
   match Map.lookup psym st.file.funs with
     | Just z  -> [(U.return z, st)]
-    | Nothing -> Boot.assert_false "HIP: get_proc failure" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
+    | Nothing -> Boot.error "HIP: get_proc failure" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
   end
 
 val register_labeled_continuation: ksym -> list (sym * ctype) * expr taction_id) -> t unit
 let register_labeled_continuation k cont = fun st ->
   match st.current_proc with
     | Nothing ->
-        Boot.assert_false "register_labeled_continuation: current_proc = Nothing"
+        Boot.error "register_labeled_continuation: current_proc = Nothing"
     | Just proc ->
         [(U.return (), <| st with registered_labeled_continuations= Map.insert proc (k, cont) st.registered_labeled_continuations |>)]
   end

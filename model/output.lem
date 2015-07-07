@@ -1,18 +1,10 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
 
 
-open import Pervasives
+open import Pervasives Global
 import String_extra
 
 import Cmm_aux_old Core_run_effect Memory
-
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
-
-(*
-val output_string: string -> unit
-declare ocaml target_rep function output_string = `Boot_ocaml.output_string`
-*)
 
 
 
@@ -391,7 +383,7 @@ end
 
 val applyFlagsAndPadding: bool -> flags -> maybe field_width -> list char -> list char
 let applyFlagsAndPadding isSignedConversion fs fw_opt str =
-  assert_false "TODO: WIP"
+  error "TODO: WIP"
 
 
 
@@ -426,7 +418,7 @@ let rec showNonNegativeWithBasis_aux acc useUpper b n =
 val showNonNegativeWithBasis: bool -> natural -> natural -> E.t (list char)
 let showNonNegativeWithBasis useUpper b n =
   if n < 0 then
-    assert_false "showNonNegativeWithBasis expects an non-negative integer"
+    error "showNonNegativeWithBasis expects an non-negative integer"
   else
     E.return $ showNonNegativeWithBasis_aux [] useUpper b n
 
@@ -448,7 +440,7 @@ let convert load p_opt cspec args =
         (* see (§7.21.6.1#8 d,i) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO: output.lem 1" (* TODO *)
+          | Just (P_asterisk) -> error "TODO: output.lem 1" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -461,14 +453,14 @@ let convert load p_opt cspec args =
                     E.return ((if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (p - length str) #'0' ++ str, args')
                   end
               end
-          | _ -> assert_false "found no argument to convert a %d or %i"
+          | _ -> error "found no argument to convert a %d or %i"
         end
     
     | CS_o ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO: output.lem 2" (* TODO *)
+          | Just (P_asterisk) -> error "TODO: output.lem 2" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -482,14 +474,14 @@ let convert load p_opt cspec args =
                     E.return (replicate (p - length str) #'0' ++ str, args')
                   end
               end
-          | _ -> assert_false "found no argument to convert an %o"
+          | _ -> error "found no argument to convert an %o"
         end
     
     | CS_u ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO: output.lem 3" (* TODO *)
+          | Just (P_asterisk) -> error "TODO: output.lem 3" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -503,14 +495,14 @@ let convert load p_opt cspec args =
                     E.return (replicate (p - length str) #'0' ++ str, args')
                   end
               end
-          | _ -> assert_false "found no argument to convert an %u"
+          | _ -> error "found no argument to convert an %u"
         end
     
     | CS_x ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO: output.lem 4" (* TODO *)
+          | Just (P_asterisk) -> error "TODO: output.lem 4" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -524,14 +516,14 @@ let convert load p_opt cspec args =
                     E.return (replicate (p - length str) #'0' ++ str, args')
                   end
               end
-          | _ -> assert_false "found no argument to convert an %x"
+          | _ -> error "found no argument to convert an %x"
         end
     
     | CS_X ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
         let p = match p_opt with
           | Just (P_num p)    -> p
-          | Just (P_asterisk) -> assert_false "TODO: output.lem 5" (* TODO *)
+          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
           | Nothing           -> 1
         end in
         match args with
@@ -545,12 +537,12 @@ let convert load p_opt cspec args =
                     E.return (replicate (p - length str) #'0' ++ str, args')
                   end
               end
-          | _ -> assert_false "found no argument to convert an %X"
+          | _ -> error "found no argument to convert an %X"
         end
     
     | CS_c ->
         (* see (§7.21.6.1#8 c) *)
-        assert_false "WIP: CS_c" (* Need to look at lengthModifier *)
+        error "WIP: CS_c" (* Need to look at lengthModifier *)
     
     | CS_s ->
         (* see (§7.21.6.1#8 s) *)
@@ -561,16 +553,16 @@ let convert load p_opt cspec args =
               (* TODO: should fix the lexing of C string instead of hacking here *)
               E.return (take (length str - 2) $ drop 1 str, args')
             end
-          | _ -> assert_false "found no argument to convert an %s"
+          | _ -> error "found no argument to convert an %s"
         end
     
     | CS_p ->
         (* see (§7.21.6.1#8 p) *)
-        assert_false "WIP: CS_p" (* Implementation defined *)
+        error "WIP: CS_p" (* Implementation defined *)
     
     | CS_n ->
         (* see (§7.21.6.1#8 n) *)
-        assert_false "WIP: CS_n"
+        error "WIP: CS_n"
     
     | CS_percent ->
         (* see (§7.21.6.1#8 %) *)
@@ -600,7 +592,7 @@ let rec formatted_print_aux load acc fs ns =
                 else
                   expanded
             | Just FW_asterisk ->
-                assert_false "TODO: output.lem 6"
+                error "TODO: output.lem 6"
           end in
           formatted_print_aux load (acc ++ justified) fs ns'
 
@@ -613,7 +605,7 @@ TODO: new
  *)
         end
     | _ ->
-        assert_false $ "formatted_print_aux, " ^ string_of_natural (naturalFromNat $ length fs) ^ " conv and " ^
+        error $ "formatted_print_aux, " ^ string_of_natural (naturalFromNat $ length fs) ^ " conv and " ^
                        string_of_natural (naturalFromNat $ length ns) ^ " arguments remaining"
   end
 
@@ -625,7 +617,7 @@ let formatted_print load fmrt args =
     | [(fs, [])] ->
         formatted_print_aux load [] fs args
     | _ ->
-      assert_false "failed to parse the format"
+      error "failed to parse the format"
   end
 
 (* END: actual implementation of printf *)

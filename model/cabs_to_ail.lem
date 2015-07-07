@@ -80,7 +80,7 @@ let rec inject_qualifiers qs = function
   | ATypes.Pointer ref_qs ref_ty ->
       let (ref_qs', ref_ty') = inject_qualifiers qs ref_ty in
       if not (AilTypesAux.is_unqualified ref_qs) && not (AilTypesAux.is_unqualified ref_qs') then
-        Boot.assert_false "TODO: inject_qualifiers, is that possible?"
+        error "TODO: inject_qualifiers, is that possible?"
       else
         (ATypes.no_qualifiers, ATypes.Pointer (AilTypesAux.combine_qualifiers ref_qs ref_qs') ref_ty')
   | ATypes.Atomic ty' ->
@@ -661,7 +661,7 @@ let translate_unary_operator = function
   | CabsMinus       -> Minus
   | CabsBnot        -> Bnot
   (* This case cannot occurs since Not is translated away. *)
-  | CabsNot         -> Boot.assert_false "[Cabs_to_ail.translate_unary_operator] Not"
+  | CabsNot         -> error "[Cabs_to_ail.translate_unary_operator] Not"
 end
 
 
@@ -677,8 +677,8 @@ let translate_arithmetic_operator = function
   | CabsBor  -> Bor
   | CabsShl  -> Shl
   | CabsShr  -> Shr
-  | _ -> Boot.assert_false "[Cabs0_to_ail.translate_arithmetic_operator] should only be called on \
-                            operators allowed for compound assignments [§6.5.16#1]."
+  | _ -> error "[Cabs0_to_ail.translate_arithmetic_operator] should only be called on \
+                operators allowed for compound assignments [§6.5.16#1]."
 end
 
 
@@ -820,7 +820,7 @@ let project_base_type_specifier = function
   | TSpec_Complex ->
       BTSpec_Complex
   | _ ->
-      Boot.assert_false "Cabs_to_ail.project_base_type_specifier found a non-base specifier"
+      error "Cabs_to_ail.project_base_type_specifier found a non-base specifier"
  end
 
 val unproject_base_type_specifier: cabs_base_type_specifier -> cabs_type_specifier
@@ -955,7 +955,7 @@ _STD "§6.7.2#2, sentence 2 (`void' case)"
       E.return (ATypes.no_qualifiers, ATypes.Void)
   
   | [TSpec_struct Nothing Nothing] ->
-      Boot.assert_false "WIP: TSpec_struct Nothing, Nothing"
+      error "WIP: TSpec_struct Nothing, Nothing"
   
   | [TSpec_struct tag_ident_opt sdecls_opt] ->
       (* §6.7.2.3#7 *)
@@ -974,7 +974,7 @@ _STD "§6.7.2#2, sentence 2 (`void' case)"
                   (* TODO: qs? *)
                   E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym xs)
               | _ ->
-                  Boot.assert_false "desugar_type_specifiers: expecting a Struct_declarations"
+                  error "desugar_type_specifiers: expecting a Struct_declarations"
             end
 *)
 
@@ -1080,13 +1080,13 @@ and struct_declaration =
       end
 
   | [TSpec_struct id_opt sdecls_opt] ->
-      Boot.assert_false "TODO"
+      error "TODO"
   
   | [TSpec_union id_opt sdecls_opt] ->
-      Boot.assert_false "TODO"
+      error "TODO"
   
   | [TSpec_enum id_opt enums_opt] ->
-      Boot.assert_false "TODO"
+      error "TODO"
   
     (* TODO: this break impl-def independance *)
   | [TSpec_name str] ->
@@ -1252,7 +1252,7 @@ _STD "§6.5.2.1#2, sentence 2" $
         desugar_type_name tyname >>= fun (qs, ty) ->
         (* TODO: qualifier? *)
 (*        KKK ZZZ  *)
-        Boot.assert_false "WIP 18"
+        error "WIP 18"
     | CabsEpreincr e ->
 _STD "§6.5.3.1#2, sentence 3" $
         desugar_expression e >>= fun d_e ->
@@ -1352,7 +1352,7 @@ _STD "§6.7.1#7" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#7")
   else
 _STD "§6.7.1#8" $ (* TODO *)
-    Boot.assert_false "WIP 33"
+    error "WIP 33"
 
 (*
 <|
@@ -1410,15 +1410,15 @@ and desugar_struct_declarator struct_decltor =
   end
 
 and desugar_enumerator (id, e_opt) =
-  Boot.assert_false "WIP 39"
+  error "WIP 39"
 
 
 and desugar_alignment_specifier align_spec =
   match align_spec with
     | AS_type tyname ->
-      Boot.assert_false "WIP 40"
+      error "WIP 40"
     | AS_expr e ->
-      Boot.assert_false "WIP 41"
+      error "WIP 41"
   end
 
 
@@ -1437,7 +1437,7 @@ and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype ->
     | DDecl_declarator decltor ->
         desugar_declarator decltor >>= fun (id, qs, mk_type) ->
           if not (AilTypesAux.is_unqualified qs) then
-            Boot.assert_false "TODO: desugar_direct_declarator, DDecl_declarator found qualifiers. Bug ?"
+            error "TODO: desugar_direct_declarator, DDecl_declarator found qualifiers. Bug ?"
           else
             E.return (id, mk_type)
     
@@ -1524,7 +1524,7 @@ _STD "§6.7.6.2#1, sentence 5" $
               else
                 E.return ()
         end >>
-        Boot.assert_false "WIP 46"
+        error "WIP 46"
   end
 
 
@@ -1532,15 +1532,15 @@ _STD "§6.7.6.2#1, sentence 5" $
 and desugar_parameter_array_declarator a_decltor =
   match a_decltor with
     | ADecl loc qs is_static a_decltor_size ->
-        Boot.assert_false "WIP desugar_parameter_array_declarator"
+        error "WIP desugar_parameter_array_declarator"
   end
 
 and desugar_array_declarator_size a_decltor_size =
   match a_decltor_size with
     | ADeclSize_expression e ->
-        Boot.assert_false "WIP 47"
+        error "WIP 47"
     | ADeclSize_asterisk ->
-        Boot.assert_false "WIP 48"
+        error "WIP 48"
   end
 
 (* val desugar_pointer_declarator: pointer_declarator -> E.t (qualifiers * ctype -> ctype) *)
@@ -1678,13 +1678,13 @@ and static_thread_implicit_initializer tagDefs ty =
         if AilTypesAux.is_arithmetic ty then
           ConstantInteger (IConstant 0 Octal Nothing)
         else
-          Boot.assert_false ("type error 1: " ^ Boot.pp_ail_ctype ty)
+          error ("type error 1: " ^ Boot.pp_ail_ctype ty)
     | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
               ConstantArray (Global.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
           | Nothing ->
-              Boot.assert_false "type error, (TODO find quote): subarray with no size"
+              error "type error, (TODO find quote): subarray with no size"
         end
 
     | ATypes.Struct tag_sym ->
@@ -1695,7 +1695,7 @@ and static_thread_implicit_initializer tagDefs ty =
           ) xs
 
     | _ ->
-        Boot.assert_false ("type error 2: " ^ Boot.pp_ail_ctype ty)
+        error ("type error 2: " ^ Boot.pp_ail_ctype ty)
 (*
     | Function ty qs_tys is_variadic ->
         
@@ -1717,7 +1717,7 @@ and wip_desugar_initializer_ dur current_ty = function
         | ATypes.Automatic ->
             desugar_expression e
         | ATypes.Allocated ->
-            Boot.assert_false "not possible"
+            error "not possible"
         (* Static | Thread *)
         | _ ->
             desugar_expression e               >>= fun d_e ->
@@ -1743,7 +1743,7 @@ and wip_desugar_initializer_ dur current_ty = function
               | ATypes.Automatic ->
                   ConstantIndeterminate elem_ty
               | ATypes.Allocated ->
-                  Boot.assert_false "not possible"
+                  error "not possible"
               (* Static | Thread *)
               | _ ->
                   static_thread_implicit_initializer tagDefs elem_ty
@@ -1798,7 +1798,7 @@ and wip_desugar_initializer_ dur current_ty = function
                     end
                   ) desigs_opt_inits (List.map fst ident_tys, initial_assoc)
               | _ ->
-                  Boot.assert_false "ERROR, todo msg"
+                  error "ERROR, todo msg"
             end >>
 *)
             E.resolve_tag_definition tag >>= function
@@ -1942,7 +1942,7 @@ and designator =
         | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
 *)
         | ATypes.Array elem_ty Nothing ->
-            Boot.assert_false "TODO: not allowing array with no size for now"
+            error "TODO: not allowing array with no size for now"
 
         (* NOTE: should be a scalar type *)
         | _ ->
@@ -1954,7 +1954,7 @@ and designator =
               | _ ->
                   (* TODO: this (at leat) possible with something like:
                        int a = {1, 2}; *)
-                  Boot.assert_false "WIP: error message. is that even a possible case?"
+                  error "WIP: error message. is that even a possible case?"
             end
 (*
 (§6.7.9#11, sentence 1) The initializer for a scalar shall be a single expression, optionally enclosed in braces.
@@ -1976,15 +1976,15 @@ and desugar_initializer_ init =
     | Init_expr e ->
         desugar_expression e
     | Init_list inits ->
-        Boot.assert_false "WIP 58"
+        error "WIP 58"
   end
 
 and desugar_designator desig =
   match desig with
     | Desig_array e ->
-       Boot.assert_false "WIP 59"
+       error "WIP 59"
     | Desig_member id ->
-       Boot.assert_false "WIP 60"
+       error "WIP 60"
   end
 *)
 
@@ -2011,7 +2011,7 @@ let desugar_declaration_base specifs idecltors =
           E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun (_, sym) ->
         let (qs', ty') = inject_qualifiers base_qs ty in
         if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
-          Boot.assert_false "TODO: desugar_declaration_base: is this case legal?"
+          error "TODO: desugar_declaration_base: is this case legal?"
         else
           E.register_typedef sym (AilTypesAux.combine_qualifiers qs qs', ty') >>
           E.return acc
@@ -2140,7 +2140,7 @@ WIP KKK
 
 val do_while_hack: cabs_expression -> cabs_statement -> E.t cabs_statement
 let do_while_hack e (CabsStatement loc smt) =
-  Boot.assert_false "WIP, Cabs_to_ail.do_while_hack"
+  error "WIP, Cabs_to_ail.do_while_hack"
 (*
 WIP KKK
   (* TODO: it would be nice to only generate these names, if they are needed *)
@@ -2195,7 +2195,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           (* this is removing unnecessary blocks introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
           let d_ss' =
-            List.foldl (fun acc z ->
+            List.foldr (fun z acc ->
               match z with
                 | (CabsStatement _ (CabsSblock _), AnnotatedStatement _ (AilSblock _ _)) ->
                     (* this is the case of a block already present in the Cabs code. *)
@@ -2535,7 +2535,7 @@ val     extract_typedef_name: list cabs_type_specifier -> list cabs_type_specifi
 let rec extract_typedef_name specs acc =
   match specs with
     | [] ->
-        Boot.assert_false "extract_typedef_name found no TSpec_name"
+        error "extract_typedef_name found no TSpec_name"
     | TSpec_name str :: specs' ->
         (str, acc ++ specs')
     | x :: xs ->
@@ -2572,7 +2572,7 @@ let desugar_and_register_external_declaration edecl =
             let _ = Boot.output_string $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
             let (qs', ty') = inject_qualifiers base_qs ty in
             if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
-              Boot.assert_false "TODO: desugar_declaration_base: is this case legal?"
+              error "TODO: desugar_declaration_base: is this case legal?"
             else
               let _ = Boot.output_string ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
               let _ = Boot.output_string ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)

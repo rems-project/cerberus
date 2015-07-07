@@ -330,11 +330,11 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
-  let strong c = load("char", shift(str, {("char", 0)})) in
+  let strong c = load("char", array_shift(str, "char", 0)) in
   if c = 0 then
     return(acc)
   else
-    let strong ret = rev_listFromStr_aux{shift(str,{("char", 1)}), cons(c,acc)} in
+    let strong ret = rev_listFromStr_aux{array_shift(str, "char", 1), cons(c,acc)} in
       return(ret)
     end
   end

@@ -10,12 +10,11 @@ instance (Default unit)
   let default = ()
 end
 
+val assert_false: forall 'a. unit -> 'a
+declare ocaml target_rep function assert_false = `Debug.assert_false`
 
-(*
-(* TODO: hack *)
-val assert_false_: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false_ = `Boot_ocaml.assert_false`
-*)
+val error: forall 'a. string -> 'a
+declare ocaml target_rep function error = `Debug.error`
 
 
 
@@ -106,11 +105,10 @@ let rec map2_ f xs ys acc =
   end
 let map2 f xs ys = map2_ f xs ys []
 
-let fromJust = function
-  | Just x -> x
-  (* | Nothing   -> assert_false_ "[Global.fromJust] found a Nothing" *)
-end
+let fromJust z = maybe (assert_false ()) id z
 
+let fromLeft z = either id (assert_false ()) z
+let fromRight z = either (assert_false ()) id z
 
 
 
@@ -308,3 +306,15 @@ let first f (x, y) =
 val second: forall 'a 'b 'c . ('a -> 'b) -> 'c * 'a -> 'c * 'b
 let second f (x, y) =
   (x, f y)
+
+
+val     list_index_update: forall 'a. nat -> ('a -> 'a) -> list 'a -> list 'a
+let rec list_index_update n f = function
+  | [] ->
+      assert_false ()
+  | x::xs ->
+      if n = 0 then
+        f x :: xs
+      else
+        x :: (list_index_update (n-1) f xs)
+end

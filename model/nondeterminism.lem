@@ -41,6 +41,12 @@ instance (Show kill_reason)
     end
 end
 
+
+(* this is for debug purpose *)
+type nd_id =
+  list nat
+
+
 type nd_state 'a =
     (* active execution: log, constraints, value *)
   | Active of Dlist.dlist string * Constraints.t * 'a
@@ -48,7 +54,7 @@ type nd_state 'a =
   | Killed of kill_reason * Dlist.dlist string * Constraints.t
 
 type t 'a =
-  ND of list (nd_state 'a)
+  ND of list (nd_id * nd_state 'a)
 
 
 (* Monadic operations *)
@@ -56,16 +62,17 @@ val return: forall 'a.    'a -> t 'a
 val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 
 let return a =
-  ND [Active Dlist.nil Constraints.empty a]
+  (* we have an empty nd_id since the is no real nondeterminism here *)
+  ND [([], Active Dlist.nil Constraints.empty a)]
 
 val bindExhaustive: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindExhaustive (ND m) f =
     ND $
-      List.concatMap (fun ma ->
+      List.concatMap (fun (a_id, ma) ->
         match ma with
           | Active logA eqsA vA ->
-              List.map (fun mb ->
-                match mb with
+              List.map (fun (b_id, mb) ->
+                (b_id ++ a_id, match mb with
                   | Active logB eqsB vB ->
                       let log' = Dlist.append logA logB in
                       
@@ -81,9 +88,9 @@ let bindExhaustive (ND m) f =
                           Active log' eqs' vB
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
-                end) $ (let ND z = f vA in z)
+                end)) $ (let ND z = f vA in z)
           | Killed reason log eqs ->
-              [Killed reason log eqs]
+              [(a_id, Killed reason log eqs)]
         end) m
 
 
@@ -126,7 +133,7 @@ let bindRandom (ND m) f =
                        | Active logB eqsB vB ->
                            let log' = Dlist.append logA logB in
                            
-                           if Constraints.is_empty eqsA then
+  if Constraints.is_empty eqsA then
                              [Active log' eqsB vB]
                            else if Constraints.is_empty eqsB then
                              [Active log' eqsA vB]
@@ -150,9 +157,9 @@ let bindRandom (ND m) f =
 let rec split_nd_states_aux ((actives,killed) as acc) = function
   | [] ->
       acc
-  | ((Active _ _ _) as x)::xs ->
+  | ((_, Active _ _ _) as x)::xs ->
       split_nd_states_aux (x::actives, killed) xs
-  | ((Killed _ _ _) as x)::xs ->
+  | ((_, Killed _ _ _) as x)::xs ->
       split_nd_states_aux (actives, x::killed) xs
 end
 
@@ -165,21 +172,19 @@ let bindRandom (ND m) f =
   ND $
     let (actives, killed) = split_nd_states m in
     let killed =
-      List.map (fun (Killed a b c) -> Killed a b c) killed in
+      (* this changes the type variable ... *)
+      List.map (fun (id, Killed a b c) -> (id, Killed a b c)) killed in
     match actives with
-(*
-      | [] -> let _ = Boot.print_debug 4 "bindRandom FOUND NO ACTIVES" in killed
-*)
       | [] -> let _ = Boot.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
-                                 show (List.map (fun (Killed r _ _) -> r) killed)) in 
+                                 show (List.map (fun (_, Killed r _ _) -> r) killed)) in 
               killed
 
 
       | _ ->
          match random_select actives with
-           | Active logA eqsA vA ->
-              List.map (fun mb ->
-                match mb with
+           | (a_id, Active logA eqsA vA) ->
+              List.map (fun (b_id, mb) ->
+                (b_id ++ a_id, match mb with
                   | Active logB eqsB vB ->
                       let log' = Dlist.append logA logB in
                       
@@ -195,7 +200,7 @@ let bindRandom (ND m) f =
                           Active log' eqs' vB
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
-                end) $ (let ND z = f vA in z)
+                end)) $ (let ND z = f vA in z)
          end ++ killed
     end
 
@@ -207,7 +212,7 @@ let bindRandom (ND m) f =
 let bind m f =
   match current_execution_mode () with
     | Nothing ->
-        Boot.assert_false "Nondeterminism.bind sees execution_mode = Nothing"
+        error "Nondeterminism.bind sees execution_mode = Nothing"
     | Just Interactive ->
         (* TODO *)
         bindExhaustive m f
@@ -271,7 +276,7 @@ let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
 (* Non-deterministically pick from a list *)
 val pick: forall 'a. list 'a -> t 'a
 let pick xs =
-  ND $ List.map (Active Dlist.nil Constraints.empty) xs
+  ND $ List.map (fun (n, z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote xs)
 
 (* The same but with a predicate and the pick is paired with it context *)
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
@@ -283,7 +288,8 @@ let rec _pickWith pred acc debug_n = function
         _pickWith pred (x::acc) (debug_n + (1:nat)) xs
 end
 let pickWith pred xs =
-  let ret = List.map (Active Dlist.nil Constraints.empty) (_pickWith pred [] 0 xs) in
+  let ret = List.map (fun (n,z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote $ _pickWith pred [] 0 xs) in
+(*
   let _ = 
     if List.null ret then
       Boot.print_debug 3 ("pickWith called with xs of length " ^ show (List.length xs) ^
@@ -291,6 +297,8 @@ let pickWith pred xs =
     else 
       ()
   in ND ret
+*)
+  ND ret
         
 
 (* Perform the first computation if it is not empty bind the result to the second computation
@@ -302,7 +310,7 @@ let tryM (ND ma) mf mend =
 
 val kill: forall 'a. kill_reason -> t 'a
 let kill reason =
-  ND [Killed reason Dlist.nil Constraints.empty]
+  ND [([], Killed reason Dlist.nil Constraints.empty)]
 
 (* The reason contains the message in the case the guard is FALSE. *)
 val guard: bool -> kill_reason -> t unit
@@ -313,11 +321,11 @@ let guard b reason =
 (* Add a constraint to the current execution *)
 val add_constraint: (Constraints.t -> Constraints.t) -> t unit
 let add_constraint mk_assert =
-  ND [Active Dlist.nil (mk_assert Constraints.empty) ()]
+  ND [([], Active Dlist.nil (mk_assert Constraints.empty) ())]
 
 val log: string -> t unit
 let log msg =
-  ND [Active (Dlist.singleton ("ND log: " ^ msg)) Constraints.empty ()]
+  ND [([], Active (Dlist.singleton ("ND log: " ^ msg)) Constraints.empty ())]
 
 
 
@@ -335,13 +343,13 @@ let user_request xs =
           | Just x ->
               return x
           | _ ->
-              Boot.assert_false "ND.user_request: invalid choice"
+              error "ND.user_request: invalid choice"
         end
   end
 
 
 let is_active = function
-  | Active _ _ _ ->
+  | (_, Active _ _ _) ->
       true
   | _ ->
       false
@@ -358,12 +366,19 @@ let warns_if_no_active_ex (ND xs) =
 
 let apply_to_constraints f (ND xs) =
   ND $ List.map (function
-    | Active log eqs v ->
+    | (id, Active log eqs v) ->
         let eqs' = f eqs in
         if Constraints.isUnsat eqs' then
-          Killed (Other "reached unsatisfiable constraints") log eqs'
+          (id, Killed (Other "reached unsatisfiable constraints") log eqs')
         else
-          Active log eqs' v
+          (id, Active log eqs' v)
     | x ->
         x
   end) xs
+
+
+
+
+val print_debug: nat -> string -> t unit
+let print_debug n str =
+  return (Boot.print_debug n ("[DRIVER] " ^ str))

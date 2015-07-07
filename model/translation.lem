@@ -4,11 +4,10 @@
 open import Pervasives Global Implementation_ Loc String_extra
 import State State_operators Translation_effect
 open import Translation_aux
-import Cmm_master Naive_memory
+import Cmm_master Mem
 
 import Decode
 
-module Mem = Naive_memory (* New_memory *)
 
 import AilSyntax AilSyntaxAux AilTypes
 import Core Core_aux Undefined
@@ -78,7 +77,7 @@ val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.t -> Cabs.
 let shiftPathFromMember program tag ident =
   match List.lookup tag (snd program).A.tag_definitions with
     | Just (A.StructDef ident_tys) ->
-        let Right sh = List.foldl (fun acc_ (ident', ty) ->
+        let sh = fromRight $ List.foldl (fun acc_ (ident', ty) ->
           match acc_ with
             | Left acc ->
                 if ident = ident' then
@@ -94,8 +93,10 @@ let shiftPathFromMember program tag ident =
         ) (Left []) ident_tys in
         sh
     | Just (A.UnionDef ident_tys) ->
-        let Just ty = List.lookup ident ident_tys in
-        [(Caux.proj_ctype ty, Caux.zero)]
+        [(Caux.proj_ctype (fromJust $ List.lookup ident ident_tys), Caux.zero)]
+    
+    | Nothing ->
+        assert_false ()
   end
 
 (*
@@ -155,18 +156,18 @@ let rec translate_lvalue tagDefs stdlib program a_expr =
             C.Esseq [Just sym_e] core_e
               (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
   
-  | _ -> Boot.assert_false ("[Translation.translate_lvalue] wildcard case: " ^ Boot.pp_ail_expr a_expr)
+  | _ -> error ("[Translation.translate_lvalue] wildcard case: " ^ Boot.pp_ail_expr a_expr)
 end
 *)
 
 
-let rec translate_function_designator (A.AnnotatedExpression _ loc expr) =
+let rec translate_function_designator (A.AnnotatedExpression _ (* TODO: loc *) _ expr) =
   match expr with
     | A.AilEident fid ->
         E.return $
           C.Epure (Caux.cfunction_const fid)
     | _ ->
-        Boot.assert_false "[Translation.translate_function_designator] wildcard case"
+        error "[Translation.translate_function_designator] wildcard case"
   end
 
 
@@ -194,7 +195,7 @@ and translate_expression tagDefs stdlib program a_expr =
   let is_lvalue = is_lvalue a_expr in
   
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
-    E.return $ C.Epure (C.PEval (C.Vpointer (Mem.null_pointer (Caux.proj_ctype result_ty))))
+    E.return $ C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype result_ty))))
   else
     let A.AnnotatedExpression annot loc expr = a_expr in
     match expr with
@@ -350,14 +351,14 @@ and translate_expression tagDefs stdlib program a_expr =
                 (* else [...] *)
                    (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                       (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                       C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.mk_integer_value 2)) (C.PEsym a_e2)))
+                       C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
                                      (C.PEop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one)
                     else (* e1 has a signed type *)
                       (* if a_e2 < 0 then undef *)
                       (C.PEif (C.PEop C.OpLt (C.PEsym a_e2) Caux.zero)
                          (C.PEundef Undefined.Negative_left_shift)
                          (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                         (C.PElet a_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.mk_integer_value 2)) (C.PEsym a_e2)))
+                         (C.PElet a_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
                                                       (C.PEop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
                             (* not representable(ty, a_res) then undef *)
                             (C.PEif (C.PEnot (is_representable [C.PEsym a_res; Caux.mk_ctype result_ty]))
@@ -394,7 +395,7 @@ and translate_expression tagDefs stdlib program a_expr =
                   (C.PEundef Undefined.Shift_too_large)
                
                (* else [...] *)
-               (let expr = C.PEop C.OpDiv (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.mk_integer_value 2)) (C.PEsym a_e2)) in
+               (let expr = C.PEop C.OpDiv (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)) in
                 if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                   (* If E1 has an unsigned type *)
                   expr
@@ -476,14 +477,24 @@ and translate_expression tagDefs stdlib program a_expr =
       | A.AilEunary A.Indirection e ->
 (* TODO: check !!! *)
           E.fresh_symbol         >>= fun sym_e  ->
+          E.fresh_symbol         >>= fun sym_b  ->
           translate_expression e >>= fun core_e ->
           E.return $
             C.Ewseq [Just sym_e] core_e
+              (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrValidForDeref [C.PEsym sym_e])
+                 (C.Eif (C.PEsym sym_b)
+                    (Caux.pload (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA)
+                    (C.Epure (C.PEundef Undefined.Indirection_invalid_value))
+                 )
+              )
+
+(*
               (C.Eif (C.PEmemop Mem.PtrValidForDeref [C.PEsym sym_e])
                  (Caux.pload (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA)
 (*                          (C.PEsym sym_e) *)
                  (C.Epure (C.PEundef Undefined.Indirection_invalid_value))
               )
+*)
 
 (*
           if is_lvalue then
@@ -535,15 +546,15 @@ and translate_expression tagDefs stdlib program a_expr =
               | (Right (AilTypes.Pointer _ ptr_ty), _) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEshift (C.PEsym sym_e1) [(Caux.proj_ctype ptr_ty, C.PEsym sym_e2)])
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e1) (Caux.proj_ctype ptr_ty) (C.PEsym sym_e2))
               
               | (_, Right (AilTypes.Pointer _ ptr_ty)) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEshift (C.PEsym sym_e2) [(Caux.proj_ctype ptr_ty, C.PEsym sym_e1)])
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e2) (Caux.proj_ctype ptr_ty) (C.PEsym sym_e1))
               
               | (_, _) ->
-                  Boot.assert_false "WTF: A.Add" (* "this case implies the expression was ill-typed." *)
+                  error "WTF: A.Add" (* "this case implies the expression was ill-typed." *)
             end            
 
 (*
@@ -559,7 +570,6 @@ and translate_expression tagDefs stdlib program a_expr =
  *)
 
               
-(*              Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.ADD) e1 e2 <pointer case>: TODO" *)
       
       | A.AilEbinary e1 (A.Arithmetic A.Sub) e2 ->
           let ty1 = exp_type_of e1 in
@@ -595,27 +605,24 @@ and translate_expression tagDefs stdlib program a_expr =
             (* TODO: check *)
             (* TODO: do something with the qualifiers *)
             match (AilTypesAux.lvalue_coercion sigm ty1, AilTypesAux.lvalue_coercion sigm ty2) with
-              | (Right (AilTypes.Pointer qs1 ptr_ty1), Right (AilTypes.Pointer qs2 ptr_ty2)) ->
+              | (Right (AilTypes.Pointer (*TODO: qs1 ptr_ty1 *) _ _), Right (AilTypes.Pointer (* TODO: qs2 ptr_ty2 *) _ _)) ->
                   (* TODO: check *)
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEmemop Mem.Ptrdiff [C.PEsym sym_e1; C.PEsym sym_e2])
-(*                  
-                  Boot.assert_false "WIP: Translation, Sub of two pointers"
-*)
+                      (C.Ememop Mem.Ptrdiff [C.PEsym sym_e1; C.PEsym sym_e2])
               
               | (Right (AilTypes.Pointer _ ptr_ty), _) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEshift (C.PEsym sym_e1) [(Caux.proj_ctype ptr_ty, C.PEop C.OpSub Caux.zero (C.PEsym sym_e2))])
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e1) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub Caux.zero (C.PEsym sym_e2)))
               
               | (_, Right (AilTypes.Pointer _ ptr_ty)) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEshift (C.PEsym sym_e2) [(Caux.proj_ctype ptr_ty, C.PEop C.OpSub Caux.zero (C.PEsym sym_e1))])
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e2) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub Caux.zero (C.PEsym sym_e1)))
               
               | (_, _) ->
-                  Boot.assert_false "WTF: A.Sub" (* "this case implies the expression was ill-typed." *)
+                  error "WTF: A.Sub" (* "this case implies the expression was ill-typed." *)
             end
 
 
@@ -670,9 +677,6 @@ and translate_expression tagDefs stdlib program a_expr =
                     C.Eshift (C.PEsym a_e2) [(Caux.proj_ctype (exp_type_of e1), C.PEsym a_e1)]
                 )
 
-(*
-              Boot.assert_false "[Translation.translate_expression] #A.BINARY (A.ARITHMETIC A.SUB) e1 e2 <pointer case>: TODO"
-*)
           end
 *)
       
@@ -709,81 +713,120 @@ and translate_expression tagDefs stdlib program a_expr =
                  )
               )
       
+(* STD §6.5.8 Relational operators *)
       | A.AilEbinary e1 A.Lt e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_b   ->
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
-          let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
-          let conv_pe1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
-          let conv_pe2 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e2] in
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
           E.return $
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (
+                     mk_usual_arithmetic_conversions
+                       (fun a b -> C.PEop C.OpLt a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                  ))
+          else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-              
-              begin
-                C.Epure $
-                  if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-                    C.PEif (C.PEop C.OpLt conv_pe1 conv_pe2) Caux.one Caux.zero
-                  
-                  else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
-                    (* TODO: experimenting *)
-                    C.PEmemop Mem.Ptreq [conv_pe1; conv_pe2]
-
-(*                  
-                  else if Aaux.is_null_pointer_constant e1 then
-                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LT e1 e2 <both pointers case, and e1 null constant>: TODO"
-*)
-                  
-                  else
-                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LT e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
-                end
+              (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLt [C.PEsym sym_e1; C.PEsym sym_e2])
+                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+              )
+          else
+            assert_false () (* this Ail program shouldn't have typechecked *)
       
       | A.AilEbinary e1 A.Gt e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_b   ->
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
-          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-            E.return $
-              C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                (C.Epure $
-                  C.PEif (C.PEnot (C.PEop C.OpOr (C.PEop C.OpLt (C.PEsym sym_e1) (C.PEsym sym_e2)) (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2))))
-                   Caux.one Caux.zero
-                )
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
+          E.return $
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (
+                     mk_usual_arithmetic_conversions
+                       (fun a b -> C.PEop C.OpGt a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                  ))
+          else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGt [C.PEsym sym_e1; C.PEsym sym_e2])
+                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+              )
           else
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.GT e1 e2 <pointers case>: TODO"
+            assert_false () (* this Ail program shouldn't have typechecked *)
       
       | A.AilEbinary e1 A.Le e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_b   ->
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
-          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-            E.return $
-              C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                (C.Epure $
-                  C.PEif (C.PEop C.OpOr (C.PEop C.OpLt (C.PEsym sym_e1) (C.PEsym sym_e2)) (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)))
-                   Caux.one Caux.zero
-                )
-          else (* MUST BE: both operands are pointers to qualified or unqualified versions of compatible object types. *)
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.LE e1 e2 <pointers case>: TODO"
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
+          E.return $
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (
+                     mk_usual_arithmetic_conversions
+                       (fun a b -> C.PEop C.OpLe a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                  ))
+          else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLe [C.PEsym sym_e1; C.PEsym sym_e2])
+                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+              )
+          else
+            assert_false () (* this Ail program shouldn't have typechecked *)
       
-      (* TODO: not doing the typing stuff for now *)
       | A.AilEbinary e1 A.Ge e2 ->
+          E.fresh_symbol          >>= fun sym_e1  ->
+          E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_b   ->
+          translate_expression e1 >>= fun core_e1 ->
+          translate_expression e2 >>= fun core_e2 ->
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
+          E.return $
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (
+                     mk_usual_arithmetic_conversions
+                       (fun a b -> C.PEop C.OpGe a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                  ))
+          else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+              (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGe [C.PEsym sym_e1; C.PEsym sym_e2])
+                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+              )
+          else
+            assert_false () (* this Ail program shouldn't have typechecked *)
+      
+(* STD §6.5.9 Equality operators *)
+(*
+      | A.AilEbinary e1 A.Eq e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
           translate_expression e1 >>= fun core_e1 ->
           translate_expression e2 >>= fun core_e2 ->
-          if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-            E.return $
-              C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                (C.Epure $
-                  C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (C.PEsym sym_e1))
-                   Caux.one Caux.zero
-                )
-          else
-            Boot.assert_false "[Translation.translate_expression] #A.BINARY A.GE e1 e2 <pointers case>: TODO"
-      
+          let ty1 = exp_type_of e1 in
+          let ty2 = exp_type_of e2 in
+          E.return $
+            if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (
+                     mk_usual_arithmetic_conversions
+                       (fun a b -> C.PEop C.OpEq a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                  ))
+            else
+              
+*)
+
+
       | A.AilEbinary e1 A.Eq e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
@@ -793,19 +836,18 @@ and translate_expression tagDefs stdlib program a_expr =
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               
               begin
-                C.Epure $
                   if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-                    C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.one Caux.zero
+                    C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.one Caux.zero)
                   
                   else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
                     (* TODO: experimenting *)
-                    C.PEmemop Mem.Ptreq [C.PEsym sym_e1; C.PEsym sym_e2]
+                    C.Ememop Mem.PtrEq [C.PEsym sym_e1; C.PEsym sym_e2]
                   
                   else if Aaux.is_null_pointer_constant e1 then
-                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
+                    error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
                   
                   else
-                    Boot.assert_false "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+                    error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
                 end
       
       | A.AilEbinary e1 A.Ne e2 ->
@@ -817,14 +859,13 @@ and translate_expression tagDefs stdlib program a_expr =
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               
               begin
-                C.Epure $
-                  if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-                    C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one
-                  else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
-                    (* TODO: experimenting *)
-                    C.PEnot (C.PEmemop Mem.Ptreq [C.PEsym sym_e1; C.PEsym sym_e2])
-                  else
-                    Boot.assert_false "WIP: Binary Ne"
+                if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
+                  C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one)
+                else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
+                  (* TODO: experimenting *)
+                  C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2]
+                else
+                  error "WIP: Binary Ne"
               end
       
       | A.AilEassign e1 e2 ->
@@ -847,7 +888,6 @@ and translate_expression tagDefs stdlib program a_expr =
          expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
          to an indeterminately-sequenced function call, the operation of a compound) *)
       | A.AilEcompoundAssign e1 aop e2 ->
-(*          Boot.assert_false $ "TODO: compound assign: " ^ (Boot.pp_ail_expr a_expr) *)
           (* TODO: this is a TEMPORARY HACK *)
           let A.AnnotatedExpression annot2 loc' _ = e2 in
           translate_expression $ A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
@@ -856,20 +896,18 @@ and translate_expression tagDefs stdlib program a_expr =
       
       | A.AilEcond e1 e2 e3 ->
           E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
-          E.fresh_symbol          >>= fun sym_e3  ->
           translate_expression e1 >>= fun core_e1 ->
-          translate_expression e1 >>= fun core_e2 ->
-          translate_expression e1 >>= fun core_e3 ->
+          translate_expression e2 >>= fun core_e2 ->
+          translate_expression e3 >>= fun core_e3 ->
           (* STD (§6.5.15#4) *)
-(* TODO(check) the case splits only have to do why the Ail typing
+(* TODO(check) the case splits only have to do with the Ail typing
 
           if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then *)
             E.return $
               C.Ewseq [Just sym_e1] core_e1
                 (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) Caux.zero)) core_e2 core_e3)
 (*          else
-            Boot.assert_false "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
+            error "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
 *)
       
       | A.AilEcast _ ty e ->
@@ -878,23 +916,22 @@ and translate_expression tagDefs stdlib program a_expr =
           E.return $
             C.Ewseq [Just sym_e] core_e
               (* TODO: check typing stuff *)
-              (C.Epure
-                 begin
-                   let e_ty = exp_type_of e in
-                   if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
-                     (* making a pointer from an integer *)
-                     let Just ref_ty = AilTypesAux.referenced_type ty in
-                     C.PEmemop Mem.PtrFromInt [Caux.mk_ctype e_ty; Caux.mk_ctype ref_ty; C.PEsym sym_e]
-                     
-                   else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
-                     (* making an integer from a pointer *)
-                     let Just ref_ty = AilTypesAux.referenced_type e_ty in
-                     C.PEmemop Mem.IntFromPtr [Caux.mk_ctype ref_ty; Caux.mk_ctype ty; C.PEsym sym_e]
-                   else
-                      (* TODO: check *)
-                      conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.PEsym sym_e]
-                 end
-              )
+              begin
+                let e_ty = exp_type_of e in
+                if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
+                  (* making a pointer from an integer *)
+                  let ref_ty = fromJust $ AilTypesAux.referenced_type ty in
+                  C.Ememop Mem.PtrFromInt [Caux.mk_ctype e_ty; Caux.mk_ctype ref_ty; C.PEsym sym_e]
+                  
+                else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
+                  (* making an integer from a pointer *)
+                  let ref_ty = fromJust $ AilTypesAux.referenced_type e_ty in
+                  C.Ememop Mem.IntFromPtr [Caux.mk_ctype ref_ty; Caux.mk_ctype ty; C.PEsym sym_e]
+                else
+                  (* TODO: check *)
+                  C.Epure (conv [Caux.mk_ctype (exp_type_of e); Caux.mk_ctype ty; C.PEsym sym_e])
+              end
+
       
 (*
       (* TODO: a bit hackish *)
@@ -920,15 +957,17 @@ and translate_expression tagDefs stdlib program a_expr =
                  | 4 -> Cmm.Acq_rel
                  | 5 -> Cmm.Seq_cst
                  | _ ->
-                     Boot.assert_false ("atomic_store_explicit other order number: " ^ show n)
+                     error ("atomic_store_explicit other order number: " ^ show n)
                end
            | _ ->
-               Boot.assert_false ("atomic_store_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
+               error ("atomic_store_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
          end in
          
          let ty = match ctype_of object_e with
            | Aty.Pointer _ ty ->
                ty
+           | _ ->
+               assert_false () (* otherwise the Ail program wouldn't have typechecked *)
          end in
          
          E.fresh_symbol                 >>= fun sym_object     ->
@@ -951,15 +990,17 @@ and translate_expression tagDefs stdlib program a_expr =
                  | 4 -> Cmm.Acq_rel
                  | 5 -> Cmm.Seq_cst
                  | _ ->
-                     Boot.assert_false ("atomic_load_explicit other order number: " ^ show n)
+                     error ("atomic_load_explicit other order number: " ^ show n)
                end
            | _ ->
-               Boot.assert_false ("atomic_load_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
+               error ("atomic_load_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
          end in
          
          let ty = match ctype_of object_e with
            | Aty.Pointer _ ty ->
                ty
+           | _ ->
+               assert_false () (* otherwise the Ail program wouldn't have typechecked *)
          end in
          
          E.fresh_symbol                >>= fun sym_object    ->
@@ -976,7 +1017,7 @@ and translate_expression tagDefs stdlib program a_expr =
        *)
       | A.AilEcall e es ->
 (*          E.fresh_symbol         >>= fun sym_e  -> *)
-          translate_expression e >>= fun core_e ->
+(*          translate_expression e >>= fun core_e -> *)
           match e with
             | A.AnnotatedExpression _ _ (A.AilEident fid) ->
                 (* If the function is just declared in a prototype but not defined,
@@ -987,13 +1028,14 @@ and translate_expression tagDefs stdlib program a_expr =
                   (* TODO: this is dirty *)
                   else match fid with
                     | Symbol.Symbol _ Nothing ->
-                        Boot.assert_false "TODO: error"
+                        error "TODO: error"
 
 
                     | Symbol.Symbol _ (Just "printf") ->
                           (* TODO: temporary hack *)
                         match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "printf_proxy" | _ -> false end) (Map_extra.toList stdlib) with
                           | Just (f, _) -> Core.Sym f
+                          | Nothing -> assert_false ()
                         end
 
 
@@ -1006,12 +1048,12 @@ and translate_expression tagDefs stdlib program a_expr =
                   E.return $ C.Eproc default fname []
                 else
                   (* TODO: variadic case *)
-                  let (return_ty, params, is_variadic) =
+                  let ((* TODO: return_ty *)_, params, is_variadic) =
                     match Context.lookup (=) (snd program).A.declarations fid with
-                      | Just (A.Decl_function return_ty params is_variadic is_inline is_Noreturn) ->
+                      | Just (A.Decl_function return_ty params is_variadic (* TODO: is_inline is_Noreturn *) _ _) ->
                           (return_ty, params, is_variadic)
                       | _ ->
-                         Boot.assert_false "[Translate] impossible error: TODO move to Exception.t"
+                         error "[Translate] impossible error: TODO move to Exception.t"
                     end in
                   let n = List.length es in
                   
@@ -1072,7 +1114,7 @@ and translate_expression tagDefs stdlib program a_expr =
                           )
                         )
                       )
-            | _ -> Boot.assert_false "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
+            | _ -> error "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
           end
       
       | A.AilEassert e ->
@@ -1087,7 +1129,12 @@ and translate_expression tagDefs stdlib program a_expr =
               )
       
       | A.AilEarray _ e_opts ->
-          let (Aty.Array ty _) = result_ty in
+          let elem_ty = match result_ty with
+            | Aty.Array ty _ ->
+                ty
+            | _ ->
+                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+          end in
           E.foldlM (fun (acc, mk_core) e_opt ->
             match e_opt with
               | Just e ->
@@ -1095,14 +1142,14 @@ and translate_expression tagDefs stdlib program a_expr =
                   translate_expression e >>= fun core_e ->
                   E.return (C.PEsym a_e :: acc, fun z -> C.Esseq [Just a_e] core_e (mk_core z))
               | Nothing ->
-                  E.return (C.PEval (C.Vunspecified $ Caux.proj_ctype ty) :: acc, mk_core)
+                  E.return (C.PEval (C.Vunspecified $ Caux.proj_ctype elem_ty) :: acc, mk_core)
             end
           ) ([], fun z -> z) (List.reverse e_opts) >>= fun (pes, mk_core) ->
           E.return $
             mk_core (C.Epure (C.PEarray pes))
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          let Just ident_tys = Map.lookup tag_sym tagDefs in
+          let ident_tys = fromJust $ Map.lookup tag_sym tagDefs in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -1113,7 +1160,7 @@ and translate_expression tagDefs stdlib program a_expr =
                     fun z -> C.Esseq [Just sym_e] core_e (mk_core z)
                   )
               | Nothing ->
-                  let Just ty = List.lookup ident ident_tys in
+                  let ty = fromJust $ List.lookup ident ident_tys in
                   E.return (
                     (ident, C.PEval (C.Vunspecified ty)) :: acc,
                     mk_core
@@ -1134,20 +1181,27 @@ and translate_expression tagDefs stdlib program a_expr =
                 tag_sym
             | Aty.Union tag_sym ->
                 tag_sym
+            | _ ->
+                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
           end in
           E.fresh_symbol         >>= fun sym_e  ->
           translate_expression e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)
           if is_lvalue then
             E.return $
               C.Esseq [Just sym_e] core_e
-                (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
+                (C.Epure (C.PEmember_shift (C.PEsym sym_e) tag_sym ident))
           else
+            E.return $
+              C.Esseq [Just sym_e] core_e
+                (Caux.pload (Caux.mk_ctype result_ty) (C.PEmember_shift (C.PEsym sym_e) tag_sym ident) Cmm.NA) (* TODO: check MO *)
+(*
             E.fresh_symbol >>= fun sym_lvalue ->
             E.return $
               C.Esseq [Just sym_e] core_e (
                 C.Esseq [Just sym_lvalue]  (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
                   (Caux.pload (Caux.mk_ctype result_ty) (C.PEsym sym_lvalue) Cmm.NA) (* TODO: check MO *)
               )
+*)
 
       | A.AilEmemberofptr e ident ->
           let tag_sym = match ctype_of e with
@@ -1155,6 +1209,8 @@ and translate_expression tagDefs stdlib program a_expr =
                 tag_sym
             | Aty.Pointer _ (Aty.Union tag_sym) ->
                 tag_sym
+            | _ ->
+                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
           end in
 
           (* TODO: check, looks fishy *)
@@ -1162,7 +1218,10 @@ and translate_expression tagDefs stdlib program a_expr =
           translate_expression e >>= fun core_e ->
           E.return $ 
             C.Esseq [Just sym_e] core_e
+              (C.Epure (C.PEmember_shift (C.PEsym sym_e) tag_sym ident))
+(*
               (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
+*)
 
 (*
       | A.AilEmemberof e ident ->
@@ -1182,10 +1241,10 @@ and translate_expression tagDefs stdlib program a_expr =
                 C.PEval (C.Vunspecified (Caux.proj_ctype ty))
             | A.ConstantNull ->
                 (* TODO: should make the Ail ctor take a ctype? *)
-                C.PEval (C.Vpointer (Mem.null_pointer Cty.Void))
+                C.PEval (C.Vpointer (Mem.null_ptrval Cty.Void))
             | A.ConstantInteger (A.IConstant n _ _) ->
                 (* TODO: suffix/basis? + check *)
-                C.PEval (C.Vinteger (Mem.mk_integer_value n))
+                C.PEval (C.Vinteger (Mem.integer_ival n))
             | A.ConstantInteger (A.IConstantMax ity) ->
                 let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
                 C.PEcall (C.Impl Implementation_.Ctype_max) [C.PEval (C.Vctype ty)]
@@ -1197,29 +1256,12 @@ and translate_expression tagDefs stdlib program a_expr =
             | A.ConstantCharacter (_, str) ->
                 (* TODO: prefix? *)
                 (* TODO: making an implementation fix here (ASCII) *)
-                C.PEval (C.Vinteger (Mem.mk_integer_value (Decode.decode_character_constant str)))
-            | A.ConstantArray csts ->
-                Boot.assert_false "WIP: Translation > AilEconst, ConstantArray"
-
-
-(*
-type integerConstant (*[name = "ic*"]*) =
-  | IConstant of integer * basis * maybe integerSuffix
-  | IConstantMax of integerType
-  | IConstantMin of integerType
-
-type characterPrefix =
-  | Pref_L
-  | Pref_u
-  | Pref_U
-
-type characterConstant =
-    maybe characterPrefix * string
-*)
-
-
+                C.PEval (C.Vinteger (Mem.integer_ival (Decode.decode_character_constant str)))
+            | A.ConstantArray (* TODO: csts *) _ ->
+                error "WIP: Translation AilEconst, ConstantArray"
+            | A.ConstantStruct (* TODO: tag_sym xs *) _ _ ->
+                error "WIP: Translation AilEconst, ConstantStruct"
           end
-
       
       | A.AilEbuiltin str ->
           let mk_ctype_min ty = C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)] in
@@ -1252,7 +1294,7 @@ type characterConstant =
             | "CHAR_BIT" ->
                 C.PEimpl Implementation_.Characters__bits_in_byte
             | _ ->
-                Boot.assert_false ( "Translation AilEbuiltin> " ^ str)
+                error ( "Translation AilEbuiltin> " ^ str)
           end
       
         (* TODO: prefix + check, §6.4.5#6 *)
@@ -1278,8 +1320,8 @@ type characterConstant =
           E.fresh_symbol >>= fun sym ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
           let elems = List.map (fun c_str ->
-            Mem.mk_integer (Decode.decode_character_constant c_str)
-          ) strs ++ [Mem.mk_integer 0] in
+            C.Vinteger (Mem.integer_ival  (Decode.decode_character_constant c_str))
+          ) strs ++ [C.Vinteger (Mem.integer_ival 0)] in
           E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Varray elems)) >>
           E.return (
             C.Epure (C.PEsym sym)
@@ -1352,8 +1394,6 @@ a
 *)
       | A.AilEannot _ e ->
           translate_expression e
-      | _ ->
-          Boot.assert_false ("Translation.translate_expression, match FAILED: " ^ Boot.pp_ail_expr a_expr)
     end
 
 
@@ -1597,7 +1637,7 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
             | Just (A.Decl_function return_ty _ _ _ _) ->
                 return_ty
             | _ ->
-                Boot.assert_false "[Translation.translate_expression A.Return] impossible error: TODO move to Exception.t"
+                error "[Translation.translate_expression A.Return] impossible error: TODO move to Exception.t"
           end in
           E.return $
             C.Esseq [Just a_e] core_e
@@ -1629,7 +1669,7 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
         E.return $
           C.Ewseq [Just a_e] core_e
             (foldl (fun acc (n, d) ->
-              C.Eif (C.PEop C.OpEq (C.PEsym a_e) (C.PEval (C.Vinteger (Mem.mk_integer_value n))))
+              C.Eif (C.PEop C.OpEq (C.PEsym a_e) (C.PEval (C.Vinteger (Mem.integer_ival n))))
                 (C.Erun default d run_as)
                 acc
              )
@@ -1880,5 +1920,5 @@ let translate stdlib impl (symbol_counter, prog) =
         (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns ;
                                 C.tagDefinitions= tagDefs |>)
     | _ ->
-        Boot.assert_false "[Translation.translate #_] error in the elaboration"
+        error "[Translation.translate #_] error in the elaboration"
   end

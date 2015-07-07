@@ -1,11 +1,10 @@
 open import Pervasives String_extra Global
 import Symbol AilTypes Implementation_ Undefined Cmm_master
-import Naive_memory
+import Mem
 
 open import Thread Core_ctype
 
 module Cmm = Cmm_master
-module Mem = Naive_memory
 
 
 (* -- Syntax ---------------------------------------------------------------- *)
@@ -49,7 +48,10 @@ type binop =
   | OpExp
   (* relational operators *)
   | OpEq
+  | OpGt
   | OpLt
+  | OpGe
+  | OpLe
   (* logical connectives *)
   | OpAnd
   | OpOr
@@ -132,11 +134,13 @@ type value =
   | Vtuple of list value
   | Vctype of ctype
 (*  | Vconst of Mem.mem_value *)
+  | Vsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+  
   | Vunspecified of ctype
   | Vinteger of Mem.integer_value
   | Vfloating of string
   | Vpointer of Mem.pointer_value
-  | Varray of list Mem.mem_value
+  | Varray of list value (* Mem.mem_value *)
   | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
   | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
 
@@ -161,12 +165,16 @@ type pexpr =
   | PEcase_ctype of pexpr * pexpr * name * name * name * name *
                     name * name * name * name
   (* operators on pointer values *)
-  | PEshift of pexpr * shift_path
+(*  | PEshift of pexpr * shift_path *)
+  | PEarray_shift of pexpr * ctype * pexpr
+  | PEmember_shift of pexpr * Symbol.t * Cabs.cabs_identifier
+
+
   (* operators on integers *)
   | PEnot of pexpr
   | PEop of binop * pexpr * pexpr
-  (* operations provide by the memory layout model *)
-  | PEmemop of Mem.memop * list pexpr
+  (* pure operations provide by the memory layout model *)
+  | PEmemop of Mem.pure_memop * list pexpr
   (* these two are annoying *)
   | PEtuple of list pexpr
 (*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
@@ -192,6 +200,9 @@ and shift_path =
 type expr 'a =
   (* pure expression *)
   | Epure of pexpr
+  
+  (* operations (that either require sequencing or are ND) provide by the memory layout model *)
+  | Ememop of Mem.memop * list pexpr
   
   (* these two are too deal with C signals *)
   | Eraise of handler_event

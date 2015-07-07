@@ -1,4 +1,4 @@
-open import Pervasives Common AilSyntax AilTypes AilSyntaxAux AilWf TypingError
+open import Pervasives Common Global AilSyntax AilTypes AilSyntaxAux AilWf TypingError
 open import GenTypes GenTypesAux Annotation
 open import Std Loc
 
@@ -21,8 +21,6 @@ val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
 
 
-val assert_false: forall 'a. string -> 'a
-declare ocaml target_rep function assert_false = `Boot_ocaml.assert_false`
 
 val output_string: string -> unit
 declare ocaml target_rep function output_string = `Debug.output_string2`
@@ -113,7 +111,7 @@ let well_typed_assignment S ty1 gty2 null2 =
           E.return (AilTypesAux.compatible ty1 (Struct id2 membrs2))
 *)
       | _ ->
-          assert_false "not possible"
+          error "not possible"
     end
   
   else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_pointer ty1 then
@@ -405,7 +403,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
                 E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray gty (Just (integerFromNat $ List.length xs))))
 *)
             | _ ->
-                assert_false "WIP: GenTyping.annotate_expression', AilEarray"
+                error "WIP: GenTyping.annotate_expression', AilEarray"
           end
         else
           E.fail Loc.unknown (TError "TODO[msg]: failed to type an array constant")
@@ -429,7 +427,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
           | Just ty ->
               E.return (AilEbuiltin str, GenRValueType (inject_type ty))
           | Nothing ->
-              assert_false ("WIP typing, AilEbuiltin: " ^ str)
+              error ("WIP typing, AilEbuiltin: " ^ str)
         end
 (*
 
@@ -463,7 +461,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
           | "UINT64_MAX" ->
               Unsigned Long
           | _ ->
-              assert_false ("WIP typing, AilEbuiltin: " ^ str)
+              error ("WIP typing, AilEbuiltin: " ^ str)
         end in
         E.return (AilEbuiltin str, GenRValueType (GenBasic (GenInteger (Concrete ity))))
 *)
@@ -541,7 +539,7 @@ OLD(sigma_declaration)
         if is_arithmetic gty then
           match promotion gty with
             | Nothing ->
-                assert_false "promotion failed on an arithmetic genType"
+                error "promotion failed on an arithmetic genType"
             | Just gty' ->
                 E.return (AilEunary uop e', GenRValueType gty')
           end
@@ -554,7 +552,7 @@ OLD(sigma_declaration)
         if is_arithmetic gty then
           match promotion gty with
             | Nothing ->
-                assert_false "promotion failed on an arithmetic genType"
+                error "promotion failed on an arithmetic genType"
             | Just gty' ->
                 E.return (AilEunary uop e', GenRValueType gty')
           end
@@ -567,7 +565,7 @@ OLD(sigma_declaration)
         if is_integer gty then
           match promotion gty with
             | Nothing ->
-                assert_false "promotion failed on an arithmetic genType"
+                error "promotion failed on an arithmetic genType"
             | Just gty' ->
                 E.return (AilEunary Bnot e', GenRValueType gty')
           end
@@ -621,10 +619,10 @@ OLD(sigma_declaration)
                  E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) loc' (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unatomic object_ty))
 (*
                else
-                 assert_false "WIP: typing of atomic_load_explicit 2"
+                 error "WIP: typing of atomic_load_explicit 2"
 *)
            | _ ->
-               assert_false "WIP: typing of atomic_load_explicit"
+               error "WIP: typing of atomic_load_explicit"
          end
 
      | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
@@ -638,7 +636,7 @@ OLD(sigma_declaration)
          match (object_gty, desired_e; order_gty) with
            | () ->
                  E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AilTypesAux.unat           | _ ->
-               assert_false "WIP: typing of atomic_store_explicit"
+               error "WIP: typing of atomic_store_explicit"
          end
 *)
 
@@ -722,7 +720,7 @@ TODO
                   E.fail Loc.unknown (TError "§6.5.2.3#1")
               | Just ty ->
                   let _TODO = (ty, a_e) in
-                  assert_false "WIP"
+                  error "WIP"
             end
         | GenUnion tag_opt members ->
             match List.lookup x members with
@@ -730,7 +728,7 @@ TODO
                   E.fail Loc.unknown (TError "§6.5.2.3#1")
               | Just ty ->
                   let _TODO = (ty, a_e) in
-                  assert_false "WIP"
+                  error "WIP"
             end
         | _ ->
             E.fail Loc.unknown (TError "§6.5.2.3#1")
@@ -746,7 +744,7 @@ TODO
                   E.fail Loc.unknown (TError "§6.5.2.3#2")
               | Just ty ->
                   let _TODO = (ty, a_e) in
-                  assert_false "WIP"
+                  error "WIP"
             end
         | GenPointer _ (Union  members) ->
             match List.lookup x members with
@@ -754,7 +752,7 @@ TODO
                   E.fail Loc.unknown (TError "§6.5.2.3#2")
               | Just ty ->
                   let _TODO = (ty, a_e) in
-                  assert_false "WIP"
+                  error "WIP"
             end
         | _ ->
             E.fail Loc.unknown (TError "§6.5.2.3#2")
@@ -845,7 +843,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail loc (TError_TODO 29)
@@ -857,7 +855,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 30)
@@ -869,7 +867,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 31)
@@ -881,7 +879,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 32)
@@ -893,7 +891,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 33)
@@ -905,7 +903,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 34)
@@ -917,7 +915,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "promotion failed on well typed binary arithmetic."
+                error "promotion failed on well typed binary arithmetic."
           end
         else E.fail Loc.unknown (TError_TODO 35)
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
@@ -928,7 +926,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "promotion failed on well typed binary arithmetic."
+                error "promotion failed on well typed binary arithmetic."
           end
         else E.fail Loc.unknown (TError_TODO 36)
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
@@ -944,7 +942,7 @@ _STD "§6.5.2.1#1" $
           | Just gty ->
               E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 37)
@@ -960,7 +958,7 @@ _STD "§6.5.2.1#1" $
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                assert_false "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes."
           end
         else
           E.fail Loc.unknown (TError_TODO 38)
@@ -1177,11 +1175,11 @@ let annotate_definition_aux A S G (ty, e) =
       
       (* STD §6.7.9#14 *)
       else if AilTypesAux.is_array_of_character ty then
-        assert_false "WIP: annotate_definition_aux, is_array_of_character ty"
+        error "WIP: annotate_definition_aux, is_array_of_character ty"
       
       (* STD §6.7.9#15 *)
       else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
-        assert_false "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
+        error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
       
           (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
@@ -1195,17 +1193,17 @@ let annotate_definition_aux A S G (ty, e) =
               if AilTypesAux.compatible elem_ty1 elem_ty2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
-                assert_false "TODO: error message: array object definition, types didn't match"
+                error "TODO: error message: array object definition, types didn't match"
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
               if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
-                assert_false "TODO: error message: array object definition, types didn't match"
+                error "TODO: error message: array object definition, types didn't match"
          | _ ->
-             assert_false "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+             error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
         end
       else
-        assert_false "WIP: annotate_definition_aux, final case"
+        error "WIP: annotate_definition_aux, final case"
   else
     (* STD §6.7.9#3 *)
     E.fail Loc.unknown (TError "§6.7.9#3")
@@ -1397,7 +1395,7 @@ let annotate_sigma A S =
         annotate_global A S glob >>= fun glob'->
         E.return (SDecl_global id glob')
     | SDecl_static_assert _ _ ->
-        assert_false "TODO"
+        error "TODO"
 (*
 TODO
         annotate_assignee A S Context.empty ty e >>= fun e' ->
