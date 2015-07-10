@@ -4,6 +4,7 @@ open Either
 open Global
 open AilSyntax
 open AilTypes
+open GenTypes
 
 open Colour
 
@@ -593,12 +594,12 @@ let pp_string_literal (pref_opt, str) =
 
 
 
-let rec pp_expression a_expr =
-  let rec pp p (AnnotatedExpression (_, loc, expr)) =
+let rec pp_expression_aux mk_pp_annot a_expr =
+  let rec pp p (AnnotatedExpression (annot, loc, expr)) =
     let p' = precedence expr in
     let pp z = P.group (pp p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)
-      (match expr with
+      (mk_pp_annot annot (match expr with
 (*
         | STRING_LITERAL lit ->
             pp_string_literal lit
@@ -631,7 +632,7 @@ let rec pp_expression a_expr =
         | AilEoffsetof (ty, ident) ->
             !^ "offsetof" ^^ P.parens (pp_ctype_raw ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
         | AilEgeneric (e, gas) ->
-            pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list pp_generic_association gas)
+            pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (ty, e_opts) ->
             P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
         | AilEstruct (tag_sym, xs) ->
@@ -690,14 +691,14 @@ let rec pp_expression a_expr =
         | PRINTF (e1, es) ->
             !^ "printf" ^^ P.parens (pp e1 ^^ P.comma ^^^ comma_list pp es)
 *)
-      ) in
+      )) in
   pp None a_expr
 
-and pp_generic_association = function
+and pp_generic_association_aux pp_annot = function
   | AilGAtype (ty, e) ->
-      pp_ctype_raw ty ^^ P.colon ^^^ pp_expression e
+      pp_ctype_raw ty ^^ P.colon ^^^ pp_expression_aux pp_annot e
   | AilGAdefault e ->
-      pp_keyword "default" ^^ P.colon ^^^ pp_expression e
+      pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
 
@@ -713,8 +714,8 @@ let pp_typed_id file name =
   pp_id name ^^ P.colon ^^^ (pp_qualifiers q $ pp_ctype t)
 *)
 
-let rec pp_statement (AnnotatedStatement (_, stmt)) =
-  let pp_statement = pp_statement in
+let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
+  let pp_statement = pp_statement_aux pp_annot in
 (*
   let nest' (_, stmt) =
     match stmt with
@@ -724,7 +725,7 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
     | AilSskip ->
         P.semi
     | AilSexpr e ->
-        pp_expression e ^^ P.semi
+        pp_expression_aux pp_annot e ^^ P.semi
     | AilSblock ([], ss) ->
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)) ^/^ P.rbrace
     | AilSblock (ids, ss) ->
@@ -736,14 +737,14 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | AilSif (e, s1, s2) ->
-        pp_keyword "if" ^^^ P.parens (pp_expression e) ^/^
+        pp_keyword "if" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^
           P.nest 2 (pp_statement s1) ^^^
         pp_keyword "else" ^/^
           pp_statement s2
     | AilSwhile (e, s) ->
-        pp_keyword "while" ^^^ P.parens (pp_expression e) ^^^ pp_statement s
+        pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e) ^^^ pp_statement s
     | AilSdo (s, e) ->
-        pp_keyword "do" ^^^ pp_statement s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression e)
+        pp_keyword "do" ^^^ pp_statement s ^^^ pp_keyword "while" ^^^ P.parens (pp_expression_aux pp_annot e)
     | AilSbreak ->
         pp_keyword "break" ^^ P.semi
     | AilScontinue ->
@@ -751,9 +752,9 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
     | AilSreturnVoid ->
         pp_keyword "return" ^^ P.semi
     | AilSreturn e ->
-        pp_keyword "return" ^^^ pp_expression e ^^ P.semi
+        pp_keyword "return" ^^^ pp_expression_aux pp_annot e ^^ P.semi
     | AilSswitch (e, s) ->
-        pp_keyword "switch" ^^^ P.parens (pp_expression e) ^/^ pp_statement s
+        pp_keyword "switch" ^^^ P.parens (pp_expression_aux pp_annot e) ^/^ pp_statement s
     | AilScase (ic, s) ->
         pp_keyword "case" ^^^ pp_integerConstant ic ^^ P.colon ^/^ pp_statement s
     | AilSdefault s ->
@@ -766,7 +767,7 @@ let rec pp_statement (AnnotatedStatement (_, stmt)) =
         P.empty
     (* TODO: looks odd *)
     | AilSdeclaration defs ->
-        comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression e) defs ^^
+        comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression_aux pp_annot e) defs ^^
         P.semi ^^^ pp_comment "// decl"
     | AilSpar ss ->
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
@@ -793,8 +794,8 @@ let pp_sigma_declaration = function
 
 
 
-let pp_static_assertion (e, lit) =
-  pp_keyword "_Static_assert" ^^ P.parens (pp_expression e ^^ P.comma ^^^ pp_stringLiteral lit)
+let pp_static_assertion pp_annot (e, lit) =
+  pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)
 
 
 let pp_tag_definition (tag, def) =
@@ -812,9 +813,9 @@ let pp_tag_definition (tag, def) =
           ) ^^ P.break 1
         ) ^^ P.semi
 
-let pp_program (startup, sigm) =
+let pp_program pp_annot (startup, sigm) =
   isatty := Unix.isatty Unix.stdout;
-  P.separate_map (P.break 1 ^^ P.break 1) pp_static_assertion sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   (* Tag declarations *)
   P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions0 ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
@@ -835,7 +836,7 @@ let pp_program (startup, sigm) =
           pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^
 
           P.optional (fun e ->
-            P.equals ^^^ pp_expression e
+            P.equals ^^^ pp_expression_aux pp_annot e
           ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi ^^
           P.break 1 ^^ P.hardline ^^ acc
       
@@ -863,7 +864,7 @@ let pp_program (startup, sigm) =
                       else
                         P.empty
                     ) ^^^
-                    pp_statement stmt
+                    pp_statement_aux pp_annot stmt
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty) ->
@@ -880,3 +881,70 @@ let pp_program (startup, sigm) =
           )  ^^
           P.break 1 ^^ P.hardline ^^ acc
     ) P.empty (List.rev sigm.declarations) ^^ P.break 1
+
+
+
+
+let rec pp_genIntegerType = function
+ | Concrete ity ->
+     !^ "Concrete" ^^ P.brackets (pp_integerType ity)
+ | SizeT ->
+     !^ "SizeT"
+ | PtrdiffT ->
+     !^ "PtrdiffT"
+ | Unknown iCst ->
+     !^ "Unknown" ^^ P.brackets (pp_integerConstant iCst)
+ | Promote gity ->
+     !^ "Promote" ^^ P.brackets (pp_genIntegerType gity)
+ | Usual (gity1, gity2) ->
+     !^ "Usual" ^^ P.brackets (pp_genIntegerType gity1 ^^ P.comma ^^^ pp_genIntegerType gity2)
+
+
+
+let pp_genBasicType = function
+ | GenInteger gity ->
+     pp_genIntegerType gity
+ | GenFloating fty ->
+     pp_floatingType fty
+
+let pp_genType = function
+ | GenVoid ->
+     !^ "GenVoid"
+ | GenBasic gbty ->
+     pp_genBasicType gbty
+  | GenArray (ty, None) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
+  | GenArray (ty, Some n) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
+
+     
+ | GenFunction (ty, params, is_variadic) ->
+      !^ "GenFunction" ^^ P.brackets (comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
+                                   !^ (if is_variadic then "true" else "false"))
+
+ | GenPointer (ref_qs, ref_ty) ->
+      !^ "GenPointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
+  | GenStruct sym ->
+      !^ "GenStruct" ^^ pp_id sym
+  | GenUnion sym ->
+      !^ "GenUnion" ^^ pp_id sym
+  | GenAtomic ty ->
+      !^ "GenAtomic" ^^ pp_ctype_raw ty
+  | GenBuiltin str ->
+      !^ "GenBuiltin" ^^ P.brackets (!^ str)
+
+
+let pp_genTypeCategory = function
+ | GenLValueType (qs, ty) ->
+     !^ "GenLValueType" ^^ P.brackets (pp_qualifiers qs P.comma ^^^ pp_ctype_raw ty)
+ | GenRValueType gty ->
+     !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
+
+
+
+
+
+let pp_expression e = pp_expression_aux (fun _ d -> d) e
+let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
+let pp_statement s = pp_statement_aux (fun _ d -> d) s
+let pp_program_with_annot prog = pp_program (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z) prog

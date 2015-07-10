@@ -63,6 +63,15 @@ let mapM_ f _as = sequence_ (List.map f _as)
 
 
 
+val     foldM: forall 'a 'b 's. ('a -> 'b -> t 'a 's) -> 'a -> list 'b -> t 'a 's
+let rec foldM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      bind (f a x) (fun z -> foldM f z xs)
+end
+
+
 val get: forall 's. t 's 's
 let get =
   fun st -> (st, st)
@@ -70,3 +79,5 @@ let get =
 val put: forall 's. 's -> t unit 's
 let put st =
   fun _ -> ((), st)
+
+

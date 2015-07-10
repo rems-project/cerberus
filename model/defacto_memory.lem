@@ -1240,7 +1240,7 @@ let integer_ival n =
 
 
 let op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
-  IV (prov_union prov1 prov2) (IVop iop [ival_1; ival_2])
+  IV (prov_union prov1 prov2) (simplify_integer_value_aux (IVop iop [ival_1; ival_2]))
 
 let case_integer_value (IV _ ival) fint fother =
   match ival with

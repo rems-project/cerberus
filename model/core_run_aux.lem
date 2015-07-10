@@ -1,5 +1,6 @@
 open import Pervasives
 open import Global Show Core Driver_util
+import Boot
 
 
 type core_run_error =
@@ -132,3 +133,49 @@ let rec add_to_sb_stack p_aids = function
   | Stack_cons cont sk ->
       Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
 end
+
+
+
+
+
+val     comma_list: forall 'a. ('a -> string) -> list 'a -> string
+let rec comma_list f = function
+  | [] ->
+      ""
+  | x::xs ->
+      f x ^ ", " ^ comma_list f xs
+end
+ 
+
+let mk_string_of_continuation_element = function
+  | Kunseq es1 es2 ->
+      fun z ->
+        "unseq(" ^ comma_list Boot.pp_core_expr es1 ^ ", " ^ z ^ ", " ^
+                   comma_list Boot.pp_core_expr es2 ^ ")"
+  | Kwseq sym_opts e2 ->
+      fun z ->
+        "let weak SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+  | Ksseq sym_opts e2 ->
+      fun z ->
+        "let strong SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+end
+
+let rec string_of_continuation cont =
+  match cont with
+    | [] ->
+        "[]"
+    | elem::cont' ->
+        mk_string_of_continuation_element elem (string_of_continuation cont')
+  end
+
+
+let rec string_of_stack_aux sk =
+  match sk with
+    | Stack_empty ->
+        ""
+    | Stack_cons cont sk' ->
+        string_of_continuation cont ^ "; " ^ string_of_stack_aux sk'
+  end
+
+let string_of_stack sk =
+  "[" ^ string_of_stack_aux sk ^ "]"

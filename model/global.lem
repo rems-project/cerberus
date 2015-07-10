@@ -318,3 +318,15 @@ let rec list_index_update n f = function
       else
         x :: (list_index_update (n-1) f xs)
 end
+
+
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> list (list 'a * 'a * list 'a)
+let rec _pickWith pred acc = function
+  | [] ->
+      []
+  | x::xs ->
+      (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
+        _pickWith pred (x::acc) xs
+end
+let pickWith pred xs =
+  _pickWith pred [] xs
