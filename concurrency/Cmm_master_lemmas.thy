@@ -2,7 +2,7 @@ theory "Cmm_master_lemmas"
 
 imports 
 Main
-"_bin/Cmm_csem"
+"lib/Cmm_csem"
 begin
 
 section {* Auxiliaries *}
