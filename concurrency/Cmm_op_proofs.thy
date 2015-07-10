@@ -3,7 +3,7 @@ theory Cmm_op_proofs
 
 imports
 Main
-"_bin/Cmm_op"
+"lib/Cmm_op"
 Cmm_master_lemmas
 Nondeterminism_lemmas  
 begin
