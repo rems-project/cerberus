@@ -1,0 +1,23 @@
+all: top
+
+ail:
+	ott -tex_wrap false ail.ott common.ott -o ail.tex
+	xelatex top_ail.tex
+
+core:
+	ott -tex_wrap false ail.ott core.ott common.ott -o core.tex
+	xelatex -interaction=nonstopmode top_core.tex
+
+core2:
+	ott ail2.ott core2.ott common2.ott -o core2.tex
+	xelatex -interaction=nonstopmode core2.tex
+
+top:
+	sh hack
+	ott -tex_wrap false translation_tmp.ott ail.ott core.ott common.ott -o core.tex
+	xelatex -interaction=nonstopmode top.tex
+
+clean:
+	rm -f ail.tex core.tex
+	rm -f *.aux *.log *.out *.toc
+

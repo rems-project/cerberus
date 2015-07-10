@@ -1,0 +1,476 @@
+open import Pervasives String_extra Global
+import Symbol AilTypes Implementation_ Undefined Cmm_csem
+import Mem
+
+open import Thread Core_ctype
+
+module Cmm = Cmm_csem
+
+
+(* -- Syntax ---------------------------------------------------------------- *)
+type handler_event =
+  string (* TODO: fixed ctors? *)
+
+
+
+type core_base_type =
+  | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
+  | BTy_boolean
+  | BTy_pointer
+  | BTy_ctype
+  | BTy_cfunction
+  | BTy_unit
+  | BTy_list of core_base_type
+  | BTy_tuple of list core_base_type
+  | BTy_any
+
+(* Types discriminate between pure (TyBase) and effectful
+   expressions (TyEffect) *)
+type core_type =
+  | TyBase   of core_base_type
+  | TyEffect of core_base_type
+
+
+(* Symbolic names *)
+type sym = Symbol.t
+
+(* Continuation names *)
+type ksym = Symbol.t
+
+(* Binary operators *)
+type binop =
+  (* arithmetic operators *)
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpMod
+  | OpExp
+  (* relational operators *)
+  | OpEq
+  | OpGt
+  | OpLt
+  | OpGe
+  | OpLe
+  (* logical connectives *)
+  | OpAnd
+  | OpOr
+
+instance (Eq binop)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show binop)
+  let show op = 
+    match op with
+    | OpAdd -> "OpAdd"
+    | OpSub -> "OpSub"
+    | OpMul -> "OpMul"
+    | OpDiv -> "OpDiv"
+    | OpMod -> "OpMod"
+    | OpEq  -> "OpEq"
+    | OpLt  -> "OpLt"
+    | OpAnd -> "OpAnd"
+    | OpOr  -> "OpOr"
+    end
+end
+
+
+(* Polarity for actions *)
+type polarity =
+  | Pos
+  | Neg
+
+type name =
+  | Sym of sym
+  | Impl of Implementation_.implementation_constant
+declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
+
+let nameEquality n1 n2 =
+  match (n1, n2) with
+  | (Sym s1, Sym s2)   -> s1 = s2
+  | (Sym _, _)         -> false
+  | (Impl i1, Impl i2) -> i1 = i2
+  | (Impl _, _)        -> false
+  end
+
+instance (Eq name)
+  let (=)  = nameEquality
+  let (<>) = fun n1 n2 -> not (nameEquality n1 n2)
+end
+
+instance (Show name)
+  let show n =
+    match n with
+    | Sym sym -> "Sym (" ^ show sym ^ ")"
+    | Impl i  -> "Impl (?)" (* TODO *)
+    end
+end
+
+
+
+(*
+type pointer_action =
+  | PtrEq
+  | PtrNe
+  | PtrShift
+*)
+
+
+(* TODO: think about that *)
+(*
+type shift_path =
+  | ShiftArray of nat
+  | ShiftMember of Symbol.t * Cabs.cabs_identifier (* tag sym, member id *)
+*)
+(*  *)
+
+(* Core values *)
+type value =
+  | Vunit
+  | Vtrue | Vfalse
+  | Vlist of list value
+  | Vtuple of list value
+  | Vctype of ctype
+(*  | Vconst of Mem.mem_value *)
+  | Vsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+  
+  | Vunspecified of ctype
+  | Vinteger of Mem.integer_value
+  | Vfloating of string
+  | Vpointer of Mem.pointer_value
+  | Varray of list value (* Mem.mem_value *)
+  | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
+  | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
+
+
+(* pure Core expressions *)
+type pexpr =
+  (* undefined behaviour and late static error / failed assert *)
+  | PEundef of Undefined.undefined_behaviour
+  | PEerror of string
+
+  (* values *)
+  | PEval of value
+  (* names *)
+  | PEsym of sym
+  | PEimpl of Implementation_.implementation_constant
+  (* list (de|con)structors *)
+  | PEcons of pexpr * pexpr
+  | PEcase_list of pexpr * pexpr * name
+  (* ctype destructor, the arguments are: ctype to destruct, constant
+       in void case, name of functions to call for the remaining cases:
+       basic, array, function, pointer, atomic, struct, union, builtin *)
+  | PEcase_ctype of pexpr * pexpr * name * name * name * name *
+                    name * name * name * name
+  (* operators on pointer values *)
+(*  | PEshift of pexpr * shift_path *)
+  | PEarray_shift of pexpr * ctype * pexpr
+  | PEmember_shift of pexpr * Symbol.t * Cabs.cabs_identifier
+
+
+  (* operators on integers *)
+  | PEnot of pexpr
+  | PEop of binop * pexpr * pexpr
+  (* pure operations provide by the memory layout model *)
+  | PEmemop of Mem.pure_memop * list pexpr
+  (* these two are annoying *)
+  | PEtuple of list pexpr
+(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
+  | PEarray of list pexpr
+  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
+  (* call to a pure function *)
+  | PEcall of name * list pexpr
+  
+  | PElet of sym * pexpr * pexpr
+  | PEif of pexpr * pexpr * pexpr
+  
+  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  | PEis_scalar of pexpr
+  | PEis_integer of pexpr
+  | PEis_signed of pexpr
+  | PEis_unsigned of pexpr
+
+
+and shift_path =
+  list (ctype * pexpr)
+
+
+type expr 'a =
+  (* pure expression *)
+  | Epure of pexpr
+  
+  (* operations (that either require sequencing or are ND) provide by the memory layout model *)
+  | Ememop of Mem.memop * list pexpr
+  
+  (* these two are too deal with C signals *)
+  | Eraise of handler_event
+  | Eregister of handler_event * name
+  
+  (* potentialy effectful *)
+  | Eskip
+  | Elet of sym * pexpr * expr 'a
+  | Eif of pexpr * expr 'a * expr 'a
+  | Eproc of 'a * name * list pexpr
+  | Eaction of paction 'a
+  
+  (* sequencing operators *)
+  | Eunseq of list (expr 'a)
+
+  | Ewseq of list (maybe sym) * expr 'a * expr 'a
+  | Esseq of list (maybe sym) * expr 'a * expr 'a
+  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  
+  (* indeterminately-sequenced expressions and boundary *) 
+  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of nat * expr 'a (* this ctor doesn't exist at runtine *)
+  
+  (* Continuation operators *)
+  (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
+  | Esave of ksym * list (sym * ctype) * expr 'a
+  | Erun of 'a * ksym * list (sym * pexpr)
+  
+  | Eret of pexpr
+  
+  (* Non deterministic choice (resulting from indet expressions) *)
+  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
+  | End of list (expr 'a)
+  
+  (* Thread operators *)
+  (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
+  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
+  | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+  
+
+
+(*
+type expr 'a =
+  (* values *)
+(*  | Eval of value *)
+  | Eunit
+  | Etrue | Efalse
+  | Elist of list (expr 'a)
+  
+  (* pure expressions *)
+  
+
+  | Econs of expr 'a * expr 'a
+  | Ecase_list of expr 'a * name * name
+  
+  | Econst of Mem.mem_value (* TODO: need to add an "indet value of type ty" *)
+  | Ectype of ctype
+  | Esym of sym
+  | Eimpl of Implementation_.implementation_constant
+  | Etuple of list (expr 'a)
+  | Enot of expr 'a
+  | Eop of binop * expr 'a * expr 'a
+  | Ecall of name * list (expr 'a)
+  
+  | Earray of list (either Mem.mem_value sym) (* TODO: this is just wrong *)
+  
+  (* TODO: think about this (this is pure) *)
+(*  | Eshift of expr 'a * shift_path *)
+  | Eshift of expr 'a * shift_path 'a
+  
+  
+  (* TODO: hack *)
+  | Ecase of expr 'a * name * name * name * name * name * name * name * name * name
+  
+  (* I/O operations *)
+  | Eoutput of string
+  
+  (* undefined behaviour and late static error / failed assert *)
+  | Eundef of Undefined.undefined_behaviour
+  | Eerror of string
+  
+  (* TODO: thing better about these two *)
+  (* TODO: use something other than string *)
+  | Eraise of handler_event (* correspond to the raising of C signal and friends (e.g. exit) *)
+  | Eregister of handler_event * name (* this is for C signal handler registration and friends, the name is that of the procedure to call *)
+(*  | Etry of expr 'a * list (string * expr 'a) *)
+  
+  (* potentialy effectful *)
+  | Eskip
+  | Elet of sym * expr 'a * expr 'a
+  | Eif of expr 'a * expr 'a * expr 'a
+  | Eproc of 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
+  | Eaction of paction 'a
+  
+  (* sequencing operators *)
+  | Eunseq of list (expr 'a)
+
+  | Ewseq of list (maybe sym) * expr 'a * expr 'a
+  | Esseq of list (maybe sym) * expr 'a * expr 'a
+  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  
+  (* indeterminately-sequenced expressions and boundary *) 
+  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of nat * expr 'a (* this ctor doesn't exist at runtine *)
+  
+  (* Continuation operators *)
+  (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
+  | Esave of ksym * list (sym * ctype) * expr 'a
+  | Erun of 'a * ksym * list (sym * expr 'a)
+  
+  | Eret of expr 'a
+  
+  (* Non deterministic choice (resulting from indet expressions) *)
+  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
+  | End of list (expr 'a)
+  
+  (* Thread operators *)
+  (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
+  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
+  | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+
+
+
+(* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  | Eis_scalar of expr 'a
+  | Eis_integer of expr 'a
+  | Eis_signed of expr 'a
+  | Eis_unsigned of expr 'a
+
+and shift_path 'a =
+  list (ctype * expr 'a) (* the expression must be a pure integer expression *)
+*)
+
+
+
+
+
+
+(* the qualification prefixes are for pprint *)
+and action_ =
+  | Create of pexpr * pexpr * list Symbol.t (* the expr arguments are: alignment requirement, effective type *)
+  | Alloc of pexpr * pexpr * list Symbol.t  (* the expr arguments are: alignment requirement, space size *)
+  | Kill of pexpr
+  | Store of pexpr * pexpr * pexpr * Cmm.memory_order
+  | Load of pexpr * pexpr * Cmm.memory_order
+  | CompareExchangeStrong of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
+  
+  (* TODO: it annoying (maybe wrong) that these are actions *)
+(*  | Ptr of pointer_action * list pexpr *)
+
+and action 'a  = Action of 'a * action_
+and paction 'a = Paction of polarity * action 'a
+
+
+(* TODO: fill in the '?' *)
+
+(*
+val expr_to_string: forall 'a. expr 'a -> string
+let rec expr_to_string e =
+  match e with
+  | Eunit           -> "Eunit"
+  | Etrue           -> "Etrue"
+  | Efalse          -> "Efalse"
+  | Econst m        -> "Econst (" ^ show m ^ ")"
+  | Elist l         -> "Elist " ^ Show.stringFromList expr_to_string l
+  | Ectype t        -> "Ectype (?)"
+  | Esym sym        -> "Esym (" ^ show sym ^ ")"
+  | Eimpl i         -> "Eimpl (?)"
+  | Etuple l        -> "Etuple " ^ Show.stringFromList expr_to_string l
+  | Enot e2         -> "Enot (" ^ expr_to_string e2 ^ ")"
+  | Eop op e1 e2    -> "Eop (" ^ show op ^ ", " ^ expr_to_string e1 ^ ", " ^ expr_to_string e2 ^ ")"
+  | Ecall n l       -> "Ecall (" ^ show n ^ ", " ^ Show.stringFromList expr_to_string l ^ ")"
+  | Eoutput s       -> "Eoutput " ^ show s 
+  | Eundef un       -> "Eundef (" ^ show un ^ ")"
+  | Eerror str          -> "Eerror " ^ show str
+  | Eskip           -> "Eskip"
+  | Elet sym e1 e2  -> "Elet (?)"
+  | Eif e1 e2 e3    -> "Eif (?)"
+  | Eproc an n l    -> "Eproc (?)" 
+  | Eaction pa      -> "Eaction (?)"
+  | Eunseq l        -> "Eunseq (?)"
+  | Ewseq l e1 e2   -> "Ewseq (?)"
+  | Esseq l e1 e2   -> "Esseq (?)"
+  | Easeq sym a pa  -> "Easeq (?)" 
+  | Eindet e2       -> "Eindet (?)" 
+  | Ebound n e2     -> "Ebound (?)" 
+  | Esave ksym l e2 -> "Esave (?)"
+  | Erun an ksym l  -> "Erun (?)"
+  | Eret e2         -> "Eret (" ^ expr_to_string e2 ^ ")"
+  | End l           -> "End (?)"
+  | Epar l          -> "Epar (?)" 
+  | Ewait tid       -> "Ewait (?)"
+  | Eis_scalar e2   -> "Eis_scalar (?)"
+  | Eis_integer e2  -> "Eis_integer (?)"
+  | Eis_signed e2   -> "Eis_signed (?)"
+  | Eis_unsigned e2 -> "Eis_unsigned (?)"
+  end
+*)
+
+instance forall 'a. (Show expr 'a)
+  let show = fun _ -> "WIP: show Core.expr"
+end
+
+
+
+
+
+
+(* TODO: don't we need any impl proc? *)
+type impl_decl =
+  | Def  of core_base_type * pexpr
+  | IFun of core_base_type * list (sym * core_base_type) * pexpr
+type impl = map Implementation_.implementation_constant impl_decl
+
+
+type fun_map_decl 'a =
+  | Fun  of core_base_type * list (sym * core_base_type) * pexpr
+  | Proc of core_base_type * list (sym * core_base_type) * expr 'a
+
+type fun_map 'a = map sym (fun_map_decl 'a)
+
+
+(* a Core file is just a set of named functions *)
+type file 'a = <|
+  main   : sym;
+  stdlib : fun_map 'a;
+  impl   : impl;
+  globs  : list (sym * core_type * expr 'a);
+  funs   : fun_map 'a;
+  
+  tagDefinitions: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype));
+|>
+declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
+
+
+
+
+
+
+
+
+
+(* runtime stuff *)
+
+type continuation_element 'a =
+  | Kunseq of list (expr 'a) * list (expr 'a)
+  | Kwseq  of list (maybe sym) * expr 'a
+  | Ksseq  of list (maybe sym) * expr 'a
+(*  | Ktry   of list (string * expr 'a) *)
+
+
+type continuation 'a = list (continuation_element 'a)
+
+
+type labeled_continuation 'a = list (sym * ctype) * expr 'a
+
+
+type stack 'a =
+  | Stack_empty
+  | Stack_cons of continuation 'a * stack 'a
+
+
+
+
+
+
+(* basic class instanciations *)
+instance (SetType polarity)
+  let setElemCompare = defaultCompare
+end

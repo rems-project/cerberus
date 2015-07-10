@@ -1,0 +1,346 @@
+open import Pervasives Global Show
+import Symbol (* Symbolic *) AilTypes
+
+
+(*
+val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
+declare ocaml target_rep function string_of_ail_ctype = `String_ail.string_of_ctype`
+
+val string_of_ail_qualifiers_human: forall 'a. 'a (* AilTypes.qualifiers *) -> string
+declare ocaml target_rep function string_of_ail_qualifiers_human = `String_ail.string_of_qualifiers_human`
+*)
+
+
+
+(* C types (this is a simplication of what is need for typechecking) *)
+(* TODO: what about Ail.ATOMIC_Q ? *)
+
+type struct_tag = Symbol.t
+type union_tag  = Symbol.t
+type member_id  = Symbol.t
+
+
+
+type modifiable =
+  | Modifiable_yes
+  | Modifiable_no
+
+instance (Eq modifiable)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+(* TODO: no volatile for now *)
+type ctype =
+ | Void
+ | Basic of AilTypes.basicType
+ | Array of ctype * maybe integer
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of AilTypes.qualifiers * ctype
+ | Atomic of ctype
+(*
+TODO: it should be like that
+ | Struct of struct_tag * list (member_id * modifiable * ctype)
+ | Union  of union_tag * list (member_id * modifiable * ctype)
+*)
+ | Struct of struct_tag
+ | Union  of union_tag
+ | Builtin of string
+
+
+(*
+let rec string_of_ctype ty =
+  match ty with
+   | Void ->
+       "Void"
+   | Basic bty ->
+       string_of_ail_ctype (AilTypes.Basic bty)
+   | Array ty n_opt ->
+       "Array[" ^ string_of_ctype ty ^ ", " ^ show n_opt ^ "]"
+   | Function ty qs_tys b ->
+       "Function[" ^ string_of_ctype ty ^ ", " ^ string_of_list (string_of_pair string_of_ail_qualifiers_human string_of_ctype) qs_tys ^
+       ", " ^ show b ^ "]"
+   | Pointer qs ty ->
+       "Pointer[" ^ string_of_ail_qualifiers_human qs ^ ", " ^ string_of_ctype ty ^ "]"
+   | Atomic ty ->
+       "Atomic[" ^ string_of_ctype ty ^ "]"
+   | Struct _ _ ->
+       (* TODO *)
+       "STRUCT[TODO]"
+   | Union  _ _ ->
+       (* TODO *)
+       "STRUCT[UNION]"
+   | Builtin str ->
+       "Builtin[" ^ str ^ "]"
+  end
+
+instance (Show ctype)
+  let show = string_of_ctype
+end
+*)
+
+
+
+
+val char: ctype
+let char =
+  Basic (AilTypes.Integer AilTypes.Char)
+
+val signed_int: ctype
+let signed_int =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_))
+
+
+val char16_t: ctype
+let char16_t =
+  (* STD §7.28#2 *)
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least16_t")))
+
+val char32_t: ctype
+let char32_t =
+  (* STD §7.28#2 *)
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least32_t")))
+
+val builtin_signed_integer_type: string -> ctype
+let builtin_signed_integer_type str =
+  Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin str)))
+
+val builtin_unsigned_integer_type: string -> ctype
+let builtin_unsigned_integer_type str =
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin str)))
+
+
+  (* this alignment is the default for the type unless overridden by
+  _Alignas, eg "_Alignas(int32_t) int16_t i", in which case it's that *)
+
+
+(* choice: do we have a layout environment or do we duplicate the info
+in every ctype? For the former:
+
+
+-  somewhere for every base type, there has to be the default (maybe impl-def) alignment and size 
+
+type layout_environment = 
+  (* for every structure member_id, the offset *)
+  
+
+then given those, we should be able to define a Lem function from ctype to calculate:
+
+- its alignment
+- its size
+- its footprint (a list of offset,size pairs)
+
+
+For the latter, we have to add more stuff into ctype.
+*)
+
+
+let rec ctypeEqual ty1 ty2 =
+  let paramsEqual (qs1, ty1) (qs2, ty2) =
+    qs1 = qs2 && ctypeEqual ty1 ty2 in
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1_opt, Array ty2 n2_opt) ->
+        ctypeEqual ty1 ty2 && n1_opt = n2_opt
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip tys1 tys2) && b1 = b2
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        qs1 = qs2 &&
+        ctypeEqual ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+        ctypeEqual ty1 ty2
+(*
+    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEqual ty1 ty2
+        ) (zip membrs1 membrs2)
+    | (Union tag1 membrs1, Union tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
+          mem1 = mem2 &&
+          m1 = m2 &&
+          ctypeEqual ty1 ty2
+        ) (zip membrs1 membrs2)
+*)
+    | (Struct tag1, Struct tag2) ->
+        tag1 = tag2
+    | (Union tag1, Union tag2) ->
+        tag1 = tag2
+(*
+    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((ident1, ty1), (ident2, ty2)) ->
+          ident1 = ident2 &&
+          ctypeEqual ty1 ty2
+        ) (zip membrs1 membrs2)
+    | (Union tag1 membrs1, Union tag2 membrs2) ->
+        tag1 = tag2 &&
+        List.all (fun ((ident1, ty1), (ident2, ty2)) ->
+          ident1 = ident2 &&
+          ctypeEqual ty1 ty2
+        ) (zip membrs1 membrs2)
+*)
+    | (Builtin str1, Builtin str2) ->
+        str1 = str2
+    | _ -> false
+  end
+
+instance (Eq ctype)
+  let (=) = ctypeEqual
+  let (<>) x y = not (ctypeEqual x y)
+end
+
+(*
+instance (Ord ctype)
+  let compare ty1 ty2 = LT (* TODO !!! *)
+end
+*)
+
+
+(*
+val ctype_to_nat : ctype -> nat
+let ctype_to_nat = function
+ | Void           -> 0
+ | Basic _        -> 1
+ | Array _ _      -> 2
+ | Function _ _ _ -> 3
+ | Pointer _      -> 4
+ | Atomic _       -> 5
+end
+
+let rec setElemCompare_ctype ty1 ty2 =
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        EQ
+    | (Basic bty1, Basic bty2) ->
+        setElemCompare bty1 bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        pairCompare setElemCompare_ctype setElemCompare (ty1, n1) (ty2, n2)
+    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
+        pairCompare setElemCompare_ctype (pairCompare (lexicographicCompareBy setElemCompare_ctype) setElemCompare)
+          (ty1, (tys1, b1)) (ty2, (tys2, b2))
+    | (Pointer ty1, Pointer ty2) ->
+        setElemCompare_ctype ty1 ty2
+    | (Atomic ty1, Atomic ty2) ->
+         setElemCompare_ctype ty1 ty2
+    | (_, _) ->
+        setElemCompare (ctype_to_nat ty1) (ctype_to_nat ty2)
+  end
+*)
+
+let rec setElemCompare_ctype_aux qs_tys1 qs_tys2 =
+  match (qs_tys1, qs_tys2) with
+    | ([], []) ->
+        EQ
+    | ([], _) ->
+        LT
+    | (_, []) ->
+        GT
+    | (((qs1, ty1) :: qs_tys1'), ((qs2, ty2) :: qs_tys2')) ->
+        match setElemCompare qs1 qs2 with
+          | EQ ->
+              match setElemCompare_ctype ty1 ty2 with
+                | EQ ->
+                    setElemCompare_ctype_aux qs_tys1' qs_tys2'
+                | x ->
+                  x
+              end
+          | x ->
+              x
+        end
+  end
+
+and setElemCompare_ctype ty1 ty2 =
+  let ord = function
+    | Void ->
+        (0: nat)
+    | Basic _ ->
+        1
+    | Array _ _ ->
+        2
+    | Function _ _ _ ->
+        3
+    | Pointer _ _ ->
+        4
+    | Atomic _ ->
+        5
+    | Struct _ ->
+        6
+    | Union _ ->
+        7
+    | Builtin _ ->
+        9
+  end in
+  match (ty1, ty2) with
+    | (Basic bty1, Basic bty2) ->
+        setElemCompare bty1 bty2
+    | (Array elem_ty1 n_opt1, Array elem_ty2 n_opt2) ->
+        match setElemCompare_ctype elem_ty1 elem_ty2 with
+          | EQ ->
+              setElemCompare n_opt1 n_opt2
+          | x ->
+              x
+        end
+    | (Function ret_ty1' qs_tys1 b1, Function ret_ty2' qs_tys2 b2) ->
+        match setElemCompare_ctype ret_ty1' ret_ty2' with
+          | EQ ->
+              match setElemCompare_ctype_aux qs_tys1 qs_tys2 with
+                | EQ ->
+                    setElemCompare b1 b2
+                | x ->
+                    x
+              end
+          | x ->
+              x
+        end
+    | (Pointer qs1 ty1', Pointer qs2 ty2') ->
+        match setElemCompare qs1 qs2 with
+          | EQ ->
+              setElemCompare_ctype ty1' ty2'
+          | x ->
+              x
+        end
+    | (Atomic ty1', Atomic ty2') ->
+        setElemCompare_ctype ty1' ty2'
+    | (Struct sym1, Struct sym2) ->
+        setElemCompare sym1 sym2
+    | (Union sym1, Union sym2) ->
+        setElemCompare sym1 sym2
+    | (Builtin str1, Builtin str2) ->
+        setElemCompare str1 str2
+    
+    | _ ->
+        setElemCompare (ord ty1) (ord ty2)
+  end
+
+
+instance (SetType ctype)
+  let setElemCompare = setElemCompare_ctype
+end
+
+
+
+
+val is_atomic: ctype -> bool
+let is_atomic = function
+ | Atomic _ ->
+     true
+ | _ ->
+     false
+end
+
+
+val unatomic: ctype -> ctype
+let unatomic = function
+  | Atomic ty ->
+      ty
+  | ty ->
+      ty
+end

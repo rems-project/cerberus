@@ -1,0 +1,415 @@
+-- auto-generated implementation file for: `gcc_4.9.0_x86_64-apple-darwin10.8.0'
+
+def <bits_in_byte> : integer :=
+  8
+
+
+fun ctype_min_void () : integer :=
+  error <<<ctype_min>>> -- TODO
+
+fun ctype_min_basic (ty: ctype) : integer :=
+  if ty = "char" \/ ty = "signed ichar" \/ ty = "int8_t" then
+    -128
+  else if    ty = "_Bool" \/ ty = "unsigned ichar" \/ ty = "unsigned short" \/ ty = "unsigned int"
+          \/ ty = "unsigned long" \/ ty = "unsigned long_long" \/ ty = "uint8_t" \/ ty = "uint16_t"
+          \/ ty = "uint32_t" \/ ty = "uint64_t"
+          \/ ty = "uintptr_t" \/ ty = "size_t" then
+    0
+  else if ty = "signed short" \/ ty = "int16_t" then
+    -32768
+  else if ty = "signed int" \/ ty = "int32_t" then
+    -2147483648
+  else if    ty = "signed long" \/ ty = "signed long_long" \/ ty = "int64_t"
+          \/ ty = "intptr_t" \/ ty = "ptrdiff_t" then
+    -9223372036854775808
+  else
+    error <<<ctype_min>>> -- TODO
+  end end end end end
+
+fun ctype_min_array (ty: ctype, n: integer) : integer :=
+  <ctype_min>(ty)
+
+fun ctype_min_pointer (ty: ctype) : integer :=
+  <ctype_min>(ty)
+
+fun ctype_min_atomic (ty: ctype) : integer :=
+  <ctype_min>(ty)
+
+
+fun <ctype_min> (ty: ctype) : integer :=
+  case_ctype ( ty,
+    ctype_min_void(), ctype_min_basic, ctype_min_array,
+    ctype_min_void {- HACK -}, ctype_min_pointer, ctype_min_atomic,
+    ctype_min_void {- HACK -}, ctype_min_void {- HACK -}, ctype_min_void {- HACK -}
+  )
+
+
+{-
+fun bar(n: integer) : integer :=
+  case_ctype ( "signed int", foo, foo, foo, foo, foo, foo, foo, foo, foo )
+-}
+
+
+{-
+fun <ctype_min> (ty: ctype) : integer :=
+  if ty = "char" then
+    -128
+  else
+    if ty = "_Bool" then
+      0 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        -128
+      else
+        if ty = "unsigned ichar" then
+          0
+        else
+          if ty = "signed short" then
+            -32768
+          else
+            if ty = "unsigned short" then
+              0
+            else
+              if ty = "signed int" then
+                -2147483648
+              else
+                if ty = "unsigned int" then
+                  0
+                else
+                  if ty = "signed long" then
+                    -9223372036854775808
+                  else
+                    if ty = "unsigned long" then
+                      0
+                    else
+                      if ty = "signed long_long" then
+                        -9223372036854775808
+                      else
+                        if ty = "unsigned long_long" then
+                          0
+                        else
+                          if ty = "int8_t" then
+                            -128
+                          else
+                            if ty = "int16_t" then
+                              -32768
+                            else
+                              if ty = "int32_t" then
+                                -2147483648
+                              else
+                                if ty = "int64_t" then
+                                  -9223372036854775808
+                                else
+                                  if ty = "uint8_t" then
+                                    0
+                                  else
+                                    if ty = "uint16_t" then
+                                      0
+                                    else
+                                      if ty = "uint32_t" then
+                                        0
+                                      else
+                                        if ty = "uint64_t" then
+                                          0
+                                        else
+
+if ty = "_Atomic(signed int)" then
+  -2147483648  else
+
+                                          error <<<ctype_min>>> -- TODO
+end
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+-}
+
+fun ctype_max_void () : integer :=
+  error <<<ctype_max>>> -- TODO
+
+
+fun ctype_max_basic (ty: ctype) : integer :=
+  if ty = "char" then
+    127
+  else
+    if ty = "_Bool" then
+      1 -- TODO: check
+    else
+      if ty = "signed ichar" then
+        127
+      else
+        if ty = "unsigned ichar" then
+          255
+        else
+          if ty = "signed short" then
+            32767
+          else
+            if ty = "unsigned short" then
+              65535
+            else
+              if ty = "signed int" then
+                2147483647
+              else
+                if ty = "unsigned int" then
+                  4294967295
+                else
+                  if ty = "signed long" then
+                    9223372036854775807
+                  else
+                    if ty = "unsigned long" then
+                      18446744073709551615
+                    else
+                      if ty = "signed long_long" then
+                        9223372036854775807
+                      else
+                        if ty = "unsigned long_long" then
+                          18446744073709551615
+                        else
+                          if ty = "int8_t" then
+                            127
+                          else
+                            if ty = "int16_t" then
+                              32767
+                            else
+                              if ty = "int32_t" then
+                                2147483647
+                              else
+                                if ty = "int64_t" then
+                                  9223372036854775807
+                                else
+                                  if ty = "uint8_t" then
+                                    255
+                                  else
+                                    if ty = "uint16_t" then
+                                      65535
+                                    else
+                                      if ty = "uint32_t" then
+                                        4294967295
+                                      else
+                                        if ty = "uint64_t" \/ ty = "size_t" then
+                                          18446744073709551615
+                                        else
+if ty = "_Atomic(signed int)" then
+  2147483647  else
+                                          error <<<ctype_max>>> -- TODO
+end
+                                        end
+                                      end
+                                    end
+                                  end
+                                end
+                              end
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+{-
+  if ty = "char" then
+    127
+  else if ty = "_Bool" then
+    1 -- TODO: check
+  else if ty = "signed ichar" then
+    127
+  else if ty = "unsigned ichar" then
+    255
+  else if ty = "signed short" then
+    32767
+  else if ty = "unsigned short" then
+    65535
+  else if ty = "signed int" then
+    2147483647
+  else if ty = "unsigned int" then
+    4294967295
+  else if ty = "signed long" then
+    9223372036854775807
+  else if ty = "unsigned long" then
+    18446744073709551615
+  else if ty = "signed long_long" then
+    9223372036854775807
+  else if ty = "unsigned long_long" then
+    18446744073709551615
+  else
+    error -- TODO
+-}
+
+
+fun ctype_max_array (ty: ctype, n: integer) : integer :=
+  <ctype_max>(ty)
+
+fun ctype_max_pointer (ty: ctype) : integer :=
+  <ctype_max>(ty)
+
+fun ctype_max_atomic (ty: ctype) : integer :=
+  <ctype_max>(ty)
+
+
+fun <ctype_max> (ty: ctype) : integer :=
+  case_ctype ( ty,
+    ctype_max_void(), ctype_max_basic, ctype_max_array,
+    ctype_max_void {- HACK -}, ctype_max_pointer, ctype_max_atomic,
+    ctype_max_void {- HACK -}, ctype_max_void {- HACK -}, ctype_max_void {- HACK -}
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+fun sizeof_void () : integer :=
+  error <<<sizeof_void>>> -- sizeof can only be called on complete types
+
+fun sizeof_basic (ty: ctype) : integer :=
+  if    ty = "char" \/ ty = "_Bool"
+     \/ ty = "signed ichar" \/ ty = "unsigned ichar"
+     \/ ty = "int8_t" \/ ty = "uint8_t" then
+    1
+  else if ty = "signed short" \/ ty = "unsigned short" \/ ty = "int16_t" \/ ty = "uint16_t" then
+    2
+  else if ty = "signed int" \/ ty = "unsigned int" \/ ty = "int32_t" \/ ty = "uint32_t" then
+    4
+  else if    ty = "signed long" \/ ty = "unsigned long" \/ ty = "signed long_long" \/  ty = "unsigned long_long"
+          \/ ty = "int64_t" \/ ty = "uint64_t"
+          \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
+    8
+  else
+    error <<<sizeof_basic>>> -- TODO
+  end end end end
+
+fun sizeof_array (ty: ctype, n: integer) : integer :=
+  <sizeof>(ty) * n
+
+fun sizeof_pointer (ty: ctype) : integer :=
+  8
+
+fun sizeof_atomic (ty: ctype) : integer :=
+  <sizeof>(ty)
+
+-- TODO: temporary hack
+fun sizeof_struct(tys: [ctype]) : integer :=
+  4
+
+
+fun <sizeof> (ty: ctype) : integer :=
+  case_ctype ( ty,
+    sizeof_void(), sizeof_basic, sizeof_array,
+    sizeof_void {- HACK -}, sizeof_pointer, sizeof_atomic,
+    sizeof_struct, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
+  )
+
+
+fun alignof_basic (ty: ctype) : integer :=
+  if    ty = "char" \/ ty = "_Bool"
+     \/ ty = "signed ichar" \/ ty = "unsigned ichar"
+     \/ ty = "int8_t" \/ ty = "uint8_t" then
+    1
+  else if ty = "signed short" \/ ty = "unsigned short" \/ ty = "int16_t" \/ ty = "uint16_t" then
+    2
+  else if ty = "signed int" \/ ty = "unsigned int" \/ ty = "int32_t" \/ ty = "uint32_t" then
+    4
+  else if    ty = "signed long" \/ ty = "unsigned long" \/ ty = "signed long_long" \/  ty = "unsigned long_long"
+          \/ ty = "int64_t" \/ ty = "uint64_t"
+          \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
+    8
+  else
+    error <<<alignof_basic>>> -- TODO
+  end end end end
+
+fun alignof_array (ty: ctype, n: integer) : integer :=
+  <alignof>(ty)
+
+fun alignof_pointer (ty: ctype) : integer :=
+  8
+
+fun alignof_atomic (ty: ctype) : integer :=
+  <alignof>(ty)
+
+
+-- TODO: temporary hack
+fun alignof_struct(tys: [ctype]) : integer :=
+  4
+
+
+fun <alignof> (ty: ctype) : integer :=
+  case_ctype ( ty,
+    sizeof_void(), alignof_basic, alignof_array,
+    sizeof_void {- HACK -}, alignof_pointer, alignof_atomic,
+    alignof_struct, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
+  )
+
+
+
+
+
+
+
+
+
+-- GCC uses the two's complement representation with no padding bits
+fun <Integer.encode> (ty: ctype, n: integer) : integer :=
+  encodeTwos(ty, n)
+
+fun <Integer.decode> (ty: ctype, n: integer) : integer :=
+  decodeTwos(ty, n)
+
+
+-- "For conversion to a type of width N, the value is reduced modulo 2^N to be
+--  within range of the type; no signal is raised."
+
+
+-- fun foo_aux(
+
+fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
+--  n % exp(2, ctype_width(ty))
+  let n = encodeTwos("unsigned long", n) in
+    <Integer.decode>(ty, n % 2^ctype_width(ty))
+  end
+
+
+-- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
+fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
+  let n = encodeTwos(ty, n) in
+    decodeTwos(ty, (n / 2^m) + ones_prefix(0, m, ctype_width(ty)))
+  end
+
+-- implementation of the ~ operator (only used in the signed case)
+fun <Bitwise_complement> (ty: ctype, n: integer) : integer :=
+  let n = encodeTwos(ty, n) in
+    decodeTwos(ty, complementTwos(ty, n))
+  end

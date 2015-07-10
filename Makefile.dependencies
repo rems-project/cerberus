@@ -1,0 +1,60 @@
+CMDLINER_SOURCE=http://erratique.ch/software/cmdliner/releases/cmdliner-0.9.7.tbz
+PPRINT_SOURCE=http://gallium.inria.fr/~fpottier/pprint/pprint-20140424.tar.gz
+ZARITH_SOURCE=https://forge.ocamlcore.org/frs/download.php/1471/zarith-1.3.tgz
+
+CMDLINER_PATH=$(shell basename $(CMDLINER_SOURCE) .tbz)
+PPRINT_PATH=$(shell basename $(PPRINT_SOURCE) .tar.gz)/src
+ZARITH_PATH=$(shell basename $(ZARITH_SOURCE) .tgz)
+
+ifeq ($(shell uname -s),Darwin)
+  CMD=curl -O
+else
+  CMD=wget --no-check-certificate
+endif
+
+
+default: cmdliner pprint zarith
+
+
+downloads:
+	$(CMD) $(PPRINT_SOURCE)
+	$(CMD) $(ZARITH_SOURCE)
+	tar -zxf pprint-20140424.tar.gz && rm pprint-20140424.tar.gz
+	tar -zxf zarith-1.3.tgz && rm zarith-1.3.tgz
+
+cmdliner:
+	@if [ ! -d $(CMDLINER_PATH) ] ; then \
+	  echo DOWNLOADING $(CMDLINER_SOURCE) ; \
+	  $(CMD) $(CMDLINER_SOURCE) && tar -jxf $(shell basename $(CMDLINER_SOURCE)) && rm -f $(shell basename $(CMDLINER_SOURCE)) ; \
+	fi
+	cd $(CMDLINER_PATH); ocaml pkg/build.ml native=true native-dynlink=false
+
+pprint:
+	@if [ ! -d $(PPRINT_PATH) ] ; then \
+	  echo DOWNLOADING $(PPRINT_SOURCE) ; \
+	  $(CMD) $(PPRINT_SOURCE) && tar -zxf $(shell basename $(PPRINT_SOURCE)) && rm -f $(shell basename $(PPRINT_SOURCE)) ; \
+	fi
+	@if [ ! `command -v ocamlfind` ]; then \
+	  mv $(PPRINT_PATH)/Makefile $(PPRINT_PATH)/Makefile_ ; \
+	  sed s/-use-ocamlfind// $(PPRINT_PATH)/Makefile_ > $(PPRINT_PATH)/Makefile ; \
+	  make -C $(PPRINT_PATH) ; \
+	  mv  $(PPRINT_PATH)/Makefile_ $(PPRINT_PATH)/Makefile ; \
+        else \
+          make -C $(PPRINT_PATH) ; \
+        fi
+
+zarith:
+	@if [ ! -d $(ZARITH_PATH) ] ; then \
+	  echo DOWNLOADING $(ZARITH_SOURCE) ; \
+	  $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
+	fi
+	cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make
+
+clean:
+	rm -f $(CMDLINE_PATH)/*.o $(PPRINT_PATH)/*.o $(ZARITH_PATH)/*.o
+	rm -f $(CMDLINE_PATH)/*.cm{i,x,o} $(PPRINT_PATH)/*.cm{i,x,o} $(ZARITH_PATH)/*.cm{i,x,o}
+
+clear:
+	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) \
+	       $(shell basename $(PPRINT_SOURCE) .tar.gz) \
+	       $(shell basename $(ZARITH_SOURCE) .tgz)
