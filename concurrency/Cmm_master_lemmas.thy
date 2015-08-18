@@ -2,7 +2,7 @@ theory "Cmm_master_lemmas"
 
 imports 
 Main
-"_bin/Cmm_csem"
+"lib/Cmm_csem"
 begin
 
 section {* Auxiliaries *}
@@ -41,11 +41,6 @@ lemma obtainToShow:
   assumes "\<And>Q. (P \<Longrightarrow> Q) \<Longrightarrow> Q"
   shows   "P"
 using assms by auto
-
-(* 
-lemmas I [intro?] = defToIntro[OF _def]
-lemmas E [elim?] = defToElim[OF _def]
-*)
 
 section {* Lemmas for relation.lem *}
 
@@ -290,7 +285,7 @@ using assms
 unfolding relRestrict_def
 by simp
 
-(* TODO: this simp is redundant (given the elim and intro of relRestrict), but removing it 
+(* This simp is redundant (given the elim and intro of relRestrict), but removing it 
 makes the proof fail *)
 lemma relRestrict_member [simp]:
   shows "(a, b) \<in> relRestrict rel s = ((a, b) \<in> rel \<and> a \<in> s \<and> b \<in> s)"
@@ -462,9 +457,6 @@ by simp
 subsubsection {* adjacent_less_than *}
 
 lemmas adjacent_less_thanI [intro?] = defToIntro[OF adjacent_less_than_def]
-
-(* TODO: perhaps the negative conjuct should be phrased differently. For example by assuming a z
-with the properties, obtaining False. *)
 
 lemma adjacent_less_thanE [elim]:
   assumes "adjacent_less_than ord s x y"
@@ -1241,7 +1233,7 @@ unfolding locks_only_relations_def Let_def by simp
 
 subsubsection {* locks_only_consistent_lo *}
 
-(* TODO: find better name. The name without the postfix _cond clashes with something else. *)
+(* The name without the postfix _cond clashes with something else. *)
 
 definition sameLocLocksUnlocks_cond :: "pre_execution \<Rightarrow> action \<Rightarrow> action \<Rightarrow> bool" where
   "sameLocLocksUnlocks_cond pre a b \<equiv>   a \<in> actions0 pre
@@ -1310,26 +1302,6 @@ lemma locks_only_consistent_loE1 [elim]:
 using assms
 unfolding locks_only_consistent_lo.simps
 by auto
-
-(* Original elim. *)
-(*
-lemma locks_only_consistent_loE2 [elim]:
-  assumes "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
-      and "(a, b) \<in> lo wit" 
-      and "a \<in> actions0 pre"
-      and "b \<in> actions0 pre"
-  obtains "(b, a) \<notin> hb"
-      and "a \<noteq> b"
-      and "loc_of a = loc_of b" 
-      and "is_lock a \<or> is_unlock a"
-      and "is_lock b \<or> is_unlock b"
-      and "is_at_mutex_location (lk pre) a"
-      and "is_at_mutex_location (lk pre) b" 
-using assms
-unfolding locks_only_consistent_lo.simps
-(* TODO: auto doesn't work here if both irreflE and transE are added to the elim-set. *)
-by auto
-*)
 
 lemma locks_only_consistent_loE2 [elim]:
   assumes "locks_only_consistent_lo (pre, wit, (''hb'', hb)#rel)"
@@ -1618,24 +1590,6 @@ lemma consistent_moE_rel [elim]:
 using assms
 unfolding consistent_mo.simps
 by auto
-
-(* Original elim *)
-(*
-lemma consistent_moE_mem [elim]:
-  assumes "consistent_mo (pre, wit, rel)"
-      and "(a, b) \<in> mo wit"
-      and "a \<in> actions0 pre"
-      and "b \<in> actions0 pre"
-  obtains "a \<noteq> b"
-          "loc_of a = loc_of b"
-          "is_write a"
-          "is_write b"
-          "is_at_atomic_location (lk pre) a"
-          "is_at_atomic_location (lk pre) b"
-using assms
-unfolding consistent_mo.simps
-by auto
-*)
 
 lemma consistent_moE_mem [elim]:
   assumes "consistent_mo (pre, wit, rel)"
@@ -2043,23 +1997,6 @@ using assms
 unfolding sc_accesses_consistent_sc.simps
 by auto
 
-(* Original elim. *)
-(*
-lemma sc_accesses_consistent_scE2 [elim]:
-  assumes "sc_accesses_consistent_sc (pre, wit, (''hb'', hb)#rel)"
-      and "(a, b) \<in> sc wit" 
-      and "a \<in> actions0 pre"
-      and "b \<in> actions0 pre"
-  obtains "(b, a) \<notin> hb"
-          "(b, a) \<notin> mo wit"
-          "a \<noteq> b"
-          "is_seq_cst a"
-          "is_seq_cst b"
-using assms
-unfolding sc_accesses_consistent_sc.simps
-by auto
-*)
-
 lemma sc_accesses_consistent_scE2 [elim]:
   assumes "sc_accesses_consistent_sc (pre, wit, (''hb'', hb)#rel)"
       and "(a, b) \<in> sc wit" 
@@ -2274,16 +2211,6 @@ proof
             using hb cons_hb 
             unfolding ex_def standard_relations_alt_def 
             by auto
-            (*
-            proof
-              assume "(b, a) \<in> with_consume_hb pre wit"
-              hence "(a, a) \<in> (with_consume_hb pre wit)\<^sup>+"
-                using hb by auto
-              thus False
-                using cons_hb
-                unfolding ex_def standard_relations_alt_def 
-                by (auto elim: consistent_hbE irreflE)
-            qed *)
         qed
       assume hb: "(b, a) \<in> with_consume_hb pre wit"
       thus False using not_hb by auto
@@ -2309,7 +2236,6 @@ next
            "is_write a"
         using well_rf `(a, b) \<in> rf wit`
         unfolding ex_def standard_relations_alt_def
-        (* by (auto elim: well_formed_rfE) *)
         by auto
       hence "is_at_atomic_location (lk pre) a"
         using `is_at_atomic_location (lk pre) b`
@@ -2323,7 +2249,6 @@ next
               `is_load b`
         using det_read 
         unfolding ex_def standard_relations_alt_def
-        (* by (auto elim: det_readE_rf) *)
         by auto
       have subset: "?S \<subseteq> {w. (w, b) \<in> with_consume_hb pre wit}"
         unfolding with_consume_vse_def
@@ -2332,7 +2257,6 @@ next
       have "finite {w. (w, b) \<in> with_consume_hb pre wit}"
         using cons_hb `b \<in> actions0 pre`
         unfolding ex_def standard_relations_alt_def
-        (* by (auto elim!: consistent_hbE finite_prefixesE) *)
         by (auto elim: finite_prefixesE)
       hence finite: "finite ?S"
         using finite_subset[OF subset] by metis
@@ -2340,7 +2264,6 @@ next
         unfolding isStrictPartialOrder_def
         using cons_mo
         unfolding ex_def standard_relations_alt_def
-        (* by (auto elim: consistent_moE_rel) *)
         by auto
       obtain head where head: "head \<in> ?S"
                     and sup:  "\<forall>y. y \<in> ?S \<longrightarrow> (head, y) \<notin> mo wit"
@@ -2469,27 +2392,6 @@ proof
     using cons_rmw ab `a = b` in_rf by auto
   thus False using cons_mo by auto
 qed
-
-(*
-lemma non_atomic_rfE:
-  assumes in_rf:   "(a, b) \<in> rf wit"
-      and not_at:  "is_at_non_atomic_location (lk pre) b"
-      and cons_rf: "consistent_non_atomic_rf (pre, wit, [(''hb'', with_consume_hb pre wit), 
-                                                         (''vse'', with_consume_vse pre wit)])"
-  shows            "(a, b) \<in> with_consume_vse pre wit"
-                   "(a, b) \<in> with_consume_hb pre wit"
-proof -
-  show "(a, b) \<in> with_consume_vse pre wit"
-    using cons_rf in_rf not_at
-    unfolding consistent_non_atomic_rf.simps 
-    by auto
-  thus "(a, b) \<in> with_consume_hb pre wit"
-    unfolding with_consume_vse_def
-    by (auto elim: visible_side_effect_setE1)
-qed
-
-thm consistent_non_atomic_rfE
-*)
 
 section {* Extra lemmas for standard-relations *}
 
