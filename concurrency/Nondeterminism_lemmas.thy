@@ -2,7 +2,7 @@ theory Nondeterminism_lemmas
 
 imports
 Main
-"_bin/Nondeterminism"
+"lib/Nondeterminism"
 begin
 
 abbreviation mem (infixl "[\<in>]" 50) where "mem \<equiv> Nondeterminism.mem"

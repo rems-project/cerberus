@@ -3,7 +3,7 @@ theory Cmm_op_proofs
 
 imports
 Main
-"_bin/Cmm_op"
+"lib/Cmm_op"
 Cmm_master_lemmas
 Nondeterminism_lemmas  
 begin
@@ -160,23 +160,6 @@ lemma axsimpMemoryModel_simps [simp]:
 unfolding axsimpMemoryModel_def
 by simp_all
 
-(* Not true anymore. *)
-(*
-lemma axsimpBehaviourEq:
-  shows "axsimpBehaviour = axBehaviour"
-proof (intro ext)
-  fix opsem_t
-  fix p :: program
-  let ?consEx1 = "{(Xo, Xw, rl). opsem_t p Xo \<and> axsimpConsistent (Xo, Xw, rl) \<and> rl = getRelations Xo Xw}"
-  let ?consEx2 = "{(Xo, Xw, rl). opsem_t p Xo \<and> axConsistent (Xo, Xw, rl) \<and> rl = getRelations Xo Xw}"
-  have consEx: "?consEx1 = ?consEx2"
-    using axsimpConsistentEq by auto
-  thus "axsimpBehaviour opsem_t p = axBehaviour opsem_t p"
-    unfolding axsimpBehaviour_def axBehaviour_def
-              behaviour_def Let_def
-    by simp
-qed *)
-
 section {* The incremental model *}
 
 subsection {* Simplifications *}
@@ -321,7 +304,6 @@ proof (elim UnE)
     using not_at unfolding is_na_or_non_write_def by simp
   thus "(a, b) \<in> hbMinusAlt pre wit"
     using in_hb
-    (* TODO: fix how hbMinus works, so we don't have to do simp before unfolding. *)
     apply simp
     unfolding hbMinusAlt_def
     by auto
@@ -537,7 +519,6 @@ lemma relOver_release_acquire_fenced_sw:
 unfolding release_acquire_fenced_synchronizes_with_set_alt_def
           release_acquire_fenced_synchronizes_with_set_def 
 unfolding relOver_def 
-(* TODO define relOver elim for all the relations *)
 unfolding sw_asw_def
           sw_lock_def
           sw_rel_acq_rs_def
@@ -824,7 +805,6 @@ lemma monotonicity_no_consume_hb:
 using assms
 unfolding no_consume_hb_def
 by (metis Un_mono trancl_mono2)
-(* by (metis Un_mono order_refl trancl_mono2) *)
 
 lemma monotonicity_locks_only_hb:
   shows "  locks_only_hb (preRestrict pre actions) (incWitRestrict wit actions)
@@ -841,7 +821,6 @@ lemma monotonicity_release_acquire_sw:
 apply (intro subrelI, elim release_acquire_swIE)
 unfolding sw_asw_def sw_lock_def sw_rel_acq_def
 by auto
-(* by (auto elim: relRestrictE) *)
 
 lemma monotonicity_release_acquire_hb:
   shows "  release_acquire_hb (preRestrict pre actions) (incWitRestrict wit actions) 
@@ -867,21 +846,19 @@ lemma monotonicity_sw_rel_acq_rs:
   assumes "downclosed actions (mo wit)"
   shows   "  sw_rel_acq_rs (preRestrict pre actions) (incWitRestrict wit actions)
            \<subseteq> sw_rel_acq_rs pre wit"
-(* TODO: for some reason "cases rule: sw_rel_acq_rsIE" doesn't work after the "intro subrelI". When
-everything is made explicit (the fix, assume, thus) then it does do the right thing. *)
 proof (intro subrelI)
   fix a b
   assume "(a, b) \<in> sw_rel_acq_rs (preRestrict pre actions) (incWitRestrict wit actions)"
   thus   "(a, b) \<in> sw_rel_acq_rs pre wit"
     proof (cases rule: sw_rel_acq_rsIE)
       case (rel_acq_rs c)
-      hence "c \<in> actions" by auto (* by (auto elim: relRestrictE) *)
+      hence "c \<in> actions" by auto 
       hence "(a, c) \<in> release_sequence_set_alt pre wit" 
         using monotonicity_release_sequence assms rel_acq_rs
         by metis
       thus "   a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> c \<in> actions0 pre
             \<and> (a, c) \<in> release_sequence_set_alt pre wit \<and> (c, b) \<in> rf wit "
-        using rel_acq_rs by auto (* by (auto elim: relRestrictE) *)
+        using rel_acq_rs by auto 
     qed
 qed
 
@@ -892,10 +869,6 @@ lemma monotonicity_release_acquire_relaxed_sw:
 using monotonicity_sw_rel_acq_rs[OF downclosed]
 by (intro subrelI, elim release_acquire_relaxed_swIE)
    (auto intro!: sw_aswI sw_lockI)
-(* by (intro subrelI, elim release_acquire_relaxed_swIE)
-   (auto elim!: sw_lockE sw_aswE 
-         intro!: sw_aswI sw_lockI 
-         elim: relRestrictE) *)
 
 lemma monotonicity_release_acquire_relaxed_hb:
   assumes downclosed_mo: "downclosed actions (mo wit)"
@@ -929,7 +902,7 @@ proof (intro subrelI)
     proof (cases rule: sw_fence_sb_hrs_rf_sbIE)
       let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
       case (fence x y z)
-      hence "y \<in> actions" by auto (* by (auto elim: relRestrictE) *)
+      hence "y \<in> actions" by auto 
       hence "(x, y) \<in> ?hrs"
         using monotonicity_hypothetical_release_sequence
         using downclosed fence
@@ -937,7 +910,7 @@ proof (intro subrelI)
       thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre
             \<and> y \<in> actions0 pre \<and> z \<in> actions0 pre
             \<and> (a, x) \<in> sb pre \<and> (x, y) \<in> ?hrs \<and> (y, z) \<in> rf wit \<and> (z, b) \<in> sb pre"
-        using fence by auto (* by (auto elim: relRestrictE) *)
+        using fence by auto 
     qed
 qed
 
@@ -952,14 +925,14 @@ proof (intro subrelI)
     proof (cases rule: sw_fence_sb_hrs_rfIE)
       let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
       case (fence x y)
-      hence "y \<in> actions" by auto (* by (auto elim: relRestrictE) *)
+      hence "y \<in> actions" by auto 
       hence "(x, y) \<in> ?hrs"
         using monotonicity_hypothetical_release_sequence
         using downclosed fence
         by auto
       thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre
             \<and> y \<in> actions0 pre \<and> (a, x) \<in> sb pre \<and> (x, y) \<in> ?hrs \<and> (y, b) \<in> rf wit"
-        using fence by auto (* by (auto elim: relRestrictE) *)
+        using fence by auto 
     qed
 qed
 
@@ -974,14 +947,14 @@ proof (intro subrelI)
     proof (cases rule: sw_fence_rs_rf_sbIE)
       let ?rs  = "release_sequence_set_alt pre wit"
       case (fence x y)
-      hence "y \<in> actions" by auto (* by (auto elim: relRestrictE) *)
+      hence "y \<in> actions" by auto
       hence "(a, x) \<in> ?rs"
         using monotonicity_release_sequence
         using downclosed fence
-        by auto (* by (auto elim: relRestrictE) *)
+        by auto 
       thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre 
             \<and> y \<in> actions0 pre \<and> (a, x) \<in> ?rs \<and> (x, y) \<in> (rf wit) \<and> (y, b) \<in> (sb pre)"
-        using fence by auto (* by (auto elim: relRestrictE) *)
+        using fence by auto 
     qed
 qed
 
@@ -995,9 +968,6 @@ using monotonicity_sw_fence_rs_rf_sb[OF downclosed]
 using monotonicity_sw_rel_acq_rs[OF downclosed]
 apply (intro subrelI, elim release_acquire_fenced_swIE)
 by (auto 8 2 intro!: sw_aswI sw_lockI)
-(* 
-by (auto 8 2 elim!: sw_lockE sw_aswE 
-             intro!: sw_aswI sw_lockI) *)
 
 lemma monotonicity_release_acquire_fenced_hb:
   assumes "downclosed actions (mo wit)"
@@ -1079,8 +1049,6 @@ subsubsection {* Prefixes are final *}
 
 (* Prefixes are final in the rel-acq-rlx fragment *)
 
-(* TODO: the following defintions can be refactored into something simpler. *)
-
 definition prefixes_are_final  :: "(action)set \<Rightarrow>(action*action)set \<Rightarrow>(action*action)set \<Rightarrow> bool "  where 
   "prefixes_are_final s r r' = (\<forall> (a, b) \<in> r. b \<in> s \<longrightarrow> (a, b) \<in> r')"
 
@@ -1158,7 +1126,7 @@ proof (cases rule: sw_rel_acq_rsIE, simp)
     using final_release_sequence[OF downclosed_mo `c \<in> actions`]
     using rel_acq_rs
     by auto
-  (* TODO: I have no idea why the simplifier did not get rid of the double occurrences. *)
+  (* I have no idea why the simplifier did not get rid of the double occurrences. *)
   thus "a \<in> actions \<and> b \<in> actions \<and> c \<in> actions \<and> (a, c) \<in> ?rs2 \<and> c \<in> actions \<and> b \<in> actions"
     using rel_acq_rs `b \<in> actions` `c \<in> actions` by auto
 qed
@@ -1309,7 +1277,7 @@ proof (cases rule: sw_fence_sb_hrs_rf_sbIE, simp)
   hence "x \<in> actions \<and> (x, y) \<in> ?hrs2"
     using final_hypothetical_release_sequence `(x, y) \<in> ?hrs` downclosed_mo
     by metis
-  (* TODO: No idea why the simplifier left the double conjuncts. *)
+  (* No idea why the simplifier left the double conjuncts. *)
   thus "  a \<in> actions \<and> b \<in> actions \<and> x \<in> actions \<and> y \<in> actions \<and> z \<in> actions \<and> a \<in> actions
         \<and> x \<in> actions \<and> (x, y) \<in> ?hrs2 \<and> y \<in> actions \<and> z \<in> actions \<and> b \<in> actions"
     using fence `z \<in> actions` `y \<in> actions` `a \<in> actions` `b \<in> actions` by auto
@@ -1647,7 +1615,6 @@ next
     using downclosed_ithb
     unfolding inter_thread_happens_before_alt_def
     by auto
-  (* TODO: refactor the following. *)
   have downclosed_sb1b: "\<And>x. (x, z) \<in> sb pre \<Longrightarrow> x \<in> actions"
     proof -
       fix x
@@ -1678,7 +1645,6 @@ next
         using wb unfolding inter_thread_happens_before_alt_def by auto
       thus "x \<in> actions" using downclosed_ithb by auto
     qed
-  (* TODO: and also refactor the following. *)
   have downclosed_ithb2: "\<And>x. (x, z) \<in> inter_thread_happens_before_alt pre wit \<Longrightarrow> x \<in> actions"
     proof -
       fix x
@@ -1743,7 +1709,6 @@ proof auto
                                      (with_consume_hb pre wit) 
                                      (with_consume_hb (preRestrict pre actions) (incWitRestrict wit actions))"
     unfolding selective_prefixes_are_final_def
-    (* TODO: remove redundancies *)
     proof auto
       fix a b
       assume b:  "b \<in> actions" "is_na_or_non_write pre b"
@@ -1804,7 +1769,6 @@ by auto
 lemma hbMinusIsMonotonic:
   shows "hbCalcIsMonotonic hbMinusAlt"
 using hbCalcIsMonotonic
-(* TODO: make a simp for "hbMinus pre wit getRelations" to "hbMinus pre wit getHb". *)
 unfolding hbCalcIsMonotonic_def 
           getRelations_simp 
           hbMinusAlt_def
@@ -1986,19 +1950,6 @@ proof (clarsimp)
       thus "\<exists>w\<in>actions0 pre \<inter> actions. (w, r) \<in> hb2 \<and> is_write w \<and> loc_of w = loc_of r"
         using w `w \<in> actions` by auto
     qed
-(*
-  hence "  (\<exists>w\<in>actions0 pre \<inter> actions. (w, r) \<in> hb2 \<and> is_write w \<and> loc_of w = loc_of r)
-         = (\<exists>w\<in>actions0 pre \<inter> actions. (w, r) \<in> hb \<and> is_write w \<and> loc_of w = loc_of r)"
-    by auto
-  also have "... = (\<exists>w'\<in>actions0 pre \<inter> actions. (w', r) \<in> rf wit)"
-    using det_read `is_load r` `r \<in> actions0 pre` downclosed_rf downclosed_hb non_write_r
-    unfolding det_read_alt.simps downclosed_def hbMinus.simps
-    by auto
-  also have "... = (\<exists>w'\<in>actions0 pre \<inter> actions. (w', r) \<in> rf wit)"
-    using downclosed_rf `r \<in> actions` unfolding downclosed_def by auto
-  finally show "  (\<exists>w\<in>actions0 pre \<inter> actions. (w, r) \<in> hb2 \<and> is_write w \<and> loc_of w = loc_of r)  
-                = (\<exists>w'\<in>actions0 pre \<inter> actions. (w', r) \<in> rf wit)" .
-*)
 qed
 
 lemma locks_only_consistent_lo_restriction:
@@ -2413,7 +2364,6 @@ next
     unfolding respectsCom_def
     proof auto
       fix b
-      (* TODO: fix opsemOrder *)
       assume "b \<in> actions0 pre"
              "(b, a) \<in> incComAlt ?pre' ?wit'"
       hence ba_in_rel: "(b, a) \<in> incComAlt pre wit"
@@ -2430,7 +2380,6 @@ next
         by auto
     next
       fix b
-      (* TODO: fix opsemOrder *)
       assume "b \<in> actions0 pre"
              "b \<in> incCommittedSet s"
              "(a, b) \<in> incComAlt ?pre' ?wit'"
@@ -2651,16 +2600,6 @@ lemma addToTransitiveOrderE_elem [elim?]:
 using assms
 unfolding addToTransitiveOrder_def
 by auto
-
-(*
-lemma addToTransitiveOrderE_elem2 [elim?]:
-  assumes "rel' [\<in>] addToTransitiveOrder domain a rel"
-      and "(x, y) \<in> rel"
-  obtains "(x, y) \<in> rel'"
-using assms
-unfolding addToTransitiveOrder_def
-by auto
-*)
 
 subsection {* Elims of relation constructions *}
 
@@ -3292,27 +3231,6 @@ by simp
 
 subsection {* Soundness *}
 
-subsubsection {* assumptions *}
-
-lemma monStep_assumptions:
-  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
-      and inv:     "monInvariant pre s1"
-  shows   "assumptions (incToEx pre s2)" 
-unfolding incToEx_def Let_def
-proof (intro assumptionsI, simp)
-  have rf: "finite_prefixes (rf (incWit s1)) (actions0 (preRestrict pre (incCommittedSet s1)))"
-    using inv by blast
-  show "finite_prefixes (rf (incWit s2)) (actions0 pre \<inter> incCommittedSet s2)"
-    proof (cases rule: monStepE_rf2[OF monStep])
-oops (*
-      case 1
-      show ?thesis 
-    next
-      case 2
-      show ?thesis 
-    qed
-oops *)
-
 subsubsection {* tot_empty *}
 
 lemma monStep_tot_empty:
@@ -3465,220 +3383,6 @@ proof -
     qed
 qed
 
-subsubsection {* locks_only_consistent_lo *}
-
-lemma monStep_locks_only_consistent_lo:
-  assumes monStep: "(a, s2) [\<in>] monStep pre s1"
-      and inv:     "monInvariant pre s1"
-  shows   "locks_only_consistent_lo (incToEx pre s2)"
-unfolding incToEx_def Let_def getRelations_simp
-proof (intro locks_only_consistent_loI, simp_all)
-  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
-                                           incWit s1, 
-                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
-    using inv by auto
-  hence trans: "trans (lo (incWit s1))" by auto
-  have a: "a \<notin> incCommittedSet s1" "a \<in> actions0 pre"
-    using monStep inv by auto
-  fix x y
-  assume in_lo_s2: "(x, y) \<in> lo (incWit s2)"
-  show "sameLocLocksUnlocks_cond (preRestrict pre (incCommittedSet s2)) x y"
-    unfolding sameLocLocksUnlocks_cond_def
-    using a monStep
-    by (cases rule: monStepE_lo_pair[OF monStep inv in_lo_s2]) auto
-  show "(y, x) \<notin> getHb (preRestrict pre (incCommittedSet s2)) (incWit s2)"
-    sorry
-  fix z
-  assume yz_in_lo_s2: "(y, z) \<in> lo (incWit s2)"
-  have x: "x \<in> insert a (incCommittedSet s1)"
-          "is_lock x \<or> is_unlock x"
-    using monStepE_lo_pair[OF monStep inv in_lo_s2]
-    by auto
-  have y: "y \<in> insert a (incCommittedSet s1)"
-          "is_lock y \<or> is_unlock y"
-          "loc_of x = loc_of y"
-    using monStepE_lo_pair[OF monStep inv in_lo_s2]
-    by auto
-  have z: "z \<in> insert a (incCommittedSet s1)"
-          "is_lock z \<or> is_unlock z"
-          "loc_of y = loc_of z"
-    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2]
-    by auto
-  show "(x, z) \<in> lo (incWit s2)"
-    proof (cases "x = a \<or> y = a \<or> z = a")
-      case False
-      hence "x \<in> incCommittedSet s1"
-            "y \<in> incCommittedSet s1"
-            "z \<in> incCommittedSet s1"
-        using x y z by auto
-      hence "(x, y) \<in> relRestrict (lo (incWit s2)) (incCommittedSet s1)"
-            "(y, z) \<in> relRestrict (lo (incWit s2)) (incCommittedSet s1)"
-        using in_lo_s2 yz_in_lo_s2 
-        by auto
-      hence "(x, y) \<in> lo (incWit s1)"
-            "(y, z) \<in> lo (incWit s1)"
-        using monStepE_lo3[OF monStep inv] by blast+
-      hence "(x, z) \<in> lo (incWit s1)"
-        using x cons_lo
-        unfolding locks_only_consistent_lo.simps trans_def
-        by metis
-      thus ?thesis
-        using monStepE_lo3[OF monStep inv] by fast
-    next
-      case True
-      show ?thesis
-        proof (cases rule: monStepE_lo2[OF monStep])
-          case (1 w)
-          show ?thesis 
-            proof (cases "x = a")
-              assume "x = a"
-              hence y2: "(w, y) \<in> lo (incWit s1)" "y \<noteq> a" 
-                using in_lo_s2 1(2) 1(3) a cons_lo by auto
-              hence "y \<noteq> w" using cons_lo by auto
-              have "z \<noteq> a"
-                proof
-                  assume "z = a"
-                  hence "(y, z) \<notin> lo (incWit s1)"
-                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] by auto
-                  hence "(y, w) \<in> lo (incWit s1)"
-                    using yz_in_lo_s2 1(3) `y \<noteq> w` a(1) y2 by auto
-                  hence "(w, w) \<in> lo (incWit s1)"
-                    using transE[OF trans] y2 by auto
-                  thus False using cons_lo by auto
-                qed
-              hence "(y, z) \<in> lo (incWit s1)"
-                using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `y \<noteq> a` by auto
-              hence wz_in_lo_s1: "(w, z) \<in> lo (incWit s1)"
-                using transE[OF trans] y2 by auto
-              have "z \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
-                unfolding sameLocLocksUnlocksSet_def 
-                using wz_in_lo_s1 cons_lo y(3) z(3) `x = a` 
-                by auto             
-              thus ?thesis using wz_in_lo_s1 `x = a` 1 by auto
-            next 
-              assume "x \<noteq> a"
-              show ?thesis
-                proof (cases "y = a")
-                  assume "y = a"
-                  have "(x, y) \<notin> lo (incWit s1)"
-                    using monStepE_lo_pair[OF monStep inv in_lo_s2] `y = a` by auto
-                  hence x: "(x, w) \<in> lo (incWit s1) \<or> (x = w)"
-                    using 1(3) in_lo_s2 `y = a` `x \<noteq> a` by auto
-                  have "(y, z) \<notin> lo (incWit s1)"
-                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `y = a` by auto
-                  hence "(w, z) \<in> lo (incWit s1)"
-                    using 1(2) 1(3) yz_in_lo_s2 `y = a` a by auto
-                  hence "(x, z) \<in> lo (incWit s1)"
-                    using x transE[OF trans] by auto 
-                  thus ?thesis using 1 by auto
-                next 
-                  assume "y \<noteq> a"
-                  hence "z = a" using `x \<noteq> a` True by auto
-                  have xy_in_lo_s1: "(x, y) \<in> lo (incWit s1)"
-                    using monStepE_lo_pair[OF monStep inv in_lo_s2] 
-                    using `x \<noteq> a` `y \<noteq> a` 
-                    by metis
-                  have "(y, z) \<notin> lo (incWit s1)"
-                    using monStepE_lo_pair[OF monStep inv yz_in_lo_s2] `z = a` by auto
-                  hence "(y, w) \<in> lo (incWit s1) \<or> (y = w)"
-                    using yz_in_lo_s2 `z = a` `y \<noteq> a` 1(3) by auto
-                  hence xw_in_lo_s1: "(x, w) \<in> lo (incWit s1)"
-                    using xy_in_lo_s1 using transE[OF trans] by auto 
-                  have "x \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
-                    unfolding sameLocLocksUnlocksSet_def 
-                    using xy_in_lo_s1 cons_lo y(3) z(3) `z = a` 
-                    by auto
-                  thus ?thesis using xw_in_lo_s1 `z = a` 1 by auto
-                qed
-            qed
-        next
-          case 2
-          have mo1: "lo (incWit s1) = relRestrict (lo (incWit s2)) (incCommittedSet s1)"
-            using monStepE_lo3[OF monStep inv] by auto
-          have "y \<noteq> a" "z \<noteq> a"
-            using in_lo_s2 yz_in_lo_s2 a
-            unfolding 2(2) 
-            using mo1
-            by auto
-          hence "x = a" using True by auto
-          hence "loc_of a = loc_of z"
-            using y z by auto
-          hence "z \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
-            unfolding sameLocLocksUnlocksSet_def
-            using z `z \<noteq> a`
-            by auto
-          thus ?thesis using 2(2) `x = a` by auto
-        next
-          case 3
-          hence False using True x y z by auto
-          thus ?thesis by auto
-        qed
-    qed
-next
-  have cons_lo: "locks_only_consistent_lo (preRestrict pre (incCommittedSet s1), 
-                                           incWit s1, 
-                                           [(''hb'', getHb (preRestrict pre (incCommittedSet s1)) (incWit s1))])"
-    using inv by auto
-  fix x y
-  assume xy: "x \<in> actions0 pre \<and> x \<in> incCommittedSet s2"
-             "y \<in> actions0 pre \<and> y \<in> incCommittedSet s2"
-             "x \<noteq> y"
-             "loc_of x = loc_of y"
-             "is_lock x \<or> is_unlock x"
-             "is_lock y \<or> is_unlock y"
-             "is_at_mutex_location (lk pre) x"
-             "is_at_mutex_location (lk pre) y"
-  show "(x, y) \<in> lo (incWit s2) \<or> (y, x) \<in> lo (incWit s2)"
-    proof (cases "x = a \<or> y = a", simp_all)
-      assume "x = a \<or> y = a"
-      hence monAddToLo: "lo (incWit s2) [\<in>] monAddToLo pre a s1"
-        using monStepE_lo[OF monStep] xy by auto
-      have loc: "is_at_mutex_location (lk pre) a"
-        using `x = a \<or> y = a` xy by auto
-      let ?x2 = "if x = a then x else y"
-      let ?y2 = "if x = a then y else x"
-      have x2: "?x2 = a"                 
-        using `x = a \<or> y = a` by auto
-      hence "?y2 \<in> incCommittedSet s1"
-        using xy monStep by auto
-      hence y2: "?y2 \<in> sameLocLocksUnlocksSet (incCommitted s1) a"
-        using x2 xy unfolding sameLocLocksUnlocksSet_def by (cases "x = a") auto
-      have "(?x2, ?y2) \<in> lo (incWit s2) \<or> (?y2, ?x2) \<in> lo (incWit s2)"
-        using monAddToLo
-        proof (cases rule: monAddToLoE)
-          case (1 z)
-          hence loc_z: "is_at_mutex_location (lk pre) z"
-            unfolding sameLocLocksUnlocksSet_def
-            using same_loc_mutex_location[OF loc, where b=z] 
-            by simp blast
-          have "z \<in> actions0 pre"
-            using 1 inv by auto
-          hence "(?y2, z) \<notin> lo (incWit s1) \<Longrightarrow> ?y2 \<noteq> z \<Longrightarrow> (z, ?y2) \<in> lo (incWit s1)"
-            using 1(1) y2 loc_z xy(1) xy(2)
-            unfolding sameLocLocksUnlocksSet_def
-            by (cases rule: locks_only_consistent_loE2_inv[OF cons_lo]) auto
-          thus ?thesis using 1 x2 y2 by blast
-        next
-          case 2
-          thus ?thesis using x2 y2 by auto
-        qed
-      thus ?thesis by (cases "x = a") auto
-    next
-      assume "x \<noteq> a \<and> y \<noteq> a"
-      hence xy2: "x \<in> incCommittedSet s1" 
-                 "y \<in> incCommittedSet s1"
-        using xy monStep by auto
-      have "(x, y) \<in> lo (incWit s1) \<or> (y, x) \<in> lo (incWit s1)"
-        using cons_lo xy xy2
-        unfolding locks_only_consistent_lo.simps
-        by auto
-      thus ?thesis
-        using monStepE_lo3[OF monStep inv] by fast
-    qed
-qed
-
-subsubsection {* locks_only_consistent_locks *}
-
 subsubsection {* consistent_mo *}
 
 lemma monStep_consistent_mo:
@@ -3790,20 +3494,6 @@ next
         qed
     qed
 qed
-
-subsubsection {* sc_accesses_consistent_sc *}
-
-subsubsection {* sc_fenced_sc_fences_heeded *}
-
-subsubsection {* consistent_hb *}
-
-subsubsection {* det_read_alt *}
-
-subsubsection {* consistent_non_atomic_rf *}
-
-subsubsection {* consistent_atomic_rf *}
-
-subsubsection {* coherent_memory_use *}
 
 subsubsection {* rmw_atomicity *}
 
@@ -3964,8 +3654,6 @@ proof (intro rmw_atomicityI, clarsimp)
         qed
     qed
 qed
-
-subsubsection {* sc_accesses_sc_reads_restricted *}
 
 subsubsection {* Invariant *}
 
@@ -4357,7 +4045,6 @@ next
           and rf: "(rf wit', value0, value0) [\<in>] auxAddPairToRf (rf (incWit s)) w a"
     using step_rf_auxAddPairToRf[OF cons2 downclosed_rf wit committed a(3)] by auto
   have max: "\<forall>c\<in>sameLocWritesSet (incCommitted s) a. (w, c) \<notin> mo (incWit s)" 
-    (* TODO: use max to prove this quicker. *)
     proof 
       fix c
       assume sameLoc: "c \<in> sameLocWritesSet (incCommitted s) a"
@@ -4589,7 +4276,7 @@ lemma step_lo_lock_unlock:
       and a:         "a \<in> actions0 pre'" "a \<notin> incCommittedSet s"
       and is_lo_ulo: "is_lock a \<or> is_unlock a"
   shows              "lo wit' [\<in>] monAddToLo pre a s"
-(* TODO: this lemma is an almost-clone of step_sc_is_sc. *)
+(* This lemma is an almost-clone of step_sc_is_sc. *)
 unfolding monAddToLo_def
 proof -
   let ?lo_list = "sameLocLocksUnlocks (incCommitted s) a"
@@ -4785,7 +4472,7 @@ proof -
     unfolding monPerformLoad_def
     using cons2 rf mo lo sc tot
     apply auto
-    (* TODO: don't know why auto can't figure this out. *)
+    (* Don't know why auto can't figure this out. *)
     apply (intro exI[where x="sc wit'"])
     by auto
 qed   
@@ -4846,7 +4533,7 @@ proof -
     unfolding monPerformStore_def 
     using cons2 rf mo lo sc tot
     apply auto
-    (* TODO: don't know why auto can't figure this out. *)
+    (* Don't know why auto can't figure this out. *)
     apply (intro exI[where x="sc wit'"])
     by auto
 qed   
@@ -4882,7 +4569,7 @@ proof -
     unfolding monPerformRmw_def 
     using cons2 rf mo lo sc tot
     apply simp
-    (* TODO: don't know why auto can't figure this out. *)
+    (* Don't know why auto can't figure this out. *)
     apply (intro exI[where x="sc wit'"])
     apply auto
     apply (intro exI[where x="rf wit'"])
@@ -5113,7 +4800,7 @@ proof -
       thus "x \<in> incCommittedSet s1" using `x \<noteq> a` committed by simp
     qed
   have downclosed_mo: "downclosed (incCommittedSet s1) (mo (incWit s2))"
-    (* TODO: Clone of the proof of downclosed_rf. *)
+    (* Clone of the proof of downclosed_rf. *)
     unfolding downclosed_def
     proof auto
       fix x y
