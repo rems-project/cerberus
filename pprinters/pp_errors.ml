@@ -74,7 +74,8 @@ let make_message loc k str =
             | Some l ->
                 let cpos = pos.pos_cnum - pos.pos_bol in
                 l ^ "\n" ^
-                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+                "WIP KKK"
+(*                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^')) *)
             | None ->
                 "")
       | Loc_region (start_p, end_p, cursor_p_opt) ->
@@ -93,9 +94,10 @@ let make_message loc k str =
                   | None ->
                       cpos1 in
                 l ^ "\n" ^
-                ansi_format [Bold; Green] (String.init (cpos2 + 1)
+                "WIP KKK"
+(*                ansi_format [Bold; Green] (String.init (cpos2 + 1)
                                              (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                                          )
+                                          ) *)
 
 
 

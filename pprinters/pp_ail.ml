@@ -492,20 +492,20 @@ let string_of_octal_big_int n =
     "0"
   else
     let l = string_of_big_int_with_basis n (Nat_big_num.of_int 8) in
-    let ret = Bytes.create (List.length l+1) in
-    Bytes.set ret 0 '0';
+    let ret = String.create (List.length l+1) in
+    String.set ret 0 '0';
     List.iteri (fun i c ->
-      Bytes.set ret (i+1) c
+      String.set ret (i+1) c
     ) l;
     ret
 
 let string_of_hexadecimal_big_int n =
   let l = string_of_big_int_with_basis n (Nat_big_num.of_int 16) in
-  let ret = Bytes.create (List.length l + 2) in
-  Bytes.set ret 0 '0';
-  Bytes.set ret 1 'x';
+  let ret = String.create (List.length l + 2) in
+  String.set ret 0 '0';
+  String.set ret 1 'x';
   List.iteri (fun i c ->
-    Bytes.set ret (i+2) c
+    String.set ret (i+2) c
   ) l;
   ret
 
