@@ -12,7 +12,7 @@ fun main () : [integer] :=
   ret a
 -}
 
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
   let strong _ = store("_Atomic(signed int)", x, 0, release) in
   let strong _ = store("_Atomic(signed int)", x, 1, release) in

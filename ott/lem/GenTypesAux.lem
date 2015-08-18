@@ -2,6 +2,9 @@ open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
 open import GenTypes Implementation
 import AilTypesAux AilTyping
 
+open import Global
+
+
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
 
@@ -206,11 +209,22 @@ let composite_pointer gty1 gty2 =
 let integer_promotion git : genIntegerType =
   Promote git
 
+(* TODO: made obsolete by integer_promote *)
 let promotion gt : maybe genType =
   match gt with
   | GenBasic (GenInteger git) -> Just (GenBasic (GenInteger (integer_promotion git)))
   | _                         -> Nothing
   end
+
+(* NOTE: must be called on a integer type *)
+val integer_promote: genType -> genType
+let integer_promote = function
+  | GenBasic (GenInteger git) ->
+      GenBasic (GenInteger (Promote git))
+  |  _ ->
+      error "GenTypesAux.integer_promote: called on a non-integer type"
+end
+
 
 (* Sound but not principal. *)
 let usual_arithmetic_promoted_integer git1 git2 : genIntegerType =

@@ -26,7 +26,7 @@ fun main () : [integer] :=
   kill(y);
   ret a + (4 * b)
 -}
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
   let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
   let strong _ = store("_Atomic(signed int)", x, 0) in

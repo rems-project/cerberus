@@ -300,7 +300,7 @@ KKKKK NOW
               | OpMod ->
                   Mem_common.IntMod
               | _ ->
-                  assert_false ()
+                  error "Core_run.core_eval, PEop Vinteger Vinteger"
             end in
             EU.return (PEval (Vinteger (Mem.op_ival iop ival1 ival2)))
 
@@ -342,6 +342,69 @@ KKKKK NOW
             end
 
 (* TODO: symbolics *)
+        | (_, Just (Vsymbolic symb), Just (Vinteger ival)) ->
+            let n = match Mem_aux.integerFromIntegerValue ival with
+              | Just n ->
+                  n
+              | Nothing ->
+                  error "Core_run.core_eval PEop: symbolic vs non-trivial ival"
+            end in
+            let sym_op = match binop with
+              | OpAdd ->
+                  Symbolic.Add
+              | OpSub ->
+                  Symbolic.Sub
+              | OpMul ->
+                  Symbolic.Mul
+              | OpDiv ->
+                  Symbolic.Div
+              | OpMod ->
+                  Symbolic.Mod
+              | _ ->
+                  error "Core_run.core_eval, PEop Vsymbolic Vinteger sym_op match"
+            end in
+            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst n))))
+
+        | (_, Just (Vinteger ival), Just (Vsymbolic symb)) ->
+            let n = match Mem_aux.integerFromIntegerValue ival with
+              | Just n ->
+                  n
+              | Nothing ->
+                  error "Core_run.core_eval PEop: non-trivial ival vs symbolic"
+            end in
+            let sym_op = match binop with
+              | OpAdd ->
+                  Symbolic.Add
+              | OpSub ->
+                  Symbolic.Sub
+              | OpMul ->
+                  Symbolic.Mul
+              | OpDiv ->
+                  Symbolic.Div
+              | OpMod ->
+                  Symbolic.Mod
+              | _ ->
+                  error "Core_run.core_eval, PEop Vinteger Vsymbolic sym_op match"
+            end in
+            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst n))))
+
+        | (_, Just (Vsymbolic symb1), Just (Vsymbolic symb2)) ->
+            let sym_op = match binop with
+              | OpAdd ->
+                  Symbolic.Add
+              | OpSub ->
+                  Symbolic.Sub
+              | OpMul ->
+                  Symbolic.Mul
+              | OpDiv ->
+                  Symbolic.Div
+              | OpMod ->
+                  Symbolic.Mod
+              | _ ->
+                  error "Core_run.core_eval, PEop Vsymbolic Vsymbolic sym_op match"
+            end in
+            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb1 symb2)))
+
         | (_, Just _, Just _) ->
             EU.fail $ Illformed_program ("ill-typed PEop: " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
         | _ ->
@@ -882,7 +945,10 @@ type core_step =
 (*  | Step_output of core_runM (string * core_state) *)
   | Step_nd of list core_step
   | Step_blocked
+(*
   | Step_branch of (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_step * core_step
+*)
+  | Step_branch of (* DEBUG *) string * thread_id * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM core_state * core_runM core_state
   | Step_done of Core.value
   
   | Step_spawn_threads of thread_id * thread_state * list thread_state
@@ -1154,6 +1220,7 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
               )
           
           | Just (Vsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 symb2)) ->
+(*
               Step_branch (Constraints.assert_eq symb1 symb2) (Constraints.assert_neq symb1 symb2)
                 (* then *)
                 begin
@@ -1168,6 +1235,20 @@ let core_thread_step file (current_tid, (parent_tid_opt, th_st)) st =
                     let labeled_conts =
                       Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                     update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                end
+*)
+              Step_branch "Eif (symbolic)" current_tid (Constraints.assert_eq symb1 symb2) (Constraints.assert_neq symb1 symb2)
+                (* then *)
+                begin
+                  let labeled_conts =
+                    Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                  update_current_thread <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                end
+                (* else *)
+                begin
+                  let labeled_conts =
+                    Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                  update_current_thread <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
                 end
 
 (*

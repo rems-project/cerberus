@@ -14,7 +14,7 @@ fun main () : [integer] :=
   b <- load(signed int, y);
   ret a + 2 * b + 4 * success
 -}
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
   let strong y = create(<alignof>("signed int"), "signed int") in
   let strong _ = store("_Atomic(signed int)", x, 0) in

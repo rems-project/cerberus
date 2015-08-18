@@ -51,6 +51,7 @@ AIL_LEM=\
   GenTyping.lem
 
 
+
 # The cerberus model
 CERBERUS_LEM=\
   cabs.lem \
@@ -202,7 +203,7 @@ OCAML_LIBS=\
 
 %.cmx: %.ml
 	@echo ${BOLD}OCAMLOPT${NOCOLOUR} $<
-	@ocamlopt -c $(LIBS) $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS)) $<
+	@ocamlopt -g -c $(LIBS) $(addprefix -I , $(OCAML_LIBS) $(OCAML_DIRS)) $<
 
 %.ml %.mli: %.mll
 	@echo ${BOLD}OCAMLLEX${NOCOLOUR} $<
@@ -233,7 +234,7 @@ ocaml_native: | depend dependencies
 #	@echo $(TIME)
 #	@$(shell sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(echo `hg id` \(\) | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\\&/g')/g" src/main.ml)
 	make src/main.cmx
-	ocamlopt unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
+	ocamlopt -g unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
 	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(CMXS) -o cerberus
 #	mv src/main.ml.sed src/main.ml
 

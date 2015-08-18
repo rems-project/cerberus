@@ -18,7 +18,7 @@ fun main () : [integer] :=
   kill(x);
   ret 0
 -}
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("signed int"), "signed int") in
   let strong _ = store("signed int", x, 0) in
   let strong _ = par(

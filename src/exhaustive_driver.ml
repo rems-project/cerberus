@@ -118,21 +118,21 @@ let drive sym_supply file args with_concurrency : execution_result =
       | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
           let str_v = String_core.string_of_pexpr pe in
           if not (List.mem str_v !ky) then (
-            Debug.print_debug 2 (
-              Printf.sprintf "Execution #%d under constraints:\n=====\n%s\n=====\n" n (pp_constraints constraints) ^
-              Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps ^
-              Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log)))
+            Debug.print_debug 3 (
+              Printf.sprintf "Execution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (pp_constraints constraints) ^
+              Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps (* ^
+              Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log))) *)
             );
           );
           if not (List.mem str_v !ky) && not is_blocked then (
             if with_concurrency then
-              Debug.print_debug 2 (Pp_cmm.dot_of_exeState conc_st str_v (pp_constraints constraints));
+              Debug.print_debug 6 (Pp_cmm.dot_of_exeState conc_st str_v (pp_constraints constraints));
             print_string stdout;
             
             ky := str_v :: !ky;
             ret := pe :: !ret;
         ) else
-          Debug.print_debug 3 (
+          Debug.print_debug 4 (
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^
             "eqs= " ^ pp_constraints constraints
           );
@@ -152,7 +152,7 @@ let drive sym_supply file args with_concurrency : execution_result =
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR: " ^ str)))
       
       | ND.Killed (ND.Other reason, log, constraints) ->
-          Debug.print_debug 3 (
+          Debug.print_debug 5 (
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log)))
           )

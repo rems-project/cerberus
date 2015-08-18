@@ -3,7 +3,7 @@
    them can be 1.  An exhaustive execution of this program should
    therefore return the values 0, 1, 2 and 3.  -}
 
-fun main () : [integer] :=
+proc main () : eff integer :=
   let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
   let strong _ = store("_Atomic(signed int)", x, 0) in
   let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
