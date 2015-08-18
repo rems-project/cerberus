@@ -176,6 +176,17 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 #	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/executableOpsem.ml
 	rm -f $(BUILD_DIR)/*.lem
 
+DOC_BUILD_DIR=generated_doc
+
+lem_model_tex alldoc.tex: copy_cmm copy_cmm_exec copy_ail copy_cerberus
+	OCAMLRUNPARAM=b $(LEM) -outdir $(DOC_BUILD_DIR) -only_changed_output -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem)
+
+lem_model.pdf: alldoc.tex
+	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+
+lem_model_pdf: 
+	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+
 
 dependencies:
 	mkdir dependencies
