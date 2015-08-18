@@ -10,8 +10,6 @@ instance (Default unit)
   let default = ()
 end
 
-val assert_false: forall 'a. unit -> 'a
-declare ocaml target_rep function assert_false = `Debug.assert_false`
 
 val error: forall 'a. string -> 'a
 declare ocaml target_rep function error = `Debug.error`
@@ -89,7 +87,7 @@ let rec foldl2 f z xs ys =
         z
     | (a::xs', b::ys') ->
         foldl2 f (f z a b) xs' ys'
-    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
+    (* | _ -> error "[Global.foldl2] the twos weren't of same length" *)
   end
 
 
@@ -101,14 +99,14 @@ let rec map2_ f xs ys acc =
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
         acc
-    (* | _ -> assert_false_ "[Global.foldl2] the twos weren't of same length" *)
+    (* | _ -> error "[Global.foldl2] the twos weren't of same length" *)
   end
 let map2 f xs ys = map2_ f xs ys []
 
-let fromJust z = maybe (assert_false ()) id z
+let fromJust z = maybe (error "Global.fromJust") id z
 
-let fromLeft z = either id (assert_false ()) z
-let fromRight z = either (assert_false ()) id z
+let fromLeft z = either id (error "Global.fromLeft") z
+let fromRight z = either (error "Global.fromLeft") id z
 
 
 
@@ -311,7 +309,7 @@ let second f (x, y) =
 val     list_index_update: forall 'a. nat -> ('a -> 'a) -> list 'a -> list 'a
 let rec list_index_update n f = function
   | [] ->
-      assert_false ()
+      error "Global.list_index_update"
   | x::xs ->
       if n = 0 then
         f x :: xs

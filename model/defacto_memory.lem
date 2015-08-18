@@ -1238,6 +1238,12 @@ let member_shift_ptrval ptr_val tag_sym memb_ident =
 let integer_ival n =
   IV Prov_none (IVconcrete n)
 
+let max_ival ity =
+  error "WIP: Defacto_memory.max_ival"
+
+let min_ival ity =
+  error "WIP: Defacto_memory.min_ival"
+
 
 let op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
   IV (prov_union prov1 prov2) (simplify_integer_value_aux (IVop iop [ival_1; ival_2]))

@@ -199,8 +199,10 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
   if AilTypesAux.corresponding_real_type ty1 = Just longDouble_ty || AilTypesAux.corresponding_real_type ty2 = Just longDouble_ty then
     error "WIP: Translate_aux.mk_usual_arithmetic_conversions, long double case"
   else if AilTypesAux.corresponding_real_type ty1 = Just double_ty || AilTypesAux.corresponding_real_type ty2 = Just double_ty then
-    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, double case"    
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, double case"
   else if AilTypesAux.corresponding_real_type ty1 = Just float_ty || AilTypesAux.corresponding_real_type ty2 = Just float_ty then
     error "WIP: Translate_aux.mk_usual_arithmetic_conversions, float case"
   else
-    error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!"
+    (* error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!" *)
+    (* TODO !!!!!!! *)
+    mk_pexpr pe1 pe2

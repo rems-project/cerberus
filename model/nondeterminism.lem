@@ -323,7 +323,8 @@ let tryM (ND ma) mf mend =
 
 val kill: forall 'a. kill_reason -> t 'a
 let kill reason =
-  ND [([], Killed reason Dlist.nil Constraints.empty)]
+(*  ND [([], Killed reason Dlist.nil Constraints.empty)] *)
+  ND []
 
 (* The reason contains the message in the case the guard is FALSE. *)
 val guard: bool -> kill_reason -> t unit

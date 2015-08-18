@@ -1,4 +1,4 @@
-val assert_false: unit -> 'a
+(* val assert_false: unit -> 'a *)
 val error: string -> 'a
 
 val debug_level: int ref

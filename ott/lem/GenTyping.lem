@@ -383,6 +383,96 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
   let annotate_assignee   = annotate_assignee_aux sigm annotate_rvalue                         in
   let annotate_arguments  = annotate_arguments_aux annot annotate_expression annotate_assignee in
   match expr with
+    | AilEunary (Plus as uop) e ->
+        (* STD §6.5.3.3#1, sentence 1 *)
+        annotate_rvalue e >>= fun (a_e, gty) ->
+        if is_arithmetic gty then
+          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+        else
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
+    | AilEunary (Minus as uop) e ->
+        (* STD §6.5.3.3#1, sentence 1 *)
+        annotate_rvalue e >>= fun (a_e, gty) ->
+        if is_arithmetic gty then
+          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+        else
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
+    | AilEunary (Bnot as uop) e ->
+        (* STD §6.5.3.3#1, sentence 2 *)
+        annotate_rvalue e >>= fun (a_e, gty) ->
+        if is_integer gty then
+          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+        else
+          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 2")
+    | AilEunary (Address as uop) e ->
+        annotate_expression e >>= fun a_e ->
+        match type_of annot a_e with
+          | GenLValueType qs ty ->
+              E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
+          | GenRValueType (GenFunction ty p b) ->
+              E.return (AilEunary Address a_e, GenRValueType (GenPointer no_qualifiers (Function ty p b)))
+          | _ ->
+              E.fail (locOf e) (TError_TODO 14)
+        end
+    
+    
+    | AilEunary Indirection e ->
+        annotate_rvalue e >>= fun (e', gty) ->
+        match gty with
+          | GenPointer qs (Function ty params is_variadic) ->
+              if AilTypesAux.is_unqualified qs
+              then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function ty params is_variadic)))
+              else E.fail Loc.unknown (TError_TODO 18)
+          | GenPointer qs ty ->
+              if AilTypesAux.is_complete sigm ty && AilTypesAux.is_object ty
+              then E.return (AilEunary Indirection e', GenLValueType qs ty)
+              else E.fail Loc.unknown (TError_TODO 19)
+          | _ ->
+              E.fail Loc.unknown (TError_TODO 20)
+        end
+    | AilEunary (PostfixIncr as uop) e ->
+        annotate_expression e >>= fun e' ->
+        match type_of annot e' with
+          | GenLValueType qs' ty' ->
+              AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
+              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
+                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              else
+                E.fail Loc.unknown (TError_TODO 21)
+          | _ -> E.fail Loc.unknown (TError_TODO 22)
+        end
+    | AilEunary (PostfixDecr as uop) e ->
+        annotate_expression e >>= fun e' ->
+        match type_of annot e' with
+          | GenLValueType qs' ty' ->
+              AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
+              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
+                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
+              else
+                E.fail Loc.unknown (TError_TODO 23)
+          | _ -> E.fail Loc.unknown (TError_TODO 24)
+        end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     | AilEarray elem_ty e_opts ->
         (* TODO: think about it *)
         E.mapM (maybe (E.return Nothing) (fun z -> Just <$> annotate_rvalue z)) e_opts >>= fun xs ->
@@ -522,92 +612,6 @@ OLD(sigma_declaration)
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         E.return (AilEbinary e1' Comma e2', GenRValueType gty2)
     
-    | AilEunary Address e ->
-        annotate_expression e >>= fun e ->
-        match type_of annot e with
-          | GenLValueType qs ty ->
-              E.return (AilEunary Address e, GenRValueType (GenPointer qs ty))
-          | GenRValueType (GenFunction ty p b) ->
-              E.return (AilEunary Address e, GenRValueType (GenPointer no_qualifiers (Function ty p b)))
-          | _ ->
-              E.fail (locOf e) (TError_TODO 14)
-        end
-    
-    | AilEunary (Plus as uop) e ->
-        (* STD §6.5.3.3#1, sentence 1 *)
-        annotate_rvalue e >>= fun (e', gty) ->
-        if is_arithmetic gty then
-          match promotion gty with
-            | Nothing ->
-                error "promotion failed on an arithmetic genType"
-            | Just gty' ->
-                E.return (AilEunary uop e', GenRValueType gty')
-          end
-        else
-          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
-    
-    | AilEunary (Minus as uop) e ->
-        (* STD §6.5.3.3#1, sentence 1 *)
-        annotate_rvalue e >>= fun (e', gty) ->
-        if is_arithmetic gty then
-          match promotion gty with
-            | Nothing ->
-                error "promotion failed on an arithmetic genType"
-            | Just gty' ->
-                E.return (AilEunary uop e', GenRValueType gty')
-          end
-        else
-          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
-    
-    | AilEunary Bnot e ->
-        (* STD §6.5.3.3#1, sentence 2 *)
-        annotate_rvalue e >>= fun (e', gty) ->
-        if is_integer gty then
-          match promotion gty with
-            | Nothing ->
-                error "promotion failed on an arithmetic genType"
-            | Just gty' ->
-                E.return (AilEunary Bnot e', GenRValueType gty')
-          end
-        else
-          E.fail (locOf e) (TError "§6.5.3.3#1, sentence 2")
-    
-    | AilEunary Indirection e ->
-        annotate_rvalue e >>= fun (e', gty) ->
-        match gty with
-          | GenPointer qs (Function ty params is_variadic) ->
-              if AilTypesAux.is_unqualified qs
-              then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function ty params is_variadic)))
-              else E.fail Loc.unknown (TError_TODO 18)
-          | GenPointer qs ty ->
-              if AilTypesAux.is_complete sigm ty && AilTypesAux.is_object ty
-              then E.return (AilEunary Indirection e', GenLValueType qs ty)
-              else E.fail Loc.unknown (TError_TODO 19)
-          | _ ->
-              E.fail Loc.unknown (TError_TODO 20)
-        end
-    | AilEunary (PostfixIncr as uop) e ->
-        annotate_expression e >>= fun e' ->
-        match type_of annot e' with
-          | GenLValueType qs' ty' ->
-              AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
-              else
-                E.fail Loc.unknown (TError_TODO 21)
-          | _ -> E.fail Loc.unknown (TError_TODO 22)
-        end
-    | AilEunary (PostfixDecr as uop) e ->
-        annotate_expression e >>= fun e' ->
-        match type_of annot e' with
-          | GenLValueType qs' ty' ->
-              AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
-                E.return (AilEunary uop e', GenRValueType (inject_type ty'))
-              else
-                E.fail Loc.unknown (TError_TODO 23)
-          | _ -> E.fail Loc.unknown (TError_TODO 24)
-        end
      
      (* TODO: it may be to restrictive to only direct left-expressions for atomic functions *)
      | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->

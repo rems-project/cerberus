@@ -34,6 +34,7 @@ end
 open Operators
 
 
+
 (*
 val translate_lvalue:
   map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))   ->
@@ -42,6 +43,7 @@ val translate_lvalue:
   E.t (C.expr unit)
 *)
 
+(*
 val translate_function_designator:
   A.expression GenTypes.genTypeCategory ->
   E.t (C.expr unit)
@@ -51,15 +53,10 @@ val translate_expression:
   C.fun_map unit -> A.program GenTypes.genTypeCategory            ->
   A.expression GenTypes.genTypeCategory                           ->
   E.t (C.expr unit)
+*)
 
 (* val collect_cases *)
 
-val translate_stmt:
-  map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))   ->
-  C.fun_map unit -> A.program GenTypes.genTypeCategory -> A.identifier    ->
-  maybe Symbol.t -> maybe (map integer Symbol.t) -> maybe Symbol.t -> maybe Symbol.t ->
-  A.statement GenTypes.genTypeCategory                                    ->
-  E.t (C.expr unit)
 
 val translate_program:
   map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))   ->
@@ -72,6 +69,9 @@ val translate:
 
 
 (* ========================================================================== *)
+
+
+
 
 val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.t -> Cabs.cabs_identifier -> C.shift_path
 let shiftPathFromMember program tag ident =
@@ -96,7 +96,7 @@ let shiftPathFromMember program tag ident =
         [(Caux.proj_ctype (fromJust $ List.lookup ident ident_tys), Caux.zero)]
     
     | Nothing ->
-        assert_false ()
+        error ("Translation.shiftPathFromMember: couldn't find a definition for `" ^ show tag ^ "'")
   end
 
 (*
@@ -159,6 +159,31 @@ let rec translate_lvalue tagDefs stdlib program a_expr =
   | _ -> error ("[Translation.translate_lvalue] wildcard case: " ^ Boot.pp_ail_expr a_expr)
 end
 *)
+
+
+
+val translate_integerConstant: A.integerConstant -> C.pexpr
+let translate_integerConstant iCst =
+  C.PEval (C.Vinteger (
+    match iCst with
+      | A.IConstant n _ _ ->
+          Mem.integer_ival n
+      | A.IConstantMax ity ->
+          Mem.max_ival ity
+      | A.IConstantMin ity ->
+          Mem.min_ival ity
+    end
+  ))
+
+
+
+
+
+
+
+
+
+
 
 
 let rec translate_function_designator (A.AnnotatedExpression _ (* TODO: loc *) _ expr) =
@@ -281,11 +306,11 @@ and translate_expression tagDefs stdlib program a_expr =
           else
             E.return $ mul_ctx (conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEsym sym_mul])
       
-      | A.AilEbinary e1 (A.Arithmetic A.Div) e2 -> do E
-          a_e1    <- E.fresh_symbol;
-          a_e2    <- E.fresh_symbol;
-          core_e1 <- translate_expression e1;
-          core_e2 <- translate_expression e2; in
+      | A.AilEbinary e1 (A.Arithmetic A.Div) e2 ->
+          E.fresh_symbol >>= fun a_e1 ->
+          E.fresh_symbol >>= fun a_e2 ->
+          translate_expression e1 >>= fun core_e1 ->
+          translate_expression e2 >>= fun core_e2 ->
             (* TODO[check] usual arithmetic conversions *)
             let core_e1' = usual_arithmetic_conv (C.PEsym a_e1) (exp_type_of e1) (exp_type_of e2) in
             let core_e2' = usual_arithmetic_conv (C.PEsym a_e2) (exp_type_of e2) (exp_type_of e1) in
@@ -302,13 +327,12 @@ and translate_expression tagDefs stdlib program a_expr =
                             (C.PEop C.OpDiv core_e1' core_e2')
                          )
                 )
-          end
       
-      | A.AilEbinary e1 (A.Arithmetic A.Mod) e2 -> do E
-          a_e1    <- E.fresh_symbol;
-          a_e2    <- E.fresh_symbol;
-          core_e1 <- translate_expression e1;
-          core_e2 <- translate_expression e2; in
+      | A.AilEbinary e1 (A.Arithmetic A.Mod) e2 ->
+          E.fresh_symbol >>= fun a_e1 ->
+          E.fresh_symbol >>= fun a_e2 ->
+          translate_expression e1 >>= fun core_e1 ->
+          translate_expression e2 >>= fun core_e2 ->
             (* TODO[check] usual arithmetic conversions *)
             let core_e1' = usual_arithmetic_conv (C.PEsym a_e1) (exp_type_of e1) (exp_type_of e2) in
             let core_e2' = usual_arithmetic_conv (C.PEsym a_e2) (exp_type_of e2) (exp_type_of e1) in
@@ -325,15 +349,15 @@ and translate_expression tagDefs stdlib program a_expr =
                             (C.PEop C.OpMod core_e1' core_e2')
                          )
                 )
-          end
+
       
       (* DONE (check promotion stuff) *)
-      | A.AilEbinary e1 (A.Arithmetic A.Shl) e2 -> do E
-          a_e1    <- E.fresh_symbol;
-          a_e2    <- E.fresh_symbol;
-          a_res   <- E.fresh_symbol;
-          core_e1 <- translate_expression e1;
-          core_e2 <- translate_expression e2; in
+      | A.AilEbinary e1 (A.Arithmetic A.Shl) e2 ->
+          E.fresh_symbol >>= fun a_e1 ->
+          E.fresh_symbol >>= fun a_e2 ->
+          E.fresh_symbol >>= fun a_res ->
+          translate_expression e1 >>= fun core_e1 ->
+          translate_expression e2 >>= fun core_e2 ->
             E.return $
               C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
               (* (§6.5.7#2) if a_e2 < 0 then undef *)
@@ -371,15 +395,15 @@ and translate_expression tagDefs stdlib program a_expr =
                  )
               )
               )
-          end
+
       
       (* DONE (check promotion stuff) *)
       (* see §6.5.7#5 *)
-      | A.AilEbinary e1 (A.Arithmetic A.Shr) e2 -> do E
-          a_e1    <- E.fresh_symbol;
-          a_e2    <- E.fresh_symbol;
-          core_e1 <- translate_expression e1;
-          core_e2 <- translate_expression e2; in
+      | A.AilEbinary e1 (A.Arithmetic A.Shr) e2 ->
+          E.fresh_symbol >>= fun a_e1 ->
+          E.fresh_symbol >>= fun a_e2 ->
+          translate_expression e1 >>= fun core_e1 ->
+          translate_expression e2 >>= fun core_e2 ->
             E.return $
               C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
               (* (§6.5.7#2) if a_e2 < 0 then undef *)
@@ -407,7 +431,6 @@ and translate_expression tagDefs stdlib program a_expr =
                     (C.PEcall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ctype (ctype_of e1) ; C.PEsym a_e1; C.PEsym a_e2])
                     expr)
                ))
-          end
       
       (* DONE (check promotion stuff) *)
       | A.AilEbinary e1 (A.Arithmetic A.Band) e2 ->
@@ -520,6 +543,8 @@ and translate_expression tagDefs stdlib program a_expr =
                           performed on them. *)
             translate_expression e1 >>= fun core_e1 ->
             translate_expression e2 >>= fun core_e2 ->
+            E.print_debug 3 ("ADD(1) " ^ Boot.pp_ail_ctype ty1 ^ " vs " ^ Boot.pp_ail_ctype ty2) >>
+            E.print_debug 3 ("ADD(2) " ^ Boot.pp_ail_ctype (exp_type_of e1) ^ " vs " ^ Boot.pp_ail_ctype (exp_type_of e2)) >>
             let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
             let conv_pe1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
             let conv_pe2 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e2] in
@@ -582,7 +607,13 @@ and translate_expression tagDefs stdlib program a_expr =
                           performed on them. *)
             translate_expression e1 >>= fun core_e1 ->
             translate_expression e2 >>= fun core_e2 ->
+
+            E.print_debug 9 ("ty1 = " ^ Boot.pp_ail_ctype ty1) >>
+            E.print_debug 9 ("ty2 = " ^ Boot.pp_ail_ctype ty2) >>
+
             let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
+
+            E.print_debug 9 "AFTER fromJust" >>
             let conv_e1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
             let conv_e2 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e2] in
             E.return $
@@ -735,7 +766,7 @@ and translate_expression tagDefs stdlib program a_expr =
                  (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
               )
           else
-            assert_false () (* this Ail program shouldn't have typechecked *)
+            error "Translation.translate_expression, AilEbinary Lt: Ail type error"
       
       | A.AilEbinary e1 A.Gt e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
@@ -758,7 +789,7 @@ and translate_expression tagDefs stdlib program a_expr =
                  (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
               )
           else
-            assert_false () (* this Ail program shouldn't have typechecked *)
+            error "Translation.translate_expression, AilEbinary Gt: Ail type error"
       
       | A.AilEbinary e1 A.Le e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
@@ -781,7 +812,7 @@ and translate_expression tagDefs stdlib program a_expr =
                  (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
               )
           else
-            assert_false () (* this Ail program shouldn't have typechecked *)
+            error "Translation.translate_expression, AilEbinary Le: Ail type error"
       
       | A.AilEbinary e1 A.Ge e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
@@ -804,7 +835,7 @@ and translate_expression tagDefs stdlib program a_expr =
                  (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
               )
           else
-            assert_false () (* this Ail program shouldn't have typechecked *)
+            error "Translation.translate_expression, AilEbinary Ge: Ail type error"
       
 (* STD §6.5.9 Equality operators *)
 (*
@@ -967,7 +998,7 @@ and translate_expression tagDefs stdlib program a_expr =
            | Aty.Pointer _ ty ->
                ty
            | _ ->
-               assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+               error "Translation.translate_expression, AilEcall atomic_store_explicit: Ail type error"
          end in
          
          E.fresh_symbol                 >>= fun sym_object     ->
@@ -1000,7 +1031,7 @@ and translate_expression tagDefs stdlib program a_expr =
            | Aty.Pointer _ ty ->
                ty
            | _ ->
-               assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+               error "Translation.translate_expression, AilEcall atomic_load_explicit: Ail type error"
          end in
          
          E.fresh_symbol                >>= fun sym_object    ->
@@ -1018,6 +1049,12 @@ and translate_expression tagDefs stdlib program a_expr =
       | A.AilEcall e es ->
 (*          E.fresh_symbol         >>= fun sym_e  -> *)
 (*          translate_expression e >>= fun core_e -> *)
+
+
+        E.print_debug 2 "BEGINNING AilEcall" >> (* DEBUG *)
+
+
+
           match e with
             | A.AnnotatedExpression _ _ (A.AilEident fid) ->
                 (* If the function is just declared in a prototype but not defined,
@@ -1035,7 +1072,7 @@ and translate_expression tagDefs stdlib program a_expr =
                           (* TODO: temporary hack *)
                         match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "printf_proxy" | _ -> false end) (Map_extra.toList stdlib) with
                           | Just (f, _) -> Core.Sym f
-                          | Nothing -> assert_false ()
+                          | Nothing -> error "Translation.translate_expression, AilEcall printf"
                         end
 
 
@@ -1104,6 +1141,11 @@ and translate_expression tagDefs stdlib program a_expr =
                   
                   (* symbolic name for the call result *)
                   E.fresh_symbol >>= fun a_call ->
+
+
+        E.print_debug 2 "ENDING AilEcall" >> (* DEBUG *)
+
+(
                   E.return $
                     C.Ewseq (List.map (fun z -> Just z) as_tmp) (Caux.mk_unseq core_creates)
                       (C.Ewseq [] (Caux.mk_unseq core_inits)
@@ -1114,6 +1156,7 @@ and translate_expression tagDefs stdlib program a_expr =
                           )
                         )
                       )
+)
             | _ -> error "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
           end
       
@@ -1133,7 +1176,7 @@ and translate_expression tagDefs stdlib program a_expr =
             | Aty.Array ty _ ->
                 ty
             | _ ->
-                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+                error "Translation.translate_expression, AilEarray: Ail type error"
           end in
           E.foldlM (fun (acc, mk_core) e_opt ->
             match e_opt with
@@ -1182,7 +1225,7 @@ and translate_expression tagDefs stdlib program a_expr =
             | Aty.Union tag_sym ->
                 tag_sym
             | _ ->
-                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+                error "Translation.translate_expression, AilEmemberof: Ail type error"
           end in
           E.fresh_symbol         >>= fun sym_e  ->
           translate_expression e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)
@@ -1210,7 +1253,7 @@ and translate_expression tagDefs stdlib program a_expr =
             | Aty.Pointer _ (Aty.Union tag_sym) ->
                 tag_sym
             | _ ->
-                assert_false () (* otherwise the Ail program wouldn't have typechecked *)
+                error "Translation.translate_expression, AilEmemberofptr: Ail type error"
           end in
 
           (* TODO: check, looks fishy *)
@@ -1400,9 +1443,6 @@ a
 
 
 
-
-
-
 (* translate_stmt Pmap.empty program program.A.main C.Constants.return s *)
 
 (* TODO[über HACK] `lasts' is the last of symbolic names saving the last statement for each block we are in
@@ -1417,13 +1457,13 @@ open State_operators
 
 type collect_cases_state = <|
   found_default: bool;
-  cases: list A.integerConstant
+  case_csts: list A.integerConstant
 |>
 
 val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.t unit collect_cases_state
 let rec collect_cases_ (A.AnnotatedStatement _ stmt) =
   let register_case n =
-    St.update (fun s -> <| s with cases= n :: s.cases |>) in
+    St.update (fun s -> <| s with case_csts= n :: s.case_csts |>) in
   let register_default =
     St.update (fun s -> <| s with found_default= true |>) in
   match stmt with
@@ -1464,16 +1504,33 @@ let rec collect_cases_ (A.AnnotatedStatement _ stmt) =
         St.mapM_ collect_cases_ ss
   end
 let collect_cases s =
-  snd $ St.run (collect_cases_ s) <| found_default= false; cases= [] |>
+  snd $ St.run (collect_cases_ s) <| found_default= false; case_csts= [] |>
 
 
 open Operators
 
-let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break (A.AnnotatedStatement _ stmt) =
-  let translate_expression e = translate_expression tagDefs stdlib program e                              in
-  let translate_stmt_ s      = translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break s in
-  let mk_stdcall fname       = mk_stdcall stdlib fname                                                    in
-  let conv_int               = mk_stdcall "conv_int"                                                      in
+type translate_stmt_labels = <|
+  default : maybe C.ksym;
+  cases   : list (C.sym * C.ksym); (* the syms are bound to the pexprs corresponding to the integer constants *)
+  loop    : maybe C.ksym;
+  break   : maybe C.ksym;
+|>
+
+
+val translate_stmt:
+  map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))   ->
+  C.fun_map unit -> A.program GenTypes.genTypeCategory -> A.identifier    ->
+(*  maybe Symbol.t -> maybe (map integer Symbol.t) -> maybe Symbol.t -> maybe Symbol.t -> *)
+  translate_stmt_labels ->
+  A.statement GenTypes.genTypeCategory                                    ->
+  E.t (C.expr unit)
+
+
+let rec translate_stmt tagDefs stdlib program f labs (A.AnnotatedStatement _ stmt) =
+  let translate_expression e = translate_expression tagDefs stdlib program e  in
+  let translate_stmt_ s      = translate_stmt tagDefs stdlib program f labs s in
+  let mk_stdcall fname       = mk_stdcall stdlib fname                        in
+  let conv_int               = mk_stdcall "conv_int"                          in
   match stmt with
     | A.AilSskip ->
         E.return C.Eskip
@@ -1482,7 +1539,6 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
         translate_expression e
     
     | A.AilSblock binds ss ->
-(*        let ids = [id | forall ((id, _) MEM binds) | true] in *)
         let decls = [(id,ty) | forall ((id, (dur, qs, ty)) MEM binds) | true] in
         
         (* the symbolic names and create actions for the local variables *)
@@ -1491,12 +1547,8 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
             let c_ty = Caux.mk_ctype ty in
             (Just a, Caux.pcreate (Caux.alignof c_ty) c_ty [f; a])
           ) decls in
-
-        let _ = Boot.print_debug 2 ("AilSblock CREATES for: " ^ show a_ids) in (* DEBUG *)
-        
-        
+        E.print_debug 2 ("AilSblock CREATES for: " ^ show a_ids) >> (* DEBUG *)
         E.push_block_objects (List.map (fun (sym, (_, _, ty)) -> (sym, ty)) binds) >>
-        
         (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
                  but it may be nasty to the check.
                  For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
@@ -1566,16 +1618,34 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
 
 *)  
     
-    | A.AilSif e s1 s2 -> do E
-        a_test  <- E.fresh_symbol;
-        core_e  <- translate_expression e;
-        core_s1 <- translate_stmt_ s1;
-        core_s2 <- translate_stmt_ s2; in
-          E.return $ C.Ewseq [Just a_test] core_e
-                       (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym a_test) Caux.zero)) core_s1 core_s2)
-        end
+    | A.AilSif e s1 s2 ->
+        E.fresh_symbol         >>= fun sym_if  ->
+        translate_expression e >>= fun core_e  ->
+        translate_stmt_ s1     >>= fun core_s1 ->
+        translate_stmt_ s2     >>= fun core_s2 ->
+        E.return $
+          C.Ewseq [Just sym_if] core_e (
+            C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_if) Caux.zero)) core_s1 core_s2
+          )
     
-    | A.AilSwhile e s -> do E
+    | A.AilSwhile e s ->
+        E.fresh_symbol               >>= fun sym_e     ->
+        E.fresh_named_symbol "loop"  >>= fun sym_loop  ->
+        E.fresh_named_symbol "break" >>= fun sym_break ->
+        translate_expression e       >>= fun core_e    ->
+        translate_stmt tagDefs stdlib program f
+            <| labs with loop= Just sym_loop; break= Just sym_break |> s >>= fun core_s ->
+        E.get_visible_objects >>= fun visible_syms ->
+        (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
+        E.return $
+          C.Esave sym_loop [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ]
+            (C.Esseq [Just sym_e] core_e
+               (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e) Caux.zero))
+                  (C.Esseq [] core_s (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]))
+                  (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
+               )
+            )
+(*
         a_e        <- E.fresh_symbol;
         d_loop     <- E.fresh_named_symbol "loop";
         d_break    <- E.fresh_named_symbol "break";
@@ -1592,35 +1662,37 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
                  )
               )
         end
+*)
     
-    | A.AilSdo s e -> do E
-        d_loop     <- E.fresh_symbol;
-        d_break    <- E.fresh_symbol;
-        core_s     <- translate_stmt tagDefs stdlib program f d_default d_cases (Just d_loop) (Just d_break) s;
-        core_e     <- translate_expression e;
-        a          <- E.fresh_symbol;
-        visible_as <- E.get_visible_objects; in
+    | A.AilSdo s e ->
+        E.fresh_symbol               >>= fun sym_e     ->
+        E.fresh_named_symbol "loop"  >>= fun sym_loop  ->
+        E.fresh_named_symbol "break" >>= fun sym_break ->
+        translate_expression e       >>= fun core_e    ->
+        translate_stmt tagDefs stdlib program f
+            <| labs with loop= Just sym_loop; break= Just sym_break |> s >>= fun core_s ->
+        E.get_visible_objects >>= fun visible_syms ->
           (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
           E.return $
-            C.Esave d_loop [ (a, Cty.Void)  | forall (a MEM visible_as) | true ]
+            C.Esave sym_loop [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ]
               (C.Esseq [] core_s
-                 (C.Esseq [Just a] core_e
-                    (C.Eif (C.PEop C.OpEq (C.PEsym a) Caux.zero)
-                       (C.Esave d_break [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] C.Eskip)
-                       (C.Erun default d_loop [ (a, C.PEsym a) | forall (a MEM visible_as) | true ])
+                 (C.Esseq [Just sym_e] core_e
+                    (C.Eif (C.PEop C.OpEq (C.PEsym sym_e) Caux.zero)
+                       (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
+                       (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ])
                     )
                  )
               )
-        end
     
-    | A.AilSbreak -> do E
-        visible_as <- E.get_visible_objects; in
-          E.return $ C.Erun default (fromJust d_break) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
-        end
+    | A.AilSbreak ->
+        E.get_visible_objects >>= fun visible_syms ->
+        E.return $
+          C.Erun default (fromJust labs.break) [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]
+
     
     | A.AilScontinue -> do E
         visible_as <- E.get_visible_objects; in
-          E.return $ C.Erun default (fromJust d_loop) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
+          E.return $ C.Erun default (fromJust labs.loop) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
         end
     
     | A.AilSreturnVoid -> do E
@@ -1649,23 +1721,28 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
     (* Need to do the promotions *)
     (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
     | A.AilSswitch e s ->
+          
+
+
+(*
+        E.fresh_symbol         >>= fun sym_e  ->
         translate_expression e >>= fun core_e ->
-        E.fresh_symbol                        >>= fun a_e    ->
         (* TODO: should properly interpret the integer constants *)
         let ((found_default, ns) : bool * list integer) =
           let x = collect_cases s in
-          (x.found_default, List.map (fun (A.IConstant z _ _) -> z) x.cases) in
+          (x.found_default, List.map (fun (A.IConstant z _ _) -> z) x.case_csts) in
         E.replicateM (List.length ns) (E.fresh_named_symbol "case") >>= fun (ds : list C.ksym) ->
-        let d_cases' = foldl (fun acc (n, d) ->
+        let syms_case' = foldl (fun acc (n, d) ->
           Map.insert n d acc) Map.empty (zip ns ds) in
-        E.fresh_named_symbol "default" >>= fun d_default' ->
+        E.fresh_named_symbol "default" >>= fun sym_default' ->
         (if found_default then
           E.fresh_named_symbol "break"
         else
-            E.return d_default') >>= fun d_break' ->
+            E.return sym_default') >>= fun sym_break' ->
         E.get_visible_objects  >>= fun visible_as      ->
         let run_as = [ (a, C.PEsym a) | forall (a MEM visible_as) | true ] in
-        translate_stmt tagDefs stdlib program f (Just d_default') (Just d_cases') d_loop (Just d_break') s >>= fun core_s ->
+        translate_stmt tagDefs stdlib program f
+          <| labs with default= Just sym_default'; cases= Just syms_cases; break= sym_break' |>  s >>= fun core_s ->
         E.return $
           C.Ewseq [Just a_e] core_e
             (foldl (fun acc (n, d) ->
@@ -1673,25 +1750,34 @@ let rec translate_stmt tagDefs stdlib program f d_default d_cases d_loop d_break
                 (C.Erun default d run_as)
                 acc
              )
-               (C.Ewseq [] (C.Erun default d_default' run_as)
+               (C.Ewseq [] (C.Erun default sym_default' run_as)
                   (C.Ewseq [] core_s
-                     (C.Esave d_break' [ (a, Cty.Void) | forall (a MEM visible_as) | true ] C.Eskip)
+                     (C.Esave sym_break' [ (a, Cty.Void) | forall (a MEM visible_as) | true ] C.Eskip)
                   )
                )
-               $ Map_extra.toList d_cases')
+               $ Map_extra.toList syms_cases')
+*)
+
+        error "WIP: switch elab"
+
     
     (* Need to do the promotions *)
-    | A.AilScase n s -> do E
-        core_s     <- translate_stmt_ s;
-        visible_as <- E.get_visible_objects; in
+    | A.AilScase iCst s ->
+(*
+        translate_stmt_ s     >>= fun core_s       ->
+        E.get_visible_objects >>= fun visible_syms ->
+        let iCst_pe = translate_integerConstant iCst in
+        
           (* TODO: should properly interpret the integer constant *)
-          E.return $ C.Esave (fromJust $ Map.lookup ((fun (A.IConstant z _ _) -> z) n) (fromJust d_cases)) [ (a, Cty.Void) | forall (a MEM visible_as) | true ] core_s
-        end
+          E.return $ C.Esave (fromJust $ Map.lookup ((fun (A.IConstant z _ _) -> z) n) (fromJust labs.cases)) [ (sym, Cty.Void) | forall (sym MEM visible_syms) | true ] core_s
+*)
+        error "WIP elab of AilScase"
+
     
     | A.AilSdefault s -> do E
         core_s     <- translate_stmt_ s;
         visible_as <- E.get_visible_objects; in
-          E.return $ C.Esave (fromJust d_default) [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] core_s
+          E.return $ C.Esave (fromJust labs.default) [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] core_s
         end
     
     | A.AilSlabel l s -> do E
@@ -1768,7 +1854,7 @@ let translate_program tagDefs stdlib ((startup_sym, sigm) as program) =
           let core_create = Caux.pcreate (Caux.alignof core_ty) core_ty [sym] in
           E.fresh_symbol >>= fun a_global ->
           
-          let _ = Boot.print_debug 2 ("(translate_program) CREATE for " ^ show a_global) in (* DEBUG *)
+          E.print_debug 2 ("(translate_program) CREATE for " ^ show a_global) >> (* DEBUG *)
           
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Just expr ->
@@ -1811,7 +1897,7 @@ let translate_program tagDefs stdlib ((startup_sym, sigm) as program) =
             | Just (param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *) (
-                  translate_stmt tagDefs stdlib program sym Nothing Nothing Nothing Nothing stmt
+                  translate_stmt tagDefs stdlib program sym <| default= Nothing; cases= []; loop= Nothing; break= Nothing |> stmt
                 ) >>= fun core_body ->
                 
                 let core_return =
@@ -1915,10 +2001,7 @@ let translate_tag_definitions ctx =
 let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   let tagDefs = translate_tag_definitions (snd prog).A.tag_definitions in
-  match (translate_program tagDefs stdlib prog) (E.init symbol_counter) with
-    | U.Defined ((cglobs, cfuns), st) ->
-        (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns ;
+  
+  let ((cglobs, cfuns), st) = (translate_program tagDefs stdlib prog) (E.init symbol_counter) in
+  (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns ;
                                 C.tagDefinitions= tagDefs |>)
-    | _ ->
-        error "[Translation.translate #_] error in the elaboration"
-  end
