@@ -204,11 +204,11 @@ type expr 'a =
   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
   | Ememop of Mem.memop * list pexpr
   
-  (* these two are too deal with C signals *)
+  (* these two are to deal with C signals *)
   | Eraise of handler_event
   | Eregister of handler_event * name
   
-  (* potentialy effectful *)
+  (* potentially effectful *)
   | Eskip
   | Elet of sym * pexpr * expr 'a
   | Eif of pexpr * expr 'a * expr 'a
