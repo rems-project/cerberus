@@ -41,9 +41,9 @@ let pp_provenance = function
 
 
 let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
-  !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_aux ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
+  !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_base ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
 
-and pp_pointer_value_aux = function
+and pp_pointer_value_base = function
   | PVnull ty ->
       !^ "PVnull" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | PVfunction sym ->
@@ -51,36 +51,36 @@ and pp_pointer_value_aux = function
   | PVbase alloc_id ->
       !^ "PVbase" ^^ P.parens (pp_allocation_id alloc_id)
   | PVfromint ival_ ->
-      !^ "PVfromint" ^^ P.parens (pp_integer_value_aux ival_)
+      !^ "PVfromint" ^^ P.parens (pp_integer_value_base ival_)
 
 and pp_shift_path_element = function
   | SPE_array (ty, ival_) ->
-      !^ "SPE_array" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^ pp_integer_value_aux ival_)
-  | SPE_post_padding (tag_sym, (Cabs.CabsIdentifier (_, memb_str))) ->
+      !^ "SPE_array" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^ pp_integer_value_base ival_)
+  | SPE_member (tag_sym, (Cabs.CabsIdentifier (_, memb_str))) ->
       !^ "SPE_post_padding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
  
 and pp_shift_path sh =
   P.brackets (comma_list pp_shift_path_element sh)
 
 
-and pp_integer_value_aux = function
+and pp_integer_value_base = function
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
   | IVfromptr (ty, ptr_val_) ->
-      !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_aux ptr_val_)
+      !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
   | IVop (iop, ival_s) ->
-      !^ "IVop" ^^ P.parens (!^ (string_of_integer_operator iop) ^^ P.comma ^^^ comma_list pp_integer_value_aux ival_s)
+      !^ "IVop" ^^ P.parens (!^ (string_of_integer_operator iop) ^^ P.comma ^^^ comma_list pp_integer_value_base ival_s)
   | IVsizeof ty ->
       !^ "IVsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
   | IVptrdiff (ptr_val_1, ptr_val_2) ->
-      !^ "IVptrdiff" ^^ P.parens (pp_pointer_value_aux ptr_val_1 ^^ P.comma ^^^ pp_pointer_value_aux ptr_val_2)
+      !^ "IVptrdiff" ^^ P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_pointer_value_base ptr_val_2)
 
 
 
 and pp_integer_value (IV (prov, ival_)) =
-  !^ "IV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_integer_value_aux ival_)
+  !^ "IV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_integer_value_base ival_)
 
 and pp_mem_value = function
   | MVsymbolic symb ->
