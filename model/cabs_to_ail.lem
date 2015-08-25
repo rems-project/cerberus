@@ -1507,7 +1507,8 @@ and desugar_array_declarator is_under_array a_decltor =
         E.return (fun ty -> ATypes.Array ty (Just $ snd (Decode.decode_integer_constant str)))
     
     | ADecl loc [] false (Just (ADeclSize_expression e)) ->
-        E.return (fun ty -> ATypes.Array ty (Just 42)) (* TODO: constant *)
+        (* TODO: if e can evaluated at runtime, this is not a VLA *)
+        E.fail loc (Errors.Desugar_NotyetSupported "variable length array type")
     
     | ADecl loc qs is_static a_decltor_size_opt ->
         E.get_scope >>= function

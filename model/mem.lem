@@ -127,9 +127,6 @@ let bind = Impl.bind
 let prettyStringFromMem_value           = Impl.prettyStringFromMem_value
 let runMem                              = Impl.runMem
 let initial_mem_stateWithTagDefinitions = Impl.initial_mem_stateWithTagDefinitions
-let allocate_static                     = Impl.allocate_static
-let load                                = Impl.load
-let store                               = Impl.store
 let null_ptrval                         = Impl.null_ptrval
 let fun_ptrval                          = Impl.fun_ptrval
 let eq_ptrval                           = Impl.eq_ptrval
@@ -162,3 +159,8 @@ let array_mval                          = Impl.array_mval
 let struct_mval                         = Impl.struct_mval
 let union_mval                          = Impl.union_mval
 let case_mem_value                      = Impl.case_mem_value
+
+
+let allocate_static                     = Impl.allocate_static
+let load                                = Impl.load
+let store                               = Impl.store

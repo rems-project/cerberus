@@ -277,7 +277,7 @@ KKKKK NOW
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* the current constraints allow both outcomes *)
-                  error "WIP: symbolic integer_value equality"
+                  error ("WIP: symbolic integer_value equalitylessequality-than ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1 pe2)) : Core.expr unit))
             end
         | (OpLt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             match Mem.lt_ival (* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
@@ -285,7 +285,7 @@ KKKKK NOW
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* the current constraints allow both outcomes *)
-                  error "WIP: symbolic integer_value less-than"
+                  error ("WIP: symbolic integer_value less-than ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1 pe2)) : Core.expr unit))
             end
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with

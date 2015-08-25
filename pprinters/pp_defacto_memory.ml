@@ -40,8 +40,8 @@ let pp_provenance = function
       !^ "Prov_some" ^^ P.braces (comma_list pp_provenance_id (Pset.elements ids))
 
 
-let rec pp_pointer_value (PV (prov, ptr_val_)) =
-  !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_aux ptr_val_)
+let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
+  !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_aux ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
 
 and pp_pointer_value_aux = function
   | PVnull ty ->
@@ -50,8 +50,6 @@ and pp_pointer_value_aux = function
       !^ "PVfunction" ^^ P.parens (P.parens (!^ (Pp_symbol.to_string_pretty sym)))
   | PVbase alloc_id ->
       !^ "PVbase" ^^ P.parens (pp_allocation_id alloc_id)
-  | PVshift (ptr_val_, sh) ->
-      !^ "PVshift" ^^ P.parens (pp_pointer_value_aux ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
   | PVfromint ival_ ->
       !^ "PVfromint" ^^ P.parens (pp_integer_value_aux ival_)
 
