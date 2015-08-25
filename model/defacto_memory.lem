@@ -75,9 +75,9 @@ type address = Symbol.t (* a normal symbolic expression that will resolve to a n
 (*** Pointer value ****************************************************************************** *)
 type pointer_value =
     (* pointer values are annotated with a provenance *)
-  | PV of provenance * pointer_value_aux * shift_path
+  | PV of provenance * pointer_value_base * shift_path
 
-and pointer_value_aux =
+and pointer_value_base =
     (* a null pointer constructed with an expression of the given ctype. *)
   | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
      (* the result of a dynamic or automatic/static/thread-local allocation *)
@@ -86,15 +86,15 @@ and pointer_value_aux =
   | PVfunction of Symbol.t (* INVARIANT: the associated provenance must be Prov_none *)
   
   | PVbase of allocation_id
-  | PVfromint of integer_value_aux (* INVARIANT: never a null pointer *)
+  | PVfromint of integer_value_base (* INVARIANT: never a null pointer *)
 (* in memory-value, kayvan wants byte-n-of-memory-value too *)
 
 
 (* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
 and shift_path_element =
-  | SPE_array of ctype * integer_value_aux
+  | SPE_array of ctype * integer_value_base
 (*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
-  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+  | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
  
 and shift_path =
   list shift_path_element
@@ -102,16 +102,17 @@ and shift_path =
 
 
 
-and integer_value_aux =
+and integer_value_base =
   | IVconcrete of integer (* of Symbolic.symbolic *)
-  | IVfromptr of ctype * pointer_value_aux (* the first parameter is the referenced type of the pointer value *)
-  | IVop of integer_operator * list integer_value_aux
+  | IVfromptr of ctype * pointer_value_base (* the first parameter is the referenced type of the pointer value *)
+  | IVop of integer_operator * list integer_value_base
   | IVsizeof of ctype
+  | IValignof of ctype
   | IVoffsetof of Symbol.t * Cabs.cabs_identifier
-  | IVptrdiff of pointer_value_aux * pointer_value_aux
+  | IVptrdiff of pointer_value_base * pointer_value_base
 
 and integer_value =
-  IV of provenance (* * AilTypes.integerType *) * integer_value_aux
+  IV of provenance (* * AilTypes.integerType *) * integer_value_base
 
 
 
@@ -139,7 +140,7 @@ type address_id = nat
 
 type allocation =
   | Alloc_static  of ctype * address_id
-  | Alloc_dynamic of integer_value_aux * address_id
+  | Alloc_dynamic of integer_value_base * address_id
 
 
 (*
@@ -148,17 +149,17 @@ type address_constraint =
     (* the first address is distinct for the addresses in the set *)
   | AC_distinct of address_id * set address_id
     (* the address is equal to a specific integer value *)
-  | AC_equals of address_id * integer_value_aux
+  | AC_equals of address_id * integer_value_base
 *)
 
 
 type mem_constraint =
-  | MC_eqIV of integer_value_aux * integer_value_aux (* equality between integer values *)
-  | MC_neIV of integer_value_aux * integer_value_aux (* non-equality between integer values *)
-  | MC_leIV of integer_value_aux * integer_value_aux
+  | MC_eqIV of integer_value_base * integer_value_base (* equality between integer values *)
+  | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
+  | MC_leIV of integer_value_base * integer_value_base
 
   | MC_addr_distinct of address_id * set address_id  (* the first address is distinct for the addresses in the set *)
-  | MC_addr_equals of address_id * integer_value_aux (* the address is equal to a specific integer value *)
+  | MC_addr_equals of address_id * integer_value_base (* the address is equal to a specific integer value *)
 
 
 
@@ -268,8 +269,8 @@ and stringFromShift_path_element spe =
   match spe with
     | SPE_array ty ival_ ->
         "SPE_array (" ^ stringFromCtype ty ^ ", " ^ stringFromInteger_value_aux ival_ ^ ")"
-    | SPE_post_padding tag_sym memb_ident ->
-        "SPE_post_padding (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
+    | SPE_member tag_sym memb_ident ->
+        "SPE_member (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
   end
 
 and stringFromInteger_value_aux ival_ =
@@ -459,16 +460,16 @@ let add_constraints xs =
   end
 
 
-let integer_value_auxSimpl ival_ =
+let integer_value_baseSimpl ival_ =
   ival_
 
-let integer_value_auxEquality ival_1 ival_2 =
+let integer_value_baseEquality ival_1 ival_2 =
   Nothing
 
 
 
-val     eval_integer_value_aux: integer_value_aux -> maybe integer
-let rec eval_integer_value_aux ival_ =
+val     eval_integer_value_base: integer_value_base -> maybe integer
+let rec eval_integer_value_base ival_ =
   match ival_ with
     | IVconcrete n ->
         Just n
@@ -487,14 +488,14 @@ let rec eval_integer_value_aux ival_ =
           | IntExp ->
               fun x y -> x ** natFromInteger y
         end in
-        match (iop, List.map eval_integer_value_aux ival_s) with
+        match (iop, List.map eval_integer_value_base ival_s) with
           | (_, [Just n1; Just n2]) ->
               Just (op n1 n2)
           | _ ->
               Nothing
         end
     | IVfromptr ref_ty (PVfromint ival_') ->
-        eval_integer_value_aux ival_'
+        eval_integer_value_base ival_'
     
     | _ ->
         (* TODO: can probably do much more *)
@@ -515,7 +516,7 @@ let negate_constraint = function
       MC_gtIV ival1_ ival2_
 
   | MC_addr_distinct of address_id * set address_id  (* the first address is distinct for the addresses in the set *)
-  | MC_addr_equals of address_id * integer_value_aux (* the address is equal to a specific integer value *)
+  | MC_addr_equals of address_id * integer_value_base (* the address is equal to a specific integer value *)
   
 end
 *)
@@ -533,9 +534,9 @@ let condM constr =
 (*
   match constr with
     | MC_eqIV ival_1 ival_2 ->
-        let ival_1' = integer_value_auxSimpl ival_1 in
-        let ival_2' = integer_value_auxSimpl ival_2 in
-        match integer_value_auxEquality ival_1' ival_2' with
+        let ival_1' = integer_value_baseSimpl ival_1 in
+        let ival_2' = integer_value_baseSimpl ival_2 in
+        match integer_value_baseEquality ival_1' ival_2' with
           | Just b ->
               if b then m_then else m_else
           | Nothing ->
@@ -662,7 +663,7 @@ let is_dead alloc_id =
   return (Set.member alloc_id mem_st.dead_allocations)
 
 
-val     explicitAllocationIdFromPointer_value_aux: pointer_value_aux -> memM (maybe allocation_id)
+val     explicitAllocationIdFromPointer_value_aux: pointer_value_base -> memM (maybe allocation_id)
 let rec explicitAllocationIdFromPointer_value_aux ptr_val_ =
   match ptr_val_ with
     | PVnull _ ->
@@ -692,13 +693,13 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
 
 
 
-val integer_value_auxFromShift_path: shift_path -> integer_value_aux
-let integer_value_auxFromShift_path sh =
+val integer_value_baseFromShift_path: shift_path -> integer_value_base
+let integer_value_baseFromShift_path sh =
   List.foldl (fun acc spe ->
     let spe_ival_ = match spe with
       | SPE_array ty ival_ ->
           IVop IntMul [IVsizeof ty; ival_]
-      | SPE_post_padding tag_sym memb_ident ->
+      | SPE_member tag_sym memb_ident ->
           IVoffsetof tag_sym memb_ident
     end in
     IVop IntAdd [spe_ival_; acc]
@@ -711,11 +712,11 @@ let integer_value_auxFromShift_path sh =
 
 (*
   | IVconcrete of integer (* of Symbolic.symbolic *)
-  | IVfromptr of ctype * pointer_value_aux (* the first parameter is the referenced type of the pointer value *)
-  | IVop of integer_operator * list integer_value_aux
+  | IVfromptr of ctype * pointer_value_base (* the first parameter is the referenced type of the pointer value *)
+  | IVop of integer_operator * list integer_value_base
   | IVsizeof of ctype
   | IVoffsetof of Symbol.t * Cabs.cabs_identifier
-  | IVptrdiff of pointer_value_aux * pointer_value_aux
+  | IVptrdiff of pointer_value_base * pointer_value_base
 *)
 
 
@@ -763,7 +764,7 @@ let initial_mem_stateWithTagDefinitions tagDefs = <|
 
 
 
-val get_allocation_id: pointer_value_aux -> maybe allocation_id
+val get_allocation_id: pointer_value_base -> maybe allocation_id
 let rec get_allocation_id ptr_val_ =
   match ptr_val_ with
     | PVnull ty ->
@@ -818,7 +819,7 @@ let rec traverse_with_shift_path tagDefs mval sh =
     | (_, []) ->
         fun z -> z
     | (MVarray mvals, (SPE_array _ ival_) :: sh') ->
-        match simplify_integer_value_aux ival_ with
+        match simplify_integer_value_base ival_ with
           | IVconcrete n ->
               (* TODO: check here for ooba? *)
               fun z ->
@@ -827,7 +828,7 @@ let rec traverse_with_shift_path tagDefs mval sh =
               error "traverse_with_shift_path: non-concrete array shift"
         end
 (*
-    | (MVstruct mval_tag_sym xs, (SPE_post_padding spe_tag_sym memb_ident) :: sh') ->
+    | (MVstruct mval_tag_sym xs, (SPE_member spe_tag_sym memb_ident) :: sh') ->
         if mval_tag_sym = spe_tag_sym then
           let Just ident_tys = Map.lookup mval_tag_sym tagDefs in
           
@@ -842,9 +843,9 @@ end
 
 (*
 and shift_path_element =
-  | SPE_array of ctype * integer_value_aux
+  | SPE_array of ctype * integer_value_base
 (*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
-  | SPE_post_padding of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+  | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
  
 and shift_path =
   list shift_path_element
@@ -933,10 +934,10 @@ let structural_equality_provenance prov1 prov2 =
 
 let rec structural_equality_pointer_value (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) =
      structural_equality_provenance prov1 prov2
-  && structural_equality_pointer_value_aux ptr_val_1 ptr_val_2
+  && structural_equality_pointer_value_base ptr_val_1 ptr_val_2
   && listEqualBy structural_equality_shift_path_element sh1 sh2
 
-and structural_equality_pointer_value_aux ptr_val_1 ptr_val_2 =
+and structural_equality_pointer_value_base ptr_val_1 ptr_val_2 =
   match (ptr_val_1, ptr_val_2) with
     | (PVnull ty1, PVnull ty2) ->
         ty1 = ty2
@@ -945,7 +946,7 @@ and structural_equality_pointer_value_aux ptr_val_1 ptr_val_2 =
     | (PVbase alloc_id1, PVbase alloc_id2) ->
         alloc_id1 = alloc_id2
     | (PVfromint ival_1, PVfromint ival_2) ->
-        structural_equality_integer_value_aux ival_1 ival_2
+        structural_equality_integer_value_base ival_1 ival_2
     | _ ->
         false
   end
@@ -953,8 +954,8 @@ and structural_equality_pointer_value_aux ptr_val_1 ptr_val_2 =
 and structural_equality_shift_path_element spe1 spe2 =
   match (spe1, spe2) with
     | (SPE_array ty1 ival_1, SPE_array ty2 ival_2) ->
-        ty1 = ty2 && structural_equality_integer_value_aux ival_1 ival_2
-    | (SPE_post_padding tag_sym1 memb_ident1, SPE_post_padding tag_sym2 memb_ident2) ->
+        ty1 = ty2 && structural_equality_integer_value_base ival_1 ival_2
+    | (SPE_member tag_sym1 memb_ident1, SPE_member tag_sym2 memb_ident2) ->
         tag_sym1 = tag_sym2 && memb_ident1 = memb_ident2
     | _ ->
         false
@@ -963,8 +964,8 @@ and structural_equality_shift_path_element spe1 spe2 =
 and structural_equality_shift_path sh1 sh2 =
   List.all (uncurry structural_equality_shift_path_element) (zip sh1 sh2)
 
-and structural_equality_integer_value_aux _ _ =
-  error "structural_equality_integer_value_aux"
+and structural_equality_integer_value_base _ _ =
+  error "structural_equality_integer_value_base"
 
 
 
@@ -1105,7 +1106,7 @@ let array_shift_ptrval ptr_val ty (IV _ ival_) =
   internal_shift_ptrval ptr_val (SPE_array ty ival_)
 
 let member_shift_ptrval ptr_val tag_sym memb_ident =
-  internal_shift_ptrval ptr_val (SPE_post_padding tag_sym memb_ident)
+  internal_shift_ptrval ptr_val (SPE_member tag_sym memb_ident)
 
 
 
@@ -1270,7 +1271,7 @@ let diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : integer_valu
 (* TODO: looks too simple to be true *)
 let intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
   IV Prov_none (
-    mk_op_ival_ IntAdd (IVfromptr ref_ty ptr_val_) (integer_value_auxFromShift_path sh)
+    mk_op_ival_ IntAdd (IVfromptr ref_ty ptr_val_) (integer_value_baseFromShift_path sh)
   )
 
 let validForDeref_ptrval ptr_val =
@@ -1363,7 +1364,7 @@ let can_store (PV prov ptr_val_ sh) =
                 | false ->
                     resolve_allocation alloc_id >>= function
                       | Alloc_static ty addr_id ->
-                          ifM (MC_leIV (integer_value_auxFromShift_path sh) (IVsizeof ty))
+                          ifM (MC_leIV (integer_value_baseFromShift_path sh) (IVsizeof ty))
                               (* then *)
                               (return (Just alloc_id))
                               (* else *)
@@ -1395,7 +1396,7 @@ let rec easy_update_mem_value_aux tagDefs write_ty sh write_mval mval =
         (* SIMPLIFICATION: we assume that the footprint of the new value covers all of the old value *)
         write_mval
     | (MVarray mvals, SPE_array elem_ty ival_ :: sh') ->
-        match Maybe.map natFromInteger (eval_integer_value_aux ival_) with
+        match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
               if n < 0 || 10 > List.length mvals then
                 let Just elem_mval = List.index mvals n in

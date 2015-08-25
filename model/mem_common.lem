@@ -115,3 +115,10 @@ type mem_value =
 
 
 *)
+
+
+
+type memory_flags = <|
+  allow_multi_provenance: bool; (* allow Prov_some aids, where aids is not a singleton *)
+  
+|>

@@ -902,7 +902,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
       | A.AilEassign e1 e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
-          translate_rvalue e1 >>= fun core_e1 ->
+          translate_lvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           let core_ty_pe1 = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           E.return $
@@ -1527,6 +1527,7 @@ val translate_stmt:
 
 
 let rec translate_stmt tagDefs stdlib program f labs (A.AnnotatedStatement _ stmt) =
+  let translate_lvalue e = translate_expression tagDefs stdlib program true e  in
   let translate_expression e = translate_expression tagDefs stdlib program false e  in
   let translate_stmt_ s      = translate_stmt tagDefs stdlib program f labs s       in
   let mk_stdcall fname       = mk_stdcall stdlib fname                              in
@@ -1799,7 +1800,7 @@ let rec translate_stmt tagDefs stdlib program f labs (A.AnnotatedStatement _ stm
         (* This pass translate the declarations *)
         E.mapM (fun (sym, e) ->
           E.fresh_symbol            >>= fun sym_e  ->
-          translate_lvalueexpression e    >>= fun core_e ->
+          translate_lvalue e    >>= fun core_e ->
           E.resolve_object_type sym >>= fun ty     ->
           let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
           E.return $ C.Esseq [Just sym_e] core_e
