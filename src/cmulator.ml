@@ -13,7 +13,7 @@ module Print = struct
   let pp_symbol (n,str_opt) =
     match str_opt with
       | Some str -> !^ str
-      | None     -> !^ ("\alpha_" ^ string_of_int n)
+      | None     -> !^ ("\\alpha_" ^ string_of_int n)
   let pp_number   n = !^ n
   
   
@@ -27,7 +27,7 @@ module Print = struct
     | OpSub -> P.minus
     | OpMul -> P.star
     | OpDiv -> P.slash
-    | OpMod -> !^ "\%"
+    | OpMod -> !^ "\\%"
     | OpEq  -> P.equals
     | OpLt  -> P.langle
     | OpAnd -> !^ "\\wedge"

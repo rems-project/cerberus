@@ -179,7 +179,7 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 DOC_BUILD_DIR=generated_doc
 
 lem_model_tex alldoc.tex: copy_cmm copy_cmm_exec copy_ail copy_cerberus
-	OCAMLRUNPARAM=b $(LEM) -outdir $(DOC_BUILD_DIR) -only_changed_output -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem)
+	OCAMLRUNPARAM=b $(LEM) -outdir $(DOC_BUILD_DIR) -only_changed_output -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem)
 
 lem_model.pdf: alldoc.tex
 	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
@@ -191,6 +191,17 @@ lem_model_pdf:
 dependencies:
 	mkdir dependencies
 	cd dependencies; make -f ../Makefile.dependencies
+
+
+depend.dot:
+	ocamldep -one-line \
+           $(addprefix -I , $(OCAML_DIRS)) $(addsuffix /*.ml, $(OCAML_DIRS)) \
+		 $(addsuffix /*.mli, $(OCAML_DIRS))  \
+	 | grep -v "cmx" | dot_of_depend.py > depend.dot
+
+depend.pdf: depend.dot
+	dot -Tpdf depend.dot > depend.pdf
+
 
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
