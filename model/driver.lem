@@ -105,10 +105,14 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         Core.PEnot (fpe pe)
     | Core.PEop bop pe1 pe2 ->
         Core.PEop bop (fpe pe1) (fpe pe2)
+    | Core.PEmemop memop pes ->
+        Core.PEmemop memop (List.map fpe pes)
     | Core.PEtuple pes ->
         Core.PEtuple (List.map fpe pes)
     | Core.PEarray pes ->
         Core.PEarray (List.map fpe pes)
+    | Core.PEstruct sym xs ->
+        Core.PEstruct sym (List.map (fun (ident, pe) -> (ident, fpe pe)) xs)
     | Core.PEcall nm pes ->
         Core.PEcall nm (List.map fpe pes)
     | Core.PElet sym pe1 pe2 ->
@@ -132,6 +136,8 @@ let rec resolve_read_expr write_sym symb_v expr =
   match expr with
     | Core.Epure pe ->
         Core.Epure (fpe pe)
+    | Core.Ememop memop pes ->
+        Core.Ememop memop (List.map fpe pes)
     | Core.Eraise _ ->
         expr
     | Core.Eregister _ _ ->
@@ -254,7 +260,7 @@ let rec stepConcurrency n dr_st =
             | Nothing ->
                 error ("stepConcurency fail: " ^ stringFromMemValue mval)
             | Just mval_symb ->
-                let Just (_, ival) = Mem_aux.integerValueFromMemValue w in
+                let (_, ival) = fromJust $ Mem_aux.integerValueFromMemValue w in
                 Mem.case_integer_value ival
                   (fun n ->
                     ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) mval_symb) >>
@@ -286,7 +292,7 @@ let liftMem m dr_st =
   ND.msum $ map (function
     | Left mem_err ->
         (* TODO: map memory error to something sensible ... *)
-        ND.kill (ND.Other "memory layout error")
+            ND.kill (ND.Other ("memory layout error (liftMem) ==> " ^ show mem_err))
     | Right (z, layout_st') ->
         ND.return (z, <| dr_st with layout_state= layout_st' |>)
   end) (Mem.runMem m dr_st.layout_state)
@@ -344,11 +350,9 @@ let number_of_uncommitted concur_st =
 
 
 
-
-
-(* For a given thread, perform all possible step that are not action requests *)
-val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
-let rec drive_core_thread tid dr_st =
+(*
+val drive_to_requests: Thread.thread_id -> core_state -> ND.t action_request
+let drive_to_requests tid core_st = 
   let th_info = match List.lookup tid dr_st.core_state.thread_states with
     | Just z ->
         (tid, z)
@@ -356,29 +360,102 @@ let rec drive_core_thread tid dr_st =
         error "drive_core_thread, wrong tid"
   end in
   match core_thread_step dr_st.core_file th_info dr_st.core_state with
-    | Step_tau debug_str _ step_m ->
+(*
+  | Step_action_request of (* DEBUG *) string * thread_id * core_runM action_request
+*)
+  | Step_tau dedug_str tid step_m ->
+      error "runCore"
+(*
+  | Step_thread_done of thread_id * core_runM core_state
+  | Step_eval of (* DEBUG *) string * thread_id * core_runM core_state
+  | Step_nd of string * list core_step
+*)
+  | Step_blocked ->
+      error "ND.return core_st"
+(*
+  | Step_branch of (* DEBUG *) string * thread_id * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM core_state * core_runM core_state
+  | Step_done of Core.value
+  | Step_spawn_threads of thread_id * thread_state * list thread_state
+*)
+
+(*
+    | Step_nd debug_str steps ->
+        ND.foldM (fun core_st_acc step ->
+          drive_to_requests tid core_st_acc
+        ) dr_st.core_state steps
+*)
+  end
+*)
+
+
+(* For a given thread, perform all possible step that are not action requests *)
+val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
+let rec drive_core_thread tid dr_st =
+  let th_info = match List.lookup tid dr_st.core_state.thread_states with
+    | Just z ->
+        z (* (tid, z) *)
+    | _ ->
+        error "drive_core_thread, wrong tid"
+  end in
+  ND.msum $ List.map (function
+    | Step2_action_request _ ->
+        (* DEBUG *) ND.print_debug 5 (">> ACTION_REQUEST") >>
+        ND.return dr_st
+    | Step2_memop_request _ _ _ _ ->
+        ND.return dr_st
+    | Step2_tau debug_str step_m ->
+        (* DEBUG *) ND.print_debug 5 ("tau: " ^ debug_str) >>
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
-        runCore step_m dr_st >>= fun (core_st', dr_st') ->
-        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_tau: " ^ debug_str) >> (* DEBUG *)
-        ND.print_debug 9 (show core_st' ^ "END Step_tau\n\n") >> (* DEBUG *)
-        drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
-    
-    | Step_eval debug_str _ step_m ->
+        runCore step_m dr_st >>= fun (th_st', dr_st') ->
+        drive_core_thread tid <| dr_st' with
+          core_state= update_thread_state tid th_st' dr_st'.core_state;
+          dr_step_counter= dr_st'.dr_step_counter + 1
+        |>
+    | Step2_eval debug_str step_m ->
+        (* DEBUG *) ND.print_debug 5 ("eval: " ^ debug_str) >>
         (* case where the Core program does a pure step *)
-        runCore step_m dr_st >>= fun (core_st', dr_st') ->
-        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_eval: " ^ debug_str) >> (* DEBUG *)
-        ND.print_debug 9 (show core_st' ^ "END Step_eval\n\n") >> (* DEBUG *)
-        drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
+        runCore step_m dr_st >>= fun (th_st', dr_st') ->
+        drive_core_thread tid <| dr_st' with
+          core_state= update_thread_state tid th_st' dr_st'.core_state;
+          dr_step_counter= dr_st'.dr_step_counter + 1
+        |>
+    
+    | Step2_thread_done parent_tid cval ->
+        (* DEBUG *) ND.print_debug 5 ("thread " ^ show tid ^ " is done") >>
+        (* case where the current (non startup) thread execution ended. *)
+        ND.return <| dr_st with
+          core_state= kill_thread tid parent_tid cval dr_st.core_state;
+          dr_step_counter= dr_st.dr_step_counter + 1
+        |> >>=
+          drive_core_thread parent_tid
+    
+    | Step2_blocked ->
+        error "WIP: Step2_blocked"
+    | Step2_error debug_str ->
+        error ("WIP: Step2_error --> " ^ debug_str)
+    | Step2_branch debug_Str mk_constr_then mk_constr_else step_then step_else ->
+        error "WIP: Step2_branch"
+    | Step2_done cval ->
+        ND.return dr_st
+    | Step2_spawn_threads th_st ->
+        error "WIP: Step2_spawn_threads"
+  end) (core_thread_step2 dr_st.core_file tid th_info)
 
-    | Step_nd step_ms ->
+(*
+  match core_thread_step dr_st.core_file th_info dr_st.core_state with
+
+(*
+    | Step_nd debug_str step_ms ->
 (*        runCore2  *)
-        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_nd") >> (* DEBUG *)
+        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_nd " ^ debug_str) >> (* DEBUG *)
         ND.foldM (fun acc step_m ->
-          ND.tryM (drive_core_thread tid acc)
-            ND.return
-            (fun () -> ND.return acc)
+          runCore step_m acc >>= fun (core_st', dr_st') ->
+          let acc' = <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |> in
+          ND.tryM (drive_core_thread tid acc')
+            (fun () -> ND.return acc')
         ) dr_st step_ms
+*)
         
 
     | Step_spawn_threads parent_tid parent_th_st th_sts ->
@@ -401,12 +478,6 @@ let rec drive_core_thread tid dr_st =
         ) dr_st' th_tids >>= fun dr_st'' ->
         
         drive_core_thread parent_tid dr_st''
-    
-    | Step_thread_done parent_tid step_m ->
-        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_thread_done") >> (* DEBUG *)
-        runCore step_m dr_st >>= fun (core_st', dr_st') ->
-        ND.return <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |> >>=
-          drive_core_thread parent_tid
 
 (*    
   | Step_branch of (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_step * core_step
@@ -424,10 +495,8 @@ let rec drive_core_thread tid dr_st =
             runCore step_else_m dr_st >>= fun (core_st', dr_st') ->
             drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
           end
-    
-    | _ ->
-        ND.return dr_st
   end
+*)
 
 
 (* perform drive_core_thread for all the core threads *)
@@ -519,70 +588,90 @@ let action_request_concurrency dr_st = function
         trace= "load" :: dr_st.trace
       |>
   
-  | AllocRequest _ _ _ _ _ _ _ core_st' ->
-      ND.return (update_core_state core_st' dr_st)
+  | AllocRequest _ _ _ _ tid pref align_ival size_ival mk_core_st' ->
+      (* TODO: hack, hack, hack *)
+      ND.msum $ map (function
+        | Left mem_err ->
+            (* TODO: map memory error to something sensible ... *)
+            ND.kill (ND.Other ("memory layout error (alloc concur) ==> " ^ show mem_err))
+        | Right (ptr_val, layout_st') ->
+            ND.return <| dr_st with
+              core_state=   mk_core_st' ptr_val;
+              layout_state= layout_st'
+            |>
+      end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
   | CreateRequest _ _ _ _ tid pref align_ival lvalue_ty mk_core_st' ->
       (* TODO: hack, hack, hack *)
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
-            ND.kill (ND.Other "memory layout error")
+            ND.kill (ND.Other ("memory layout error (create concur) ==> " ^ show mem_err))
         | Right (ptr_val, layout_st') ->
             ND.return <| dr_st with
               core_state=   mk_core_st' ptr_val;
               layout_state= layout_st'
             |>
-      end) (Mem.runMem (Mem.allocate_static tid pref lvalue_ty) dr_st.layout_state)
+      end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
 end
 
 
 
 
 (* This version only uses the memory layout model (note that is deterministic) *)
-val action_request_sequential: driver_state -> action_request -> ND.t driver_state
+val action_request_sequential: driver_state -> action_request2 -> ND.t driver_state
 let action_request_sequential dr_st = function
-  | AllocRequest sb_edges dd_edges asw_edges aid tid ty pre_val core_st' ->
-      (* TODO: this is wrong *)
-      ND.return (update_core_state core_st' dr_st)
-  
-  | CreateRequest sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_core_st' ->
+  | AllocRequest2 sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
-            ND.kill (ND.Other "memory layout error")
+            ND.kill (ND.Other ("memory layout error (alloc seq) ==> " ^ show mem_err))
         | Right (ptr_val, layout_st') ->
             ND.return <| dr_st with
-              core_state=   mk_core_st' ptr_val;
+              core_state=   update_thread_state tid (mk_th_st' ptr_val) dr_st.core_state;
               layout_state= layout_st'
             |>
-      end) (Mem.runMem (Mem.allocate_static tid pref lvalue_ty) dr_st.layout_state)
+      end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
-  | LoadRequest sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_core_st' ->
+  | CreateRequest2 sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
-            ND.kill (ND.Other "memory layout error")
+            ND.kill (ND.Other ("memory layout error (create seq) ==> " ^ show mem_err))
+        | Right (ptr_val, layout_st') ->
+            ND.return <| dr_st with
+              core_state=   update_thread_state tid (mk_th_st' ptr_val) dr_st.core_state;
+              layout_state= layout_st'
+            |>
+      end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
+  
+  | LoadRequest2 sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
+      ND.msum $ map (function
+        | Left mem_err ->
+            (* TODO: map memory error to something sensible ... *)
+            ND.kill (ND.Other ("memory layout error (load seq) ==> " ^ show mem_err))
         | Right (mem_val, layout_st') ->
             ND.return <| dr_st with
-              core_state=   mk_core_st' mem_val;
+              core_state=   update_thread_state tid (mk_th_st' mem_val) dr_st.core_state;
               layout_state= layout_st'
             |>
       end) (Mem.runMem (Mem.load lvalue_ty ptr_val) dr_st.layout_state)
   
-  | StoreRequest sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val core_st' ->
+  | StoreRequest2 sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
-            ND.kill (ND.Other "memory layout error")
+            ND.kill (ND.Other ("memory layout error (store seq) ==> " ^ show mem_err))
+
         | Right ((), layout_st') ->
             ND.return <| dr_st with
-              core_state=   core_st';
+              core_state=   update_thread_state tid th_st' dr_st.core_state;
               layout_state= layout_st'
             |>
       end) (Mem.runMem (Mem.store lvalue_ty ptr_val mem_val) dr_st.layout_state)
+(* TODO: KillRequest2 *)
 end
 
 
@@ -594,6 +683,77 @@ end
 
 val     driver: bool -> driver_state -> ND.t driver_state
 let rec driver with_concurrency dr_st =
+  let process_core_step2 dr_st = function
+  | Step2_action_request request_m ->
+      (* DEBUG *) ND.print_debug 9 "Step2_action_request" >>
+      runCore request_m dr_st >>= fun (request, dr_st') ->
+      
+      let execution_mode_is_random = match ND.current_execution_mode () with
+        | Nothing   -> false
+        | Just mode -> mode = ND.Random
+      end in
+      
+      begin
+        if with_concurrency then
+          error "action_request_concurrency dr_st' request" >>= fun dr_st'' ->
+          if execution_mode_is_random then
+            let total = number_of_uncommitted dr_st''.concurrency_state in
+            let choices = Enum.enumFromTo 0 total in
+            
+            (* DEBUG *)
+            let _ = if choices = [] then error "BOOM" else () in
+            
+            ND.pick choices >>= fun n ->
+            ND.warns_if_no_active_ex (stepConcurrency n dr_st'')
+          else
+            ND.return dr_st''
+        else
+          action_request_sequential dr_st' request
+      end >>= fun dr_final ->
+      driver with_concurrency dr_final
+  | Step2_memop_request memop cvals tid mk_th_st ->
+      let cval = match (memop, cvals) with
+        | (Mem_common.Ptrdiff, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
+            Core.Vinteger (Mem.diff_ptrval ptr_val1 ptr_val2)
+        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vpointer ptr_val]) ->
+            Core.Vinteger (Mem.intcast_ptrval ref_ty ity ptr_val)
+        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vinteger ival]) ->
+            Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival)
+
+(*
+  | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
+  | PtrValidForDeref (* address -> boolean *)
+*)
+
+
+(*
+        | (Mem_common.Ptrdiff, _) ->
+            error ("memop request: ptrdiff operand error ==> " ^
+                   Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
+*)
+        | _ ->
+            error ("WIP memop request: " ^ show memop ^ " ==> " ^
+                   Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
+      end in
+      ND.return <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+  | Step2_tau debug_str _ ->
+      error ("FOUND A TAU: '" ^ debug_str ^ "'")
+  | Step2_eval debug_str _ ->
+      error ("FOUND AN EVAL: '" ^ debug_str ^ "'")
+
+(*
+  | Step2_thread_done of thread_id * Core.value
+  | Step2_blocked
+  | Step2_error of string
+  | Step2_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
+*)
+  | Step2_done cval ->
+      ND.print_debug 3 ("driver.process_core_step ==> Step_done with value: " ^ Boot.pp_core_expr (Core.Epure (Core.PEval cval) : Core.expr unit)) >> (* DEBUG *)
+      ND.return dr_st
+(*
+  | Step2_spawn_threads of list thread_state (* initial states for the children *)
+*)
+  end in
   let process_core_step dr_st = function
     | Step_action_request debug_str tid request_m ->
         ND.print_debug 9 ("Step_action_request[" ^ debug_str ^ "]") >>
@@ -620,7 +780,7 @@ let rec driver with_concurrency dr_st =
             else
               ND.return dr_st''
           else
-            action_request_sequential dr_st' request
+            error "action_request_sequential dr_st' request"
         end >>= fun dr_final ->
         driver with_concurrency dr_final
 
@@ -648,14 +808,16 @@ let rec driver with_concurrency dr_st =
               error "Step_thread_done"
           | Step_eval debug_str tid _ ->
               error ("Step_eval[" ^ debug_str ^ "] by thread " ^ show tid)
-          | Step_nd _ ->
-              error "Step_nd"
+          | Step_nd debug_str _ ->
+              error ("Step_nd[" ^ debug_str ^ "]")
           | Step_blocked ->
               error "Step_blocked"
           | Step_branch _ _ _ _ _ _ ->
               error "Step_branch"
           | Step_done _ ->
               error "Step_done"
+          | Step_spawn_threads _ _ _ ->
+              error "Step_spawn_threads"
         end
 
 
@@ -664,13 +826,8 @@ let rec driver with_concurrency dr_st =
   drive_core_threads dr_st >>= fun post_core_dr_st ->
   
     (* TODO: hackish *)
-    let non_blocked_th_sts = List.filter (fun th_info ->
-      match core_thread_step post_core_dr_st.core_file th_info dr_st.core_state with
-        | Step_blocked ->
-            false
-        | _ ->
-            true
-      end
+    let non_blocked_th_sts = List.filter (fun (tid, th_info) ->
+      List.any (fun step -> step <> Step2_blocked) $ core_thread_step2 post_core_dr_st.core_file tid th_info
     ) post_core_dr_st.core_state.thread_states in
   
   (if ND.current_execution_mode () = Just ND.Random then
@@ -681,18 +838,24 @@ let rec driver with_concurrency dr_st =
        implement back tracking. Since we haven't, we temporarily
        switch to exhaustive mode and also compute the steps of the
        other threads. *)
-
     
+    ND.print_debug 5 ("FIRST: " ^ show (List.length post_core_dr_st.core_state.thread_states) ^ " vs " ^ show (List.length non_blocked_th_sts)) >>
     ND.bindExhaustive (ND.pick (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts)
-                      (fun th_info ->
-                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)
+                      (fun (tid, th_info) ->
+(* OLD                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state) *)
+                       ND.pick $ core_thread_step2 post_core_dr_st.core_file tid th_info)
     
 
    else
+    ND.print_debug 5 "SECOND" >>
+(*
      ND.pick (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts >>= fun th_info ->
      ND.return (core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)
+*)
+    ND.pick non_blocked_th_sts >>= fun (tid, th_info) ->
+    ND.pick (core_thread_step2 post_core_dr_st.core_file tid th_info)
   ) >>=
-      process_core_step post_core_dr_st
+      process_core_step2 post_core_dr_st
 
 
 
@@ -932,7 +1095,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argc_sym] Core_ctype.signed_int) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argc_sym] (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
                   Mem.bind (Mem.store Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
@@ -942,7 +1105,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
                 liftMem (
-                  Mem.bind (Mem.allocate_static tid0 [] arg_ty) (fun ptr_val ->
+                  Mem.bind (Mem.allocate_static tid0 [] (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
                     Mem.bind (Mem.store arg_ty ptr_val arg_mem_val) (fun () ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
@@ -954,7 +1117,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argv_sym] argv_ty) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argv_sym] (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
                   Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun () ->
                     Mem.return ptr_val
                   )

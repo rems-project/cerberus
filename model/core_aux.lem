@@ -367,6 +367,22 @@ let rec valueFromPexpr pexpr =
         Nothing
     | PEarray_shift _ _ _ ->
         Nothing
+(*
+    | PEstruct tag_sym xs ->
+        let ident_mem_vals_opt = List.foldr (fun (ident, pe) acc_opt ->
+          match (acc_opt, maybe Nothing memValueFromValue (valueFromPexpr pe)) with
+            | (Just acc, Just mem_val) ->
+                Just ((ident, mem_val) :: acc)
+            | _ ->
+                Nothing
+          end) (Just []) xs in
+        match ident_mem_vals_opt with
+          | Just ident_mem_vals ->
+              Just (Vstruct tag_sym ident_mem_vals)
+          | Nothing ->
+              Nothing
+        end
+*)
     | PEmember_shift _ _ _ ->
         Nothing
     | PEnot (PEval Vtrue) ->
@@ -396,16 +412,16 @@ let rec valueFromPexpr pexpr =
               Nothing
         end
     | PEarray pes ->
-        let mem_vals_opt = List.foldr (fun pe acc_opt ->
+        let cvals_opt = List.foldr (fun pe acc_opt ->
           match (acc_opt, (* maybe Nothing memValueFromValue $ *) valueFromPexpr pe) with
-            | (Just acc, Just mem_val) ->
-                Just (mem_val :: acc)
+            | (Just acc, Just cval) ->
+                Just (cval :: acc)
             | _ ->
                 Nothing
           end) (Just []) pes in
-        match mem_vals_opt with
-          | Just mem_vals ->
-              Just (Varray mem_vals)
+        match cvals_opt with
+          | Just cvals ->
+              Just (Varray cvals)
           | Nothing ->
               Nothing
         end
@@ -611,6 +627,8 @@ let rec subst_sym_pexpr sym pe' = function
                                Boot.pp_core_expr (Epure pe' : expr unit))
       end
 *)
+  | PEstruct tag_sym xs ->
+      PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, subst_sym_pexpr sym pe' pe)) xs)
   | PEcall nm pes ->
       PEcall nm (List.map (subst_sym_pexpr sym pe') pes)
   | PElet sym' pe1 pe2 ->

@@ -281,7 +281,12 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 
 
 val msum: forall 'a. list (t 'a) -> t 'a (* GENERIC MonadPlus *)
-let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
+let msum ms =
+  let () = if List.null ms then
+    Boot.print_debug 5 "ND.msum, empty list"
+  else
+    () in
+  List.foldr mplus mzero ms        (* GENERIC MonadPlus *)
 
 
 (* Specific operations *)
@@ -289,12 +294,17 @@ let msum = List.foldr mplus mzero        (* GENERIC MonadPlus *)
 (* Non-deterministically pick from a list *)
 val pick: forall 'a. list 'a -> t 'a
 let pick xs =
+  let () = if List.null xs then
+    Boot.print_debug 5 "ND.pick, empty list"
+  else
+    () in
   ND $ List.map (fun (n, z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote xs)
 
 (* The same but with a predicate and the pick is paired with it context *)
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
 let rec _pickWith pred acc debug_n = function
   | [] ->
+      let _ = Boot.print_debug 3 "WARNING: pickWith returns []" in
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
@@ -314,17 +324,17 @@ let pickWith pred xs =
   ND ret
         
 
-(* Perform the first computation if it is not empty bind the result to the second computation
-   otherwise run the third computation *)
-val tryM: forall 'a 'b. t 'a -> ('a -> t 'b) -> (unit -> t 'b) -> t 'b
-let tryM (ND ma) mf mend =
-  if List.null ma then mend () else ND ma >>= mf
+(* Perform the first computation and if it is not empty forward the result, otherwise run the third computation *)
+val tryM: forall 'a 'b. t 'a -> (unit -> t 'a) -> t 'a
+let tryM (ND ma) mend =
+  if List.null ma then mend () else ND ma
 
 
 val kill: forall 'a. kill_reason -> t 'a
 let kill reason =
-(*  ND [([], Killed reason Dlist.nil Constraints.empty)] *)
-  ND []
+  let _ = Boot.print_debug 3 ("WARNING: kill (\"" ^ show reason ^ "\") is called") in
+  ND [([], Killed reason Dlist.nil Constraints.empty)]
+(*  ND [] *)
 
 (* The reason contains the message in the case the guard is FALSE. *)
 val guard: bool -> kill_reason -> t unit

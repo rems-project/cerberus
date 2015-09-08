@@ -11,7 +11,8 @@ else
 endif
 
 LEMLIB_DIR=$(LEMDIR)/library
-LEM=lem -wl ign -wl_rename warn -wl_unused_vars warn -wl_pat_red err -wl_pat_exh warn
+# TODO: bring back: -wl_unused_vars warn
+LEM=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn
 
 
 
@@ -88,7 +89,6 @@ CERBERUS_LEM=\
   undefined.lem \
   core_ctype.lem \
   defacto_memory.lem \
-  naive_memory.lem \
   mem.lem \
   mem_aux.lem \
   mem_common.lem \
@@ -249,16 +249,20 @@ CMOS=\
   $(patsubst %.ml, %.cmo, $(shell ocamldep -sort $(patsubst %.cmo, %.ml, $(wildcard $(addsuffix /*.cmo, $(OCAML_DIRS))))))
 
 
+VER:=\
+  `xargs echo -n `hg id`` `date "+%y/%m/%d@%H:%M"`
+
 ocaml_native: | depend dependencies
 # TODO: surely this is wrong ...
-#	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
+	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
+#	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(VER)/" src/main.ml
 #	TIME=`date "+%y/%m/%d@%H:%M"`
 #	@echo $(TIME)
 #	@$(shell sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(echo `hg id` \(\) | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\\&/g')/g" src/main.ml)
 	make src/main.cmx
 	ocamlopt -g unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
 	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(CMXS) -o cerberus
-#	mv src/main.ml.sed src/main.ml
+	mv src/main.ml.sed src/main.ml
 
 
 

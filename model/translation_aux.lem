@@ -85,6 +85,11 @@ let tmp_implementation =
 	| Aty.Signed   _ -> true
         | Aty.Bool       -> false
 	| Aty.Unsigned _ -> false
+
+        | Aty.IBuiltin str ->
+            error ("WIP: Translation_aux.tmp_implementation (1), IBuiltin '" ^ str ^ "'")
+        | Aty.Enum sym ->
+            error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
       end
     )
     ( function
@@ -105,10 +110,19 @@ let tmp_implementation =
         | Aty.Signed (Aty.IBBuiltin "int16_t") -> 15
         | Aty.Signed (Aty.IBBuiltin "int32_t") -> 31
         | Aty.Signed (Aty.IBBuiltin "int64_t") -> 63
+        | Aty.Signed (Aty.IBBuiltin str) ->
+            error ("WIP: Translation_aux.tmp_implementation, Signed IBBuiltin '" ^ str ^ "'")
         | Aty.Unsigned (Aty.IBBuiltin "int8_t") -> 8
         | Aty.Unsigned (Aty.IBBuiltin "int16_t") -> 16
         | Aty.Unsigned (Aty.IBBuiltin "int32_t") -> 32
         | Aty.Unsigned (Aty.IBBuiltin "int64_t") -> 64
+        | Aty.Unsigned (Aty.IBBuiltin str) ->
+            error ("WIP: Translation_aux.tmp_implementation, Unsigned IBBuiltin '" ^ str ^ "'")
+        
+        | Aty.IBuiltin str ->
+            error ("WIP: Translation_aux.tmp_implementation (2), IBuiltin '" ^ str ^ "'")
+        | Aty.Enum sym ->
+            error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
       end
     )
     (Aty.Unsigned Aty.Long)

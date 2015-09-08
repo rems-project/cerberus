@@ -70,6 +70,8 @@ let rec add_to_sb p_aids = function
   | Epure pe ->
       (* no change *)
       Epure pe
+  | Ememop memop pes ->
+      Ememop memop pes
   | Eskip ->
       (* no change *)
       Eskip

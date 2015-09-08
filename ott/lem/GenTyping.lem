@@ -507,6 +507,16 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         (* TODO: the actual type checking of the members ... *)
         E.return (AilEstruct tag_sym xs', GenRValueType (GenStruct tag_sym))
 
+    | AilEcompound ty e ->
+        (* STD §6.5.2.5#1 *)
+        if    (AilTypesAux.is_complete sigm ty && AilTypesAux.is_object ty)
+           || (AilTypesAux.is_array_unknown_size ty && not (AilTypesAux.is_vla ty)) then
+          (* TODO: check that *)
+          annotate_definition_aux annot sigm gamm (ty, e) >>= fun a_e ->
+          error "XXX E.return (AilEcompound ty a_e, GenRValue)"
+          
+        else
+          E.fail Loc.unknown (TError "AilEcompound")
 
 
 (* of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *) *)
@@ -1138,29 +1148,87 @@ and annotate_expression A S G (AnnotatedExpression a loc e) =
   annotate_expression' loc A S G e >>= fun (e, gty) ->
   E.return (AnnotatedExpression (A.Annotation.add_type gty a) loc e)
 
-let annotate_rvalue A S G =
+
+and annotate_rvalue A S G =
   annotate_rvalue_aux S A (annotate_expression A S G)
 
-let annotate_assignee A S G =
+and annotate_assignee A S G =
   annotate_assignee_aux S (annotate_rvalue A S G)
 
-let annotate_arguments A S G =
-  annotate_arguments_aux A (annotate_expression A S G) (annotate_assignee A S G)
 
 
-(*
-let rec annotate_block_aux A annotate_statement = function
-  | [] ->
-      E.return []
-  | s :: ss ->
-      annotate_statement s                       >>= fun s  ->
-      annotate_block_aux A annotate_statement ss >>= fun ss ->
-      E.return (s :: ss)
-end
-*)
 
 
-let annotate_definition_aux A S G (ty, e) =
+
+
+
+(* returns both the annotated intializer and the infered type (used for arrays) *)
+and annotate_initialization annot sigm gamm ty e =
+  (* §6.7.9#3 *)
+  E.guard (TError "failed §6.7.9#3")
+    (   AilTypesAux.is_array_unknown_size ty
+     || AilTypesAux.is_complete_object sigm ty && not (AilTypesAux.is_vla ty)) >>
+  
+  if AilTypesAux.is_scalar ty then
+    (* STD §6.7.9#11, sentence 3 *)
+    annotate_assignee annot sigm gamm (AilTypesAux.unqualify ty) e >>= fun a_e ->
+    E.return (a_e, ty)
+  
+  (* TODO: "(...) that has automatic storage duration" *)
+  (* STD §6.7.9#13 *)
+  else if AilTypesAux.is_struct_or_union ty then
+    (* TODO: check *)
+    annotate_rvalue annot sigm gamm e >>= fun (a_e, gty) ->
+    (* TODO: need to make sure that gty is compatible with ty *)
+    E.return (a_e, ty)
+  
+  (* STD §6.7.9#14 *)
+  else if AilTypesAux.is_array_of_character ty then
+    error "WIP: annotate_initialization, is_array_of_character ty"
+  
+  (* STD §6.7.9#15 *)
+  else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
+    error "WIP: annotate_initialization, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
+  
+          (* STD §6.7.9#16 *)
+(*          else if  then *) (* KKK *)
+  (* TODO: at this point we should now have a non character array *)
+  else if AilTypesAux.is_array ty then
+    (* TODO: check the std. (not that it says anything useful here ...) *)
+    annotate_expression annot sigm gamm e >>= fun a_e ->
+    match (ty, Annotation.type_of annot a_e) with
+      | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n2))) ->
+          if AilTypesAux.compatible elem_ty1 elem_ty2 then
+            E.return (a_e, Array elem_ty1 (Just n2))
+          else
+            error "TODO: error message: array object definition, types didn't match"
+     | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+         if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
+           E.return (a_e, Array elem_ty1 (Just n1))
+         else
+           error "TODO: error message: array object definition, types didn't match"
+     | _ ->
+         error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
+    end
+  else
+    error "WIP: annotate_initialization, final case"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+and annotate_definition_aux A S G (ty, e) =
   if    (AilTypesAux.is_array ty --> AilTypesAux.has_unknown_size ty)
      || (AilTypesAux.is_complete_object S ty --> not (AilTypesAux.is_vla ty)) then
     if AilTypesAux.is_scalar ty then
@@ -1231,6 +1299,29 @@ let rec annotate_definitions A S G = function
       annotate_definitions A S G ds >>= fun ds ->
       E.return (d :: ds)
 end
+
+
+
+
+
+
+let annotate_arguments A S G =
+  annotate_arguments_aux A (annotate_expression A S G) (annotate_assignee A S G)
+
+
+(*
+let rec annotate_block_aux A annotate_statement = function
+  | [] ->
+      E.return []
+  | s :: ss ->
+      annotate_statement s                       >>= fun s  ->
+      annotate_block_aux A annotate_statement ss >>= fun ss ->
+      E.return (s :: ss)
+end
+*)
+
+
+
 
 
 val     annotate_statement': annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement' unit -> E.t (statement' genTypeCategory)

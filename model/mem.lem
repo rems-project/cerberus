@@ -38,9 +38,14 @@ val initial_mem_stateWithTagDefinitions: tag_definitions -> mem_state
 (* Memory actions *)
 val allocate_static:    Thread.thread_id  (* the allocating thread *)
                      -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> integer_value     (* alignment constraint *)
                      -> Core_ctype.ctype  (* type of the allocation *)
-(*                   -> Symbolic.symbolic (* size of that type *)
-                     -> Symbolic.symbolic (* alignment of that tyepe *)  *)
+                     -> memM pointer_value
+
+val allocate_dynamic:   Thread.thread_id  (* the allocating thread *)
+                     -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> integer_value     (* alignment constraint *)
+                     -> integer_value     (* size *)
                      -> memM pointer_value
 
 val load: ctype -> pointer_value -> memM mem_value
@@ -80,6 +85,11 @@ val integer_ival: integer -> integer_value
 val max_ival: integerType -> integer_value
 val min_ival: integerType -> integer_value
 val op_ival: integer_operator -> integer_value -> integer_value -> integer_value
+val offsetof_ival: Symbol.t -> Cabs.cabs_identifier -> integer_value
+
+val sizeof_ival: Core_ctype.ctype -> integer_value
+val alignof_ival: Core_ctype.ctype -> integer_value
+
 
 val case_integer_value: forall 'a. (* TODO: expose more ctors *)
     integer_value ->
@@ -145,6 +155,9 @@ let integer_ival                        = Impl.integer_ival
 let max_ival                            = Impl.max_ival
 let min_ival                            = Impl.min_ival
 let op_ival                             = Impl.op_ival
+let offsetof_ival                       = Impl.offsetof_ival
+let sizeof_ival                         = Impl.sizeof_ival
+let alignof_ival                        = Impl.alignof_ival
 let case_integer_value                  = Impl.case_integer_value
 let eq_ival                             = Impl.eq_ival
 let lt_ival                             = Impl.lt_ival
@@ -162,5 +175,6 @@ let case_mem_value                      = Impl.case_mem_value
 
 
 let allocate_static                     = Impl.allocate_static
+let allocate_dynamic                    = Impl.allocate_dynamic
 let load                                = Impl.load
 let store                               = Impl.store
