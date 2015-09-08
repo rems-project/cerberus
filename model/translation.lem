@@ -198,8 +198,9 @@ let rec translate_function_designator (A.AnnotatedExpression _ (* TODO: loc *) _
 
 and translate_expression tagDefs stdlib program is_lvalue a_expr =
   let sigm = snd program in
-  let translate_lvalue = translate_expression tagDefs stdlib program true  in
-  let translate_rvalue = translate_expression tagDefs stdlib program false in
+  let translate_lvalue = translate_expression tagDefs stdlib program true      in
+  let translate_rvalue = translate_expression tagDefs stdlib program false     in
+  let translate_expr   = translate_expression tagDefs stdlib program is_lvalue in
   let mk_stdcall fname = mk_stdcall stdlib fname in
   let bitwise_AND      = mk_stdcall "bitwise_AND"      in
   let bitwise_XOR      = mk_stdcall "bitwise_XOR"      in
@@ -493,7 +494,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
       
       | A.AilEunary A.Address e ->
           if AilTypesAux.is_object result_ty then
-             translate_rvalue e
+             translate_lvalue e
           else
             translate_function_designator e
       
@@ -545,6 +546,14 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
             translate_rvalue e2 >>= fun core_e2 ->
             E.print_debug 3 ("ADD(1) " ^ Boot.pp_ail_ctype ty1 ^ " vs " ^ Boot.pp_ail_ctype ty2) >>
             E.print_debug 3 ("ADD(2) " ^ Boot.pp_ail_ctype (exp_type_of e1) ^ " vs " ^ Boot.pp_ail_ctype (exp_type_of e2)) >>
+            
+            E.print_debug 3 ("ADD(3) usual = " ^ match AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) with
+              | Just ty ->
+                  Boot.pp_ail_ctype ty
+              | Nothing ->
+                  "Nothing"
+            end) >>
+            
             let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
             let conv_pe1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
             let conv_pe2 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e2] in
@@ -559,8 +568,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2])
           else
             (* otherwise, we have some pointer arithmetic *)
-            translate_rvalue e1 >>= fun core_e1 ->
-            translate_rvalue e2 >>= fun core_e2 ->
+            (if AilTypesAux.is_pointer ty1 then translate_lvalue else translate_rvalue) e1 >>= fun core_e1 ->
+            (if AilTypesAux.is_pointer ty2 then translate_lvalue else translate_rvalue) e2 >>= fun core_e2 ->
 (*
             (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
             (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
@@ -627,8 +636,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEop C.OpSub conv_e1 conv_e2])
           else
             (* otherwise, we have some pointer arithmetic *)
-            translate_rvalue e1 >>= fun core_e1 ->
-            translate_rvalue e2 >>= fun core_e2 ->
+            translate_lvalue e1 >>= fun core_e1 ->
+            translate_lvalue e2 >>= fun core_e2 ->
 (*
             (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
             (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
@@ -942,8 +951,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
 *)
       
       | A.AilEcast _ ty e ->
-          E.fresh_symbol         >>= fun sym_e  ->
-          translate_rvalue e >>= fun core_e ->
+          E.fresh_symbol     >>= fun sym_e  ->
+          translate_expr e >>= fun core_e ->
           E.return $
             C.Ewseq [Just sym_e] core_e
               (* TODO: check typing stuff *)
@@ -976,7 +985,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                   C.
           end
 *)
-      
+
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
          let mo = match order_e with
            | A.AnnotatedExpression _ _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
@@ -1075,6 +1084,12 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                           | Nothing -> error "Translation.translate_expression, AilEcall printf"
                         end
 
+                    | Symbol.Symbol _ (Just "malloc") ->
+                          (* TODO: temporary hack *)
+                        match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "malloc_proxy" | _ -> false end) (Map_extra.toList stdlib) with
+                          | Just (f, _) -> Core.Sym f
+                          | Nothing -> error "Translation.translate_expression, AilEcall malloc"
+                        end
 
                     | Symbol.Symbol _ (Just str) ->
                         C.Impl (Implementation_.StdFunction str)
@@ -1171,6 +1186,21 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                        )
               )
       
+      | A.AilEoffsetof ty membr_ident ->
+          let tag_sym = match ty with
+            | Aty.Struct x ->
+                x
+            | Aty.Union x ->
+                x
+            | _ ->
+                error "[Translation.translate_expression, A.AilEoffsetof] found an Ail type error]"
+          end in
+          E.return $
+            C.Epure (C.PEval (C.Vinteger (Mem.offsetof_ival tag_sym membr_ident)))
+      
+      | A.AilEgeneric _ _ ->
+          error "WIP: Translation.translate_expression, AilEgeneric"
+      
       | A.AilEarray _ e_opts ->
           let elem_ty = match result_ty with
             | Aty.Array ty _ ->
@@ -1212,7 +1242,9 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
           ) ([], fun z -> z) ident_e_opts >>= fun (core_xs, mk_core) ->
           E.return $
             mk_core (C.Epure (C.PEstruct tag_sym core_xs))
-
+      
+      | A.AilEcompound _ _ ->
+          error "WIP: Translation.translate_expression, AilEcompound"
 
 
 
@@ -1436,7 +1468,7 @@ a
     | A.Offsetof ty x ->
 *)
       | A.AilEannot _ e ->
-          translate_expression tagDefs stdlib program is_lvalue e
+          translate_expr e
     end
 
 
@@ -1993,9 +2025,12 @@ let translate_tag_definitions ctx =
     | _ ->
         false
   end ) ctx in
-  Map.fromList $ List.map (fun (sym, A.StructDef ident_tys) ->
-    (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
-  ) ctxWithoutUnions
+  Map.fromList $ List.map (function
+    | (sym, A.StructDef ident_tys) ->
+        (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
+    | (sym, A.UnionDef ident_tys) ->
+        error "WIP: Translation.translate_tag_definitions, UnionDef"
+  end) ctxWithoutUnions
 
 
 (* This is the entry function (called from main.ml) *)

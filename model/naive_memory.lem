@@ -167,6 +167,8 @@ let rec mem_valueCompare mem_val1 mem_val2 =
 *)
     | (MVunion tag1 sym1 mem_val1, MVunion tag2 sym2 mem_val2) ->
         error "WIP: mem_valueCompare, MVunion"
+    | _ ->
+        error "WIP: Naive mem_valueCompare"
   end
 
 let mem_valueEquals mem_val1 mem_val2 =
@@ -333,17 +335,6 @@ end
 
 
 
-instance (Show mem_error)
-let show err =
-  match err with
-    | MerrUnitialised r ->
-        "MerrUnitialised " ^ show r
-    | MerrInternal str ->
-        "MErrInternal " ^ show str
-    | MerrOther str ->
-        "MerrOther " ^ show str
-  end
-end
 
 (* END CLASS INSTANCES ========================================================================== *)
 

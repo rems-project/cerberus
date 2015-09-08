@@ -13,14 +13,22 @@ let pp_pure_memop = function
 let pp_memop = function
   | PtrEq ->
       !^ "\"ptreq\""
+  | PtrNe ->
+      !^ "\"ptrne\""
+  | PtrLt ->
+      !^ "\"ptrlt\""
+  | PtrGt ->
+      !^ "\"ptrgt\""
+  | PtrLe ->
+      !^ "\"ptrle\""
+  | PtrGe ->
+      !^ "\"ptrge\""
   | Ptrdiff ->
       !^ "\"ptrdiff\""
   | IntFromPtr ->
       !^ "\"intfromptr\""
   | PtrFromInt ->
       !^ "\"ptrfromint\""
-  | PtrLt ->
-      !^ "\"ptrlt\""
   | PtrValidForDeref ->
       !^ "\"ptrvalidforderef\""
 

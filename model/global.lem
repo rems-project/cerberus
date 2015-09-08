@@ -103,10 +103,26 @@ let rec map2_ f xs ys acc =
   end
 let map2 f xs ys = map2_ f xs ys []
 
-let fromJust z = maybe (error "Global.fromJust") id z
+let fromJust = function
+  | Just z ->
+      z
+  | Nothing ->
+      error "Global.fromJust"
+end
 
-let fromLeft z = either id (error "Global.fromLeft") z
-let fromRight z = either (error "Global.fromLeft") id z
+let fromLeft = function
+  | Left z ->
+      z
+  | Right _ ->
+      error "Global.fromLeft"
+end
+
+let fromRight = function
+  | Left _ ->
+      error "Global.fromRight"
+  | Right z ->
+      z
+end
 
 
 

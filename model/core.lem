@@ -69,8 +69,12 @@ instance (Show binop)
     | OpMul -> "OpMul"
     | OpDiv -> "OpDiv"
     | OpMod -> "OpMod"
+    | OpExp -> "OpExp"
     | OpEq  -> "OpEq"
+    | OpGt  -> "OpGt"
     | OpLt  -> "OpLt"
+    | OpGe  -> "OpGe"
+    | OpLe  -> "OpLe"
     | OpAnd -> "OpAnd"
     | OpOr  -> "OpOr"
     end

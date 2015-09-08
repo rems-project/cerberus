@@ -54,6 +54,31 @@ type memop =
   | PtrValidForDeref (* address -> boolean *)
 
 
+instance (Show memop)
+  let show = function
+    | PtrEq ->
+        "ptreq"
+    | PtrNe ->
+        "ptrne"
+    | PtrLt ->
+        "ptrlt"
+    | PtrGt ->
+        "ptrgt"
+    | PtrLe ->
+        "ptrle"
+    | PtrGe ->
+        "ptrge"
+    | Ptrdiff ->
+        "ptrdiff"
+    | IntFromPtr ->
+        "intfromptr"
+    | PtrFromInt ->
+        "ptrfromint"
+    | PtrValidForDeref ->
+        "ptrvalidforderef"
+  end
+end
+
 
 
 let stringFromInteger_operator = function

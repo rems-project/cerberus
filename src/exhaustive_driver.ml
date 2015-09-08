@@ -107,8 +107,10 @@ let drive sym_supply file args with_concurrency : execution_result =
   
   Debug.print_debug 1 (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
   
-  if n_actives = 0 then
-    Debug.print_debug 0 "FOUND NO VALID EXECUTION";
+  if n_actives = 0 then begin
+    Debug.print_debug 0 (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
+    
+  end;
   
   let ky  = ref [] in
   let ret = ref [] in

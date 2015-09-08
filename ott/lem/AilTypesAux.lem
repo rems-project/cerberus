@@ -188,6 +188,18 @@ let is_array ty =
       false
 end
 
+val is_array_unknown_size: ctype -> bool
+let is_array_unknown_size ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+    | Array _ Nothing ->
+        true
+    | _ ->
+        (* TODO: check builtins *)
+        false
+  end
+
+
 val is_array_of_character: ctype -> bool
 let is_array_of_character ty =
   (* TODO: check atomic *)
