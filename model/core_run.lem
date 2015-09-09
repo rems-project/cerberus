@@ -215,7 +215,7 @@ let rec core_eval file inside_if = function
         | (PEval (Vpointer ptr_val), PEval (Vinteger ival)) ->
             EU.return $ PEval (Vpointer (Mem.array_shift_ptrval ptr_val ty ival))
         | (PEval _, PEval _) ->
-            EU.fail $ Illformed_program "PEarray_shift: type error"
+            EU.fail $ Illformed_program ("PEarray_shift: type error ==> " ^ Boot.pp_core_expr (Epure (PEarray_shift pe1' ty pe2') : Core.expr unit))
         | _ ->
             EU.return $ PEarray_shift pe1' ty pe2'
       end
@@ -272,15 +272,15 @@ KKKKK NOW
       
       match (binop, valueFromPexpr pe1', valueFromPexpr pe2') with
         | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.eq_ival (* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.eq_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value equalitylessequality-than ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1 pe2)) : Core.expr unit))
+                  error ("WIP: symbolic integer_value equalitylessequality-than ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         | (OpLt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.lt_ival (* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.lt_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -784,6 +784,17 @@ type core_state = <|
   io:            io_state;
   handlers:      Map.map handler_event (list name);
 |>
+
+(*
+let core_state_eq core_st1 core_st2 =
+  (* TODO: IO and handlers *)
+  core_st1 
+
+instance (Eq core_state)
+  let (=) = core_state_eq
+  let (<>) = fun x y -> not (core_state_eq x y)
+end
+*)
 
 
 let string_of_thread_state th_st =
@@ -2534,8 +2545,50 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                       let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) expr in
                       E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk |>
                     )
+                | Impl (StdFunction "printf") ->
+                    match cvals with
+                      | [Vlist chars; Vlist args] ->
+                          (* building an OCaml string for the format *)
+                          let frmt_str =
+                            String.toString $ List.map (function
+                              | Vinteger ival ->
+                                  match Mem_aux.integerFromIntegerValue ival with
+                                    | Just n ->
+                                        Decode.encode_character_constant n
+                                    | Nothing ->
+                                        error "printf_hack: one of the element of the format array was invalid (1)"
+                                  end
+                              | z ->
+                                  error "printf_hack: one of the element of the format array was invalid (2)"
+                            end) (List.reverse chars) in
+                          
+                          (* get the list of types specified by the format string, and a builder function
+                             for the string to be printed *)
+                          let (tys, mk_str) = pseudo_printf frmt_str in
+                          
+                          
+                          (* TODO!!! this is wrong: the loads don't have any associated action_request, so
+                             they are not visible to the concurrency *)
+                          Step2_tau "printf" (
+                            E.return <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival 0))) |> (* TODO *)
+                          )
+(*
+                          one $ Step_output (
+                            (* performs the loads of the printf arguments *)
+                            SEU.foldM (fun acc (ty, Vpointer ptr) ->
+                              liftMem (Mem.load ty ptr) >>= fun mem_val ->
+                              SEU.return (Mem.prettyStringFromMem_value mem_val :: acc)
+                            ) [] (List.zip tys args) >>= fun arg_strs_rev ->
+                            
+                            let str = mk_str (List.reverse arg_strs_rev) in
+                            SEU.return (str, update_thread_state current_tid <| th_st with
+                              arena= Epure (PEval (Vinteger (Mem.integer_ival (integerFromNat (String.stringLength str)))))
+                            |> st)
+                          )
+*)
+                    end
                 | _ ->
-                    error "WIP: Eproc"
+                    error ("WIP: Eproc ==> " ^ Boot.pp_core_expr th_st.arena)
               end
           | Nothing ->
               Step2_eval "Eproc" (

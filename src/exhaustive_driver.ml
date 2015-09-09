@@ -108,8 +108,15 @@ let drive sym_supply file args with_concurrency : execution_result =
   Debug.print_debug 1 (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
   
   if n_actives = 0 then begin
-    Debug.print_debug 0 (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
-    
+    print_endline Colour.(ansi_format [Red]
+      (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
+    );
+    List.iteri (fun n (_, ND.Killed (ND.Other reason, log, constraints)) ->
+      print_endline Colour.(ansi_format [Red] 
+        (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
+              n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))))
+      )
+    ) vs
   end;
   
   let ky  = ref [] in
