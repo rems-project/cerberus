@@ -1040,15 +1040,43 @@ let fetch_first_write_event pred =
 *)
 
 
+val apply_shift_path_element: ctype -> shift_path_element -> mem_value -> mem_value
+let apply_shift_path_element ty spe mval =
+(* TODO: use ty *)
+  match (spe, mval) with
+    | (SPE_array elem_ty ival_, MVarray mvals) ->
+        match eval_integer_value_base ival_ with
+          | Just n ->
+              let n = natFromInteger n in
+              if n < 0 || List.length mvals <= n then
+                error "Mem.apply_shift_path_element: out of bound array"
+              else
+                fromJust $ List.index mvals n
+          | Nothing ->
+              error "Mem.apply_shift_path_element: symbolic array index"
+        end
+   | (SPE_array _ _, _) ->
+       error ("Mem.apply_shift_path_element, SPE_array ==> " ^ stringFromMem_value mval)
+   | (SPE_member _ _, _) ->
+       error ("Mem.apply_shift_path_element, SPE_member ==> " ^ stringFromMem_value mval)
+  end
+
+let apply_shift_path ty sh mval =
+  List.foldl (fun acc spe ->
+    apply_shift_path_element ty spe acc
+  ) mval sh
+
+
 let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
-  print_debugM 5 "HELLO load" >>
+  print_debugM 5 ("LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
         get >>= fun mem_st ->
         match Map.lookup alloc_id mem_st.objects with
           | Just mval ->
-              print_debugM 5 ("Loading [" ^ stringFromCtype ty ^ "]: " ^ stringFromMem_value mval  ^ " with pointer: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
-              return mval
+              let mval' = apply_shift_path ty sh mval in
+              print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
+              return mval'
           | Nothing ->
               fail (MerrUnitialised (stringFromPointer_value ptr_val))
         end
@@ -1089,6 +1117,21 @@ let to_shift_path tagDefs xs =
 *)
 
 
+let insert_element_to_path sh spe2 =
+  match List.dest_init sh with
+    | Just (sh', spe1) ->
+        match (spe1, spe2) with
+          | (SPE_array ty1 ival1, SPE_array ty2 ival2) ->
+              if ty1 = ty2 then
+                sh' ++ [SPE_array ty1 (IVop IntAdd [ival1; ival2])]
+              else
+                List.snoc spe2 sh
+          | _ ->
+              List.snoc spe2 sh
+        end
+    | Nothing ->
+        [spe2]
+  end
 
 let internal_shift_ptrval ptr_val spe : pointer_value =
   match ptr_val with
@@ -1100,7 +1143,7 @@ let internal_shift_ptrval ptr_val spe : pointer_value =
         match get_allocation_id ptr_val_ with
           | Just alloc_id ->
               (* TODO: there should a be check for when we go out of an object *)
-              PV prov ptr_val_ (sh ++ [spe])
+              PV prov ptr_val_ (insert_element_to_path sh spe)
           | Nothing ->
               error "TODO internal_shift_ptrval: shift 2"
         end
@@ -1311,19 +1354,45 @@ let intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
 let validForDeref_ptrval ptr_val =
   error "WIP: validForDeref_ptrval"
 
-let eq_ival eqs (IV _ ival_1) (IV _ ival_2) =
+let eq_ival tagDefs eqs (IV _ ival_1) (IV _ ival_2) =
   match (ival_1, ival_2) with
     | (IVconcrete n1, IVconcrete n2) ->
         Just (n1 = n2)
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        if n = 0 then
+          let xs = fromJust $ Map.lookup tag_sym tagDefs in
+          match xs with
+            | (ident', _)::_ ->
+                if membr_ident = ident' then
+                  (* TODO: assuming no prefix padding *)
+                  Just true
+                else
+                  Just false
+          end
+        else
+          Nothing
     | _ ->
         (* TODO *)
         Nothing
   end
 
-let lt_ival eqs (IV _ ival_1) (IV _ ival_2) =
+let lt_ival tagDefs eqs (IV _ ival_1) (IV _ ival_2) =
   match (ival_1, ival_2) with
     | (IVconcrete n1, IVconcrete n2) ->
         Just (n1 < n2)
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        if n = 0 then
+          let xs = fromJust $ Map.lookup tag_sym tagDefs in
+          match xs with
+            | (ident', _)::_ ->
+                if membr_ident = ident' then
+                  (* TODO: assuming no prefix padding *)
+                  Just false
+                else
+                  Just true
+          end
+        else
+          Nothing
     | _ ->
         (* TODO *)
         Nothing

@@ -568,8 +568,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                    conv_int [Caux.mk_ctype (exp_type_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2])
           else
             (* otherwise, we have some pointer arithmetic *)
-            (if AilTypesAux.is_pointer ty1 then translate_lvalue else translate_rvalue) e1 >>= fun core_e1 ->
-            (if AilTypesAux.is_pointer ty2 then translate_lvalue else translate_rvalue) e2 >>= fun core_e2 ->
+            (if AilTypesAux.is_arithmetic ty1 then translate_rvalue else translate_lvalue) e1 >>= fun core_e1 ->
+            (if AilTypesAux.is_arithmetic ty2 then translate_rvalue else translate_lvalue) e2 >>= fun core_e2 ->
 (*
             (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
             (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
@@ -767,7 +767,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEop C.OpLt a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpLt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
@@ -790,7 +790,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEop C.OpGt a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpGt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
@@ -813,7 +813,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEop C.OpLe a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpLe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
@@ -836,7 +836,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEop C.OpGe a b) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpGe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
@@ -868,8 +868,9 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
 
 
       | A.AilEbinary e1 A.Eq e2 ->
-          E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_e1    ->
+          E.fresh_symbol          >>= fun sym_e2    ->
+          E.fresh_symbol          >>= fun sym_memop ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
@@ -881,7 +882,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                   
                   else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
                     (* TODO: experimenting *)
-                    C.Ememop Mem.PtrEq [C.PEsym sym_e1; C.PEsym sym_e2]
+                    C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEsym sym_e1; C.PEsym sym_e2])
+                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
                   
                   else if Aaux.is_null_pointer_constant e1 then
                     error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
@@ -893,6 +895,7 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
       | A.AilEbinary e1 A.Ne e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol          >>= fun sym_memop ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
@@ -903,7 +906,8 @@ and translate_expression tagDefs stdlib program is_lvalue a_expr =
                   C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one)
                 else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
                   (* TODO: experimenting *)
-                  C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2]
+                    C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2])
+                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
                 else
                   error "WIP: Binary Ne"
               end

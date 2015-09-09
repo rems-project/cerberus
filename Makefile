@@ -254,7 +254,7 @@ VER:=\
 
 ocaml_native: | depend dependencies
 # TODO: surely this is wrong ...
-	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
+	@sed -i".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
 #	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(VER)/" src/main.ml
 #	TIME=`date "+%y/%m/%d@%H:%M"`
 #	@echo $(TIME)

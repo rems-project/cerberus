@@ -35,13 +35,18 @@ let inline (>?>) x b f g = if b then f x else g x
 
 
 (* TODO: move into Lem's libary *)
-let rec nub' l acc =
+let rec nubBy' eq l acc =
   match l with
     | []    -> []
-    | x::xs -> if List.elem x acc then nub' xs acc
-                                  else x :: nub' xs (x::acc)
+    | x::xs -> if List.elemBy eq x acc then nubBy' eq xs acc
+                                  else x :: nubBy' eq xs (x::acc)
   end
-let nub l = nub' l []
+val nubBy: forall 'a. ('a -> 'a -> bool) -> list 'a -> list 'a
+let nubBy eq l = nubBy' eq l []
+
+val nub: forall 'a. Eq 'a => list 'a -> list 'a
+let nub l =
+  nubBy (=) l
 
 
 let rec or_list l =

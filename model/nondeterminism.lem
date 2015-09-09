@@ -406,3 +406,18 @@ let apply_to_constraints f (ND xs) =
 val print_debug: nat -> string -> t unit
 let print_debug n str =
   return (Boot.print_debug n ("[DRIVER] " ^ str))
+
+
+
+val collapse: forall 'a. Eq 'a => t 'a -> t 'a
+let collapse (ND xs) =
+  let (actives, killed) = List.foldl (fun (actives_, killed_) (id, nd_st) ->
+    match (nd_st) with
+      | Active _ _ _ ->
+          ((id, nd_st) :: actives_, killed_)
+      | Killed _ _ _ ->
+          (actives_, (id, nd_st) :: killed_)
+    end
+  ) ([], []) xs in
+  
+  ND (Global.nubBy (fun (_, Active _ _ x) (_, Active _ _ y) -> x = y) actives ++ killed)
