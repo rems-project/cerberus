@@ -448,6 +448,15 @@ let rec drive_core_thread tid dr_st =
         ND.return dr_st
     | Step2_spawn_threads th_st ->
         error "WIP: Step2_spawn_threads"
+    | Step2_output debug_str str th_st' ->
+        ND.print_debug 5 ("Step2_output [" ^ debug_str ^ "] ==> " ^ str) >>
+        let core_st' = update_thread_state tid th_st' dr_st.core_state in
+        drive_core_thread tid <| dr_st with
+          core_state= <| core_st' with
+            io= <| dr_st.core_state.io with stdout= Dlist.append (Dlist.singleton str) dr_st.core_state.io.stdout |>
+          |>;
+          dr_step_counter= dr_st.dr_step_counter + 1;
+        |>
   end) (core_thread_step2 dr_st.core_file tid th_info)
 
 (*
@@ -731,9 +740,9 @@ let rec driver with_concurrency dr_st =
             Core.Vinteger (Mem.intcast_ptrval ref_ty ity ptr_val)
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vinteger ival]) ->
             Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival)
-
+        | (Mem_common.PtrValidForDeref, [Core.Vpointer ptr_val]) ->
+            if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse
 (*
-  | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
   | PtrValidForDeref (* address -> boolean *)
 *)
 
@@ -747,7 +756,7 @@ let rec driver with_concurrency dr_st =
             error ("WIP memop request: " ^ show memop ^ " ==> " ^
                    Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
       end in
-      ND.return <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+      driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
   | Step2_tau debug_str _ ->
       error ("FOUND A TAU: '" ^ debug_str ^ "'")
   | Step2_eval debug_str _ ->

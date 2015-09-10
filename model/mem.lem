@@ -100,6 +100,7 @@ val case_integer_value: forall 'a. (* TODO: expose more ctors *)
 (* Predicats on integer values *)
 val eq_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val lt_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val le_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> pointer_value
 (* val is_concrete_ival: integer_value -> bool *)
 
@@ -161,6 +162,7 @@ let alignof_ival                        = Impl.alignof_ival
 let case_integer_value                  = Impl.case_integer_value
 let eq_ival                             = Impl.eq_ival
 let lt_ival                             = Impl.lt_ival
+let le_ival                             = Impl.le_ival
 let ptrcast_ival                        = Impl.ptrcast_ival
 (* let is_concrete_ival                    = Impl.is_concrete_ival *)
 let symbolic_mval                       = Impl.symbolic_mval

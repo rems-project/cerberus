@@ -141,7 +141,7 @@ fun conv_aux (ty: ctype, n: integer) : integer :=
   else
 --    conv_aux(ty, if <ctype_max>(ty) < n then n - <ctype_max>(ty) + 1 else n + <ctype_max>(ty) + 1 end)
     -- TODO: check
-    n % (<ctype_max>(ty) + 1)
+    n % (ivmax(ty) + 1)
   end
 {-
   let n2 =
@@ -201,12 +201,12 @@ fun usual_arithmetic (ty1: ctype, ty2: ctype): ctype :=
   ty1
 
 fun ctype_width (ty: ctype): integer :=
-  <sizeof>(ty) * <bits_in_byte>
+  ivsizeof(ty) * <bits_in_byte>
 
 
 fun is_representable (n: integer, ty: ctype): boolean :=
-  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
-
+--  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
+  ivmin(ty) <= n /\ n <= ivmax(ty)
 
 
 

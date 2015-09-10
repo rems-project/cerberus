@@ -173,6 +173,12 @@ type token =
   | WAIT
   | ARRAY_SHIFT
   | MEMBER_SHIFT
+  
+  (* integer values *)
+  | IVMAX
+  | IVMIN
+  | IVSIZEOF
+  | IVALIGNOF
 
 
 (*

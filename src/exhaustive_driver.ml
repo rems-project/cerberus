@@ -111,10 +111,17 @@ let drive sym_supply file args with_concurrency : execution_result =
     print_endline Colour.(ansi_format [Red]
       (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
     );
-    List.iteri (fun n (_, ND.Killed (ND.Other reason, log, constraints)) ->
+    List.iteri (fun n (_, ND.Killed (reason, log, constraints)) ->
+      let reason_str = match reason with
+        | ND.Undef0 ubs ->
+            "undefined behaviour: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
+        | ND.Error0 str ->
+            "static error: " ^ str
+        | ND.Other str ->
+            str in
       print_endline Colour.(ansi_format [Red] 
         (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))))
+              n reason_str (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))))
       )
     ) vs
   end;

@@ -143,6 +143,12 @@ let keywords =
       ("is_integer",  T.IS_INTEGER );
       ("is_signed",   T.IS_SIGNED  );
       ("is_unsigned", T.IS_UNSIGNED);
+      
+      (* integer values *)
+      ("ivmax",     T.IVMAX);
+      ("ivmin",     T.IVMIN);
+      ("ivsizeof",  T.IVSIZEOF);
+      ("ivalignof", T.IVALIGNOF)
     ]
 
 let scan_sym lexbuf =

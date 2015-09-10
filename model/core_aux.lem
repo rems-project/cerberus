@@ -354,6 +354,31 @@ let rec valueFromPexpr pexpr =
         Nothing
     | PEimpl _ ->
         Nothing
+    | PEctor ctor pes ->
+        let cvals_opt = List.foldr (fun pe acc_opt ->
+          match (acc_opt, valueFromPexpr pe) with
+            | (Just acc, Just cval) ->
+                Just (cval :: acc)
+            | _ ->
+                Nothing
+          end) (Just []) pes in
+        match (ctor, cvals_opt) with
+          | (Clist, Just [cval1; Vlist cvals]) ->
+              Just $ Vlist (cval1 :: cvals)
+        | (Ctuple, Just cvals) ->
+              Just $ Vtuple cvals
+        | (Civmax, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
+            Just $ Vinteger (Mem.max_ival ity)
+        | (Civmin, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
+            Just $ Vinteger (Mem.min_ival ity)
+        | (Civsizeof, Just [Vctype ty]) ->
+            Just $ Vinteger (Mem.sizeof_ival ty)
+        | (Civalignof, Just [Vctype ty]) ->
+            Just $ Vinteger (Mem.alignof_ival ty)
+        
+        | _ ->
+            Nothing
+      end
     | PEcons pe1 pe2 ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just cval1, Just (Vlist cvals)) ->
@@ -367,8 +392,9 @@ let rec valueFromPexpr pexpr =
         Nothing
     | PEarray_shift _ _ _ ->
         Nothing
-(*
     | PEstruct tag_sym xs ->
+        error "WIP: Core_aux.valueFromPexpr, PEstruct"
+(*
         let ident_mem_vals_opt = List.foldr (fun (ident, pe) acc_opt ->
           match (acc_opt, maybe Nothing memValueFromValue (valueFromPexpr pe)) with
             | (Just acc, Just mem_val) ->
@@ -584,6 +610,8 @@ let rec subst_sym_pexpr sym pe' = function
       if sym = sym' then pe' else pexpr
   | (PEimpl _ as pexpr) ->
       pexpr
+  | PEctor ctor pes ->
+      PEctor ctor (List.map (subst_sym_pexpr sym pe') pes)
   | PEcons pe1 pe2 ->
       PEcons (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2)
   | PEcase_list pe nm1 nm2 ->

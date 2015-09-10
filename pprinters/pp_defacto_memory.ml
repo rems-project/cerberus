@@ -70,6 +70,10 @@ and pp_integer_value_base = function
       !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
   | IVop (iop, ival_s) ->
       !^ "IVop" ^^ P.parens (!^ (string_of_integer_operator iop) ^^ P.comma ^^^ comma_list pp_integer_value_base ival_s)
+  | IVmax ity ->
+      !^ "IVmax" ^^ P.parens (Pp_ail.pp_integerType ity)
+  | IVmin ity ->
+      !^ "IVmin" ^^ P.parens (Pp_ail.pp_integerType ity)
   | IVsizeof ty ->
       !^ "IVsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
