@@ -149,6 +149,17 @@ type value =
   | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
 
 
+type ctor =
+  | Clist
+  | Ctuple
+  | Carray
+  | Civmax
+  | Civmin
+  | Civsizeof
+  | Civalignof
+
+
+
 (* pure Core expressions *)
 type pexpr =
   (* undefined behaviour and late static error / failed assert *)
@@ -160,8 +171,18 @@ type pexpr =
   (* names *)
   | PEsym of sym
   | PEimpl of Implementation_.implementation_constant
-  (* list (de|con)structors *)
+  
+  (* data (de|con)structors *)
+  | PEctor of ctor * list pexpr
+  
+  (* BEGIN OBSOLETE *)
   | PEcons of pexpr * pexpr
+  | PEtuple of list pexpr
+(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
+  | PEarray of list pexpr
+  (* END OBSOLETE *)
+  
+  (* list (de|con)structors *)
   | PEcase_list of pexpr * pexpr * name
   (* ctype destructor, the arguments are: ctype to destruct, constant
        in void case, name of functions to call for the remaining cases:
@@ -180,9 +201,6 @@ type pexpr =
   (* pure operations provide by the memory layout model *)
   | PEmemop of Mem.pure_memop * list pexpr
   (* these two are annoying *)
-  | PEtuple of list pexpr
-(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
-  | PEarray of list pexpr
   | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
   (* call to a pure function *)
   | PEcall of name * list pexpr

@@ -35,6 +35,7 @@ type expr =
   | PEerror of string
   | PEsym of _sym
   | PEimpl of Implementation_.implementation_constant
+  | PEctor of Core.ctor * expr list
   | PEcons of expr (* pexpr *) * expr (* pexpr *)
   | PEcase_list of expr (* pexpr *) * expr (* pexpr *) * name
   | PEcase_ctype of expr (* pexpr *) * expr (* pexpr *) * name * name * name * name *
@@ -128,6 +129,7 @@ let register_cont_symbols expr =
     | PEerror _
     | PEsym _
     | PEimpl _
+    | PEctor _
     | PEcons _
     | PEcase_list _
     | PEcase_ctype _
@@ -262,6 +264,12 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         Pure (Core.PEsym (lookup_symbol _sym st))
     | PEimpl iCst ->
         Pure (Core.PEimpl iCst)
+    | PEctor (ctor, _es) ->
+        (match to_pures (List.map (f st) _es) with
+          | Left pes ->
+              Pure (Core.PEctor (ctor, pes))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEctor")
     | PEcons (_e1, _e2) ->
         (match to_pure (f st _e1), to_pure (f st _e2) with
           | Left pe1, Left pe2 ->
@@ -1012,8 +1020,11 @@ let subst name =
 (* binder patterns *)
 %token UNDERSCORE
 
-
 %token ND PAR 
+
+
+(* integer values *)
+%token IVMAX IVMIN IVSIZEOF IVALIGNOF
 
 
 (* TODO: not used yet, but the tracing mode of the parser crash othewise ..... *)
@@ -1332,6 +1343,7 @@ core_type:
 | CARET           { Core.OpExp }
 | EQ              { Core.OpEq  }
 | LT              { Core.OpLt  }
+| LE              { Core.OpLe  }
 | SLASH_BACKSLASH { Core.OpAnd }
 | BACKSLASH_SLASH { Core.OpOr  }
 ;
@@ -1380,6 +1392,15 @@ expr:
 *)
 | n= INT_CONST
     { Vinteger n }
+| IVMAX _e= delimited(LPAREN, expr, RPAREN)
+    { PEctor (Core.Civmax, [_e]) }
+| IVMIN _e= delimited(LPAREN, expr, RPAREN)
+    { PEctor (Core.Civmin, [_e]) }
+| IVSIZEOF _e= delimited(LPAREN, expr, RPAREN)
+    { PEctor (Core.Civsizeof, [_e]) }
+| IVALIGNOF _e= delimited(LPAREN, expr, RPAREN)
+    { PEctor (Core.Civalignof, [_e]) }
+
 (* TODO:
 | Vfloating of string
     {  }
@@ -1411,9 +1432,10 @@ expr:
 *)
 | NOT _e= delimited(LPAREN, expr, RPAREN)
     { PEnot _e }
-(* some sugar *)
+(*
 | _e1= expr LE _e2= expr
-    { PEop (Core.OpOr, PEop (Core.OpLt, _e1, _e2), PEop (Core.OpEq, _e1, _e2)) }
+    { Eif (PEop (Core.OpLt, _e1, _e2), Vtrue, PEop (Core.OpEq, _e1, _e2)) }
+*)
 | _e1= expr bop= binary_operator _e2= expr
     { PEop (bop, _e1, _e2) }
 | LPAREN _e= expr COMMA _es= separated_nonempty_list(COMMA, expr) RPAREN

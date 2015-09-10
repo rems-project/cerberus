@@ -138,6 +138,34 @@ let rec core_eval file inside_if = function
         | _ ->
             EU.fail Unknown_impl
       end
+  
+  | PEctor ctor pes ->
+      EU.mapM (core_eval file inside_if) pes >>= fun pes' ->
+      match (ctor, valueFromPexprs pes') with
+        | (Clist, Just [cval1; Vlist cvals]) ->
+              EU.return $ PEval (Vlist (cval1 :: cvals))
+        | (Ctuple, Just cvals) ->
+              EU.return $ PEval (Vtuple cvals)
+(*
+        | (Carray, Just [cval1; Vlist cvals]) ->
+              EU.return $ PEval (Vlist (cval1 :: cvals))
+*)
+        | (Civmax, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
+            EU.return $ PEval (Vinteger (Mem.max_ival ity))
+        | (Civmin, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
+            EU.return $ PEval (Vinteger (Mem.min_ival ity))
+        | (Civsizeof, Just [Vctype ty]) ->
+            EU.return $ PEval (Vinteger (Mem.sizeof_ival ty))
+        | (Civalignof, Just [Vctype ty]) ->
+            EU.return $ PEval (Vinteger (Mem.alignof_ival ty))
+        
+        | (_, Just _) ->
+            EU.fail $ Illformed_program "PEctor: one of the operands was ill-typed"
+        | (_, Nothing) ->
+            EU.return $ PEctor ctor pes'
+      end
+
+  
   | PEcons pe1 pe2 ->
       core_eval file inside_if pe1 >>= fun pe1' ->
       core_eval file inside_if pe2 >>= fun pe2' ->
@@ -288,6 +316,17 @@ KKKKK NOW
                   error ("WIP: symbolic integer_value less-than ==> " ^
                          Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
             end
+        
+        | (OpLe, Just (Vinteger ival1), Just (Vinteger ival2)) ->
+            match Mem.le_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value less_equal-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
+            end
+        
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with
               | OpAdd ->
@@ -2280,6 +2319,7 @@ type core_step2 =
   | Step2_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
   | Step2_done of Core.value
   | Step2_spawn_threads of list thread_state (* initial states for the children *)
+  | Step2_output of (* DEBUG *) string * string * thread_state
 
 
 
@@ -2569,8 +2609,8 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                           
                           (* TODO!!! this is wrong: the loads don't have any associated action_request, so
                              they are not visible to the concurrency *)
-                          Step2_tau "printf" (
-                            E.return <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival 0))) |> (* TODO *)
+                          Step2_output "printf" frmt_str (
+                            <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival 0))) |> (* TODO *)
                           )
 (*
                           one $ Step_output (
