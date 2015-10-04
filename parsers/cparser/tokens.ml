@@ -111,6 +111,8 @@ type token =
   | PIPES
   | RBRACES
   
+  |IDENTIFIER of string
+  
   | EOF
 
 
@@ -222,4 +224,10 @@ let string_of_token = function
   | CARET_EQ -> "CARET_EQ"
   | PIPE_EQ -> "PIPE_EQ"
   | COMMA -> "COMMA"
+  | ASSERT -> "ASSERT"
+  | OFFSETOF -> "OFFSETOF"
+  | LBRACES -> "LBRACES"
+  | PIPES -> "PIPES"
+  | RBRACES -> "RBRACES"
+  | IDENTIFIER str -> "IDENTIFIER(" ^ str ^ ")"
   | EOF -> "EOF"

@@ -61,6 +61,13 @@ let string_at_line fname lnum =
     ""
 *)
 
+(* we need this for old version of OCaml *)
+let my_string_init n f =
+  let str = String.create n in
+  for i = 0 to n - 1 do
+    String.unsafe_set str i (f i)
+  done;
+  str
 
 
 let make_message loc k str =
@@ -74,8 +81,7 @@ let make_message loc k str =
             | Some l ->
                 let cpos = pos.pos_cnum - pos.pos_bol in
                 l ^ "\n" ^
-                "WIP KKK"
-(*                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^')) *)
+                ansi_format [Bold; Green] ((* Bytes.init *) my_string_init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
             | None ->
                 "")
       | Loc_region (start_p, end_p, cursor_p_opt) ->
@@ -94,10 +100,9 @@ let make_message loc k str =
                   | None ->
                       cpos1 in
                 l ^ "\n" ^
-                "WIP KKK"
-(*                ansi_format [Bold; Green] (String.init (cpos2 + 1)
+                ansi_format [Bold; Green] ((* String.init *) my_string_init (cpos2 + 1)
                                              (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                                          ) *)
+                                          )
 
 
 

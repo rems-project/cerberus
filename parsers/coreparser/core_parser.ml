@@ -562,7 +562,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, Eproc")
     | Eaction (p, act) ->
-        Expr (Core.Eaction (Core.Paction (p, Core.Action ((), g st act))))
+        Expr (Core.Eaction (Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g st act))))
     | Eunseq _es ->
         Expr (Core.Eunseq (List.map (fun z -> to_expr (f st z)) _es))
     | Ewseq (_as, _e1, _e2) ->
@@ -589,9 +589,9 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         Expr (match _sym_opt with
           | Some _sym ->
               let sym = fresh_symbol _sym in
-              Core.Easeq (Some sym, Core.Action ((), g st act1), Core.Paction (p, Core.Action ((), g (Pmap.add _sym sym st) act2)))
+              Core.Easeq (Some sym, Core.Action (Location_ocaml.unknown, (), g st act1), Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g (Pmap.add _sym sym st) act2)))
           | None ->
-              Core.Easeq (None, Core.Action ((), g st act1), Core.Paction (p, Core.Action ((), g st act2))))
+              Core.Easeq (None, Core.Action (Location_ocaml.unknown, (), g st act1), Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g st act2))))
     | Eindet _e ->
         Expr (Core.Eindet (to_expr (f st _e)))
     | Ebound (n, _e) ->
@@ -628,13 +628,13 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
     | Create (_e1, _e2) ->
         (match to_pure (f st _e1), to_pure (f st _e2) with
           | Left pe1, Left pe2 ->
-              Core.Create (pe1, pe2, [])
+              Core.Create (pe1, pe2, (Symbol.PrefOther "core parser"))
           | _ ->
             failwith "TODO(MSG) type-error: symbolify_expr, Create")
     | Alloc (_e1, _e2) ->
         (match to_pure (f st _e1), to_pure (f st _e2) with
           | Left pe1, Left pe2 ->
-              Core.Alloc0 (pe1, pe2, [])
+              Core.Alloc0 (pe1, pe2, (Symbol.PrefOther "core parser"))
           | _ ->
             failwith "TODO(MSG) type-error: symbolify_expr, Alloc")
     | Kill _e ->

@@ -667,20 +667,20 @@ and remove_conv_int_action_ act_ =
         CompareExchangeWeak (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
   end
 
-and remove_conv_int_action (Action () act_) = Action () (remove_conv_int_action_ act_)
+and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)
 and remove_conv_int_paction (Paction p act) = Paction p (remove_conv_int_action act)
 
 
 
 let is_create = function
-  | Eaction (Paction _ (Action _ (Create _ _ _))) ->
+  | Eaction (Paction _ (Action _ _ (Create _ _ _))) ->
       true
   | _ ->
       false
 end
 
 let is_kill = function
-  | Eaction (Paction _ (Action _ (Kill _))) ->
+  | Eaction (Paction _ (Action _ _ (Kill _))) ->
       true
   | _ ->
       false

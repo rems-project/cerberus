@@ -1102,6 +1102,7 @@ and struct_declaration =
   
   (* *)
   | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
+      E.print_debug 2 ("Cabs_to_ail, TSpec_name ==> " ^ str) >>
       match Builtins.translate_builtin_typenames str with
         | Just ty ->
             E.return (ATypes.no_qualifiers, ty)
@@ -1112,7 +1113,7 @@ and struct_declaration =
                   E.resolve_typedef sym >>= fun (qs, ty) ->
                   E.return (qs, ty)
               | _ ->
-                  E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case")
+                  E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case 1115")
             end
       end
   | ss ->
@@ -1197,7 +1198,7 @@ and desugar_expression (CabsExpression loc expr) =
   match expr with
     | CabsEident ident ->
         let (CabsIdentifier _ str) = ident in (* DEBUG *)
-        let _ = Boot.output_string ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
+        let _ = Boot.print_debug 2 ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
 _STD "§6.5.1#2" $
         E.resolve_identifier ident E.Namespace_ordinary >>= function
           | Just (_, (id, E.Kind_member E.Kind_enum, _)) ->
@@ -1215,7 +1216,8 @@ _STD "§6.5.1#2" $
                 | Just (d_e, _) ->
                     E.return d_e
                 | Nothing ->
-                    E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation ("§6.5.1#2, Nothing, Nothing: " ^ str)) (* TODO: check the quote *)
+                    E.fail (Loc.locOf ident)
+                      (Errors.Desugar_OtherViolation ("§6.5.1#2, Nothing, Nothing: " ^ str)) (* TODO: check the quote *)
               end
         end
     
@@ -2001,11 +2003,12 @@ and desugar_and_register_static_assert_declaration sa_decl =
 val desugar_declaration_base: specifiers -> list init_declarator -> E.t (list (identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
   desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), _ty) ->
-  E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs  ->
+(*   E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs  -> *)
   let base_qs = translate_type_qualifiers specifs.type_qualifiers in
   
   (* for each [init_declarator] *)
-    E.foldrM (fun (ident, qs, ty, d_e_opt) acc ->
+    E.foldrM (fun idecltor acc ->
+      desugar_init_declarator _ty specifs.storage_classes idecltor >>= fun (ident, qs, ty, d_e_opt) ->
       if specifs.storage_classes = [SC_typedef] then
         (* Case of a typedef *)
         E.register_identifier ident
@@ -2041,7 +2044,7 @@ let desugar_declaration_base specifs idecltors =
                   E.return acc
             end
       end
-    ) xs []
+    ) (List.reverse idecltors) []
 
 (* WIP
 
@@ -2244,10 +2247,14 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       
       | CabsSdo e s ->
           (* TODO: check *)
+          AilSdo <$> E.perform_inside_loop (desugar_statement s)
+                 <*> desugar_expression e
+(*
           (* TODO: this is a bit hackish *)
           do_while_hack e s    >>= fun s' ->
           desugar_statement s' >>= fun (AnnotatedStatement _ d_s) ->
           E.return d_s
+*)
       
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
           (* TODO: this is not really a block scope (...) *)
@@ -2281,7 +2288,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                           E.return (acc1, acc2)
                     end
               end
-            ) xs ([], []) >>= fun (sym_d_es, bs) ->
+            ) (List.reverse xs) ([], []) >>= fun (sym_d_es, bs) ->
             
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
@@ -2554,7 +2561,7 @@ let desugar_and_register_external_declaration edecl =
   else
     match edecl with
       | EDecl_func fdef ->
-          let _ = Boot.output_string "EDecl_func" in (* DEBUG *)
+          let _ = Boot.print_debug 2 "EDecl_func" in (* DEBUG *)
           desugar_and_register_function_definition fdef
       
       (* TODO: check *)
@@ -2566,17 +2573,17 @@ let desugar_and_register_external_declaration edecl =
           E.mapM_ (fun (ident, qs, ty, d_e_opt) ->
             (* TODO!!!: do something with qs *)
             let base_qs = translate_type_qualifiers specifs.type_qualifiers in
-            let _ = Boot.output_string
+            let _ = Boot.print_debug 2
               (if base_qs.ATypes.const then "FOUND CONST" else "DIDN'T FIND CONST") in (* DEBUG *)
             
             
-            let _ = Boot.output_string $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
+            let _ = Boot.print_debug 2 $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
             let (qs', ty') = inject_qualifiers base_qs ty in
             if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
               error "TODO: desugar_declaration_base: is this case legal?"
             else
-              let _ = Boot.output_string ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
-              let _ = Boot.output_string ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)
+              let _ = Boot.print_debug 2 ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
+              let _ = Boot.print_debug 2 ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)
               
               
               if specifs.storage_classes = [SC_typedef] then

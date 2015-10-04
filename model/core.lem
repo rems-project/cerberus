@@ -368,8 +368,8 @@ and shift_path 'a =
 
 (* the qualification prefixes are for pprint *)
 and action_ =
-  | Create of pexpr * pexpr * list Symbol.t (* the expr arguments are: alignment requirement, effective type *)
-  | Alloc of pexpr * pexpr * list Symbol.t  (* the expr arguments are: alignment requirement, space size *)
+  | Create of pexpr * pexpr * Symbol.prefix (* the expr arguments are: alignment requirement, effective type *)
+  | Alloc of pexpr * pexpr * Symbol.prefix  (* the expr arguments are: alignment requirement, space size *)
   | Kill of pexpr
   | Store of pexpr * pexpr * pexpr * Cmm.memory_order
   | Load of pexpr * pexpr * Cmm.memory_order
@@ -379,7 +379,7 @@ and action_ =
   (* TODO: it annoying (maybe wrong) that these are actions *)
 (*  | Ptr of pointer_action * list pexpr *)
 
-and action 'a  = Action of 'a * action_
+and action 'a  = Action of Loc.t * 'a * action_
 and paction 'a = Paction of polarity * action 'a
 
 
@@ -458,8 +458,6 @@ type file 'a = <|
   impl   : impl;
   globs  : list (sym * core_type * expr 'a);
   funs   : fun_map 'a;
-  
-  tagDefinitions: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype));
 |>
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 

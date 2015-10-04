@@ -88,6 +88,7 @@ CERBERUS_LEM=\
   symbol.lem \
   undefined.lem \
   core_ctype.lem \
+  defacto_memory_types.lem \
   defacto_memory.lem \
   mem.lem \
   mem_aux.lem \

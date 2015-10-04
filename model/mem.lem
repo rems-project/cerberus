@@ -14,7 +14,10 @@ module Impl = Naive_memory
 *)
 
 import Defacto_memory
-module Impl = Defacto_memory
+module Impl = struct
+  include import Defacto_memory
+  include import Defacto_memory_types
+end
 
 
 (* The API *)
@@ -33,17 +36,17 @@ val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_
 
 
 
-val initial_mem_stateWithTagDefinitions: tag_definitions -> mem_state
+val initial_mem_state: mem_state
 
 (* Memory actions *)
 val allocate_static:    Thread.thread_id  (* the allocating thread *)
-                     -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
                      -> integer_value     (* alignment constraint *)
                      -> Core_ctype.ctype  (* type of the allocation *)
                      -> memM pointer_value
 
 val allocate_dynamic:   Thread.thread_id  (* the allocating thread *)
-                     -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
                      -> integer_value     (* alignment constraint *)
                      -> integer_value     (* size *)
                      -> memM pointer_value
@@ -98,9 +101,9 @@ val case_integer_value: forall 'a. (* TODO: expose more ctors *)
     'a
 
 (* Predicats on integer values *)
-val eq_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
-val lt_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
-val le_ival: map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype)) -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val eq_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val lt_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val le_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> pointer_value
 (* val is_concrete_ival: integer_value -> bool *)
 
@@ -137,7 +140,7 @@ let bind = Impl.bind
 
 let prettyStringFromMem_value           = Impl.prettyStringFromMem_value
 let runMem                              = Impl.runMem
-let initial_mem_stateWithTagDefinitions = Impl.initial_mem_stateWithTagDefinitions
+let initial_mem_state                   = Impl.initial_mem_state
 let null_ptrval                         = Impl.null_ptrval
 let fun_ptrval                          = Impl.fun_ptrval
 let eq_ptrval                           = Impl.eq_ptrval

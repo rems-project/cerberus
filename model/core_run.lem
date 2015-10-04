@@ -1,5 +1,5 @@
 
-open import Pervasives String_extra Global Core Core_ctype Core_aux Show Show_extra
+open import Pervasives String_extra Global Core Core_ctype Core_aux Show Show_extra Loc
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
@@ -212,7 +212,7 @@ let rec core_eval file inside_if = function
               | Atomic ty ->
                   EU.return $ PEcall nm_atom [PEval (Vctype ty)]
               | Struct tag ->
-                  match Map.lookup tag file.tagDefinitions with
+                  match Map.lookup tag (Core_ctype.tagDefs ()) with
                     | Just ident_tys ->
                         (* TODO: identifiers *)
                         EU.return $ PEcall nm_struct [PEval (Vlist $ List.map (fun (_, ty) -> Vctype ty) ident_tys)]
@@ -220,7 +220,7 @@ let rec core_eval file inside_if = function
                         EU.fail $ Illformed_program ("couldn't find definition of tag: " ^ show tag)
                   end
               | Union tag ->
-                  match Map.lookup tag file.tagDefinitions with
+                  match Map.lookup tag (Core_ctype.tagDefs ()) with
                     | Just ident_tys ->
                         (* TODO: identifiers *)
                         EU.return $ PEcall nm_union [PEval (Vlist $ List.map (fun (_, ty) -> Vctype ty) ident_tys)]
@@ -300,15 +300,15 @@ KKKKK NOW
       
       match (binop, valueFromPexpr pe1', valueFromPexpr pe2') with
         | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.eq_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.eq_ival Symbolic.Constraints_TODO ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value equalitylessequality-than ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
+                  error ("WIP: symbolic integer_value equality ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         | (OpLt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.lt_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.lt_ival Symbolic.Constraints_TODO ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -318,7 +318,7 @@ KKKKK NOW
             end
         
         | (OpLe, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.le_ival file.tagDefinitions(* TODO *) Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.le_ival Symbolic.Constraints_TODO ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -326,6 +326,8 @@ KKKKK NOW
                   error ("WIP: symbolic integer_value less_equal-than ==> " ^
                          Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
             end
+        
+(*        | (OpGe,) -> *)
         
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with
@@ -940,11 +942,11 @@ type action_request =
                      parameters of request *
                      the new state or a callback *)
   | AllocRequest  of set action_id * set action_id * set action_id *
-                     action_id * thread_id * list Symbol.t * Mem.integer_value * Mem.integer_value *
+                     action_id * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
                      (Mem.pointer_value -> core_state)
   
   | CreateRequest of set action_id * set action_id * set action_id *
-                     action_id * thread_id * list Symbol.t * Mem.integer_value * ctype *
+                     action_id * thread_id * Symbol.prefix * Mem.integer_value * ctype *
                      (Mem.pointer_value -> core_state)
   
   | LoadRequest   of set action_id * set action_id * set action_id * 
@@ -2285,15 +2287,15 @@ type action_request2 =
   (* RequestName  of sbBefore * ddBefore * aswBefore
                      parameters of request *
                      the new state or a callback *)
-  | AllocRequest2  of set action_id * set action_id * set action_id *
-                     action_id * thread_id * list Symbol.t * Mem.integer_value * Mem.integer_value *
+  | AllocRequest2  of Loc.t * set action_id * set action_id * set action_id *
+                     action_id * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
                      (Mem.pointer_value -> thread_state)
   
-  | CreateRequest2 of set action_id * set action_id * set action_id *
-                     action_id * thread_id * list Symbol.t * Mem.integer_value * ctype *
+  | CreateRequest2 of Loc.t * set action_id * set action_id * set action_id *
+                     action_id * thread_id * Symbol.prefix * Mem.integer_value * ctype *
                      (Mem.pointer_value -> thread_state)
   
-  | LoadRequest2  of set action_id * set action_id * set action_id * 
+  | LoadRequest2  of Loc.t * set action_id * set action_id * set action_id * 
                      (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
                      action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.t *
                      (* the argument of the callback is either a concrete value if the memory model
@@ -2301,10 +2303,10 @@ type action_request2 =
                         present LoadRequest *)
                      (Mem.mem_value -> thread_state)
 
-  | StoreRequest2 of set action_id * set action_id * set action_id *
+  | StoreRequest2 of Loc.t * set action_id * set action_id * set action_id *
                      action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
                      thread_state
-  | KillRequest2 of  set action_id * set action_id * set action_id *
+  | KillRequest2 of  Loc.t * set action_id * set action_id * set action_id *
                      action_id * thread_id * Mem.pointer_value * thread_state
 
 type core_step2 =
@@ -2328,7 +2330,7 @@ type core_step2 =
 
 val core_action_step:
     Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step2
-let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action annots act)) =
+let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
     Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
@@ -2351,7 +2353,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_action_request (
                 E.fresh_action_id >>= fun create_aid ->
                 E.return (
-                  CreateRequest2 sb_before dd_before asw_before
+                  CreateRequest2 loc sb_before dd_before asw_before
                     create_aid current_tid pref ival ty
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
@@ -2365,14 +2367,14 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "first operand of a Create" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Create pe1' pe2 pref)))
+                  Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
               Step2_eval "second operand of a Create" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Create pe1 pe2' pref)))
+                  Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
                 |>
               )
         end
@@ -2382,7 +2384,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_action_request (
                 E.fresh_action_id >>= fun alloc_aid ->
                 E.return (
-                  AllocRequest2 sb_before dd_before asw_before
+                  AllocRequest2 loc sb_before dd_before asw_before
                     alloc_aid current_tid pref ival1 ival2
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
@@ -2396,14 +2398,14 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "first operand of a Alloc" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Create pe1' pe2 pref)))
+                  Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
               Step2_eval "second operand of a Alloc" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Create pe1 pe2' pref)))
+                  Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
                 |>
               )
         end
@@ -2413,7 +2415,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_action_request (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
-                  KillRequest2 sb_before dd_before asw_before
+                  KillRequest2 loc sb_before dd_before asw_before
                     kill_aid current_tid ptr_val
                     <| th_st with
                       arena= Eskip;
@@ -2427,7 +2429,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "operand of kill()" (
                 E.core_eval file false pe >>= fun pe' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Kill pe')))
+                  Eaction (Paction p (Action loc annots (Kill pe')))
                 |>
               )
         end
@@ -2440,7 +2442,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                       E.fresh_action_id >>= fun store_aid ->
                       E.fresh_symbol    >>= fun val_sym   ->
                       E.return (
-                        StoreRequest2 sb_before dd_before asw_before
+                        StoreRequest2 loc sb_before dd_before asw_before
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
                             arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
@@ -2458,21 +2460,21 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "first operand of a Store" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Store pe1' pe2 pe3 mo)))
+                  Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo)))
                 |>
               )
           | (_, Nothing, _) ->
               Step2_eval "second operand of a Store" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Store pe1 pe2' pe3 mo)))
+                  Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo)))
                 |>
               )
           | (_, _, Nothing) ->
               Step2_eval "third operand of a Store" (
                 E.core_eval file false pe3 >>= fun pe3' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Store pe1 pe2 pe3' mo)))
+                  Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo)))
                 |>
               )
         end
@@ -2483,7 +2485,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                 E.fresh_action_id >>= fun load_aid ->
                 E.fresh_symbol    >>= fun val_sym  ->
                 E.return (
-                  LoadRequest2 sb_before dd_before asw_before
+                  LoadRequest2 loc sb_before dd_before asw_before
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
                         arena= Epure (PEval (valueFromMemValue mem_val));
@@ -2497,14 +2499,14 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "first operand of a Load" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Load pe1' pe2 mo)))
+                  Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
                 |>
               )
           | (_, Nothing) ->
               Step2_eval "second operand of a Load" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action annots (Load pe1 pe2' mo)))
+                  Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
                 |>
               )
         end
@@ -2767,10 +2769,10 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
           let kill_es = List.map snd $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) sym_tys)) sym_vs in
           let e =
-            Ewseq [] (mk_unseq $ List.map (fun e -> pkill e) kill_es)
+            Ewseq [] (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
               (Ewseq (List.map (fun z -> Just z) create_as) (mk_unseq $ List.map (fun ty ->
                 let pe_ty = PEval (Vctype ty) in
-                pcreate (alignof pe_ty) pe_ty []
+                pcreate Loc.unknown (alignof pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
               ) create_tys)
                  (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
@@ -3002,7 +3004,7 @@ and convert_paction pact =
 
 and convert_action act =
   match act with
-    | Action _ act_ -> Action empty_annotation act_
+    | Action loc _ act_ -> Action loc empty_annotation act_
   end
 
 
@@ -3022,7 +3024,6 @@ let convert_file file =
   impl=   file.impl;
   globs=  List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
   funs=   Map.map convert_fun_map_decl file.funs;
-  tagDefinitions= file.tagDefinitions
  |>
 (* END silly *)
 

@@ -9575,7 +9575,7 @@ and _menhir_goto_option_init_declarator_list_ : _menhir_env -> 'ttv_tail -> _men
 # 9576 "Parser.ml"
         ) = 
 # 501 "Parser.mly"
-    ( Declaration_base (decspecs, option [] id idecls_opt) )
+    ( Declaration_base (decspecs, option [] List.rev idecls_opt) )
 # 9580 "Parser.ml"
          in
         _menhir_goto_declaration _menhir_env _menhir_stack _menhir_s _v _startpos _endpos) : 'freshtv930)) : 'freshtv932)

@@ -81,8 +81,8 @@ let rec add_to_sb p_aids = function
       Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
   | Eproc annots nm pes ->
       Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
-  | Eaction (Paction p' (Action annots a)) ->
-      Eaction (Paction p' (Action <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+  | Eaction (Paction p' (Action loc annots a)) ->
+      Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
   | Eunseq es ->
       Eunseq (List.map (add_to_sb p_aids) es)
   | Ewseq _as e1 e2 ->

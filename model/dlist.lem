@@ -17,6 +17,16 @@ val append: forall 'a. dlist 'a -> dlist 'a -> dlist 'a
 let append (Dlist xs) (Dlist ys) =
   Dlist (fun zs -> ys (xs zs))
 
+val cons: forall 'a. 'a -> dlist 'a -> dlist 'a
+let cons x (Dlist ys) =
+  Dlist (fun zs -> ys (x :: zs))
+
+
+
+val fromList: forall 'a. list 'a -> dlist 'a
+let fromList xs =
+  List.foldl (fun acc x -> cons x acc) nil xs
+
 val toList: forall 'a. dlist 'a -> list 'a
 let toList (Dlist xs) =
   xs []

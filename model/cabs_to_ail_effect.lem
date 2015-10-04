@@ -286,7 +286,7 @@ let get_scope =
 val with_scope: forall 'a. scope -> t 'a -> t (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
-    let _ = Boot.output_string ("ENTERING Scope: " ^ string_of_scope scope) in
+    let _ = Boot.print_debug 2 ("ENTERING Scope: " ^ string_of_scope scope) in
     
     <| st with registered_identifiers=      Scope_table.create_scope scope st.registered_identifiers;
 (*               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations *) |> 
@@ -296,7 +296,7 @@ let with_scope scope m =
     let (idents_map, ident_table'  ) = Scope_table.destroy_scope st.registered_identifiers      in
 (*    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in *)
     
-    let _ = Boot.output_string ("EXITING Scope: " ^ string_of_scope scope) in
+    let _ = Boot.print_debug 2 ("EXITING Scope: " ^ string_of_scope scope) in
     
     (Set_helpers.fold (fun (sym, kind, _) acc ->
       match kind with
@@ -873,7 +873,7 @@ let perform_inside_loop m =
 val add_used_identifier: A.identifier -> t unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
-    let _ = Boot.output_string "USED IDENTIFIER" in
+    let _ = Boot.print_debug 2 "USED IDENTIFIER" in
     <| st with used_identifier= Global.list_insert sym st.used_identifier |>
   )
 
@@ -1007,4 +1007,7 @@ let extract_program startup_str =
 
 
 
-
+val print_debug: nat -> string -> t unit
+let print_debug n msg =
+  let _ = Boot.print_debug n msg in
+  return ()
