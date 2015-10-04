@@ -29,7 +29,7 @@ let precedence = function
   | AilEunary (Minus, _)
   | AilEunary (Bnot, _)
   | AilEunary (Indirection, _)
-  | AilEunary (Address, _) -> Some 2
+  | AilEunary (Address0, _) -> Some 2
   
   | AilEbinary (_, Arithmetic Mul0, _)
   | AilEbinary (_, Arithmetic Div0, _)
@@ -446,7 +446,7 @@ let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus
   | Bnot        -> P.tilde
-  | Address     -> P.ampersand
+  | Address0    -> P.ampersand
   | Indirection -> P.star
   | PostfixIncr -> P.plus ^^ P.plus
   | PostfixDecr -> P.minus ^^ P.minus
