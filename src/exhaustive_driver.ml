@@ -133,19 +133,21 @@ let drive sym_supply file args with_concurrency : execution_result =
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
           let str_v = String_core.string_of_pexpr pe in
-          if not (List.mem str_v !ky) then (
-            Debug.print_debug 3 (
+          let str_v_ = str_v ^ stdout in
+          if not (List.mem str_v_ !ky) then (
+            Debug.print_debug 1 (
               Printf.sprintf "Execution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (pp_constraints constraints) ^
+              Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
               Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps (* ^
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log))) *)
             );
           );
-          if not (List.mem str_v !ky) && not is_blocked then (
+          if not (List.mem str_v_ !ky) && not is_blocked then (
             if with_concurrency then
               Debug.print_debug 6 (Pp_cmm.dot_of_exeState conc_st str_v (pp_constraints constraints));
-            print_string stdout;
+(*            print_string stdout; *)
             
-            ky := str_v :: !ky;
+            ky := str_v_ :: !ky;
             ret := pe :: !ret;
         ) else
           Debug.print_debug 4 (

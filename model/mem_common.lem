@@ -23,9 +23,6 @@ instance (Show mem_error)
 end
 
 
-type tag_definitions =
-  map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))
-
 
 type integer_operator =
   | IntAdd
@@ -142,8 +139,11 @@ type mem_value =
 *)
 
 
-
 type memory_flags = <|
   allow_multi_provenance: bool; (* allow Prov_some aids, where aids is not a singleton *)
   
 |>
+
+
+type memory_flag =
+  | Allow_disjoint_alloc_tests (* allow (for example) pointer equality between different objects *)

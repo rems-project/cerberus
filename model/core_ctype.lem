@@ -15,6 +15,23 @@ declare ocaml target_rep function string_of_ail_qualifiers_human = `String_ail.s
 (* C types (this is a simplication of what is need for typechecking) *)
 (* TODO: what about Ail.ATOMIC_Q ? *)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 type struct_tag = Symbol.t
 type union_tag  = Symbol.t
 type member_id  = Symbol.t
@@ -79,6 +96,27 @@ instance (Show ctype)
   let show = string_of_ctype
 end
 *)
+
+
+
+
+
+
+
+(* SEE src/tags.mli for the documentation *)
+val tagDefs: unit -> map Symbol.t (list (Cabs.cabs_identifier * ctype))
+val set_tagDefs: map Symbol.t (list (Cabs.cabs_identifier * ctype)) -> unit
+
+declare ocaml target_rep function tagDefs = `Tags.tagDefs`
+declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
+
+
+
+
+
+
+
+
 
 
 

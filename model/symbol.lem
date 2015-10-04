@@ -11,6 +11,13 @@ declare ocaml target_rep function debug_level = `Debug.get_debug_level`
 type t =
   Symbol of nat * maybe string
 
+
+type prefix =
+  | PrefSource of list t
+  | PrefOther of string
+
+
+
 let symbol_eq (Symbol n1 str_opt1) (Symbol n2 str_opt2) =
   if debug_level () >= 5 then
     n1 = n2 && str_opt1 = str_opt2
@@ -96,6 +103,22 @@ instance (Show t)
 end
 
 
+
+val     stringFromPrefix: prefix -> string
+let rec stringFromPrefix_ syms =
+  match syms with
+    | [] ->
+        ""
+    | sym :: syms' ->
+        show sym ^ "." ^ stringFromPrefix_ syms'
+end
+
+let stringFromPrefix = function
+  | PrefSource syms ->
+      "{" ^ stringFromPrefix_ syms ^ "}"
+  | PrefOther str ->
+      "{" ^ str ^ "}"
+end
 
 
 

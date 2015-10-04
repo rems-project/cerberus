@@ -371,6 +371,7 @@ let builtin = [
   ("__cerbty_once_flag", Typename);
   
   (* TODO: from time.h (§7.27) *)
+  ("__cerbty_time_t", Typename);
   
   (* TODO: from uchar.h (§7.28) *)
   
@@ -505,8 +506,17 @@ let translate_builtin_typenames = function
       Just (ATypes.Builtin "va_list")
   | "__cerbty_wchar_t" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "wchar_t")))
-  
-  | _                       -> Nothing
+  | "__cerbty_time_t" ->
+      Just (ATypes.Builtin "time_t")
+  | str ->
+      (* TODO *)
+      let chars = String.toCharList str in
+      let (pref, tyname) = List.splitAt 9 chars in
+      if String.toString pref = "__cerbty_" then
+        Just (ATypes.Builtin (String.toString tyname))
+      else
+        Nothing
+
 end
 
 
@@ -830,6 +840,7 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_ONCE_FLAG_INIT" -> Just (A.AilEbuiltin "ONCE_FLAG_INIT")
     | "__cerbvar_TSS_DTOR_ITERATIONS" -> Just (A.AilEbuiltin "tss_DTOR_ITERATIONS")
 *)
+
     | _                   -> Nothing
 end
 

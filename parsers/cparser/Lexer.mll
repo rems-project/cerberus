@@ -11,12 +11,13 @@ let mk_loc lexbuf =
   (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
 
 
-let offset_location lexbuf file n =
+let offset_location lexbuf new_file new_lnum char_offset =
   Lexing.(
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
-      pos_fname = file;
-      pos_lnum = n;
-(*      pos_bol = lexbuf.lex_curr_p.pos_cnum *)
+      pos_fname = new_file;
+      pos_lnum = new_lnum;
+      pos_bol = lexbuf.lex_curr_p.pos_bol + char_offset;
+      pos_cnum = lexbuf.lex_curr_p.pos_cnum + char_offset
     }
   )
 
@@ -87,9 +88,9 @@ let lexicon: (string, token) Hashtbl.t =
 let init filename channel: Lexing.lexbuf =
   assert (!contexts = []);
   Hashtbl.clear lexicon;
-  List.iter
-    (fun (key, builder) -> Hashtbl.add lexicon key builder)
-    keywords;
+  List.iter (fun (key, builder) ->
+    Hashtbl.add lexicon key builder
+  ) keywords;
   
   push_context := begin fun () -> contexts := [] :: !contexts end;
   pop_context  := begin fun () ->
@@ -340,7 +341,7 @@ and hash = parse
               Failure "int_of_string" -> 
                 Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
                   lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum in
-          offset_location lexbuf file n;
+          offset_location lexbuf file n ((String.length l));
 (*          print_endline "FOUND A HASH"; (* DEBUG *) *)
           String.length l
         )}
@@ -384,7 +385,7 @@ let offset = hash lexbuf in
                         pos_bol = lexbuf.lex_curr_p.pos_cnum
                       };
 *)
-hash lexbuf;
+                      hash lexbuf;
 (*                      Printf.printf ">>> %d\n" lexbuf.lex_curr_p.pos_bol; *)
                       initial lexbuf
                     }
@@ -502,21 +503,35 @@ hash lexbuf;
   (* STD §6.7.2.4#4, sentence 2 *)
   | "_Atomic" (' ')* "(" { ATOMIC_LPAREN }
 
-
-  | identifier as id
+(*
+  | identifier as str
       { try
-          Hashtbl.find lexicon id
+          Hashtbl.find lexicon str
+        with Not_found ->
+          (* KKK new lexing *)
+          IDENTIFIER str
+*)
+
+  | identifier as str
+      { try
+          Hashtbl.find lexicon str
         with Not_found ->
           let pref_var = "__cerbvar_" in
           let pref_ty  = "__cerbty_"  in
-          if    String.length id > String.length pref_ty
-             && String.sub id 0 (String.length pref_ty) = pref_ty then
-            TYPEDEF_NAME (id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref TypedefId)
-          else if    String.length id > String.length pref_var
-                  && String.sub id 0 (String.length pref_var) = pref_var then
-            VAR_NAME (id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref VarId)
+          if    String.length str > String.length pref_ty
+             && String.sub str 0 (String.length pref_ty) = pref_ty then
+            TYPEDEF_NAME (str (* Cabs.CabsIdentifier (mk_loc lexbuf, str) *), ref TypedefId)
+          else if    String.length str > String.length pref_var
+                  && String.sub str 0 (String.length pref_var) = pref_var then
+(
+(*            Printf.printf "LEXER FOUND IDENTIFIER %s (VAR_NAME)\n" str; *)
+            VAR_NAME (str (* Cabs.CabsIdentifier (mk_loc lexbuf, str) *), ref VarId)
+)
           else
-            UNKNOWN_NAME(id (* Cabs.CabsIdentifier (mk_loc lexbuf, id) *), ref (OtherId "Lexer.mll"))
+(
+(*            Printf.printf "LEXER FOUND IDENTIFIER %s (UNKNOWN_NAME)\n" str; *)
+            UNKNOWN_NAME(str (* Cabs.CabsIdentifier (mk_loc lexbuf, str) *), ref (OtherId "Lexer.mll"))
+)
       }
   
   | eof

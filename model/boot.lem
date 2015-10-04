@@ -44,6 +44,8 @@ declare ocaml target_rep function output_string = `Debug.output_string2`
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
 
+val print_debug_located: nat -> Loc.t -> string -> unit
+declare ocaml target_rep function print_debug_located = `Debug.print_debug_located`
 
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
@@ -80,3 +82,5 @@ val begin_timing: string -> unit
 declare ocaml target_rep function begin_timing = `Debug.begin_timing`
 val end_timing: unit -> unit
 declare ocaml target_rep function end_timing = `Debug.end_timing`
+
+

@@ -1,4 +1,4 @@
-open Defacto_memory
+open Defacto_memory_types
 open Pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
@@ -48,8 +48,8 @@ and pp_pointer_value_base = function
       !^ "PVnull" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | PVfunction sym ->
       !^ "PVfunction" ^^ P.parens (P.parens (!^ (Pp_symbol.to_string_pretty sym)))
-  | PVbase alloc_id ->
-      !^ "PVbase" ^^ P.parens (pp_allocation_id alloc_id)
+  | PVbase (alloc_id, pref) ->
+      !^ "PVbase" ^^ P.parens (pp_allocation_id alloc_id ^^ P.comma ^^^ Pp_symbol.pp_prefix pref)
   | PVfromint ival_ ->
       !^ "PVfromint" ^^ P.parens (pp_integer_value_base ival_)
 
@@ -66,6 +66,8 @@ and pp_shift_path sh =
 and pp_integer_value_base = function
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
+  | IVaddress n ->
+      !^ "IVaddress" ^^ P.parens (!^ (string_of_int n))
   | IVfromptr (ty, ptr_val_) ->
       !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
   | IVop (iop, ival_s) ->
@@ -80,6 +82,8 @@ and pp_integer_value_base = function
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
   | IVptrdiff (ptr_val_1, ptr_val_2) ->
       !^ "IVptrdiff" ^^ P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_pointer_value_base ptr_val_2)
+  | IVbyteof (ival_, mval) ->
+      !^ "IVbyteof" ^^ P.parens (pp_integer_value_base ival_ ^^ P.comma ^^^ pp_mem_value mval)
 
 
 
@@ -115,3 +119,18 @@ and pp_mem_value = function
       P.braces (
         P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       )
+
+
+let pp_mem_constraint = function
+  | MC_eqIV (debug_str, ival_1, ival_2) ->
+      !^ "MC_eqIV" ^^ P.parens (P.dquotes (!^ debug_str) ^^ P.comma ^^^
+                                pp_integer_value_base ival_1 ^^ P.comma ^^^
+                                pp_integer_value_base ival_2)
+  | MC_neIV (ival_1, ival_2) ->
+      !^ "MC_neIV" ^^ P.parens (pp_integer_value_base ival_1 ^^ P.comma ^^^
+                                pp_integer_value_base ival_2)
+  | MC_leIV (ival_1, ival_2) ->
+      !^ "MC_leIV" ^^ P.parens (pp_integer_value_base ival_1 ^^ P.comma ^^^
+                                pp_integer_value_base ival_2)
+  | MC_addr_distinct (addr_id, addr_ids) ->
+      !^ "MC_addr_distinct(TODO)"

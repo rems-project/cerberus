@@ -1,3 +1,4 @@
+open Lexing
 (*
 module Loc = struct
   let of_tuple (file, line, _, _, _, _, _, _) = 
@@ -37,6 +38,25 @@ let print_success msg =
 let print_debug level msg =
   if !debug_level >= level then
     prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg))
+
+
+
+let location_to_string loc =
+  Location_ocaml.(
+    match loc with
+      | Loc_unknown ->
+          "unknown location"
+      | Loc_point pos ->
+          Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
+      | Loc_region (pos1, pos2, _) ->
+          Printf.sprintf "%s:%d:%d - %d:%d"
+            pos1.pos_fname pos1.pos_lnum (1+pos1.pos_cnum-pos1.pos_bol)
+                           pos2.pos_lnum (1+pos2.pos_cnum-pos2.pos_bol)
+  )
+
+let print_debug_located level loc msg =
+  print_debug level ("(" ^ location_to_string loc ^ ") - " ^ msg)
+
 
 let print_debug2 msg k =
   if !debug_level > 0 then

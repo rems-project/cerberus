@@ -22,8 +22,9 @@ declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
 
 
 
-val output_string: string -> unit
-declare ocaml target_rep function output_string = `Debug.output_string2`
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
 (* END debug *)
 
 
@@ -94,7 +95,7 @@ val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.
 let well_typed_assignment S ty1 gty2 null2 =
   (* §6.5.16.1#1, bullet 1 *)
   if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && GenTypesAux.is_arithmetic gty2 then
-    let _ = output_string "[well_typed_assignment] OK: bullet 1" in
+    let _ = print_debug 2 "[well_typed_assignment] OK: bullet 1" in
     E.return true
   
   (* §6.5.16.1#1, bullet 2 *)
@@ -120,18 +121,18 @@ let well_typed_assignment S ty1 gty2 null2 =
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
           if AilTypesAux.compatible ref_ty1 ref_ty2 && AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = output_string "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
+            let _ = print_debug 2 "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
           else if (AilTypesAux.is_void ref_ty1 || AilTypesAux.is_void ref_ty2) &&
                   AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = output_string "[well_typed_assignment] OK: bullet 4" in                     (* DEBUG *)
-            let _ = output_string $ "qs1: " ^ (if ref_qs1.const    then "const "    else "") ^  (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] OK: bullet 4" in                     (* DEBUG *)
+            let _ = print_debug 2 $ "qs1: " ^ (if ref_qs1.const    then "const "    else "") ^  (* DEBUG *)
                                               (if ref_qs1.restrict then "restrict " else "") ^  (* DEBUG *)
                                               (if ref_qs1.volatile then "volatile " else "") ^  (* DEBUG *)
                                               (if ref_qs1.atomic   then "atomic "   else "") in (* DEBUG *)
-            let _ = output_string $ "qs2: " ^ (if ref_qs2.const    then "const "    else "") ^  (* DEBUG *)
+            let _ = print_debug 2 $ "qs2: " ^ (if ref_qs2.const    then "const "    else "") ^  (* DEBUG *)
                                               (if ref_qs2.restrict then "restrict " else "") ^  (* DEBUG *)
                                               (if ref_qs2.volatile then "volatile " else "") ^  (* DEBUG *)
                                               (if ref_qs2.atomic   then "atomic "   else "") in (* DEBUG *)
@@ -139,27 +140,27 @@ let well_typed_assignment S ty1 gty2 null2 =
           
           (* §6.5.16.1#1, bullet 5 *)
           else if null2 then
-            let _ = output_string "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
             E.return true
           
           else
-            let _ = output_string "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
             E.return false
       | (Pointer ref_qs1 ref_ty1, _) ->
           (* §6.5.16.1#1, bullet 5 *)
           E.return null2
       | _ ->
-          let _ = output_string "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
+          let _ = print_debug 2 "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
           E.return false
     end
   
   (* §6.5.16.1#1, bullet 6 *)
   else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool ty1 && GenTypesAux.is_pointer gty2 then
-    let _ = output_string "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
+    let _ = print_debug 2 "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
     E.return true
   
   else
-    let _ = output_string "[well_typed_assignment] KO: the end" in (* DEBUG *)
+    let _ = print_debug 2 "[well_typed_assignment] KO: the end" in (* DEBUG *)
     E.return false
 
 
@@ -1233,7 +1234,7 @@ and annotate_definition_aux A S G (ty, e) =
      || (AilTypesAux.is_complete_object S ty --> not (AilTypesAux.is_vla ty)) then
     if AilTypesAux.is_scalar ty then
       (* STD §6.7.9#11, sentence 3 *)
-      let _ = output_string $ "HELLLOO: " ^ pp_ail_expr e in
+      let _ = print_debug 2 $ "HELLLOO: " ^ pp_ail_expr e in
       annotate_assignee A S G (AilTypesAux.unqualify ty) e >>= fun a_e ->
       E.return a_e
       

@@ -120,8 +120,7 @@ let core_frontend f =
            Core.stdlib= !!cerb_conf.core_stdlib;
            Core.impl=   !!cerb_conf.core_impl;
            Core.globs=  globs;
-           Core.funs=   funs;
-           Core.tagDefinitions = Pmap.empty Symbol.instance_Basic_classes_SetType_Symbol_t_dict.setElemCompare_method;
+           Core.funs=   funs
          })
     
     | Rstd _ ->

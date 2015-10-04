@@ -818,7 +818,7 @@ let pp_program pp_annot (startup, sigm) =
   P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   (* Tag declarations *)
-  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions0 ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
   List.fold_left (fun acc (sym, decl) ->
     match decl with

@@ -6,6 +6,7 @@ val get_debug_level: unit -> int
 
 val print_success: string -> unit
 val print_debug: int -> string -> unit
+val print_debug_located: int -> Location_ocaml.t -> string -> unit
 
 (* val print_deubg2: string -> 'a -> 'a *)
 

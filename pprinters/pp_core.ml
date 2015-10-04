@@ -39,6 +39,7 @@ let precedence = function
   | PEval _
   | PEsym _
   | PEimpl _
+  | PEctor _
   | PEcons _
   | PEcase_list _
   | PEcase_ctype _
@@ -225,6 +226,8 @@ let pp_pexpr pe =
             pp_symbol sym
         | PEimpl iCst ->
             pp_impl iCst
+        | PEctor (ctor, pes) ->
+            pp_const "ctor(TODO)" 
         | PEcons (pe1, pe2) ->
             pp_const "cons" ^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
         | PEcase_list (pe1, pe2, nm) ->
@@ -324,7 +327,7 @@ let rec pp_expr = function
       pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3) ^^ P.break 1 ^^^ pp_control "end"
   | Eproc (_, nm, es) ->
       pp_name nm ^^ P.braces (comma_list pp_pexpr es)
-  | Eaction (Paction (p, (Action (bs, act)))) ->
+  | Eaction (Paction (p, (Action (_, bs, act)))) ->
       (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
          P.rangle ^^ P.space) ^^ *)
       pp_polarity p ^^ pp_action act
@@ -531,7 +534,7 @@ let pp_file file =
   
   
   !^ "{-" ^^ P.break 1 ^^
-  pp_tagDefinitions file.tagDefinitions ^^ P.break 1 ^^
+  pp_tagDefinitions (Tags.tagDefs ()) ^^ P.break 1 ^^
   !^ "-}" ^^ P.break 1 ^^
   
   List.fold_left pp_glob P.empty file.globs ^^

@@ -189,10 +189,10 @@ let rec resolve_read_expr write_sym symb_v expr =
 and resolve_read_paction write_sym symb_v (Core.Paction p act) =
   Core.Paction p (resolve_read_action write_sym symb_v act)
 
-and resolve_read_action write_sym symb_v (Core.Action annots act_) =
+and resolve_read_action write_sym symb_v (Core.Action loc annots act_) =
   let fpe = resolve_read_pexpr write_sym symb_v in
   
-  Core.Action annots $ match act_ with
+  Core.Action loc annots $ match act_ with
   | Core.Create pe1 pe2 pref ->
       Core.Create (fpe pe1) (fpe pe2) pref
   | Core.Alloc pe1 pe2 pref ->
@@ -638,7 +638,8 @@ end
 (* This version only uses the memory layout model (note that is deterministic) *)
 val action_request_sequential: driver_state -> action_request2 -> ND.t driver_state
 let action_request_sequential dr_st = function
-  | AllocRequest2 sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
+  | AllocRequest2 loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
+      let _ = Boot.print_debug_located 2 loc "REQUEST ALLOC" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -650,7 +651,8 @@ let action_request_sequential dr_st = function
             |>
       end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
-  | CreateRequest2 sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
+  | CreateRequest2 loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
+      let _ = Boot.print_debug_located 2 loc "REQUEST CREATE" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -662,7 +664,8 @@ let action_request_sequential dr_st = function
             |>
       end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
   
-  | LoadRequest2 sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
+  | LoadRequest2 loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
+      let _ = Boot.print_debug_located 2 loc "REQUEST LOAD" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -674,7 +677,8 @@ let action_request_sequential dr_st = function
             |>
       end) (Mem.runMem (Mem.load lvalue_ty ptr_val) dr_st.layout_state)
   
-  | StoreRequest2 sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
+  | StoreRequest2 loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
+      let _ = Boot.print_debug_located 2 loc "REQUEST STORE" in
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       ND.msum $ map (function
@@ -688,7 +692,8 @@ let action_request_sequential dr_st = function
               layout_state= layout_st'
             |>
       end) (Mem.runMem (Mem.store lvalue_ty ptr_val mem_val) dr_st.layout_state)
-  | KillRequest2 sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+  | KillRequest2 loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+      let _ = Boot.print_debug_located 2 loc "REQUEST KILL" in
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
         (* TODO: the kill ... *)
@@ -733,30 +738,35 @@ let rec driver with_concurrency dr_st =
       end >>= fun dr_final ->
       driver with_concurrency dr_final
   | Step2_memop_request memop cvals tid mk_th_st ->
-      let cval = match (memop, cvals) with
+      match (memop, cvals) with
         | (Mem_common.Ptrdiff, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
-            Core.Vinteger (Mem.diff_ptrval ptr_val1 ptr_val2)
+            let cval = Core.Vinteger (Mem.diff_ptrval ptr_val1 ptr_val2) in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vpointer ptr_val]) ->
-            Core.Vinteger (Mem.intcast_ptrval ref_ty ity ptr_val)
+            let cval = Core.Vinteger (Mem.intcast_ptrval ref_ty ity ptr_val) in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vinteger ival]) ->
-            Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival)
+            let cval = Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival) in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         | (Mem_common.PtrValidForDeref, [Core.Vpointer ptr_val]) ->
-            if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse
-(*
-  | PtrValidForDeref (* address -> boolean *)
-*)
-
+            let cval = if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
 
 (*
         | (Mem_common.Ptrdiff, _) ->
             error ("memop request: ptrdiff operand error ==> " ^
                    Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
 *)
+
+        | (Mem_common.PtrEq, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
+            liftMem (Mem.eq_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_eq, dr_st') ->
+            let cval = if is_eq then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        
         | _ ->
             error ("WIP memop request: " ^ show memop ^ " ==> " ^
                    Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
-      end in
-      driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+      end
   | Step2_tau debug_str _ ->
       error ("FOUND A TAU: '" ^ debug_str ^ "'")
   | Step2_eval debug_str _ ->
@@ -989,7 +999,7 @@ let initial_driver_state sym_supply file =
     core_file=         file;
     core_state=        initial_core_state;
     core_run_state=    initial_core_run_state;
-    layout_state=  Mem.initial_mem_stateWithTagDefinitions file.Core.tagDefinitions;
+    layout_state=      Mem.initial_mem_state;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
 
     
@@ -1118,7 +1128,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argc_sym] (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [dr_st.core_file.Core.main; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
                   Mem.bind (Mem.store Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
@@ -1128,7 +1138,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
                 liftMem (
-                  Mem.bind (Mem.allocate_static tid0 [] (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
+                  Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
                     Mem.bind (Mem.store arg_ty ptr_val arg_mem_val) (fun () ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
@@ -1140,7 +1150,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 [dr_st.core_file.Core.main; argv_sym] (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [dr_st.core_file.Core.main; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
                   Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun () ->
                     Mem.return ptr_val
                   )

@@ -498,7 +498,7 @@ constant_expression:
 (* §6.7 Declarations *)
 declaration:
 | decspecs= declaration_specifiers idecls_opt= init_declarator_list? SEMICOLON
-    { Declaration_base (decspecs, option [] id idecls_opt) }
+    { Declaration_base (decspecs, option [] List.rev idecls_opt) }
 | sa= static_assert_declaration
     { Declaration_static_assert sa }
 

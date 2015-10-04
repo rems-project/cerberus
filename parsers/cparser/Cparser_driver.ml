@@ -8,6 +8,8 @@ let string_of_pos pos =
     Printf.sprintf "<%s:%d:%d>" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
   )
 
+let string_of_loc (start_p, end_p) = 
+  string_of_pos start_p ^ " - " ^ string_of_pos end_p
 
 
 
@@ -29,6 +31,15 @@ let merge_encoding_prefixes pref1_opt pref2_opt =
         None
 
 
+module M = Map.Make (struct
+  type t = string
+  let compare = Pervasives.compare
+end)
+
+let seen_typedefs : (identifier_type M.t) ref =
+  ref M.empty
+
+
 let parse input : Cabs.translation_unit =
   (* TODO: hack *)
   Lexer.contexts := [];
@@ -47,10 +58,6 @@ let parse input : Cabs.translation_unit =
     
     let hack lexbuf =
       match !saved_tokens with
-(*
-        | [] ->
-            EOF
-*)
         | (tok, (start_p, end_p)) :: xs ->
             saved_tokens := xs;
             lexbuf.Lexing.lex_start_p <- start_p;
@@ -62,6 +69,13 @@ let parse input : Cabs.translation_unit =
         | TYPEDEF_NAME (id, typ)
         | UNKNOWN_NAME (id, typ)
         | VAR_NAME     (id, typ) ->
+(*
+            if M.mem id !seen_typedefs then
+              Printf.printf "====> ALREADY SEEN: %s with typ: %s (now has typ: %s)\n"
+                id (string_of_typ (M.find id !seen_typedefs)) (string_of_typ !typ)
+            else
+              seen_typedefs := M.add id !typ !seen_typedefs;
+*)
             begin
               match !typ with
                 | VarId       -> VAR_NAME2 id
@@ -97,8 +111,8 @@ let parse input : Cabs.translation_unit =
       saved_tokens := xs' in
     
     try
-      Pre_parser.translation_unit_file lexer_wrapper lexbuf;
       
+      Pre_parser.translation_unit_file lexer_wrapper lexbuf;
 (*
       print_endline "==== BEFORE LEXER HACK ====";
       List.iter (fun (tok, loc) ->
@@ -106,8 +120,15 @@ let parse input : Cabs.translation_unit =
       ) (List.rev !saved_tokens);
       print_endline "===========================";
 *)
-      
+
       modify_tokens ();
+(*
+      print_endline "==== AFTER LEXER HACK ====";
+      List.iter (fun (tok, loc) ->
+        Printf.printf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc)
+      ) !saved_tokens;
+      print_endline "===========================";
+*)
       Parser.translation_unit_file hack (Lexing.from_string "")
     with
       | Failure msg -> raise (Failure msg)
