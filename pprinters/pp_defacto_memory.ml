@@ -66,8 +66,8 @@ and pp_shift_path sh =
 and pp_integer_value_base = function
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
-  | IVaddress n ->
-      !^ "IVaddress" ^^ P.parens (!^ (string_of_int n))
+  | IVaddress (Address (pref, n)) ->
+      !^ "IVaddress" ^^ P.parens (Pp_symbol.pp_prefix pref ^^ P.comma ^^^ !^ (string_of_int n))
   | IVfromptr (ty, ptr_val_) ->
       !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
   | IVop (iop, ival_s) ->

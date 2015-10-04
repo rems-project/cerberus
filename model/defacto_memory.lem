@@ -52,13 +52,14 @@ val initial_constraints: unit -> constraints
 val is_unsat: string -> bool
 val add_constraint: mem_constraint -> constraints -> constraints (* Left => unsat *)
 val check_sat: mem_constraint -> constraints -> maybe bool
+val declare_address: address -> constraints -> constraints
 
 declare ocaml target_rep type     constraints         = `Sat_solving.assertions`
 declare ocaml target_rep function initial_constraints = `Sat_solving.initial_assertions`
 declare ocaml target_rep function is_unsat            = `Sat_solving.is_unsat`
 declare ocaml target_rep function add_constraint      = `Sat_solving.add_mem_constraint`
 declare ocaml target_rep function check_sat           = `Sat_solving.check`
-
+declare ocaml target_rep function declare_address     = `Sat_solving.declare_address`
 
 
 type write_event =
@@ -71,12 +72,12 @@ type mem_state = <|
   
   (* machinery stuff *)
   allocation_id_suppl: UniqueId.supply allocation_id;
-  address_id_suppl:    UniqueId.supply address_id;
+  suppl:    UniqueId.supply nat;
   
   (* the semantic stuff starts here *)
   allocations:         map allocation_id allocation;
   dead_allocations:    set allocation_id;
-  addresses:           map address_id address;
+  addresses:           set address;
   constraints:         constraints;
   objects:             map allocation_id mem_value;
 |>
@@ -299,12 +300,16 @@ let put st =
 
 
 
-val fresh_address_id: memM address_id
-let fresh_address_id =
+val fresh_address: Symbol.prefix -> memM address
+let fresh_address pref =
   get >>= fun mem_st ->
-  let (id, suppl') = UniqueId.fresh_id mem_st.address_id_suppl in
-  put <| mem_st with address_id_suppl= suppl' |> >>
-  return id
+  let (n, suppl') = UniqueId.fresh_id mem_st.suppl in
+  let addr = Address pref n in
+  put <| mem_st with
+    suppl= suppl';
+    constraints= declare_address addr mem_st.constraints;
+    addresses= Set.insert addr mem_st.addresses |> >>
+  return addr
 
 
 val fresh_allocation_id: memM allocation_id
@@ -756,11 +761,11 @@ let runMem (MemM m) st =
 let initial_mem_state = <|
   flags= [];
   allocation_id_suppl= UniqueId.new_supply;
-  address_id_suppl= UniqueId.new_supply;
+  suppl= UniqueId.new_supply;
   
   allocations= Map.empty;
   dead_allocations= Set.empty;
-  addresses= Map.empty;
+  addresses= Set.empty;
   constraints= initial_constraints ();
 (*  writes= []; *)
   objects= Map.empty;
@@ -783,12 +788,12 @@ let rec get_allocation_id ptr_val_ =
 
 
 (* Make a given address disjoint to all other existing address *)
-val register_distinctness_constraints: address_id -> memM unit
-let register_distinctness_constraints addr_id =
+val register_distinctness_constraints: address -> memM unit
+let register_distinctness_constraints addr =
   get >>= fun mem_st ->
   put <| mem_st with
-    constraints= add_constraint (MC_addr_distinct addr_id
-                                   (Set.filter (fun addr_id' -> addr_id <> addr_id') (Map.domain mem_st.addresses))) mem_st.constraints
+    constraints= add_constraint (MC_addr_distinct addr
+                                   (Set.filter (fun addr' -> addr <> addr') mem_st.addresses)) mem_st.constraints
   |>
          
 (*  wip "add_constraints [MC_addr_distinct addr_id (Set.filter (fun addr_id' -> addr_id <> addr_id') (Map.domain mem_st.addresses))]" *)
@@ -900,11 +905,12 @@ let update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_) mval') mval =
 let allocate_static tid pref align_ival ty =
   (* the allocated object is given a new address (distinct from all other
      existing addresses) *)
-  fresh_address_id >>= fun addr_id ->
-  register_distinctness_constraints addr_id >>
+  fresh_address pref >>= fun addr ->
+  
+  register_distinctness_constraints addr >>
   
   fresh_allocation_id >>= fun alloc_id ->
-  register_allocation alloc_id (Alloc_static ty addr_id) >>
+  register_allocation alloc_id (Alloc_static ty addr) >>
   
   (* TODO: maybe bad ? *)
   get >>= fun mem_st ->
@@ -1289,12 +1295,12 @@ let case_mem_value mval fsymb funspec fival ffval fptrval farr fstruct funion =
   end
 
 
-val address_id_of: allocation -> address_id
-let address_id_of = function
-  | Alloc_static _ addr_id ->
-      addr_id
-  | Alloc_dynamic _ addr_id ->
-      addr_id
+val address_of: allocation -> address
+let address_of = function
+  | Alloc_static _ addr ->
+      addr
+  | Alloc_dynamic _ addr ->
+      addr
 end
 
 

@@ -30,9 +30,8 @@ type provenance =
 
 
 
-type address = Symbol.t (* a normal symbolic expression that will resolve to a number, maybe with disjointness and adjacency constraints (kept elsewhere) *)
-
-type address_id = nat
+type address =
+  | Address of Symbol.prefix * nat
 
 
 
@@ -68,7 +67,7 @@ and shift_path =
 
 and integer_value_base =
   | IVconcrete of integer (* of Symbolic.symbolic *)
-  | IVaddress of address_id (* NOTE: this should never get out of this module *)
+  | IVaddress of address (* NOTE: this should never get out of this module *)
   | IVfromptr of ctype * pointer_value_base (* the first parameter is the referenced type of the pointer value *)
   | IVop of integer_operator * list integer_value_base
   | IVmin of AilTypes.integerType
@@ -108,8 +107,8 @@ and mem_value =
 
 
 type allocation =
-  | Alloc_static  of ctype * address_id
-  | Alloc_dynamic of integer_value_base * address_id
+  | Alloc_static  of ctype * address
+  | Alloc_dynamic of integer_value_base * address
 
 
 (*
@@ -134,4 +133,4 @@ type mem_constraint =
   | MC_eqIV of string (* TMP debug *) * integer_value_base * integer_value_base (* equality between integer values *)
   | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
   | MC_leIV of integer_value_base * integer_value_base
-  | MC_addr_distinct of address_id * set address_id  (* the first address is distinct for the addresses in the set *)
+  | MC_addr_distinct of address * set address  (* the first address is distinct for the addresses in the set *)

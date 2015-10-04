@@ -2,15 +2,16 @@ open Defacto_memory_types
 open Mem_common
 
 
+module StringSet = Set.Make (String)
+
 type assertions =
-  Assertions of string Dlist.dlist
+  Assertions of int * StringSet.t * string Dlist.dlist
 
 
 let initial_assertions () =
-  Assertions (Dlist.nil)
+  Assertions (0, StringSet.empty, Dlist.nil)
 
-
-module StringMap = Map.Make (String)
+(*
 
 (* TODO: yuck, no to state !! *)
 let declared_consts : (string StringMap.t) ref =
@@ -18,11 +19,23 @@ let declared_consts : (string StringMap.t) ref =
 
 let declare_const str_name str_sort =
   declared_consts := StringMap.add str_name str_sort !declared_consts
+*)
 
 (*
 let declare_const str_name str_ty =
   vars := Printf.sprintf "(define %s::%s)" str_name str_ty :: !vars
 *)
+
+let string_of_address (Address (pref, n)) =
+  "addr_" ^ string_of_int n
+
+let declare_address (Address (pref, _) as addr) (Assertions (n, addrs, xs) as asserts) =
+  let addr_str = string_of_address addr in
+  if StringSet.mem addr_str addrs then
+    asserts
+  else
+    Assertions (n, addrs, Dlist.cons (Printf.sprintf "(declare-fun %s () Address); %s" addr_str
+                                        (Pp_utils.to_plain_string (Pp_symbol.pp_prefix pref))) xs)
 
 
 let smt2_from_integerBaseType = function
@@ -66,10 +79,8 @@ let smt2_from_basicType = function
 let rec expression_from_integer_value_base = function
   | IVconcrete bign ->
       (Nat_big_num.to_string bign)
-  | IVaddress addr_n ->
-      let str_name = "addr_" ^ string_of_int addr_n in
-      declare_const str_name "Address";
-      str_name
+  | IVaddress addr ->
+      string_of_address addr
   | IVfromptr (_, ptr_val_) ->
       assert false
   | IVop (iop, [ival1_; ival2_]) ->
@@ -110,17 +121,13 @@ let assertion_of_memory_constraint = function
   | MC_leIV (ival1_, ival2_) ->
       [Printf.sprintf "(<= %s %s)" (expression_from_integer_value_base ival1_) (expression_from_integer_value_base ival2_)]
   | MC_addr_distinct (addr_a, addr_bs) ->
-      let addr_a_str = "addr_" ^ string_of_int addr_a in
-      declare_const addr_a_str "Address";
       List.map (fun addr_b ->
-        let addr_b_str = ("addr_" ^ string_of_int addr_b) in
-        declare_const addr_b_str "Address";
-        Printf.sprintf "(not (= %s %s))" addr_a_str addr_b_str
+        Printf.sprintf "(not (= %s %s))" (string_of_address addr_a) (string_of_address addr_b)
       ) (Pset.elements addr_bs)
 
 
 
-let is_unsat (Assertions strs) =
+let is_unsat (Assertions (_, _, strs)) =
   let str_problem =
     String.concat "\n" (
       [
@@ -130,10 +137,10 @@ let is_unsat (Assertions strs) =
         "(declare-fun sizeof (Ctype) Int)";
         "(assert (forall ((ty Ctype)) (>= (sizeof ty) 1)))"
       ] @
-
+      (*
       StringMap.fold (fun str_name str_sort acc ->
         Printf.sprintf "(declare-fun %s () %s)" str_name str_sort :: acc
-      ) !declared_consts (List.filter (fun z -> z <> "") (Dlist.toList strs))
+      ) !declared_consts *) (List.filter (fun z -> z <> "") (Dlist.toList strs))
     ) in
   Debug.print_debug 3 ("IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
   let ic, oc = Unix.open_process "z3 -nw -t:100 -smt2 -in" in
@@ -153,17 +160,17 @@ let is_unsat (Assertions strs) =
       Debug.print_debug 3 ("DEBUG Z3 ==> " ^ output);
       false
 
-let add_mem_constraint constr (Assertions asserts) =
-  Assertions (Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) (assertion_of_memory_constraint constr))) asserts)
+let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
+  Assertions (n+1, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) (assertion_of_memory_constraint constr))) asserts)
 
 
-let check constr (Assertions strs) =
-  Debug.print_debug 3 ("CHECKING " ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
+let check constr (Assertions (n, addrs, strs)) =
+  Debug.print_debug 3 ("CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
   let assert_strs = assertion_of_memory_constraint constr in
-  if is_unsat (Assertions (Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
+  if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
     (Debug.print_debug 3 "check returned FALSE";
     Some false)
-  else if is_unsat (Assertions (Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
+  else if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
     (Debug.print_debug 3 "check returned TRUE";
     Some true)
   else
