@@ -88,6 +88,7 @@ CERBERUS_LEM=\
   symbol.lem \
   undefined.lem \
   core_ctype.lem \
+  core_ctype_aux.lem \
   defacto_memory_types.lem \
   defacto_memory.lem \
   mem.lem \
@@ -195,7 +196,7 @@ dependencies:
 
 
 depend.dot:
-	ocamldep -one-line \
+	ocamldep -native -one-line \
            $(addprefix -I , $(OCAML_DIRS)) $(addsuffix /*.ml, $(OCAML_DIRS)) \
 		 $(addsuffix /*.mli, $(OCAML_DIRS))  \
 	 | grep -v "cmx" | dot_of_depend.py > depend.dot
@@ -207,11 +208,13 @@ depend.pdf: depend.dot
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
-depend: parsers/coreparser/core_lexer.ml parsers/cparser/Lexer.ml | $(BUILD_DIR)
-	ocamldep $(addprefix -I , $(OCAML_DIRS)) $(addsuffix /*.ml, $(OCAML_DIRS)) \
-		 $(addsuffix /*.mli, $(OCAML_DIRS)) > depend
-
 -include depend
+
+
+mk_depend: parsers/coreparser/core_lexer.ml parsers/cparser/Lexer.ml | $(BUILD_DIR)
+	ocamldep $(addprefix -I , $(OCAML_DIRS)) $(addsuffix /*.ml, $(OCAML_DIRS)) \
+	$(addsuffix /*.mli, $(OCAML_DIRS)) > depend
+
 
 
 OCAML_LIBS=\
@@ -253,7 +256,7 @@ CMOS=\
 VER:=\
   `xargs echo -n `hg id`` `date "+%y/%m/%d@%H:%M"`
 
-ocaml_native: | depend dependencies
+ocaml_native: | dependencies
 # TODO: surely this is wrong ...
 	@sed -i".sed" -e "s/<<HG-IDENTITY>>/`hg id`/" src/main.ml
 #	@sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(VER)/" src/main.ml
@@ -261,9 +264,9 @@ ocaml_native: | depend dependencies
 #	@echo $(TIME)
 #	@$(shell sed -i ".sed" -e "s/<<HG-IDENTITY>>/$(echo `hg id` \(\) | sed -e 's/\\/\\\\/g' -e 's/\//\\\//g' -e 's/&/\\\&/g')/g" src/main.ml)
 	make src/main.cmx
-	ocamlopt -g unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
+	@ocamlopt -g unix.cmxa str.cmxa nums.cmxa -cclib "-L./dependencies/zarith-1.3" \
 	$(wildcard $(addsuffix /*.cmxa, $(OCAML_LIBS))) $(CMXS) -o cerberus
-	mv src/main.ml.sed src/main.ml
+	@mv src/main.ml.sed src/main.ml
 
 
 

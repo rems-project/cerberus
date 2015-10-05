@@ -324,19 +324,19 @@ end
 
 
 let setElemCompare_basicType bty1 bty2 =
-(* TODO: currently not used
   let ord = function
-    | Integer ->
+    | Integer _ ->
         (0 : nat)
+    | Floating _ ->
+        1
   end in
-*)
   match (bty1, bty2) with
     | (Integer ity1, Integer ity2) ->
         setElemCompare ity1 ity2
-(* TODO: currently a redundant pattern
+    | (Floating str1, Floating str2) ->
+        setElemCompare str1 str2
     | _ ->
         setElemCompare (ord bty1) (ord bty2)
-*)
   end
 
 instance (SetType basicType)

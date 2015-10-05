@@ -20,6 +20,10 @@ dependencies/**
 *.cmx
 *.cmi
 *.o
+*.orig
+*.lem_
+*.lemOLD
+depend
 
 .DS_Store
 

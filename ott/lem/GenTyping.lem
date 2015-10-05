@@ -641,9 +641,9 @@ OLD(sigma_declaration)
          end
 
      | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
-         annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
-         annotate_rvalue order_e  >>= fun (desired_e', desired_gty) ->
-         annotate_rvalue order_e  >>= fun (order_e',   order_gty)   ->
+         annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
+         annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
+         annotate_rvalue order_e   >>= fun (order_e',   order_gty)   ->
          
          E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) loc' (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
                    GenRValueType GenVoid)

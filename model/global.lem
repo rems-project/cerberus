@@ -92,7 +92,8 @@ let rec foldl2 f z xs ys =
         z
     | (a::xs', b::ys') ->
         foldl2 f (f z a b) xs' ys'
-    (* | _ -> error "[Global.foldl2] the twos weren't of same length" *)
+    | _ ->
+        error "[Global.foldl2] the twos weren't of same length"
   end
 
 
@@ -104,7 +105,8 @@ let rec map2_ f xs ys acc =
         map2_ f xs' ys' (f x y :: acc)
     | ([],[]) ->
         acc
-    (* | _ -> error "[Global.foldl2] the twos weren't of same length" *)
+    | _ ->
+        error "[Global.foldl2] the twos weren't of same length"
   end
 let map2 f xs ys = map2_ f xs ys []
 
