@@ -254,7 +254,7 @@ let pp_pexpr pe =
             )
         | PEmember_shift (pe, tag_sym, memb_ident) ->
             pp_keyword "member_shift" ^^ P.parens (
-              pp pe ^^ P.comma ^^^ pp_symbol tag_sym ^^ Pp_cabs.pp_cabs_identifier memb_ident
+              pp pe ^^ P.comma ^^^ pp_symbol tag_sym ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident
             )
         | PEnot pe ->
             pp_keyword "not" ^^ P.parens (pp pe)
@@ -511,6 +511,11 @@ let pp_impl impl =
   
 
 
+let mk_comment doc =
+  pp_ansi_format [Red] (
+    !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
+  )
+
 
 let pp_file file =
   let pp_glob acc (sym, coreTy, e) =
@@ -521,21 +526,24 @@ let pp_file file =
   
   isatty := Unix.isatty Unix.stdout;
   
-  !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-  pp_fun_map file.stdlib ^^ P.break 1 ^^
-  !^ "-- END STDLIB" ^^ P.break 1 ^^
-  !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
-(*  pp_impl file.impl ^^ P.break 1 ^^ *)
-  !^ "-- END IMPL" ^^ P.break 1 ^^
-
-
+  begin
+    if Debug.get_debug_level () > 1 then
+      fun z -> 
+        !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
+        pp_fun_map file.stdlib ^^ P.break 1 ^^
+        !^ "-- END STDLIB" ^^ P.break 1 ^^
+        !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
+  (*  pp_impl file.impl ^^ P.break 1 ^^ *)
+        !^ "-- END IMPL" ^^ P.break 1 ^^ z
+    else
+      id
+  end
   
+  begin
   
-  
-  
-  !^ "{-" ^^ P.break 1 ^^
-  pp_tagDefinitions (Tags.tagDefs ()) ^^ P.break 1 ^^
-  !^ "-}" ^^ P.break 1 ^^
+  mk_comment (pp_tagDefinitions (Tags.tagDefs ())) ^^
+  P.break 1 ^^ P.break 1 ^^
   
   List.fold_left pp_glob P.empty file.globs ^^
   pp_fun_map file.funs
+  end

@@ -87,6 +87,7 @@ let isActive = function
 type execution_result = (Core.pexpr list, Errors.t6) Exception.t3
 
 let drive sym_supply file args with_concurrency : execution_result =
+(*
   let main_body = 
     match Pmap.lookup file.main file.funs with
       | Some (Core.Proc (_, _, e)) ->
@@ -96,6 +97,7 @@ let drive sym_supply file args with_concurrency : execution_result =
       |  _ ->
           Pervasives.output_string stderr "ERROR: couldn't find the Core main function\n";
           exit (-1) in
+*)
   
   let file = Core_run.convert_file file in
   let (Nondeterminism.ND vs) = Driver.drive with_concurrency sym_supply file args in 

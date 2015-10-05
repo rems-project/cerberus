@@ -275,7 +275,7 @@ let rec stepConcurrency n dr_st =
                     
                     match mval_symb with
                       | Symbolic.SYMBsym _ r_sym ->
-                          ND.print_debug 5 ("ReadsFrom: " ^ show r_sym ^ " = " ^ show n) >>
+                          ND.print_debug 6 ("ReadsFrom: " ^ show r_sym ^ " = " ^ show n) >>
                           ND.return <| dr_st with
                             concurrency_state= concur_st';
                             core_state= resolve_read r_sym (Symbolic.SYMBconst n) dr_st.core_state;
@@ -407,12 +407,12 @@ let rec drive_core_thread tid dr_st =
   end in
   ND.msum $ List.map (function
     | Step2_action_request _ ->
-        (* DEBUG *) ND.print_debug 5 (">> ACTION_REQUEST") >>
+        (* DEBUG *) ND.print_debug 6 (">> ACTION_REQUEST") >>
         ND.return dr_st
     | Step2_memop_request _ _ _ _ ->
         ND.return dr_st
     | Step2_tau debug_str step_m ->
-        (* DEBUG *) ND.print_debug 5 ("tau: " ^ debug_str) >>
+        (* DEBUG *) ND.print_debug 6 ("tau: " ^ debug_str) >>
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
@@ -421,7 +421,7 @@ let rec drive_core_thread tid dr_st =
           dr_step_counter= dr_st'.dr_step_counter + 1
         |>
     | Step2_eval debug_str step_m ->
-        (* DEBUG *) ND.print_debug 5 ("eval: " ^ debug_str) >>
+        (* DEBUG *) ND.print_debug 6 ("eval: " ^ debug_str) >>
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
         drive_core_thread tid <| dr_st' with
@@ -430,7 +430,7 @@ let rec drive_core_thread tid dr_st =
         |>
     
     | Step2_thread_done parent_tid cval ->
-        (* DEBUG *) ND.print_debug 5 ("thread " ^ show tid ^ " is done") >>
+        (* DEBUG *) ND.print_debug 6 ("thread " ^ show tid ^ " is done") >>
         (* case where the current (non startup) thread execution ended. *)
         ND.return <| dr_st with
           core_state= kill_thread tid parent_tid cval dr_st.core_state;
@@ -449,7 +449,7 @@ let rec drive_core_thread tid dr_st =
     | Step2_spawn_threads th_st ->
         error "WIP: Step2_spawn_threads"
     | Step2_output debug_str str th_st' ->
-        ND.print_debug 5 ("Step2_output [" ^ debug_str ^ "] ==> " ^ str) >>
+        ND.print_debug 6 ("Step2_output [" ^ debug_str ^ "] ==> " ^ str) >>
         let core_st' = update_thread_state tid th_st' dr_st.core_state in
         drive_core_thread tid <| dr_st with
           core_state= <| core_st' with
@@ -872,7 +872,7 @@ let rec driver with_concurrency dr_st =
        switch to exhaustive mode and also compute the steps of the
        other threads. *)
     
-    ND.print_debug 5 ("FIRST: " ^ show (List.length post_core_dr_st.core_state.thread_states) ^ " vs " ^ show (List.length non_blocked_th_sts)) >>
+    ND.print_debug 6 ("FIRST: " ^ show (List.length post_core_dr_st.core_state.thread_states) ^ " vs " ^ show (List.length non_blocked_th_sts)) >>
     ND.bindExhaustive (ND.pick (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts)
                       (fun (tid, th_info) ->
 (* OLD                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state) *)
@@ -880,7 +880,7 @@ let rec driver with_concurrency dr_st =
     
 
    else
-    ND.print_debug 5 "SECOND" >>
+    ND.print_debug 6 "SECOND" >>
 (*
      ND.pick (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts >>= fun th_info ->
      ND.return (core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)

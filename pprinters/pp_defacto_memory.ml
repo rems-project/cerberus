@@ -78,6 +78,8 @@ and pp_integer_value_base = function
       !^ "IVmin" ^^ P.parens (Pp_ail.pp_integerType ity)
   | IVsizeof ty ->
       !^ "IVsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+  | IValignof ty ->
+      !^ "IValignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
   | IVptrdiff (ptr_val_1, ptr_val_2) ->

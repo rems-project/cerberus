@@ -362,5 +362,6 @@ proc printf_proxy(tmp_ptr: pointer, args: [pointer]) : eff integer :=
 
 proc malloc_proxy (size_ptr: pointer) : eff pointer :=
   let strong size = load("size_t", size_ptr) in
-  alloc(4, size)
-  end
+  let strong ret = alloc(4, size) in
+  return (ret)
+  end end

@@ -2,11 +2,11 @@
 open import Pervasives
 import Set_helpers (* fold *)
 
-open import Global Core_ctype
+open import Global
 
 import Symbolic Thread Cabs AilTypes Dlist
 
-open import Mem_common Defacto_memory_types
+open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 
 
 val print_debug: nat -> string -> unit
@@ -75,11 +75,10 @@ type mem_state = <|
   suppl:    UniqueId.supply nat;
   
   (* the semantic stuff starts here *)
-  allocations:         map allocation_id allocation;
+  allocations:         map allocation_id (allocation * mem_value);
   dead_allocations:    set allocation_id;
   addresses:           set address;
   constraints:         constraints;
-  objects:             map allocation_id mem_value;
 |>
 
 
@@ -320,11 +319,11 @@ let fresh_allocation_id =
   return id
 
 
-val register_allocation: allocation_id -> allocation -> memM unit
-let register_allocation alloc_id alloc =
+val register_allocation: allocation_id -> (allocation * mem_value) -> memM unit
+let register_allocation alloc_id alloc_mval =
   get >>= fun mem_st ->
   put <| mem_st with allocations=
-    Map.insert alloc_id alloc mem_st.allocations
+    Map.insert alloc_id alloc_mval mem_st.allocations
   |>
 
 
@@ -333,7 +332,7 @@ let allocation_is_dead alloc_id =
   get >>= fun mem_st ->
   return (alloc_id IN mem_st.dead_allocations)
 
-val resolve_allocation: allocation_id -> memM allocation
+val resolve_allocation: allocation_id -> memM (allocation * mem_value)
 let resolve_allocation alloc_id =
   get >>= fun mem_st ->
   maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
@@ -768,7 +767,6 @@ let initial_mem_state = <|
   addresses= Set.empty;
   constraints= initial_constraints ();
 (*  writes= []; *)
-  objects= Map.empty;
 |>
 
 
@@ -815,8 +813,7 @@ let rec mkUnspec ty =
     | (Atomic _ as ty) ->
         MVunspecified ty
     | Struct tag ->
-        let (Just ident_tys) = Map.lookup tag (Core_ctype.tagDefs ()) in
-        MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec ty)) ident_tys
+        MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec ty)) (get_membersDefs tag)
     | (Union _ as ty) ->
         MVunspecified ty
     | (Builtin _ as ty) ->
@@ -906,15 +903,10 @@ let allocate_static tid pref align_ival ty =
   (* the allocated object is given a new address (distinct from all other
      existing addresses) *)
   fresh_address pref >>= fun addr ->
-  
   register_distinctness_constraints addr >>
   
   fresh_allocation_id >>= fun alloc_id ->
-  register_allocation alloc_id (Alloc_static ty addr) >>
-  
-  (* TODO: maybe bad ? *)
-  get >>= fun mem_st ->
-  put <| mem_st with objects= Map.insert alloc_id (mkUnspec ty) mem_st.objects  |> >>
+  register_allocation alloc_id (Alloc_static ty addr, mkUnspec ty) >>
   
   let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
   print_debugM 4 ("Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
@@ -922,9 +914,18 @@ let allocate_static tid pref align_ival ty =
   return ptr_val
 
 
-let allocate_dynamic tid prefix align_ival size_ival =
-  wip "WIP: allocate_dynamic"
-
+let allocate_dynamic tid pref align_ival (IV _ size_ival) =
+  (* TODO *)
+  fresh_address pref >>= fun addr ->
+  register_distinctness_constraints addr >>
+  
+  fresh_allocation_id >>= fun alloc_id ->
+  let unsigned_char = Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) in
+  register_allocation alloc_id (Alloc_dynamic size_ival addr, mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *)))) >>
+  
+  return (
+    PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) []
+  )
 
 
 
@@ -1094,6 +1095,12 @@ let apply_shift_path_element ty spe mval =
        else
          MVinteger (AilTypes.Unsigned AilTypes.Ichar (* TODO: hack, hack *)) (IV Prov_none (IVbyteof ival_ mval))
    
+   | (SPE_member tag_sym memb_ident, MVstruct tag_sym_ xs) ->
+       if tag_sym <> tag_sym_ then
+         error "Mem.apply_shift_path_element, SPE_member vs MVstruct, TODO(msg) the tags didn't match"
+       else
+         fromJust (List.lookup memb_ident xs)
+   
    | (SPE_array _ _, _) ->
        error ("Mem.apply_shift_path_element, SPE_array ==> " ^ stringFromMem_value mval)
    | (SPE_member _ _, _) ->
@@ -1111,8 +1118,8 @@ let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
         get >>= fun mem_st ->
-        match Map.lookup alloc_id mem_st.objects with
-          | Just mval ->
+        match Map.lookup alloc_id mem_st.allocations with
+          | Just (_, mval) ->
               let mval' = apply_shift_path ty sh mval in
               print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
               return mval'
@@ -1339,7 +1346,7 @@ let is_one_past_pointer (PV _ ptr_val_ sh) =
     | _ ->
         explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
           | Just alloc_id ->
-              resolve_allocation alloc_id >>= fun alloc ->
+              fst <$> resolve_allocation alloc_id >>= fun alloc ->
                 let size_ival_ = match alloc with
                   | Alloc_static ty _ ->
                       IVsizeof ty
@@ -1365,7 +1372,7 @@ let address_expression_of_pointer (PV _ ptr_val_ sh) =
     | _ ->
         explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
           | Just alloc_id ->
-              resolve_allocation alloc_id >>= function
+              fst <$> resolve_allocation alloc_id >>= function
                 | Alloc_static ty addr ->
                   return $ mk_op_ival_ IntAdd (IVaddress addr) (IVsizeof ty)
                 | Alloc_dynamic ival_ addr ->
@@ -1378,6 +1385,8 @@ end
 
 (* WIP *)
 let eq_ptrval eqs ptr_val1 ptr_val2 =
+  print_debugM 6 ("Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
+                  stringFromPointer_value ptr_val2) >>
   match (ptr_val1, ptr_val2) with
     | (PV prov1 ptr_val1_ sh1, PV prov2 ptr_val2_ sh2) ->
         match (ptr_val1_, ptr_val2_) with
@@ -1386,6 +1395,10 @@ let eq_ptrval eqs ptr_val1 ptr_val2 =
               return true
           | (PVfunction sym1, PVfunction sym2) ->
               return (sym1 = sym2)
+          | (PVnull _, _) ->
+              return false
+          | (_, PVnull _) ->
+              return false
           | _ ->
               explicitAllocationIdFromPointer_value_aux ptr_val1_ >>= fun alloc_id1_opt ->
               explicitAllocationIdFromPointer_value_aux ptr_val2_ >>= fun alloc_id2_opt ->
@@ -1552,8 +1565,7 @@ let rec eq_ival eqs (IV _ ival_1) (IV _ ival_2) =
         Just (n1 = n2)
     | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
         if n = 0 then
-          let xs = fromJust $ Map.lookup tag_sym (Core_ctype.tagDefs ()) in
-          match xs with
+          match get_membersDefs tag_sym with
             | (ident', _)::_ ->
                 if membr_ident = ident' then
                   (* TODO: assuming no prefix padding *)
@@ -1602,8 +1614,7 @@ let lt_ival eqs (IV _ ival_1) (IV _ ival_2) =
         Just (n1 < n2)
     | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
         if n = 0 then
-          let xs = fromJust $ Map.lookup tag_sym (Core_ctype.tagDefs ()) in
-          match xs with
+          match get_membersDefs tag_sym with
             | (ident', _)::_ ->
                 if membr_ident = ident' then
                   (* TODO: assuming no prefix padding *)
@@ -1772,8 +1783,9 @@ let can_store (PV prov ptr_val_ sh) =
 
 
 (* TODO: with temporary simplification *)
-val     easy_update_mem_value_aux: ctype -> shift_path -> mem_value -> mem_value -> mem_value
-let rec easy_update_mem_value_aux write_ty sh write_mval mval =
+val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> mem_value -> mem_value -> mem_value
+let rec easy_update_mem_value_aux is_strong write_ty sh write_mval mval =
+  let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
   match (mval, sh) with
     | (_, []) ->
         (* SIMPLIFICATION: we assume that the footprint of the new value covers all of the old value *)
@@ -1782,8 +1794,7 @@ let rec easy_update_mem_value_aux write_ty sh write_mval mval =
         match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
               if n < 0 || 10 > List.length mvals then
-                let Just elem_mval = List.index mvals n in
-                easy_update_mem_value_aux write_ty sh' write_mval elem_mval
+                easy_update_mem_value_aux write_ty sh' write_mval (fromJust $ List.index mvals n)
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
                 error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
@@ -1791,14 +1802,32 @@ let rec easy_update_mem_value_aux write_ty sh write_mval mval =
               (* TODO: this is going to be complicated, probably require new variants in mem_value *)
               error "WIP: easy_update_mem_value_aux ==> symbolic SPE_array"
         end
+    | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
+        if tag_sym <> tag_sym_ then
+          error "WIP[easy_update_mem_value_aux ==> ]: TODO error message ===> struct value accessed with incompatible SPE"
+        else
+          MVstruct tag_sym (assoc_adjust (easy_update_mem_value_aux write_ty sh' write_mval) memb_ident xs)
     | _ ->
-        error "WIP: easy_update_mem_value_aux"
+        if is_strong then
+          match sh with
+            | SPE_member tag_sym memb_ident :: sh' ->
+                MVstruct tag_sym $ List.map (fun (ident, ty) ->
+                  (ident, if ident = memb_ident then
+                    easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty)
+                  else
+                    mkUnspec ty)
+                ) (get_membersDefs tag_sym)
+            | _ ->
+                error "WIP: easy_update_mem_value_aux, _, is_strong"
+          end
+        else
+          error ("WIP: easy_update_mem_value_aux ===> mval = " ^ stringFromMem_value mval)
   end
 
 
-val easy_update_mem_value: write_event -> mem_value -> mem_value
-let easy_update_mem_value (WriteEvent write_ty (PV prov ptr_val_ sh) write_mval) mval =
-  easy_update_mem_value_aux write_ty sh write_mval mval
+val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
+let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh) write_mval) mval =
+  easy_update_mem_value_aux is_strong write_ty sh write_mval mval
 (*
 let easy_update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_ sh) mval') mval =
   match (mval, sh) with
@@ -1827,12 +1856,18 @@ let easy_update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_ sh) mval') mv
 val register_write_event: allocation_id -> write_event -> memM unit
 let register_write_event alloc_id (WriteEvent _ _ mval as w) =
   get >>= fun st ->
-  put <| st with objects=
-    match Map.lookup alloc_id st.objects with
-      | Just mval ->
-          Map.insert alloc_id (easy_update_mem_value w mval) st.objects
+  put <| st with allocations=
+    match Map.lookup alloc_id st.allocations with
+      | Just (alloc, mval) ->
+          let is_strong = match alloc with
+            | Alloc_static _ _ ->
+                false
+            | Alloc_dynamic _ _ ->
+                true
+          end in
+          Map.insert alloc_id (alloc, easy_update_mem_value is_strong w mval) st.allocations
       | Nothing ->
-          Map.insert alloc_id mval st.objects (* TODO: Map.insert alloc_id (update_mem_value (MVunspecified *)
+          error "Mem.register_write_event, Nothing"
     end
   |>
 
@@ -1841,6 +1876,7 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
 
 (* val store: ctype -> pointer_value -> mem_value -> memM unit *)
 let store lvalue_ty ptr_val mval =
+  print_debugM 5 ("STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval) >> (* DEBUG *)
   can_store ptr_val >>= function
     | Just alloc_id ->
         register_write_event alloc_id (WriteEvent lvalue_ty ptr_val mval)

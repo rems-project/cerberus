@@ -57,6 +57,9 @@ declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
 val pp_core_expr: forall 'a. Core.expr 'a -> string
 declare ocaml target_rep function pp_core_expr = `String_core.string_of_expr`
 
+val pp_prefix: Symbol.prefix -> string
+declare ocaml target_rep function pp_prefix = `String_symbol.string_of_prefix`
+
 let inline {coq} pp_core_expr x = let _ = x in ""
 
 val nat_of_string: string -> natural

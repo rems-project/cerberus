@@ -17,7 +17,10 @@ module Aaux = AilSyntaxAux
 module Aty  = AilTypes
 
 module C    = Core
-module Cty  = Core_ctype
+module Cty  = struct 
+  include import Core_ctype
+  include import Core_ctype_aux
+end
 module Caux = Core_aux
 module U    = Undefined
 
@@ -1092,6 +1095,16 @@ and translate_expression stdlib program is_lvalue a_expr =
            * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
                           "default argument promotions"
        *)
+
+      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEident (Symbol.Symbol _ (Just "malloc")))) [e] ->
+          translate_rvalue e >>= fun core_e ->
+          E.fresh_symbol     >>= fun sym_e  ->
+          E.return $
+            C.Esseq [Just sym_e] core_e
+              (C.Eaction (C.Paction C.Pos (C.Action loc () (
+                C.Alloc (C.PEval (C.Vinteger (Mem.alignof_ival Cty.unsigned_char))) (C.PEsym sym_e) (Symbol.PrefOther "malloc")
+              ))))
+
       | A.AilEcall e es ->
 (*          E.fresh_symbol         >>= fun sym_e  -> *)
 (*          translate_expression e >>= fun core_e -> *)
@@ -1122,11 +1135,14 @@ and translate_expression stdlib program is_lvalue a_expr =
                         end
 
                     | Symbol.Symbol _ (Just "malloc") ->
+                        error "Translation.malloc"
+(*
                           (* TODO: temporary hack *)
                         match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "malloc_proxy" | _ -> false end) (Map_extra.toList stdlib) with
                           | Just (f, _) -> Core.Sym f
                           | Nothing -> error "Translation.translate_expression, AilEcall malloc"
                         end
+*)
 
                     | Symbol.Symbol _ (Just str) ->
                         C.Impl (Implementation_.StdFunction str)
@@ -1259,7 +1275,7 @@ and translate_expression stdlib program is_lvalue a_expr =
             mk_core (C.Epure (C.PEarray pes))
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          let ident_tys = fromJust $ Map.lookup tag_sym (Core_ctype.tagDefs ()) in
+          let ident_tys = fromJust $ Map.lookup tag_sym (Cty.tagDefs ()) in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -1325,12 +1341,18 @@ and translate_expression stdlib program is_lvalue a_expr =
                 error "Translation.translate_expression, AilEmemberofptr: Ail type error"
           end in
 
-          (* TODO: check, looks fishy *)
-          E.fresh_symbol         >>= fun sym_e  ->
+          (* TODO: check *)
+          E.fresh_symbol     >>= fun sym_e  ->
           translate_rvalue e >>= fun core_e ->
-          E.return $ 
+          E.return $
             C.Esseq [Just sym_e] core_e
-              (C.Epure (C.PEmember_shift (C.PEsym sym_e) tag_sym ident))
+              ((fun z ->
+                if is_lvalue then
+                  C.Epure z
+                else
+                  let memb_ty = fromJust (List.lookup ident (Cty.get_membersDefs tag_sym)) in
+                  Caux.pload loc (C.PEval (C.Vctype memb_ty)) z Cmm.NA (* TODO: check MO *)
+              ) (C.PEmember_shift (C.PEsym sym_e) tag_sym ident))
 (*
               (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
 *)
@@ -2053,7 +2075,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
 
 
 (* TODO: skipping unions for now *)
-val translate_tag_definitions: Context.context A.identifier A.tag_definition -> map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))
+val translate_tag_definitions: Context.context A.identifier A.tag_definition -> map Symbol.t (list (Cabs.cabs_identifier * Cty.ctype))
 let translate_tag_definitions ctx =
   let ctxWithoutUnions = List.filter (function
     | (_, A.StructDef _) ->
@@ -2072,7 +2094,7 @@ let translate_tag_definitions ctx =
 (* This is the entry function (called from main.ml) *)
 let translate stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
-  let () = Core_ctype.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in
+  let () = Cty.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in
   
   let ((cglobs, cfuns), st) = (translate_program stdlib prog) (E.init symbol_counter) in
   (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>)

@@ -154,7 +154,7 @@ let backend sym_supply core_file args =
     | Some (Exhaustive | Random | Interactive) ->
         (* TODO: temporary hack for the command name *)
         match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) (!!cerb_conf.concurrency) with
-          | Exception.Result (pe::_ | [pe]) ->
+          | Exception.Result (pe::_) ->
             begin
               (* TODO: yuck *)
               try

@@ -1,5 +1,5 @@
 
-open import Pervasives String_extra Global Core Core_ctype Core_aux Show Show_extra Loc
+open import Pervasives String_extra Global Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Loc
 import Set_extra (* Set_helpers *)
 import State State_operators
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
@@ -212,7 +212,7 @@ let rec core_eval file inside_if = function
               | Atomic ty ->
                   EU.return $ PEcall nm_atom [PEval (Vctype ty)]
               | Struct tag ->
-                  match Map.lookup tag (Core_ctype.tagDefs ()) with
+                  match Map.lookup tag (tagDefs ()) with
                     | Just ident_tys ->
                         (* TODO: identifiers *)
                         EU.return $ PEcall nm_struct [PEval (Vlist $ List.map (fun (_, ty) -> Vctype ty) ident_tys)]
@@ -220,7 +220,7 @@ let rec core_eval file inside_if = function
                         EU.fail $ Illformed_program ("couldn't find definition of tag: " ^ show tag)
                   end
               | Union tag ->
-                  match Map.lookup tag (Core_ctype.tagDefs ()) with
+                  match Map.lookup tag (tagDefs ()) with
                     | Just ident_tys ->
                         (* TODO: identifiers *)
                         EU.return $ PEcall nm_union [PEval (Vlist $ List.map (fun (_, ty) -> Vctype ty) ident_tys)]
@@ -246,6 +246,16 @@ let rec core_eval file inside_if = function
             EU.fail $ Illformed_program ("PEarray_shift: type error ==> " ^ Boot.pp_core_expr (Epure (PEarray_shift pe1' ty pe2') : Core.expr unit))
         | _ ->
             EU.return $ PEarray_shift pe1' ty pe2'
+      end
+  
+  | PEmember_shift pe tag_sym memb_ident ->
+      core_eval file inside_if pe >>= function
+        | PEval (Vpointer ptr_val) ->
+            EU.return $ PEval (Vpointer (Mem.member_shift_ptrval ptr_val tag_sym memb_ident))
+        | (PEval _ as pe') ->
+            EU.fail $ Illformed_program ("PEmember_shift: type error ==> " ^ Boot.pp_core_expr (Epure (PEmember_shift pe' tag_sym memb_ident) : Core.expr unit))
+        | pe' ->
+            EU.return $ PEmember_shift pe' tag_sym memb_ident
       end
 (*
 KKKKK NOW
@@ -2362,7 +2372,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     )
                   )
           | (Just _, Just _) ->
-              Step2_error "found a create() with ill-typed operands"
+              Step2_error ("found a create() with ill-typed operands [" ^ Boot.pp_prefix pref ^ "]")
           | (Nothing, _) ->
               Step2_eval "first operand of a Create" (
                 E.core_eval file false pe1 >>= fun pe1' ->
@@ -2398,14 +2408,14 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
               Step2_eval "first operand of a Alloc" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
+                  Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
               Step2_eval "second operand of a Alloc" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
+                  Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref)))
                 |>
               )
         end
@@ -2867,7 +2877,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                 | Just cval ->
                     Step2_tau "value" (match cont with
                       | [] ->
-                          error "<e, Stack_cons []>" (* TODO: what case is that? *)
+                          error ("<e, Stack_cons []> with e= " ^ Boot.pp_core_expr e) (* TODO: what case is that? *)
                       | _ ->
                           (* -----------------------------------
                              <v, κ.κs, Λ> --τ--> <κ(v), ɛ.κs, Λ> *)

@@ -103,14 +103,6 @@ end
 
 
 
-(* SEE src/tags.mli for the documentation *)
-val tagDefs: unit -> map Symbol.t (list (Cabs.cabs_identifier * ctype))
-val set_tagDefs: map Symbol.t (list (Cabs.cabs_identifier * ctype)) -> unit
-
-declare ocaml target_rep function tagDefs = `Tags.tagDefs`
-declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
-
-
 
 
 
@@ -129,6 +121,9 @@ val signed_int: ctype
 let signed_int =
   Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_))
 
+val unsigned_char: ctype
+let unsigned_char =
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Ichar)))
 
 val char16_t: ctype
 let char16_t =

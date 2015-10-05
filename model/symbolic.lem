@@ -206,6 +206,8 @@ end
 val symbolic_to_string: symbolic -> string
 let rec symbolic_to_string sym =
   match sym with
+  | SYMBtrue -> "SYMBtrue"
+  | SYMBfalse -> "SYMBfalse"
   | SYMBconst i -> "Constant (" ^ show i ^ ")" 
   | SYMBctype ty -> "Ctype"
   | SYMBsym ty t -> "Symbol (TODO, " ^ show t ^ ")"
