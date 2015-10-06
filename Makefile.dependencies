@@ -1,6 +1,6 @@
 CMDLINER_SOURCE=http://erratique.ch/software/cmdliner/releases/cmdliner-0.9.7.tbz
 PPRINT_SOURCE=http://gallium.inria.fr/~fpottier/pprint/pprint-20140424.tar.gz
-ZARITH_SOURCE=https://forge.ocamlcore.org/frs/download.php/1471/zarith-1.3.tgz
+ZARITH_SOURCE=http://forge.ocamlcore.org/frs/download.php/1471/zarith-1.3.tgz
 
 CMDLINER_PATH=$(shell basename $(CMDLINER_SOURCE) .tbz)
 PPRINT_PATH=$(shell basename $(PPRINT_SOURCE) .tar.gz)/src
