@@ -88,6 +88,10 @@ let eq_genBasicType gbty1 gbty2 =
   match (gbty1, gbty2) with
     | (GenInteger gity1, GenInteger gity2) ->
         eq_genIntegerType gity1 gity2
+    | (GenFloating fty1, GenFloating fty2) ->
+        fty1 = fty2
+    | _ ->
+        false
   end
 
 instance (Eq genBasicType)
@@ -112,8 +116,10 @@ let rec eq_genType gty1 gty2 =
         5
     | GenUnion _ ->
         6
-    | GenBuiltin _ ->
+    | GenAtomic _ ->
         7
+    | GenBuiltin _ ->
+        8
   end in
   match (gty1, gty2) with
     | (GenBasic gbty1, GenBasic gbty2 ) ->
@@ -128,6 +134,8 @@ let rec eq_genType gty1 gty2 =
         tag1 = tag2 (* && xs1 = xs2 *)
     | (GenUnion tag1, GenUnion tag2) ->
         tag1 = tag2 (* && xs1 = xs2 *)
+    | (GenAtomic ty1, GenAtomic ty2) ->
+        ty1 = ty2
     | (GenBuiltin str1, GenBuiltin str2) ->
         str1 = str2
     | _ ->

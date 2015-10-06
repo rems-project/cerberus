@@ -332,8 +332,17 @@ let integerSuffixEqual s1 s2 =
     | (_  , _  ) -> false
   end
 
-let integerConstantEqual (IConstant n1 b1 suff1_opt) (IConstant n2 b2 suff2_opt) =
-  n1 = n2 && basisEqual b1 b2 && eq_option integerSuffixEqual suff1_opt suff2_opt
+let integerConstantEqual iCst1 iCst2 =
+  match (iCst1, iCst2) with
+    | (IConstant n1 b1 suff1_opt, IConstant n2 b2 suff2_opt) ->
+        n1 = n2 && basisEqual b1 b2 && eq_option integerSuffixEqual suff1_opt suff2_opt
+    | (IConstantMax ity1, IConstantMax ity2) ->
+        integerTypeEqual ity1 ity2
+    | (IConstantMin ity1, IConstantMin ity2) ->
+        integerTypeEqual ity1 ity2
+    | _ ->
+        false
+end
 
 instance (Eq integerConstant)
   let (=)  = integerConstantEqual

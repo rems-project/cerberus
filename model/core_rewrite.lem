@@ -542,6 +542,8 @@ let rec remove_conv_int_pexpr pexpr =
         pexpr
     | PEimpl _ ->
         pexpr
+    | PEctor ctor pes ->
+        PEctor ctor (List.map remove_conv_int_pexpr pes)
     | PEcons pe1 pe2 ->
         PEcons (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
     | PEcase_list pe nm1 nm2 ->

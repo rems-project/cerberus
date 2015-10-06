@@ -17,15 +17,6 @@ val stringFromCtype: ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
 
 
-
-
-
-
-
-
-
-
-
 (* Semantic switches *)
 type mode =
   | Mode_ISO
@@ -37,13 +28,6 @@ type mode =
 (* Basic representation:
      assuming 8-bit bytes and two's complement arithmetic.
  *)
-
-
-
-
-
-
-
 
 
 (* Constraints solving stuff *)
@@ -133,84 +117,12 @@ instance (Show pointer_value)
   let show x = "WIP: show pointer_value"
 end
 
-let stringFromProvenance = function
-  | Prov_wildcard ->
-      "Prov_wildcard"
-  | Prov_none ->
-      "Prov_none"
-  | Prov_device ->
-      "Prov_device"
-  | Prov_some prov_ids ->
-      "Prov_some (" ^ show prov_ids ^ ")"
-end
+val stringFromPointer_value: pointer_value -> string
+val stringFromMem_value: mem_value -> string
 
-let rec stringFromPointer_value ptr_val =
-  match ptr_val with
-    | PV prov ptr_val_ sh ->
-        "PV (" ^ stringFromProvenance prov ^ ", " ^ stringFromPointer_value_aux ptr_val_ ^ ", " ^ stringFromList stringFromShift_path_element sh ^ ")"
-  end
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
 
-and stringFromPointer_value_aux ptr_val_ =
-  match ptr_val_ with
-  | PVnull ty ->
-      "PVnull ("^ stringFromCtype ty ^ ")"
-  | PVfunction sym ->
-      "PVfunction (" ^ show sym ^ ")"
-  | PVbase alloc_id pref ->
-      "PVbase (" ^ show alloc_id ^ Symbol.stringFromPrefix pref ^ ")"
-  | PVfromint ival_ ->
-      "PVfrompint (" ^ stringFromInteger_value_base ival_ ^ ")"
-  end
-
-and stringFromShift_path_element spe =
-  match spe with
-    | SPE_array ty ival_ ->
-        "SPE_array (" ^ stringFromCtype ty ^ ", " ^ stringFromInteger_value_base ival_ ^ ")"
-    | SPE_member tag_sym memb_ident ->
-        "SPE_member (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
-  end
-
-and stringFromInteger_value_base ival_ =
-  match ival_ with
-    | IVconcrete symb ->
-        "IVconcrete (" ^ show symb ^ ")"
-    | IVfromptr ref_ty ptr_val_ ->
-        "IVfromptr (" ^ stringFromCtype ref_ty ^ ", " ^ stringFromPointer_value_aux ptr_val_ ^ ")"
-    | IVop iop ival_s ->
-        "IVop (" ^ stringFromInteger_operator iop ^ ", " ^
-                   List.foldr (fun ival_ acc -> stringFromInteger_value_base ival_ ^ ", " ^ acc) ")" ival_s
-    | IVsizeof ty ->
-        "IVsizeof (" ^ stringFromCtype ty ^ ")"
-    | IVoffsetof tag_sym memb_ident ->
-        "IVoffsetof (" ^ show tag_sym ^ ", " ^ show memb_ident ^ ")"
-    | IVptrdiff ptr_val_1 ptr_val_2 ->
-        "IVptrdiff (" ^ stringFromPointer_value_aux ptr_val_1 ^ ", " ^ stringFromPointer_value_aux ptr_val_2 ^ ")"
-    | IVbyteof ival_ mval' ->
-        "IVbyteof (" ^ stringFromInteger_value_base ival_ ^ ", " ^ stringFromMem_value mval' ^ ")"
-end
-
-and stringFromInteger_value (IV prov ival_) =
-  "(" ^ stringFromProvenance prov ^ ", " ^ stringFromInteger_value_base ival_ ^ ")"
-
-
-and stringFromMem_value mval =
-  match mval with
-    | MVunspecified ty ->
-        "MVunspecified (" ^ stringFromCtype ty  ^ ")"
-    | MVinteger ity ival ->
-        "MVinteger (" ^ stringFromCtype (Basic (AilTypes.Integer ity)) ^ ", " ^ stringFromInteger_value ival ^ ")"
-    | MVfloating fty str ->
-        "MVfloating (" ^ stringFromCtype (Basic (AilTypes.Floating fty)) ^ ", " ^ show str ^ ")"
-    | MVpointer ref_ty ptr_val ->
-        "MVpointer (" ^ stringFromCtype ref_ty ^ ", " ^ stringFromPointer_value ptr_val ^ ")"
-    | MVarray mvals ->
-        "MVarray (" ^ stringFromList stringFromMem_value mvals ^ ")"
-    | MVstruct tag_sym xs ->
-        "MVstruct (" ^ show tag_sym ^ ", " ^
-                       stringFromList (stringFromPair show stringFromMem_value) xs ^ ")"
-    | MVunion tag_sym memb_ident mval' ->
-        "MVunion (" ^ show tag_sym ^ ", " ^ show memb_ident ^ stringFromMem_value mval' ^ ")"
-  end
 
 
 
@@ -448,6 +360,8 @@ let rec simplify_integer_value_base ival_ =
               end
           | [Right ival_1; Right ival_2] ->
               Right (IVop iop [ival_1; ival_2])
+          | _ ->
+              error "Mem.simplify_integer_value_base"
         end
     | IVfromptr ref_ty (PVfromint ival_') ->
         simplify_integer_value_base ival_'
@@ -680,13 +594,25 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
   match ival_ with
     | IVconcrete n ->
         return Nothing
+    | IVaddress _ ->
+        return Nothing
     | IVfromptr _ ptr_val_ ->
         explicitAllocationIdFromPointer_value_aux ptr_val_
-    | IVop iop ival_s ->
+    | IVop _ _ ->
         return Nothing
-    | IVsizeof ty ->
+    | IVmin _ ->
         return Nothing
-    | IVoffsetof tag_sym memb_ident ->
+    | IVmax _->
+        return Nothing
+    | IVsizeof _->
+        return Nothing
+    | IValignof _->
+        return Nothing
+    | IVoffsetof _ _->
+        return Nothing
+    | IVptrdiff _ _->
+        return Nothing
+    | IVbyteof _ _->
         return Nothing
   end
 
@@ -781,6 +707,8 @@ let rec get_allocation_id ptr_val_ =
         Just alloc_id
     | PVfromint (IVfromptr ref_ty ptr_val_') ->
         get_allocation_id ptr_val_'
+    | _ ->
+        error "TODO: get_allocation_id, wildcard"
   end
 
 
@@ -1328,9 +1256,13 @@ let rec isBeginningShift sh =
         ifM (MC_eqIV "isBeginningShift" ival_ (IVconcrete 0))
             (isBeginningShift sh')
             (return false)
-(*
-    | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
-*)
+    | (SPE_member tag_sym memb_ident) :: sh' ->
+        match get_membersDefs tag_sym with
+          | [] ->
+              error "Mem.isBeginningShift, get_membersDefs returning an empty list"
+          | (memb_ident', _) :: _ ->
+              return (memb_ident = memb_ident')
+        end
   end
 
 
@@ -1444,6 +1376,8 @@ let eq_ptrval eqs ptr_val1 ptr_val2 =
                                   end
                             end
                         end
+                | _ ->
+                    error "WIP: Mem.eq_ptrval, not (Just alloc_id1, Just alloc_id2)"
               end
 
 
@@ -1523,7 +1457,8 @@ let validForDeref_ptrval ptr_val =
 val minimal_range: AilTypes.integerType -> integer * integer
 let minimal_range = function
  | AilTypes.Char ->
-     error "WIP: Mem.minimal_range, Char"
+     (* TODO: making an impl-choice here ===> char = signed char *)
+     (0-127, 127)
  | AilTypes.Bool ->
      error "WIP: Mem.minimal_range, Bool"
  | AilTypes.Signed AilTypes.Ichar ->
@@ -1572,6 +1507,8 @@ let rec eq_ival eqs (IV _ ival_1) (IV _ ival_2) =
                   Just true
                 else
                   Just false
+            | _ ->
+                error "Mem.eq_ival, get_membersDefs returned an empty list"
           end
         else
           Nothing
@@ -1621,6 +1558,8 @@ let lt_ival eqs (IV _ ival_1) (IV _ ival_2) =
                   Just false
                 else
                   Just true
+            | _ ->
+                error "Mem.lt_ival, get_membersDefs returned an empty list"
           end
         else
           Nothing

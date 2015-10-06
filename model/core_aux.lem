@@ -169,11 +169,19 @@ let rec zeros_aux tagDefs ty =
     | Core_ctype.Atomic ty' ->
         zeros_aux tagDefs ty'
     | Core_ctype.Struct tag ->
-        let Just (AilSyntax.StructDef ident_tys) = List.lookup tag tagDefs in
-        Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs (proj_ctype ty))) ident_tys)
+        match List.lookup tag tagDefs with
+          | Just (AilSyntax.StructDef ident_tys) ->
+              Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs (proj_ctype ty))) ident_tys)
+          | _ ->
+              error "Core_aux.zeros_aux, not StructDef"
+        end
     | Core_ctype.Union tag ->
-        let Just (AilSyntax.UnionDef ((ident, ty')::_)) = List.lookup tag tagDefs in
-        Mem.union_mval tag ident (zeros_aux tagDefs (proj_ctype ty'))
+        match List.lookup tag tagDefs with
+          | Just (AilSyntax.UnionDef ((ident, ty')::_)) ->
+              Mem.union_mval tag ident (zeros_aux tagDefs (proj_ctype ty'))
+          | _ ->
+              error "Core_aux.zeros_aux, not UnionDef"
+        end
 
 (*
  | Builtin of string
@@ -1151,22 +1159,28 @@ let symbolify expr =
         Symbolic.SYMBtrue
     | Vfalse ->
         Symbolic.SYMBfalse
-    | Vlist pes ->
+    | Vlist _ ->
         error "TODO: Core_aux.symbolify, Vlist"
-    | Vtuple vs ->
+    | Vtuple _ ->
         error "TODO: Core_aux.symbolify, Vtuple"
     | Vctype ty ->
         Symbolic.SYMBctype ty
-    | Vunspecified ty ->
+    | Vsymbolic symb ->
+        symb
+    | Vunspecified _ ->
         error "TODO: Core_aux.symbolify, Vunspecified"
-    | Vinteger ival ->
+    | Vinteger _ ->
         error "TODO: Core_aux.symbolify, Vinteger"
-    | Vfloating str ->
+    | Vfloating _ ->
         error "TODO: Core_aux.symbolify, Vfloating"
-    | Vpointer ptr_val ->
+    | Vpointer _ ->
         error "TODO: Core_aux.symbolify, Vpointer"
-    | Varray mem_vals ->
+    | Varray _ ->
         error "TODO: Core_aux.symbolify, Varray"
+    | Vstruct _ _ ->
+        error "TODO: Core_aux.symbolify, Vstruct"
+    | Vunion _ _ _ ->
+        error "TODO: Core_aux.symbolify, Vunion"
   end
 
 val     pexprFromSymbolic: Symbolic.symbolic -> maybe pexpr
@@ -1192,6 +1206,10 @@ let rec pexprFromSymbolic symb =
         OpAnd
     | Symbolic.Or ->
         OpOr
+    | Symbolic.Ge ->
+        OpGe
+    | Symbolic.Neq ->
+        error "Core_aux.conver_operator, Symbolic.Neq"
   end in
   let convert_name = function
     | Symbolic.SYMBfsym sym ->

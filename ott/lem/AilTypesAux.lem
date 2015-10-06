@@ -1264,6 +1264,8 @@ let corresponding_real_type ty =
     | Basic (Floating (Complex fty))
         Basic (Floating fty)
 *)
+    | _ ->
+        error "AilTypesAux.corresponding_real_type"
     end
   else
     Nothing
