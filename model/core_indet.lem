@@ -416,7 +416,7 @@ let rec hack expr =
 (* TODO: lem non termination bug *)
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
-                            (Core.Ewseq [] (Core.Eaction pact) (Core.Epure (Core.PEsym match _a_opt with Just x -> x end)))
+                            (Core.Ewseq [] (Core.Eaction pact) (Core.Epure (Core.PEsym match _a_opt with Just x -> x | Nothing -> error "Core_indet.hack" end)))
 (*
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))

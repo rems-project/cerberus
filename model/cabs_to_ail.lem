@@ -262,6 +262,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () loc expr) =
 
     | AilEalignof _ _ ->
         E.fail loc (Errors.Desugar_NotyetSupported "_Alignof operator in `integer constant expressions'")
+    | _ ->
+        error "WIP: Cabs_to_ail.is_integer_constant_expression, wildcard"
 end
 
 
@@ -772,7 +774,7 @@ end
 val register_simple_enumerators: ATypes.ctype -> list enumerator -> E.t unit
 let register_simple_enumerators ty enums =
   if List.all is_simple_enumerator enums then
-    let register_simple_enumerator (n, (ident, Nothing)) =
+    let register_simple_enumerator (n, (ident, _ (* Nothing *) (* TODO: wtf ?? *))) =
       (* NOTE: numerote starts counting from 1 *)
       let n = n-1 in
       
@@ -1691,11 +1693,15 @@ and static_thread_implicit_initializer tagDefs ty =
         end
 
     | ATypes.Struct tag_sym ->
-        let Just (E.Struct_definition xs) = Map.lookup tag_sym tagDefs in
-        ConstantStruct tag_sym $
-          List.map (fun (ident, ty) ->
-            (ident, static_thread_implicit_initializer tagDefs ty)
-          ) xs
+        match Map.lookup tag_sym tagDefs with
+          | Just (E.Struct_definition xs) ->
+              ConstantStruct tag_sym $
+                List.map (fun (ident, ty) ->
+                  (ident, static_thread_implicit_initializer tagDefs ty)
+                ) xs
+          | _ ->
+              error "Cabs_to_ail.static_thread_implicit, Struct, not Struct_definition"
+        end
 
     | _ ->
         error ("type error 2: " ^ Boot.pp_ail_ctype ty)
@@ -1758,16 +1764,19 @@ and wip_desugar_initializer_ dur current_ty = function
                     desugar_expression e               >>= fun d_e ->
                     is_integer_constant_expression d_e >>= function
                       | true ->
-                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun (IConstant j _ _) ->
-                           wip_desugar_initializer_ dur elem_ty init             >>= fun d_e               ->
-                          
-                          match compare j i with
-                            | LT ->
-                                E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
-                            | EQ ->
-                                E.return (i+1, acc)
-                            | GT ->
-                                E.return (j+1, Just d_e :: (Global.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
+                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= function
+                            | IConstant j _ _ ->
+                                wip_desugar_initializer_ dur elem_ty init             >>= fun d_e               ->
+                                match compare j i with
+                                  | LT ->
+                                      E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
+                                  | EQ ->
+                                      E.return (i+1, acc)
+                                  | GT ->
+                                      E.return (j+1, Just d_e :: (Global.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
+                                end
+                            | _ ->
+                                error "WIP: Cabs_to_ail.wip_desugar_initializer_, Init_list, Desig_array, not IConstant"
                           end
                       
                       | false ->
@@ -1811,9 +1820,14 @@ and wip_desugar_initializer_ dur current_ty = function
                        | (Just [Desig_member _], Init_expr _) -> true
                        | _                                    -> false
                      end) desigs_opt_inits then
-                    E.foldlM (fun (Just [Desig_member ident], Init_expr e) acc ->
-                      desugar_expression e >>= fun d_e ->
-                      E.return $ (ident, d_e) :: acc
+                    E.foldlM (fun desigs_opt_init acc ->
+                      match desigs_opt_init with
+                        | (Just [Desig_member ident], Init_expr e) ->
+                            desugar_expression e >>= fun d_e ->
+                            E.return $ (ident, d_e) :: acc
+                        | _ ->
+                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, not Desig_member vs Init_expr"
+                      end
                     ) desigs_opt_inits [] >>= fun xs ->
                     
                     E.return $
@@ -1826,9 +1840,14 @@ and wip_desugar_initializer_ dur current_ty = function
                             | (Nothing, Init_expr _) -> true
                             | _                      -> false
                           end) desigs_opt_inits then
-                    E.foldlM (fun ((ident, _), (Nothing, Init_expr e)) acc ->
-                      desugar_expression e >>= fun d_e ->
-                      E.return $ (ident, Just d_e) :: acc
+                    E.foldlM (fun desigs_opt_init acc ->
+                      match desigs_opt_init with
+                        | ((ident, _), (Nothing, Init_expr e)) ->
+                            desugar_expression e >>= fun d_e ->
+                            E.return $ (ident, Just d_e) :: acc
+                        | _ ->
+                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
+                      end
                     ) (List.zip ident_tys desigs_opt_inits) [] >>= fun xs_rev ->
                     
                     E.return $
@@ -2377,6 +2396,8 @@ let rec desugar_statement (CabsStatement loc stmt_) =
             
             | (Nothing, Nothing) ->
                 E.return (AilSwhile d_e2 d_s)
+            | _ ->
+              error "WIP: Cabs_to_ail.desugar_statement, CabsSfor"
           end
       
       | CabsSgoto ident ->

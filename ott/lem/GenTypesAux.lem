@@ -335,10 +335,17 @@ let min_interpret_optionIntegerSuffix = function
       min_interpret_integerSuffix suff
 end
 
+(*
 val min_interpret_integerConstant: integerConstant -> integerBaseType
-let min_interpret_integerConstant (IConstant _ _ suff) =
-  min_interpret_optionIntegerSuffix suff
-
+let min_interpret_integerConstant = function
+  | IConstant _ _ suff ->
+      min_interpret_optionIntegerSuffix suff
+  | IConstantMax ity ->
+      ity
+  | IConstantMin ity ->
+      ity
+end
+*)
 
 
 

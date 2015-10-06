@@ -49,13 +49,20 @@ let call_function file f_nm arg_cvals =
           | Just (IFun bty params pe) ->
               Exception.return (Fun bty params pe)
           | _ ->
-              Exception.fail (Illformed_program ("calling an unknown impl-function: " ^ Implementation_.string_of_implementation_constant f))
+              Exception.fail (Illformed_program ("calling an unknown impl-function: " ^
+                                                 Implementation_.string_of_implementation_constant f))
         end
-    end >>= fun (Fun _ params body_pe) ->
-  if List.length params <> List.length arg_cvals then
-    error "$ \"CALL #args <> #params, params= \" ^ Boot.pp_core_params params"
-  else
-    Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (PEval cval) acc) body_pe params arg_cvals
+  end >>= function
+    | Fun _ params body_pe ->
+        if List.length params <> List.length arg_cvals then
+          error "$ \"CALL #args <> #params, params= \" ^ Boot.pp_core_params params"
+        else
+          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (PEval cval) acc) body_pe params arg_cvals
+    | Proc _ _ _ ->
+        error "Core_run.call_function, called on a Proc"
+  end
+
+
 
 
 
@@ -201,6 +208,8 @@ let rec core_eval file inside_if = function
                   EU.return $ PEcall nm_basic [PEval (Vctype ty)]
               | Array elem_ty (Just n) ->
                   EU.return $ PEcall nm_array [PEval (Vctype elem_ty); PEval (Vinteger (Mem.integer_ival n))]
+              | Array _ Nothing ->
+                  error "WIP: Core_run.core_eval PEcase_ctype, Array Nothing"
               | Function return_ty qs_tys is_variadic ->
                   (* TODO: qualifiers *)
                   EU.return $ PEcall nm_fun [PEval (Vctype return_ty);
@@ -1118,6 +1127,8 @@ let rec hoist_negatives expr =
 *)
   match expr with
     | Epure _ ->
+        State.return expr
+    | Ememop _ _ ->
         State.return expr
     | Eraise _ ->
         State.return expr
@@ -2367,7 +2378,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     create_aid current_tid pref ival ty
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
-                        stack= add_to_sb_stack {(p, (current_tid, create_aid))} th_st.stack;
+                        stack= (* add_to_sb_stack {(p, (current_tid, create_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                     |>)
                     )
                   )
@@ -2398,7 +2409,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     alloc_aid current_tid pref ival1 ival2
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
-                        stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} th_st.stack;
+                        stack= (* add_to_sb_stack {(p, (current_tid, alloc_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                     |>)
                     )
                   )
@@ -2429,7 +2440,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     kill_aid current_tid ptr_val
                     <| th_st with
                       arena= Eskip;
-                      stack= add_to_sb_stack {(p, (current_tid, kill_aid))} th_st.stack;
+                      stack= (* add_to_sb_stack {(p, (current_tid, kill_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                     |>
                 )
               )
@@ -2456,7 +2467,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
                             arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
-                            stack= add_to_sb_stack {(p, (current_tid, store_aid))} th_st.stack;
+                            stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                           |>
                       )
                     )
@@ -2499,7 +2510,7 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
                         arena= Epure (PEval (valueFromMemValue mem_val));
-                        stack= add_to_sb_stack {(p, (current_tid, load_aid))} th_st.stack
+                        stack= (* add_to_sb_stack {(p, (current_tid, load_aid))} *) th_st.stack
                     |>)
                 )
               )
@@ -2594,7 +2605,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                           EU.return
                       ) >>= fun expr ->
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) expr in
+                      let a_expr = (* add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) *) (* TODO: bring back for concurrency !!! *) expr in
                       E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk |>
                     )
                 | Impl (StdFunction "printf") ->
@@ -2638,6 +2649,8 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                             |> st)
                           )
 *)
+                      | _ ->
+                          error "Core_run, printf giving arguments of wrong types"
                     end
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Boot.pp_core_expr th_st.arena)
@@ -2770,7 +2783,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                   | Just cont ->
                       SEU.return cont
                 end
-          end >>= fun (sym_tys, e_cont) ->
+          end >>= fun ((sym_tys, e_cont) as cont) ->
           (* TODO: debug *)
 (*          let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr e_cont) in *)
           
@@ -2786,9 +2799,11 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
               ) create_tys)
                  (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
-          
-          E.return <| th_st with arena= add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e;
-                                 stack= push_empty_continuation sk |>
+(*          let tmp = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in *) (* TODO: bring back for CONCURRENCY !!! *)
+          E.return <| th_st with arena= e;
+                                 stack= push_empty_continuation sk;
+                                 labels= Map.insert k cont th_st.labels
+                   |>
       )
 
 

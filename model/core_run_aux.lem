@@ -66,50 +66,62 @@ let has_sbBefore_on_thread tid annot =
 (* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
 
 val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
-let rec add_to_sb p_aids = function
-  | Epure pe ->
-      (* no change *)
-      Epure pe
-  | Ememop memop pes ->
-      Ememop memop pes
-  | Eskip ->
-      (* no change *)
-      Eskip
-  | Elet a pe1 e2 ->
-      Elet a pe1 (add_to_sb p_aids e2)
-  | Eif pe1 e2 e3 ->
-      Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
-  | Eproc annots nm pes ->
-      Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
-  | Eaction (Paction p' (Action loc annots a)) ->
-      Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
-  | Eunseq es ->
-      Eunseq (List.map (add_to_sb p_aids) es)
-  | Ewseq _as e1 e2 ->
-      let is_positive = function
-        | (Pos, _) -> true
-        | _        -> false
-      end in
-      Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
-  | Esseq _as e1 e2 ->
-      Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
-(*
-  | Easeq  of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
-  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-  | Ebound of natural * expr 'a (* this ctor doesn't exist at runtine *)
-*)
-  | Esave k a_tys e ->
-      Esave k a_tys (add_to_sb p_aids e)
-  | Erun annots k a_vs ->
-      Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-  | Eret pe ->
-      (* no change *)
-      Eret pe
-  | End es ->
-      End (List.map (add_to_sb p_aids) es)
-  | Epar es ->
-      Epar (List.map (add_to_sb p_aids) es)
-end
+let rec add_to_sb p_aids expr =
+  match expr with
+    | Epure _ ->
+        (* no change *)
+        expr
+    | Ememop _ _ ->
+        (* no change *)
+        expr
+    | Eraise _ ->
+        (* no change *)
+        expr
+    | Eregister _ _ ->
+        (* no change *)
+        expr
+    | Eskip ->
+        (* no change *)
+        expr
+    | Elet a pe1 e2 ->
+        Elet a pe1 (add_to_sb p_aids e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+    | Eproc annots nm pes ->
+        Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
+    | Eaction (Paction p' (Action loc annots a)) ->
+        Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+    | Eunseq es ->
+        Eunseq (List.map (add_to_sb p_aids) es)
+    | Ewseq _as e1 e2 ->
+        let is_positive = function
+          | (Pos, _) -> true
+          | _        -> false
+        end in
+        Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
+    | Easeq _ _ _ ->
+        error "Core_run_aux.add_to_sb, Easeq"
+    | Eindet _ ->
+        error "Core_run_aux.add_to_sb, Eindet"
+    | Ebound _ _ ->
+        error "Core_run_aux.add_to_sb, Ebound"
+    | Esave k a_tys e ->
+        Esave k a_tys (add_to_sb p_aids e)
+    | Erun annots k a_vs ->
+        Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+    | Eret _ ->
+        (* no change *)
+        expr
+    | End es ->
+        End (List.map (add_to_sb p_aids) es)
+    | Epar es ->
+        Epar (List.map (add_to_sb p_aids) es)
+    | Ewait _ ->
+        (* no change *)
+        expr
+  end
 
 
 

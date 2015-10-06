@@ -363,6 +363,12 @@ let rec annotate_constant cst =
     | ConstantNull ->
         (* TODO: check *)
         E.return (ConstantNull, GenRValueType (GenPointer no_qualifiers Void))
+    | ConstantStruct tag_sym xs ->
+        E.mapM (fun (memb_ident, e) ->
+          (* TODO: need to check that the members type match ... *)
+          annotate_constant e >>= fun a_e -> E.return (memb_ident, fst a_e)
+        ) xs >>= fun a_xs ->
+        E.return (ConstantStruct tag_sym a_xs, GenRValueType (GenTypes.GenStruct tag_sym))
   end
 
 
@@ -803,6 +809,8 @@ TODO
               | _ ->
                   E.fail Loc.unknown (TError "TODO: AilEmemberof Union, failed to kind a valid tag definition")
             end
+        | _ ->
+            error "WIP: error, GenTyping.annotate_expression', AilEmemberof"
       end
   
   | AilEmemberofptr e ident ->
@@ -835,6 +843,8 @@ TODO
               | _ ->
                   E.fail Loc.unknown (TError "TODO: AilEmemberofptr Union, failed to kind a valid tag definition")
             end
+        | _ ->
+            error "WIP: error, GenTyping.annotate_expression', AilEmemberofptr"
       end
 
   | AilEassign e1 e2 ->

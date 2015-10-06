@@ -90,6 +90,8 @@ let type_of_constant impl = function
         fail Loc.unknown (TError_integerConstant_too_large n)
   | IConstantMax ity ->
       return ity
+  | IConstantMin ity ->
+      return ity
 end
 
 (*

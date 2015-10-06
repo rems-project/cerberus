@@ -6,12 +6,12 @@ import Cmm_op Cmm_csem
 
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
-import Map_extra (* DEBUG *)
 
-import Mem Mem_aux
+module Mem = struct
+  include import Mem Mem_aux
+end
 
 import Driver_effect
-(* module E = Driver_effect *)
 
 module Cmm = Cmm_csem
 
@@ -99,6 +99,8 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         pexpr
     | Core.PEimpl _ ->
         pexpr
+    | Core.PEctor ctor (pes) ->
+        Core.PEctor ctor (List.map fpe pes)
     | Core.PEcons pe1 pe2 ->
         Core.PEcons (fpe pe1) (fpe pe2)
     | Core.PEcase_list pe1 pe2 nm ->
@@ -264,11 +266,11 @@ let rec stepConcurrency n dr_st =
 (*          ND.log ("Performed action " ^ aid_to_string performed_act ^ "\n")           >> (* DEBUG *) *)
           ND.print_debug 4 ("ReadsFrom with aid: " ^ aid_to_string performed_act ^ "\n") >> (* DEBUG *)
           (* TODO: w is the new concrete value, mval is the symbolic value from the read *)
-          match Mem_aux.symbolicFromMemValue mval with
+          match Mem.symbolicFromMemValue mval with
             | Nothing ->
                 error ("stepConcurency fail: " ^ stringFromMemValue mval)
             | Just mval_symb ->
-                let (_, ival) = fromJust $ Mem_aux.integerValueFromMemValue w in
+                let (_, ival) = fromJust $ Mem.integerValueFromMemValue w in
                 Mem.case_integer_value ival
                   (fun n ->
                     ND.add_constraint (Constraints.assert_eq (Symbolic.SYMBconst n) mval_symb) >>
@@ -412,18 +414,22 @@ let rec drive_core_thread tid dr_st =
     | Step2_memop_request _ _ _ _ ->
         ND.return dr_st
     | Step2_tau debug_str step_m ->
+        let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
         (* DEBUG *) ND.print_debug 6 ("tau: " ^ debug_str) >>
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
+        let () = Boot.end_timing () in (* DEBUG, PROFILING *)
         drive_core_thread tid <| dr_st' with
           core_state= update_thread_state tid th_st' dr_st'.core_state;
           dr_step_counter= dr_st'.dr_step_counter + 1
         |>
     | Step2_eval debug_str step_m ->
+        let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
         (* DEBUG *) ND.print_debug 6 ("eval: " ^ debug_str) >>
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
+        let () = Boot.end_timing () in (* DEBUG, PROFILING *)
         drive_core_thread tid <| dr_st' with
           core_state= update_thread_state tid th_st' dr_st'.core_state;
           dr_step_counter= dr_st'.dr_step_counter + 1
@@ -639,7 +645,7 @@ end
 val action_request_sequential: driver_state -> action_request2 -> ND.t driver_state
 let action_request_sequential dr_st = function
   | AllocRequest2 loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
-      let _ = Boot.print_debug_located 2 loc "REQUEST ALLOC" in
+      let _ = Boot.print_debug_located 3 loc "REQUEST ALLOC" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -652,7 +658,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
   | CreateRequest2 loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
-      let _ = Boot.print_debug_located 2 loc "REQUEST CREATE" in
+      let _ = Boot.print_debug_located 3 loc "REQUEST CREATE" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -665,7 +671,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
   
   | LoadRequest2 loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
-      let _ = Boot.print_debug_located 2 loc "REQUEST LOAD" in
+      let _ = Boot.print_debug_located 3 loc "REQUEST LOAD" in
       ND.msum $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -678,7 +684,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.load lvalue_ty ptr_val) dr_st.layout_state)
   
   | StoreRequest2 loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
-      let _ = Boot.print_debug_located 2 loc "REQUEST STORE" in
+      let _ = Boot.print_debug_located 3 loc "REQUEST STORE" in
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       ND.msum $ map (function
@@ -693,7 +699,7 @@ let action_request_sequential dr_st = function
             |>
       end) (Mem.runMem (Mem.store lvalue_ty ptr_val mem_val) dr_st.layout_state)
   | KillRequest2 loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let _ = Boot.print_debug_located 2 loc "REQUEST KILL" in
+      let _ = Boot.print_debug_located 3 loc "REQUEST KILL" in
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
         (* TODO: the kill ... *)
@@ -784,6 +790,8 @@ let rec driver with_concurrency dr_st =
 (*
   | Step2_spawn_threads of list thread_state (* initial states for the children *)
 *)
+  | _ ->
+      error "Driver.driver, wrong Step2_"
   end in
 (*
   let process_core_step dr_st = function
@@ -929,9 +937,12 @@ let finalize_constraints core_file (Constraints.Constraints symbs) =
                                 Mem_aux.symbolicFromIntegerValue ival
                           end in
 *)
-        let Core.Vsymbolic symb1' = hack core_file (Core.PEval (Core.Vsymbolic symb1)) in
-        let Core.Vsymbolic symb2' = hack core_file (Core.PEval (Core.Vsymbolic symb2)) in
-        Symbolic.SYMBop op symb1' symb2'
+        match (hack core_file (Core.PEval (Core.Vsymbolic symb1)), hack core_file (Core.PEval (Core.Vsymbolic symb2))) with
+          | (Core.Vsymbolic symb1', Core.Vsymbolic symb2') ->
+              Symbolic.SYMBop op symb1' symb2'
+          | _ ->
+              error "Driver.finalize_constraints"
+        end
     | symb ->
         symb
   end) symbs
@@ -958,7 +969,7 @@ let finalize debug_str dr_st =
         (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, v),
          (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
     | xs ->
-        let () = Boot.print_debug 1 ("ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state) in
+        let () = Boot.print_debug 3 ("ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state) in
         error ("BOOM finalize [" ^ debug_str ^ "]")
   end
 
@@ -1114,17 +1125,17 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                   let mem_vals =
                     List.map (fun c ->
                       (* TODO: fixing impl choice here (ASCII) *)
-                      Mem_aux.integer_mval AilTypes.Char $ Decode.decode_character_constant (String.toString [c])
+                      Mem.integer_mval AilTypes.Char $ Decode.decode_character_constant (String.toString [c])
                     ) (String.toCharList arg_str) in
                   (* NOTE: adding a null termination to the char array *)
                   (
-                    Mem.array_mval $ mem_vals ++ [Mem_aux.integer_mval AilTypes.Char 0],
+                    Mem.array_mval $ mem_vals ++ [Mem.integer_mval AilTypes.Char 0],
                     Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
                   )
                 ) arg_strs in
               
               (* memory value to be stored in the memory object pointed to by main.argc *)
-              let argc_mem_val = Mem_aux.integer_mval (AilTypes.Signed AilTypes.Int_) (integerFromNat $ List.length args_mem_val_tys) in
+              let argc_mem_val = Mem.integer_mval (AilTypes.Signed AilTypes.Int_) (integerFromNat $ List.length args_mem_val_tys) in
               
               (* allocating and initialising an object for main.argc *)
               liftMem (

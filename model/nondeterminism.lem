@@ -173,10 +173,10 @@ let bindRandom (ND m) f =
     let (actives, killed) = split_nd_states m in
     let killed =
       (* this changes the type variable ... *)
-      List.map (fun (id, Killed a b c) -> (id, Killed a b c)) killed in
+      List.map (function (id, Killed a b c) -> (id, Killed a b c) | _ -> error "bindRandom 1" end) killed in
     match actives with
       | [] -> let _ = Boot.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
-                                 show (List.map (fun (_, Killed r _ _) -> r) killed)) in 
+                                 show (List.map (function (_, Killed r _ _) -> r | _ -> error "ND.bindRandom 2" end) killed)) in 
               killed
 
 
@@ -201,6 +201,8 @@ let bindRandom (ND m) f =
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
                 end)) $ (let ND z = f vA in z)
+           | _ ->
+               error "ND.bindRandom 3"
          end ++ killed
     end
 
@@ -420,4 +422,10 @@ let collapse (ND xs) =
     end
   ) ([], []) xs in
   
-  ND (Global.nubBy (fun (_, Active _ _ x) (_, Active _ _ y) -> x = y) actives ++ killed)
+  ND (Global.nubBy (fun _x _y ->
+    match (_x, _y) with
+      | ((_, Active _ _ x), (_, Active _ _ y)) ->
+          x = y
+      | _ ->
+          error "ND.collapse"
+    end) actives ++ killed)
