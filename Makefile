@@ -173,7 +173,6 @@ lem_model: copy_cmm copy_cmm_exec copy_ail copy_cerberus
 #	@echo "[CORRECTING LINE ANNOTATION]" # $(patsubst _lem/%.lem, $(BUILD_DIR)/%.ml, $(wildcard _lem/*.lem))
 #	@./hack.sh $(BUILD_DIR)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
-	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/naive_memory.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 #	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/executableOpsem.ml
 	rm -f $(BUILD_DIR)/*.lem
