@@ -31,17 +31,23 @@ int pop()
     if (t == NULL)
       return -1;
     x = t->next;
-  } while (0 /* TODO */);
+  } while ( (T = x, 0) /* TODO */);
   return t->data;
 }
 
 
 int main(void)
 {
+  int ret = 0;
   init();
-  push(10);
+  push(1);
   push(20);
   pop();
-  push(30);
-  return pop();
+  push(300);
+  while (1) {
+    int i = pop();
+    if (i == -1)
+      return ret;
+    ret += i;
+  }
 }

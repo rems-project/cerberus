@@ -2766,7 +2766,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
             | Nothing ->
                 match find_labeled_continuation k (apply_continuation cont th_st.arena) with
                   | Nothing ->
-                      SEU.fail (Illformed_program "unknown ksym when running an Erun")
+                      SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show k))
                   | Just cont ->
                       SEU.return cont
                 end
@@ -2820,7 +2820,10 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                       E.return <| th_st with
                         arena= apply_continuation cont (Epure (PEval cval));
                         stack= push_empty_continuation sk';
+(*
+(* TODO: need stacked scopes ... *)
                         labels= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
+*)
                       |>
                     )
               end

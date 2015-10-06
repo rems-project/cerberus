@@ -4,7 +4,7 @@ import Product Symbolic Exception Mem Mem_aux
 
 open import Thread Core_run_aux
 
-
+import Boot
 
 val     valueFromMemValue: Mem.mem_value -> value
 let rec valueFromMemValue mem_val =
@@ -863,7 +863,9 @@ end
 
 
 
-let rec find_labeled_continuation ksym = function
+let rec find_labeled_continuation ksym expr =
+let () = Boot.print_debug 3 ("Core_aux.find_labeled_continuation: " ^ show ksym ^ " ==> " ^ Boot.pp_core_expr expr) in
+match expr with
   | Epure _ ->
       Nothing
   | Ememop _ _ ->
