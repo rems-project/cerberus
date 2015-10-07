@@ -129,6 +129,7 @@ type expression' 'A [name = "e*"] =
   (* NOTE: type annotation on expression, used to remember the type of desugared
            enumeration constants *)
   | AilEannot of ctype * (expression 'A)
+  | AilEva_arg of expression 'A * ctype
 
 and generic_association 'A =
   | AilGAtype of ctype * expression 'A

@@ -53,6 +53,8 @@ let empty_specs = {
 (* NON-STD cppmem syntax *)
 (* LBRACES PIPES RBRACES *)
 
+%token VA_ARG
+
 %token EOF
 
 
@@ -294,6 +296,8 @@ postfix_expression:
 (* TODO: non-std way of dealing with these *)
 | ASSERT LPAREN expr= assignment_expression RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEassert expr) }
+| VA_ARG LPAREN expr= assignment_expression COMMA ty= type_name RPAREN
+    { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEva_arg(expr, ty)) }
 | OFFSETOF LPAREN ty= type_name COMMA str= OTHER_NAME RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEoffsetof (ty, CabsIdentifier (Loc_point $startpos(str), str))) }
 
@@ -487,7 +491,6 @@ expression:
     { expr }
 | expr1= expression COMMA expr2= assignment_expression
     { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEcomma (expr1, expr2)) }
-
 
 (* §6.6 Constant expressions *)
 constant_expression:

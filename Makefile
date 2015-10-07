@@ -1,3 +1,9 @@
+# We need ocamlfind
+ifeq (, $(shell which ocamlfind))
+$(warning "ocamlfind is required to build the executable part of Cerberus")
+endif
+
+
 BOLD="\033[1m"
 RED="\033[31m"
 YELLOW="\033[33m"
@@ -119,6 +125,12 @@ copy_cerberus: $(addprefix model/, $(CERBERUS_LEM)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING cerberus .lem files$(RESET)
 	@cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
 
+#dependencies:
+#	@if [ "2" == "$(shell ocamlfind query pprint > /dev/null 2>&1; echo $$?)" ]; then \
+#	  $(error "Please install pprint"); \
+#	fi
+#	mkdir dependencies
+#	cd dependencies; make -f ../Makefile.dependencies
 
 
 lem: copy_cmm copy_cmm_exec copy_cerberus

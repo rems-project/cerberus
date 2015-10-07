@@ -112,6 +112,7 @@ type token =
   | RBRACES
   
   |IDENTIFIER of string
+  | VA_ARG
   
   | EOF
 
@@ -230,4 +231,5 @@ let string_of_token = function
   | PIPES -> "PIPES"
   | RBRACES -> "RBRACES"
   | IDENTIFIER str -> "IDENTIFIER(" ^ str ^ ")"
+  | VA_ARG -> "__cerbvar_va_arg"
   | EOF -> "EOF"

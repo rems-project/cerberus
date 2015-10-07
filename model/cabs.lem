@@ -120,6 +120,7 @@ type cabs_expression_ =
   (* NOTE: the following are suppose to be in the library, but need special treatment *)
   | CabsEassert of cabs_expression
   | CabsEoffsetof of type_name * cabs_identifier
+  | CabsEva_arg of cabs_expression * type_name
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
 
