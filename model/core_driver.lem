@@ -1,0 +1,75 @@
+
+type address = Symbolic.symbolic   (* the type of symbolic integers *)
+
+
+(* Ids for dynamically allocated regions *)
+type statically_allocated_object_id = Symbolic.symbol   (* a type of unique-over-time ids *)
+
+type dynamically_allocated_space_id = Symbolic.symbol
+
+
+(* we have:
+
+- statically allocated objects, including globals, block-scoped
+  variables, function parameters, un-named objects (from compound
+  literals and string constants).  All these have a static type from
+  the program source.
+
+- dynamically allocated space, coming from malloc etc., which may or
+  may not yet have been written into.
+
+BTW, The standard's usage of "object" is confusing (or confused?) here:
+it's unclear whether a malloc'd space is an "object" before you've
+written into it, for example.  So we avoid the word.  We don't treat
+malloc'd space as a char array, either.
+
+This metadata is immutable, and we keep extend-only maps from the ids
+(here in the driver).
+
+*)
+
+
+(* for "statically allocated" objects, we have: *)
+
+type statically_allocated_object_metadata = <|
+  obj_original_type: Core.ctype;
+  obj_address:       address;
+  (* the size is determined by the ctype *)
+  
+  (* and maybe a size for VLAs and flexible array member
+    (for f.a.m., you're not supposed to have any statically allocated f.a.m.'s; for VLAs we're not sure) 
+  *)
+|>
+
+(* for dynamically allocated space *)
+
+type dynamically_allocated_space_metadata = <|
+  space_address:  address;
+  space_size: Symbolic.symbolic;
+|>
+
+(* for calloc, you create a write (of a char array literal of zeros)
+just after creation time *)
+
+(* writes into dynamically allocated space do *not* create new
+"objects" inside that space; they just exist in the set of writes
+maintained by the concurrency model *)
+
+
+type driver_state = <|
+  sao_counter : UniqueId.counter;
+  das_counter : UniqueId.counter;
+  sao_map : bmap sao_id sao_metadata;
+  das_map : map das_id das_metadata;
+|>
+
+
+val initial_driver_state: driver_state
+let initial_driver_state = <|
+  sao_counter= UniqueId.init;
+  das_counter=  UniqueId.init;
+  sao_map=           Map.empty;
+  das_map=           Map.empty;
+|>
+
+

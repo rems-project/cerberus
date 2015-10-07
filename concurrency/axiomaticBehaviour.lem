@@ -1,0 +1,238 @@
+(* *)
+
+open import Pervasives Show Cmm_master
+import Set_extra
+
+(* Non-deterministic monad *)
+module ND = struct
+
+  type t 'a = list 'a
+
+  val pick: forall 'a. list 'a -> t 'a
+  let pick l = l
+
+  val return: forall 'a. 'a -> t 'a
+  let return x = [x]
+
+  val block: forall 'a. t 'a
+  let block = []
+
+  val guard: bool -> t unit
+  let guard b = if b then return () else block
+  
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind m f = List.concat (List.map f m)
+
+  val bind2: forall 'a 'b. t 'a -> t 'b -> t 'b
+  let bind2 m1 m2 = if List.null m1 then block else m2
+
+  val sum: forall 'a. t 'a -> t 'a -> t 'a
+  let sum m1 m2 = m1 ++ m2
+
+  val bigSum: forall 'a. list (t 'a) -> t 'a
+  let bigSum l = List.foldr sum block l
+
+  val product: forall 'a 'b 'c. ('a -> 'b -> 'c) -> t 'a -> t 'b -> t 'c 
+  let product f m1 m2 =
+    bind m1 (fun e1 -> bind m2 (fun e2 -> return (f e1 e2)))
+
+  val bigProduct: forall 'a 'b. ('a -> 'b -> 'b) -> 'b -> list (t 'a) -> t 'b
+  let bigProduct f e l = List.foldr (product f) (return e) l
+
+  val destruct: forall 'a. t 'a -> list 'a
+  let destruct l = l
+
+end
+
+let inline (>>=) = ND.bind
+let inline (>>)  = ND.bind2
+
+
+
+val chooseSubList: forall 'a. list 'a -> ND.t (list 'a)
+let rec chooseSubList l =
+  match l with
+  | []   -> ND.return []
+  | h::t -> let subListsOfT = chooseSubList t in
+            ND.sum subListsOfT (subListsOfT >>= fun s -> ND.return (h::s))
+  end
+
+assert chooseSubList_0: chooseSubList ( [] :list nat) = [[]]
+assert chooseSubList_1: chooseSubList ( [0] :list nat) = [[];[0]]
+assert chooseSubList_2: chooseSubList ( [0;1] :list nat) = [[];[1];[0];[0;1]]
+
+val splitList: forall 'a. list 'a -> ND.t (list 'a * list 'a)
+let rec splitList l = 
+  match l with 
+  | []   -> ND.return ([], [])
+  | h::t -> ND.sum (ND.return ([], l))
+                   (splitList t >>= fun (t1, t2) ->
+                    ND.return (h::t1, t2))
+  end
+
+assert splitList_0: splitList ( [] :list nat) = [([],[])]
+assert splitList_1: splitList ( [0] :list nat) = [([],[0]); ([0],[])]
+assert splitList_2: splitList ( [0;1] :list nat) = [([],[0;1]); ([0],[1]); ([0;1],[])]
+
+val permuteList: forall 'a. list 'a -> ND.t (list 'a)
+let rec permuteList l =
+  match l with
+  | []   -> ND.return []
+  | [h]  -> ND.return [h]
+  | h::t -> permuteList t >>= fun t2 ->
+            splitList t2  >>= fun (left, right) ->
+            ND.return (left ++ (h::right))
+  end
+
+assert permuteList_0: permuteList ( [] :list nat) = [[]]
+assert permuteList_1: permuteList ( [0] :list nat) = [[0]]
+assert permuteList_2: permuteList ( [0;1] :list nat) = [[0;1]; [1;0]]
+assert permuteList_3: permuteList ( [0;1;2] :list nat) = [[0;1;2]; [1;0;2]; [1;2;0];
+                                                          [0;2;1]; [2;0;1]; [2;1;0]]
+val totalRelFromList: forall 'a. SetType 'a => list 'a -> set ('a * 'a)
+let rec totalRelFromList l = 
+  match l with 
+  | []   -> {}
+  | h::t -> {(h,x) | forall (x IN Set.fromList t) | true} union
+                     (totalRelFromList t)
+  end
+
+assert totalRelFromList_0: totalRelFromList ( [] :list nat) = {}
+assert totalRelFromList_1: totalRelFromList ( [0] :list nat) = {}
+assert totalRelFromList_2: totalRelFromList ( [0;1] :list nat) = {(0,1)}
+assert totalRelFromList_3: totalRelFromList ( [0;1;2] :list nat) = {(0,1);(0,2);(1,2)}
+
+val totalRelOverList: forall 'a. SetType 'a => list 'a -> ND.t (set ('a * 'a))
+let totalRelOverList l = 
+  permuteList l >>= fun perm -> ND.return (totalRelFromList perm)
+
+assert totalRelOverList_0: totalRelOverList ( [] :list nat) = [{}]
+assert totalRelOverList_1: totalRelOverList ( [0] :list nat) = [{}]
+assert totalRelOverList_2: totalRelOverList ( [0;1] :list nat) = [{(0,1)}; {(1,0)}]
+
+val partitionList: forall 'a 'b. Eq 'b => ('a -> 'b) -> list 'a -> list (list 'a)
+let partitionList f l =
+  let keys = List.map f l in
+  let distinctKeys = List.foldr (fun k t -> if List.elem k t then t else k::t) [] keys in
+  [[x | forall (x MEM l) | f x = key] | forall (key MEM distinctKeys) | true]
+
+assert partitionList_0: partitionList (fun x -> x < 2) ( [] :list nat)  = []
+assert partitionList_1: partitionList (fun x -> x < 2) ( [0] :list nat) = [[0]]
+assert partitionList_2: partitionList (fun x -> x < 2) ( [0;1;2;3;4] :list nat) =
+                        [[0;1]; [2;3;4]]
+assert partitionList_3: partitionList (fun x -> x) ( [0;1;2;3;4] :list nat) =
+                        [[0]; [1]; [2]; [3]; [4]]
+
+(* This function returns a relation that is total per partition, and
+   contains no edges between partitions. *)
+val relOverPartition: forall 'a. SetType 'a => list (list 'a) -> ND.t (set ('a * 'a))
+let relOverPartition p =
+  ND.bigProduct (union) {} [totalRelOverList l | forall (l MEM p) | true]
+
+assert relOverPartition_0: relOverPartition ( [] : list (list nat)) = [{}]
+assert relOverPartition_1: relOverPartition ( [[]] : list (list nat)) = [{}]
+assert relOverPartition_2: relOverPartition ( [[0]] : list (list nat)) = [{}]
+assert relOverPartition_3: relOverPartition ( [[0];[1]] : list (list nat)) = [{}]
+assert relOverPartition_4: relOverPartition ( [[0;1]] : list (list nat)) = [{(0,1)}; {(1,0)}]
+assert relOverPartition_5: relOverPartition ( [[0;1]; [2;3]] : list (list nat)) = 
+                           [{(0,1); (2,3)}; {(0,1); (3,2)}; {(1,0); (2,3)}; {(1,0); (3,2)}]
+
+
+
+
+(* Generating witnesses *)
+
+val generateMo: list action -> ND.t (set (action * action))
+let generateMo l =
+  let all_writes = List.filter is_write l in 
+  relOverPartition (partitionList loc_of all_writes)
+
+val generateLo: list action -> ND.t (set (action * action))
+let generateLo l =
+  let all_locks = List.filter (fun x -> is_lock x || is_unlock x) l in 
+  relOverPartition (partitionList loc_of all_locks)
+
+val generateSc: list action -> ND.t (set (action * action))
+let generateSc l =
+  totalRelOverList (List.filter is_seq_cst l)
+
+val generateRfPerRead: action -> list action -> ND.t (set (action * footprint * action))
+let generateRfPerRead r l = 
+  let all_writes = List.filter is_write l in
+  chooseSubList all_writes >>= fun writes ->
+  permuteList writes       >>= fun perm -> 
+  let (rf, _) = 
+    List.foldr (fun w (rel, f) (* f is the footprint already written *) -> 
+                let remaining_footprint = footprint_difference (footprint_of w) f in
+                let new_rf_edge = (w, remaining_footprint, r) in
+                let new_rel = Set.insert new_rf_edge rel in
+                let new_f = footprint_bigunion {(footprint_of w); f} in
+                (new_rel, new_f)) ({}, footprint_empty) perm in
+  ND.return rf
+  
+val generateRf: list action -> ND.t (set (action * footprint * action))
+let generateRf l =
+  let reads = List.filter is_read l in
+  ND.bigProduct (union) {} [generateRfPerRead r l | forall (r MEM reads) | true]
+
+val generateWitness: list action -> ND.t execution_witness_fp
+let generateWitness l =
+  generateRf l >>= fun rf ->
+  generateMo l >>= fun mo ->
+  generateSc l >>= fun sc ->
+  generateLo l >>= fun lo ->
+  ND.return <| rf_fp = rf; mo_fp = mo; sc_fp = sc; lo_fp = lo; tot_fp = {}; |>
+
+
+
+(* Checking consistency *)
+
+type axiomBehaviour =
+  | Consistent
+  | Inconsistent of list string
+
+val combineBehaviour: axiomBehaviour -> axiomBehaviour -> axiomBehaviour
+let combineBehaviour b1 b2 =
+  match (b1, b2) with
+  | (Consistent, b)                    -> b
+  | (b, Consistent)                    -> b
+  | (Inconsistent s1, Inconsistent s2) -> Inconsistent (s1 ++ s2)
+  end
+
+val combineBehaviourList: list axiomBehaviour -> axiomBehaviour
+let rec combineBehaviourList l =
+  match l with
+  | []   -> Consistent
+  | h::t -> combineBehaviour h (combineBehaviourList t)
+  end
+
+val check_predicates_aux: string -> named_predicate_tree_fp -> 
+                          candidate_execution_fp -> candidate_execution -> axiomBehaviour
+let rec check_predicates_aux name pred_tree ex_fp ex =
+  match pred_tree with
+    | Leaf_fp p     -> if p ex_fp then Consistent else Inconsistent [name]
+    | Leaf_non_fp p -> if p ex then Consistent else Inconsistent [name]
+    | Node_fp l     -> combineBehaviourList 
+                         (List.map (fun (name2, branch) -> 
+                                    check_predicates_aux name2 branch ex_fp ex) 
+                                   l)
+  end
+
+val check_predicates: named_predicate_tree_fp -> candidate_execution_fp -> axiomBehaviour
+let check_predicates tree ex_fp =
+  check_predicates_aux "root" tree ex_fp (project_candidate_execution_fp ex_fp)
+
+val memory_model: memory_model_fp
+let memory_model = overlap_memory_model
+
+(* We don't want to expose the monad outside this file *)
+val consistent_executions: pre_execution -> list (candidate_execution_fp * axiomBehaviour)
+let consistent_executions pre =
+  ND.destruct
+  (let order = Set_extra.toList pre.actions in
+   generateWitness order >>= fun wit ->
+   let rel = memory_model.relation_calculation_fp pre wit in
+   let ex = (pre, wit, rel) in
+   let behaviour = check_predicates memory_model.consistent_fp ex in
+   ND.return (ex, behaviour))
+  

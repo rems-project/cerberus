@@ -1,0 +1,414 @@
+open import Pervasives Global String_extra
+import Symbol Implementation_ Core_ctype
+
+
+type constraints =
+  | Constraints_TODO
+
+
+
+
+(* Everything beyond this point should be redone *)
+
+
+
+
+
+type operator =
+  | Add
+  | Sub
+  | Mul
+  | Div
+  | Mod
+  | Exp
+  | Eq
+  | Neq
+  | Lt
+  | Ge
+  | And
+  | Or
+
+instance (SetType operator)
+  let setElemCompare = defaultCompare
+end
+
+instance (Eq operator)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show operator)
+  let show op = 
+    match op with
+    | Add -> "Add"
+    | Sub -> "Sub"
+    | Mul -> "Mul"
+    | Div -> "Div"
+    | Mod -> "Mod"
+    | Exp -> "Exp"
+    | Eq  -> "Eq"
+    | Neq -> "Neq"
+    | Lt  -> "Lt"
+    | Ge  -> "Ge"
+    | And -> "And"
+    | Or  -> "Or"
+    end
+end
+
+type symbolic_type =
+  | SYMBint
+  | SYMBbool
+
+instance (SetType symbolic_type)
+  let setElemCompare = defaultCompare
+end
+
+type symbolic_name =
+  | SYMBfsym of Symbol.t
+  | SYMBimpl of Implementation_.implementation_constant
+
+let symbolic_nameEquality n1 n2 =
+  match (n1, n2) with
+  | (SYMBfsym s1, SYMBfsym s2)   -> s1 = s2
+  | (SYMBfsym _, _)         -> false
+  | (SYMBimpl i1, SYMBimpl i2) -> i1 = i2
+  | (SYMBimpl _, _)        -> false
+  end
+
+instance (Eq symbolic_name)
+  let (=)  = symbolic_nameEquality
+  let (<>) = fun n1 n2 -> not (symbolic_nameEquality n1 n2)
+end
+
+let setElemCompare_symbolic_name n1 n2 =
+  let ord = function
+    | SYMBfsym _ ->
+        (0: nat)
+    | SYMBimpl _ ->
+        1
+  end in
+  match (n1, n2) with
+    | (SYMBfsym sym1, SYMBfsym sym2) ->
+        setElemCompare sym1 sym2
+    | (SYMBimpl impl1, SYMBimpl impl2) ->
+        setElemCompare impl1 impl2
+    | _ ->
+        setElemCompare (ord n1) (ord n2)
+  end
+
+instance (SetType symbolic_name)
+  let setElemCompare = setElemCompare_symbolic_name
+end
+
+type symbolic =
+  | SYMBtrue
+  | SYMBfalse
+  | SYMBconst of integer
+  | SYMBctype of Core_ctype.ctype
+  | SYMBsym   of symbolic_type * Symbol.t
+  | SYMBop    of operator * symbolic * symbolic
+  | SYMBite   of symbolic * symbolic * symbolic
+  | SYMBcall  of symbolic_name * list symbolic
+
+
+
+
+instance (Eq symbolic_type)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+let rec symbolicEqual symb1 symb2 =
+  let ord = function
+    | SYMBtrue ->
+        (0 : nat)
+    | SYMBfalse ->
+        1
+    | SYMBconst _ ->
+        2
+    | SYMBctype _ ->
+        3
+    | SYMBsym _ _ ->
+        4
+    | SYMBop _ _ _ ->
+        5
+    | SYMBite _ _ _ ->
+        6
+    | SYMBcall _ _ ->
+        7
+  end in
+  match (symb1, symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        n1 = n2
+    | (SYMBctype ty1, SYMBctype ty2) ->
+        ty1 = ty2
+    | (SYMBsym symbty1 sym1, SYMBsym symbty2 sym2) ->
+        symbty1 = symbty2 && sym1 = sym2
+    | (SYMBop op1 symb11 symb12, SYMBop op2 symb21 symb22) ->
+        op1 = op2 && symbolicEqual symb11 symb21 && symbolicEqual symb12 symb22
+    | (SYMBite symb11 symb12 symb13, SYMBite symb21 symb22 symb23) ->
+        symbolicEqual symb11 symb21 && symbolicEqual symb12 symb22 && symbolicEqual symb13 symb23
+    | (SYMBcall sym1 symbs1, SYMBcall sym2 symbs2) ->
+        sym1 = sym2 && List.all (uncurry symbolicEqual) (zip symbs1 symbs2)
+    | _ ->
+        ord symb1 = ord symb2
+  end
+
+instance (Eq symbolic)
+  let (=)  = symbolicEqual
+  let (<>) = fun symb1 symb2 -> not (symbolicEqual symb1 symb2)
+end
+
+
+let rec setElemCompare_symbolic symb1 symb2 =
+  let ord = function
+    | SYMBtrue ->
+        (0 : nat)
+    | SYMBfalse ->
+        1
+    | SYMBconst _ ->
+        2
+    | SYMBctype _ ->
+        3
+    | SYMBsym _ _ ->
+        4
+    | SYMBop _ _ _ ->
+        5
+    | SYMBite _ _ _ ->
+        6
+    | SYMBcall _ _ ->
+        7
+  end in
+  match (symb1, symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        setElemCompare n1 n2
+    | (SYMBctype ty1, SYMBctype ty2) ->
+        setElemCompare ty1 ty2
+    | (SYMBsym symbty1 sym1, SYMBsym symbty2 sym2) ->
+        setElemCompare (symbty1, sym1) (symbty2, sym2)
+    | (SYMBop op1 symb11 symb12, SYMBop op2 symb21 symb22) ->
+        tripleCompare setElemCompare setElemCompare_symbolic setElemCompare_symbolic
+          (op1, symb11, symb12) (op2, symb21, symb22)
+    | (SYMBite symb11 symb12 symb13, SYMBite symb21 symb22 symb23) ->
+        tripleCompare setElemCompare_symbolic setElemCompare_symbolic setElemCompare_symbolic
+          (symb11, symb12, symb13) (symb21, symb22, symb23)
+    | (SYMBcall sym1 symbs1, SYMBcall sym2 symbs2) ->
+        pairCompare setElemCompare (lexicographicCompareBy setElemCompare_symbolic) (sym1, symbs1) (sym2, symbs2)
+    | _ ->
+        setElemCompare (ord symb1) (ord symb2)
+  end
+
+instance (SetType symbolic)
+  let setElemCompare = setElemCompare_symbolic
+end
+
+val symbolic_to_string: symbolic -> string
+let rec symbolic_to_string sym =
+  match sym with
+  | SYMBtrue -> "SYMBtrue"
+  | SYMBfalse -> "SYMBfalse"
+  | SYMBconst i -> "Constant (" ^ show i ^ ")" 
+  | SYMBctype ty -> "Ctype"
+  | SYMBsym ty t -> "Symbol (TODO, " ^ show t ^ ")"
+  | SYMBop op sym1 sym2 -> 
+      "Op (" ^ show op ^ " " ^ symbolic_to_string sym1 ^ " " ^ symbolic_to_string sym2 ^ ")"
+  | SYMBite _ _ _ ->
+      "SYMBite"
+  | SYMBcall _ _ ->
+      "SYMBcall"
+  end
+
+instance (Show symbolic)
+  let show = symbolic_to_string
+end
+
+
+(*
+val     typeof: symbolic -> maybe symbolic_type
+let rec typeof symb =
+  match symb with
+    | SYMBtrue ->
+        Just SYMBbool
+    | SYMBfalse ->
+        Just SYMBbool
+    | SYMBconst _ ->
+        Just SYMBint
+    | SYMBsym ty _ ->
+        Just ty
+    | SYMBop op symb1 symb2 ->
+        match (op, typeof symb1, typeof symb2) with
+          | (Add, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Sub, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Mul, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Div, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Mod, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Exp, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | (Eq, Just SYMBint, Just SYMBint) ->
+              Just SYMBbool
+          | (Lt, Just SYMBint, Just SYMBint) ->
+              Just SYMBbool
+          | _ ->
+              Nothing
+        end
+    | SYMBite symb1 symb2 symb3 ->
+        match (typeof symb1, typeof symb2, typeof symb3) with
+          | (Just SYMBbool, Just SYMBbool, Just SYMBbool) ->
+              Just SYMBbool
+          | (Just SYMBbool, Just SYMBint, Just SYMBint) ->
+              Just SYMBint
+          | _ ->
+              Nothing
+        end
+  end
+*)
+
+val     reduce: symbolic -> symbolic
+let rec reduce symb =
+  match symb with
+    | SYMBconst _ ->
+        symb
+    | SYMBctype _ ->
+        symb
+    | SYMBsym _ _ ->
+        symb
+    |  SYMBop op symb1 symb2 ->
+        match (op, reduce symb1, reduce symb2) with
+          | (Add, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 + n2)
+          | (Sub, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 - n2)
+          | (Mul, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 * n2)
+          | (Div, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 / n2)
+          | (Mod, SYMBconst n1, SYMBconst n2) ->
+              SYMBconst (n1 mod n2)
+(*
+          | (Exp, Symbolic_constant n1, Symbolic_constant n2) ->
+              (* TODO: if the natFromInteger doesn't work, you are far gone anyway *)
+              Symbolic_constant (n1 ** natFromInteger n2)
+*)
+          | (Eq, SYMBconst n1, SYMBconst n2) ->
+              if n1 = n2 then SYMBtrue else SYMBfalse
+          | (Lt, SYMBconst n1, SYMBconst n2) ->
+              if n1 < n2 then SYMBtrue else SYMBfalse
+          | (Ge, SYMBconst n1, SYMBconst n2) ->
+              if n1 >= n2 then SYMBtrue else SYMBfalse
+          | (And, SYMBtrue, SYMBtrue) ->
+              SYMBtrue
+          | (And, SYMBfalse, _) ->
+              error "And: SYMBfalse"
+          | (And, _, SYMBfalse) ->
+              error"And2: SYMBfalse"
+          | (Or, SYMBfalse, SYMBfalse) ->
+              error "Or: SYMBfalse"
+          | (Or, SYMBtrue, _) ->
+              SYMBtrue
+          | (Or, _, SYMBtrue) ->
+              SYMBtrue
+          | (_, symb1', symb2') ->
+              SYMBop op symb1' symb2'
+        end
+    | SYMBite symb1 symb2 symb3 ->
+        match (reduce symb1, reduce symb2, reduce symb3) with
+          | (SYMBtrue, symb2', _) ->
+              symb2'
+          | (SYMBfalse, _, symb3') ->
+              symb3'
+          | (symb1', symb2', symb3') ->
+              SYMBite symb1' symb2' symb3'
+        end
+    | SYMBcall sym symbs ->
+        SYMBcall sym (List.map reduce symbs)
+    | _ ->
+        symb
+  end
+
+
+
+val make_op: operator -> symbolic -> symbolic -> symbolic
+let make_op op symb1 symb2 =
+  reduce (SYMBop op symb1 symb2)
+
+
+val make_ite: symbolic -> symbolic -> symbolic -> symbolic
+let make_ite symb1 symb2 symb3 =
+  reduce (SYMBite symb1 symb2 symb3)
+
+
+val make_call: symbolic_name -> list symbolic -> symbolic
+let make_call symb_nm symbs =
+  reduce (SYMBcall symb_nm symbs)
+
+
+
+val try_eq: symbolic -> symbolic -> either bool (symbolic * symbolic)
+let try_eq symb1 symb2 =
+  match (reduce symb1, reduce symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        Left (n1 = n2)
+    | symbs' ->
+        Right symbs'
+  end
+
+val try_lt: symbolic -> symbolic -> either bool (symbolic * symbolic)
+let try_lt symb1 symb2 =
+  match (reduce symb1, reduce symb2) with
+    | (SYMBconst n1, SYMBconst n2) ->
+        Left (n1 < n2)
+    | symbs' ->
+        Right symbs'
+  end
+
+
+
+val     subst_sym: Symbol.t -> symbolic -> symbolic -> symbolic
+let rec subst_sym sym v symb =
+  reduce match symb with
+    | SYMBtrue ->
+        SYMBtrue
+    | SYMBfalse ->
+        SYMBfalse
+    | SYMBconst n ->
+        SYMBconst n
+    | SYMBctype _ ->
+        symb
+    | SYMBsym _ sym' ->
+        if sym = sym' then v else symb
+    | SYMBop op symb1 symb2 ->
+        SYMBop op (subst_sym sym v symb1) (subst_sym sym v symb2)
+    | SYMBite symb1 symb2 symb3 ->
+        SYMBite (subst_sym sym v symb1) (subst_sym sym v symb2) (subst_sym sym v symb3)
+    | SYMBcall fsym symbs ->
+        SYMBcall fsym (List.map (subst_sym sym v) symbs)
+  end
+
+
+
+val     is_concrete_symbolic: symbolic -> bool
+let rec is_concrete_symbolic symb =
+  match symb with
+    | SYMBtrue ->
+        true
+    | SYMBfalse ->
+        true
+    | SYMBconst _ ->
+        true
+    | SYMBctype _ ->
+        true
+    | SYMBsym _ _ ->
+        false
+    | SYMBop _ symb1 symb2 ->
+        is_concrete_symbolic symb1 && is_concrete_symbolic symb2
+    | SYMBite symb1 symb2 symb3 ->
+        is_concrete_symbolic symb1 && is_concrete_symbolic symb2 && is_concrete_symbolic symb3
+    | SYMBcall _ symbs ->
+        List.all is_concrete_symbolic symbs
+  end

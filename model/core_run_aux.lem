@@ -1,0 +1,195 @@
+open import Pervasives
+open import Global Show Core Driver_util
+import Boot
+
+
+type core_run_error =
+  | Illformed_program of string (* typing or name-scope error *)
+  | Found_empty_stack of string (* TODO debug *)
+  | Reached_end_of_proc
+  | Unknown_impl
+  | Unresolved_symbol of Symbol.t(* found an unresolved symbolic name in core_eval *)
+
+
+instance (Show core_run_error)
+  let show = function
+    | Illformed_program str ->
+        "Illformed_program[" ^ str ^ "]"
+    | Found_empty_stack str ->
+        "Found_empty_stack[" ^ str ^ "]"
+    | Reached_end_of_proc ->
+        "Reached_end_of_proc"
+    | Unknown_impl ->
+        "Unknown_impl"
+    | Unresolved_symbol sym ->
+        "Unresolved_symbol[" ^ show sym ^ "]"
+  end
+end
+
+
+
+type core_run_annotation = <|
+  sb_before:  set (Thread.thread_id * action_id);
+  dd_before:  set action_id;
+  asw_before: set action_id;
+|>
+
+let empty_annotation = <|
+  sb_before  = {};
+  dd_before  = {};
+  asw_before = {};
+|>
+
+instance (Default core_run_annotation)
+  let default = empty_annotation
+end
+
+
+
+
+val has_sbBefore_on_thread: Thread.thread_id -> core_run_annotation -> bool
+let has_sbBefore_on_thread tid annot =
+  Set.any (fun (tid', _) ->
+    tid = tid'
+  ) annot.sb_before
+
+
+
+(* TODO: the following comment is probably out of date *)
+(* TODO: here I'm annotating all actions instead (this may reduce the number of
+         epsilon transitions) *)
+(* [annotate b e] add on each sb-minimal action of [e] an annotation meaning
+                  that this action is sequenced-after [act]
+  
+  in the rules comments, this function is noted: <b> e
+ *)
+(* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
+
+val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+let rec add_to_sb p_aids expr =
+  match expr with
+    | Epure _ ->
+        (* no change *)
+        expr
+    | Ememop _ _ ->
+        (* no change *)
+        expr
+    | Eraise _ ->
+        (* no change *)
+        expr
+    | Eregister _ _ ->
+        (* no change *)
+        expr
+    | Eskip ->
+        (* no change *)
+        expr
+    | Elet a pe1 e2 ->
+        Elet a pe1 (add_to_sb p_aids e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+    | Eproc annots nm pes ->
+        Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
+    | Eaction (Paction p' (Action loc annots a)) ->
+        Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+    | Eunseq es ->
+        Eunseq (List.map (add_to_sb p_aids) es)
+    | Ewseq _as e1 e2 ->
+        let is_positive = function
+          | (Pos, _) -> true
+          | _        -> false
+        end in
+        Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
+    | Easeq _ _ _ ->
+        error "Core_run_aux.add_to_sb, Easeq"
+    | Eindet _ ->
+        error "Core_run_aux.add_to_sb, Eindet"
+    | Ebound _ _ ->
+        error "Core_run_aux.add_to_sb, Ebound"
+    | Esave k a_tys e ->
+        Esave k a_tys (add_to_sb p_aids e)
+    | Erun annots k a_vs ->
+        Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+    | Eret _ ->
+        (* no change *)
+        expr
+    | End es ->
+        End (List.map (add_to_sb p_aids) es)
+    | Epar es ->
+        Epar (List.map (add_to_sb p_aids) es)
+    | Ewait _ ->
+        (* no change *)
+        expr
+  end
+
+
+
+val add_to_sb_stack: set (polarity * (Thread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+
+let rec add_to_sb_continuation p_aids = function
+  | [] ->
+      []
+  | Kunseq es1 es2 :: cont ->
+      Kunseq es1 es2 :: add_to_sb_continuation p_aids cont
+  | Kwseq _as e2 :: cont ->
+      let is_positive = function
+        | (Pos, _) -> true
+        | _        -> false
+      end in
+      Kwseq _as(add_to_sb (Set.filter is_positive p_aids) e2) :: add_to_sb_continuation p_aids cont
+  | Ksseq _as e2 :: cont ->
+      Ksseq _as (add_to_sb p_aids e2) :: add_to_sb_continuation p_aids cont
+end
+let rec add_to_sb_stack p_aids = function
+  | Stack_empty ->
+      Stack_empty
+  | Stack_cons cont sk ->
+      Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+end
+
+
+
+
+
+val     comma_list: forall 'a. ('a -> string) -> list 'a -> string
+let rec comma_list f = function
+  | [] ->
+      ""
+  | x::xs ->
+      f x ^ ", " ^ comma_list f xs
+end
+ 
+
+let mk_string_of_continuation_element = function
+  | Kunseq es1 es2 ->
+      fun z ->
+        "unseq(" ^ comma_list Boot.pp_core_expr es1 ^ ", " ^ z ^ ", " ^
+                   comma_list Boot.pp_core_expr es2 ^ ")"
+  | Kwseq sym_opts e2 ->
+      fun z ->
+        "let weak SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+  | Ksseq sym_opts e2 ->
+      fun z ->
+        "let strong SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+end
+
+let rec string_of_continuation cont =
+  match cont with
+    | [] ->
+        "[]"
+    | elem::cont' ->
+        mk_string_of_continuation_element elem (string_of_continuation cont')
+  end
+
+
+let rec string_of_stack_aux sk =
+  match sk with
+    | Stack_empty ->
+        ""
+    | Stack_cons cont sk' ->
+        string_of_continuation cont ^ "; " ^ string_of_stack_aux sk'
+  end
+
+let string_of_stack sk =
+  "[" ^ string_of_stack_aux sk ^ "]"
