@@ -46,7 +46,7 @@
 (* NON-STD cppmem syntax *)
 (* LBRACES PIPES RBRACES *)
 
-%token VA_ARG
+%token VA_START VA_ARG
 
 %token EOF
 
@@ -164,6 +164,7 @@ postfix_expression:
 | LPAREN type_name RPAREN LBRACE initializer_list COMMA RBRACE
 (* NOTE: the following are suppose to be part of the C library, but are "special" *)
 | ASSERT LPAREN assignment_expression RPAREN
+| VA_START LPAREN assignment_expression COMMA VAR_NAME RPAREN
 | VA_ARG LPAREN assignment_expression COMMA type_name RPAREN
     { }
 | OFFSETOF LPAREN type_name COMMA id= general_identifier RPAREN

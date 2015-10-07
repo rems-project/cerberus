@@ -8,5 +8,7 @@ typedef __cerbty_va_list va_list;
 #define va_end(ap)          __cerbvar_va_end(ap)
 #define va_start(ap, param) __cerbvar_va_start(ap, param)
 
+void __cerb_va_end(va_list ap);
+
 #else
 #endif
