@@ -137,6 +137,9 @@ let drive sym_supply file args with_concurrency : execution_result =
           let str_v = String_core.string_of_pexpr pe in
           let str_v_ = str_v ^ stdout in
           if not (List.mem str_v_ !ky) then (
+            if Debug.get_debug_level () = 0 then
+              (print_string stdout; flush_all());
+            
             Debug.print_debug 1 (
               Printf.sprintf "Execution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (pp_constraints constraints) ^
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
