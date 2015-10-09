@@ -8,3 +8,7 @@ let string_of_mem_value mval =
 
 let string_pretty_of_mem_value mval =
   Pp_utils.to_plain_string (pp_pretty_mem_value mval)
+
+(* FOR DEBUG *)
+let string_of_shift_path sh =
+  Pp_utils.to_plain_string (pp_shift_path sh)
