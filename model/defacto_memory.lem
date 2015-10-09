@@ -119,9 +119,11 @@ end
 
 val stringFromPointer_value: pointer_value -> string
 val stringFromMem_value: mem_value -> string
+val stringFromShift_path: shift_path -> string (* DEBUG *)
 
 declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
 declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
 
 
 
@@ -1810,7 +1812,7 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval mval =
         match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
               if n < 0 || 10 > List.length mvals then
-                easy_update_mem_value_aux write_ty sh' write_mval (fromJust $ List.index mvals n)
+                MVarray (List.update mvals n (easy_update_mem_value_aux write_ty sh' write_mval (fromJust $ List.index mvals n)))
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
                 error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
@@ -1837,12 +1839,13 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval mval =
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
         else
-          error ("WIP: easy_update_mem_value_aux ===> mval = " ^ stringFromMem_value mval)
+          error ("WIP: easy_update_mem_value_aux ===> sh = " ^ stringFromShift_path sh ^ "; mval = " ^ stringFromMem_value mval)
   end
 
 
 val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
-let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh) write_mval) mval =
+let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) mval =
+  let () = print_debug 2 ("easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value mval) in
   easy_update_mem_value_aux is_strong write_ty sh write_mval mval
 (*
 let easy_update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_ sh) mval') mval =
