@@ -4,6 +4,7 @@ import Core Core_ctype Boot UniqueId Decode
 open import Global Show Core_run Core_run_aux
 import Cmm_op Cmm_csem
 
+import Translation_aux
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 
@@ -441,11 +442,29 @@ let printf_loader dr_st ty args mk_str =
                   dr_st' >>= fun (chars, dr_st'') ->
                 ND.return (String.toString chars :: acc, dr_st'')
             | Nothing ->
-                error "WIP[error message], Driver.printf_loader"
+                error "WIP[error message], Driver.printf_loader, char*"
           end
       | _ ->
           liftMem (Mem.load ty ptr_val) dr_st' >>= fun (mval, dr_st'') ->
-          ND.return (stringPrettyFromMemValue mval :: acc, dr_st'')
+          if AilTypesAux.is_integer (Core_aux.unproj_ctype ty) then
+            let pe_conv =
+              Translation_aux.mk_stdcall dr_st''.core_file.Core.stdlib "conv_int"
+                [Core.PEval (Core.Vctype ty); Core.PEval (Core_aux.valueFromMemValue mval)] in
+            match Core_run.full_core_eval dr_st''.core_file false pe_conv with
+              | Exception.Result (Undefined.Defined cval) ->
+                  ND.return (stringPrettyFromMemValue (fromJust $ Core_aux.memValueFromValue ty cval) :: acc, dr_st'')
+              | _ ->
+                  error "WIP[error] printf_loader"
+            end
+          else
+            ND.return (stringPrettyFromMemValue mval :: acc, dr_st'')
+
+(*
+val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
+                   EU.t Core.pexpr core_run_error
+*)
+
+          
     end
   ) ([], dr_st) (List.zip ty args) >>= fun (strs, dr_st') ->
   ND.return (mk_str strs, dr_st')
