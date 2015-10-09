@@ -136,3 +136,14 @@ let pp_mem_constraint = function
                                 pp_integer_value_base ival_2)
   | MC_addr_distinct (addr_id, addr_ids) ->
       !^ "MC_addr_distinct(TODO)"
+
+
+let pp_pretty_mem_value = function
+  | MVinteger (ity, (IV (_, IVconcrete n))) ->
+      !^ (Nat_big_num.to_string n)
+  | MVfloating (fty, str) ->
+      !^ str
+  | MVunspecified ty ->
+      !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+  | mval ->
+      pp_mem_value mval

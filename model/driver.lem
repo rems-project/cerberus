@@ -27,9 +27,11 @@ module ND  = Nondeterminism
 val stringFromPointerValue: Mem.pointer_value -> string
 declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
 
-
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
+
+val stringPrettyFromMemValue: Mem.mem_value -> string
+declare ocaml target_rep function stringPrettyFromMemValue = `String_mem.string_pretty_of_mem_value`
 
 (* TODO: debug *)
 val pp_core_state: forall 'a. core_state -> string
@@ -81,6 +83,19 @@ let aid_to_string a =
 
 
 open ND.Operators
+
+
+
+val liftMem: forall 'a. Mem.memM 'a -> driver_state -> ND.t ('a * driver_state)
+let liftMem m dr_st =
+  ND.msum $ map (function
+    | Left mem_err ->
+        (* TODO: map memory error to something sensible ... *)
+            ND.kill (ND.Other ("memory layout error (liftMem) ==> " ^ show mem_err))
+    | Right (z, layout_st') ->
+        ND.return (z, <| dr_st with layout_state= layout_st' |>)
+  end) (Mem.runMem m dr_st.layout_state)
+
 
 (* BEGIN reads resolving ======================================================================== *)
 val     resolve_read_pexpr: Symbol.t -> Symbolic.symbolic -> Core.pexpr -> Core.pexpr
@@ -297,15 +312,6 @@ let rec stepConcurrency n dr_st =
 
 
 
-val liftMem: forall 'a. Mem.memM 'a -> driver_state -> ND.t ('a * driver_state)
-let liftMem m dr_st =
-  ND.msum $ map (function
-    | Left mem_err ->
-        (* TODO: map memory error to something sensible ... *)
-            ND.kill (ND.Other ("memory layout error (liftMem) ==> " ^ show mem_err))
-    | Right (z, layout_st') ->
-        ND.return (z, <| dr_st with layout_state= layout_st' |>)
-  end) (Mem.runMem m dr_st.layout_state)
 
 
 
@@ -398,6 +404,71 @@ let drive_to_requests tid core_st =
 *)
 
 
+val     load_string: Mem.pointer_value -> list char -> Mem.memM (list char)
+let rec load_string ptr_val acc =
+  let ty = Core_ctype.Pointer AilTypes.no_qualifiers (Core_ctype.char) in
+  let ptr_val' = Mem.array_shift_ptrval ptr_val Core_ctype.char (Mem.integer_ival 1) in
+  Mem.bind (Mem.load ty ptr_val) (fun mval ->
+    Mem.case_mem_value mval
+      (fun _ -> error "Driver.load_string, Symbolic")
+      (fun _ -> error "Driver.load_string, found a ctype")
+      (fun ity ival ->
+        Mem.case_integer_value ival
+          (fun n -> if n = 0 then
+            Mem.return (List.reverse acc)
+          else
+            load_string ptr_val' ((Decode.encode_character_constant n) :: acc))
+          (fun () -> error "WIP: Driver.load_string, non constant ival")
+      )
+      (fun _ _ -> error "Driver.load_string, found a float")
+      (fun _ ptr_val -> error ("Driver.load_string, found a pointer ==> " ^ stringFromPointerValue ptr_val))
+      (fun _ -> error "Driver.load_string, found an array")
+      (fun _ _ -> error "Driver.load_string, found a struct")
+      (fun _ _ -> error "Driver.load_string, found a union")
+  )
+
+(* TODO: hack *)
+val printf_loader: driver_state -> list Core_ctype.ctype -> list Core.value -> (list string -> string) -> ND.t (string * driver_state)
+let printf_loader dr_st ty args mk_str =
+  ND.foldM (fun (acc, dr_st') (ty, Core.Vpointer ptr_val) ->
+    match ty with
+      (* TODO: this is yucky *)
+      | Core_ctype.Pointer _ (Core_ctype.Basic (AilTypes.Integer (AilTypes.Char))) ->
+          liftMem (Mem.load ty ptr_val) dr_st' >>= fun (mval, dr_st'') ->
+          match Mem_aux.pointerValueFromMemValue mval with
+            | Just (_, ptr_val) ->
+                liftMem (load_string (Mem.array_shift_ptrval ptr_val Core_ctype.char (Mem.integer_ival 0)) [])
+                  dr_st' >>= fun (chars, dr_st'') ->
+                ND.return (String.toString chars :: acc, dr_st'')
+            | Nothing ->
+                error "WIP[error message], Driver.printf_loader"
+          end
+      | _ ->
+          liftMem (Mem.load ty ptr_val) dr_st' >>= fun (mval, dr_st'') ->
+          ND.return (stringPrettyFromMemValue mval :: acc, dr_st'')
+    end
+  ) ([], dr_st) (List.zip ty args) >>= fun (strs, dr_st') ->
+  ND.return (mk_str strs, dr_st')
+
+(*
+  ND.foldM (fun (mem_st', acc) (ty, Core.Vpointer ptr_val) ->
+    match ty with
+      (* TODO: this is yucky *)
+      | Core_ctype.Pointer _ (Core_ctype.Basic (AilTypes.Integer (AilTypes.Char))) ->
+          load_string mem_st' ptr_val >>= fun (mem_st'', chars) ->
+          ND.return (mem_st'', String.toString chars :: acc)
+      | _ ->
+          ND.msum $ map (function
+            | Left err ->
+                error "WIP: printf_loader, memory error"
+            | Right (mval, mem_st'') ->
+                ND.return (mem_st'', stringPrettyFromMemValue mval :: acc)
+          end) (Mem.runMem (Mem.load ty ptr_val) mem_st')
+    end
+  ) (mem_st, []) (List.zip ty args) >>= fun (mem_st', strs) ->
+  ND.return (mem_st', mk_str strs)
+*)
+
 (* For a given thread, perform all possible step that are not action requests *)
 val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
 let rec drive_core_thread tid dr_st =
@@ -463,6 +534,17 @@ let rec drive_core_thread tid dr_st =
           |>;
           dr_step_counter= dr_st.dr_step_counter + 1;
         |>
+    | Step2_printf tys args mk_str mk_th_st ->
+        ND.print_debug 6 ("Step2_printf") >>
+        printf_loader dr_st tys args mk_str >>= fun (str, dr_st') ->
+        let core_st' = update_thread_state tid (mk_th_st (integerFromNat (String.stringLength str))) dr_st'.core_state in
+        drive_core_thread tid <| dr_st' with
+          core_state= <| core_st' with
+            io= <| dr_st'.core_state.io with stdout= Dlist.append (Dlist.singleton str) dr_st'.core_state.io.stdout |>
+          |>;
+          dr_step_counter= dr_st'.dr_step_counter + 1;
+        |>
+        
   end) (core_thread_step2 dr_st.core_file tid th_info)
 
 (*
