@@ -27,6 +27,9 @@ let precedence = function
   | PEop (OpLt,  _, _)
   | PEop (OpLe,  _, _) -> Some 4
   
+  | PEop (OpGt,  _, _)
+  | PEop (OpGe,  _, _) -> Some 4
+  
   | PEop (OpEq,  _, _) -> Some 5
   
   | PEop (OpAnd, _, _) -> Some 6
@@ -100,6 +103,8 @@ let pp_binop = function
   | OpEq  -> P.equals
   | OpLt  -> P.langle
   | OpLe  -> P.langle ^^ P.equals
+  | OpGt  -> P.rangle
+  | OpGe  -> P.rangle ^^ P.equals
   | OpAnd -> !^ "/\\"
   | OpOr  -> !^ "\\/"
 

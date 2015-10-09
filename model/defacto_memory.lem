@@ -285,6 +285,61 @@ let integer_value_baseEquality ival_1 ival_2 =
 
 
 
+(* DEBUG, fixing impl: gcc-5 (Homebrew gcc 5.2.0) 5.2.0 *)
+val integer_range: AilTypes.integerType -> integer * integer
+let integer_range = function
+ | AilTypes.Char ->
+     (0-128, 127)
+ | AilTypes.Bool ->
+     error "WIP: Mem.integer_range, Bool"
+ | AilTypes.Signed AilTypes.Ichar ->
+     (0-128, 127)
+ | AilTypes.Signed AilTypes.Short ->
+     (0-32768, 32767)
+ | AilTypes.Signed AilTypes.Int_ ->
+     (0-2147483648, 2147483647)
+ | AilTypes.Signed AilTypes.Long ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Signed AilTypes.LongLong ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int8_t")  ->
+     (0-128, 127)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int16_t")  ->
+     (0-32768, 32767)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int32_t")  ->
+     (0-2147483648, 2147483647)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int64_t")  ->
+     (0-(2**63), 2**63-1)
+ | AilTypes.Signed (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.integer_range, Signed IBBuiltin ==> " ^ str)
+ | AilTypes.Unsigned AilTypes.Ichar ->
+     (0, 255)
+ | AilTypes.Unsigned AilTypes.Short ->
+     (0, 65535)
+ | AilTypes.Unsigned AilTypes.Int_ ->
+     (0, 4294967295)
+ | AilTypes.Unsigned AilTypes.Long ->
+     (0, 2**64-1)
+ | AilTypes.Unsigned AilTypes.LongLong ->
+     (0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t")  ->
+     (0, 255)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t")  ->
+     (0, 65535)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t")  ->
+     (0, 4294967295)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t")  ->
+     (0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.integer_range, Unsigned IBBuiltin ==> " ^ str)
+ | AilTypes.IBuiltin str ->
+     error ("WIP: Mem.integer_range, IBuiltin ==> " ^ str)
+ | AilTypes.Enum sym ->
+     error "WIP: Mem.integer_range, Enum"
+end
+
+
+
 val     simplify_integer_value_base: integer_value_base -> either integer integer_value_base
 let rec simplify_integer_value_base ival_ =
   match ival_ with
@@ -375,6 +430,49 @@ let rec simplify_integer_value_base ival_ =
               Right ival_
         end
     
+    | IVmax ity ->
+        match ity with
+          | AilTypes.Signed (AilTypes.IBBuiltin "int8_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int16_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int32_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int64_t") ->
+              Left (snd (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t") ->
+              Left (snd (integer_range ity))
+          | _ ->
+              Right ival_
+        end
+
+    | IVmin ity ->
+        match ity with
+          | AilTypes.Signed (AilTypes.IBBuiltin "int8_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int16_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int32_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Signed (AilTypes.IBBuiltin "int64_t") ->
+              Left (fst (integer_range ity))
+          | AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t") ->
+              Left (fst (integer_range ity))
+          | _ ->
+              Right ival_
+        end    
     
     | _ ->
         (* TODO: can probably do much more *)
@@ -1503,6 +1601,10 @@ let validForDeref_ptrval ptr_val =
 
 (* integer types minimal range (STD Annex E #1) *)
 val minimal_range: AilTypes.integerType -> bool * integer * integer
+let minimal_range ity =
+  let (min,max) = integer_range ity in
+  (true, min, max)
+(*
 let minimal_range = function
  | AilTypes.Char ->
      (* TODO: making an impl-choice here ===> char = signed char *)
@@ -1554,6 +1656,7 @@ let minimal_range = function
  | AilTypes.Enum sym ->
      error "WIP: Mem.minimal_range, Enum"
 end
+*)
 
 
 

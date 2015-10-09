@@ -400,22 +400,21 @@ let rec valueFromPexpr pexpr =
     | PEarray_shift _ _ _ ->
         Nothing
     | PEstruct tag_sym xs ->
-        error "WIP: Core_aux.valueFromPexpr, PEstruct"
-(*
-        let ident_mem_vals_opt = List.foldr (fun (ident, pe) acc_opt ->
-          match (acc_opt, maybe Nothing memValueFromValue (valueFromPexpr pe)) with
+        let ident_tys = Core_ctype_aux.get_membersDefs tag_sym in
+        let ident_mem_vals_opt = List.foldr (fun ((_, ty), (ident, pe)) acc_opt ->
+          match (acc_opt, maybe Nothing (memValueFromValue ty) (valueFromPexpr pe)) with
             | (Just acc, Just mem_val) ->
                 Just ((ident, mem_val) :: acc)
             | _ ->
                 Nothing
-          end) (Just []) xs in
+          end) (Just []) (List.zip ident_tys xs) in
         match ident_mem_vals_opt with
           | Just ident_mem_vals ->
               Just (Vstruct tag_sym ident_mem_vals)
           | Nothing ->
               Nothing
         end
-*)
+
     | PEmember_shift _ _ _ ->
         Nothing
     | PEnot (PEval Vtrue) ->

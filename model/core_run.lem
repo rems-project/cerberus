@@ -349,7 +349,27 @@ KKKKK NOW
                          Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
             end
         
-(*        | (OpGe,) -> *)
+        | (OpGe, Just (Vinteger ival1), Just (Vinteger ival2)) ->
+            (* TODO CHECK *)
+            match Mem.le_ival Symbolic.Constraints_TODO ival2 ival1 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value greater_equal-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
+            end
+        | (OpGt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
+            (* TODO CHECK *)
+            match Mem.lt_ival Symbolic.Constraints_TODO ival2 ival1 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value greater-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop (PEval (Vinteger ival1)) (PEval (Vinteger ival2)))) : Core.expr unit))
+            end
+
         
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with
@@ -709,7 +729,18 @@ KKK NOW
             EU.return $ PEis_unsigned pe'
 end
 
-
+  | PEstruct tag_sym xs ->
+      EU.mapM (fun (ident, pe) -> core_eval file inside_if pe) xs >>= fun pes' ->
+      match valueFromPexprs pes' with
+        | Just cvals ->
+            let xs' = List.map (fun ((ident, ty), cval) ->
+              (ident, fromJust $ memValueFromValue ty cval)
+            ) (List.zip (Core_ctype_aux.get_membersDefs tag_sym) cvals) in
+            EU.return $ PEval (Vstruct tag_sym xs')
+        | Nothing ->
+            EU.return $ PEstruct tag_sym (List.zip (List.map fst xs) pes')
+      end
+      
   | pe ->
     error (">>> " ^ Boot.pp_core_expr (Epure pe : expr unit))
 
@@ -824,6 +855,17 @@ end
 
 
 *)
+
+
+val     full_core_eval: Core.file core_run_annotation -> bool -> Core.pexpr -> EU.t Core.value core_run_error
+let rec full_core_eval file inside_if pe =
+  core_eval file inside_if pe >>= fun pe' ->
+  match valueFromPexpr pe' with
+    | Just cval ->
+        EU.return cval
+    | Nothing ->
+        full_core_eval file inside_if pe'
+  end
 
 
 

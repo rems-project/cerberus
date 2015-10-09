@@ -1137,10 +1137,18 @@ end
 
 (* STD §6.2.5#6, fourth sentence *)
 val is_unsigned_integer_type: ctype -> bool
-let is_unsigned_integer_type ty =
+let is_unsigned_integer_type = function
+  | Basic (Integer Bool) ->
+      true
+  | Basic (Integer (Unsigned _)) ->
+      true
+  | _ ->
+      false
+end
   (* TODO: later, extended types *)
-  is_standard_unsigned_integer_type ty
-
+(*
+  is_standard_unsigned_integer_type ty ||
+*)
 
 
 
