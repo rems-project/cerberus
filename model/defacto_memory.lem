@@ -1811,7 +1811,7 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval mval =
     | (MVarray mvals, SPE_array elem_ty ival_ :: sh') ->
         match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
-              if n < 0 || 10 > List.length mvals then
+              if 0 < n || n < List.length mvals then
                 MVarray (List.update mvals n (easy_update_mem_value_aux write_ty sh' write_mval (fromJust $ List.index mvals n)))
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
