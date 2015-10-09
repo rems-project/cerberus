@@ -691,6 +691,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | PRINTF (e1, es) ->
             !^ "printf" ^^ P.parens (pp e1 ^^ P.comma ^^^ comma_list pp es)
 *)
+        | AilEva_start (e, sym) ->
+            pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
         | AilEva_arg (e, ty) ->
             pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype_raw ty)
       )) in

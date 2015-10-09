@@ -208,13 +208,26 @@ let ctype_of_specifier = function
   | "%p" -> Pointer0 (AilTypes.no_qualifiers, Void0)
 (*  | "n" -> *)
   | "%llx" -> Basic0 (Integer (Unsigned LongLong))
+  | "%s" -> Pointer0 (AilTypes.no_qualifiers, Core_ctype.char)
   | str ->
     failwith ("BOOM: " ^ str)
 
 
 
+let recombiner xs ys =
+  let rec aux xs ys = match (xs, ys) with
+    | ([], []) ->
+        []
+    | (x::xs, y::ys) ->
+        x::y::(aux xs ys)
+    | ([], ys) ->
+        ys
+    | (xs, []) ->
+        xs in
+  String.concat "" (aux xs ys)
+(*
 let recombiner (xs: string list ) : string list -> string =
-  let n = List.length xs in
+(*  let n = List.length xs in *)
   let rec aux z n = function
     | []  ->
         ""
@@ -223,6 +236,7 @@ let recombiner (xs: string list ) : string list -> string =
     | (x::xs) ->
         x ^ List.nth z n ^ aux z (n+1) xs in
   fun z -> aux z 0 xs
+*)
   
 
 let pseudo_printf (frmt : string) : Core_ctype.ctype0 list * (string list -> string) =

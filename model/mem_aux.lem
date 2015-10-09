@@ -1,7 +1,7 @@
 open import Pervasives Global
 open import Mem
 
-import Symbolic AilTypes
+import Symbolic AilTypes Core_ctype
 
 
 val integerFromIntegerValue: integer_value -> maybe integer
@@ -49,6 +49,18 @@ let symbolicFromMemValue mval =
 
 
 
+
+val pointerValueFromMemValue: mem_value -> maybe (Core_ctype.ctype * pointer_value)
+let pointerValueFromMemValue mval =
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun ref_ty ptr_val -> Just (ref_ty, ptr_val))
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
 
 
 

@@ -1,4 +1,13 @@
-S _ocaml_generated
-S _ocaml_generated/_build
-B _ocaml_generated/_build
-PKG pprint
+S ocaml_generated
+S src
+S pprinters
+S parsers/cparser
+S parsers/coreparser
+
+B _build/ocaml_generated
+B _build/src
+B _build/pprinters
+B _build/parsers/cparser
+B _build/parsers/coreparser
+
+PKG pprint cmdliner zarith

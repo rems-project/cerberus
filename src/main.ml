@@ -28,7 +28,7 @@ let load_stdlib () =
                                  let sym_counter = core_sym_counter
                                  let std = Pmap.empty Core_parser_util._sym_compare
                                end)
-      type token = Core_parser_util.token
+(*      type token = Core_parser_util.token *)
       type result = Core_parser_util.result
     end in
     let module Core_std_parser =
@@ -114,7 +114,7 @@ let (>>=) = Exception.bind2
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
-    | Rfile (sym_main, globs, funs) ->
+    | Core_parser_util.Rfile (sym_main, globs, funs) ->
         Exception.return2 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;
@@ -123,9 +123,9 @@ let core_frontend f =
            Core.funs=   funs
          })
     
-    | Rstd _ ->
+    | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
-    | Rimpl _ ->
+    | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 
 (*
@@ -224,11 +224,11 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
     include Core_parser.Make (struct
         let sym_counter = core_sym_counter
         let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
-          let std_pos = {Lexing.dummy_pos with pos_fname= "core_stdlib"} in
+          let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
         ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
       end)
-    type token = Core_parser_util.token
+(*    type token = Core_parser_util.token *)
     type result = Core_parser_util.result
   end in
   let module Core_parser =

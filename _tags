@@ -1,4 +1,4 @@
-true: -traverse, use_menhir
+true: -traverse, use_menhir, annot
 
 "src": include
 "ocaml_generated": include

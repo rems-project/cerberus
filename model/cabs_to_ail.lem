@@ -1314,6 +1314,14 @@ _STD "§6.5.3.1#3" $
         (* TODO: do something with the qualifiers? *)
         desugar_type_name tyname >>= fun (qs, ty) ->
         E.return (AilEoffsetof ty ident)
+    | CabsEva_start e (CabsIdentifier loc str as ident) ->
+        desugar_expression e                                       >>= fun d_e ->
+        desugar_expression (CabsExpression loc (CabsEident ident)) >>= function
+          | AnnotatedExpression _ _ (AilEident sym) ->
+              E.return (AilEva_start d_e sym)
+          | _ ->
+              E.fail Loc.unknown (Errors.Desugar_TODOCTOR "the second operand of va_start() was not paramN")
+        end
     | CabsEva_arg e tyname ->
         (* TODO: do something with the qualifiers? *)
         desugar_expression e     >>= fun d_e      ->

@@ -360,6 +360,29 @@ proc printf_proxy(tmp_ptr: pointer, args: [pointer]) : eff integer :=
   end
 
 
+
+{-
+fun printf_zip_aux2(arg:pointer, args: [pointer]) : (pointer, [pointer]) :=
+  (arg, args)
+
+fun printf_zip_aux1(ty: ctype, args: [pointer]) : ((ctype, pointer), [pointer]) :=
+  let (arg, args) = case_list(args,
+    error <<<printf_zip_aux1>>>,
+    printf_zip_aux2
+  ) in
+  ((ty,arg), args)
+  end
+
+-- fun printf_zip(xs: [ctype], args: [pointer]) : [(ctype, pointer)] :=
+--  case_list(xs)
+
+
+proc printf_loader(tys: [ctype], args: [pointer]) : eff integer :=
+  return(0)
+  -}
+
+
+
 proc malloc_proxy (size_ptr: pointer) : eff pointer :=
   let strong size = load("size_t", size_ptr) in
   let strong ret = alloc(4, size) in

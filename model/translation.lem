@@ -538,12 +538,18 @@ and translate_expression stdlib program is_lvalue a_expr =
 (* TODO: check !!! *)
           E.fresh_symbol      >>= fun sym_e  ->
           E.fresh_symbol      >>= fun sym_b  ->
-          translate_rvalue e >>= fun core_e ->
+          translate_rvalue e  >>= fun core_e ->
           E.return $
             C.Ewseq [Just sym_e] core_e
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrValidForDeref [C.PEsym sym_e])
                  (C.Eif (C.PEsym sym_b)
-                    (Caux.pload loc (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA)
+                    begin
+                      if is_lvalue then
+                        C.Epure (C.PEsym sym_e)
+                      else
+                        Caux.pload loc (Caux.mk_ctype result_ty) (C.PEsym sym_e) Cmm.NA
+                    end
+(*                    (C.Epure (C.PEsym sym_e)) *)
                     (C.Epure (C.PEundef Undefined.Indirection_invalid_value))
                  )
               )
@@ -1170,7 +1176,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     if is_variadic then
                       (* TODO: check the std *)
                       List.map (fun e ->
-                        let c_ty = Caux.mk_ctype (ctype_of e) in
+                        let c_ty = Caux.mk_ctype (AilTypesAux.rvalue_coercion (ctype_of e)) in
                         Caux.pcreate loc (Caux.alignof c_ty) c_ty (Symbol.PrefOther "translation, AilEcall temp")
                       ) es
                     else
@@ -1189,7 +1195,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     translate_rvalue e >>= fun core_e ->
                     let ty = match param_opt with
                       | Just (_, ty) -> ty
-                      | Nothing      -> ctype_of e (* TODO: check the std *)
+                      | Nothing      -> AilTypesAux.rvalue_coercion (ctype_of e) (* TODO: check the std *)
                     end in
                     E.return $
                       C.Ewseq [Just a_init] core_e
@@ -1528,6 +1534,10 @@ a
 *)
       | A.AilEannot _ e ->
           translate_expr e
+      | A.AilEva_start e sym ->
+          error "WIP: Translation.translate_expr, AilEva_start"
+      | A.AilEva_arg e ty ->
+          error "WIP: Translation.translate_expr, AilEva_arg"
     end
 
 

@@ -281,39 +281,7 @@ let integer_value_baseEquality ival_1 ival_2 =
 
 
 
-val     eval_integer_value_base: integer_value_base -> maybe integer
-let rec eval_integer_value_base ival_ =
-  match ival_ with
-    | IVconcrete n ->
-        Just n
-    | IVop iop ival_s ->
-        let op = match iop with
-          | IntAdd ->
-              fun x y -> x + y
-          | IntSub ->
-              fun x y -> x - y
-          | IntMul ->
-              fun x y -> x * y
-          | IntDiv ->
-              fun x y -> if y = 0 then 0 else x / y
-          | IntMod ->
-              fun x y -> if y = 0 then 0 else x mod y
-          | IntExp ->
-              fun x y -> x ** natFromInteger y
-        end in
-        match (iop, List.map eval_integer_value_base ival_s) with
-          | (_, [Just n1; Just n2]) ->
-              Just (op n1 n2)
-          | _ ->
-              Nothing
-        end
-    | IVfromptr ref_ty (PVfromint ival_') ->
-        eval_integer_value_base ival_'
-    
-    | _ ->
-        (* TODO: can probably do much more *)
-        Nothing
-  end
+
 
 val     simplify_integer_value_base: integer_value_base -> either integer integer_value_base
 let rec simplify_integer_value_base ival_ =
@@ -366,12 +334,90 @@ let rec simplify_integer_value_base ival_ =
     | IVfromptr ref_ty (PVfromint ival_') ->
         simplify_integer_value_base ival_'
     
+    
+    | IVsizeof ty ->
+        match ty with
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
+              Left 1
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
+              Left 1
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
+              Left 1
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin "int8_t"))) ->
+              Left 1
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t"))) ->
+              Left 1
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin "int16_t"))) ->
+              Left 2
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t"))) ->
+              Left 2
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin "int32_t"))) ->
+              Left 4
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t"))) ->
+              Left 4
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin "int64_t"))) ->
+              Left 8
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t"))) ->
+              Left 8
+
+        (* TODO !!!!, fixing impl for testing purpose *)
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
+              Left 4
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
+              Left 4
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
+              Left 8
+          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
+              Left 8
+          | _ ->
+              Right ival_
+        end
+    
+    
     | _ ->
         (* TODO: can probably do much more *)
         Right ival_
   end
 
 
+
+val eval_integer_value_base: integer_value_base -> maybe integer
+let eval_integer_value_base ival_ =
+  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
+
+(*
+  match ival_ with
+    | IVconcrete n ->
+        Just n
+    | IVop iop ival_s ->
+        let op = match iop with
+          | IntAdd ->
+              fun x y -> x + y
+          | IntSub ->
+              fun x y -> x - y
+          | IntMul ->
+              fun x y -> x * y
+          | IntDiv ->
+              fun x y -> if y = 0 then 0 else x / y
+          | IntMod ->
+              fun x y -> if y = 0 then 0 else x mod y
+          | IntExp ->
+              fun x y -> x ** natFromInteger y
+        end in
+        match (iop, List.map eval_integer_value_base ival_s) with
+          | (_, [Just n1; Just n2]) ->
+              Just (op n1 n2)
+          | _ ->
+              Nothing
+        end
+    | IVfromptr ref_ty (PVfromint ival_') ->
+        eval_integer_value_base ival_'
+    
+    | _ ->
+        (* TODO: can probably do much more *)
+        Nothing
+  end
+*)
 
 
 (*
@@ -1454,39 +1500,55 @@ let validForDeref_ptrval ptr_val =
 
 
 (* integer types minimal range (STD Annex E #1) *)
-val minimal_range: AilTypes.integerType -> integer * integer
+val minimal_range: AilTypes.integerType -> bool * integer * integer
 let minimal_range = function
  | AilTypes.Char ->
      (* TODO: making an impl-choice here ===> char = signed char *)
-     (0-127, 127)
+     (true, 0-127, 127)
  | AilTypes.Bool ->
      error "WIP: Mem.minimal_range, Bool"
  | AilTypes.Signed AilTypes.Ichar ->
-     (0-127, 127)
+     (true, 0-127, 127)
  | AilTypes.Signed AilTypes.Short ->
-     (0-32767, 32767)
+     (false, 0-32767, 32767)
  | AilTypes.Signed AilTypes.Int_ ->
-     (0-32767, 32767)
+     (false, 0-32767, 32767)
  | AilTypes.Signed AilTypes.Long ->
-     (0-2147483647, 2147483647)
+     (false, 0-2147483647, 2147483647)
  | AilTypes.Signed AilTypes.LongLong ->
-     (0-(2**63-1), 2**63-1)
+     (false, 0-(2**63-1), 2**63-1)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int8_t")  ->
+     (true, 0-127, 127)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int16_t")  ->
+     (true, 0-32767, 32767)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int32_t")  ->
+     (true, 0-2147483647, 2147483647)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int64_t")  ->
+     (true, 0-(2**63-1), 2**63-1)
  | AilTypes.Signed (AilTypes.IBBuiltin str)  ->
-     error "WIP: Mem.minimal_range, Signed IBBuiltin"
+     error ("WIP: Mem.minimal_range, Signed IBBuiltin ==> " ^ str)
  | AilTypes.Unsigned AilTypes.Ichar ->
-     (0, 255)
+     (true, 0, 255)
  | AilTypes.Unsigned AilTypes.Short ->
-     (0, 65535)
+     (false, 0, 65535)
  | AilTypes.Unsigned AilTypes.Int_ ->
-     (0, 65535)
+     (false, 0, 65535)
  | AilTypes.Unsigned AilTypes.Long ->
-     (0, 4294967295)
+     (false, 0, 4294967295)
  | AilTypes.Unsigned AilTypes.LongLong ->
-     (0, 2**64-1)
+     (false, 0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t")  ->
+     (true, 0, 255)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t")  ->
+     (true, 0, 65535)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t")  ->
+     (true, 0, 4294967295)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t")  ->
+     (true, 0, 2**64-1)
  | AilTypes.Unsigned (AilTypes.IBBuiltin str)  ->
-     error "WIP: Mem.minimal_range, Unsigned IBBuiltin"
+     error ("WIP: Mem.minimal_range, Unsigned IBBuiltin ==> " ^ str)
  | AilTypes.IBuiltin str ->
-     error "WIP: Mem.minimal_range, IBuiltin"
+     error ("WIP: Mem.minimal_range, IBuiltin ==> " ^ str)
  | AilTypes.Enum sym ->
      error "WIP: Mem.minimal_range, Enum"
 end
@@ -1513,11 +1575,14 @@ let rec eq_ival eqs (IV _ ival_1) (IV _ ival_2) =
         else
           Nothing
     | (IVmin ity, IVconcrete n) ->
-        let (min, _) = minimal_range ity in
-        if min < n then
-          Just false
+        let (is_exact, min, _) = minimal_range ity in
+        if is_exact then
+          Just (min < n)
         else
-          Nothing
+          if min < n then
+            Just false
+          else
+            Nothing
 
 (*
     | (IVbyteof ival_1' (MVpointer ref_ty1 ptr_val1), IVbyteof ival_2' (MVpointer ref_ty2 ptr_val2)) ->
@@ -1565,18 +1630,24 @@ let lt_ival eqs (IV _ ival_1) (IV _ ival_2) =
           Nothing
     
     | (IVmin ity, IVconcrete n) ->
-        let (min, _) = minimal_range ity in
-        if min < n then
-          Just true
+        let (is_exact, min, _) = minimal_range ity in
+        if is_exact then
+          Just (min < n)
         else
-          Nothing
+          if min < n then
+            Just true
+          else
+            Nothing
 
     | (IVconcrete n, IVmax ity) ->
-        let (_, max) = minimal_range ity in
-        if n < max then
-          Just true
+        let (is_exact, _, max) = minimal_range ity in
+        if is_exact then
+          Just (n < max)
         else
-          Nothing
+          if n < max then
+            Just true
+          else
+            Nothing
 
     | _ ->
         (* TODO *)
@@ -1603,18 +1674,24 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               Just true
           
           | (IVmin ity, IVconcrete n) ->
-              let (min, _) = minimal_range ity in
-              if min <= n then
-                Just true
+              let (is_exact, min, _) = minimal_range ity in
+              if is_exact then
+                Just (min <= n)
               else
-                Nothing
+                if min <= n then
+                  Just true
+                else
+                  Nothing
           
           | (IVconcrete n, IVmax ity) ->
-              let (_, max) = minimal_range ity in
-              if n <= max then
-                Just true
+              let (is_exact, _, max) = minimal_range ity in
+              if is_exact then
+                Just (n <= max)
               else
-                Nothing
+                if n <= max then
+                  Just true
+                else
+                  Nothing
           
           (* a byte always range over uchar *)
           | (IVmin (AilTypes.Unsigned AilTypes.Ichar), IVbyteof _ _) ->
@@ -1743,7 +1820,7 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval mval =
         end
     | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
         if tag_sym <> tag_sym_ then
-          error "WIP[easy_update_mem_value_aux ==> ]: TODO error message ===> struct value accessed with incompatible SPE"
+          error "WIP[easy_update_mem_value_aux]: TODO error message ===> struct value accessed with incompatible SPE"
         else
           MVstruct tag_sym (assoc_adjust (easy_update_mem_value_aux write_ty sh' write_mval) memb_ident xs)
     | _ ->

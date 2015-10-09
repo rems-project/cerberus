@@ -1139,6 +1139,13 @@ _STD "§6.5.2.1#1" $
   | AilEannot ty e ->
       annotate_expression e >>= fun (AnnotatedExpression _ _ e') ->
       E.return (e', GenRValueType (inject_type ty))
+  | AilEva_start e sym ->
+      annotate_rvalue e >>= function
+        | (e', GenBuiltin "va_list") ->
+            E.return (AilEva_start e' sym, GenRValueType GenVoid)
+        | _ ->
+            E.fail Loc.unknown (TError "va_start")
+      end
   | AilEva_arg e ty ->
       annotate_rvalue e >>= function
         | (e', GenBuiltin "va_list") ->

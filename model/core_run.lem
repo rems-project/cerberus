@@ -22,6 +22,9 @@ module EU  = Exception_undefined
 module SEU = State_exception_undefined
 
 
+val stringFromValue: Core.value ->string
+declare ocaml target_rep function stringFromValue = `String_core.string_of_value`
+
 
 open Exception.Operators
 (* takes the symbolic names of a function, some pure expressions and produce
@@ -467,7 +470,6 @@ KKKKK NOW
                   error "Core_run.core_eval, PEop Vsymbolic Vsymbolic sym_op match"
             end in
             EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb1 symb2)))
-
         | (_, Just _, Just _) ->
             EU.fail $ Illformed_program ("ill-typed PEop: " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
         | _ ->
@@ -1242,7 +1244,6 @@ let printf_hack core_st pes =
 (* TODO: hack *)
 val pseudo_printf: string -> list Core_ctype.ctype * (list string -> string)
 declare ocaml target_rep function pseudo_printf = `Boot_ocaml.pseudo_printf`
-
 
 
 (*
@@ -2343,6 +2344,7 @@ type core_step2 =
   | Step2_done of Core.value
   | Step2_spawn_threads of list thread_state (* initial states for the children *)
   | Step2_output of (* DEBUG *) string * string * thread_state
+  | Step2_printf of list Core_ctype.ctype * list Core.value * (list string -> string) * (integer -> thread_state)
 
 
 
@@ -2475,8 +2477,9 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                     Step2_error ("the value of a store() didn't match the lvalue type: " ^
                       Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Boot.pp_core_expr ((Epure (PEval cval)) : Core.expr unit) ^ "")
               end
-          | (Just _, Just _, Just _) ->
-              Step2_error "found a store() with ill-typed operands"
+          | (Just v1, Just v2, Just v3) ->
+              Step2_error ("found a store() with ill-typed operands: " ^
+                           stringFromValue v1 ^ " <-> " ^ stringFromValue v2 ^ " <-> " ^ stringFromValue v3)
           | (Nothing, _, _) ->
               Step2_eval "first operand of a Store" (
                 E.core_eval file false pe1 >>= fun pe1' ->
@@ -2632,9 +2635,14 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                           
                           (* TODO!!! this is wrong: the loads don't have any associated action_request, so
                              they are not visible to the concurrency *)
+                          Step2_printf tys args mk_str (fun n ->
+                            <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival n))) |>
+                          )
+(*
                           Step2_output "printf" frmt_str (
                             <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival 0))) |> (* TODO *)
                           )
+*)
 (*
                           one $ Step_output (
                             (* performs the loads of the printf arguments *)
