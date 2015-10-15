@@ -134,8 +134,19 @@ $(CPP_BUILD_DIR):
 
 
 
+# count lines of code
+count:
+	-mkdir tmp.count
+	rm -rf tmp.count/*
+	cp Cmm_master_lemmas.thy tmp.count/Cmm_master_lemmas.ml
+	cp Cmm_op_proofs.thy tmp.count/Cmm_op_proofs.ml
+	cp _bin/Cmm_op.thy tmp.count/Cmm_op.ml
+	cp _bin/Cmm_csem.thy tmp.count/Cmm_csem.ml
+	sloccount --details tmp.count/*
+
 
 # Delete the build directories
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf $(CPP_BUILD_DIR)
+
