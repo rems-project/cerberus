@@ -1,0 +1,222 @@
+open import Pervasives Global Translation_effect Symbol Show Show_extra
+import Core Core_aux
+import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
+import Boot Map_extra
+
+module C    = Core
+module Caux = Core_aux
+module Aty  = AilTypes
+
+
+
+(* this is only used by [mk_stdcall] *)
+val     mk_stdcall_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
+let rec mk_stdcall_aux pred xs =
+ match xs with
+    | []     -> Nothing
+    | x::xs' -> if pred x then Just x else mk_stdcall_aux pred xs'
+  end
+
+val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.pexpr) -> Core.pexpr)
+let mk_stdcall stdlib fname =
+  match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
+    | Just (f, _) -> Core.PEcall (Core.Sym f)
+    | Nothing     -> error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
+ end
+
+
+
+(* TODO: the third argument shouldn't be a computation *)
+
+
+
+(* (integer) promotion for values. (cf. §6.3.1.1#2) *)
+(* this should be a function from pure Core expr to pure Core expr (I think ...) *)
+let promote_value (e: C.pexpr) : C.pexpr = e (* TODO !!!! *)
+
+
+
+
+
+
+
+(*
+(* NOTE: assume that [e] is a pure expression *)
+val conv A.ctype -> A.ctype -> C.expr 'a -> t (C.expr 'a)
+let conv ty1 ty2 e =
+  
+    (* (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value
+                    compares equal to 0; otherwise, the result is 1. *)
+    if T.is_scalar ty && is_bool ty2 then
+      C.Eif (C.Eop (C.OpEq) e (C.Econst 0))
+        (C.Econst 0) (C.Econst 1)
+    
+    (* (§6.3.1.3#1) When a value with integer type is converted to another integer type other
+                    than _Bool, if the value can be represented by the new type, it is unchanged. *)
+    else if is_integer  ty1 && is_integer ty2 then
+      E.fresh_symbol       >>= fun a_e    ->
+      C.Elet a_e e $
+        C.Eif (is_presentable [e; Caux.mk_ctype ty2])
+        
+      if is_representable(n, ty2) then
+      n
+    -- (§6.3.1.3#1) Otherwise, if the new type is unsigned, the value is converted by repeatedly
+    -- adding or subtracting one more than the maximum value that can be represented in the new type
+    -- until the value is in the range of the new type.
+    else if is_unsigned(ty2) then
+      conv_aux(ty2, n)
+    
+    -- (§6.3.1.3#1) Otherwise, the new type is signed and the value cannot be represented in it;
+    -- either the result is implementation-defined or an implementation-defined signal is raised.
+    else
+      error -- TODO
+  else
+    error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
+*)
+
+open Implementation
+(* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
+val tmp_implementation: implementation
+let tmp_implementation =
+  make_implementation
+    Two'sComplement
+    ( function
+        | Aty.Char       -> true (* Check that *)
+	| Aty.Signed   _ -> true
+        | Aty.Bool       -> false
+	| Aty.Unsigned _ -> false
+
+        | Aty.IBuiltin str ->
+            error ("WIP: Translation_aux.tmp_implementation (1), IBuiltin '" ^ str ^ "'")
+        | Aty.Enum sym ->
+            error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
+      end
+    )
+    ( function
+        | Aty.Char                  -> 7 (* check *)
+        | Aty.Bool                  -> 1 (* check *)
+        | Aty.Signed   Aty.Ichar    -> 7
+        | Aty.Unsigned Aty.Ichar    -> 8
+        | Aty.Signed   Aty.Short    -> 15
+        | Aty.Unsigned Aty.Short    -> 16
+        | Aty.Signed   Aty.Int_     -> 31
+        | Aty.Unsigned Aty.Int_     -> 32
+        | Aty.Signed   Aty.Long     -> 63
+        | Aty.Unsigned Aty.Long     -> 64
+        | Aty.Signed   Aty.LongLong -> 63
+        | Aty.Unsigned Aty.LongLong -> 64
+
+        | Aty.Signed (Aty.IBBuiltin "int8_t") -> 7
+        | Aty.Signed (Aty.IBBuiltin "int16_t") -> 15
+        | Aty.Signed (Aty.IBBuiltin "int32_t") -> 31
+        | Aty.Signed (Aty.IBBuiltin "int64_t") -> 63
+        | Aty.Signed (Aty.IBBuiltin str) ->
+            error ("WIP: Translation_aux.tmp_implementation, Signed IBBuiltin '" ^ str ^ "'")
+        | Aty.Unsigned (Aty.IBBuiltin "int8_t") -> 8
+        | Aty.Unsigned (Aty.IBBuiltin "int16_t") -> 16
+        | Aty.Unsigned (Aty.IBBuiltin "int32_t") -> 32
+        | Aty.Unsigned (Aty.IBBuiltin "int64_t") -> 64
+        | Aty.Unsigned (Aty.IBBuiltin str) ->
+            error ("WIP: Translation_aux.tmp_implementation, Unsigned IBBuiltin '" ^ str ^ "'")
+        
+        | Aty.IBuiltin str ->
+            error ("WIP: Translation_aux.tmp_implementation (2), IBuiltin '" ^ str ^ "'")
+        | Aty.Enum sym ->
+            error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
+      end
+    )
+    (Aty.Unsigned Aty.Long)
+    (Aty.Signed   Aty.Long)
+
+
+
+open AilTypes
+val is_unsigned_integer_type: ctype -> bool
+let is_unsigned_integer_type = function
+  | Basic (Integer ity) ->
+      AilTypesAux.unsigned_type ity
+  | _ ->
+      false
+end
+
+let function_return_type = function
+  | Function ty _ _ -> ty
+  | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
+end
+
+(* TODO: check with J *)
+
+
+val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
+let from_lvalue_type = function
+  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _ _) -> (qs, ty)
+  | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
+end
+
+
+val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let exp_type_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Right (AilTypes.LValueType _ ty) -> (* unqualify *) ty
+    | Right (AilTypes.RValueType   ty) -> ty
+    | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
+  end
+
+
+val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
+let ctype_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+    | Right (AilTypes.LValueType _ ty) -> ty
+    | Right (AilTypes.RValueType   ty) -> ty
+    | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
+        error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
+                            (Boot.pp_ail_expr a_expr)
+    | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
+        error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
+                            show n
+    | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
+  end
+
+
+val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
+let is_lvalue a_expr =
+  match Annotation.type_of Annotation.concrete_annotation a_expr with
+    | GenTypes.GenLValueType _ _ ->
+        true
+    | GenTypes.GenRValueType _ ->
+        false
+  end
+
+val is_defined_ail_function: forall 'A. AilSyntax.identifier -> AilSyntax.program 'A -> bool
+let is_defined_ail_function sym (_, sigm) =
+  (* NOTE: the `Nothing' case could technically also mean that [sym] is not event registered *)
+  isJust (Context.lookup (=) sigm.AilSyntax.function_definitions sym)
+
+
+
+
+
+
+
+
+
+
+(* STD §6.3.1.8#1 *)
+val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> AilTypes.ctype * C.pexpr -> AilTypes.ctype * C.pexpr -> C.pexpr
+let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
+  let longDouble_ty = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.LongDouble)) in
+  let double_ty      = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))     in
+  let float_ty       = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Float))      in
+  
+  if AilTypesAux.corresponding_real_type ty1 = Just longDouble_ty || AilTypesAux.corresponding_real_type ty2 = Just longDouble_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, long double case"
+  else if AilTypesAux.corresponding_real_type ty1 = Just double_ty || AilTypesAux.corresponding_real_type ty2 = Just double_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, double case"
+  else if AilTypesAux.corresponding_real_type ty1 = Just float_ty || AilTypesAux.corresponding_real_type ty2 = Just float_ty then
+    error "WIP: Translate_aux.mk_usual_arithmetic_conversions, float case"
+  else
+    (* error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!" *)
+    (* TODO !!!!!!! *)
+    mk_pexpr pe1 pe2
