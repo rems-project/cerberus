@@ -429,3 +429,16 @@ let collapse (ND xs) =
       | _ ->
           error "ND.collapse"
     end) actives ++ killed)
+
+val forget_nd_state: forall 'a. nd_state 'a -> maybe 'a
+let forget_nd_state x =
+  match x with 
+  | Active _ _ y -> Just y
+  | _            -> Nothing
+  end
+
+val forget: forall 'a. t 'a -> list 'a
+let forget m =
+  match m with 
+  | ND l -> catMaybes (map forget_nd_state (map snd l))
+  end
