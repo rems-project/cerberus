@@ -282,10 +282,10 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 *)
 
 
-val msum: forall 'a. list (t 'a) -> t 'a (* GENERIC MonadPlus *)
-let msum ms =
+val msum: forall 'a. string -> list (t 'a) -> t 'a (* GENERIC MonadPlus *)
+let msum debug_str ms =
   let () = if List.null ms then
-    Boot.print_debug 5 "ND.msum, empty list"
+    Boot.print_debug 5 ("ND.msum(" ^ debug_str ^ "), empty list")
   else
     () in
   List.foldr mplus mzero ms        (* GENERIC MonadPlus *)
@@ -294,10 +294,10 @@ let msum ms =
 (* Specific operations *)
 
 (* Non-deterministically pick from a list *)
-val pick: forall 'a. list 'a -> t 'a
-let pick xs =
+val pick: forall 'a. string -> list 'a -> t 'a
+let pick debug_str xs =
   let () = if List.null xs then
-    Boot.print_debug 5 "ND.pick, empty list"
+    Boot.print_debug 5 ("ND.pick(" ^ debug_str ^ "), empty list")
   else
     () in
   ND $ List.map (fun (n, z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote xs)

@@ -164,7 +164,7 @@ type ctor =
 type pexpr =
   (* undefined behaviour and late static error / failed assert *)
   | PEundef of Undefined.undefined_behaviour
-  | PEerror of string
+  | PEerror of string * pexpr (* the expression is for debug purpose *)
 
   (* values *)
   | PEval of value
@@ -373,8 +373,12 @@ and action_ =
   | Kill of pexpr
   | Store of pexpr * pexpr * pexpr * Cmm.memory_order
   | Load of pexpr * pexpr * Cmm.memory_order
+  | RMW of pexpr(* ctype *) * pexpr(* object_ptr *) * pexpr(* expected_val *) * pexpr(* desired_val *) * Cmm.memory_order * Cmm.memory_order
+
+(*
   | CompareExchangeStrong of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
   | CompareExchangeWeak of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
+*)
   
   (* TODO: it annoying (maybe wrong) that these are actions *)
 (*  | Ptr of pointer_action * list pexpr *)
@@ -442,6 +446,12 @@ type impl_decl =
   | Def  of core_base_type * pexpr
   | IFun of core_base_type * list (sym * core_base_type) * pexpr
 type impl = map Implementation_.implementation_constant impl_decl
+(*
+type impl_decl =
+  | IConst  of core_base_type * value
+  | IFun of core_base_type * list (sym * core_base_type) * pexpr
+type impl = map Impl_types.impl_name impl_decl
+*)
 
 
 type fun_map_decl 'a =

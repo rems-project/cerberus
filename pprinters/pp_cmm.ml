@@ -47,8 +47,8 @@ let string_of_memory_order = function
       "acq_rel"
 
 
-let string_of_location ptr_val = Pp_utils.to_plain_string (Pp_mem.pp_pointer_value ptr_val)
-let string_of_cvalue mval = Pp_utils.to_plain_string (Pp_mem.pp_mem_value mval)
+let string_of_location ptr_val = Pp_utils.to_plain_string (Pp_mem.pp_pretty_pointer_value ptr_val)
+let string_of_cvalue mval = Pp_utils.to_plain_string (Pp_mem.pp_pretty_mem_value mval)
 
 
 let string_of_action_aux = function
@@ -111,6 +111,7 @@ let dot_of_pre_execution preEx value_str eqs_str =
 
 open Cmm_op
 
+(*
 let dot_of_exeState st value_str eqs_str =
   "digraph G {" ^
   "value [shape=box, label= \"Value: " ^ value_str ^ "\"];" ^
@@ -127,11 +128,78 @@ let dot_of_exeState st value_str eqs_str =
                                       string_of_action act2 ^ "\" [color=\"blue\"];" ^ acc) st.symWit.mo "") ^
 
   "}}"
+*)
+
+
+
+
+
+open Pp_prelude
+
+let pp_action act =
+  !^ (string_of_action act)
+
+let pp_symState (st: Cmm_op.symState) : PPrint.document =
+  let pp_aid act = P.dquotes (!^ ("aid_" ^ string_of_int (Cmm_csem.aid_of act))) in
+  let (asw_colour, rf_colour, mo_colour) = ("deeppink4", "red", "blue") in
+  
+  let thread_docs = List.fold_left (fun acc act ->
+    let tid = Cmm_csem.tid_of act in
+    let xs' = (pp_aid act ^^^ P.brackets (!^ "label" ^^ P.equals ^^^ P.dquotes (pp_action act))) ::
+      match Pmap.lookup tid acc with
+        | Some xs ->
+            xs
+        | None ->
+            [] in
+    Pmap.add tid xs' acc
+  ) (Pmap.empty compare) (Pset.elements st.symPre.actions) in
+  
+  !^ "digraph G" ^^^ P.braces (
+    P.nest 2 (P.hardline ^^
+      P.separate (P.semi ^^ P.hardline) begin
+        (* listing the actions by their aid *)
+        Pmap.fold (fun tid docs acc ->
+          begin
+            !^ ("subgraph cluster_" ^ string_of_int tid) ^^ P.braces (P.hardline ^^
+              P.separate (P.semi ^^ P.hardline) begin
+               (!^ "label" ^^ P.equals ^^^ P.dquotes (!^ ("Thread " ^ string_of_int tid))) :: docs
+              end
+            ^^ P.hardline)
+          end :: acc
+        ) thread_docs [] @
+
+
+(*
+        List.map (fun act ->
+          pp_aid act ^^^ P.brackets (!^ "label" ^^ P.equals ^^^ P.dquotes (pp_action act))
+        ) (Pset.elements st.symPre.actions) @
+*)
+        (* sb, asw, rf, mo *)
+        List.map (fun (act1, act2) ->
+        pp_aid act1 ^^^ P.minus ^^ P.rangle ^^^ pp_aid act2
+      ) (Pset.elements st.symPre.sb) @
+        List.map (fun (act1, act2) ->
+        pp_aid act1 ^^^ P.minus ^^ P.rangle ^^^ pp_aid act2 ^^^ P.brackets (!^ "color" ^^ P.equals ^^^ P.dquotes (!^ asw_colour))
+      ) (Pset.elements st.symPre.asw) @
+        List.map (fun (act1, act2) ->
+        pp_aid act1 ^^^ P.minus ^^ P.rangle ^^^ pp_aid act2 ^^^ P.brackets (!^ "color" ^^ P.equals ^^^ P.dquotes (!^ rf_colour))
+      ) (Pset.elements st.symWit.rf) @
+        List.map (fun (act1, act2) ->
+        pp_aid act1 ^^^ P.minus ^^ P.rangle ^^^ pp_aid act2 ^^^ P.brackets (!^ "color" ^^ P.equals ^^^ P.dquotes (!^ mo_colour))
+      ) (Pset.elements st.symWit.mo)
+      end
+    ) ^^ P.hardline
+  )
+
+
+let dot_of_exeState st _ _ =
+  Pp_utils.to_plain_string (pp_symState st)
+
+
 
 
 let pp_execState st =
   dot_of_exeState st "" ""
-
 
 (*
   type pre_execution =

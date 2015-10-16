@@ -5,7 +5,7 @@ def <bits_in_byte> : integer :=
 
 
 fun ctype_min_void () : integer :=
-  error <<<ctype_min>>> -- TODO
+  error(<<<ctype_min>>>, unit) -- TODO
 
 fun ctype_min_basic (ty: ctype) : integer :=
   if ty = "char" \/ ty = "signed ichar" \/ ty = "int8_t" then
@@ -23,20 +23,20 @@ fun ctype_min_basic (ty: ctype) : integer :=
           \/ ty = "intptr_t" \/ ty = "ptrdiff_t" then
     -9223372036854775808
   else
-    error <<<ctype_min>>> -- TODO
+    error(<<<ctype_min>>>, ty) -- TODO
   end end end end end
 
 fun ctype_min_array (ty: ctype, n: integer) : integer :=
-  <ctype_min>(ty)
+  <Ctype.min>(ty)
 
 fun ctype_min_pointer (ty: ctype) : integer :=
-  <ctype_min>(ty)
+  <Ctype.min>(ty)
 
 fun ctype_min_atomic (ty: ctype) : integer :=
-  <ctype_min>(ty)
+  <Ctype.min>(ty)
 
 
-fun <ctype_min> (ty: ctype) : integer :=
+fun <Ctype.min> (ty: ctype) : integer :=
   case_ctype ( ty,
     ctype_min_void(), ctype_min_basic, ctype_min_array,
     ctype_min_void {- HACK -}, ctype_min_pointer, ctype_min_atomic,
@@ -141,7 +141,7 @@ end
 -}
 
 fun ctype_max_void () : integer :=
-  error <<<ctype_max>>> -- TODO
+  error(<<<ctype_max_void>>>, unit) -- TODO
 
 
 fun ctype_max_basic (ty: ctype) : integer :=
@@ -207,7 +207,7 @@ fun ctype_max_basic (ty: ctype) : integer :=
                                         else
 if ty = "_Atomic(signed int)" then
   2147483647  else
-                                          error <<<ctype_max>>> -- TODO
+                                          error(<<<ctype_max>>>, ty) -- TODO
 end
                                         end
                                       end
@@ -261,16 +261,16 @@ end
 
 
 fun ctype_max_array (ty: ctype, n: integer) : integer :=
-  <ctype_max>(ty)
+  <Ctype.max>(ty)
 
 fun ctype_max_pointer (ty: ctype) : integer :=
-  <ctype_max>(ty)
+  <Ctype.max>(ty)
 
 fun ctype_max_atomic (ty: ctype) : integer :=
-  <ctype_max>(ty)
+  <Ctype.max>(ty)
 
 
-fun <ctype_max> (ty: ctype) : integer :=
+fun <Ctype.max> (ty: ctype) : integer :=
   case_ctype ( ty,
     ctype_max_void(), ctype_max_basic, ctype_max_array,
     ctype_max_void {- HACK -}, ctype_max_pointer, ctype_max_atomic,
@@ -293,7 +293,7 @@ fun <ctype_max> (ty: ctype) : integer :=
 
 
 fun sizeof_void () : integer :=
-  error <<<sizeof_void>>> -- sizeof can only be called on complete types
+  error(<<<sizeof_void>>>, unit) -- sizeof can only be called on complete types
 
 fun sizeof_basic (ty: ctype) : integer :=
   if    ty = "char" \/ ty = "_Bool"
@@ -309,7 +309,7 @@ fun sizeof_basic (ty: ctype) : integer :=
           \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
     8
   else
-    error <<<sizeof_basic>>> -- TODO
+    error(<<<sizeof_basic>>>, ty) -- TODO
   end end end end
 
 fun sizeof_array (ty: ctype, n: integer) : integer :=
@@ -348,7 +348,7 @@ fun alignof_basic (ty: ctype) : integer :=
           \/ ty = "size_t" \/ ty = "intptr_t" \/ ty = "uintptr_t" \/ ty = "ptrdiff_t" then
     8
   else
-    error <<<alignof_basic>>> -- TODO
+    error(<<<alignof_basic>>>, ty) -- TODO
   end end end end
 
 fun alignof_array (ty: ctype, n: integer) : integer :=

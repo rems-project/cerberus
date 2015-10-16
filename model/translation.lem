@@ -95,7 +95,7 @@ let shiftPathFromMember program tag ident =
         ) (Left []) ident_tys in
         sh
     | Just (A.UnionDef ident_tys) ->
-        [(Caux.proj_ctype (fromJust $ List.lookup ident ident_tys), Caux.zero)]
+        [(Caux.proj_ctype (fromJust "Translation.shiftPathFromMember" $ List.lookup ident ident_tys), Caux.zero)]
     
     | Nothing ->
         error ("Translation.shiftPathFromMember: couldn't find a definition for `" ^ show tag ^ "'")
@@ -178,6 +178,22 @@ let translate_integerConstant iCst =
   ))
 
 
+let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
+  match expr with
+    | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
+        match natFromInteger n with
+          | 0 -> Cmm.Relaxed
+          | 1 -> Cmm.Consume
+          | 2 -> Cmm.Acquire
+          | 3 -> Cmm.Release
+          | 4 -> Cmm.Acq_rel
+          | 5 -> Cmm.Seq_cst
+          | _ ->
+              error ("Translation.translate_memory_order: " ^ show n)
+        end
+    | _ ->
+        error ("Translation.translate_memory_order: " ^ Boot.pp_ail_expr a_expr)
+  end
 
 
 
@@ -596,7 +612,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   "Nothing"
             end) >>
             
-            let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
+            let common_ty = fromJust "Translation.translate_expression, Add" $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
             let conv_pe1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
             let conv_pe2 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e2] in
             E.return $
@@ -662,7 +678,7 @@ and translate_expression stdlib program is_lvalue a_expr =
             E.print_debug 9 ("ty1 = " ^ Boot.pp_ail_ctype ty1) >>
             E.print_debug 9 ("ty2 = " ^ Boot.pp_ail_ctype ty2) >>
 
-            let common_ty = fromJust $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
+            let common_ty = fromJust "Translation.translate_expression, Sub" $ AilTypesAux.usual_arithmetic tmp_implementation (exp_type_of e1) (exp_type_of e2) in
 
             E.print_debug 9 "AFTER fromJust" >>
             let conv_e1 = conv_int [Caux.mk_ctype common_ty; C.PEsym sym_e1] in
@@ -928,8 +944,15 @@ and translate_expression stdlib program is_lvalue a_expr =
                       (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
                   
                   else if Aaux.is_null_pointer_constant e1 then
+                    (* TODO: check that *)
+                    match Core_aux.proj_ctype (exp_type_of e1) with
+                      | Cty.Pointer _ ref_ty ->
+                          C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e2])
+                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                    end
+(*                    
                     error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
-                  
+*)
                   else
                     error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
                 end
@@ -1006,12 +1029,12 @@ and translate_expression stdlib program is_lvalue a_expr =
                 let e_ty = exp_type_of e in
                 if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
                   (* making a pointer from an integer *)
-                  let ref_ty = fromJust $ AilTypesAux.referenced_type ty in
+                  let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type ty in
                   C.Ememop Mem.PtrFromInt [Caux.mk_ctype e_ty; Caux.mk_ctype ref_ty; C.PEsym sym_e]
                   
                 else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
                   (* making an integer from a pointer *)
-                  let ref_ty = fromJust $ AilTypesAux.referenced_type e_ty in
+                  let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" $ AilTypesAux.referenced_type e_ty in
                   C.Ememop Mem.IntFromPtr [Caux.mk_ctype ref_ty; Caux.mk_ctype ty; C.PEsym sym_e]
                 else
                   (* TODO: check *)
@@ -1033,22 +1056,7 @@ and translate_expression stdlib program is_lvalue a_expr =
 *)
 
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
-         let mo = match order_e with
-           | A.AnnotatedExpression _ _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
-               match natFromInteger n with
-                 | 0 -> Cmm.Relaxed
-                 | 1 -> Cmm.Consume
-                 | 2 -> Cmm.Acquire
-                 | 3 -> Cmm.Release
-                 | 4 -> Cmm.Acq_rel
-                 | 5 -> Cmm.Seq_cst
-                 | _ ->
-                     error ("atomic_store_explicit other order number: " ^ show n)
-               end
-           | _ ->
-               error ("atomic_store_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
-         end in
-         
+         let mo = translate_memory_order order_e in
          let ty = match ctype_of object_e with
            | Aty.Pointer _ ty ->
                ty
@@ -1066,22 +1074,7 @@ and translate_expression stdlib program is_lvalue a_expr =
              (C.Eaction (C.Paction C.Pos (C.Action loc () (C.Store (Caux.mk_ctype ty) (C.PEsym sym_object) (C.PEsym sym_desired) mo))))
 
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
-         let mo = match order_e with
-           | A.AnnotatedExpression _ _ (A.AilEconst (A.ConstantInteger (A.IConstant n _ _))) ->
-               match natFromInteger n with
-                 | 0 -> Cmm.Relaxed
-                 | 1 -> Cmm.Consume
-                 | 2 -> Cmm.Acquire
-                 | 3 -> Cmm.Release
-                 | 4 -> Cmm.Acq_rel
-                 | 5 -> Cmm.Seq_cst
-                 | _ ->
-                     error ("atomic_load_explicit other order number: " ^ show n)
-               end
-           | _ ->
-               error ("atomic_load_explicit other order expr: " ^ Boot.pp_ail_expr order_e)
-         end in
-         
+         let mo = translate_memory_order order_e in
          let ty = match ctype_of object_e with
            | Aty.Pointer _ ty ->
                ty
@@ -1097,6 +1090,37 @@ and translate_expression stdlib program is_lvalue a_expr =
              (C.Eaction (C.Paction C.Pos (C.Action loc () (C.Load (Caux.mk_ctype ty) (C.PEsym sym_object) mo))))
       
       
+     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
+         let mo_success = translate_memory_order order_success_e in
+         let mo_failure = translate_memory_order order_failure_e in
+         let ty = match ctype_of object_e with
+           | Aty.Pointer _ ty ->
+               ty
+           | _ ->
+               error "Translation.translate_expression, AilEcall atomic_compare_exchange_strong_explicit: Ail type error"
+         end in
+         
+         E.fresh_symbol              >>= fun sym_object       ->
+         E.fresh_symbol              >>= fun sym_expected_ptr ->
+         E.fresh_symbol              >>= fun sym_expected_val ->
+         E.fresh_symbol              >>= fun sym_desired      ->
+         translate_rvalue object_e   >>= fun core_object_e    ->
+         translate_rvalue expected_e >>= fun core_expected_e  ->
+         translate_rvalue desired_e  >>= fun core_desired_e   ->
+         E.return $
+           (* TODO: weak or strong seq? *)
+           C.Esseq [Just sym_object; Just sym_expected_ptr; Just sym_desired] (C.Eunseq [core_object_e; core_expected_e; core_desired_e])
+             (C.Esseq [Just sym_expected_val] (Caux.pload loc (Caux.mk_ctype (AilTypesAux.unatomic ty)) (C.PEsym sym_expected_ptr) Cmm.NA)
+                (Caux.prmw loc (Caux.mk_ctype (AilTypesAux.unatomic ty)) (C.PEsym sym_object) (C.PEsym sym_expected_val) (C.PEsym sym_desired)
+                   mo_success mo_failure)
+             )
+
+(*
+             (C.Eaction (C.Paction C.Pos (C.Action loc ()
+               (C.CompareExchangeStrong (Caux.mk_ctype ty) (C.PEsym sym_object) (C.PEsym sym_expected) (C.PEsym sym_desired) mo_success mo_failure))))
+*)
+
+
       (* TODO:
            * (§6.5.2.2#6) since we don't support prototype-less functions, we don't do
                           "default argument promotions"
@@ -1231,7 +1255,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                         )
                       )
 )
-            | _ -> error "[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type"
+            | _ -> error ("[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type ==> " ^ Boot.pp_ail_expr e)
           end
       
       | A.AilEassert e ->
@@ -1240,7 +1264,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           E.return $
             C.Esseq [Just a_e] core_e 
               (C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym a_e) Caux.zero)
-                          (C.PEerror "assert() failure")
+                          (C.PEerror "assert() failure" (C.PEval C.Vunit))
                           (C.PEval C.Vunit)
                        )
               )
@@ -1281,7 +1305,7 @@ and translate_expression stdlib program is_lvalue a_expr =
             mk_core (C.Epure (C.PEarray pes))
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          let ident_tys = fromJust $ Map.lookup tag_sym (Cty.tagDefs ()) in
+          let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym (Cty.tagDefs ()) in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -1292,7 +1316,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     fun z -> C.Esseq [Just sym_e] core_e (mk_core z)
                   )
               | Nothing ->
-                  let ty = fromJust $ List.lookup ident ident_tys in
+                  let ty = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
                   E.return (
                     (ident, C.PEval (C.Vunspecified ty)) :: acc,
                     mk_core
@@ -1356,7 +1380,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 if is_lvalue then
                   C.Epure z
                 else
-                  let memb_ty = fromJust (List.lookup ident (Cty.get_membersDefs tag_sym)) in
+                  let memb_ty = fromJust "Translation.translate_expression, AilEmemberofptr" (List.lookup ident (Cty.get_membersDefs tag_sym)) in
                   Caux.pload loc (C.PEval (C.Vctype memb_ty)) z Cmm.NA (* TODO: check MO *)
               ) (C.PEmember_shift (C.PEsym sym_e) tag_sym ident))
 (*
@@ -1788,12 +1812,12 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSbreak ->
         E.get_visible_objects >>= fun visible_syms ->
         E.return $
-          C.Erun default (fromJust labs.break) [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]
+          C.Erun default (fromJust "Translation.translate_statement, AilSbreak" labs.break) [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]
 
     
     | A.AilScontinue -> do E
         visible_as <- E.get_visible_objects; in
-          E.return $ C.Erun default (fromJust labs.loop) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
+          E.return $ C.Erun default (fromJust "Translation.translate_statement, AilScontinue" labs.loop) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
         end
     
     | A.AilSreturnVoid -> do E
@@ -1878,7 +1902,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSdefault s -> do E
         core_s     <- translate_stmt_ s;
         visible_as <- E.get_visible_objects; in
-          E.return $ C.Esave (fromJust labs.default) [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] core_s
+          E.return $ C.Esave (fromJust "Translation.translate_statement, AilSdefault" labs.default) [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] core_s
         end
     
     | A.AilSlabel l s -> do E

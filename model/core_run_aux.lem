@@ -152,6 +152,95 @@ end
 
 
 
+val     add_to_asw: set (action_id) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+let rec add_to_asw aids expr =
+  match expr with
+    | Epure _ ->
+        (* no change *)
+        expr
+    | Ememop _ _ ->
+        (* no change *)
+        expr
+    | Eraise _ ->
+        (* no change *)
+        expr
+    | Eregister _ _ ->
+        (* no change *)
+        expr
+    | Eskip ->
+        (* no change *)
+        expr
+    | Elet a pe1 e2 ->
+        Elet a pe1 (add_to_asw aids e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
+    | Eproc annots nm pes ->
+        Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
+    | Eaction (Paction p' (Action loc annots a)) ->
+        let _ = Boot.print_debug 1 ("NEW ASW => " ^ show (Set.size aids)) in
+        Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
+    | Eunseq es ->
+        Eunseq (List.map (add_to_asw aids) es)
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (add_to_asw aids e1) e2
+    | Esseq _as e1 e2 ->
+        Esseq _as (add_to_asw aids e1) e2
+    | Easeq _ _ _ ->
+        error "Core_run_aux.add_to_asw, Easeq"
+    | Eindet _ ->
+        error "Core_run_aux.add_to_asw, Eindet"
+    | Ebound _ _ ->
+        error "Core_run_aux.add_to_asw, Ebound"
+    | Esave k a_tys e ->
+        Esave k a_tys (add_to_asw aids e)
+    | Erun annots k a_vs ->
+        Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
+    | Eret _ ->
+        (* no change *)
+        expr
+    | End es ->
+        End (List.map (add_to_asw aids) es)
+    | Epar es ->
+        Epar (List.map (add_to_asw aids) es)
+    | Ewait _ ->
+        (* no change *)
+        expr
+  end
+
+val add_to_asw_stack: set (action_id) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+
+let rec add_to_asw_continuation aids = function
+  | [] ->
+      []
+  | Kunseq es1 es2 :: cont ->
+      Kunseq (List.map (add_to_asw aids) es1) (List.map (add_to_asw aids) es2) :: add_to_asw_continuation aids cont
+  | Kwseq _as e2 :: cont ->
+      Kwseq _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
+  | Ksseq _as e2 :: cont ->
+      Ksseq _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
+end
+let rec add_to_asw_stack aids = function
+  | Stack_empty ->
+      Stack_empty
+  | Stack_cons cont sk ->
+      Stack_cons (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 val     comma_list: forall 'a. ('a -> string) -> list 'a -> string
 let rec comma_list f = function
   | [] ->

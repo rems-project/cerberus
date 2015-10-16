@@ -115,6 +115,7 @@ let (>>=) = Exception.bind2
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
+        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_t_dict.Lem_pervasives.setElemCompare_method));
         Exception.return2 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;

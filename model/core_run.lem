@@ -22,8 +22,10 @@ module EU  = Exception_undefined
 module SEU = State_exception_undefined
 
 
-val stringFromValue: Core.value ->string
+val stringFromValue: Core.value -> string
+val stringFromPexpr: Core.pexpr -> string 
 declare ocaml target_rep function stringFromValue = `String_core.string_of_value`
+declare ocaml target_rep function stringFromPexpr = `String_core.string_of_pexpr`
 
 
 open Exception.Operators
@@ -117,8 +119,8 @@ val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
 let rec core_eval file inside_if = function
   | PEundef ub ->
       Exception.return (Undefined.undef [ub])
-  | PEerror str ->
-      Exception.return (Undefined.error str)
+  | PEerror str pe ->
+      Exception.return (Undefined.error (str ^ " ==> " ^ stringFromPexpr pe))
   | (PEval _ as pexpr) ->
 (* TODO:
     match expr with
@@ -734,7 +736,7 @@ end
       match valueFromPexprs pes' with
         | Just cvals ->
             let xs' = List.map (fun ((ident, ty), cval) ->
-              (ident, fromJust $ memValueFromValue ty cval)
+              (ident, fromJust "Core_run.core_eval, PEstruct" $ memValueFromValue ty cval)
             ) (List.zip (Core_ctype_aux.get_membersDefs tag_sym) cvals) in
             EU.return $ PEval (Vstruct tag_sym xs')
         | Nothing ->
@@ -868,13 +870,25 @@ let rec full_core_eval file inside_if pe =
   end
 
 
+(* DEBUG *)
+type exec_location =
+  | ELoc_globals
+  | ELoc_normal of list Core.sym
 
+let push_exec_loc sym = function
+  | ELoc_globals ->
+      ELoc_normal [sym]
+  | ELoc_normal syms ->
+      ELoc_normal (sym :: syms)
+end
 
 type thread_state = <|
   arena:  expr core_run_annotation;
 (*  arenas:  list (expr core_run_annotation); *)
   stack:  stack core_run_annotation;
   labels: map ksym (list (sym * ctype) * expr core_run_annotation);
+  
+  exec_loc: exec_location; (* DEBUG *)
 |>
 
 
@@ -999,7 +1013,7 @@ let liftMem m =
   )
 *)
 
-
+(*
 type action_request =
   (* RequestName  of sbBefore * ddBefore * aswBefore
                      parameters of request *
@@ -1041,6 +1055,7 @@ type action_request =
                      action_id * thread_id * Cmm.memory_order *
                      (SEU.t thread_state Symbol.counter core_run_error)
 *)
+*)
 
 
 (*
@@ -1052,37 +1067,6 @@ type pointer_request =
   | PtrShiftRequest of ctype * Mem.pointer_value * Symbolic.symbolic (* integer value *) *
                        (Core.expr core_run_annotation -> core_state)
 *)
-
-
-type core_step =
-  | Step_action_request of (* DEBUG *) string * thread_id * core_runM action_request
-  | Step_tau of (* DEBUG *) string * thread_id * core_runM core_state
-  | Step_thread_done of thread_id * core_runM core_state
-  | Step_eval of (* DEBUG *) string * thread_id * core_runM core_state
-(*  | Step_output of core_runM (string * core_state) *)
-  | Step_nd of string * list core_step
-  | Step_blocked
-(*
-  | Step_branch of (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_step * core_step
-*)
-  | Step_branch of (* DEBUG *) string * thread_id * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM core_state * core_runM core_state
-  | Step_done of Core.value
-  
-  | Step_spawn_threads of thread_id * thread_state * list thread_state
-
-(*
-  TODO: these twos variant are not needed because the preEx incrementation function
-        is clever enough to spot thread spawning/kills
-  
-  
-    (* the first tid is that of the parent thread, and the following computation
-       returns the tids of the spawned threads and the new core state *)
-  | Step_spawn_threads of thread_id * SEU.t (set thread_id * core_state) core_run_state core_run_error
-  
-    (* the computation returns the tid of the killed threand and the new core state *)
-  | Step_kill_thread of thread_id * SEU.t (thread_id * core_state) core_run_state core_run_error
-*)
-
 
 
 
@@ -1123,8 +1107,8 @@ let spawn_thread parent_tid_opt th_st st =
   )
 
 
-val kill_thread: thread_id -> thread_id -> Core.value -> core_state -> core_state
-let kill_thread tid parent_tid v st =
+val kill_thread: thread_id -> thread_id -> set action_id -> Core.value -> core_state -> core_state
+let kill_thread tid parent_tid aswBefores v st =
   <| st with
        thread_states= assoc_adjust (fun (parent_tid_opt, th_st) ->
          (parent_tid_opt, <| th_st with
@@ -1132,7 +1116,7 @@ let kill_thread tid parent_tid v st =
 (*
             arenas= List.map (subst_wait tid v) th_st.arenas; (* NOTE!!!! ==> in fact here arenas must be a singleton (since Epar is not allowed inside Eunseq) *)
 *)
-            stack= subst_wait_stack tid v th_st.stack |>)
+            stack= add_to_asw_stack aswBefores (subst_wait_stack tid v th_st.stack) |>)
        ) parent_tid $ assoc_remove tid st.thread_states
   |>
 
@@ -2347,46 +2331,49 @@ module E = struct
 end
 
 
-type action_request2 =
-  (* RequestName  of sbBefore * ddBefore * aswBefore
+type action_request =
+  (* RequestName  of location * sbBefore * ddBefore * aswBefore
                      parameters of request *
                      the new state or a callback *)
-  | AllocRequest2  of Loc.t * set action_id * set action_id * set action_id *
-                     action_id * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
-                     (Mem.pointer_value -> thread_state)
+  | AllocRequest of Loc.t * set action_id * set action_id * set action_id *
+                    action_id * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
+                    (Mem.pointer_value -> thread_state)
   
-  | CreateRequest2 of Loc.t * set action_id * set action_id * set action_id *
+  | CreateRequest of Loc.t * set action_id * set action_id * set action_id *
                      action_id * thread_id * Symbol.prefix * Mem.integer_value * ctype *
                      (Mem.pointer_value -> thread_state)
   
-  | LoadRequest2  of Loc.t * set action_id * set action_id * set action_id * 
-                     (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
-                     action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.t *
-                     (* the argument of the callback is either a concrete value if the memory model
-                        is able to give one right away, or is equal to the symbolic value provided by the
-                        present LoadRequest *)
-                     (Mem.mem_value -> thread_state)
+  | LoadRequest of Loc.t * set action_id * set action_id * set action_id * 
+                   (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
+                   action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.t *
+                   (* the argument of the callback is either a concrete value if the memory model
+                      is able to give one right away, or is equal to the symbolic value provided by the
+                      present LoadRequest *)
+                   (Mem.mem_value -> thread_state)
 
-  | StoreRequest2 of Loc.t * set action_id * set action_id * set action_id *
-                     action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
-                     thread_state
-  | KillRequest2 of  Loc.t * set action_id * set action_id * set action_id *
-                     action_id * thread_id * Mem.pointer_value * thread_state
+  | StoreRequest of Loc.t * set action_id * set action_id * set action_id *
+                    action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                    thread_state
+  | RMWRequest of Loc.t * set action_id * set action_id * set action_id *
+                  action_id * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
+                  Mem.mem_value * Mem.mem_value * thread_state
+  | KillRequest of Loc.t * set action_id * set action_id * set action_id *
+                   action_id * thread_id * Mem.pointer_value * thread_state
 
-type core_step2 =
-  | Step2_action_request of core_runM action_request2
-  | Step2_memop_request of Mem.memop * list Core.value * thread_id * (Core.value -> thread_state)
-  | Step2_tau of string * core_runM thread_state
-  | Step2_eval of string * core_runM thread_state
-  | Step2_thread_done of thread_id * Core.value
-(*  | Step2_nd of string * list core_step *)
-  | Step2_blocked
-  | Step2_error of string
-  | Step2_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
-  | Step2_done of Core.value
-  | Step2_spawn_threads of list thread_state (* initial states for the children *)
-  | Step2_output of (* DEBUG *) string * string * thread_state
-  | Step2_printf of list Core_ctype.ctype * list Core.value * (list string -> string) * (integer -> thread_state)
+type core_step =
+  | Step_action_request of core_runM action_request
+  | Step_memop_request of Mem.memop * list Core.value * thread_id * (Core.value -> thread_state)
+  | Step_tau of string * core_runM thread_state
+  | Step_eval of string * core_runM thread_state
+  | Step_thread_done of thread_id * Core.value
+(*  | Step_nd of string * list core_step *)
+  | Step_blocked
+  | Step_error of string
+  | Step_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
+  | Step_done of Core.value
+  | Step_spawn_threads of (Core.expr core_run_annotation -> thread_state) * list thread_state (* initial states for the children *)
+  | Step_output of (* DEBUG *) string * string * thread_state
+  | Step_printf of list Core_ctype.ctype * list Core.value * (list string -> string) * (integer -> thread_state)
 
 
 
@@ -2394,13 +2381,13 @@ type core_step2 =
 
 
 val core_action_step:
-    Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step2
+    Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
     Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
   let dd_before = {(* TODO *)} in
-  let asw_before =
+  let asw_before_ =
     if has_sbBefore_on_thread current_tid annots then
       {}
     else
@@ -2411,32 +2398,36 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
           | _ ->
               false
         end) annots.sb_before in
+  
+  let asw_before = annots.asw_before union asw_before_ in
+
+  
   match act with
     | Create pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vinteger ival), Just (Vctype ty)) ->
-              Step2_action_request (
+              Step_action_request (
                 E.fresh_action_id >>= fun create_aid ->
                 E.return (
-                  CreateRequest2 loc sb_before dd_before asw_before
+                  CreateRequest loc sb_before dd_before asw_before
                     create_aid current_tid pref ival ty
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
-                        stack= (* add_to_sb_stack {(p, (current_tid, create_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                        stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>)
                     )
                   )
           | (Just _, Just _) ->
-              Step2_error ("found a create() with ill-typed operands [" ^ Boot.pp_prefix pref ^ "]")
+              Step_error ("found a create() with ill-typed operands [" ^ Boot.pp_prefix pref ^ "]")
           | (Nothing, _) ->
-              Step2_eval "first operand of a Create" (
+              Step_eval "first operand of a Create" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
-              Step2_eval "second operand of a Create" (
+              Step_eval "second operand of a Create" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
@@ -2446,28 +2437,28 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
     | Alloc pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vinteger ival1), Just (Vinteger ival2)) ->
-              Step2_action_request (
+              Step_action_request (
                 E.fresh_action_id >>= fun alloc_aid ->
                 E.return (
-                  AllocRequest2 loc sb_before dd_before asw_before
+                  AllocRequest loc sb_before dd_before asw_before
                     alloc_aid current_tid pref ival1 ival2
                     (fun ptr_val -> <| th_st with
                         arena= Epure (PEval (Vpointer ptr_val));
-                        stack= (* add_to_sb_stack {(p, (current_tid, alloc_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                        stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>)
                     )
                   )
           | (Just _, Just _) ->
-              Step2_error "found a alloc() with ill-typed operands"
+              Step_error "found a alloc() with ill-typed operands"
           | (Nothing, _) ->
-              Step2_eval "first operand of a Alloc" (
+              Step_eval "first operand of a Alloc" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
-              Step2_eval "second operand of a Alloc" (
+              Step_eval "second operand of a Alloc" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref)))
@@ -2477,21 +2468,21 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
     | Kill pe ->
         match valueFromPexpr pe with
           | Just (Vpointer ptr_val) ->
-              Step2_action_request (
+              Step_action_request (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
-                  KillRequest2 loc sb_before dd_before asw_before
+                  KillRequest loc sb_before dd_before asw_before
                     kill_aid current_tid ptr_val
                     <| th_st with
                       arena= Eskip;
-                      stack= (* add_to_sb_stack {(p, (current_tid, kill_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                      stack= add_to_sb_stack {(p, (current_tid, kill_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>
                 )
               )
           | Just _ ->
-              Step2_error "found a kill() with an ill-typed operand"
+              Step_error "found a kill() with an ill-typed operand"
           | Nothing ->
-              Step2_eval "operand of kill()" (
+              Step_eval "operand of kill()" (
                 E.core_eval file false pe >>= fun pe' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Kill pe')))
@@ -2503,41 +2494,41 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
           | (Just (Vctype ty), Just (Vpointer ptr_val), Just cval) ->
               match memValueFromValue (Core_ctype.unatomic ty) cval with
                 | Just mem_val ->
-                    Step2_action_request (
+                    Step_action_request (
                       E.fresh_action_id >>= fun store_aid ->
                       E.fresh_symbol    >>= fun val_sym   ->
                       E.return (
-                        StoreRequest2 loc sb_before dd_before asw_before
+                        StoreRequest loc sb_before dd_before asw_before
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
                             arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
-                            stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                            stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>
                       )
                     )
                 | Nothing ->
-                    Step2_error ("the value of a store() didn't match the lvalue type: " ^
+                    Step_error ("the value of a store() didn't match the lvalue type: " ^
                       Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Boot.pp_core_expr ((Epure (PEval cval)) : Core.expr unit) ^ "")
               end
           | (Just v1, Just v2, Just v3) ->
-              Step2_error ("found a store() with ill-typed operands: " ^
+              Step_error ("found a store() with ill-typed operands: " ^
                            stringFromValue v1 ^ " <-> " ^ stringFromValue v2 ^ " <-> " ^ stringFromValue v3)
           | (Nothing, _, _) ->
-              Step2_eval "first operand of a Store" (
+              Step_eval "first operand of a Store" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo)))
                 |>
               )
           | (_, Nothing, _) ->
-              Step2_eval "second operand of a Store" (
+              Step_eval "second operand of a Store" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo)))
                 |>
               )
           | (_, _, Nothing) ->
-              Step2_eval "third operand of a Store" (
+              Step_eval "third operand of a Store" (
                 E.core_eval file false pe3 >>= fun pe3' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo)))
@@ -2547,11 +2538,117 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
     | Load pe1 pe2 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vctype ty), Just (Vpointer ptr_val)) ->
-              Step2_action_request (
+              Step_action_request (
                 E.fresh_action_id >>= fun load_aid ->
                 E.fresh_symbol    >>= fun val_sym  ->
                 E.return (
-                  LoadRequest2 loc sb_before dd_before asw_before
+                  LoadRequest loc sb_before dd_before asw_before
+                    load_aid current_tid mo ty ptr_val val_sym
+                    (fun mem_val -> <| th_st with
+                        arena= Epure (PEval (valueFromMemValue mem_val));
+                        stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
+                    |>)
+                )
+              )
+          | (Just _, Just _) ->
+              Step_error "found a load with ill-typed operands"
+          | (Nothing, _) ->
+              Step_eval "first operand of a Load" (
+                E.core_eval file false pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
+                |>
+              )
+          | (_, Nothing) ->
+              Step_eval "second operand of a Load" (
+                E.core_eval file false pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
+                |>
+              )
+        end
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3, valueFromPexpr pe4) with
+          | (Just (Vctype ty), Just (Vpointer ptr_val), Just cval_expected, Just cval_desired) ->
+              match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
+                | (Just mval_expected, Just mval_desired) ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun rmw_aid ->
+                      E.return (
+                        RMWRequest loc sb_before dd_before asw_before
+                          rmw_aid current_tid mo1 mo2 ty ptr_val mval_expected mval_desired
+                          <| th_st with
+                            arena= Epure (PEval Vtrue); (* TODO *)
+                            stack= add_to_sb_stack {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+
+
+(*
+  | RMW of aid * tid * memory_order * location * cvalue * cvalue  (* first val = value read; second val = value written *)
+*)
+
+(*
+                    Step_action_request (
+                      E.fresh_action_id >>= fun rmw_aid ->
+                      E.fresh_symbol    >>= fun val_sym ->
+                      E.return (
+                        StoreRequest loc sb_before dd_before asw_before
+                          store_aid current_tid mo ty ptr_val mem_val
+                          <| th_st with
+                            arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
+                            stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+*)
+                | _ ->
+                    Step_error ("one of the values of a rmw() didn't match the lvalue type: " ^
+                      Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^
+                                Boot.pp_core_expr ((Epure (PEval cval_expected)) : Core.expr unit) ^ " <-> " ^
+                                Boot.pp_core_expr ((Epure (PEval cval_desired)) : Core.expr unit))
+              end
+          | (Just _, Just _, Just _, Just _) ->
+              Step_error "found a rmw with ill-typed operands"
+          | (Nothing, _, _, _) ->
+              Step_eval "first operand of a RMW" (
+                E.core_eval file false pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1' pe2 pe3 pe4 mo1 mo2)))
+                |>
+              )
+          | (_, Nothing, _, _) ->
+              Step_eval "second operand of a RMW" (
+                E.core_eval file false pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2' pe3 pe4 mo1 mo2)))
+                |>
+              )
+          | (_, _, Nothing, _) ->
+              Step_eval "third operand of a RMW" (
+                E.core_eval file false pe3 >>= fun pe3' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3' pe4 mo1 mo2)))
+                |>
+              )
+          | (_, _, _, Nothing) ->
+              Step_eval "fourth operand of a RMW" (
+                E.core_eval file false pe4 >>= fun pe4' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3 pe4' mo1 mo2)))
+                |>
+              )
+        end
+
+(*
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
+          | (Just (Vctype ty), Just (Vpointer ptr_val)) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun load_aid ->
+                E.fresh_symbol    >>= fun val_sym  ->
+                E.return (
+                  LoadRequest loc sb_before dd_before asw_before
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
                         arena= Epure (PEval (valueFromMemValue mem_val));
@@ -2560,36 +2657,35 @@ let core_action_step file current_tid (parent_tid_opt, th_st) (Paction p (Action
                 )
               )
           | (Just _, Just _) ->
-              Step2_error "found a load with ill-typed operands"
+              Step_error "found a load with ill-typed operands"
           | (Nothing, _) ->
-              Step2_eval "first operand of a Load" (
+              Step_eval "first operand of a Load" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
                 |>
               )
           | (_, Nothing) ->
-              Step2_eval "second operand of a Load" (
+              Step_eval "second operand of a Load" (
                 E.core_eval file false pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
                 |>
               )
         end
-    | _ ->
-        error "OTHER ACTION"
+*)
   end
 
 
 
-val core_thread_step2: Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> list core_step2
+val core_thread_step2: Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> list core_step
 let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   match (th_st.arena, th_st.stack) with
     | (Eskip, Stack_cons cont sk') ->
         (* ---------------------------------------
            <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
-        one $ Step2_tau "Eskip" (
+        one $ Step_tau "Eskip" (
           E.return <| th_st with arena= apply_continuation cont (Epure (PEval Vunit)); stack= Stack_cons [] sk' |>
         )
     
@@ -2599,11 +2695,11 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
            <let α = pe1 in e2, κs, Λ> --τ--> <e2[α\v], κs, Λ> *)
         one match valueFromPexpr pe1 with
           | Just cval ->
-              Step2_tau "Elet" (
+              Step_tau "Elet" (
                 E.return <| th_st with arena= subst_sym sym (PEval cval) e2 |>
               )
           | Nothing ->
-              Step2_eval "Elet" (
+              Step_eval "Elet" (
                 E.core_eval file false pe1 >>= fun pe1' ->
                 E.return <| th_st with arena= Elet sym pe1' e2 |>
               )
@@ -2617,13 +2713,13 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                                                    '- <e3, κs>  IF v = false *)
         match valueFromPexpr pe1 with
           | Just Vtrue ->
-              one $ Step2_tau "Eif (then)" (
+              one $ Step_tau "Eif (then)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
                 E.return <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
               )
           | Just Vfalse ->
-              one $ Step2_tau "Eif (else)" (
+              one $ Step_tau "Eif (else)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                 E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
@@ -2631,9 +2727,9 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | Just (Vsymbolic _) ->
               error "WIP: Eif, Vsymbolic"
           | Just _ ->
-              one $ Step2_error "the first operand of an Eif didn't evaluated to a boolean"
+              one $ Step_error "the first operand of an Eif didn't evaluated to a boolean"
           | Nothing ->
-              one $ Step2_eval "Eif" (
+              one $ Step_eval "Eif" (
                 E.core_eval file true pe1 >>= fun pe1' ->
                 E.return <| th_st with arena= Eif pe1' e2 e3 |>
               )
@@ -2644,14 +2740,14 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | Just cvals ->
               match nm with
                 | Sym psym ->
-                    Step2_tau "Eproc" (
+                    Step_tau "Eproc" (
                       SEU.runEU (
                         Exception.bind (call_proc file psym cvals)
                           EU.return
                       ) >>= fun expr ->
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                      let a_expr = (* add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) *) (* TODO: bring back for concurrency !!! *) expr in
-                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk |>
+                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
                     )
                 | Impl (StdFunction "printf") ->
                     match cvals with
@@ -2677,11 +2773,11 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                           
                           (* TODO!!! this is wrong: the loads don't have any associated action_request, so
                              they are not visible to the concurrency *)
-                          Step2_printf tys args mk_str (fun n ->
+                          Step_printf tys args mk_str (fun n ->
                             <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival n))) |>
                           )
 (*
-                          Step2_output "printf" frmt_str (
+                          Step_output "printf" frmt_str (
                             <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival 0))) |> (* TODO *)
                           )
 *)
@@ -2706,7 +2802,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                     error ("WIP: Eproc ==> " ^ Boot.pp_core_expr th_st.arena)
               end
           | Nothing ->
-              Step2_eval "Eproc" (
+              Step_eval "Eproc" (
                 E.core_evals file false pes >>= fun pes' ->
                 E.return <| th_st with arena= Eproc annots nm pes' |>
               )
@@ -2716,11 +2812,11 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
     | (Ememop memop pes, _) ->
         one match valueFromPexprs pes with
           | Just cvals ->
-              Step2_memop_request memop cvals current_tid (fun cval ->
+              Step_memop_request memop cvals current_tid (fun cval ->
                 <| th_st with arena= Epure (PEval cval) |>
               )
           | Nothing ->
-              Step2_eval "Ememop" (
+              Step_eval "Ememop" (
                 E.core_evals file false pes >>= fun pes' ->
                 E.return <| th_st with arena= Ememop memop pes' |>
               )
@@ -2730,7 +2826,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | (Ptreq, Just cvals) ->
               match Mem.eq_ptrval (* TODO *)Symbolic.Constraints_TODO ptr_val1 ptr_val2 with
                 | Just b ->
-                    one $ Step2_tau "Ememop, Ptreq" (
+                    one $ Step_tau "Ememop, Ptreq" (
                       E.return <| th_st with arena= Epure (PEval (if b then Vtrue else Vfalse)) |>
                     )
                 | Nothing ->
@@ -2753,15 +2849,29 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
     | (Eunseq es, Stack_cons cont sk) ->
         match to_pures es with
           | Just pes ->
-              one $ Step2_tau "Eunseq pure" (
+              one $ Step_tau "Eunseq pure" (
                 E.return <| th_st with arena= Epure (PEtuple pes) |>
               )
           | Nothing ->
-              List.map (fun (es1, ej, es2) ->
-                Step2_tau "Eunseq" (
-                  E.return <| th_st with arena= ej; stack= Stack_cons (Kunseq es1 es2 :: cont) sk |>
-                )
-              ) (pickWith (fun e -> to_pure e = Nothing) es)
+              let is_wait = function
+                | Ewait _ ->
+                    true
+                | _ ->
+                  false
+              end in
+              if List.all (fun e -> is_wait e || to_pure e <> Nothing) es then
+                one Step_blocked
+              else
+                let xs = 
+                List.map (fun (es1, ej, es2) ->
+                  Step_tau "Eunseq" (
+                    E.return <| th_st with arena= ej; stack= Stack_cons (Kunseq es1 es2 :: cont) sk |>
+                  )
+                ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
+                if List.length xs = 0 then
+                  error ("BOOM Core_run, Eunseq, empty list ==> " ^ Boot.pp_core_expr (Eunseq es)) (* TODO: debug *)
+                else
+                  xs
         end
     
     | (Ewseq _as e1 e2, Stack_cons cont sk) ->
@@ -2770,18 +2880,18 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | Just pe ->
               match valueFromPexpr pe with
                 | Just cval ->
-                    Step2_tau "Ewseq subst" (
+                    Step_tau "Ewseq subst" (
                       E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
                     )
                 | Nothing ->
-                    Step2_eval "Ewseq" (
+                    Step_eval "Ewseq" (
                       E.core_eval file false pe >>= fun pe' ->
                       E.return <| th_st with arena= Ewseq _as (Epure pe') e2 |>
                     )
               end
           | Nothing ->
               (* focus the execution on the first operand *)
-              Step2_tau "Ewseq" (
+              Step_tau "Ewseq" (
                 E.return <| th_st with
                   arena= e1;
                   stack= Stack_cons (Kwseq _as e2 :: cont) sk
@@ -2795,18 +2905,18 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | Just pe ->
               match valueFromPexpr pe with
                 | Just cval ->
-                    Step2_tau "Esseq subst" (
+                    Step_tau "Esseq subst" (
                       E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
                     )
                 | Nothing ->
-                    Step2_eval "Esseq" (
+                    Step_eval "Esseq" (
                       E.core_eval file false pe >>= fun pe' ->
                       E.return <| th_st with arena= Esseq _as (Epure pe') e2 |>
                     )
               end
           | Nothing ->
               (* focus the execution on the first operand *)
-              Step2_tau "Esseq" (
+              Step_tau "Esseq" (
                 E.return <| th_st with
                   arena= e1;
                   stack= Stack_cons (Ksseq _as e2 :: cont) sk
@@ -2817,12 +2927,12 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
     
     | (Esave k a_tys e, Stack_cons cont _) ->
         (* TODO: this is partial *)
-        one $ Step2_tau "Esave" (
+        one $ Step_tau "Esave" (
           E.return <| th_st with arena= e; labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels |>
         )
     
     | (Erun annots k sym_vs, Stack_cons cont sk) ->
-        one $ Step2_tau "Erun" (
+        one $ Step_tau "Erun" (
           match Map.lookup k th_st.labels with
             | Just cont ->
                 SEU.return cont
@@ -2849,8 +2959,8 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
               ) create_tys)
                  (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
-(*          let tmp = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in *) (* TODO: bring back for CONCURRENCY !!! *)
-          E.return <| th_st with arena= e;
+          let e' = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)
+          E.return <| th_st with arena= e';
                                  stack= push_empty_continuation sk;
                                  labels= Map.insert k cont th_st.labels
                    |>
@@ -2871,17 +2981,17 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                     (* "return" ending the execution of a thread. *)
                     match parent_tid_opt with
                       | Just parent_tid ->
-                          Step2_thread_done parent_tid cval
+                          Step_thread_done parent_tid cval
                       | Nothing ->
                           (* we reached the end of the startup thread's execution *)
                           (* TODO: this seems like a silly indirection *)
-                          Step2_tau "end of main thread" (
+                          Step_tau "end of main thread" (
                             E.return <| th_st with arena= Epure pe; stack= empty_stack |>
                           )
                     end
                 | Stack_cons cont sk' ->
                     (* "return" only ending the execution of a procedure. *)
-                    Step2_tau "end of procedure" (
+                    Step_tau "end of procedure" (
                       E.return <| th_st with
                         arena= apply_continuation cont (Epure (PEval cval));
                         stack= push_empty_continuation sk';
@@ -2893,7 +3003,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                     )
               end
           | Nothing ->
-              Step2_eval "Eret" (
+              Step_eval "Eret" (
                 E.core_eval file false pe >>= fun pe' ->
                 E.return <| th_st with arena= Eret pe' |>
               )
@@ -2903,19 +3013,19 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
         (* -------------------------------------------
            <nd(e1, ..., eN), κs, Λ> --τ--> <ej, κs, Λ>    j ∈ {1, ..., N} *)
         List.map (fun e ->
-          Step2_tau "End" (E.return <| th_st with arena= e |>)
+          Step_tau "End" (E.return <| th_st with arena= e |>)
        ) es
     
     | (Epar es, _) ->
         (* TODO: doc *)
-        one $ Step2_spawn_threads (
-          List.map (fun e -> <| arena= e; stack= push_empty_continuation empty_stack; labels= Map.empty |>) es
+        one $ Step_spawn_threads (fun e -> <| th_st with arena= e |>) (
+          List.map (fun e -> <| arena= e; stack= push_empty_continuation empty_stack; labels= Map.empty; exec_loc= ELoc_normal [] |>) es
         )
     | (Ewait _, _) ->
         (* We don't do anything here. When a thread terminated, the driver
            substitute the corresponding wait in parent thread with the returned
            value. *)
-        []
+        error "Core_run, Ewait"
     
     | (Eraise handl, sk) ->
         error "WIP: Eraise"
@@ -2933,9 +3043,9 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
         (* End of program execution *)
         one match maybe Nothing valueFromPexpr (to_pure e) with
           | Just cval ->
-              Step2_done cval
+              Step_done cval
           | Nothing ->
-              Step2_error ("reached empty stack on a non-value arena: " ^ Boot.pp_core_expr e) (* TODO: better error message *)
+              Step_error ("reached empty stack on a non-value arena: " ^ Boot.pp_core_expr e) (* TODO: better error message *)
         end
     
     | (e, Stack_cons cont sk) ->
@@ -2943,7 +3053,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
           | Just pe ->
               one match valueFromPexpr pe with
                 | Just cval ->
-                    Step2_tau "value" (match cont with
+                    Step_tau "value" (match cont with
                       | [] ->
                           error ("<e, Stack_cons []> with e= " ^ Boot.pp_core_expr e) (* TODO: what case is that? *)
                       | _ ->
@@ -2955,7 +3065,7 @@ let core_thread_step2 file current_tid (parent_tid_opt, th_st) =
                       (*          [| pe |] = v
                          -----------------------------
                          <pe, κs, Λ> --τ--> <v, κs, Λ> *)
-                      Step2_eval "pure" (
+                      Step_eval "pure" (
                         E.core_eval file false pe >>= fun pe' ->
                         E.return <| th_st with arena= Epure pe' |>
                       )

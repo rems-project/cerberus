@@ -1,3 +1,4 @@
+#include<stdio.h>
 #include<stdlib.h>
 #include<stdatomic.h>
 
@@ -38,7 +39,6 @@ int pop()
 
 int main(void)
 {
-  int ret = 0;
   init();
   push(1);
   push(20);
@@ -47,7 +47,7 @@ int main(void)
   while (1) {
     int i = pop();
     if (i == -1)
-      return ret;
-    ret += i;
+      return 0;
+    printf("> %d\n", i);
   }
 }

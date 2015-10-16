@@ -110,13 +110,12 @@ let keywords =
       ("member_shift", T.MEMBER_SHIFT);
       
       (* for Core.action_ *)
-      ("create",                  T.CREATE                 );
-      ("alloc",                   T.ALLOC                  );
-      ("kill",                    T.KILL                   );
-      ("store",                   T.STORE                  );
-      ("load",                    T.LOAD                   );
-      ("compare_exchange_strong", T.COMPARE_EXCHANGE_STRONG);
-      ("compare_exchange_weak",   T.COMPARE_EXCHANGE_WEAK  );
+      ("create",  T.CREATE);
+      ("alloc",   T.ALLOC );
+      ("kill",    T.KILL  );
+      ("store",   T.STORE );
+      ("load",    T.LOAD  );
+      ("rmw",     T.RMW   );
      
       
       
@@ -206,7 +205,7 @@ rule main = parse
       { main lexbuf }
   
   (* integer constants *)
-  | ('-'?)['0'-'9']+ as integer
+  | ['0'-'9']+ as integer
       { T.INT_CONST (Nat_big_num.of_string integer) }
   
   (* binary operators *)
