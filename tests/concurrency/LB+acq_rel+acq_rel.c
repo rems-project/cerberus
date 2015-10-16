@@ -5,16 +5,13 @@
 
 #include <stdatomic.h>
 int main() {
-  atomic_int x=0, y=0;
+  _Atomic int x=0, y=0;
   int z1, z2;
   // Because of a bug in the parser, we have to declare the pointers explicitely
-  int* px, py;
-  px = &x;
-  py = &y;
-  {{{ { z1 = atomic_load_explicit(px, memory_order_acquire); 
-        atomic_store_explicit(py, 1, memory_order_release); }
-  ||| { z2 = atomic_load_explicit(py, memory_order_acquire);
-        atomic_store_explicit(px, 1, memory_order_release); }  }}};
+  {{{ { z1 = atomic_load_explicit(&x, memory_order_acquire); 
+        atomic_store_explicit(&y, 1, memory_order_release); }
+  ||| { z2 = atomic_load_explicit(&y, memory_order_acquire);
+        atomic_store_explicit(&x, 1, memory_order_release); }  }}};
   return z1 + (2 * z2);
 }
 
