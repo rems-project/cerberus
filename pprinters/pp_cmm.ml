@@ -145,7 +145,9 @@ let pp_symState (st: Cmm_op.symState) : PPrint.document =
   
   let thread_docs = List.fold_left (fun acc act ->
     let tid = Cmm_csem.tid_of act in
-    let xs' = (pp_aid act ^^^ P.brackets (!^ "label" ^^ P.equals ^^^ P.dquotes (pp_action act))) ::
+    let xs' = (pp_aid act ^^^ P.brackets (!^ "label" ^^ P.equals ^^^ P.dquotes (pp_action act) ^^ 
+            (if List.mem act st.symCommitted then 
+P.comma ^^^ !^ "style" ^^ P.equals ^^^ P.dquotes (!^"filled") else P.empty))) ::
       match Pmap.lookup tid acc with
         | Some xs ->
             xs
@@ -155,6 +157,7 @@ let pp_symState (st: Cmm_op.symState) : PPrint.document =
   ) (Pmap.empty compare) (Pset.elements st.symPre.actions) in
   
   !^ "digraph G" ^^^ P.braces (
+    !^ "node" ^^ P.brackets (!^ "fillcolor" ^^ P.equals ^^^ P.dquotes (!^ "grey")) ^^ P.semi ^^^
     P.nest 2 (P.hardline ^^
       P.separate (P.semi ^^ P.hardline) begin
         (* listing the actions by their aid *)
@@ -195,7 +198,8 @@ let pp_symState (st: Cmm_op.symState) : PPrint.document =
 let dot_of_exeState st _ _ =
   Pp_utils.to_plain_string (pp_symState st)
 
-
+let string_of_exeState st =
+  dot_of_exeState st "" ""
 
 
 let pp_execState st =

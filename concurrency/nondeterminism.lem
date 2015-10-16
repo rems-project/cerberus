@@ -8,8 +8,8 @@ let mzero = ND []
 val return: forall 'a. 'a -> t 'a
 let return a = ND [a]
 
-val pick: forall 'a. list 'a -> t 'a
-let pick l = ND l
+val pick: forall 'a. string -> list 'a -> t 'a
+let pick _ l = ND l
 
 (* Forget is not part of the interface, but is used internally *)
 val forget: forall 'a. t 'a -> list 'a

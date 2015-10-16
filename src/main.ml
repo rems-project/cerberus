@@ -28,7 +28,7 @@ let load_stdlib () =
                                  let sym_counter = core_sym_counter
                                  let std = Pmap.empty Core_parser_util._sym_compare
                                end)
-(*      type token = Core_parser_util.token *)
+      type token = Core_parser_util.token
       type result = Core_parser_util.result
     end in
     let module Core_std_parser =
@@ -229,7 +229,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
           Pmap.add (str, (std_pos, std_pos)) fsym acc
         ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
       end)
-(*    type token = Core_parser_util.token *)
+    type token = Core_parser_util.token
     type result = Core_parser_util.result
   end in
   let module Core_parser =
