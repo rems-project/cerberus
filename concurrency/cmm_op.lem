@@ -216,7 +216,7 @@ val incStep: pre_execution -> incState -> incState -> action -> bool
 let incStep pre s1 s2 a =
 
   let s2_ex = incToEx pre s2 in
-  let com   = incCom s2_ex in
+  let com = incCom (pre, s2.incWit, getRelations pre s2.incWit) in
 
   (* The action that is committed in this step hasn't already been committed *)
   a IN pre.actions &&

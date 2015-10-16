@@ -29,12 +29,12 @@ unfolding mem_def
 by simp
 
 lemma forget_pick [simp]:
-  shows "forget (pick l) = l"
+  shows "forget (pick m l) = l"
 unfolding forget.simps pick_def
 ..
 
 lemma member_pick [simp]:
-  shows "x [\<in>] pick l = (x \<in> set l)"
+  shows "x [\<in>] pick m l = (x \<in> set l)"
 unfolding mem_def
 by simp
 
