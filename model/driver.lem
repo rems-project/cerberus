@@ -38,7 +38,8 @@ declare ocaml target_rep function stringPrettyFromMemValue = `String_mem.string_
 val pp_core_state: forall 'a. core_state -> string
 declare ocaml target_rep function pp_core_state = `String_core_run.string_of_core_state`
 
-
+val stringSymState: Cmm_op.symState -> string
+declare ocaml target_rep function stringSymState = `Pp_cmm.string_of_exeState`
 
 
 
@@ -276,7 +277,17 @@ let rec stepConcurrency n dr_st =
   if n = 0 then
     ND.return dr_st
   else begin
-    Cmm_op.symStep dr_st.concurrency_state >>=  function
+
+    ND.log ("\n" ^ (stringSymState dr_st.concurrency_state) ^ "\n") >>
+
+    let conc_result = Cmm_op.symStep dr_st.concurrency_state in
+    let conc_steps = Nondeterminism.forget conc_result in
+
+    (if null conc_steps
+     then ND.log ("symStep BLOCKED (zero symSteps possible)")
+     else ND.return ()) >>
+
+    conc_result >>= function
       | Cmm_op.ConcurrencyTau performed_act concur_st' ->
 (*          ND.log ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act) ^ "\n")           >> (* DEBUG *) *)
           ND.print_debug 4 ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act) ^ "\n") >> (* DEBUG *)
