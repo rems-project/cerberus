@@ -510,7 +510,7 @@ let monPerformAction pre s a =
 
 val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
 let monStep pre s =
-  lnsitiveOrder" et uncommitted_actions = 
+  let uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList pre.actions) | not (a MEM s.incCommitted)] in
   Nondeterminism.pick "monStep" uncommitted_actions >>= fun a ->
 
