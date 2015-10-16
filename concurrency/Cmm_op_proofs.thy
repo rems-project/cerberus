@@ -800,6 +800,13 @@ unfolding locks_only_sw_set_alt_def
           locks_only_sw_set_def 
 by (auto simp add: locks_only_sw_def)
 
+lemma monotonicity_locks_only_sw2:
+  shows   "  locks_only_sw_set_alt pre (incWitRestrict wit actions)
+           \<subseteq> locks_only_sw_set_alt pre wit "
+unfolding locks_only_sw_set_alt_def
+          locks_only_sw_set_def 
+by (auto simp add: locks_only_sw_def)
+
 lemma monotonicity_no_consume_hb:
   assumes "sw2 \<subseteq> sw"
       and "p_sb2 \<subseteq> p_sb"
@@ -815,10 +822,24 @@ unfolding locks_only_hb_def
 using monotonicity_no_consume_hb[OF monotonicity_locks_only_sw]
 by auto
 
+lemma monotonicity_locks_only_hb2:
+  shows "  locks_only_hb pre (incWitRestrict wit actions)
+         \<subseteq> locks_only_hb pre wit"
+unfolding locks_only_hb_def 
+using monotonicity_no_consume_hb[OF monotonicity_locks_only_sw2]
+by auto
+
 (* Monotonicity hb in the rel-acq fragment *)
 
 lemma monotonicity_release_acquire_sw:
   shows   "  release_acquire_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions) 
+           \<subseteq> release_acquire_synchronizes_with_set_alt pre wit"
+apply (intro subrelI, elim release_acquire_swIE)
+unfolding sw_asw_def sw_lock_def sw_rel_acq_def
+by auto
+
+lemma monotonicity_release_acquire_sw2:
+  shows   "  release_acquire_synchronizes_with_set_alt pre (incWitRestrict wit actions) 
            \<subseteq> release_acquire_synchronizes_with_set_alt pre wit"
 apply (intro subrelI, elim release_acquire_swIE)
 unfolding sw_asw_def sw_lock_def sw_rel_acq_def
@@ -831,11 +852,29 @@ unfolding release_acquire_hb_def
 using monotonicity_no_consume_hb[OF monotonicity_release_acquire_sw]
 by auto
 
+lemma monotonicity_release_acquire_hb2:
+  shows "  release_acquire_hb pre (incWitRestrict wit actions) 
+         \<subseteq> release_acquire_hb pre wit"
+unfolding release_acquire_hb_def 
+using monotonicity_no_consume_hb[OF monotonicity_release_acquire_sw2]
+by auto
+
 (* Monotonicity hb in the rel-acq-rlx fragment *)
 
 lemma monotonicity_release_sequence:
   assumes "downclosed actions (mo wit)"
           "(a, b) \<in> release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
+          "b \<in> actions"          
+  shows   "(a, b) \<in> release_sequence_set_alt pre wit"
+using assms
+unfolding release_sequence_set_alt_def 
+          release_sequence_set_def
+          downclosed_def
+by auto
+
+lemma monotonicity_release_sequence2:
+  assumes "downclosed actions (mo wit)"
+          "(a, b) \<in> release_sequence_set_alt pre (incWitRestrict wit actions)"
           "b \<in> actions"          
   shows   "(a, b) \<in> release_sequence_set_alt pre wit"
 using assms
@@ -864,11 +903,39 @@ proof (intro subrelI)
     qed
 qed
 
+lemma monotonicity_sw_rel_acq_rs2:
+  assumes "downclosed actions (mo wit)"
+  shows   "  sw_rel_acq_rs pre (incWitRestrict wit actions)
+           \<subseteq> sw_rel_acq_rs pre wit"
+proof (intro subrelI)
+  fix a b
+  assume "(a, b) \<in> sw_rel_acq_rs pre (incWitRestrict wit actions)"
+  thus   "(a, b) \<in> sw_rel_acq_rs pre wit"
+    proof (cases rule: sw_rel_acq_rsIE)
+      case (rel_acq_rs c)
+      hence "c \<in> actions" by auto 
+      hence "(a, c) \<in> release_sequence_set_alt pre wit" 
+        using monotonicity_release_sequence2 assms rel_acq_rs
+        by metis
+      thus "   a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> c \<in> actions0 pre
+            \<and> (a, c) \<in> release_sequence_set_alt pre wit \<and> (c, b) \<in> rf wit "
+        using rel_acq_rs by auto 
+    qed
+qed
+
 lemma monotonicity_release_acquire_relaxed_sw:
   assumes downclosed: "downclosed actions (mo wit)"
   shows   "  release_acquire_relaxed_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)
            \<subseteq> release_acquire_relaxed_synchronizes_with_set_alt pre wit"
 using monotonicity_sw_rel_acq_rs[OF downclosed]
+by (intro subrelI, elim release_acquire_relaxed_swIE)
+   (auto intro!: sw_aswI sw_lockI)
+
+lemma monotonicity_release_acquire_relaxed_sw2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  release_acquire_relaxed_synchronizes_with_set_alt pre (incWitRestrict wit actions)
+           \<subseteq> release_acquire_relaxed_synchronizes_with_set_alt pre wit"
+using monotonicity_sw_rel_acq_rs2[OF downclosed]
 by (intro subrelI, elim release_acquire_relaxed_swIE)
    (auto intro!: sw_aswI sw_lockI)
 
@@ -880,11 +947,30 @@ unfolding release_acquire_relaxed_hb_def
 using monotonicity_no_consume_hb[OF monotonicity_release_acquire_relaxed_sw[OF downclosed_mo]]
 by auto
 
+lemma monotonicity_release_acquire_relaxed_hb2:
+  assumes downclosed_mo: "downclosed actions (mo wit)"
+  shows   "  release_acquire_relaxed_hb pre (incWitRestrict wit actions)
+           \<subseteq> release_acquire_relaxed_hb pre wit"
+unfolding release_acquire_relaxed_hb_def 
+using monotonicity_no_consume_hb[OF monotonicity_release_acquire_relaxed_sw2[OF downclosed_mo]]
+by auto
+
 (* Monotonicity hb in the rel-acq-rlx-fenced fragment *)
 
 lemma monotonicity_hypothetical_release_sequence:
   assumes "downclosed actions (mo wit)"
           "(a, b) \<in> hypothetical_release_sequence_set_alt (preRestrict pre actions) (incWitRestrict wit actions)"
+          "b \<in> actions"          
+  shows   "(a, b) \<in> hypothetical_release_sequence_set_alt pre wit"
+using assms
+unfolding hypothetical_release_sequence_set_alt_def 
+          hypothetical_release_sequence_set_def
+          downclosed_def
+by auto
+
+lemma monotonicity_hypothetical_release_sequence2:
+  assumes "downclosed actions (mo wit)"
+          "(a, b) \<in> hypothetical_release_sequence_set_alt pre (incWitRestrict wit actions)"
           "b \<in> actions"          
   shows   "(a, b) \<in> hypothetical_release_sequence_set_alt pre wit"
 using assms
@@ -916,6 +1002,29 @@ proof (intro subrelI)
     qed
 qed
 
+lemma monotonicity_sw_fence_sb_hrs_rf_sb2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  sw_fence_sb_hrs_rf_sb pre (incWitRestrict wit actions)
+           \<subseteq> sw_fence_sb_hrs_rf_sb pre wit"
+proof (intro subrelI)
+  fix a b
+  assume "(a, b) \<in> sw_fence_sb_hrs_rf_sb pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> sw_fence_sb_hrs_rf_sb pre wit"
+    proof (cases rule: sw_fence_sb_hrs_rf_sbIE)
+      let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
+      case (fence x y z)
+      hence "y \<in> actions" by auto 
+      hence "(x, y) \<in> ?hrs"
+        using monotonicity_hypothetical_release_sequence2
+        using downclosed fence
+        by auto
+      thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre
+            \<and> y \<in> actions0 pre \<and> z \<in> actions0 pre
+            \<and> (a, x) \<in> sb pre \<and> (x, y) \<in> ?hrs \<and> (y, z) \<in> rf wit \<and> (z, b) \<in> sb pre"
+        using fence by auto 
+    qed
+qed
+
 lemma monotonicity_sw_fence_sb_hrs_rf:
   assumes downclosed: "downclosed actions (mo wit)"
   shows   "  sw_fence_sb_hrs_rf (preRestrict pre actions) (incWitRestrict wit actions)
@@ -930,6 +1039,28 @@ proof (intro subrelI)
       hence "y \<in> actions" by auto 
       hence "(x, y) \<in> ?hrs"
         using monotonicity_hypothetical_release_sequence
+        using downclosed fence
+        by auto
+      thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre
+            \<and> y \<in> actions0 pre \<and> (a, x) \<in> sb pre \<and> (x, y) \<in> ?hrs \<and> (y, b) \<in> rf wit"
+        using fence by auto 
+    qed
+qed
+
+lemma monotonicity_sw_fence_sb_hrs_rf2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  sw_fence_sb_hrs_rf pre (incWitRestrict wit actions)
+           \<subseteq> sw_fence_sb_hrs_rf pre wit"
+proof (intro subrelI)
+  fix a b
+  assume "(a, b) \<in> sw_fence_sb_hrs_rf pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> sw_fence_sb_hrs_rf pre wit"
+    proof (cases rule: sw_fence_sb_hrs_rfIE)
+      let ?hrs  = "hypothetical_release_sequence_set_alt pre wit"
+      case (fence x y)
+      hence "y \<in> actions" by auto 
+      hence "(x, y) \<in> ?hrs"
+        using monotonicity_hypothetical_release_sequence2
         using downclosed fence
         by auto
       thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre
@@ -960,6 +1091,28 @@ proof (intro subrelI)
     qed
 qed
 
+lemma monotonicity_sw_fence_rs_rf_sb2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  sw_fence_rs_rf_sb pre (incWitRestrict wit actions)
+           \<subseteq> sw_fence_rs_rf_sb pre wit"
+proof (intro subrelI)
+  fix a b
+  assume "(a, b) \<in> sw_fence_rs_rf_sb pre (incWitRestrict wit actions)"
+  thus "(a, b) \<in> sw_fence_rs_rf_sb pre wit"
+    proof (cases rule: sw_fence_rs_rf_sbIE)
+      let ?rs  = "release_sequence_set_alt pre wit"
+      case (fence x y)
+      hence "y \<in> actions" by auto
+      hence "(a, x) \<in> ?rs"
+        using monotonicity_release_sequence2
+        using downclosed fence
+        by auto 
+      thus "  a \<in> actions0 pre \<and> b \<in> actions0 pre \<and> x \<in> actions0 pre 
+            \<and> y \<in> actions0 pre \<and> (a, x) \<in> ?rs \<and> (x, y) \<in> (rf wit) \<and> (y, b) \<in> (sb pre)"
+        using fence by auto 
+    qed
+qed
+
 lemma monotonicity_release_acquire_fenced_sw: 
   assumes downclosed: "downclosed actions (mo wit)"
   shows   "  release_acquire_fenced_synchronizes_with_set_alt (preRestrict pre actions) (incWitRestrict wit actions)
@@ -971,6 +1124,17 @@ using monotonicity_sw_rel_acq_rs[OF downclosed]
 apply (intro subrelI, elim release_acquire_fenced_swIE)
 by (auto 8 2 intro!: sw_aswI sw_lockI)
 
+lemma monotonicity_release_acquire_fenced_sw2: 
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  release_acquire_fenced_synchronizes_with_set_alt pre (incWitRestrict wit actions)
+           \<subseteq> release_acquire_fenced_synchronizes_with_set_alt pre wit"
+using monotonicity_sw_fence_sb_hrs_rf_sb2[OF downclosed]
+using monotonicity_sw_fence_sb_hrs_rf2[OF downclosed]
+using monotonicity_sw_fence_rs_rf_sb2[OF downclosed]
+using monotonicity_sw_rel_acq_rs2[OF downclosed]
+apply (intro subrelI, elim release_acquire_fenced_swIE)
+by (auto 8 2 intro!: sw_aswI sw_lockI)
+
 lemma monotonicity_release_acquire_fenced_hb:
   assumes "downclosed actions (mo wit)"
   shows   "  release_acquire_fenced_hb (preRestrict pre actions) (incWitRestrict wit actions)
@@ -979,10 +1143,25 @@ unfolding release_acquire_fenced_hb_def
 using monotonicity_no_consume_hb[OF monotonicity_release_acquire_fenced_sw[OF assms]]
 by auto
 
+lemma monotonicity_release_acquire_fenced_hb2:
+  assumes "downclosed actions (mo wit)"
+  shows   "  release_acquire_fenced_hb pre (incWitRestrict wit actions)
+           \<subseteq> release_acquire_fenced_hb pre wit"
+unfolding release_acquire_fenced_hb_def 
+using monotonicity_no_consume_hb[OF monotonicity_release_acquire_fenced_sw2[OF assms]]
+by auto
+
 (* Monotonicity hb in the with_consume fragment *)
 
 lemma monotonicity_with_consume_cad:
   shows "with_consume_cad_set_alt (preRestrict pre actions) (incWitRestrict wit actions) \<subseteq> 
+         with_consume_cad_set_alt pre wit"
+unfolding with_consume_cad_set_alt_def
+          with_consume_cad_set_def
+by (intro trancl_mono2) auto
+
+lemma monotonicity_with_consume_cad2:
+  shows "with_consume_cad_set_alt pre (incWitRestrict wit actions) \<subseteq> 
          with_consume_cad_set_alt pre wit"
 unfolding with_consume_cad_set_alt_def
           with_consume_cad_set_def
@@ -1023,6 +1202,41 @@ proof (intro subrelI)
     by (auto simp add: dependency_ordered_before_def)
 qed
 
+lemma monotonicity_with_consume_dob_set2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows "  with_consume_dob_set_alt pre(incWitRestrict wit actions)
+         \<subseteq> with_consume_dob_set_alt pre wit"
+proof (intro subrelI)
+  let ?rs   = "release_sequence_set_alt pre wit"
+  let ?rs2  = "release_sequence_set_alt pre (incWitRestrict wit actions)"
+  let ?cad  = "with_consume_cad_set_alt pre wit"
+  let ?cad2 = "with_consume_cad_set_alt pre (incWitRestrict wit actions)"
+  fix a b
+  assume in_dob: "(a, b) \<in> with_consume_dob_set_alt pre (incWitRestrict wit actions)"
+  obtain ba e where ba_e: "ba \<in> actions0 pre \<and> 
+                           is_consume ba \<and> 
+                           e \<in> actions0 pre \<and> 
+                           (a, e) \<in> ?rs2 \<and> 
+                           (e, ba) \<in> relRestrict (rf wit) actions \<and> 
+                           ((ba, b) \<in> ?cad2 \<or> ba = b)"
+    using in_dob
+    unfolding with_consume_dob_set_alt_def
+              with_consume_dob_set_def
+    by (auto simp add: dependency_ordered_before_def)
+  hence "e \<in> actions" unfolding relRestrict_def by auto
+  hence rs: "(a, e) \<in> ?rs"
+    using ba_e monotonicity_release_sequence2[OF downclosed]
+    by fast
+  have cad2: "(ba, b) \<in> ?cad \<or> ba = b" 
+    using ba_e monotonicity_with_consume_cad2 by auto
+  show "(a, b) \<in> with_consume_dob_set_alt pre wit"
+    using in_dob
+    unfolding with_consume_dob_set_alt_def
+              with_consume_dob_set_def
+    using ba_e rs cad2 
+    by (auto simp add: dependency_ordered_before_def)
+qed
+
 lemma relComp_member:
   shows "(a, c) \<in> relcomp r r' = (\<exists>b. (a, b) \<in> r \<and> (b, c) \<in> r')"
 by auto
@@ -1039,12 +1253,32 @@ using monotonicity_release_acquire_fenced_sw[OF downclosed]
 using monotonicity_with_consume_dob_set[OF downclosed]
 by (auto intro!: trancl_mono2 Un_mono relcomp_mono del: subsetI)
 
+lemma monotonicity_ithb2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  inter_thread_happens_before_alt pre (incWitRestrict wit actions)
+           \<subseteq> inter_thread_happens_before_alt pre wit"
+unfolding inter_thread_happens_before_alt_def
+          inter_thread_happens_before_step_def
+          inter_thread_happens_before_r_def
+          Let_def
+using monotonicity_release_acquire_fenced_sw2[OF downclosed]
+using monotonicity_with_consume_dob_set2[OF downclosed]
+by (auto intro!: trancl_mono2 Un_mono relcomp_mono del: subsetI)
+
 lemma monotonicity_with_consume_hb:
   assumes downclosed: "downclosed actions (mo wit)"
   shows   "  with_consume_hb (preRestrict pre actions) (incWitRestrict wit actions)
            \<subseteq> with_consume_hb pre wit"
 unfolding with_consume_hb_def happens_before_def
 using monotonicity_ithb[OF downclosed]
+by auto
+
+lemma monotonicity_with_consume_hb2:
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "  with_consume_hb pre (incWitRestrict wit actions)
+           \<subseteq> with_consume_hb pre wit"
+unfolding with_consume_hb_def happens_before_def
+using monotonicity_ithb2[OF downclosed]
 by auto
 
 subsubsection {* Prefixes are final *}
@@ -1769,15 +2003,32 @@ by auto
 (* Corollaries for derived relations *)
 
 lemma hbMinusIsMonotonic:
-  shows "hbCalcIsMonotonic hbMinusAlt"
-using hbCalcIsMonotonic
-unfolding hbCalcIsMonotonic_def 
-          getRelations_simp 
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "hbMinusAlt pre (incWitRestrict wit actions) \<subseteq> hbMinusAlt pre wit"
+using monotonicity_with_consume_hb2[OF downclosed]
+unfolding getRelations_simp 
           hbMinusAlt_def
 by auto
 
 lemma opsemOrderIsMonotonic:
-  shows "hbCalcIsMonotonic incComAlt"
+  assumes downclosed: "downclosed actions (mo wit)"
+  shows   "incComAlt pre (incWitRestrict wit actions) \<subseteq> incComAlt pre wit"
+proof -
+  have "hbMinusAlt pre (incWitRestrict wit actions) \<subseteq> hbMinusAlt pre wit"
+    using downclosed hbMinusIsMonotonic
+    unfolding hbCalcIsMonotonic_def by metis
+  hence subset: "hbMinusAlt pre (incWitRestrict wit actions) \<union> 
+                (rf (incWitRestrict wit actions) \<union> 
+                 mo (incWitRestrict wit actions)) \<subseteq> 
+                hbMinusAlt pre wit \<union> (rf wit \<union> mo wit)" 
+    by auto
+  show "incComAlt pre (incWitRestrict wit actions) \<subseteq> incComAlt pre wit"
+    unfolding incComAlt_def 
+    using subset trancl_mono2
+    by metis
+qed
+
+(*
 unfolding hbCalcIsMonotonic_def
 proof (intro allI impI)
   fix pre
@@ -1796,7 +2047,7 @@ proof (intro allI impI)
     unfolding incComAlt_def 
     using subset trancl_mono2
     by metis
-qed
+qed *)
 
 subsection {* Invariance of consistency predicates under prefixes *}
 
@@ -2362,15 +2613,14 @@ next
                incCommitted=a#(incCommitted s)\<rparr>"
   have downclosed_mo: "downclosed ?actions' (mo wit)"
     using downclosed' unfolding incComAlt_def by auto
-  have inOpsemOrder: "respectsCom (actions0 pre) (incCommitted s) (incComAlt ?pre' (incWit ?s')) a"
+  have inOpsemOrder: "respectsCom (actions0 pre) (incCommitted s) (incComAlt pre (incWit ?s')) a"
     unfolding respectsCom_def
     proof auto
       fix b
       assume "b \<in> actions0 pre"
-             "(b, a) \<in> incComAlt ?pre' ?wit'"
+             "(b, a) \<in> incComAlt pre ?wit'"
       hence ba_in_rel: "(b, a) \<in> incComAlt pre wit"
-        using opsemOrderIsMonotonic downclosed_mo
-        unfolding hbCalcIsMonotonic_def
+        using opsemOrderIsMonotonic[OF downclosed_mo]
         by auto
       hence "b \<noteq> a"
         using opsemOrder_isStrictPartialOrder[OF cons]
@@ -2384,10 +2634,9 @@ next
       fix b
       assume "b \<in> actions0 pre"
              "b \<in> incCommittedSet s"
-             "(a, b) \<in> incComAlt ?pre' ?wit'"
+             "(a, b) \<in> incComAlt pre ?wit'"
       hence ba_in_rel: "(a, b) \<in> incComAlt pre wit"
-        using opsemOrderIsMonotonic downclosed_mo
-        unfolding hbCalcIsMonotonic_def
+        using opsemOrderIsMonotonic[OF downclosed_mo]
         by auto
       thus False using max `b \<in> incCommittedSet s` committed  by metis 
     qed
@@ -3226,9 +3475,9 @@ unfolding monCheckWitRestrict_def
 by simp
 
 lemma monCheckCommitmentOrder_simp [simp]:
-  shows "  x [\<in>] monCheckCommitmentOrder actions (pre, wit, getRelations pre wit) committed a
-         = (respectsCom actions committed (incComAlt pre wit) a)"
-unfolding monCheckCommitmentOrder.simps Let_def
+  shows "  x [\<in>] monCheckCommitmentOrder pre wit committed a
+         = (respectsCom (actions0 pre) committed (incComAlt pre wit) a)"
+unfolding monCheckCommitmentOrder_def Let_def
 by simp
 
 subsection {* Soundness *}
@@ -4772,7 +5021,7 @@ proof -
    and a:         "a \<in> actions0 pre" "a \<notin> incCommittedSet s1"
    and committed: "incCommitted s2 = a # (incCommitted s1)"
    and wit:       "incWit s1 = incWitRestrict (incWit s2) (incCommittedSet s1)"
-   and order:     "respectsCom (actions0 pre) (incCommitted s1) (incComAlt ?pre' (incWit s2)) a"
+   and order:     "respectsCom (actions0 pre) (incCommitted s1) (incComAlt pre (incWit s2)) a"
     using step unfolding incStep_def Let_def incToEx_def by auto
   have committed2: "actions0 ?pre' = insert a (incCommittedSet s1)"
     using committed a invariant by auto
@@ -4790,7 +5039,7 @@ proof -
          and in_rf: "(x, y) \<in> rf (incWit s2)"
       have "y \<in> actions0 ?pre'" using cons in_rf by blast
       hence "y \<in> actions0 pre" by simp
-      hence "(a, y) \<notin> incComAlt ?pre' (incWit s2)"
+      hence "(a, y) \<notin> incComAlt pre (incWit s2)"
         using in_rf order y
         unfolding respectsCom_def
         by auto
@@ -4810,7 +5059,7 @@ proof -
          and in_rf: "(x, y) \<in> mo (incWit s2)"
       have "y \<in> actions0 ?pre'" using cons in_rf by blast
       hence "y \<in> actions0 pre" by simp
-      hence "(a, y) \<notin> incComAlt ?pre' (incWit s2)"
+      hence "(a, y) \<notin> incComAlt pre (incWit s2)"
         using in_rf order y
         unfolding respectsCom_def
         by auto
