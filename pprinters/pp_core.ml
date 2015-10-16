@@ -223,8 +223,8 @@ let pp_pexpr pe =
             pp_keyword "undef" ^^ P.angles (P.angles (!^ (
               if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour ub)
                          else Undefined.string_of_undefined_behaviour ub)))
-        | PEerror str ->
-            pp_keyword "error" ^^^ P.dquotes (!^ str)
+        | PEerror (str, pe) ->
+            pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp pe)
         | PEval cval ->
             pp_value cval
         | PEsym sym ->
@@ -425,13 +425,8 @@ and pp_action act =
        pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
-    | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
-        pp_keyword "compare_exchange_strong" ^^
-        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
-                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
-                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
-        pp_keyword "compare_exchange_weak" ^^
+    | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "rmw" ^^
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)

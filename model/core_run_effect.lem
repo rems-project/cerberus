@@ -326,10 +326,11 @@ let rec map_from_list xs =
     | (a,b) :: xs' -> Map.insert a b (map_from_list xs')
   end
 
+(*
 val get_cont: ksym -> t (list (sym * ctype) * expr taction_id)
 let get_cont k = fun st ->
   [(U.return (fromJust $ Map.lookup d (fromJust $ Map.lookup (fromJust st.current_proc) st.cont_map)), st)]
-
+*)
 
 (*
   val get_sym: sym -> t (expr taction_id)

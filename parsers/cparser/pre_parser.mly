@@ -44,7 +44,7 @@
 
   ASSERT OFFSETOF
 (* NON-STD cppmem syntax *)
-(* LBRACES PIPES RBRACES *)
+  LBRACES PIPES RBRACES
 
 %token VA_START VA_ARG
 
@@ -668,9 +668,7 @@ labeled_statement:
 compound_statement:
 | LBRACE block_item_list? RBRACE
 (* NON-STD cppmem syntax *)
-(*
-| LBRACES separated_nonempty_list(PIPES, compound_statement) RBRACES
-*)
+| LBRACES separated_nonempty_list(PIPES, statement) RBRACES
     {}
 
 block_item_list:

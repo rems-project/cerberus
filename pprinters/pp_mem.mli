@@ -9,4 +9,5 @@ val pp_pointer_value: pointer_value0 -> PPrint.document
 val pp_integer_value: integer_value0 -> PPrint.document
 val pp_mem_value: mem_value0 -> PPrint.document
 
+val pp_pretty_pointer_value: pointer_value0 -> PPrint.document
 val pp_pretty_mem_value: mem_value0 -> PPrint.document

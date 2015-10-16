@@ -13,4 +13,4 @@ declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
 
 val get_membersDefs: Symbol.t -> list (Cabs.cabs_identifier * ctype)
 let get_membersDefs tag_sym =
-  fromJust $ Map.lookup tag_sym (tagDefs ())
+  fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())

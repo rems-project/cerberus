@@ -324,7 +324,7 @@ let addToTransitiveOrder domain a r =
   (* We insert the action before all other actions *)
   (Nondeterminism.return (Set.(union) r (Set.fromList [(a, b) | forall (b MEM domain) | true])))
   (* We choose an action, and insert 'a' directly after it *)
-  (Nondeterminism.pick domain >>= fun b ->
+  (Nondeterminism.pick "addToTransitiveOrder" domain >>= fun b ->
     let prev = [(c, a) | forall (c MEM domain) | (c, b) IN r] in
     let succ = [(a, c) | forall (c MEM domain) | (b, c) IN r] in
     Nondeterminism.return (Set.(union) r 
@@ -361,7 +361,7 @@ let auxAddToRfLoad pre a s =
   (* We do not add an rf-edge. This should happen when there is no vse-edge in the resulting state. *)
   (Nondeterminism.return (s.incWit.rf, Nothing))
   (* We add an rf-edge. *)
-  (Nondeterminism.pick (sameLocWrites s.incCommitted a) 
+  (Nondeterminism.pick "auxAddToRfLoad" (sameLocWrites s.incCommitted a) 
    >>= fun w ->
    auxAddPairToRf s.incWit.rf w a
    >>= fun (new_rf, value_w, value_r) ->
@@ -385,7 +385,7 @@ let auxAddToRfRmw pre a s =
   if List.null mo_actions then
     Nondeterminism.return (s.incWit.rf, Nothing)
   else
-    Nondeterminism.pick 
+    Nondeterminism.pick "auxAddToRfRmw"
         [w | forall (w MEM mo_actions) 
            | forall (c MEM mo_actions). (w, c) NIN s.incWit.mo]
     >>= fun w ->
@@ -515,7 +515,7 @@ let monStep pre s =
   let uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList pre.actions) | not (a MEM s.incCommitted)] in
     (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
-  Nondeterminism.pick uncommitted_actions >>= fun a ->
+  Nondeterminism.pick "monStep" uncommitted_actions >>= fun a ->
 
   monPerformAction pre s a >>= fun new_wit ->
 
@@ -774,7 +774,7 @@ let symStep s =
   let uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList s.symPre.actions) | not (a MEM s.symCommitted)] in
     (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
-  Nondeterminism.pick uncommitted_actions >>= fun a ->
+  Nondeterminism.pick "symStep" uncommitted_actions >>= fun a ->
 
   symPerformAction s a >>= fun (new_wit, values) ->
 

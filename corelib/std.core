@@ -212,11 +212,26 @@ fun is_representable (n: integer, ty: ctype): boolean :=
 
 -- encode an element of Z into an element of N following the
 -- two's complement encoding
+{-
 fun encodeTwos (ty : ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
   let width = ctype_width(ty) in
     if (n < 0 - 2^(width - 1)) \/ (2^(width - 1) - 1 < n) then
-      error <<<encodeTwos>>>
+      error(<<<encodeTwos>>>, (width, ty, n))
+    else
+      if 0 <= n then
+        n
+      else
+        2^width + n
+      end
+    end
+  end
+-}
+fun encodeTwos (ty : ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width = ctype_width(ty) in
+    if n < ivmin(ty) \/ ivmax(ty) < n then
+      error(<<<encodeTwos>>>, (width, ty, n))
     else
       if 0 <= n then
         n
@@ -226,12 +241,14 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
     end
   end
 
+
+
 -- the inverse of the previous function
 fun decodeTwos (ty: ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
   let width = ctype_width(ty) in
     if (n < 0) \/ (2^width <= n) then
-      error <<<decodeTwos>>>
+      error(<<<decodeTwos>>>, (ty, n))
     else
       if n <= 2^(width - 1) - 1 then
         n

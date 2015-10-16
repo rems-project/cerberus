@@ -94,7 +94,7 @@ and pp_integer_value (IV (prov, ival_)) =
 
 and pp_mem_value = function
   | MVsymbolic symb ->
-      !^ "MVsymbolic(TODO)"
+      !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic symb)
   | MVunspecified ty ->
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | MVinteger (ity, ival) ->
@@ -136,6 +136,20 @@ let pp_mem_constraint = function
                                 pp_integer_value_base ival_2)
   | MC_addr_distinct (addr_id, addr_ids) ->
       !^ "MC_addr_distinct(TODO)"
+
+
+
+let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
+  match ptr_val_ with
+    | PVnull ty ->
+        !^ "null"
+    | PVfunction sym ->
+      !^ "funptr" ^^ P.braces (!^ (Pp_symbol.to_string_pretty sym))
+    | PVbase (_, pref) ->
+        Pp_symbol.pp_prefix pref
+    | PVfromint _ ->
+        pp_pointer_value ptr_val
+
 
 
 let pp_pretty_mem_value = function

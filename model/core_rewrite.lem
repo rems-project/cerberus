@@ -534,8 +534,8 @@ let rec remove_conv_int_pexpr pexpr =
   match pexpr with
     | PEundef _ ->
         pexpr
-    | PEerror _ ->
-        pexpr
+    | PEerror str pe ->
+        PEerror str (remove_conv_int_pexpr pe)
     | PEval _ ->
         pexpr
     | PEsym _ ->
@@ -588,6 +588,11 @@ let rec remove_conv_int_pexpr pexpr =
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
               end
+          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; pe_n]) ->
+              if pe_ty1 = pe_ty2 then
+                pe_n
+              else
+                PEcall nm pes'
           | _ ->
               PEcall nm pes'
         end
@@ -663,10 +668,14 @@ and remove_conv_int_action_ act_ =
         Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->
         Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        RMW (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
+(*
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeStrong (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
     | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeWeak (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
+*)
   end
 
 and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)
@@ -817,7 +826,7 @@ let rec pure_propagation2 expr =
     match to_pure e with
       | Just (PEundef _) ->
           Nothing
-      | Just (PEerror _) ->
+      | Just (PEerror _ _) ->
           Nothing
       | Just pe ->
           Just pe

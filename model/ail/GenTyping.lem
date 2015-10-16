@@ -660,6 +660,18 @@ OLD(sigma_declaration)
                error "WIP: typing of atomic_store_explicit"
          end
 *)
+     
+     | AilEcall (AnnotatedExpression _ loc' (AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
+         annotate_rvalue object_e        >>= fun (object_e',        object_gty)        ->
+         annotate_rvalue expected_e      >>= fun (expected_e',      expected_gty)      ->
+         annotate_rvalue desired_e       >>= fun (desired_e',       desired_gty)       ->
+         annotate_rvalue order_success_e >>= fun (order_success_e', order_success_gty) ->
+         annotate_rvalue order_failure_e >>= fun (order_failure_e', order_failure_gty) ->
+         (* TODO: do actual checks *)
+         
+         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) loc' (AilEbuiltin "atomic_compare_exchange_strong_explicit"))
+                     [object_e'; expected_e'; desired_e'; order_success_e'; order_failure_e'],
+                   GenRValueType (GenBasic (GenInteger (Concrete (AilTypes.Bool)))))
 
 
     | AilEcall e es ->

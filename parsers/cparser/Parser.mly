@@ -51,7 +51,7 @@ let empty_specs = {
 
   ASSERT OFFSETOF
 (* NON-STD cppmem syntax *)
-(* LBRACES PIPES RBRACES *)
+  LBRACES PIPES RBRACES
 
 %token VA_START VA_ARG
 
@@ -891,6 +891,9 @@ labeled_statement:
 compound_statement:
 | LBRACE bis_opt= block_item_list? RBRACE
     { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSblock (option [] List.rev bis_opt)) }
+(* NON-STD cppmem syntax *)
+| LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
+    { CabsStatement (Loc_region ($startpos, $endpos, None), CabsSpar stmts) }
 ;
 
 block_item_list: (* NOTE: the list is in reverse *)

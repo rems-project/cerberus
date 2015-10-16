@@ -279,8 +279,8 @@ let impl_map =
     ("<Plain_bitfield_sign>"                          , Plain_bitfield_sign);
     ("<Bitfield_other_types>"                         , Bitfield_other_types);
     ("<Atomic_bitfield_permitted>"                    , Atomic_bitfield_permitted);
-    ("<ctype_min>"                                    , Ctype_min);
-    ("<ctype_max>"                                    , Ctype_max);
+    ("<Ctype.min>"                                    , Ctype_min);
+    ("<Ctype.max>"                                    , Ctype_max);
   ]
 
 

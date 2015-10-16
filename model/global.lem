@@ -110,11 +110,11 @@ let rec map2_ f xs ys acc =
   end
 let map2 f xs ys = map2_ f xs ys []
 
-let fromJust = function
+let fromJust debug_str = function
   | Just z ->
       z
   | Nothing ->
-      error "Global.fromJust"
+      error ("Global.fromJust(" ^ debug_str ^ ")")
 end
 
 let fromLeft = function

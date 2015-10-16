@@ -32,7 +32,7 @@ type expr =
 (* RUNTIME  | Vpointer of Mem.pointer_value *)
 (*  | Varray of list Mem.mem_value *)
   | PEundef of Undefined.undefined_behaviour
-  | PEerror of string
+  | PEerror of string * expr
   | PEsym of _sym
   | PEimpl of Implementation_.implementation_constant
   | PEctor of Core.ctor * expr list
@@ -80,8 +80,7 @@ and action =
   | Kill of expr (* pexpr *)
   | Store of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order
   | Load of expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order
-  | CompareExchangeStrong of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order * Cmm.memory_order
-  | CompareExchangeWeak of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order * Cmm.memory_order
+  | RMW of expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * expr (* pexpr *) * Cmm.memory_order * Cmm.memory_order
 and paction = Core.polarity * action
 
 
@@ -258,8 +257,12 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         Value (Core.Vfloating str)
     | PEundef ub ->
         Pure (Core.PEundef ub)
-    | PEerror str ->
-        Pure (Core.PEerror str)
+    | PEerror (str, _e) ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEerror (str, pe))
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEerror")
     | PEsym _sym ->
         Pure (Core.PEsym (lookup_symbol _sym st))
     | PEimpl iCst ->
@@ -505,18 +508,12 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
           | _ ->
             failwith "TODO(MSG) type-error: symbolify_expr, Load")
         
-    | CompareExchangeStrong (_e1, _e2, _e3, _e4, mo1, mo2) ->
+    | RMW (_e1, _e2, _e3, _e4, mo1, mo2) ->
         (match to_pure (f st _e1), to_pure (f st _e2), to_pure (f st _e3), to_pure (f st _e4) with
           | Left pe1, Left pe2, Left pe3, Left pe4 ->
-              Core.CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2)
+              Core.RMW0 (pe1, pe2, pe3, pe4, mo1, mo2)
           | _ ->
-            failwith "TODO(MSG) type-error: symbolify_expr, CompareExchangeStrong")
-    | CompareExchangeWeak (_e1, _e2, _e3, _e4, mo1, mo2) ->
-        (match to_pure (f st _e1), to_pure (f st _e2), to_pure (f st _e3), to_pure (f st _e4) with
-          | Left pe1, Left pe2, Left pe3, Left pe4 ->
-              Core.CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2)
-          | _ ->
-            failwith "TODO(MSG) type-error: symbolify_expr, CompareExchangeWeak") in
+            failwith "TODO(MSG) type-error: symbolify_expr, RMW") in
   f st expr
 
 
@@ -1012,7 +1009,7 @@ let subst name =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE ALLOC STORE LOAD KILL COMPARE_EXCHANGE_STRONG COMPARE_EXCHANGE_WEAK
+%token CREATE ALLOC STORE LOAD KILL RMW
 
 (* continuation operators *)
 %token SAVE RUN DOT
@@ -1383,7 +1380,8 @@ expr:
 | FALSE
     { Vfalse }
 | _es= delimited(LBRACKET, separated_list(COMMA, expr), RBRACKET)
-    { Vlist _es }
+(*    { Vlist _es } *)
+    { List.fold_right (fun _e acc -> PEcons (_e, acc)) _es (Vlist []) }
 | ty= delimited(DQUOTE, ctype, DQUOTE)
     { Vctype ty }
 (* TODO:
@@ -1407,8 +1405,8 @@ expr:
 *)
 | UNDEF ub= UB
     { PEundef ub }
-| ERROR str= STRING
-    { PEerror str }
+| ERROR LPAREN str= STRING COMMA _e= expr RPAREN
+    { PEerror (str, _e)  }
 | str= SYM
     { PEsym str }
 | iCst= IMPL
@@ -1436,6 +1434,8 @@ expr:
 | _e1= expr LE _e2= expr
     { Eif (PEop (Core.OpLt, _e1, _e2), Vtrue, PEop (Core.OpEq, _e1, _e2)) }
 *)
+| MINUS _e= expr
+    { PEop (Core.OpSub, Vinteger (Nat_big_num.of_int 0), _e) }
 | _e1= expr bop= binary_operator _e2= expr
     { PEop (bop, _e1, _e2) }
 | LPAREN _e= expr COMMA _es= separated_nonempty_list(COMMA, expr) RPAREN
@@ -1553,10 +1553,8 @@ action:
     { Store (e1, e2, e3, mo) }
 | LOAD LPAREN e1= expr COMMA e2= expr COMMA mo= memory_order RPAREN
     { Load (e1, e2, mo) }
-| COMPARE_EXCHANGE_STRONG LPAREN e1= expr COMMA e2= expr COMMA e3= expr COMMA e4= expr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
-    { CompareExchangeStrong (e1, e2, e3, e4, mo1, mo2) }
-| COMPARE_EXCHANGE_WEAK LPAREN e1= expr COMMA e2= expr COMMA e3= expr COMMA e4= expr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
-    { CompareExchangeWeak (e1, e2, e3, e4, mo1, mo2) }
+| RMW LPAREN e1= expr COMMA e2= expr COMMA e3= expr COMMA e4= expr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
+    { RMW (e1, e2, e3, e4, mo1, mo2) }
 ;
 
 paction:

@@ -102,8 +102,7 @@ type token =
   | KILL
   | STORE
   | LOAD
-  | COMPARE_EXCHANGE_STRONG
-  | COMPARE_EXCHANGE_WEAK
+  | RMW
   | DEF
   | GLOB
   | FUN

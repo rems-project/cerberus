@@ -1,7 +1,6 @@
 open Global_ocaml
 open Core
 
-open Pp_cmm
 open Pp_run
 
 module ND  = Nondeterminism
@@ -123,7 +122,7 @@ let drive sym_supply file args with_concurrency : execution_result =
             str in
       print_endline Colour.(ansi_format [Red] 
         (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason_str (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))))
+              n reason_str (Pp_cmm.pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log))))
       )
     ) vs
   end;
@@ -141,7 +140,7 @@ let drive sym_supply file args with_concurrency : execution_result =
               (print_string stdout; flush_all());
             
             Debug.print_debug 1 (
-              Printf.sprintf "Execution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (pp_constraints constraints) ^
+              Printf.sprintf "Execution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_constraints constraints) ^
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
               Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps (* ^
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log))) *)
@@ -149,7 +148,7 @@ let drive sym_supply file args with_concurrency : execution_result =
           );
           if not (List.mem str_v_ !ky) && not is_blocked then (
             if with_concurrency then
-              Debug.print_debug 6 (Pp_cmm.dot_of_exeState conc_st str_v (pp_constraints constraints));
+              Debug.print_debug 1 (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_constraints constraints));
 (*            print_string stdout; *)
             
             ky := str_v_ :: !ky;
@@ -157,7 +156,7 @@ let drive sym_supply file args with_concurrency : execution_result =
         ) else
           Debug.print_debug 4 (
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^
-            "eqs= " ^ pp_constraints constraints
+            "eqs= " ^ Pp_cmm.pp_constraints constraints
           );
 
 
@@ -177,7 +176,7 @@ let drive sym_supply file args with_concurrency : execution_result =
       | ND.Killed (ND.Other reason, log, constraints) ->
           Debug.print_debug 5 (
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason (pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log)))
+              n reason (Pp_cmm.pp_constraints constraints) (String.concat "\n" (List.rev (Dlist.toList log)))
           )
   ) vs;
   Exception.return2 !ret

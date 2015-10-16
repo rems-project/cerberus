@@ -21,6 +21,9 @@ let rec valueFromMemValue mem_val =
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue ty cval =
   match (ty, cval) with
+    | (_, Vsymbolic symb) ->
+      (* TODO: check *)
+      Just (Mem.symbolic_mval symb)
     | (_, Vunit) ->
         Nothing
     | (_, Vtrue) ->
@@ -101,6 +104,7 @@ let palloc loc al e pref   = Eaction (Paction Pos (Action loc default (Alloc al 
 let pkill loc x            = Eaction (Paction Pos (Action loc default (Kill x         )))
 let pstore loc ty x n mo   = Eaction (Paction Pos (Action loc default (Store ty x n mo)))
 let pload loc ty x mo      = Eaction (Paction Pos (Action loc default (Load ty x mo   )))
+let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2)))
 
 
 let zero =
@@ -352,7 +356,7 @@ let rec valueFromPexpr pexpr =
     (* TODO: hum *)
     | PEundef _ ->
         Nothing
-    | PEerror _ ->
+    | PEerror _ _ ->
         Nothing
     
     | PEval cval ->
@@ -608,8 +612,8 @@ val     subst_sym_pexpr: sym -> pexpr -> pexpr -> pexpr
 let rec subst_sym_pexpr sym pe' = function
   | (PEundef _ as pexpr) ->
       pexpr
-  | (PEerror _ as pexpr) ->
-      pexpr
+  | (PEerror str pe) ->
+      PEerror str (subst_sym_pexpr sym pe' pe)
   | (PEval _ as pexpr) ->
       pexpr
   | (PEsym sym' as pexpr) ->
@@ -751,10 +755,14 @@ and subst_sym_action_ a pe' = function
       Store (subst_sym_pexpr a pe' pe1) (subst_sym_pexpr a pe' pe2) (subst_sym_pexpr a pe' pe3) mo
   | Load pe1 pe2 mo ->
       Load (subst_sym_pexpr a pe' pe1) (subst_sym_pexpr a pe' pe2) mo
+  | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+      RMW (subst_sym_pexpr a pe' pe1) (subst_sym_pexpr a pe' pe2) (subst_sym_pexpr a pe' pe3) (subst_sym_pexpr a pe' pe4) mo1 mo2
+(*
   | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
       CompareExchangeStrong (subst_sym_pexpr a pe' pe1) (subst_sym_pexpr a pe' pe2) (subst_sym_pexpr a pe' pe3) (subst_sym_pexpr a pe' pe4) mo1 mo2
   | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeWeak (subst_sym_pexpr a pe' pe1) (subst_sym_pexpr a pe' pe2) (subst_sym_pexpr a pe' pe3) (subst_sym_pexpr a pe' pe4) mo1 mo2
+*)
   end
 and subst_sym_action a pe' (Action loc bs act_) =
   Action loc bs (subst_sym_action_ a pe' act_)
