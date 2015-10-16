@@ -1,3 +1,5 @@
+(* (c) Kyndylan Nienhuis, University of Cambridge *)
+
 theory "Cmm_master_lemmas"
 
 imports 
