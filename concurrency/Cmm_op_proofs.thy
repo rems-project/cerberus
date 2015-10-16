@@ -1,3 +1,5 @@
+(* (c) Kyndylan Nienhuis, University of Cambridge *)
+
 (*<*)
 theory Cmm_op_proofs
 

@@ -40,8 +40,11 @@ let inline axConsistent ex =
 
 (* The simplified axiomatic model -------------------------------------- *)
 
-(* We use the simplified version of det_read and consistent_atomic_rf,
-and we add some requirements on pre-executions. *)
+(* We use alternative versions of det_read and consistent_atomic_rf
+   that are simpler but equivalent, and we add the requirement that
+   executions are finite. The simplified axiomatic model is therefore
+   equivalent to the original axiomatic model for finite
+   executions. *)
 
 val well_formed_threads_opsem: candidate_execution -> bool
 let well_formed_threads_opsem (pre, wit, rel) =
@@ -97,7 +100,7 @@ let ~{ocaml} axsimpBehaviour opsem_t p =
 val (MEM) [`listMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
 let inline (MEM) = List.elem  
 
-(* I don't have a clue why the following does not work. *)
+(* I don't have a clue why the defintion of NMEM does not work. *)
 
 (*
 val (NMEM) [`notListMember`] : forall 'a. Eq 'a => 'a -> list 'a -> bool
@@ -219,11 +222,6 @@ let incToEx pre s =
 val incStep: pre_execution -> incState -> incState -> action -> bool
 let incStep pre s1 s2 a =
 
-  (*
-  let s2_pre = preRestrict pre s2.incCommitted in
-  let rel   = getRelations s2_pre s2.incWit in
-  let s2_ex = (s2_pre, s2.incWit, rel) in *)
-
   let s2_ex = incToEx pre s2 in
   let com   = incCom s2_ex in
 
@@ -318,7 +316,8 @@ let checkValuesAreEqual v =
 
 (* Methods for updating the execution witness *)
 
-val addToTransitiveOrder: list action -> action -> set (action * action) -> Nondeterminism.t (set (action * action))
+val addToTransitiveOrder: list action -> action -> set (action * action) -> 
+                          Nondeterminism.t (set (action * action))
 let addToTransitiveOrder domain a r =
   Nondeterminism.mplus
   (* We insert the action before all other actions *)
@@ -385,7 +384,7 @@ let auxAddToRfRmw pre a s =
   if List.null mo_actions then
     Nondeterminism.return (s.incWit.rf, Nothing)
   else
-    Nondeterminism.pick "auxAddToRfRmw"
+    Nondeterminism.pick "auxAddToRfRmw" 
         [w | forall (w MEM mo_actions) 
            | forall (c MEM mo_actions). (w, c) NIN s.incWit.mo]
     >>= fun w ->
@@ -511,10 +510,8 @@ let monPerformAction pre s a =
 
 val monStep: pre_execution -> incState -> Nondeterminism.t (action * incState)
 let monStep pre s =
-
-  let uncommitted_actions = 
+  lnsitiveOrder" et uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList pre.actions) | not (a MEM s.incCommitted)] in
-    (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
   Nondeterminism.pick "monStep" uncommitted_actions >>= fun a ->
 
   monPerformAction pre s a >>= fun new_wit ->
@@ -643,14 +640,6 @@ let symUpdatePreEx s step =
                    asw     = pre.asw union extra_asw;
                    dd      = pre.dd union extra_dd;
                 |> in
-  (*
-  let extra_mo = if is_write step.newAction && is_at_atomic_location new_lk step.newAction then
-                    {(a, step.action) | forall (a IN s.preEx.actions)
-                     | a IN s.committed && a <> step.action && is_write a && loc_of a = loc_of step.action} 
-                 else {} in
-  let new_mo = Set.(union) s.exWitness.mo extra_mo in
-  let new_wit = <| s.exWitness with mo = new_mo |> in
-  <|s with preEx = new_pre; exWitness = new_wit; |> *)
   <| s with symPre = new_pre; |>
 
 
@@ -773,7 +762,6 @@ let symStep s =
 
   let uncommitted_actions = 
     [a | forall (a MEM Set_extra.toList s.symPre.actions) | not (a MEM s.symCommitted)] in
-    (* Set_extra.toList (Set.difference pre.actions s.incCommitted) in *)
   Nondeterminism.pick "symStep" uncommitted_actions >>= fun a ->
 
   symPerformAction s a >>= fun (new_wit, values) ->
