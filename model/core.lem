@@ -138,7 +138,7 @@ type value =
   | Vtuple of list value
   | Vctype of ctype
 (*  | Vconst of Mem.mem_value *)
-  | Vsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+  | Vsymbolic of Symbolic.symbolic value Mem.pointer_value (* symbolicity coming from the concurrency *)
   
   | Vunspecified of ctype
   | Vinteger of Mem.integer_value

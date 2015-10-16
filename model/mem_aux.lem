@@ -32,7 +32,7 @@ let integerValueFromMemValue mval =
     (fun _ _ _ -> Nothing)
 
 
-val symbolicFromMemValue: mem_value -> maybe Symbolic.symbolic
+val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
 let symbolicFromMemValue mval =
 (*
   maybe Nothing (symbolicFromIntegerValue -| snd) (integerValueFromMemValue mval)

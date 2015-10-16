@@ -177,7 +177,6 @@ let rec add_to_asw aids expr =
     | Eproc annots nm pes ->
         Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
     | Eaction (Paction p' (Action loc annots a)) ->
-        let _ = Boot.print_debug 1 ("NEW ASW => " ^ show (Set.size aids)) in
         Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
     | Eunseq es ->
         Eunseq (List.map (add_to_asw aids) es)

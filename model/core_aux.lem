@@ -9,7 +9,7 @@ import Boot
 val     valueFromMemValue: Mem.mem_value -> value
 let rec valueFromMemValue mem_val =
   Mem.case_mem_value mem_val
-    (fun symb              -> Vsymbolic symb)
+    (fun symb              -> Vsymbolic (Symbolic.map_const valueFromMemValue symb))
     (fun ty                -> Vunspecified ty)
     (fun _ ival            -> Vinteger ival)
     (fun _ str             -> Vfloating str)
@@ -21,9 +21,16 @@ let rec valueFromMemValue mem_val =
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue ty cval =
   match (ty, cval) with
+(*
     | (_, Vsymbolic symb) ->
       (* TODO: check *)
-      Just (Mem.symbolic_mval symb)
+      Just (Mem.symbolic_mval (Symbolic.map_const (fun z -> fromJust $ memValueFromValue ty z) symb))
+*)
+    | (_, Vsymbolic symb) ->
+      Just (Mem.symbolic_mval (Symbolic.map_const (fun z ->
+          match memValueFromValue ty z with
+           | Just mval -> mval
+        end) symb))
     | (_, Vunit) ->
         Nothing
     | (_, Vtrue) ->
@@ -1157,41 +1164,24 @@ end
 
 (* assumes a value expression *)
 
-val symbolify: value -> Symbolic.symbolic
+val symbolify: value -> Symbolic.symbolic value Mem.pointer_value
 let symbolify expr =
   match expr with
-    | Vunit ->
-        error "TODO: Core_aux.symbolify, Vunit"
     | Vtrue ->
         Symbolic.SYMBtrue
     | Vfalse ->
         Symbolic.SYMBfalse
-    | Vlist _ ->
-        error "TODO: Core_aux.symbolify, Vlist"
-    | Vtuple _ ->
-        error "TODO: Core_aux.symbolify, Vtuple"
     | Vctype ty ->
         Symbolic.SYMBctype ty
     | Vsymbolic symb ->
         symb
-    | Vunspecified _ ->
-        error "TODO: Core_aux.symbolify, Vunspecified"
-    | Vinteger _ ->
-        error "TODO: Core_aux.symbolify, Vinteger"
-    | Vfloating _ ->
-        error "TODO: Core_aux.symbolify, Vfloating"
-    | Vpointer _ ->
-        error "TODO: Core_aux.symbolify, Vpointer"
-    | Varray _ ->
-        error "TODO: Core_aux.symbolify, Varray"
-    | Vstruct _ _ ->
-        error "TODO: Core_aux.symbolify, Vstruct"
-    | Vunion _ _ _ ->
-        error "TODO: Core_aux.symbolify, Vunion"
+    | cval ->
+        Symbolic.SYMBconst cval
   end
 
-val     pexprFromSymbolic: Symbolic.symbolic -> maybe pexpr
-let rec pexprFromSymbolic symb =
+val     pexprFromSymbolic: map Symbol.t value -> Symbolic.symbolic value Mem.pointer_value -> maybe pexpr
+let rec pexprFromSymbolic concur_sym_map symb =
+  let pexprFromSymbolic = pexprFromSymbolic concur_sym_map in
   let convert_operator = function
     | Symbolic.Add ->
         OpAdd
@@ -1229,12 +1219,14 @@ let rec pexprFromSymbolic symb =
         Just (PEval Vtrue)
     | Symbolic.SYMBfalse ->
         Just (PEval Vfalse)
-    | Symbolic.SYMBconst n ->
-        Just (PEval (Vinteger (Mem.integer_ival n)))
+    | Symbolic.SYMBconst cval ->
+        Just (PEval cval)
+    | Symbolic.SYMBptrval ptr_val ->
+        Just (PEval (Vpointer ptr_val))
     | Symbolic.SYMBctype ty ->
         Just (PEval (Vctype ty))
-    | Symbolic.SYMBsym _ _ ->
-        Nothing
+    | Symbolic.SYMBsym _ sym ->
+        Maybe.map (fun z -> PEval z) (Map.lookup sym concur_sym_map)
     | Symbolic.SYMBop Symbolic.Neq symb1 symb2 ->
         match (pexprFromSymbolic symb1, pexprFromSymbolic symb2) with
           | (Just pe1, Just pe2) ->

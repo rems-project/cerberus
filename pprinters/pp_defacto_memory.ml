@@ -94,7 +94,7 @@ and pp_integer_value (IV (prov, ival_)) =
 
 and pp_mem_value = function
   | MVsymbolic symb ->
-      !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic symb)
+      !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic pp_mem_value pp_pointer_value symb)
   | MVunspecified ty ->
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | MVinteger (ity, ival) ->

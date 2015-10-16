@@ -199,7 +199,7 @@ let rec pp_value = function
   | Vfloating str ->
       !^ str
   | Vsymbolic symb ->
-      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic symb)
+      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_value Pp_mem.pp_pointer_value symb)
   | Vpointer ptr_val ->
       Pp_mem.pp_pointer_value ptr_val
   | Varray cvals ->

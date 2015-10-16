@@ -1,6 +1,7 @@
 syntax: glob
 
 ocaml_generated/**
+_build/**
 _lem/**
 _coq/**
 _coq-orig/**

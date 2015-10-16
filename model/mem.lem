@@ -108,7 +108,7 @@ val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference
 (* val is_concrete_ival: integer_value -> bool *)
 
 (* Memory value constructors *)
-val symbolic_mval: Symbolic.symbolic -> mem_value
+val symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value
 val unspecified_mval: ctype -> mem_value
 val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
 val floating_mval: AilTypes.floatingType -> string -> mem_value
@@ -120,7 +120,7 @@ val union_mval: Symbol.t -> Cabs.cabs_identifier -> mem_value -> mem_value
 (* Memory value destructor *)
 val case_mem_value: forall 'a.
   mem_value ->
-  (Symbolic.symbolic -> 'a) ->
+  (Symbolic.symbolic mem_value pointer_value -> 'a) ->
   (ctype -> 'a) ->
   (AilTypes.integerType -> integer_value -> 'a) ->
   (AilTypes.floatingType -> string -> 'a) ->

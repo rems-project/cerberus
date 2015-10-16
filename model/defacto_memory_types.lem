@@ -87,7 +87,7 @@ and integer_value =
 
 (* The mem_value represents what can be stored in memory. *)
 and mem_value =
-  | MVsymbolic of Symbolic.symbolic (* symbolicity coming from the concurrency *)
+  | MVsymbolic of Symbolic.symbolic mem_value pointer_value (* symbolicity coming from the concurrency *)
   | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *)
   | MVinteger of AilTypes.integerType * integer_value
   | MVfloating of AilTypes.floatingType * string
