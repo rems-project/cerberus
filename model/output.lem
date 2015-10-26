@@ -1,112 +1,15 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
-
-
 open import Pervasives Global
 import String_extra
 
-import Cmm_aux_old Core_run_effect Memory
+open import Monadic_parsing
+import Errors Core Core_ctype Mem Mem_aux
+module Cty = Core_ctype
+
+import Undefined
+module U = Undefined
 
 
-
-(* BEGIN: Monadic parsing (see "Monadic Parsing in Haskell" from Hutton & Meijer) *)
-type parser 'a =
- | Parser of (list char -> list ('a * list char))
-
-
-val parse: forall 'a. parser 'a -> list char -> list ('a * list char)
-let parse (Parser p) = p
-
-
-module P = struct
-  type t 'a = parser 'a
-  val return: forall 'a.    'a -> t 'a
-  val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-  let return a = Parser (fun cs -> [(a, cs)])
-  let bind p f = Parser (fun cs ->
-    List.concatMap (fun (a, cs') -> parse (f a) cs') (parse p cs)
-  )
-  
-  val mzero: forall 'a. t 'a
-  val mplus: forall 'a. t 'a -> t 'a -> t 'a
-  let mzero       = Parser (fun _ -> [])
-  let mplus p1 p2 = Parser (fun cs -> parse p1 cs ++ parse p2 cs)
-  
-  val liftM: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
-  let liftM f p = Parser (fun cs ->
-    map (fun (a, cs') -> (f a, cs')) $ parse p cs
-  )
-end
-
-let inline (>>=)    = P.bind
-let inline (>>) m f = P.bind m (fun _ -> f)
-
-
-val item: parser char
-let item =
-  Parser (fun cs -> match cs with
-    | []      -> []
-    | (c::cs) -> [(c, cs)]
-  end)
-
-
-val (<|>): forall 'a. parser 'a -> parser 'a -> parser 'a
-let (<|>) p1 p2 =
-  Parser (fun cs -> match parse (P.mplus p1 p2) cs with
-    | []     -> []
-    | (x::_) -> [x]
-  end)
-
-
-val option: forall 'a. 'a -> parser 'a -> parser 'a
-let option x p = p <|> P.return x
-
-
-val optionMaybe: forall 'a. parser 'a -> parser (maybe 'a)
-let optionMaybe p =
-  option Nothing (P.liftM (fun z -> Just z) p) 
-
-
-val sat: (char -> bool) -> parser char
-let sat pred = do P
-  c <- item; in
-    if pred c then P.return c else P.mzero
-  end
-
-
-val char: char -> parser char
-let char c =
-  sat (fun z -> c = z)
-
-
-val anyChar: parser char
-let anyChar =
-  sat (fun _ -> true)
-
-
-val string: list char -> parser (list char)
-let rec string cs =
-  match cs with
-    | []      -> P.return []
-    | (c::cs') -> do P
-        _ <- char c;
-        _ <- string cs'; in
-          P.return (c::cs')
-        end
-  end
-
-
-val     many:  forall 'a. parser 'a -> parser (list 'a)
-val     many1: forall 'a. parser 'a -> parser (list 'a)
-let rec many p = many1 p <|> P.return []
-and     many1 p = do P
-  a   <- p;
-  _as <- many p; in
-    P.return (a::_as)
-  end
-(* END: Monadic parsring *)
-
-
-(* BEGIN: definitions for the format argument *)
 type flags = <|
   flag_minus: bool;
   flag_plus:  bool;
@@ -118,7 +21,6 @@ type flags = <|
 type field_width =
   | FW_num of nat
   | FW_asterisk
-
 
 type precision =
   | P_num of nat
@@ -145,7 +47,6 @@ type conversion_specifier =
   | CS_p
   | CS_n
   | CS_percent
-(* TODO: deriving Eq *)
 
 type conversion_specification = <|
   cp_flags:                flags;
@@ -159,11 +60,9 @@ type format_ =
   | F_text of list char
   | F_conv of conversion_specification
 type format = list format_
-(* END: definitions for the format argument *)
 
 
-(* BEGIN: parsing of format strings *)
-val nonzero: parser char
+val nonzero: parserM char
 let nonzero =
   sat (function
     | #'1' -> true
@@ -179,125 +78,97 @@ let nonzero =
   end)
 
 
-val digit: parser char
+val digit: parserM char
 let digit =
   char #'0' <|> nonzero
 
 
-val nonnegativeDecimalInteger: parser nat
-let nonnegativeDecimalInteger = do P
-  c  <- nonzero;
-  cs <- many digit; in
-    P.return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) (c::cs))
-  end
+val nonnegativeDecimalInteger: parserM nat
+let nonnegativeDecimalInteger =
+  nonzero    >>= fun c  ->
+  many digit >>= fun cs ->
+  return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) (c::cs))
 
 
 (* TODO: clang/gcc seems to allow 0, ie. this is not like a "C decimal integer constant" *)
-val decimalInteger: parser nat
-let decimalInteger = do P
-  cs <- many digit; in
-    P.return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) cs)
-  end
+val decimalInteger: parserM nat
+let decimalInteger =
+  many digit >>= fun cs ->
+  return (foldl (fun acc n -> n + 10 * acc) 0 $ map (fun c -> String_extra.ord c - 48) cs)
 
 
-val flags: parser flags
-let flags = do P
-  xs <- many (char #'-' <|> char #'+' <|> char #' ' <|> char #'#' <|> char #'0'); in
-    P.return <|
-      flag_minus= elem #'-' xs; flag_plus= elem #'+' xs;
-      flag_space= elem #' ' xs; flag_hash= elem #'#' xs;
-      flag_zero=  elem #'0' xs
-    |>
-  end
+val flags: parserM flags
+let flags =
+  many (char #'-' <|> char #'+' <|> char #' ' <|> char #'#' <|> char #'0') >>= fun xs ->
+  return <|
+    flag_minus= elem #'-' xs; flag_plus= elem #'+' xs;
+    flag_space= elem #' ' xs; flag_hash= elem #'#' xs;
+    flag_zero=  elem #'0' xs
+  |>
 
 
-val fieldWidth: parser field_width
+val fieldWidth: parserM field_width
 let fieldWidth =
-  (char #'*' >> P.return FW_asterisk) <|>
-  (nonnegativeDecimalInteger >>= fun n -> P.return $ FW_num n)
+  (char #'*' >> return FW_asterisk) <|>
+  (nonnegativeDecimalInteger >>= fun n -> return $ FW_num n)
 
 
-val precision: parser precision
+val precision: parserM precision
 let precision =
-      (char #'.' >> char #'*' >> P.return P_asterisk)
-  <|> (char #'.' >> decimalInteger >>= fun n -> P.return $ P_num n)
-  <|> (char #'.' >> P.return (P_num 0))
+      (char #'.' >> char #'*' >> return P_asterisk)
+  <|> (char #'.' >> decimalInteger >>= fun n -> return $ P_num n)
+  <|> (char #'.' >> return (P_num 0))
 
 
-val lengthModifier: parser length_modifier
+val lengthModifier: parserM length_modifier
 let lengthModifier =
-      (string [#'h'; #'h'] >> P.return LM_hh)
-  <|> (char #'h'           >> P.return LM_h)
-  <|> (char #'l'           >> P.return LM_l)
-  <|> (string [#'l'; #'l'] >> P.return LM_l)
-  <|> (char #'j'           >> P.return LM_j)
-  <|> (char #'z'           >> P.return LM_z)
-  <|> (char #'t'           >> P.return LM_t)
-  <|> (char #'L'           >> P.return LM_L)
+      (string [#'h'; #'h'] >> return LM_hh)
+  <|> (char #'h'           >> return LM_h)
+  <|> (char #'l'           >> return LM_l)
+  <|> (string [#'l'; #'l'] >> return LM_l)
+  <|> (char #'j'           >> return LM_j)
+  <|> (char #'z'           >> return LM_z)
+  <|> (char #'t'           >> return LM_t)
+  <|> (char #'L'           >> return LM_L)
 
 
-val conversionSpecifier: parser conversion_specifier
+val conversionSpecifier: parserM conversion_specifier
 let conversionSpecifier =
-      (char #'d' <|> char #'i' >> P.return CS_di)
-  <|> (char #'o' >> P.return CS_o)
-  <|> (char #'u' >> P.return CS_u)
-  <|> (char #'x' >> P.return CS_x)
-  <|> (char #'X' >> P.return CS_X)
-  <|> (char #'c' >> P.return CS_c)
-  <|> (char #'s' >> P.return CS_s)
-  <|> (char #'p' >> P.return CS_p)
-  <|> (char #'n' >> P.return CS_n)
-  <|> (char #'%' >> P.return CS_percent)
+      (char #'d' <|> char #'i' >> return CS_di)
+  <|> (char #'o' >> return CS_o)
+  <|> (char #'u' >> return CS_u)
+  <|> (char #'x' >> return CS_x)
+  <|> (char #'X' >> return CS_X)
+  <|> (char #'c' >> return CS_c)
+  <|> (char #'s' >> return CS_s)
+  <|> (char #'p' >> return CS_p)
+  <|> (char #'n' >> return CS_n)
+  <|> (char #'%' >> return CS_percent)
 
 
-val conversionSpecification: parser conversion_specification
-let conversionSpecification = do P
-  _      <- char #'%';
-  fs     <- flags;
-  fw_opt <- optionMaybe fieldWidth;
-  p_opt  <- optionMaybe precision;
-  lm_opt <- optionMaybe lengthModifier;
-  cs     <- conversionSpecifier; in
-    P.return <|
-      cp_flags=                fs;
-      cp_field_width=          fw_opt;
-      cp_precision=            p_opt;
-      cp_length_modifier=      lm_opt;
-      cp_conversion_specifier= cs
-    |>
-  end
+val conversionSpecification: parserM conversion_specification
+let conversionSpecification =
+  char #'%'                  >>
+  flags                      >>= fun fs     ->
+  optionMaybe fieldWidth     >>= fun fw_opt ->
+  optionMaybe precision      >>= fun p_opt  ->
+  optionMaybe lengthModifier >>= fun lm_opt ->
+  conversionSpecifier        >>= fun cs     ->
+  return <|
+    cp_flags=                fs;
+    cp_field_width=          fw_opt;
+    cp_precision=            p_opt;
+    cp_length_modifier=      lm_opt;
+    cp_conversion_specifier= cs
+  |>
 
 
-val format: parser format
+val format: parserM format
 let format =
   many (
-        (many1 (sat (fun z -> z <> #'%')) >>= fun str -> P.return (F_text str))
-    <|> (conversionSpecification >>= fun cs -> P.return (F_conv cs))
+        (many1 (sat (fun z -> z <> #'%')) >>= fun str -> return (F_text str))
+    <|> (conversionSpecification >>= fun cs -> return (F_conv cs))
   )
-
-(* END: parsing of format strings *)
-
-
-(* BEGIN: actual implementation of printf *)
-(*
-module E = struct
-  type printf_error = string
-  
-  type t 'a = either printf_error 'a
-  val return: forall 'a.    'a -> t 'a
-  val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-  let return a = Right a
-  let bind m f = match m with
-    | Left err -> Left err
-    | Right a  -> f a
-  end
-  
-  val fail: forall 'a. printf_error -> t 'a
-  let fail err = Left err
-(*  val liftM: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b *)
-end
- *)
-module E = Core_run_effect
 
 
 
@@ -415,19 +286,258 @@ let rec showNonNegativeWithBasis_aux acc useUpper b n =
   else
     showNonNegativeWithBasis_aux (charFromDigit useUpper d :: acc) useUpper b r
 
-val showNonNegativeWithBasis: bool -> natural -> natural -> E.t (list char)
+val showNonNegativeWithBasis: bool -> natural -> natural -> list char
 let showNonNegativeWithBasis useUpper b n =
   if n < 0 then
     error "showNonNegativeWithBasis expects an non-negative integer"
   else
-    E.return $ showNonNegativeWithBasis_aux [] useUpper b n
+    showNonNegativeWithBasis_aux [] useUpper b n
+
+let inline (>>=) = Mem.bind
 
 
+(* TODO: need the length modifier to perform the loads using the proper ctype *)
+val convert: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
+             maybe precision -> maybe length_modifier -> conversion_specifier -> list Mem.pointer_value ->
+             Mem.memM (either Errors.t (U.t (list char * list Mem.pointer_value)))
+let convert full_core_eval prec_opt lm_opt cspec args =
+  let prec = match prec_opt with
+    | Just (P_num z) ->
+        z
+    | Just (P_asterisk) ->
+        error "TODO: Output.convert, prec" (* TODO *)
+    | Nothing ->
+        1
+  end in
+  let aux ty cont =
+    match args with
+      | [] ->
+          Mem.return $
+            Right (U.undef [U.Insufficient_arguments_for_format])
+      | arg :: args' ->
+          Mem.load ty arg >>= fun mem_val ->
+          (* TODO: this is wrong if "not (is_integer ty)" *)
+          match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
+            | Nothing ->
+                error "WIP: convert --> not integer"
+            | Just n ->
+                Mem.return $ Right (U.return (
+                  if prec = 0 && n = 0 then
+                    ([], args')
+                  else
+                    (cont n, args')
+                ))
+          end
+    end in
+  match cspec with
+    | CS_di ->
+        (* see (§7.21.6.1#8 d,i) *)
+        let ty = match lm_opt with
+          | Just LM_hh ->
+              Cty.signed_char
+          | Just LM_h ->
+              Cty.signed_short
+          | Just LM_l ->
+              Cty.signed_long
+          | Just LM_ll ->
+              Cty.signed_long_long
+          | Just LM_j ->
+              Cty.intmax_t
+          | Just LM_z ->
+              Cty.size_t
+          | Just LM_t ->
+              Cty.ptrdiff_t
+          | Just LM_L ->
+              error "found a LM_l with a CS_di"
+          | Nothing ->
+              Cty.signed_int
+        end in
+
+
+        aux ty (fun n ->
+          let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
+          (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
+        )
+(*
+        let prec = match prec_opt with
+          | Just (P_num z)    -> z
+          | Just (P_asterisk) -> error "TODO: output.lem 1" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' ->
+              Mem.load Cty.signed_int arg >>= fun mem_val ->
+              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
+                | Nothing ->
+                    error "WIP: convert, CS_di --> not integer"
+                | Just n ->
+                    Mem.return $ if prec = 0 && n = 0 then
+                      ([], args')
+                    else
+                      let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
+                      ((if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str, args')
+              end
+          | _ -> error "found no argument to convert a %d or %i"
+        end
+*)
+    
+    | CS_o ->
+        error "WIP: Output.convert, CS_o"
+    | CS_u ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        aux Cty.unsigned_int (fun n ->
+          (* TODO: conversion (n is unsigned int here) *)
+          let str = showNonNegativeWithBasis false 10 (naturalFromInteger n) in
+          replicate (prec - length str) #'0' ++ str
+        )
+    | CS_x ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        aux Cty.unsigned_int (fun n ->
+          (* TODO: conversion (n is unsigned int here) *)
+          let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
+          replicate (prec - length str) #'0' ++ str
+        )
+
+(*
+        let prec = match prec_opt with
+          | Just (P_num z)    -> z
+          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' ->
+              Mem.load Cty.unsigned_int arg >>= fun mem_val ->
+              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
+                | Nothing ->
+                    error "WIP: convert, CS_X --> not integer"
+                | Just n ->
+                    Mem.return $ if prec = 0 && n = 0 then
+                      ([], args')
+                    else
+                      (* TODO: conversion (n is unsigned int here) *)
+                      let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
+                      (replicate (prec - length str) #'0' ++ str, args')
+              end
+          | _ -> error "found no argument to convert an %X"
+        end
+*)
+(*
+    | CS_X ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        let prec = match prec_opt with
+          | Just (P_num z)    -> z
+          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
+          | Nothing           -> 1
+        end in
+        match args with
+          | arg :: args' ->
+              Mem.load Cty.unsigned_int arg >>= fun mem_val ->
+              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
+                | Nothing ->
+                    error "WIP: convert, CS_X --> not integer"
+                | Just n ->
+                    Mem.return $ if prec = 0 && n = 0 then
+                      ([], args')
+                    else
+                      (* TODO: conversion (n is unsigned int here) *)
+                      let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
+                      (replicate (prec - length str) #'0' ++ str, args')
+              end
+          | _ -> error "found no argument to convert an %X"
+        end
+*)
+    | CS_c ->
+        error "WIP: Output.convert, CS_c"
+    | CS_s ->
+        error "WIP: Output.convert, CS_s"
+    | CS_p ->
+        error "WIP: Output.convert, CS_p"
+    | CS_n ->
+        error "WIP: Output.convert, CS_n"
+    | CS_percent ->
+        error "WIP: Output.convert, CS_percent"
+  end
+
+
+
+
+
+
+
+val     printf_aux: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
+                    list char -> format -> list Mem.pointer_value -> Mem.memM (either Errors.t (Undefined.t (list char)))
+let rec printf_aux full_core_eval acc fs ptrvals =
+  match (fs, ptrvals) with
+    | ([], []) ->
+        Mem.return $
+          Right (U.return acc)
+    | (F_text str :: fs, ptrvals) ->
+        printf_aux full_core_eval (acc ++ str) fs ptrvals
+    | (F_conv cp :: fs, ptrvals) ->
+        convert full_core_eval cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ptrvals >>= function
+          | Right (U.Defined (str, ptrvals')) ->
+              let expanded  = expand cp.cp_flags str in
+              let justified = match cp.cp_field_width with
+                | Nothing ->
+                    expanded
+                | Just (FW_num fw) ->
+                    if length expanded < fw then
+                      justify cp.cp_precision cp.cp_conversion_specifier cp.cp_flags fw expanded
+                    else
+                      expanded
+                | Just FW_asterisk ->
+                    error "TODO: output.lem 6"
+              end in
+              printf_aux full_core_eval (acc ++ justified) fs ptrvals'
+          | Right (U.Error loc str) ->
+              Mem.return $ Right (U.Error loc str)
+          | Right (U.Undef ubs) ->
+              Mem.return $ Right (U.Undef ubs)
+          | Left err ->
+              Mem.return $ Left err
+        end
+    | _ ->
+        error "Output.printf_aux"
+  end
+
+
+
+val printf: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
+            list char -> list Mem.pointer_value -> Mem.memM (either Errors.t (Undefined.t (list char)))
+let printf full_core_eval frmt args =
+  match parse format frmt with
+    | [(fs, [])] ->
+        printf_aux full_core_eval [] fs args
+    | _ ->
+        Mem.return $
+          Right (U.undef [U.Invalid_format (String.toString frmt)])
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
 
 (* TODO: hack *)
 open Core_ctype
+(*
 import Memory_order
 module Cmm = Memory_order
+*)
+
+
 
 
 (* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
@@ -637,3 +747,4 @@ let printf load frmt args =
 
 
 
+*)

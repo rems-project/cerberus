@@ -1,5 +1,5 @@
 open import Pervasives String_extra Global
-import Symbol AilTypes Implementation_ Undefined Cmm_csem
+import Symbol AilTypes Implementation_ Undefined Loc Cmm_csem
 import Mem
 
 open import Thread Core_ctype
@@ -267,7 +267,7 @@ type expr 'a =
   | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
   | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
   
-
+  | Eloc of Loc.t * expr 'a
 
 (*
 type expr 'a =

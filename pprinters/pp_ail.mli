@@ -7,7 +7,7 @@ val pp_storageDuration: storageDuration -> PPrint.document
 
 val pp_qualifiers: qualifiers -> PPrint.document -> PPrint.document
 
-val pp_integerBaseType: integerBaseType -> PPrint.document
+val string_of_integerBaseType: integerBaseType -> string
 
 
 val pp_integerType_raw: integerType -> PPrint.document
@@ -27,6 +27,7 @@ let rec pp_ctype_raw
 *)
 
 val pp_ctype: ctype -> PPrint.document
+val pp_ctype_raw: ctype -> PPrint.document
 
 (*
 let rec pp_ctype_declaration id
@@ -62,3 +63,6 @@ let pp_static_assertion (e, lit) =
 
 val pp_program: ('a -> (PPrint.document -> PPrint.document)) -> 'a program0 -> PPrint.document
 val pp_program_with_annot: GenTypes.genTypeCategory program0 -> PPrint.document
+
+(* DEBUG *)
+val pp_genTypeCategory: GenTypes.genTypeCategory -> PPrint.document

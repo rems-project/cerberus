@@ -116,8 +116,8 @@ let drive sym_supply file args with_concurrency : execution_result =
       let reason_str = match reason with
         | ND.Undef0 ubs ->
             "undefined behaviour: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
-        | ND.Error0 str ->
-            "static error: " ^ str
+        | ND.Error0 (loc , str) ->
+            "static error[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str
         | ND.Other str ->
             str in
       print_endline Colour.(ansi_format [Red] 
@@ -170,8 +170,8 @@ let drive sym_supply file args with_concurrency : execution_result =
             ))
           )
       
-      | ND.Killed (ND.Error0 str, _, _) ->
-          print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR: " ^ str)))
+      | ND.Killed (ND.Error0 (loc, str), _, _) ->
+          print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str)))
       
       | ND.Killed (ND.Other reason, log, constraints) ->
           Debug.print_debug 5 (

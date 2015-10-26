@@ -6,6 +6,7 @@
 open import Pervasives Show Show_extra
 open import Cmm_aux Cmm_csem
 
+import Loc (* Somebody is going to hate me for this *)
 
 
 (* The axiomatic model ------------------------------------------------- *)
@@ -336,7 +337,7 @@ let auxAddPairToRf old_rf w r =
   | (Just value_w, Just value_r) -> 
       Nondeterminism.return ((Set.insert (w, r) old_rf), value_w, value_r)
   | _ -> 
-      Nondeterminism.kill (Nondeterminism.Error "A write-read pair doesn't contain the values written and read")
+      Nondeterminism.kill (Nondeterminism.Error Loc.unknown "A write-read pair doesn't contain the values written and read")
   end  
 
 (* NOTE: this function is only sound when the resulting execution is
@@ -419,7 +420,7 @@ let monCheckConsistency ex =
 val monCheckWitRestrict: execution_witness -> set action -> execution_witness -> Nondeterminism.t unit
 let monCheckWitRestrict new_wit committed old_wit =
   Nondeterminism.guard (incWitRestrict new_wit committed = old_wit) 
-           (Nondeterminism.Error "\"witnessRestrict new committed = old\" should hold by construction.")
+           (Nondeterminism.Error Loc.unknown "\"witnessRestrict new committed = old\" should hold by construction.")
 
 val monCheckCommitmentOrder: pre_execution -> execution_witness -> list action 
                              -> action -> Nondeterminism.t unit

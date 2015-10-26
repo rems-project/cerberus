@@ -588,6 +588,8 @@ let rec to_pure expr =
         Nothing
     | Ewait _ ->
         Nothing
+    | Eloc _ _ ->
+        Nothing
 end
 
 val     to_pures: forall 'a. list (expr 'a) -> maybe (list pexpr)
@@ -747,6 +749,8 @@ let rec subst_sym sym pe' = function
       Epar (List.map (subst_sym sym pe') es)
   | (Ewait _ as expr) ->
       expr
+  | Eloc loc e ->
+      Eloc loc (subst_sym sym pe' e)
 end
 
 
@@ -856,6 +860,8 @@ let rec subst_wait tid v = function
          Epure (PEval v)
        else
          Ewait tid'
+   | Eloc loc e ->
+       Eloc loc (subst_wait tid v e)
 end
 
 
@@ -948,6 +954,8 @@ match expr with
       error "Core_aux.find_labeled_continuation:  think about this Ctor (Epar)"
   | Ewait _ ->
       Nothing
+  | Eloc _ e ->
+      find_labeled_continuation ksym e
   end
 
 
@@ -1087,6 +1095,8 @@ let rec collect_labeled_continuations expr =
         Map.empty
     | Ewait _ ->
         Map.empty
+    | Eloc loc e ->
+        collect_labeled_continuations e
   end
 
 
@@ -1148,6 +1158,8 @@ let rec has_sseqs expr =
         false
     | Ewait _ ->
         false
+    | Eloc _ e ->
+        has_sseqs e
   end
 
 

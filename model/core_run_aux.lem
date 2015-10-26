@@ -121,6 +121,8 @@ let rec add_to_sb p_aids expr =
     | Ewait _ ->
         (* no change *)
         expr
+    | Eloc loc e ->
+        Eloc loc (add_to_sb p_aids e)
   end
 
 
@@ -204,6 +206,8 @@ let rec add_to_asw aids expr =
     | Ewait _ ->
         (* no change *)
         expr
+    | Eloc loc e ->
+        Eloc loc (add_to_asw aids e)
   end
 
 val add_to_asw_stack: set (action_id) -> Core.stack core_run_annotation -> Core.stack core_run_annotation

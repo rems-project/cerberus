@@ -495,9 +495,9 @@ let offset = hash lexbuf in
 (*  | "%:%:" *)
 
   (* NON-STD (cppmem-like thread syntax) *)
-  | "{{{" { LBRACES }
+  | "{-{" { LBRACES }
   | "|||" { PIPES   }
-  | "}}}" { RBRACES }
+  | "}-}" { RBRACES }
   
   
   (* STD §6.7.2.4#4, sentence 2 *)

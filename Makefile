@@ -97,7 +97,9 @@ CERBERUS_LEM=\
   ail/Annotation.lem \
   ail/GenTypes.lem \
   ail/GenTypesAux.lem \
-  ail/GenTyping.lem
+  ail/GenTyping.lem \
+  monadic_parsing.lem \
+  output.lem
 
 
 # Where and how ocamlbuild will be called
@@ -144,6 +146,10 @@ ocaml_native:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.native
 	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.native | ./tools/colours.sh
 	@cp -L main.native cerberus
+
+ocaml_byte:
+	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
+	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
 
 
 clean:

@@ -117,9 +117,41 @@ val char: ctype
 let char =
   Basic (AilTypes.Integer AilTypes.Char)
 
+val signed_char: ctype
+let signed_char =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar))
+
+val signed_short: ctype
+let signed_short =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short))
+
 val signed_int: ctype
 let signed_int =
   Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_))
+
+val signed_long: ctype
+let signed_long =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long))
+
+val signed_long_long: ctype
+let signed_long_long =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong))
+
+val intmax_t: ctype
+let intmax_t =
+  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intmax_t))
+
+val ptrdiff_t: ctype
+let ptrdiff_t =
+  Basic (AilTypes.Integer AilTypes.Ptrdiff_t)
+
+val size_t: ctype
+let size_t =
+  Basic (AilTypes.Integer AilTypes.Size_t)
+
+val unsigned_int: ctype
+let unsigned_int =
+  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_))
 
 val unsigned_char: ctype
 let unsigned_char =
@@ -128,13 +160,14 @@ let unsigned_char =
 val char16_t: ctype
 let char16_t =
   (* STD §7.28#2 *)
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least16_t")))
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_leastN_t 16)))
 
 val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin "int_least32_t")))
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_leastN_t 32)))
 
+(*
 val builtin_signed_integer_type: string -> ctype
 let builtin_signed_integer_type str =
   Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin str)))
@@ -142,6 +175,7 @@ let builtin_signed_integer_type str =
 val builtin_unsigned_integer_type: string -> ctype
 let builtin_unsigned_integer_type str =
   Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin str)))
+*)
 
 
   (* this alignment is the default for the type unless overridden by

@@ -242,7 +242,7 @@ and translate_expression stdlib program is_lvalue a_expr =
     E.return $ C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype result_ty))))
   else
     let A.AnnotatedExpression annot loc expr = a_expr in
-    match expr with
+    C.Eloc loc <$> match expr with
       (* TODO: integer promotion *)
       | A.AilEunary A.Plus e ->
           translate_rvalue e >>= fun core_e ->
@@ -497,8 +497,9 @@ and translate_expression stdlib program is_lvalue a_expr =
       
       (* DONE (check promotion stuff) *)
       | A.AilEbinary e1 (A.Arithmetic A.Bxor) e2 ->
-          E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
+          let _ = Boot.print_debug 1 ("XOR, result_ty= " ^ Boot.pp_ail_ctype result_ty) in
+          E.fresh_symbol      >>= fun sym_e1  ->
+          E.fresh_symbol      >>= fun sym_e2  ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
@@ -507,8 +508,8 @@ and translate_expression stdlib program is_lvalue a_expr =
       
       (* DONE (check promotion stuff) *)
       | A.AilEbinary e1 (A.Arithmetic A.Bor) e2 ->
-          E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol      >>= fun sym_e1  ->
+          E.fresh_symbol      >>= fun sym_e2  ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
@@ -926,6 +927,7 @@ and translate_expression stdlib program is_lvalue a_expr =
 
 
       | A.AilEbinary e1 A.Eq e2 ->
+          (* TODO: factorise *)
           E.fresh_symbol          >>= fun sym_e1    ->
           E.fresh_symbol          >>= fun sym_e2    ->
           E.fresh_symbol          >>= fun sym_memop ->
@@ -944,20 +946,65 @@ and translate_expression stdlib program is_lvalue a_expr =
                       (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
                   
                   else if Aaux.is_null_pointer_constant e1 then
-                    (* TODO: check that *)
-                    match Core_aux.proj_ctype (exp_type_of e1) with
+                    (* STD §6.5.9#5, second sentence *)
+                    match Core_aux.proj_ctype (exp_type_of e2) with
                       | Cty.Pointer _ ref_ty ->
                           C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e2])
                             (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                      | ty ->
+                          error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
                     end
-(*                    
-                    error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 null constant>: TODO"
-*)
+                  else if Aaux.is_null_pointer_constant e2 then
+                    (* STD §6.5.9#5, second sentence *)
+                    match Core_aux.proj_ctype (exp_type_of e1) with
+                      | Cty.Pointer _ ref_ty ->
+                          C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e1])
+                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                      | ty ->
+                          error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
+                    end
                   else
-                    error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+                    error "[Translation.translate_expression] #A.BINARY A.EQ e1 e2 <one pointer case, and e1 NOT null constant>: TODO"
                 end
       
       | A.AilEbinary e1 A.Ne e2 ->
+          (* TODO: factorise *)
+          E.fresh_symbol          >>= fun sym_e1    ->
+          E.fresh_symbol          >>= fun sym_e2    ->
+          E.fresh_symbol          >>= fun sym_memop ->
+          translate_rvalue e1 >>= fun core_e1 ->
+          translate_rvalue e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+              
+              begin
+                  if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
+                    C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one)
+                  
+                  else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
+                    (* TODO: experimenting *)
+                    C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2])
+                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                  
+                  else if Aaux.is_null_pointer_constant e1 then
+                    (* STD §6.5.9#5, second sentence *)
+                    match Core_aux.proj_ctype (exp_type_of e2) with
+                      | Cty.Pointer _ ref_ty ->
+                          C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e2])
+                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                    end
+                  else if Aaux.is_null_pointer_constant e2 then
+                    (* STD §6.5.9#5, second sentence *)
+                    match Core_aux.proj_ctype (exp_type_of e1) with
+                      | Cty.Pointer _ ref_ty ->
+                          C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e1])
+                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                    end
+                  else
+                    error "[Translation.translate_expression] #A.BINARY A.NE e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
+                end
+
+(*
           E.fresh_symbol          >>= fun sym_e1  ->
           E.fresh_symbol          >>= fun sym_e2  ->
           E.fresh_symbol          >>= fun sym_memop ->
@@ -976,6 +1023,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 else
                   error "WIP: Binary Ne"
               end
+*)
       
       | A.AilEassign e1 e2 ->
           E.fresh_symbol          >>= fun sym_e1  ->
@@ -991,7 +1039,8 @@ and translate_expression stdlib program is_lvalue a_expr =
                             Cmm.NA)))
                           )
                  (C.Epure $ C.PEsym sym_e2))
-      
+
+(*      
       (*
          (std: A compound assignment of the form E1 op = E2 is equivalent to the simple assignment
          expression E1 = E1 op (E2), except that the lvalue E1 is evaluated only once, and with respect
@@ -999,7 +1048,11 @@ and translate_expression stdlib program is_lvalue a_expr =
       | A.AilEcompoundAssign e1 aop e2 ->
           (* TODO: this is a TEMPORARY HACK *)
           let A.AnnotatedExpression annot2 loc' _ = e2 in
-          translate_rvalue $ A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
+          translate_rvalue $
+            A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
+*)
+      | A.AilEcompoundAssign e1 aop e2 ->
+          error "TEMPORARY ==> compound assign are not supported by the elaboration and should desugared in Cabs_to_ail"
       
       (* TODO: conv_int on e2 and e2 !!!!!!! *)
       
@@ -1428,33 +1481,34 @@ and translate_expression stdlib program is_lvalue a_expr =
           end
       
       | A.AilEbuiltin str ->
+          (* TODO: the redundance with Builtins.lem is wrong *)
           let mk_ctype_min ty = C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)] in
           let mk_ctype_max ty = C.PEcall (C.Impl Implementation_.Ctype_max) [C.PEval (C.Vctype ty)] in
           E.return $ C.Epure match str with
             | "INT8_MIN" ->
-                mk_ctype_min (Cty.builtin_signed_integer_type "int8_t")
+                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))
             | "INT16_MIN" ->
-                mk_ctype_min (Cty.builtin_signed_integer_type "int16_t")
+                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))
             | "INT32_MIN" ->
-                mk_ctype_min (Cty.builtin_signed_integer_type "int32_t")
+                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))
             | "INT64_MIN" ->
-                mk_ctype_min (Cty.builtin_signed_integer_type "int64_t")
+                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))
             | "INT8_MAX" ->
-                mk_ctype_max (Cty.builtin_signed_integer_type "int8_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))
             | "INT16_MAX" ->
-                mk_ctype_max (Cty.builtin_signed_integer_type "int16_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))
             | "INT32_MAX" ->
-                mk_ctype_max (Cty.builtin_signed_integer_type "int32_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))
             | "INT64_MAX" ->
-                mk_ctype_max (Cty.builtin_signed_integer_type "int64_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))
             | "UINT8_MAX" ->
-                mk_ctype_max (Cty.builtin_unsigned_integer_type "int8_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8))))
             | "UINT16_MAX" ->
-                mk_ctype_max (Cty.builtin_unsigned_integer_type "int16_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16))))
             | "UINT32_MAX" ->
-                mk_ctype_max (Cty.builtin_unsigned_integer_type "int32_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32))))
             | "UINT64_MAX" ->
-                mk_ctype_max (Cty.builtin_unsigned_integer_type "int64_t")
+                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64))))
             | "CHAR_BIT" ->
                 C.PEimpl Implementation_.Characters__bits_in_byte
             | _ ->
@@ -1656,7 +1710,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
   let translate_stmt_ s      = translate_stmt stdlib program f labs s       in
   let mk_stdcall fname       = mk_stdcall stdlib fname                              in
   let conv_int               = mk_stdcall "conv_int"                                in
-  match stmt with
+  C.Eloc loc <$> match stmt with
     | A.AilSskip ->
         E.return C.Eskip
     
@@ -1923,12 +1977,19 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSdeclaration defns ->
         (* This pass translate the declarations *)
         E.mapM (fun (sym, e) ->
-          E.fresh_symbol            >>= fun sym_e  ->
-          translate_lvalue e    >>= fun core_e ->
-          E.resolve_object_type sym >>= fun ty     ->
-          let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
-          E.return $ C.Esseq [Just sym_e] core_e
-                       (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) expr Cmm.NA)
+          E.resolve_object_type sym >>= fun ty ->
+          if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
+            match ty with
+              | Aty.Pointer _ ref_ty ->
+                  E.return $ Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym)
+                               (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA
+            end
+          else
+            E.fresh_symbol        >>= fun sym_e  ->
+            translate_lvalue e    >>= fun core_e ->
+            let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
+            E.return $ C.Esseq [Just sym_e] core_e
+                         (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) expr Cmm.NA)
 
 
 (*

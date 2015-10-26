@@ -1236,21 +1236,21 @@ integer_type:
 | BOOL
     { AilTypes.Bool }
 | INT8_T
-    { AilTypes.Signed (AilTypes.IBBuiltin "int8_t") }
+    { AilTypes.Signed (AilTypes.IntN_t 8) }
 | INT16_T
-    { AilTypes.Signed (AilTypes.IBBuiltin "int16_t") }
+    { AilTypes.Signed (AilTypes.IntN_t 16) }
 | INT32_T
-    { AilTypes.Signed (AilTypes.IBBuiltin "int32_t") }
+    { AilTypes.Signed (AilTypes.IntN_t 32) }
 | INT64_T
-    { AilTypes.Signed (AilTypes.IBBuiltin "int64_t") }
+    { AilTypes.Signed (AilTypes.IntN_t 64) }
 | UINT8_T
-    { AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t") }
+    { AilTypes.Unsigned (AilTypes.IntN_t 8) }
 | UINT16_T
-    { AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t") }
+    { AilTypes.Unsigned (AilTypes.IntN_t 16) }
 | UINT32_T
-    { AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t") }
+    { AilTypes.Unsigned (AilTypes.IntN_t 32) }
 | UINT64_T
-    { AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t") }
+    { AilTypes.Unsigned (AilTypes.IntN_t 64) }
 | SIGNED ibt= integer_base_type
     { AilTypes.Signed ibt }
 | UNSIGNED ibt= integer_base_type

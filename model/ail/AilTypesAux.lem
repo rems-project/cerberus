@@ -65,6 +65,10 @@ let signed_type = function
   | Enum _ ->
       (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
       true
+  | Size_t ->
+      false
+  | Ptrdiff_t ->
+      true
 end
 
 val unsigned_type: integerType -> bool
@@ -81,6 +85,10 @@ let unsigned_type = function
       false (* TODO: builtins here are of impl-def signess*)
   | Enum _ ->
       (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+      false
+  | Size_t ->
+      true
+  | Ptrdiff_t ->
       false
  end
 

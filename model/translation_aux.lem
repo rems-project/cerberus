@@ -106,18 +106,14 @@ let tmp_implementation =
         | Aty.Signed   Aty.LongLong -> 63
         | Aty.Unsigned Aty.LongLong -> 64
 
-        | Aty.Signed (Aty.IBBuiltin "int8_t") -> 7
-        | Aty.Signed (Aty.IBBuiltin "int16_t") -> 15
-        | Aty.Signed (Aty.IBBuiltin "int32_t") -> 31
-        | Aty.Signed (Aty.IBBuiltin "int64_t") -> 63
-        | Aty.Signed (Aty.IBBuiltin str) ->
-            error ("WIP: Translation_aux.tmp_implementation, Signed IBBuiltin '" ^ str ^ "'")
-        | Aty.Unsigned (Aty.IBBuiltin "int8_t") -> 8
-        | Aty.Unsigned (Aty.IBBuiltin "int16_t") -> 16
-        | Aty.Unsigned (Aty.IBBuiltin "int32_t") -> 32
-        | Aty.Unsigned (Aty.IBBuiltin "int64_t") -> 64
-        | Aty.Unsigned (Aty.IBBuiltin str) ->
-            error ("WIP: Translation_aux.tmp_implementation, Unsigned IBBuiltin '" ^ str ^ "'")
+        | Aty.Signed (Aty.IntN_t 8) -> 7
+        | Aty.Signed (Aty.IntN_t 16) -> 15
+        | Aty.Signed (Aty.IntN_t 32) -> 31
+        | Aty.Signed (Aty.IntN_t 64) -> 63
+        | Aty.Unsigned (Aty.IntN_t 8) -> 8
+        | Aty.Unsigned (Aty.IntN_t 16) -> 16
+        | Aty.Unsigned (Aty.IntN_t 32) -> 32
+        | Aty.Unsigned (Aty.IntN_t 64) -> 64
         
         | Aty.IBuiltin str ->
             error ("WIP: Translation_aux.tmp_implementation (2), IBuiltin '" ^ str ^ "'")
@@ -162,6 +158,8 @@ let exp_type_of a_expr =
     | Right (AilTypes.RValueType   ty) -> ty
     | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
   end
+
+
 
 
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype

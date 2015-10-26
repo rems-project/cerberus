@@ -28,7 +28,7 @@ let load_stdlib () =
                                  let sym_counter = core_sym_counter
                                  let std = Pmap.empty Core_parser_util._sym_compare
                                end)
-      type token = Core_parser_util.token
+(*      type token = Core_parser_util.token *)
       type result = Core_parser_util.result
     end in
     let module Core_std_parser =
@@ -93,7 +93,7 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.core_impl)
+    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
 (*
@@ -119,7 +119,7 @@ let core_frontend f =
         Exception.return2 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;
-           Core.impl=   !!cerb_conf.core_impl;
+           Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x);
            Core.globs=  globs;
            Core.funs=   funs
          })
@@ -229,17 +229,21 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
           Pmap.add (str, (std_pos, std_pos)) fsym acc
         ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
       end)
-    type token = Core_parser_util.token
+(*    type token = Core_parser_util.token *)
     type result = Core_parser_util.result
   end in
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
+
+  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx (* TODO *) RefStd;
   
   (* Looking for and parsing the implementation file *)
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
+
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx (* TODO *) RefStd;
+
   
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) core_impl exec exec_mode Core_parser.parse progress no_rewrite concurrency preEx (* TODO *) RefStd;
   
 (*
   if !!cerb_conf.concurrency_tests then

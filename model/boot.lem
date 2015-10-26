@@ -1,5 +1,5 @@
 open import Pervasives
-import Core
+import Core AilTypes
 
 
 
@@ -48,8 +48,8 @@ val print_debug_located: nat -> Loc.t -> string -> unit
 declare ocaml target_rep function print_debug_located = `Debug.print_debug_located`
 
 (* Pretty printing (HACK: mind your mind) *)
-val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
-declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype`
+val pp_ail_ctype: AilTypes.ctype -> string
+declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype_raw`
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`

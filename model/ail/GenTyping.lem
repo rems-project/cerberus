@@ -1238,12 +1238,14 @@ and annotate_initialization annot sigm gamm ty e =
           if AilTypesAux.compatible elem_ty1 elem_ty2 then
             E.return (a_e, Array elem_ty1 (Just n2))
           else
-            error "TODO: error message: array object definition, types didn't match"
+            error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
+                   pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
      | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
          if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
            E.return (a_e, Array elem_ty1 (Just n1))
          else
-           error "TODO: error message: array object definition, types didn't match"
+            error ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
+                   pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
      | _ ->
          error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
     end
@@ -1302,12 +1304,14 @@ and annotate_definition_aux A S G (ty, e) =
               if AilTypesAux.compatible elem_ty1 elem_ty2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
-                error "TODO: error message: array object definition, types didn't match"
+                error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
+                       pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
               if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
-                error "TODO: error message: array object definition, types didn't match"
+                error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+                       pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
          | _ ->
              error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
         end

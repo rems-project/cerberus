@@ -438,6 +438,8 @@ let rec hack expr =
         Core.Epar (map hack es)
     | Core.Ewait tid ->
         Core.Ewait tid
+    | Core.Eloc loc e ->
+        Core.Eloc loc (hack e)
 end
 
 
