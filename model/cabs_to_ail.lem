@@ -270,9 +270,10 @@ end
 
 
 (* STD §6.6#8 *)
+(* TODO: this is super partial and hackish *)
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
-val     is_arithmetic_constant_expression: expression unit -> E.t bool
-let rec is_arithmetic_constant_expression ((AnnotatedExpression () loc expr) as a_expr) =
+val     is_arithmetic_constant_expression: bool -> expression unit -> E.t bool
+let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () loc expr) as a_expr) =
   (* TODO: enumeration constant *)
   match expr with
     | AilEconst (ConstantInteger _) ->
@@ -287,12 +288,17 @@ let rec is_arithmetic_constant_expression ((AnnotatedExpression () loc expr) as 
         E.return true
 *)
 
+    | AilEident _ ->
+        E.return is_lvalue
+
+    | AilEunary Address e ->
+        is_arithmetic_constant_expression true e
     | AilEunary _ e ->
-        is_arithmetic_constant_expression e
+        is_arithmetic_constant_expression is_lvalue e
 
     | AilEbinary e1 _ e2 ->
-        is_arithmetic_constant_expression e1 >>= fun b1 ->
-        is_arithmetic_constant_expression e2 >>= fun b2 ->
+        is_arithmetic_constant_expression is_lvalue e1 >>= fun b1 ->
+        is_arithmetic_constant_expression is_lvalue e2 >>= fun b2 ->
         E.return (b1 && b2)
 
     | AilEsizeof _ ty ->
@@ -356,9 +362,9 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
     | AilEbinary e1 (Arithmetic Add) e2 ->
         (* NOTE: this case corresponds to array-subcript *)
         is_lvalue_to_static_object e1        >>= fun b11 ->
-        is_arithmetic_constant_expression e1 >>= fun b12 ->
+        is_arithmetic_constant_expression false (* TODO check *) e1 >>= fun b12 ->
         is_lvalue_to_static_object e2        >>= fun b21 ->
-        is_arithmetic_constant_expression e2 >>= fun b22 ->
+        is_arithmetic_constant_expression false (* TODO check *) e2 >>= fun b22 ->
         E.return (b11 && b22 || b12 && b21)
 (* TODO
     | AilEmemberof e ident ->
@@ -418,23 +424,26 @@ The array-subscript [] and member-access . and -> operators, the address & and i
 *)
 
 
-(* STD §6.6#7 *)
+(* As defined in STD §6.6#7, in the context of initializers, "constant expressions" 
+   can have more things in them *)
 (* TODO: "or evaluate to" *)
 val is_initializer_constant_expression: expression unit -> E.t bool
-let is_initializer_constant_expression a_expr =
-  is_arithmetic_constant_expression a_expr >>= fun b1 ->
+let is_initializer_constant_expression (AnnotatedExpression () loc expr as a_expr) =
+  is_arithmetic_constant_expression false (* TODO check *) a_expr >>= fun b1 ->
   is_address_constant a_expr               >>= fun b2 ->
+  (* STD §6.6#7, bullets 1 - 3 *)
   if b1 || AilSyntaxAux.is_null_pointer_constant a_expr || b2 then
     E.return true
   
-  else match a_expr with
-    | AnnotatedExpression () loc (AilEbinary e1 (Arithmetic Add) e2) ->
+  (* STD §6.6#7, bullets 4 *)
+  else match expr with
+    | AilEbinary e1 (Arithmetic Add) e2 ->
         is_address_constant e1            >>= fun b11 ->
         is_integer_constant_expression e2 >>= fun b12 ->
         is_address_constant e2            >>= fun b21 ->
         is_integer_constant_expression e1 >>= fun b22 ->
         E.return (b11 && b12 || b21 && b22)
-    | AnnotatedExpression () loc (AilEbinary e1 (Arithmetic Sub) e2) ->
+    | AilEbinary e1 (Arithmetic Sub) e2 ->
         is_address_constant e1            >>= fun b11 ->
         is_integer_constant_expression e2 >>= fun b12 ->
         is_address_constant e2            >>= fun b21 ->
@@ -2472,7 +2481,8 @@ val     register_labels: cabs_statement -> E.t unit
 let rec register_labels (CabsStatement _ stmt_) =
   match stmt_ with
     | CabsSlabel ident s ->
-        E.register_label ident
+        E.register_label ident >>
+        register_labels s
     | CabsScase _ s ->
         register_labels s
     | CabsSdefault s ->
