@@ -275,50 +275,50 @@ let builtin = [
   ("__cerbty_uintptr_t",        Typename); (* optional *)
   ("__cerbty_intmax_t",         Typename);
   ("__cerbty_uintmax_t",        Typename);
-  ("__cerbvar_INT8_MIN",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int8_t"))))));
-  ("__cerbvar_INT16_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int16_t"))))));
-  ("__cerbvar_INT32_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int32_t"))))));
-  ("__cerbvar_INT64_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int64_t"))))));
-  ("__cerbvar_INT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int8_t"))))));
-  ("__cerbvar_INT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int16_t"))))));
-  ("__cerbvar_INT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int32_t"))))));
-  ("__cerbvar_INT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int64_t"))))));
-  ("__cerbvar_UINT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int8_t"))))));
-  ("__cerbvar_UINT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int16_t"))))));
-  ("__cerbvar_UINT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int32_t"))))));
-  ("__cerbvar_UINT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int64_t"))))));
-  ("__cerbvar_INT_LEAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least8_t"))))));
-  ("__cerbvar_INT_LEAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least16_t"))))));
-  ("__cerbvar_INT_LEAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least32_t"))))));
-  ("__cerbvar_INT_LEAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least64_t"))))));
-  ("__cerbvar_INT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least8_t"))))));
-  ("__cerbvar_INT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least16_t"))))));
-  ("__cerbvar_INT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least32_t"))))));
-  ("__cerbvar_INT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least64_t"))))));
-  ("__cerbvar_UINT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least8_t"))))));
-  ("__cerbvar_UINT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least16_t"))))));
-  ("__cerbvar_UINT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least32_t"))))));
-  ("__cerbvar_UINT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least64_t"))))));
-  ("__cerbvar_INT_FAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast8_t"))))));
-  ("__cerbvar_INT_FAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast16_t"))))));
-  ("__cerbvar_INT_FAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast32_t"))))));
-  ("__cerbvar_INT_FAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast64_t"))))));
-  ("__cerbvar_INT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast8_t"))))));
-  ("__cerbvar_INT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast16_t"))))));
-  ("__cerbvar_INT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast32_t"))))));
-  ("__cerbvar_INT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast64_t"))))));
-  ("__cerbvar_UINT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast8_t"))))));
-  ("__cerbvar_UINT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast16_t"))))));
-  ("__cerbvar_UINT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast32_t"))))));
-  ("__cerbvar_UINT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast64_t"))))));
-  ("__cerbvar_INTPTR_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intptr_t"))))));
-  ("__cerbvar_INTPTR_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intptr_t"))))));
-  ("__cerbvar_UINTPTR_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "intptr_t"))))));
-  ("__cerbvar_INTMAX_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intmax_t"))))));
-  ("__cerbvar_INTMAX_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intmax_t"))))));
-  ("__cerbvar_UINTMAX_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "intmax_t"))))));
-  ("__cerbvar_PTRDIFF_MIN",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "ptrdiff_t"))))));
-  ("__cerbvar_PTRDIFF_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "ptrdiff_t"))))));
+  ("__cerbvar_INT8_MIN",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))));
+  ("__cerbvar_INT16_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))));
+  ("__cerbvar_INT32_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))));
+  ("__cerbvar_INT64_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))));
+  ("__cerbvar_INT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))));
+  ("__cerbvar_INT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))));
+  ("__cerbvar_INT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))));
+  ("__cerbvar_INT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))));
+  ("__cerbvar_UINT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 8))))));
+  ("__cerbvar_UINT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 16))))));
+  ("__cerbvar_UINT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 32))))));
+  ("__cerbvar_UINT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 64))))));
+  ("__cerbvar_INT_LEAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_INT_LEAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_INT_LEAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_INT_LEAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_INT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_INT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_INT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_INT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_UINT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_UINT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_UINT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_UINT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_INT_FAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_INT_FAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_INT_FAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_INT_FAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_INT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_INT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_INT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_INT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_UINT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_UINT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_UINT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_UINT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_INTPTR_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intptr_t))))));
+  ("__cerbvar_INTPTR_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intptr_t))))));
+  ("__cerbvar_UINTPTR_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Intptr_t))))));
+  ("__cerbvar_INTMAX_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intmax_t))))));
+  ("__cerbvar_INTMAX_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intmax_t))))));
+  ("__cerbvar_UINTMAX_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Intmax_t))))));
+  ("__cerbvar_PTRDIFF_MIN",      Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))));
+  ("__cerbvar_PTRDIFF_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))));
   ("__cerbvar_SIG_ATOMIC_MIN",   Varname Nothing);
   ("__cerbvar_SIG_ATOMIC_MAX",   Varname Nothing);
   ("__cerbvar_SIZE_MAX",         Varname Nothing);
@@ -431,77 +431,79 @@ let translate_builtin_typenames = function
   | "__cerbty_fpos_t" ->
       Just (ATypes.Builtin "fpos_t")
   | "__cerbty_int8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))
   | "__cerbty_int16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))
   | "__cerbty_int32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))
   | "__cerbty_int64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))
   | "__cerbty_int_fast8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))
   | "__cerbty_int_fast16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))
   | "__cerbty_int_fast32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))
   | "__cerbty_int_fast64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_fast64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))
   | "__cerbty_int_least8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))
   | "__cerbty_int_least16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))
   | "__cerbty_int_least32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))
   | "__cerbty_int_least64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "int_least64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))
   | "__cerbty_intmax_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intmax_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Intmax_t)))
   | "__cerbty_intptr_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "intptr_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Intptr_t)))
   | "__cerbty_ptrdiff_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IBBuiltin "ptrdiff_t"))))
+      Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))
   | "__cerbty_jmp_buf" ->
       Just (ATypes.Builtin "jmp_buf")
   | "__cerbty_mtx_t" ->
       Just (ATypes.Builtin "mtx_t")
   | "__cerbty_once_flag" ->
       Just (ATypes.Builtin "once_flag")
+(*
   | "__cerbty_sig_atomic_t" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "sig_atomic_t")))
+*)
   | "__cerbty_size_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "size_t"))))
+      Just (ATypes.Basic (ATypes.Integer ATypes.Size_t))
   | "__cerbty_thrd_t" ->
       Just (ATypes.Builtin "thrd_t")
   | "__cerbty_tss_t" ->
       Just (ATypes.Builtin "tss_t")
   | "__cerbty_uint8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 8))))
   | "__cerbty_uint16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 16))))
   | "__cerbty_uint32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 32))))
   | "__cerbty_uint64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 64))))
   | "__cerbty_uint_fast8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 8))))
   | "__cerbty_uint_fast16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 16))))
   | "__cerbty_uint_fast32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 32))))
   | "__cerbty_uint_fast64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_fast64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 64))))
   | "__cerbty_uint_least8_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least8_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 8))))
   | "__cerbty_uint_least16_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least16_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 16))))
   | "__cerbty_uint_least32_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least32_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 32))))
   | "__cerbty_uint_least64_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "int_least64_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 64))))
   | "__cerbty_uintmax_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "intmax_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Intmax_t)))
   | "__cerbty_uintptr_t" ->
-      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IBBuiltin "intptr_t"))))
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Intptr_t)))
   | "__cerbty_va_list" ->
       Just (ATypes.Builtin "va_list")
   | "__cerbty_wchar_t" ->
@@ -727,40 +729,40 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_NULL" -> Just (A.AilEconst A.ConstantNull, Just (ATypes.Pointer ATypes.no_qualifiers ATypes.Void))
     | "__cerbvar_offsetof" -> Just (A.AilEbuiltin "offsetof", Nothing)
     | "__cerbvar_INT8_MIN" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int8_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 8) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT16_MIN" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int16_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 16) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT32_MIN" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int32_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 32) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT64_MIN" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int64_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 64) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT8_MAX" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int8_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 8) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT16_MAX" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int16_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 16) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT32_MAX" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int32_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 32) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_INT64_MAX" ->
-        let ity = ATypes.Signed (ATypes.IBBuiltin "int64_t") in
+        let ity = ATypes.Signed (ATypes.IntN_t 64) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_UINT8_MAX" ->
-        let ity = ATypes.Unsigned (ATypes.IBBuiltin "int8_t") in
+        let ity = ATypes.Unsigned (ATypes.IntN_t 8) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_UINT16_MAX" ->
-        let ity = ATypes.Unsigned (ATypes.IBBuiltin "int16_t") in
+        let ity = ATypes.Unsigned (ATypes.IntN_t 16) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_UINT32_MAX" ->
-        let ity = ATypes.Unsigned (ATypes.IBBuiltin "int32_t") in
+        let ity = ATypes.Unsigned (ATypes.IntN_t 32) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     | "__cerbvar_UINT64_MAX" ->
-        let ity = ATypes.Unsigned (ATypes.IBBuiltin "int64_t") in
+        let ity = ATypes.Unsigned (ATypes.IntN_t 64) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     
     | "__cerbvar_atomic_init" -> Just (A.AilEbuiltin "atomic_init", Nothing)

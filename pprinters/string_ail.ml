@@ -11,3 +11,11 @@ let string_of_expr e =
 
 let string_of_qualifiers_human qs =
   Pp_utils.to_plain_string (pp_qualifiers_human qs)
+
+
+(* DEBUG*)
+let string_of_genTypeCategory gtc =
+  Pp_utils.to_plain_string (pp_genTypeCategory gtc)
+
+let string_of_ctype_raw ty =
+  Pp_utils.to_plain_string (pp_ctype_raw ty)

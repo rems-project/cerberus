@@ -7,7 +7,7 @@
 
 int main(void) {
   int x = 0;
-  _Atomic(int) y = 0; 
+  _Atomic int y = 0; 
   int z1, z2;
   {{{ { x = 1;
         atomic_store_explicit(&y, 1, memory_order_release); }

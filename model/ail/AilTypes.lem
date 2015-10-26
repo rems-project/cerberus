@@ -13,13 +13,12 @@ type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Long
  | LongLong
    (* Things defined in the standard libraries *)
- | IBBuiltin of string
-(*
- | Int8_t (* TODO: merge into a IBBuiltin variant ? *)
- | Int16_t (* TODO: merge into a IBBuiltin variant ? *)
- | Int32_t (* TODO: merge into a IBBuiltin variant ? *)
- | Int64_t (* TODO: merge into a IBBuiltin variant ? *)
-*)
+ | IntN_t of nat
+ | Int_leastN_t of nat
+ | Int_fastN_t of nat
+ | Intmax_t
+ | Intptr_t
+(* | IBBuiltin of string *)
 
 
 (* STD §6.2.5#17, sentence 1 *)
@@ -30,6 +29,8 @@ type integerType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] =
  | Unsigned of integerBaseType
  | IBuiltin of string
  | Enum of identifier
+ | Size_t
+ | Ptrdiff_t
 (*
  | Wchar_t (* TODO: merge into a IBuiltin variant ? *)
  | Char16_t (* TODO: merge into a IBuiltin variant ? *)
@@ -113,12 +114,32 @@ let integerBaseTypeEqual ibty1 ibty2 =
         3
     | LongLong ->
         4
+(*
     | IBBuiltin _ ->
         5
+*)
+    | IntN_t _ ->
+        5
+    | Int_leastN_t  _ ->
+        6
+    | Int_fastN_t  _ ->
+        7
+    | Intmax_t ->
+        8
+    | Intptr_t ->
+        9
   end in
   match (ibty1, ibty2) with
+(*
     | (IBBuiltin str1, IBBuiltin str2) ->
         str1 = str2
+*)
+    | (IntN_t n1, IntN_t n2) ->
+        n1 = n2
+    | (Int_leastN_t n1, Int_leastN_t n2) ->
+        n1 = n2
+    | (Int_fastN_t n1, Int_fastN_t n2) ->
+        n1 = n2
     | _ ->
         ord ibty1 = ord ibty2
   end
@@ -143,6 +164,10 @@ let integerTypeEqual ity1 ity2 =
         4
     | Enum _ ->
         5
+    | Size_t ->
+        6
+    | Ptrdiff_t ->
+        7
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -275,12 +300,32 @@ let setElemCompare_integerBaseType ibty1 ibty2 =
         3
     | LongLong ->
         4
+(*
     | IBBuiltin _ ->
         5
+*)
+    | IntN_t _ ->
+        5
+    | Int_leastN_t _ ->
+        6
+    | Int_fastN_t _ ->
+        7
+    | Intmax_t ->
+        8
+    | Intptr_t ->
+        9
   end in
   match (ibty1, ibty2) with
+(*
     | (IBBuiltin str1, IBBuiltin str2) ->
         setElemCompare str1 str2
+*)
+    | (IntN_t n1, IntN_t n2) ->
+        setElemCompare n1 n2
+    | (Int_leastN_t n1, Int_leastN_t n2) ->
+        setElemCompare n1 n2
+    | (Int_fastN_t n1, Int_fastN_t n2) ->
+        setElemCompare n1 n2
     | _ ->
         setElemCompare (ord ibty1) (ord ibty2)
   end
@@ -304,6 +349,10 @@ let setElemCompare_integerType ity1 ity2 =
         4
     | Enum _ ->
         5
+    | Size_t ->
+        6
+    | Ptrdiff_t ->
+        7
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -416,9 +465,9 @@ let typeCategoryEqual tc1 tc2 : bool =
 val char16_t: ctype
 let char16_t =
   (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (IBBuiltin "int_least16_t")))
+  Basic (Integer (Unsigned (Int_leastN_t 16)))
 
 val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (IBBuiltin "int_least32_t")))
+  Basic (Integer (Unsigned (Int_leastN_t 32)))

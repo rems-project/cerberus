@@ -212,6 +212,23 @@ let rec pp_value = function
       (* pp_const "struct" ^^ P.parens *)
 
 
+let pp_ctor = function
+  | Clist ->
+      !^ "list"
+  | Ctuple ->
+      !^ "list"
+  | Carray ->
+      !^ "array"
+  | Civmax ->
+      !^ "ivmax"
+  | Civmin ->
+      !^ "ivmin"
+  | Civsizeof ->
+      !^ "sizeof"
+  | Civalignof ->
+      !^ "alignof"
+
+
 let pp_pexpr pe =
   let rec pp prec pe =
     let prec' = precedence pe in
@@ -232,7 +249,7 @@ let pp_pexpr pe =
         | PEimpl iCst ->
             pp_impl iCst
         | PEctor (ctor, pes) ->
-            pp_const "ctor(TODO)" 
+            pp_ctor ctor ^^ P.parens (comma_list pp pes)
         | PEcons (pe1, pe2) ->
             pp_const "cons" ^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
         | PEcase_list (pe1, pe2, nm) ->
@@ -402,6 +419,8 @@ let rec pp_expr = function
       pp_keyword "par" ^^ P.parens (comma_list pp_expr es)
   | Ewait tid ->
       pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+  | Eloc (_, e) ->
+      pp_expr e
   | End es ->
       pp_keyword "nd" ^^ P.parens (comma_list pp_expr es)
 

@@ -34,12 +34,12 @@ type genType (* [name="gt*"] *) =
 val genChar16_t: genType
 let genChar16_t =
   (* STD §7.28#2 *)
-  GenBasic (GenInteger (Concrete (Unsigned (IBBuiltin "int_least16_t"))))
+  GenBasic (GenInteger (Concrete (Unsigned (Int_leastN_t 16))))
 
 val genChar32_t: genType
 let genChar32_t =
   (* STD §7.28#2 *)
-  GenBasic (GenInteger (Concrete (Unsigned (IBBuiltin "int_least32_t"))))
+  GenBasic (GenInteger (Concrete (Unsigned (Int_leastN_t 32))))
 
 
 type genTypeCategory = 

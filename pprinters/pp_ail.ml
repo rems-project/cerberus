@@ -123,13 +123,17 @@ let pp_qualifiers q =
 *)
 
 
-let pp_integerBaseType = function
- | Ichar         -> pp_type_keyword "char"
- | Short         -> pp_type_keyword "short"
- | Int_          -> pp_type_keyword "int"
- | Long          -> pp_type_keyword "long"
- | LongLong      -> pp_type_keyword "long" ^^^ pp_type_keyword "long"
- | IBBuiltin str -> pp_type_keyword str
+let string_of_integerBaseType = function
+ | Ichar          -> "char"
+ | Short          -> "short"
+ | Int_           -> "int"
+ | Long           -> "long"
+ | LongLong       -> "long long"
+ | IntN_t n       -> "int" ^ string_of_int n ^ "_t"
+ | Int_leastN_t n -> "int_least" ^ string_of_int n ^ "_t"
+ | Int_fastN_t n  -> "int_fast" ^ string_of_int n ^ "_t"
+ | Intmax_t       -> "intmax_t"
+ | Intptr_t       -> "intptr_t"
 
 
 
@@ -138,14 +142,18 @@ let pp_integerType = function
      pp_type_keyword "char"
  | Bool ->
      pp_type_keyword "_Bool"
- | Signed (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-     pp_type_keyword str
- | Unsigned (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-     pp_type_keyword ("u" ^ str)
- | Unsigned (IBBuiltin "size_t") ->
+ | Signed ((IntN_t _ | Int_leastN_t _ | Int_fastN_t _ | Intmax_t | Intptr_t) as ibty) ->
+     pp_type_keyword (string_of_integerBaseType ibty)
+ | Unsigned ((IntN_t _ | Int_leastN_t _ | Int_fastN_t _ | Intmax_t | Intptr_t) as ibty) ->
+     pp_type_keyword ("u" ^ string_of_integerBaseType ibty)
+ | Size_t ->
      pp_type_keyword "size_t"
- | Signed ibt       -> pp_type_keyword "signed"   ^^^ pp_integerBaseType ibt
- | Unsigned ibt     -> pp_type_keyword "unsigned" ^^^ pp_integerBaseType ibt
+ | Ptrdiff_t ->
+     pp_type_keyword "ptrdiff_t"
+ | Signed ibty ->
+     pp_type_keyword "signed" ^^^ !^ (string_of_integerBaseType ibty)
+ | Unsigned ibty ->
+     pp_type_keyword "unsigned" ^^^ !^ (string_of_integerBaseType ibty)
  | IBuiltin str ->
      pp_type_keyword str
  | Enum sym ->
@@ -187,8 +195,16 @@ let pp_integerBaseType_raw = function
       !^ "Long"
   | LongLong ->
       !^ "LongLong"
-  | IBBuiltin str ->
-      !^ str
+  | IntN_t n ->
+      !^ "IntN_t" ^^ P.brackets (!^ (string_of_int n))
+  | Int_leastN_t n ->
+      !^ "Int_leastN_t" ^^ P.brackets (!^ (string_of_int n))
+  | Int_fastN_t n ->
+      !^ "Int_fastN_t" ^^ P.brackets (!^ (string_of_int n))
+  | Intmax_t ->
+      !^ "Intmax_t"
+  | Intptr_t ->
+      !^ "Intptr_t"
 
 (*
   | Int8_t ->
@@ -214,6 +230,10 @@ let pp_integerType_raw = function
      !^ str
  | Enum sym ->
      !^ "enum" ^^^ pp_id sym
+ | Size_t ->
+     !^ "Size_t"
+ | Ptrdiff_t ->
+     !^ "Ptrdiff_t"
 
 
 
@@ -469,45 +489,6 @@ let rec string_of_octal_big_int n =
     | 
  *)
 
-let string_of_big_int_with_basis n b =
-  let char_of_digit = function
-      | 15 -> 'f'
-      | 14 -> 'e'
-      | 13 -> 'd'
-      | 12 -> 'c'
-      | 11 -> 'b'
-      | 10 -> 'a'
-      | r  -> char_of_int (r + 48) in
-  let rec f n acc =
-    let (n', r) = Nat_big_num.quomod n b in
-    let c = char_of_digit (Nat_big_num.to_int r) in
-    if Nat_big_num.equal n' (Nat_big_num.of_int 0) then
-      c :: acc
-    else
-      f n' (c :: acc) in
-  f n []
-
-let string_of_octal_big_int n =
-  if Nat_big_num.equal n (Nat_big_num.of_int 0) then
-    "0"
-  else
-    let l = string_of_big_int_with_basis n (Nat_big_num.of_int 8) in
-    let ret = String.create (List.length l+1) in
-    String.set ret 0 '0';
-    List.iteri (fun i c ->
-      String.set ret (i+1) c
-    ) l;
-    ret
-
-let string_of_hexadecimal_big_int n =
-  let l = string_of_big_int_with_basis n (Nat_big_num.of_int 16) in
-  let ret = String.create (List.length l + 2) in
-  String.set ret 0 '0';
-  String.set ret 1 'x';
-  List.iteri (fun i c ->
-    String.set ret (i+2) c
-  ) l;
-  ret
 
 
 
@@ -515,9 +496,9 @@ let string_of_hexadecimal_big_int n =
 let pp_integerConstant = function
   | IConstant (n, basis, suff_opt) ->
       !^ (match basis with
-            | Octal       -> string_of_octal_big_int n
-            | Decimal     -> Nat_big_num.to_string n
-            | Hexadecimal -> string_of_hexadecimal_big_int n
+            | Octal       -> String_nat_big_num.string_of_octal n
+            | Decimal     -> String_nat_big_num.string_of_decimal n
+            | Hexadecimal -> String_nat_big_num.string_of_hexadecimal n
          )  ^^ (P.optional pp_integerSuffix suff_opt)
   | IConstantMax ity ->
       !^ "TODO[IConstantMax]"
@@ -891,7 +872,7 @@ let pp_program pp_annot (startup, sigm) =
 
 let rec pp_genIntegerType = function
  | Concrete ity ->
-     !^ "Concrete" ^^ P.brackets (pp_integerType ity)
+     !^ "Concrete" ^^ P.brackets (pp_integerType_raw ity)
  | SizeT ->
      !^ "SizeT"
  | PtrdiffT ->

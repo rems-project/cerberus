@@ -152,9 +152,21 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
 
 
 
-let pp_pretty_mem_value = function
+let pp_pretty_mem_value format = function
   | MVinteger (ity, (IV (_, IVconcrete n))) ->
-      !^ (Nat_big_num.to_string n)
+      !^ begin
+           let b = match format.Boot_printf.basis with
+             | Some AilSyntax.Octal ->
+                 8
+             | Some AilSyntax.Decimal | None ->
+                 10
+             | Some AilSyntax.Hexadecimal ->
+                 16 in
+           let chars = String_nat_big_num.chars_of_num_with_basis b format.Boot_printf.use_upper n in
+           let bts = Bytes.create (List.length chars) in
+           List.iteri (Bytes.set bts) chars;
+           Bytes.to_string bts
+      end
   | MVfloating (fty, str) ->
       !^ str
   | MVunspecified ty ->

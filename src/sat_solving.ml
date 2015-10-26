@@ -49,8 +49,6 @@ let smt2_from_integerBaseType = function
      "long_ity"
   | AilTypes.LongLong ->
      "long_long_ity"
-  | AilTypes.IBBuiltin _ ->
-      failwith "Sat_folving.smt2_from_integerBaseType: TODO IBBuiltin"
 
 
 let smt2_from_integerType = function
@@ -62,8 +60,6 @@ let smt2_from_integerType = function
       "(signed " ^ smt2_from_integerBaseType ibty ^ ")"
   | AilTypes.Unsigned ibty ->
       "(unsigned " ^ smt2_from_integerBaseType ibty ^ ")"
-  | AilTypes.IBuiltin _ ->
-      failwith "Sat_folving.smt2_from_integerType: TODO IBuiltin"
   | AilTypes.Enum _ ->
       failwith "Sat_folving.smt2_from_integerType: TODO Enum"
 

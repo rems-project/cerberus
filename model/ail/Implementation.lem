@@ -26,11 +26,7 @@ let min_precision = function
   | Long     -> 32
   | LongLong -> 64
   (* TODO: check the following *)
-  | IBBuiltin "int8_t"  -> 8
-  | IBBuiltin "int16_t" -> 16
-  | IBBuiltin "int32_t" -> 32
-  | IBBuiltin "int64_t" -> 64
-  | IBBuiltin str -> error ("WIP min_precision: " ^ str)
+  | IntN_t n  -> n
 end
 
 type implementation = <|
@@ -124,19 +120,9 @@ let min_implementation_signed_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
 
-        | Signed (IBBuiltin "int8_t") -> 7
-        | Signed (IBBuiltin "int16_t") -> 15
-        | Signed (IBBuiltin "int32_t") -> 31
-        | Signed (IBBuiltin "int64_t") -> 63
-
-        | Signed (IBBuiltin str) -> error ("WIP min_implementation_signed_char 2: signed " ^ str)
-
-        | Unsigned (IBBuiltin "int8_t") -> 8
-        | Unsigned (IBBuiltin "int16_t") -> 17
-        | Unsigned (IBBuiltin "int32_t") -> 32
-        | Unsigned (IBBuiltin "int64_t") -> 64
+        | Signed (IntN_t n) -> n-1
+        | Unsigned (IntN_t n) -> n
         
-        | Unsigned (IBBuiltin str) -> error ("WIP min_implementation_signed_char 3: unsigned" ^ str)
         
         | IBuiltin str -> error ("WIP: min_implementation_signed_char 4" ^ str)
         
@@ -175,19 +161,9 @@ let min_implementation_unsigned_char =
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
         
-        | Signed (IBBuiltin "int8_t") -> 7
-        | Signed (IBBuiltin "int16_t") -> 15
-        | Signed (IBBuiltin "int32_t") -> 31
-        | Signed (IBBuiltin "int64_t") -> 63
+        | Signed (IntN_t n) -> n-1
 
-        | Signed (IBBuiltin str) -> error ("WIP min_implementation_unsigned_char 2: signed " ^ str)
-
-        | Unsigned (IBBuiltin "int8_t") -> 8
-        | Unsigned (IBBuiltin "int16_t") -> 17
-        | Unsigned (IBBuiltin "int32_t") -> 32
-        | Unsigned (IBBuiltin "int64_t") -> 64
-        
-        | Unsigned (IBBuiltin str) -> error ("WIP min_implementation_unsigned_char 3: unsigned " ^ str)
+        | Unsigned (IntN_t n) -> n
 
         | IBuiltin str -> error ("WIP: min_implementation_unsigned_char 4" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)

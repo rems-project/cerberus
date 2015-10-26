@@ -1,12 +1,14 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId Decode
+import Core Core_ctype Boot UniqueId Decode Output
 open import Global Show Core_run Core_run_aux
 import Cmm_op Cmm_csem
 
 import Translation_aux
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
+
+import AilSyntax AilTypes
 
 module Mem = struct
   include import Mem Mem_aux
@@ -31,7 +33,7 @@ declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
 
-val stringPrettyFromMemValue: Mem.mem_value -> string
+val stringPrettyFromMemValue: formatting -> Mem.mem_value -> string
 declare ocaml target_rep function stringPrettyFromMemValue = `String_mem.string_pretty_of_mem_value`
 
 (* TODO: debug *)
@@ -42,8 +44,8 @@ val stringSymState: Cmm_op.symState -> string
 declare ocaml target_rep function stringSymState = `Pp_cmm.string_of_exeState`
 
 
-
-
+val stringFromSymbolic: Symbolic.symbolic Core.value Mem.pointer_value -> string
+declare ocaml target_rep function stringFromSymbolic = `Pp_cmm.pp_constraints_symbolic`
 
 
 
@@ -204,6 +206,8 @@ let rec resolve_read_expr write_sym symb_v expr =
         Core.Epar (List.map fe es)
     | Core.Ewait _ ->
         expr
+    | Core.Eloc loc e ->
+        Core.Eloc loc (fe e)
   end
 
 and resolve_read_paction write_sym symb_v (Core.Paction p act) =
@@ -426,8 +430,8 @@ let runCore m dr_st =
     | Exception.Result (U.Undef ubs, _) ->
         ND.kill (ND.Undef ubs)
     
-    | Exception.Result (U.Error str, _) ->
-        ND.kill (ND.Error str)
+    | Exception.Result (U.Error loc str, _) ->
+        ND.kill (ND.Error loc str)
     
     | Exception.Exception err ->
         ND.kill (ND.Other $ "WIP Driver.runCore: runtime error ==> " ^ show err)
@@ -516,9 +520,9 @@ let rec load_string ptr_val acc =
   )
 
 (* TODO: hack *)
-val printf_loader: driver_state -> list Core_ctype.ctype -> list Core.value -> (list string -> string) -> ND.t (string * driver_state)
-let printf_loader dr_st ty args mk_str =
-  ND.foldM (fun (acc, dr_st') (ty, Core.Vpointer ptr_val) ->
+val printf_loader: driver_state -> list (formatting * Core_ctype.ctype) -> list Core.value -> (list string -> string) -> ND.t (string * driver_state)
+let printf_loader dr_st format_tys args mk_str =
+  ND.foldM (fun (acc, dr_st') ((format, ty), Core.Vpointer ptr_val) ->
     match ty with
       (* TODO: this is yucky *)
       | Core_ctype.Pointer _ (Core_ctype.Basic (AilTypes.Integer (AilTypes.Char))) ->
@@ -537,14 +541,14 @@ let printf_loader dr_st ty args mk_str =
             let pe_conv =
               Translation_aux.mk_stdcall dr_st''.core_file.Core.stdlib "conv_int"
                 [Core.PEval (Core.Vctype ty); Core.PEval (Core_aux.valueFromMemValue mval)] in
-            match Core_run.full_core_eval dr_st''.core_file dr_st''.symbolic_assoc false pe_conv with
-              | Exception.Result (Undefined.Defined cval) ->
-                  ND.return (stringPrettyFromMemValue (fromJust "Driver.printf_loader" $ Core_aux.memValueFromValue ty cval) :: acc, dr_st'')
+            match Core_run.full_core_eval Loc.unknown dr_st''.core_file dr_st''.symbolic_assoc false pe_conv with
+              | Right (Undefined.Defined cval) ->
+                  ND.return (stringPrettyFromMemValue format (fromJust "Driver.printf_loader" $ Core_aux.memValueFromValue ty cval) :: acc, dr_st'')
               | _ ->
                   error "WIP[error] printf_loader"
             end
           else
-            ND.return (stringPrettyFromMemValue mval :: acc, dr_st'')
+            ND.return (stringPrettyFromMemValue format mval :: acc, dr_st'')
 
 (*
 val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
@@ -553,7 +557,7 @@ val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
 
           
     end
-  ) ([], dr_st) (List.zip ty args) >>= fun (strs, dr_st') ->
+  ) ([], dr_st) (List.zip format_tys args) >>= fun (strs, dr_st') ->
   ND.return (mk_str strs, dr_st')
 
 (*
@@ -708,9 +712,9 @@ let rec drive_core_thread tid dr_st =
           |>;
           dr_step_counter= dr_st.dr_step_counter + 1;
         |>
-    | Step_printf tys args mk_str mk_th_st ->
+    | Step_printf format_tys args mk_str mk_th_st ->
         ND.print_debug 6 ("Step_printf") >>
-        printf_loader dr_st tys args mk_str >>= fun (str, dr_st') ->
+        printf_loader dr_st format_tys args mk_str >>= fun (str, dr_st') ->
         let core_st' = update_thread_state tid (mk_th_st (integerFromNat (String.stringLength str))) dr_st'.core_state in
         drive_core_thread tid <| dr_st' with
           core_state= <| core_st' with
@@ -719,6 +723,28 @@ let rec drive_core_thread tid dr_st =
           dr_step_counter= dr_st'.dr_step_counter + 1;
         |>
         
+    | Step_printf2 frmt_chars args_ptrvals mk_th_st ->
+        ND.print_debug 6 "Step_printf2" >>
+        let wrapped_full_core_eval = full_core_eval Loc.unknown dr_st.core_file dr_st.symbolic_assoc false in
+        liftMem (Output.printf wrapped_full_core_eval frmt_chars args_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
+        match out_chars_ with
+          | Left err ->
+              error "TODO(msg): a printf() got an error"
+          | Right (Undefined.Defined out_chars) ->
+              let core_st' = update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st'.core_state in
+              drive_core_thread tid <| dr_st' with
+                core_state= <| core_st' with
+                  io= <| dr_st'.core_state.io with stdout=
+                        Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st'.core_state.io.stdout
+                      |>
+                |>;
+                dr_step_counter= dr_st'.dr_step_counter + 1;
+              |>
+          | Right (Undefined.Error loc str) ->
+              ND.kill (ND.Error loc str)
+          | Right (Undefined.Undef ubs) ->
+              ND.kill (ND.Undef ubs)
+        end
   end) (core_thread_step2 dr_st.core_file dr_st.symbolic_assoc tid th_info)
 
 (*
@@ -898,8 +924,24 @@ let action_request_concurrency dr_st = function
         (* TODO: the kill ... *)
       |>
 
-  | _ ->
-      error "WIP: Driver.action_request_concurrency"
+  | RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
+(*
+      let preEx_step = <|
+          Cmm_op.newAction=    Cmm.RMW aid tid mo ptr_val mval;
+          Cmm_op.sbBefore=     sb_edges;
+          Cmm_op.ddBefore=     dd_edges;
+          Cmm_op.aswBefore=    asw_edges;
+          Cmm_op.locationKind= Just (if Core_ctype.is_atomic lvalue_ty then Cmm.Atomic else Cmm.Non_Atomic);
+      |> in
+      
+      ND.return <| dr_st with
+        core_state= update_thread_state tid (mk_th_st' mval) dr_st.core_state;
+        concurrency_state= Cmm_op.symUpdatePreEx dr_st.concurrency_state preEx_step;
+        trace= "rmw" :: dr_st.trace
+      |>
+*)
+      error "WIP: Driver ==> RMWRequest"
+
 (*
   | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
       ND.print_debug 4 ("StoreRequest on: " ^ stringFromPointerValue ptr_val ^ " := " ^ stringFromMemValue mem_val) >>
@@ -1067,6 +1109,7 @@ let rec driver with_concurrency dr_st =
             let _ = if choices = [] then error "BOOM" else () in
             
             ND.pick "driver 1" choices >>= fun n ->
+            ND.print_debug 3 "INTEGRATED" >>
             ND.warns_if_no_active_ex (stepConcurrency n dr_st'')
           else
             ND.return dr_st''
@@ -1241,7 +1284,7 @@ let rec driver with_concurrency dr_st =
 
 val     hack: Core.file core_run_annotation -> map Symbol.t Core.value -> Core.pexpr -> Core.value
 let rec hack core_file concur_sym_map pexpr =
-  match core_eval core_file concur_sym_map false pexpr with
+  match core_eval Loc.unknown core_file concur_sym_map false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
@@ -1274,6 +1317,7 @@ let finalize_constraints core_file concur_sym_map (Constraints.Constraints symbs
 *)
         match (hack core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb1)), hack core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb2))) with
           | (Core.Vsymbolic symb1', Core.Vsymbolic symb2') ->
+   let _ = Boot.print_debug 1 ("finalize_constr ==> " ^ stringFromSymbolic symb1 ^ " <-> " ^ stringFromSymbolic symb2) in
               Symbolic.SYMBop op symb1' symb2'
           | (Core.Vsymbolic symb1', cval2') ->
               Symbolic.SYMBop op symb1' (Symbolic.SYMBconst cval2')
@@ -1377,6 +1421,7 @@ let driver_globals with_concurrency sym_supply file =
           arena=  Core.Eskip;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty;
+          current_loc= Loc.unknown;
           exec_loc= ELoc_globals;
     |> dr_st.core_state
   ) dr_st.core_run_state in
@@ -1399,6 +1444,7 @@ let driver_globals with_concurrency sym_supply file =
                   ) e to_subst;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty;
+          current_loc= Loc.unknown;
           exec_loc= ELoc_globals;
         |> dr_st.core_state
     |> in
@@ -1521,6 +1567,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                         arena=  expr;
                         stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
                         labels= Map.empty;
+                        current_loc= Loc.unknown;
                         exec_loc= ELoc_normal [dr_st.core_file.Core.main];
                       |> dr_st.core_state
         |> >>= fun dr_st' ->

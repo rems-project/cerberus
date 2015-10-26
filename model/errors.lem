@@ -1,6 +1,7 @@
 open import Global Cabs AilSyntax (* Core *)
 import Loc TypingError Undefined
 
+import Core_run_aux
 
 
 type desugar_cause =
@@ -53,6 +54,7 @@ type cause =
   
   
   | Desugar_cause of desugar_cause
+  | Core_run_cause of Core_run_aux.core_run_error
 
   (* Constraint violation *)
 

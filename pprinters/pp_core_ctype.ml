@@ -16,13 +16,17 @@ let pp_symbol  a = !^ (Pp_symbol.to_string_pretty a)
 
 let pp_integer_base_ctype ibty =
   let open AilTypes in
-  match ibty with
-    | Ichar         -> !^ "ichar"
-    | Short         -> !^ "short"
-    | Int_          -> !^ "int"
-    | Long          -> !^ "long"
-    | LongLong      -> !^ "long_long"
-    | IBBuiltin str -> !^ str
+  !^ (match ibty with
+    | Ichar          -> "ichar"
+    | Short          -> "short"
+    | Int_           -> "int"
+    | Long           -> "long"
+    | LongLong       -> "long_long"
+    | IntN_t n       -> "int" ^ string_of_int n ^ "_t"
+    | Int_leastN_t n -> "int_least" ^ string_of_int n ^ "_t"
+    | Int_fastN_t n  -> "int_fast" ^ string_of_int n ^ "_t"
+    | Intmax_t       -> "intmax_t"
+    | Intptr_t       -> "intptr_t")
 
 
 let pp_integer_ctype ity =
@@ -30,14 +34,16 @@ let pp_integer_ctype ity =
   match ity with
     | Char             -> !^ "char"
     | Bool             -> !^ "_Bool"
-    | Signed (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-        !^ str
-    | Unsigned (IBBuiltin (("int8_t" | "int16_t" | "int32_t" | "int64_t") as str)) ->
-        !^ ("u" ^ str)
+    | Signed ((IntN_t _ | Int_leastN_t _ | Int_fastN_t _ | Intmax_t | Intptr_t) as ibty) ->
+        pp_integer_base_ctype ibty
+    | Unsigned ((IntN_t _ | Int_leastN_t _ | Int_fastN_t _ | Intmax_t | Intptr_t) as ibty) ->
+        !^ "u" ^^ pp_integer_base_ctype ibty
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
     | IBuiltin str     -> !^ str
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
+    | Size_t           -> !^ "size_t"
+    | Ptrdiff_t        -> !^ "ptrdiff_t"
 
 let pp_floating_ctype fty =
   let open AilTypes in

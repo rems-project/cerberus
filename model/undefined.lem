@@ -1,4 +1,4 @@
-open import Pervasives String_extra
+open import Pervasives String_extra Loc
 
 (* C undefined behaviours *)
 type undefined_behaviour =
@@ -106,6 +106,11 @@ type undefined_behaviour =
   | TODO_find_a_name12
   
   | Reached_end_of_function (* 6.9.1#12 *)
+  
+  | Invalid_format of string (* TODO: check STD *)
+
+  (* There are insufficient arguments for the format in a call to one of the formatted input/output functions, or an argument does not have an appropriate type (7.21.6.1, 7.21.6.2, 7.29.2.1, 7.29.2.2). *)
+  | Insufficient_arguments_for_format
 
 
 
@@ -352,7 +357,7 @@ let string_of_undefined_behaviours ubs =
 type t 'a =
   | Defined of 'a
   | Undef of list undefined_behaviour
-  | Error of string
+  | Error of Loc.t * string
 
 val return: forall 'a. 'a -> t 'a
 let return x = Defined x
@@ -362,7 +367,7 @@ let bind m f =
   match m with
     | Defined x -> f x
     | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
-    | Error str -> Error str
+    | Error loc str -> Error loc str
 end 
 
 let inline (>>=) = bind
@@ -378,8 +383,8 @@ let mapM f xs = sequence (List.map f xs)
 val undef: forall 'a. list undefined_behaviour -> t 'a
 let undef us = Undef us
 
-val error: forall 'a. string -> t 'a
-let error str = Error str
+val error: forall 'a. Loc.t -> string -> t 'a
+let error loc str = Error loc str
 
 
 val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
@@ -387,5 +392,5 @@ let fmap f m =
   match m with
     | Defined x -> Defined (f x)
     | Undef us  -> Undef us
-    | Error str -> Error str
+    | Error loc str -> Error loc str
   end

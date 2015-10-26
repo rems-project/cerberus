@@ -654,6 +654,8 @@ let rec remove_conv_int expr =
         Epar (List.map remove_conv_int es)
     | Ewait _ ->
         expr
+    | Eloc loc e ->
+        Eloc loc (remove_conv_int e)
   end
 
 and remove_conv_int_action_ act_ =
