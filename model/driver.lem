@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode Output
-open import Global Show Core_run Core_run_aux
+open import Global Show Core_run Core_run_aux Errors
 import Cmm_op Cmm_csem
 
 import Translation_aux
@@ -9,6 +9,8 @@ import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 
 import AilSyntax AilTypes
+
+import Translation_aux
 
 module Mem = struct
   include import Mem Mem_aux
@@ -33,8 +35,10 @@ declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
 
+(*
 val stringPrettyFromMemValue: formatting -> Mem.mem_value -> string
 declare ocaml target_rep function stringPrettyFromMemValue = `String_mem.string_pretty_of_mem_value`
+*)
 
 (* TODO: debug *)
 val pp_core_state: forall 'a. core_state -> string
@@ -520,6 +524,7 @@ let rec load_string ptr_val acc =
   )
 
 (* TODO: hack *)
+(*
 val printf_loader: driver_state -> list (formatting * Core_ctype.ctype) -> list Core.value -> (list string -> string) -> ND.t (string * driver_state)
 let printf_loader dr_st format_tys args mk_str =
   ND.foldM (fun (acc, dr_st') ((format, ty), Core.Vpointer ptr_val) ->
@@ -559,6 +564,8 @@ val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
     end
   ) ([], dr_st) (List.zip format_tys args) >>= fun (strs, dr_st') ->
   ND.return (mk_str strs, dr_st')
+*)
+
 
 (*
   ND.foldM (fun (mem_st', acc) (ty, Core.Vpointer ptr_val) ->
@@ -712,6 +719,7 @@ let rec drive_core_thread tid dr_st =
           |>;
           dr_step_counter= dr_st.dr_step_counter + 1;
         |>
+(*
     | Step_printf format_tys args mk_str mk_th_st ->
         ND.print_debug 6 ("Step_printf") >>
         printf_loader dr_st format_tys args mk_str >>= fun (str, dr_st') ->
@@ -722,11 +730,17 @@ let rec drive_core_thread tid dr_st =
           |>;
           dr_step_counter= dr_st'.dr_step_counter + 1;
         |>
+*)
         
-    | Step_printf2 frmt_chars args_ptrvals mk_th_st ->
+    | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
-        let wrapped_full_core_eval = full_core_eval Loc.unknown dr_st.core_file dr_st.symbolic_assoc false in
-        liftMem (Output.printf wrapped_full_core_eval frmt_chars args_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
+        let eval_conv ty1 ty2 mval =
+          full_core_eval Loc.unknown dr_st.core_file dr_st.symbolic_assoc false $
+            (* Core.PEcall (Core.Sym conv_sym) *)
+            Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
+              [Core.PEval (Core.Vctype ty1); Core.PEval (Core.Vctype ty2); Core.PEval (Core_aux.valueFromMemValue mval)] in 
+        
+        liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
         match out_chars_ with
           | Left err ->
               error "TODO(msg): a printf() got an error"
@@ -1145,6 +1159,15 @@ let rec driver with_concurrency dr_st =
         
         | (Mem_common.PtrEq, [Core.Vsymbolic symb1; Core.Vpointer ptr_val2]) ->
             let cval = Core.Vsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2)) in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+
+        | (Mem_common.PtrNe, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
+            liftMem (Mem.ne_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_ne, dr_st') ->
+            let cval = if is_ne then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        
+        | (Mem_common.PtrNe, [Core.Vsymbolic symb1; Core.Vpointer ptr_val2]) ->
+            let cval = Core.Vsymbolic (Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2))) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         
         | _ ->

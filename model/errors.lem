@@ -1,7 +1,6 @@
 open import Global Cabs AilSyntax (* Core *)
 import Loc TypingError Undefined
 
-import Core_run_aux
 
 
 type desugar_cause =
@@ -45,6 +44,12 @@ type desugar_cause =
 
 
 
+type core_run_error =
+  | Illformed_program of string (* typing or name-scope error *)
+  | Found_empty_stack of string (* TODO debug *)
+  | Reached_end_of_proc
+  | Unknown_impl
+  | Unresolved_symbol of Symbol.t(* found an unresolved symbolic name in core_eval *)
 
 
 type cause =
@@ -54,7 +59,7 @@ type cause =
   
   
   | Desugar_cause of desugar_cause
-  | Core_run_cause of Core_run_aux.core_run_error
+  | Core_run_cause of core_run_error
 
   (* Constraint violation *)
 

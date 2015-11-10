@@ -1,6 +1,6 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
 open import Pervasives Global
-import String_extra
+import String_extra Boot
 
 open import Monadic_parsing
 import Errors Core Core_ctype Mem Mem_aux
@@ -124,8 +124,8 @@ val lengthModifier: parserM length_modifier
 let lengthModifier =
       (string [#'h'; #'h'] >> return LM_hh)
   <|> (char #'h'           >> return LM_h)
+  <|> (string [#'l'; #'l'] >> return LM_ll)
   <|> (char #'l'           >> return LM_l)
-  <|> (string [#'l'; #'l'] >> return LM_l)
   <|> (char #'j'           >> return LM_j)
   <|> (char #'z'           >> return LM_z)
   <|> (char #'t'           >> return LM_t)
@@ -296,11 +296,16 @@ let showNonNegativeWithBasis useUpper b n =
 let inline (>>=) = Mem.bind
 
 
+(* DEBUG *)
+val stringFromMemValue: Mem.mem_value -> string
+declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
+
+
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
-val convert: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
-             maybe precision -> maybe length_modifier -> conversion_specifier -> list Mem.pointer_value ->
-             Mem.memM (either Errors.t (U.t (list char * list Mem.pointer_value)))
-let convert full_core_eval prec_opt lm_opt cspec args =
+val convert: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
+             maybe precision -> maybe length_modifier -> conversion_specifier -> list (Cty.ctype * Mem.pointer_value) ->
+             Mem.memM (either Errors.t (U.t (list char * list (Cty.ctype * Mem.pointer_value))))
+let convert eval_conv prec_opt lm_opt cspec args =
   let prec = match prec_opt with
     | Just (P_num z) ->
         z
@@ -309,13 +314,39 @@ let convert full_core_eval prec_opt lm_opt cspec args =
     | Nothing ->
         1
   end in
-  let aux ty cont =
+  let aux conv_ty cont =
     match args with
       | [] ->
           Mem.return $
             Right (U.undef [U.Insufficient_arguments_for_format])
-      | arg :: args' ->
-          Mem.load ty arg >>= fun mem_val ->
+      | (arg_ty, arg_ptr) :: args' ->
+          Mem.load arg_ty arg_ptr >>= fun mval ->
+          
+          let () = Boot.print_debug 1 ("Output.convert ==> ty1= " ^
+            Boot.pp_core_ctype arg_ty ^ ", ty2=  " ^ Boot.pp_core_ctype conv_ty ^ ", mval= " ^ stringFromMemValue mval )  in
+          match eval_conv arg_ty conv_ty mval with
+            | Left err ->
+                Mem.return (Left err)
+            | Right (U.Defined (Core.Vinteger ival)) ->
+                match Mem_aux.integerFromIntegerValue ival with
+                  | Just n ->
+                      Mem.return $ Right (U.return (
+                        if prec = 0 && n = 0 then
+                          ([], args')
+                        else
+                          (cont n, args')
+                      ))
+                  | Nothing ->
+                      error "WIP: convert --> not a concrete integer"
+                end
+            | Right (U.Defined _) ->
+                error "WIP: convert --> not an integer"
+            | Right (U.Error loc str) ->
+                Mem.return (Right (U.Error loc str))
+            | Right (U.Undef ubs) ->
+                Mem.return (Right (U.Undef ubs))
+          end
+(*          
           (* TODO: this is wrong if "not (is_integer ty)" *)
           match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
             | Nothing ->
@@ -328,11 +359,12 @@ let convert full_core_eval prec_opt lm_opt cspec args =
                     (cont n, args')
                 ))
           end
+*)
     end in
   match cspec with
     | CS_di ->
         (* see (§7.21.6.1#8 d,i) *)
-        let ty = match lm_opt with
+        let conv_ty = match lm_opt with
           | Just LM_hh ->
               Cty.signed_char
           | Just LM_h ->
@@ -354,7 +386,7 @@ let convert full_core_eval prec_opt lm_opt cspec args =
         end in
 
 
-        aux ty (fun n ->
+        aux conv_ty (fun n ->
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         )
@@ -397,6 +429,16 @@ let convert full_core_eval prec_opt lm_opt cspec args =
           let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
+
+    | CS_X ->
+        (* see (§7.21.6.1#8 o,u,x,X) *)
+        aux Cty.unsigned_int (fun n ->
+          (* TODO: conversion (n is unsigned int here) *)
+          let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
+          replicate (prec - length str) #'0' ++ str
+        )
+
+
 
 (*
         let prec = match prec_opt with
@@ -464,18 +506,18 @@ let convert full_core_eval prec_opt lm_opt cspec args =
 
 
 
-val     printf_aux: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
-                    list char -> format -> list Mem.pointer_value -> Mem.memM (either Errors.t (Undefined.t (list char)))
-let rec printf_aux full_core_eval acc fs ptrvals =
-  match (fs, ptrvals) with
+val     printf_aux: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
+                    list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.t (Undefined.t (list char)))
+let rec printf_aux eval_conv acc fs ty_ptrvals =
+  match (fs, ty_ptrvals) with
     | ([], []) ->
         Mem.return $
           Right (U.return acc)
-    | (F_text str :: fs, ptrvals) ->
-        printf_aux full_core_eval (acc ++ str) fs ptrvals
-    | (F_conv cp :: fs, ptrvals) ->
-        convert full_core_eval cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ptrvals >>= function
-          | Right (U.Defined (str, ptrvals')) ->
+    | (F_text str :: fs, ty_ptrvals) ->
+        printf_aux eval_conv (acc ++ str) fs ty_ptrvals
+    | (F_conv cp :: fs, ty_ptrvals) ->
+        convert eval_conv cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ty_ptrvals >>= function
+          | Right (U.Defined (str, ty_ptrvals')) ->
               let expanded  = expand cp.cp_flags str in
               let justified = match cp.cp_field_width with
                 | Nothing ->
@@ -488,7 +530,7 @@ let rec printf_aux full_core_eval acc fs ptrvals =
                 | Just FW_asterisk ->
                     error "TODO: output.lem 6"
               end in
-              printf_aux full_core_eval (acc ++ justified) fs ptrvals'
+              printf_aux eval_conv (acc ++ justified) fs ty_ptrvals'
           | Right (U.Error loc str) ->
               Mem.return $ Right (U.Error loc str)
           | Right (U.Undef ubs) ->
@@ -502,12 +544,12 @@ let rec printf_aux full_core_eval acc fs ptrvals =
 
 
 
-val printf: (Core.pexpr -> either Errors.t (Undefined.t Core.value)) ->
-            list char -> list Mem.pointer_value -> Mem.memM (either Errors.t (Undefined.t (list char)))
-let printf full_core_eval frmt args =
+val printf: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
+            list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.t (Undefined.t (list char)))
+let printf eval_conv frmt args =
   match parse format frmt with
     | [(fs, [])] ->
-        printf_aux full_core_eval [] fs args
+        printf_aux eval_conv [] fs args
     | _ ->
         Mem.return $
           Right (U.undef [U.Invalid_format (String.toString frmt)])

@@ -184,7 +184,8 @@ type state = <|
   tag_definitions: map A.identifier tag_definition;
   
                                                 (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-  function_declarations:        map A.identifier (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool);
+                                                (* the first boolean records whether the function has a prototype *)
+  function_declarations:        map A.identifier (bool * (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool));
   external_object_declarations: map A.identifier  (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype);
   
@@ -707,6 +708,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
+    let () = Boot.print_debug 8 ("DESUGAR: registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -725,8 +727,8 @@ let function_is_defined sym =
   )
 
 
-val register_function_declaration: Loc.t -> A.identifier -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> t unit
-let register_function_declaration loc sym decl =
+val register_function_declaration: Loc.t -> A.identifier -> bool -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> t unit
+let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
   let string_of_decl (ty, xs, _, _, _) =
     Boot.pp_ail_ctype ty ^ "(" ^ stringFromList (stringFromPair (fun _ -> "") Boot.pp_ail_ctype) xs ^ ")" in
@@ -734,7 +736,7 @@ let register_function_declaration loc sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just decl' ->
+    | Just (_, decl') ->
         if decl <> decl' then
           (* TODO: msg and location *)
           fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^ show sym ^ ", old decl= " ^ string_of_decl decl' ^ " --- vs --- " ^ string_of_decl decl))
@@ -742,7 +744,9 @@ let register_function_declaration loc sym decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          <| st with function_declarations= Map.insert sym decl st.function_declarations |>
+          let () = Boot.print_debug 8 ("DESUGAR: registering function declaration of '" ^ show sym ^
+                                       (if is_proto then "' with PROTOTYPE" else "'")) in
+          <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
         )
   end
 
@@ -979,7 +983,7 @@ let extract_program startup_str =
           let _ = Boot.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
           let decls = Map_extra.toList (
             map_union
-              (Map.map (fun (ty, params, b1, b2, b3) -> A.Decl_function ty params b1 b2 b3) st.function_declarations)
+              (Map.map (fun (has_proto, (ty, params, b1, b2, b3)) -> A.Decl_function has_proto ty params b1 b2 b3) st.function_declarations)
               (Map.map (fun (dur, qs, ty) -> A.Decl_object dur qs ty) st.external_object_declarations)
           ) in
           

@@ -2,7 +2,7 @@ open import Pervasives Global Show Core Core_ctype
 import AilSyntax AilTypes
 import Product Symbolic Exception Mem Mem_aux
 
-open import Thread Core_run_aux
+open import Thread Errors
 
 import Boot
 
@@ -62,12 +62,16 @@ let rec memValueFromValue ty cval =
                   Nothing
             end
           ) (Just []) cvals
-(*
-    | Vstruct sym xs ->
-        Just (Mem.struct_mval sym xs)
-    | Vunion sym ident mem_val ->
-        Just (Mem.union_mval sym ident mem_val)
-*)
+    | (Struct tag_sym1, Vstruct tag_sym2 xs) ->
+        if tag_sym1 = tag_sym2 then
+          Just (Mem.struct_mval tag_sym1 xs)
+        else
+          Nothing
+    | (Union tag_sym1, Vunion tag_sym2 ident mem_val) ->
+        if tag_sym1 = tag_sym2 then
+          Just (Mem.union_mval tag_sym1 ident mem_val)
+        else
+          Nothing
     | _ ->
         Nothing
   end
@@ -137,7 +141,7 @@ let rec proj_ctype ty =
         Core_ctype.Basic bty
     | AilTypes.Array ty n_opt ->
         Core_ctype.Array (proj_ctype ty) n_opt
-    | AilTypes.Function ty qs_tys is_variadic ->
+    | AilTypes.Function _ ty qs_tys is_variadic ->
         Core_ctype.Function (proj_ctype ty) (List.map (fun (qs,ty) -> (qs, proj_ctype ty)) qs_tys) is_variadic
     | AilTypes.Pointer qs ty ->
         Core_ctype.Pointer qs (proj_ctype ty)
@@ -251,7 +255,7 @@ let rec unproj_ctype ty =
     | Core_ctype.Array ty n_opt ->
         AilTypes.Array (unproj_ctype ty) n_opt
     | Core_ctype.Function ty qs_tys is_variadic ->
-        AilTypes.Function (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
+        AilTypes.Function (* TODO!!!! proto *) false (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
     | Core_ctype.Pointer qs ty ->
         AilTypes.Pointer qs (unproj_ctype ty)
     | Core_ctype.Atomic ty ->

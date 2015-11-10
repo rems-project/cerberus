@@ -219,6 +219,14 @@ let pretty_string_of_undefined_behaviour = function
   | Reached_end_of_function ->
       "(§6.9.1#12) If the } that terminates a function is reached, and the value of\n \
                    the function call is used by the caller, the behavior is undefined."
+  | Invalid_format str ->
+      "Invalid_format \"" ^ str ^ "\""
+  | Insufficient_arguments_for_format ->
+      "Insufficient_arguments_for_format"
+(*
+  | _ ->
+      "TODO[pretty_string_of_undefined_behaviour]"
+*)
 end
 
 
@@ -330,6 +338,14 @@ let string_of_undefined_behaviour = function
       "TODO_find_a_name12"
   | Reached_end_of_function ->
       "Reached_end_of_function"
+  | Invalid_format str ->
+      "Invalid_format \"" ^ str ^ "\""
+  | Insufficient_arguments_for_format ->
+      "Insufficient_arguments_for_format"
+(*
+  | _ ->
+      "TODO[string_of_undefined_behaviour]"
+*)
 end
 
 instance (Show undefined_behaviour)

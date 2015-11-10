@@ -1,9 +1,10 @@
 open import Pervasives Global Translation_effect Symbol Show Show_extra
-import Core Core_aux
+import Core Core_aux Core_ctype
 import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
 import Boot Map_extra
 
 module C    = Core
+module Cty  = Core_ctype
 module Caux = Core_aux
 module Aty  = AilTypes
 
@@ -136,7 +137,7 @@ let is_unsigned_integer_type = function
 end
 
 let function_return_type = function
-  | Function ty _ _ -> ty
+  | Function _ ty _ _ -> ty
   | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 
@@ -150,6 +151,7 @@ let from_lvalue_type = function
 end
 
 
+(*
 val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let exp_type_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
@@ -158,7 +160,7 @@ let exp_type_of a_expr =
     | Right (AilTypes.RValueType   ty) -> ty
     | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
   end
-
+*)
 
 
 
@@ -218,3 +220,7 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
     (* error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!" *)
     (* TODO !!!!!!! *)
     mk_pexpr pe1 pe2
+
+
+
+

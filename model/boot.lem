@@ -1,5 +1,5 @@
 open import Pervasives
-import Core AilTypes
+import Core Core_ctype AilTypes
 
 
 
@@ -53,6 +53,9 @@ declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype_raw
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
+
+val pp_core_ctype: Core_ctype.ctype -> string
+declare ocaml target_rep function pp_core_ctype = `String_core_ctype.string_of_ctype`
 
 val pp_core_expr: forall 'a. Core.expr 'a -> string
 declare ocaml target_rep function pp_core_expr = `String_core.string_of_expr`

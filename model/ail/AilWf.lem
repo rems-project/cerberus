@@ -67,7 +67,7 @@ let rec wf_type S ty =
         is_complete S elem_ty && not (is_function elem_ty)
       ) >>
       wf_type elem_ty
-  | Function ret_ty params _ ->
+  | Function _ ret_ty params _ ->
       guard (TError "§6.7.6.3#1") (
         not (is_array ret_ty || is_function ret_ty)
       ) >>

@@ -9,7 +9,7 @@ import Dlist
 
 open import Implementation_ Decode
 
-open import Thread Driver_util Core_run_aux
+open import Thread Driver_util Core_run_aux Errors
 (* import Output *)
 
 
@@ -210,7 +210,7 @@ let rec core_eval loc file concur_sym_map inside_if = function
               | (Core_ctype.Basic (AilTypes.Integer ity)) ->
                   EU.return $ PEval (Vinteger (Mem.min_ival ity))
               | _ ->
-                  error ("Core_run ivmin ==> " ^
+                  error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^
                              Boot.pp_core_expr (Core.Epure (Core.PEval (Vctype ty)) : Core.expr unit))
             end
         | (Civsizeof, Just [Vctype ty]) ->
@@ -545,7 +545,8 @@ KKKKK NOW
             end in
             EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb1 symb2)))
         | (_, Just _, Just _) ->
-            EU.fail $ Illformed_program ("ill-typed PEop: " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
+            EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop: " ^
+                                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
         | _ ->
             EU.return $ PEop binop pe1' pe2'
       end
@@ -1335,11 +1336,12 @@ let printf_hack core_st pes =
 *)
 
 (* TODO: hack *)
+(*
 type formatting
 declare ocaml target_rep type formatting = `Boot_printf.formatting`
 val pseudo_printf: string -> list (formatting * Core_ctype.ctype) * (list string -> string)
 declare ocaml target_rep function pseudo_printf = `Boot_printf.pseudo_printf`
-
+*)
 
 
 
@@ -1407,10 +1409,10 @@ type core_step =
   | Step_done of Core.value
   | Step_spawn_threads of (Core.expr core_run_annotation -> thread_state) * list thread_state (* initial states for the children *)
   | Step_output of (* DEBUG *) string * string * thread_state
-  | Step_printf of list (formatting * Core_ctype.ctype) * list Core.value * (list string -> string) * (integer -> thread_state)
+(*  | Step_printf of list (formatting * Core_ctype.ctype) * list Core.value * (list string -> string) * (integer -> thread_state) *)
   
     (* format string; arg pointers; callback taking as argument the length of the printed string *)
-  | Step_printf2 of list char * list Mem.pointer_value * (integer -> thread_state)
+  | Step_printf2 of list char * list (Core_ctype.ctype * Mem.pointer_value) * (integer -> thread_state)
 
 
 
@@ -1541,7 +1543,7 @@ let core_action_step file concur_sym_map current_tid (parent_tid_opt, th_st) (Pa
                       )
                     )
                 | Nothing ->
-                    Step_error ("the value of a store() didn't match the lvalue type: " ^
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " ^
                       Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Boot.pp_core_expr ((Epure (PEval cval)) : Core.expr unit) ^ "")
               end
           | (Just v1, Just v2, Just v3) ->
@@ -1842,10 +1844,11 @@ let core_thread_step2 file concur_sym_map current_tid (parent_tid_opt, th_st) =
                                   error "Core_run, printf one of the element of the format array was invalid (2)"
                           end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
                           let args_ptrvals = List.map (function
-                            | Vpointer ptr_val ->
-                                ptr_val
+                            | Vtuple [Vctype ty; Vpointer ptr_val] ->
+                                (* TODO: WIP *)
+                                (ty, ptr_val)
                             | _ ->
-                                error "Core_run, printf the second argument should be a list of pointers"
+                                error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
                           end) args_cvals in
                           Step_printf2 frmt_chars args_ptrvals (fun n ->
                             <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival n))) |>

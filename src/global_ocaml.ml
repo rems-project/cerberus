@@ -119,3 +119,5 @@ let user_request_driver (strs: string list) : int =
   Pervasives.read_int ()
 
 
+let concurrency_mode () =
+  !!cerb_conf.concurrency

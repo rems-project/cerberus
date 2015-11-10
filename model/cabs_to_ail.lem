@@ -75,8 +75,8 @@ let rec inject_qualifiers qs = function
   | ATypes.Array elem_ty n_opt ->
       (* TODO: check, we loose the qualifiers if elem_ty is not a pointer type *)
       (ATypes.no_qualifiers, ATypes.Array (snd $ inject_qualifiers qs elem_ty) n_opt)
-  | ATypes.Function ret_ty params is_variadic ->
-      (ATypes.no_qualifiers, ATypes.Function (snd $ inject_qualifiers qs ret_ty) params is_variadic)
+  | ATypes.Function has_proto ret_ty params is_variadic ->
+      (ATypes.no_qualifiers, ATypes.Function has_proto (snd $ inject_qualifiers qs ret_ty) params is_variadic)
   | ATypes.Pointer ref_qs ref_ty ->
       let (ref_qs', ref_ty') = inject_qualifiers qs ref_ty in
       if not (AilTypesAux.is_unqualified ref_qs) && not (AilTypesAux.is_unqualified ref_qs') then
@@ -527,7 +527,7 @@ val desugar_and_register_static_assert_declaration:  static_assert_declaration -
 val desugar_for_clause:                 for_clause -> E.t unit (* TODO *)
 
 (* TODO: WIP *)
-val wip_desugar_initializer_: ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.t (expression unit)
+val wip_desugar_initializer_: Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.t (expression unit)
 val static_thread_implicit_initializer: map identifier E.tag_definition -> ATypes.ctype -> constant
 
 
@@ -859,6 +859,30 @@ let unproject_base_type_specifier = function
   | BTSpec_Complex ->
       TSpec_Complex
  end
+
+
+
+(* TODO: this is temporary *)
+val     is_fully_non_designated: list (maybe (list designator) * initializer_) -> bool
+let rec is_fully_non_designated xs =
+  List.all function
+    | (Nothing, Init_expr _) ->
+        true
+    | (Nothing, Init_list xs') ->
+        is_fully_non_designated xs'
+    | _ ->
+        false
+  end xs
+
+(*
+List.all (function
+                            | (Nothing, Init_expr _)  -> true
+                            | (Nothing, Init_list xs) -> List.all 
+                            | _                       -> false
+                          end)
+*)
+
+
 
 
 
@@ -1265,7 +1289,7 @@ _STD "§6.5.2.1#2, sentence 2" $
         desugar_type_name tyname >>= fun (qs, ty) ->
         (* TODO: qualifier? *) (* TODO check *)
         (* TODO: the storage duration is wrong here, if we are inside the body of a function, it should be automatic *)
-        AilEcompound ty <$> wip_desugar_initializer_ ATypes.Static ty (Init_list inits)
+        AilEcompound ty <$> wip_desugar_initializer_ loc ATypes.Static ty (Init_list inits)
     | CabsEpreincr e ->
 _STD "§6.5.3.1#2, sentence 3" $
 (*
@@ -1409,10 +1433,10 @@ _STD "§6.7.1#8" $ (* TODO *)
 (* E.t (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit)) *)
 and desugar_init_declarator _ty scs idecltor =
   match idecltor with
-    | InitDecl decltor Nothing ->
+    | InitDecl loc decltor Nothing ->
         desugar_declarator decltor >>= fun (ident, qs, mk_ty) ->
         E.return (ident, qs, mk_ty _ty, Nothing)
-    | InitDecl decltor (Just init) ->
+    | InitDecl loc decltor (Just init) ->
         desugar_declarator decltor >>= fun (ident, qs, mk_ty) ->
         let ty = mk_ty _ty in
         
@@ -1420,7 +1444,7 @@ and desugar_init_declarator _ty scs idecltor =
         let kind = if AilTypesAux.is_function ty then E.Kind_function else E.Kind_object false in
         (* TODO: I don't like the fact that we are using this function directly here *)
         E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
-        wip_desugar_initializer_ (determinate_storage_duration link scs) ty init  >>= fun d_e ->
+        wip_desugar_initializer_ loc (determinate_storage_duration link scs) ty init  >>= fun d_e ->
         E.return (ident, qs, ty, Just d_e)
   end
 
@@ -1512,7 +1536,7 @@ and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype ->
           | qs_tys ->
               qs_tys
         end in
-        E.return (ident, fun ty -> mk_ty (ATypes.Function ty params is_variadic))
+        E.return (ident, fun ty -> mk_ty (ATypes.Function false (* TODO!!! proto *) ty params is_variadic))
 
 (*
         E.register_identifier ident
@@ -1669,7 +1693,7 @@ and desugar_direct_abstract_declarator is_under_array dabs_decltor =
         mk_ty             <- maybe (E.return id) (desugar_direct_abstract_declarator is_under_array) dabs_decltor_opt;
         (_, (tys, is_variadic)) <- E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys); in
           (* TODO: check *)
-          E.return (fun ty -> mk_ty (ATypes.Function ty (List.map snd tys) is_variadic))
+          E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd tys) is_variadic))
         end
   end
 
@@ -1755,7 +1779,7 @@ and static_thread_implicit_initializer tagDefs ty =
 
 
 (*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.t ? *)
-and wip_desugar_initializer_ dur current_ty = function
+and wip_desugar_initializer_ loc dur current_ty = function
   | Init_expr e ->
       (* we ignore the type here because the type checking will catch
          errors later *)
@@ -1803,7 +1827,7 @@ and wip_desugar_initializer_ dur current_ty = function
                       | true ->
                           evaluate_integer_constant_expression (Loc.locOf e) d_e >>= function
                             | IConstant j _ _ ->
-                                wip_desugar_initializer_ dur elem_ty init             >>= fun d_e               ->
+                                wip_desugar_initializer_ loc dur elem_ty init             >>= fun d_e               ->
                                 match compare j i with
                                   | LT ->
                                       E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
@@ -1822,8 +1846,9 @@ and wip_desugar_initializer_ dur current_ty = function
 (*
                 | Just [Desig_member id] ->
 *)
+
                 | Nothing ->
-                    wip_desugar_initializer_ dur elem_ty init >>= fun cst ->
+                    wip_desugar_initializer_ loc dur elem_ty init >>= fun cst ->
                     E.return (i+1, Just cst :: acc)
                 | _ ->
                     (* Multi-array designator *)
@@ -1837,19 +1862,6 @@ and wip_desugar_initializer_ dur current_ty = function
             
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)
-(*
-            E.resolve_tag_definition tag >>= function
-              | E.Struct_definition ident_tys ->
-                  let initial_assoc = List.map (fun (z, _) -> (z, Nothing)) ident_tys in
-                  E.foldlM (fun (desigs_opt, init) (cursor, assoc) ->
-                    match desigs_opt with
-                      | Just [Desig_member]
-                    end
-                  ) desigs_opt_inits (List.map fst ident_tys, initial_assoc)
-              | _ ->
-                  error "ERROR, todo msg"
-            end >>
-*)
             E.resolve_tag_definition tag >>= function
               | E.Struct_definition ident_tys ->
                   (* TODO: (for now) only allowing explicit and complete initializer *)
@@ -1873,6 +1885,7 @@ and wip_desugar_initializer_ dur current_ty = function
                       )
                   
                   (* TODO: OR a flat implicit initializer *)
+(*
                   else if List.all (function
                             | (Nothing, Init_expr _) -> true
                             | _                      -> false
@@ -1891,10 +1904,43 @@ and wip_desugar_initializer_ dur current_ty = function
                       AnnotatedExpression () Loc.unknown(* TODO *) (
                         AilEstruct tag (List.reverse xs_rev)
                       )
+*)
+                  else if is_fully_non_designated desigs_opt_inits then
+                    E.foldlM (fun desigs_opt_init acc ->
+                      match desigs_opt_init with
+                        | ((ident, _), (Nothing, Init_expr e)) ->
+                            desugar_expression e >>= fun d_e ->
+                            E.return $ (ident, Just d_e) :: acc
+                        | ((ident, membr_ty), (Nothing, init)) ->
+                            wip_desugar_initializer_ loc dur membr_ty init >>= fun d_e ->
+                            E.return $ (ident, Just d_e) :: acc
+(*
+                        | ((ident, membr_ty), (Nothing, Init_list non_designated_inits)) ->
+                            E.mapM (fun (Nothing, init) ->
+                              wip_desugar_initializer_ loc dur membr_ty init
+                            ) non_designated_inits >>= fun d_es ->
+                            E.return (ident,
+                              match membr_ty with
+                                | Array elem_ty _ ->
+                                    AilEarray elem_ty d_es
+                                | Struct tag_sym ->
+                                    AilEstruct 
+                              end
+*)
+                        | _ ->
+                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
+                      end
+                    ) (List.zip ident_tys desigs_opt_inits) [] >>= fun xs_rev ->
+                    
+                    E.return $
+                      AnnotatedExpression () Loc.unknown(* TODO *) (
+                        AilEstruct tag (List.reverse xs_rev)
+                      )
+
                   
                   else
                     (* TODO: crazy stuff we don't deal with yet *)
-                    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "crazy struct initializers")
+                    E.fail loc (Errors.Desugar_NotyetSupported "crazy struct initializers")
                   
 
 
@@ -1985,7 +2031,7 @@ and designator =
 
 
               | _ ->
-                  E.fail Loc.unknown (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
+                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
             end
 
 
@@ -2009,7 +2055,7 @@ and designator =
             match desigs_opt_inits with
               (* this the "optionaly enclosed in braces" case from (§6.7.9#11, sentence 1) *)
               | [(Nothing, init)] ->
-                  wip_desugar_initializer_ dur current_ty init
+                  wip_desugar_initializer_ loc dur current_ty init
               | _ ->
                   (* TODO: this (at leat) possible with something like:
                        int a = {1, 2}; *)
@@ -2077,10 +2123,10 @@ let desugar_declaration_base specifs idecltors =
           E.return acc
         
       else match ty with
-        | ATypes.Function return_ty params is_variadic ->
+        | ATypes.Function _ return_ty params is_variadic ->
             E.register_identifier ident
               E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
-            E.register_function_declaration (Loc.locOf ident) sym (
+            E.register_function_declaration (Loc.locOf ident) sym false (
               return_ty,
               params,
               is_variadic,
@@ -2331,7 +2377,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
               
               else match ty with
-                | ATypes.Function _ _ _ ->
+                | ATypes.Function _ _ _ _ ->
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
                 | _ ->
                     E.register_identifier ident
@@ -2577,7 +2623,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
                     ) params
               end >>= fun bindings ->
               
-              E.register_function_declaration (Loc.locOf fun_ident) fun_sym (
+              E.register_function_declaration (Loc.locOf fun_ident) fun_sym false (
                 return_ty,
                 List.map snd bindings,
                 is_variadic,
@@ -2625,7 +2671,7 @@ let desugar_and_register_external_declaration edecl =
       
       (* TODO: check *)
       | EDecl_decl (Declaration_base specifs idecltors) ->
-          desugar_type_specifiers specifs.type_specifiers >>= fun (qs (* TODO: use qualifiers *), _ty) ->
+          desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs (* TODO: use qualifiers *), _ty) ->
           E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors >>= fun xs  ->
           
           (* for each [init_declarator] *)
@@ -2644,7 +2690,6 @@ let desugar_and_register_external_declaration edecl =
               let _ = Boot.print_debug 2 ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
               let _ = Boot.print_debug 2 ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)
               
-              
               if specifs.storage_classes = [SC_typedef] then
                 (* Case of a typedef *)
                 E.register_identifier ident
@@ -2652,10 +2697,10 @@ let desugar_and_register_external_declaration edecl =
                 E.register_typedef sym (AilTypesAux.combine_qualifiers qs qs', ty')
                 
               else match ty with
-                | ATypes.Function return_ty params is_variadic ->
+                | ATypes.Function _ return_ty params is_variadic ->
                     E.register_identifier ident
                       E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
-                    E.register_function_declaration (Loc.locOf ident) sym (
+                    E.register_function_declaration (Loc.locOf ident) sym true (
                       return_ty,
                       params,
                       is_variadic,
