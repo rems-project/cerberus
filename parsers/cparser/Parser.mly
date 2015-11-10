@@ -537,9 +537,9 @@ init_declarator_list: (* NOTE: the list is in reverse *)
 
 init_declarator:
 | decl= declarator
-    { InitDecl (decl, None) }
+    { InitDecl (Loc_region ($startpos, $endpos, None), decl, None) }
 | decl= declarator EQ init= initializer_
-    { InitDecl (decl, Some init) }
+    { InitDecl (Loc_region ($startpos, $endpos, None), decl, Some init) }
 
 
 (* §6.7.1 Storage-class specifiers *)

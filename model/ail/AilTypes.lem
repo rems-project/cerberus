@@ -74,7 +74,7 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
             we have a parameter with type "restrict pointer to a const char",
             the qualifiers in the tuple will be:
               {no_qualifiers with restrict=true} *)
- | Function of ctype * list (qualifiers * ctype) * bool
+ | Function of (* has_proto *) bool * ctype * list (qualifiers * ctype) * bool
    (* NOTE: the qualifiers are that of the referenced type *)
  | Pointer of qualifiers * ctype
  | Atomic of ctype
@@ -242,7 +242,7 @@ let rec ctypeEqual ty1 ty2 =
         1
     | Array _ _ ->
         2
-    | Function _ _ _ ->
+    | Function _ _ _ _ ->
         3
     | Pointer _ _ ->
         4
@@ -262,7 +262,8 @@ let rec ctypeEqual ty1 ty2 =
         bty1 = bty2
     | (Array ty1 n1_opt, Array ty2 n2_opt) ->
         ctypeEqual ty1 ty2 && n1_opt = n2_opt
-    | (Function ty1 params1 b1, Function ty2 params2 b2) ->
+    | (Function has_proto1 ty1 params1 b1, Function has_proto2 ty2 params2 b2) ->
+        has_proto1 = has_proto2 &&
         ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2

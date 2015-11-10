@@ -19,7 +19,7 @@ type genType (* [name="gt*"] *) =
  | GenVoid
  | GenBasic of genBasicType
  | GenArray of ctype * (maybe integer)
- | GenFunction of ctype * list (qualifiers * ctype) * bool
+ | GenFunction of (* has_proto *) bool * ctype * list (qualifiers * ctype) * bool
  | GenPointer of qualifiers * ctype
 (*
  | GenStruct of identifier * list (Cabs.cabs_identifier * ctype)
@@ -108,7 +108,7 @@ let rec eq_genType gty1 gty2 =
         1
     | GenArray _ _ ->
         2
-    | GenFunction _ _ _ ->
+    | GenFunction _ _ _ _ ->
         3
     | GenPointer _ _ ->
         4
@@ -126,8 +126,8 @@ let rec eq_genType gty1 gty2 =
         gbty1 = gbty2
     | (GenArray ty1 n1_opt, GenArray ty2 n2_opt) ->
         ty1 = ty2 && n1_opt = n2_opt
-    | (GenFunction ty1 params1 b1 , GenFunction ty2 params2 b2 ) ->
-        ty1 = ty2 && params1 = params2 && b1 = b2
+    | (GenFunction has_proto1 ty1 params1 b1 , GenFunction has_proto2 ty2 params2 b2 ) ->
+        has_proto1 = has_proto2 && ty1 = ty2 && params1 = params2 && b1 = b2
     | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
         qs1 = qs2 && ty1 = ty2
     | (GenStruct tag1, GenStruct tag2) ->
@@ -196,8 +196,8 @@ let inject_type = function
       GenPointer qs ty
   | Array ty n_opt ->
       GenArray ty n_opt
-  | Function ty params b ->
-      GenFunction ty params b
+  | Function has_proto ty params b ->
+      GenFunction has_proto ty params b
   | Atomic ty ->
       GenAtomic ty
   | Struct tag ->

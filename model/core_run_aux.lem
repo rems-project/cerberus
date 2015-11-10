@@ -2,13 +2,7 @@ open import Pervasives
 open import Global Show Core Driver_util
 import Boot
 
-
-type core_run_error =
-  | Illformed_program of string (* typing or name-scope error *)
-  | Found_empty_stack of string (* TODO debug *)
-  | Reached_end_of_proc
-  | Unknown_impl
-  | Unresolved_symbol of Symbol.t(* found an unresolved symbolic name in core_eval *)
+open import Errors
 
 
 instance (Show core_run_error)
@@ -65,66 +59,71 @@ let has_sbBefore_on_thread tid annot =
  *)
 (* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
 
+val using_concurrency: unit -> bool
+declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
+
 val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids expr =
-  match expr with
-    | Epure _ ->
-        (* no change *)
-        expr
-    | Ememop _ _ ->
-        (* no change *)
-        expr
-    | Eraise _ ->
-        (* no change *)
-        expr
-    | Eregister _ _ ->
-        (* no change *)
-        expr
-    | Eskip ->
-        (* no change *)
-        expr
-    | Elet a pe1 e2 ->
-        Elet a pe1 (add_to_sb p_aids e2)
-    | Eif pe1 e2 e3 ->
-        Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
-    | Eproc annots nm pes ->
-        Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
-    | Eaction (Paction p' (Action loc annots a)) ->
-        Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
-    | Eunseq es ->
-        Eunseq (List.map (add_to_sb p_aids) es)
-    | Ewseq _as e1 e2 ->
-        let is_positive = function
-          | (Pos, _) -> true
-          | _        -> false
-        end in
-        Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
-    | Esseq _as e1 e2 ->
-        Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
-    | Easeq _ _ _ ->
-        error "Core_run_aux.add_to_sb, Easeq"
-    | Eindet _ ->
-        error "Core_run_aux.add_to_sb, Eindet"
-    | Ebound _ _ ->
-        error "Core_run_aux.add_to_sb, Ebound"
-    | Esave k a_tys e ->
-        Esave k a_tys (add_to_sb p_aids e)
-    | Erun annots k a_vs ->
-        Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-    | Eret _ ->
-        (* no change *)
-        expr
-    | End es ->
-        End (List.map (add_to_sb p_aids) es)
-    | Epar es ->
-        Epar (List.map (add_to_sb p_aids) es)
-    | Ewait _ ->
-        (* no change *)
-        expr
-    | Eloc loc e ->
-        Eloc loc (add_to_sb p_aids e)
-  end
-
+  if using_concurrency () then
+    match expr with
+      | Epure _ ->
+          (* no change *)
+          expr
+      | Ememop _ _ ->
+          (* no change *)
+          expr
+      | Eraise _ ->
+          (* no change *)
+          expr
+      | Eregister _ _ ->
+          (* no change *)
+          expr
+      | Eskip ->
+          (* no change *)
+          expr
+      | Elet a pe1 e2 ->
+          Elet a pe1 (add_to_sb p_aids e2)
+      | Eif pe1 e2 e3 ->
+          Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+      | Eproc annots nm pes ->
+          Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
+      | Eaction (Paction p' (Action loc annots a)) ->
+          Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+      | Eunseq es ->
+          Eunseq (List.map (add_to_sb p_aids) es)
+      | Ewseq _as e1 e2 ->
+          let is_positive = function
+            | (Pos, _) -> true
+            | _        -> false
+          end in
+          Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
+      | Esseq _as e1 e2 ->
+          Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
+      | Easeq _ _ _ ->
+          error "Core_run_aux.add_to_sb, Easeq"
+      | Eindet _ ->
+          error "Core_run_aux.add_to_sb, Eindet"
+      | Ebound _ _ ->
+          error "Core_run_aux.add_to_sb, Ebound"
+      | Esave k a_tys e ->
+          Esave k a_tys (add_to_sb p_aids e)
+      | Erun annots k a_vs ->
+          Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+      | Eret _ ->
+          (* no change *)
+          expr
+      | End es ->
+          End (List.map (add_to_sb p_aids) es)
+      | Epar es ->
+          Epar (List.map (add_to_sb p_aids) es)
+      | Ewait _ ->
+          (* no change *)
+          expr
+      | Eloc loc e ->
+          Eloc loc (add_to_sb p_aids e)
+    end
+  else
+    expr
 
 
 val add_to_sb_stack: set (polarity * (Thread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
@@ -143,72 +142,78 @@ let rec add_to_sb_continuation p_aids = function
   | Ksseq _as e2 :: cont ->
       Ksseq _as (add_to_sb p_aids e2) :: add_to_sb_continuation p_aids cont
 end
-let rec add_to_sb_stack p_aids = function
-  | Stack_empty ->
-      Stack_empty
-  | Stack_cons cont sk ->
-      Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
-end
-
+let rec add_to_sb_stack p_aids sk =
+  if using_concurrency () then
+    match sk with
+      | Stack_empty ->
+          Stack_empty
+      | Stack_cons cont sk ->
+          Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+   end
+  else
+    sk
 
 
 
 
 val     add_to_asw: set (action_id) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_asw aids expr =
-  match expr with
-    | Epure _ ->
-        (* no change *)
-        expr
-    | Ememop _ _ ->
-        (* no change *)
-        expr
-    | Eraise _ ->
-        (* no change *)
-        expr
-    | Eregister _ _ ->
-        (* no change *)
-        expr
-    | Eskip ->
-        (* no change *)
-        expr
-    | Elet a pe1 e2 ->
-        Elet a pe1 (add_to_asw aids e2)
-    | Eif pe1 e2 e3 ->
-        Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
-    | Eproc annots nm pes ->
-        Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
-    | Eaction (Paction p' (Action loc annots a)) ->
-        Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
-    | Eunseq es ->
-        Eunseq (List.map (add_to_asw aids) es)
-    | Ewseq _as e1 e2 ->
-        Ewseq _as (add_to_asw aids e1) e2
-    | Esseq _as e1 e2 ->
-        Esseq _as (add_to_asw aids e1) e2
-    | Easeq _ _ _ ->
-        error "Core_run_aux.add_to_asw, Easeq"
-    | Eindet _ ->
-        error "Core_run_aux.add_to_asw, Eindet"
-    | Ebound _ _ ->
-        error "Core_run_aux.add_to_asw, Ebound"
-    | Esave k a_tys e ->
-        Esave k a_tys (add_to_asw aids e)
-    | Erun annots k a_vs ->
-        Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
-    | Eret _ ->
-        (* no change *)
-        expr
-    | End es ->
-        End (List.map (add_to_asw aids) es)
-    | Epar es ->
-        Epar (List.map (add_to_asw aids) es)
-    | Ewait _ ->
-        (* no change *)
-        expr
-    | Eloc loc e ->
-        Eloc loc (add_to_asw aids e)
-  end
+  if using_concurrency () then
+    match expr with
+      | Epure _ ->
+          (* no change *)
+          expr
+      | Ememop _ _ ->
+          (* no change *)
+          expr
+      | Eraise _ ->
+          (* no change *)
+          expr
+      | Eregister _ _ ->
+          (* no change *)
+          expr
+      | Eskip ->
+          (* no change *)
+          expr
+      | Elet a pe1 e2 ->
+          Elet a pe1 (add_to_asw aids e2)
+      | Eif pe1 e2 e3 ->
+          Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
+      | Eproc annots nm pes ->
+          Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
+      | Eaction (Paction p' (Action loc annots a)) ->
+          Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
+      | Eunseq es ->
+          Eunseq (List.map (add_to_asw aids) es)
+      | Ewseq _as e1 e2 ->
+          Ewseq _as (add_to_asw aids e1) e2
+      | Esseq _as e1 e2 ->
+          Esseq _as (add_to_asw aids e1) e2
+      | Easeq _ _ _ ->
+          error "Core_run_aux.add_to_asw, Easeq"
+      | Eindet _ ->
+          error "Core_run_aux.add_to_asw, Eindet"
+      | Ebound _ _ ->
+          error "Core_run_aux.add_to_asw, Ebound"
+      | Esave k a_tys e ->
+          Esave k a_tys (add_to_asw aids e)
+      | Erun annots k a_vs ->
+          Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
+      | Eret _ ->
+          (* no change *)
+          expr
+      | End es ->
+          End (List.map (add_to_asw aids) es)
+      | Epar es ->
+          Epar (List.map (add_to_asw aids) es)
+      | Ewait _ ->
+          (* no change *)
+          expr
+      | Eloc loc e ->
+          Eloc loc (add_to_asw aids e)
+    end
+  else
+    expr
 
 val add_to_asw_stack: set (action_id) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
 
@@ -222,13 +227,16 @@ let rec add_to_asw_continuation aids = function
   | Ksseq _as e2 :: cont ->
       Ksseq _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
 end
-let rec add_to_asw_stack aids = function
-  | Stack_empty ->
-      Stack_empty
-  | Stack_cons cont sk ->
-      Stack_cons (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
-end
-
+let rec add_to_asw_stack aids sk =
+  if using_concurrency () then
+    match sk with
+      | Stack_empty ->
+          Stack_empty
+      | Stack_cons cont sk ->
+          Stack_cons (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+    end
+  else
+    sk
 
 
 

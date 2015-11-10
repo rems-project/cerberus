@@ -269,8 +269,9 @@ let rec pp_ctype_raw = function
       !^ "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
   | Array (ty, Some n) ->
       !^ "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
-  | Function (ty, params, is_variadic) ->
-      !^ "Function" ^^ P.brackets (comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
+  | Function (has_proto, ty, params, is_variadic) ->
+      !^ "Function" ^^ P.brackets (!^ (if has_proto then "true" else "false") ^^ P.comma ^^^
+                                        comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
                                    !^ (if is_variadic then "true" else "false"))
   | Pointer (ref_qs, ref_ty) ->
       !^ "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
@@ -305,7 +306,7 @@ let rec pp_ctype = function
       pp_basicType b
   | Array (ty, n_opt) ->
       pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
-  | Function (ty, ps, is_variadic) ->
+  | Function (has_proto, ty, ps, is_variadic) ->
       pp_ctype ty ^^ P.parens (
         let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
         if is_variadic then
@@ -341,7 +342,7 @@ let rec pp_ctype_declaration id = function
       pp_basicType b ^^^ id
   | Array (ty, n_opt) ->
       pp_ctype ty ^^^ id ^^ P.brackets (P.optional pp_integer n_opt)
-  | Function (ty, ps, is_variadic) ->
+  | Function (has_proto, ty, ps, is_variadic) ->
       pp_ctype_declaration id ty ^^ P.parens (
         let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
         if is_variadic then
@@ -399,7 +400,7 @@ let rec pp_ctype_human qs ty =
       prefix_pp_qs ^^ pp_basicType b
   | Array (ty, n_opt) ->
       !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs ty
-  | Function (ret_ty, params, is_variadic) ->
+  | Function (has_proto, ret_ty, params, is_variadic) ->
       if not (AilTypesAux.is_unqualified qs) then
         print_endline "TODO: warning, found qualifiers in a function type (this is an UB)";
       
@@ -825,11 +826,13 @@ let pp_program pp_annot (startup, sigm) =
           ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi ^^
           P.break 1 ^^ P.hardline ^^ acc
       
-      | Decl_function (return_ty, params, is_variadic, is_inline, is_Noreturn) ->
+      | Decl_function (has_proto, return_ty, params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           (if !isatty then !^ "\x1b[31m" else P.empty) ^^
-          !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (return_ty, params, is_variadic)) ^^
+          !^ "// declare" ^^^ pp_id sym ^^^
+          (if has_proto then !^ "WITH PROTO " else P.empty) ^^
+          !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, return_ty, params, is_variadic)) ^^
           (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
@@ -903,7 +906,7 @@ let pp_genType = function
       !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
 
      
- | GenFunction (ty, params, is_variadic) ->
+ | GenFunction (has_proto, ty, params, is_variadic) ->
       !^ "GenFunction" ^^ P.brackets (comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
                                    !^ (if is_variadic then "true" else "false"))
 

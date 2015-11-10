@@ -191,7 +191,7 @@ and specifiers = <|
 |>
 
 and init_declarator =
-  | InitDecl of declarator * maybe initializer_
+  | InitDecl of Loc.t * declarator * maybe initializer_
 
 
 (* §6.7.1 Storage-class specifiers, Syntax *)

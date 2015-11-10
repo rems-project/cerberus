@@ -82,3 +82,6 @@ val pass_message: string -> ('a, 'msg) Exception.t3 -> ('a, 'msg) Exception.t3
 
 
 val user_request_driver: string list -> int
+
+
+val concurrency_mode: unit -> bool

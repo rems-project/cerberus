@@ -223,7 +223,7 @@ val is_function: ctype -> bool
 let is_function ty =
   (* TODO: check atomic *)
   match unatomic ty with
-  | Function _ _ _ ->
+  | Function _ _ _ _ ->
       true
   | _ ->
       false
@@ -889,7 +889,7 @@ let rec ~{coq} compatible ty1 ty2 =
         bty1 = bty2
     | (Array ty1 n1, Array ty2 n2) ->
         compatible ty1 ty2 && n1 = n2
-    | (Function ty1 p1 b1, Function ty2 p2 b2) ->
+    | (Function _ ty1 p1 b1, Function _ ty2 p2 b2) ->
         compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
         compatible ty1 ty2 && qs1 = qs2
@@ -932,7 +932,7 @@ let rec ~{coq} is_composite ty1 ty2 ty3 =
         bty1 = bty2 && bty1 = bty3
     | (Array ty1 n1, Array ty2 n2, Array ty3 n3) ->
         is_composite ty1 ty2 ty3 && n1 = n2 && n1 = n3
-    | (Function ty1 p1 _, Function ty2 p2 _, Function ty3 p3 _) ->
+    | (Function _ ty1 p1 _, Function _ ty2 p2 _, Function _ ty3 p3 _) ->
         is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
     | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
         is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
@@ -978,11 +978,12 @@ let rec ~{coq} composite ty1 ty2 =
           Maybe.map (fun ty -> Array ty n1) (composite ty1 ty2)
         else
           Nothing
-    | (Function ty1 p1 b1, Function ty2 p2 b2) ->
+    | (Function has_proto1 ty1 p1 b1, Function has_proto2 ty2 p2 b2) ->
         match (composite ty1 ty2, composite_params p1 p2) with
           | (Just ty, Just p) ->
               if b1 = b2 then
-                Just (Function ty p b1)
+                (* TODO: check the prototype thing *)
+                Just (Function (has_proto1 || has_proto2) ty p b1)
               else
                 Nothing
           | _ ->
@@ -1013,8 +1014,8 @@ end
 (* following (§6.3.2.1)#4 *)
 val function_coercion: ctype -> ctype
 let function_coercion = function
-  | Function ty' params is_variadic ->
-      Pointer no_qualifiers (Function ty' params is_variadic)
+  | Function has_proto ty' params is_variadic ->
+      Pointer no_qualifiers (Function has_proto ty' params is_variadic)
   | ty ->
       ty
 end
@@ -1085,6 +1086,15 @@ let pointer_to_void = function
   | _ ->
       false
 end
+
+val is_pointer_to_function: ctype -> bool
+let is_pointer_to_function = function
+  | Pointer _ ref_ty ->
+      is_function ref_ty
+  | _ ->
+      false
+end
+
 
 val        pointers_to_compatible_types: ctype -> ctype -> bool
 let ~{coq} pointers_to_compatible_types ty1 ty2 =
@@ -1224,9 +1234,9 @@ let adjust = function
       (* STD §6.7.6.3#7 *)
       (* TODO: qualifiers *)
       Pointer no_qualifiers elem_ty
- | Function ret_ty params is_variadic ->
+ | Function has_proto ret_ty params is_variadic ->
       (* STD §6.7.6.3#8 *)
-     Pointer no_qualifiers (Function ret_ty params is_variadic)
+     Pointer no_qualifiers (Function has_proto ret_ty params is_variadic)
  | ty ->
      ty
 end
@@ -1285,3 +1295,28 @@ let corresponding_real_type ty =
     end
   else
     Nothing
+
+(* TODO: this is such a bad name ... *)
+val     has_pointer_at_leafs: ctype -> bool
+let rec has_pointer_at_leafs ty =
+  match ty with
+    | Void ->
+        false
+    | Basic _ ->
+        false
+    | Array ref_ty _ ->
+        has_pointer_at_leafs ref_ty
+    | Function _ _ _ _ ->
+        false
+    | Pointer _ _ ->
+        true
+    | Atomic ty ->
+        has_pointer_at_leafs ty
+    | Struct _ ->
+        false
+    | Union _ ->
+        false
+    | Builtin _ ->
+        (* TODO *)
+        false
+  end

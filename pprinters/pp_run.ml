@@ -163,7 +163,7 @@ let pp_traces ts =
 
 (* ======== RESET ======== *)
 
-open Core_run_aux
+open Errors
 
 let string_of_core_run_error = function
   | Illformed_program str ->

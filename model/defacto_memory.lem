@@ -348,7 +348,7 @@ let rec simplify_integer_value_base ival_ =
           | IntDiv ->
               fun x y -> if y = 0 then 0 else x / y
           | IntMod ->
-              fun x y -> if y = 0 then 0 else if x<0 then (x+y) mod y else x mod y (* Because why should people agree on how to define modulo? *)
+              fun x y -> if y = 0 then 0 else x mod y
           | IntExp ->
               fun x y -> x ** natFromInteger y
         end in
@@ -538,6 +538,7 @@ let ifM constr (MemM m_then) (MemM m_else) =
                       (* TODO: check, but it doesn't seem useful to add the constraint *)
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                   | Nothing ->
+                      (* DEBUG *) let () = print_debug 1 "Defacto_memory.ifM ==> DID A ND SPLIT" in
                       (m_then <| mem_st with constraints= add_constraint (MC_eqIV ("ifM(then)[" ^ debug_str ^ "]") ival_1' ival_2') mem_st.constraints |>) ++
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                 end
@@ -1509,9 +1510,19 @@ let eq_ptrval eqs ptr_val1 ptr_val2 =
 
 
 
+(* TODO: more .... *)
+let ne_ptrval eqs (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) =
+  match (ptr_val_1, ptr_val_2) with
+  | (PVnull _, PVbase _ _) ->
+      return true
+  | (PVbase _ _, PVnull _) ->
+      return true
+  | _ ->
+      error "WIP: ne_ptrval"
+  end
 
-let ne_ptrval eqs ptr_val1 ptr_val2 =
-  error "WIP: ne_ptrval"
+
+
 let lt_ptrval eqs ptr_val1 ptr_val2 =
   error "WIP: lt_ptrval"
 let gt_ptrval eqs ptr_val1 ptr_val2 =

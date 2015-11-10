@@ -173,8 +173,8 @@ and statement 'A [name="s*"] =
 
 type declaration =
   | Decl_object   of storageDuration * qualifiers * ctype
-    (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-  | Decl_function of ctype * (list (qualifiers * ctype)) * bool * bool * bool
+    (* has_prototype; return type; parameters types; is_variadic; is_inline; is_Noreturn *)
+  | Decl_function of bool * ctype * (list (qualifiers * ctype)) * bool * bool * bool
 
 
 type tag_definition =
@@ -509,7 +509,9 @@ let eq_declaration ds1 ds2 =
   match (ds1, ds2) with
     | (Decl_object dur1 qs1 ty1, Decl_object dur2 qs2 ty2) ->
         dur1 = dur2 && qs1 = qs2 && ty1 = ty2
-    | (Decl_function ret_ty1 qs_tys1 is_variadic1 is_inline1 is_Noreturn1, Decl_function ret_ty2 qs_tys2 is_variadic2 is_inline2 is_Noreturn2) ->
+    | (Decl_function has_proto1 ret_ty1 qs_tys1 is_variadic1 is_inline1 is_Noreturn1,
+       Decl_function has_proto2 ret_ty2 qs_tys2 is_variadic2 is_inline2 is_Noreturn2) ->
+        has_proto1 = has_proto2 &&
         ret_ty1 = ret_ty2 &&
         qs_tys1 = qs_tys2 &&
         is_variadic1 = is_variadic2 &&
@@ -951,9 +953,10 @@ val type_from_sigma: forall 'A. (ctype * bindings * bool) * maybe (statement 'A)
 let parameters_of_bindings bs =
   List.map snd bs
 
+    (*
 let type_from_sigma ((ty, bs, is_variadic), _) =
   Function ty (List.map (fun (_, (_, qs, ty)) -> (qs,ty)) bs) is_variadic
-
+*)
 
 
 

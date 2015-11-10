@@ -392,7 +392,18 @@ fun <Integer.decode> (ty: ctype, n: integer) : integer :=
 -- "For conversion to a type of width N, the value is reduced modulo 2^N to be
 --  within range of the type; no signal is raised."
 fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
-  n % (2 ^ ctype_width(ty))
+-- TODO doc
+  wrapI(ty, n)
+{-
+--  n % (2 ^ ctype_width(ty))
+  if is_representable(n, ty) then
+    n
+  else
+    if ivmax(ty) < n then n % -(2 ^ ctype_width(ty)) else n % (2 ^ ctype_width(ty)) end
+     -- <Integer.conv_nonrepresentable_signed_integer>(ty, if ivmax(ty) < n then n - 2 ^ ctype_width(ty)  else n + 2 ^ ctype_width(ty) end)
+  end
+-}
+
 {-
 --  n % exp(2, ctype_width(ty))
   let n = encodeTwos("signed long", n) in

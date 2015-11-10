@@ -25,7 +25,7 @@ end
 
 val is_function: genType -> bool
 let is_function = function
-  | GenFunction _ _ _ ->
+  | GenFunction _ _ _ _ ->
       true
   | _ ->
       false
@@ -125,7 +125,7 @@ let array_coercion = function
 
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
-  | GenFunction ty qs is_variadic -> GenPointer no_qualifiers (Function ty qs is_variadic)
+  | GenFunction has_proto ty qs is_variadic -> GenPointer no_qualifiers (Function has_proto ty qs is_variadic)
   | gty                           -> gty
   end
 
@@ -278,8 +278,8 @@ let interpret_genType impl = function
       return (Basic bty)
   | GenArray ty n ->
       return (Array ty n)
-  | GenFunction ty params is_variadic ->
-      return (Function ty params is_variadic)
+  | GenFunction has_proto ty params is_variadic ->
+      return (Function has_proto ty params is_variadic)
   | GenPointer qs ty ->
       return (Pointer qs ty)
   | GenStruct tag ->
@@ -371,7 +371,7 @@ let is_complete sigm gty =
        true
    | GenArray _ _ ->
        true
-   | GenFunction _ _ _ ->
+   | GenFunction _ _ _ _ ->
        false (* TODO: check *)
    | GenPointer _ _ ->
        true

@@ -95,9 +95,14 @@ type ctype =
 
 
 
+-- STD §6.5#5
+fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
+  if ivmin(ty) <= n /\ n <= ivmax(ty) then
+    n
+  else
+    undef <<Exceptional_condition>>
+  end
 
-fun overflow (ty: ctype, n: integer) : integer :=
-  n
 
 -- [conv_int ty n] returns the value [n] converted to the integer type [ty]
 fun conv_int (ty: ctype, n: integer): integer :=
@@ -367,7 +372,7 @@ proc rev_listFromStr(str: pointer) : eff [integer] :=
 
 
 
-proc printf_proxy(tmp_ptr: pointer, args: [pointer]) : eff integer :=
+proc printf_proxy(tmp_ptr: pointer, args: [(ctype, pointer)]) : eff integer :=
   let strong frmt_ptr = load("char*", tmp_ptr) in
   let strong xs = rev_listFromStr{frmt_ptr} in
   let strong ret = <std_function_printf>{xs, args} in
@@ -405,3 +410,29 @@ proc malloc_proxy (size_ptr: pointer) : eff pointer :=
   let strong ret = alloc(4, size) in
   return (ret)
   end end
+
+
+
+
+
+
+-- see §5.1.2 from ISO/IEC 10967-1:1994(E)
+fun wrapI(ty: ctype, n: integer) : integer :=
+  let dlt = ivmax(ty) - ivmin(ty) + 1 in
+  let r = n % dlt in
+  if r <= ivmax(ty) then
+    r
+  else
+    r - dlt
+  end
+  end
+  end
+{-
+  if n < ivmin(ty) then
+    wrapI(ty, n + (ivmax(ty) - ivmin(ty) + 1))
+  else if ivmax(ty) < n then
+    wrapI(ty, n - (ivmax(ty) - ivmin(ty) + 1))
+  else
+    n
+  end end
+-}

@@ -260,6 +260,7 @@ val annotate_arguments_aux: forall 'A1 'A2.
                             (expression 'A1 -> E.t (expression 'A2))          ->
                             (ctype -> expression 'A1 -> E.t (expression 'A2)) ->
                             bool                                              ->
+                            bool                                              ->
                             list (expression 'A1)                             ->
                             list (qualifiers * ctype)                         ->
                             E.t (list (expression 'A2))
@@ -267,16 +268,28 @@ val annotate_arguments_aux: forall 'A1 'A2.
 
 
 (* let rec annotate_arguments_aux (A : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.t (expression 'A2)) es (p : list (qualifiers * _)) : E.t (list (expression 'A2)) = *)
-let rec annotate_arguments_aux A annotate_expression annotate_assignee is_variadic es p =
-  match (es, p) with
+let rec annotate_arguments_aux A annotate_expression annotate_assignee has_proto is_variadic args params =
+  match (args, params) with
     | ([], []) ->
         E.return []
     | ([], [(_, Void)]) ->
+        (* TODO: document this case *)
         E.return []
-    | (e :: es, (_, ty1) :: p) ->
-        annotate_assignee (AilTypesAux.rvalue_coercion ty1) e                            >>= fun e  ->
-        annotate_arguments_aux A annotate_expression annotate_assignee is_variadic es p >>= fun es ->
-        E.return (e :: es)
+    | (arg_e :: args', (_, param_ty1) :: params') ->
+(*
+        if has_proto then
+*)
+          annotate_assignee (AilTypesAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e  ->
+          annotate_arguments_aux A annotate_expression annotate_assignee has_proto is_variadic args' params' >>= fun a_args' ->
+          E.return (a_arg_e :: a_args')
+(*
+        else
+          (* the called function has a type that does not include a prototype *)
+          (* STD §6.5.2.2#6 *)
+          let ty1' = KKKK
+*)
+
+
     | (_, []) ->
         (* This case must correspond to a call to a variadic function *)
         if not is_variadic then
@@ -284,7 +297,7 @@ let rec annotate_arguments_aux A annotate_expression annotate_assignee is_variad
         else
           (* following (§6.5.2.2#7) *)
           (* TODO: check *)
-          E.mapM annotate_expression es
+          E.mapM annotate_expression args
     | (_, _) ->
         E.fail Loc.unknown (TError_TODO 12)
   end
@@ -416,8 +429,8 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         match type_of annot a_e with
           | GenLValueType qs ty ->
               E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
-          | GenRValueType (GenFunction ty p b) ->
-              E.return (AilEunary Address a_e, GenRValueType (GenPointer no_qualifiers (Function ty p b)))
+          | GenRValueType (GenFunction has_proto ty p b) ->
+              E.return (AilEunary Address a_e, GenRValueType (GenPointer no_qualifiers (Function has_proto ty p b)))
           | _ ->
               E.fail (locOf e) (TError_TODO 14)
         end
@@ -426,9 +439,9 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
     | AilEunary Indirection e ->
         annotate_rvalue e >>= fun (e', gty) ->
         match gty with
-          | GenPointer qs (Function ty params is_variadic) ->
+          | GenPointer qs (Function has_proto ty params is_variadic) ->
               if AilTypesAux.is_unqualified qs
-              then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function ty params is_variadic)))
+              then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function has_proto ty params is_variadic)))
               else E.fail Loc.unknown (TError_TODO 18)
           | GenPointer qs ty ->
               if AilTypesAux.is_complete sigm ty && AilTypesAux.is_object ty
@@ -579,9 +592,9 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
               E.return (AilEident v, GenLValueType qs ty)
           | (Nothing, Just (Decl_object _ qs ty)) ->
               E.return (AilEident v, GenLValueType qs ty)
-          | (Nothing, Just (Decl_function ret_ty params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
+          | (Nothing, Just (Decl_function has_proto ret_ty params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
-              E.return (AilEident v, GenRValueType (inject_type (Function ret_ty params is_variadic)))
+              E.return (AilEident v, GenRValueType (inject_type (Function has_proto ret_ty params is_variadic)))
           | _ ->
               E.fail loc (TError_TODO 13)
         end
@@ -675,11 +688,11 @@ OLD(sigma_declaration)
 
 
     | AilEcall e es ->
-(* _STD "§6.5.2.2#1" $ *)
+        (* STD §6.5.2.2#1 *)
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Function ty params is_variadic)) ->
+          | (e', GenPointer qs (Function has_proto ty params is_variadic)) ->
               if AilTypesAux.is_unqualified qs then
-                annotate_arguments is_variadic es params >>= fun es' ->
+                annotate_arguments has_proto is_variadic es params >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ty))
               else
                 E.fail Loc.unknown (TError_TODO 25)
@@ -1551,9 +1564,9 @@ let annotate_sigma annot sigm =
     | (Decl_object _ _ ty as decl) ->
         wf_type sigm ty >>
         E.return decl
-    | (Decl_function ret_ty qs_tys is_variadic _ (* is_inline *) _ (* is_Noreturn *) as decl) ->
+    | (Decl_function has_proto ret_ty qs_tys is_variadic _ (* is_inline *) _ (* is_Noreturn *) as decl) ->
         (* AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Function ret_ty qs_tys is_variadic) >>
+        wf_type sigm (Function has_proto ret_ty qs_tys is_variadic) >>
         E.return decl
     end
   ) sigm.declarations >>
@@ -1569,7 +1582,7 @@ let annotate_sigma annot sigm =
   
   Context.mapP identifierEqual (fun ident (param_idents, s) ->
     match Context.lookup identifierEqual sigm.declarations ident with
-      | Just (Decl_function ret_ty qs_tys _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
+      | Just (Decl_function has_proto ret_ty qs_tys _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
           (* WIP: storage duration *)
           let bs = List.zip param_idents $ List.map (fun (qs, ty) -> (Just Automatic, qs, ty)) qs_tys in
           if sigma_fresh_bindings bs sigm then
@@ -1602,7 +1615,7 @@ TODO: static asserts
 val annotate_program: annotation unit genTypeCategory -> program unit -> E.t (program genTypeCategory)
 let annotate_program annot (startup, sigm) =
   match Context.lookup identifierEqual sigm.declarations startup with
-    | Just (Decl_function ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
+    | Just (Decl_function has_proto ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
         
         (* §5.1.2.2.1 *)
         (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)

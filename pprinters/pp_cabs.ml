@@ -805,9 +805,9 @@ and pp_specifiers specifs =
 *)
 
 and pp_init_declarator = function
-  | InitDecl (decltor, None) ->
+  | InitDecl (_, decltor, None) ->
       pp_ctor "InitDecl" ^^ P.brackets (pp_declarator decltor ^^ P.comma ^^^ !^ "None")
-  | InitDecl (decltor, Some init) ->
+  | InitDecl (_, decltor, Some init) ->
       pp_ctor "InitDecl" ^^ P.brackets (pp_declarator decltor ^^ P.comma ^^^ !^ "Some" ^^^ P.parens (pp_initializer_ init))
 
 
