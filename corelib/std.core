@@ -202,8 +202,8 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
 --  n
 
 
-fun usual_arithmetic (ty1: ctype, ty2: ctype): ctype :=
-  ty1
+-- fun usual_arithmetic (ty1: ctype, ty2: ctype): ctype :=
+--   ty1
 
 fun ctype_width (ty: ctype): integer :=
   ivsizeof(ty) * <bits_in_byte>
