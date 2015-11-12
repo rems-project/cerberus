@@ -144,7 +144,10 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 
 ocaml_native:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.native
+	@cp src/main.ml src/main.ml_
+	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml_ > src/main.ml
 	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.native | ./tools/colours.sh
+	@mv src/main.ml_ src/main.ml
 	@cp -L main.native cerberus
 
 ocaml_byte:

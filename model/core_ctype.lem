@@ -149,13 +149,30 @@ val size_t: ctype
 let size_t =
   Basic (AilTypes.Integer AilTypes.Size_t)
 
+val unsigned_char: ctype
+let unsigned_char =
+  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Ichar)))
+
+val unsigned_short: ctype
+let unsigned_short =
+  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short))
+
 val unsigned_int: ctype
 let unsigned_int =
   Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_))
 
-val unsigned_char: ctype
-let unsigned_char =
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Ichar)))
+val unsigned_long: ctype
+let unsigned_long =
+  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long))
+
+val unsigned_long_long: ctype
+let unsigned_long_long =
+  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong))
+
+val uintmax_t: ctype
+let uintmax_t =
+  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Intmax_t))
+
 
 val char16_t: ctype
 let char16_t =

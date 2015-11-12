@@ -34,7 +34,7 @@ type length_modifier =
   | LM_j
   | LM_z
   | LM_t
-  | LM_L
+(*   | LM_L *)
 
 type conversion_specifier =
   | CS_di
@@ -129,7 +129,7 @@ let lengthModifier =
   <|> (char #'j'           >> return LM_j)
   <|> (char #'z'           >> return LM_z)
   <|> (char #'t'           >> return LM_t)
-  <|> (char #'L'           >> return LM_L)
+(*  <|> (char #'L'           >> return LM_L) *)
 
 
 val conversionSpecifier: parserM conversion_specifier
@@ -314,21 +314,182 @@ let convert eval_conv prec_opt lm_opt cspec args =
     | Nothing ->
         1
   end in
-  let aux conv_ty cont =
+  (* STD §7.21.6.1#7 *)
+  let conv_ty_opt = match (cspec, lm_opt) with
+    (* NOTE: please oh great Lem god, give me alternative patterns *)
+    | (CS_di, Just LM_hh) ->
+        Just (Cty.signed_char)
+    | (CS_o, Just LM_hh) ->
+        Just (Cty.unsigned_char)
+    | (CS_u, Just LM_hh) ->
+        Just (Cty.unsigned_char)
+    | (CS_x, Just LM_hh) ->
+        Just (Cty.unsigned_char)
+    | (CS_X, Just LM_hh) ->
+        Just (Cty.unsigned_char)
+    | (CS_n, Just LM_hh) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char)
+    
+    | (CS_di, Just LM_h) ->
+        Just (Cty.signed_short)
+    | (CS_o, Just LM_h) ->
+        Just (Cty.unsigned_short)
+    | (CS_u, Just LM_h) ->
+        Just (Cty.unsigned_short)
+    | (CS_x, Just LM_h) ->
+        Just (Cty.unsigned_short)
+    | (CS_X, Just LM_h) ->
+        Just (Cty.unsigned_short)
+    | (CS_n, Just LM_h) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_short)
+    
+    | (CS_di, Just LM_l) ->
+        Just (Cty.signed_long)
+    | (CS_o, Just LM_l) ->
+        Just (Cty.unsigned_long)
+    | (CS_u, Just LM_l) ->
+        Just (Cty.unsigned_long)
+    | (CS_x, Just LM_l) ->
+        Just (Cty.unsigned_long)
+    | (CS_X, Just LM_l) ->
+        Just (Cty.unsigned_long)
+    | (CS_n, Just LM_l) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_long)
+    | (CS_c, Just LM_l) ->
+        error "WIP, Output.conv_ty: Cty.wint_t"
+    | (CS_s, Just LM_l) ->
+        error "WIP, Output.conv_ty: Cty.wchar_t"
+    
+    | (CS_di, Just LM_ll) ->
+        Just (Cty.signed_long_long)
+    | (CS_o, Just LM_ll) ->
+        Just (Cty.unsigned_long_long)
+    | (CS_u, Just LM_ll) ->
+        Just (Cty.unsigned_long_long)
+    | (CS_x, Just LM_ll) ->
+        Just (Cty.unsigned_long_long)
+    | (CS_X, Just LM_ll) ->
+        Just (Cty.unsigned_long_long)
+    | (CS_n, Just LM_ll) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_long_long)
+    
+    | (CS_di, Just LM_j) ->
+        Just (Cty.intmax_t)
+    | (CS_o, Just LM_j) ->
+        Just (Cty.uintmax_t)
+    | (CS_u, Just LM_j) ->
+        Just (Cty.uintmax_t)
+    | (CS_x, Just LM_j) ->
+        Just (Cty.uintmax_t)
+    | (CS_X, Just LM_j) ->
+        Just (Cty.uintmax_t)
+    | (CS_n, Just LM_j) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.intmax_t)
+    
+    | (CS_di, Just LM_z) ->
+        Just (Cty.size_t)
+    | (CS_o, Just LM_z) ->
+        Just (Cty.size_t)
+    | (CS_u, Just LM_z) ->
+        Just (Cty.size_t)
+    | (CS_x, Just LM_z) ->
+        Just (Cty.size_t)
+    | (CS_X, Just LM_z) ->
+        Just (Cty.size_t)
+    | (CS_n, Just LM_z) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.size_t)
+    
+    | (CS_di, Just LM_t) ->
+        Just (Cty.ptrdiff_t)
+    | (CS_o, Just LM_t) ->
+        Just (Cty.ptrdiff_t)
+    | (CS_u, Just LM_t) ->
+        Just (Cty.ptrdiff_t)
+    | (CS_x, Just LM_t) ->
+        Just (Cty.ptrdiff_t)
+    | (CS_X, Just LM_t) ->
+        Just (Cty.ptrdiff_t)
+    | (CS_n, Just LM_t) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.ptrdiff_t)
+    
+    | (CS_di, Nothing) ->
+        Just (Cty.signed_int)
+    | (CS_o, Nothing) ->
+        Just (Cty.unsigned_int)
+    | (CS_u, Nothing) ->
+        Just (Cty.unsigned_int)
+    | (CS_x, Nothing) ->
+        Just (Cty.unsigned_int)
+    | (CS_X, Nothing) ->
+        Just (Cty.unsigned_int)
+    | (CS_c, Nothing) ->
+        Just (Cty.unsigned_char)
+    | (CS_s, Nothing) ->
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char) (* TODO check *)
+    | (CS_p, Nothing) ->
+        Nothing
+    | (CS_n, Nothing) ->
+        Nothing
+    | (CS_percent, Nothing) ->
+        Nothing
+
+(*
+    | Just LM_h ->
+        Cty.signed_short
+    | Just LM_l ->
+        Cty.signed_long
+    | Just LM_ll ->
+        Cty.signed_long_long
+    | Just LM_j ->
+        Cty.intmax_t
+    | Just LM_z ->
+        Cty.size_t
+    | Just LM_t ->
+        Cty.ptrdiff_t
+    | Just LM_L ->
+        error "found a LM_l with a CS_di"
+    | Nothing ->
+        Cty.signed_int
+*)
+  end in
+  let aux cont =
     match args with
       | [] ->
           Mem.return $
             Right (U.undef [U.Insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
           Mem.load arg_ty arg_ptr >>= fun mval ->
-          
-          let () = Boot.print_debug 1 ("Output.convert ==> ty1= " ^
-            Boot.pp_core_ctype arg_ty ^ ", ty2=  " ^ Boot.pp_core_ctype conv_ty ^ ", mval= " ^ stringFromMemValue mval )  in
-          match eval_conv arg_ty conv_ty mval with
-            | Left err ->
-                Mem.return (Left err)
-            | Right (U.Defined (Core.Vinteger ival)) ->
-                match Mem_aux.integerFromIntegerValue ival with
+          match conv_ty_opt with
+            | Just conv_ty ->
+                let () = Boot.print_debug 1 ("Output.convert ==> ty1= " ^
+                  Boot.pp_core_ctype arg_ty ^ ", ty2=  " ^ Boot.pp_core_ctype conv_ty ^ ", mval= " ^ stringFromMemValue mval )  in
+                match eval_conv arg_ty conv_ty mval with
+                  | Left err ->
+                      Mem.return (Left err)
+                  | Right (U.Defined (Core.Vinteger ival)) ->
+                      match Mem_aux.integerFromIntegerValue ival with
+                        | Just n ->
+                            Mem.return $ Right (U.return (
+                              if prec = 0 && n = 0 then
+                                ([], args')
+                              else
+                                (cont n, args')
+                            ))
+                        | Nothing ->
+                            error "WIP: convert --> not a concrete integer"
+                      end
+                  | Right (U.Defined _) ->
+                      error "WIP: convert --> not an integer"
+                  | Right (U.Error loc str) ->
+                      Mem.return (Right (U.Error loc str))
+                  | Right (U.Undef ubs) ->
+                      Mem.return (Right (U.Undef ubs))
+                end
+            | Nothing ->
+                (* TODO: this is wrong if "not (is_integer ty)" *)
+                match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mval) with
+                  | Nothing ->
+                      error "WIP: convert --> not integer"
                   | Just n ->
                       Mem.return $ Right (U.return (
                         if prec = 0 && n = 0 then
@@ -336,57 +497,14 @@ let convert eval_conv prec_opt lm_opt cspec args =
                         else
                           (cont n, args')
                       ))
-                  | Nothing ->
-                      error "WIP: convert --> not a concrete integer"
                 end
-            | Right (U.Defined _) ->
-                error "WIP: convert --> not an integer"
-            | Right (U.Error loc str) ->
-                Mem.return (Right (U.Error loc str))
-            | Right (U.Undef ubs) ->
-                Mem.return (Right (U.Undef ubs))
-          end
-(*          
-          (* TODO: this is wrong if "not (is_integer ty)" *)
-          match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
-            | Nothing ->
-                error "WIP: convert --> not integer"
-            | Just n ->
-                Mem.return $ Right (U.return (
-                  if prec = 0 && n = 0 then
-                    ([], args')
-                  else
-                    (cont n, args')
-                ))
-          end
-*)
+            end
     end in
+  
   match cspec with
     | CS_di ->
         (* see (§7.21.6.1#8 d,i) *)
-        let conv_ty = match lm_opt with
-          | Just LM_hh ->
-              Cty.signed_char
-          | Just LM_h ->
-              Cty.signed_short
-          | Just LM_l ->
-              Cty.signed_long
-          | Just LM_ll ->
-              Cty.signed_long_long
-          | Just LM_j ->
-              Cty.intmax_t
-          | Just LM_z ->
-              Cty.size_t
-          | Just LM_t ->
-              Cty.ptrdiff_t
-          | Just LM_L ->
-              error "found a LM_l with a CS_di"
-          | Nothing ->
-              Cty.signed_int
-        end in
-
-
-        aux conv_ty (fun n ->
+        aux (fun n ->
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         )
@@ -417,14 +535,14 @@ let convert eval_conv prec_opt lm_opt cspec args =
         error "WIP: Output.convert, CS_o"
     | CS_u ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux Cty.unsigned_int (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
     | CS_x ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux Cty.unsigned_int (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
@@ -432,7 +550,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
 
     | CS_X ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux Cty.unsigned_int (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str

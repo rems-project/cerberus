@@ -12,6 +12,7 @@ open import Implementation_ Decode
 open import Thread Driver_util Core_run_aux Errors
 (* import Output *)
 
+(* TODO: tmp*) import Defacto_memory_types
 
 module Cmm = Cmm_csem
 
@@ -425,6 +426,32 @@ KKKKK NOW
             end
 
         
+(*
+        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity2)))) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: unspec ty1 <= ivmin ty2"
+
+        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity1))), Just (Vunspecified ty2)) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: ivmax ty1 <= unspec ty2"
+*)
+        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity1))), Just (Vunspecified ty2)) ->
+            if Core_ctype.Basic (AilTypes.Integer ity1) = ty2 then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: ivmin ity1 <= unspec ty2"
+
+        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity2)))) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: unspec ty1 <= ivmax ity1"
+
+
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with
               | OpAdd ->

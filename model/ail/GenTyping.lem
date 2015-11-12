@@ -1234,7 +1234,7 @@ and annotate_initialization annot sigm gamm ty e =
   
   (* STD §6.7.9#14 *)
   else if AilTypesAux.is_array_of_character ty then
-    error "WIP: annotate_initialization, is_array_of_character ty"
+    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ pp_ail_ctype ty)
   
   (* STD §6.7.9#15 *)
   else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
@@ -1297,10 +1297,6 @@ and annotate_definition_aux A S G (ty, e) =
         (* TODO: need to make sure that gty is compatible with ty *)
         E.return a_e
       
-      (* STD §6.7.9#14 *)
-      else if AilTypesAux.is_array_of_character ty then
-        error "WIP: annotate_definition_aux, is_array_of_character ty"
-      
       (* STD §6.7.9#15 *)
       else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
         error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
@@ -1326,7 +1322,11 @@ and annotate_definition_aux A S G (ty, e) =
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
                        pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
          | _ ->
-             error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
+             (* STD §6.7.9#14 *)
+             if AilTypesAux.is_array_of_character ty then
+               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^ pp_ail_ctype ty ^ " <===> " ^ pp_ail_expr a_e)
+             else
+               error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
         end
       else
         error "WIP: annotate_definition_aux, final case"

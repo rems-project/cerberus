@@ -336,7 +336,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ no_rewrite $
                          concurrency $ preEx $ args) in
-  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"2cb5144109c4+ tip -- 11/11/2015@18:56" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
@@ -629,7 +629,7 @@ let () =
   let file = ref "" in
   Arg.parse options (fun z -> file := z) usage;
   
-  if !print_version then print_endline "Csem (hg version: <<HG-IDENTITY>>)"; (* this is "sed-out" by the Makefile *)
+  if !print_version then print_endline "Csem (hg version: 2cb5144109c4+ tip -- 11/11/2015@18:56)"; (* this is "sed-out" by the Makefile *)
   
   
   let csemlib_path =

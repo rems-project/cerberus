@@ -676,6 +676,10 @@ val le_integer_rank: integerType -> integerType -> bool
 let le_integer_rank ity1 ity2 =
   eq_integer_rank ity1 ity2 || lt_integer_rank ity1 ity2
 
+val ge_integer_rank: integerType -> integerType -> bool
+let ge_integer_rank ity1 ity2 =
+  le_integer_rank ity2 ity1
+
 
 val is_corresponding_unsigned: integerType -> integerType -> bool
 let is_corresponding_unsigned ity1 ity2 =

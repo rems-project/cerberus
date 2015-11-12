@@ -9,12 +9,13 @@ import Cmm_csem Mem
 import Decode
 
 
-import AilSyntax AilSyntaxAux AilTypes
+import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import Core Core_aux Undefined
 
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
 module Aty  = AilTypes
+
 
 module C    = Core
 module Cty  = struct 
@@ -176,9 +177,11 @@ and translate_expression stdlib program is_lvalue a_expr =
   let ctype_width      = mk_stdcall "ctype_width"      in
 (*  let quot             = mk_stdcall "quot"             in *)
   let is_representable = mk_stdcall "is_representable" in
+(*
   let usual_arithmetic = mk_stdcall "usual_arithmetic" in
   let usual_arithmetic_conv e ty1 ty2 =
     conv [Caux.mk_ctype ty1; usual_arithmetic [Caux.mk_ctype ty1; Caux.mk_ctype ty2]; e] in
+*)
   
   let catch_exceptional_condition =
     mk_stdcall "catch_exceptional_condition" in
@@ -190,7 +193,61 @@ and translate_expression stdlib program is_lvalue a_expr =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion tmp_implementation ty) in
     let _ = Boot.print_debug 1 "HELLO promotion" in
     conv [C.PEval (C.Vctype (Caux.proj_ctype ty)); C.PEval (C.Vctype (Caux.proj_ctype promoted_ty)); e] in
-
+  
+  (* STD §6.3.1.8 *)
+  let usual_arithmetic_conversion (ty1: Aty.ctype) (ty2: Aty.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
+    match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
+      | (Just _, _) ->
+          error "TODO: §6.3.1.8, floating 1"
+      | (_, Just _) ->
+          error "TODO: §6.3.1.8, floating 2"
+      | (Nothing, Nothing) ->
+          (* TODO: this is so readable ... *)
+          match (AilTypesAux.promotion tmp_implementation ty1, AilTypesAux.promotion tmp_implementation ty2) with
+            | (Just (Aty.Basic (Aty.Integer ity1') as ty1'), Just (Aty.Basic (Aty.Integer ity2') as ty2')) ->
+                if ty1' = ty2' then
+                  (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e1],
+                   conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e2])
+                
+                else if   AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2'
+                       || AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2' then
+                  if AilTypesAux.lt_integer_rank ity1' ity2' then
+                    (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e1],
+                     conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e2])
+                  else
+                    (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e1],
+                     conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e2])
+                
+                else if AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.ge_integer_rank ity1' ity2' then
+                  (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e1],
+                   conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e2])
+                
+                else if AilTypesAux.is_unsigned_integer_type ty2' && AilTypesAux.ge_integer_rank ity2' ity1' then
+                  (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e1],
+                   conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e2])
+                
+                else if AilTypesAux.is_signed_integer_type ty1' then
+                  (C.PEif (is_representable [e2; C.PEval (C.Vctype (Caux.proj_ctype ty1'))])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e1])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))))); e1])
+                  ,
+                  C.PEif (is_representable [e2; C.PEval (C.Vctype (Caux.proj_ctype ty1'))])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty1')); e2])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))))); e2])
+                  )
+                
+                else (* if AilTypesAux.is_signed_integer_type ty2' then *)
+                  (C.PEif (is_representable [e2; C.PEval (C.Vctype (Caux.proj_ctype ty2'))])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e1])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty1)); C.PEval (C.Vctype (Caux.proj_ctype (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))))); e1])
+                  ,
+                  C.PEif (is_representable [e2; C.PEval (C.Vctype (Caux.proj_ctype ty2'))])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype ty2')); e2])
+                     (conv [C.PEval (C.Vctype (Caux.proj_ctype ty2)); C.PEval (C.Vctype (Caux.proj_ctype (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))))); e2])
+                  )
+          end
+(* Aty.make_corresponding_unsigned ity *)
+      end in
 
 
   
@@ -382,24 +439,25 @@ and translate_expression stdlib program is_lvalue a_expr =
             mul_ctx (conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul])
       
       | A.AilEbinary e1 (A.Arithmetic A.Div) e2 ->
-          E.fresh_symbol      >>= fun a_e1 ->
-          E.fresh_symbol      >>= fun a_e2 ->
+          E.fresh_symbol      >>= fun sym_e1 ->
+          E.fresh_symbol      >>= fun sym_e2 ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
             (* TODO[check] usual arithmetic conversions *)
-            let core_e1' = usual_arithmetic_conv (C.PEsym a_e1) (ctype_of e1) (ctype_of e2) in
-            let core_e2' = usual_arithmetic_conv (C.PEsym a_e2) (ctype_of e2) (ctype_of e1) in
+(*          let core_e1' = usual_arithmetic_conv (C.PEsym a_e1) (ctype_of e1) (ctype_of e2) in
+            let core_e2' = usual_arithmetic_conv (C.PEsym a_e2) (ctype_of e2) (ctype_of e1) in *)
+            let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
             
             (* TODO[check]: When integers are divided, the result of the / operator is the algebraic
                             quotient with any fractional part discarded.105) If the quotient a/b is
                             representable, the expression (a/b)*b + a%b shall equal a; otherwise, the
                             behavior of both a/b and a%b is undefined. *)
             E.return $
-              C.Ewseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
+              C.Ewseq [Just sym_e1; Just sym_e2] (Caux.mk_unseq [core_e1; core_e2])
                 (* if the value of the second operand is zero, the behavior is undefined. *)
-                (C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym a_e2) Caux.zero)
+                (C.Epure (C.PEif (C.PEop C.OpEq conved_e2 Caux.zero)
                             (C.PEundef Undefined.Division_by_zero)
-                            (C.PEop C.OpDiv core_e1' core_e2')
+                            (C.PEop C.OpDiv conved_e1 conved_e2)
                          )
                 )
       
@@ -416,11 +474,12 @@ and translate_expression stdlib program is_lvalue a_expr =
                             quotient with any fractional part discarded.105) If the quotient a/b is
                             representable, the expression (a/b)*b + a%b shall equal a; otherwise, the
                             behavior of both a/b and a%b is undefined. *)
+            let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
             E.return $
               C.Ewseq [Just sym_e1; Just sym_e2] (Caux.mk_unseq [core_e1; core_e2]) (
                 C.Epure (
-                  C.PElet sym_conv1 (usual_arithmetic_conv (C.PEsym sym_e1) (ctype_of e1) (ctype_of e2)) (
-                    C.PElet sym_conv2 (usual_arithmetic_conv (C.PEsym sym_e2) (ctype_of e2) (ctype_of e1)) (
+                  C.PElet sym_conv1 conved_e1 (
+                    C.PElet sym_conv2 conved_e2 (
                       C.PEif (C.PEop C.OpEq (C.PEsym sym_conv2) Caux.zero)
                         (* if the value of the second operand is zero, the behavior is undefined. *)
                         (C.PEundef Undefined.Modulo_by_zero)
@@ -814,11 +873,15 @@ and translate_expression stdlib program is_lvalue a_expr =
           let ty2 = ctype_of e2 in
           E.return $
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+              let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (C.PEif (C.PEop C.OpLt conved_e1 conved_e2) Caux.one Caux.zero))
+(*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
                        (fun a b -> C.PEif (C.PEop C.OpLt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
-                  ))
+*)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLt [C.PEsym sym_e1; C.PEsym sym_e2])
@@ -837,11 +900,16 @@ and translate_expression stdlib program is_lvalue a_expr =
           let ty2 = ctype_of e2 in
           E.return $
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+              let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (C.PEif (C.PEop C.OpGt conved_e1 conved_e2) Caux.one Caux.zero))
+(*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
                        (fun a b -> C.PEif (C.PEop C.OpGt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
+*)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGt [C.PEsym sym_e1; C.PEsym sym_e2])
@@ -860,11 +928,16 @@ and translate_expression stdlib program is_lvalue a_expr =
           let ty2 = ctype_of e2 in
           E.return $
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+              let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
+                C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
+                  (C.Epure (C.PEif (C.PEop C.OpLe conved_e1 conved_e2) Caux.one Caux.zero))
+(*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
                        (fun a b -> C.PEif (C.PEop C.OpLe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
+*)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLe [C.PEsym sym_e1; C.PEsym sym_e2])
@@ -883,11 +956,13 @@ and translate_expression stdlib program is_lvalue a_expr =
           let ty2 = ctype_of e2 in
           E.return $
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
+              let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Epure (
+                  (C.Epure (C.PEif (C.PEop C.OpGe conved_e1 conved_e2) Caux.one Caux.zero))
+(*
                      mk_usual_arithmetic_conversions
                        (fun a b -> C.PEif (C.PEop C.OpGe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
-                  ))
+*)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGe [C.PEsym sym_e1; C.PEsym sym_e2])
@@ -929,7 +1004,10 @@ and translate_expression stdlib program is_lvalue a_expr =
               
               begin
                   if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
-                    C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.one Caux.zero)
+                    C.Epure (C.PEif (C.PEop C.OpEq
+                      (integer_promotion (ctype_of e1) (C.PEsym sym_e1))
+                      (integer_promotion (ctype_of e2) (C.PEsym sym_e2))
+                    ) Caux.one Caux.zero)
                   
                   else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
                     (* TODO: experimenting *)
@@ -1262,16 +1340,17 @@ and translate_expression stdlib program is_lvalue a_expr =
                   
                   
                   (* their initialisations *)
-                  E.mapM (fun (a, param_opt, e) ->
-                    E.fresh_symbol         >>= fun a_init ->
+                  E.mapM (fun (sym, param_opt, e) ->
+                    E.fresh_symbol         >>= fun sym_init ->
                     translate_rvalue e >>= fun core_e ->
-                    let ty = match param_opt with
+                    let param_ty = match param_opt with
                       | Just (_, ty) -> ty
                       | Nothing      -> AilTypesAux.rvalue_coercion (ctype_of e) (* TODO: check the std *)
                     end in
+                    let conved_init = conv [Caux.mk_ctype (ctype_of e); Caux.mk_ctype param_ty; C.PEsym sym_init] in
                     E.return $
-                      C.Ewseq [Just a_init] core_e
-                        (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym a) (C.PEsym a_init) Cmm.NA)
+                      C.Ewseq [Just sym_init] core_e
+                        (Caux.pstore loc (Caux.mk_ctype param_ty) (C.PEsym sym) conved_init Cmm.NA)
                   ) (zip3 as_tmp params' es) >>= fun core_inits ->
                   
                   (* their kill actions *)
