@@ -16,8 +16,10 @@ else
   LEMDIR=~/bitbucket/lem
 endif
 
-LEM=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
-        -outdir $(BUILD_DIR) -only_changed_output -add_loc_annots
+LEM0=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
+        -only_changed_output 
+
+LEM=$(LEM0) -outdir $(BUILD_DIR) -add_loc_annots
 
 
 # C11 related stuff
@@ -140,6 +142,18 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) 2>&1 | ./tools/colours.sh lem
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
+
+
+
+DOC_BUILD_DIR = generated_doc
+
+alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
+	@OCAMLRUNPARAM=b $(LEM0) -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+
+alldoc.pdf: alldoc.tex
+	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+
 
 
 ocaml_native:
