@@ -383,18 +383,22 @@ let rec pp_expr = function
         | Ewseq ([], e1, e2) ->
             pp e1 ^^ P.semi ^^ P.break 1 ^^ pp e2
 *)
+(*
   | Ewseq (([] as _as), e1, e2)
   | Ewseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
       pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
       pp_expr e2
+*)
   | Ewseq (_as, e1, e2) ->
       pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+(*
   | Esseq (([] as _as), e1, e2)
   | Esseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
       pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
       pp_expr e2
+*)
   | Esseq (_as, e1, e2) -> 
       pp_control "let" ^^^ pp_control "strong" ^^^ pp_pattern _as ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
@@ -423,6 +427,8 @@ let rec pp_expr = function
       pp_expr e
   | End es ->
       pp_keyword "nd" ^^ P.parens (comma_list pp_expr es)
+  | Ebound _ ->
+      failwith "pp_core ==> Ebound"
 
 and pp_shift_path sh_path =
   P.braces (

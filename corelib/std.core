@@ -290,12 +290,16 @@ fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
   end
 
 fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
+  if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
+    error(<<<WIP_bAND>>>, (ty, n1, n2))
+  else
+
   let n1_ = <Integer.encode>(ty, n1) in
     let n2_ = <Integer.encode>(ty, n2) in
       <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
     end
   end
-
+  end
 
 -- bitwise XOR
 fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
@@ -310,10 +314,14 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
   end
 
 fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
+  if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
+    error(<<<WIP_bXOR>>>, unit)
+  else
   let n1_ = <Integer.encode>(ty, n1) in
     let n2_ = <Integer.encode>(ty, n2) in
       <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
     end
+  end
   end
 
 
@@ -330,10 +338,15 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
   end
 
 fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
+  if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
+    error(<<<WIP_bOR>>>, unit)
+  else
+
   let n1_ = <Integer.encode>(ty, n1) in
     let n2_ = <Integer.encode>(ty, n2) in
       <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
     end
+  end
   end
 
 -- ones_prefix(0, k, width) returns an positive integer whose binary

@@ -2,7 +2,9 @@
 #ifndef	_STRING_H_
 #define	_STRING_H_
 
-// typedef __cerbty_size_t size_t;
+#ifndef _STDIO_H_
+typedef __cerbty_size_t size_t;
+#endif
 #define NULL __cerbvar_NULL
 
 void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
@@ -46,6 +48,20 @@ size_t strnlen_s(const char *s, size_t maxsize);
 */
 
 
+// TMP
+void* memcpy(void * restrict s1, const void * restrict s2, size_t n)
+{
+/*
+  unsigned char c1, c2;
+  for (int i=0; i < n; i++) {
+    c1 = ((unsigned char*)s1)[i];
+    c2 = ((unsigned char*)s2)[i];
+    if ( c1 != c2 )
+      return c1 - c2;
+  }
+*/
+  return 0;
+}
 
 
 int memcmp(const void *s1, const void *s2, size_t n)

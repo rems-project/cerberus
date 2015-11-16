@@ -1003,7 +1003,7 @@ let subst name =
 %token STAR SLASH PERCENT MINUS EQ PLUS CARET
 
 (* boolean operators *)
-%token LE LT
+%token GT LT GE LE
 
 (* logical operators *)
 %token SLASH_BACKSLASH BACKSLASH_SLASH
@@ -1033,7 +1033,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 
 %right BACKSLASH_SLASH
 %right SLASH_BACKSLASH
-%left EQ LT LE
+%left EQ GT LT GE LE
 %left PLUS MINUS
 %left STAR SLASH PERCENT
 %nonassoc CARET
@@ -1339,7 +1339,9 @@ core_type:
 | PERCENT         { Core.OpMod }
 | CARET           { Core.OpExp }
 | EQ              { Core.OpEq  }
+| GT              { Core.OpGt  }
 | LT              { Core.OpLt  }
+| GE              { Core.OpGe  }
 | LE              { Core.OpLe  }
 | SLASH_BACKSLASH { Core.OpAnd }
 | BACKSLASH_SLASH { Core.OpOr  }

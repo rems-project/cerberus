@@ -198,6 +198,9 @@ type pexpr =
   (* operators on integers *)
   | PEnot of pexpr
   | PEop of binop * pexpr * pexpr
+  
+  | PEis_unspec of pexpr
+  
   (* pure operations provide by the memory layout model *)
   | PEmemop of Mem.pure_memop * list pexpr
   (* these two are annoying *)

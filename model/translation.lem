@@ -295,7 +295,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 (* NOTE: result_ty == promoted type of e *)
                 if is_unsigned_integer_type result_ty then
                   (* STD §6.5.3.3#4, sentence 3 *)
-                  C.PEop C.OpSub (Caux.ctype_max (Caux.mk_ctype result_ty)) promoted_sym_e
+                  C.PEop C.OpSub (Caux.ivmax_pe (Caux.mk_ctype result_ty)) promoted_sym_e
                 else
                   Caux.bitwise_complement (Caux.mk_ctype result_ty) promoted_sym_e
               )
@@ -517,14 +517,14 @@ and translate_expression stdlib program is_lvalue a_expr =
                    (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                       (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
                        C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
-                                     (C.PEop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one)
+                                     (C.PEop C.OpAdd (Caux.ivmax_pe $ Caux.mk_ctype result_ty) Caux.one)
                     else (* e1 has a signed type *)
                       (* if a_e2 < 0 then undef *)
                       (C.PEif (C.PEop C.OpLt (C.PEsym a_e2) Caux.zero)
                          (C.PEundef Undefined.Negative_left_shift)
                          (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
                          (C.PElet a_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
-                                                      (C.PEop C.OpAdd (Caux.ctype_max $ Caux.mk_ctype result_ty) Caux.one))
+                                                      (C.PEop C.OpAdd (Caux.ivmax_pe $ Caux.mk_ctype result_ty) Caux.one))
                             (* not representable(ty, a_res) then undef *)
                             (C.PEif (C.PEnot (is_representable [C.PEsym a_res; Caux.mk_ctype result_ty]))
                                (C.PEundef Undefined.Negative_left_shift)
@@ -919,9 +919,9 @@ and translate_expression stdlib program is_lvalue a_expr =
             error "Translation.translate_expression, AilEbinary Gt: Ail type error"
       
       | A.AilEbinary e1 A.Le e2 ->
-          E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
-          E.fresh_symbol          >>= fun sym_b   ->
+          E.fresh_symbol      >>= fun sym_e1  ->
+          E.fresh_symbol      >>= fun sym_e2  ->
+          E.fresh_symbol      >>= fun sym_b   ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
           let ty1 = ctype_of e1 in
@@ -1480,9 +1480,9 @@ and translate_expression stdlib program is_lvalue a_expr =
                     mk_core
                   )
             end
-          ) ([], fun z -> z) ident_e_opts >>= fun (core_xs, mk_core) ->
+          ) ([], fun z -> z) ident_e_opts >>= fun (core_xs_rev, mk_core) ->
           E.return $
-            mk_core (C.Epure (C.PEstruct tag_sym core_xs))
+            mk_core (C.Epure (C.PEstruct tag_sym (List.reverse core_xs_rev)))
       
       | A.AilEcompound _ _ ->
           error "WIP: Translation.translate_expression, AilEcompound"
@@ -1587,33 +1587,31 @@ and translate_expression stdlib program is_lvalue a_expr =
       
       | A.AilEbuiltin str ->
           (* TODO: the redundance with Builtins.lem is wrong *)
-          let mk_ctype_min ty = C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)] in
-          let mk_ctype_max ty = C.PEcall (C.Impl Implementation_.Ctype_max) [C.PEval (C.Vctype ty)] in
           E.return $ C.Epure match str with
             | "INT8_MIN" ->
-                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))
+                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))))
             | "INT16_MIN" ->
-                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))
+                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))))
             | "INT32_MIN" ->
-                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))
+                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))))
             | "INT64_MIN" ->
-                mk_ctype_min (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))
+                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))))
             | "INT8_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))))
             | "INT16_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))))
             | "INT32_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))))
             | "INT64_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))))
             | "UINT8_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8))))))
             | "UINT16_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16))))))
             | "UINT32_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32))))))
             | "UINT64_MAX" ->
-                mk_ctype_max (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64))))
+                Caux.ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64))))))
             | "CHAR_BIT" ->
                 C.PEimpl Implementation_.Characters__bits_in_byte
             | _ ->

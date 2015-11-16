@@ -165,7 +165,7 @@ ocaml_native:
 	@cp -L main.native cerberus
 
 ocaml_byte:
-	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
+	@echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte
 	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
 
 
