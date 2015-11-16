@@ -1,5 +1,5 @@
 for file in csmith_???.c; do
-    rm -f a.out; gcc-5 -DCSMITH_MINIMAL -I /Users/catzilla/bitbucket/csem/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime $file 2> /dev/null; gtimeout 30s ./a.out > gcc.out;
+    rm -f a.out; gcc-5 -DCSMITH_MINIMAL -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime $file 2> /dev/null; gtimeout 30s ./a.out > gcc.out;
     ret=$?;
     echo $ret >> gcc.out;
     if [ $ret == 124 ]; then

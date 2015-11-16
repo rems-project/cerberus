@@ -49,7 +49,7 @@ type cerberus_conf = {
   core_parser:       Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3;
   exec_mode_opt:     execution_mode option;
   progress:          bool;
-  no_rewrite:        bool;
+  rewrite:           bool;
   concurrency:       bool;
   preEx:             bool;
   error_verbosity:   error_verbosity;
@@ -70,7 +70,7 @@ let current_execution_mode () =
   !cerb_exec_mode_opt
 
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress no_rewrite concurrency preEx error_verbosity =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite concurrency preEx error_verbosity =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -80,7 +80,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     core_parser=   core_parser;
     exec_mode_opt= if exec then Some exec_mode else None;
     progress=      progress;
-    no_rewrite=    no_rewrite;
+    rewrite=       rewrite;
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;

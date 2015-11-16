@@ -3,7 +3,8 @@ open import Pervasives Global
 import String_extra Boot
 
 open import Monadic_parsing
-import Errors Core Core_ctype Mem Mem_aux
+import Errors AilTypesAux Core Core_aux Core_ctype Mem Mem_aux
+import Decode
 module Cty = Core_ctype
 
 import Undefined
@@ -42,6 +43,7 @@ type conversion_specifier =
   | CS_u
   | CS_x
   | CS_X
+  | CS_f (* | CS_F | CS_e | CS_E | CS_g | CS_G | CS_a | CS_A *)
   | CS_c
   | CS_s
   | CS_p
@@ -139,6 +141,7 @@ let conversionSpecifier =
   <|> (char #'u' >> return CS_u)
   <|> (char #'x' >> return CS_x)
   <|> (char #'X' >> return CS_X)
+  <|> (char #'f' >> return CS_f)
   <|> (char #'c' >> return CS_c)
   <|> (char #'s' >> return CS_s)
   <|> (char #'p' >> return CS_p)
@@ -245,6 +248,7 @@ let isSignedConversion = function
   | CS_u       -> false
   | CS_x       -> false
   | CS_X       -> false
+  | CS_f       -> true (* TODO: check *)
   | CS_c       -> false
   | CS_s       -> false (* TODO: check *)
   | CS_p       -> false
@@ -276,6 +280,8 @@ let charFromDigit useUpper = function
   | 13 -> if useUpper then #'D' else #'d'
   | 14 -> if useUpper then #'E' else #'e'
   | 15 -> if useUpper then #'F' else #'f'
+  | _ ->
+      error "Output.charFromDigit, the second argument should be in {0..15}"
 end
 
 
@@ -300,6 +306,42 @@ let inline (>>=) = Mem.bind
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
 
+val stringFromPointerValue: Mem.pointer_value -> string
+declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
+
+
+
+(* the third argument specify have many characters to load at most *)
+val     load_character_array_aux: Cty.ctype -> Mem.pointer_value -> nat -> list char -> Mem.memM (list char)
+let rec load_character_array_aux elem_ty ptrval prec_n acc =
+  if prec_n = 0 then
+    Mem.return (List.reverse acc)
+  else
+    Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
+      Mem.case_mem_value mval
+        (fun _ -> error "Output.load_character_array, Symbolic")
+        (fun _ -> error "Output.load_character_array, found a ctype")
+        (fun ity ival ->
+          Mem.case_integer_value ival
+            (fun n -> if n = 0 then
+              Mem.return (List.reverse acc)
+            else
+              let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
+              load_character_array_aux elem_ty ptrval' (prec_n-1) ((Decode.encode_character_constant n) :: acc))
+            (fun () -> error "WIP: Output.load_character_array, non constant ival")
+        )
+        (fun _ _ -> error "Output.load_character_array, found a float")
+        (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
+        (fun _ -> error "Output.load_character_array, found an array")
+        (fun _ _ -> error "Output.load_character_array, found a struct")
+        (fun _ _ -> error "Output.load_character_array, found a union")
+    )
+val load_character_array: Cty.ctype -> Mem.pointer_value -> nat -> Mem.memM (list char)
+let load_character_array elem_ty ptrval prec_n =
+  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n []
+
+
+
 
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
 val convert: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
@@ -310,7 +352,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
     | Just (P_num z) ->
         z
     | Just (P_asterisk) ->
-        error "TODO: Output.convert, prec" (* TODO *)
+        error "TODO: Output.convert, * prec" (* TODO *)
     | Nothing ->
         1
   end in
@@ -412,20 +454,23 @@ let convert eval_conv prec_opt lm_opt cspec args =
     | (CS_n, Just LM_t) ->
         Just (Cty.Pointer AilTypes.no_qualifiers Cty.ptrdiff_t)
     
+    (* TODO: check that, be no conversion seems to be needed in the absence of a LM for most CS *)
     | (CS_di, Nothing) ->
-        Just (Cty.signed_int)
+        Nothing (* Just (Cty.signed_int) *)
     | (CS_o, Nothing) ->
-        Just (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_u, Nothing) ->
-        Just (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_x, Nothing) ->
-        Just (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_X, Nothing) ->
-        Just (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
+    | (CS_f, Nothing) ->
+        Nothing
     | (CS_c, Nothing) ->
         Just (Cty.unsigned_char)
     | (CS_s, Nothing) ->
-        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char) (* TODO check *)
+        Nothing (* Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char) (* TODO check *) *)
     | (CS_p, Nothing) ->
         Nothing
     | (CS_n, Nothing) ->
@@ -461,8 +506,10 @@ let convert eval_conv prec_opt lm_opt cspec args =
           Mem.load arg_ty arg_ptr >>= fun mval ->
           match conv_ty_opt with
             | Just conv_ty ->
+(*
                 let () = Boot.print_debug 1 ("Output.convert ==> ty1= " ^
                   Boot.pp_core_ctype arg_ty ^ ", ty2=  " ^ Boot.pp_core_ctype conv_ty ^ ", mval= " ^ stringFromMemValue mval )  in
+*)
                 match eval_conv arg_ty conv_ty mval with
                   | Left err ->
                       Mem.return (Left err)
@@ -478,6 +525,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
                         | Nothing ->
                             error "WIP: convert --> not a concrete integer"
                       end
+                  | Right (U.Defined (Core.Vunspecified _)) ->
+                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                   | Right (U.Defined _) ->
                       error "WIP: convert --> not an integer"
                   | Right (U.Error loc str) ->
@@ -487,9 +536,32 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 end
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
+                match Core_aux.valueFromMemValue mval with
+                  | Core.Vunspecified _ ->
+                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                  | Core.Vinteger ival ->
+                      match Mem_aux.integerFromIntegerValue ival with
+                        | Just n ->
+                            Mem.return $ Right (U.return (
+                              if prec = 0 && n = 0 then
+                                ([], args')
+                              else
+                                (cont n, args')
+                            ))
+                      end
+                  | Core.Vfloating str ->
+                      Mem.return $ Right (U.return (String.toCharList str, args'))
+(*                  | Vpointer of Mem.pointer_value *)
+                end
+(*
                 match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mval) with
                   | Nothing ->
-                      error "WIP: convert --> not integer"
+                      match Mem_aux.unspecifiedFromMemValue mval with
+                        | Just _ ->
+                            Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                        | Nothing ->
+                            error ("WIP: convert --> not an integer ==> " ^ stringFromMemValue mval)
+                      end
                   | Just n ->
                       Mem.return $ Right (U.return (
                         if prec = 0 && n = 0 then
@@ -498,6 +570,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                           (cont n, args')
                       ))
                 end
+*)
             end
     end in
   
@@ -508,29 +581,6 @@ let convert eval_conv prec_opt lm_opt cspec args =
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         )
-(*
-        let prec = match prec_opt with
-          | Just (P_num z)    -> z
-          | Just (P_asterisk) -> error "TODO: output.lem 1" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' ->
-              Mem.load Cty.signed_int arg >>= fun mem_val ->
-              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
-                | Nothing ->
-                    error "WIP: convert, CS_di --> not integer"
-                | Just n ->
-                    Mem.return $ if prec = 0 && n = 0 then
-                      ([], args')
-                    else
-                      let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
-                      ((if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str, args')
-              end
-          | _ -> error "found no argument to convert a %d or %i"
-        end
-*)
-    
     | CS_o ->
         error "WIP: Output.convert, CS_o"
     | CS_u ->
@@ -547,7 +597,6 @@ let convert eval_conv prec_opt lm_opt cspec args =
           let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
-
     | CS_X ->
         (* see (§7.21.6.1#8 o,u,x,X) *)
         aux (fun n ->
@@ -555,67 +604,65 @@ let convert eval_conv prec_opt lm_opt cspec args =
           let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
-
-
-
-(*
-        let prec = match prec_opt with
-          | Just (P_num z)    -> z
-          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' ->
-              Mem.load Cty.unsigned_int arg >>= fun mem_val ->
-              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
-                | Nothing ->
-                    error "WIP: convert, CS_X --> not integer"
-                | Just n ->
-                    Mem.return $ if prec = 0 && n = 0 then
-                      ([], args')
-                    else
-                      (* TODO: conversion (n is unsigned int here) *)
-                      let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
-                      (replicate (prec - length str) #'0' ++ str, args')
-              end
-          | _ -> error "found no argument to convert an %X"
-        end
-*)
-(*
-    | CS_X ->
-        (* see (§7.21.6.1#8 o,u,x,X) *)
-        let prec = match prec_opt with
-          | Just (P_num z)    -> z
-          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' ->
-              Mem.load Cty.unsigned_int arg >>= fun mem_val ->
-              match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mem_val) with
-                | Nothing ->
-                    error "WIP: convert, CS_X --> not integer"
-                | Just n ->
-                    Mem.return $ if prec = 0 && n = 0 then
-                      ([], args')
-                    else
-                      (* TODO: conversion (n is unsigned int here) *)
-                      let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
-                      (replicate (prec - length str) #'0' ++ str, args')
-              end
-          | _ -> error "found no argument to convert an %X"
-        end
-*)
+    | CS_f ->
+        (* TODO: check *)
+        aux (fun _ -> []) (* TODO: ahem *)
     | CS_c ->
         error "WIP: Output.convert, CS_c"
     | CS_s ->
-        error "WIP: Output.convert, CS_s"
+        (* TODO: I don't like it ==> should rewrite it *)
+        match lm_opt with
+          | Just _ ->
+              error "WIP: Output.convert, CS_s with length modifier"
+          | Nothing ->
+              match args with
+                | [] ->
+                    Mem.return (
+                      Right (U.undef [U.Insufficient_arguments_for_format])
+                    )
+                | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
+                    if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
+                      (* TODO: this is not a strong enough check, we need to point to
+                         the "initial element of an array of character type" *)
+                      Mem.return (
+                        Right (U.undef [U.Illtyped_argument_for_format])
+                      )
+                    else
+                      Mem.load arg_ty arg_ptr >>= fun mval ->
+                      match Mem_aux.pointerValueFromMemValue mval with
+                        | Just (_, ptrval) ->
+                            load_character_array ref_ty ptrval prec >>= fun chars ->
+                            Mem.return (Right (U.Defined (chars, args')))
+                        | Nothing ->
+                            error "WIP[error message], Output => CS_s, didn't load a pointer"
+                      end
+              end
+        end
     | CS_p ->
-        error "WIP: Output.convert, CS_p"
+        match args with
+          | [] ->
+              Mem.return (
+                Right (U.undef [U.Insufficient_arguments_for_format])
+              )
+          | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
+              Mem.load arg_ty arg_ptr >>= function
+                | Defacto_memory_types.MVpointer _ ptrval ->
+                    Mem.return (
+                      Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
+                    )
+              end
+          | _ ->
+              Mem.return (
+                Right (U.undef [U.Illtyped_argument_for_format])
+              )
+        end
     | CS_n ->
         error "WIP: Output.convert, CS_n"
     | CS_percent ->
-        error "WIP: Output.convert, CS_percent"
+        (* TODO: it seems that if there is a length, modif, flags, precision, ... it is undefined behaviour .... *)
+        Mem.return (
+          Right (U.Defined ([#'%'], args))
+        )
   end
 
 
@@ -628,9 +675,6 @@ val     printf_aux: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t 
                     list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.t (Undefined.t (list char)))
 let rec printf_aux eval_conv acc fs ty_ptrvals =
   match (fs, ty_ptrvals) with
-    | ([], []) ->
-        Mem.return $
-          Right (U.return acc)
     | (F_text str :: fs, ty_ptrvals) ->
         printf_aux eval_conv (acc ++ str) fs ty_ptrvals
     | (F_conv cp :: fs, ty_ptrvals) ->
@@ -657,7 +701,8 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
               Mem.return $ Left err
         end
     | _ ->
-        error "Output.printf_aux"
+        Mem.return $
+          Right (U.return acc)
   end
 
 

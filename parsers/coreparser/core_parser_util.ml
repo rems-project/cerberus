@@ -139,7 +139,9 @@ type token =
   | PERCENT
   | CARET
   | EQ
+  | GT
   | LT
+  | GE
   | LE
   | SLASH_BACKSLASH
   | BACKSLASH_SLASH

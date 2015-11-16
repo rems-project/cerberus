@@ -77,22 +77,25 @@ let rec memValueFromValue ty cval =
   end
 
 
-
 val sizeof: pexpr -> pexpr
 let sizeof pe =
-  PEcall (Impl Implementation_.Sizeof) [pe]
+(*  PEcall (Impl Implementation_.Sizeof) [pe] *)
+  PEctor Civsizeof [pe]
 
 val alignof: pexpr -> pexpr
 let alignof pe =
-  PEcall (Impl Implementation_.Alignof) [pe]
+  (*PEcall (Impl Implementation_.Alignof) [pe] *)
+  PEctor Civalignof [pe]
 
-val ctype_min: pexpr -> pexpr
-let ctype_min pe =
-  PEcall (Impl Implementation_.Ctype_min) [pe]
+val ivmin_pe: pexpr -> pexpr
+let ivmin_pe pe =
+  PEctor Civmin [pe]
+(*  PEcall (Impl Implementation_.Ctype_min) [pe] *)
 
-val ctype_max: pexpr -> pexpr
-let ctype_max pe =
-  PEcall (Impl Implementation_.Ctype_max) [pe]
+val ivmax_pe: pexpr -> pexpr
+let ivmax_pe pe =
+  PEctor Civmax [pe]
+(*  PEcall (Impl Implementation_.Ctype_max) [pe] *)
 
 val bitwise_complement: pexpr -> pexpr -> pexpr
 let bitwise_complement pe1 pe2 =
@@ -441,6 +444,15 @@ let rec valueFromPexpr pexpr =
     | PEop _ _ _ ->
         (* TODO: do better *)
         Nothing
+    | PEis_unspec pe ->
+        match valueFromPexpr pe with
+          | Just (Vunspecified _) ->
+              Just Vtrue
+          | Just _ ->
+              Just Vfalse
+          | Nothing ->
+              Nothing
+        end
     | PEmemop _ _ ->
         (* TODO: do better *)
         Nothing

@@ -947,5 +947,6 @@ let rewrite_fun_map fun_map =
 
 (* TODO *)
 let rewrite_file file =
-  <| file with funs=  rewrite_fun_map file.funs;
-               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>
+  let () = Boot.print_debug 0 "PERFORMING CORE REWRITES" in
+  error "<| file with funs=  rewrite_fun_map file.funs;
+               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>"

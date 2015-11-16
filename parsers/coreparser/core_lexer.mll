@@ -216,7 +216,9 @@ rule main = parse
   | '%'   { T.PERCENT }
   | '^'   { T.CARET }
   | '='   { T.EQ }
+  | '>'   { T.GT }
   | '<'   { T.LT }
+  | ">="  { T.GE }
   | "<="  { T.LE }
   | "/\\" { T.SLASH_BACKSLASH }
   | "\\/" { T.BACKSLASH_SLASH }

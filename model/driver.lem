@@ -500,28 +500,7 @@ let drive_to_requests tid core_st =
 *)
 
 
-val     load_string: Mem.pointer_value -> list char -> Mem.memM (list char)
-let rec load_string ptr_val acc =
-  let ty = Core_ctype.Pointer AilTypes.no_qualifiers (Core_ctype.char) in
-  let ptr_val' = Mem.array_shift_ptrval ptr_val Core_ctype.char (Mem.integer_ival 1) in
-  Mem.bind (Mem.load ty ptr_val) (fun mval ->
-    Mem.case_mem_value mval
-      (fun _ -> error "Driver.load_string, Symbolic")
-      (fun _ -> error "Driver.load_string, found a ctype")
-      (fun ity ival ->
-        Mem.case_integer_value ival
-          (fun n -> if n = 0 then
-            Mem.return (List.reverse acc)
-          else
-            load_string ptr_val' ((Decode.encode_character_constant n) :: acc))
-          (fun () -> error "WIP: Driver.load_string, non constant ival")
-      )
-      (fun _ _ -> error "Driver.load_string, found a float")
-      (fun _ ptr_val -> error ("Driver.load_string, found a pointer ==> " ^ stringFromPointerValue ptr_val))
-      (fun _ -> error "Driver.load_string, found an array")
-      (fun _ _ -> error "Driver.load_string, found a struct")
-      (fun _ _ -> error "Driver.load_string, found a union")
-  )
+
 
 (* TODO: hack *)
 (*
@@ -735,7 +714,7 @@ let rec drive_core_thread tid dr_st =
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
         let eval_conv ty1 ty2 mval =
-          full_core_eval Loc.unknown dr_st.core_file dr_st.symbolic_assoc false $
+          full_core_eval Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
               [Core.PEval (Core.Vctype ty1); Core.PEval (Core.Vctype ty2); Core.PEval (Core_aux.valueFromMemValue mval)] in 
@@ -759,7 +738,7 @@ let rec drive_core_thread tid dr_st =
           | Right (Undefined.Undef ubs) ->
               ND.kill (ND.Undef ubs)
         end
-  end) (core_thread_step2 dr_st.core_file dr_st.symbolic_assoc tid th_info)
+  end) (core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
 
 (*
   match core_thread_step dr_st.core_file th_info dr_st.core_state with
@@ -1269,7 +1248,7 @@ let rec driver with_concurrency dr_st =
   
     (* TODO: hackish *)
     let non_blocked_th_sts = List.filter (fun (tid, th_info) ->
-      List.any (fun step -> step <> Step_blocked) $ core_thread_step2 post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info
+      List.any (fun step -> step <> Step_blocked) $ core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info
     ) post_core_dr_st.core_state.thread_states in
   
   (if ND.current_execution_mode () = Just ND.Random then
@@ -1285,7 +1264,7 @@ let rec driver with_concurrency dr_st =
     ND.bindExhaustive (ND.pick "driver 2" (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts)
                       (fun (tid, th_info) ->
 (* OLD                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state) *)
-                       ND.pick "driver 3" $ core_thread_step2 post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
+                       ND.pick "driver 3" $ core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
     
 
    else
@@ -1295,7 +1274,7 @@ let rec driver with_concurrency dr_st =
      ND.return (core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)
 *)
     ND.pick "driver 4" non_blocked_th_sts >>= fun (tid, th_info) ->
-    ND.pick "driver 5" (core_thread_step2 post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
+    ND.pick "driver 5" (core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
   ) >>=
       process_core_step2 post_core_dr_st
 
@@ -1305,15 +1284,15 @@ let rec driver with_concurrency dr_st =
 
 
 
-val     hack: Core.file core_run_annotation -> map Symbol.t Core.value -> Core.pexpr -> Core.value
-let rec hack core_file concur_sym_map pexpr =
-  match core_eval Loc.unknown core_file concur_sym_map false pexpr with
+val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.value -> Core.pexpr -> Core.value
+let rec hack mem_st core_file concur_sym_map pexpr =
+  match core_eval Loc.unknown mem_st core_file concur_sym_map false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
               cval
           | Nothing ->
-              hack core_file concur_sym_map pexpr'
+              hack mem_st core_file concur_sym_map pexpr'
         end
     | _ ->
         error ("Driver.hack, UNDEF/ERROR:" ^ Boot.pp_core_expr (Core.Epure pexpr : Core.expr unit))
@@ -1325,7 +1304,7 @@ let rec hack core_file concur_sym_map pexpr =
 end
 
 
-let finalize_constraints core_file concur_sym_map (Constraints.Constraints symbs) =
+let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
     | Symbolic.SYMBop op symb1 symb2 ->
 (*
@@ -1338,7 +1317,7 @@ let finalize_constraints core_file concur_sym_map (Constraints.Constraints symbs
                                 Mem_aux.symbolicFromIntegerValue ival
                           end in
 *)
-        match (hack core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb1)), hack core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb2))) with
+        match (hack mem_st core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb1)), hack mem_st core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb2))) with
           | (Core.Vsymbolic symb1', Core.Vsymbolic symb2') ->
    let _ = Boot.print_debug 1 ("finalize_constr ==> " ^ stringFromSymbolic symb1 ^ " <-> " ^ stringFromSymbolic symb2) in
               Symbolic.SYMBop op symb1' symb2'
@@ -1358,7 +1337,7 @@ val finalize: string -> driver_state -> (string * (bool * Cmm_op.symState * Core
 let finalize debug_str dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        let v = hack dr_st.core_file dr_st.symbolic_assoc
+        let v = hack dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
@@ -1600,7 +1579,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
           let n     = number_of_uncommitted dr_st'.concurrency_state in
           ND.log ("pre_ex: " ^ show dr_st'.concurrency_state.Cmm_op.symPre ^ "\n") >>
           ND.log ("Calling concurrency " ^ show n ^ " times\n") >>
-          ND.apply_to_constraints (finalize_constraints dr_st'.core_file dr_st'.symbolic_assoc) (stepConcurrency n dr_st') >>= fun dr_st' ->
+          ND.apply_to_constraints (finalize_constraints dr_st'.layout_state dr_st'.core_file dr_st'.symbolic_assoc) (stepConcurrency n dr_st') >>= fun dr_st' ->
           ND.log ("with: " ^ show dr_st'.concurrency_state.Cmm_op.symWit ^ "\n") >>
           
           (* TODO: tmp *)

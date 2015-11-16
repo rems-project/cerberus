@@ -111,7 +111,9 @@ type undefined_behaviour =
 
   (* There are insufficient arguments for the format in a call to one of the formatted input/output functions, or an argument does not have an appropriate type (7.21.6.1, 7.21.6.2, 7.29.2.1, 7.29.2.2). *)
   | Insufficient_arguments_for_format
-
+  
+  (* TODO: doc, somethings the STD said the argument "shall" have type blah (e.g. for CS_p) *)
+  | Illtyped_argument_for_format
 
 
 
@@ -223,6 +225,8 @@ let pretty_string_of_undefined_behaviour = function
       "Invalid_format \"" ^ str ^ "\""
   | Insufficient_arguments_for_format ->
       "Insufficient_arguments_for_format"
+  | Illtyped_argument_for_format ->
+      "Illtyped_argument_for_format"
 (*
   | _ ->
       "TODO[pretty_string_of_undefined_behaviour]"
@@ -342,6 +346,8 @@ let string_of_undefined_behaviour = function
       "Invalid_format \"" ^ str ^ "\""
   | Insufficient_arguments_for_format ->
       "Insufficient_arguments_for_format"
+  | Illtyped_argument_for_format ->
+      "Illtyped_argument_for_format"
 (*
   | _ ->
       "TODO[string_of_undefined_behaviour]"

@@ -38,7 +38,7 @@ type cerberus_conf = {
   core_parser:   Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3;
   exec_mode_opt: execution_mode option;
   progress:      bool;
-  no_rewrite:    bool;
+  rewrite:       bool;
   concurrency:   bool;
   preEx:         bool;
   error_verbosity: error_verbosity;
