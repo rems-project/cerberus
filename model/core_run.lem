@@ -716,7 +716,15 @@ KKK NOW
   | PtrLt
 *)
 *)
-
+  | PEis_unspec pe ->
+      core_eval loc mem_st file concur_sym_map inside_if pe >>= function
+        | PEval (Vunspecified _) ->
+            EU.return $ PEval Vtrue
+        | PEval _ ->
+            EU.return $ PEval Vfalse
+        | pe' ->
+            EU.return $ PEis_unspec pe'
+      end
   
   | PEtuple pes ->
       EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->

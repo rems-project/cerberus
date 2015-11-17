@@ -139,6 +139,8 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         Core.PEnot (fpe pe)
     | Core.PEop bop pe1 pe2 ->
         Core.PEop bop (fpe pe1) (fpe pe2)
+    | Core.PEis_unspec pe ->
+        Core.PEis_unspec (fpe pe)
     | Core.PEmemop memop pes ->
         Core.PEmemop memop (List.map fpe pes)
     | Core.PEtuple pes ->

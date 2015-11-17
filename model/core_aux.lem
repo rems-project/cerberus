@@ -659,6 +659,8 @@ let rec subst_sym_pexpr sym pe' = function
       PEnot (subst_sym_pexpr sym pe' pe)
   | PEop bop pe1 pe2 ->
       PEop bop (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2)
+  | PEis_unspec pe ->
+      PEis_unspec (subst_sym_pexpr sym pe' pe)
   | PEmemop pure_memop pes ->
       PEmemop pure_memop (List.map (subst_sym_pexpr sym pe') pes)
   | PEtuple pes ->

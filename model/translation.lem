@@ -1008,10 +1008,25 @@ and translate_expression stdlib program is_lvalue a_expr =
               
               begin
                   if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
+                    C.Epure (
+                      C.PEif (C.PEop C.OpOr (C.PEis_unspec (integer_promotion (ctype_of e1)(C.PEsym sym_e1)))
+                                            (C.PEis_unspec (integer_promotion (ctype_of e1)(C.PEsym sym_e2))))
+                        (* if either operand is unspecified, then the result is unspecified *)
+                        (* TODO: it's wrong that the semantics of unspec is defined outside of the Mem module *)
+                        (C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
+                        (* else *)
+                        (C.PEif (C.PEop C.OpEq
+                          (integer_promotion (ctype_of e1) (C.PEsym sym_e1))
+                          (integer_promotion (ctype_of e2) (C.PEsym sym_e2))
+                        ) (Caux.ival 1) (Caux.ival 0))
+
+                    )
+(*
                     C.Epure (C.PEif (C.PEop C.OpEq
                       (integer_promotion (ctype_of e1) (C.PEsym sym_e1))
                       (integer_promotion (ctype_of e2) (C.PEsym sym_e2))
                     ) (Caux.ival 1) (Caux.ival 0))
+*)
                   
                   else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
                     (* TODO: experimenting *)
@@ -1911,8 +1926,13 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         translate_stmt_ s1     >>= fun core_s1 ->
         translate_stmt_ s2     >>= fun core_s2 ->
         E.return $
+          (* NOTE: fixing strictness of unspec here *)
           C.Ewseq [Just sym_if] core_e (
-            C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_if) (Caux.ival 0))) core_s1 core_s2
+            C.Eif (C.PEis_unspec (C.PEsym sym_if))
+              (* non-deterministic branching if the test expression had unspecified value *)
+              (C.End [core_s1; core_s2])
+              (* else *)
+              (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_if) (Caux.ival 0))) core_s1 core_s2)
           )
     
     | A.AilSwhile e s ->
