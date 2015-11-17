@@ -312,33 +312,36 @@ declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of
 
 
 (* the third argument specify have many characters to load at most *)
-val     load_character_array_aux: Cty.ctype -> Mem.pointer_value -> nat -> list char -> Mem.memM (list char)
-let rec load_character_array_aux elem_ty ptrval prec_n acc =
-  if prec_n = 0 then
-    Mem.return (List.reverse acc)
-  else
-    Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
-      Mem.case_mem_value mval
-        (fun _ -> error "Output.load_character_array, Symbolic")
-        (fun _ -> error "Output.load_character_array, found a ctype")
-        (fun ity ival ->
-          Mem.case_integer_value ival
-            (fun n -> if n = 0 then
-              Mem.return (List.reverse acc)
-            else
-              let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
-              load_character_array_aux elem_ty ptrval' (prec_n-1) ((Decode.encode_character_constant n) :: acc))
-            (fun () -> error "WIP: Output.load_character_array, non constant ival")
-        )
-        (fun _ _ -> error "Output.load_character_array, found a float")
-        (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
-        (fun _ -> error "Output.load_character_array, found an array")
-        (fun _ _ -> error "Output.load_character_array, found a struct")
-        (fun _ _ -> error "Output.load_character_array, found a union")
-    )
-val load_character_array: Cty.ctype -> Mem.pointer_value -> nat -> Mem.memM (list char)
-let load_character_array elem_ty ptrval prec_n =
-  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n []
+val     load_character_array_aux: Cty.ctype -> Mem.pointer_value -> maybe nat -> list char -> Mem.memM (list char)
+let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
+  match prec_n_opt with
+    | Just 0 ->
+        Mem.return (List.reverse acc)
+    | _ ->
+        let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
+        Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
+        Mem.case_mem_value mval
+          (fun _ -> error "Output.load_character_array, Symbolic")
+          (fun _ -> error "Output.load_character_array, found a ctype")
+          (fun ity ival ->
+            Mem.case_integer_value ival
+              (fun n -> if n = 0 then
+                Mem.return (List.reverse acc)
+              else
+                let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
+                load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc))
+              (fun () -> error "WIP: Output.load_character_array, non constant ival")
+          )
+          (fun _ _ -> error "Output.load_character_array, found a float")
+          (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
+          (fun _ -> error "Output.load_character_array, found an array")
+          (fun _ _ -> error "Output.load_character_array, found a struct")
+          (fun _ _ -> error "Output.load_character_array, found a union")
+      )
+  end
+val load_character_array: Cty.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
+let load_character_array elem_ty ptrval prec_n_opt =
+  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n_opt []
 
 
 
@@ -629,6 +632,14 @@ let convert eval_conv prec_opt lm_opt cspec args =
                       )
                     else
                       Mem.load arg_ty arg_ptr >>= fun mval ->
+                      let prec = match prec_opt with
+                        | Just (P_num z) ->
+                            Just z
+                        | Just (P_asterisk) ->
+                            error "TODO(2): Output.convert, * prec" (* TODO *)
+                        | Nothing ->
+                            Nothing
+                      end in
                       match Mem_aux.pointerValueFromMemValue mval with
                         | Just (_, ptrval) ->
                             load_character_array ref_ty ptrval prec >>= fun chars ->
