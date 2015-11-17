@@ -121,13 +121,11 @@ let pload loc ty x mo      = Eaction (Paction Pos (Action loc default (Load ty x
 let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2)))
 
 
-let zero =
-  PEval (Vinteger (Mem.integer_ival 0))
-
-let one =
-  PEval (Vinteger (Mem.integer_ival 1))
+let ival n =
+  PEval (Vinteger (Mem.integer_ival n))
+(*
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
-
+*)
 
 val cfunction_const: Symbol.t -> pexpr
 let cfunction_const fsym =

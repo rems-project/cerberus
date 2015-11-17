@@ -58,18 +58,18 @@ let shiftPathFromMember program tag ident =
             | Left acc ->
                 if ident = ident' then
                   if List.null acc then
-                    Right [(Caux.proj_ctype ty, Caux.zero)]
+                    Right [(Caux.proj_ctype ty, Caux.ival 0)]
                   else
                     Right acc
                 else
-                  Left ((Caux.proj_ctype ty, Caux.one) :: acc)
+                  Left ((Caux.proj_ctype ty, Caux.ival 1) :: acc)
             | Right acc ->
                 Right acc
           end
         ) (Left []) ident_tys in
         sh
     | Just (A.UnionDef ident_tys) ->
-        [(Caux.proj_ctype (fromJust "Translation.shiftPathFromMember" $ List.lookup ident ident_tys), Caux.zero)]
+        [(Caux.proj_ctype (fromJust "Translation.shiftPathFromMember" $ List.lookup ident ident_tys), Caux.ival 0)]
     
     | Nothing ->
         error ("Translation.shiftPathFromMember: couldn't find a definition for `" ^ show tag ^ "'")
@@ -279,7 +279,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 (* result_y == promoted type of e *)
                 catch_exceptional_condition [
                   Caux.mk_ctype result_ty;
-                  C.PEop C.OpSub Caux.zero (integer_promotion (ctype_of e) (C.PEsym sym_e))
+                  C.PEop C.OpSub (Caux.ival 0) (integer_promotion (ctype_of e) (C.PEsym sym_e))
                 ]
               ))
       
@@ -396,7 +396,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                  (C.Action loc default (C.Load core_ty_e (C.PEsym sym_lvalue) Cmm.NA))
                  (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
                                         (C.PEsym sym_lvalue)
-                                        (conv_int [Caux.mk_ctype (ctype_of e); (C.PEop C.OpAdd (C.PEsym sym_load) Caux.one)])
+                                        (conv_int [Caux.mk_ctype (ctype_of e); (C.PEop C.OpAdd (C.PEsym sym_load) (Caux.ival 1))])
                                         Cmm.NA)
                                       )
                  )
@@ -413,7 +413,7 @@ and translate_expression stdlib program is_lvalue a_expr =
               (C.Ewseq [Just sym_load] (Caux.pload loc core_ty_e (C.PEsym sym_lvalue) Cmm.NA)
                  (C.Ewseq [] (Caux.pstore loc core_ty_e
                                           (C.PEsym sym_lvalue)
-                                          (conv_int [Caux.mk_ctype (ctype_of e); (C.PEop C.OpSub (C.PEsym sym_load) Caux.one)])
+                                          (conv_int [Caux.mk_ctype (ctype_of e); (C.PEop C.OpSub (C.PEsym sym_load) (Caux.ival 1))])
                                           Cmm.NA
                              )
                     (C.Epure (C.PEsym sym_load))
@@ -455,7 +455,7 @@ and translate_expression stdlib program is_lvalue a_expr =
             E.return $
               C.Ewseq [Just sym_e1; Just sym_e2] (Caux.mk_unseq [core_e1; core_e2])
                 (* if the value of the second operand is zero, the behavior is undefined. *)
-                (C.Epure (C.PEif (C.PEop C.OpEq conved_e2 Caux.zero)
+                (C.Epure (C.PEif (C.PEop C.OpEq conved_e2 (Caux.ival 0))
                             (C.PEundef Undefined.Division_by_zero)
                             (C.PEop C.OpDiv conved_e1 conved_e2)
                          )
@@ -480,10 +480,10 @@ and translate_expression stdlib program is_lvalue a_expr =
                 C.Epure (
                   C.PElet sym_conv1 conved_e1 (
                     C.PElet sym_conv2 conved_e2 (
-                      C.PEif (C.PEop C.OpEq (C.PEsym sym_conv2) Caux.zero)
+                      C.PEif (C.PEop C.OpEq (C.PEsym sym_conv2) (Caux.ival 0))
                         (* if the value of the second operand is zero, the behavior is undefined. *)
                         (C.PEundef Undefined.Modulo_by_zero)
-                        (C.PEif (C.PEop C.OpLt (C.PEsym sym_conv1) Caux.zero)
+                        (C.PEif (C.PEop C.OpLt (C.PEsym sym_conv1) (Caux.ival 0))
                            (C.PEop C.OpMod (C.PEsym sym_conv1) (C.PEsym sym_conv2))
                            (C.PEop C.OpMod (C.PEop C.OpAdd (C.PEsym sym_conv1) (C.PEsym sym_conv2)) (C.PEsym sym_conv2))
                         )
@@ -492,50 +492,49 @@ and translate_expression stdlib program is_lvalue a_expr =
                 )
               )
       
-      (* DONE (check promotion stuff) *)
       | A.AilEbinary e1 (A.Arithmetic A.Shl) e2 ->
-          E.fresh_symbol >>= fun a_e1 ->
-          E.fresh_symbol >>= fun a_e2 ->
-          E.fresh_symbol >>= fun a_res ->
+          E.fresh_symbol      >>= fun sym_e1  ->
+          E.fresh_symbol      >>= fun sym_e2  ->
+          E.fresh_symbol      >>= fun sym_res ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
-            E.return $
-              C.Ewseq [Just a_e1; Just a_e2] (C.Eunseq [core_e1; core_e2])
-              (* (§6.5.7#2) if a_e2 < 0 then undef *)
-              (C.Epure $
-                
-                C.PEif (C.PEop C.OpLt (C.PEsym a_e2) Caux.zero)
+          E.return (
+            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2]) (
+              (* (§6.5.7#2) if sym_e2 < 0 then undef *)
+              C.Epure (
+                C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (Caux.ival 0))
                   (C.PEundef Undefined.Negative_shift)
                 
-                (* if width{ty} <= a_e2 then undef *)
-                (* TODO: [ty] should be the promoted type of [e1] *)
-                (C.PEif (C.PEop C.OpOr (C.PEop C.OpLt (ctype_width [Caux.mk_ctype result_ty]) (C.PEsym a_e2))
-                                       (C.PEop C.OpEq (ctype_width [Caux.mk_ctype result_ty]) (C.PEsym a_e2))) (* TODO: check the test about the width *)
+                (* if width{ty} <= sym_e2 then undef *)
+                (C.PEif (C.PEop C.OpOr (C.PEop C.OpLt (ctype_width [Caux.mk_ctype result_ty]) (C.PEsym sym_e2))
+                                       (C.PEop C.OpEq (ctype_width [Caux.mk_ctype result_ty]) (C.PEsym sym_e2))) (* TODO: check the test about the width *)
                    (C.PEundef Undefined.Shift_too_large)
                 
                 (* else [...] *)
                    (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                      (* mod (a_e1 * exp(2, a_e2)) (max{ty}+1) *)
-                       C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
-                                     (C.PEop C.OpAdd (Caux.ivmax_pe $ Caux.mk_ctype result_ty) Caux.one)
+                      (* mod (sym_e1 * exp(2, sym_e2)) (max{ty}+1) *)
+                       C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
+                                      (C.PEop C.OpAdd (Caux.ivmax_pe (Caux.mk_ctype result_ty)) (Caux.ival 1))
                     else (* e1 has a signed type *)
-                      (* if a_e2 < 0 then undef *)
-                      (C.PEif (C.PEop C.OpLt (C.PEsym a_e2) Caux.zero)
+                      (* if sym_e2 < 0 then undef *)
+                      (C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (Caux.ival 0))
                          (C.PEundef Undefined.Negative_left_shift)
-                         (* let a_res = mod (a_e1 * exp(2, a_e2)) (max{ty}+1) in [...] *)
-                         (C.PElet a_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym a_e1) (C.PEop C.OpExp (C.PEval $ C.Vinteger (Mem.integer_ival 2)) (C.PEsym a_e2)))
-                                                      (C.PEop C.OpAdd (Caux.ivmax_pe $ Caux.mk_ctype result_ty) Caux.one))
-                            (* not representable(ty, a_res) then undef *)
-                            (C.PEif (C.PEnot (is_representable [C.PEsym a_res; Caux.mk_ctype result_ty]))
+                         (* let sym_res = mod (sym_e1 * exp(2, sym_e2)) (max{ty}+1) in [...] *)
+                         (C.PElet sym_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (C.PEval (C.Vinteger (Mem.integer_ival 2))) (C.PEsym sym_e2)))
+                                                      (C.PEop C.OpAdd (Caux.ivmax_pe (Caux.mk_ctype result_ty)) (Caux.ival 1)))
+                            (* not representable(ty, sym_res) then undef *)
+                            (C.PEif (C.PEnot (is_representable [C.PEsym sym_res; Caux.mk_ctype result_ty]))
                                (C.PEundef Undefined.Negative_left_shift)
                             (* else  *)
-                               (C.PEsym a_res)
+                               (C.PEsym sym_res)
                           )
                        )
                     )
                  )
               )
               )
+            )
+          )
 
       
       (* DONE (check promotion stuff) *)
@@ -550,7 +549,7 @@ and translate_expression stdlib program is_lvalue a_expr =
               (* (§6.5.7#2) if a_e2 < 0 then undef *)
               (C.Epure $
                 
-                C.PEif (C.PEop C.OpLt (C.PEsym a_e2) Caux.zero)
+                C.PEif (C.PEop C.OpLt (C.PEsym a_e2) (Caux.ival 0))
                   (C.PEundef Undefined.Negative_shift)
                
                (* if width{ty} <= a_e2 then undef *)
@@ -568,7 +567,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   (* or if E1 has a signed type and a nonnegative value [...]
                      If E1 has a signed type and a negative value, the resulting
                     value is implementation-defined. *)
-                  C.PEif (C.PEop C.OpLt (C.PEsym a_e1) Caux.zero)
+                  C.PEif (C.PEop C.OpLt (C.PEsym a_e1) (Caux.ival 0))
                     (C.PEcall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ctype (ctype_of e1) ; C.PEsym a_e1; C.PEsym a_e2])
                     expr)
                ))
@@ -763,12 +762,12 @@ and translate_expression stdlib program is_lvalue a_expr =
               | (Right (AilTypes.Pointer _ ptr_ty), _) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e1) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub Caux.zero (C.PEsym sym_e2)))
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e1) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub (Caux.ival 0) (C.PEsym sym_e2)))
               
               | (_, Right (AilTypes.Pointer _ ptr_ty)) ->
                   E.return $
                     C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e2) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub Caux.zero (C.PEsym sym_e1)))
+                      (C.Epure $ C.PEarray_shift (C.PEsym sym_e2) (Caux.proj_ctype ptr_ty) (C.PEop C.OpSub (Caux.ival 0) (C.PEsym sym_e1)))
               
               | (_, _) ->
                   error "WTF: A.Sub" (* "this case implies the expression was ill-typed." *)
@@ -841,10 +840,10 @@ and translate_expression stdlib program is_lvalue a_expr =
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
             C.Ewseq [Just sym_e1] core_e1
-              (C.Eif (C.PEop C.OpEq (C.PEsym sym_e1) Caux.zero)
-                 (C.Epure Caux.zero)
+              (C.Eif (C.PEop C.OpEq (C.PEsym sym_e1) (Caux.ival 0))
+                 (C.Epure (Caux.ival 0))
                  (C.Ewseq [Just sym_e2] core_e2
-                    (C.Epure $ C.PEif (C.PEop C.OpEq (C.PEsym sym_e2) Caux.zero) Caux.zero Caux.one)
+                    (C.Epure $ C.PEif (C.PEop C.OpEq (C.PEsym sym_e2) (Caux.ival 0)) (Caux.ival 0) (Caux.ival 1))
                  )
               )
       
@@ -855,10 +854,10 @@ and translate_expression stdlib program is_lvalue a_expr =
           translate_rvalue e2 >>= fun core_e2 ->
           E.return $
             C.Ewseq [Just sym_e1] core_e1
-              (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) Caux.zero))
-                 (C.Epure Caux.one)
+              (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) (Caux.ival 0)))
+                 (C.Epure (Caux.ival 1))
                  (C.Ewseq [Just sym_e2] core_e2
-                    (C.Epure $ C.PEif (C.PEop C.OpEq (C.PEsym sym_e2) Caux.zero) Caux.zero Caux.one)
+                    (C.Epure $ C.PEif (C.PEop C.OpEq (C.PEsym sym_e2) (Caux.ival 0)) (Caux.ival 0) (Caux.ival 1))
                  )
               )
       
@@ -875,17 +874,17 @@ and translate_expression stdlib program is_lvalue a_expr =
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
               let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Epure (C.PEif (C.PEop C.OpLt conved_e1 conved_e2) Caux.one Caux.zero))
+                  (C.Epure (C.PEif (C.PEop C.OpLt conved_e1 conved_e2) (Caux.ival 1) (Caux.ival 0)))
 (*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEif (C.PEop C.OpLt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpLt a b) (Caux.ival 1) (Caux.ival 0)) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
 *)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLt [C.PEsym sym_e1; C.PEsym sym_e2])
-                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+                 (C.Epure (C.PEif (C.PEsym sym_b) (Caux.ival 1) (Caux.ival 0)))
               )
           else
             error "Translation.translate_expression, AilEbinary Lt: Ail type error"
@@ -902,18 +901,18 @@ and translate_expression stdlib program is_lvalue a_expr =
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
               let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Epure (C.PEif (C.PEop C.OpGt conved_e1 conved_e2) Caux.one Caux.zero))
+                  (C.Epure (C.PEif (C.PEop C.OpGt conved_e1 conved_e2) (Caux.ival 1) (Caux.ival 0)))
 (*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEif (C.PEop C.OpGt a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpGt a b) (Caux.ival 1) (Caux.ival 0)) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
 *)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGt [C.PEsym sym_e1; C.PEsym sym_e2])
-                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+                 (C.Epure (C.PEif (C.PEsym sym_b) (Caux.ival 1) (Caux.ival 0)))
               )
           else
             error "Translation.translate_expression, AilEbinary Gt: Ail type error"
@@ -930,18 +929,18 @@ and translate_expression stdlib program is_lvalue a_expr =
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
               let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Epure (C.PEif (C.PEop C.OpLe conved_e1 conved_e2) Caux.one Caux.zero))
+                  (C.Epure (C.PEif (C.PEop C.OpLe conved_e1 conved_e2) (Caux.ival 1) (Caux.ival 0)))
 (*
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
                   (C.Epure (
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEif (C.PEop C.OpLe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpLe a b) (Caux.ival 1) (Caux.ival 0)) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
                   ))
 *)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrLe [C.PEsym sym_e1; C.PEsym sym_e2])
-                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+                 (C.Epure (C.PEif (C.PEsym sym_b) (Caux.ival 1) (Caux.ival 0)))
               )
           else
             error "Translation.translate_expression, AilEbinary Le: Ail type error"
@@ -958,15 +957,15 @@ and translate_expression stdlib program is_lvalue a_expr =
             if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
               let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
                 C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-                  (C.Epure (C.PEif (C.PEop C.OpGe conved_e1 conved_e2) Caux.one Caux.zero))
+                  (C.Epure (C.PEif (C.PEop C.OpGe conved_e1 conved_e2) (Caux.ival 1) (Caux.ival 0)))
 (*
                      mk_usual_arithmetic_conversions
-                       (fun a b -> C.PEif (C.PEop C.OpGe a b) Caux.one Caux.zero) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
+                       (fun a b -> C.PEif (C.PEop C.OpGe a b) (Caux.ival 1) (Caux.ival 0)) (ty1, C.PEsym sym_e1) (ty2, C.PEsym sym_e2)
 *)
           else if AilTypesAux.is_pointer ty1 && AilTypesAux.is_pointer ty2 then
             C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
               (C.Ewseq [Just sym_b] (C.Ememop Mem.PtrGe [C.PEsym sym_e1; C.PEsym sym_e2])
-                 (C.Epure (C.PEif (C.PEsym sym_b) Caux.one Caux.zero))
+                 (C.Epure (C.PEif (C.PEsym sym_b) (Caux.ival 1) (Caux.ival 0)))
               )
           else
             error "Translation.translate_expression, AilEbinary Ge: Ail type error"
@@ -1007,19 +1006,19 @@ and translate_expression stdlib program is_lvalue a_expr =
                     C.Epure (C.PEif (C.PEop C.OpEq
                       (integer_promotion (ctype_of e1) (C.PEsym sym_e1))
                       (integer_promotion (ctype_of e2) (C.PEsym sym_e2))
-                    ) Caux.one Caux.zero)
+                    ) (Caux.ival 1) (Caux.ival 0))
                   
                   else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
                     (* TODO: experimenting *)
                     C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEsym sym_e1; C.PEsym sym_e2])
-                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                      (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                   
                   else if Aaux.is_null_pointer_constant e1 then
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e2) with
                       | Cty.Pointer _ ref_ty ->
                           C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e2])
-                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                            (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                       | ty ->
                           error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
                     end
@@ -1028,7 +1027,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     match Core_aux.proj_ctype (ctype_of e1) with
                       | Cty.Pointer _ ref_ty ->
                           C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e1])
-                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                            (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                       | ty ->
                           error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
                     end
@@ -1048,26 +1047,26 @@ and translate_expression stdlib program is_lvalue a_expr =
               
               begin
                   if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
-                    C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one)
+                    C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) (Caux.ival 0) (Caux.ival 1))
                   
                   else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
                     (* TODO: experimenting *)
                     C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2])
-                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                      (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                   
                   else if Aaux.is_null_pointer_constant e1 then
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e2) with
                       | Cty.Pointer _ ref_ty ->
                           C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e2])
-                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                            (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                     end
                   else if Aaux.is_null_pointer_constant e2 then
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e1) with
                       | Cty.Pointer _ ref_ty ->
                           C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_e1])
-                            (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                            (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                     end
                   else
                     error "[Translation.translate_expression] #A.BINARY A.NE e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
@@ -1084,11 +1083,11 @@ and translate_expression stdlib program is_lvalue a_expr =
               
               begin
                 if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-                  C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) Caux.zero Caux.one)
+                  C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym sym_e1) (C.PEsym sym_e2)) (Caux.ival 0) (Caux.ival 1))
                 else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
                   (* TODO: experimenting *)
                     C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEsym sym_e1; C.PEsym sym_e2])
-                      (C.Epure (C.PEif (C.PEsym sym_memop) Caux.one Caux.zero))
+                      (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.ival 1) (Caux.ival 0)))
                 else
                   error "WIP: Binary Ne"
               end
@@ -1143,7 +1142,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then *)
             E.return $
               C.Ewseq [Just sym_e1] core_e1
-                (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) Caux.zero)) core_e2 core_e3)
+                (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) (Caux.ival 0))) core_e2 core_e3)
 (*          else
             error "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
 *)
@@ -1401,7 +1400,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           translate_rvalue e >>= fun core_e   ->
           E.return $
             C.Esseq [Just a_e] core_e 
-              (C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym a_e) Caux.zero)
+              (C.Epure (C.PEif (C.PEop C.OpEq (C.PEsym a_e) (Caux.ival 0))
                           (C.PEerror "assert() failure" (C.PEval C.Vunit))
                           (C.PEval C.Vunit)
                        )
@@ -1661,9 +1660,9 @@ a
 *)
       
       
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer Aty.Char))                 -> E.return $ C.Epure Caux.one
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))   -> E.return $ C.Epure Caux.one
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) -> E.return $ C.Epure Caux.one
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer Aty.Char))                 -> E.return $ C.Epure (Caux.ival 1)
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))   -> E.return $ C.Epure (Caux.ival 1)
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) -> E.return $ C.Epure (Caux.ival 1)
       | A.AilEsizeof _ ty ->
           E.return $
             C.Epure (Caux.sizeof $ Caux.mk_ctype ty)
@@ -1706,7 +1705,7 @@ a
         core_e <- translate_expression e; in
           E.return $
             C.Ewseq [Just a_e] core_e
-              (C.Eif (C.PEop C.OpEq (C.PEsym a_e) Caux.zero) C.Eerror C.Eskip)
+              (C.Eif (C.PEop C.OpEq (C.PEsym a_e) (Caux.ival 0)) C.Eerror C.Eskip)
         end
     
     | A.ConstArray es ->
@@ -1907,7 +1906,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         translate_stmt_ s2     >>= fun core_s2 ->
         E.return $
           C.Ewseq [Just sym_if] core_e (
-            C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_if) Caux.zero)) core_s1 core_s2
+            C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_if) (Caux.ival 0))) core_s1 core_s2
           )
     
     | A.AilSwhile e s ->
@@ -1922,7 +1921,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.return $
           C.Esave sym_loop [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ]
             (C.Esseq [Just sym_e] core_e
-               (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e) Caux.zero))
+               (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e) (Caux.ival 0)))
                   (C.Esseq [] core_s (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]))
                   (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
                )
@@ -1938,7 +1937,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
           E.return $
             C.Esave d_loop [ (a, Cty.Void)  | forall (a MEM visible_as) | true ]
               (C.Esseq [Just a_e] core_e
-                 (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym a_e) Caux.zero))
+                 (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym a_e) (Caux.ival 0)))
                     (C.Esseq [] core_s (C.Erun default d_loop [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]))
                     (C.Esave d_break [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] C.Eskip)
                  )
@@ -1959,7 +1958,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
             C.Esave sym_loop [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ]
               (C.Esseq [] core_s
                  (C.Esseq [Just sym_e] core_e
-                    (C.Eif (C.PEop C.OpEq (C.PEsym sym_e) Caux.zero)
+                    (C.Eif (C.PEop C.OpEq (C.PEsym sym_e) (Caux.ival 0))
                        (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
                        (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ])
                     )
@@ -2206,7 +2205,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
                   if startup_sym = sym then
                     (* §5.1.2.2.3#1 first sentence *)
                     (* TODO: "If the return type is not compatible with int" *)
-                    C.Eret Caux.zero
+                    C.Eret (Caux.ival 0)
                   else if return_ty = Aty.Void then
                     C.Eret (C.PEval (C.Vunit))
                   else
@@ -2260,7 +2259,7 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
             if startup_sym = fun_sym then
               (* §5.1.2.2.3#1 first sentence *)
               (* TODO: "If the return type is not compatible with int" *)
-              C.Eret Caux.zero
+              C.Eret (Caux.ival 0)
             
             else if ret_ty = Aty.Void then
               C.Eret (C.PEval (C.Vunit))
