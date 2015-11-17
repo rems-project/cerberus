@@ -558,6 +558,8 @@ let rec remove_conv_int_pexpr pexpr =
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
         PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEis_unspec pe ->
+        PEis_unspec (remove_conv_int_pexpr pe)
     | PEmemop memop pes ->
         PEmemop memop (List.map remove_conv_int_pexpr pes)
     | PEtuple pes ->

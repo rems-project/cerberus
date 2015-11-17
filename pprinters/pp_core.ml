@@ -36,6 +36,7 @@ let precedence = function
   
   | PEop (OpOr,  _, _) -> Some 7
   
+  | PEis_unspec _
   | PEmemop _
   | PEundef _
   | PEerror _
@@ -282,6 +283,8 @@ let pp_pexpr pe =
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
+        | PEis_unspec pe ->
+            pp_keyword "is_unspec" ^^ P.parens (pp pe)
         | PEmemop (pure_memop, pes) ->
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
         | PEtuple pes ->
