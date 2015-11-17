@@ -78,6 +78,7 @@ and integer_value_base =
   | IVptrdiff of pointer_value_base * pointer_value_base
   (* TODO: tentative *)
   | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
+  | IVcomposite of list integer_value_base
 
 
 and integer_value =
