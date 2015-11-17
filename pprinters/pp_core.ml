@@ -224,9 +224,9 @@ let pp_ctor = function
   | Civmin ->
       !^ "ivmin"
   | Civsizeof ->
-      !^ "sizeof"
+      !^ "ivsizeof"
   | Civalignof ->
-      !^ "alignof"
+      !^ "ivalignof"
 
 
 let pp_pexpr pe =

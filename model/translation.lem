@@ -628,7 +628,12 @@ and translate_expression stdlib program is_lvalue a_expr =
           else
             E.return (
               if is_lvalue then
-                C.Epure (C.PEsym id)
+(*
+                if AilTypesAux.is_array result_ty then
+                  (* STD §6.3.2.1# *)
+                else
+*)
+                  C.Epure (C.PEsym id)
               else
                 Caux.pload loc (Caux.mk_ctype result_ty) (C.PEsym id) Cmm.NA
             )
@@ -1808,7 +1813,8 @@ val translate_stmt:
 
 let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
   let translate_lvalue e = translate_expression stdlib program true e  in
-  let translate_expression e = translate_expression stdlib program false e  in
+  let translate_rvalue e = translate_expression stdlib program false e  in
+(*  let translate_expression e = translate_expression stdlib program false e  in *)
   let translate_stmt_ s      = translate_stmt stdlib program f labs s       in
   let mk_stdcall fname       = mk_stdcall stdlib fname                              in
   let conv_int               = mk_stdcall "conv_int"                                in
@@ -1817,7 +1823,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.return C.Eskip
     
     | A.AilSexpr e ->
-        translate_expression e
+        translate_rvalue e
     
     | A.AilSblock binds ss ->
         let decls = [(id,ty) | forall ((id, (dur, qs, ty)) MEM binds) | true] in
@@ -1901,7 +1907,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     
     | A.AilSif e s1 s2 ->
         E.fresh_symbol         >>= fun sym_if  ->
-        translate_expression e >>= fun core_e  ->
+        translate_rvalue e >>= fun core_e  ->
         translate_stmt_ s1     >>= fun core_s1 ->
         translate_stmt_ s2     >>= fun core_s2 ->
         E.return $
@@ -1913,7 +1919,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.fresh_symbol               >>= fun sym_e     ->
         E.fresh_named_symbol "loop"  >>= fun sym_loop  ->
         E.fresh_named_symbol "break" >>= fun sym_break ->
-        translate_expression e       >>= fun core_e    ->
+        translate_rvalue e       >>= fun core_e    ->
         translate_stmt stdlib program f
             <| labs with loop= Just sym_loop; break= Just sym_break |> s >>= fun core_s ->
         E.get_visible_objects >>= fun visible_syms ->
@@ -1930,7 +1936,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         a_e        <- E.fresh_symbol;
         d_loop     <- E.fresh_named_symbol "loop";
         d_break    <- E.fresh_named_symbol "break";
-        core_e     <- translate_expression e;
+        core_e     <- translate_rvalue e;
         core_s     <- translate_stmt tagDefs stdlib program f d_default d_cases (Just d_loop) (Just d_break) s;
         visible_as <- E.get_visible_objects; in
           (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
@@ -1949,7 +1955,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.fresh_symbol               >>= fun sym_e     ->
         E.fresh_named_symbol "loop"  >>= fun sym_loop  ->
         E.fresh_named_symbol "break" >>= fun sym_break ->
-        translate_expression e       >>= fun core_e    ->
+        translate_rvalue e       >>= fun core_e    ->
         translate_stmt stdlib program f
             <| labs with loop= Just sym_loop; break= Just sym_break |> s >>= fun core_s ->
         E.get_visible_objects >>= fun visible_syms ->
@@ -1982,7 +1988,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         end
     
     | A.AilSreturn e -> do E
-        core_e     <- translate_expression e;
+        core_e     <- translate_rvalue e;
         a_e        <- E.fresh_symbol;
         visible_as <- E.get_visible_objects; in
 (*           let A.AnnotatedExpression ty _ = e in *)
@@ -1990,7 +1996,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
             | Just (A.Decl_function _ return_ty _ _ _ _) ->
                 return_ty
             | _ ->
-                error "[Translation.translate_expression A.Return] impossible error: TODO move to Exception.t"
+                error "[Translation.translate_rvalue A.Return] impossible error: TODO move to Exception.t"
           end in
           E.return $
             C.Esseq [Just a_e] core_e
@@ -2010,7 +2016,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
 
 (*
         E.fresh_symbol         >>= fun sym_e  ->
-        translate_expression e >>= fun core_e ->
+        translate_rvalue e >>= fun core_e ->
         (* TODO: should properly interpret the integer constants *)
         let ((found_default, ns) : bool * list integer) =
           let x = collect_cases s in
@@ -2083,20 +2089,32 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         (* This pass translate the declarations *)
         E.mapM (fun (sym, e) ->
           E.resolve_object_type sym >>= fun ty ->
-          if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
-            match ty with
-              | Aty.Pointer _ ref_ty ->
-                  E.return $ Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym)
-                               (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA
-            end
+          if AilTypesAux.is_pointer ty then
+            if Aaux.is_null_pointer_constant e then
+              match ty with
+                | Aty.Pointer _ ref_ty ->
+                    E.return (
+                      Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym)
+                        (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA
+                    )
+              end
 (*          
           else if AilTypesAux.has_pointer_at_leafs ty then
             error ("PTR LEAFS ==> " ^ Boot.pp_ail_ctype ty)
 *)
+            else
+              E.fresh_symbol     >>= fun sym_e     ->
+(*              E.fresh_symbol     >>= fun sym_load  -> *)
+              translate_lvalue e >>= fun core_e    ->
+              E.return (
+                C.Esseq [Just sym_e] core_e
+                  (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) (C.PEsym sym_e) Cmm.NA)
+              )
           
           else
+            (* we are not dealing with a pointer initialisation *)
             E.fresh_symbol        >>= fun sym_e  ->
-            translate_lvalue e    >>= fun core_e ->
+            translate_rvalue e    >>= fun core_e ->
             let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
             E.return $ C.Esseq [Just sym_e] core_e
                          (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) expr Cmm.NA)
@@ -2104,7 +2122,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
 
 (*
           E.fresh_symbol                        >>= fun a      ->
-          translate_expression stdlib program e >>= fun core_e ->
+          translate_rvalue stdlib program e >>= fun core_e ->
           E.return $ C.Esseq [Just a] core_e
                        (Caux.pstore (Caux.mk_ctype (exp_type_of e)) (C.PEsym id) (conv_int [Caux.mk_ctype (exp_type_of e); C.PEsym a]) Cmm.NA)
  *)

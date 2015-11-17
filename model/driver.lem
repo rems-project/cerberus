@@ -1489,10 +1489,10 @@ val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> 
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
-  driver_globals with_concurrency sym_supply file >>= fun (tid0, dr_st) ->
+  driver_globals with_concurrency sym_supply file >>= fun (tid0, post_globals_dr_st) ->
   
   (* setting the arena of thread 0 to the body of the main function *)
-  match Map.lookup dr_st.core_file.Core.main dr_st.core_file.Core.funs with
+  match Map.lookup post_globals_dr_st.core_file.Core.main post_globals_dr_st.core_file.Core.funs with
     | Nothing ->
         ND.kill (ND.Other "couldn't find the startup function")
     
@@ -1527,12 +1527,12 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [dr_st.core_file.Core.main; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [post_globals_dr_st.core_file.Core.main; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
                   Mem.bind (Mem.store Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
-              ) dr_st >>= fun (argc_ptr_val, dr_st) ->
+              ) post_globals_dr_st >>= fun (argc_ptr_val, post_argc_dr_st) ->
               
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
@@ -1543,35 +1543,35 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                     )
                   )
                 ) dr_st
-              ) ([], dr_st) args_mem_val_tys >>= fun (ptr_vals_rev, dr_st) ->
+              ) ([], post_argc_dr_st) args_mem_val_tys >>= fun (ptr_vals_rev, post_args_dr_st) ->
               
               (* allocating and initialising an object for main.argv *)
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [dr_st.core_file.Core.main; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [post_args_dr_st.core_file.Core.main; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
                   Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun () ->
                     Mem.return ptr_val
                   )
                 )
-              ) dr_st >>= fun (argv_ptr_val, dr_st) ->
+              ) post_args_dr_st >>= fun (argv_ptr_val, post_argv_dr_st) ->
               
               ND.return $
-                Core_aux.subst_syms [Just argc_sym; Just argv_sym]
+                (Core_aux.subst_syms [Just argc_sym; Just argv_sym]
                   (Core.PEval $ Core.Vtuple [Core.Vpointer argc_ptr_val; Core.Vpointer argv_ptr_val])
 (*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
-                  expr
+                  expr, post_argv_dr_st)
           | _ ->
-              ND.return expr
-        end >>= fun expr ->
-        driver with_concurrency <| dr_st with
+              ND.return (expr, post_globals_dr_st)
+        end >>= fun (expr, post_argv_dr_st) ->
+        driver with_concurrency <| post_argv_dr_st with
           core_state= update_thread_state tid0 <|
                         arena=  expr;
                         stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
                         labels= Map.empty;
                         current_loc= Loc.unknown;
-                        exec_loc= ELoc_normal [dr_st.core_file.Core.main];
-                      |> dr_st.core_state
+                        exec_loc= ELoc_normal [post_argv_dr_st.core_file.Core.main];
+                      |> post_argv_dr_st.core_state
         |> >>= fun dr_st' ->
         
         if with_concurrency then
@@ -1594,23 +1594,23 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
 (*                  ND.log ("Result: " ^ show (Core.Epure (Core.PEval cval)) ^ (if dr_st'.blocked then ", BLOCKED" else "") ^ "\n") >> *)
                   ND.return (str, (is_blocked, conc_st, Core.PEval cval), steps)
               | (Cmm.DataRaces _)::_ ->
-                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
+                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Data_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.UnsequencedRaces _)::_  ->
-                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
+                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.Unsequenced_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.IndeterminateReads _)::_  ->
-                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
+                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.BadMutexes _)::_  ->
-                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
+                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | Cmm.NotInSublanguage::_  ->
-                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout),
+                  ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
                              (dr_st'.blocked, dr_st'.concurrency_state, Core.PEundef U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
             end
