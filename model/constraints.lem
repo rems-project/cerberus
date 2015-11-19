@@ -1,0 +1,225 @@
+open import Pervasives
+open import Global Symbolic
+
+import Defacto_memory_types Core Mem
+
+  (*
+type t
+declare ocaml target_rep type t = `Smt_wrapper.assertions`
+
+
+val empty: t
+declare ocaml target_rep function empty = `Smt_wrapper.empty_assertions`
+
+
+val is_empty: t -> bool
+declare ocaml target_rep function is_empty = `Smt_wrapper.is_empty_assertions`
+
+val combine: t -> t -> t
+declare ocaml target_rep function combine = `Smt_wrapper.combine_assertions`
+
+val assert_eq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_eq = `Smt_wrapper.assert_eq`
+
+val assert_neq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_neq = `Smt_wrapper.assert_neq`
+
+val assert_lt: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_lt = `Smt_wrapper.assert_lt`
+
+val assert_ge: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_ge = `Smt_wrapper.assert_ge`
+
+
+
+
+
+val isUnsat: t -> bool
+declare ocaml target_rep function isUnsat = `Smt_wrapper.is_unsat`
+*)
+
+type t =
+  (* TODO: assumes that the symbolic expressions have type "bool" *)
+  | Constraints of list (symbolic Core.value Mem.pointer_value)
+
+
+val empty: t
+let empty =
+  Constraints []
+
+
+val is_empty: t -> bool
+let is_empty (Constraints xs) =
+  List.null xs
+
+
+val combine: t -> t -> t
+let combine (Constraints xs) (Constraints ys) =
+  Constraints (xs ++ ys) (* TODO: simplification ? *)
+
+
+
+
+val assert_eq: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+let assert_eq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Eq symb1 symb2 :: xs)
+
+val assert_neq: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+let assert_neq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Neq symb1 symb2 :: xs)
+
+val assert_lt: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+let assert_lt symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Lt symb1 symb2 :: xs)
+
+val assert_ge: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+let assert_ge symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Ge symb1 symb2 :: xs)
+
+
+
+
+val simplify: t -> t
+let simplify (Constraints xs) =
+  Constraints $
+  List.foldl (fun acc symb ->
+    let symb = Symbolic.reduce symb in
+    match symb with
+      | SYMBop Eq (SYMBsym _ sym) symb2 ->
+          symb :: List.map (subst_sym sym symb2) acc
+      | SYMBop Eq symb1 (SYMBsym _ sym) ->
+          symb :: List.map (subst_sym sym symb1) acc
+      | SYMBop Eq symb1 symb2 ->
+          if symb1 = symb2 then
+            acc
+          else
+            symb :: acc
+      | _ ->
+        symb :: acc
+    end
+  ) [] xs
+
+
+
+(* TODO: more "is clearly unsat" *)
+val isUnsat: t -> bool
+let isUnsat xs =
+  let Constraints xs = simplify xs in
+  List.any (function
+    | SYMBfalse ->
+        true
+(*
+    | SYMBop Eq (SYMBconst n1) (SYMBconst n2) ->
+        n1 <> n2
+    | SYMBop Neq (SYMBconst n1) (SYMBconst n2) ->
+        n1 = n2
+    | SYMBop Lt (SYMBconst n1) (SYMBconst n2) ->
+        n1 >= n2
+*)
+    | SYMBop Eq (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+        n1 <> n2
+    | SYMBop Neq (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                 (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+        n1 = n2
+    | SYMBop Lt (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+        n1 >= n2
+    | _ ->
+        false
+  end) xs
+
+
+
+(* ============================================================================================== *)
+
+
+
+(*
+type assertion =
+  | Assert_eq  of symbolic * symbolic
+  | Assert_neq of symbolic * symbolic
+  | Assert_lt  of symbolic * symbolic
+  | Assert_ge  of symbolic * symbolic
+
+type t =
+  Constraints of list assertion
+
+
+val empty: t
+let empty =
+  Constraints []
+
+val singleton: assertion -> t
+let singleton x =
+  Constraints [x]
+
+
+val combine: t -> t -> t
+let combine (Constraints a) (Constraints b) =
+  Constraints (a ++ b)
+
+
+(* TODO *)
+let trivially_sat = function
+  | Assert_eq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 = n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_neq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 <> n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_lt (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 < n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_ge (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 >= n2 then
+        true
+      else
+        false (* TODO *)
+  | _ ->
+      false (* TODO *)
+end
+
+
+val simplify: t -> t
+let simplify (Constraints xs) =
+  (* TODO *)
+  Constraints (List.filter (not -| trivially_sat) xs)
+
+
+let trivially_unsat = function
+  | Assert_eq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 <> n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_neq (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 = n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_lt (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 >= n2 then
+        true
+      else
+        false (* TODO *)
+  | Assert_ge (Symbolic_constant n1) (Symbolic_constant n2) ->
+      if n1 < n2 then
+        true
+      else
+        false (* TODO *)
+  | _ ->
+      false (* TODO *)
+end
+
+val isUnsat: t -> bool
+let isUnsat (Constraints asserts) =
+  any trivially_unsat asserts
+*)
+

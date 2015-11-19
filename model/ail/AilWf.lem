@@ -1,0 +1,113 @@
+open import Pervasives Common AilSyntax AilTypes AilSyntax AilTypesAux
+
+open import TypingError ErrorMonad
+
+val print_debug: forall 'a. string -> 'a -> 'a
+declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
+
+
+
+(* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
+   NOTE: this function obviously doesn't whether the adjusting was properly
+         done. *)
+val is_adjusted: ctype -> bool
+let is_adjusted ty =
+  not (is_array ty) && not (is_function ty)
+
+
+val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
+let wf_lvalue_aux qs ty =
+  match ty with
+    | Pointer _ ref_ty ->
+        guard (TError "§6.7.3#2, pointer case") (
+          not (is_object ref_ty) --> not (qs.restrict)
+        )
+    | _ ->
+        guard (TError "§6.7.3#2, non pointer case") (
+          not (qs.restrict)
+        ) >>
+        guard (TError_undef "§6.7.3#9, sentence 2") (
+          is_function ty --> is_unqualified qs
+        )
+  end
+
+val     wf_parameters_aux: forall 'a. sigma 'a -> (ctype -> errorM unit) -> list (qualifiers * ctype) -> errorM unit
+let rec wf_parameters_aux S wf_type params =
+  match params with
+    | [] ->
+        return ()
+      (* TODO: check if qualifiers are allowed here *)
+    | [(_, Void)] ->
+        return ()
+    | (qs, ty) :: params' ->
+        guard (TError "a parameter type was not adjusted") (
+          is_adjusted ty
+        ) >>
+        guard (TError "a parameter type was incomplete") (
+          not (is_incomplete S ty)
+        ) >>
+        wf_type ty >>
+        wf_lvalue_aux qs ty >>
+        wf_parameters_aux S wf_type params'
+  end
+
+
+(* TODO: check *)
+val     wf_type: forall 'a. sigma 'a -> ctype -> errorM unit
+let rec wf_type S ty =
+  let wf_type ty = wf_type S ty in
+  let wf_parameters = wf_parameters_aux S wf_type in
+  match ty with
+  | Void ->
+      return ()
+  | Basic _ ->
+      return ()
+  | Array elem_ty _ ->
+      guard (TError "§6.7.6.2#1, sentence 4") (
+        is_complete S elem_ty && not (is_function elem_ty)
+      ) >>
+      wf_type elem_ty
+  | Function _ ret_ty params _ ->
+      guard (TError "§6.7.6.3#1") (
+        not (is_array ret_ty || is_function ret_ty)
+      ) >>
+      wf_type ret_ty >>
+      wf_parameters params
+  | Pointer ref_qs ref_ty ->
+      wf_type ref_ty >>
+      wf_lvalue_aux ref_qs ref_ty
+  | Atomic ty' ->
+      guard (TError "§6.7.2.4#3") (
+        (* NOTE: the check that ty' is not qualified has to be done during the
+           desugaring (see Cabs_to_ail.desugar_type_specifiers). *)
+        not (is_array ty' || is_function ty' || is_atomic ty')
+      ) >>
+      wf_type ty'
+      
+(*
+  | Struct _ xs ->
+      (* TODO: check *)
+      mapM_ (comb wf_type snd) xs
+  | Union _ xs ->
+      (* TODO: check *)
+      mapM_ (comb wf_type snd) xs
+*)
+  (* TODO: maybe check that the tags are in Sigma *)
+  | Struct _ ->
+      return ()
+  | Union _ ->
+      return ()
+
+  | Builtin _ ->
+      return ()
+  end
+
+
+val wf_lvalue: forall 'a. sigma 'a -> qualifiers -> ctype -> errorM unit
+let wf_lvalue S qs ty =
+  wf_type S ty >>
+  wf_lvalue_aux qs ty
+
+
+let wf_parameters S =
+  wf_parameters_aux S (wf_type S)

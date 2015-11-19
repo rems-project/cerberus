@@ -1,0 +1,87 @@
+grammar
+r, range :: range ::=
+  {{ phantom }}
+  | ( range ) :: S :: Parens
+      {{ icho [[range]] }}
+  | [ w1 , w2 ] :: M :: Construct
+      {{ coq makeRange [[w1]] [[w2]] }}
+
+wholeNumber, w :: wholeNumber ::=
+  | max range :: M :: RangeMax
+      {{ coq max [[range]] }}
+  | min range :: M :: RangeMin
+      {{ coq min [[range]] }}
+
+terminals :: 'terminals_' ::=
+  | max :: :: Max
+  | min :: :: Min
+
+formula :: 'formula_' ::=
+  | n in range :: M :: natMem
+      {{ coq memNat }}
+
+embed
+{{ coq
+Require Import ZArith.
+Local Open Scope Z_scope.
+
+Inductive range :=
+  rangeI : forall x y, x <= y -> range.
+
+Definition min r :=
+  match r with
+  | rangeI x _ _ => x
+  end.
+Definition max r :=
+  match r with
+  | rangeI _ y _ => y
+  end.
+Definition leq r : (min r) <= (max r) :=
+  match r with
+  | rangeI _ _ p => p
+  end.
+
+Definition mkRange x y :=
+  match Z_lt_le_dec x y with
+  | left  p => rangeI x y (Z.lt_le_incl _ _ p)
+  | right p => rangeI y x p
+  end.
+}}
+
+defns
+neRange :: '' ::=
+
+defn
+range1 <> range2 :: :: noOverlap :: noOverlap by
+
+max r1 <= min r2
+---------------- :: I_Below 
+r1 <> r2
+
+max r2 <= min r1
+---------------- :: I_Above
+r1 <> r2
+
+defns
+leRange :: '' ::=
+
+defn
+range1 <= range2 :: :: le :: le by
+
+max r1 <= max r2
+min r2 <= min r1
+---------------- :: I
+r1 <= r2
+
+defns
+memRange :: '' ::=
+
+defn
+w in range :: :: mem :: mem by
+
+w <= max r
+min r <= w
+---------- :: I
+w in r
+
+embed {{ coq Definition memNat (n : nat) (r: range) := mem (Z_of_nat n) r. }}
