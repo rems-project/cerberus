@@ -151,8 +151,10 @@ alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
 	@OCAMLRUNPARAM=b $(LEM0) -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 
 alldoc.pdf: alldoc.tex
-	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
-	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+	pdflatex alldoc.tex
+	pdflatex alldoc.tex
+#	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
+#	TEXINPUTS=../lem/tex-lib:$(TEXINPUTS) pdflatex alldoc.tex
 
 
 
