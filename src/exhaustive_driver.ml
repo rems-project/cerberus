@@ -114,8 +114,8 @@ let drive sym_supply file args with_concurrency : execution_result =
     );
     List.iteri (fun n (_, ND.Killed (reason, log, constraints)) ->
       let reason_str = match reason with
-        | ND.Undef0 ubs ->
-            "undefined behaviour: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
+        | ND.Undef0 (loc, ubs) ->
+            "undefined behaviour[" ^ Pp_errors.location_to_string loc ^ "]: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
         | ND.Error0 (loc , str) ->
             "static error[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str
         | ND.Other str ->
@@ -163,9 +163,9 @@ let drive sym_supply file args with_concurrency : execution_result =
 
 
 
-      | ND.Killed (ND.Undef0 ubs, _, _) ->
+      | ND.Killed (ND.Undef0 (loc, ubs), _, _) ->
           print_endline (
-            Colour.(ansi_format [Red] (Printf.sprintf "UNDEFINED BEHAVIOUR:\n%s\n"
+            Colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Pp_errors.location_to_string loc ^ "]:\n" ^
               (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
             ))
           )

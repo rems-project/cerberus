@@ -93,7 +93,7 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
+    |> Exception.fmap (Translation.translate !!cerb_conf.sequentialise !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
 (*
@@ -211,7 +211,7 @@ let pipeline filename args =
   Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite concurrency preEx args =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args =
   Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -235,13 +235,13 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
 
-  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx (* TODO *) RefStd;
   
   (* Looking for and parsing the implementation file *)
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx (* TODO *) RefStd;
 
   
   
@@ -314,6 +314,10 @@ let rewrite =
   let doc = "Activate the Core to Core transformations" in
   Arg.(value & flag & info["rewrite"] ~doc)
 
+let sequentialise =
+  let doc = "Replace all unseq() with left to righ wseq(s)" in
+  Arg.(value & flag & info["sequentialise"] ~doc)
+
 let concurrency =
   let doc = "Activate the C11 concurrency" in
   Arg.(value & flag & info["concurrency"] ~doc)
@@ -335,8 +339,8 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         concurrency $ preEx $ args) in
-  let info       = Term.info "cerberus" ~version:"118b9eda832b+ tip -- 13/11/2015@14:45" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+                         sequentialise $ concurrency $ preEx $ args) in
+  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

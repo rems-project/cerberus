@@ -433,8 +433,8 @@ let runCore m dr_st =
     | Exception.Result (U.Defined z, run_st') ->
         ND.return (z, <| dr_st with core_run_state= run_st' |>)
     
-    | Exception.Result (U.Undef ubs, _) ->
-        ND.kill (ND.Undef ubs)
+    | Exception.Result (U.Undef loc ubs, _) ->
+        ND.kill (ND.Undef loc ubs)
     
     | Exception.Result (U.Error loc str, _) ->
         ND.kill (ND.Error loc str)
@@ -737,8 +737,8 @@ let rec drive_core_thread tid dr_st =
               |>
           | Right (Undefined.Error loc str) ->
               ND.kill (ND.Error loc str)
-          | Right (Undefined.Undef ubs) ->
-              ND.kill (ND.Undef ubs)
+          | Right (Undefined.Undef loc ubs) ->
+              ND.kill (ND.Undef loc ubs)
         end
   end) (core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
 

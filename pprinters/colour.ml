@@ -37,8 +37,11 @@ let int_fg = function
 
 
 let ansi_format f str =
-  let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
-  "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
+  if Unix.isatty Unix.stdout then
+    let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
+    "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
+  else
+    str
 
 
 let pp_ansi_format f doc =

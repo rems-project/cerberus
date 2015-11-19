@@ -12,8 +12,8 @@ let bind m f =
   match m with
     | Exception.Result (Undefined.Defined z) ->
         f z
-    | Exception.Result (Undefined.Undef ubs) ->
-        Exception.return (Undefined.undef ubs)
+    | Exception.Result (Undefined.Undef loc ubs) ->
+        Exception.return (Undefined.undef loc ubs)
     | Exception.Result (Undefined.Error loc str) ->
         Exception.return (Undefined.error loc str)
     | Exception.Exception err ->

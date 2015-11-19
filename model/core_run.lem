@@ -136,7 +136,7 @@ val     core_eval: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
                    EU.t Core.pexpr core_run_error
 let rec core_eval loc mem_st file concur_sym_map inside_if = function
   | PEundef ub ->
-      Exception.return (Undefined.undef [ub])
+      Exception.return (Undefined.undef loc [ub])
   | PEerror str pe ->
       Exception.return (Undefined.error loc (str ^ " ==> " ^ stringFromPexpr pe))
 
@@ -378,6 +378,7 @@ KKKKK NOW
       
       let to_wrapped_ival = function
         | Vunspecified ty ->
+            let () = Boot.print_debug 0 "UNSPEC IN CORE_EVAL" in
             Just (Left ty)
         | Vinteger ival ->
             Just (Right ival)

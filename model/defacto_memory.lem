@@ -1521,26 +1521,34 @@ let eq_ptrval eqs ptr_val1 ptr_val2 =
 
 
 (* TODO: more .... *)
-let ne_ptrval eqs (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) =
+let ne_ptrval eqs (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
   match (ptr_val_1, ptr_val_2) with
+  | (PVnull _, PVnull _)->
+      return false
   | (PVnull _, PVbase _ _) ->
       return true
   | (PVbase _ _, PVnull _) ->
       return true
+  | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
+      if sh1 = [] && sh2 = [] then
+        return (alloc_id1 <> alloc_id2)
+      else
+        error ("WIP(1): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+
   | _ ->
-      error "WIP: ne_ptrval"
+      error ("WIP(2): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
   end
 
 
 
-let lt_ptrval eqs ptr_val1 ptr_val2 =
-  error "WIP: lt_ptrval"
-let gt_ptrval eqs ptr_val1 ptr_val2 =
-  error "WIP: gt_ptrval"
-let le_ptrval eqs ptr_val1 ptr_val2 =
-  error "WIP: le_ptrval"
-let ge_ptrval eqs ptr_val1 ptr_val2 =
-  error "WIP: ge_ptrval"
+let lt_ptrval eqs ptrval1 ptrval2 =
+  error ("WIP: lt_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+let gt_ptrval eqs ptrval1 ptrval2 =
+  error ("WIP: gt_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+let le_ptrval eqs ptrval1 ptrval2 =
+  error ("WIP: le_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+let ge_ptrval eqs ptrval1 ptrval2 =
+  error ("WIP: ge_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
 
 
 

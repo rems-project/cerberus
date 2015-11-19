@@ -33,20 +33,105 @@ module Operators = struct
   let inline (>>=)      = E.bind
   let inline (>>) m f   = E.bind m (fun _ -> f)
   let inline (<$>) f ma = E.bind ma (fun a -> E.return (f a))
+  let inline (<*>) mf m = E.bind mf (fun f -> f <$> m)
+
 end
 
 open Operators
 
 val translate_program:
-  C.fun_map unit -> A.program GenTypes.genTypeCategory ->
+  bool -> C.fun_map unit -> A.program GenTypes.genTypeCategory ->
   E.t (list (C.sym * C.core_type * C.expr unit) * C.fun_map unit)
 
 val translate:
-    C.fun_map unit -> C.impl -> (UniqueId.supply Symbol.t) * A.program GenTypes.genTypeCategory ->
+    bool -> C.fun_map unit -> C.impl -> (UniqueId.supply Symbol.t) * A.program GenTypes.genTypeCategory ->
     (UniqueId.supply Symbol.t * C.file unit)
 
 
 (* ========================================================================== *)
+
+
+
+(* TODO: doc *)
+val     sequentialise_expr: C.expr unit -> E.t (C.expr unit)
+let rec sequentialise_expr expr =
+  match expr with
+    | C.Epure _ ->
+        E.return expr
+    | C.Ememop _ _ ->
+        E.return expr
+    | C.Eraise _ ->
+        E.return expr
+    | C.Eregister _ _ ->
+        E.return expr
+    | C.Eskip ->
+        E.return expr
+    | C.Elet sym pe1 e2 ->
+        C.Elet sym pe1 <$> sequentialise_expr e2
+    | C.Eif pe1 e2 e3 ->
+        C.Eif pe1 <$> sequentialise_expr e2 <*> sequentialise_expr e3
+    | C.Eproc _ _ _ ->
+        E.return expr
+    | C.Eaction _ ->
+        E.return expr
+    | C.Eunseq es ->
+        E.replicateM (List.length es) E.fresh_symbol >>= fun syms ->
+        E.mapM sequentialise_expr es >>= fun es' ->
+        E.return (
+          Caux.mk_wseq (C.Epure (C.PEtuple (List.map (fun sym -> C.PEsym sym) syms)))
+            (Global.map2 (fun sym e -> ([Just sym], e)) syms es')
+        )
+    | C.Ewseq sym_opts e1 e2 ->
+        C.Ewseq sym_opts <$> sequentialise_expr e1 <*> sequentialise_expr e2
+    | C.Esseq sym_opts e1 e2 ->
+        C.Esseq sym_opts <$> sequentialise_expr e1 <*> sequentialise_expr e2
+    | C.Easeq _ _ _ ->
+        E.return expr
+    | C.Eindet e ->
+        C.Eindet <$> sequentialise_expr e
+    | C.Ebound n e ->
+        C.Ebound n <$> sequentialise_expr e
+    | C.Esave ksym sym_tys e ->
+        C.Esave ksym sym_tys <$> sequentialise_expr e
+    | C.Erun _ _ _ ->
+        E.return expr
+    | C.Eret _ ->
+        E.return expr
+    | C.End es ->
+        C.End <$> E.mapM sequentialise_expr es
+    | C.Epar es ->
+        C.Epar <$> E.mapM sequentialise_expr es
+    | C.Ewait _ ->
+        E.return expr
+    | C.Eloc loc e ->
+        C.Eloc loc <$> sequentialise_expr e
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.t -> Cabs.cabs_identifier -> C.shift_path
@@ -276,11 +361,12 @@ and translate_expression stdlib program is_lvalue a_expr =
           E.return $
             C.Ewseq [Just sym_e] core_e
               (C.Epure (
-                (* result_y == promoted type of e *)
-                catch_exceptional_condition [
-                  Caux.mk_ctype result_ty;
-                  C.PEop C.OpSub (Caux.ival 0) (integer_promotion (ctype_of e) (C.PEsym sym_e))
-                ]
+                 (* result_y == promoted type of e *)
+                 let expr = C.PEop C.OpSub (Caux.ival 0) (integer_promotion (ctype_of e) (C.PEsym sym_e)) in
+                 if AilTypesAux.is_signed_integer_type result_ty then
+                   catch_exceptional_condition [Caux.mk_ctype result_ty; expr]
+                 else
+                   conv_int [Caux.mk_ctype result_ty; expr]
               ))
       
       (* CHECKED IN NOV2015 *)
@@ -1160,9 +1246,16 @@ and translate_expression stdlib program is_lvalue a_expr =
 (* TODO(check) the case splits only have to do with the Ail typing
 
           if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then *)
-            E.return $
-              C.Ewseq [Just sym_e1] core_e1
-                (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) (Caux.ival 0))) core_e2 core_e3)
+            E.return (
+              C.Ewseq [Just sym_e1] core_e1 (
+                (* NOTE: fixing strictness of unspec here *)
+                C.Eif (C.PEis_unspec (C.PEsym sym_e1))
+                  (* non-deterministic branching if the test expression had unspecified value *)
+                  (C.End [core_e2; core_e3])
+                  (* else *)
+                  (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_e1) (Caux.ival 0))) core_e2 core_e3)
+              )
+            )
 (*          else
             error "[Translation.translate_expression] #A.CONDTIONAL e1 e2 e3 <pointers case>: TODO"
 *)
@@ -2178,7 +2271,7 @@ val translate_program:
 *)
 
 
-let translate_program stdlib ((startup_sym, sigm) as program) =
+let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
   let conv_int = mk_stdcall stdlib "conv_int" in
   E.foldlM (fun (gacc, facc) (sym, decl) ->
     match decl with
@@ -2237,7 +2330,13 @@ let translate_program stdlib ((startup_sym, sigm) as program) =
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *) (
                   translate_stmt stdlib program sym <| default= Nothing; cases= []; loop= Nothing; break= Nothing |> stmt
-                ) >>= fun core_body ->
+                ) >>= fun _core_body ->
+                
+                (* TODO: sequentialisation is only a debug feature *)
+                (if sequentialise then
+                  sequentialise_expr _core_body
+                else
+                  E.return _core_body) >>= fun core_body ->
                 
                 let core_return =
                   if startup_sym = sym then
@@ -2340,9 +2439,9 @@ let translate_tag_definitions ctx =
 
 
 (* This is the entry function (called from main.ml) *)
-let translate stdlib impl (symbol_counter, prog) =
+let translate sequentialise stdlib impl (symbol_counter, prog) =
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   let () = Cty.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in
   
-  let ((cglobs, cfuns), st) = (translate_program stdlib prog) (E.init symbol_counter) in
+  let ((cglobs, cfuns), st) = (translate_program sequentialise stdlib prog) (E.init symbol_counter) in
   (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>)

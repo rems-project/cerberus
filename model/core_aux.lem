@@ -301,11 +301,19 @@ end
 val mk_ctype: forall 'a. AilTypes.ctype -> pexpr
 let mk_ctype ty = PEval (Vctype (proj_ctype ty))
 
-let rec mk_wseq a_opts_es =
+let rec mk_wseq_aux end_e a_opts_es =
   match a_opts_es with
-    | []               -> Eskip
-    | [(_, e)]         -> e
-    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq es')
+    | []               -> end_e
+(*    | [(_, e)]         -> e *)
+    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq_aux end_e es')
+end
+let mk_wseq end_e = function
+  | [] ->
+      end_e
+  | [(_, e)] ->
+      e
+  | a_opts_es ->
+      mk_wseq_aux end_e a_opts_es
 end
 
 val     mk_sseq: forall 'a. list (list (maybe Core.sym) * expr 'a) -> expr 'a

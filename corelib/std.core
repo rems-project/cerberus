@@ -146,7 +146,18 @@ fun conv_aux (ty: ctype, n: integer) : integer :=
   else
 --    conv_aux(ty, if <ctype_max>(ty) < n then n - <ctype_max>(ty) + 1 else n + <ctype_max>(ty) + 1 end)
     -- TODO: check
-    n % (ivmax(ty) + 1)
+    if n >= 0 then
+      n % (ivmax(ty) + 1)
+    else
+      let n2 = (ivmax(ty) + 1) + (n % (ivmax(ty) + 1)) in
+      if is_unsigned(ty) /\ n2 < 0 then
+        error(<<<conv_aux>>>, (ty, n, n2))
+      else
+        n2
+      end
+      end
+    end
+    
   end
 {-
   let n2 =
