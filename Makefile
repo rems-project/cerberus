@@ -171,6 +171,35 @@ ocaml_byte:
 	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
 
 
+
+
+# LOS-count the spec
+
+
+los: $(addprefix model/, $(CERBERUS_LEM))
+	./mysloc $(addprefix model/, $(CERBERUS_LEM))
+#	./mysloc ~/bitbucket/csem/model/*.lem ~/bitbucket/csem/ott/lem/*.lem   
+
+losparser:
+	./mysloc \
+	parsers/cparser/Cparser_driver.ml  \
+	parsers/cparser/Parser_errors.ml   \
+	parsers/cparser/Parser_errors.mli  \
+	parsers/cparser/tokens.ml
+	wc \
+	parsers/cparser/Lexer.mll	       \
+	parsers/cparser/Parser.mly \
+	parsers/cparser/pre_parser.mly    
+
+losconc:
+	./mysloc \
+	~/rsem/cpp/newmm_op/executableOpsem.lem \
+	~/rsem/cpp/newmm_op/minimalOpsem.lem \
+	~/rsem/cpp/newmm_op/relationalOpsem.lem 
+	wc ~/rsem/cpp/newmm_op/*.thy
+
+
+
 clean:
 	rm -rf _build
 
