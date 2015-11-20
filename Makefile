@@ -33,7 +33,7 @@ CMM_EXEC_LEM =\
 
 
 # The cerberus model
-OLD_CERBERUS_LEM=\
+CERBERUS_LEM=\
   cabs.lem \
   dlist.lem \
   constraints.lem \
@@ -104,14 +104,6 @@ OLD_CERBERUS_LEM=\
   output.lem
 
 
-include Makefile-source
-
-CERBERUS_LEM=$(CERBERUS_LEM_SOURCES)
-
-foo:
-	echo $(CERBERUS_LEM) | sort > foo.cerb
-	echo $(SOURCES) | sort > foo.ms
-	diff foo.cerb foo.ms
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
@@ -184,10 +176,21 @@ ocaml_byte:
 
 # LOS-count the spec
 
+include Makefile-source
 
-los: $(addprefix model/, $(CERBERUS_LEM))
-	./mysloc $(addprefix model/, $(CERBERUS_LEM))
-#	./mysloc ~/bitbucket/csem/model/*.lem ~/bitbucket/csem/ott/lem/*.lem   
+los:
+	./mysloc   $(addprefix model/,$(SOURCE_ail) )
+	./mysloc   $(addprefix model/,$(SOURCE_ail_typing) )
+	./mysloc   $(addprefix model/,$(SOURCE_cabs) )
+	./mysloc   $(addprefix model/,$(SOURCE_cabs_to_ail) )
+	./mysloc   $(addprefix model/,$(SOURCE_core) )
+	./mysloc   $(addprefix model/,$(SOURCE_core_to_core) )
+	./mysloc   $(addprefix model/,$(SOURCE_core_dynamics) )
+	./mysloc   $(addprefix model/,$(SOURCE_elaboration) )
+	./mysloc   $(addprefix model/,$(SOURCE_utils) )
+	./mysloc   $(addprefix model/,$(SOURCE_defacto)) 
+	./mysloc   $(addprefix model/,$(SOURCE_concurrency_interface))
+
 
 losparser:
 	./mysloc \
@@ -207,6 +210,9 @@ losconc:
 	~/rsem/cpp/newmm_op/relationalOpsem.lem 
 	wc ~/rsem/cpp/newmm_op/*.thy
 
+
+los_snapshot-2015-11-20.txt:
+	$(MAKE) los > los_snapshot-2015-11-20.txt 
 
 
 clean:

@@ -16,28 +16,28 @@ SOURCE_ail_typing=\
   ail/GenTyping.lem \
   ail/Range.lem \
   ail/TypingError.lem \
-  ail/Implementation.lem \
+  ail/Implementation.lem 
 
 SOURCE_cabs=\
   cabs.lem \
-  undefined.lem \
+  undefined.lem 
 
 SOURCE_cabs_to_ail=\
   builtins.lem \
   cabs_to_ail_aux.lem \
   cabs_to_ail_effect.lem \
   cabs_to_ail.lem \
-  scope_table.lem \
+  scope_table.lem 
 
 SOURCE_core=\
   core_aux.lem \
   core_ctype.lem \
   core_ctype_aux.lem \
-  core.lem \
+  core.lem 
 
 SOURCE_core_to_core=\
   core_indet.lem \
-  core_rewrite.lem \
+  core_rewrite.lem 
 
 SOURCE_core_dynamics=\
   constraints.lem \
@@ -46,13 +46,13 @@ SOURCE_core_dynamics=\
   driver.lem \
   driver_effect.lem \
   nondeterminism.lem \
-  symbolic.lem \
+  symbolic.lem 
 
 SOURCE_elaboration=\
   implementation_.lem \
   translation_aux.lem \
   translation_effect.lem \
-  translation.lem \
+  translation.lem 
 
 SOURCE_utils=\
   boot.lem \
@@ -84,7 +84,7 @@ SOURCE_defacto =\
   mem_aux.lem \
   mem_common.lem \
   defacto_memory_types.lem \
-  defacto_memory.lem \
+  defacto_memory.lem 
 
 SOURCE_concurrency_interface =\
   cmm_aux.lem
