@@ -33,7 +33,7 @@ CMM_EXEC_LEM =\
 
 
 # The cerberus model
-CERBERUS_LEM=\
+OLD_CERBERUS_LEM=\
   cabs.lem \
   dlist.lem \
   constraints.lem \
@@ -103,6 +103,15 @@ CERBERUS_LEM=\
   monadic_parsing.lem \
   output.lem
 
+
+include Makefile-source
+
+CERBERUS_LEM=$(CERBERUS_LEM_SOURCES)
+
+foo:
+	echo $(CERBERUS_LEM) | sort > foo.cerb
+	echo $(SOURCES) | sort > foo.ms
+	diff foo.cerb foo.ms
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
