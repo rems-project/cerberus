@@ -259,6 +259,7 @@ and translate_expression stdlib program is_lvalue a_expr =
   
   let conv             = mk_stdcall "conv"             in
   let conv_int         = mk_stdcall "conv_int"         in
+  let wrapI            = mk_stdcall "wrapI"            in
   let ctype_width      = mk_stdcall "ctype_width"      in
 (*  let quot             = mk_stdcall "quot"             in *)
   let is_representable = mk_stdcall "is_representable" in
@@ -365,7 +366,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                  if AilTypesAux.is_signed_integer_type result_ty then
                    catch_exceptional_condition [Caux.mk_ctype result_ty; expr]
                  else
-                   conv_int [Caux.mk_ctype result_ty; expr]
+                   wrapI [Caux.mk_ctype result_ty; expr]
               ))
       
       (* CHECKED IN NOV2015 *)
@@ -533,7 +534,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                         (if AilTypesAux.is_signed_integer_type (ctype_of a_expr) then
                           catch_exceptional_condition [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul]
                         else
-                          conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul])
+                          wrapI [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul])
                       )
                   )
                 )
@@ -864,7 +865,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2]
                  else
                    (* otherwise, bring back the value from Z to the result type *)
-                   conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2])
+                   wrapI [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpAdd conv_pe1 conv_pe2])
           else
             (* otherwise, we have some pointer arithmetic *)
             (if AilTypesAux.is_arithmetic ty1 then translate_rvalue else translate_lvalue) e1 >>= fun core_e1 ->
@@ -935,7 +936,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                         (if AilTypesAux.is_signed_integer_type result_ty then
                           catch_exceptional_condition [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub (C.PEsym sym_conv1) (C.PEsym sym_conv2)]
                         else
-                          conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub (C.PEsym sym_conv1) (C.PEsym sym_conv2)])
+                          wrapI [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub (C.PEsym sym_conv1) (C.PEsym sym_conv2)])
                     )
                   )
                 )
@@ -1347,16 +1348,16 @@ and translate_expression stdlib program is_lvalue a_expr =
 *)
       
       | A.AilEassign e1 e2 ->
-          E.fresh_symbol          >>= fun sym_e1  ->
-          E.fresh_symbol          >>= fun sym_e2  ->
+          E.fresh_symbol      >>= fun sym_e1  ->
+          E.fresh_symbol      >>= fun sym_e2  ->
           translate_lvalue e1 >>= fun core_e1 ->
-          if AilTypesAux.is_pointer (ctype_of e1) && Aaux.is_null_pointer_constant e2 then
+          (if AilTypesAux.is_pointer (ctype_of e1) && Aaux.is_null_pointer_constant e2 then
             match (ctype_of e1) with
               | Aty.Pointer _ ref_ty ->
                   E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))))
             end
           else
-            translate_rvalue e2
+            translate_rvalue e2)
           >>= fun core_e2 ->
           let core_ty_pe1 = Caux.mk_ctype $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           E.return $

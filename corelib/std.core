@@ -93,11 +93,15 @@ type ctype =
 -}
 
 
+fun is_representable (n: integer, ty: ctype): boolean :=
+--  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
+  ivmin(ty) <= n /\ n <= ivmax(ty)
+
 
 
 -- STD §6.5#5
 fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
-  if ivmin(ty) <= n /\ n <= ivmax(ty) then
+  if is_representable(n, ty) then
     n
   else
     undef <<Exceptional_condition>>
@@ -127,7 +131,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
   -- new type.
     else
       if is_unsigned(ty) then
-        conv_aux(ty, n)
+        wrapI(ty, n)
   
   -- (§6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
   -- represented in it; either the result is implementation-defined or an
@@ -230,9 +234,6 @@ fun ctype_width (ty: ctype): integer :=
   ivsizeof(ty) * <bits_in_byte>
 
 
-fun is_representable (n: integer, ty: ctype): boolean :=
---  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
-  ivmin(ty) <= n /\ n <= ivmax(ty)
 
 
 
@@ -453,7 +454,7 @@ proc malloc_proxy (size_ptr: pointer) : eff pointer :=
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
 fun wrapI(ty: ctype, n: integer) : integer :=
   let dlt = ivmax(ty) - ivmin(ty) + 1 in
-  let r = n rem_t dlt in
+  let r = n rem_f dlt in
   if r <= ivmax(ty) then
     r
   else
@@ -461,6 +462,8 @@ fun wrapI(ty: ctype, n: integer) : integer :=
   end
   end
   end
+
+
 {-
   if n < ivmin(ty) then
     wrapI(ty, n + (ivmax(ty) - ivmin(ty) + 1))
