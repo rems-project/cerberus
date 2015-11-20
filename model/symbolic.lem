@@ -18,7 +18,8 @@ type operator =
   | Sub
   | Mul
   | Div
-  | Mod
+  | Rem_t
+  | Rem_f
   | Exp
   | Eq
   | Neq
@@ -39,18 +40,19 @@ end
 instance (Show operator)
   let show op = 
     match op with
-    | Add -> "Add"
-    | Sub -> "Sub"
-    | Mul -> "Mul"
-    | Div -> "Div"
-    | Mod -> "Mod"
-    | Exp -> "Exp"
-    | Eq  -> "Eq"
-    | Neq -> "Neq"
-    | Lt  -> "Lt"
-    | Ge  -> "Ge"
-    | And -> "And"
-    | Or  -> "Or"
+    | Add   -> "Add"
+    | Sub   -> "Sub"
+    | Mul   -> "Mul"
+    | Div   -> "Div"
+    | Rem_t -> "Rem_t"
+    | Rem_f -> "Rem_f"
+    | Exp   -> "Exp"
+    | Eq    -> "Eq"
+    | Neq   -> "Neq"
+    | Lt    -> "Lt"
+    | Ge    -> "Ge"
+    | And   -> "And"
+    | Or    -> "Or"
     end
 end
 

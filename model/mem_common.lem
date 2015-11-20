@@ -29,7 +29,8 @@ type integer_operator =
   | IntSub
   | IntMul
   | IntDiv
-  | IntMod
+  | IntRem_t (* truncating remainder (this is % of C) *)
+  | IntRem_f (* flooring remainder *)
   | IntExp
 
 
@@ -87,8 +88,10 @@ let stringFromInteger_operator = function
       "IntMul"
   | IntDiv ->
       "IntDiv"
-  | IntMod ->
-      "IntMod"
+  | IntRem_t ->
+      "IntRem_t"
+  | IntRem_f ->
+      "IntRem_f"
   | IntExp ->
       "IntExp"
 end

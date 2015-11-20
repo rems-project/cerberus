@@ -1123,6 +1123,11 @@ let rec driver with_concurrency dr_st =
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vinteger ival]) ->
             let cval = Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+
+        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vpointer _]) ->
+            error "WTF ptrFromInt"
+
+
         | (Mem_common.PtrValidForDeref, [Core.Vpointer ptr_val]) ->
             let cval = if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>

@@ -33,7 +33,7 @@ let precedence = function
   
   | AilEbinary (_, Arithmetic Mul0, _)
   | AilEbinary (_, Arithmetic Div0, _)
-  | AilEbinary (_, Arithmetic Mod0, _) -> Some 3
+  | AilEbinary (_, Arithmetic Mod, _) -> Some 3
   
   | AilEbinary (_, Arithmetic Add0, _)
   | AilEbinary (_, Arithmetic Sub0, _) -> Some 4
@@ -440,7 +440,7 @@ let rec pp_ctype_human qs ty =
 let pp_arithmeticOperator = function
   | Mul0  -> P.star
   | Div0  -> P.slash
-  | Mod0  -> P.percent
+  | Mod  -> P.percent
   | Add0  -> P.plus
   | Sub0  -> P.minus
   | Shl  -> P.langle ^^ P.langle

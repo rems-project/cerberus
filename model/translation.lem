@@ -276,7 +276,6 @@ and translate_expression stdlib program is_lvalue a_expr =
   (* TODO !!!! *)
   let integer_promotion (ty: Aty.ctype) (e: C.pexpr) : C.pexpr =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion tmp_implementation ty) in
-    let _ = Boot.print_debug 1 "HELLO promotion" in
     conv [C.PEval (C.Vctype (Caux.proj_ctype ty)); C.PEval (C.Vctype (Caux.proj_ctype promoted_ty)); e] in
   
   (* STD §6.3.1.8 *)
@@ -506,7 +505,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                  )
               )
       
-      (* TODO: check conversion *)
+      (* CHECK IN NOV2015 *)
       | A.AilEbinary e1 (A.Arithmetic A.Mul) e2 ->
           translate_rvalue e1 >>= fun core_e1   ->
           translate_rvalue e2 >>= fun core_e2   ->
@@ -540,24 +539,6 @@ and translate_expression stdlib program is_lvalue a_expr =
                 )
               )
             )
-
-(*
-          E.fresh_symbol      >>= fun sym_e1  ->
-          E.fresh_symbol      >>= fun sym_e2  ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          E.fresh_symbol      >>= fun sym_mul ->
-          
-          let mul_ctx pe =
-            C.Ewseq [Just sym_e1; Just sym_e2] (C.Eunseq [core_e1; core_e2])
-              (C.Elet sym_mul (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEsym sym_e2))
-                 (C.Epure pe)) in
-          
-          E.return $ if AilTypesAux.is_signed_integer_type (ctype_of a_expr) then
-            mul_ctx (catch_exceptional_condition [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul])
-          else
-            mul_ctx (conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEsym sym_mul])
-*)
       
       | A.AilEbinary e1 (A.Arithmetic A.Div) e2 ->
           E.fresh_symbol      >>= fun sym_e1 ->
@@ -612,8 +593,8 @@ and translate_expression stdlib program is_lvalue a_expr =
                         (* if the value of the second operand is zero, the behavior is undefined. *)
                         (C.PEundef Undefined.Modulo_by_zero)
                         (C.PEif (C.PEop C.OpLt (C.PEsym sym_conv1) (Caux.ival 0))
-                           (C.PEop C.OpMod (C.PEsym sym_conv1) (C.PEsym sym_conv2))
-                           (C.PEop C.OpMod (C.PEop C.OpAdd (C.PEsym sym_conv1) (C.PEsym sym_conv2)) (C.PEsym sym_conv2))
+                           (C.PEop C.OpRem_t (C.PEsym sym_conv1) (C.PEsym sym_conv2))
+                           (C.PEop C.OpRem_t (C.PEop C.OpAdd (C.PEsym sym_conv1) (C.PEsym sym_conv2)) (C.PEsym sym_conv2))
                         )
                     )
                   )
@@ -649,14 +630,14 @@ and translate_expression stdlib program is_lvalue a_expr =
                 (* else [...] *)
                 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                   (* mod (sym_e1 * exp(2, sym_e2)) (max{ty}+1) *)
-                  C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
+                  C.PEop C.OpRem_t (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
                       (C.PEop C.OpAdd (Caux.ivmax_pe (Caux.mk_ctype result_ty)) (Caux.ival 1))
                 else (* e1 has a signed type *)
                   (* if sym_e2 < 0 then undef *)
                   (C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (Caux.ival 0))
                     (C.PEundef Undefined.Negative_left_shift)
                     (* let sym_res = mod (sym_e1 * exp(2, sym_e2)) (max{ty}+1) in [...] *)
-                    (C.PElet sym_res (C.PEop C.OpMod (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
+                    (C.PElet sym_res (C.PEop C.OpRem_t (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
                         (C.PEop C.OpAdd (Caux.ivmax_pe (Caux.mk_ctype result_ty)) (Caux.ival 1)))
                     (* not representable(ty, sym_res) then undef *)
                     (C.PEif (C.PEnot (is_representable [C.PEsym sym_res; Caux.mk_ctype result_ty]))
@@ -932,9 +913,35 @@ and translate_expression stdlib program is_lvalue a_expr =
           if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
             (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
                           performed on them. *)
-            translate_rvalue e1 >>= fun core_e1 ->
-            translate_rvalue e2 >>= fun core_e2 ->
+            translate_rvalue e1 >>= fun core_e1   ->
+            translate_rvalue e2 >>= fun core_e2   ->
+            E.fresh_symbol      >>= fun sym_conv1 ->
+            E.fresh_symbol      >>= fun sym_conv2 ->
+            let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_e1) (C.PEsym sym_e2) in
+            (* NOTE: result_ty is the usual arithmetic conv *)
+            E.return $
+              C.Ewseq [Just sym_e1; Just sym_e2] (Caux.mk_unseq [core_e1; core_e2]) (
+                C.Epure (
+                  C.PElet sym_conv1 conved_e1 (
+                    C.PElet sym_conv2 conved_e2 (
+                      C.PEif (C.PEop C.OpOr (C.PEis_unspec conved_e1) (C.PEis_unspec conved_e2))
+                        (if AilTypesAux.is_signed_integer_type result_ty then
+                          (* NOTE: unspecified value are daemonic *)
+                          C.PEundef Undefined.Exceptional_condition
+                        else
+                          (* NOTE: arithmetic is strict on unspecified values *)
+                          C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
+                        
+                        (if AilTypesAux.is_signed_integer_type result_ty then
+                          catch_exceptional_condition [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub (C.PEsym sym_conv1) (C.PEsym sym_conv2)]
+                        else
+                          conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub (C.PEsym sym_conv1) (C.PEsym sym_conv2)])
+                    )
+                  )
+                )
+              )
 
+(*
             E.print_debug 9 ("ty1 = " ^ Boot.pp_ail_ctype ty1) >>
             E.print_debug 9 ("ty2 = " ^ Boot.pp_ail_ctype ty2) >>
 
@@ -953,6 +960,11 @@ and translate_expression stdlib program is_lvalue a_expr =
                  else
                    (* otherwise, bring back the value from Z to the result type *)
                    conv_int [Caux.mk_ctype (ctype_of a_expr); C.PEop C.OpSub conv_e1 conv_e2])
+*)
+
+
+
+
           else
             (* otherwise, we have some pointer arithmetic *)
             translate_lvalue e1 >>= fun core_e1 ->
