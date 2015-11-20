@@ -133,7 +133,15 @@ let drive sym_supply file args with_concurrency : execution_result =
   List.iteri (fun n (_, exec) ->
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
-          let str_v = String_core.string_of_pexpr pe in
+          let str_v = String_core.string_of_pexpr
+              begin
+                match pe with
+                  | Core.PEval (Core.Vinteger ival) ->
+                      Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
+                      | None -> Core.Vinteger ival | Some n -> Core.Vinteger (Mem.integer_ival0 n)) )
+                  | _ ->
+                      pe
+              end in
           let str_v_ = str_v ^ stdout in
           if not (List.mem str_v_ !ky) then (
             if Debug.get_debug_level () = 0 then

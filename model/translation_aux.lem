@@ -122,8 +122,8 @@ let tmp_implementation =
             error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
       end
     )
-    (Aty.Unsigned Aty.Long)
-    (Aty.Signed   Aty.Long)
+    (Aty.Size_t)
+    (Aty.Ptrdiff_t)
 
 
 

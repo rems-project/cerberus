@@ -54,6 +54,7 @@ type expr =
   | PEis_integer of expr (* pexpr *)
   | PEis_signed of expr (* pexpr *)
   | PEis_unsigned of expr (* pexpr *)
+  | PEis_unspec of expr (* pexpr *)
   | Eraise of _sym
   | Eregister of _sym * name
   | Eskip
@@ -142,6 +143,7 @@ let register_cont_symbols expr =
     | PEis_integer _
     | PEis_signed _
     | PEis_unsigned _
+    | PEis_unspec _
     | Eraise _
     | Eregister _
     | Eskip
@@ -377,6 +379,12 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Pure (Core.PEis_unsigned pe)
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEis_unsigned")
+    | PEis_unspec _e ->
+        (match to_pure (f st _e) with
+          | Left pe ->
+              Pure (Core.PEis_unspec pe)
+          | _ ->
+              failwith "TODO(MSG) type-error: symbolify_expr, PEis_unspec")
     | Eraise _sym ->
         Expr (Core.Eraise (fst _sym))
     | Eregister (_sym, nm) ->
@@ -1000,7 +1008,7 @@ let subst name =
 %token NOT
 
 (* binary operators *)
-%token STAR SLASH PERCENT MINUS EQ PLUS CARET
+%token STAR SLASH REM_T REM_F MINUS EQ PLUS CARET
 
 (* boolean operators *)
 %token GT LT GE LE
@@ -1023,6 +1031,8 @@ let subst name =
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF
 
+%token UNSPECIFIED IS_UNSPEC
+
 
 (* TODO: not used yet, but the tracing mode of the parser crash othewise ..... *)
 (*
@@ -1035,7 +1045,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 %right SLASH_BACKSLASH
 %left EQ GT LT GE LE
 %left PLUS MINUS
-%left STAR SLASH PERCENT
+%left STAR SLASH REM_T REM_F
 %nonassoc CARET
 
 (* %right ELSE (* TODO: CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *) *)
@@ -1332,19 +1342,20 @@ core_type:
 
 
 %inline binary_operator:
-| PLUS            { Core.OpAdd }
-| MINUS           { Core.OpSub }
-| STAR            { Core.OpMul }
-| SLASH           { Core.OpDiv }
-| PERCENT         { Core.OpMod }
-| CARET           { Core.OpExp }
-| EQ              { Core.OpEq  }
-| GT              { Core.OpGt  }
-| LT              { Core.OpLt  }
-| GE              { Core.OpGe  }
-| LE              { Core.OpLe  }
-| SLASH_BACKSLASH { Core.OpAnd }
-| BACKSLASH_SLASH { Core.OpOr  }
+| PLUS            { Core.OpAdd   }
+| MINUS           { Core.OpSub   }
+| STAR            { Core.OpMul   }
+| SLASH           { Core.OpDiv   }
+| REM_T           { Core.OpRem_t }
+| REM_F           { Core.OpRem_f }
+| CARET           { Core.OpExp   }
+| EQ              { Core.OpEq    }
+| GT              { Core.OpGt    }
+| LT              { Core.OpLt    }
+| GE              { Core.OpGe    }
+| LE              { Core.OpLe    }
+| SLASH_BACKSLASH { Core.OpAnd   }
+| BACKSLASH_SLASH { Core.OpOr    }
 ;
 
 
@@ -1400,6 +1411,11 @@ expr:
     { PEctor (Core.Civsizeof, [_e]) }
 | IVALIGNOF _e= delimited(LPAREN, expr, RPAREN)
     { PEctor (Core.Civalignof, [_e]) }
+
+| UNSPECIFIED _e= delimited(LPAREN, expr, RPAREN)
+    { PEctor (Core.Cunspecified, [_e]) }
+| IS_UNSPEC _e= delimited(LPAREN, expr, RPAREN)
+    { PEis_unspec _e }
 
 (* TODO:
 | Vfloating of string

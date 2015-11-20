@@ -6,9 +6,7 @@ import Symbolic AilTypes Core_ctype
 
 val integerFromIntegerValue: integer_value -> maybe integer
 let integerFromIntegerValue ival =
-  case_integer_value ival
-    (fun n -> Just n)
-    (fun () -> Nothing)
+  eval_integer_value ival
 
 (*
 val symbolicFromIntegerValue: integer_value -> maybe Symbolic.symbolic

@@ -118,6 +118,8 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
+  | IS_UNSPEC
+  | UNSPECIFIED
   
   | STRING of string
   
@@ -136,7 +138,9 @@ type token =
   | MINUS
   | STAR
   | SLASH
-  | PERCENT
+(*  | PERCENT *)
+  | REM_T
+  | REM_F
   | CARET
   | EQ
   | GT

@@ -617,7 +617,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
                                 (cont n, args')
                             ))
                         | Nothing ->
-                            error "WIP: convert --> not a concrete integer"
+                            error ("WIP: convert --> not a concrete integer: " ^
+                                   stringFromMemValue (fromJust "Output, not a concrete integer" $ Core_aux.memValueFromValue conv_ty (Core.Vinteger ival)))
                       end
                   | Right (U.Defined (Core.Vunspecified _)) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))

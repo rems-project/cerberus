@@ -12,6 +12,9 @@ open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
 
+val warn: string -> unit
+declare ocaml target_rep function warn = `Debug.warn`
+
 
 val stringFromCtype: ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
@@ -340,8 +343,8 @@ end
 
 
 
-val     simplify_integer_value_base: integer_value_base -> either integer integer_value_base
-let rec simplify_integer_value_base ival_ =
+val     simplify_integer_value_base: bool -> integer_value_base -> either integer integer_value_base
+let rec simplify_integer_value_base do_unfolding ival_ =
   match ival_ with
     | IVconcrete n ->
         Left n
@@ -355,12 +358,14 @@ let rec simplify_integer_value_base ival_ =
               fun x y -> x * y
           | IntDiv ->
               fun x y -> if y = 0 then 0 else Num_extra.integerDiv_t x y
-          | IntMod ->
-              fun x y -> if y = 0 then 0 else Num_extra.integerMod_a x y
+          | IntRem_t ->
+              fun x y -> if y = 0 then 0 else Num_extra.integerRem_t x y
+          | IntRem_f ->
+              fun x y -> if y = 0 then 0 else Num_extra.integerRem_f x y
           | IntExp ->
               fun x y -> x ** natFromInteger y
         end in
-        match List.map simplify_integer_value_base ival_s with
+        match List.map (simplify_integer_value_base do_unfolding) ival_s with
           | [Left n1; Left n2] ->
               Left (op n1 n2)
           | [Left n1; Right ival_2] ->
@@ -389,82 +394,88 @@ let rec simplify_integer_value_base ival_ =
               error "Mem.simplify_integer_value_base"
         end
     | IVfromptr ref_ty (PVfromint ival_') ->
-        simplify_integer_value_base ival_'
+        simplify_integer_value_base do_unfolding ival_'
     
     
     | IVsizeof ty ->
-        match ty with
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
-              Left 1
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
-              Left 1
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
-              Left 1
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
-              (* TODO: assuming one byte = 8bits *)
-              Left (integerFromNat (n / 8))
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
-              (* TODO: assuming one byte = 8bits *)
-              Left (integerFromNat (n / 8))
-        (* TODO !!!!, fixing impl for testing purpose *)
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
-              Left 2
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
-              Left 2
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
-              Left 4
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
-              Left 4
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
-              Left 8
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
-              Left 8
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
-              Left 8
-          | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
-              Left 8
-          | _ ->
-              Right ival_
-        end
+        if do_unfolding then
+          match ty with
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
+                let () = warn "assuming one byte = 8 bits" in
+                Left (integerFromNat (n / 8))
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
+                let () = warn "assuming one byte = 8 bits" in
+                Left (integerFromNat (n / 8))
+            (* TODO !!!!, fixing impl for testing purpose *)
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
+                Left 2
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
+                Left 2
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
+                Left 4
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
+                Left 4
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
+                Left 8
+            | _ ->
+                Right ival_
+          end
+        else
+          Right ival_
     
     | IVmax ity ->
-        match ity with
-          | AilTypes.Signed (AilTypes.IntN_t _) ->
-              Left (snd (integer_range ity))
-          | AilTypes.Unsigned (AilTypes.IntN_t _) ->
-              Left (snd (integer_range ity))
-          | _ ->
-              (* TODO: fixing implementation for debug *)
-              Left (snd (integer_range ity))
-(*
-              Right ival_
-*)
-        end
+        if do_unfolding then
+          match ity with
+            | AilTypes.Signed (AilTypes.IntN_t _) ->
+                Left (snd (integer_range ity))
+            | AilTypes.Unsigned (AilTypes.IntN_t _) ->
+                Left (snd (integer_range ity))
+            | _ ->
+                (* TODO: fixing implementation for debug *)
+                Left (snd (integer_range ity))
+          end
+        else
+          Right ival_
 
     | IVmin ity ->
-        match ity with
-          | AilTypes.Signed (AilTypes.IntN_t _) ->
-              Left (fst (integer_range ity))
-          | AilTypes.Unsigned (AilTypes.IntN_t _) ->
-              Left (fst (integer_range ity))
-          | _ ->
-              (* TODO: fixing implementation for debug *)
-              Left (fst (integer_range ity))
-(*
-              Right ival_
-*)
-        end    
+        if do_unfolding then
+          match ity with
+            | AilTypes.Signed (AilTypes.IntN_t _) ->
+                Left (fst (integer_range ity))
+            | AilTypes.Unsigned (AilTypes.IntN_t _) ->
+                Left (fst (integer_range ity))
+            | _ ->
+                (* TODO: fixing implementation for debug *)
+                Left (fst (integer_range ity))
+          end
+        else
+          Right ival_
     
     | _ ->
         (* TODO: can probably do much more *)
         Right ival_
   end
 
-
-
 val eval_integer_value_base: integer_value_base -> maybe integer
 let eval_integer_value_base ival_ =
-  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
+  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base true ival_)
+
+
+val eval_integer_value: integer_value -> maybe integer
+let eval_integer_value (IV _ ival_) =
+  eval_integer_value_base ival_
 
 (*
   match ival_ with
@@ -531,8 +542,8 @@ val ifM: forall 'a. mem_constraint -> memM 'a -> memM 'a -> memM 'a
 let ifM constr (MemM m_then) (MemM m_else) =
   match constr with
     | MC_eqIV debug_str ival_1 ival_2 ->
-        let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_1) in
-        let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_2) in
+        let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1) in
+        let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2) in
         match (ival_1', ival_2') with
           | (IVconcrete n1, IVconcrete n2) ->
               MemM (if n1 = n2 then m_then else m_else)
@@ -749,7 +760,7 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
 
 (* Making an indirection here, so that future crazy optimisations won't be duplicated all over. *)
 let mk_op_ival_ iop ival_1 ival_2 =
-  either (fun z -> IVconcrete z) id (simplify_integer_value_base $ IVop iop [ival_1; ival_2])
+  either (fun z -> IVconcrete z) id (simplify_integer_value_base false $ IVop iop [ival_1; ival_2])
 
 
 
@@ -1445,6 +1456,39 @@ let address_expression_of_pointer (PV _ ptr_val_ sh) =
         end
 end
 
+
+
+
+(*
+let rec integerTypes_of_ival ival =
+  match ival with
+    | IVconcrete _ ->
+        Nothing
+    | IVaddress _ ->
+        Nothing
+(*
+    | IVfromptr _ _ ->
+        [Cty.intptr_t; Cty.unintptr_t]
+*)
+    | IVop _ [ival_1; ival_2] ->
+        
+    | IVmin ity ->
+        
+    | IVmax of AilTypes.integerType
+    | IVsizeof of ctype
+    | IValignof of ctype
+    | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+    | IVptrdiff of pointer_value_base * pointer_value_base
+    | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
+    | IVcomposite of list integer_value_base
+  end
+*)
+
+
+
+
+
+
 (* WIP *)
 let eq_ptrval eqs ptr_val1 ptr_val2 =
   print_debugM 6 ("Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
@@ -1663,58 +1707,60 @@ end
 
 
 
-let rec eq_ival mem_st eqs wival1 wival2 =
-  match (wival1, wival2) with
-    | (Left _, _) ->
-        (* TODO check with P: an unspec value is always equal to anything else *)
-        Just true
-    | (_, Left _) ->
-        Just true
-    | (Right (IV _ ival_1),  Right (IV _ ival_2)) ->
-        match (ival_1, ival_2) with
-          | (IVconcrete n1, IVconcrete n2) ->
-              Just (n1 = n2)
-          | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
-              if n = 0 then
-                match get_membersDefs tag_sym with
-                  | (ident', _)::_ ->
-                      if membr_ident = ident' then
-                        (* TODO: assuming no prefix padding *)
-                        Just true
-                      else
-                        Just false
-                  | _ ->
-                      error "Mem.eq_ival, get_membersDefs returned an empty list"
-                end
-              else
-                Nothing
-          | (IVmin ity, IVconcrete n) ->
-              let (is_exact, min, _) = minimal_range ity in
-              if is_exact then
-                Just (min < n)
-              else
-                if min < n then
-                  Just false
+let rec eq_ival mem_st eqs (IV prov1 ival_1) (IV prov2 ival_2) =
+  let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
+  let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
+  match (ival_1', ival_2') with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 = n2)
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        if n = 0 then
+          match get_membersDefs tag_sym with
+            | (ident', _)::_ ->
+                if membr_ident = ident' then
+                  (* TODO: assuming no prefix padding *)
+                  Just true
                 else
-                  Nothing
+                  Just false
+            | _ ->
+                error "Mem.eq_ival, get_membersDefs returned an empty list"
+          end
+        else
+          Nothing
+    | (IVmin ity, IVconcrete n) ->
+        let (is_exact, min, _) = minimal_range ity in
+        if is_exact then
+          Just (min < n)
+        else
+          if min < n then
+            Just false
+          else
+            Nothing
           
-          | (IVbyteof ival_1' (MVpointer ref_ty1 ptr_val1), IVbyteof ival_2' (MVpointer ref_ty2 ptr_val2)) ->
-              if ref_ty1 <> ref_ty2 then
-                Just false
-              else match eq_ival mem_st eqs (Right (IV Prov_none ival_1')) (Right (IV Prov_none ival_2')) with
-                | Just true ->
-                    match runMem (eq_ptrval eqs ptr_val1 ptr_val2) mem_st with
-                      | [Right (b, _)] ->
-                          Just b
-                      | _ ->
-                          Nothing
-                    end
-                | Just false ->
-                    Just false
-                | Nothing ->
-                    (* TODO *)
+    | (IVbyteof ival_1' (MVpointer ref_ty1 ptr_val1), IVbyteof ival_2' (MVpointer ref_ty2 ptr_val2)) ->
+        if ref_ty1 <> ref_ty2 then
+          Just false
+        (* TODO: check the provs *)
+        else match eq_ival mem_st eqs (IV prov1 ival_1') (IV prov2 ival_2') with
+          | Just true ->
+              match runMem (eq_ptrval eqs ptr_val1 ptr_val2) mem_st with
+                | [Right (b, _)] ->
+                    Just b
+                | _ ->
                     Nothing
               end
+          | Just false ->
+              Just false
+          | Nothing ->
+              (* TODO *)
+              Nothing
+        end
+    | _ ->
+        let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
+        let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
+        match (ival_1'', ival_2'') with
+          | (IVconcrete n1, IVconcrete n2) ->
+              Just (n1 = n2)
           | _ ->
               (* TODO *)
               Nothing
@@ -1724,40 +1770,28 @@ let rec eq_ival mem_st eqs wival1 wival2 =
 
 
 
-let lt_ival eqs wival1 wival2 =
-  let wival_1' = match wival1 with
-    | Left ty ->
-        Left ty
-    | Right (IV _ ival_1) ->
-        Right (either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_1))
-  end in
-  let wival_2' = match wival2 with
-    | Left ty ->
-        Left ty
-    | Right (IV _ ival_2) ->
-        Right (either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_2))
-  end in
-
-  match (wival_1', wival_2') with
-    | (Left ty1, Right (IVmin ity2)) ->
-        if ty1 = Basic (AilTypes.Integer ity2) then
-          Just false
-        else
-          Nothing
-    | (Right (IVmax ity1), Left ty2) ->
-        if Basic (AilTypes.Integer ity1) = ty2 then
-          Just false
-        else
-          Nothing
-    | (Left _, _) ->
-        (* TODO check with P: an unspec value is always equal to anything else *)
-        Just true
-    | (_, Left _) ->
-        Just true
-    | (Right (IVconcrete n1), Right (IVconcrete n2)) ->
+let lt_ival eqs (IV prov1 ival_1) (IV prov2 ival_2) =
+  let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
+  let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
+  match (ival_1', ival_2') with
+    | (IVconcrete n1, IVconcrete n2) ->
         Just (n1 < n2)
-    | (Right (IVconcrete n), Right (IVoffsetof tag_sym membr_ident)) ->
-        if n = 0 then
+
+    | (IVconcrete n, IVsizeof _) ->
+        if n <= 0 then
+          Just true
+        else
+          Nothing
+    
+    | (IVmin _, IVsizeof _) ->
+        let () = warn "assuming that no integer type has a strictly positive minimal value" in
+        Just true
+    | (IVmin _, IValignof _) ->
+        let () = warn "assuming that no integer type has a strictly positive minimal value" in
+        Just true
+    
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        if n <= 0 then
           match get_membersDefs tag_sym with
             | (ident', _)::_ ->
                 if membr_ident = ident' then
@@ -1771,7 +1805,7 @@ let lt_ival eqs wival1 wival2 =
         else
           Nothing
     
-    | (Right (IVmin ity), Right (IVconcrete n)) ->
+    | (IVmin ity, IVconcrete n) ->
         let (is_exact, min, _) = minimal_range ity in
         if is_exact then
           Just (min < n)
@@ -1781,7 +1815,7 @@ let lt_ival eqs wival1 wival2 =
           else
             Nothing
 
-    | (Right (IVconcrete n), Right (IVmax ity)) ->
+    | (IVconcrete n, IVmax ity) ->
         let (is_exact, _, max) = minimal_range ity in
         if is_exact then
           Just (n < max)
@@ -1792,26 +1826,28 @@ let lt_ival eqs wival1 wival2 =
             Nothing
 
     | _ ->
-        (* TODO *)
-        Nothing
+        let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
+        let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
+        match (ival_1'', ival_2'') with
+          | (IVconcrete n1, IVconcrete n2) ->
+              Just (n1 < n2)
+          | _ ->
+              (* TODO *)
+              Nothing
+        end
   end
 
-let le_ival eqs wival1 wival2 =
-  match (wival1, wival2) with
-    | (Left _, _) ->
-        Just true
-    | (_, Left _) ->
-        Just true
-    | (Right (IV _ ival_1),  Right (IV _ ival_2)) ->
-  match lt_ival eqs wival1 wival2 with
+let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
+  match lt_ival eqs ival1 ival2 with
     | Just true ->
         Just true
     | _ ->
-        let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_1) in
-        let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base ival_2) in
+        let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
+        let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
         match (ival_1', ival_2') with
           | (IVconcrete n1, IVconcrete n2) ->
               Just (n1 = n2)
+(*
           | (IVmin (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ _) ->
               Just true
           | (IVmin (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ _) ->
@@ -1820,6 +1856,7 @@ let le_ival eqs wival1 wival2 =
               Just true
           | (IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
               Just true
+*)
           
           | (IVmin ity, IVconcrete n) ->
               let (is_exact, min, _) = minimal_range ity in
@@ -1830,12 +1867,19 @@ let le_ival eqs wival1 wival2 =
                   Just true
                 else
                   Nothing
-          | (IVmin ity, IVoffsetof _ _) ->
-             (* TODO: check, but sounds right *)
-             Just true
-          | (IVoffsetof _ _, IVmax ity) ->
-             (* TODO: check, but sounds right *)
-             Just true
+          
+          | (IVconcrete n, IVsizeof _) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          | (IVmin _, IVsizeof _) ->
+              let () = warn "assuming that no integer type has a strictly positive minimal value" in
+              Just true
+          | (IVmin _, IValignof _) ->
+              let () = warn "assuming that no integer type has a strictly positive minimal value" in
+              Just true
+
           
           | (IVconcrete n, IVmax ity) ->
               let (is_exact, _, max) = minimal_range ity in
@@ -1847,52 +1891,93 @@ let le_ival eqs wival1 wival2 =
                 else
                   Nothing
           
-          | _ ->
-              (* TODO: this is fugly *)
-              match (ival_1, ival_1', ival_2, ival_2') with
-                (* a byte always range over uchar *)
-                | (IVmin (AilTypes.Unsigned AilTypes.Ichar), _, _, IVbyteof _ _) ->
-                    Just true
-                | (_, IVbyteof _ _, IVmax (AilTypes.Unsigned AilTypes.Ichar), _) ->
-                    Just true
-                | (IVmin (AilTypes.Signed AilTypes.Intptr_t), _, _, IVfromptr _ _) ->
-                    Just true
-                | (IVmin (AilTypes.Unsigned AilTypes.Intptr_t), _, _, IVfromptr _ _) ->
-                    Just true
-                | (_, IVfromptr _ _, IVmax (AilTypes.Signed AilTypes.Intptr_t), _) ->
-                    Just true
-                | (_, IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t), _) ->
-                    Just true
-                
-                (* sizeof and alignof are always in range of size_t *)
-                | (IVmin AilTypes.Size_t, _, IVsizeof _, _) ->
-                    Just true
-                | (IVsizeof _, _, IVmax AilTypes.Size_t, _) ->
-                    Just true
-                | (IVmin AilTypes.Size_t, _, IValignof _, _) ->
-                    Just true
-                | (IValignof _, _, IVmax AilTypes.Size_t, _) ->
-                    Just true
-                
+          | (IVmin (AilTypes.Size_t), IVoffsetof tag_sym membr_ident) ->
+              let () = warn ("we are assuming that struct/union type '" ^ show tag_sym ^
+                             "' isn't so big the offset to member '" ^ show membr_ident ^
+                             "' is representable in size_t") in
+              (* TODO: check that *)
+              Just true
+          | (IVoffsetof tag_sym membr_ident, IVmax (AilTypes.Size_t)) ->
+              let () = warn ("we are assuming that struct/union type '" ^ show tag_sym ^
+                             "' isn't so big the offset to member '" ^ show membr_ident ^
+                             "' is representable in size_t") in
+              Just true
+          
+          | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          
+          (* a byte always range over uchar *)
+          | (IVmin (AilTypes.Unsigned AilTypes.Ichar), IVbyteof _ _) ->
+              Just true
+          | (IVbyteof _ _, IVmax (AilTypes.Unsigned AilTypes.Ichar)) ->
+              Just true
+          | (IVmin (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ _) ->
+              Just true
+          | (IVmin (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ _) ->
+              Just true
+          | (IVfromptr _ _, IVmax (AilTypes.Signed AilTypes.Intptr_t)) ->
+              Just true
+          | (IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+              Just true
+          
+          (* sizeof and alignof are always in range of size_t *)
 (*
-                (* sizeof and alignof are never negative and we assume IVmin is never strictly positive *)
-                | (IVmin _, _, IVsizeof _, _) ->
-                    Just true
+          | (IVmin AilTypes.Size_t, IVsizeof _) ->
+              Just true
 *)
-                
+          | (IVsizeof _, IVmax AilTypes.Size_t) ->
+              Just true
+(*
+          | (IVmin AilTypes.Size_t, IValignof _) ->
+              Just true
+*)
+          | (IValignof _, IVmax AilTypes.Size_t) ->
+              Just true
+          
+          | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax AilTypes.Size_t) ->
+              if tag_sym1 = tag_sym2 then
+                let () = warn ("we are assuming that the delta between members '" ^ show membr_ident1 ^
+                               "' and '" ^ show membr_ident2 ^ "' of struct/union type '" ^ show tag_sym1 ^
+                               "' is representable in size_t") in
+                Just true
+              else
+                Nothing
+          | (IVconcrete n, IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2]) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          
+          | _ ->
+              let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
+              let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
+              match (ival_1'', ival_2'') with
+                | (IVconcrete n1, IVconcrete n2) ->
+                    Just (n1 <= n2)
                 | _ ->
+                    (* TODO *)
                     Nothing
               end
         end
   end
-end
 
 
 
-let ptrcast_ival int_ty ref_ty ival =
+let ptrcast_ival int_ty ref_ty (IV prov ival) =
+  (* TODO: check the types *)
+  match ival with
+  | IVfromptr ty ptrval_ ->
+      PV prov ptrval_ []
+  | _  ->
   (* TODO: for integer_value with no provenance, this is define only if the value is within
            the range of "device memory addresses" and the resulting pointer_value has Prov_device *)
   error "WIP: ptrcast_ival"
+  end
+
+
 
 
 

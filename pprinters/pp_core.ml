@@ -19,7 +19,8 @@ let precedence = function
 
   | PEop (OpMul, _, _)
   | PEop (OpDiv, _, _)
-  | PEop (OpMod, _, _) -> Some 2
+  | PEop (OpRem_t, _, _)
+  | PEop (OpRem_f, _, _) -> Some 2
   
   | PEop (OpAdd, _, _)
   | PEop (OpSub, _, _) -> Some 3
@@ -99,7 +100,8 @@ let pp_binop = function
   | OpSub -> P.minus
   | OpMul -> P.star
   | OpDiv -> P.slash
-  | OpMod -> P.percent
+  | OpRem_t -> pp_keyword "rem_t"
+  | OpRem_f -> pp_keyword "rem_f"
   | OpExp -> P.caret
   | OpEq  -> P.equals
   | OpLt  -> P.langle

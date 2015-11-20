@@ -147,7 +147,10 @@ let keywords =
       ("ivmax",     T.IVMAX);
       ("ivmin",     T.IVMIN);
       ("ivsizeof",  T.IVSIZEOF);
-      ("ivalignof", T.IVALIGNOF)
+      ("ivalignof", T.IVALIGNOF);
+      ("unspecified", T.UNSPECIFIED);
+      
+      ("is_unspec", T.IS_UNSPEC);
     ]
 
 let scan_sym lexbuf =
@@ -213,7 +216,11 @@ rule main = parse
   | '-'   { T.MINUS }
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
+(*
   | '%'   { T.PERCENT }
+*)
+  | "rem_t" { T.REM_T }
+  | "rem_f" { T.REM_F }
   | '^'   { T.CARET }
   | '='   { T.EQ }
   | '>'   { T.GT }

@@ -1227,8 +1227,10 @@ let rec pexprFromSymbolic concur_sym_map symb =
         OpMul
     | Symbolic.Div ->
         OpDiv
-    | Symbolic.Mod ->
-        OpMod
+    | Symbolic.Rem_t ->
+        OpRem_t
+    | Symbolic.Rem_f ->
+        OpRem_f
     | Symbolic.Exp ->
         OpExp
     | Symbolic.Eq ->

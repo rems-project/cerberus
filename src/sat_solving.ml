@@ -85,7 +85,8 @@ let rec expression_from_integer_value_base = function
       | IntSub -> "-"
       | IntMul -> "*"
       | IntDiv -> "/" (* TODO: div by zero? *)
-      | IntMod -> failwith "IntMod"
+      | IntRem_t -> failwith "IntRem_t"
+      | IntRem_f -> failwith "IntRem_f"
       | IntExp -> failwith "IntExp" in
       Printf.sprintf "(%s %s %s)" iop_str
         (expression_from_integer_value_base ival1_) (expression_from_integer_value_base ival2_)

@@ -100,13 +100,10 @@ val case_integer_value: forall 'a. (* TODO: expose more ctors *)
     (unit -> 'a) ->
     'a
 
-type wrapped_ival =
-  either ctype integer_value (* the Left ty, correspond to unpec value of type ty *)
-
 (* Predicats on integer values *)
-val eq_ival: mem_state -> Symbolic.constraints -> wrapped_ival -> wrapped_ival -> maybe bool
-val lt_ival: Symbolic.constraints -> wrapped_ival -> wrapped_ival -> maybe bool
-val le_ival: Symbolic.constraints -> wrapped_ival -> wrapped_ival -> maybe bool
+val eq_ival: mem_state -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val lt_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val le_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> pointer_value
 (* val is_concrete_ival: integer_value -> bool *)
 
@@ -186,3 +183,6 @@ let allocate_static                     = Impl.allocate_static
 let allocate_dynamic                    = Impl.allocate_dynamic
 let load                                = Impl.load
 let store                               = Impl.store
+
+val eval_integer_value: integer_value -> maybe integer
+let eval_integer_value = Impl.eval_integer_value
