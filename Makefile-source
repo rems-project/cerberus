@@ -16,6 +16,7 @@ SOURCE_ail_typing=\
   ail/GenTyping.lem \
   ail/Range.lem \
   ail/TypingError.lem \
+  ail/Implementation.lem \
 
 SOURCE_cabs=\
   cabs.lem \
@@ -31,6 +32,7 @@ SOURCE_cabs_to_ail=\
 SOURCE_core=\
   core_aux.lem \
   core_ctype.lem \
+  core_ctype_aux.lem \
   core.lem \
 
 SOURCE_core_to_core=\
@@ -42,10 +44,12 @@ SOURCE_core_dynamics=\
   core_run_aux.lem \
   core_run.lem \
   driver.lem \
+  driver_effect.lem \
   nondeterminism.lem \
   symbolic.lem \
 
 SOURCE_elaboration=\
+  implementation_.lem \
   translation_aux.lem \
   translation_effect.lem \
   translation.lem \
@@ -70,23 +74,21 @@ SOURCE_utils=\
   symbol.lem \
   thread.lem \
   uniqueId.lem \
+  std.lem \
+  monadic_parsing.lem \
+  output.lem
+
 
 SOURCE_defacto =\
-  defacto_memory_types.lem \
-  defacto_memory.lem \
-
-SOURCE_extra=\
-  cmm_aux.lem \
-  std.lem \
-  implementation_.lem \
-  core_ctype_aux.lem \
   mem.lem \
   mem_aux.lem \
   mem_common.lem \
-  driver_effect.lem \
-  ail/Implementation.lem \
-  monadic_parsing.lem \
-  output.lem
+  defacto_memory_types.lem \
+  defacto_memory.lem \
+
+SOURCE_concurrency_interface =\
+  cmm_aux.lem
+
 
 CERBERUS_LEM_SOURCES=\
   $(SOURCE_ail) \
@@ -99,4 +101,4 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_elaboration) \
   $(SOURCE_utils) \
   $(SOURCE_defacto) \
-  $(SOURCE_extra) 
+  $(SOURCE_concurrency_interface)
