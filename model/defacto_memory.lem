@@ -429,6 +429,10 @@ let rec simplify_integer_value_base do_unfolding ival_ =
                 Left 8
             | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
                 Left 8
+
+            | Core_ctype.Pointer _ _ ->
+                Left 8
+
             | _ ->
                 Right ival_
           end
@@ -1562,7 +1566,26 @@ let eq_ptrval eqs ptr_val1 ptr_val2 =
   end
 
 
-
+let rec silly_sh_eq sh1 sh2 =
+  match (sh1, sh2) with
+    | ([], []) ->
+        Just true
+    | (SPE_array ty1 ival_1 :: sh1', SPE_array ty2 ival_2 :: sh2') ->
+        if ty1 = ty2 then
+          match (eval_integer_value_base ival_1, eval_integer_value_base ival_2) with
+            | (Just n1, Just n2) ->
+                if n1 = n2 then silly_sh_eq sh1' sh2' else Nothing
+            | _ ->
+              Nothing
+          end
+        else
+          Nothing
+    | (SPE_member tag_sym1 membr_ident1 :: sh1', SPE_member tag_sym2 membr_ident2 :: sh2') ->
+        if tag_sym1 = tag_sym2 && membr_ident1 = membr_ident2 then
+          silly_sh_eq sh1' sh2'
+        else
+          Nothing
+  end
 
 (* TODO: more .... *)
 let ne_ptrval eqs (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
@@ -1577,7 +1600,13 @@ let ne_ptrval eqs (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as
       if sh1 = [] && sh2 = [] then
         return (alloc_id1 <> alloc_id2)
       else
-        error ("WIP(1): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+        match (silly_sh_eq sh1 sh2) with
+          | Just true ->
+              return (alloc_id1 <> alloc_id2)
+          | _ ->
+              error ("WIP(1): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+        end
+        
 
   | _ ->
       error ("WIP(2): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
@@ -1903,6 +1932,8 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                              "' is representable in size_t") in
               Just true
           
+
+
           | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
               if n <= 0 then
                 Just true
@@ -1921,6 +1952,13 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
           | (IVfromptr _ _, IVmax (AilTypes.Signed AilTypes.Intptr_t)) ->
               Just true
           | (IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+              Just true
+
+          | (IVmin (AilTypes.Signed AilTypes.Int_), IVbyteof _ _) ->
+              let () = warn "TODO: check + document" in
+              Just true
+          | (IVbyteof _ _, IVmax (AilTypes.Signed AilTypes.Int_)) ->
+              let () = warn "TODO: check + document" in
               Just true
           
           (* sizeof and alignof are always in range of size_t *)
@@ -1951,6 +1989,10 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               else
                 Nothing
           
+          | (IVsizeof (Core_ctype.Pointer _ _), IVmax _) ->
+              let () = warn "TODO: document" in
+              Just true
+
           | _ ->
               let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
               let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
