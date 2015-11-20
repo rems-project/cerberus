@@ -2104,6 +2104,60 @@ and desugar_and_register_static_assert_declaration sa_decl =
 
 val desugar_declaration_base: specifiers -> list init_declarator -> E.t (list (identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
+          desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs (* TODO: use qualifiers *), _ty) ->
+          E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors >>= fun xs ->
+          
+          (* for each [init_declarator] *)
+          E.foldrM (fun (ident, qs, ty, d_e_opt) acc ->
+            (* TODO!!!: do something with qs *)
+            let base_qs = translate_type_qualifiers specifs.type_qualifiers in
+            let _ = Boot.print_debug 2
+              (if base_qs.ATypes.const then "FOUND CONST" else "DIDN'T FIND CONST") in (* DEBUG *)
+            
+            
+            let _ = Boot.print_debug 2 $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
+            let (qs', ty') = inject_qualifiers base_qs ty in
+            if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
+              error "TODO: desugar_declaration_base: is this case legal?"
+            else
+              let _ = Boot.print_debug 2 ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
+              let _ = Boot.print_debug 2 ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)
+              
+              if specifs.storage_classes = [SC_typedef] then
+                (* Case of a typedef *)
+                E.register_identifier ident
+                  E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun (_, sym) ->
+                E.register_typedef sym (AilTypesAux.combine_qualifiers qs qs', ty') >>
+                E.return acc
+                
+              else match ty with
+                | ATypes.Function _ return_ty params is_variadic ->
+                    E.register_identifier ident
+                      E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
+                    E.register_function_declaration (Loc.locOf ident) sym true (
+                      return_ty,
+                      params,
+                      is_variadic,
+                      List.elem FS_inline   specifs.function_specifiers,
+                      List.elem FS_Noreturn specifs.function_specifiers
+                    ) >>
+                    E.return acc
+                | _ ->
+                    E.register_identifier ident
+                      E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
+                    let dur = determinate_storage_duration link specifs.storage_classes in
+                    E.register_internal_object_declaration sym (dur, AilTypesAux.combine_qualifiers qs qs', ty') >>
+                    match d_e_opt with
+                      | Just d_e ->
+                          E.return ((sym, d_e) :: acc)
+                      | Nothing ->
+                          E.return acc
+                    end
+              end
+          ) xs []
+
+
+(*
   desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), _ty) ->
 (*   E.mapM (desugar_init_declarator _ty specifs.storage_classes) idecltors  >>= fun xs  -> *)
   let base_qs = translate_type_qualifiers specifs.type_qualifiers in
@@ -2147,6 +2201,27 @@ let desugar_declaration_base specifs idecltors =
             end
       end
     ) (List.reverse idecltors) []
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 (* WIP
 
