@@ -1310,17 +1310,19 @@ and annotate_definition_aux A S G (ty, e) =
         annotate_expression A S G e >>= fun a_e ->
         match (ty, Annotation.type_of A a_e) with
           | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
-              if AilTypesAux.compatible elem_ty1 elem_ty2 then
+             (* TODO: check that is correct to unqualify *)
+              if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
-              if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
+             (* TODO: check that is correct to unqualify *)
+              if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
-                       pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
+                       pp_ail_ctype (AilTypesAux.unqualify elem_ty1) ^ " <-> " ^ pp_ail_ctype (AilTypesAux.unqualify elem_ty2))
          | _ ->
              (* STD §6.7.9#14 *)
              if AilTypesAux.is_array_of_character ty then

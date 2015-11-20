@@ -1209,12 +1209,23 @@ let is_complete_object S ty =
 
 (* TODO: check *)
 val unqualify: ctype -> ctype
-let unqualify = function
+let rec unqualify ty =
+  match ty with
+  | Array elem_ty n ->
+      Array (unqualify elem_ty) n
 (*
-  | Pointer _ ty ->
-      Pointer no_qualifiers ty
+ | Function ty qs_tys is_variadic ->
+     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
 *)
-  | ty ->
+  | Pointer _ Void ->
+      Pointer no_qualifiers Void
+  | Pointer _ (Basic bty) ->
+      Pointer no_qualifiers (Basic bty)
+  | Pointer ref_qs ref_ty ->
+      Pointer ref_qs (unqualify ref_ty)
+ | Atomic ty' ->
+     Atomic (unqualify ty')
+  | _ ->
       ty
 end
 (*

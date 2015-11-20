@@ -637,24 +637,18 @@ and translate_expression stdlib program is_lvalue a_expr =
                   (* if sym_e2 < 0 then undef *)
                   (C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (Caux.ival 0))
                     (C.PEundef Undefined.Negative_left_shift)
-                    (* let sym_res = mod (sym_e1 * exp(2, sym_e2)) (max{ty}+1) in [...] *)
-                    (C.PElet sym_res (C.PEop C.OpRem_t (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
-                        (C.PEop C.OpAdd (Caux.ivmax_pe (Caux.mk_ctype result_ty)) (Caux.ival 1)))
+                    (* let sym_res = sym_e1 * exp(2, sym_e2) in [...] *)
+(*                    (C.PElet sym_res (C.PEop C.OpRem_t (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2))) *)
+                    (C.PElet sym_res (C.PEop C.OpMul (C.PEsym sym_e1) (C.PEop C.OpExp (Caux.ival 2) (C.PEsym sym_e2)))
                     (* not representable(ty, sym_res) then undef *)
                     (C.PEif (C.PEnot (is_representable [C.PEsym sym_res; Caux.mk_ctype result_ty]))
                       (C.PEundef Undefined.Negative_left_shift)
                     (* else  *)
                       (C.PEsym sym_res)
-                       )
-                    )
+                    ))
                   )
                 )
-               )))
-              )
-            )
-          )
-
-
+                   ))))))
 (*
                 C.PEif (C.PEop C.OpLt (C.PEsym sym_e2) (Caux.ival 0))
                   (C.PEundef Undefined.Negative_shift)
@@ -1411,13 +1405,20 @@ and translate_expression stdlib program is_lvalue a_expr =
       | A.AilEcast _ ty e ->
           E.fresh_symbol     >>= fun sym_e  ->
 (*          translate_expr e >>= fun core_e -> *)
-          translate_rvalue e >>= fun core_e ->
+          (if AilTypesAux.is_integer (ctype_of e) then translate_rvalue else translate_expr) e >>= fun core_e ->
           E.return $
             C.Ewseq [Just sym_e] core_e
               (* TODO: check typing stuff *)
               begin
                 let e_ty = ctype_of e in
-                if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
+                
+                if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
+                    match ty with
+                      | Aty.Pointer _ ref_ty ->
+                          C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty))))
+                    end
+                
+                else if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
                   (* making a pointer from an integer *)
                   let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type ty in
                   C.Ememop Mem.PtrFromInt [Caux.mk_ctype e_ty; Caux.mk_ctype ref_ty; C.PEsym sym_e]
@@ -1602,12 +1603,24 @@ and translate_expression stdlib program is_lvalue a_expr =
                   
                   (* their initialisations *)
                   E.mapM (fun (sym, param_opt, e) ->
-                    E.fresh_symbol         >>= fun sym_init ->
-                    translate_rvalue e >>= fun core_e ->
                     let param_ty = match param_opt with
                       | Just (_, ty) -> ty
                       | Nothing      -> AilTypesAux.rvalue_coercion (ctype_of e) (* TODO: check the std *)
                     end in
+
+(* TODO !!!!! shouldn't do this here *)
+                if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant e then
+                    match param_ty with
+                      | Aty.Pointer _ ref_ty ->
+                          E.return $
+                          (Caux.pstore loc (Caux.mk_ctype param_ty) (C.PEsym sym) (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA)
+
+                          
+                    end
+             else
+
+                    E.fresh_symbol         >>= fun sym_init ->
+                    translate_rvalue e >>= fun core_e ->
                     let conved_init = conv [Caux.mk_ctype (ctype_of e); Caux.mk_ctype param_ty; C.PEsym sym_init] in
                     E.return $
                       C.Ewseq [Just sym_init] core_e
