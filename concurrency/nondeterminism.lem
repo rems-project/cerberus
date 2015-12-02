@@ -1,0 +1,55 @@
+open import Pervasives
+import Loc
+
+type t 'a = ND of list 'a
+
+val mzero: forall 'a. t 'a
+let mzero = ND []
+
+val return: forall 'a. 'a -> t 'a
+let return a = ND [a]
+
+val pick: forall 'a. string -> list 'a -> t 'a
+let pick _ l = ND l
+
+(* Forget is not part of the interface, but is used internally *)
+val forget: forall 'a. t 'a -> list 'a
+let forget m =
+  match m with
+  | ND l -> l
+  end
+
+type kill_reason =
+  (* Undef is not used by the opsem *)
+  (* | Undef of list Undefined.undefined_behaviour *)
+  | Error of Loc.t * string
+  | Other of string
+
+(* The function kill (and the types of its arguments) are part of the
+   interface, but they are not used in this implementation. *)
+val kill: forall 'a. kill_reason -> t 'a
+let kill _ = mzero
+
+(* The reason contains the message in the case the guard is FALSE. *)
+val guard: bool -> kill_reason -> t unit
+let guard b reason =
+  if b then return () else kill reason
+
+val mplus: forall 'a. t 'a -> t 'a -> t 'a
+let mplus left right = 
+  match (left, right) with
+  | (ND l1, ND l2) -> ND (l1 ++ l2)
+  end
+
+val msum: forall 'a. list (t 'a) -> t 'a
+let msum = List.foldr mplus mzero
+
+val bindExhaustive: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bindExhaustive m f = 
+  msum (List.map f (forget m))
+
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind = bindExhaustive
+
+val mem : forall 'a. Eq 'a => 'a -> t 'a -> bool
+let mem x m = List.elem x (forget m)
