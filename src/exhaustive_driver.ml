@@ -167,16 +167,19 @@ let drive sym_supply file args with_concurrency : execution_result =
             "eqs= " ^ Pp_cmm.pp_constraints constraints
           );
 
-
-
-
-
       | ND.Killed (ND.Undef0 (loc, ubs), _, _) ->
-          print_endline (
-            Colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Pp_errors.location_to_string loc ^ "]:\n" ^
-              (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
-            ))
-          )
+          let str_v = Pp_errors.location_to_string loc ^
+            (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs)) in
+          
+          if not (List.mem str_v !ky) then (
+            print_endline (
+              Colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Pp_errors.location_to_string loc ^ "]:\n" ^
+                (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
+              ))
+           );
+            ky := str_v :: !ky;
+          ) else
+            ()
       
       | ND.Killed (ND.Error0 (loc, str), _, _) ->
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str)))
