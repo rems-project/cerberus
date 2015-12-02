@@ -29,11 +29,14 @@ AXIOM_BEH_GEN = \
 
 ND_LEM = \
   nondeterminism.lem \
+  loc.lem \
 
 ND_GEN = \
   Nondeterminism.thy \
   nondeterminism.ml \
   Nondeterminism-inc.tex \
+  Loc.thy \
+  loc.ml \
 
 OPSEM_LEM = \
   cmm_op.lem \
@@ -43,6 +46,12 @@ OPSEM_GEN = \
   Cmm_op.thy \
   cmm_op.ml \
   Cmm_op-inc.tex \
+
+DOC_ISA = \
+  Cmm_op.thy \
+
+DOC_PDF = \
+  Cmm_op.pdf \
 
 default: $(BUILD_DIR)/Cmm_op.thy \
 
@@ -100,6 +109,11 @@ $(BUILD_DIR)/%.lem: %.lem | $(BUILD_DIR)
 	@echo COPYING $<
 	@cp $< $(BUILD_DIR)
 
+# Copy the thy files to the build dir
+$(BUILD_DIR)/%.thy: %.thy | $(BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)
+
 # Copy the ml files to the build dir
 $(BUILD_DIR)/%.ml: %.ml | $(BUILD_DIR)
 	@echo COPYING $<
@@ -113,6 +127,12 @@ $(BUILD_DIR)/%.ott: %.ott | $(BUILD_DIR)
 # Create the build directory
 $(BUILD_DIR):
 	mkdir $(BUILD_DIR)
+
+
+
+
+
+
 
 
 

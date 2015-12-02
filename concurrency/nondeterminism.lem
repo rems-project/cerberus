@@ -1,4 +1,5 @@
 open import Pervasives
+import Loc
 
 type t 'a = ND of list 'a
 
@@ -21,7 +22,7 @@ let forget m =
 type kill_reason =
   (* Undef is not used by the opsem *)
   (* | Undef of list Undefined.undefined_behaviour *)
-  | Error of string
+  | Error of Loc.t * string
   | Other of string
 
 (* The function kill (and the types of its arguments) are part of the
