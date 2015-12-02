@@ -1,6 +1,8 @@
 BUILD_DIR           = _bin
 CPP_BUILD_DIR       = _bin_cppmem
+ISA                 = ../../../Isabelle2015/bin/isabelle
 OCAML_LIB_DIR       = ../../lem/ocaml-lib
+ISA_LIB_DIR         = ../../lem/isabelle-lib
 CMM_MODEL_DIR       = ../../../rsem/cpp/axiomatic/ntc
 CPP_SRC_DIR         = ../../../rsem/cpp/src
 CPP_INTEGRATION_DIR = cppmem-integration
@@ -131,6 +133,27 @@ $(BUILD_DIR):
 
 
 
+
+
+# Generate Isabelle pdf of definitions
+
+$(BUILD_DIR)/Cmm_op.pdf: $(BUILD_DIR)/Cmm_op.thy \
+                  $(BUILD_DIR)/ROOT \
+                  $(BUILD_DIR)/document/root.tex
+	cp $(ISA_LIB_DIR)/*.thy $(BUILD_DIR)
+	cd $(BUILD_DIR); ../$(ISA) build -D .
+	cp $(BUILD_DIR)/output/document.pdf $(BUILD_DIR)/Cmm_op.pdf
+
+$(BUILD_DIR)/document/root.tex: root.tex | $(BUILD_DIR)/document
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)/document
+
+$(BUILD_DIR)/document: | $(BUILD_DIR)
+	mkdir $(BUILD_DIR)/document
+
+$(BUILD_DIR)/ROOT: ROOT | $(BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)
 
 
 
