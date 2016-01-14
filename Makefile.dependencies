@@ -40,7 +40,7 @@ pprint:
 	  make -C $(PPRINT_PATH) ; \
 	  mv  $(PPRINT_PATH)/Makefile_ $(PPRINT_PATH)/Makefile ; \
         else \
-          make -C $(PPRINT_PATH) ; \
+          make -C $(PPRINT_PATH) install; \
         fi
 
 zarith:
@@ -48,7 +48,7 @@ zarith:
 	  echo DOWNLOADING $(ZARITH_SOURCE) ; \
 	  $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
 	fi
-	cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make
+	cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make && make install
 
 clean:
 	rm -f $(CMDLINE_PATH)/*.o $(PPRINT_PATH)/*.o $(ZARITH_PATH)/*.o
