@@ -68,8 +68,7 @@ and shift_path =
 and integer_value_base =
   | IVconcrete of integer (* of Symbolic.symbolic *)
   | IVaddress of address (* NOTE: this should never get out of this module *)
-  | IVfromptr of ctype * (* ctype * *) pointer_value_base (* the first parameter is the referenced type of the pointer value,
-                                                       the second is the integer type *)
+  | IVfromptr of ctype * pointer_value_base (* the first parameter is the referenced type of the pointer value *)
   | IVop of integer_operator * list integer_value_base
   | IVmin of AilTypes.integerType
   | IVmax of AilTypes.integerType
@@ -79,7 +78,6 @@ and integer_value_base =
   | IVptrdiff of pointer_value_base * pointer_value_base
   (* TODO: tentative *)
   | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
-  | IVcomposite of list integer_value_base
 
 
 and integer_value =

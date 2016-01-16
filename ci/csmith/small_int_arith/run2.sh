@@ -8,7 +8,7 @@ for file in csmith_???.c; do
         continue
     fi;
     
-    gtimeout 30s cerberus --sequentialise --exec $file 2>&1 > cerb.out;
+    gtimeout 30s cerberus --exec $file 2>&1 > cerb.out;
     ret=$?
     echo $ret >> cerb.out
     if [ $ret == 124 ]; then

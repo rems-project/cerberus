@@ -121,11 +121,13 @@ let pload loc ty x mo      = Eaction (Paction Pos (Action loc default (Load ty x
 let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2)))
 
 
-let ival n =
-  PEval (Vinteger (Mem.integer_ival n))
-(*
+let zero =
+  PEval (Vinteger (Mem.integer_ival 0))
+
+let one =
+  PEval (Vinteger (Mem.integer_ival 1))
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
-*)
+
 
 val cfunction_const: Symbol.t -> pexpr
 let cfunction_const fsym =
@@ -301,19 +303,11 @@ end
 val mk_ctype: forall 'a. AilTypes.ctype -> pexpr
 let mk_ctype ty = PEval (Vctype (proj_ctype ty))
 
-let rec mk_wseq_aux end_e a_opts_es =
+let rec mk_wseq a_opts_es =
   match a_opts_es with
-    | []               -> end_e
-(*    | [(_, e)]         -> e *)
-    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq_aux end_e es')
-end
-let mk_wseq end_e = function
-  | [] ->
-      end_e
-  | [(_, e)] ->
-      e
-  | a_opts_es ->
-      mk_wseq_aux end_e a_opts_es
+    | []               -> Eskip
+    | [(_, e)]         -> e
+    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq es')
 end
 
 val     mk_sseq: forall 'a. list (list (maybe Core.sym) * expr 'a) -> expr 'a
@@ -667,8 +661,6 @@ let rec subst_sym_pexpr sym pe' = function
       PEnot (subst_sym_pexpr sym pe' pe)
   | PEop bop pe1 pe2 ->
       PEop bop (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2)
-  | PEis_unspec pe ->
-      PEis_unspec (subst_sym_pexpr sym pe' pe)
   | PEmemop pure_memop pes ->
       PEmemop pure_memop (List.map (subst_sym_pexpr sym pe') pes)
   | PEtuple pes ->
@@ -1227,10 +1219,8 @@ let rec pexprFromSymbolic concur_sym_map symb =
         OpMul
     | Symbolic.Div ->
         OpDiv
-    | Symbolic.Rem_t ->
-        OpRem_t
-    | Symbolic.Rem_f ->
-        OpRem_f
+    | Symbolic.Mod ->
+        OpMod
     | Symbolic.Exp ->
         OpExp
     | Symbolic.Eq ->

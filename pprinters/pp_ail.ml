@@ -33,7 +33,7 @@ let precedence = function
   
   | AilEbinary (_, Arithmetic Mul0, _)
   | AilEbinary (_, Arithmetic Div0, _)
-  | AilEbinary (_, Arithmetic Mod, _) -> Some 3
+  | AilEbinary (_, Arithmetic Mod0, _) -> Some 3
   
   | AilEbinary (_, Arithmetic Add0, _)
   | AilEbinary (_, Arithmetic Sub0, _) -> Some 4
@@ -260,24 +260,6 @@ let pp_qualifiers_raw qs =
     !^ str ^^ P.equals ^^^ !^ (if b then "true" else "false") in
   P.braces (comma_list f [("const", qs.const); ("restrict", qs.restrict); ("volatile", qs.volatile); ("atomic", qs.atomic)])
 
-
-(* pprint C types in human readable format *)
-let pp_qualifiers_human qs =
-  let strs =
-    (if qs.const then fun z -> "const" :: z else (fun z -> z)) (
-      (if qs.restrict then fun z -> "restrict" :: z else (fun z -> z)) (
-        (if qs.volatile then fun z -> "volatile" :: z else (fun z -> z)) (
-          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z))
-            []
-        )
-      )
-    ) in
-  P.braces (
-    comma_list (!^) strs
-  )
-
-
-
 let rec pp_ctype_raw = function
   | Void ->
       !^ "Void"
@@ -289,10 +271,10 @@ let rec pp_ctype_raw = function
       !^ "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
   | Function (has_proto, ty, params, is_variadic) ->
       !^ "Function" ^^ P.brackets (!^ (if has_proto then "true" else "false") ^^ P.comma ^^^
-                                        comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
+                                        comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
                                    !^ (if is_variadic then "true" else "false"))
   | Pointer (ref_qs, ref_ty) ->
-      !^ "Pointer" ^^ P.brackets (pp_qualifiers_human ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
+      !^ "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
   | Atomic ty ->
       !^ "Atomic" ^^ P.brackets (pp_ctype_raw ty)
   | Struct sym ->
@@ -313,8 +295,6 @@ let rec pp_ctype_raw = function
 *)
   | Builtin str ->
       !^ "Builtin" ^^ P.brackets (!^ str)
-
-
 
 
 
@@ -390,6 +370,20 @@ let rec pp_ctype_declaration id = function
       !^ str
 
 
+(* pprint C types in human readable format *)
+let pp_qualifiers_human qs =
+  let strs =
+    (if qs.const then fun z -> "const" :: z else (fun z -> z)) (
+      (if qs.restrict then fun z -> "restrict" :: z else (fun z -> z)) (
+        (if qs.volatile then fun z -> "volatile" :: z else (fun z -> z)) (
+          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z))
+            []
+        )
+      )
+    ) in
+  P.braces (
+    comma_list (!^) strs
+  )
 
 let rec pp_ctype_human qs ty =
   let prefix_pp_qs =
@@ -446,7 +440,7 @@ let rec pp_ctype_human qs ty =
 let pp_arithmeticOperator = function
   | Mul0  -> P.star
   | Div0  -> P.slash
-  | Mod  -> P.percent
+  | Mod0  -> P.percent
   | Add0  -> P.plus
   | Sub0  -> P.minus
   | Shl  -> P.langle ^^ P.langle

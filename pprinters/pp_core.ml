@@ -19,8 +19,7 @@ let precedence = function
 
   | PEop (OpMul, _, _)
   | PEop (OpDiv, _, _)
-  | PEop (OpRem_t, _, _)
-  | PEop (OpRem_f, _, _) -> Some 2
+  | PEop (OpMod, _, _) -> Some 2
   
   | PEop (OpAdd, _, _)
   | PEop (OpSub, _, _) -> Some 3
@@ -37,7 +36,6 @@ let precedence = function
   
   | PEop (OpOr,  _, _) -> Some 7
   
-  | PEis_unspec _
   | PEmemop _
   | PEundef _
   | PEerror _
@@ -100,8 +98,7 @@ let pp_binop = function
   | OpSub -> P.minus
   | OpMul -> P.star
   | OpDiv -> P.slash
-  | OpRem_t -> pp_keyword "rem_t"
-  | OpRem_f -> pp_keyword "rem_f"
+  | OpMod -> P.percent
   | OpExp -> P.caret
   | OpEq  -> P.equals
   | OpLt  -> P.langle
@@ -227,9 +224,9 @@ let pp_ctor = function
   | Civmin ->
       !^ "ivmin"
   | Civsizeof ->
-      !^ "ivsizeof"
+      !^ "sizeof"
   | Civalignof ->
-      !^ "ivalignof"
+      !^ "alignof"
 
 
 let pp_pexpr pe =
@@ -285,8 +282,6 @@ let pp_pexpr pe =
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
-        | PEis_unspec pe ->
-            pp_keyword "is_unspec" ^^ P.parens (pp pe)
         | PEmemop (pure_memop, pes) ->
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
         | PEtuple pes ->

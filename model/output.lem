@@ -309,41 +309,36 @@ declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem
 val stringFromPointerValue: Mem.pointer_value -> string
 declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
 
-val stringFromCtype: Cty.ctype -> string
-declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
 
 
 (* the third argument specify have many characters to load at most *)
-val     load_character_array_aux: Cty.ctype -> Mem.pointer_value -> maybe nat -> list char -> Mem.memM (list char)
-let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
-  match prec_n_opt with
-    | Just 0 ->
-        Mem.return (List.reverse acc)
-    | _ ->
-        let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
-        Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
-        Mem.case_mem_value mval
-          (fun _ -> error "Output.load_character_array, Symbolic")
-          (fun _ -> error "Output.load_character_array, found a ctype")
-          (fun ity ival ->
-            Mem.case_integer_value ival
-              (fun n -> if n = 0 then
-                Mem.return (List.reverse acc)
-              else
-                let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
-                load_character_array_aux elem_ty ptrval' prec_n_opt' ((Decode.encode_character_constant n) :: acc))
-              (fun () -> error "WIP: Output.load_character_array, non constant ival")
-          )
-          (fun _ _ -> error "Output.load_character_array, found a float")
-          (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
-          (fun _ -> error "Output.load_character_array, found an array")
-          (fun _ _ -> error "Output.load_character_array, found a struct")
-          (fun _ _ -> error "Output.load_character_array, found a union")
-      )
-  end
-val load_character_array: Cty.ctype -> Mem.pointer_value -> maybe nat -> Mem.memM (list char)
-let load_character_array elem_ty ptrval prec_n_opt =
-  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n_opt []
+val     load_character_array_aux: Cty.ctype -> Mem.pointer_value -> nat -> list char -> Mem.memM (list char)
+let rec load_character_array_aux elem_ty ptrval prec_n acc =
+  if prec_n = 0 then
+    Mem.return (List.reverse acc)
+  else
+    Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
+      Mem.case_mem_value mval
+        (fun _ -> error "Output.load_character_array, Symbolic")
+        (fun _ -> error "Output.load_character_array, found a ctype")
+        (fun ity ival ->
+          Mem.case_integer_value ival
+            (fun n -> if n = 0 then
+              Mem.return (List.reverse acc)
+            else
+              let ptrval' = Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 1) in
+              load_character_array_aux elem_ty ptrval' (prec_n-1) ((Decode.encode_character_constant n) :: acc))
+            (fun () -> error "WIP: Output.load_character_array, non constant ival")
+        )
+        (fun _ _ -> error "Output.load_character_array, found a float")
+        (fun _ ptrval -> error ("Output.load_character_array, found a pointer ==> " ^ stringFromPointerValue ptrval))
+        (fun _ -> error "Output.load_character_array, found an array")
+        (fun _ _ -> error "Output.load_character_array, found a struct")
+        (fun _ _ -> error "Output.load_character_array, found a union")
+    )
+val load_character_array: Cty.ctype -> Mem.pointer_value -> nat -> Mem.memM (list char)
+let load_character_array elem_ty ptrval prec_n =
+  load_character_array_aux elem_ty (Mem.array_shift_ptrval ptrval elem_ty (Mem.integer_ival 0)) prec_n []
 
 
 
@@ -361,195 +356,119 @@ let convert eval_conv prec_opt lm_opt cspec args =
     | Nothing ->
         1
   end in
-(*
-    | (CS_o, Nothing)    -> (Just Cty.unsigned_int      , Nothing                )
-    | (CS_o, Just LM_hh) -> (Nothing                    , Just Cty.unsigned_char )
-    | (CS_o, Just LM_h)  -> (Nothing                    , Just Cty.unsigned_short)
-    | (CS_o, Just LM_l)  -> (Just Cty.unsigned_long     , Nothing                )
-    | (CS_o, Just LM_ll) -> (Just Cty.unsigned_long_long, Nothing                )
-    | (CS_o, Just LM_j)  -> (Just Cty.uintmax_t         , Nothing                )
-    | (CS_o, Just LM_z)  -> (Just Cty.size_t            , Nothing                )
-    | (CS_o, Just LM_t)  -> (Just Cty.ptrdiff_t         , Nothing                ) (* TODO: "or the corresponding unsigned integer type" *)
-    
-    | (CS_u, Nothing)    -> (Just Cty.unsigned_int      , Nothing                )
-    | (CS_u, Just LM_hh) -> (Nothing                    , Just Cty.unsigned_char )
-    | (CS_u, Just LM_h)  -> (Nothing                    , Just Cty.unsigned_short)
-    | (CS_u, Just LM_l)  -> (Just Cty.unsigned_long     , Nothing                )
-    | (CS_u, Just LM_ll) -> (Just Cty.unsigned_long_long, Nothing                )
-    | (CS_u, Just LM_j)  -> (Just Cty.uintmax_t         , Nothing                )
-    | (CS_u, Just LM_z)  -> (Just Cty.size_t            , Nothing                )
-    | (CS_u, Just LM_t)  -> (Just Cty.ptrdiff_t         , Nothing                ) (* TODO: "or the corresponding unsigned integer type" *)
-    
-    | (CS_x, Nothing)    -> (Just Cty.unsigned_int      , Nothing                )
-    | (CS_x, Just LM_hh) -> (Nothing                    , Just Cty.unsigned_char )
-    | (CS_x, Just LM_h)  -> (Nothing                    , Just Cty.unsigned_short)
-    | (CS_x, Just LM_l)  -> (Just Cty.unsigned_long     , Nothing                )
-    | (CS_x, Just LM_ll) -> (Just Cty.unsigned_long_long, Nothing                )
-    | (CS_x, Just LM_j)  -> (Just Cty.uintmax_t         , Nothing                )
-    | (CS_x, Just LM_z)  -> (Just Cty.size_t            , Nothing                )
-    | (CS_x, Just LM_t)  -> (Just Cty.ptrdiff_t         , Nothing                ) (* TODO: "or the corresponding unsigned integer type" *)
-    
-    | (CS_X, Nothing)    -> (Just Cty.unsigned_int      , Nothing                )
-    | (CS_X, Just LM_hh) -> (Nothing                    , Just Cty.unsigned_char )
-    | (CS_X, Just LM_h)  -> (Nothing                    , Just Cty.unsigned_short)
-    | (CS_X, Just LM_l)  -> (Just Cty.unsigned_long     , Nothing                )
-    | (CS_X, Just LM_ll) -> (Just Cty.unsigned_long_long, Nothing                )
-    | (CS_X, Just LM_j)  -> (Just Cty.uintmax_t         , Nothing                )
-    | (CS_X, Just LM_z)  -> (Just Cty.size_t            , Nothing                )
-    | (CS_X, Just LM_t)  -> (Just Cty.ptrdiff_t         , Nothing                ) (* TODO: "or the corresponding unsigned integer type" *)
-    
-    | (CS_f, Nothing) -> (Just (Cty.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))), Nothing)
-    
-    | (CS_c, Nothing)   -> (Just Cty.signed_int, Just Cty.unsigned_char)
-    | (CS_c, Just LM_t) -> error "Output, Cs_c + LM_t" (* (Just Cty.wint_t, Just Cty.unsigned_char) *)
-    
-    | (CS_s, Nothing) ->
-        error "Output.expected_ty, found CS_s"
-
-(*
-    | (CS_n, Just LM_hh) ->
-        (Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char), Nothing)
-    | (CS_n, Just LM_h) ->
-        (Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_short), Nothing)
-    | (CS_n, Just LM_l) ->
-        (Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_long), Nothing)
-    | (CS_c, Just LM_l) ->
-        error "WIP, Output.conv_ty: Cty.wint_t"
-    | (CS_s, Just LM_l) ->
-        error "WIP, Output.conv_ty: Cty.wchar_t"
-    | (CS_n, Just LM_ll) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.signed_int, Cty.Pointer AilTypes.no_qualifiers Cty.signed_long_long)
-    | (CS_n, Just LM_j) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.intmax_t)
-    | (CS_n, Just LM_z) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.size_t)
-    | (CS_n, Just LM_t) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.ptrdiff_t)
-    
-    (* TODO: check that, be no conversion seems to be needed in the absence of a LM for most CS *)
-    | (CS_p, Nothing) ->
-        Nothing
-    | (CS_n, Nothing) ->
-        Nothing
-    | (CS_percent, Nothing) ->
-        error "Output.expected_ty, found CS_percent"
-*)
-*)
-
-(*
   (* STD §7.21.6.1#7 *)
-  (* Left = no conversion; Right = (expected type, conversion ty) *)
   let conv_ty_opt = match (cspec, lm_opt) with
+    (* NOTE: please oh great Lem god, give me alternative patterns *)
     | (CS_di, Just LM_hh) ->
-        Right (Cty.signed_int, Cty.signed_char)
+        Just (Cty.signed_char)
     | (CS_o, Just LM_hh) ->
-        Right (Cty.unsigned_int, Cty.unsigned_char)
+        Just (Cty.unsigned_char)
     | (CS_u, Just LM_hh) ->
-        Right (Cty.unsigned_int, Cty.unsigned_char)
+        Just (Cty.unsigned_char)
     | (CS_x, Just LM_hh) ->
-        Right (Cty.unsigned_int, Cty.unsigned_char)
+        Just (Cty.unsigned_char)
     | (CS_X, Just LM_hh) ->
-        Right (Cty.unsigned_int, Cty.unsigned_char)
+        Just (Cty.unsigned_char)
     | (CS_n, Just LM_hh) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.signed_int, Cty.Pointer AilTypes.no_qualifiers Cty.signed_char)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char)
     
     | (CS_di, Just LM_h) ->
-        Right (Cty.signed_int, Cty.signed_short)
+        Just (Cty.signed_short)
     | (CS_o, Just LM_h) ->
-        Right (Cty.unsigned_int, Cty.unsigned_short)
+        Just (Cty.unsigned_short)
     | (CS_u, Just LM_h) ->
-        Right (Cty.unsigned_int, Cty.unsigned_short)
+        Just (Cty.unsigned_short)
     | (CS_x, Just LM_h) ->
-        Right (Cty.unsigned_int, Cty.unsigned_short)
+        Just (Cty.unsigned_short)
     | (CS_X, Just LM_h) ->
-        Right (Cty.unsigned_int, Cty.unsigned_short)
+        Just (Cty.unsigned_short)
     | (CS_n, Just LM_h) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.signed_int, Cty.Pointer AilTypes.no_qualifiers Cty.signed_short)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_short)
     
     | (CS_di, Just LM_l) ->
-        Right (Cty.signed_long)
+        Just (Cty.signed_long)
     | (CS_o, Just LM_l) ->
-        Right (Cty.unsigned_long)
+        Just (Cty.unsigned_long)
     | (CS_u, Just LM_l) ->
-        Right (Cty.unsigned_long)
+        Just (Cty.unsigned_long)
     | (CS_x, Just LM_l) ->
-        Right (Cty.unsigned_long)
+        Just (Cty.unsigned_long)
     | (CS_X, Just LM_l) ->
-        Right (Cty.unsigned_long)
+        Just (Cty.unsigned_long)
     | (CS_n, Just LM_l) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.signed_int, Cty.Pointer AilTypes.no_qualifiers Cty.signed_long)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_long)
     | (CS_c, Just LM_l) ->
         error "WIP, Output.conv_ty: Cty.wint_t"
     | (CS_s, Just LM_l) ->
         error "WIP, Output.conv_ty: Cty.wchar_t"
     
     | (CS_di, Just LM_ll) ->
-        Right (Cty.signed_long_long)
+        Just (Cty.signed_long_long)
     | (CS_o, Just LM_ll) ->
-        Right (Cty.unsigned_long_long)
+        Just (Cty.unsigned_long_long)
     | (CS_u, Just LM_ll) ->
-        Right (Cty.unsigned_long_long)
+        Just (Cty.unsigned_long_long)
     | (CS_x, Just LM_ll) ->
-        Right (Cty.unsigned_long_long)
+        Just (Cty.unsigned_long_long)
     | (CS_X, Just LM_ll) ->
-        Right (Cty.unsigned_long_long)
+        Just (Cty.unsigned_long_long)
     | (CS_n, Just LM_ll) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.signed_int, Cty.Pointer AilTypes.no_qualifiers Cty.signed_long_long)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_long_long)
     
     | (CS_di, Just LM_j) ->
-        Right (Cty.intmax_t)
+        Just (Cty.intmax_t)
     | (CS_o, Just LM_j) ->
-        Right (Cty.uintmax_t)
+        Just (Cty.uintmax_t)
     | (CS_u, Just LM_j) ->
-        Right (Cty.uintmax_t)
+        Just (Cty.uintmax_t)
     | (CS_x, Just LM_j) ->
-        Right (Cty.uintmax_t)
+        Just (Cty.uintmax_t)
     | (CS_X, Just LM_j) ->
-        Right (Cty.uintmax_t)
+        Just (Cty.uintmax_t)
     | (CS_n, Just LM_j) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.intmax_t)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.intmax_t)
     
     | (CS_di, Just LM_z) ->
-        Right (Cty.size_t)
+        Just (Cty.size_t)
     | (CS_o, Just LM_z) ->
-        Right (Cty.size_t)
+        Just (Cty.size_t)
     | (CS_u, Just LM_z) ->
-        Right (Cty.size_t)
+        Just (Cty.size_t)
     | (CS_x, Just LM_z) ->
-        Right (Cty.size_t)
+        Just (Cty.size_t)
     | (CS_X, Just LM_z) ->
-        Right (Cty.size_t)
+        Just (Cty.size_t)
     | (CS_n, Just LM_z) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.size_t)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.size_t)
     
     | (CS_di, Just LM_t) ->
-        Right (Cty.ptrdiff_t)
+        Just (Cty.ptrdiff_t)
     | (CS_o, Just LM_t) ->
-        Right (Cty.ptrdiff_t)
+        Just (Cty.ptrdiff_t)
     | (CS_u, Just LM_t) ->
-        Right (Cty.ptrdiff_t)
+        Just (Cty.ptrdiff_t)
     | (CS_x, Just LM_t) ->
-        Right (Cty.ptrdiff_t)
+        Just (Cty.ptrdiff_t)
     | (CS_X, Just LM_t) ->
-        Right (Cty.ptrdiff_t)
+        Just (Cty.ptrdiff_t)
     | (CS_n, Just LM_t) ->
-        Right (Cty.Pointer AilTypes.no_qualifiers Cty.ptrdiff_t)
+        Just (Cty.Pointer AilTypes.no_qualifiers Cty.ptrdiff_t)
     
     (* TODO: check that, be no conversion seems to be needed in the absence of a LM for most CS *)
     | (CS_di, Nothing) ->
-        Left (Cty.signed_int)
+        Nothing (* Just (Cty.signed_int) *)
     | (CS_o, Nothing) ->
-        Left (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_u, Nothing) ->
-        Left (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_x, Nothing) ->
-        Left (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_X, Nothing) ->
-        Left (Cty.unsigned_int)
+        Nothing (* Just (Cty.unsigned_int) *)
     | (CS_f, Nothing) ->
-        Left (Cty.Basic (AilTypes.Floating AilTypes.Double))
+        Nothing
     | (CS_c, Nothing) ->
-        Right (Cty.unsigned_char)
+        Just (Cty.unsigned_char)
     | (CS_s, Nothing) ->
         Nothing (* Just (Cty.Pointer AilTypes.no_qualifiers Cty.signed_char) (* TODO check *) *)
     | (CS_p, Nothing) ->
@@ -578,32 +497,19 @@ let convert eval_conv prec_opt lm_opt cspec args =
         Cty.signed_int
 *)
   end in
-*)
-  let aux expected_ty_opt _conv_ty_opt cont =
+  let aux cont =
     match args with
       | [] ->
           Mem.return $
-            Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+            Right (U.undef [U.Insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
           Mem.load arg_ty arg_ptr >>= fun mval ->
-          (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
-             is undefined, but that doesn't seem to match at all what people do. So we are
-             just showing a warning for now and performing a conversion from arg_ty to expected_ty
-             when there is conv_ty_opt = Nothing *)
-          let conv_ty_opt = match expected_ty_opt with
-            | Just expected_ty ->
-                if arg_ty <> expected_ty then
-                  let () = Boot.warn $ "printf() was expecting a(n) " ^ stringFromCtype expected_ty ^
-                                       " but got a(n) " ^ stringFromCtype arg_ty ^ " instead." in
-                  Just expected_ty
-                else
-                  _conv_ty_opt
-            | Nothing ->
-                _conv_ty_opt
-          end in
-          
           match conv_ty_opt with
             | Just conv_ty ->
+(*
+                let () = Boot.print_debug 1 ("Output.convert ==> ty1= " ^
+                  Boot.pp_core_ctype arg_ty ^ ", ty2=  " ^ Boot.pp_core_ctype conv_ty ^ ", mval= " ^ stringFromMemValue mval )  in
+*)
                 match eval_conv arg_ty conv_ty mval with
                   | Left err ->
                       Mem.return (Left err)
@@ -617,8 +523,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                                 (cont n, args')
                             ))
                         | Nothing ->
-                            error ("WIP: convert --> not a concrete integer: " ^
-                                   stringFromMemValue (fromJust "Output, not a concrete integer" $ Core_aux.memValueFromValue conv_ty (Core.Vinteger ival)))
+                            error "WIP: convert --> not a concrete integer"
                       end
                   | Right (U.Defined (Core.Vunspecified _)) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
@@ -626,8 +531,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
                       error "WIP: convert --> not an integer"
                   | Right (U.Error loc str) ->
                       Mem.return (Right (U.Error loc str))
-                  | Right (U.Undef loc ubs) ->
-                      Mem.return (Right (U.Undef loc ubs))
+                  | Right (U.Undef ubs) ->
+                      Mem.return (Right (U.Undef ubs))
                 end
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
@@ -648,84 +553,60 @@ let convert eval_conv prec_opt lm_opt cspec args =
                       Mem.return $ Right (U.return (String.toCharList str, args'))
 (*                  | Vpointer of Mem.pointer_value *)
                 end
-          end
+(*
+                match maybe Nothing (comb Mem_aux.integerFromIntegerValue snd) (Mem_aux.integerValueFromMemValue mval) with
+                  | Nothing ->
+                      match Mem_aux.unspecifiedFromMemValue mval with
+                        | Just _ ->
+                            Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                        | Nothing ->
+                            error ("WIP: convert --> not an integer ==> " ^ stringFromMemValue mval)
+                      end
+                  | Just n ->
+                      Mem.return $ Right (U.return (
+                        if prec = 0 && n = 0 then
+                          ([], args')
+                        else
+                          (cont n, args')
+                      ))
+                end
+*)
+            end
     end in
   
   match cspec with
     | CS_di ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                   , Just Cty.signed_char )
-          | Just LM_h  -> (Nothing                   , Just Cty.signed_short)
-          | Just LM_l  -> (Just Cty.signed_long      , Nothing              )
-          | Just LM_ll -> (Just Cty.signed_long_long , Nothing              )
-          | Just LM_j  -> (Just Cty.intmax_t         , Nothing              )
-          | Just LM_z  -> (Just Cty.size_t           , Nothing              ) (* TODO: should be "the corresponding signed integer type" *)
-          | Just LM_t  -> (Just Cty.ptrdiff_t        , Nothing              )
-          | Nothing    -> (Just Cty.signed_int       , Nothing              )
-        end in
         (* see (§7.21.6.1#8 d,i) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux (fun n ->
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n) in
           (if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (prec - length str) #'0' ++ str
         )
     | CS_o ->
         error "WIP: Output.convert, CS_o"
     | CS_u ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Cty.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Cty.unsigned_short)
-          | Just LM_l  -> (Just Cty.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Cty.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Cty.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Cty.size_t             , Nothing                )
-          | Just LM_t  -> (Just Cty.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Cty.unsigned_int       , Nothing                )
-        end in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 10 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
     | CS_x ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Cty.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Cty.unsigned_short)
-          | Just LM_l  -> (Just Cty.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Cty.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Cty.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Cty.size_t             , Nothing                )
-          | Just LM_t  -> (Just Cty.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Cty.unsigned_int       , Nothing                )
-        end in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis false 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
     | CS_X ->
-        let (expected_ty_opt, conv_ty_opt) = match lm_opt with
-          | Just LM_hh -> (Nothing                     , Just Cty.unsigned_char )
-          | Just LM_h  -> (Nothing                     , Just Cty.unsigned_short)
-          | Just LM_l  -> (Just Cty.unsigned_long      , Nothing                )
-          | Just LM_ll -> (Just Cty.unsigned_long_long , Nothing                )
-          | Just LM_j  -> (Just Cty.uintmax_t          , Nothing                )
-          | Just LM_z  -> (Just Cty.size_t             , Nothing                )
-          | Just LM_t  -> (Just Cty.ptrdiff_t          , Nothing                ) (* TODO: should be "the corresponding unsigned integer type" *)
-          | Nothing    -> (Just Cty.unsigned_int       , Nothing                )
-        end in
         (* see (§7.21.6.1#8 o,u,x,X) *)
-        aux expected_ty_opt conv_ty_opt (fun n ->
+        aux (fun n ->
           (* TODO: conversion (n is unsigned int here) *)
           let str = showNonNegativeWithBasis true 16 (naturalFromInteger n) in
           replicate (prec - length str) #'0' ++ str
         )
     | CS_f ->
         (* TODO: check *)
-        let (expected_ty_opt, conv_ty_opt) =
-          (Just (Cty.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))), Nothing) in
-        aux expected_ty_opt conv_ty_opt (fun _ -> []) (* TODO: ahem *)
+        aux (fun _ -> []) (* TODO: ahem *)
     | CS_c ->
         error "WIP: Output.convert, CS_c"
     | CS_s ->
@@ -737,25 +618,17 @@ let convert eval_conv prec_opt lm_opt cspec args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+                      Right (U.undef [U.Insufficient_arguments_for_format])
                     )
                 | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
                       (* TODO: this is not a strong enough check, we need to point to
                          the "initial element of an array of character type" *)
                       Mem.return (
-                        Right (U.undef Loc.unknown [U.Illtyped_argument_for_format])
+                        Right (U.undef [U.Illtyped_argument_for_format])
                       )
                     else
                       Mem.load arg_ty arg_ptr >>= fun mval ->
-                      let prec = match prec_opt with
-                        | Just (P_num z) ->
-                            Just z
-                        | Just (P_asterisk) ->
-                            error "TODO(2): Output.convert, * prec" (* TODO *)
-                        | Nothing ->
-                            Nothing
-                      end in
                       match Mem_aux.pointerValueFromMemValue mval with
                         | Just (_, ptrval) ->
                             load_character_array ref_ty ptrval prec >>= fun chars ->
@@ -769,7 +642,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+                Right (U.undef [U.Insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
               Mem.load arg_ty arg_ptr >>= function
@@ -780,7 +653,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
               end
           | _ ->
               Mem.return (
-                Right (U.undef Loc.unknown [U.Illtyped_argument_for_format])
+                Right (U.undef [U.Illtyped_argument_for_format])
               )
         end
     | CS_n ->
@@ -822,8 +695,8 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
               printf_aux eval_conv (acc ++ justified) fs ty_ptrvals'
           | Right (U.Error loc str) ->
               Mem.return $ Right (U.Error loc str)
-          | Right (U.Undef loc ubs) ->
-              Mem.return $ Right (U.Undef loc ubs)
+          | Right (U.Undef ubs) ->
+              Mem.return $ Right (U.Undef ubs)
           | Left err ->
               Mem.return $ Left err
         end
@@ -842,7 +715,7 @@ let printf eval_conv frmt args =
         printf_aux eval_conv [] fs args
     | _ ->
         Mem.return $
-          Right (U.undef Loc.unknown [U.Invalid_format (String.toString frmt)])
+          Right (U.undef [U.Invalid_format (String.toString frmt)])
   end
 
 

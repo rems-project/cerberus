@@ -15,8 +15,8 @@ let bind m f = fun st ->
   match m st with
     | Exception.Result (Undefined.Defined z, st') ->
         f z st'
-    | Exception.Result (Undefined.Undef loc ubs, st') ->
-        State_exception.return (Undefined.undef loc ubs) st'
+    | Exception.Result (Undefined.Undef ubs, st') ->
+        State_exception.return (Undefined.undef ubs) st'
     | Exception.Result (Undefined.Error loc str, st') ->
         State_exception.return (Undefined.error loc str) st'
     | Exception.Exception err ->
@@ -37,8 +37,8 @@ let runEU m = fun st ->
   match m with
     | Exception.Result (Undefined.Defined z) ->
         Exception.Result (Undefined.Defined z, st)
-    | Exception.Result (Undefined.Undef loc ubs) ->
-        Exception.Result (Undefined.Undef loc ubs, st)
+    | Exception.Result (Undefined.Undef ubs) ->
+        Exception.Result (Undefined.Undef ubs, st)
     | Exception.Result (Undefined.Error loc str) ->
         Exception.Result (Undefined.Error loc str, st)
     | Exception.Exception err ->

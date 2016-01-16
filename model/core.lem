@@ -44,8 +44,7 @@ type binop =
   | OpSub
   | OpMul
   | OpDiv
-  | OpRem_t (* this the % of C ===> rem_t(x,y) = x - ((truncate(x/y) * y) *)
-  | OpRem_f (* rem_t(x,y) = x - ((foor(x/y) * y) *)
+  | OpMod
   | OpExp
   (* relational operators *)
   | OpEq
@@ -69,8 +68,7 @@ instance (Show binop)
     | OpSub -> "OpSub"
     | OpMul -> "OpMul"
     | OpDiv -> "OpDiv"
-    | OpRem_t -> "OpRem_t"
-    | OpRem_f -> "OpRem_f"
+    | OpMod -> "OpMod"
     | OpExp -> "OpExp"
     | OpEq  -> "OpEq"
     | OpGt  -> "OpGt"
@@ -159,7 +157,6 @@ type ctor =
   | Civmin
   | Civsizeof
   | Civalignof
-  | Cunspecified
 
 
 

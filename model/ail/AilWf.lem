@@ -15,13 +15,6 @@ let is_adjusted ty =
   not (is_array ty) && not (is_function ty)
 
 
-val stringFromCtype: ctype -> string
-declare ocaml target_rep function stringFromCtype = `String_ail.string_of_ctype_raw`
-
-val stringFromQualifiers: qualifiers -> string
-declare ocaml target_rep function stringFromQualifiers = `String_ail.string_of_qualifiers_human`
-
-
 val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
 let wf_lvalue_aux qs ty =
   match ty with
@@ -30,11 +23,7 @@ let wf_lvalue_aux qs ty =
           not (is_object ref_ty) --> not (qs.restrict)
         )
     | _ ->
-(*
         guard (TError "§6.7.3#2, non pointer case") (
-*)
-        guard (TError $"§6.7.3#2, non pointer case" ^ stringFromQualifiers qs ^ " <|> " ^ stringFromCtype ty) (
-
           not (qs.restrict)
         ) >>
         guard (TError_undef "§6.7.3#9, sentence 2") (

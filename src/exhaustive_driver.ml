@@ -114,8 +114,8 @@ let drive sym_supply file args with_concurrency : execution_result =
     );
     List.iteri (fun n (_, ND.Killed (reason, log, constraints)) ->
       let reason_str = match reason with
-        | ND.Undef0 (loc, ubs) ->
-            "undefined behaviour[" ^ Pp_errors.location_to_string loc ^ "]: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
+        | ND.Undef0 ubs ->
+            "undefined behaviour: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
         | ND.Error0 (loc , str) ->
             "static error[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str
         | ND.Other str ->
@@ -133,15 +133,7 @@ let drive sym_supply file args with_concurrency : execution_result =
   List.iteri (fun n (_, exec) ->
     match exec with
       | ND.Active (log, constraints, (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps))) ->
-          let str_v = String_core.string_of_pexpr
-              begin
-                match pe with
-                  | Core.PEval (Core.Vinteger ival) ->
-                      Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vinteger ival | Some n -> Core.Vinteger (Mem.integer_ival0 n)) )
-                  | _ ->
-                      pe
-              end in
+          let str_v = String_core.string_of_pexpr pe in
           let str_v_ = str_v ^ stdout in
           if not (List.mem str_v_ !ky) then (
             if Debug.get_debug_level () = 0 then
@@ -167,19 +159,16 @@ let drive sym_supply file args with_concurrency : execution_result =
             "eqs= " ^ Pp_cmm.pp_constraints constraints
           );
 
-      | ND.Killed (ND.Undef0 (loc, ubs), _, _) ->
-          let str_v = Pp_errors.location_to_string loc ^
-            (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs)) in
-          
-          if not (List.mem str_v !ky) then (
-            print_endline (
-              Colour.(ansi_format [Red] ("UNDEFINED BEHAVIOUR[" ^ Pp_errors.location_to_string loc ^ "]:\n" ^
-                (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
-              ))
-           );
-            ky := str_v :: !ky;
-          ) else
-            ()
+
+
+
+
+      | ND.Killed (ND.Undef0 ubs, _, _) ->
+          print_endline (
+            Colour.(ansi_format [Red] (Printf.sprintf "UNDEFINED BEHAVIOUR:\n%s\n"
+              (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs))
+            ))
+          )
       
       | ND.Killed (ND.Error0 (loc, str), _, _) ->
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str)))

@@ -57,8 +57,6 @@ let location_to_string loc =
 let print_debug_located level loc msg =
   print_debug level ("(" ^ location_to_string loc ^ ") - " ^ msg)
 
-let warn msg =
-  prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg))
 
 let print_debug2 msg k =
   if !debug_level > 0 then

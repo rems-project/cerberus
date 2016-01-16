@@ -1,7 +1,0 @@
-#!/bin/bash
-echo $@
-rm -rf tmp-los/*
-cp $@  tmp-los
-cd tmp-los && rename 's/.lem/.ml/'  *.lem && sloccount --details *.ml
-
-#for i in `ls *.ml` ; do sloccount --details "$i" ; done  #

@@ -47,9 +47,6 @@ declare ocaml target_rep function print_debug = `Debug.print_debug`
 val print_debug_located: nat -> Loc.t -> string -> unit
 declare ocaml target_rep function print_debug_located = `Debug.print_debug_located`
 
-val warn: string -> unit
-declare ocaml target_rep function warn = `Debug.warn`
-
 (* Pretty printing (HACK: mind your mind) *)
 val pp_ail_ctype: AilTypes.ctype -> string
 declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype_raw`

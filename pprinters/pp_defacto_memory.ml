@@ -15,10 +15,8 @@ let string_of_integer_operator = function
       "*"
   | Mem_common.IntDiv ->
       "/"
-  | Mem_common.IntRem_t ->
-      "rem_t"
-  | Mem_common.IntRem_f ->
-      "rem_f"
+  | Mem_common.IntMod ->
+      "mod"
   | Mem_common.IntExp ->
       "^"
 
@@ -59,7 +57,7 @@ and pp_shift_path_element = function
   | SPE_array (ty, ival_) ->
       !^ "SPE_array" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^ pp_integer_value_base ival_)
   | SPE_member (tag_sym, (Cabs.CabsIdentifier (_, memb_str))) ->
-      !^ "SPE_member" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
+      !^ "SPE_post_padding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
  
 and pp_shift_path sh =
   P.brackets (comma_list pp_shift_path_element sh)

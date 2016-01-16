@@ -136,7 +136,7 @@ val     core_eval: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
                    EU.t Core.pexpr core_run_error
 let rec core_eval loc mem_st file concur_sym_map inside_if = function
   | PEundef ub ->
-      Exception.return (Undefined.undef loc [ub])
+      Exception.return (Undefined.undef [ub])
   | PEerror str pe ->
       Exception.return (Undefined.error loc (str ^ " ==> " ^ stringFromPexpr pe))
 
@@ -219,10 +219,6 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
             EU.return $ PEval (Vinteger (Mem.sizeof_ival ty))
         | (Civalignof, Just [Vctype ty]) ->
             EU.return $ PEval (Vinteger (Mem.alignof_ival ty))
-
-        | (Cunspecified, Just [Vctype ty]) ->
-            EU.return $ PEval (Vunspecified ty)
-
         
         | (_, Just _) ->
             EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^
@@ -379,68 +375,124 @@ KKKKK NOW
   | PEop binop pe1 pe2 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
       core_eval loc mem_st file concur_sym_map inside_if pe2 >>= fun pe2' ->
+      
+      let to_wrapped_ival = function
+        | Vunspecified ty ->
+            Just (Left ty)
+        | Vinteger ival ->
+            Just (Right ival)
+        | _ ->
+            Nothing
+      end in
+      
       match (binop, valueFromPexpr pe1', valueFromPexpr pe2') with
-        (* Ctype equality *)
+        | (OpEq, Just (Vsymbolic symb1), Just cval2) ->
+            EU.return (PEval (Vsymbolic (Symbolic.make_op Symbolic.Eq symb1 (Symbolic.SYMBconst cval2))))
+        
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
         
-        (* Integer equality *)
-        | (OpEq, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.eq_ival mem_st Symbolic.Constraints_TODO ival1 ival2 with
-              | Just b ->
-                  EU.return (PEval (if b then Vtrue else Vfalse))
-              | Nothing ->
-                  (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value equality ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
+        | (OpEq, Just cval1, Just cval2) ->
+            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
+              | (Just wival1, Just wival2) ->
+                  match Mem.eq_ival mem_st Symbolic.Constraints_TODO wival1 wival2 with
+                    | Just b ->
+                        EU.return (PEval (if b then Vtrue else Vfalse))
+                    | Nothing ->
+                        (* the current constraints allow both outcomes *)
+                        error ("WIP: symbolic integer_value equality ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
+                  end
+              | _ ->
+                  EU.fail $ Illformed_program "PEop OpEq"
+            end
+
+        | (OpLt, Just cval1, Just cval2) ->
+            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
+              | (Just wival1, Just wival2) ->
+                  match Mem.lt_ival Symbolic.Constraints_TODO wival1 wival2 with
+                    | Just b ->
+                        EU.return (PEval (if b then Vtrue else Vfalse))
+                    | Nothing ->
+                        (* the current constraints allow both outcomes *)
+                        error ("WIP: symbolic integer_value less-than ==> " ^
+                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
+                  end
             end
         
-        (* NOTE: this is for the concurrency *)
-        | (OpEq, Just (Vsymbolic symb1), Just cval2) ->
-            EU.return (PEval (Vsymbolic (Symbolic.make_op Symbolic.Eq symb1 (Symbolic.SYMBconst cval2))))
+        | (OpLe, Just cval1, Just cval2) ->
+            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
+              | (Just wival1, Just wival2) ->
+                  match Mem.le_ival Symbolic.Constraints_TODO wival1 wival2 with
+                    | Just b ->
+                        EU.return (PEval (if b then Vtrue else Vfalse))
+                    | Nothing ->
+                        (* the current constraints allow both outcomes *)
+                        error ("WIP: symbolic integer_value less_equal-than ==> " ^
+                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
+                  end
+            end
+        
+        | (OpGe, Just cval1, Just cval2) ->
+            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
+              | (Just wival1, Just wival2) ->
+                  (* TODO CHECK *)
+                  match Mem.le_ival Symbolic.Constraints_TODO wival2 wival1 with
+                    | Just b ->
+                        EU.return (PEval (if b then Vtrue else Vfalse))
+                    | Nothing ->
+                        (* the current constraints allow both outcomes *)
+                        error ("WIP: symbolic integer_value greater_equal-than ==> " ^
+                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
+                  end
+            end
+        
+        | (OpGt, Just cval1, Just cval2) ->
+            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
+              | (Just wival1, Just wival2) ->
+                  (* TODO CHECK *)
+                  match Mem.lt_ival Symbolic.Constraints_TODO wival2 wival1 with
+                    | Just b ->
+                        EU.return (PEval (if b then Vtrue else Vfalse))
+                    | Nothing ->
+                        (* the current constraints allow both outcomes *)
+                        error ("WIP: symbolic integer_value greater-than ==> " ^
+                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
+                  end
+            end
+        
+(*
+        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity2)))) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: unspec ty1 <= ivmin ty2"
+
+        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity1))), Just (Vunspecified ty2)) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: ivmax ty1 <= unspec ty2"
+*)
+(*
+        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity1))), Just (Vunspecified ty2)) ->
+            if Core_ctype.Basic (AilTypes.Integer ity1) = ty2 then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: ivmin ity1 <= unspec ty2"
+
+        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity2)))) ->
+            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
+              EU.return (PEval Vtrue)
+            else
+              error "WIP: unspec ty1 <= ivmax ity1"
+*)
 
 
-        | (OpLt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.lt_ival Symbolic.Constraints_TODO ival1 ival2 with
-              | Just b ->
-                  EU.return (PEval (if b then Vtrue else Vfalse))
-              | Nothing ->
-                  (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value less-than ==> " ^
-                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
-            end
-        
-        | (OpLe, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            match Mem.le_ival Symbolic.Constraints_TODO ival1 ival2 with
-              | Just b ->
-                  EU.return (PEval (if b then Vtrue else Vfalse))
-              | Nothing ->
-                  (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value less_equal-than ==> " ^
-                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
-            end
-        
-        | (OpGe, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            (* TODO CHECK *)
-            match Mem.le_ival Symbolic.Constraints_TODO ival2 ival1 with
-              | Just b ->
-                  EU.return (PEval (if b then Vtrue else Vfalse))
-              | Nothing ->
-                  (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value greater_equal-than ==> " ^
-                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
-            end
-        
-        | (OpGt, Just (Vinteger ival1), Just (Vinteger ival2)) ->
-            (* TODO CHECK *)
-            match Mem.lt_ival Symbolic.Constraints_TODO ival2 ival1 with
-              | Just b ->
-                  EU.return (PEval (if b then Vtrue else Vfalse))
-              | Nothing ->
-                  (* the current constraints allow both outcomes *)
-                  error ("WIP: symbolic integer_value greater-than ==> " ^
-                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
-            end
-        
+        | (_, Just (Vunspecified ty), Just _) ->
+            EU.return (PEval (Vunspecified ty))
+        | (_, Just _, Just (Vunspecified ty)) ->
+            EU.return (PEval (Vunspecified ty))
+
         | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
             let iop = match binop with
               | OpAdd ->
@@ -451,10 +503,8 @@ KKKKK NOW
                   Mem_common.IntMul
               | OpDiv ->
                   Mem_common.IntDiv
-              | OpRem_t ->
-                  Mem_common.IntRem_t
-              | OpRem_f ->
-                  Mem_common.IntRem_f
+              | OpMod ->
+                  Mem_common.IntMod
               | OpExp ->
                   Mem_common.IntExp
               | _ ->
@@ -510,10 +560,8 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpRem_t ->
-                  Symbolic.Rem_t
-              | OpRem_f ->
-                  Symbolic.Rem_f
+              | OpMod ->
+                  Symbolic.Mod
               | _ ->
                   error "Core_run.core_eval, PEop Vsymbolic Vinteger sym_op match"
             end in
@@ -535,10 +583,8 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpRem_t ->
-                  Symbolic.Rem_t
-              | OpRem_f ->
-                  Symbolic.Rem_f
+              | OpMod ->
+                  Symbolic.Mod
               | _ ->
                   error "Core_run.core_eval, PEop Vinteger Vsymbolic sym_op match"
             end in
@@ -554,10 +600,8 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpRem_t ->
-                  Symbolic.Rem_t
-              | OpRem_f ->
-                  Symbolic.Rem_f
+              | OpMod ->
+                  Symbolic.Mod
               | OpLt ->
                   Symbolic.Lt
               | _ ->
@@ -672,15 +716,7 @@ KKK NOW
   | PtrLt
 *)
 *)
-  | PEis_unspec pe ->
-      core_eval loc mem_st file concur_sym_map inside_if pe >>= function
-        | PEval (Vunspecified _) ->
-            EU.return $ PEval Vtrue
-        | PEval _ ->
-            EU.return $ PEval Vfalse
-        | pe' ->
-            EU.return $ PEis_unspec pe'
-      end
+
   
   | PEtuple pes ->
       EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->
