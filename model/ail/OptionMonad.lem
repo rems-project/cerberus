@@ -1,0 +1,21 @@
+open import Pervasives
+
+type optionM 'a = maybe 'a
+
+let return z        = Just z
+
+let fail            = Nothing
+
+let inline (>>=)    = Maybe.bind
+let inline (>>) m f = Maybe.bind m (fun _ -> f)
+let inline (<$>)    = Maybe.map
+
+val tryM: forall 'a 'b. optionM 'a -> ('a -> optionM 'b) -> optionM 'b -> optionM 'b
+let tryM m f errCase =
+  match m with
+    | Just z  -> f z
+    | Nothing -> errCase
+  end
+
+val runM: forall 'a. optionM 'a -> maybe 'a
+let runM m = m

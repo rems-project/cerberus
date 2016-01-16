@@ -1,0 +1,867 @@
+open import Pervasives
+import Cabs AilTypes AilSyntax
+(* Things needed to model in a implementation independant way,
+   types and constant the std library defines. *)
+
+module A      = AilSyntax
+module ATypes = AilTypes
+
+type builtin_kind =
+  | Typename
+  | Varname of maybe ATypes.ctype (* TODO: get rid of the maybe *)
+
+let builtin = [
+  (* from errno.h (§7.5) *)
+  ("__cerbvar_EDOM",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+  ("__cerbvar_EILSEQ", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+  ("__cerbvar_ERANGE", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+  ("__cerbvar_errno",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+
+  (* from inttypes.h (§7.8) *)
+  ("__cerbty_imaxdiv_t",   Typename);
+
+(* TODO: these are string literals .... *)
+  ("__cerbvar_PRId8",       Varname Nothing);
+  ("__cerbvar_PRId16",      Varname Nothing);
+  ("__cerbvar_PRId32",      Varname Nothing);
+  ("__cerbvar_PRId64",      Varname Nothing);
+  ("__cerbvar_PRIdLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIdLEAST16", Varname Nothing);
+  ("__cerbvar_PRIdLEAST32", Varname Nothing);
+  ("__cerbvar_PRIdLEAST64", Varname Nothing);
+  ("__cerbvar_PRIdFAST8",   Varname Nothing);
+  ("__cerbvar_PRIdFAST16",  Varname Nothing);
+  ("__cerbvar_PRIdFAST32",  Varname Nothing);
+  ("__cerbvar_PRIdFAST64",  Varname Nothing);
+  ("__cerbvar_PRIdMAX",     Varname Nothing);
+  ("__cerbvar_PRIdPTR",     Varname Nothing);
+  ("__cerbvar_PRIi8",       Varname Nothing);
+  ("__cerbvar_PRIi16",      Varname Nothing);
+  ("__cerbvar_PRIi32",      Varname Nothing);
+  ("__cerbvar_PRIi64",      Varname Nothing);
+  ("__cerbvar_PRIiLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIiLEAST16", Varname Nothing);
+  ("__cerbvar_PRIiLEAST32", Varname Nothing);
+  ("__cerbvar_PRIiLEAST64", Varname Nothing);
+  ("__cerbvar_PRIiFAST8",   Varname Nothing);
+  ("__cerbvar_PRIiFAST16",  Varname Nothing);
+  ("__cerbvar_PRIiFAST32",  Varname Nothing);
+  ("__cerbvar_PRIiFAST64",  Varname Nothing);
+  ("__cerbvar_PRIiMAX",     Varname Nothing);
+  ("__cerbvar_PRIiPTR",     Varname Nothing);
+  ("__cerbvar_PRIo8",       Varname Nothing);
+  ("__cerbvar_PRIo16",      Varname Nothing);
+  ("__cerbvar_PRIo32",      Varname Nothing);
+  ("__cerbvar_PRIo64",      Varname Nothing);
+  ("__cerbvar_PRIoLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIoLEAST16", Varname Nothing);
+  ("__cerbvar_PRIoLEAST32", Varname Nothing);
+  ("__cerbvar_PRIoLEAST64", Varname Nothing);
+  ("__cerbvar_PRIoFAST8",   Varname Nothing);
+  ("__cerbvar_PRIoFAST16",  Varname Nothing);
+  ("__cerbvar_PRIoFAST32",  Varname Nothing);
+  ("__cerbvar_PRIoFAST64",  Varname Nothing);
+  ("__cerbvar_PRIoMAX",     Varname Nothing);
+  ("__cerbvar_PRIoPTR",     Varname Nothing);
+  ("__cerbvar_PRIu8",       Varname Nothing);
+  ("__cerbvar_PRIu16",      Varname Nothing);
+  ("__cerbvar_PRIu32",      Varname Nothing);
+  ("__cerbvar_PRIu64",      Varname Nothing);
+  ("__cerbvar_PRIuLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIuLEAST16", Varname Nothing);
+  ("__cerbvar_PRIuLEAST32", Varname Nothing);
+  ("__cerbvar_PRIuLEAST64", Varname Nothing);
+  ("__cerbvar_PRIuFAST8",   Varname Nothing);
+  ("__cerbvar_PRIuFAST16",  Varname Nothing);
+  ("__cerbvar_PRIuFAST32",  Varname Nothing);
+  ("__cerbvar_PRIuFAST64",  Varname Nothing);
+  ("__cerbvar_PRIuMAX",     Varname Nothing);
+  ("__cerbvar_PRIuPTR",     Varname Nothing);
+  ("__cerbvar_PRIx8",       Varname Nothing);
+  ("__cerbvar_PRIx16",      Varname Nothing);
+  ("__cerbvar_PRIx32",      Varname Nothing);
+  ("__cerbvar_PRIx64",      Varname Nothing);
+  ("__cerbvar_PRIxLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIxLEAST16", Varname Nothing);
+  ("__cerbvar_PRIxLEAST32", Varname Nothing);
+  ("__cerbvar_PRIxLEAST64", Varname Nothing);
+  ("__cerbvar_PRIxFAST8",   Varname Nothing);
+  ("__cerbvar_PRIxFAST16",  Varname Nothing);
+  ("__cerbvar_PRIxFAST32",  Varname Nothing);
+  ("__cerbvar_PRIxFAST64",  Varname Nothing);
+  ("__cerbvar_PRIxMAX",     Varname Nothing);
+  ("__cerbvar_PRIxPTR",     Varname Nothing);
+  ("__cerbvar_PRIX8",       Varname Nothing);
+  ("__cerbvar_PRIX16",      Varname Nothing);
+  ("__cerbvar_PRIX32",      Varname Nothing);
+  ("__cerbvar_PRIX64",      Varname Nothing);
+  ("__cerbvar_PRIXLEAST8",  Varname Nothing);
+  ("__cerbvar_PRIXLEAST16", Varname Nothing);
+  ("__cerbvar_PRIXLEAST32", Varname Nothing);
+  ("__cerbvar_PRIXLEAST64", Varname Nothing);
+  ("__cerbvar_PRIXFAST8",   Varname Nothing);
+  ("__cerbvar_PRIXFAST16",  Varname Nothing);
+  ("__cerbvar_PRIXFAST32",  Varname Nothing);
+  ("__cerbvar_PRIXFAST64",  Varname Nothing);
+  ("__cerbvar_PRIXMAX",     Varname Nothing);
+  ("__cerbvar_PRIXPTR",     Varname Nothing);
+  ("__cerbvar_SCNd8",       Varname Nothing);
+  ("__cerbvar_SCNd16",      Varname Nothing);
+  ("__cerbvar_SCNd32",      Varname Nothing);
+  ("__cerbvar_SCNd64",      Varname Nothing);
+  ("__cerbvar_SCNdLEAST8",  Varname Nothing);
+  ("__cerbvar_SCNdLEAST16", Varname Nothing);
+  ("__cerbvar_SCNdLEAST32", Varname Nothing);
+  ("__cerbvar_SCNdLEAST64", Varname Nothing);
+  ("__cerbvar_SCNdFAST8",   Varname Nothing);
+  ("__cerbvar_SCNdFAST16",  Varname Nothing);
+  ("__cerbvar_SCNdFAST32",  Varname Nothing);
+  ("__cerbvar_SCNdFAST64",  Varname Nothing);
+  ("__cerbvar_SCNdMAX",     Varname Nothing);
+  ("__cerbvar_SCNdPTR",     Varname Nothing);
+  ("__cerbvar_SCNi8",       Varname Nothing);
+  ("__cerbvar_SCNi16",      Varname Nothing);
+  ("__cerbvar_SCNi32",      Varname Nothing);
+  ("__cerbvar_SCNi64",      Varname Nothing);
+  ("__cerbvar_SCNiLEAST8",  Varname Nothing);
+  ("__cerbvar_SCNiLEAST16", Varname Nothing);
+  ("__cerbvar_SCNiLEAST32", Varname Nothing);
+  ("__cerbvar_SCNiLEAST64", Varname Nothing);
+  ("__cerbvar_SCNiFAST8",   Varname Nothing);
+  ("__cerbvar_SCNiFAST16",  Varname Nothing);
+  ("__cerbvar_SCNiFAST32",  Varname Nothing);
+  ("__cerbvar_SCNiFAST64",  Varname Nothing);
+  ("__cerbvar_SCNiMAX",     Varname Nothing);
+  ("__cerbvar_SCNiPTR",     Varname Nothing);
+  ("__cerbvar_SCNo8",       Varname Nothing);
+  ("__cerbvar_SCNo16",      Varname Nothing);
+  ("__cerbvar_SCNo32",      Varname Nothing);
+  ("__cerbvar_SCNo64",      Varname Nothing);
+  ("__cerbvar_SCNoLEAST8",  Varname Nothing);
+  ("__cerbvar_SCNoLEAST16", Varname Nothing);
+  ("__cerbvar_SCNoLEAST32", Varname Nothing);
+  ("__cerbvar_SCNoLEAST64", Varname Nothing);
+  ("__cerbvar_SCNoFAST8",   Varname Nothing);
+  ("__cerbvar_SCNoFAST16",  Varname Nothing);
+  ("__cerbvar_SCNoFAST32",  Varname Nothing);
+  ("__cerbvar_SCNoFAST64",  Varname Nothing);
+  ("__cerbvar_SCNoMAX",     Varname Nothing);
+  ("__cerbvar_SCNoPTR",     Varname Nothing);
+  ("__cerbvar_SCNu8",       Varname Nothing);
+  ("__cerbvar_SCNu16",      Varname Nothing);
+  ("__cerbvar_SCNu32",      Varname Nothing);
+  ("__cerbvar_SCNu64",      Varname Nothing);
+  ("__cerbvar_SCNuLEAST8",  Varname Nothing);
+  ("__cerbvar_SCNuLEAST16", Varname Nothing);
+  ("__cerbvar_SCNuLEAST32", Varname Nothing);
+  ("__cerbvar_SCNuLEAST64", Varname Nothing);
+  ("__cerbvar_SCNuFAST8",   Varname Nothing);
+  ("__cerbvar_SCNuFAST16",  Varname Nothing);
+  ("__cerbvar_SCNuFAST32",  Varname Nothing);
+  ("__cerbvar_SCNuFAST64",  Varname Nothing);
+  ("__cerbvar_SCNuMAX",     Varname Nothing);
+  ("__cerbvar_SCNuPTR",     Varname Nothing);
+  ("__cerbvar_SCNx8",       Varname Nothing);
+  ("__cerbvar_SCNx16",      Varname Nothing);
+  ("__cerbvar_SCNx32",      Varname Nothing);
+  ("__cerbvar_SCNx64",      Varname Nothing);
+  ("__cerbvar_SCNxLEAST8",  Varname Nothing);
+  ("__cerbvar_SCNxLEAST16", Varname Nothing);
+  ("__cerbvar_SCNxLEAST32", Varname Nothing);
+  ("__cerbvar_SCNxLEAST64", Varname Nothing);
+  ("__cerbvar_SCNxFAST8",   Varname Nothing);
+  ("__cerbvar_SCNxFAST16",  Varname Nothing);
+  ("__cerbvar_SCNxFAST32",  Varname Nothing);
+  ("__cerbvar_SCNxFAST64",  Varname Nothing);
+  ("__cerbvar_SCNxMAX",     Varname Nothing);
+  ("__cerbvar_SCNxPTR",     Varname Nothing);
+  
+  (* from limits.h (§7.10) *)
+  ("__cerbvar_CHAR_BIT",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_))))); (* TODO[check] type based on §6.4.4.1#5 *)
+  
+  (* TODO[check] types based on §5.2.4.2.1#1, second sentence *)
+  ("__cerbvar_SCHAR_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Ichar)))));
+  ("__cerbvar_SCHAR_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Ichar)))));
+  ("__cerbvar_UCHAR_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Ichar)))));
+  ("__cerbvar_CHAR_MIN",   Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Char))));
+  ("__cerbvar_CHAR_MAX",   Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Char))));
+  ("__cerbvar_MB_LEN_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_))))); (* TODO[check] type based on §6.4.4.1#5 *)
+  ("__cerbvar_SHRT_MIN",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Short)))));
+  ("__cerbvar_SHRT_MAX",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Short)))));
+  ("__cerbvar_USHRT_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Short)))));
+  ("__cerbvar_INT_MIN",    Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+  ("__cerbvar_INT_MAX",    Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))));
+  ("__cerbvar_UINT_MAX",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)))));
+  ("__cerbvar_LONG_MIN",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Long)))));
+  ("__cerbvar_LONG_MAX",   Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Long)))));
+  ("__cerbvar_ULONG_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Long)))));
+  ("__cerbvar_LLONG_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.LongLong)))));
+  ("__cerbvar_LLONG_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.LongLong)))));
+  ("__cerbvar_ULLONG_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.LongLong)))));
+  
+  (* TODO: locale.h (§7.11) *)
+  
+  (* from setjump.h (§7.13) *)
+  ("__cerbty_jmp_buf", Typename);
+  
+  (* from signal.h (§7.14) *)
+  ("__cerbty_sig_atomic_t", Typename);
+  ("__cerbvar_SIG_IGN",      Varname Nothing);
+  ("__cerbvar_SIGILL",       Varname Nothing);
+  ("__cerbvar_SIGTERM",      Varname Nothing);
+  ("__cerbvar_SIG_DFL",      Varname Nothing);
+  ("__cerbvar_SIGABRT",      Varname Nothing);
+  ("__cerbvar_SIGINT",       Varname Nothing);
+  ("__cerbvar_SIG_ERR",      Varname Nothing);
+  ("__cerbvar_SIGFPE",       Varname Nothing);
+  ("__cerbvar_SIGSEGV",      Varname Nothing);
+  
+  (* from stdarg.h (§7.16) *)
+  ("__cerbty_va_list",  Typename);
+  ("__cerbvar_va_arg",   Varname Nothing);
+  ("__cerbvar_va_copy",  Varname Nothing);
+  ("__cerbvar_va_end",   Varname Nothing);
+  ("__cerbvar_va_start", Varname Nothing);
+  
+  (* from stdatomic.h (§7.17) *)
+  ("__cerbvar_ATOMIC_BOOL_LOCK_FREE",     Varname Nothing);
+  ("__cerbvar_ATOMIC_CHAR_LOCK_FREE",     Varname Nothing);
+  ("__cerbvar_ATOMIC_CHAR16_T_LOCK_FREE", Varname Nothing);
+  ("__cerbvar_ATOMIC_CHAR32_T_LOCK_FREE", Varname Nothing);
+  ("__cerbvar_ATOMIC_WCHAR_T_LOCK_FREE",  Varname Nothing);
+  ("__cerbvar_ATOMIC_SHORT_LOCK_FREE",    Varname Nothing);
+  ("__cerbvar_ATOMIC_INT_LOCK_FREE",      Varname Nothing);
+  ("__cerbvar_ATOMIC_LONG_LOCK_FREE",     Varname Nothing);
+  ("__cerbvar_ATOMIC_LLONG_LOCK_FREE",    Varname Nothing);
+  ("__cerbvar_ATOMIC_POINTER_LOCK_FREE",  Varname Nothing);
+  ("__cerbvar_ATOMIC_FLAG_INIT",          Varname Nothing);
+  (* TODO *)
+  
+  
+  (* from stddef.h (§7.19) *)
+  ("__cerbty_ptrdiff_t",   Typename);
+  ("__cerbty_size_t",      Typename);
+  ("__cerbty_max_align_t", Typename);
+  ("__cerbty_wchar_t",     Typename);
+  ("__cerbvar_NULL",        Varname (Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Void))));
+(*   ("__cerbvar_offsetof",    Varname Nothing); *)
+  
+  (* from stdint.h (§7.20) *)
+  ("__cerbty_int8_t",           Typename);
+  ("__cerbty_int16_t",          Typename);
+  ("__cerbty_int32_t",          Typename);
+  ("__cerbty_int64_t",          Typename);
+  ("__cerbty_uint8_t",          Typename);
+  ("__cerbty_uint16_t",         Typename);
+  ("__cerbty_uint32_t",         Typename);
+  ("__cerbty_uint64_t",         Typename);
+  ("__cerbty_int_least8_t",     Typename);
+  ("__cerbty_int_least16_t",    Typename);
+  ("__cerbty_int_least32_t",    Typename);
+  ("__cerbty_int_least64_t",    Typename);
+  ("__cerbty_uint_least8_t",    Typename);
+  ("__cerbty_uint_least16_t",   Typename);
+  ("__cerbty_uint_least32_t",   Typename);
+  ("__cerbty_uint_least64_t",   Typename);
+  ("__cerbty_int_fast8_t",      Typename);
+  ("__cerbty_int_fast16_t",     Typename);
+  ("__cerbty_int_fast32_t",     Typename);
+  ("__cerbty_int_fast64_t",     Typename);
+  ("__cerbty_uint_fast8_t",     Typename);
+  ("__cerbty_uint_fast16_t",    Typename);
+  ("__cerbty_uint_fast32_t",    Typename);
+  ("__cerbty_uint_fast64_t",    Typename);
+  ("__cerbty_intptr_t",         Typename); (* optional *)
+  ("__cerbty_uintptr_t",        Typename); (* optional *)
+  ("__cerbty_intmax_t",         Typename);
+  ("__cerbty_uintmax_t",        Typename);
+  ("__cerbvar_INT8_MIN",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))));
+  ("__cerbvar_INT16_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))));
+  ("__cerbvar_INT32_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))));
+  ("__cerbvar_INT64_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))));
+  ("__cerbvar_INT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))));
+  ("__cerbvar_INT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))));
+  ("__cerbvar_INT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))));
+  ("__cerbvar_INT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))));
+  ("__cerbvar_UINT8_MAX",        Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 8))))));
+  ("__cerbvar_UINT16_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 16))))));
+  ("__cerbvar_UINT32_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 32))))));
+  ("__cerbvar_UINT64_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 64))))));
+  ("__cerbvar_INT_LEAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_INT_LEAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_INT_LEAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_INT_LEAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_INT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_INT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_INT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_INT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_UINT_LEAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 8))))));
+  ("__cerbvar_UINT_LEAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 16))))));
+  ("__cerbvar_UINT_LEAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 32))))));
+  ("__cerbvar_UINT_LEAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 64))))));
+  ("__cerbvar_INT_FAST8_MIN",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_INT_FAST16_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_INT_FAST32_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_INT_FAST64_MIN", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_INT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_INT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_INT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_INT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_UINT_FAST8_MAX",  Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 8))))));
+  ("__cerbvar_UINT_FAST16_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 16))))));
+  ("__cerbvar_UINT_FAST32_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 32))))));
+  ("__cerbvar_UINT_FAST64_MAX", Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 64))))));
+  ("__cerbvar_INTPTR_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intptr_t))))));
+  ("__cerbvar_INTPTR_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intptr_t))))));
+  ("__cerbvar_UINTPTR_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Intptr_t))))));
+  ("__cerbvar_INTMAX_MIN",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intmax_t))))));
+  ("__cerbvar_INTMAX_MAX",       Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Intmax_t))))));
+  ("__cerbvar_UINTMAX_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Intmax_t))))));
+  ("__cerbvar_PTRDIFF_MIN",      Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))));
+  ("__cerbvar_PTRDIFF_MAX",      Varname (Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))));
+  ("__cerbvar_SIG_ATOMIC_MIN",   Varname Nothing);
+  ("__cerbvar_SIG_ATOMIC_MAX",   Varname Nothing);
+  ("__cerbvar_SIZE_MAX",         Varname Nothing);
+  ("__cerbvar_WCHAR_MIN",        Varname Nothing);
+  ("__cerbvar_WCHAR_MAX",        Varname Nothing);
+  ("__cerbvar_WINT_MIN",         Varname Nothing);
+  ("__cerbvar_WINT_MAX",         Varname Nothing);
+  
+  (* from stdio.h (§7.21) *)
+(*  ("__cerbty_size_t", Typename); *) (* Already listed *)
+  ("__cerbty_FILE",   Typename);
+  ("__cerbty_fpos_t", Typename);
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
+  ("__cerbvar_IOFBF",        Varname Nothing);
+  ("__cerbvar_IOLBF",        Varname Nothing);
+  ("__cerbvar_IONBF",        Varname Nothing);
+  ("__cerbvar_BUFSIZ",       Varname Nothing);
+  ("__cerbvar_EOF",          Varname Nothing);
+  ("__cerbvar_FOPEN_MAX",    Varname Nothing);
+  ("__cerbvar_FILENAME_MAX", Varname Nothing);
+  ("__cerbvar_L_tmpnam",     Varname Nothing);
+  ("__cerbvar_SEEK_CUR",     Varname Nothing);
+  ("__cerbvar_SEEK_END",     Varname Nothing);
+  ("__cerbvar_SEEK_SET",     Varname Nothing);
+  ("__cerbvar_TMP_MAX",      Varname Nothing);
+  ("__cerbvar_stderr",       Varname Nothing);
+  ("__cerbvar_stdin",        Varname Nothing);
+  ("__cerbvar_stdout",       Varname Nothing);
+  
+  (* from stdlib.h (§7.22) *)
+  ("__cerbvar_EXIT_FAILURE", Varname Nothing);
+  ("__cerbvar_MB_CUR_MAX",   Varname Nothing);
+  ("__cerbvar_EXIT_SUCCESS", Varname Nothing);
+  ("__cerbvar_RAND_MAX",     Varname Nothing);
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
+  
+  (* from string.h (§7.24) *)
+(*  ("__cerbty_size_t", Typename); *) (* Already listed *)
+(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
+  
+  (* TODO: from tgmath.h (§7.25) *)
+  
+  (* from threads.h (§7.26) *)
+  ("__cerbvar_ONCE_FLAG_INIT",      Varname Nothing);
+  ("__cerbvar_TSS_DTOR_ITERATIONS", Varname Nothing);
+  ("__cerbty_cnd_t", Typename);
+  ("__cerbty_thrd_t", Typename);
+  ("__cerbty_tss_t", Typename);
+  ("__cerbty_mtx_t", Typename);
+  ("__cerbty_once_flag", Typename);
+  
+  (* TODO: from time.h (§7.27) *)
+  ("__cerbty_time_t", Typename);
+  
+  (* TODO: from uchar.h (§7.28) *)
+  
+  (* TODO: from wchar.h (§7.29) *)
+  
+  (* TODO: from wctype.h (§7.30) *)
+  
+
+
+]
+
+
+val translate_builtin_typenames: string -> maybe ATypes.ctype
+let translate_builtin_typenames = function
+(*
+  | "__cerbty_ptrdiff_t"      -> Nothing
+  | "__cerbty_size_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_max_align_t"    -> Nothing
+  | "__cerbty_wchar_t"        -> Nothing
+  | "__cerbty_int8_t"         -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int8_t))
+  | "__cerbty_int16_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int16_t))
+  | "__cerbty_int32_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int32_t))
+  | "__cerbty_int64_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed   ATypes.Int64_t))
+  | "__cerbty_uint8_t"        -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t))
+  | "__cerbty_uint16_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t))
+  | "__cerbty_uint32_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t))
+  | "__cerbty_uint64_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t))
+
+  | "__cerbty_int_least8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_int_least16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_int_least32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_int_least64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_uint_least8_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_uint_least16_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_uint_least32_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_uint_least64_t" -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_int_fast8_t"    -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_int_fast16_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_int_fast32_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_int_fast64_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int64_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast8_t"   -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int8_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast16_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int16_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast32_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int32_t)) (* TODO: hack *)
+  | "__cerbty_uint_fast64_t"  -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int64_t)) (* TODO: hack *)
+  
+  | "__cerbty_intptr_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_uintptr_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_intmax_t"       -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) (* TODO: hack *)
+  | "__cerbty_uintmax_t"      -> Just $ ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) (* TODO: hack *)
+*)
+
+
+  | "__cerbty_FILE" ->
+      Just (ATypes.Builtin "FILE")
+  | "__cerbty_cnd_t" ->
+      Just (ATypes.Builtin "cnd_t")
+  | "__cerbty_fpos_t" ->
+      Just (ATypes.Builtin "fpos_t")
+  | "__cerbty_int8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 8))))
+  | "__cerbty_int16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 16))))
+  | "__cerbty_int32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 32))))
+  | "__cerbty_int64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.IntN_t 64))))
+  | "__cerbty_int_fast8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 8))))
+  | "__cerbty_int_fast16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 16))))
+  | "__cerbty_int_fast32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 32))))
+  | "__cerbty_int_fast64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_fastN_t 64))))
+  | "__cerbty_int_least8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 8))))
+  | "__cerbty_int_least16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 16))))
+  | "__cerbty_int_least32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 32))))
+  | "__cerbty_int_least64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed (ATypes.Int_leastN_t 64))))
+  | "__cerbty_intmax_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Intmax_t)))
+  | "__cerbty_intptr_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Intptr_t)))
+  | "__cerbty_ptrdiff_t" ->
+      Just (ATypes.Basic (ATypes.Integer ATypes.Ptrdiff_t))
+  | "__cerbty_jmp_buf" ->
+      Just (ATypes.Builtin "jmp_buf")
+  | "__cerbty_mtx_t" ->
+      Just (ATypes.Builtin "mtx_t")
+  | "__cerbty_once_flag" ->
+      Just (ATypes.Builtin "once_flag")
+(*
+  | "__cerbty_sig_atomic_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "sig_atomic_t")))
+*)
+  | "__cerbty_size_t" ->
+      Just (ATypes.Basic (ATypes.Integer ATypes.Size_t))
+  | "__cerbty_thrd_t" ->
+      Just (ATypes.Builtin "thrd_t")
+  | "__cerbty_tss_t" ->
+      Just (ATypes.Builtin "tss_t")
+  | "__cerbty_uint8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 8))))
+  | "__cerbty_uint16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 16))))
+  | "__cerbty_uint32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 32))))
+  | "__cerbty_uint64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.IntN_t 64))))
+  | "__cerbty_uint_fast8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 8))))
+  | "__cerbty_uint_fast16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 16))))
+  | "__cerbty_uint_fast32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 32))))
+  | "__cerbty_uint_fast64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_fastN_t 64))))
+  | "__cerbty_uint_least8_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 8))))
+  | "__cerbty_uint_least16_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 16))))
+  | "__cerbty_uint_least32_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 32))))
+  | "__cerbty_uint_least64_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned (ATypes.Int_leastN_t 64))))
+  | "__cerbty_uintmax_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Intmax_t)))
+  | "__cerbty_uintptr_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Unsigned ATypes.Intptr_t)))
+  | "__cerbty_va_list" ->
+      Just (ATypes.Builtin "va_list")
+  | "__cerbty_wchar_t" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "wchar_t")))
+  | "__cerbty_time_t" ->
+      Just (ATypes.Builtin "time_t")
+  | str ->
+      (* TODO *)
+      let chars = String.toCharList str in
+      let (pref, tyname) = List.splitAt 9 chars in
+      if String.toString pref = "__cerbty_" then
+        Just (ATypes.Builtin (String.toString tyname))
+      else
+        Nothing
+
+end
+
+
+val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (A.expression' unit * maybe ATypes.ctype)
+let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
+  match str with
+    | "__cerbvar_EDOM" -> Just (A.AilEbuiltin "EDOM", Nothing)
+    | "__cerbvar_EILSEQ" -> Just (A.AilEbuiltin "EILSEQ", Nothing)
+    | "__cerbvar_ERANGE" -> Just (A.AilEbuiltin "ERANGE", Nothing)
+    | "__cerbvar_errno" -> Just (A.AilEbuiltin "errno", Nothing)
+    | "__cerbvar_PRId8" -> Just (A.AilEbuiltin "PRId8", Nothing)
+    | "__cerbvar_PRId16" -> Just (A.AilEbuiltin "PRId16", Nothing)
+    | "__cerbvar_PRId32" -> Just (A.AilEbuiltin "PRId32", Nothing)
+    | "__cerbvar_PRId64" -> Just (A.AilEbuiltin "PRId64", Nothing)
+    | "__cerbvar_PRIdLEAST8" -> Just (A.AilEbuiltin "PRIdLEAST8", Nothing)
+    | "__cerbvar_PRIdLEAST16" -> Just (A.AilEbuiltin "PRIdLEAST16", Nothing)
+    | "__cerbvar_PRIdLEAST32" -> Just (A.AilEbuiltin "PRIdLEAST32", Nothing)
+    | "__cerbvar_PRIdLEAST64" -> Just (A.AilEbuiltin "PRIdLEAST64", Nothing)
+    | "__cerbvar_PRIdFAST8" -> Just (A.AilEbuiltin "PRIdFAST8", Nothing)
+    | "__cerbvar_PRIdFAST16" -> Just (A.AilEbuiltin "PRIdFAST16", Nothing)
+    | "__cerbvar_PRIdFAST32" -> Just (A.AilEbuiltin "PRIdFAST32", Nothing)
+    | "__cerbvar_PRIdFAST64" -> Just (A.AilEbuiltin "PRIdFAST64", Nothing)
+    | "__cerbvar_PRIdMAX" -> Just (A.AilEbuiltin "PRIdMAX", Nothing)
+    | "__cerbvar_PRIdPTR" -> Just (A.AilEbuiltin "PRIdPTR", Nothing)
+    | "__cerbvar_PRIi8" -> Just (A.AilEbuiltin "PRIi8", Nothing)
+    | "__cerbvar_PRIi16" -> Just (A.AilEbuiltin "PRIi16", Nothing)
+    | "__cerbvar_PRIi32" -> Just (A.AilEbuiltin "PRIi32", Nothing)
+    | "__cerbvar_PRIi64" -> Just (A.AilEbuiltin "PRIi64", Nothing)
+    | "__cerbvar_PRIiLEAST8" -> Just (A.AilEbuiltin "PRIiLEAST8", Nothing)
+    | "__cerbvar_PRIiLEAST16" -> Just (A.AilEbuiltin "PRIiLEAST16", Nothing)
+    | "__cerbvar_PRIiLEAST32" -> Just (A.AilEbuiltin "PRIiLEAST32", Nothing)
+    | "__cerbvar_PRIiLEAST64" -> Just (A.AilEbuiltin "PRIiLEAST64", Nothing)
+    | "__cerbvar_PRIiFAST8" -> Just (A.AilEbuiltin "PRIiFAST8", Nothing)
+    | "__cerbvar_PRIiFAST16" -> Just (A.AilEbuiltin "PRIiFAST16", Nothing)
+    | "__cerbvar_PRIiFAST32" -> Just (A.AilEbuiltin "PRIiFAST32", Nothing)
+    | "__cerbvar_PRIiFAST64" -> Just (A.AilEbuiltin "PRIiFAST64", Nothing)
+    | "__cerbvar_PRIiMAX" -> Just (A.AilEbuiltin "PRIiMAX", Nothing)
+    | "__cerbvar_PRIiPTR" -> Just (A.AilEbuiltin "PRIiPTR", Nothing)
+    | "__cerbvar_PRIo8" -> Just (A.AilEbuiltin "PRIo8", Nothing)
+    | "__cerbvar_PRIo16" -> Just (A.AilEbuiltin "PRIo16", Nothing)
+    | "__cerbvar_PRIo32" -> Just (A.AilEbuiltin "PRIo32", Nothing)
+    | "__cerbvar_PRIo64" -> Just (A.AilEbuiltin "PRIo64", Nothing)
+    | "__cerbvar_PRIoLEAST8" -> Just (A.AilEbuiltin "PRIoLEAST8", Nothing)
+    | "__cerbvar_PRIoLEAST16" -> Just (A.AilEbuiltin "PRIoLEAST16", Nothing)
+    | "__cerbvar_PRIoLEAST32" -> Just (A.AilEbuiltin "PRIoLEAST32", Nothing)
+    | "__cerbvar_PRIoLEAST64" -> Just (A.AilEbuiltin "PRIoLEAST64", Nothing)
+    | "__cerbvar_PRIoFAST8" -> Just (A.AilEbuiltin "PRIoFAST8", Nothing)
+    | "__cerbvar_PRIoFAST16" -> Just (A.AilEbuiltin "PRIoFAST16", Nothing)
+    | "__cerbvar_PRIoFAST32" -> Just (A.AilEbuiltin "PRIoFAST32", Nothing)
+    | "__cerbvar_PRIoFAST64" -> Just (A.AilEbuiltin "PRIoFAST64", Nothing)
+    | "__cerbvar_PRIoMAX" -> Just (A.AilEbuiltin "PRIoMAX", Nothing)
+    | "__cerbvar_PRIoPTR" -> Just (A.AilEbuiltin "PRIoPTR", Nothing)
+    | "__cerbvar_PRIu8" -> Just (A.AilEbuiltin "PRIu8", Nothing)
+    | "__cerbvar_PRIu16" -> Just (A.AilEbuiltin "PRIu16", Nothing)
+    | "__cerbvar_PRIu32" -> Just (A.AilEbuiltin "PRIu32", Nothing)
+    | "__cerbvar_PRIu64" -> Just (A.AilEbuiltin "PRIu64", Nothing)
+    | "__cerbvar_PRIuLEAST8" -> Just (A.AilEbuiltin "PRIuLEAST8", Nothing)
+    | "__cerbvar_PRIuLEAST16" -> Just (A.AilEbuiltin "PRIuLEAST16", Nothing)
+    | "__cerbvar_PRIuLEAST32" -> Just (A.AilEbuiltin "PRIuLEAST32", Nothing)
+    | "__cerbvar_PRIuLEAST64" -> Just (A.AilEbuiltin "PRIuLEAST64", Nothing)
+    | "__cerbvar_PRIuFAST8" -> Just (A.AilEbuiltin "PRIuFAST8", Nothing)
+    | "__cerbvar_PRIuFAST16" -> Just (A.AilEbuiltin "PRIuFAST16", Nothing)
+    | "__cerbvar_PRIuFAST32" -> Just (A.AilEbuiltin "PRIuFAST32", Nothing)
+    | "__cerbvar_PRIuFAST64" -> Just (A.AilEbuiltin "PRIuFAST64", Nothing)
+    | "__cerbvar_PRIuMAX" -> Just (A.AilEbuiltin "PRIuMAX", Nothing)
+    | "__cerbvar_PRIuPTR" -> Just (A.AilEbuiltin "PRIuPTR", Nothing)
+    | "__cerbvar_PRIx8" -> Just (A.AilEbuiltin "PRIx8", Nothing)
+    | "__cerbvar_PRIx16" -> Just (A.AilEbuiltin "PRIx16", Nothing)
+    | "__cerbvar_PRIx32" -> Just (A.AilEbuiltin "PRIx32", Nothing)
+    | "__cerbvar_PRIx64" -> Just (A.AilEbuiltin "PRIx64", Nothing)
+    | "__cerbvar_PRIxLEAST8" -> Just (A.AilEbuiltin "PRIxLEAST8", Nothing)
+    | "__cerbvar_PRIxLEAST16" -> Just (A.AilEbuiltin "PRIxLEAST16", Nothing)
+    | "__cerbvar_PRIxLEAST32" -> Just (A.AilEbuiltin "PRIxLEAST32", Nothing)
+    | "__cerbvar_PRIxLEAST64" -> Just (A.AilEbuiltin "PRIxLEAST64", Nothing)
+    | "__cerbvar_PRIxFAST8" -> Just (A.AilEbuiltin "PRIxFAST8", Nothing)
+    | "__cerbvar_PRIxFAST16" -> Just (A.AilEbuiltin "PRIxFAST16", Nothing)
+    | "__cerbvar_PRIxFAST32" -> Just (A.AilEbuiltin "PRIxFAST32", Nothing)
+    | "__cerbvar_PRIxFAST64" -> Just (A.AilEbuiltin "PRIxFAST64", Nothing)
+    | "__cerbvar_PRIxMAX" -> Just (A.AilEbuiltin "PRIxMAX", Nothing)
+    | "__cerbvar_PRIxPTR" -> Just (A.AilEbuiltin "PRIxPTR", Nothing)
+    | "__cerbvar_PRIX8" -> Just (A.AilEbuiltin "PRIX8", Nothing)
+    | "__cerbvar_PRIX16" -> Just (A.AilEbuiltin "PRIX16", Nothing)
+    | "__cerbvar_PRIX32" -> Just (A.AilEbuiltin "PRIX32", Nothing)
+    | "__cerbvar_PRIX64" -> Just (A.AilEbuiltin "PRIX64", Nothing)
+    | "__cerbvar_PRIXLEAST8" -> Just (A.AilEbuiltin "PRIXLEAST8", Nothing)
+    | "__cerbvar_PRIXLEAST16" -> Just (A.AilEbuiltin "PRIXLEAST16", Nothing)
+    | "__cerbvar_PRIXLEAST32" -> Just (A.AilEbuiltin "PRIXLEAST32", Nothing)
+    | "__cerbvar_PRIXLEAST64" -> Just (A.AilEbuiltin "PRIXLEAST64", Nothing)
+    | "__cerbvar_PRIXFAST8" -> Just (A.AilEbuiltin "PRIXFAST8", Nothing)
+    | "__cerbvar_PRIXFAST16" -> Just (A.AilEbuiltin "PRIXFAST16", Nothing)
+    | "__cerbvar_PRIXFAST32" -> Just (A.AilEbuiltin "PRIXFAST32", Nothing)
+    | "__cerbvar_PRIXFAST64" -> Just (A.AilEbuiltin "PRIXFAST64", Nothing)
+    | "__cerbvar_PRIXMAX" -> Just (A.AilEbuiltin "PRIXMAX", Nothing)
+    | "__cerbvar_PRIXPTR" -> Just (A.AilEbuiltin "PRIXPTR", Nothing)
+    | "__cerbvar_SCNd8" -> Just (A.AilEbuiltin "SCNd8", Nothing)
+    | "__cerbvar_SCNd16" -> Just (A.AilEbuiltin "SCNd16", Nothing)
+    | "__cerbvar_SCNd32" -> Just (A.AilEbuiltin "SCNd32", Nothing)
+    | "__cerbvar_SCNd64" -> Just (A.AilEbuiltin "SCNd64", Nothing)
+    | "__cerbvar_SCNdLEAST8" -> Just (A.AilEbuiltin "SCNdLEAST8", Nothing)
+    | "__cerbvar_SCNdLEAST16" -> Just (A.AilEbuiltin "SCNdLEAST16", Nothing)
+    | "__cerbvar_SCNdLEAST32" -> Just (A.AilEbuiltin "SCNdLEAST32", Nothing)
+    | "__cerbvar_SCNdLEAST64" -> Just (A.AilEbuiltin "SCNdLEAST64", Nothing)
+    | "__cerbvar_SCNdFAST8" -> Just (A.AilEbuiltin "SCNdFAST8", Nothing)
+    | "__cerbvar_SCNdFAST16" -> Just (A.AilEbuiltin "SCNdFAST16", Nothing)
+    | "__cerbvar_SCNdFAST32" -> Just (A.AilEbuiltin "SCNdFAST32", Nothing)
+    | "__cerbvar_SCNdFAST64" -> Just (A.AilEbuiltin "SCNdFAST64", Nothing)
+    | "__cerbvar_SCNdMAX" -> Just (A.AilEbuiltin "SCNdMAX", Nothing)
+    | "__cerbvar_SCNdPTR" -> Just (A.AilEbuiltin "SCNdPTR", Nothing)
+    | "__cerbvar_SCNi8" -> Just (A.AilEbuiltin "SCNi8", Nothing)
+    | "__cerbvar_SCNi16" -> Just (A.AilEbuiltin "SCNi16", Nothing)
+    | "__cerbvar_SCNi32" -> Just (A.AilEbuiltin "SCNi32", Nothing)
+    | "__cerbvar_SCNi64" -> Just (A.AilEbuiltin "SCNi64", Nothing)
+    | "__cerbvar_SCNiLEAST8" -> Just (A.AilEbuiltin "SCNiLEAST8", Nothing)
+    | "__cerbvar_SCNiLEAST16" -> Just (A.AilEbuiltin "SCNiLEAST16", Nothing)
+    | "__cerbvar_SCNiLEAST32" -> Just (A.AilEbuiltin "SCNiLEAST32", Nothing)
+    | "__cerbvar_SCNiLEAST64" -> Just (A.AilEbuiltin "SCNiLEAST64", Nothing)
+    | "__cerbvar_SCNiFAST8" -> Just (A.AilEbuiltin "SCNiFAST8", Nothing)
+    | "__cerbvar_SCNiFAST16" -> Just (A.AilEbuiltin "SCNiFAST16", Nothing)
+    | "__cerbvar_SCNiFAST32" -> Just (A.AilEbuiltin "SCNiFAST32", Nothing)
+    | "__cerbvar_SCNiFAST64" -> Just (A.AilEbuiltin "SCNiFAST64", Nothing)
+    | "__cerbvar_SCNiMAX" -> Just (A.AilEbuiltin "SCNiMAX", Nothing)
+    | "__cerbvar_SCNiPTR" -> Just (A.AilEbuiltin "SCNiPTR", Nothing)
+    | "__cerbvar_SCNo8" -> Just (A.AilEbuiltin "SCNo8", Nothing)
+    | "__cerbvar_SCNo16" -> Just (A.AilEbuiltin "SCNo16", Nothing)
+    | "__cerbvar_SCNo32" -> Just (A.AilEbuiltin "SCNo32", Nothing)
+    | "__cerbvar_SCNo64" -> Just (A.AilEbuiltin "SCNo64", Nothing)
+    | "__cerbvar_SCNoLEAST8" -> Just (A.AilEbuiltin "SCNoLEAST8", Nothing)
+    | "__cerbvar_SCNoLEAST16" -> Just (A.AilEbuiltin "SCNoLEAST16", Nothing)
+    | "__cerbvar_SCNoLEAST32" -> Just (A.AilEbuiltin "SCNoLEAST32", Nothing)
+    | "__cerbvar_SCNoLEAST64" -> Just (A.AilEbuiltin "SCNoLEAST64", Nothing)
+    | "__cerbvar_SCNoFAST8" -> Just (A.AilEbuiltin "SCNoFAST8", Nothing)
+    | "__cerbvar_SCNoFAST16" -> Just (A.AilEbuiltin "SCNoFAST16", Nothing)
+    | "__cerbvar_SCNoFAST32" -> Just (A.AilEbuiltin "SCNoFAST32", Nothing)
+    | "__cerbvar_SCNoFAST64" -> Just (A.AilEbuiltin "SCNoFAST64", Nothing)
+    | "__cerbvar_SCNoMAX" -> Just (A.AilEbuiltin "SCNoMAX", Nothing)
+    | "__cerbvar_SCNoPTR" -> Just (A.AilEbuiltin "SCNoPTR", Nothing)
+    | "__cerbvar_SCNu8" -> Just (A.AilEbuiltin "SCNu8", Nothing)
+    | "__cerbvar_SCNu16" -> Just (A.AilEbuiltin "SCNu16", Nothing)
+    | "__cerbvar_SCNu32" -> Just (A.AilEbuiltin "SCNu32", Nothing)
+    | "__cerbvar_SCNu64" -> Just (A.AilEbuiltin "SCNu64", Nothing)
+    | "__cerbvar_SCNuLEAST8" -> Just (A.AilEbuiltin "SCNuLEAST8", Nothing)
+    | "__cerbvar_SCNuLEAST16" -> Just (A.AilEbuiltin "SCNuLEAST16", Nothing)
+    | "__cerbvar_SCNuLEAST32" -> Just (A.AilEbuiltin "SCNuLEAST32", Nothing)
+    | "__cerbvar_SCNuLEAST64" -> Just (A.AilEbuiltin "SCNuLEAST64", Nothing)
+    | "__cerbvar_SCNuFAST8" -> Just (A.AilEbuiltin "SCNuFAST8", Nothing)
+    | "__cerbvar_SCNuFAST16" -> Just (A.AilEbuiltin "SCNuFAST16", Nothing)
+    | "__cerbvar_SCNuFAST32" -> Just (A.AilEbuiltin "SCNuFAST32", Nothing)
+    | "__cerbvar_SCNuFAST64" -> Just (A.AilEbuiltin "SCNuFAST64", Nothing)
+    | "__cerbvar_SCNuMAX" -> Just (A.AilEbuiltin "SCNuMAX", Nothing)
+    | "__cerbvar_SCNuPTR" -> Just (A.AilEbuiltin "SCNuPTR", Nothing)
+    | "__cerbvar_SCNx8" -> Just (A.AilEbuiltin "SCNx8", Nothing)
+    | "__cerbvar_SCNx16" -> Just (A.AilEbuiltin "SCNx16", Nothing)
+    | "__cerbvar_SCNx32" -> Just (A.AilEbuiltin "SCNx32", Nothing)
+    | "__cerbvar_SCNx64" -> Just (A.AilEbuiltin "SCNx64", Nothing)
+    | "__cerbvar_SCNxLEAST8" -> Just (A.AilEbuiltin "SCNxLEAST8", Nothing)
+    | "__cerbvar_SCNxLEAST16" -> Just (A.AilEbuiltin "SCNxLEAST16", Nothing)
+    | "__cerbvar_SCNxLEAST32" -> Just (A.AilEbuiltin "SCNxLEAST32", Nothing)
+    | "__cerbvar_SCNxLEAST64" -> Just (A.AilEbuiltin "SCNxLEAST64", Nothing)
+    | "__cerbvar_SCNxFAST8" -> Just (A.AilEbuiltin "SCNxFAST8", Nothing)
+    | "__cerbvar_SCNxFAST16" -> Just (A.AilEbuiltin "SCNxFAST16", Nothing)
+    | "__cerbvar_SCNxFAST32" -> Just (A.AilEbuiltin "SCNxFAST32", Nothing)
+    | "__cerbvar_SCNxFAST64" -> Just (A.AilEbuiltin "SCNxFAST64", Nothing)
+    | "__cerbvar_SCNxMAX" -> Just (A.AilEbuiltin "SCNxMAX", Nothing)
+    | "__cerbvar_SCNxPTR" -> Just (A.AilEbuiltin "SCNxPTR", Nothing)
+    | "__cerbvar_CHAR_BIT" -> Just (A.AilEbuiltin "CHAR_BIT", Nothing)
+    | "__cerbvar_SCHAR_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Ichar))), Nothing)
+    | "__cerbvar_SCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Ichar))), Nothing)
+    | "__cerbvar_UCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Ichar))), Nothing)
+    | "__cerbvar_CHAR_MIN" -> Just (A.AilEbuiltin "CHAR_MIN", Nothing)
+    | "__cerbvar_CHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ATypes.Char)), Nothing)
+    | "__cerbvar_MB_LEN_MAX" -> Just (A.AilEbuiltin "MB_LEN_MAX", Nothing)
+    | "__cerbvar_SHRT_MIN" -> Just (A.AilEbuiltin "SHRT_MIN", Nothing)
+    | "__cerbvar_SHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Short))), Nothing)
+    | "__cerbvar_USHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Short))), Nothing)
+    | "__cerbvar_INT_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Int_))), Nothing)
+    | "__cerbvar_INT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Int_))), Nothing)
+    | "__cerbvar_UINT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Int_))), Nothing)
+    | "__cerbvar_LONG_MIN" -> Just (A.AilEbuiltin "LONG_MIN", Nothing)
+    | "__cerbvar_LONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Long))), Nothing)
+    | "__cerbvar_ULONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Long))), Nothing)
+    | "__cerbvar_LLONG_MIN" -> Just (A.AilEbuiltin "LLONG_MIN", Nothing)
+    | "__cerbvar_LLONG_MAX" -> Just (A.AilEbuiltin "LLONG_MAX", Nothing)
+    | "__cerbvar_ULLONG_MAX" -> Just (A.AilEbuiltin "ULLONG_MAX", Nothing)
+    | "__cerbvar_SIG_IGN" -> Just (A.AilEbuiltin "SIG_IGN", Nothing)
+    | "__cerbvar_SIGILL" -> Just (A.AilEbuiltin "SIGILL", Nothing)
+    | "__cerbvar_SIGTERM" -> Just (A.AilEbuiltin "SIGTERM", Nothing)
+    | "__cerbvar_SIG_DFL" -> Just (A.AilEbuiltin "SIG_DFL", Nothing)
+    | "__cerbvar_SIGABRT" -> Just (A.AilEbuiltin "SIGABRT", Nothing)
+    | "__cerbvar_SIGINT" -> Just (A.AilEbuiltin "SIGINT", Nothing)
+    | "__cerbvar_SIG_ERR" -> Just (A.AilEbuiltin "SIG_ERR", Nothing)
+    | "__cerbvar_SIGFPE" -> Just (A.AilEbuiltin "SIGFPE", Nothing)
+    | "__cerbvar_SIGSEGV" -> Just (A.AilEbuiltin "SIGSEGV", Nothing)
+    | "__cerbvar_va_arg" -> Just (A.AilEbuiltin "va_arg", Nothing)
+    | "__cerbvar_va_copy" -> Just (A.AilEbuiltin "va_copy", Nothing)
+    | "__cerbvar_va_end" -> Just (A.AilEbuiltin "va_end", Nothing)
+    | "__cerbvar_va_start" -> Just (A.AilEbuiltin "va_start", Nothing)
+    | "__cerbvar_ATOMIC_BOOL_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_BOOL_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_CHAR_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_CHAR_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_CHAR16_T_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_CHAR16_T_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_CHAR32_T_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_CHAR32_t_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_WCHAR_T_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_WCHAR_T_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_SHORT_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_SHORT_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_INT_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_INT_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_LONG_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_LONG_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_LLONG_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_LLONG_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_POINTER_LOCK_FREE" -> Just (A.AilEbuiltin "ATOMIC_POINTER_LOCK_FREE", Nothing)
+    | "__cerbvar_ATOMIC_FLAG_INIT" -> Just (A.AilEbuiltin "ATOMIC_FLAG_INIT", Nothing)
+    | "__cerbvar_NULL" -> Just (A.AilEconst A.ConstantNull, Just (ATypes.Pointer ATypes.no_qualifiers ATypes.Void))
+    | "__cerbvar_offsetof" -> Just (A.AilEbuiltin "offsetof", Nothing)
+    | "__cerbvar_INT8_MIN" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT16_MIN" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT32_MIN" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT64_MIN" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT8_MAX" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT16_MAX" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT32_MAX" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INT64_MAX" ->
+        let ity = ATypes.Signed (ATypes.IntN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINT8_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.IntN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINT16_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.IntN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINT32_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.IntN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINT64_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.IntN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    
+    | "__cerbvar_atomic_init" -> Just (A.AilEbuiltin "atomic_init", Nothing)
+    | "__cerbvar_atomic_thread_fence" -> Just (A.AilEbuiltin "atomic_thread_fence", Nothing)
+    | "__cerbvar_atomic_signal_fence" -> Just (A.AilEbuiltin "atomic_signal_fence", Nothing)
+    | "__cerbvar_atomic_is_lock_free" -> Just (A.AilEbuiltin "atomic_is_lock_free", Nothing)
+    | "__cerbvar_atomic_store_explicit" -> Just (A.AilEbuiltin "atomic_store_explicit", Nothing)
+    | "__cerbvar_atomic_load_explicit" -> Just (A.AilEbuiltin "atomic_load_explicit", Nothing)
+    | "__cerbvar_atomic_exchange_explicit" -> Just (A.AilEbuiltin "atomic_exchange_explicit", Nothing)
+    | "__cerbvar_atomic_compare_exchange_strong_explicit" -> Just (A.AilEbuiltin "atomic_compare_exchange_strong_explicit", Nothing)
+    | "__cerbvar_atomic_compare_exchange_weak_explicit" -> Just (A.AilEbuiltin "atomic_compare_exchange_weak_explicit", Nothing)
+    | "__cerbvar_atomic_fetch_key_explicit" -> Just (A.AilEbuiltin "atomic_fetch_key_explicit", Nothing)
+
+
+
+(*
+    | "__cerbvar_INT_LEAST8_MIN" -> Just (A.AilEbuiltin "INT_LEAST8_MIN")
+    | "__cerbvar_INT_LEAST16_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
+    | "__cerbvar_INT_LEAST32_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
+    | "__cerbvar_INT_LEAST64_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
+    | "__cerbvar_INT_LEAST8_MAX" -> Just (A.AilEbuiltin "INT_LEAST8_MAX")
+    | "__cerbvar_INT_LEAST16_MAX" -> Just (A.AilEbuiltin "INT_LEAST16_MAX")
+    | "__cerbvar_INT_LEAST32_MAX" -> Just (A.AilEbuiltin "INT_LEAST32_MAX")
+    | "__cerbvar_INT_LEAST64_MAX" -> Just (A.AilEbuiltin "INT_LEAST64_MAX")
+    | "__cerbvar_UINT_LEAST8_MAX" -> Just (A.AilEbuiltin "UINT_LEAST8_MAX")
+    | "__cerbvar_UINT_LEAST16_MAX" -> Just (A.AilEbuiltin "UINT_LEAST16_MAX")
+    | "__cerbvar_UINT_LEAST32_MAX" -> Just (A.AilEbuiltin "UINT_LEAST32_MAX")
+    | "__cerbvar_UINT_LEAST64_MAX" -> Just (A.AilEbuiltin "UINT_LEAST64_MAX")
+    | "__cerbvar_INT_FAST8_MIN" -> Just (A.AilEbuiltin "INT_FAST8_MIN")
+    | "__cerbvar_INT_FAST16_MIN" -> Just (A.AilEbuiltin "INT_FAST16_MIN")
+    | "__cerbvar_INT_FAST32_MIN" -> Just (A.AilEbuiltin "INT_FAST32_MIN")
+    | "__cerbvar_INT_FAST64_MIN" -> Just (A.AilEbuiltin "INT_FAST64_MIN")
+    | "__cerbvar_INT_FAST8_MAX" -> Just (A.AilEbuiltin "INT_FAST8_MAX")
+    | "__cerbvar_INT_FAST16_MAX" -> Just (A.AilEbuiltin "INT_FAST16_MAX")
+    | "__cerbvar_INT_FAST32_MAX" -> Just (A.AilEbuiltin "INT_FAST32_MAX")
+    | "__cerbvar_INT_FAST64_MAX" -> Just (A.AilEbuiltin "INT_FAST64_MAX")
+    | "__cerbvar_UINT_FAST8_MAX" -> Just (A.AilEbuiltin "UINT_FAST8_MAX")
+    | "__cerbvar_UINT_FAST16_MAX" -> Just (A.AilEbuiltin "UINT_FAST16_MAX")
+    | "__cerbvar_UINT_FAST32_MAX" -> Just (A.AilEbuiltin "UINT_FAST32_MAX")
+    | "__cerbvar_UINT_FAST64_MAX" -> Just (A.AilEbuiltin "UINT_FAST64_MAX")
+    | "__cerbvar_INTPTR_MIN" -> Just (A.AilEbuiltin "INTPTR_MIN")
+    | "__cerbvar_INTPTR_MAX" -> Just (A.AilEbuiltin "INTPTR_MAX")
+    | "__cerbvar_UINTPTR_MAX" -> Just (A.AilEbuiltin "UINTPTR_MAX")
+    | "__cerbvar_INTMAX_MIN" -> Just (A.AilEbuiltin "INTMAX_MIN")
+    | "__cerbvar_INTMAX_MAX" -> Just (A.AilEbuiltin "UNTMAX_MAX")
+    | "__cerbvar_UINTMAX_MAX" -> Just (A.AilEbuiltin "UINTMAX_MAX")
+    | "__cerbvar_PTRDIFF_MIN" -> Just (A.AilEbuiltin "PTRDIFF_MIN")
+    | "__cerbvar_PTRDIFF_MAX" -> Just (A.AilEbuiltin "PTRDIFF_MAX")
+    | "__cerbvar_SIG_ATOMIC_MIN" -> Just (A.AilEbuiltin "SIG_ATOMIC_MIN")
+    | "__cerbvar_SIG_ATOMIC_MAX" -> Just (A.AilEbuiltin "SIG_ATOMIC_MAX")
+    | "__cerbvar_SIZE_MAX" -> Just (A.AilEbuiltin "SIZE_MAX")
+    | "__cerbvar_WCHAR_MIN" -> Just (A.AilEbuiltin "WCHAR_MIN")
+    | "__cerbvar_WCHAR_MAX" -> Just (A.AilEbuiltin "WCHAR_MAX")
+    | "__cerbvar_WINT_MIN" -> Just (A.AilEbuiltin "WINT_MIN")
+    | "__cerbvar_WINT_MAX" -> Just (A.AilEbuiltin "WINT_MAX")
+    | "__cerbvar_IOFBF" -> Just (A.AilEbuiltin "IOFBF")
+    | "__cerbvar_IOLBF" -> Just (A.AilEbuiltin "IOLBF")
+    | "__cerbvar_IONBF" -> Just (A.AilEbuiltin "IONBF")
+    | "__cerbvar_BUFSIZ" -> Just (A.AilEbuiltin "BUFSIZ")
+    | "__cerbvar_EOF" -> Just (A.AilEbuiltin "EOF")
+    | "__cerbvar_FOPEN_MAX" -> Just (A.AilEbuiltin "FOPEN_MAX")
+    | "__cerbvar_FILENAME_MAX" -> Just (A.AilEbuiltin "FILENAME_MAX")
+    | "__cerbvar_L_tmpnam" -> Just (A.AilEbuiltin "L_tmpnam")
+    | "__cerbvar_SEEK_CUR" -> Just (A.AilEbuiltin "SEEK_CUR")
+    | "__cerbvar_SEEK_END" -> Just (A.AilEbuiltin "SEEK_END")
+    | "__cerbvar_SEEK_SET" -> Just (A.AilEbuiltin "SEEK_SET")
+    | "__cerbvar_TMP_MAX" -> Just (A.AilEbuiltin "TMP_MAX")
+    | "__cerbvar_stderr" -> Just (A.AilEbuiltin "srderr")
+*)
+    | "__cerbvar_stdin" -> Just (A.AilEbuiltin "stdin", Nothing)
+(*
+    | "__cerbvar_stdout" -> Just (A.AilEbuiltin "stdout")
+    | "__cerbvar_EXIT_FAILURE" -> Just (A.AilEbuiltin "EXIT_FAILURE")
+    | "__cerbvar_MB_CUR_MAX" -> Just (A.AilEbuiltin "MB_CUR_MAX")
+    | "__cerbvar_EXIT_SUCCESS" -> Just (A.AilEbuiltin "EXIT_SUCCESS")
+    | "__cerbvar_RAND_MAX" -> Just (A.AilEbuiltin "RAND_MAX")
+    | "__cerbvar_ONCE_FLAG_INIT" -> Just (A.AilEbuiltin "ONCE_FLAG_INIT")
+    | "__cerbvar_TSS_DTOR_ITERATIONS" -> Just (A.AilEbuiltin "tss_DTOR_ITERATIONS")
+*)
+
+    | _                   -> Nothing
+end
+
+
+
+val ctype_of_builtin_varname: string -> maybe ATypes.ctype
+let ctype_of_builtin_varname = function
+  
+  (* STD §7.21.1#3 *)
+  | "stderr" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+  | "stdin" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+  | "stdout" ->
+      Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
+      
+  | "CHAR_BIT" ->
+      Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))
+
+  | _ ->
+      Nothing
+end
