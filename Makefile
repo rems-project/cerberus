@@ -182,7 +182,7 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 DOC_BUILD_DIR = generated_doc
 
 alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
-	#@OCAMLRUNPARAM=b $(LEM0)  --dry-run -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+	#@OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 	@OCAMLRUNPARAM=b $(LEM0)  -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 
 alldoc.pdf: alldoc.tex
