@@ -33,78 +33,33 @@ CMM_EXEC_DIR=concurrency
 CMM_EXEC_LEM =\
   cmm_op.lem
 
+SOURCE_utils=\
+  boot.lem \
+  decode.lem \
+  dlist.lem \
+  driver_util.lem \
+  enum.lem \
+  errors.lem \
+  exception.lem \
+  exception_undefined.lem \
+  global.lem \
+  loc.lem \
+  multiset.lem \
+  product.lem \
+  state_exception.lem \
+  state_exception_undefined.lem \
+  state.lem \
+  state_operators.lem \
+  symbol.lem \
+  thread.lem \
+  uniqueId.lem \
+  std.lem \
+  monadic_parsing.lem \
+  output.lem
 
-# # The cerberus model
-# CERBERUS_LEM=\
-#   cabs.lem \
-#   dlist.lem \
-#   constraints.lem \
-#   cmm_aux.lem \
-#   boot.lem \
-#   cabs_to_ail.lem \
-#   cabs_to_ail_aux.lem \
-#   cabs_to_ail_effect.lem \
-#   scope_table.lem \
-#   std.lem \
-#   decode.lem \
-#   multiset.lem \
-#   core.lem \
-#   core_aux.lem \
-#   translation.lem \
-#   translation_aux.lem \
-#   translation_effect.lem \
-#   core_indet.lem \
-#   core_rewrite.lem \
-#   core_run.lem \
-#   core_run_aux.lem \
-#   errors.lem \
-#   exception.lem \
-#   global.lem \
-#   implementation_.lem \
-#   loc.lem \
-#   product.lem \
-#   state.lem \
-#   state_operators.lem \
-#   state_exception.lem \
-#   symbol.lem \
-#   undefined.lem \
-#   core_ctype.lem \
-#   core_ctype_aux.lem \
-#   defacto_memory_types.lem \
-#   defacto_memory.lem \
-#   mem.lem \
-#   mem_aux.lem \
-#   mem_common.lem \
-#   symbolic.lem \
-#   driver_util.lem \
-#   driver_effect.lem \
-#   driver.lem \
-#   exception_undefined.lem \
-#   state_exception_undefined.lem \
-#   nondeterminism.lem \
-#   thread.lem \
-#   uniqueId.lem \
-#   enum.lem \
-#   builtins.lem \
-#   ail/Common.lem \
-#   ail/ErrorMonad.lem \
-#   ail/TypingError.lem \
-#   ail/Range.lem \
-#   ail/Implementation.lem \
-#   ail/AilSyntax.lem \
-#   ail/AilSyntaxAux.lem \
-#   ail/AilTypes.lem \
-#   ail/AilTypesAux.lem \
-#   ail/AilTyping.lem \
-#   ail/AilWf.lem \
-#   ail/Context.lem \
-#   ail/Annotation.lem \
-#   ail/GenTypes.lem \
-#   ail/GenTypesAux.lem \
-#   ail/GenTyping.lem \
-#   monadic_parsing.lem \
-#   output.lem
-
+SOURCE_cabs=\
+  cabs.lem \
+  undefined.lem 
 
 SOURCE_ail=\
   ail/AilSyntax.lem \
@@ -125,10 +80,6 @@ SOURCE_ail_typing=\
   ail/Range.lem \
   ail/TypingError.lem \
   ail/Implementation.lem 
-
-SOURCE_cabs=\
-  cabs.lem \
-  undefined.lem 
 
 SOURCE_cabs_to_ail=\
   builtins.lem \
@@ -162,31 +113,6 @@ SOURCE_elaboration=\
   translation_effect.lem \
   translation.lem 
 
-SOURCE_utils=\
-  boot.lem \
-  decode.lem \
-  dlist.lem \
-  driver_util.lem \
-  enum.lem \
-  errors.lem \
-  exception.lem \
-  exception_undefined.lem \
-  global.lem \
-  loc.lem \
-  multiset.lem \
-  product.lem \
-  state_exception.lem \
-  state_exception_undefined.lem \
-  state.lem \
-  state_operators.lem \
-  symbol.lem \
-  thread.lem \
-  uniqueId.lem \
-  std.lem \
-  monadic_parsing.lem \
-  output.lem
-
-
 SOURCE_defacto =\
   mem.lem \
   mem_aux.lem \
@@ -199,15 +125,15 @@ SOURCE_concurrency_interface =\
 
 
 CERBERUS_LEM=\
+  $(SOURCE_utils) \
+  $(SOURCE_cabs) \
   $(SOURCE_ail) \
   $(SOURCE_ail_typing) \
-  $(SOURCE_cabs) \
   $(SOURCE_cabs_to_ail) \
   $(SOURCE_core) \
   $(SOURCE_core_to_core) \
   $(SOURCE_core_dynamics) \
   $(SOURCE_elaboration) \
-  $(SOURCE_utils) \
   $(SOURCE_defacto) \
   $(SOURCE_concurrency_interface)
 
@@ -256,7 +182,8 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 DOC_BUILD_DIR = generated_doc
 
 alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
-	@OCAMLRUNPARAM=b $(LEM0) -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+	#@OCAMLRUNPARAM=b $(LEM0)  --dry-run -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+	@OCAMLRUNPARAM=b $(LEM0)  -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 
 alldoc.pdf: alldoc.tex
 	pdflatex alldoc.tex
