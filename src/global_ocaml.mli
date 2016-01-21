@@ -37,6 +37,7 @@ type cerberus_conf = {
   core_impl_opt: Core.impl option;
   core_parser:   Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3;
   exec_mode_opt: execution_mode option;
+  compile:       bool;
   progress:      bool;
   rewrite:       bool;
   sequentialise: bool;
@@ -63,6 +64,7 @@ val set_cerb_conf:
     bool ->
     execution_mode ->
     (Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3) ->
+    bool ->
     bool ->
     bool ->
     bool ->

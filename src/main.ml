@@ -207,11 +207,13 @@ let pipeline filename args =
       print_endline "====================";
    );
   
-  
-  Exception.return2 (backend sym_supply rewritten_core_file args)
+  if !!cerb_conf.compile then
+    Codegen_ocaml.compile filename true rewritten_core_file
+  else
+    Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args compile =
   Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -235,13 +237,13 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
 
-  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
   
   (* Looking for and parsing the implementation file *)
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
 
   
   
@@ -279,6 +281,10 @@ open Cmdliner
 let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+let compile =
+  let doc = "Compile core code (passing through Ocaml)." in
+  Arg.(value & flag & info ["compile"] ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls and excluding the .impl suffix)." in
@@ -339,7 +345,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args) in
+                         sequentialise $ concurrency $ preEx $ args $ compile) in
   let info       = Term.info "cerberus" ~version:"b3e67754f25e+ tip -- 20/11/2015@15:12" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
