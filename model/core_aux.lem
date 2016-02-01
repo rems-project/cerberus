@@ -316,7 +316,7 @@ let mk_wseq end_e = function
       mk_wseq_aux end_e a_opts_es
 end
 
-val     mk_sseq: forall 'a. list (list (maybe Core.sym) * expr 'a) -> expr 'a
+val     mk_sseq: forall 'a. list (pattern * expr 'a) -> expr 'a
 let rec mk_sseq a_opts_es =
   match a_opts_es with
     | []               -> Eskip
@@ -324,7 +324,7 @@ let rec mk_sseq a_opts_es =
     | (a_opts, e)::es' -> Esseq a_opts e (mk_sseq es')
 end
 
-val     mk_sseq': forall 'a. list (list (maybe Core.sym) * expr 'a) -> expr 'a -> expr 'a
+val     mk_sseq': forall 'a. list (pattern * expr 'a) -> expr 'a -> expr 'a
 let rec mk_sseq' a_opts_es z =
   match a_opts_es with
     | []               -> z
@@ -630,12 +630,15 @@ let rec to_pures es =
 
 
 (* check if a symbolic names is part of a pattern *)
-val in_pattern: sym -> list (maybe sym) -> bool
-let rec in_pattern a p =
-  match p with
-    | []             -> false
-    | Nothing  :: xs -> in_pattern a xs
-    | Just a'  :: xs -> if a = a' then true else in_pattern a xs
+val in_pattern: sym -> pattern -> bool
+let rec in_pattern sym pat =
+  match pat with
+    | [] ->
+        false
+    | Nothing :: xs ->
+        in_pattern sym xs
+    | Just (sym', _) :: xs ->
+        if sym = sym' then true else in_pattern sym xs
   end
 
 (* substitute in an expression a symbolic name with a (pure) expression *)
@@ -647,7 +650,7 @@ let rec subst_sym_pexpr sym pe' = function
       PEerror str (subst_sym_pexpr sym pe' pe)
   | (PEval _ as pexpr) ->
       pexpr
-  | (PEsym sym' as pexpr) ->
+  | (PEsym (sym', _) as pexpr) ->
       if sym = sym' then pe' else pexpr
   | (PEimpl _ as pexpr) ->
       pexpr
@@ -702,8 +705,8 @@ let rec subst_sym_pexpr sym pe' = function
       PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, subst_sym_pexpr sym pe' pe)) xs)
   | PEcall nm pes ->
       PEcall nm (List.map (subst_sym_pexpr sym pe') pes)
-  | PElet sym' pe1 pe2 ->
-      PElet sym' (subst_sym_pexpr sym pe' pe1) (if sym = sym' then pe2 else subst_sym_pexpr sym pe' pe2)
+  | PElet ((sym', _) as pat) pe1 pe2 ->
+      PElet pat (subst_sym_pexpr sym pe' pe1) (if sym = sym' then pe2 else subst_sym_pexpr sym pe' pe2)
   | PEif pe1 pe2 pe3 ->
       PEif (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2) (subst_sym_pexpr sym pe' pe3)
   | PEis_scalar pe ->
@@ -741,8 +744,8 @@ let rec subst_sym sym pe' = function
       expr
   | (Eskip as expr) ->
       expr
-  | Elet sym' pe1 e2 ->
-      Elet sym' (subst_sym_pexpr sym pe' pe1) (if sym = sym' then e2 else subst_sym sym pe' e2)
+  | Elet ((sym', _) as pat) pe1 e2 ->
+      Elet pat (subst_sym_pexpr sym pe' pe1) (if sym = sym' then e2 else subst_sym sym pe' e2)
   | Eif pe1 e2 e3 ->
       Eif (subst_sym_pexpr sym pe' pe1) (subst_sym sym pe' e2) (subst_sym sym pe' e3)
   | Eproc annot nm pes ->
@@ -751,12 +754,19 @@ let rec subst_sym sym pe' = function
       Eaction (subst_sym_paction sym pe' pact)
   | Eunseq es ->
       Eunseq (List.map (subst_sym sym pe') es)
-  | Ewseq _as e1 e2 ->
-      Ewseq _as (subst_sym sym pe' e1) (if in_pattern sym _as then e2 else subst_sym sym pe' e2)
-  | Esseq _as e1 e2 ->
-      Esseq _as (subst_sym sym pe' e1) (if in_pattern sym _as then e2 else subst_sym sym pe' e2)
-  | Easeq sym_opt act1 pact2 ->
-      Easeq sym_opt (subst_sym_action sym pe' act1) (if Just sym = sym_opt then pact2 else subst_sym_paction sym pe' pact2)
+  | Ewseq pat e1 e2 ->
+      Ewseq pat (subst_sym sym pe' e1) (if in_pattern sym pat then e2 else subst_sym sym pe' e2)
+  | Esseq pat e1 e2 ->
+      Esseq pat (subst_sym sym pe' e1) (if in_pattern sym pat then e2 else subst_sym sym pe' e2)
+  | Easeq pat act1 pact2 ->
+      Easeq pat (subst_sym_action sym pe' act1) (
+        match pat with
+          | Just (sym, _) ->
+              pact2
+          | Nothing ->
+              subst_sym_paction sym pe' pact2
+        end
+      )
   | Eindet e ->
       Eindet (subst_sym sym pe' e)
   | Ebound k e ->
@@ -810,29 +820,29 @@ and subst_sym_paction a pe' (Paction p act) =
    of the value expression [v] in the expression [e]. This function leads
    to a crash if [v] is not a value or its type doesn't match the symbolic
    pattern *)
-val subst_syms: forall 'a. list (maybe sym) -> pexpr -> expr 'a -> expr 'a
-let subst_syms _as pe' expr =
-  match (_as, pe') with
+val subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> expr 'a
+let subst_pattern pat pe' expr =
+  match (pat, pe') with
     | ([], _) ->
         expr
     | ([Nothing], _) ->
         expr
-    | ([Just sym], _) ->
+    | ([Just (sym, _)], _) ->
         subst_sym sym pe' expr
     | (_, PEtuple pes') ->
-        Global.foldl2 (fun acc _a_opt pe' ->
-          match _a_opt with
-            | Just sym ->
+        Global.foldl2 (fun acc sym_ty_opt pe' ->
+          match sym_ty_opt with
+            | Just (sym, _) ->
                 subst_sym sym pe' acc
             | Nothing ->
                 acc
-          end) expr _as pes'
+          end) expr pat pes'
     | (_, PEval (Vtuple cvals)) ->
-        Global.foldl2 (fun acc sym_opt cval ->
-          maybe acc (fun sym -> subst_sym sym (PEval cval) acc) sym_opt
-        ) expr _as cvals
+        Global.foldl2 (fun acc sym_ty_opt cval ->
+          maybe acc (fun (sym, _) -> subst_sym sym (PEval cval) acc) sym_ty_opt
+        ) expr pat cvals
     | _ ->
-        error "[Core_aux.subst_syms] impossible case"
+        error "[Core_aux.subst_pattern] impossible case"
   end
 
 
@@ -988,10 +998,10 @@ val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
 let apply_continuation cont expr =
   let f _cont expr =
     match _cont with
-      | Kwseq _as e2 ->
-          Ewseq _as expr e2
-      | Ksseq _as e2 ->
-          Esseq _as expr e2
+      | Kwseq pat e2 ->
+          Ewseq pat expr e2
+      | Ksseq pat e2 ->
+          Esseq pat expr e2
       | Kunseq es1 es2 ->
           Eunseq $ es1 ++ (expr :: es2)
 (*

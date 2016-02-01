@@ -131,6 +131,84 @@ let rec resolve_concur_sym sym concur_sym_map seen_syms =
 
 
 
+
+(*
+            match cval with
+              | Vlist [] ->
+                  
+              | Vlist cvals ->
+                  
+              | Vtuple cvals ->
+
+  | Vtuple of list value
+  | Vctype of ctype
+(*  | Vconst of Mem.mem_value *)
+  | Vsymbolic of Symbolic.symbolic value Mem.pointer_value (* symbolicity coming from the concurrency *)
+  
+  | Vunspecified of ctype
+  | Vinteger of Mem.integer_value
+  | Vfloating of string
+  | Vpointer of Mem.pointer_value
+  | Varray of list value (* Mem.mem_value *)
+  | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
+  | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
+
+(*
+of pexpr * list (case_pattern * pexpr)
+
+type case_pattern =
+  | CaseBase of ctor * pattern
+  | CaseCtor of ctor * list case_pattern
+  | CaseWildcard
+*)
+*)
+
+let rec lookup_case_pattern ctor = function
+  | [] ->
+      Nothing
+  | (CaseBase ctor' pat, pe) :: cpat_pes' ->
+      if ctor = ctor' then
+        Just (pat, pe)
+      else
+        lookup_case_pattern ctor cpat_pes'
+(*
+  | (CaseCtor ctor' cpats, p) ->
+      if ctor = ctor' then
+        
+*)
+end
+
+val subst_syms_opt: list (maybe (Symbol.t * Core.core_base_type)) -> list Core.value -> Core.pexpr -> Core.pexpr
+let subst_syms_opt sym_ty_opts cvals pe =
+  List.foldl (fun acc (sym_ty_opt, cval) ->
+    maybe acc (fun (sym, _) -> subst_sym_pexpr sym (PEval cval) acc) sym_ty_opt
+  ) pe (List.zip sym_ty_opts cvals)
+
+val     core_case: Core.value -> list (Core.case_pattern * pexpr) -> maybe Core.pexpr
+let rec core_case cval cpat_pes =
+  match cval with
+    | Vlist [] ->
+        match lookup_case_pattern Cnil cpat_pes with
+          | Just ([], body_pe) ->
+              Just body_pe
+          | Nothing ->
+              Nothing
+        end
+    | Vlist (cval'::cvals') ->
+        match lookup_case_pattern Ccons cpat_pes with
+          | Just (pat, body_pe) ->
+              Just (subst_syms_opt pat [cval'; Vlist cvals'] body_pe)
+          | Nothing ->
+              Nothing
+        end
+(*
+        
+    | Vtuple cvals ->
+        
+*)
+  end
+
+
 val     core_eval: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
                    map Symbol.t Core.value -> bool -> Core.pexpr ->
                    EU.t Core.pexpr core_run_error
@@ -175,7 +253,7 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
     end
 *)
       EU.return pexpr
-  | (PEsym sym as pexpr) ->
+  | (PEsym (sym, _) as pexpr) ->
       if inside_if then
         EU.return pexpr
       else
@@ -230,6 +308,26 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
         | (_, Nothing) ->
             EU.return $ PEctor ctor pes'
       end
+
+(*  
+  | PEcase pe cpats =
+      core_eval loc mem_st file concur_sym_map inside_if pe >>= function ->
+        | PEval cval ->
+            match core_case cval cpats with
+              | Just body_pe ->
+                  EU.return body_pe'
+              | Nothing ->
+                  EU.fail $ Illformed_program "PEcase: first operand should be caseable"
+            end
+        | pe' ->
+            EU.return $ PEcase pe' cpats
+      end
+*)
+
+
+
+
+
 
   
   | PEcons pe1 pe2 ->
@@ -739,13 +837,13 @@ KKK NOW
         | Nothing ->
             EU.return $ PEcall nm pes'
       end
-  | PElet sym pe1 pe2 ->
+  | PElet ((sym, _) as pat) pe1 pe2 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
       EU.return $ match valueFromPexpr pe1' with
         | Just cval ->
             subst_sym_pexpr sym (PEval cval) pe2
         | Nothing ->
-            PElet sym pe1' pe2
+            PElet pat pe1' pe2
       end
   | PEif pe1 pe2 pe3 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
@@ -1755,19 +1853,19 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
           E.return <| th_st with arena= apply_continuation cont (Epure (PEval Vunit)); stack= Stack_cons [] sk' |>
         )
     
-    | (Elet sym pe1 e2, _) ->
+    | (Elet pat pe1 e2, _) ->
         (*                [| pe1 |] = v
            --------------------------------------------------
            <let α = pe1 in e2, κs, Λ> --τ--> <e2[α\v], κs, Λ> *)
         one match valueFromPexpr pe1 with
           | Just cval ->
               Step_tau "Elet" (
-                E.return <| th_st with arena= subst_sym sym (PEval cval) e2 |>
+                E.return <| th_st with arena= subst_sym (fst pat) (PEval cval) e2 |>
               )
           | Nothing ->
               Step_eval "Elet" (
                 E.core_eval th_st.current_loc mem_st file concur_sym_map false pe1 >>= fun pe1' ->
-                E.return <| th_st with arena= Elet sym pe1' e2 |>
+                E.return <| th_st with arena= Elet pat pe1' e2 |>
               )
         end
     
@@ -1966,19 +2064,19 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                   xs
         end
     
-    | (Ewseq _as e1 e2, Stack_cons cont sk) ->
+    | (Ewseq pat e1 e2, Stack_cons cont sk) ->
         (* TODO: negatives *)
         one match to_pure e1 with
           | Just pe ->
               match valueFromPexpr pe with
                 | Just cval ->
                     Step_tau "Ewseq subst" (
-                      E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
+                      E.return <| th_st with arena= subst_pattern pat (PEval cval) e2 |>
                     )
                 | Nothing ->
                     Step_eval "Ewseq" (
                       E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                      E.return <| th_st with arena= Ewseq _as (Epure pe') e2 |>
+                      E.return <| th_st with arena= Ewseq pat (Epure pe') e2 |>
                     )
               end
           | Nothing ->
@@ -1986,24 +2084,24 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_tau "Ewseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons (Kwseq _as e2 :: cont) sk
+                  stack= Stack_cons (Kwseq pat e2 :: cont) sk
                 |>
               )
         end
     
-    | (Esseq _as e1 e2, Stack_cons cont sk) ->
+    | (Esseq pat e1 e2, Stack_cons cont sk) ->
         (* TODO: negatives *)
         one match to_pure e1 with
           | Just pe ->
               match valueFromPexpr pe with
                 | Just cval ->
                     Step_tau "Esseq subst" (
-                      E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
+                      E.return <| th_st with arena= subst_pattern pat (PEval cval) e2 |>
                     )
                 | Nothing ->
                     Step_eval "Esseq" (
                       E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                      E.return <| th_st with arena= Esseq _as (Epure pe') e2 |>
+                      E.return <| th_st with arena= Esseq pat (Epure pe') e2 |>
                     )
               end
           | Nothing ->
@@ -2011,7 +2109,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_tau "Esseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons (Ksseq _as e2 :: cont) sk
+                  stack= Stack_cons (Ksseq pat e2 :: cont) sk
                 |>
               )
         end
@@ -2045,7 +2143,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
           let kill_es = List.map snd $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) sym_tys)) sym_vs in
           let e =
             Ewseq [] (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
-              (Ewseq (List.map (fun z -> Just z) create_as) (mk_unseq $ List.map (fun ty ->
+              (Ewseq (List.map (fun z -> Just (z, BTy_ctype)) create_as) (mk_unseq $ List.map (fun ty ->
                 let pe_ty = PEval (Vctype ty) in
                 pcreate Loc.unknown (alignof pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
               ) create_tys)

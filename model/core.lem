@@ -12,17 +12,28 @@ type handler_event =
   string (* TODO: fixed ctors? *)
 
 
+type core_object_type =
+  | OTy_integer
+  | OTy_floating
+  | OTy_pointer
+  | OTy_array of core_object_type
+  | OTy_struct of Cabs.cabs_identifier
+  | OTy_union of Cabs.cabs_identifier
 
 type core_base_type =
+  | BTy_object of core_object_type
+  | BTy_loaded of core_object_type (* NOTE: same as BTy_object, but has just been loaded from memory so the value may be unspecified *)
+(*
   | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
-  | BTy_boolean
   | BTy_pointer
+*)
+  | BTy_boolean
   | BTy_ctype
   | BTy_cfunction
   | BTy_unit
   | BTy_list of core_base_type
   | BTy_tuple of list core_base_type
-  | BTy_any
+  | BTy_any (* TODO: tmp *)
 
 (* Types discriminate between pure (TyBase) and effectful
    expressions (TyEffect) *)
@@ -152,15 +163,25 @@ type value =
 
 
 type ctor =
-  | Clist
-  | Ctuple
-  | Carray
-  | Civmax
-  | Civmin
-  | Civsizeof
-  | Civalignof
-  | Cunspecified
+  | Cnil         (* : [bTy] *)
+  | Ccons        (* : bTy -> [bTy] -> [bTy] *)
+  | Ctuple       (* : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) *)
+  | Carray       (* : bTy -> ... -> bTy -> array bTy *)
+  | Civmax       (* : ctype -> integer *)
+  | Civmin       (* : ctype -> integer *)
+  | Civsizeof    (* : ctype -> integer *)
+  | Civalignof   (* : ctype -> integer *)
+  | Cobject      (* : objTy -> load objTy *)
+  | Cunspecified (* : ctype -> loaded (integer|floating|pointer|array|struct|union) *)
 
+
+type pattern =
+    list (maybe (sym * core_base_type))
+
+type case_pattern =
+  | CaseBase of ctor * pattern
+  | CaseCtor of ctor * list case_pattern
+  | CaseWildcard
 
 
 (* pure Core expressions *)
@@ -172,11 +193,13 @@ type pexpr =
   (* values *)
   | PEval of value
   (* names *)
-  | PEsym of sym
+  | PEsym of (sym * core_base_type)
   | PEimpl of Implementation_.implementation_constant
   
   (* data (de|con)structors *)
   | PEctor of ctor * list pexpr
+(*  | PEcase of pexpr * list (ctor * list (maybe (sym * core_base_type)) * pexpr) *)
+  | PEcase of pexpr * list (case_pattern * pexpr)
   
   (* BEGIN OBSOLETE *)
   | PEcons of pexpr * pexpr
@@ -211,7 +234,7 @@ type pexpr =
   (* call to a pure function *)
   | PEcall of name * list pexpr
   
-  | PElet of sym * pexpr * pexpr
+  | PElet of (sym * core_base_type) * pexpr * pexpr
   | PEif of pexpr * pexpr * pexpr
   
 (*  | PEvla of ctype * pexpr *)
@@ -228,6 +251,7 @@ and shift_path =
   list (ctype * pexpr)
 
 
+
 type expr 'a =
   (* pure expression *)
   | Epure of pexpr
@@ -241,7 +265,7 @@ type expr 'a =
   
   (* potentially effectful *)
   | Eskip
-  | Elet of sym * pexpr * expr 'a
+  | Elet of (sym * core_base_type) * pexpr * expr 'a
   | Eif of pexpr * expr 'a * expr 'a
   | Eproc of 'a * name * list pexpr
   | Eaction of paction 'a
@@ -249,9 +273,9 @@ type expr 'a =
   (* sequencing operators *)
   | Eunseq of list (expr 'a)
 
-  | Ewseq of list (maybe sym) * expr 'a * expr 'a
-  | Esseq of list (maybe sym) * expr 'a * expr 'a
-  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
+  | Ewseq of pattern * expr 'a * expr 'a
+  | Esseq of pattern * expr 'a * expr 'a
+  | Easeq of maybe (sym * core_base_type) * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
   
   (* indeterminately-sequenced expressions and boundary *) 
   | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
@@ -489,8 +513,8 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
 
 type continuation_element 'a =
   | Kunseq of list (expr 'a) * list (expr 'a)
-  | Kwseq  of list (maybe sym) * expr 'a
-  | Ksseq  of list (maybe sym) * expr 'a
+  | Kwseq  of pattern * expr 'a
+  | Ksseq  of pattern * expr 'a
 (*  | Ktry   of list (string * expr 'a) *)
 
 
