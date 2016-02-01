@@ -1564,7 +1564,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               ) post_args_dr_st >>= fun (argv_ptr_val, post_argv_dr_st) ->
               
               ND.return $
-                (Core_aux.subst_syms [Just argc_sym; Just argv_sym]
+                (Core_aux.subst_pattern [Just (argc_sym, Core.BTy_object Core.OTy_pointer); Just (argv_sym, Core.BTy_object Core.OTy_pointer)]
                   (Core.PEval $ Core.Vtuple [Core.Vpointer argc_ptr_val; Core.Vpointer argv_ptr_val])
 (*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
                   expr, post_argv_dr_st)

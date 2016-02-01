@@ -226,7 +226,7 @@ let rec remove_unseqs expr =
         end) (Just []) es in
       maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (PEtuple pes)) pes_opt
   
-  | Ewseq _as (Eunseq es) e2 ->
+  | Ewseq pat (Eunseq es) e2 ->
       (* ys is the assoc list of symbolic names, values that can be substituted away *)
       let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
         match to_pure e with
@@ -234,11 +234,11 @@ let rec remove_unseqs expr =
               (acc1, (sym_opt, cval) :: acc2)
           | Nothing ->
               ((sym_opt, remove_unseqs e) :: acc1, acc2)
-        end) ([], []) (List.zip _as es) in
+        end) ([], []) (List.zip pat es) in
       
       let e2' =
         remove_unseqs $ List.foldl (fun acc (sym_opt, cval) ->
-          maybe acc (fun sym -> subst_sym sym cval acc) sym_opt
+          maybe acc (fun (sym, _) -> subst_sym sym cval acc) sym_opt
         ) e2 rev_ys in
       
       match rev_xs with
@@ -265,7 +265,7 @@ let rec remove_unseqs expr =
       
       let e2' =
         remove_unseqs $ List.foldl (fun acc (sym_opt, pe) ->
-          maybe acc (fun sym -> subst_sym sym pe acc) sym_opt
+          maybe acc (fun (sym, _) -> subst_sym sym pe acc) sym_opt
         ) e2 rev_ys in
       
       match rev_xs with
@@ -878,21 +878,21 @@ let rec pure_propagation2 expr =
           | Nothing ->
               Eunseq es'
         end
-    | Ewseq _as e1 e2 ->
+    | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (subst_syms _as pe1 e2)
+              pure_propagation2 (subst_pattern pat pe1 e2)
           | Nothing ->
-              Ewseq _as e1' (pure_propagation2 e2)
+              Ewseq pat e1' (pure_propagation2 e2)
        end
-    | Esseq _as e1 e2 ->
+    | Esseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (subst_syms _as pe1 e2)
+              pure_propagation2 (subst_pattern pat pe1 e2)
           | Nothing ->
-              Esseq _as e1' (pure_propagation2 e2)
+              Esseq pat e1' (pure_propagation2 e2)
        end
     | Eindet e ->
         Eindet (pure_propagation2 e)
