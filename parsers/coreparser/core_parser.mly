@@ -266,7 +266,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEerror")
     | PEsym _sym ->
-        Pure (Core.PEsym (lookup_symbol _sym st))
+        Pure (Core.PEsym (lookup_symbol _sym st, Core.BTy_any (* TODO *)))
     | PEimpl iCst ->
         Pure (Core.PEimpl iCst)
     | PEctor (ctor, _es) ->
@@ -396,9 +396,9 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         let _e2' = f (Pmap.add _sym sym st) _e2 in
         (match to_pure (f st _e1), to_pure _e2' with
           | Left pe1, Left pe2 ->
-              Pure (Core.PElet (sym, pe1, pe2))
+              Pure (Core.PElet ((sym, Core.BTy_any), pe1, pe2))
           | Left pe1, Right e2 ->
-              Expr (Core.Elet (sym, pe1, e2))
+              Expr (Core.Elet ((sym, Core.BTy_any), pe1, e2))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, Elet")
     | Eif (_e1, _e2, _e3) ->
@@ -430,7 +430,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
           match _sym_opt with
             | Some _sym ->
                 let sym = fresh_symbol _sym in
-                (Some sym :: _as, Pmap.add _sym sym st)
+                (Some (sym, Core.BTy_any) :: _as, Pmap.add _sym sym st)
             | None ->
                 (None :: _as, st)
         ) ([], st) _as in
@@ -440,7 +440,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
           match _sym_opt with
             | Some _sym ->
                 let sym = fresh_symbol _sym in
-                (Some sym :: _as, Pmap.add _sym sym st)
+                (Some (sym, Core.BTy_any) :: _as, Pmap.add _sym sym st)
             | None ->
                 (None :: _as, st)
         ) ([], st) _as in
@@ -449,7 +449,7 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         Expr (match _sym_opt with
           | Some _sym ->
               let sym = fresh_symbol _sym in
-              Core.Easeq (Some sym, Core.Action (Location_ocaml.unknown, (), g st act1), Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g (Pmap.add _sym sym st) act2)))
+              Core.Easeq (Some (sym, Core.BTy_any), Core.Action (Location_ocaml.unknown, (), g st act1), Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g (Pmap.add _sym sym st) act2)))
           | None ->
               Core.Easeq (None, Core.Action (Location_ocaml.unknown, (), g st act1), Core.Paction (p, Core.Action (Location_ocaml.unknown, (), g st act2))))
     | Eindet _e ->
@@ -1301,15 +1301,17 @@ ctype:
 
 core_base_type:
 | INTEGER
-    { Core.BTy_integer }
+    { Core.BTy_object Core.OTy_integer }
 | BOOLEAN
     { Core.BTy_boolean }
 | POINTER
-    { Core.BTy_pointer }
+    { Core.BTy_object Core.OTy_pointer }
 | CTYPE
     { Core.BTy_ctype }
+(*
 | CFUNCTION
-    { Core.BTy_cfunction }
+    { Core.BTy_object OTy_cfunction }
+*)
 | UNIT
     { Core.BTy_unit }
 | baseTys= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN)

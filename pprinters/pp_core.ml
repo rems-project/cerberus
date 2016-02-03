@@ -78,10 +78,26 @@ let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implement
                                             else Implementation_.string_of_implementation_constant i))
 
 
+let rec pp_core_object_type = function
+  | OTy_integer ->
+      !^ "integer"
+  | OTy_floating ->
+      !^ "floating"
+  | OTy_pointer ->
+      !^ "pointer"
+  | OTy_array bty ->
+      !^ "array" ^^ P.parens (pp_core_object_type bty)
+  | OTy_struct ident ->
+      !^ "struct(TODO)"
+  | OTy_union ident  ->
+      !^ "union(TODO)"
+
 let rec pp_core_base_type = function
-  | BTy_integer    -> !^ "integer"
+  | BTy_object bty ->
+      pp_core_object_type bty
+  | BTy_loaded bty ->
+      !^ "loaded" ^^ pp_core_object_type bty
   | BTy_boolean    -> !^ "boolean"
-  | BTy_pointer    -> !^ "pointer"
   | BTy_ctype      -> !^ "ctype"
   | BTy_cfunction  -> !^ "cfunction"
   | BTy_unit       -> !^ "unit"
@@ -157,14 +173,14 @@ let pp_thread_id n =
   !^ ("th_" ^ string_of_int n)
 
 
-let pp_pattern _as =
+let pp_pattern pat =
   let g = function
-    | Some x -> pp_symbol x
+    | Some (sym, _) -> pp_symbol sym
     | None   -> P.underscore in
-  match _as with
+  match pat with
     | []   -> P.lparen ^^ P.rparen
-    | [_a] -> g _a
-    | _    -> P.parens (comma_list g _as)
+    | [sym_ty] -> g sym_ty
+    | _    -> P.parens (comma_list g pat)
 
 
 (*
@@ -216,8 +232,10 @@ let rec pp_value = function
 
 
 let pp_ctor = function
-  | Clist ->
-      !^ "list"
+  | Cnil ->
+      !^ "nil"
+  | Ccons ->
+      !^ "cons"
   | Ctuple ->
       !^ "list"
   | Carray ->
@@ -230,6 +248,11 @@ let pp_ctor = function
       !^ "ivsizeof"
   | Civalignof ->
       !^ "ivalignof"
+  | Cobject ->
+      !^ "object"
+  | Cunspecified ->
+      !^ "unspecified"
+
 
 
 let pp_pexpr pe =
@@ -247,7 +270,7 @@ let pp_pexpr pe =
             pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp pe)
         | PEval cval ->
             pp_value cval
-        | PEsym sym ->
+        | PEsym (sym, _) ->
             pp_symbol sym
         | PEimpl iCst ->
             pp_impl iCst
@@ -312,7 +335,7 @@ let pp_pexpr pe =
 *)
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
-        | PElet (sym, pe1, pe2) ->
+        | PElet ((sym, _), pe1, pe2) ->
             (* DEBUG *) !^ "{-pe-}" ^^^ pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
             pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2 ^^^ pp_control "end"
         | PEif (pe1, pe2, pe3) ->
@@ -345,7 +368,7 @@ let rec pp_expr = function
       pp_keyword "register" ^^ P.parens (!^ str ^^ P.comma ^^^ pp_name nm)
   | Eskip ->
       pp_keyword "skip"
-  | Elet (sym, pe1, e2) ->
+  | Elet ((sym, _), pe1, e2) ->
       (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
       pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2 ^^^ pp_control "end"
   | Eif (pe1, e2, e3) ->
@@ -394,8 +417,8 @@ let rec pp_expr = function
       pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
       pp_expr e2
 *)
-  | Ewseq (_as, e1, e2) ->
-      pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern _as ^^^ P.equals ^^^
+  | Ewseq (pat, e1, e2) ->
+      pp_control "let" ^^^ pp_control "weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
 (*
@@ -411,7 +434,7 @@ let rec pp_expr = function
   | Easeq (None, act1, pact2) ->
       pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
       pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
-  | Easeq (Some sym, act1, pact2) ->
+  | Easeq (Some (sym, _), act1, pact2) ->
       pp_control "let" ^^^ pp_control "atom" ^^^ pp_symbol sym ^^^ P.equals ^^^
       pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
   | Eindet e ->
