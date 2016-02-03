@@ -2214,13 +2214,13 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         translate_rvalue e
     
     | A.AilSblock binds ss ->
-        let decls = [(id,ty) | forall ((id, (dur, qs, ty)) MEM binds) | true] in
+        let decls = [((id, C.BTy_any (* TODO *)) ,ty) | forall ((id, (dur, qs, ty)) MEM binds) | true] in
         
         (* the symbolic names and create actions for the local variables *)
         let (a_ids, core_creates) =
           mapUnzip (fun (a, ty) ->
             let c_ty = Caux.mk_ctype ty in
-            (Just (a, C.BTy_any (* TODO *)), Caux.pcreate loc (Caux.alignof c_ty) c_ty (Symbol.PrefSource [f; a]))
+            (Just a, Caux.pcreate loc (Caux.alignof c_ty) c_ty (Symbol.PrefSource [f; fst a]))
           ) decls in
 (*        E.print_debug 2 ("AilSblock CREATES for: " ^ show a_ids) >> (* DEBUG *) *)
         E.push_block_objects (List.map (fun (sym, (_, _, ty)) -> (sym, ty)) binds) >>
@@ -2309,10 +2309,10 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
           )
     
     | A.AilSwhile e s ->
-        E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-        E.fresh_named_symbol "loop"  >>= fun sym_loop  ->
-        E.fresh_named_symbol "break" >>= fun sym_break ->
-        translate_rvalue e       >>= fun core_e    ->
+        E.fresh_named_symbol "loop"            >>= fun sym_loop  ->
+        E.fresh_named_symbol "break"           >>= fun sym_break ->
+        E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e  ->
+        translate_rvalue e                     >>= fun core_e    ->
         translate_stmt stdlib program f
             <| labs with loop= Just sym_loop; break= Just sym_break |> s >>= fun core_s ->
         E.get_visible_objects >>= fun visible_syms ->
@@ -2321,7 +2321,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
           C.Esave sym_loop [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ]
             (C.Esseq [Just sym_ty_e] core_e
                (C.Eif (C.PEnot (C.PEop C.OpEq (C.PEsym sym_ty_e) (Caux.ival 0)))
-                  (C.Esseq [] core_s (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]))
+                  (C.Esseq [] core_s (C.Erun default sym_loop [ (sym, C.PEsym (sym, C.BTy_object C.OTy_pointer)) | forall (sym MEM visible_syms) | true ]))
                   (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
                )
             )
@@ -2359,7 +2359,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
                  (C.Esseq [Just sym_ty_e] core_e
                     (C.Eif (C.PEop C.OpEq (C.PEsym sym_ty_e) (Caux.ival 0))
                        (C.Esave sym_break [ (sym, Cty.Void)  | forall (sym MEM visible_syms) | true ] C.Eskip)
-                       (C.Erun default sym_loop [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ])
+                       (C.Erun default sym_loop [ (sym, C.PEsym (sym, C.BTy_object C.OTy_pointer)) | forall (sym MEM visible_syms) | true ])
                     )
                  )
               )
@@ -2367,23 +2367,26 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSbreak ->
         E.get_visible_objects >>= fun visible_syms ->
         E.return $
-          C.Erun default (fromJust "Translation.translate_statement, AilSbreak" labs.break) [ (sym, C.PEsym sym) | forall (sym MEM visible_syms) | true ]
+          C.Erun default (fromJust "Translation.translate_statement, AilSbreak" labs.break) [ (sym, C.PEsym (sym, C.BTy_object C.OTy_pointer)) | forall (sym MEM visible_syms) | true ]
 
     
-    | A.AilScontinue -> do E
-        visible_as <- E.get_visible_objects; in
-          E.return $ C.Erun default (fromJust "Translation.translate_statement, AilScontinue" labs.loop) [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
-        end
+    | A.AilScontinue ->
+        E.get_visible_objects >>= fun visible_syms ->
+        E.return $
+          C.Erun default (fromJust "Translation.translate_statement, AilScontinue" labs.loop)
+            [ (sym, C.PEsym (sym, C.BTy_object C.OTy_pointer)) | forall (sym MEM visible_syms) | true ]
     
-    | A.AilSreturnVoid -> do E
-        visible_as <- E.get_visible_objects; in
-          E.return (C.Esseq [] (Caux.mk_unseq $ List.map (Caux.pkill loc -| C.PEsym) visible_as) (C.Eret (C.PEval (C.Vunit))))
-        end
+    | A.AilSreturnVoid ->
+        E.get_visible_objects >>= fun visible_syms ->
+        E.return (C.Esseq [] (Caux.mk_unseq $
+                                List.map (fun sym -> Caux.pkill loc (C.PEsym (sym, C.BTy_object C.OTy_pointer))) visible_syms
+                             ) (C.Eret (C.PEval (C.Vunit)))
+                 )
     
-    | A.AilSreturn e -> do E
-        core_e     <- translate_rvalue e;
-        a_e        <- E.fresh_symbol;
-        visible_as <- E.get_visible_objects; in
+    | A.AilSreturn e ->
+        translate_rvalue e                     >>= fun core_e       ->
+        E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e     ->
+        E.get_visible_objects                  >>= fun visible_syms ->
 (*           let A.AnnotatedExpression ty _ = e in *)
           let return_ty = match Context.lookup (=) (snd program).A.declarations f with
             | Just (A.Decl_function _ return_ty _ _ _ _) ->
@@ -2392,14 +2395,13 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
                 error "[Translation.translate_rvalue A.Return] impossible error: TODO move to Exception.t"
           end in
           E.return $
-            C.Esseq [Just a_e] core_e
-              (C.Esseq [] (Caux.mk_unseq $ List.map (Caux.pkill loc -| C.PEsym) visible_as)
+            C.Esseq [Just sym_ty_e] core_e
+              (C.Esseq [] (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (C.PEsym (sym, C.BTy_object C.OTy_pointer))) visible_syms)
                  (C.Eret (if AilTypesAux.is_integer return_ty then
-                   conv_int [Caux.mk_ctype return_ty; C.PEsym a_e]
+                   conv_int [Caux.mk_ctype return_ty; C.PEsym sym_ty_e]
                  else
-                   C.PEsym a_e))
+                   C.PEsym sym_ty_e))
               )
-        end
     
     (* Need to do the promotions *)
     (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
@@ -2470,10 +2472,9 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
           E.return $ C.Esave l [ (a, Cty.Void)  | forall (a MEM visible_as) | true ] core_s
         end
     
-    | A.AilSgoto l -> do E
-        visible_as <- E.get_visible_objects; in
-          E.return $ C.Erun default l [ (a, C.PEsym a) | forall (a MEM visible_as) | true ]
-        end
+    | A.AilSgoto l ->
+        E.get_visible_objects >>= fun visible_syms ->
+        E.return $ C.Erun default l [ (sym, C.PEsym (sym, C.BTy_object C.OTy_pointer)) | forall (sym MEM visible_syms) | true ]
     
     | A.AilSdeclaration [] ->
         E.return C.Eskip
@@ -2487,7 +2488,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
               match ty with
                 | Aty.Pointer _ ref_ty ->
                     E.return (
-                      Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym)
+                      Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym (sym, C.BTy_object C.OTy_pointer))
                         (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA
                     )
               end
@@ -2496,21 +2497,21 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
             error ("PTR LEAFS ==> " ^ Boot.pp_ail_ctype ty)
 *)
             else
-              E.fresh_symbol     >>= fun sym_e     ->
+              E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
 (*              E.fresh_symbol     >>= fun sym_load  -> *)
               translate_lvalue e >>= fun core_e    ->
               E.return (
-                C.Esseq [Just sym_e] core_e
-                  (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) (C.PEsym sym_e) Cmm.NA)
+                C.Esseq [Just sym_ty_e] core_e
+                  (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym (sym, C.BTy_object C.OTy_pointer)) (C.PEsym sym_ty_e) Cmm.NA)
               )
           
           else
             (* we are not dealing with a pointer initialisation *)
-            E.fresh_symbol        >>= fun sym_e  ->
+            E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
             translate_rvalue e    >>= fun core_e ->
-            let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_e] else C.PEsym sym_e in
-            E.return $ C.Esseq [Just sym_e] core_e
-                         (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym sym) expr Cmm.NA)
+            let expr = if AilTypesAux.is_integer ty then conv_int [Caux.mk_ctype ty; C.PEsym sym_ty_e] else C.PEsym sym_ty_e in
+            E.return $ C.Esseq [Just sym_ty_e] core_e
+                         (Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym (sym, C.BTy_object C.OTy_pointer)) expr Cmm.NA)
 
 
 (*
@@ -2559,14 +2560,14 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
           (* generate the initialisation code for global variables *)
           let core_ty     = Caux.mk_ctype ty in
           let core_create = Caux.pcreate Loc.unknown (Caux.alignof core_ty) core_ty (Symbol.PrefSource [sym]) in
-          E.fresh_symbol >>= fun a_global ->
+          E.fresh_symbol >>= fun sym_global ->
           
-          E.print_debug 2 ("(translate_program) CREATE for " ^ show a_global) >> (* DEBUG *)
+          E.print_debug 2 ("(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
           
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Just expr ->
                 (* if the global has an initialisation *)
-                E.fresh_symbol >>= fun sym_e ->
+                E.fresh_typed_symbol true (ctype_of expr) >>= fun sym_ty_e ->
                 begin
                   if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant expr then
                     E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ty)))))
@@ -2575,18 +2576,18 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 end >>= fun core_e ->
                 let core_init_e =
                   if AilTypesAux.is_integer ty then
-                    conv_int [core_ty; C.PEsym sym_e]
+                    conv_int [core_ty; C.PEsym sym_ty_e]
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
-                    C.PEsym sym_e in
+                    C.PEsym sym_ty_e in
                 E.return
                   ((sym,
-                    C.TyEffect C.BTy_pointer,
-                    C.Esseq [Just a_global] core_create
-                      (C.Esseq [Just sym_e] core_e
+                    C.TyEffect (C.BTy_object C.OTy_pointer),
+                    C.Esseq [Just (sym_global, C.BTy_object C.OTy_pointer)] core_create
+                      (C.Esseq [Just sym_ty_e] core_e
                          (* TODO: proper memory order *)
-                         (C.Esseq [] (Caux.pstore Loc.unknown core_ty (C.PEsym a_global) core_init_e Cmm.NA)
-                            (C.Eret $ C.PEsym a_global)
+                         (C.Esseq [] (Caux.pstore Loc.unknown core_ty (C.PEsym (sym_global, C.BTy_object C.OTy_pointer)) core_init_e Cmm.NA)
+                            (C.Eret $ C.PEsym (sym_global, C.BTy_object C.OTy_pointer))
                          )
                       )
                    ) :: gacc, facc)
@@ -2594,11 +2595,11 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 (* otherwise *)
                 E.return
                   ((sym,
-                    C.TyEffect C.BTy_pointer,
-                    C.Esseq [Just a_global] core_create
+                    C.TyEffect (C.BTy_object C.OTy_pointer),
+                    C.Esseq [Just (sym_global, C.BTy_object C.OTy_pointer)] core_create
                       (* TODO: proper memory order *)
-                      (C.Esseq [] (Caux.pstore Loc.unknown core_ty (C.PEsym a_global) (Caux.zeros sigm.A.tag_definitions (Caux.proj_ctype ty)) Cmm.NA)
-                         (C.Eret $ C.PEsym a_global)
+                      (C.Esseq [] (Caux.pstore Loc.unknown core_ty (C.PEsym (sym_global, C.BTy_object C.OTy_pointer)) (Caux.zeros sigm.A.tag_definitions (Caux.proj_ctype ty)) Cmm.NA)
+                         (C.Eret $ C.PEsym (sym_global, C.BTy_object C.OTy_pointer))
                       )
                     ) :: gacc, facc)
           end
@@ -2632,8 +2633,8 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 E.return
                   (gacc,
                    Map.insert sym
-                     (C.Proc (if AilTypesAux.is_pointer return_ty then C.BTy_pointer else C.BTy_integer)
-                             (List.map (fun sym -> (sym, C.BTy_pointer)) param_syms)
+                     (C.Proc (C.BTy_object (if AilTypesAux.is_pointer return_ty then C.OTy_pointer else C.OTy_integer))
+                             (List.map (fun sym -> (sym, C.BTy_object C.OTy_pointer)) param_syms)
                              (C.Esseq [] core_body core_return)
                      ) facc)
             | Nothing ->
@@ -2645,12 +2646,12 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
   (* adding string literals *)
   E.get_string_literals >>= fun xs ->
   E.foldlM (fun acc (sym, ty, e_init) ->
-    E.fresh_symbol >>= fun a_lit ->
+  E.fresh_symbol >>= fun sym_lit ->
     let expr =
-      C.Esseq [Just a_lit] (Caux.pcreate Loc.unknown (Caux.alignof (C.PEval (C.Vctype ty))) (C.PEval (C.Vctype ty)) (Symbol.PrefOther "string literal"))
-        (C.Esseq [] (Caux.pstore Loc.unknown (C.PEval (C.Vctype ty)) (C.PEsym a_lit) e_init Cmm.NA)
-          (C.Eret $ C.PEsym a_lit)) in
-    E.return $ (sym, C.TyEffect C.BTy_pointer, expr) :: acc
+      C.Esseq [Just (sym_lit, C.BTy_object C.OTy_pointer)] (Caux.pcreate Loc.unknown (Caux.alignof (C.PEval (C.Vctype ty))) (C.PEval (C.Vctype ty)) (Symbol.PrefOther "string literal"))
+        (C.Esseq [] (Caux.pstore Loc.unknown (C.PEval (C.Vctype ty)) (C.PEsym (sym_lit, C.BTy_object C.OTy_pointer)) e_init Cmm.NA)
+          (C.Eret $ C.PEsym (sym_lit, C.BTy_object C.OTy_pointer))) in
+    E.return $ (sym, C.TyEffect (C.BTy_object C.OTy_pointer), expr) :: acc
   ) (List.reverse globs) xs >>= fun globs' ->
   E.return (List.reverse globs', cfuns)
 (*
