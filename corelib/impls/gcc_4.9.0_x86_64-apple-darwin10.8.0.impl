@@ -27,18 +27,18 @@ fun ctype_min_basic (ty: ctype) : integer :=
   end end end end end
 
 fun ctype_min_array (ty: ctype, n: integer) : integer :=
-  <Ctype.min>(ty)
+  <Ctype.min>(integer, ty:ctype)
 
 fun ctype_min_pointer (ty: ctype) : integer :=
-  <Ctype.min>(ty)
+  <Ctype.min>(integer, ty:ctype)
 
 fun ctype_min_atomic (ty: ctype) : integer :=
-  <Ctype.min>(ty)
+  <Ctype.min>(integer, ty:ctype)
 
 
 fun <Ctype.min> (ty: ctype) : integer :=
   case_ctype ( ty,
-    ctype_min_void(), ctype_min_basic, ctype_min_array,
+    ctype_min_void(integer,), ctype_min_basic, ctype_min_array,
     ctype_min_void {- HACK -}, ctype_min_pointer, ctype_min_atomic,
     ctype_min_void {- HACK -}, ctype_min_void {- HACK -}, ctype_min_void {- HACK -}
   )
@@ -261,18 +261,18 @@ end
 
 
 fun ctype_max_array (ty: ctype, n: integer) : integer :=
-  <Ctype.max>(ty)
+  <Ctype.max>(integer, ty:ctype)
 
 fun ctype_max_pointer (ty: ctype) : integer :=
-  <Ctype.max>(ty)
+  <Ctype.max>(integer, ty:ctype)
 
 fun ctype_max_atomic (ty: ctype) : integer :=
-  <Ctype.max>(ty)
+  <Ctype.max>(integer, ty:ctype)
 
 
 fun <Ctype.max> (ty: ctype) : integer :=
   case_ctype ( ty,
-    ctype_max_void(), ctype_max_basic, ctype_max_array,
+    ctype_max_void(integer,), ctype_max_basic, ctype_max_array,
     ctype_max_void {- HACK -}, ctype_max_pointer, ctype_max_atomic,
     ctype_max_void {- HACK -}, ctype_max_void {- HACK -}, ctype_max_void {- HACK -}
   )
@@ -313,13 +313,13 @@ fun sizeof_basic (ty: ctype) : integer :=
   end end end end
 
 fun sizeof_array (ty: ctype, n: integer) : integer :=
-  <sizeof>(ty) * n
+  <sizeof>(integer, ty:ctype) * n
 
 fun sizeof_pointer (ty: ctype) : integer :=
   8
 
 fun sizeof_atomic (ty: ctype) : integer :=
-  <sizeof>(ty)
+  <sizeof>(integer, ty:ctype)
 
 -- TODO: temporary hack
 fun sizeof_struct(tys: [ctype]) : integer :=
@@ -328,7 +328,7 @@ fun sizeof_struct(tys: [ctype]) : integer :=
 
 fun <sizeof> (ty: ctype) : integer :=
   case_ctype ( ty,
-    sizeof_void(), sizeof_basic, sizeof_array,
+    sizeof_void(integer,), sizeof_basic, sizeof_array,
     sizeof_void {- HACK -}, sizeof_pointer, sizeof_atomic,
     sizeof_struct, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
   )
@@ -352,13 +352,13 @@ fun alignof_basic (ty: ctype) : integer :=
   end end end end
 
 fun alignof_array (ty: ctype, n: integer) : integer :=
-  <alignof>(ty)
+  <alignof>(integer, ty:ctype)
 
 fun alignof_pointer (ty: ctype) : integer :=
   8
 
 fun alignof_atomic (ty: ctype) : integer :=
-  <alignof>(ty)
+  <alignof>(integer, ty:ctype)
 
 
 -- TODO: temporary hack
@@ -368,7 +368,7 @@ fun alignof_struct(tys: [ctype]) : integer :=
 
 fun <alignof> (ty: ctype) : integer :=
   case_ctype ( ty,
-    sizeof_void(), alignof_basic, alignof_array,
+    sizeof_void(integer,), alignof_basic, alignof_array,
     sizeof_void {- HACK -}, alignof_pointer, alignof_atomic,
     alignof_struct, sizeof_void {- HACK -}, ctype_min_void {- HACK -}
   )
@@ -383,17 +383,17 @@ fun <alignof> (ty: ctype) : integer :=
 
 -- GCC uses the two's complement representation with no padding bits
 fun <Integer.encode> (ty: ctype, n: integer) : integer :=
-  encodeTwos(ty, n)
+  encodeTwos(integer, ty:ctype, n:integer)
 
 fun <Integer.decode> (ty: ctype, n: integer) : integer :=
-  decodeTwos(ty, n)
+  decodeTwos(integer, ty:ctype, n:integer)
 
 
 -- "For conversion to a type of width N, the value is reduced modulo 2^N to be
 --  within range of the type; no signal is raised."
 fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
 -- TODO doc
-  wrapI(ty, n)
+  wrapI(integer, ty:ctype, n:integer)
 {-
 --  n % (2 ^ ctype_width(ty))
   if is_representable(n, ty) then
@@ -414,12 +414,12 @@ fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : inte
 
 -- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
 fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
-  let n = encodeTwos(ty, n) in
-    decodeTwos(ty, (n / 2^m) + ones_prefix(0, m, ctype_width(ty)))
+  let n = encodeTwos(integer,ty:ctype, n:integer) in
+    decodeTwos(integer, ty:ctype, (n / 2^m) + ones_prefix(integer, 0:integer, m:integer, ctype_width(integer, ty:ctype):integer):integer)
   end
 
 -- implementation of the ~ operator (only used in the signed case)
 fun <Bitwise_complement> (ty: ctype, n: integer) : integer :=
-  let n = encodeTwos(ty, n) in
-    decodeTwos(ty, complementTwos(ty, n))
+  let n = encodeTwos(integer,ty:ctype, n:integer) in
+    decodeTwos(integer, ty:ctype, complementTwos(integer, ty:ctype, n:integer): integer)
   end

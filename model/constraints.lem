@@ -40,7 +40,7 @@ declare ocaml target_rep function isUnsat = `Smt_wrapper.is_unsat`
 
 type t =
   (* TODO: assumes that the symbolic expressions have type "bool" *)
-  | Constraints of list (symbolic Core.value Mem.pointer_value)
+  | Constraints of list (symbolic Core.object_value Mem.pointer_value)
 
 
 val empty: t
@@ -60,19 +60,19 @@ let combine (Constraints xs) (Constraints ys) =
 
 
 
-val assert_eq: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+val assert_eq: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> t -> t
 let assert_eq symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Eq symb1 symb2 :: xs)
 
-val assert_neq: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+val assert_neq: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> t -> t
 let assert_neq symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Neq symb1 symb2 :: xs)
 
-val assert_lt: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+val assert_lt: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> t -> t
 let assert_lt symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Lt symb1 symb2 :: xs)
 
-val assert_ge: symbolic Core.value Mem.pointer_value -> symbolic Core.value Mem.pointer_value -> t -> t
+val assert_ge: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> t -> t
 let assert_ge symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Ge symb1 symb2 :: xs)
 
@@ -116,14 +116,14 @@ let isUnsat xs =
     | SYMBop Lt (SYMBconst n1) (SYMBconst n2) ->
         n1 >= n2
 *)
-    | SYMBop Eq (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Eq (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
         n1 <> n2
-    | SYMBop Neq (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                 (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Neq (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                 (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
         n1 = n2
-    | SYMBop Lt (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                (SYMBconst (Core.Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Lt (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
         n1 >= n2
     | _ ->
         false

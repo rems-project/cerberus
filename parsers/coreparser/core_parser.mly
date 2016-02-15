@@ -28,6 +28,7 @@ type expr =
   | Vunspecified of Core_ctype.ctype0
   | Vinteger of Nat_big_num.num
   | Vfloating of string
+  | Vcfunction of name
 (* RUNTIME  | Vsymbolic of Symbolic.symbolic *)
 (* RUNTIME  | Vpointer of Mem.pointer_value *)
 (*  | Varray of list Mem.mem_value *)
@@ -45,7 +46,7 @@ type expr =
   | PEop of Core.binop * expr (* pexpr *) * expr (* pexpr *)
   | PEtuple of expr list (* pexpr *)
   | PEarray of expr list (* ((Mem.mem_value, _sym) either) list *)
-  | PEcall of name * expr list (* pexpr *)
+  | PEcall of (name * Core.core_base_type) * (expr * Core.core_base_type) list (* pexpr *)
 (*
   | PElet of sym * pexpr * pexpr
   | PEif of pexpr * pexpr * pexpr
@@ -60,7 +61,7 @@ type expr =
   | Eskip
   | Elet of _sym * expr (* pexpr *) * expr
   | Eif of expr (* pexpr *) * expr * expr
-  | Eproc of name * expr list (* pexpr *)
+  | Eproc of expr (* pexpr *) * expr list (* pexpr *)
   | Eaction of paction
   | Eunseq of expr list
   | Ewseq of (_sym option) list * expr * expr
@@ -122,6 +123,7 @@ let register_cont_symbols expr =
     | Vfalse
     | Vlist _
     | Vctype _
+    | Vcfunction _
     | Vunspecified _
     | Vinteger _
     | Vfloating _
@@ -251,12 +253,14 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               failwith "TODO(MSG) type-error: symbolify_expr, Vlist")
     | Vctype ty ->
         Value (Core.Vctype ty)
+    | Vcfunction _nm ->
+        Value (Core.Vobject (Core.OVcfunction (fnm _nm)))
     | Vunspecified ty ->
         Value (Core.Vunspecified ty)
     | Vinteger n ->
-        Value (Core.Vinteger (Mem.integer_ival0 n))
+        Value (Core.Vobject (Core.OVinteger (Mem.integer_ival0 n)))
     | Vfloating str ->
-        Value (Core.Vfloating str)
+        Value (Core.Vobject (Core.OVfloating (Mem.str_fval0 str)))
     | PEundef ub ->
         Pure (Core.PEundef ub)
     | PEerror (str, _e) ->
@@ -348,11 +352,11 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
         ) _xs in
         Pure (Core.PEarray xs)
 *)
-    | PEcall (_nm, _es) ->
+    | PEcall ((_nm, bTy), _e_bTys) ->
         let nm = fnm _nm in
-        (match to_pures (List.map (f st) _es) with
+        (match to_pures (List.map (fun (_e, _) -> f st _e) _e_bTys) with
           | Left pes ->
-              Pure (Core.PEcall (nm, pes))
+              Pure (Core.PEcall ((nm, bTy), List.combine pes (map snd _e_bTys)))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, PEcall")
     | PEis_scalar _e ->
@@ -415,10 +419,10 @@ let symbolify_expr _Sigma st (expr: expr) : _core =
               Expr (Core.Eif (pe1, e2, e3))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, Eif")
-    | Eproc (nm, _es) ->
-        (match to_pures (List.map (f st) _es) with
-          | Left pes ->
-              Expr (Core.Eproc ((), fnm nm, pes))
+    | Eproc (_e, _es) ->
+        (match to_pure (f st _e), to_pures (List.map (f st) _es) with
+          | Left pe, Left pes ->
+              Expr (Core.Eproc ((), pe, pes))
           | _ ->
               failwith "TODO(MSG) type-error: symbolify_expr, Eproc")
     | Eaction (p, act) ->
@@ -1025,6 +1029,7 @@ let subst name =
 (* binder patterns *)
 %token UNDERSCORE
 
+%token PCALL
 %token ND PAR 
 
 
@@ -1384,7 +1389,9 @@ memory_order:
 
 
 
-
+typed_expr:
+| _e= expr COLON bTy= core_base_type
+  { (_e, bTy) }
 
 
 expr:
@@ -1403,6 +1410,9 @@ expr:
 | Vunspecified of ctype
     {  }
 *)
+| LBRACE nm= name RBRACE
+  { Vcfunction nm }
+
 | n= INT_CONST
     { Vinteger n }
 | IVMAX _e= delimited(LPAREN, expr, RPAREN)
@@ -1462,8 +1472,8 @@ expr:
     { PEtuple (_e::_es) }
 | ARRAY _es= delimited(LPAREN, separated_nonempty_list(COMMA, expr), RPAREN)
     { PEarray _es }
-| nm= name _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { PEcall (nm, _es) }
+| nm= name LPAREN bTy= core_base_type COMMA _e_bTys= separated_list(COMMA, typed_expr) RPAREN
+    { PEcall ((nm, bTy), _e_bTys) }
 (* TODO: these are temporary *)
 | IS_SCALAR _e= delimited(LPAREN, expr, RPAREN)
     { PEis_scalar _e }
@@ -1485,8 +1495,8 @@ expr:
     { Elet (str, _e1, _e2) }
 | IF _e1= expr THEN _e2= expr ELSE _e3= expr END
     { Eif (_e1, _e2, _e3) }
-| nm= name _es= delimited(LBRACE, separated_list(COMMA, expr), RBRACE)
-    { Eproc (nm, _es) }
+| PCALL LPAREN _e= expr COMMA _es= separated_list(COMMA, expr) RPAREN
+    { Eproc (_e, _es) }
 | pact= paction
     { Eaction pact }
 | UNSEQ _es= delimited(LPAREN, separated_nonempty_list(COMMA, expr), RPAREN)

@@ -1546,7 +1546,7 @@ let annotate_sigma A S =
         annotate_global A S glob >>= fun glob'->
         E.return (SDecl_global id glob')
     | SDecl_static_assert _ _ ->
-        error "TODO"
+        error "TODO_"
 (*
 TODO
         annotate_assignee A S Context.empty ty e >>= fun e' ->

@@ -91,6 +91,8 @@ let rec pp_core_object_type = function
       !^ "struct(TODO)"
   | OTy_union ident  ->
       !^ "union(TODO)"
+  | OTy_cfunction ->
+      !^ "cfunction"
 
 let rec pp_core_base_type = function
   | BTy_object bty ->
@@ -99,7 +101,6 @@ let rec pp_core_base_type = function
       !^ "loaded" ^^ pp_core_object_type bty
   | BTy_boolean    -> !^ "boolean"
   | BTy_ctype      -> !^ "ctype"
-  | BTy_cfunction  -> !^ "cfunction"
   | BTy_unit       -> !^ "unit"
   | BTy_list bTys  -> !^ "TODO(BTy_list)"
   | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
@@ -195,6 +196,30 @@ let pp_pointer_action = function
 
 
 
+let rec pp_object_value = function
+  | OVinteger ival ->
+      Mem.case_integer_value0 ival
+        (fun n -> !^ (Nat_big_num.to_string n))
+        (fun () -> Pp_mem.pp_integer_value ival)
+  | OVfloating (Defacto_memory_types.FVconcrete str) ->
+      !^ str
+  | OVfloating (Defacto_memory_types.FVunspecified) ->
+      !^ "unspec(floating)"
+  | OVsymbolic symb ->
+      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
+  | OVpointer ptr_val ->
+      Pp_mem.pp_pointer_value ptr_val
+  | OVarray cvals ->
+      pp_const "array" ^^ P.parens (comma_list pp_object_value cvals)
+  | OVstruct (sym, xs) ->
+      !^ "TODO(Vstruct)" 
+      (* pp_const "struct" ^^ P.parens *)
+  | OVunion (sym, ident, mem_val) ->
+      !^ "TODO(Vunion)" 
+      (* pp_const "struct" ^^ P.parens *)
+  | OVcfunction nm ->
+      P.braces (pp_name nm)
+
 
 let rec pp_value = function
   | Vunit ->
@@ -211,25 +236,10 @@ let rec pp_value = function
       P.dquotes (Pp_core_ctype.pp_ctype ty)
   | Vunspecified ty ->
       pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
-  | Vinteger ival ->
-      Mem.case_integer_value0 ival
-        (fun n -> !^ (Nat_big_num.to_string n))
-        (fun () -> Pp_mem.pp_integer_value ival)
-  | Vfloating str ->
-      !^ str
-  | Vsymbolic symb ->
-      !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_value Pp_mem.pp_pointer_value symb)
-  | Vpointer ptr_val ->
-      Pp_mem.pp_pointer_value ptr_val
-  | Varray cvals ->
-      pp_const "array" ^^ P.parens (comma_list pp_value cvals)
-  | Vstruct (sym, xs) ->
-      !^ "TODO(Vstruct)" 
-      (* pp_const "struct" ^^ P.parens *)
-  | Vunion (sym, ident, mem_val) ->
-      !^ "TODO(Vunion)" 
-      (* pp_const "struct" ^^ P.parens *)
-
+  | Vloaded oval ->
+      pp_const "loaded" ^^ P.parens (pp_object_value oval)
+  | Vobject oval ->
+      pp_object_value oval
 
 let pp_ctor = function
   | Cnil ->
@@ -333,8 +343,8 @@ let pp_pexpr pe =
               ) xs
             )
 *)
-        | PEcall (nm, pes) ->
-            pp_name nm ^^ P.parens (comma_list pp pes)
+        | PEcall ((nm, _), pe_bTys) ->
+            pp_name nm ^^ P.parens (comma_list pp (map fst pe_bTys))
         | PElet ((sym, _), pe1, pe2) ->
             (* DEBUG *) !^ "{-pe-}" ^^^ pp_control "let" ^^^ pp_symbol sym ^^^ P.equals ^^^
             pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2 ^^^ pp_control "end"
@@ -375,8 +385,8 @@ let rec pp_expr = function
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
       P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
       pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3) ^^ P.break 1 ^^^ pp_control "end"
-  | Eproc (_, nm, es) ->
-      pp_name nm ^^ P.braces (comma_list pp_pexpr es)
+  | Eproc (_, pe, pes) ->
+      !^ "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
   | Eaction (Paction (p, (Action (_, bs, act)))) ->
       (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
          P.rangle ^^ P.space) ^^ *)

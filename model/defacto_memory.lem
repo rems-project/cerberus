@@ -62,7 +62,7 @@ type mem_state = <|
   suppl:    UniqueId.supply nat;
   
   (* the semantic stuff starts here *)
-  allocations:         map allocation_id (allocation * mem_value);
+  allocations:         map allocation_id (allocation * maybe mem_value);
   dead_allocations:    set allocation_id;
   addresses:           set address;
   constraints:         constraints;
@@ -236,11 +236,11 @@ let fresh_allocation_id =
   return id
 
 
-val register_allocation: allocation_id -> (allocation * mem_value) -> memM unit
-let register_allocation alloc_id alloc_mval =
+val register_allocation: allocation_id -> (allocation * maybe mem_value) -> memM unit
+let register_allocation alloc_id alloc_mval_opt =
   get >>= fun mem_st ->
   put <| mem_st with allocations=
-    Map.insert alloc_id alloc_mval mem_st.allocations
+    Map.insert alloc_id alloc_mval_opt mem_st.allocations
   |>
 
 
@@ -249,7 +249,7 @@ let allocation_is_dead alloc_id =
   get >>= fun mem_st ->
   return (alloc_id IN mem_st.dead_allocations)
 
-val resolve_allocation: allocation_id -> memM (allocation * mem_value)
+val resolve_allocation: allocation_id -> memM (allocation * maybe mem_value)
 let resolve_allocation alloc_id =
   get >>= fun mem_st ->
   maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
@@ -875,20 +875,26 @@ let register_distinctness_constraints addr =
 val     mkUnspec: ctype -> mem_value
 let rec mkUnspec ty =
   match ty with
-    | (Basic _ as ty) ->
-        MVunspecified ty
+    | Basic (AilTypes.Integer ity) ->
+        MVinteger ity (IV Prov_none IVunspecified) 
+    | Basic (AilTypes.Floating fty) ->
+        MVfloating fty FVunspecified
     | Array ty (Just n) ->
         MVarray $ replicate (natFromInteger n) (mkUnspec ty)
-    | (Pointer _ _ as ty) ->
-        MVunspecified ty
+    | (Pointer _ ty') ->
+        MVpointer ty' (PV Prov_none (PVunspecified ty') [])
+(*
     | (Atomic _ as ty) ->
         MVunspecified ty
+*)
     | Struct tag ->
         MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec ty)) (get_membersDefs tag)
+(*
     | (Union _ as ty) ->
         MVunspecified ty
     | (Builtin _ as ty) ->
         MVunspecified ty
+*)
     | _ ->
         error "Mem.mkUnspec: invalid type"
   end
@@ -977,7 +983,7 @@ let allocate_static tid pref align_ival ty =
   register_distinctness_constraints addr >>
   
   fresh_allocation_id >>= fun alloc_id ->
-  register_allocation alloc_id (Alloc_static ty addr, mkUnspec ty) >>
+  register_allocation alloc_id (Alloc_static ty addr, Nothing (* mkUnspec ty *)) >>
   
   let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
   print_debugM 4 ("Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
@@ -992,7 +998,7 @@ let allocate_dynamic tid pref align_ival (IV _ size_ival) =
   
   fresh_allocation_id >>= fun alloc_id ->
   let unsigned_char = Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) in
-  register_allocation alloc_id (Alloc_dynamic size_ival addr, mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *)))) >>
+  register_allocation alloc_id (Alloc_dynamic size_ival addr, Nothing (* mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *))) *)) >>
   
   return (
     PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) []
@@ -1190,14 +1196,16 @@ let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
     | Just alloc_id ->
         get >>= fun mem_st ->
         match Map.lookup alloc_id mem_st.allocations with
-          | Just (_, mval) ->
+          | Just (_, Just mval) ->
               let mval' = apply_shift_path ty sh mval in
               print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
               return mval'
-          | Nothing ->
+          | Just (_, Nothing) ->
 (*              fail (MerrUnitialised (stringFromPointer_value ptr_val)) *)
               (* NOTE: going beyond the STD here *)
-              return (MVunspecified ty)
+              return (mkUnspec ty)
+          | Nothing ->
+              error "Mem.load, couldn't find some allocation"
         end
     | Nothing ->
         wip ("TODO: load, Nothing ==> " ^ stringFromPointer_value ptr_val)
@@ -1325,13 +1333,13 @@ let symbolic_mval symb =
   MVsymbolic symb
 
 let unspecified_mval ty =
-  MVunspecified ty
+  mkUnspec ty
 
 let integer_value_mval ity ival =
   MVinteger ity ival
 
-let floating_mval fty str =
-  MVfloating fty str
+let floating_value_mval fty fval =
+  MVfloating fty fval
 
 let pointer_mval ref_ty ptr_val =
   MVpointer ref_ty ptr_val
@@ -1354,16 +1362,14 @@ let union_mval tag_sym memb_ident mval =
 
 
 (* Memory value destructor *)
-let case_mem_value mval fsymb funspec fival ffval fptrval farr fstruct funion =
+let case_mem_value mval fsymb fival ffval fptrval farr fstruct funion =
   match mval with
     | MVsymbolic symb ->
         fsymb symb
-    | MVunspecified ty ->
-        funspec ty
     | MVinteger ity ival ->
         fival ity ival
-    | MVfloating fty str ->
-        ffval fty str
+    | MVfloating fty fval ->
+        ffval fty fval
     | MVpointer ref_ty ptr_val ->
         fptrval ref_ty ptr_val
     | MVarray mvals ->
@@ -1373,6 +1379,21 @@ let case_mem_value mval fsymb funspec fival ffval fptrval farr fstruct funion =
     | MVunion tag_sym memb_ident mval ->
         funion tag_sym memb_ident mval
   end
+
+let case_fval fval funspec fconcrete =
+  match fval with
+    | FVunspecified ->
+        funspec ()
+    | FVconcrete str ->
+        fconcrete str
+  end
+
+val zero_fval: floating_value
+let zero_fval =
+  FVconcrete "0"
+
+val str_fval: string -> floating_value
+let str_fval str = FVconcrete str
 
 
 val address_of: allocation -> address
@@ -2163,14 +2184,14 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
   get >>= fun st ->
   put <| st with allocations=
     match Map.lookup alloc_id st.allocations with
-      | Just (alloc, current_mval) ->
+      | Just (alloc, Just current_mval) ->
           let is_strong = match alloc with
             | Alloc_static _ _ ->
                 false
             | Alloc_dynamic _ _ ->
                 true
           end in
-          Map.insert alloc_id (alloc, easy_update_mem_value is_strong w current_mval) st.allocations
+          Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w current_mval) st.allocations
       | Nothing ->
           error "Mem.register_write_event, Nothing"
     end

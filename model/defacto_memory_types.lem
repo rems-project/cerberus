@@ -41,6 +41,7 @@ type pointer_value =
   | PV of provenance * pointer_value_base * shift_path
 
 and pointer_value_base =
+  | PVunspecified of ctype (* TODO: maybe put this ctor in pointer_value ? *)
     (* a null pointer constructed with an expression of the given ctype. *)
   | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
      (* the result of a dynamic or automatic/static/thread-local allocation *)
@@ -66,6 +67,7 @@ and shift_path =
 
 
 and integer_value_base =
+  | IVunspecified
   | IVconcrete of integer (* of Symbolic.symbolic *)
   | IVaddress of address (* NOTE: this should never get out of this module *)
   | IVfromptr of ctype * (* ctype * *) pointer_value_base (* the first parameter is the referenced type of the pointer value,
@@ -86,13 +88,16 @@ and integer_value =
   IV of provenance (* * AilTypes.integerType *) * integer_value_base
 
 
+and floating_value =
+  | FVunspecified
+  | FVconcrete of string
 
 (* The mem_value represents what can be stored in memory. *)
 and mem_value =
   | MVsymbolic of Symbolic.symbolic mem_value pointer_value (* symbolicity coming from the concurrency *)
-  | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *)
+(*  | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *) *)
   | MVinteger of AilTypes.integerType * integer_value
-  | MVfloating of AilTypes.floatingType * string
+  | MVfloating of AilTypes.floatingType * floating_value
   | MVpointer of ctype * pointer_value (* the first parameter is the referenced type of the pointer value *)
   | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
   | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)

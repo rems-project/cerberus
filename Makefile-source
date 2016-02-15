@@ -33,7 +33,8 @@ SOURCE_core=\
   core_aux.lem \
   core_ctype.lem \
   core_ctype_aux.lem \
-  core.lem 
+  core.lem \
+  core_typing.lem 
 
 SOURCE_core_to_core=\
   core_indet.lem \

@@ -22,9 +22,10 @@ end
 
 (* The API *)
 
-type pointer_value = Impl.pointer_value
-type mem_value     = Impl.mem_value
-type integer_value = Impl.integer_value
+type pointer_value  = Impl.pointer_value
+type mem_value      = Impl.mem_value
+type integer_value  = Impl.integer_value
+type floating_value = Impl.floating_value
 
 type mem_state = Impl.mem_state
 
@@ -111,7 +112,7 @@ val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference
 val symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value
 val unspecified_mval: ctype -> mem_value
 val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
-val floating_mval: AilTypes.floatingType -> string -> mem_value
+val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
 val pointer_mval: Core_ctype.ctype -> pointer_value -> mem_value
 val array_mval: list mem_value -> mem_value
 val struct_mval: Symbol.t -> list (Cabs.cabs_identifier * mem_value) -> mem_value
@@ -121,9 +122,8 @@ val union_mval: Symbol.t -> Cabs.cabs_identifier -> mem_value -> mem_value
 val case_mem_value: forall 'a.
   mem_value ->
   (Symbolic.symbolic mem_value pointer_value -> 'a) ->
-  (ctype -> 'a) ->
   (AilTypes.integerType -> integer_value -> 'a) ->
-  (AilTypes.floatingType -> string -> 'a) ->
+  (AilTypes.floatingType -> floating_value -> 'a) ->
   (Core_ctype.ctype -> pointer_value -> 'a) ->
   (list mem_value -> 'a) ->
   (Symbol.t -> list (Cabs.cabs_identifier * mem_value) -> 'a) ->
@@ -171,13 +171,20 @@ let ptrcast_ival                        = Impl.ptrcast_ival
 let symbolic_mval                       = Impl.symbolic_mval
 let unspecified_mval                    = Impl.unspecified_mval
 let integer_value_mval                  = Impl.integer_value_mval
-let floating_mval                       = Impl.floating_mval
+let floating_value_mval                 = Impl.floating_value_mval
 let pointer_mval                        = Impl.pointer_mval
 let array_mval                          = Impl.array_mval
 let struct_mval                         = Impl.struct_mval
 let union_mval                          = Impl.union_mval
 let case_mem_value                      = Impl.case_mem_value
 
+val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (string -> 'a) -> 'a
+let case_fval = Impl.case_fval
+val zero_fval: floating_value
+let zero_fval = Impl.zero_fval
+
+val str_fval: string -> floating_value
+let str_fval = Impl.str_fval
 
 let allocate_static                     = Impl.allocate_static
 let allocate_dynamic                    = Impl.allocate_dynamic

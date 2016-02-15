@@ -190,6 +190,8 @@ let pipeline filename args =
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
+  Core_typing.typecheck_program core_file >>= fun _ ->
+  
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.rewrite then Core_rewrite.rewrite_file core_file else core_file) in
@@ -207,9 +209,11 @@ let pipeline filename args =
       print_endline "====================";
    );
   
+(*
   if !!cerb_conf.compile then
     Codegen_ocaml.compile filename true rewritten_core_file
   else
+*)
     Exception.return2 (backend sym_supply rewritten_core_file args)
 
 

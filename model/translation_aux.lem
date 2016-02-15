@@ -21,7 +21,15 @@ let rec mk_stdcall_aux pred xs =
 val mk_stdcall: forall 'a. Core.fun_map 'a -> string -> (list (Core.pexpr) -> Core.pexpr)
 let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
-    | Just (f, _) -> Core.PEcall (Core.Sym f)
+    | Just (f, Core.Fun bTy params _) ->
+        fun pes ->
+          Core.PEcall (Core.Sym f, bTy) $
+            List.zip pes (List.map snd params)
+
+(*
+  | Fun  of core_base_type * list (sym * core_base_type) * pexpr
+*)
+
     | Nothing     -> error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
 

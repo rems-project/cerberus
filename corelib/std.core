@@ -101,7 +101,7 @@ fun is_representable (n: integer, ty: ctype): boolean :=
 
 -- STD §6.5#5
 fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
-  if is_representable(n, ty) then
+  if is_representable(boolean, n:integer, ty:ctype) then
     n
   else
     undef <<Exceptional_condition>>
@@ -122,7 +122,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
   -- type other than _Bool, if the value can be represented by the new type, it
   -- is unchanged.
   else
-    if is_representable(n, ty) then
+    if is_representable(boolean, n:integer, ty:ctype) then
       n
   
   -- (§6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
@@ -131,13 +131,13 @@ fun conv_int (ty: ctype, n: integer): integer :=
   -- new type.
     else
       if is_unsigned(ty) then
-        wrapI(ty, n)
+        wrapI(integer, ty:ctype, n:integer)
   
   -- (§6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
   -- represented in it; either the result is implementation-defined or an
   -- implementation-defined signal is raised.
       else
-        <Integer.conv_nonrepresentable_signed_integer>(ty, n)
+        <Integer.conv_nonrepresentable_signed_integer>(integer, ty:ctype, n:integer)
       end
     end
   end
@@ -149,7 +149,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
 -- auxiliary function for the [conv] (see §6.3.1.3#1)
 fun conv_aux (ty: ctype, n: integer) : integer :=
 {-
---  if is_representable(n, ty) then
+--  if is_representable(boolean,n:integer, ty:ctype) then
 --    n
 --  else
 --    conv_aux(ty, if <ctype_max>(ty) < n then n - <ctype_max>(ty) + 1 else n + <ctype_max>(ty) + 1 end)
@@ -200,19 +200,19 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
   -- than _Bool, if the value can be represented by the new type, it is unchanged.
   else
     if is_integer(ty1) /\ is_integer(ty2) then
-      if is_representable(n, ty2) then
+      if is_representable(boolean, n:integer, ty2:ctype) then
         n
     -- (§6.3.1.3#1) Otherwise, if the new type is unsigned, the value is converted by repeatedly
     -- adding or subtracting one more than the maximum value that can be represented in the new type
     -- until the value is in the range of the new type.
       else
         if is_unsigned(ty2) then
-          conv_aux(ty2, n)
+          conv_aux(integer, ty2:ctype, n:integer)
     
     -- (§6.3.1.3#1) Otherwise, the new type is signed and the value cannot be represented in it;
     -- either the result is implementation-defined or an implementation-defined signal is raised.
         else
-          <Integer.conv_nonrepresentable_signed_integer>(ty2, n) -- 42 -- TODO
+          <Integer.conv_nonrepresentable_signed_integer>(integer, ty2:ctype, n:integer) -- 42 -- TODO
         end
       end
     else
@@ -256,7 +256,7 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
 -}
 fun encodeTwos (ty : ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
+  let width = ctype_width(integer, ty:ctype) in
     if n < ivmin(ty) \/ ivmax(ty) < n then
       error(<<<encodeTwos>>>, (width, ty, n))
     else
@@ -273,7 +273,7 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
 -- the inverse of the previous function
 fun decodeTwos (ty: ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
+  let width = ctype_width(integer, ty:ctype) in
     if (n < 0) \/ (2^width <= n) then
       error(<<<decodeTwos>>>, (ty, n))
     else
@@ -291,12 +291,12 @@ fun complementTwos_aux (n: integer, w: integer) : integer :=
     n
   else
     let n_ = n / 2 in
-      (1 - (n rem_f 2)) + 2 * complementTwos_aux(n_, w - 1)
+      (1 - (n rem_f 2)) + 2 * complementTwos_aux(integer, n_:integer, w - 1 : integer)
     end
   end
 
 fun complementTwos (ty:ctype, n: integer) : integer :=
-  complementTwos_aux(n, ctype_width(ty))
+  complementTwos_aux(integer, n:integer, ctype_width(integer, ty: ctype) : integer)
 
 
 -- bitwise AND
@@ -306,7 +306,7 @@ fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
   else
     let n1_ = n1 / 2 in
       let n2_ = n2 / 2 in
-        (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0 end) + 2 * bitwise_AND_aux(n1_, n2_, w - 1)
+        (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0 end) + 2 * bitwise_AND_aux(integer, n1_:integer, n2_:integer, w - 1:integer)
       end
     end
   end
@@ -316,9 +316,9 @@ fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
     error(<<<WIP_bAND>>>, (ty, n1, n2))
   else
 
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
+  let n1_ = <Integer.encode>(integer, ty:ctype, n1:integer) in
+    let n2_ = <Integer.encode>(integer, ty:ctype, n2:integer) in
+      <Integer.decode>(integer,ty:ctype, bitwise_AND_aux(integer, n1_:integer, n2_:integer, ctype_width(integer, ty:ctype):integer):integer)
     end
   end
   end
@@ -330,7 +330,7 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
   else
     let n1_ = n1 / 2 in
       let n2_ = n2 / 2 in
-        (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0 end) + 2 * bitwise_XOR_aux(n1_, n2_, w - 1)
+        (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0 end) + 2 * bitwise_XOR_aux(integer, n1_:integer, n2_:integer, w - 1 : integer)
       end
     end
   end
@@ -339,9 +339,9 @@ fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
     error(<<<WIP_bXOR>>>, unit)
   else
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
+  let n1_ = <Integer.encode>(integer, ty:ctype, n1:integer) in
+    let n2_ = <Integer.encode>(integer, ty:ctype, n2:integer) in
+      <Integer.decode>(integer,ty:ctype, bitwise_XOR_aux(integer, n1_:integer, n2_:integer, ctype_width(integer, ty:ctype):integer):integer)
     end
   end
   end
@@ -354,7 +354,7 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
   else
     let n1_ = n1 / 2 in
       let n2_ = n2 / 2 in
-        (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0 end) + 2 * bitwise_OR_aux(n1_, n2_, w - 1)
+        (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0 end) + 2 * bitwise_OR_aux(integer, n1_:integer, n2_:integer, w - 1 : integer)
       end
     end
   end
@@ -364,9 +364,9 @@ fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
     error(<<<WIP_bOR>>>, unit)
   else
 
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
+  let n1_ = <Integer.encode>(integer, ty:ctype, n1:integer) in
+    let n2_ = <Integer.encode>(integer, ty:ctype, n2:integer) in
+      <Integer.decode>(integer,ty:ctype, bitwise_OR_aux(integer, n1_:integer, n2_:integer, ctype_width(integer, ty:ctype):integer):integer)
     end
   end
   end
@@ -376,7 +376,7 @@ fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
 --                     k times     width - k times
 fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
   if (0 <= i) /\ (i < k) then
-    2^(width - 1 - i) + ones_prefix(i + 1, k, width)
+    2^(width - 1 - i) + ones_prefix(integer, i + 1 : integer, k : integer, width:integer)
   else
     0
   end
@@ -391,7 +391,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   if c = 0 then
     return(acc)
   else
-    let strong ret = rev_listFromStr_aux{array_shift(str, "char", 1), cons(c,acc)} in
+    let strong ret = pcall({rev_listFromStr_aux}, array_shift(str, "char", 1), cons(c,acc)) in
       return(ret)
     end
   end
@@ -400,7 +400,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
 
 -- TODO: this is the reverse
 proc rev_listFromStr(str: pointer) : eff [integer] :=
-  let strong ret = rev_listFromStr_aux{str, []} in
+  let strong ret = pcall({rev_listFromStr_aux}, str, []) in
   return(ret)
   end
 
@@ -409,8 +409,8 @@ proc rev_listFromStr(str: pointer) : eff [integer] :=
 
 proc printf_proxy(tmp_ptr: pointer, args: [(ctype, pointer)]) : eff integer :=
   let strong frmt_ptr = load("char*", tmp_ptr) in
-  let strong xs = rev_listFromStr{frmt_ptr} in
-  let strong ret = <std_function_printf>{xs, args} in
+  let strong xs = pcall({rev_listFromStr}, frmt_ptr) in
+  let strong ret = pcall({<std_function_printf>}, xs, args) in
   return (ret)
   end
   end
