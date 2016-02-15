@@ -6,17 +6,16 @@ open import Thread Errors
 
 import Boot
 
-val     valueFromMemValue: Mem.mem_value -> value
-let rec valueFromMemValue mem_val =
+val     objectValueFromMemValue: Mem.mem_value -> object_value
+let rec objectValueFromMemValue mem_val =
   Mem.case_mem_value mem_val
-    (fun symb              -> Vsymbolic (Symbolic.map_const valueFromMemValue symb))
-    (fun ty                -> Vunspecified ty)
-    (fun _ ival            -> Vinteger ival)
-    (fun _ str             -> Vfloating str)
-    (fun _ ptr_val         -> Vpointer ptr_val)
-    (fun mem_vals          -> Varray (List.map valueFromMemValue mem_vals))
-    (fun sym xs            -> Vstruct sym xs)
-    (fun sym ident mem_val -> Vunion sym ident mem_val)
+    (fun symb              -> error "Vloaded (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
+    (fun _ ival            -> OVinteger ival)
+    (fun _ fval            -> OVfloating fval)
+    (fun _ ptr_val         -> OVpointer ptr_val)
+    (fun mem_vals          -> error "Vloaded (OVarray (List.map objectValueFromMemValue mem_vals))")
+    (fun sym xs            -> OVstruct sym xs)
+    (fun sym ident mem_val -> OVunion sym ident mem_val)
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue ty cval =
@@ -26,11 +25,13 @@ let rec memValueFromValue ty cval =
       (* TODO: check *)
       Just (Mem.symbolic_mval (Symbolic.map_const (fun z -> fromJust $ memValueFromValue ty z) symb))
 *)
-    | (_, Vsymbolic symb) ->
+(*
+    | (_, Vobject (OVsymbolic symb)) ->
       Just (Mem.symbolic_mval (Symbolic.map_const (fun z ->
           match memValueFromValue ty z with
            | Just mval -> mval
         end) symb))
+*)
     | (_, Vunit) ->
         Nothing
     | (_, Vtrue) ->
@@ -45,13 +46,15 @@ let rec memValueFromValue ty cval =
         Nothing
     | (_, Vunspecified ty') ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
-    | (Basic (AilTypes.Integer ity), Vinteger ival) ->
+    | (Basic (AilTypes.Integer ity), Vobject (OVinteger ival)) ->
         Just (Mem.integer_value_mval ity ival)
-    | (Basic (AilTypes.Floating fty), Vfloating str) ->
-        Just (Mem.floating_mval fty str)
-    | (Pointer _ ref_ty, Vpointer ptr_val) ->
+    | (Basic (AilTypes.Floating fty), Vobject (OVfloating fval)) ->
+        Just (Mem.floating_value_mval fty fval)
+    | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
-    | (Array elem_ty _, Varray cvals) ->
+(*
+TODO
+    | (Array elem_ty _, Vobject (OVarray cvals)) ->
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
           List.foldr (fun cval acc_opt ->
@@ -62,12 +65,13 @@ let rec memValueFromValue ty cval =
                   Nothing
             end
           ) (Just []) cvals
-    | (Struct tag_sym1, Vstruct tag_sym2 xs) ->
+*)
+    | (Struct tag_sym1, Vobject (OVstruct tag_sym2 xs)) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.struct_mval tag_sym1 xs)
         else
           Nothing
-    | (Union tag_sym1, Vunion tag_sym2 ident mem_val) ->
+    | (Union tag_sym1, Vobject (OVunion tag_sym2 ident mem_val)) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.union_mval tag_sym1 ident mem_val)
         else
@@ -99,15 +103,15 @@ let ivmax_pe pe =
 
 val bitwise_complement: pexpr -> pexpr -> pexpr
 let bitwise_complement pe1 pe2 =
-  PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2]
+  PEcall (Impl Implementation_.Bitwise_complement, BTy_object OTy_integer) [(pe1, BTy_ctype); (pe2, BTy_object OTy_integer)]
 
 val integer_encode: pexpr -> pexpr -> pexpr
 let integer_encode pe1 pe2 =
-  PEcall (Impl Implementation_.Integer__encode) [pe1; pe2]
+  PEcall (Impl Implementation_.Integer__encode, BTy_object OTy_integer) [(pe1, BTy_ctype); (pe2, BTy_object OTy_integer)]
 
 val integer_decode: pexpr -> pexpr -> pexpr
 let integer_decode pe1 pe2 =
-  PEcall (Impl Implementation_.Integer__decode) [pe1; pe2]
+  PEcall (Impl Implementation_.Integer__decode, BTy_object OTy_integer) [(pe1, BTy_ctype); (pe2, BTy_object OTy_integer)]
 
 
 
@@ -122,14 +126,15 @@ let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW 
 
 
 let ival n =
-  PEval (Vinteger (Mem.integer_ival n))
+  PEval (Vobject (OVinteger (Mem.integer_ival n)))
 (*
 declare {coq} rename function zero = zero_ (* workaround for Lem issue #87 *)
 *)
 
 val cfunction_const: Symbol.t -> pexpr
 let cfunction_const fsym =
-  PEval (Vpointer (Mem.fun_ptrval fsym))
+(*  PEval (Vpointer (Mem.fun_ptrval fsym)) *)
+  PEval (Vobject (OVcfunction (Sym fsym)))
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
@@ -174,7 +179,7 @@ let rec zeros_aux tagDefs ty =
     | Core_ctype.Basic (AilTypes.Integer ity) ->
         Mem.integer_value_mval ity zero_ival
     | Core_ctype.Basic (AilTypes.Floating fty) ->
-        Mem.floating_mval fty "0"
+        Mem.floating_value_mval fty Mem.zero_fval
     | Core_ctype.Array elem_ty (Just n) ->
         Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux tagDefs elem_ty))
 (*
@@ -208,7 +213,7 @@ let rec zeros_aux tagDefs ty =
 
 let zeros tagDefs ty =
   (* TODO: yucky *)
-  PEval $ valueFromMemValue (zeros_aux tagDefs ty)
+  PEval $ Vobject (objectValueFromMemValue (zeros_aux tagDefs ty))
 
 
 
@@ -399,13 +404,13 @@ let rec valueFromPexpr pexpr =
         | (Ctuple, Just cvals) ->
               Just $ Vtuple cvals
         | (Civmax, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
-            Just $ Vinteger (Mem.max_ival ity)
+            Just $ Vobject (OVinteger (Mem.max_ival ity))
         | (Civmin, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity))]) ->
-            Just $ Vinteger (Mem.min_ival ity)
+            Just $ Vobject (OVinteger (Mem.min_ival ity))
         | (Civsizeof, Just [Vctype ty]) ->
-            Just $ Vinteger (Mem.sizeof_ival ty)
+            Just $ Vobject (OVinteger (Mem.sizeof_ival ty))
         | (Civalignof, Just [Vctype ty]) ->
-            Just $ Vinteger (Mem.alignof_ival ty)
+            Just $ Vobject (OVinteger (Mem.alignof_ival ty))
         
         | _ ->
             Nothing
@@ -434,7 +439,7 @@ let rec valueFromPexpr pexpr =
           end) (Just []) (List.zip ident_tys xs) in
         match ident_mem_vals_opt with
           | Just ident_mem_vals ->
-              Just (Vstruct tag_sym ident_mem_vals)
+              Just (Vobject (OVstruct tag_sym ident_mem_vals))
           | Nothing ->
               Nothing
         end
@@ -477,6 +482,8 @@ let rec valueFromPexpr pexpr =
               Nothing
         end
     | PEarray pes ->
+        Nothing
+(* TODO 
         let cvals_opt = List.foldr (fun pe acc_opt ->
           match (acc_opt, (* maybe Nothing memValueFromValue $ *) valueFromPexpr pe) with
             | (Just acc, Just cval) ->
@@ -486,10 +493,11 @@ let rec valueFromPexpr pexpr =
           end) (Just []) pes in
         match cvals_opt with
           | Just cvals ->
-              Just (Varray cvals)
+              Just (Vobject (OVarray cvals))
           | Nothing ->
               Nothing
         end
+*)
 (*
     | PEarray xs ->
         let cvals_opt = List.foldr (fun x acc_opt ->
@@ -546,7 +554,7 @@ let rec valueFromPexprs pes =
 val to_integer: pexpr -> maybe integer
 let to_integer pe =
   match valueFromPexpr pe with
-    | Just (Vinteger ival) ->
+    | Just (Vobject (OVinteger ival)) ->
         Mem_aux.integerFromIntegerValue ival
     | _ ->
         Nothing
@@ -703,8 +711,8 @@ let rec subst_sym_pexpr sym pe' = function
 *)
   | PEstruct tag_sym xs ->
       PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, subst_sym_pexpr sym pe' pe)) xs)
-  | PEcall nm pes ->
-      PEcall nm (List.map (subst_sym_pexpr sym pe') pes)
+  | PEcall nm pe_bTys ->
+      PEcall nm (List.map (fun (pe, bTy) -> (subst_sym_pexpr sym pe' pe, bTy)) pe_bTys)
   | PElet ((sym', _) as pat) pe1 pe2 ->
       PElet pat (subst_sym_pexpr sym pe' pe1) (if sym = sym' then pe2 else subst_sym_pexpr sym pe' pe2)
   | PEif pe1 pe2 pe3 ->
@@ -748,8 +756,8 @@ let rec subst_sym sym pe' = function
       Elet pat (subst_sym_pexpr sym pe' pe1) (if sym = sym' then e2 else subst_sym sym pe' e2)
   | Eif pe1 e2 e3 ->
       Eif (subst_sym_pexpr sym pe' pe1) (subst_sym sym pe' e2) (subst_sym sym pe' e3)
-  | Eproc annot nm pes ->
-      Eproc annot nm (List.map (subst_sym_pexpr sym pe') pes)
+  | Eproc annot pe pes ->
+      Eproc annot (subst_sym_pexpr sym pe' pe) (List.map (subst_sym_pexpr sym pe') pes)
   | Eaction pact ->
       Eaction (subst_sym_paction sym pe' pact)
   | Eunseq es ->
@@ -1202,7 +1210,7 @@ let rec has_sseqs expr =
 
 val is_concrete: value -> bool
 let is_concrete = function
-  | Vsymbolic _ ->
+  | Vobject (OVsymbolic _) ->
       false
   | _ ->
       true
@@ -1210,22 +1218,23 @@ end
 
 (* assumes a value expression *)
 
-val symbolify: value -> Symbolic.symbolic value Mem.pointer_value
-let symbolify expr =
-  match expr with
-    | Vtrue ->
-        Symbolic.SYMBtrue
-    | Vfalse ->
-        Symbolic.SYMBfalse
-    | Vctype ty ->
-        Symbolic.SYMBctype ty
-    | Vsymbolic symb ->
-        symb
-    | cval ->
-        Symbolic.SYMBconst cval
-  end
+val symbolify: value -> Symbolic.symbolic object_value Mem.pointer_value
+let symbolify = function
+  | Vtrue ->
+      Symbolic.SYMBtrue
+  | Vfalse ->
+      Symbolic.SYMBfalse
+  | Vctype ty ->
+      Symbolic.SYMBctype ty
+  | Vobject (OVsymbolic symb) ->
+      symb
+  | Vobject oval ->
+      Symbolic.SYMBconst oval
+  | _ ->
+      error "Core_aux.symbolify"
+end
 
-val     pexprFromSymbolic: map Symbol.t value -> Symbolic.symbolic value Mem.pointer_value -> maybe pexpr
+val     pexprFromSymbolic: map Symbol.t object_value -> Symbolic.symbolic object_value Mem.pointer_value -> maybe pexpr
 let rec pexprFromSymbolic concur_sym_map symb =
   let pexprFromSymbolic = pexprFromSymbolic concur_sym_map in
   let convert_operator = function
@@ -1267,14 +1276,14 @@ let rec pexprFromSymbolic concur_sym_map symb =
         Just (PEval Vtrue)
     | Symbolic.SYMBfalse ->
         Just (PEval Vfalse)
-    | Symbolic.SYMBconst cval ->
-        Just (PEval cval)
+    | Symbolic.SYMBconst oval ->
+        Just (PEval (Vobject oval))
     | Symbolic.SYMBptrval ptr_val ->
-        Just (PEval (Vpointer ptr_val))
+        Just (PEval (Vobject (OVpointer ptr_val)))
     | Symbolic.SYMBctype ty ->
         Just (PEval (Vctype ty))
     | Symbolic.SYMBsym _ sym ->
-        Maybe.map (fun z -> PEval z) (Map.lookup sym concur_sym_map)
+        Maybe.map (fun z -> PEval (Vobject z)) (Map.lookup sym concur_sym_map)
     | Symbolic.SYMBop Symbolic.Neq symb1 symb2 ->
         match (pexprFromSymbolic symb1, pexprFromSymbolic symb2) with
           | (Just pe1, Just pe2) ->
@@ -1296,6 +1305,8 @@ let rec pexprFromSymbolic concur_sym_map symb =
           | _ ->
               Nothing
         end
+(*
+TODO
     | Symbolic.SYMBcall symb_nm symbs ->
         let pes_opt = List.foldr (fun symb acc_opt ->
           match (pexprFromSymbolic symb, acc_opt) with
@@ -1311,4 +1322,5 @@ let rec pexprFromSymbolic concur_sym_map symb =
           | _ ->
               Nothing
         end
+*)
   end

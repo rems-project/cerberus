@@ -16,21 +16,17 @@ type core_object_type =
   | OTy_integer
   | OTy_floating
   | OTy_pointer
+  | OTy_cfunction
   | OTy_array of core_object_type
-  | OTy_struct of Cabs.cabs_identifier
-  | OTy_union of Cabs.cabs_identifier
+  | OTy_struct of Symbol.t
+  | OTy_union of Symbol.t
 
 type core_base_type =
   | BTy_object of core_object_type
   | BTy_loaded of core_object_type (* NOTE: same as BTy_object, but has just been loaded from memory so the value may be unspecified *)
-(*
-  | BTy_integer (* TODO: should have and "Object" type for C arrays/struct ? *)
-  | BTy_pointer
-*)
+  | BTy_unit
   | BTy_boolean
   | BTy_ctype
-  | BTy_cfunction
-  | BTy_unit
   | BTy_list of core_base_type
   | BTy_tuple of list core_base_type
   | BTy_any (* TODO: tmp *)
@@ -144,22 +140,26 @@ type shift_path =
 (*  *)
 
 (* Core values *)
+type object_value =
+  | OVsymbolic of Symbolic.symbolic object_value Mem.pointer_value (* symbolicity coming from the concurrency *)
+  | OVinteger of Mem.integer_value
+  | OVfloating of Mem.floating_value
+  | OVpointer of Mem.pointer_value
+  | OVarray of list object_value (* Mem.mem_value *)
+  | OVstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
+  | OVunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
+  | OVcfunction of name
+
+
 type value =
+  | Vobject of object_value
+  | Vloaded of object_value
+  | Vunspecified of ctype
   | Vunit
   | Vtrue | Vfalse
+  | Vctype of ctype
   | Vlist of list value
   | Vtuple of list value
-  | Vctype of ctype
-(*  | Vconst of Mem.mem_value *)
-  | Vsymbolic of Symbolic.symbolic value Mem.pointer_value (* symbolicity coming from the concurrency *)
-  
-  | Vunspecified of ctype
-  | Vinteger of Mem.integer_value
-  | Vfloating of string
-  | Vpointer of Mem.pointer_value
-  | Varray of list value (* Mem.mem_value *)
-  | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
-  | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
 
 
 type ctor =
@@ -193,7 +193,7 @@ type pexpr =
   (* values *)
   | PEval of value
   (* names *)
-  | PEsym of (sym * core_base_type)
+  | PEsym of (sym * core_base_type) (* TODO: remove the type annotation at some point *)
   | PEimpl of Implementation_.implementation_constant
   
   (* data (de|con)structors *)
@@ -232,7 +232,7 @@ type pexpr =
   (* these two are annoying *)
   | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
   (* call to a pure function *)
-  | PEcall of name * list pexpr
+  | PEcall of (name * core_base_type) * list (pexpr * core_base_type) (* TODO: remove the type annot *)
   
   | PElet of (sym * core_base_type) * pexpr * pexpr
   | PEif of pexpr * pexpr * pexpr
@@ -267,7 +267,8 @@ type expr 'a =
   | Eskip
   | Elet of (sym * core_base_type) * pexpr * expr 'a
   | Eif of pexpr * expr 'a * expr 'a
-  | Eproc of 'a * name * list pexpr
+(*  | Eproc of 'a * name * list pexpr *)
+  | Eproc of 'a * pexpr * list pexpr
   | Eaction of paction 'a
   
   (* sequencing operators *)

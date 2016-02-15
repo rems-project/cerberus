@@ -151,6 +151,7 @@ let keywords =
       ("unspecified", T.UNSPECIFIED);
       
       ("is_unspec", T.IS_UNSPEC);
+      ("pcall", T.PCALL);
     ]
 
 let scan_sym lexbuf =

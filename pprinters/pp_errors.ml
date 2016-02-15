@@ -249,8 +249,12 @@ let std_ref = function
       "Ail typing error (TODO " ^ string_of_int n ^ ")"
   | Desugar_cause (Desugar_ConstraintViolation str) ->
       str
+  | Core_run_cause _  ->
+      "TODO: core_run_cause"
+  | Core_typing ->
+      "TODO: core typing"
   | _ ->
-      "TODO"
+      "TODO: pp_erors std_ref"
 
 
 
@@ -308,7 +312,7 @@ let to_string (loc, err) =
       | RefStd ->
           short_message err ^ ". (" ^ std_ref err ^ ")"
       | QuoteStd ->
-          failwith "TODO"
+          failwith "TODO: Pp_errors.to_string QuoteStd"
   end
 
 (*

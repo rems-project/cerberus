@@ -570,33 +570,33 @@ let rec remove_conv_int_pexpr pexpr =
     | PEstruct _ _ ->
         (* TODO *)
         pexpr
-    | PEcall nm pes ->
-        let pes' = List.map remove_conv_int_pexpr pes in
-        match (nm, pes') with
+    | PEcall nm_bTy pe_bTys ->
+        let pe_bTys' = List.map (fun (pe, bTy) -> (remove_conv_int_pexpr pe, bTy)) pe_bTys in
+        match (fst nm_bTy, pe_bTys') with
           (* TODO: hack !!!!!!!!! *)
-          | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv_int")), [(pe_ty, _); (pe_n, _)]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
-                | (Just (Vctype ty), Just ((Vinteger ival) as cval)) ->
+                | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
                     match Mem_aux.integerFromIntegerValue ival with
                       | Just n ->
                           if in_minimal_range ty n then
                             PEval cval
                           else
-                            PEcall nm pes'
+                            PEcall nm_bTy pe_bTys'
                       | Nothing ->
-                          PEcall nm pes'
+                          PEcall nm_bTy pe_bTys'
                     end
                 | _ ->
-                    PEcall nm pes'
+                    PEcall nm_bTy pe_bTys'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
               end
-          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; pe_n]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv")), [(pe_ty1, _); (pe_ty2, _); (pe_n, _)]) ->
               if pe_ty1 = pe_ty2 then
                 pe_n
               else
-                PEcall nm pes'
+                PEcall nm_bTy pe_bTys'
           | _ ->
-              PEcall nm pes'
+              PEcall nm_bTy pe_bTys'
         end
     | PElet sym pe1 pe2 ->
         PElet sym (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)

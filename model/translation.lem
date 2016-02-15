@@ -7,7 +7,7 @@ open import Translation_aux
 import Cmm_csem Mem
 
 import Decode
-
+import Core_typing
 
 import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import Core Core_aux Undefined
@@ -168,7 +168,7 @@ let shiftPathFromMember program tag ident =
 
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
-  C.PEval (C.Vinteger (
+  C.PEval (C.Vobject (C.OVinteger (
     match iCst with
       | A.IConstant n _ _ ->
           Mem.integer_ival n
@@ -177,7 +177,7 @@ let translate_integerConstant iCst =
       | A.IConstantMin ity ->
           Mem.min_ival ity
     end
-  ))
+  )))
 
 
 let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
@@ -344,7 +344,7 @@ and translate_expression stdlib program is_lvalue a_expr =
   let result_ty = ctype_of a_expr in
   
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
-    E.return $ C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype result_ty))))
+    E.return $ C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype result_ty)))))
   else
     let A.AnnotatedExpression annot loc expr = a_expr in
     C.Eloc loc <$> match expr with
@@ -1357,7 +1357,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e2) with
                       | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_ty_e2])
+                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrEq [C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval ref_ty))); C.PEsym sym_ty_e2])
                             (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.ival 1) (Caux.ival 0)))
                       | ty ->
                           error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
@@ -1366,7 +1366,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e1) with
                       | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrEq [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_ty_e1])
+                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrEq [C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval ref_ty))); C.PEsym sym_ty_e1])
                             (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.ival 1) (Caux.ival 0)))
                       | ty ->
                           error ("[" ^ Loc.stringFromLocation loc ^ "]>> " ^ Boot.pp_ail_ctype (Core_aux.unproj_ctype ty))
@@ -1413,14 +1413,14 @@ and translate_expression stdlib program is_lvalue a_expr =
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e2) with
                       | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_ty_e2])
+                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval ref_ty))); C.PEsym sym_ty_e2])
                             (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.ival 1) (Caux.ival 0)))
                     end
                   else if Aaux.is_null_pointer_constant e2 then
                     (* STD §6.5.9#5, second sentence *)
                     match Core_aux.proj_ctype (ctype_of e1) with
                       | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [C.PEval (C.Vpointer (Mem.null_ptrval ref_ty)); C.PEsym sym_ty_e1])
+                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval ref_ty))); C.PEsym sym_ty_e1])
                             (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.ival 1) (Caux.ival 0)))
                     end
                   else
@@ -1455,7 +1455,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           (if AilTypesAux.is_pointer (ctype_of e1) && Aaux.is_null_pointer_constant e2 then
             match (ctype_of e1) with
               | Aty.Pointer _ ref_ty ->
-                  E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))))
+                  E.return (C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty))))))
             end
           else
             translate_rvalue e2)
@@ -1522,7 +1522,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
                     match ty with
                       | Aty.Pointer _ ref_ty ->
-                          C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty))))
+                          C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))))
                     end
                 
                 else if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
@@ -1639,12 +1639,27 @@ and translate_expression stdlib program is_lvalue a_expr =
           E.return $
             C.Esseq [Just sym_ty_e] core_e
               (C.Eaction (C.Paction C.Pos (C.Action loc () (
-                C.Alloc (C.PEval (C.Vinteger (Mem.alignof_ival Cty.unsigned_char))) (C.PEsym sym_ty_e) (Symbol.PrefOther "malloc")
+                C.Alloc (C.PEval (C.Vobject (C.OVinteger (Mem.alignof_ival Cty.unsigned_char)))) (C.PEsym sym_ty_e) (Symbol.PrefOther "malloc")
               ))))
 
-(*
+      | A.AilEcall e [] ->
+          translate_rvalue e >>= fun core_e ->
+          E.fresh_symbol     >>= fun sym_e  ->
+          (* if there are no arguments, we don't need all the temporary object creation stuff *)
+          E.return $
+            (* TODO: indet + check that wseq is right *)
+            C.Ewseq [Just (sym_e, C.BTy_object C.OTy_cfunction)] core_e (
+              C.Eproc default (C.PEsym (sym_e, C.BTy_object C.OTy_cfunction)) []
+            )
+      
       | A.AilEcall e es ->
-        E.print_debug 2 "BEGINNING AilEcall" >> (* DEBUG *)
+          translate_rvalue e >>= fun core_e ->
+          E.fresh_symbol >>= fun sym_e ->
+          let sym_ty_e = (sym_e, C.BTy_object C.OTy_cfunction) in
+          
+          error "WIP"
+
+(*
           match e with
             | A.AnnotatedExpression _ _ (A.AilEident fid) ->
                 (* If the function is just declared in a prototype but not defined,
@@ -1685,7 +1700,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 
                 if List.length es = 0 then
                   (* if there are no arguments, we don't need all the temporary object creation stuff *)
-                  E.return $ C.Eproc default fname []
+                  E.return $ C.Eproc default (C.PEval (C.Vcfunction fname)) []
                 else
                   (* TODO: variadic case *)
                   let (has_proto, (* TODO: return_ty *) _, params, is_variadic) =
@@ -1776,7 +1791,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   E.return $
                     C.Ewseq (List.map (fun z -> Just z) as_tmp) (Caux.mk_unseq core_creates)
                       (C.Ewseq [] (Caux.mk_unseq core_inits)
-                        (C.Ewseq [Just (a_call, C.BTy_any (* TODO *))] (C.Eindet $ C.Eproc default fname
+                        (C.Ewseq [Just (a_call, C.BTy_any (* TODO *))] (C.Eindet $ C.Eproc default (C.PEval (C.Vcfunction fname))
                                                   (if is_variadic then syms1 ++ [Caux.mk_cons syms_reminder] else syms1))
                           (C.Ewseq [] (Caux.mk_unseq core_kills)
                             (C.Epure (C.PEsym (a_call, C.BTy_any (* TODO *))))
@@ -1787,6 +1802,7 @@ and translate_expression stdlib program is_lvalue a_expr =
             | _ -> error ("[Translation.translate_exp, A.CALL e es] a function id is declared with a non-function type ==> " ^ Boot.pp_ail_expr e)
           end
 *)
+
       
       | A.AilEassert e ->
           E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
@@ -1809,7 +1825,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 error "[Translation.translate_expression, A.AilEoffsetof] found an Ail type error]"
           end in
           E.return $
-            C.Epure (C.PEval (C.Vinteger (Mem.offsetof_ival tag_sym membr_ident)))
+            C.Epure (C.PEval (C.Vobject (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident))))
       
       | A.AilEgeneric _ _ ->
           error "WIP: Translation.translate_expression, AilEgeneric"
@@ -1828,7 +1844,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   (if AilTypesAux.is_pointer elem_ty && Aaux.is_null_pointer_constant e then
                     match elem_ty with
                       | Aty.Pointer _ ref_ty ->
-                          E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))))
+                          E.return (C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty))))))
                     end
                   else
                     translate_rvalue e)
@@ -1851,7 +1867,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   (if AilTypesAux.is_pointer (Caux.unproj_ctype memb_ty) && Aaux.is_null_pointer_constant e then
                     match memb_ty with
                       | Cty.Pointer _ ref_ty ->
-                          E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval ref_ty))))
+                          E.return (C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval ref_ty)))))
                     end
                   else
                     E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
@@ -1955,22 +1971,22 @@ and translate_expression stdlib program is_lvalue a_expr =
                 C.PEval (C.Vunspecified (Caux.proj_ctype ty))
             | A.ConstantNull ->
                 (* TODO: should make the Ail ctor take a ctype? *)
-                C.PEval (C.Vpointer (Mem.null_ptrval Cty.Void))
+                C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval Cty.Void)))
             | A.ConstantInteger (A.IConstant n _ _) ->
                 (* TODO: suffix/basis? + check *)
-                C.PEval (C.Vinteger (Mem.integer_ival n))
+                C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival n)))
             | A.ConstantInteger (A.IConstantMax ity) ->
                 let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
-                C.PEcall (C.Impl Implementation_.Ctype_max) [C.PEval (C.Vctype ty)]
+                C.PEcall (C.Impl Implementation_.Ctype_max, C.BTy_object C.OTy_integer) [(C.PEval (C.Vctype ty), C.BTy_ctype)]
             | A.ConstantInteger (A.IConstantMin ity) ->
                 let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
-                C.PEcall (C.Impl Implementation_.Ctype_min) [C.PEval (C.Vctype ty)]
+                C.PEcall (C.Impl Implementation_.Ctype_min, C.BTy_object C.OTy_integer) [(C.PEval (C.Vctype ty), C.BTy_ctype)]
             | A.ConstantFloating str ->
-                C.PEval (C.Vfloating str)
+                C.PEval (C.Vobject (C.OVfloating (Mem.str_fval str)))
             | A.ConstantCharacter (_, str) ->
                 (* TODO: prefix? *)
                 (* TODO: making an implementation fix here (ASCII) *)
-                C.PEval (C.Vinteger (Mem.integer_ival (Decode.decode_character_constant str)))
+                C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str))))
             | A.ConstantArray (* TODO: csts *) _ ->
                 error "WIP: Translation AilEconst, ConstantArray"
             | A.ConstantStruct (* TODO: tag_sym xs *) _ _ ->
@@ -2033,9 +2049,9 @@ and translate_expression stdlib program is_lvalue a_expr =
           E.fresh_symbol >>= fun sym ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
           let elems = List.map (fun c_str ->
-            C.Vinteger (Mem.integer_ival  (Decode.decode_character_constant c_str))
-          ) strs ++ [C.Vinteger (Mem.integer_ival 0)] in
-          E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Varray elems)) >>
+            C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str))
+          ) strs ++ [C.OVinteger (Mem.integer_ival 0)] in
+          E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Vobject (C.OVarray elems))) >>
           E.return (
             C.Epure (C.PEsym (sym, C.BTy_object C.OTy_pointer (* TODO: check *)))
           )
@@ -2489,7 +2505,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
                 | Aty.Pointer _ ref_ty ->
                     E.return (
                       Caux.pstore loc (Caux.mk_ctype ty) (C.PEsym (sym, C.BTy_object C.OTy_pointer))
-                        (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty)))) Cmm.NA
+                        (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype ref_ty))))) Cmm.NA
                     )
               end
 (*          
@@ -2570,7 +2586,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 E.fresh_typed_symbol true (ctype_of expr) >>= fun sym_ty_e ->
                 begin
                   if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant expr then
-                    E.return (C.Epure (C.PEval (C.Vpointer (Mem.null_ptrval (Caux.proj_ctype ty)))))
+                    E.return (C.Epure (C.PEval (C.Vobject (C.OVpointer (Mem.null_ptrval (Caux.proj_ctype ty))))))
                   else
                     translate_expression stdlib program false expr
                 end >>= fun core_e ->

@@ -97,12 +97,16 @@ and pp_integer_value (IV (prov, ival_)) =
 and pp_mem_value = function
   | MVsymbolic symb ->
       !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic pp_mem_value pp_pointer_value symb)
+(*
   | MVunspecified ty ->
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+*)
   | MVinteger (ity, ival) ->
       !^ "MVinteger" ^^ P.parens (Pp_ail.pp_integerType_raw ity ^^ P.comma ^^^ pp_integer_value ival)
-  | MVfloating (fty, str) ->
-      !^ ("MVfloating(TODO, " ^ str ^ ")")
+  | MVfloating (fty, FVconcrete str) ->
+      !^ ("MVfloating(" ^ str ^ ")")
+  | MVfloating (fty, FVunspecified) ->
+      !^ ("MVfloating(unspec)")
   | MVpointer (ty, ptr_val) ->
       !^ "MVpointer" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value ptr_val)
   | MVarray mem_vals ->
@@ -169,9 +173,13 @@ let pp_pretty_mem_value format = function
            List.iteri (Bytes.set bts) chars;
            Bytes.to_string bts
       end
-  | MVfloating (fty, str) ->
+  | MVfloating (fty, FVconcrete str) ->
       !^ str
+  | MVfloating (fty, FVunspecified) ->
+      !^ "unspec(floating)"
+(*
   | MVunspecified ty ->
       !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+*)
   | mval ->
       pp_mem_value mval

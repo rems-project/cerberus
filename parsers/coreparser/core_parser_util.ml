@@ -184,6 +184,7 @@ type token =
   | IVMIN
   | IVSIZEOF
   | IVALIGNOF
+  | PCALL
 
 
 (*

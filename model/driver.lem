@@ -48,7 +48,7 @@ val stringSymState: Cmm_op.symState -> string
 declare ocaml target_rep function stringSymState = `Pp_cmm.string_of_exeState`
 
 
-val stringFromSymbolic: Symbolic.symbolic Core.value Mem.pointer_value -> string
+val stringFromSymbolic: Symbolic.symbolic Core.object_value Mem.pointer_value -> string
 declare ocaml target_rep function stringFromSymbolic = `Pp_cmm.pp_constraints_symbolic`
 
 
@@ -65,7 +65,7 @@ type driver_state = <|
   layout_state:      Mem.mem_state;    (* state of memory layout model *)
   concurrency_state: Cmm_op.symState; (* state of the concurrency memory model *)
   
-  symbolic_assoc: map Symbol.t Core.value;
+  symbolic_assoc: map Symbol.t Core.object_value;
   
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
@@ -107,7 +107,7 @@ let liftMem m dr_st =
 
 
 (* BEGIN reads resolving ======================================================================== *)
-val     resolve_read_pexpr: Symbol.t -> Symbolic.symbolic Core.value Mem.pointer_value -> Core.pexpr -> Core.pexpr
+val     resolve_read_pexpr: Symbol.t -> Symbolic.symbolic Core.object_value Mem.pointer_value -> Core.pexpr -> Core.pexpr
 let rec resolve_read_pexpr write_sym symb_v pexpr =
   let fpe = resolve_read_pexpr write_sym symb_v in
   match pexpr with
@@ -115,8 +115,10 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         pexpr
     | Core.PEerror str pe ->
         Core.PEerror str (fpe pe)
+(* TODO: concur
     | Core.PEval (Core.Vsymbolic symb) ->
         Core.PEval (Core.Vsymbolic $ Symbolic.subst_sym write_sym symb_v symb)
+*)
     | Core.PEval _ ->
         pexpr
     | Core.PEsym _ ->
@@ -149,8 +151,8 @@ let rec resolve_read_pexpr write_sym symb_v pexpr =
         Core.PEarray (List.map fpe pes)
     | Core.PEstruct sym xs ->
         Core.PEstruct sym (List.map (fun (ident, pe) -> (ident, fpe pe)) xs)
-    | Core.PEcall nm pes ->
-        Core.PEcall nm (List.map fpe pes)
+    | Core.PEcall nm_bTy pe_bTys ->
+        Core.PEcall nm_bTy (List.map (fun (pe, bTy) -> (fpe pe, bTy)) pe_bTys)
     | Core.PElet sym pe1 pe2 ->
         Core.PElet sym (fpe pe1) (fpe pe2)
     | Core.PEif pe1 pe2 pe3 ->
@@ -266,7 +268,7 @@ let rec resolve_read_stack write_sym symb_v = function
 end
 
 
-val resolve_read: Symbol.t -> Symbolic.symbolic Core.value Mem.pointer_value -> core_state -> core_state
+val resolve_read: Symbol.t -> Symbolic.symbolic Core.object_value Mem.pointer_value -> core_state -> core_state
 let resolve_read write_sym symb_v core_st =
   (* let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in *)
   <| core_st with
@@ -281,20 +283,20 @@ let resolve_read write_sym symb_v core_st =
 (* END reads resolving ========================================================================= *)
 
 
-let add_to_concur_sym_map sym cval concur_sym_map =
-  match cval with
-    | Core.Vsymbolic (Symbolic.SYMBsym _ sym') ->
+let add_to_concur_sym_map sym oval concur_sym_map =
+  match oval with
+    | Core.OVsymbolic (Symbolic.SYMBsym _ sym') ->
         match Map.lookup sym' concur_sym_map with
-        | Just cval' ->
-            let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue cval') in
-            Map.insert sym cval' concur_sym_map
+        | Just oval' ->
+            let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval')) in
+            Map.insert sym oval' concur_sym_map
           | Nothing ->
-              let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue cval) in
-              Map.insert sym cval concur_sym_map
+              let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval)) in
+              Map.insert sym oval concur_sym_map
         end
     | _ ->
-        let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue cval) in
-        Map.insert sym cval concur_sym_map
+        let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval)) in
+        Map.insert sym oval concur_sym_map
   end
 
 
@@ -326,9 +328,9 @@ let rec stepConcurrency n dr_st =
       | Cmm_op.ReadsFrom (new_concrete_mval: Mem.mem_value) (previous_symbolic_mval: Mem.mem_value) performed_act concur_st' ->
           ND.print_debug 2 ("ReadsFrom with aid: " ^ aid_to_string performed_act ^ "\n") >> (* DEBUG *)
           
-          let new_concrete_cst = Symbolic.SYMBconst (Core_aux.valueFromMemValue new_concrete_mval) in
+          let new_concrete_cst = Symbolic.SYMBconst (Core_aux.objectValueFromMemValue new_concrete_mval) in
           let (Symbolic.SYMBsym _ previous_sym as previous_symb) = fromJust "stepConcurrency" $
-            maybe Nothing (fun z -> Just (Symbolic.map_const Core_aux.valueFromMemValue z)) (Mem.symbolicFromMemValue previous_symbolic_mval) in
+            maybe Nothing (fun z -> Just (Symbolic.map_const Core_aux.objectValueFromMemValue z)) (Mem.symbolicFromMemValue previous_symbolic_mval) in
           
           ND.add_constraint (Constraints.assert_eq previous_symb new_concrete_cst) >>
           
@@ -336,7 +338,7 @@ let rec stepConcurrency n dr_st =
           ND.return <| dr_st with
             concurrency_state= concur_st';
             core_state= (* resolve_read previous_sym new_concrete_cst *) dr_st.core_state;
-            symbolic_assoc= add_to_concur_sym_map previous_sym (Core_aux.valueFromMemValue new_concrete_mval) dr_st.symbolic_assoc;
+            symbolic_assoc= add_to_concur_sym_map previous_sym (Core_aux.objectValueFromMemValue new_concrete_mval) dr_st.symbolic_assoc;
           |>
 
 (*
@@ -719,7 +721,7 @@ let rec drive_core_thread tid dr_st =
           full_core_eval Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
-              [Core.PEval (Core.Vctype ty1); Core.PEval (Core.Vctype ty2); Core.PEval (Core_aux.valueFromMemValue mval)] in 
+              [Core.PEval (Core.Vctype ty1); Core.PEval (Core.Vctype ty2); Core.PEval (Core.Vobject (Core_aux.objectValueFromMemValue mval))] in 
         
         liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
         match out_chars_ with
@@ -1114,21 +1116,21 @@ let rec driver with_concurrency dr_st =
       driver with_concurrency dr_final
   | Step_memop_request memop cvals tid mk_th_st ->
       match (memop, cvals) with
-        | (Mem_common.Ptrdiff, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
-            let cval = Core.Vinteger (Mem.diff_ptrval ptr_val1 ptr_val2) in
+        | (Mem_common.Ptrdiff, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            let cval = Core.Vobject (Core.OVinteger (Mem.diff_ptrval ptr_val1 ptr_val2)) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
-        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vpointer ptr_val]) ->
-            let cval = Core.Vinteger (Mem.intcast_ptrval ref_ty ity ptr_val) in
+        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
+            let cval = Core.Vobject (Core.OVinteger (Mem.intcast_ptrval ref_ty ity ptr_val)) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
-        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vinteger ival]) ->
-            let cval = Core.Vpointer (Mem.ptrcast_ival ty ref_ty ival) in
+        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
+            let cval = Core.Vobject (Core.OVpointer (Mem.ptrcast_ival ty ref_ty ival)) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
 
-        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vpointer _]) ->
+        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVpointer _)]) ->
             error "WTF ptrFromInt"
 
 
-        | (Mem_common.PtrValidForDeref, [Core.Vpointer ptr_val]) ->
+        | (Mem_common.PtrValidForDeref, [Core.Vobject (Core.OVpointer ptr_val)]) ->
             let cval = if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
 
@@ -1138,22 +1140,22 @@ let rec driver with_concurrency dr_st =
                    Boot.pp_core_expr ((Core.Epure (Core.PEval (Core.Vtuple cvals))): Core.expr unit))
 *)
 
-        | (Mem_common.PtrEq, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
+        | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             liftMem (Mem.eq_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_eq, dr_st') ->
             let cval = if is_eq then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
         
-        | (Mem_common.PtrEq, [Core.Vsymbolic symb1; Core.Vpointer ptr_val2]) ->
-            let cval = Core.Vsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2)) in
+        | (Mem_common.PtrEq, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            let cval = Core.Vobject (Core.OVsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2))) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
 
-        | (Mem_common.PtrNe, [Core.Vpointer ptr_val1; Core.Vpointer ptr_val2]) ->
+        | (Mem_common.PtrNe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             liftMem (Mem.ne_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_ne, dr_st') ->
             let cval = if is_ne then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
         
-        | (Mem_common.PtrNe, [Core.Vsymbolic symb1; Core.Vpointer ptr_val2]) ->
-            let cval = Core.Vsymbolic (Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2))) in
+        | (Mem_common.PtrNe, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            let cval = Core.Vobject (Core.OVsymbolic (Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2)))) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         
         | _ ->
@@ -1291,7 +1293,7 @@ let rec driver with_concurrency dr_st =
 
 
 
-val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.value -> Core.pexpr -> Core.value
+val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
   match core_eval Loc.unknown mem_st core_file concur_sym_map false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
@@ -1324,12 +1326,12 @@ let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraint
                                 Mem_aux.symbolicFromIntegerValue ival
                           end in
 *)
-        match (hack mem_st core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb1)), hack mem_st core_file concur_sym_map (Core.PEval (Core.Vsymbolic symb2))) with
-          | (Core.Vsymbolic symb1', Core.Vsymbolic symb2') ->
+        match (hack mem_st core_file concur_sym_map (Core.PEval (Core.Vobject (Core.OVsymbolic symb1))), hack mem_st core_file concur_sym_map (Core.PEval (Core.Vobject (Core.OVsymbolic symb2)))) with
+          | (Core.Vobject (Core.OVsymbolic symb1'), Core.Vobject (Core.OVsymbolic symb2')) ->
    let _ = Boot.print_debug 1 ("finalize_constr ==> " ^ stringFromSymbolic symb1 ^ " <-> " ^ stringFromSymbolic symb2) in
               Symbolic.SYMBop op symb1' symb2'
-          | (Core.Vsymbolic symb1', cval2') ->
-              Symbolic.SYMBop op symb1' (Symbolic.SYMBconst cval2')
+          | (Core.Vobject (Core.OVsymbolic symb1'), Core.Vobject oval2') ->
+              Symbolic.SYMBop op symb1' (Symbolic.SYMBconst oval2')
           | (cval1, cval2) ->
               error ("Driver.finalize_constraints ==> " ^ stringFromValue cval1 ^ " <-> " ^ stringFromValue cval2)
         end
@@ -1565,7 +1567,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               
               ND.return $
                 (Core_aux.subst_pattern [Just (argc_sym, Core.BTy_object Core.OTy_pointer); Just (argv_sym, Core.BTy_object Core.OTy_pointer)]
-                  (Core.PEval $ Core.Vtuple [Core.Vpointer argc_ptr_val; Core.Vpointer argv_ptr_val])
+                  (Core.PEval $ Core.Vtuple [Core.Vobject (Core.OVpointer argc_ptr_val); Core.Vobject (Core.OVpointer argv_ptr_val)])
 (*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
                   expr, post_argv_dr_st)
           | _ ->
