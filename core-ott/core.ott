@@ -1,0 +1,448 @@
+embed {{ lem 
+open import Pervasives String_extra Global
+import Symbol AilTypes Implementation_ Undefined Loc Cmm_csem
+import Mem
+
+open import Thread Core_ctype
+
+module Cmm = Cmm_csem
+}}
+
+% (*
+% (TODO C signals)
+% type handler_event =
+%   string (* TODO: fixed ctors? *)
+% *)
+
+
+metavar Symbol_t {{ lem Symbol.t }}  ::=  {{ phantom }} 
+
+indexvar n ::= {{ phantom }}
+
+grammar
+
+core_object_type :: 'OTy_' ::= {{ com  Object types (those that may be memory read/stored, hence matching C object types) }}
+  | integer                    :: ::  integer                    
+  | floating                   :: ::  floating                   
+  | pointer                    :: ::  pointer                    
+  | cfunction                  :: ::  cfunction                  
+  | array  core_object_type    :: ::  array
+  | struct Symbol_t            :: ::  struct
+  | union Symbol_t             :: ::  union
+
+core_base_type :: 'BTy_' ::= 
+   | unit                         :: ::   unit  
+   | boolean                      :: ::   boolean
+   | ctype                        :: ::   ctype 
+   | list of core_base_type       :: ::   list 
+   | tuple of core_base_type1 .. core_base_typen :: ::   tuple 
+   | object of core_object_type   :: ::   object
+   | loaded of core_object_type   :: ::   loaded
+
+% NOTE: loaded is the same as object, but has just been loaded from
+% memory so the value may be unspecified
+ 
+
+
+% Types discriminate between pure (TyBase) and effectful
+% expressions (TyEffect)
+
+core_type :: '' ::=
+   | TyBase   core_base_type   :: ::  TyBase   
+   | TyEffect core_base_type   :: ::  TyEffect 
+ 
+ 
+
+metavar sym {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Symbolic names }}
+
+metavar ksym {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Continuation names }}
+
+
+% (* Binary operators *)
+
+grammar
+ binop :: 'Op' ::= 
+%   (* arithmetic operators *)
+   | Add     :: ::    Add    
+   | Sub     :: ::    Sub    
+   | Mul     :: ::    Mul    
+   | Div     :: ::    Div    
+   | Rem_t   :: ::    Rem_t  
+%(* this the % of C ===> rem_t(x,y) = x - ((truncate(x/y) * y) *)
+   | Rem_f   :: ::   Rem_f 
+%(* rem_t(x,y) = x - ((foor(x/y) * y) *)
+   | Exp     :: ::   Exp
+%   (* relational operators *)
+   | Eq      :: ::        Eq
+   | Gt      :: ::        Gt
+   | Lt      :: ::        Lt
+   | Ge      :: ::        Ge
+   | Le      :: ::        Le
+%   (* logical connectives *)
+   | And     :: ::   And 
+   | Or      :: ::   Or
+
+embed {{ lem
+ 
+ instance (Eq binop)
+   let (=)  = unsafe_structural_equality
+   let (<>) = unsafe_structural_inequality
+ end
+ 
+ instance (Show binop)
+   let show op = 
+     match op with
+     | OpAdd -> "OpAdd"
+     | OpSub -> "OpSub"
+     | OpMul -> "OpMul"
+     | OpDiv -> "OpDiv"
+     | OpRem_t -> "OpRem_t"
+     | OpRem_f -> "OpRem_f"
+     | OpExp -> "OpExp"
+     | OpEq  -> "OpEq"
+     | OpGt  -> "OpGt"
+     | OpLt  -> "OpLt"
+     | OpGe  -> "OpGe"
+     | OpLe  -> "OpLe"
+     | OpAnd -> "OpAnd"
+     | OpOr  -> "OpOr"
+     end
+ end
+}}
+
+
+
+grammar
+ polarity :: '' ::= {{ com  Polarity for actions }}
+   | Pos   :: ::  Pos
+   | Neg   :: ::  Neg
+
+
+metavar 
+Implementation__implementation_constant {{ lem Implementation_.implementation_constant }} ::= {{ phantom }}
+
+metavar tyvarsym {{ lem 'sym }} ::= {{ phantom }}
+
+grammar 
+generic_name :: '' ::= {{ auxparam 'sym }}
+   | Sym tyvarsym                                 :: :: Sym
+   | Impl Implementation__implementation_constant :: :: Impl
+
+
+ 
+% (*
+% declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
+% 
+% let nameEquality n1 n2 =
+%   match (n1, n2) with
+%   | (Sym s1, Sym s2)   -> s1 = s2
+%   | (Sym _, _)         -> false
+%   | (Impl i1, Impl i2) -> i1 = i2
+%   | (Impl _, _)        -> false
+%   end
+% 
+% instance (Eq name)
+%   let (=)  = nameEquality
+%   let (<>) = fun n1 n2 -> not (nameEquality n1 n2)
+% end
+% 
+% instance (Show name)
+%   let show n =
+%     match n with
+%     | Sym sym -> "Sym (" ^ show sym ^ ")"
+%     | Impl i  -> "Impl (?)" (* TODO *)
+%     end
+% end
+% *)
+ 
+ 
+metavar Symbolic_symbolic {{ lem Symbolic.symbolic }} ::= {{ phantom }}  
+metavar Mem_integer_value {{ lem Mem.integer_value }} ::= {{ phantom }}  
+metavar Mem_floating_value {{ lem Mem.floating_value }} ::= {{ phantom }}  
+metavar Mem_pointer_value {{ lem Mem.pointer_value }} ::= {{ phantom }}  
+metavar Mem_mem_value {{ lem Mem.mem_value }} ::= {{ phantom }}  
+metavar Cabs_cabs_identifier {{ lem Cabs.cabs_identifier }} ::= {{ phantom }}
+ 
+% (* Object values (inhabitants of object types, hence values that can be read/stored) *)
+grammar
+generic_object_value :: 'OV' ::=  {{ auxparam 'sym }}
+   | symbolic Symbolic_symbolic generic_object_value  Mem_pointer_value  :: :: symbolic 
+%(* symbolicity coming from the concurrency *)
+   | integer Mem_integer_value :: :: integer
+   | floating Mem_floating_value :: :: floating
+   | pointer Mem_pointer_value :: :: pointer
+   | cfunction generic_name  :: :: cfunction
+   | array generic_object_value1 .. generic_object_valuen  (* Mem_mem_value *) :: :: array
+   | struct sym ( Cabs_cabs_identifier1 , Mem_mem_value1 ) .. ( Cabs_cabs_identifiern , Mem_mem_valuen ) :: :: struct
+   | union sym Cabs_cabs_identifier Mem_mem_value :: :: union
+ 
+
+metavar Mem_mem_constraint {{ lem Mem.mem_constraint }} ::= {{ phantom }}   
+metavar ctype {{ lem ctype }} ::= {{ phantom }}   
+
+grammar
+list_Mem_mem_constraint :: '' ::=  {{ phantom }} {{ lem list Mem.mem_constraint }}
+   | Mem_mem_constraint1 .. Mem_mem_constraintn :: :: list_mem_constraint
+
+generic_value :: 'V' ::=  {{ auxparam 'sym }}
+   | Vconstrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: :: constrained
+   | Vobject generic_object_value :: :: object
+   | Vloaded generic_object_value :: :: loaded
+   | Vunspecified  ctype :: :: unspecified
+   | Vunit :: :: unit
+   | Vtrue :: :: true
+   | Vfalse :: :: false
+   | Vctype  ctype :: :: ctype
+   | Vlist  core_base_type  generic_value1 .. generic_valuen :: :: list
+   | Vtuple  generic_value1 .. generic_valuen :: :: tuple
+ 
+
+metavar ty {{ lem 'ty }} ::= {{ phantom }}
+ 
+grammar
+generic_ctor :: 'C' ::= {{ auxparam 'ty }}
+   | Cnil ty      :: :: nil         %  : [bTy] 
+   | Ccons        :: :: cons        %  : bTy -> [bTy] -> [bTy] 
+   | Ctuple       :: :: tuple       %  : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
+   | Carray       :: :: array       %  : bTy -> ... -> bTy -> array bTy 
+   | Civmax       :: :: ivmax       %  : ctype -> integer 
+   | Civmin       :: :: ivmin       %  : ctype -> integer 
+   | Civsizeof    :: :: ivsizeof    %  : ctype -> integer 
+   | Civalignof   :: :: ivalignof   %  : ctype -> integer 
+   | Cloaded      :: :: loaded      %  : objTy -> loaded objTy 
+   | Cunspecified :: :: unspecified %  : ctype -> loaded (integer|floating|pointer|array|struct|union) 
+
+
+% (*
+% type pattern =
+%     list (maybe (sym * core_base_type))
+% *)
+
+maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
+   | Nothing   :: :: Nothing 
+   | Just sym  :: :: Just
+
+
+generic_pattern :: '' ::= {{ auxparam 'ty 'sym }}
+   | CaseBase maybesym :: :: CaseBase
+   | CaseCtor generic_ctor generic_pattern1 .. generic_patternn :: :: CaseCtor
+ 
+
+metavar Undefined_undefined_behaviour {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
+metavar string {{ lem string }}  ::=  {{ phantom }} 
+
+metavar Mem_pure_memop {{ lem Mem.pure_memop }} ::= {{ phantom }}  
+
+
+grammar
+% (* pure Core expressions *)
+pexpr_ :: 'PE' ::=  {{ auxparam 'ty 'sym }}
+%   (* undefined behaviour and late static error / failed assert *)
+   | PEundef Undefined_undefined_behaviour   :: :: undef
+   | PEerror string generic_pexpr            :: :: error
+ 
+%(* the expression is for debug purpose *)
+ 
+%   (* values *)
+   | PEval generic_value                     :: :: val
+   | PEconstrained ( list_Mem_mem_constraint1 , generic_pexpr1 ) .. ( list_Mem_mem_constraintn , generic_pexprn )  :: :: constrained
+   
+%   (* names *)
+   | PEsym tyvarsym                          :: :: sym
+   | PEimpl Implementation__implementation_constant :: :: impl
+   
+%   (* data (de|con)structors *)
+   | PEctor  generic_ctor  generic_pexpr1 .. generic_pexprn  :: :: ctor
+   | PEcase generic_pexpr  ( generic_pattern1 , generic_pexpr1 ) .. ( generic_patternn , generic_pexprn ) :: :: case
+   
+%   (* operators on pointer values *)
+   | PEarray_shift generic_pexpr1  ctype  generic_pexpr2    :: :: array_shift
+   | PEmember_shift generic_pexpr  Symbol_t Cabs_cabs_identifier :: :: member_shift
+   
+%   (* operators on integers *)
+   | PEnot generic_pexpr          :: :: not
+   | PEop binop  generic_pexpr1 generic_pexpr2  :: :: binop
+   
+%   (* pure operations provide by the memory layout model *)
+   | PEmemop Mem_pure_memop generic_pexpr1 .. generic_pexprn :: :: memop
+%   (* these two are annoying *)
+   | PEstruct Symbol_t  ( Cabs_cabs_identifier1 , generic_pexpr1 ) .. ( Cabs_cabs_identifiern , generic_pexprn ) :: :: struct
+ 
+%   (* call to a pure function *)
+   | PEcall generic_name  generic_pexpr1 .. generic_pexprn :: :: call
+   
+   | PElet generic_pattern generic_pexpr1  generic_pexpr2  :: :: let
+   | PEif generic_pexpr generic_pexpr1 generic_pexpr2  :: :: if
+   
+ %(*  | PEvla ctype * pexpr *)
+ 
+ 
+ %  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+   | PEis_scalar generic_pexpr    :: :: is_scalar
+   | PEis_integer generic_pexpr   :: :: is_integer
+   | PEis_signed generic_pexpr    :: :: is_signed
+   | PEis_unsigned generic_pexpr  :: :: is_unsigned
+ 
+generic_pexpr :: 'P' ::= {{ auxparam 'ty 'sym }}
+   | Pexpr ty pexpr_ :: :: expr
+ 
+metavar a {{ lem 'a }} ::= {{ phantom }}
+metavar nat {{ lem nat }} ::= {{ phantom }}
+metavar Thread_thread_id {{ lem Thread.thread_id }} ::= {{ phantom }}
+metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
+metavar Cmm_memory_order {{ lem Cmm.memory_order }} ::= {{ phantom }}
+
+grammar
+
+maybe_Symbol_t_core_base_type :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
+
+generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
+%   (* pure expression *)
+   | Epure generic_pexpr :: :: pure
+%   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
+   | Ememop Mem_memop generic_pexpr1 .. generic_pexprn
+% (*
+% (TODO C signals)
+%   (* these two are to deal with C signals *)
+%   | Eraise handler_event
+%   | Eregister handler_event * name
+% *)
+%   (* potentially effectful *)
+   | Eskip
+   | Elet generic_pattern generic_pexpr generic_expr :: :: let
+   | Eif generic_pexpr generic_expr1 generic_expr2 :: :: if
+   | Ecase generic_pexpr ( generic_pattern1 , generic_expr1 ) .. ( generic_patternn , generic_exprn ) :: :: case
+   | Eproc a generic_pexpr generic_pexpr1 .. generic_pexprn :: :: proc
+   | Eaction generic_paction  :: :: action
+%   (* sequencing operators *)
+   | Eunseq generic_expr1 .. generic_exprn :: :: unseq
+   | Ewseq generic_pattern generic_expr1 generic_expr2 :: :: wseq
+   | Esseq generic_pattern generic_expr1 generic_expr2 :: :: sseq
+   | Easeq maybe_Symbol_t_core_base_type generic_action1 generic_paction2 :: :: aseq % (* this ctor doesn't exist at runtine *)
+%   (* indeterminately-sequenced expressions and boundary *) 
+   | Eindet generic_expr :: :: indet %(* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+   | Ebound nat generic_expr :: :: bound %(* this ctor doesn't exist at runtine *)
+%   (* Continuation operators *)
+%   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
+   | Esave ksym ( Symbol_t1 ctype1 ) .. ( Symbol_tn ctypen ) generic_expr :: :: save
+   | Erun a ksym ( Symbol_t1 , generic_pexpr1 ) .. ( Symbol_tn , generic_pexprn ) :: :: run
+   | Ereturn generic_pexpr :: :: return
+%   (* Non deterministic choice (resulting from indet expressions) *)
+%   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
+   | End generic_expr1 .. generic_exprn :: ::  nd
+%   (* Thread operators *)
+%   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
+   | Epar generic_expr1 .. generic_exprn :: :: par %(* Parallel composition: for cppmem-style composition *)
+   | Ewait Thread_thread_id :: :: wait %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+   | Eloc Loc_t generic_expr :: :: loc
+ 
+ %(* the qualification prefixes are for pprint *)
+% WAS generic_action_ in source
+ generic_actionB :: '' ::= {{ auxparam 'ty 'sym }}
+   | Create generic_pexpr1 generic_pexpr2 Symbol.prefix :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
+   | Alloc generic_pexpr1 generic_pexpr2 Symbol.prefix :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
+   | Kill generic_pexpr :: :: Kill
+   | Store generic_pexpr1 generic_pexpr2 generic_pexpr Cmm_memory_order :: :: Store
+   | Load generic_pexpr1 generic_pexpr2 Cmm.memory_order :: :: Load
+   | RMW generic_pexpr1  generic_pexpr2 generic_pexpr3 generic_pexpr4 Cmm_memory_order1 Cmm_memory_order2 :: :: RMW
+%   | RMW generic_pexpr(* ctype *) generic_pexpr(* object_ptr *) generic_pexpr(* expected_val *) generic_pexpr(* desired_val *) Cmm.memory_order Cmm.memory_order
+ 
+% (*
+%   | CompareExchangeStrong pexpr pexpr pexpr pexpr Cmm.memory_order Cmm.memory_order
+%   | CompareExchangeWeak pexpr pexpr pexpr pexpr Cmm.memory_order Cmm.memory_order
+% *)
+   
+%   (* TODO: it annoying (maybe wrong) that these are actions *)
+% (*  | Ptr pointer_action list pexpr *)
+ 
+
+
+ generic_action :: '' ::= {{ auxparam 'a 'ty 'sym }}
+    |  Action Loc_t a generic_actionB  :: :: Action 
+ generic_paction :: '' ::= {{ auxparam 'a 'ty 'sym }}
+    |  Paction polarity generic_action :: :: Paction
+
+embed {{ lem 
+ 
+ type name         = generic_name Symbol_t
+ type object_value = generic_object_value Symbol_t
+ type value        = generic_value Symbol_t
+ type ctor         = generic_ctor Symbol_t
+ type pattern      = generic_pattern core_base_type Symbol_t
+ type pexpr        = generic_pexpr core_base_type Symbol_t
+ type expr 'a      = generic_expr 'a core_base_type Symbol_t
+ type paction 'a   = generic_paction 'a core_base_type Symbol_t
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ (* TODO: don't we need any impl proc? *)
+ type impl_decl =
+   | Def  core_base_type * pexpr
+   | IFun core_base_type * list (Symbol_t * core_base_type) * pexpr
+ type impl = map Implementation_.implementation_constant impl_decl
+ (*
+ type impl_decl =
+   | IConst  core_base_type * value
+   | IFun core_base_type * list (sym * core_base_type) * pexpr
+ type impl = map Impl_types.impl_name impl_decl
+ *)
+ 
+ 
+ type fun_map_decl 'a =
+   | Fun  core_base_type * list (Symbol_t * core_base_type) * pexpr
+   | Proc core_base_type * list (Symbol_t * core_base_type) * expr 'a
+ 
+ type fun_map 'a = map Symbol_t (fun_map_decl 'a)
+ 
+ 
+ (* a Core file is just a set named functions *)
+ type file 'a = <|
+   main   : Symbol.t;
+   stdlib : fun_map 'a;
+   impl   : impl;
+   globs  : list (Symbol.t * core_type * expr 'a);
+   funs   : fun_map 'a;
+ |>
+ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ (* runtime stuff *)
+ 
+ type continuation_element 'a =
+   | Kunseq list (expr 'a) * list (expr 'a)
+   | Kwseq  pattern * expr 'a
+   | Ksseq  pattern * expr 'a
+ (*  | Ktry   list (string * expr 'a) *)
+ 
+ 
+ type continuation 'a = list (continuation_element 'a)
+ 
+ 
+ type labeled_continuation 'a = list (Symbol.t * ctype) * expr 'a
+ 
+ 
+ type stack 'a =
+   | Stack_empty
+   | Stack_cons continuation 'a * stack 'a
+ 
+ 
+ 
+ 
+ 
+ 
+ (* basic class instanciations *)
+ instance (SetType polarity)
+   let setElemCompare = defaultCompare
+ end
+}}
