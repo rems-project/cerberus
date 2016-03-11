@@ -275,7 +275,8 @@ let resolve_read write_sym symb_v core_st =
 
 let add_to_concur_sym_map sym oval concur_sym_map =
   match oval with
-    | Core.OVsymbolic (Symbolic.SYMBsym _ sym') ->
+(* TODO CONCUR
+  | Core.OVsymbolic (Symbolic.SYMBsym _ sym') ->
         match Map.lookup sym' concur_sym_map with
         | Just oval' ->
             let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval')) in
@@ -284,6 +285,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
               let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval)) in
               Map.insert sym oval concur_sym_map
         end
+*)
     | _ ->
         let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval)) in
         Map.insert sym oval concur_sym_map
@@ -1138,18 +1140,22 @@ let rec driver with_concurrency dr_st =
             let cval = if is_eq then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
         
-        | (Mem_common.PtrEq, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+(* TODO CONCUR
+          | (Mem_common.PtrEq, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             let cval = Core.Vobject (Core.OVsymbolic (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2))) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+*)
 
         | (Mem_common.PtrNe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             liftMem (Mem.ne_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_ne, dr_st') ->
             let cval = if is_ne then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
-        
+
+(* TODO CONCUR
         | (Mem_common.PtrNe, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             let cval = Core.Vobject (Core.OVsymbolic (Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Eq symb1 (Symbolic.SYMBptrval ptr_val2)))) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+*)
         
         | _ ->
             error ("WIP memop request: " ^ show memop ^ " ==> " ^ Boot.pp_core_value (Core.Vtuple cvals) )

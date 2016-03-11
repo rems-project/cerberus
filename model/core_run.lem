@@ -77,7 +77,7 @@ let call_function file f_nm arg_cvals =
 
 
 
-val call_proc: Core.file core_run_annotation -> Core.sym -> list Core.value ->
+val call_proc: Core.file core_run_annotation -> Symbol.t -> list Core.value ->
                Exception.t (Core.expr core_run_annotation) core_run_error
 let call_proc file psym cvals =
   let bTy_params_body_opt =
@@ -121,11 +121,13 @@ let inline (>>) m f = m >>= fun _ -> f
 
 let rec resolve_concur_sym sym concur_sym_map seen_syms =
   match Map.lookup sym concur_sym_map with
-    | Just (Vobject (OVsymbolic (Symbolic.SYMBsym _ sym'))) ->
+(* TODO CONCUR
+  | Just (Vobject (OVsymbolic (Symbolic.SYMBsym _ sym'))) ->
         if List.elem sym' seen_syms then
           Nothing
         else
           resolve_concur_sym sym' concur_sym_map (sym' :: seen_syms)
+*)
     | Just cval ->
         Just cval
     | Nothing ->
@@ -1056,7 +1058,7 @@ let full_core_eval loc mem_st file concur_sym_map inside_if pe =
 (* DEBUG *)
 type exec_location =
   | ELoc_globals
-  | ELoc_normal of list Core.sym
+  | ELoc_normal of list Symbol.t
 
 let push_exec_loc sym = function
   | ELoc_globals ->

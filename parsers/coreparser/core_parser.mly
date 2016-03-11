@@ -1513,9 +1513,9 @@ expr:
 *)
 | SKIP
     { Eskip }
-(*
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
     { Elet (_pat, _pe1, _e2) }
+(*
   | Eif of generic_pexpr 'ty 'sym * generic_expr 'a 'ty 'sym * generic_expr 'a 'ty 'sym
   | Ecase of generic_pexpr 'ty 'sym * list (generic_pattern 'ty 'sym * generic_expr 'a 'ty 'sym)
   | Eaction of generic_paction 'a 'ty 'sym

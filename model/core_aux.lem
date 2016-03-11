@@ -659,7 +659,7 @@ let rec to_pures es =
 
 
 (* check if a symbolic names is part of a pattern *)
-val in_pattern: sym -> pattern -> bool
+val in_pattern: Symbol.t -> pattern -> bool
 let rec in_pattern sym pat =
   match pat with
     | CaseBase sym_opt ->
@@ -669,7 +669,7 @@ let rec in_pattern sym pat =
   end
 
 (* substitute in an expression a symbolic name with a (pure) expression *)
-val     subst_sym_pexpr: sym -> pexpr -> pexpr -> pexpr
+val     subst_sym_pexpr: Symbol.t -> pexpr -> pexpr -> pexpr
 let rec subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
   Pexpr annot match pe_ with
     | PEundef _ ->
@@ -742,7 +742,7 @@ let rec subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
 end
 
 
-val     subst_sym: forall 'a. sym -> pexpr -> expr 'a -> expr 'a
+val     subst_sym: forall 'a. Symbol.t -> pexpr -> expr 'a -> expr 'a
 let rec subst_sym sym pe' = function
 (*
   let () =
@@ -1104,7 +1104,7 @@ let append_to_current_continuation cont = function
 end
 
 
-val subst_sym_fun_map: forall 'a. sym -> pexpr -> fun_map 'a -> fun_map 'a
+val subst_sym_fun_map: forall 'a. Symbol.t -> pexpr -> fun_map 'a -> fun_map 'a
 let subst_sym_fun_map sym pe' funs =
   Map.map (function
     | Fun ty params pe ->
@@ -1114,7 +1114,7 @@ let subst_sym_fun_map sym pe' funs =
   end) funs
 
 
-val     collect_labeled_continuations: forall 'a. expr 'a -> map ksym (list (sym * Core_ctype.ctype) * expr 'a)
+val     collect_labeled_continuations: forall 'a. expr 'a -> map Symbol.t (list (Symbol.t * Core_ctype.ctype) * expr 'a)
 let rec collect_labeled_continuations expr =
   match expr with
     | Epure _ ->
