@@ -39,7 +39,7 @@ core_object_type {{ tex \textit{oTy} }} :: 'OTy_' ::= {{ com Core object types }
 core_base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types}}
    | unit                                       :: ::   unit    {{ com unit }}
    | boolean                                    :: ::   boolean {{ com boolean }}
-   | ctype                                      :: ::   ctype   {{ com C type }}
+   | Ctype                                      :: ::   ctype   {{ com C type }} {{ tex \ottkw{ctype} }}
    | [ core_base_type ]                         :: ::   list    {{ com list }}
    | ( core_base_type1 , .. , core_base_typen ) :: ::   tuple   {{ com tuple }}
    | core_object_type                           :: ::   object  {{ com C object value }}
@@ -246,6 +246,10 @@ metavar string {{ lem string }}  ::=  {{ phantom }}
 metavar Mem_pure_memop {{ lem Mem.pure_memop }} {{ tex memop }} ::= {{ phantom }}  
 % TODO: introduce a phantom grammar for memop 
 
+embed {{ lem
+type sym = Symbol.t
+type ksym = Symbol.t
+}}
 
 grammar
 % (* pure Core expressions *)
@@ -274,7 +278,7 @@ pexpr_ :: 'PE' ::=  {{ auxparam 'ty 'sym }}
    
 %   (* operators on integers *)
    | not ( generic_pexpr )          :: :: not {{ com not }} 
-   |  generic_pexpr1 binop generic_pexpr2  :: :: binop {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binop }}
+   |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binop }}
    
 %   (* pure operations provide by the memory layout model *)
    | memop ( Mem_pure_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
@@ -306,6 +310,7 @@ metavar nat {{ lem nat }} ::= {{ phantom }}
 metavar Thread_thread_id {{ lem Thread.thread_id }} ::= {{ phantom }}
 metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
 metavar Cmm_memory_order {{ lem Cmm.memory_order }} ::= {{ phantom }}
+metavar Symbol_prefix {{ lem Symbol.prefix }}  ::=  {{ phantom }} 
 
 grammar
 
@@ -315,7 +320,7 @@ generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
 %   (* pure expression *)
    | generic_pexpr :: :: pure
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
-   | Ememop Mem_memop generic_pexpr1 .. generic_pexprn :: :: memop
+   | memop Mem_pure_memop generic_pexpr1 .. generic_pexprn :: :: memop
 % (*
 % (TODO C signals)
 %   (* these two are to deal with C signals *)
@@ -353,12 +358,12 @@ generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
  
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
- generic_actionB :: '' ::= {{ auxparam 'ty 'sym }}
-   | Create generic_pexpr1 generic_pexpr2 Symbol.prefix :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
-   | Alloc generic_pexpr1 generic_pexpr2 Symbol.prefix :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
+ generic_actionB {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }}
+   | Create generic_pexpr1 generic_pexpr2 Symbol_prefix :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
+   | Alloc generic_pexpr1 generic_pexpr2 Symbol_prefix :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
    | Kill generic_pexpr :: :: Kill
    | Store generic_pexpr1 generic_pexpr2 generic_pexpr Cmm_memory_order :: :: Store
-   | Load generic_pexpr1 generic_pexpr2 Cmm.memory_order :: :: Load
+   | Load generic_pexpr1 generic_pexpr2 Cmm_memory_order :: :: Load
    | RMW generic_pexpr1  generic_pexpr2 generic_pexpr3 generic_pexpr4 Cmm_memory_order1 Cmm_memory_order2 :: :: RMW
 %   | RMW generic_pexpr(* ctype *) generic_pexpr(* object_ptr *) generic_pexpr(* expected_val *) generic_pexpr(* desired_val *) Cmm.memory_order Cmm.memory_order
  
@@ -391,14 +396,14 @@ terminals :: 'terminal' ::=
    | is_unsigned :: :: is_unsigned {{ tex \ottkw{is\_unsigned} }}
 embed {{ lem 
  
- type name         = generic_name Symbol_t
- type object_value = generic_object_value Symbol_t
- type value        = generic_value Symbol_t
- type ctor         = generic_ctor Symbol_t
- type pattern      = generic_pattern core_base_type Symbol_t
- type pexpr        = generic_pexpr core_base_type Symbol_t
- type expr 'a      = generic_expr 'a core_base_type Symbol_t
- type paction 'a   = generic_paction 'a core_base_type Symbol_t
+ type name         = generic_name Symbol.t
+ type object_value = generic_object_value Symbol.t
+ type value        = generic_value Symbol.t
+ type ctor         = generic_ctor Symbol.t
+ type pattern      = generic_pattern core_base_type Symbol.t
+ type pexpr        = generic_pexpr core_base_type Symbol.t
+ type expr 'a      = generic_expr 'a core_base_type Symbol.t
+ type paction 'a   = generic_paction 'a core_base_type Symbol.t
  
  
  
@@ -408,8 +413,8 @@ embed {{ lem
  
  (* TODO: don't we need any impl proc? *)
  type impl_decl =
-   | Def  core_base_type * pexpr
-   | IFun core_base_type * list (Symbol_t * core_base_type) * pexpr
+   | Def of core_base_type * pexpr
+   | IFun of core_base_type * list (Symbol.t * core_base_type) * pexpr
  type impl = map Implementation_.implementation_constant impl_decl
  (*
  type impl_decl =
@@ -420,10 +425,10 @@ embed {{ lem
  
  
  type fun_map_decl 'a =
-   | Fun  core_base_type * list (Symbol_t * core_base_type) * pexpr
-   | Proc core_base_type * list (Symbol_t * core_base_type) * expr 'a
+   | Fun of core_base_type * list (Symbol.t * core_base_type) * pexpr
+   | Proc of core_base_type * list (Symbol.t * core_base_type) * expr 'a
  
- type fun_map 'a = map Symbol_t (fun_map_decl 'a)
+ type fun_map 'a = map Symbol.t (fun_map_decl 'a)
  
  
  (* a Core file is just a set named functions *)
@@ -447,9 +452,9 @@ embed {{ lem
  (* runtime stuff *)
  
  type continuation_element 'a =
-   | Kunseq list (expr 'a) * list (expr 'a)
-   | Kwseq  pattern * expr 'a
-   | Ksseq  pattern * expr 'a
+   | Kunseq of list (expr 'a) * list (expr 'a)
+   | Kwseq  of pattern * expr 'a
+   | Ksseq  of pattern * expr 'a
  (*  | Ktry   list (string * expr 'a) *)
  
  
@@ -461,7 +466,7 @@ embed {{ lem
  
  type stack 'a =
    | Stack_empty
-   | Stack_cons continuation 'a * stack 'a
+   | Stack_cons of continuation 'a * stack 'a
  
  
  
