@@ -110,9 +110,11 @@ fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
 
 -- [conv_int ty n] returns the value [n] converted to the integer type [ty]
 fun conv_int (ty: ctype, n: integer): integer :=
+{-
   if is_unspec(n) then
     unspecified(ty)
   else
+-}
   -- (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
   -- equal to 0; otherwise, the result is 1.
   if ty = "_Bool" then
@@ -140,7 +142,6 @@ fun conv_int (ty: ctype, n: integer): integer :=
         <Integer.conv_nonrepresentable_signed_integer>(integer, ty:ctype, n:integer)
       end
     end
-  end
   end
 
 
@@ -189,9 +190,11 @@ fun conv_aux (ty: ctype, n: integer) : integer :=
 -- TODO: the part do-able statically should probably be done by Translation.lem
 -- [conv ty1 ty2 n] converts a value [n] of ctype [ty1] to a value of type [ty2]
 fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
+{-
   if is_unspec(n) then
     unspecified(ty2)
   else
+-}
   -- (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
   -- equal to 0; otherwise, the result is 1.
   if is_scalar(ty1) /\ ty2 = "_Bool" then
@@ -220,7 +223,6 @@ fun conv (ty1: ctype, ty2: ctype, n: integer): integer :=
     -- TODO !!!!
       n
     end
-  end
   end
 
 -- fun div_zero (n: integer): integer :=
@@ -472,4 +474,30 @@ fun wrapI(ty: ctype, n: integer) : integer :=
   else
     n
   end end
+-}
+
+
+{-
+fun signed_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
+                _n1: loaded integer, _n2: loaded integer) : loaded integer :=
+  case (_n1, _n2) of
+    | tuple(loaded(n1), loaded(n2)) =>
+        let conv1: integer = conv(ty1, ty1', n1) in
+        let conv2: integer = conv(ty2, ty2', n2) in
+        loaded(catch_exceptional_condition(result_ty, conv1 * conv2))
+    | _ =>
+        undef(Exception_condition)
+  end
+
+
+fun unsigned_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
+                  _n1: loaded integer, _n2: loaded integer) : loaded integer :=
+  case (_n1, _n2) of
+    | (loaded(n1), loaded(n2)) =>
+        let conv1: integer = conv(ty1, ty1', n1) in
+        let conv2: integer = conv(ty2, ty2', n2) in
+        loaded(wrapI(result_ty, conv1 * conv2))
+    | _ =>
+        unspecified(result_ty)
+  end
 -}

@@ -62,6 +62,7 @@ type token =
   | CHAR16_T
   | CHAR32_T
   | INTEGER
+  | FLOATING
   | BOOLEAN
   | POINTER
   | CTYPE
@@ -70,8 +71,6 @@ type token =
   | FUNCTION
   | EFF
   | LIST
-  | CONS
-  | ARRAY
   | TRUE
   | FALSE
   | NOT
@@ -84,9 +83,9 @@ type token =
   | THEN
   | ELSE
   | UNSEQ
-  | WEAK
-  | STRONG
-  | ATOM
+  | LETW
+  | LETS
+  | LETA
   | SAVE
   | RUN
   | RAISE
@@ -130,8 +129,9 @@ type token =
   
   | DQUOTE
   
-  | CASE_LIST
-  | CASE_CTYPE
+  | CASE
+  | OF
+  
   | EQ_GT
 
   | PLUS
@@ -185,6 +185,15 @@ type token =
   | IVSIZEOF
   | IVALIGNOF
   | PCALL
+
+
+  | NIL
+  | CONS
+  | TUPLE
+  | ARRAY
+  | LOADED
+
+
 
 
 (*

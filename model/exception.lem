@@ -60,6 +60,13 @@ val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
 let mapM f = listM (List.map f)
 
 
+val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> t 'a 'msg) -> 'a -> list 'b -> t 'a 'msg
+let rec foldlM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      bind (f a x) (fun z -> foldlM f z xs)
+end
 
 
 
