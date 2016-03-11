@@ -136,9 +136,9 @@ let drive sym_supply file args with_concurrency : execution_result =
           let str_v = String_core.string_of_pexpr
               begin
                 match pe with
-                  | Core.PEval (Core.Vobject (Core.OVinteger ival)) ->
-                      Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) )
+                  | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
+                      Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
+                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
                   | _ ->
                       pe
               end in

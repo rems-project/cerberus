@@ -50,6 +50,7 @@ let keywords =
       
       (* for Core.core_base_type *)
       ("integer",   T.INTEGER  );
+      ("floating",  T.FLOATING  );
       ("boolean",   T.BOOLEAN  );
       ("pointer",   T.POINTER  );
       ("ctype",     T.CTYPE    );
@@ -62,8 +63,6 @@ let keywords =
       
       (* for Core.expr *)
       ("list",   T.LIST     );
-      ("cons",   T.CONS     );
-      ("array",   T.ARRAY     );
       ("true",   T.TRUE);
       ("false",  T.FALSE);
 (*  | Econst of Cmm_aux.constant *)
@@ -87,9 +86,9 @@ let keywords =
 (*  | Eaction of paction 'a *)
 (*  | Eunseq of list (expr 'a) *)
       ("unseq", T.UNSEQ);
-      ("weak", T.WEAK);
-      ("strong", T.STRONG);
-      ("atom", T.ATOM);
+      ("letw", T.LETW);
+      ("lets", T.LETS);
+      ("leta", T.LETA);
       ("save", T.SAVE);
       ("run", T.RUN);
       ("indet", T.INDET);
@@ -133,8 +132,8 @@ let keywords =
       ("consume", T.CONSUME );
       ("acq_rel", T.ACQ_REL );
 
-      ("case_list",   T.CASE_LIST);
-      ("case_ctype",   T.CASE_CTYPE);
+      ("case", T.CASE);
+      ("of",   T.OF);
 
 
 (* TODO: temporary *)
@@ -152,6 +151,14 @@ let keywords =
       
       ("is_unspec", T.IS_UNSPEC);
       ("pcall", T.PCALL);
+      
+      ("Nil",    T.NIL);
+      ("Cons",   T.CONS);
+      ("Tuple",  T.TUPLE);
+      ("Array",  T.ARRAY);
+      ("Loaded", T.LOADED);
+
+      
     ]
 
 let scan_sym lexbuf =

@@ -2211,3 +2211,8 @@ let store lvalue_ty ptr_val mval =
     | Nothing ->
         fail (MerrWIP $ "attempted to store with pointer: " ^ stringFromPointer_value ptr_val)
   end
+
+
+(* TODO: move this up *)
+type mem_constraint =
+  | MC_eq_ival of integer_value * integer_value

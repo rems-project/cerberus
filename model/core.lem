@@ -6,12 +6,13 @@ open import Thread Core_ctype
 
 module Cmm = Cmm_csem
 
-
-(* -- Syntax ---------------------------------------------------------------- *)
+(*
+(TODO C signals)
 type handler_event =
   string (* TODO: fixed ctors? *)
+*)
 
-
+(* Object types (those that may be memory read/stored, hence matching C object types) *)
 type core_object_type =
   | OTy_integer
   | OTy_floating
@@ -22,14 +23,13 @@ type core_object_type =
   | OTy_union of Symbol.t
 
 type core_base_type =
-  | BTy_object of core_object_type
-  | BTy_loaded of core_object_type (* NOTE: same as BTy_object, but has just been loaded from memory so the value may be unspecified *)
   | BTy_unit
   | BTy_boolean
   | BTy_ctype
   | BTy_list of core_base_type
   | BTy_tuple of list core_base_type
-  | BTy_any (* TODO: tmp *)
+  | BTy_object of core_object_type
+  | BTy_loaded of core_object_type (* NOTE: same as BTy_object, but has just been loaded from memory so the value may be unspecified *)
 
 (* Types discriminate between pure (TyBase) and effectful
    expressions (TyEffect) *)
@@ -95,9 +95,11 @@ type polarity =
   | Pos
   | Neg
 
-type name =
-  | Sym of sym
+type generic_name 'sym =
+  | Sym of 'sym
   | Impl of Implementation_.implementation_constant
+
+(*
 declare {coq} rename type name = name_ (* workaround for Lem issue #87 *)
 
 let nameEquality n1 n2 =
@@ -120,50 +122,36 @@ instance (Show name)
     | Impl i  -> "Impl (?)" (* TODO *)
     end
 end
-
-
-
-(*
-type pointer_action =
-  | PtrEq
-  | PtrNe
-  | PtrShift
 *)
 
 
-(* TODO: think about that *)
-(*
-type shift_path =
-  | ShiftArray of nat
-  | ShiftMember of Symbol.t * Cabs.cabs_identifier (* tag sym, member id *)
-*)
-(*  *)
 
-(* Core values *)
-type object_value =
-  | OVsymbolic of Symbolic.symbolic object_value Mem.pointer_value (* symbolicity coming from the concurrency *)
+(* Object values (inhabitants of object types, hence values that can be read/stored) *)
+type generic_object_value 'sym =
+  | OVsymbolic of Symbolic.symbolic (generic_object_value 'sym) Mem.pointer_value (* symbolicity coming from the concurrency *)
   | OVinteger of Mem.integer_value
   | OVfloating of Mem.floating_value
   | OVpointer of Mem.pointer_value
-  | OVarray of list object_value (* Mem.mem_value *)
+  | OVcfunction of generic_name 'sym
+  | OVarray of list (generic_object_value 'sym) (* Mem.mem_value *)
   | OVstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
   | OVunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
-  | OVcfunction of name
 
 
-type value =
-  | Vobject of object_value
-  | Vloaded of object_value
+type generic_value 'sym =
+  | Vconstrained of list (list Mem.mem_constraint * generic_value 'sym)
+  | Vobject of generic_object_value 'sym
+  | Vloaded of generic_object_value 'sym
   | Vunspecified of ctype
   | Vunit
   | Vtrue | Vfalse
   | Vctype of ctype
-  | Vlist of list value
-  | Vtuple of list value
+  | Vlist of core_base_type * list (generic_value 'sym)
+  | Vtuple of list (generic_value 'sym)
 
 
-type ctor =
-  | Cnil         (* : [bTy] *)
+type generic_ctor 'ty =
+  | Cnil of 'ty (* : [bTy] *)
   | Ccons        (* : bTy -> [bTy] -> [bTy] *)
   | Ctuple       (* : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) *)
   | Carray       (* : bTy -> ... -> bTy -> array bTy *)
@@ -171,240 +159,117 @@ type ctor =
   | Civmin       (* : ctype -> integer *)
   | Civsizeof    (* : ctype -> integer *)
   | Civalignof   (* : ctype -> integer *)
-  | Cobject      (* : objTy -> load objTy *)
+  | Cloaded      (* : objTy -> loaded objTy *)
   | Cunspecified (* : ctype -> loaded (integer|floating|pointer|array|struct|union) *)
 
 
+(*
 type pattern =
     list (maybe (sym * core_base_type))
+*)
 
-type case_pattern =
-  | CaseBase of ctor * pattern
-  | CaseCtor of ctor * list case_pattern
-  | CaseWildcard
+type generic_pattern 'ty 'sym =
+  | CaseBase of maybe 'sym
+  | CaseCtor of generic_ctor 'ty * list (generic_pattern 'ty 'sym)
 
 
 (* pure Core expressions *)
-type pexpr =
+type pexpr_ 'ty 'sym =
   (* undefined behaviour and late static error / failed assert *)
   | PEundef of Undefined.undefined_behaviour
-  | PEerror of string * pexpr (* the expression is for debug purpose *)
+  | PEerror of string * generic_pexpr 'ty 'sym (* the expression is for debug purpose *)
 
   (* values *)
-  | PEval of value
+  | PEval of generic_value 'sym
+  | PEconstrained of list (list Mem.mem_constraint * generic_pexpr 'ty 'sym)
+  
   (* names *)
-  | PEsym of (sym * core_base_type) (* TODO: remove the type annotation at some point *)
+  | PEsym of 'sym
   | PEimpl of Implementation_.implementation_constant
   
   (* data (de|con)structors *)
-  | PEctor of ctor * list pexpr
-(*  | PEcase of pexpr * list (ctor * list (maybe (sym * core_base_type)) * pexpr) *)
-  | PEcase of pexpr * list (case_pattern * pexpr)
+  | PEctor of generic_ctor 'ty * list (generic_pexpr 'ty 'sym)
+  | PEcase of generic_pexpr 'ty 'sym * list (generic_pattern 'ty 'sym * generic_pexpr 'ty 'sym)
   
-  (* BEGIN OBSOLETE *)
-  | PEcons of pexpr * pexpr
-  | PEtuple of list pexpr
-(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
-  | PEarray of list pexpr
-  (* END OBSOLETE *)
-  
-  (* list (de|con)structors *)
-  | PEcase_list of pexpr * pexpr * name
-  (* ctype destructor, the arguments are: ctype to destruct, constant
-       in void case, name of functions to call for the remaining cases:
-       basic, array, function, pointer, atomic, struct, union, builtin *)
-  | PEcase_ctype of pexpr * pexpr * name * name * name * name *
-                    name * name * name * name
   (* operators on pointer values *)
-(*  | PEshift of pexpr * shift_path *)
-  | PEarray_shift of pexpr * ctype * pexpr
-  | PEmember_shift of pexpr * Symbol.t * Cabs.cabs_identifier
-
-
-  (* operators on integers *)
-  | PEnot of pexpr
-  | PEop of binop * pexpr * pexpr
+  | PEarray_shift of generic_pexpr 'ty 'sym * ctype * generic_pexpr 'ty 'sym
+  | PEmember_shift of generic_pexpr 'ty 'sym * Symbol.t * Cabs.cabs_identifier
   
-  | PEis_unspec of pexpr
+  (* operators on integers *)
+  | PEnot of generic_pexpr 'ty 'sym
+  | PEop of binop * generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym
   
   (* pure operations provide by the memory layout model *)
-  | PEmemop of Mem.pure_memop * list pexpr
+  | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
   (* these two are annoying *)
-  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
+  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * generic_pexpr 'ty 'sym)
+
   (* call to a pure function *)
-  | PEcall of (name * core_base_type) * list (pexpr * core_base_type) (* TODO: remove the type annot *)
+  | PEcall of generic_name 'sym * list (generic_pexpr 'ty 'sym)
   
-  | PElet of (sym * core_base_type) * pexpr * pexpr
-  | PEif of pexpr * pexpr * pexpr
+  | PElet of generic_pattern 'ty 'sym * generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym
+  | PEif of generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym
   
 (*  | PEvla of ctype * pexpr *)
 
 
   (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
-  | PEis_scalar of pexpr
-  | PEis_integer of pexpr
-  | PEis_signed of pexpr
-  | PEis_unsigned of pexpr
+  | PEis_scalar of generic_pexpr 'ty 'sym
+  | PEis_integer of generic_pexpr 'ty 'sym
+  | PEis_signed of generic_pexpr 'ty 'sym
+  | PEis_unsigned of generic_pexpr 'ty 'sym
 
+and generic_pexpr 'ty 'sym =
+  Pexpr of 'ty * pexpr_ 'ty 'sym
 
-and shift_path =
-  list (ctype * pexpr)
-
-
-
-type expr 'a =
+type generic_expr 'a 'ty 'sym =
   (* pure expression *)
-  | Epure of pexpr
-  
+  | Epure of generic_pexpr 'ty 'sym
   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
-  | Ememop of Mem.memop * list pexpr
-  
+  | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym)
+(*
+(TODO C signals)
   (* these two are to deal with C signals *)
   | Eraise of handler_event
   | Eregister of handler_event * name
-  
+*)
   (* potentially effectful *)
   | Eskip
-  | Elet of (sym * core_base_type) * pexpr * expr 'a
-  | Eif of pexpr * expr 'a * expr 'a
-(*  | Eproc of 'a * name * list pexpr *)
-  | Eproc of 'a * pexpr * list pexpr
-  | Eaction of paction 'a
-  
+  | Elet of generic_pattern 'ty 'sym * generic_pexpr 'ty 'sym * generic_expr 'a 'ty 'sym
+  | Eif of generic_pexpr 'ty 'sym * generic_expr 'a 'ty 'sym * generic_expr 'a 'ty 'sym
+  | Ecase of generic_pexpr 'ty 'sym * list (generic_pattern 'ty 'sym * generic_expr 'a 'ty 'sym)
+  | Eproc of 'a * generic_pexpr 'ty 'sym * list (generic_pexpr 'ty 'sym)
+  | Eaction of generic_paction 'a 'ty 'sym
   (* sequencing operators *)
-  | Eunseq of list (expr 'a)
-
-  | Ewseq of pattern * expr 'a * expr 'a
-  | Esseq of pattern * expr 'a * expr 'a
-  | Easeq of maybe (sym * core_base_type) * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
-  
+  | Eunseq of list (generic_expr 'a 'ty 'sym)
+  | Ewseq of generic_pattern 'ty 'sym * generic_expr 'a 'ty 'sym * generic_expr 'a 'ty 'sym
+  | Esseq of generic_pattern 'ty 'sym * generic_expr 'a 'ty 'sym * generic_expr 'a 'ty 'sym
+  | Easeq of maybe (Symbol.t * core_base_type) * generic_action 'a 'ty 'sym * generic_paction 'a 'ty 'sym (* this ctor doesn't exist at runtine *)
   (* indeterminately-sequenced expressions and boundary *) 
-  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-  | Ebound of nat * expr 'a (* this ctor doesn't exist at runtine *)
-  
+  | Eindet of generic_expr 'a 'ty 'sym (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+  | Ebound of nat * generic_expr 'a 'ty 'sym (* this ctor doesn't exist at runtine *)
   (* Continuation operators *)
   (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
-  | Esave of ksym * list (sym * ctype) * expr 'a
-  | Erun of 'a * ksym * list (sym * pexpr)
-  
-  | Eret of pexpr
-  
+  | Esave of ksym * list (Symbol.t * ctype) * generic_expr 'a 'ty 'sym
+  | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
+  | Ereturn of generic_pexpr 'ty 'sym
   (* Non deterministic choice (resulting from indet expressions) *)
   (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
-  | End of list (expr 'a)
-  
+  | End of list (generic_expr 'a 'ty 'sym)
   (* Thread operators *)
   (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
-  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
+  | Epar of list (generic_expr 'a 'ty 'sym) (* Parallel composition: for cppmem-style composition *)
   | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
-  
-  | Eloc of Loc.t * expr 'a
-
-(*
-type expr 'a =
-  (* values *)
-(*  | Eval of value *)
-  | Eunit
-  | Etrue | Efalse
-  | Elist of list (expr 'a)
-  
-  (* pure expressions *)
-  
-
-  | Econs of expr 'a * expr 'a
-  | Ecase_list of expr 'a * name * name
-  
-  | Econst of Mem.mem_value (* TODO: need to add an "indet value of type ty" *)
-  | Ectype of ctype
-  | Esym of sym
-  | Eimpl of Implementation_.implementation_constant
-  | Etuple of list (expr 'a)
-  | Enot of expr 'a
-  | Eop of binop * expr 'a * expr 'a
-  | Ecall of name * list (expr 'a)
-  
-  | Earray of list (either Mem.mem_value sym) (* TODO: this is just wrong *)
-  
-  (* TODO: think about this (this is pure) *)
-(*  | Eshift of expr 'a * shift_path *)
-  | Eshift of expr 'a * shift_path 'a
-  
-  
-  (* TODO: hack *)
-  | Ecase of expr 'a * name * name * name * name * name * name * name * name * name
-  
-  (* I/O operations *)
-  | Eoutput of string
-  
-  (* undefined behaviour and late static error / failed assert *)
-  | Eundef of Undefined.undefined_behaviour
-  | Eerror of string
-  
-  (* TODO: thing better about these two *)
-  (* TODO: use something other than string *)
-  | Eraise of handler_event (* correspond to the raising of C signal and friends (e.g. exit) *)
-  | Eregister of handler_event * name (* this is for C signal handler registration and friends, the name is that of the procedure to call *)
-(*  | Etry of expr 'a * list (string * expr 'a) *)
-  
-  (* potentialy effectful *)
-  | Eskip
-  | Elet of sym * expr 'a * expr 'a
-  | Eif of expr 'a * expr 'a * expr 'a
-  | Eproc of 'a * name * list (expr 'a) (* Exactely like Ecall except that the body is impure *) (* TODO: discuss whether this is proper *)
-  | Eaction of paction 'a
-  
-  (* sequencing operators *)
-  | Eunseq of list (expr 'a)
-
-  | Ewseq of list (maybe sym) * expr 'a * expr 'a
-  | Esseq of list (maybe sym) * expr 'a * expr 'a
-  | Easeq of maybe sym * action 'a * paction 'a (* this ctor doesn't exist at runtine *)
-  
-  (* indeterminately-sequenced expressions and boundary *) 
-  | Eindet of expr 'a (* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-  | Ebound of nat * expr 'a (* this ctor doesn't exist at runtine *)
-  
-  (* Continuation operators *)
-  (* TODO: may have to add the possibility of storing a number instead of a ctype (for dynamically allocated objects) *)
-  | Esave of ksym * list (sym * ctype) * expr 'a
-  | Erun of 'a * ksym * list (sym * expr 'a)
-  
-  | Eret of expr 'a
-  
-  (* Non deterministic choice (resulting from indet expressions) *)
-  (* TODO: this only exists for the second stage of dynamics (after core_indet) *)
-  | End of list (expr 'a)
-  
-  (* Thread operators *)
-  (* TODO: this ctor is kind of redundant once we add Espawn, since we have Eunseq ... *)
-  | Epar of list (expr 'a) (* Parallel composition: for cppmem-style composition *)
-  | Ewait of Thread.thread_id (* TODO: this will need to have a Core type annotation to allow typecheck ... *)
-
-
-
-(* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
-  | Eis_scalar of expr 'a
-  | Eis_integer of expr 'a
-  | Eis_signed of expr 'a
-  | Eis_unsigned of expr 'a
-
-and shift_path 'a =
-  list (ctype * expr 'a) (* the expression must be a pure integer expression *)
-*)
-
-
-
-
-
+  | Eloc of Loc.t * generic_expr 'a 'ty 'sym
 
 (* the qualification prefixes are for pprint *)
-and action_ =
-  | Create of pexpr * pexpr * Symbol.prefix (* the expr arguments are: alignment requirement, effective type *)
-  | Alloc of pexpr * pexpr * Symbol.prefix  (* the expr arguments are: alignment requirement, space size *)
-  | Kill of pexpr
-  | Store of pexpr * pexpr * pexpr * Cmm.memory_order
-  | Load of pexpr * pexpr * Cmm.memory_order
-  | RMW of pexpr(* ctype *) * pexpr(* object_ptr *) * pexpr(* expected_val *) * pexpr(* desired_val *) * Cmm.memory_order * Cmm.memory_order
+and generic_action_ 'ty 'sym =
+  | Create of generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * Symbol.prefix (* the expr arguments are: alignment requirement, effective type *)
+  | Alloc of generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * Symbol.prefix  (* the expr arguments are: alignment requirement, space size *)
+  | Kill of generic_pexpr 'ty 'sym
+  | Store of generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * Cmm.memory_order
+  | Load of generic_pexpr 'ty 'sym * generic_pexpr 'ty 'sym * Cmm.memory_order
+  | RMW of generic_pexpr 'ty 'sym(* ctype *) * generic_pexpr 'ty 'sym(* object_ptr *) * generic_pexpr 'ty 'sym(* expected_val *) * generic_pexpr 'ty 'sym(* desired_val *) * Cmm.memory_order * Cmm.memory_order
 
 (*
   | CompareExchangeStrong of pexpr * pexpr * pexpr * pexpr * Cmm.memory_order * Cmm.memory_order
@@ -414,58 +279,18 @@ and action_ =
   (* TODO: it annoying (maybe wrong) that these are actions *)
 (*  | Ptr of pointer_action * list pexpr *)
 
-and action 'a  = Action of Loc.t * 'a * action_
-and paction 'a = Paction of polarity * action 'a
+and generic_action 'a 'ty 'sym = Action of Loc.t * 'a * generic_action_ 'ty 'sym
+and generic_paction 'a 'ty 'sym = Paction of polarity * generic_action 'a 'ty 'sym
 
+type name         = generic_name Symbol.t
+type object_value = generic_object_value Symbol.t
+type value        = generic_value Symbol.t
+type ctor         = generic_ctor Symbol.t
+type pattern      = generic_pattern core_base_type Symbol.t
+type pexpr        = generic_pexpr core_base_type Symbol.t
+type expr 'a      = generic_expr 'a core_base_type Symbol.t
+type paction 'a   = generic_paction 'a core_base_type Symbol.t
 
-(* TODO: fill in the '?' *)
-
-(*
-val expr_to_string: forall 'a. expr 'a -> string
-let rec expr_to_string e =
-  match e with
-  | Eunit           -> "Eunit"
-  | Etrue           -> "Etrue"
-  | Efalse          -> "Efalse"
-  | Econst m        -> "Econst (" ^ show m ^ ")"
-  | Elist l         -> "Elist " ^ Show.stringFromList expr_to_string l
-  | Ectype t        -> "Ectype (?)"
-  | Esym sym        -> "Esym (" ^ show sym ^ ")"
-  | Eimpl i         -> "Eimpl (?)"
-  | Etuple l        -> "Etuple " ^ Show.stringFromList expr_to_string l
-  | Enot e2         -> "Enot (" ^ expr_to_string e2 ^ ")"
-  | Eop op e1 e2    -> "Eop (" ^ show op ^ ", " ^ expr_to_string e1 ^ ", " ^ expr_to_string e2 ^ ")"
-  | Ecall n l       -> "Ecall (" ^ show n ^ ", " ^ Show.stringFromList expr_to_string l ^ ")"
-  | Eoutput s       -> "Eoutput " ^ show s 
-  | Eundef un       -> "Eundef (" ^ show un ^ ")"
-  | Eerror str          -> "Eerror " ^ show str
-  | Eskip           -> "Eskip"
-  | Elet sym e1 e2  -> "Elet (?)"
-  | Eif e1 e2 e3    -> "Eif (?)"
-  | Eproc an n l    -> "Eproc (?)" 
-  | Eaction pa      -> "Eaction (?)"
-  | Eunseq l        -> "Eunseq (?)"
-  | Ewseq l e1 e2   -> "Ewseq (?)"
-  | Esseq l e1 e2   -> "Esseq (?)"
-  | Easeq sym a pa  -> "Easeq (?)" 
-  | Eindet e2       -> "Eindet (?)" 
-  | Ebound n e2     -> "Ebound (?)" 
-  | Esave ksym l e2 -> "Esave (?)"
-  | Erun an ksym l  -> "Erun (?)"
-  | Eret e2         -> "Eret (" ^ expr_to_string e2 ^ ")"
-  | End l           -> "End (?)"
-  | Epar l          -> "Epar (?)" 
-  | Ewait tid       -> "Ewait (?)"
-  | Eis_scalar e2   -> "Eis_scalar (?)"
-  | Eis_integer e2  -> "Eis_integer (?)"
-  | Eis_signed e2   -> "Eis_signed (?)"
-  | Eis_unsigned e2 -> "Eis_unsigned (?)"
-  end
-*)
-
-instance forall 'a. (Show expr 'a)
-  let show = fun _ -> "WIP: show Core.expr"
-end
 
 
 
@@ -475,7 +300,7 @@ end
 (* TODO: don't we need any impl proc? *)
 type impl_decl =
   | Def  of core_base_type * pexpr
-  | IFun of core_base_type * list (sym * core_base_type) * pexpr
+  | IFun of core_base_type * list (Symbol.t * core_base_type) * pexpr
 type impl = map Implementation_.implementation_constant impl_decl
 (*
 type impl_decl =
@@ -486,18 +311,18 @@ type impl = map Impl_types.impl_name impl_decl
 
 
 type fun_map_decl 'a =
-  | Fun  of core_base_type * list (sym * core_base_type) * pexpr
-  | Proc of core_base_type * list (sym * core_base_type) * expr 'a
+  | Fun  of core_base_type * list (Symbol.t * core_base_type) * pexpr
+  | Proc of core_base_type * list (Symbol.t * core_base_type) * expr 'a
 
-type fun_map 'a = map sym (fun_map_decl 'a)
+type fun_map 'a = map Symbol.t (fun_map_decl 'a)
 
 
 (* a Core file is just a set of named functions *)
 type file 'a = <|
-  main   : sym;
+  main   : Symbol.t;
   stdlib : fun_map 'a;
   impl   : impl;
-  globs  : list (sym * core_type * expr 'a);
+  globs  : list (Symbol.t * core_type * expr 'a);
   funs   : fun_map 'a;
 |>
 declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
@@ -522,7 +347,7 @@ type continuation_element 'a =
 type continuation 'a = list (continuation_element 'a)
 
 
-type labeled_continuation 'a = list (sym * ctype) * expr 'a
+type labeled_continuation 'a = list (Symbol.t * ctype) * expr 'a
 
 
 type stack 'a =

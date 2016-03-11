@@ -193,3 +193,7 @@ let store                               = Impl.store
 
 val eval_integer_value: integer_value -> maybe integer
 let eval_integer_value = Impl.eval_integer_value
+
+
+(* TODO: move this up *)
+type mem_constraint = Impl.mem_constraint

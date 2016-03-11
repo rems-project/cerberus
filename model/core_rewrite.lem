@@ -4,7 +4,7 @@ open import Global Core Core_aux Core_ctype
 import Symbol Symbolic AilTypes Mem
 
 module ATypes = AilTypes
-
+module Caux = Core_aux
 
 val pp_pexpr: pexpr -> string
 declare ocaml target_rep function pp_pexpr = `String_core.string_of_pexpr`
@@ -224,8 +224,9 @@ let rec remove_unseqs expr =
           | _ ->
               Nothing
         end) (Just []) es in
-      maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (PEtuple pes)) pes_opt
+      maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple pes)) pes_opt
   
+(* TODO
   | Ewseq pat (Eunseq es) e2 ->
       (* ys is the assoc list of symbolic names, values that can be substituted away *)
       let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
@@ -250,10 +251,12 @@ let rec remove_unseqs expr =
             let (_as', es') = List.unzip $ List.reverse rev_xs in
             Ewseq _as' (Eunseq es') e2'
       end
+*)
 
   | Ewseq _as e1 e2 ->
       Ewseq _as (remove_unseqs e1) (remove_unseqs e2)
   
+(* TODO
   | Esseq _as (Eunseq es) e2 ->
       let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
         match to_pure e with
@@ -277,6 +280,7 @@ let rec remove_unseqs expr =
             let (_as', es') = List.unzip $ List.reverse rev_xs in
             Esseq _as' (Eunseq es') e2'
       end
+*)
   
   | Esseq _as e1 e2 ->
       Esseq _as (remove_unseqs e1) (remove_unseqs e2)
@@ -438,7 +442,7 @@ let rec remove_dead_aux expr =
     | Esave of ksym * list (sym * ctype) * expr 'a
     | Erun of 'a * ksym * list (sym * expr 'a)
 *)
-    | Eret _ ->
+    | Ereturn _ ->
         Right expr
     | _ ->
         Left expr
@@ -530,26 +534,21 @@ let in_minimal_range ty n =
   end
 
 
-let rec remove_conv_int_pexpr pexpr =
-  match pexpr with
+val     remove_conv_int_pexpr: pexpr -> pexpr
+let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
+  Pexpr bTy match _pe with
     | PEundef _ ->
-        pexpr
+        _pe
     | PEerror str pe ->
         PEerror str (remove_conv_int_pexpr pe)
     | PEval _ ->
-        pexpr
+        _pe
     | PEsym _ ->
-        pexpr
+        _pe
     | PEimpl _ ->
-        pexpr
+        _pe
     | PEctor ctor pes ->
         PEctor ctor (List.map remove_conv_int_pexpr pes)
-    | PEcons pe1 pe2 ->
-        PEcons (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
-    | PEcase_list pe nm1 nm2 ->
-        PEcase_list (remove_conv_int_pexpr pe) nm1 nm2
-    | PEcase_ctype pe nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9 ->
-        PEcase_ctype (remove_conv_int_pexpr pe) nm1 nm2 nm3 nm4 nm5 nm6 nm7 nm8 nm9
     | PEarray_shift pe1 ty pe2 ->
         PEarray_shift (remove_conv_int_pexpr pe1) ty (remove_conv_int_pexpr pe2)
     | PEmember_shift pe tag_sym memb_ident ->
@@ -558,45 +557,38 @@ let rec remove_conv_int_pexpr pexpr =
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
         PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
-    | PEis_unspec pe ->
-        PEis_unspec (remove_conv_int_pexpr pe)
     | PEmemop memop pes ->
         PEmemop memop (List.map remove_conv_int_pexpr pes)
-    | PEtuple pes ->
-        PEtuple (List.map remove_conv_int_pexpr pes)
-    | PEarray _ ->
-        (* TODO *)
-        pexpr
     | PEstruct _ _ ->
         (* TODO *)
-        pexpr
-    | PEcall nm_bTy pe_bTys ->
-        let pe_bTys' = List.map (fun (pe, bTy) -> (remove_conv_int_pexpr pe, bTy)) pe_bTys in
-        match (fst nm_bTy, pe_bTys') with
+        _pe
+    | PEcall nm pes ->
+        let pes' = List.map remove_conv_int_pexpr pes in
+        match (nm, pes') with
           (* TODO: hack !!!!!!!!! *)
-          | (Sym (Symbol.Symbol _ (Just "conv_int")), [(pe_ty, _); (pe_n, _)]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
-                | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
+                | (Just (_, Vctype ty), Just (_, ((Vobject (OVinteger ival)) as cval))) ->
                     match Mem_aux.integerFromIntegerValue ival with
                       | Just n ->
                           if in_minimal_range ty n then
                             PEval cval
                           else
-                            PEcall nm_bTy pe_bTys'
+                            PEcall nm pes'
                       | Nothing ->
-                          PEcall nm_bTy pe_bTys'
+                          PEcall nm pes'
                     end
                 | _ ->
-                    PEcall nm_bTy pe_bTys'
+                    PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
               end
-          | (Sym (Symbol.Symbol _ (Just "conv")), [(pe_ty1, _); (pe_ty2, _); (pe_n, _)]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _pe_n]) ->
               if pe_ty1 = pe_ty2 then
-                pe_n
+                _pe_n
               else
-                PEcall nm_bTy pe_bTys'
+                PEcall nm pes'
           | _ ->
-              PEcall nm_bTy pe_bTys'
+              PEcall nm pes'
         end
     | PElet sym pe1 pe2 ->
         PElet sym (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
@@ -618,10 +610,12 @@ let rec remove_conv_int expr =
         Epure (remove_conv_int_pexpr pe)
     | Ememop memop pes ->
         Ememop memop (List.map remove_conv_int_pexpr pes)
+(*
     | Eraise _ ->
         expr
     | Eregister _ _ ->
         expr
+*)
     | Eskip ->
         expr
     | Elet sym pe1 e2 ->
@@ -648,8 +642,8 @@ let rec remove_conv_int expr =
         Esave ksym sym_tys (remove_conv_int e)
     | Erun () ksym sym_pes ->
         Erun () ksym (List.map (fun (sym, pe) -> (sym, remove_conv_int_pexpr pe)) sym_pes)
-    | Eret pe ->
-        Eret (remove_conv_int_pexpr pe)
+    | Ereturn pe ->
+        Ereturn (remove_conv_int_pexpr pe)
     | End es ->
         End (List.map remove_conv_int es)
     | Epar es ->
@@ -711,22 +705,25 @@ let rec sequentialise_creates_kills expr =
     | Eunseq es ->
         if List.all is_kill es then
           List.foldr (fun e acc ->
-            Esseq [] e acc
+            Esseq (CaseBase Nothing) e acc
           ) Eskip es
         else
           Eunseq (List.map sequentialise_creates_kills es)
     
+(* TODO
     | Ewseq _as ((Eunseq es1) as e1) e2 ->
         if List.all is_create es1 then
           List.foldr (fun (sym_opt, e) acc ->
-            Ewseq [sym_opt] e acc
+            Ewseq (CaseBase sym_opt) e acc
           ) (sequentialise_creates_kills e2) (zip _as es1)
         else
           Ewseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+*)
     
     | Ewseq _as e1 e2 ->
         Ewseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
     
+(* TODO
     | Esseq _as ((Eunseq es1) as e1) e2 ->
         if List.all is_create es1 then
           List.foldr (fun (sym_opt, e) acc ->
@@ -734,6 +731,7 @@ let rec sequentialise_creates_kills expr =
           ) (sequentialise_creates_kills e2) (zip _as es1)
         else
           Esseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+*)
     | Esseq _as e1 e2 ->
         Esseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
     
@@ -828,9 +826,9 @@ let rec pure_propagation expr =
 let rec pure_propagation2 expr =
   let to_pure' e =
     match to_pure e with
-      | Just (PEundef _) ->
+      | Just (Pexpr _ (PEundef _)) ->
           Nothing
-      | Just (PEerror _ _) ->
+      | Just (Pexpr _ (PEerror _ _)) ->
           Nothing
       | Just pe ->
           Just pe
@@ -851,8 +849,8 @@ let rec pure_propagation2 expr =
     | Elet sym pe1 e2 ->
         let e2' = pure_propagation2 e2 in
         match to_pure' e2' with
-          | Just pe2 ->
-              Epure (PElet sym pe1 pe2)
+          | Just (Pexpr bTy _ as pe2) ->
+              Epure (Pexpr bTy (PElet sym pe1 pe2))
           | Nothing ->
               Elet sym pe1 e2'
         end
@@ -860,8 +858,8 @@ let rec pure_propagation2 expr =
         let e2' = pure_propagation2 e2 in
         let e3' = pure_propagation2 e3 in
         match (to_pure' e2', to_pure' e3') with
-          | (Just pe2, Just pe3) ->
-              Epure (PEif pe1 pe2 pe3)
+          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
+              Epure (Pexpr bTy (PEif pe1 pe2 pe3))
           | (Just pe2, Nothing) ->
               Eif pe1 (Epure pe2) e3'
           | (Nothing, Just pe3) ->
@@ -874,7 +872,7 @@ let rec pure_propagation2 expr =
         let es' = List.map pure_propagation2 es in
         match to_pures' es' with
           | Just pes ->
-              Epure (PEtuple pes)
+              Epure (Caux.mk_tuple pes)
           | Nothing ->
               Eunseq es'
         end

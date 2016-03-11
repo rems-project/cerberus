@@ -630,7 +630,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 end
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
-                match Core_aux.objectValueFromMemValue mval with
+                match snd (Core_aux.objectValueFromMemValue mval) with
 (*
                   | Core.Vunspecified _ ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))

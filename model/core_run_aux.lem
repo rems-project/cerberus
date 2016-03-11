@@ -72,12 +72,14 @@ let rec add_to_sb p_aids expr =
       | Ememop _ _ ->
           (* no change *)
           expr
+(*
       | Eraise _ ->
           (* no change *)
           expr
       | Eregister _ _ ->
           (* no change *)
           expr
+*)
       | Eskip ->
           (* no change *)
           expr
@@ -109,7 +111,7 @@ let rec add_to_sb p_aids expr =
           Esave k a_tys (add_to_sb p_aids e)
       | Erun annots k a_vs ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-      | Eret _ ->
+      | Ereturn _ ->
           (* no change *)
           expr
       | End es ->
@@ -166,12 +168,14 @@ let rec add_to_asw aids expr =
       | Ememop _ _ ->
           (* no change *)
           expr
+(*
       | Eraise _ ->
           (* no change *)
           expr
       | Eregister _ _ ->
           (* no change *)
           expr
+*)
       | Eskip ->
           (* no change *)
           expr
@@ -199,7 +203,7 @@ let rec add_to_asw aids expr =
           Esave k a_tys (add_to_asw aids e)
       | Erun annots k a_vs ->
           Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
-      | Eret _ ->
+      | Ereturn _ ->
           (* no change *)
           expr
       | End es ->
