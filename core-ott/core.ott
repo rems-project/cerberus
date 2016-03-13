@@ -130,8 +130,8 @@ embed {{ lem
 
 grammar
  polarity :: '' ::= {{ com memory action polarities }}
-   | Pos   :: ::  Pos {{ com TODO: explain a bit }}
-   | Neg   :: ::  Neg {{ com TODO: explain a bit }}
+   | Pos   :: ::  Pos {{ com these are sequenced by both "let weak" and "let strong" }}
+   | Neg   :: ::  Neg {{ com only sequenced by "let strong" }}
 
 
 metavar 
