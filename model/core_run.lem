@@ -14,6 +14,10 @@ open import Thread Driver_util Core_run_aux Errors
 
 (* TODO: tmp*) import Defacto_memory_types
 
+
+module Caux = Core_aux
+
+
 module Cmm = Cmm_csem
 
 
@@ -59,11 +63,11 @@ let call_function file f_nm arg_cvals =
                                                  Implementation_.string_of_implementation_constant f))
         end
   end >>= function
-    | Fun _ params body_pe ->
+    | Fun _ params (Pexpr annot _ as body_pe) ->
         if List.length params <> List.length arg_cvals then
           error "$ \"CALL #args <> #params, params= \" ^ Boot.pp_core_params params"
         else
-          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (PEval cval) acc) body_pe params arg_cvals
+          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
     | Proc _ _ _ ->
         error "Core_run.call_function, called on a Proc"
   end
@@ -73,30 +77,30 @@ let call_function file f_nm arg_cvals =
 
 
 
-val call_proc: Core.file core_run_annotation -> Core.sym -> list Core.value ->
+val call_proc: Core.file core_run_annotation -> Symbol.t -> list Core.value ->
                Exception.t (Core.expr core_run_annotation) core_run_error
 let call_proc file psym cvals =
-  let params_body_opt =
+  let bTy_params_body_opt =
     match Map.lookup psym file.stdlib with
-      | Just (Proc _ params body) ->
-          Just (params, body)
+      | Just (Proc bTy params body) ->
+          Just (bTy, params, body)
       | _ ->
           match Map.lookup psym file.funs with
-            | Just (Proc _ params body) ->
-                Just (params, body)
+            | Just (Proc bTy params body) ->
+                Just (bTy, params, body)
             | _ ->
                 Nothing
           end
     end in
-  match params_body_opt with
-    | Just (params, body) ->
+  match bTy_params_body_opt with
+    | Just (bTy, params, body) ->
         if List.length params <> List.length cvals then
           error $ "[Core_run.call_proc] wrong number of args applied to `" ^ show psym  ^ "' |args|=" ^
           show (List.length cvals) ^ "expecting: " ^ show (List.length params)
 
 (* TODO[newLem] ^ Boot.pp_core_expr (Esym psym) ^ "'" *)
         else
-          Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym sym (PEval cval) acc) body params cvals)
+          Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym sym (Pexpr bTy (PEval cval)) acc) body params cvals)
     | Nothing ->
         Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
@@ -117,11 +121,13 @@ let inline (>>) m f = m >>= fun _ -> f
 
 let rec resolve_concur_sym sym concur_sym_map seen_syms =
   match Map.lookup sym concur_sym_map with
-    | Just (Vsymbolic (Symbolic.SYMBsym _ sym')) ->
+(* TODO CONCUR
+  | Just (Vobject (OVsymbolic (Symbolic.SYMBsym _ sym'))) ->
         if List.elem sym' seen_syms then
           Nothing
         else
           resolve_concur_sym sym' concur_sym_map (sym' :: seen_syms)
+*)
     | Just cval ->
         Just cval
     | Nothing ->
@@ -131,14 +137,110 @@ let rec resolve_concur_sym sym concur_sym_map seen_syms =
 
 
 
+
+(*
+            match cval with
+              | Vlist [] ->
+                  
+              | Vlist cvals ->
+                  
+              | Vtuple cvals ->
+
+  | Vtuple of list value
+  | Vctype of ctype
+(*  | Vconst of Mem.mem_value *)
+  | Vsymbolic of Symbolic.symbolic value Mem.pointer_value (* symbolicity coming from the concurrency *)
+  
+  | Vunspecified of ctype
+  | Vinteger of Mem.integer_value
+  | Vfloating of string
+  | Vpointer of Mem.pointer_value
+  | Varray of list value (* Mem.mem_value *)
+  | Vstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value)
+  | Vunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value
+
+(*
+of pexpr * list (case_pattern * pexpr)
+
+type case_pattern =
+  | CaseBase of ctor * pattern
+  | CaseCtor of ctor * list case_pattern
+  | CaseWildcard
+*)
+*)
+
+(* TODO
+let rec lookup_case_pattern ctor = function
+  | [] ->
+      Nothing
+  | (CaseBase ctor' pat, pe) :: cpat_pes' ->
+      if ctor = ctor' then
+        Just (pat, pe)
+      else
+        lookup_case_pattern ctor cpat_pes'
+(*
+  | (CaseCtor ctor' cpats, p) ->
+      if ctor = ctor' then
+        
+*)
+end
+*)
+
+val subst_syms_opt: list (maybe (Symbol.t * Core.core_base_type)) -> list Core.value -> Core.pexpr -> Core.pexpr
+let subst_syms_opt sym_ty_opts cvals pe =
+  List.foldl (fun acc (sym_ty_opt, cval) ->
+    maybe acc (fun (sym, bTy) -> subst_sym_pexpr sym (Pexpr bTy (PEval cval)) acc) sym_ty_opt
+  ) pe (List.zip sym_ty_opts cvals)
+
+(*
+val     core_case: Core.value -> list (Core.case_pattern * Core.pexpr) -> maybe (Core.pexpr)
+let rec core_case cval cpat_pes =
+  match cval with
+    | Vlist bTy [] ->
+        match lookup_case_pattern (Cnil bTy) cpat_pes with
+          | Just ([], body_pe) ->
+              Just body_pe
+          | Nothing ->
+              Nothing
+        end
+    | Vlist bTy (cval'::cvals') ->
+        match lookup_case_pattern (Ccons bTy) cpat_pes with
+          | Just (pat, body_pe) ->
+              Just (subst_syms_opt pat [cval'; Vlist bTy cvals'] body_pe)
+          | Nothing ->
+              Nothing
+        end
+(*
+        
+    | Vtuple cvals ->
+        
+*)
+  end
+*)
+
+
 val     core_eval: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                   map Symbol.t Core.value -> bool -> Core.pexpr ->
+                   map Symbol.t Core.object_value -> bool -> Core.pexpr ->
                    EU.t Core.pexpr core_run_error
-let rec core_eval loc mem_st file concur_sym_map inside_if = function
-  | PEundef ub ->
-      Exception.return (Undefined.undef [ub])
-  | PEerror str pe ->
-      Exception.return (Undefined.error loc (str ^ " ==> " ^ stringFromPexpr pe))
+let rec core_eval loc mem_st file concur_sym_map inside_if (Pexpr bTy _pe as pexpr) =
+  match _pe with
+(*
+    | PEconstrained xs ->
+val     foldrM: forall 'a 'b 'msg. ('a -> 'b -> t 'b 'msg) -> 'b -> list 'a -> t 'b 'msg
+
+      EU.foldrM (fun (cs, pe) acc ->
+        core_eval loc mem_st file concur_sym_map inside_if pe >>= function
+          | PEval (Vconstrained xs')
+        end
+      ) xs >>= fun pes' ->
+*)
+    | _ ->
+        error "WIP: core_eval"
+(*
+    | PEundef ub ->
+        Exception.return (Undefined.undef loc [ub])
+    | PEerror str pe ->
+        Exception.return (Undefined.error loc (str ^ " ==> " ^ stringFromPexpr pe))
 
 (*
   | (PEval (Vsymbolic (Symbolic.SYMBsym _ sym)) as pexpr) ->
@@ -150,15 +252,18 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
             pexpr
       end
 *)
-  | (PEval (Vsymbolic symb) as pexpr) ->
+(*
+TODO: CONCUR
+  | (PEval (Vobject (OVsymbolic symb)) as pexpr) ->
       match Core_aux.pexprFromSymbolic concur_sym_map symb with
         | Just pe ->
             EU.return pe
         | Nothing ->
             EU.return pexpr
       end
+*)
 
-  | (PEval _ as pexpr) ->
+  | PEval _ ->
 (* TODO:
     match expr with
       | Econst (Mem.MVinteger symb) ->
@@ -175,7 +280,7 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
     end
 *)
       EU.return pexpr
-  | (PEsym sym as pexpr) ->
+  | PEsym sym ->
       if inside_if then
         EU.return pexpr
       else
@@ -191,8 +296,13 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
   | PEctor ctor pes ->
       EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->
       match (ctor, valueFromPexprs pes') with
-        | (Clist, Just [cval1; Vlist cvals]) ->
-              EU.return $ PEval (Vlist (cval1 :: cvals))
+        | (Cnil bTy, Just []) ->
+            EU.return $ PEval (Vlist bTy [])
+        | (Ccons, Just [cval1; Vlist bTy' cvals]) ->
+            if bTy <> bTy' then
+              EU.fail (Illformed_program "illtyped operand for Ccons")
+            else
+              EU.return $ PEval (Vlist bTy (cval1 :: cvals))
         | (Ctuple, Just cvals) ->
               EU.return $ PEval (Vtuple cvals)
 (*
@@ -202,46 +312,58 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
         | (Civmax, Just [Vctype ty]) ->
             match Core_ctype.unatomic ty with
               | (Core_ctype.Basic (AilTypes.Integer ity)) ->
-                  EU.return $ PEval (Vinteger (Mem.max_ival ity))
+                  EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
               | _ ->
                   error ("Core_run ivmax" ^
-                             Boot.pp_core_expr (Core.Epure (Core.PEval (Vctype ty)) : Core.expr unit))
+                             Boot.pp_core_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
             end
         | (Civmin, Just [Vctype ty]) ->
             match Core_ctype.unatomic ty with
               | (Core_ctype.Basic (AilTypes.Integer ity)) ->
-                  EU.return $ PEval (Vinteger (Mem.min_ival ity))
+                  EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
               | _ ->
                   error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^
-                             Boot.pp_core_expr (Core.Epure (Core.PEval (Vctype ty)) : Core.expr unit))
+                             Boot.pp_core_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
             end
         | (Civsizeof, Just [Vctype ty]) ->
-            EU.return $ PEval (Vinteger (Mem.sizeof_ival ty))
+            EU.return $ PEval (Vobject (OVinteger (Mem.sizeof_ival ty)))
         | (Civalignof, Just [Vctype ty]) ->
-            EU.return $ PEval (Vinteger (Mem.alignof_ival ty))
+            EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
+
+        | (Cunspecified, Just [Vctype ty]) ->
+            EU.return $ PEval (Vunspecified ty)
+
         
         | (_, Just _) ->
-            EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^
-                                         Boot.pp_core_expr (Epure (PEctor ctor pes') : Core.expr unit))
+            EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " (*^
+                                         Boot.pp_core_expr (Epure (PEctor ctor pes') : Core.expr unit) *))
         | (_, Nothing) ->
             EU.return $ PEctor ctor pes'
       end
 
-  
-  | PEcons pe1 pe2 ->
-      core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
-      core_eval loc mem_st file concur_sym_map inside_if pe2 >>= fun pe2' ->
-      match (pe1', pe2') with
-        | (PEval cval1, PEval cval2) ->
-            match cval2 with
-              |  Vlist cvals ->
-                  EU.return $ PEval (Vlist (cval1 :: cvals))
-              | _ ->
-                  EU.fail $ Illformed_program "PEcons: second operand should be a list"
+(*  
+  | PEcase pe cpats =
+      core_eval loc mem_st file concur_sym_map inside_if pe >>= function ->
+        | PEval cval ->
+            match core_case cval cpats with
+              | Just body_pe ->
+                  EU.return body_pe'
+              | Nothing ->
+                  EU.fail $ Illformed_program "PEcase: first operand should be caseable"
             end
-        | _ ->
-            EU.return $ PEcons pe1' pe2'
+        | pe' ->
+            EU.return $ PEcase pe' cpats
       end
+*)
+
+
+
+
+
+
+  
+(*
+TODO:
   | PEcase_list pe pe_nil nm_cons ->
       core_eval loc mem_st file concur_sym_map inside_if pe >>= function
         | PEval (Vlist []) ->
@@ -262,7 +384,7 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
               | ((Basic _) as ty) ->
                   EU.return $ PEcall nm_basic [PEval (Vctype ty)]
               | Array elem_ty (Just n) ->
-                  EU.return $ PEcall nm_array [PEval (Vctype elem_ty); PEval (Vinteger (Mem.integer_ival n))]
+                  EU.return $ PEcall nm_array [PEval (Vctype elem_ty); PEval (Vobject (OVinteger (Mem.integer_ival n)))]
               | Array _ Nothing ->
                   error "WIP: Core_run.core_eval PEcase_ctype, Array Nothing"
               | Function return_ty qs_tys is_variadic ->
@@ -299,13 +421,14 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
         | pe' ->
             EU.return $ PEcase_ctype pe' pe_void nm_basic nm_array nm_fun nm_ptr nm_atom nm_struct nm_union nm_builtin
       end
+*)
 
   | PEarray_shift pe1 ty pe2 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
       core_eval loc mem_st file concur_sym_map inside_if pe2 >>= fun pe2' ->
       match (pe1', pe2') with
-        | (PEval (Vpointer ptr_val), PEval (Vinteger ival)) ->
-            EU.return $ PEval (Vpointer (Mem.array_shift_ptrval ptr_val ty ival))
+        | (PEval (Vobject (OVpointer ptr_val)), PEval (Vobject (OVinteger ival))) ->
+            EU.return $ PEval (Vobject (OVpointer (Mem.array_shift_ptrval ptr_val ty ival)))
         | (PEval _, PEval _) ->
             EU.fail $ Illformed_program ("PEarray_shift: type error ==> " ^ Boot.pp_core_expr (Epure (PEarray_shift pe1' ty pe2') : Core.expr unit))
         | _ ->
@@ -314,49 +437,15 @@ let rec core_eval loc mem_st file concur_sym_map inside_if = function
   
   | PEmember_shift pe tag_sym memb_ident ->
       core_eval loc mem_st file concur_sym_map inside_if pe >>= function
-        | PEval (Vpointer ptr_val) ->
-            EU.return $ PEval (Vpointer (Mem.member_shift_ptrval ptr_val tag_sym memb_ident))
-        | PEval (Vsymbolic symb) ->
-            EU.return $ PEval (Vsymbolic (Symbolic.SYMBmember_shift symb tag_sym memb_ident))
+        | PEval (Vobject (OVpointer ptr_val)) ->
+            EU.return $ PEval (Vobject (OVpointer (Mem.member_shift_ptrval ptr_val tag_sym memb_ident)))
+        | PEval (Vobject (OVsymbolic symb)) ->
+            EU.return $ PEval (Vobject (OVsymbolic (Symbolic.SYMBmember_shift symb tag_sym memb_ident)))
         | (PEval _ as pe') ->
             EU.fail $ Illformed_program ("PEmember_shift: type error ==> " ^ Boot.pp_core_expr (Epure (PEmember_shift pe' tag_sym memb_ident) : Core.expr unit))
         | pe' ->
             EU.return $ PEmember_shift pe' tag_sym memb_ident
       end
-(*
-KKKKK NOW
-
-  | PEshift pe ty_pes ->
-      core_eval file inside_if pe >>= fun pe' ->
-      match valueFromPexpr pe' with
-        | Just (Vpointer ptr_val as cval) ->
-            EU.foldM (fun _acc (ty, pe) ->
-              core_eval file inside_if pe >>= fun pe' ->
-              match (valueFromPexpr pe', _acc) with
-                | (Just (Vinteger ival), Left acc) ->
-                    (* TODO: Vunspecified *)
-                    EU.return $ Left ((ty, ival) :: acc)
-                | (Just (Vinteger _ as cval), Right acc) ->
-                    EU.return $ Right ((ty, PEval cval) :: acc)
-                | (Just _, _) ->
-                    EU.fail $ Illformed_program "PEshift: the expression in the shift path should be integers"
-                | (Nothing, Left ivals) ->
-                    EU.return $ Right ((ty, pe') :: List.map (fun (ty, ival) -> (ty, PEval (Vinteger ival))) ivals)
-                | (Nothing, Right acc) ->
-                    EU.return $ Right ((ty, pe') :: acc)
-              end
-            ) (Left []) ty_pes >>= function
-              | Left rev_ty_ivals ->
-                  EU.return $ PEval (Vpointer (Mem.shift_ptrval ptr_val (List.reverse rev_ty_ivals)))
-              | Right rev_ty_pes' ->
-                  EU.return $ PEshift (PEval cval) (List.reverse rev_ty_pes')
-            end
-        | Just _ ->
-            EU.fail $ Illformed_program ("PEshift: first operand should be a pointer")
-        | Nothing ->
-            EU.return $ PEshift pe' ty_pes
-      end
-*)
 
   | PEnot pe ->
       core_eval loc mem_st file concur_sym_map inside_if pe >>= function
@@ -364,8 +453,8 @@ KKKKK NOW
             EU.return $ PEval Vfalse
         | PEval Vfalse ->
             EU.return $ PEval Vtrue
-        | PEval (Vsymbolic symb) ->
-            EU.return $ PEval (Vsymbolic (Symbolic.SYMBnot symb))
+        | PEval (Vobject (OVsymbolic symb)) ->
+            EU.return $ PEval (Vobject (OVsymbolic (Symbolic.SYMBnot symb)))
         | PEval _ ->
             EU.fail $ Illformed_program "PEnot: operand should be a boolean"
         | pe' ->
@@ -375,125 +464,69 @@ KKKKK NOW
   | PEop binop pe1 pe2 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
       core_eval loc mem_st file concur_sym_map inside_if pe2 >>= fun pe2' ->
-      
-      let to_wrapped_ival = function
-        | Vunspecified ty ->
-            Just (Left ty)
-        | Vinteger ival ->
-            Just (Right ival)
-        | _ ->
-            Nothing
-      end in
-      
       match (binop, valueFromPexpr pe1', valueFromPexpr pe2') with
-        | (OpEq, Just (Vsymbolic symb1), Just cval2) ->
-            EU.return (PEval (Vsymbolic (Symbolic.make_op Symbolic.Eq symb1 (Symbolic.SYMBconst cval2))))
-        
+        (* Ctype equality *)
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
         
-        | (OpEq, Just cval1, Just cval2) ->
-            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
-              | (Just wival1, Just wival2) ->
-                  match Mem.eq_ival mem_st Symbolic.Constraints_TODO wival1 wival2 with
-                    | Just b ->
-                        EU.return (PEval (if b then Vtrue else Vfalse))
-                    | Nothing ->
-                        (* the current constraints allow both outcomes *)
-                        error ("WIP: symbolic integer_value equality ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
-                  end
-              | _ ->
-                  EU.fail $ Illformed_program "PEop OpEq"
-            end
-
-        | (OpLt, Just cval1, Just cval2) ->
-            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
-              | (Just wival1, Just wival2) ->
-                  match Mem.lt_ival Symbolic.Constraints_TODO wival1 wival2 with
-                    | Just b ->
-                        EU.return (PEval (if b then Vtrue else Vfalse))
-                    | Nothing ->
-                        (* the current constraints allow both outcomes *)
-                        error ("WIP: symbolic integer_value less-than ==> " ^
-                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
-                  end
+        (* Integer equality *)
+        | (OpEq, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+            match Mem.eq_ival mem_st Symbolic.Constraints_TODO ival1 ival2 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value equality ==> " ^ Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         
-        | (OpLe, Just cval1, Just cval2) ->
-            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
-              | (Just wival1, Just wival2) ->
-                  match Mem.le_ival Symbolic.Constraints_TODO wival1 wival2 with
-                    | Just b ->
-                        EU.return (PEval (if b then Vtrue else Vfalse))
-                    | Nothing ->
-                        (* the current constraints allow both outcomes *)
-                        error ("WIP: symbolic integer_value less_equal-than ==> " ^
-                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
-                  end
+        (* NOTE: this is for the concurrency *)
+        | (OpEq, Just (Vobject (OVsymbolic symb1)), Just (Vobject oval2)) ->
+            EU.return (PEval (Vobject (OVsymbolic (Symbolic.make_op Symbolic.Eq symb1 (Symbolic.SYMBconst oval2)))))
+
+
+        | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+            match Mem.lt_ival Symbolic.Constraints_TODO ival1 ival2 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value less-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         
-        | (OpGe, Just cval1, Just cval2) ->
-            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
-              | (Just wival1, Just wival2) ->
-                  (* TODO CHECK *)
-                  match Mem.le_ival Symbolic.Constraints_TODO wival2 wival1 with
-                    | Just b ->
-                        EU.return (PEval (if b then Vtrue else Vfalse))
-                    | Nothing ->
-                        (* the current constraints allow both outcomes *)
-                        error ("WIP: symbolic integer_value greater_equal-than ==> " ^
-                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
-                  end
+        | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+            match Mem.le_ival Symbolic.Constraints_TODO ival1 ival2 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value less_equal-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         
-        | (OpGt, Just cval1, Just cval2) ->
-            match (to_wrapped_ival cval1, to_wrapped_ival cval2) with
-              | (Just wival1, Just wival2) ->
-                  (* TODO CHECK *)
-                  match Mem.lt_ival Symbolic.Constraints_TODO wival2 wival1 with
-                    | Just b ->
-                        EU.return (PEval (if b then Vtrue else Vfalse))
-                    | Nothing ->
-                        (* the current constraints allow both outcomes *)
-                        error ("WIP: symbolic integer_value greater-than ==> " ^
-                               Boot.pp_core_expr ((Epure (PEop binop (PEval cval1) (PEval cval2))) : Core.expr unit))
-                  end
+        | (OpGe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+            (* TODO CHECK *)
+            match Mem.le_ival Symbolic.Constraints_TODO ival2 ival1 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value greater_equal-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
             end
         
-(*
-        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity2)))) ->
-            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
-              EU.return (PEval Vtrue)
-            else
-              error "WIP: unspec ty1 <= ivmin ty2"
-
-        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity1))), Just (Vunspecified ty2)) ->
-            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
-              EU.return (PEval Vtrue)
-            else
-              error "WIP: ivmax ty1 <= unspec ty2"
-*)
-(*
-        | (OpLe, Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmin ity1))), Just (Vunspecified ty2)) ->
-            if Core_ctype.Basic (AilTypes.Integer ity1) = ty2 then
-              EU.return (PEval Vtrue)
-            else
-              error "WIP: ivmin ity1 <= unspec ty2"
-
-        | (OpLe, Just (Vunspecified ty1), Just (Vinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVmax ity2)))) ->
-            if ty1 = Core_ctype.Basic (AilTypes.Integer ity2) then
-              EU.return (PEval Vtrue)
-            else
-              error "WIP: unspec ty1 <= ivmax ity1"
-*)
-
-
-        | (_, Just (Vunspecified ty), Just _) ->
-            EU.return (PEval (Vunspecified ty))
-        | (_, Just _, Just (Vunspecified ty)) ->
-            EU.return (PEval (Vunspecified ty))
-
-        | (_, Just (Vinteger ival1), Just (Vinteger ival2)) ->
+        | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+            (* TODO CHECK *)
+            match Mem.lt_ival Symbolic.Constraints_TODO ival2 ival1 with
+              | Just b ->
+                  EU.return (PEval (if b then Vtrue else Vfalse))
+              | Nothing ->
+                  (* the current constraints allow both outcomes *)
+                  error ("WIP: symbolic integer_value greater-than ==> " ^
+                         Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
+            end
+        
+        | (_, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             let iop = match binop with
               | OpAdd ->
                   Mem_common.IntAdd
@@ -503,14 +536,16 @@ KKKKK NOW
                   Mem_common.IntMul
               | OpDiv ->
                   Mem_common.IntDiv
-              | OpMod ->
-                  Mem_common.IntMod
+              | OpRem_t ->
+                  Mem_common.IntRem_t
+              | OpRem_f ->
+                  Mem_common.IntRem_f
               | OpExp ->
                   Mem_common.IntExp
               | _ ->
                   error ("Core_run.core_eval, PEop Vinteger Vinteger: " ^ show binop)
             end in
-            EU.return (PEval (Vinteger (Mem.op_ival iop ival1 ival2)))
+            EU.return (PEval (Vobject (OVinteger (Mem.op_ival iop ival1 ival2))))
 
 
 
@@ -544,7 +579,7 @@ KKKKK NOW
             end
 
 (* TODO: symbolics *)
-        | (_, Just (Vsymbolic symb), Just (Vinteger ival as cval)) ->
+        | (_, Just (Vobject (OVsymbolic symb)), Just (Vobject (OVinteger ival as oval))) ->
             let n = match Mem_aux.integerFromIntegerValue ival with
               | Just n ->
                   n
@@ -560,14 +595,16 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpMod ->
-                  Symbolic.Mod
+              | OpRem_t ->
+                  Symbolic.Rem_t
+              | OpRem_f ->
+                  Symbolic.Rem_f
               | _ ->
                   error "Core_run.core_eval, PEop Vsymbolic Vinteger sym_op match"
             end in
-            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst cval))))
+            EU.return (PEval (Vobject (OVsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst oval)))))
 
-        | (_, Just (Vinteger ival as cval), Just (Vsymbolic symb)) ->
+        | (_, Just (Vobject (OVinteger ival as oval)), Just (Vobject (OVsymbolic symb))) ->
             let n = match Mem_aux.integerFromIntegerValue ival with
               | Just n ->
                   n
@@ -583,14 +620,16 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpMod ->
-                  Symbolic.Mod
+              | OpRem_t ->
+                  Symbolic.Rem_t
+              | OpRem_f ->
+                  Symbolic.Rem_f
               | _ ->
                   error "Core_run.core_eval, PEop Vinteger Vsymbolic sym_op match"
             end in
-            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst cval))))
+            EU.return (PEval (Vobject (OVsymbolic (Symbolic.make_op sym_op symb (Symbolic.SYMBconst oval)))))
 
-        | (_, Just (Vsymbolic symb1), Just (Vsymbolic symb2)) ->
+        | (_, Just (Vobject (OVsymbolic symb1)), Just (Vobject (OVsymbolic symb2))) ->
             let sym_op = match binop with
               | OpAdd ->
                   Symbolic.Add
@@ -600,14 +639,16 @@ KKKKK NOW
                   Symbolic.Mul
               | OpDiv ->
                   Symbolic.Div
-              | OpMod ->
-                  Symbolic.Mod
+              | OpRem_t ->
+                  Symbolic.Rem_t
+              | OpRem_f ->
+                  Symbolic.Rem_f
               | OpLt ->
                   Symbolic.Lt
               | _ ->
                   error "Core_run.core_eval, PEop Vsymbolic Vsymbolic sym_op match"
             end in
-            EU.return (PEval (Vsymbolic (Symbolic.make_op sym_op symb1 symb2)))
+            EU.return (PEval (Vobject (OVsymbolic (Symbolic.make_op sym_op symb1 symb2))))
         | (_, Just _, Just _) ->
             EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop: " ^
                                          Boot.pp_core_expr ((Epure (PEop binop pe1' pe2')) : Core.expr unit))
@@ -716,7 +757,16 @@ KKK NOW
   | PtrLt
 *)
 *)
-
+(*
+  | PEis_unspec pe ->
+      core_eval loc mem_st file concur_sym_map inside_if pe >>= function
+        | PEval (Vunspecified _) ->
+            EU.return $ PEval Vtrue
+        | PEval _ ->
+            EU.return $ PEval Vfalse
+        | pe' ->
+            EU.return $ PEis_unspec pe'
+      end
   
   | PEtuple pes ->
       EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->
@@ -726,11 +776,14 @@ KKK NOW
         | Nothing ->
             PEtuple pes'
       end
+*)
+(*
+TODO: 
   | PEarray pes ->
       EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->
       match valueFromPexprs pes' with
         | Just cvals ->
-            EU.return $ PEval (Varray cvals)
+            EU.return $ PEval (Vobject (OVarray cvals))
 (*
             maybe (EU.fail $ Illformed_program ("PEarray: found a symbol during evaluation> " ^ Boot.pp_core_expr (Epure (PEarray pes') : expr unit)))
               (fun mem_vals -> EU.return $ PEval (Varray mem_vals)) $
@@ -745,6 +798,7 @@ KKK NOW
         | Nothing ->
             EU.return $ PEarray pes'
       end
+*)
 (*
   | PEarray xs ->
       maybe (EU.fail $ Illformed_program "PEarray: found a symbol during evaluation")
@@ -757,31 +811,31 @@ KKK NOW
                 Nothing
           end) (Just []) xs
 *)
-  | PEcall nm pes ->
-      EU.mapM (core_eval loc mem_st file concur_sym_map inside_if) pes >>= fun pes' ->
-      match valueFromPexprs pes' with
+  | PEcall nm_bTy pe_bTys ->
+      EU.mapM (fun (pe, bTy) -> core_eval loc mem_st file concur_sym_map inside_if pe >>= fun pe' -> EU.return (pe', bTy)) pe_bTys >>= fun pe_bTys' ->
+      match valueFromPexprs (List.map fst pe_bTys') with
         | Just cvals ->
             if List.all Core_aux.is_concrete cvals then
               (* We do not immediately call eval on the result of call_function,
                  as that could lead to non-termination. *)
-              Exception.bind (call_function file nm cvals)
+              Exception.bind (call_function file (fst nm_bTy) cvals)
                 EU.return
             else
-              let symb_nm = match nm with
+              let symb_nm = match fst nm_bTy with
                 | Sym f -> Symbolic.SYMBfsym f
                 | Impl i -> Symbolic.SYMBimpl i
               end in
-              EU.return $ PEval (Vsymbolic (Symbolic.make_call symb_nm (List.map symbolify cvals)))
+              EU.return $ PEval (Vobject (OVsymbolic (Symbolic.make_call symb_nm (List.map symbolify cvals))))
         | Nothing ->
-            EU.return $ PEcall nm pes'
+            EU.return $ PEcall nm_bTy pe_bTys'
       end
-  | PElet sym pe1 pe2 ->
+  | PElet ((sym, _) as pat) pe1 pe2 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
       EU.return $ match valueFromPexpr pe1' with
         | Just cval ->
             subst_sym_pexpr sym (PEval cval) pe2
         | Nothing ->
-            PElet sym pe1' pe2
+            PElet pat pe1' pe2
       end
   | PEif pe1 pe2 pe3 ->
       core_eval loc mem_st file concur_sym_map inside_if pe1 >>= fun pe1' ->
@@ -791,12 +845,12 @@ KKK NOW
         | Just Vfalse ->
             core_eval loc mem_st file concur_sym_map inside_if pe3
 
-        | Just (Vsymbolic symb) ->
+        | Just (Vobject (OVsymbolic symb)) ->
             core_eval loc mem_st file concur_sym_map inside_if pe2 >>= fun pe2' ->
             core_eval loc mem_st file concur_sym_map inside_if pe3 >>= fun pe3' ->
             EU.return $ match (valueFromPexpr pe2', valueFromPexpr pe3') with
               | (Just cval2, Just cval3) ->
-                  PEval (Vsymbolic (Symbolic.make_ite symb (symbolify cval2) (symbolify cval3)))
+                  PEval (Vobject (OVsymbolic (Symbolic.make_ite symb (symbolify cval2) (symbolify cval3))))
               | _ ->
                   PEif pe1' pe2' pe3'
             end
@@ -855,14 +909,15 @@ end
             let xs' = List.map (fun ((ident, ty), cval) ->
               (ident, fromJust ("Core_run.core_eval, PEstruct ==> " ^ show ident) $ memValueFromValue ty cval)
             ) (List.zip (Core_ctype_aux.get_membersDefs tag_sym) cvals) in
-            EU.return $ PEval (Vstruct tag_sym xs')
+            EU.return $ PEval (Vobject (OVstruct tag_sym xs'))
         | Nothing ->
             EU.return $ PEstruct tag_sym (List.zip (List.map fst xs) pes')
       end
       
-  | pe ->
-    error (">>> " ^ Boot.pp_core_expr (Epure pe : expr unit))
+  | _ ->
+    error (">>> " ^ Boot.pp_core_expr (Epure (Pexpr bTy _pe) : expr unit))
 
+*)
 end
 
 
@@ -977,18 +1032,18 @@ end
 
 
 val     full_core_eval_aux: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                            map Symbol.t Core.value -> bool -> Core.pexpr ->
+                            map Symbol.t Core.object_value -> bool -> Core.pexpr ->
                             EU.t Core.value core_run_error
 let rec full_core_eval_aux loc mem_st file concur_sym_map inside_if pe =
   core_eval loc mem_st file concur_sym_map inside_if pe >>= fun pe' ->
   match valueFromPexpr pe' with
-    | Just cval ->
+    | Just (_, cval) ->
         EU.return cval
     | Nothing ->
         full_core_eval_aux loc mem_st file concur_sym_map inside_if pe'
   end
 val full_core_eval: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                    map Symbol.t Core.value -> bool -> Core.pexpr ->
+                    map Symbol.t Core.object_value -> bool -> Core.pexpr ->
                     either Errors.t (Undefined.t Core.value)
 let full_core_eval loc mem_st file concur_sym_map inside_if pe =
   match full_core_eval_aux loc mem_st file concur_sym_map inside_if pe with
@@ -1003,7 +1058,7 @@ let full_core_eval loc mem_st file concur_sym_map inside_if pe =
 (* DEBUG *)
 type exec_location =
   | ELoc_globals
-  | ELoc_normal of list Core.sym
+  | ELoc_normal of list Symbol.t
 
 let push_exec_loc sym = function
   | ELoc_globals ->
@@ -1031,7 +1086,7 @@ type io_state = <|
 type core_state = <|
   thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
   io:            io_state;
-  handlers:      Map.map handler_event (list name);
+(*  handlers:      Map.map handler_event (list name); *)
 |>
 
 (*
@@ -1289,10 +1344,12 @@ let rec hoist_negatives expr =
         State.return expr
     | Ememop _ _ ->
         State.return expr
+(*
     | Eraise _ ->
         State.return expr
     | Eregister _ _ ->
         State.return expr
+*)
     | Eskip ->
         State.return expr
     | Elet sym pe1 e2 ->
@@ -1306,7 +1363,7 @@ let rec hoist_negatives expr =
         State.return expr
     | Eaction pact ->
         if is_negative_action pact then
-          add_neg expr >> State.return (Epure (PEval Vunit))
+          add_neg expr >> State.return (Epure (Pexpr BTy_unit (PEval Vunit)))
         else
           State.return expr
     | Eunseq es ->
@@ -1334,9 +1391,9 @@ let rec hoist_negatives expr =
 *)
     | Easeq sym_opt act1 pact2 ->
         error "Core_run.hoist_negatives found an Easeq"
-    | Eindet e ->
+    | Eindet i e ->
         hoist_negatives e >>= fun e' ->
-        State.return (Eindet e')
+        State.return (Eindet i e')
     | Ebound i e ->
         hoist_negatives e >>= fun e' ->
         State.return (Ebound i e')
@@ -1345,8 +1402,10 @@ let rec hoist_negatives expr =
         State.return (Esave ksym sym_tys e')
     | Erun _ _ _ ->
       State.return expr
-    | Eret _ ->
+(*
+    | Ereturn _ ->
         State.return expr
+*)
     | End es ->
         State.mapM hoist_negatives es >>= fun es' ->
         State.return (End es')
@@ -1483,7 +1542,7 @@ type core_step =
 
 
 val core_action_step:
-    Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.value -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
+    Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
@@ -1507,14 +1566,14 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
   match act with
     | Create pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
-          | (Just (Vinteger ival), Just (Vctype ty)) ->
+          | (Just (_, Vobject (OVinteger ival)), Just (_, Vctype ty)) ->
               Step_action_request (
                 E.fresh_action_id >>= fun create_aid ->
                 E.return (
                   CreateRequest loc sb_before dd_before asw_before
                     create_aid current_tid pref ival ty
                     (fun ptr_val -> <| th_st with
-                        arena= Epure (PEval (Vpointer ptr_val));
+                        arena= Epure (Pexpr (BTy_object OTy_pointer) (PEval (Vobject (OVpointer ptr_val))));
                         stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>)
                     )
@@ -1538,14 +1597,14 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
         end
     | Alloc pe1 pe2 pref ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
-          | (Just (Vinteger ival1), Just (Vinteger ival2)) ->
+          | (Just (_, Vobject (OVinteger ival1)), Just (_, Vobject (OVinteger ival2))) ->
               Step_action_request (
                 E.fresh_action_id >>= fun alloc_aid ->
                 E.return (
                   AllocRequest loc sb_before dd_before asw_before
                     alloc_aid current_tid pref ival1 ival2
                     (fun ptr_val -> <| th_st with
-                        arena= Epure (PEval (Vpointer ptr_val));
+                        arena= Epure (Pexpr (BTy_object OTy_pointer) (PEval (Vobject (OVpointer ptr_val))));
                         stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                     |>)
                     )
@@ -1569,7 +1628,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
         end
     | Kill pe ->
         match valueFromPexpr pe with
-          | Just (Vpointer ptr_val) ->
+          | Just (_, Vobject (OVpointer ptr_val)) ->
               Step_action_request (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
@@ -1593,7 +1652,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
         end
     | Store pe1 pe2 pe3 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
-          | (Just (Vctype ty), Just (Vpointer ptr_val), Just cval) ->
+          | (Just (_, Vctype ty), Just (_, Vobject (OVpointer ptr_val)), Just (_, cval)) ->
               match memValueFromValue (Core_ctype.unatomic ty) cval with
                 | Just mem_val ->
                     Step_action_request (
@@ -1603,18 +1662,18 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                         StoreRequest loc sb_before dd_before asw_before
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
-                            arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
+                            arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
                             stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>
                       )
                     )
                 | Nothing ->
-                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " ^
-                      Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Boot.pp_core_expr ((Epure (PEval cval)) : Core.expr unit) ^ "")
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " (* ^
+                      Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Boot.pp_core_expr ((Epure (PEval cval)) : Core.expr unit) ^ "" *))
               end
-          | (Just v1, Just v2, Just v3) ->
+          | (Just (_, cval1), Just (_, cval2), Just (_, cval3)) ->
               Step_error ("found a store() with ill-typed operands: " ^
-                           stringFromValue v1 ^ " <-> " ^ stringFromValue v2 ^ " <-> " ^ stringFromValue v3)
+                           stringFromValue cval1 ^ " <-> " ^ stringFromValue cval2 ^ " <-> " ^ stringFromValue cval3)
           | (Nothing, _, _) ->
               Step_eval "first operand of a Store" (
                 E.core_eval loc mem_st file concur_sym_map false pe1 >>= fun pe1' ->
@@ -1639,7 +1698,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
         end
     | Load pe1 pe2 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
-          | (Just (Vctype ty), Just (Vpointer ptr_val)) ->
+          | (Just (_, Vctype ty), Just (_, Vobject (OVpointer ptr_val))) ->
               Step_action_request (
                 E.fresh_action_id >>= fun load_aid ->
                 E.fresh_symbol    >>= fun val_sym  ->
@@ -1647,7 +1706,9 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                   LoadRequest loc sb_before dd_before asw_before
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
-                        arena= Epure (PEval (valueFromMemValue mem_val));
+                        (* NOTE: the parenthesis are needed because of a Lem's bug... *)
+                        arena= (let (oTy, oval) = objectValueFromMemValue mem_val in
+                               Epure (Pexpr (BTy_loaded oTy) (PEval (Vloaded oval))));
                         stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
                     |>)
                 )
@@ -1671,7 +1732,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
         end
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3, valueFromPexpr pe4) with
-          | (Just (Vctype ty), Just (Vpointer ptr_val), Just cval_expected, Just cval_desired) ->
+          | (Just (_, Vctype ty), Just (_, Vobject (OVpointer ptr_val)), Just (_, cval_expected), Just (_, cval_desired)) ->
               match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
                 | (Just mval_expected, Just mval_desired) ->
                     Step_action_request (
@@ -1680,7 +1741,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                         RMWRequest loc sb_before dd_before asw_before
                           rmw_aid current_tid mo1 mo2 ty ptr_val mval_expected mval_desired
                           <| th_st with
-                            arena= Epure (PEval Vtrue); (* TODO *)
+                            arena= Epure (Pexpr BTy_boolean (PEval Vtrue)); (* TODO *)
                             stack= add_to_sb_stack {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>
                       )
@@ -1699,17 +1760,17 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                         StoreRequest loc sb_before dd_before asw_before
                           store_aid current_tid mo ty ptr_val mem_val
                           <| th_st with
-                            arena= Eskip (* Epure (PEval (valueFromMemValue mem_val)) *);
+                            arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
                             stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
                           |>
                       )
                     )
 *)
                 | _ ->
-                    Step_error ("one of the values of a rmw() didn't match the lvalue type: " ^
+                    Step_error ("one of the values of a rmw() didn't match the lvalue type: " (* ^
                       Boot.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^
                                 Boot.pp_core_expr ((Epure (PEval cval_expected)) : Core.expr unit) ^ " <-> " ^
-                                Boot.pp_core_expr ((Epure (PEval cval_desired)) : Core.expr unit))
+                                Boot.pp_core_expr ((Epure (PEval cval_desired)) : Core.expr unit) *))
               end
           | (Just _, Just _, Just _, Just _) ->
               Step_error "found a rmw with ill-typed operands"
@@ -1753,7 +1814,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                   LoadRequest loc sb_before dd_before asw_before
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
-                        arena= Epure (PEval (valueFromMemValue mem_val));
+                        arena= Epure (PEval (objectValueFromMemValue mem_val));
                         stack= (* add_to_sb_stack {(p, (current_tid, load_aid))} *) th_st.stack
                     |>)
                 )
@@ -1780,7 +1841,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
 
 
 
-val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
+val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
 let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   match (th_st.arena, th_st.stack) with
@@ -1788,22 +1849,22 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
         (* ---------------------------------------
            <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
         one $ Step_tau "Eskip" (
-          E.return <| th_st with arena= apply_continuation cont (Epure (PEval Vunit)); stack= Stack_cons [] sk' |>
+          E.return <| th_st with arena= apply_continuation cont (Epure (Pexpr BTy_unit (PEval Vunit))); stack= Stack_cons [] sk' |>
         )
     
-    | (Elet sym pe1 e2, _) ->
+    | (Elet pat pe1 e2, _) ->
         (*                [| pe1 |] = v
            --------------------------------------------------
            <let α = pe1 in e2, κs, Λ> --τ--> <e2[α\v], κs, Λ> *)
         one match valueFromPexpr pe1 with
-          | Just cval ->
+          | Just (bTy, cval) ->
               Step_tau "Elet" (
-                E.return <| th_st with arena= subst_sym sym (PEval cval) e2 |>
+                E.return <| th_st with arena= subst_pattern pat (Pexpr bTy (PEval cval)) e2 |>
               )
           | Nothing ->
               Step_eval "Elet" (
                 E.core_eval th_st.current_loc mem_st file concur_sym_map false pe1 >>= fun pe1' ->
-                E.return <| th_st with arena= Elet sym pe1' e2 |>
+                E.return <| th_st with arena= Elet pat pe1' e2 |>
               )
         end
     
@@ -1814,19 +1875,20 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
            <if pe1 then e2 else e3, κs, Λ> --τ--> <
                                                    '- <e3, κs>  IF v = false *)
         match valueFromPexpr pe1 with
-          | Just Vtrue ->
+          | Just (_, Vtrue) ->
               one $ Step_tau "Eif (then)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
                 E.return <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
               )
-          | Just Vfalse ->
+          | Just (_, Vfalse) ->
               one $ Step_tau "Eif (else)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                 E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
-              )
-          | Just (Vsymbolic symb) ->
+                                          )
+(*
+          | Just (Vobject (OVsymbolic symb)) ->
               let (constr_then, constr_else) =
                 match symb with
                   | Symbolic.SYMBop Symbolic.Eq symb1 symb2 ->
@@ -1849,6 +1911,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                   E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
                 end
+*)
 
           | Just _ ->
               one $ Step_error "the first operand of an Eif didn't evaluated to a boolean"
@@ -1859,23 +1922,26 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               )
         end
     
-    | (Eproc annots nm pes, sk) ->
-        one match valueFromPexprs pes with
-          | Just cvals ->
-              match nm with
-                | Sym psym ->
-                    Step_tau "Eproc" (
-                      SEU.runEU (
-                        Exception.bind (call_proc file psym cvals)
-                          EU.return
-                      ) >>= fun expr ->
-                      (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
-                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
-                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
-                    )
-                | Impl (StdFunction "printf") ->
-                    match cvals with
-                      | [Vlist frmt_cvals; Vlist args_cvals] ->
+    | (Eproc annots pe pes, sk) ->
+        one match valueFromPexpr pe with
+          | Just (_, Vobject (OVcfunction nm)) ->
+              match valueFromPexprs pes with
+                | Just bTy_cvals ->
+                    match nm with
+                      | Sym psym ->
+                          Step_tau "Eproc" (
+                            SEU.runEU (
+                              Exception.bind (call_proc file psym (List.map snd bTy_cvals))
+                                EU.return
+                            ) >>= fun expr ->
+                            (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                            let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                            E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                          )
+                      | Impl (StdFunction "printf") ->
+                          match List.map snd bTy_cvals with
+                            | [Vlist (BTy_object OTy_integer) frmt_cvals;
+                               Vlist (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) args_cvals] ->
 (*
                           (* building an OCaml string for the format *)
                           let frmt_str =
@@ -1899,7 +1965,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                           )
 *)
                           let frmt_chars = List.map (function
-                            | Vinteger ival ->
+                            | Vobject (OVinteger ival) ->
                                 match Mem_aux.integerFromIntegerValue ival with
                                   | Just n ->
                                       Decode.encode_character_constant n
@@ -1910,14 +1976,14 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                                   error "Core_run, printf one of the element of the format array was invalid (2)"
                           end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
                           let args_ptrvals = List.map (function
-                            | Vtuple [Vctype ty; Vpointer ptr_val] ->
+                            | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
                                 (* TODO: WIP *)
                                 (ty, ptr_val)
                             | _ ->
                                 error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
                           end) args_cvals in
                           Step_printf2 frmt_chars args_ptrvals (fun n ->
-                            <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival n))) |>
+                            <| th_st with arena= Epure (Caux.integer_pe n) |>
                           )
 (*
   | Step_printf2 of list Core.value * list Mem.pointer_value * (integer -> thread_state)
@@ -1929,19 +1995,32 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Boot.pp_core_expr th_st.arena)
               end
+              
+                | Nothing ->
+                    Step_eval "Eproc" (
+                      E.core_evals th_st.current_loc mem_st file concur_sym_map false pes >>= fun pes' ->
+                      E.return <| th_st with arena= Eproc annots pe pes' |>
+                    )
+              end
+          | Just (bTy, cval) ->
+              Step_error ((Loc.stringFromLocation th_st.current_loc) ^ "the first argument of pcall() must evaluate to a cfunction, found: " ^
+                Boot.pp_core_expr ((Epure (Pexpr bTy (PEval cval))) : Core.expr unit) ^ "")
           | Nothing ->
               Step_eval "Eproc" (
-                E.core_evals th_st.current_loc mem_st file concur_sym_map false pes >>= fun pes' ->
-                E.return <| th_st with arena= Eproc annots nm pes' |>
+                E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
+                E.return <| th_st with arena= Eproc annots pe' pes |>
               )
         end
+    
     | (Eaction pact, _) ->
         one $ core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) pact
     | (Ememop memop pes, _) ->
+        error "Core_run, WIP Ememop"
+(*
         one match valueFromPexprs pes with
-          | Just cvals ->
-              Step_memop_request memop cvals current_tid (fun cval ->
-                <| th_st with arena= Epure (PEval cval) |>
+          | Just bTy_cvals ->
+              Step_memop_request memop bTy_cvals current_tid (fun (bTy, cval) ->
+                <| th_st with arena= Epure (Pexpr bTy (PEval cval)) |>
               )
           | Nothing ->
               Step_eval "Ememop" (
@@ -1949,6 +2028,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                 E.return <| th_st with arena= Ememop memop pes' |>
               )
         end
+*)
 
 (*
           | (Ptreq, Just cvals) ->
@@ -1978,7 +2058,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
         match to_pures es with
           | Just pes ->
               one $ Step_tau "Eunseq pure" (
-                E.return <| th_st with arena= Epure (PEtuple pes) |>
+                E.return <| th_st with arena= Epure (Caux.mk_tuple pes) |>
               )
           | Nothing ->
               let is_wait = function
@@ -2002,19 +2082,19 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                   xs
         end
     
-    | (Ewseq _as e1 e2, Stack_cons cont sk) ->
+    | (Ewseq pat e1 e2, Stack_cons cont sk) ->
         (* TODO: negatives *)
         one match to_pure e1 with
           | Just pe ->
               match valueFromPexpr pe with
-                | Just cval ->
+                | Just (bTy, cval) ->
                     Step_tau "Ewseq subst" (
-                      E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
+                      E.return <| th_st with arena= subst_pattern pat (Pexpr bTy (PEval cval)) e2 |>
                     )
                 | Nothing ->
                     Step_eval "Ewseq" (
                       E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                      E.return <| th_st with arena= Ewseq _as (Epure pe') e2 |>
+                      E.return <| th_st with arena= Ewseq pat (Epure pe') e2 |>
                     )
               end
           | Nothing ->
@@ -2022,24 +2102,24 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_tau "Ewseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons (Kwseq _as e2 :: cont) sk
+                  stack= Stack_cons (Kwseq pat e2 :: cont) sk
                 |>
               )
         end
     
-    | (Esseq _as e1 e2, Stack_cons cont sk) ->
+    | (Esseq pat e1 e2, Stack_cons cont sk) ->
         (* TODO: negatives *)
         one match to_pure e1 with
           | Just pe ->
               match valueFromPexpr pe with
-                | Just cval ->
+                | Just (bTy, cval) ->
                     Step_tau "Esseq subst" (
-                      E.return <| th_st with arena= subst_syms _as (PEval cval) e2 |>
+                      E.return <| th_st with arena= subst_pattern pat (Pexpr bTy (PEval cval)) e2 |>
                     )
                 | Nothing ->
                     Step_eval "Esseq" (
                       E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                      E.return <| th_st with arena= Esseq _as (Epure pe') e2 |>
+                      E.return <| th_st with arena= Esseq pat (Epure pe') e2 |>
                     )
               end
           | Nothing ->
@@ -2047,7 +2127,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_tau "Esseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons (Ksseq _as e2 :: cont) sk
+                  stack= Stack_cons (Ksseq pat e2 :: cont) sk
                 |>
               )
         end
@@ -2076,14 +2156,14 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
 (*          let _ = Boot.output_string ("stepping Erun ===> " ^ Boot.pp_core_expr e_cont) in *)
           
           (* we have to create the objects which are visible at the level of the save but not from the run *)
-          let (create_as, create_tys) = unzip $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) sym_vs)) sym_tys in
+          let (create_syms, create_tys) = unzip $ List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_vs)) sym_tys in
           (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
-          let kill_es = List.map snd $ List.filter (fun (a,_) -> not (any (fun (x,_) -> x = a) sym_tys)) sym_vs in
+          let kill_es = List.map snd $ List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_tys)) sym_vs in
           let e =
-            Ewseq [] (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
-              (Ewseq (List.map (fun z -> Just z) create_as) (mk_unseq $ List.map (fun ty ->
-                let pe_ty = PEval (Vctype ty) in
-                pcreate Loc.unknown (alignof pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
+            Ewseq (CaseBase Nothing) (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
+              (Ewseq (CaseCtor Ctuple (List.map (fun z -> CaseBase (Just z)) create_syms)) (mk_unseq $ List.map (fun ty ->
+                let pe_ty = Pexpr BTy_ctype (PEval (Vctype ty)) in
+                pcreate Loc.unknown (Caux.alignof_pe pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
               ) create_tys)
                  (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
@@ -2100,10 +2180,12 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
 
 
 
-
-    | (Eret pe, Stack_cons _ sk) ->
+(*
+    | (Ereturn pe, Stack_cons _ sk) ->
+*)
+    | (Epure pe, Stack_cons [] sk) ->
         one match valueFromPexpr pe with
-          | Just cval ->
+          | Just (bTy, cval) ->
               match sk with
                 | Stack_empty ->
                     (* "return" ending the execution of a thread. *)
@@ -2121,7 +2203,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     (* "return" only ending the execution of a procedure. *)
                     Step_tau "end of procedure" (
                       E.return <| th_st with
-                        arena= apply_continuation cont (Epure (PEval cval));
+                        arena= apply_continuation cont (Epure (Pexpr bTy (PEval cval)));
                         stack= push_empty_continuation sk';
 (*
 (* TODO: need stacked scopes ... *)
@@ -2131,9 +2213,9 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     )
               end
           | Nothing ->
-              Step_eval "Eret" (
+              Step_eval "Epure" (
                 E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                E.return <| th_st with arena= Eret pe' |>
+                E.return <| th_st with arena= Epure pe' |>
               )
         end
     
@@ -2166,14 +2248,16 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
           E.return <| th_st with current_loc= loc; arena= e |>
         )
     
+(*
     | (Eraise handl, sk) ->
         error "WIP: Eraise"
     | (Eregister handl nm, sk) ->
         error "WIPL Eregister"
+*)
     
     | (Easeq _ _ _, _) ->
         error "Core_run must be called after Core_indet"
-    | (Eindet _, _) ->
+    | (Eindet _ _, _) ->
         error "Core_run must be called after Core_indet"
     | (Ebound _ _, _) ->
         error "Core_run must be called after Core_indet"
@@ -2181,7 +2265,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
     | (e, Stack_empty) ->
         (* End of program execution *)
         one match maybe Nothing valueFromPexpr (to_pure e) with
-          | Just cval ->
+          | Just (_,  cval) ->
               Step_done cval
           | Nothing ->
               Step_error ("reached empty stack on a non-value arena: " ^ Boot.pp_core_expr e) (* TODO: better error message *)
@@ -2191,14 +2275,14 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
         match to_pure e with
           | Just pe ->
               one match valueFromPexpr pe with
-                | Just cval ->
+                | Just (bTy, cval) ->
                     Step_tau "value" (match cont with
                       | [] ->
                           error ("<e, Stack_cons []> with e= " ^ Boot.pp_core_expr e) (* TODO: what case is that? *)
                       | _ ->
                           (* -----------------------------------
                              <v, κ.κs, Λ> --τ--> <κ(v), ɛ.κs, Λ> *)
-                          E.return <| th_st with arena= apply_continuation cont (Epure (PEval cval)); stack= push_empty_continuation sk |>
+                          E.return <| th_st with arena= apply_continuation cont (Epure (Pexpr bTy (PEval cval))); stack= push_empty_continuation sk |>
                     end)
                   | Nothing ->
                       (*          [| pe |] = v
@@ -2283,18 +2367,20 @@ let rec convert_expr expr =
         Epure pe
     | Ememop memop pes ->
         Ememop memop pes
+(*
     | Eraise h ->
         Eraise h
     | Eregister h nm ->
         Eregister h nm
+*)
     | Eskip ->
         Eskip
     | Elet sym pe1 e2 ->
         Elet sym pe1 (convert_expr e2)
     | Eif pe1 e2 e3 ->
         Eif pe1 (convert_expr e2) (convert_expr e3)
-    | Eproc _ nm pes ->
-        Eproc empty_annotation nm pes
+    | Eproc _ pe pes ->
+        Eproc empty_annotation pe pes
     | Eaction pact ->
         Eaction (convert_paction pact)
     | Eunseq es ->
@@ -2305,16 +2391,18 @@ let rec convert_expr expr =
         Esseq _as (convert_expr e1) (convert_expr e2)
     | Easeq sym_opt act1 pact2 ->
         Easeq sym_opt (convert_action act1) (convert_paction pact2)
-    | Eindet e ->
-        Eindet (convert_expr e)
+    | Eindet i e ->
+        Eindet i (convert_expr e)
     | Ebound i e ->
         Ebound i (convert_expr e)
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (convert_expr e)
     | Erun _ ksym sym_pes ->
         Erun empty_annotation ksym sym_pes
-    | Eret pe ->
-        Eret pe
+(*
+    | Ereturn pe ->
+        Ereturn pe
+*)
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->
@@ -2369,7 +2457,7 @@ val initial_core_state: core_state
 let initial_core_state = <|
   thread_states= [];
   io= initial_io_state;
-  handlers= Map.empty;
+(*  handlers= Map.empty;*)
 |>
 
 

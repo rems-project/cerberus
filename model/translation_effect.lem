@@ -1,6 +1,6 @@
 (* Effects for Translation: state + exception *)
 open import Pervasives Global Show Show_extra
-import Boot UniqueId Symbol Undefined Core_ctype AilTypes
+import Boot UniqueId Symbol Undefined Core_ctype AilTypes AilTypesAux
 
 open import Core
 
@@ -78,6 +78,33 @@ val fresh_symbol: t Symbol.t
 let fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
   let (sym, suppl') = State.run Symbol.fresh suppl in
   (sym, <| st with symbol_supply= suppl' |>)
+
+val     core_object_type_of_ctype: AilTypes.ctype -> maybe Core.core_object_type
+let rec core_object_type_of_ctype ty =
+  match AilTypesAux.unatomic ty with
+    | AilTypes.Basic (AilTypes.Integer _) ->
+        Just Core.OTy_integer
+    | AilTypes.Basic (AilTypes.Floating _) ->
+        Just Core.OTy_floating
+    | AilTypes.Array elem_ty _ ->
+        maybe Nothing (fun objTy -> Just (Core.OTy_array objTy)) $
+          core_object_type_of_ctype elem_ty
+    | AilTypes.Pointer _ _ ->
+        Just Core.OTy_pointer
+    | _ ->
+        Nothing
+  end
+
+val fresh_typed_symbol: bool -> AilTypes.ctype -> t (Symbol.t * Core.core_base_type)
+let fresh_typed_symbol is_loaded ty =
+  let ctor x = if is_loaded then Core.BTy_loaded x else Core.BTy_object x in
+  bind fresh_symbol (fun sym ->
+    match core_object_type_of_ctype ty with
+      | Just objTy ->
+          return (sym, ctor objTy)
+      | Nothing ->
+          error "Translation_effect.fresh_typed_symbol"
+    end)
 
 (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
 val fresh_named_symbol: string -> t Symbol.t

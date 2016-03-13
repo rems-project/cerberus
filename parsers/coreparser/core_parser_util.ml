@@ -62,16 +62,14 @@ type token =
   | CHAR16_T
   | CHAR32_T
   | INTEGER
+  | FLOATING
   | BOOLEAN
   | POINTER
   | CTYPE
   | CFUNCTION
   | UNIT
-  | FUNCTION
   | EFF
   | LIST
-  | CONS
-  | ARRAY
   | TRUE
   | FALSE
   | NOT
@@ -84,9 +82,9 @@ type token =
   | THEN
   | ELSE
   | UNSEQ
-  | WEAK
-  | STRONG
-  | ATOM
+  | LETW
+  | LETS
+  | LETA
   | SAVE
   | RUN
   | RAISE
@@ -118,6 +116,8 @@ type token =
   | IS_INTEGER
   | IS_SIGNED
   | IS_UNSIGNED
+  | IS_UNSPEC
+  | UNSPECIFIED
   
   | STRING of string
   
@@ -128,15 +128,18 @@ type token =
   
   | DQUOTE
   
-  | CASE_LIST
-  | CASE_CTYPE
+  | CASE
+  | OF
+  
   | EQ_GT
 
   | PLUS
   | MINUS
   | STAR
   | SLASH
-  | PERCENT
+(*  | PERCENT *)
+  | REM_T
+  | REM_F
   | CARET
   | EQ
   | GT
@@ -145,7 +148,7 @@ type token =
   | LE
   | SLASH_BACKSLASH
   | BACKSLASH_SLASH
-  | TILDE
+  | NEG
   | PIPES
   | UNDERSCORE
   | PIPE
@@ -180,6 +183,18 @@ type token =
   | IVMIN
   | IVSIZEOF
   | IVALIGNOF
+  | PCALL
+  | CFUNCTION_VALUE
+
+
+  | NIL
+  | CONS
+  | TUPLE
+  | ARRAY
+  | LOADED
+  
+  | PURE
+
 
 
 (*

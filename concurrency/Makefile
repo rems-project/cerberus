@@ -1,6 +1,8 @@
 BUILD_DIR           = _bin
 CPP_BUILD_DIR       = _bin_cppmem
+ISA                 = ../../../Isabelle2015/bin/isabelle
 OCAML_LIB_DIR       = ../../lem/ocaml-lib
+ISA_LIB_DIR         = ../../lem/isabelle-lib
 CMM_MODEL_DIR       = ../../../rsem/cpp/axiomatic/ntc
 CPP_SRC_DIR         = ../../../rsem/cpp/src
 CPP_INTEGRATION_DIR = cppmem-integration
@@ -29,11 +31,14 @@ AXIOM_BEH_GEN = \
 
 ND_LEM = \
   nondeterminism.lem \
+  loc.lem \
 
 ND_GEN = \
   Nondeterminism.thy \
   nondeterminism.ml \
   Nondeterminism-inc.tex \
+  Loc.thy \
+  loc.ml \
 
 OPSEM_LEM = \
   cmm_op.lem \
@@ -43,6 +48,12 @@ OPSEM_GEN = \
   Cmm_op.thy \
   cmm_op.ml \
   Cmm_op-inc.tex \
+
+DOC_ISA = \
+  Cmm_op.thy \
+
+DOC_PDF = \
+  Cmm_op.pdf \
 
 default: $(BUILD_DIR)/Cmm_op.thy \
 
@@ -100,6 +111,11 @@ $(BUILD_DIR)/%.lem: %.lem | $(BUILD_DIR)
 	@echo COPYING $<
 	@cp $< $(BUILD_DIR)
 
+# Copy the thy files to the build dir
+$(BUILD_DIR)/%.thy: %.thy | $(BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)
+
 # Copy the ml files to the build dir
 $(BUILD_DIR)/%.ml: %.ml | $(BUILD_DIR)
 	@echo COPYING $<
@@ -113,6 +129,33 @@ $(BUILD_DIR)/%.ott: %.ott | $(BUILD_DIR)
 # Create the build directory
 $(BUILD_DIR):
 	mkdir $(BUILD_DIR)
+
+
+
+
+
+
+# Generate Isabelle pdf of definitions
+
+$(BUILD_DIR)/Cmm_op.pdf: $(BUILD_DIR)/Cmm_op.thy \
+                  $(BUILD_DIR)/ROOT \
+                  $(BUILD_DIR)/document/root.tex
+	cp $(ISA_LIB_DIR)/*.thy $(BUILD_DIR)
+	cd $(BUILD_DIR); ../$(ISA) build -D .
+	cp $(BUILD_DIR)/output/document.pdf $(BUILD_DIR)/Cmm_op.pdf
+
+$(BUILD_DIR)/document/root.tex: root.tex | $(BUILD_DIR)/document
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)/document
+
+$(BUILD_DIR)/document: | $(BUILD_DIR)
+	mkdir $(BUILD_DIR)/document
+
+$(BUILD_DIR)/ROOT: ROOT | $(BUILD_DIR)
+	@echo COPYING $<
+	@cp $< $(BUILD_DIR)
+
+
 
 
 

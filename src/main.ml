@@ -93,7 +93,7 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
+    |> Exception.fmap (Translation.translate !!cerb_conf.sequentialise !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
 (*
@@ -190,6 +190,8 @@ let pipeline filename args =
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
+  Core_typing.typecheck_program core_file >>= fun _ ->
+  
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.rewrite then Core_rewrite.rewrite_file core_file else core_file) in
@@ -207,11 +209,15 @@ let pipeline filename args =
       print_endline "====================";
    );
   
-  
-  Exception.return2 (backend sym_supply rewritten_core_file args)
+(*
+  if !!cerb_conf.compile then
+    Codegen_ocaml.compile filename true rewritten_core_file
+  else
+*)
+    Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite concurrency preEx args =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args compile =
   Debug.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -235,13 +241,13 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
 
-  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
   
   (* Looking for and parsing the implementation file *)
   let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
   Debug.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite concurrency preEx (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
 
   
   
@@ -280,6 +286,10 @@ let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
+let compile =
+  let doc = "Compile core code (passing through Ocaml)." in
+  Arg.(value & flag & info ["compile"] ~doc)
+
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls and excluding the .impl suffix)." in
   Arg.(value & opt string "gcc_4.9.0_x86_64-apple-darwin10.8.0" & info ["impl"] ~docv:"NAME" ~doc)
@@ -314,6 +324,10 @@ let rewrite =
   let doc = "Activate the Core to Core transformations" in
   Arg.(value & flag & info["rewrite"] ~doc)
 
+let sequentialise =
+  let doc = "Replace all unseq() with left to righ wseq(s)" in
+  Arg.(value & flag & info["sequentialise"] ~doc)
+
 let concurrency =
   let doc = "Activate the C11 concurrency" in
   Arg.(value & flag & info["concurrency"] ~doc)
@@ -335,8 +349,8 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         concurrency $ preEx $ args) in
-  let info       = Term.info "cerberus" ~version:"118b9eda832b+ tip -- 13/11/2015@14:45" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+                         sequentialise $ concurrency $ preEx $ args $ compile) in
+  let info       = Term.info "cerberus" ~version:"b3e67754f25e+ tip -- 20/11/2015@15:12" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

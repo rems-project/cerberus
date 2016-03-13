@@ -60,6 +60,7 @@ type cause =
   
   | Desugar_cause of desugar_cause
   | Core_run_cause of core_run_error
+  | Core_typing
 
   (* Constraint violation *)
 
