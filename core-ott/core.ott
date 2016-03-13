@@ -129,9 +129,9 @@ embed {{ lem
 
 
 grammar
- polarity :: '' ::= {{ com  Polarity for actions }}
-   | Pos   :: ::  Pos
-   | Neg   :: ::  Neg
+ polarity :: '' ::= {{ com  action polarity }}
+   | Pos   :: ::  Pos {{ com TODO: explain a bit }}
+   | Neg   :: ::  Neg {{ com TODO: explain a bit }}
 
 
 metavar 
@@ -187,7 +187,7 @@ grammar
 generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object value }} 
    | Mem_integer_value :: :: integer  {{ com integer constant }}
    | Mem_floating_value :: :: floating {{ com floating-point constant }}
-   | Mem_pointer_value :: :: pointer {{ com pointer constant (e.g. null pointer) }}
+   | Mem_pointer_value :: :: pointer {{ com pointer constant (e.g.~null) }}
    | generic_name  :: :: cfunction {{ com C function pointer }}
 %   | array ( generic_object_value1 , .. , generic_object_valuen ) :: :: array {{ com C array value }}
    | array ( </ generic_object_valuei // , // i /> ) :: :: array {{ com C array value }}
@@ -212,7 +212,7 @@ generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core value 
    | Unit :: :: unit                              {{ com unit }}
    | True :: :: true                              {{ com true }}
    | False :: :: false                            {{ com false }}
-   | ctype :: :: ctype                            {{ com C type as value }}
+   | ctype :: :: ctype                            {{ com C type expr as value }}
    | core_base_type [ generic_value1 , .. , generic_valuen ] :: :: list {{ com list }}
    | ( generic_value1 , .. , generic_valuen ) :: :: tuple {{ com tuple }}
  
@@ -333,7 +333,7 @@ maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Sym
    | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
    | intFromPtr :: :: IntFromPtr {{ com cast of pointer value to integer value }} 
    | ptrFromInt :: :: PtrFromInt {{ com cast of integer value to pointer value }} 
-   | ptrValidForDeref :: :: PtrValidForDeref {{ com dereferencing validity predicat }}
+   | ptrValidForDeref :: :: PtrValidForDeref {{ com dereferencing validity predicate }}
    % | ptr_eq :: :: PtrEq
    % | ptr_ne :: :: PtrNe
    % | ptr_lt :: :: PtrLt
@@ -387,13 +387,13 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 %   (* Thread operators *)
 %   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
    | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com cppmem thread creation }}%(* Parallel composition: for cppmem-style composition *)
-   | wait ( Thread_thread_id ) :: :: wait  {{ com TODO: need to be removed from the TeX }}%(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
-   | Eloc Loc_t generic_expr :: X :: loc {{ com TODO: need to be removed from the TeX  }}
+   | wait ( Thread_thread_id ) :: X :: wait  %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+   | Eloc Loc_t generic_expr :: X :: loc 
 % TODO: P suppressed Eloc in latex - is that right? 
 
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
- generic_actionB {{ tex a }} {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }}
+ generic_actionB {{ tex a }} {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }} {{ com memory action }}
    | create ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
    | alloc ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
    | kill ( generic_pexpr ) :: :: Kill
