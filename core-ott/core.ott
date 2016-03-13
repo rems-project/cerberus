@@ -179,7 +179,7 @@ metavar Mem_mem_value {{ lem Mem.mem_value }} {{ tex memval }} ::= {{ phantom }}
 metavar Cabs_cabs_identifier {{ tex member }} {{ lem Cabs.cabs_identifier }} ::= {{ phantom }} {{ com C struct/union member name }}
  
 grammar 
-Mem_pointer_value {{ tex pointerval }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_value }}
+Mem_pointer_value {{ tex pointer\_const }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_value }}
    | nullptr ( ctype ) :: :: nullptr
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
@@ -187,7 +187,7 @@ grammar
 generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object value }} 
    | Mem_integer_value :: :: integer  {{ com integer constant }}
    | Mem_floating_value :: :: floating {{ com floating-point constant }}
-   | Mem_pointer_value :: :: pointer {{ com TODO null pointer constant? }}
+   | Mem_pointer_value :: :: pointer {{ com pointer constant (e.g. null pointer) }}
    | generic_name  :: :: cfunction {{ com C function pointer }}
 %   | array ( generic_object_value1 , .. , generic_object_valuen ) :: :: array {{ com C array value }}
    | array ( </ generic_object_valuei // , // i /> ) :: :: array {{ com C array value }}
@@ -212,7 +212,7 @@ generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core value 
    | Unit :: :: unit                              {{ com unit }}
    | True :: :: true                              {{ com true }}
    | False :: :: false                            {{ com false }}
-   | ctype :: :: ctype                            {{ com C type expr }}
+   | ctype :: :: ctype                            {{ com C type as value }}
    | core_base_type [ generic_value1 , .. , generic_valuen ] :: :: list {{ com list }}
    | ( generic_value1 , .. , generic_valuen ) :: :: tuple {{ com tuple }}
  
@@ -253,9 +253,7 @@ generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
 metavar Undefined_undefined_behaviour {{ tex \ottnt{ub\textit{-}name} }} {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
 metavar string {{ lem string }}  ::=  {{ phantom }} 
 
-metavar Mem_pure_memop {{ lem Mem.pure_memop }} {{ tex memop }} ::= {{ phantom }}  
-% TODO: introduce a phantom grammar for memop 
-% TODO: P wonders whether there is a distinction between pure memop and impure memop?  The idea of a "pure memop" may confuse, so we'd better be clear...
+% metavar Mem_memop {{ lem Mem.memop }} {{ tex memop }} ::= {{ phantom }}  
 
 embed {{ lem
 type sym = Symbol.t
@@ -292,7 +290,7 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
    |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com integer binop }}
    
 %   (* pure operations provided by the memory layout model *)
-   | memop ( Mem_pure_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com pure memory operation }}
+%   | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com pure memory operation }}
 %   (* these two are annoying *) 
 %   | ( struct tag ) { . Cabs_cabs_identifier1 = generic_pexpr1 , .. , . Cabs_cabs_identifiern = generic_pexprn } :: :: struct {{ com C struct expression }}
    | ( struct tag ) { </ . Cabs_cabs_identifieri = generic_pexpri // , // i /> } :: :: struct {{ com C struct expression }}
@@ -329,11 +327,30 @@ grammar
 
 maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
 
+ Mem_memop {{ tex memop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }}
+   | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }}
+   | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }}
+   | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
+   | intFromPtr :: :: IntFromPtr {{ com cast of pointer value to integer value }} 
+   | ptrFromInt :: :: PtrFromInt {{ com cast of integer value to pointer value }} 
+   | ptrValidForDeref :: :: PtrValidForDeref {{ com dereferencing validity predicat }}
+   % | ptr_eq :: :: PtrEq
+   % | ptr_ne :: :: PtrNe
+   % | ptr_lt :: :: PtrLt
+   % | ptr_gt :: :: PtrGt
+   % | ptr_le :: :: PtrLe
+   % | ptr_ge :: :: PtrGe
+   % | ptrdiff :: :: Ptrdiff
+   % | int_from_ptr :: :: IntFromPtr
+   % | ptr_from_int :: :: PtrFromInt
+   % | ptr_valid_for_deref :: :: PtrValidForDeref
+
+
 generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expressions }} 
 %   (* pure expression *)
    | pure ( generic_pexpr ) :: :: pure  {{ com  pure expression }}
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
-   | memop ( Mem_pure_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
+   | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
 % (*
 % (TODO C signals)
 %   (* these two are to deal with C signals *)
@@ -435,6 +452,10 @@ terminals :: 'terminal' ::=
    | is_integer  :: :: is_integer  {{ tex \ottkw{is\_integer } }}
    | is_signed   :: :: is_signed   {{ tex \ottkw{is\_signed  } }}
    | is_unsigned :: :: is_unsigned {{ tex \ottkw{is\_unsigned} }}
+   | ptrdiff :: :: Ptrdiff {{ tex \ottkw{ptrdiff} }}
+   | intFromPtr :: :: IntFromPtr {{ tex \ottkw{intFromPtr} }}
+   | ptrFromInt :: :: PtrFromInt {{ tex \ottkw{ptrFromInt} }}
+   | ptrValidForDeref :: :: PtrValidForDeref {{ tex \ottkw{ptrValidForDeref} }}
 embed {{ lem 
  
  type name         = generic_name Symbol.t
