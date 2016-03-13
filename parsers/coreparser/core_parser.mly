@@ -15,6 +15,87 @@ let symbol_compare =
 let implementation_constant_compare =
   compare
 
+type parsed_pexpr = (unit, _sym) generic_pexpr
+type parsed_expr  = (unit, unit, _sym) generic_expr
+
+type declaration =
+  | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * parsed_pexpr
+  | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
+  | Glob_decl of _sym * Core.core_type * parsed_expr
+  | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
+  | Proc_decl of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
+
+
+let rec mk_list_pe = function
+  | [] ->
+      Pexpr ((), PEctor (Cnil (), []))
+  | _pe::_pes ->
+      Pexpr ((), PEctor (Ccons, [_pe; mk_list_pe _pes]))
+
+
+(* TODO ... *)
+let mk_file _ =
+  if Pmap.is_empty M.std then
+    Rstd begin
+      Pmap.add (Symbol.Symbol (8, Some "catch_exceptional_condition")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (7, Some "is_representable")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (6, Some "ctype_width")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (5, Some "wrapI")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (4, Some "conv")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (3, Some "bitwise_OR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (2, Some "bitwise_XOR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (1, Some "bitwise_AND")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (0, Some "conv_int")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (Pmap.empty compare)
+     ))))))))
+    end
+  else
+     Rimpl (Pmap.empty compare, Pmap.empty compare)
+(*
+{
+  main= Symbol.Symbol (0, Some "main");
+  stdlib= Pmap.empty compare;
+  impl= Pmap.empty compare;
+  globs= [];
+  funs= Pmap.empty compare;
+}
+*)
+
+(*
+let rec symbolify_pexpr (Pexpr ((), _pe_): parsed_pexpr) : pexpr =
+  Pexpr ((), match _pe_ with
+    | PEundef ub ->
+        PEundef ub
+    | PEerror (str, _pe) ->
+        PEerror (str, symbolify_pexpr _pe)
+  )
+*)
+
+(*
+ | PEval of (generic_value 'sym) (* value *)
+ | PEconstrained of list (list Mem.mem_constraint * (generic_pexpr 'ty 'sym)) (* constrained value *)
+ | PEsym of 'sym (* core identifier *)
+ | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
+ | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
+ | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
+ | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
+ | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.t * Cabs.cabs_identifier (* pointer struct/union member shift *)
+ | PEnot of (generic_pexpr 'ty 'sym) (* not *)
+ | PEop of binop * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* binop *)
+ | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym) (* memory operation *)
+ | PEstruct of Symbol.t * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
+ | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
+ | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core let *)
+ | PEif of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core if *)
+ | PEis_scalar of (generic_pexpr 'ty 'sym)
+ | PEis_integer of (generic_pexpr 'ty 'sym)
+ | PEis_signed of (generic_pexpr 'ty 'sym)
+ | PEis_unsigned of (generic_pexpr 'ty 'sym)
+*)
+
+
+
+
+
 (*
 type _name =
   | Sym of _sym
@@ -952,6 +1033,7 @@ let subst name =
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
+%token STRUCT UNION
 
 (* C11 memory orders *)
 %token SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
@@ -975,11 +1057,11 @@ let subst name =
 %token RAISE REGISTER (* TRY WITH PIPE MINUS_GT *)
 
 (* Core sequencing operators *)
-%token LET LETW LETS LETA UNSEQ IN END INDET RETURN
+%token LET LETW LETS LETA UNSEQ IN END INDET RETURN PURE PCALL
 %nonassoc IN DOT
 
 
-%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA LBRACE RBRACE TILDE
+%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA LBRACE RBRACE NEG
 
 %token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
 
@@ -1004,16 +1086,14 @@ let subst name =
 (* binder patterns *)
 %token UNDERSCORE
 
-%token PCALL
 %token ND PAR 
 
 
 (* integer values *)
-%token IVMAX IVMIN IVSIZEOF IVALIGNOF
+%token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
 %token NIL CONS TUPLE ARRAY LOADED UNSPECIFIED
 
 %token CASE PIPE EQ_GT OF
-
 
 (* TODO: not used yet, but the tracing mode of the parser crash othewise ..... *)
 (*
@@ -1118,103 +1198,9 @@ delimited_nonempty_list(opening, separator, X, closing):
 
 start:
 | decls= nonempty_list(declaration) EOF
-    { failwith "mk_file decls" }
+    { mk_file decls }
 ;
 
-
-
-
-
-
-
-
-
-
-
-(* HIP
-
-
-
-
-
-%inline binary_operator:
-| PLUS            { Core.OpAdd }
-| MINUS           { Core.OpSub }
-| STAR            { Core.OpMul }
-| SLASH           { Core.OpDiv }
-| PERCENT         { Core.OpMod }
-| EQ              { Core.OpEq  }
-| LT              { Core.OpLt  }
-| SLASH_BACKSLASH { Core.OpAnd }
-| BACKSLASH_SLASH { Core.OpOr  }
-
-
-unseq_expr:
-| es = delimited(LBRACKET, n_ary_operator(PIPE_PIPE, seq_expr), RBRACKET)
-    { Eunseq es }
-
-
-basic_expr:
-| e = expr
-    { e }
-| p = paction
-    { Eaction p }
-
-extended_expr:
-| e = basic_expr
-    { e }
-| es = delimited(LBRACES, n_ary_operator(PIPES, seq_expr), RBRACES)
-    { Epar es }
-| e = unseq_expr
-    { e }
-
-seq_expr:
-| e = basic_expr
-    { e }
-| LET STRONG _as= pattern EQ e1= extended_expr IN e2= impure_expr
-    { Esseq (_as, e1, e2) }
-| LET STRONG LPAREN RPAREN EQ e1= extended_expr IN e2= impure_expr
-    { Esseq ([], e1, e2) }
-| LET WEAK _as= pattern EQ e1= extended_expr IN e2= impure_expr
-    { Ewseq (_as, e1, e2) }
-| LET WEAK LPAREN RPAREN EQ e1= extended_expr IN e2= impure_expr
-    { Ewseq ([], e1, e2) }
-| LET ATOM _as= pattern EQ a= action IN p= paction
-    { match _as with
-      | [alpha] -> Easeq (alpha, a, p)
-      | _       -> assert false }
-    (* TODO Really, we just want to parse a "SYM" an not a "pattern". *)
-| SAVE d = SYM DOT e = impure_expr
-    { Esave (d, e) }
-| RUN d = SYM
-    { Erun d }
-
-
-impure_expr:
-| e = seq_expr
-    { e }
-| e = unseq_expr
-    { e }
-
-
-
-expr:
-
-| CASE e = expr OF es = guards END
-    { Ecase (e, es) }
-
-
-| e = delimited(LBRACKET, seq_expr, RBRACKET) (* TODO: may need to also allow unseq_expr *)
-    { Eindet e } (* TODO: the index *)
-
-
-
-
-
-*)
-
-
-(* == CLEAN AFTER THAT =================================================================================================== *)
 
 (* BEGIN Ail types *)
 integer_base_type:
@@ -1251,15 +1237,15 @@ integer_type:
     { AilTypes.Unsigned (AilTypes.IntN_t 32) }
 | UINT64_T
     { AilTypes.Unsigned (AilTypes.IntN_t 64) }
-| SIGNED ibt= integer_base_type
-    { AilTypes.Signed ibt }
-| UNSIGNED ibt= integer_base_type
-    { AilTypes.Unsigned ibt }
+| SIGNED ibty= integer_base_type
+    { AilTypes.Signed ibty }
+| UNSIGNED ibty= integer_base_type
+    { AilTypes.Unsigned ibty }
 ;
 
 basic_type:
-| it= integer_type
-    { AilTypes.Integer it }
+| ity= integer_type
+    { AilTypes.Integer ity }
 ;
 
 ctype:
@@ -1301,16 +1287,14 @@ core_object_type:
 | ARRAY oTy= delimited(LPAREN, core_object_type, RPAREN)
     { OTy_array oTy }
 (*
-  | OTy_struct of Symbol.t
-  | OTy_union of Symbol.t
+| STRUCT tag= SYM
+    { OTy_struct tag }
+| UNION tag= SYM
+    { OTy_union tag }
 *)
 ;
 
 core_base_type:
-| oTy= core_object_type
-    { BTy_object oTy }
-| LOADED oTy= core_object_type
-    { BTy_loaded oTy }
 | UNIT
     { BTy_unit }
 | BOOLEAN
@@ -1321,26 +1305,15 @@ core_base_type:
     { BTy_list baseTy }
 | baseTys= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN)
     { BTy_tuple baseTys }
+| oTy= core_object_type
+    { BTy_object oTy }
+| LOADED oTy= core_object_type
+    { BTy_loaded oTy }
 ;
-
-(*
-core_derived_type:
-| baseTy = core_base_type
-    { baseTy }
-| baseTys= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN)
-    { BTy_tuple baseTys }
-| LIST baseTy= core_base_type
-    { BTy_list baseTy }
-;
-*)
 
 core_type:
-| baseTy = core_base_type (* core_derived_type *)
+| baseTy = core_base_type
     { TyBase baseTy }
-(*
-| baseTy = delimited(LBRACKET, (* core_derived_type *) core_base_type, RBRACKET)
-    { TyEffect baseTy }
-*)
 | EFF baseTy= core_base_type
     { TyEffect baseTy }
 ;
@@ -1420,9 +1393,9 @@ pattern:
 (* Syntactic sugar for tuples and lists *)
 ;
 
-pattern_pair:
-| PIPE pat= pattern EQ_GT _pe= pexpr
-    { (pat, _pe) }
+pattern_pair(X):
+| PIPE _pat= pattern EQ_GT _body= X
+    { (_pat, _body) }
 
 (*
 typed_expr:
@@ -1440,10 +1413,8 @@ value:
 *)
 | n= INT_CONST
     { Vobject (OVinteger (Mem.integer_ival0 n)) }
-(*
-| LBRACE nm= name RBRACE
-  { Vcfunction nm }
-*)
+| CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
+  { Vobject (OVcfunction _nm) }
 | UNIT
     { Vunit }
 | TRUE
@@ -1456,6 +1427,8 @@ value:
 
 
 pexpr:
+| _pe= delimited(LPAREN, pexpr, RPAREN)
+    { _pe }
 | UNDEF ub= UB
     { Pexpr ((), PEundef ub) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
@@ -1469,11 +1442,16 @@ pexpr:
     { Pexpr ((), PEsym str) }
 | iCst= IMPL
     { Pexpr ((), PEimpl iCst) }
+(* Syntactic sugar for tuples and lists *)
+| LPAREN _pe= pexpr COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+    { Pexpr ((), PEctor (Ctuple, _pe :: _pes)) }
+| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
+    { mk_list_pe _pes }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Pexpr ((), PEctor (ctor, _pes)) }
-| CASE _pe= pexpr OF _pat_es= list(pattern_pair) END
-    { Pexpr ((), PEcase (_pe, _pat_es)) }
-| ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= ctype COMMA _pe2= pexpr RPAREN
+| CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
+    { Pexpr ((), PEcase (_pe, _pat_pes)) }
+| ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= delimited(DQUOTE, ctype, DQUOTE) COMMA _pe2= pexpr RPAREN
     { Pexpr ((), PEarray_shift (_pe1, ty, _pe2)) }
 (*
 | MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA RPAREN
@@ -1506,7 +1484,7 @@ pexpr:
 
 
 expr:
-| pe_= pexpr
+| PURE pe_= delimited(LPAREN, pexpr, RPAREN)
     { Epure pe_ }
 (*
   | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym)
@@ -1515,11 +1493,14 @@ expr:
     { Eskip }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
     { Elet (_pat, _pe1, _e2) }
-(*
-  | Eif of generic_pexpr 'ty 'sym * generic_expr 'a 'ty 'sym * generic_expr 'a 'ty 'sym
-  | Ecase of generic_pexpr 'ty 'sym * list (generic_pattern 'ty 'sym * generic_expr 'a 'ty 'sym)
-  | Eaction of generic_paction 'a 'ty 'sym
-*)
+| IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
+    { Eif (_pe1, _e2, _e3) }
+| CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
+    { Ecase (_pe, _pat_es) }
+| PCALL LPAREN _pe= pexpr COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+    { Core.Eproc ((), _pe, _pes) }
+| _pact= paction
+    { Eaction _pact }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Eunseq _es }
 | LETW _pat= pattern EQ _e1= expr IN _e2= expr
@@ -1544,6 +1525,31 @@ expr:
 *)
 ;
 
+action:
+| CREATE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Create (_pe1, _pe2, Symbol.PrefOther "Core") }
+| ALLOC LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Alloc0 (_pe1, _pe2, Symbol.PrefOther "Core") }
+| KILL _pe= delimited(LPAREN, pexpr, RPAREN)
+    { Kill _pe }
+| STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
+    { Store0 (_pe1, _pe2, _pe3, Cmm.NA) }
+| LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Load0 (_pe1, _pe2, Cmm.NA) }
+| STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA mo= memory_order RPAREN
+    { Store0 (_pe1, _pe2, _pe3, mo) }
+| LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
+    { Load0 (_pe1, _pe2, mo) }
+| RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
+    { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
+;
+
+paction:
+| act= action
+    { Paction (Pos, Action (Location_ocaml.unknown, (), act)) }
+| NEG act= delimited(LPAREN, action, RPAREN)
+    { Paction (Neg, Action (Location_ocaml.unknown, (), act)) }
+;
 
 
 
@@ -1887,35 +1893,33 @@ expr_old:
 
 def_declaration:
 | DEF dname= IMPL COLON bTy= core_base_type COLON_EQ pe_= pexpr
-    { failwith "Def_decl (dname, bTy, pe_)" }
+    { Def_decl (dname, bTy, pe_) }
 ;
 
 ifun_declaration:
 | FUN fname= IMPL params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON bTy= core_base_type
-  COLON_EQ fbody= expr
-    { failwith "IFun_decl (fname, (bTy, params, fbody))" }
+  COLON_EQ fbody= pexpr
+    { IFun_decl (fname, (bTy, params, fbody)) }
 ;
 
 glob_declaration:
 | GLOB gname= SYM COLON cTy= core_type COLON_EQ e= expr
-  {
-   print_endline "GLOB";
-   failwith "Glob_decl (gname, cTy, e)" }
+  { Glob_decl (gname, cTy, e) }
 ;
 
 fun_declaration:
 | FUN fname= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON bTy= core_base_type
-  COLON_EQ fbody= expr
-    { failwith "Fun_decl (fname, (bTy, params, fbody))" }
+  COLON_EQ fbody= pexpr
+    { Fun_decl (fname, (bTy, params, fbody)) }
 ;
 
 proc_declaration:
 | PROC _sym= SYM params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON EFF bTy= core_base_type
   COLON_EQ fbody= expr
-    { failwith "Proc_decl (_sym, (bTy, params, fbody))" }
+    { Proc_decl (_sym, (bTy, params, fbody)) }
 ;
 
 

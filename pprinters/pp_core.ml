@@ -200,8 +200,10 @@ let rec pp_object_value = function
       !^ str
   | OVfloating (Defacto_memory_types.FVunspecified) ->
       !^ "unspec(floating)"
+(*
   | OVsymbolic symb ->
       !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
+*)
   | OVpointer ptr_val ->
       Pp_mem.pp_pointer_value ptr_val
   | OVarray cvals ->
@@ -245,25 +247,25 @@ let rec pp_value = function
 
 let pp_ctor = function
   | Cnil _ ->
-      !^ "nil"
+      !^ "Nil"
   | Ccons ->
-      !^ "cons"
+      !^ "Cons"
   | Ctuple ->
-      !^ "list"
+      !^ "Tuple"
   | Carray ->
-      !^ "array"
+      !^ "Array"
   | Civmax ->
-      !^ "ivmax"
+      !^ "Ivmax"
   | Civmin ->
-      !^ "ivmin"
+      !^ "Ivmin"
   | Civsizeof ->
-      !^ "ivsizeof"
+      !^ "Ivsizeof"
   | Civalignof ->
-      !^ "ivalignof"
+      !^ "Ivalignof"
   | Cloaded ->
-      !^ "loaded"
+      !^ "Loaded"
   | Cunspecified ->
-      !^ "unspecified"
+      !^ "Unspecified"
 
 
 let rec pp_pattern = function
@@ -271,6 +273,9 @@ let rec pp_pattern = function
       P.underscore
   | CaseBase (Some sym) ->
       pp_symbol sym
+(* Syntactic sugar for tuples and lists *)
+  | CaseCtor (Ctuple, pats) ->
+      P.parens (comma_list pp_pattern pats)
   | CaseCtor (ctor, pats) ->
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
@@ -344,13 +349,12 @@ let pp_pexpr pe =
         | PElet (pat, pe1, pe2) ->
             (* DEBUG *) !^ "{-pe-}" ^^^
             pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
-            pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2 ^^^ pp_control "end"
+            pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
         | PEif (pe1, pe2, pe3) ->
             pp_control "if" ^^^ pp pe1 ^^^ pp_control "then" ^^
             P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
             pp_control "else" ^^
-            P.nest 2 (P.break 1 ^^ pp pe3) ^^ P.break 1 ^^^
-            pp_control "end"
+            P.nest 2 (P.break 1 ^^ pp pe3)
         | PEis_scalar pe ->
             pp_keyword "is_scalar" ^^^ P.parens (pp pe)
         | PEis_integer pe ->
@@ -366,9 +370,12 @@ let pp_pexpr pe =
 
 let rec pp_expr = function
   | Epure pe ->
-      pp_pexpr pe
+      pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
   | Ememop (memop, pes) ->
+      failwith "Ememop"
+      (*
       pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
+*)
 (*
   | Eraise str ->
       pp_keyword "raise" ^^ P.parens (!^ str)
@@ -379,11 +386,11 @@ let rec pp_expr = function
       pp_keyword "skip"
   | Elet (pat, pe1, e2) ->
       (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
-      pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2 ^^^ pp_control "end"
+      pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2
   | Eif (pe1, e2, e3) ->
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
       P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
-      pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3) ^^ P.break 1 ^^^ pp_control "end"
+      pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3)
   | Ecase _ ->
       failwith "Ecase"
   | Eproc (_, pe, pes) ->
@@ -431,7 +438,7 @@ let rec pp_expr = function
   | Ewseq (pat, e1, e2) ->
       pp_control "letw" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-      (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+      (* P.nest 2 *) (pp_expr e2)
 (*
   | Esseq (([] as _as), e1, e2)
   | Esseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
@@ -441,15 +448,15 @@ let rec pp_expr = function
   | Esseq (pat, e1, e2) -> 
       pp_control "lets" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-      (* P.nest 2 *) (pp_expr e2) ^^ P.break 1 ^^ pp_control "end"
+      (* P.nest 2 *) (pp_expr e2)
   | Easeq (None, act1, pact2) ->
       pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
       pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
   | Easeq (Some (sym, _), act1, pact2) ->
       pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
       pp_expr (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp_expr (Eaction pact2)
-  | Eindet e ->
-      pp_control "indet" ^^ P.parens (pp_expr e)
+  | Eindet (i, e) ->
+      pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp_expr e)
   | Esave (sym, sym_tys, e) ->
       pp_keyword "save" ^^^ pp_symbol sym ^^
       P.parens (comma_list (fun (sym,ty) -> pp_symbol sym ^^ P.colon ^^^ Pp_core_ctype.pp_ctype ty) sym_tys) ^^

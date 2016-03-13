@@ -68,7 +68,6 @@ type token =
   | CTYPE
   | CFUNCTION
   | UNIT
-  | FUNCTION
   | EFF
   | LIST
   | TRUE
@@ -149,7 +148,7 @@ type token =
   | LE
   | SLASH_BACKSLASH
   | BACKSLASH_SLASH
-  | TILDE
+  | NEG
   | PIPES
   | UNDERSCORE
   | PIPE
@@ -185,6 +184,7 @@ type token =
   | IVSIZEOF
   | IVALIGNOF
   | PCALL
+  | CFUNCTION_VALUE
 
 
   | NIL
@@ -192,7 +192,8 @@ type token =
   | TUPLE
   | ARRAY
   | LOADED
-
+  
+  | PURE
 
 
 

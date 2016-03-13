@@ -93,10 +93,10 @@ let rec sequentialise_expr expr =
         C.Esseq sym_opts <$> sequentialise_expr e1 <*> sequentialise_expr e2
     | C.Easeq _ _ _ ->
         E.return expr
-    | C.Eindet e ->
-        C.Eindet <$> sequentialise_expr e
-    | C.Ebound n e ->
-        C.Ebound n <$> sequentialise_expr e
+    | C.Eindet i e ->
+        C.Eindet i <$> sequentialise_expr e
+    | C.Ebound i e ->
+        C.Ebound i <$> sequentialise_expr e
     | C.Esave ksym sym_tys e ->
         C.Esave ksym sym_tys <$> sequentialise_expr e
     | C.Erun _ _ _ ->
@@ -390,7 +390,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                   C.PEcase (Caux.mk_sym_pe bTy_e sym_e)
                     [ (C.CaseCtor C.Cloaded [C.CaseBase (Just sym)],
                        let expr =
-                         Caux.mk_op_pe C.OpSub zero_pe (integer_promotion (ctype_of e) (Caux.mk_sym_pe bTy_e sym_e)) in
+                         Caux.mk_op_pe C.OpSub zero_pe (integer_promotion (ctype_of e) (Caux.mk_sym_pe bTy_e sym)) in
                        if AilTypesAux.is_signed_integer_type result_ty then
                          catch_exceptional_condition [Caux.mk_ail_ctype_pe result_ty; expr]
                        else
@@ -414,7 +414,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 C.Pexpr (C.BTy_loaded C.OTy_integer) (
                   C.PEcase (Caux.mk_sym_pe bTy_e sym_e)
                     [ (C.CaseCtor C.Cloaded [C.CaseBase (Just sym)],
-                       let promoted_e = integer_promotion (ctype_of e) (Caux.mk_sym_pe bTy_e sym_e) in
+                       let promoted_e = integer_promotion (ctype_of e) (Caux.mk_sym_pe bTy_e sym) in
                        (* NOTE: result_ty == promoted type of e *)
                        if AilTypesAux.is_unsigned_integer_type result_ty then
                          (* STD §6.5.3.3#4, sentence 3 *)
@@ -2037,18 +2037,20 @@ end
               (C.Eshift (C.PEsym a_e) (shiftPathFromMember program tag_sym ident))
 *)
 
-
+*)
 
       | A.AilEconst cst ->
           E.return $ C.Epure match cst with
             | A.ConstantIndeterminate ty ->
-                C.PEval (C.Vunspecified (Caux.proj_ctype ty))
+                let c_ty = Caux.proj_ctype ty in
+                C.Pexpr (C.BTy_loaded (Caux.core_object_type_of_ctype c_ty)) (C.PEval (C.Vunspecified c_ty))
             | A.ConstantNull ->
                 (* TODO: should make the Ail ctor take a ctype? *)
-                Caux.nullptr_pexpr Cty.Void
+                Caux.nullptr_pe Cty.Void
             | A.ConstantInteger (A.IConstant n _ _) ->
                 (* TODO: suffix/basis? + check *)
-                C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival n)))
+                C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEval (C.Vloaded (C.OVinteger (Mem.integer_ival n))))
+(*
             | A.ConstantInteger (A.IConstantMax ity) ->
                 let ty = Caux.proj_ctype (Aty.Basic (Aty.Integer ity)) in
                 C.PEcall (C.Impl Implementation_.Ctype_max, C.BTy_object C.OTy_integer) [(C.PEval (C.Vctype ty), C.BTy_ctype)]
@@ -2065,8 +2067,10 @@ end
                 error "WIP: Translation AilEconst, ConstantArray"
             | A.ConstantStruct (* TODO: tag_sym xs *) _ _ ->
                 error "WIP: Translation AilEconst, ConstantStruct"
+*)
           end
       
+(*
       | A.AilEbuiltin str ->
           (* TODO: the redundance with Builtins.lem is wrong *)
           E.return $ C.Epure match str with
@@ -2279,6 +2283,7 @@ type translate_stmt_labels = <|
   cases   : list (C.sym * C.ksym); (* the syms are bound to the pexprs corresponding to the integer constants *)
   loop    : maybe C.ksym;
   break   : maybe C.ksym;
+  return  : C.ksym;
 |>
 
 
@@ -2303,6 +2308,19 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSexpr e ->
         translate_rvalue e
     
+    | A.AilSblock [] ss ->
+        E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> E.return core_s) ss >>= fun core_ss ->
+        E.return $
+          foldr (fun core_s acc -> C.Esseq (C.CaseBase Nothing) core_s acc) C.Eskip core_ss
+    
+    | A.AilSblock [(sym, (dur_opt, qs, ty))] ss ->
+        let c_ty = Caux.mk_ail_ctype_pe ty in
+        E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> E.return core_s) ss >>= fun core_ss ->
+        E.return $
+          C.Esseq (Caux.mk_sym_pat sym) (Caux.pcreate loc (Caux.alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym])) (
+            foldr (fun core_s acc -> C.Esseq Caux.mk_empty_pat core_s acc) (Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) core_ss
+          )
+    
     | A.AilSblock binds ss ->
         let decls = [ (sym, ty) | forall ((sym, (dur, qs, ty)) MEM binds ) | true ] in
         (* the symbolic names and create actions for the local variables *)
@@ -2321,7 +2339,7 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> E.return core_s) ss >>= fun core_ss ->
         E.pop_block_objects >>
         E.return (
-          C.Esseq (C.CaseCtor C.Ctuple pats) (Caux.mk_unseq core_creates)
+          C.Esseq (Caux.mk_tuple_pat pats) (Caux.mk_unseq core_creates)
             (foldr (fun core_s acc -> C.Esseq (C.CaseBase Nothing) core_s acc) (Caux.mk_unseq core_kills) core_ss)
         )
 (*
@@ -2464,9 +2482,15 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
     | A.AilSreturnVoid ->
         E.get_visible_objects >>= fun visible_syms ->
         E.return $
+          C.Esseq Caux.mk_empty_pat
+            (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) visible_syms)
+            (* TODO: check the symbols *)
+            (C.Erun () labs.return [])
+(* OLD Ereturn
           C.Esseq (C.CaseBase Nothing)
             (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) visible_syms)
             (C.Ereturn Caux.unit_pe)
+*)
     
     | A.AilSreturn e ->
         (* TODO UNSPEC *)
@@ -2692,7 +2716,9 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
             | Just (param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *) (
-                  translate_stmt stdlib program sym <| default= Nothing; cases= []; loop= Nothing; break= Nothing |> stmt
+
+                  E.fresh_named_symbol "return"  >>= fun sym_return  ->
+                  translate_stmt stdlib program sym <| return= sym_return; default= Nothing; cases= []; loop= Nothing; break= Nothing |> stmt
                 ) >>= fun _core_body ->
                 
                 (* TODO: sequentialisation is only a debug feature *)

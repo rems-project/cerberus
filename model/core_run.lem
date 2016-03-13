@@ -1391,9 +1391,9 @@ let rec hoist_negatives expr =
 *)
     | Easeq sym_opt act1 pact2 ->
         error "Core_run.hoist_negatives found an Easeq"
-    | Eindet e ->
+    | Eindet i e ->
         hoist_negatives e >>= fun e' ->
-        State.return (Eindet e')
+        State.return (Eindet i e')
     | Ebound i e ->
         hoist_negatives e >>= fun e' ->
         State.return (Ebound i e')
@@ -1402,8 +1402,10 @@ let rec hoist_negatives expr =
         State.return (Esave ksym sym_tys e')
     | Erun _ _ _ ->
       State.return expr
+(*
     | Ereturn _ ->
         State.return expr
+*)
     | End es ->
         State.mapM hoist_negatives es >>= fun es' ->
         State.return (End es')
@@ -2178,8 +2180,10 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
 
 
 
-
+(*
     | (Ereturn pe, Stack_cons _ sk) ->
+*)
+    | (Epure pe, Stack_cons [] sk) ->
         one match valueFromPexpr pe with
           | Just (bTy, cval) ->
               match sk with
@@ -2209,9 +2213,9 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     )
               end
           | Nothing ->
-              Step_eval "Ereturn" (
+              Step_eval "Epure" (
                 E.core_eval th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                E.return <| th_st with arena= Ereturn pe' |>
+                E.return <| th_st with arena= Epure pe' |>
               )
         end
     
@@ -2253,7 +2257,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
     
     | (Easeq _ _ _, _) ->
         error "Core_run must be called after Core_indet"
-    | (Eindet _, _) ->
+    | (Eindet _ _, _) ->
         error "Core_run must be called after Core_indet"
     | (Ebound _ _, _) ->
         error "Core_run must be called after Core_indet"
@@ -2387,16 +2391,18 @@ let rec convert_expr expr =
         Esseq _as (convert_expr e1) (convert_expr e2)
     | Easeq sym_opt act1 pact2 ->
         Easeq sym_opt (convert_action act1) (convert_paction pact2)
-    | Eindet e ->
-        Eindet (convert_expr e)
+    | Eindet i e ->
+        Eindet i (convert_expr e)
     | Ebound i e ->
         Ebound i (convert_expr e)
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (convert_expr e)
     | Erun _ ksym sym_pes ->
         Erun empty_annotation ksym sym_pes
+(*
     | Ereturn pe ->
         Ereturn pe
+*)
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->

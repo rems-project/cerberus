@@ -56,7 +56,7 @@ let keywords =
       ("ctype",     T.CTYPE    );
       ("cfunction", T.CFUNCTION);
       ("unit",      T.UNIT     );
-      ("function",  T.FUNCTION );
+
       
       ("eff", T.EFF);
 (*    | Tuple of list core_base_type *)
@@ -85,6 +85,7 @@ let keywords =
 (*  | Eproc of set 'a * name * list (expr 'a) *)
 (*  | Eaction of paction 'a *)
 (*  | Eunseq of list (expr 'a) *)
+      ("pure", T.PURE);
       ("unseq", T.UNSEQ);
       ("letw", T.LETW);
       ("lets", T.LETS);
@@ -124,7 +125,6 @@ let keywords =
       ("proc",    T.PROC     );
       
       
-      ("end",     T.END     );
       ("seq_cst", T.SEQ_CST );
       ("relaxed", T.RELAXED );
       ("release", T.RELEASE );
@@ -133,7 +133,8 @@ let keywords =
       ("acq_rel", T.ACQ_REL );
 
       ("case", T.CASE);
-      ("of",   T.OF);
+      ("of"  , T.OF  );
+      ("end" , T.END );
 
 
 (* TODO: temporary *)
@@ -143,13 +144,15 @@ let keywords =
       ("is_unsigned", T.IS_UNSIGNED);
       
       (* integer values *)
-      ("ivmax",     T.IVMAX);
-      ("ivmin",     T.IVMIN);
-      ("ivsizeof",  T.IVSIZEOF);
-      ("ivalignof", T.IVALIGNOF);
-      ("unspecified", T.UNSPECIFIED);
+      ("Ivmax",     T.IVMAX);
+      ("Ivmin",     T.IVMIN);
+      ("Ivsizeof",  T.IVSIZEOF);
+      ("Ivalignof", T.IVALIGNOF);
+      ("Unspecified", T.UNSPECIFIED);
+
+      ("Cfunction", T.CFUNCTION_VALUE);
+
       
-      ("is_unspec", T.IS_UNSPEC);
       ("pcall", T.PCALL);
       
       ("Nil",    T.NIL);
@@ -200,7 +203,7 @@ let lex_comment remainder lexbuf =
 let error_name = "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
 let ub_name = "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
 let impl_name = '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
-let symbolic_name = ['_' 'a'-'z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
+let symbolic_name = ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
 rule main = parse
   (* beginning of a comment *)
@@ -239,7 +242,7 @@ rule main = parse
   | "\\/" { T.BACKSLASH_SLASH }
   
   (* negative action *)
-  | '~' { T.TILDE }
+  | "neg" { T.NEG }
   
   | "||"  { T.PIPE_PIPE }
   | "|||"  { T.PIPES }

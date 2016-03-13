@@ -188,16 +188,18 @@ let rec resolve_read_expr write_sym symb_v expr =
         Core.Esseq _as (fe e1) (fe e2)
     | Core.Easeq sym_opt act1 pact2 ->
         Core.Easeq sym_opt (resolve_read_action write_sym symb_v act1) (resolve_read_paction write_sym symb_v pact2)
-    | Core.Eindet e ->
-        Core.Eindet (fe e)
+    | Core.Eindet i e ->
+        Core.Eindet i (fe e)
     | Core.Ebound i e ->
         Core.Ebound i (fe e)
     | Core.Esave ksym sym_tys e ->
         Core.Esave ksym sym_tys (fe e)
     | Core.Erun annot ksym sym_pes ->
         Core.Erun annot ksym (List.map (fun (sym, pe) -> (sym, fpe pe)) sym_pes)
+(*
     | Core.Ereturn pe ->
         Core.Ereturn (fpe pe)
+*)
     | Core.End es ->
         Core.End (List.map fe es)
     | Core.Epar es ->
@@ -1512,7 +1514,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
     | Just decl ->
         let (params, expr) = match decl with
           | Core.Fun  _ params pe ->
-              (params, Core.Ereturn pe)
+              (params, Core.Epure pe)
           | Core.Proc _ params e ->
               (params, e)
         end in

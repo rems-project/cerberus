@@ -19,7 +19,7 @@ module Cmm = Cmm_csem
 % *)
 
 
-metavar Symbol_t {{ lem Symbol.t }}  ::=  {{ phantom }} 
+metavar Symbol_t {{ tex sym }} {{ lem Symbol.t }}  ::=  {{ phantom }} 
 metavar tag {{ lem Symbol.t }}  ::=  {{ phantom }}  {{ com struct/union tag }}
 
 indexvar n ::= {{ phantom }}
@@ -61,7 +61,7 @@ core_type {{ tex \textit{coreTy} }} :: 'Ty' ::= {{ com Core types }}
 %TODO: maybe split apart this sym into different nonterminals? 
 metavar sym {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Symbolic names }}
 
-metavar ksym {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Continuation names }}
+metavar label {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Continuation names }}
 
 
 % (* Binary operators *)
@@ -128,14 +128,14 @@ grammar
 
 
 metavar 
-Implementation__implementation_constant {{ lem Implementation_.implementation_constant }} {{ tex impl\_const }}::= {{ phantom }}
+Implementation__implementation_constant {{ lem Implementation_.implementation_constant }} {{ tex \texttt{<impl-const>} }}::= {{ phantom }}
 
 metavar tyvarsym {{ lem 'sym }} {{tex \mathit{sym} }}::= {{ phantom }}
 
 grammar 
 generic_name {{ tex name }} :: '' ::= {{ auxparam 'sym }}
-   | tyvarsym                                    :: :: Sym   {{ com core identifier }} 
-   | < Implementation__implementation_constant > :: :: Impl  {{ com implementation-defined constant }}
+   | tyvarsym                                :: :: Sym   {{ com Core identifier }} 
+   | Implementation__implementation_constant :: :: Impl  {{ com implementation-defined constant }}
 
 
  
@@ -183,8 +183,8 @@ generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }}
    | Mem_pointer_value :: :: pointer {{ com TODO: CHECK  null pointer constant }}
    | generic_name  :: :: cfunction {{ com C function pointer }}
    | array ( generic_object_value1 , .. , generic_object_valuen ) :: :: array {{ com C array value }}
-   | ( struct sym ) { . Cabs_cabs_identifier1 = Mem_mem_value1 , .. , . Cabs_cabs_identifiern = Mem_mem_valuen } :: :: struct {{ com C struct value }}
-   | ( union sym ) { . Cabs_cabs_identifier = Mem_mem_value } :: :: union {{ com C union value }}
+   | ( struct tag ) { . Cabs_cabs_identifier1 = Mem_mem_value1 , .. , . Cabs_cabs_identifiern = Mem_mem_valuen } :: :: struct {{ com C struct value }}
+   | ( union tag ) { . Cabs_cabs_identifier = Mem_mem_value } :: :: union {{ com C union value }}
  
 
 metavar Mem_mem_constraint {{ lem Mem.mem_constraint }} ::= {{ phantom }}   
@@ -207,7 +207,7 @@ generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }}
    | ( generic_value1 , .. , generic_valuen ) :: :: tuple
  
 
-metavar ty {{ lem 'ty }} ::= {{ phantom }}
+metavar ty {{ tex }} {{ lem 'ty }} ::= {{ phantom }}
  
 
 % TODO: maybe suppress ty in latex 
@@ -235,12 +235,12 @@ maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
    | sym :: :: Just
 
 
-generic_pattern {{ tex pattern }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
+generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
    | maybesym                                                  :: :: Base
    | generic_ctor ( generic_pattern1 , .. , generic_patternn ) :: :: Ctor
  
 
-metavar Undefined_undefined_behaviour {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
+metavar Undefined_undefined_behaviour {{ tex \texttt{ub-name} }} {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
 metavar string {{ lem string }}  ::=  {{ phantom }} 
 
 metavar Mem_pure_memop {{ lem Mem.pure_memop }} {{ tex memop }} ::= {{ phantom }}  
@@ -266,7 +266,7 @@ pexpr_ :: 'PE' ::=  {{ auxparam 'ty 'sym }}
    
 %   (* names *)
    | tyvarsym                          :: :: sym {{ com core identifier }}
-   | < Implementation__implementation_constant > :: :: impl {{ com implementation-defined constant }} 
+   | Implementation__implementation_constant :: :: impl {{ com implementation-defined constant }} 
    
 %   (* data (de|con)structors *)
    | generic_ctor ( generic_pexpr1 , ..  , generic_pexprn )  :: :: ctor  {{ com constructor application }}
@@ -284,6 +284,7 @@ pexpr_ :: 'PE' ::=  {{ auxparam 'ty 'sym }}
    | memop ( Mem_pure_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
 %   (* these two are annoying *) 
    | ( struct tag ) { . Cabs_cabs_identifier1 = generic_pexpr1 , .. , . Cabs_cabs_identifiern = generic_pexprn } :: :: struct {{ com C struct expression }}
+   | ( union tag ) { . Cabs_cabs_identifier1 = generic_pexpr1 } :: :: union {{ com C union expression }}
  
 % TODO what about unions???!
 
@@ -305,22 +306,22 @@ pexpr_ :: 'PE' ::=  {{ auxparam 'ty 'sym }}
 generic_pexpr {{ tex pe }} :: 'P' ::= {{ auxparam 'ty 'sym }}
    | Pexpr ty pexpr_ :: :: expr
  
-metavar a {{ lem 'a }} ::= {{ phantom }}
-metavar nat {{ lem nat }} ::= {{ phantom }}
-metavar Thread_thread_id {{ lem Thread.thread_id }} ::= {{ phantom }}
+metavar a {{ tex }} {{ lem 'a }} ::= {{ phantom }}
+metavar nat {{ tex n }} {{ lem nat }} ::= {{ phantom }}
+metavar Thread_thread_id {{ tex \texttt{thread-id} }} {{ lem Thread.thread_id }} ::= {{ phantom }}
 metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
-metavar Cmm_memory_order {{ lem Cmm.memory_order }} ::= {{ phantom }}
-metavar Symbol_prefix {{ lem Symbol.prefix }}  ::=  {{ phantom }} 
+metavar Cmm_memory_order {{ tex \texttt{memory-order} }} {{ lem Cmm.memory_order }} ::= {{ phantom }}
+metavar Symbol_prefix {{ tex }} {{ lem Symbol.prefix }}  ::=  {{ phantom }} 
 
 grammar
 
-maybe_Symbol_t_core_base_type :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
+maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
 
-generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
+generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
 %   (* pure expression *)
-   | generic_pexpr :: :: pure
+   | pure ( generic_pexpr ) :: :: pure
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
-   | memop Mem_pure_memop generic_pexpr1 .. generic_pexprn :: :: memop
+   | memop ( Mem_pure_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop
 % (*
 % (TODO C signals)
 %   (* these two are to deal with C signals *)
@@ -330,41 +331,41 @@ generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
 %   (* potentially effectful *)
    | skip :: :: skip
    | let generic_pattern = generic_pexpr in generic_expr :: :: let
-   | Eif generic_pexpr generic_expr1 generic_expr2 :: :: if
-   | Ecase generic_pexpr ( generic_pattern1 , generic_expr1 ) .. ( generic_patternn , generic_exprn ) :: :: case
-   | Eproc a generic_pexpr generic_pexpr1 .. generic_pexprn :: :: proc
-   | Eaction generic_paction  :: :: action
+   | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if
+   | case generic_pexpr with | generic_pattern1 => generic_expr1 .. | generic_patternn => generic_exprn end :: :: case {{ com pattern matching }}
+   | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc
+   | generic_paction  :: :: action
 %   (* sequencing operators *)
-   | Eunseq generic_expr1 .. generic_exprn :: :: unseq
+   | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq
    | letw generic_pattern = generic_expr1 in generic_expr2 :: :: wseq
    | lets generic_pattern = generic_expr1 in generic_expr2 :: :: sseq
-   | Easeq maybe_Symbol_t_core_base_type generic_action1 generic_paction2 :: :: aseq % (* this ctor doesn't exist at runtine *)
+   | leta maybe_Symbol_t_core_base_type = generic_action1 in generic_paction2 :: :: aseq % (* this ctor doesn't exist at runtine *)
 %   (* indeterminately-sequenced expressions and boundary *) 
-   | Eindet generic_expr :: :: indet %(* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
-   | Ebound nat generic_expr :: :: bound %(* this ctor doesn't exist at runtine *)
+   | indet [ nat ] ( generic_expr ) :: :: indet %(* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+   | bound [ nat ] ( generic_expr ) :: :: bound %(* this ctor doesn't exist at runtine *)
 %   (* Continuation operators *)
 %   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
-   | Esave ksym ( Symbol_t1 ctype1 ) .. ( Symbol_tn ctypen ) generic_expr :: :: save
-   | Erun a ksym ( Symbol_t1 , generic_pexpr1 ) .. ( Symbol_tn , generic_pexprn ) :: :: run
-   | return ( generic_pexpr ) :: :: return
+   | save label ( Symbol_t1 : ctype1 ,  .. , Symbol_tn : ctypen ) in generic_expr :: :: save
+   | run a label ( Symbol_t1 := generic_pexpr1 , .. , Symbol_tn := generic_pexprn ) :: :: run
+%   | return ( generic_pexpr ) :: :: return
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
    | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd
 %   (* Thread operators *)
 %   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
    | par ( generic_expr1 , .. , generic_exprn ) :: :: par %(* Parallel composition: for cppmem-style composition *)
-   | Ewait Thread_thread_id :: :: wait %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+   | wait ( Thread_thread_id ) :: :: wait %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
    | Eloc Loc_t generic_expr :: :: loc
  
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
  generic_actionB {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }}
-   | Create generic_pexpr1 generic_pexpr2 Symbol_prefix :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
-   | Alloc generic_pexpr1 generic_pexpr2 Symbol_prefix :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
-   | Kill generic_pexpr :: :: Kill
-   | Store generic_pexpr1 generic_pexpr2 generic_pexpr Cmm_memory_order :: :: Store
-   | Load generic_pexpr1 generic_pexpr2 Cmm_memory_order :: :: Load
-   | RMW generic_pexpr1  generic_pexpr2 generic_pexpr3 generic_pexpr4 Cmm_memory_order1 Cmm_memory_order2 :: :: RMW
+   | create ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
+   | alloc ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
+   | kill ( generic_pexpr ) :: :: Kill
+   | store ( generic_pexpr1 , generic_pexpr2 , generic_pexpr , Cmm_memory_order ) :: :: Store
+   | load ( generic_pexpr1 , generic_pexpr2 , Cmm_memory_order ) :: :: Load
+   | rmw ( generic_pexpr1 ,  generic_pexpr2 , generic_pexpr3 , generic_pexpr4 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: RMW
 %   | RMW generic_pexpr(* ctype *) generic_pexpr(* object_ptr *) generic_pexpr(* expected_val *) generic_pexpr(* desired_val *) Cmm.memory_order Cmm.memory_order
  
 % (*
@@ -377,16 +378,22 @@ generic_expr :: 'E' ::= {{ auxparam 'a 'ty 'sym }}
  
 
 
- generic_action :: '' ::= {{ auxparam 'a 'ty 'sym }}
+ generic_action {{ tex action }} :: '' ::= {{ auxparam 'a 'ty 'sym }}
     |  Action Loc_t a generic_actionB  :: :: Action 
- generic_paction :: '' ::= {{ auxparam 'a 'ty 'sym }}
+ generic_paction {{ tex paction }} :: '' ::= {{ auxparam 'a 'ty 'sym }}
     |  Paction polarity generic_action :: :: Paction
+
+
+ declaration :: '' ::= {{ phantom }}
+    | fun generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : core_base_type := generic_pexpr :: :: Fun    | proc generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : eff core_base_type := generic_expr :: :: Proc
 
 
 
 terminals :: 'terminal' ::=
    | /\    :: :: And  {{ tex \wedge }}
    | \/    :: :: Or   {{ tex \vee }}
+   | ^     :: :: Expr {{ tex \hat{} }}
+   | =>    :: :: Pat  {{ tex \texttt{=>} }}
 
    | array_shift :: :: array_shift {{ tex \ottkw{array\_shift} }}
    | member_shift :: :: member_shift {{ tex \ottkw{member\_shift} }}

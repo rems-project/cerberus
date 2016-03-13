@@ -193,10 +193,10 @@ let rec remove_skips expr =
   | Etry e str_es ->
       Etry (remove_skips e) (List.map (fun (str, e) -> (str, remove_skips e)) str_es)
 *)
-  | Eindet e ->
-      Eindet (remove_skips e)
-  | Ebound n e ->
-      Ebound n (remove_skips e)
+  | Eindet i e ->
+      Eindet i (remove_skips e)
+  | Ebound i e ->
+      Ebound i (remove_skips e)
   | Esave k sym_tys e ->
       Esave k sym_tys (remove_skips e)
   | End es ->
@@ -289,10 +289,10 @@ let rec remove_unseqs expr =
   | Etry e str_es ->
       Etry (remove_unseqs e) (List.map (fun (str, e) -> (str, remove_unseqs e)) str_es)
 *)
-  | Eindet e ->
-      Eindet (remove_unseqs e)
-  | Ebound n e ->
-      Ebound n (remove_unseqs e)
+  | Eindet i e ->
+      Eindet i (remove_unseqs e)
+  | Ebound i e ->
+      Ebound i (remove_unseqs e)
   | Esave k sym_tys e ->
       Esave k sym_tys (remove_unseqs e)
   | End es ->
@@ -424,12 +424,12 @@ let rec remove_dead_aux expr =
           | Right e1' ->
               Right e1'
         end
-    | Eindet e ->
+    | Eindet i e ->
         match remove_dead_aux e with
           | Left e' ->
-              Left (Eindet e')
+              Left (Eindet i e')
           | Right e' ->
-              Right (Eindet e')
+              Right (Eindet i e')
         end
     | Ebound i e ->
         match remove_dead_aux e with
@@ -442,8 +442,10 @@ let rec remove_dead_aux expr =
     | Esave of ksym * list (sym * ctype) * expr 'a
     | Erun of 'a * ksym * list (sym * expr 'a)
 *)
+(*
     | Ereturn _ ->
         Right expr
+*)
     | _ ->
         Left expr
   end
@@ -483,10 +485,10 @@ let rec flatten_seqs expr =
           | (e1', e2') ->
               Esseq _as e1' e2'
         end
-    | Eindet e ->
-        Eindet (flatten_seqs e)
-    | Ebound n e ->
-        Ebound n (flatten_seqs e)
+    | Eindet i e ->
+        Eindet i (flatten_seqs e)
+    | Ebound i e ->
+        Ebound i (flatten_seqs e)
     | Esave k a_tys e ->
         Esave k a_tys (flatten_seqs e)
     | End es ->
@@ -634,16 +636,18 @@ let rec remove_conv_int expr =
         Esseq _as (remove_conv_int e1) (remove_conv_int e2)
     | Easeq a_opt act1 pact2 ->
         Easeq a_opt (remove_conv_int_action act1) (remove_conv_int_paction pact2)
-    | Eindet e ->
-        Eindet (remove_conv_int e)
+    | Eindet i e ->
+        Eindet i (remove_conv_int e)
     | Ebound i e ->
         Ebound i (remove_conv_int e)
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (remove_conv_int e)
     | Erun () ksym sym_pes ->
         Erun () ksym (List.map (fun (sym, pe) -> (sym, remove_conv_int_pexpr pe)) sym_pes)
+(*
     | Ereturn pe ->
         Ereturn (remove_conv_int_pexpr pe)
+*)
     | End es ->
         End (List.map remove_conv_int es)
     | Epar es ->
@@ -735,8 +739,8 @@ let rec sequentialise_creates_kills expr =
     | Esseq _as e1 e2 ->
         Esseq _as (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
     
-    | Eindet e ->
-        Eindet (sequentialise_creates_kills e)
+    | Eindet i e ->
+        Eindet i (sequentialise_creates_kills e)
     | Ebound i e ->
         Ebound i (sequentialise_creates_kills e)
     | Esave k a_tys e ->
@@ -892,10 +896,10 @@ let rec pure_propagation2 expr =
           | Nothing ->
               Esseq pat e1' (pure_propagation2 e2)
        end
-    | Eindet e ->
-        Eindet (pure_propagation2 e)
-    | Ebound n e ->
-        Ebound n (pure_propagation2 e)
+    | Eindet i e ->
+        Eindet i (pure_propagation2 e)
+    | Ebound i e ->
+        Ebound i (pure_propagation2 e)
     | Esave sym sym_tys e ->
         Esave sym sym_tys (pure_propagation2 e)
     | End es ->

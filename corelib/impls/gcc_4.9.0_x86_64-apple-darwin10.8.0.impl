@@ -6,17 +6,17 @@ def <bits_in_byte> : integer :=
 
 -- GCC uses the two's complement representation with no padding bits
 fun <Integer.encode> (ty: ctype, n: integer) : integer :=
-  encodeTwos(integer, ty:ctype, n:integer)
+  encodeTwos(ty, n)
 
 fun <Integer.decode> (ty: ctype, n: integer) : integer :=
-  decodeTwos(integer, ty:ctype, n:integer)
+  decodeTwos(ty, n)
 
 
 -- "For conversion to a type of width N, the value is reduced modulo 2^N to be
 --  within range of the type; no signal is raised."
 fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : integer :=
 -- TODO doc
-  wrapI(integer, ty:ctype, n:integer)
+  wrapI(ty, n)
 {-
 --  n % (2 ^ ctype_width(ty))
   if is_representable(n, ty) then
@@ -37,12 +37,10 @@ fun <Integer.conv_nonrepresentable_signed_integer>(ty: ctype, n: integer) : inte
 
 -- GCC says "Signed ‘>>’ acts on negative numbers by sign extension."
 fun <SHR_signed_negative> (ty: ctype, n: integer, m: integer) : integer :=
-  let n = encodeTwos(integer,ty:ctype, n:integer) in
-    decodeTwos(integer, ty:ctype, (n / 2^m) + ones_prefix(integer, 0:integer, m:integer, ctype_width(integer, ty:ctype):integer):integer)
-  end
+  let n = encodeTwos(ty, n) in
+  decodeTwos(ty, (n / 2^m) + ones_prefix(0, m, ctype_width(ty)))
 
 -- implementation of the ~ operator (only used in the signed case)
 fun <Bitwise_complement> (ty: ctype, n: integer) : integer :=
-  let n = encodeTwos(integer,ty:ctype, n:integer) in
-    decodeTwos(integer, ty:ctype, complementTwos(integer, ty:ctype, n:integer): integer)
-  end
+  let n = encodeTwos(ty, n) in
+  decodeTwos(ty, complementTwos(ty, n))
