@@ -286,8 +286,8 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
    | member_shift ( generic_pexpr , tag . Cabs_cabs_identifier ) :: :: member_shift {{ com pointer struct/union member shift }}
    
 %   (* operators on integers *)
-   | not ( generic_pexpr )          :: :: not {{ com integer not }} 
-   |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com integer binop }}
+   | not ( generic_pexpr )          :: :: not {{ com boolean not }} 
+   |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binary operators }}
    
 %   (* pure operations provided by the memory layout model *)
 %   | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com pure memory operation }}
