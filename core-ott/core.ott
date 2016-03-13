@@ -130,8 +130,8 @@ embed {{ lem
 
 grammar
  polarity :: '' ::= {{ com memory action polarities }}
-   | Pos   :: ::  Pos {{ com these are sequenced by both "let weak" and "let strong" }}
-   | Neg   :: ::  Neg {{ com only sequenced by "let strong" }}
+   | Pos   :: ::  Pos {{ com sequenced by both [[let]] [[weak]] and [[let]] [[strong]] }}
+   | Neg   :: ::  Neg {{ com only sequenced by [[let]] [[strong]] }}
 
 
 metavar 
@@ -419,9 +419,10 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 % NB in the generated latex we suppress the distinction between generic_actionB and generic_action by typesetting both as 'a'
  generic_action {{ tex a}} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com memory actions }}
     |  Action Loc_t a generic_actionB  :: :: Action 
+
  generic_paction {{ tex pa }} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com memory actions with polarity }}
     |  Paction polarity generic_action :: :: Paction
-% TODO: P thinks it's ugly that this is recursive - do you really want to stick on lots of polarities, nesting Paction?
+
 
 
  declaration :: '' ::= {{ phantom }} {{ com Core declarations }}
