@@ -207,8 +207,8 @@ list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.m
 generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core value }}
    | Constrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: X :: constrained
    | generic_object_value :: :: object {{ com C object value }} 
-   | Loaded ( generic_object_value ) :: :: loaded {{ com TODO }}
-   | Unspecified ( ctype ) :: :: unspecified      {{ com unspecified value }} 
+   | Loaded ( generic_object_value ) :: :: loaded {{ com non-unspecified loaded value }}
+   | Unspecified ( ctype ) :: :: unspecified      {{ com unspecified loaded value }} 
    | Unit :: :: unit                              {{ com unit }}
    | True :: :: true                              {{ com true }}
    | False :: :: false                            {{ com false }}
@@ -298,7 +298,6 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
    | ( struct tag ) { </ . Cabs_cabs_identifieri = generic_pexpri // , // i /> } :: :: struct {{ com C struct expression }}
    | ( union tag ) { . Cabs_cabs_identifier = generic_pexpr } :: :: union {{ com C union expression }}
  
-% TODO what about unions???!
 
 %   (* call to a pure function *)
    | generic_name ( generic_pexpr1 , .. , generic_pexprn ) :: :: call {{ com pure Core function call }}
@@ -347,8 +346,8 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
 %   | case generic_pexpr with | generic_pattern1 => generic_expr1 .. | generic_patternn => generic_exprn end :: :: case {{ com pattern matching }}
    | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
-   | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com TODO: P WANTS TO KNOW WHAT THIS IS - WHY [[generic_pexpr]] NOT a name?}}
-   | generic_paction  :: :: action {{ com TODO }}
+   | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com procedure call }}
+   | generic_paction  :: :: action {{ com memory action }}
 %   (* sequencing operators *)
    | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq {{ com unsequenced expressions }}
    | let weak generic_pattern = generic_expr1 in generic_expr2 :: :: wseq {{ com weak sequencing }}
@@ -370,9 +369,9 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 % TODO shouldn't this come with the other sequencing operations?
 %   (* Thread operators *)
 %   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
-   | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com TODO? }}%(* Parallel composition: for cppmem-style composition *)
-   | wait ( Thread_thread_id ) :: :: wait  {{ com TODO? }}%(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
-   | Eloc Loc_t generic_expr :: X :: loc {{ com TODO ?  }}
+   | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com cppmem thread creation }}%(* Parallel composition: for cppmem-style composition *)
+   | wait ( Thread_thread_id ) :: :: wait  {{ com TODO: need to be removed from the TeX }}%(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+   | Eloc Loc_t generic_expr :: X :: loc {{ com TODO: need to be removed from the TeX  }}
 % TODO: P suppressed Eloc in latex - is that right? 
 
  %(* the qualification prefixes are for pprint *)
@@ -405,8 +404,8 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
  declaration :: '' ::= {{ phantom }} {{ com Core declarations }}
 %    | fun generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : core_base_type := generic_pexpr :: :: Fun    
 %    | proc generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : eff core_base_type := generic_expr :: :: Proc
-    | fun generic_name ( </ generic_pexpri : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun    {{ com TODO: P ASKS WHY pe NOT idents? }}
-    | proc generic_name ( </ generic_pexpri : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc
+    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun
+    | proc generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc
 
 
 
