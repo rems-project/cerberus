@@ -129,7 +129,7 @@ embed {{ lem
 
 
 grammar
- polarity :: '' ::= {{ com  action polarity }}
+ polarity :: '' ::= {{ com memory action polarities }}
    | Pos   :: ::  Pos {{ com TODO: explain a bit }}
    | Neg   :: ::  Neg {{ com TODO: explain a bit }}
 
@@ -184,7 +184,7 @@ Mem_pointer_value {{ tex pointer\_const }} :: '' ::= {{ phantom }} {{ lem Mem.po
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
 grammar
-generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object value }} 
+generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
    | Mem_integer_value :: :: integer  {{ com integer constant }}
    | Mem_floating_value :: :: floating {{ com floating-point constant }}
    | Mem_pointer_value :: :: pointer {{ com pointer constant (e.g.~null) }}
@@ -204,7 +204,7 @@ list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.m
 % {{ tex list Mem.mem\_constraint }}
    | </ Mem_mem_constrainti // , // i /> :: :: list_mem_constraint
 
-generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core value }}
+generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core values }}
    | Constrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: X :: constrained
    | generic_object_value :: :: object {{ com C object value }} 
    | Loaded ( generic_object_value ) :: :: loaded {{ com non-unspecified loaded value }}
@@ -246,9 +246,13 @@ maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
 
 
 generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
-   | maybesym                                                  :: :: Base
-   | generic_ctor ( generic_pattern1 , .. , generic_patternn ) :: :: Ctor
- 
+   | maybesym                                                  :: X :: Base
+   | _                                                         :: M :: Nothing
+    {{ lem Nothing }} {{ com wildcard pattern}}
+   | sym                                                       :: M :: Just 
+    {{ lem Just [[sym]] }} {{ com identifier pattern }} 
+   | generic_ctor ( generic_pattern1 , .. , generic_patternn ) ::   :: Ctor
+    {{ com constructor pattern }}
 
 metavar Undefined_undefined_behaviour {{ tex \ottnt{ub\textit{-}name} }} {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
 metavar string {{ lem string }}  ::=  {{ phantom }} 
@@ -327,9 +331,9 @@ grammar
 
 maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
 
- Mem_memop {{ tex memop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }}
-   | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }}
-   | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }}
+ Mem_memop {{ tex memop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
+   | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }} {{ com pointer equality comparison}}
+   | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }} {{ com pointer relational comparison}}
    | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
    | intFromPtr :: :: IntFromPtr {{ com cast of pointer value to integer value }} 
    | ptrFromInt :: :: PtrFromInt {{ com cast of integer value to pointer value }} 
@@ -376,14 +380,15 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 %   (* Continuation operators *)
 %   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
 %   | save label ( Symbol_t1 : ctype1 ,  .. , Symbol_tn : ctypen ) in generic_expr :: :: save
+   | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondetermnistic sequencing }}
+% TODO shouldn't this come with the other sequencing operations?
+
    | save label ( </ Symbol_ti : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
 %   | run a label ( Symbol_t1 := generic_pexpr1 , .. , Symbol_tn := generic_pexprn ) :: :: run
    | run a label ( </ Symbol_ti := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
 %   | return ( generic_pexpr ) :: :: return
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
-   | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondetermnistic sequencing }}
-% TODO shouldn't this come with the other sequencing operations?
 %   (* Thread operators *)
 %   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
    | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com cppmem thread creation }}%(* Parallel composition: for cppmem-style composition *)
@@ -393,7 +398,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
- generic_actionB {{ tex a }} {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }} {{ com memory action }}
+ generic_actionB {{ tex a }} {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }} {{ com memory actions }}
    | create ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
    | alloc ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
    | kill ( generic_pexpr ) :: :: Kill
@@ -412,10 +417,11 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
  
 
 % NB in the generated latex we suppress the distinction between generic_actionB and generic_action by typesetting both as 'a'
- generic_action {{ tex a}} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com action }}
+ generic_action {{ tex a}} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com memory actions }}
     |  Action Loc_t a generic_actionB  :: :: Action 
- generic_paction {{ tex pa }} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com action with polarity }}
+ generic_paction {{ tex pa }} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com memory actions with polarity }}
     |  Paction polarity generic_action :: :: Paction
+% TODO: P thinks it's ugly that this is recursive - do you really want to stick on lots of polarities, nesting Paction?
 
 
  declaration :: '' ::= {{ phantom }} {{ com Core declarations }}
