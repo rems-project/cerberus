@@ -493,7 +493,7 @@ embed {{ lem
  type fun_map 'a = map Symbol.t (fun_map_decl 'a)
  
  
- (* a Core file is just a set named functions *)
+ (* a Core file is just a set of named functions *)
  type file 'a = <|
    main   : Symbol.t;
    stdlib : fun_map 'a;
