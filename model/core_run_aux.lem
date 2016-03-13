@@ -103,7 +103,7 @@ let rec add_to_sb p_aids expr =
           Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_sb, Easeq"
-      | Eindet _ ->
+      | Eindet _ _ ->
           error "Core_run_aux.add_to_sb, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_sb, Ebound"
@@ -111,9 +111,11 @@ let rec add_to_sb p_aids expr =
           Esave k a_tys (add_to_sb p_aids e)
       | Erun annots k a_vs ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+(*
       | Ereturn _ ->
           (* no change *)
           expr
+*)
       | End es ->
           End (List.map (add_to_sb p_aids) es)
       | Epar es ->
@@ -195,7 +197,7 @@ let rec add_to_asw aids expr =
           Esseq _as (add_to_asw aids e1) e2
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_asw, Easeq"
-      | Eindet _ ->
+      | Eindet _ _ ->
           error "Core_run_aux.add_to_asw, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_asw, Ebound"
@@ -203,9 +205,11 @@ let rec add_to_asw aids expr =
           Esave k a_tys (add_to_asw aids e)
       | Erun annots k a_vs ->
           Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
+(*
       | Ereturn _ ->
           (* no change *)
           expr
+*)
       | End es ->
           End (List.map (add_to_asw aids) es)
       | Epar es ->

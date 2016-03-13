@@ -623,7 +623,7 @@ let rec to_pure expr =
         Nothing
     | Easeq _ _ _ ->
       Nothing
-    | Eindet _ ->
+    | Eindet _ _ ->
         Nothing
     | Ebound _ _ ->
         Nothing
@@ -631,8 +631,10 @@ let rec to_pure expr =
         Nothing
     | Erun _ _ _ ->
         Nothing
+(*
     | Ereturn _ ->
         Nothing
+*)
     | End _ ->
         Nothing
     | Epar _ ->
@@ -785,16 +787,18 @@ let rec subst_sym sym pe' = function
               subst_sym_paction sym pe' pact2
         end
       )
-  | Eindet e ->
-      Eindet (subst_sym sym pe' e)
-  | Ebound k e ->
-      Ebound k (subst_sym sym pe' e)
+  | Eindet i e ->
+      Eindet i (subst_sym sym pe' e)
+  | Ebound i e ->
+      Ebound i (subst_sym sym pe' e)
   | Esave ksym sym_tys e ->
       Esave ksym sym_tys (subst_sym sym pe' e)
   | Erun annot ksym sym_pes ->
       Erun annot ksym (list_update sym pe' sym_pes)
+(*
   | Ereturn pe ->
       Ereturn (subst_sym_pexpr sym pe' pe)
+*)
   | End es ->
       End (List.map (subst_sym sym pe') es)
   | Epar es ->
@@ -910,16 +914,18 @@ let rec subst_wait tid v = function
        Esseq _as (subst_wait tid v e1) (subst_wait tid v e2)
    | (Easeq _ _ _ as expr) ->
        expr
-   | Eindet e ->
-       Eindet (subst_wait tid v e)
-   | Ebound k e ->
-       Ebound k (subst_wait tid v e)
+   | Eindet i e ->
+       Eindet i (subst_wait tid v e)
+   | Ebound i e ->
+       Ebound i (subst_wait tid v e)
    | Esave ksym sym_tys e ->
        Esave ksym sym_tys (subst_wait tid v e)
    | (Erun _ _ _ as expr) ->
        expr
+(*
    | (Ereturn _ as expr) ->
        expr
+*)
    | End es ->
        End (List.map (subst_wait tid v) es)
    | Epar es ->
@@ -1003,7 +1009,7 @@ match expr with
       end
   | Easeq _ _ _ ->
       error "Core_aux.find_labeled_continuation: Easeq shouldn't exists at this point"
-  | Eindet _ ->
+  | Eindet _ _ ->
       error "Core_aux.find_labeled_continuation: Eindet shouldn't exists at this point"
   | Ebound _ _ ->
       error "Core_aux.find_labeled_continuation: Ebound shouldn't exists at this point"
@@ -1014,8 +1020,10 @@ match expr with
         find_labeled_continuation ksym e
   | Erun _ _ _ ->
       Nothing
+(*
   | Ereturn _ ->
       Nothing
+*)
   | End _ ->
       Nothing
   | Epar _ ->
@@ -1141,7 +1149,7 @@ let rec collect_labeled_continuations expr =
                     (collect_labeled_continuations e2)
     | Easeq _ _ _ ->
         Map.empty
-    | Eindet _ ->
+    | Eindet _ _ ->
         Map.empty
     | Ebound _ _ ->
         Map.empty
@@ -1149,8 +1157,10 @@ let rec collect_labeled_continuations expr =
         Map.insert k (a_tys, e) $ collect_labeled_continuations e
     | Erun _ _ _ ->
         Map.empty
+(*
     | Ereturn _ ->
         Map.empty
+*)
     | End _ ->
         (* TODO: check *)
         Map.empty
@@ -1201,7 +1211,7 @@ let rec has_sseqs expr =
         true
     | Easeq _ _ _  ->
         error "has_sseqs found an Easeq"
-    | Eindet e ->
+    | Eindet _ e ->
         has_sseqs e
     | Ebound _ e ->
         has_sseqs e
@@ -1209,8 +1219,10 @@ let rec has_sseqs expr =
         has_sseqs e
     | Erun _ _ _ ->
         false
+(*
     | Ereturn _ ->
         false
+*)
     | End es ->
         List.any has_sseqs es
     | Epar _ ->
@@ -1421,3 +1433,37 @@ let mk_op_pe bop (Pexpr bTy1 _ as pe1) (Pexpr bTy2 _ as pe2) =
     | (OpOr, BTy_boolean, BTy_boolean) ->
         Pexpr BTy_boolean (PEop bop pe1 pe2)
   end
+
+
+val mk_empty_pat: pattern
+let mk_empty_pat =
+  CaseBase Nothing
+
+val mk_sym_pat: Symbol.t -> pattern
+let mk_sym_pat sym =
+  CaseBase (Just sym)
+
+val mk_tuple_pat: list pattern -> pattern
+let mk_tuple_pat pats =
+  if List.length pats < 2 then
+      error "[Core_aux.mk_tuple_pat] called with |pats| < 2"
+  else
+    CaseCtor Ctuple pats
+
+
+(*
+val     mk_sseqs_e: list (expr unit) -> expr unit
+let rec mk_sseqs_e es =
+  match es with
+    | [] ->
+        error "[Caux.mk_sseq_e] called on empty list"
+    | [e] ->
+        e (* TODO: maybe make this an error *)
+    | Eskip :: es' ->
+        (* NOTE: doing a little optimisation here *)
+        (* TODO: maybe better to leave that for the Core to Core phase *)
+        mk_sseq_e es'
+    | e :: es' ->
+        Esseq mk_empty_pat e (mk_sseq_e es')
+  end
+*)

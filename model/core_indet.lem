@@ -425,7 +425,7 @@ let rec hack expr =
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
                             (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Just x -> x
                                                                                            | _ -> Boot.assert_false "[Core_indet.hack Easeq] impossible case" end))*)
-    | Core.Eindet e ->
+    | Core.Eindet _ e ->
         hack e
     | Core.Ebound _ e ->
         hack e
@@ -433,8 +433,10 @@ let rec hack expr =
         Core.Esave d a_tys (hack e)
     | Core.Erun bs d a_vs ->
         Core.Erun bs d a_vs
+(*
     | Core.Ereturn _ ->
         expr
+*)
     | Core.End es ->
         Core.End (map hack es)
     | Core.Epar es ->

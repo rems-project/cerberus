@@ -85,7 +85,7 @@ type polarity =  (* Polarity for actions *)
 
 
 type generic_name 'sym = 
- | Sym of 'sym (* core identifier *)
+ | Sym of 'sym (* Core identifier *)
  | Impl of Implementation_.implementation_constant (* implementation-defined constant *)
 
 
@@ -148,6 +148,7 @@ type pexpr_ 'ty 'sym =
  | PEop of binop * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* binop *)
  | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym) (* memory operation *)
  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
+ | PEunion of Symbol.t * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
  | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
  | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core let *)
  | PEif of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core if *)
@@ -183,18 +184,17 @@ type generic_expr 'a 'ty 'sym =
  | Eskip
  | Elet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym)
  | Eif of (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
- | Ecase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym))
+ | Ecase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym)) (* pattern matching *)
  | Eproc of 'a * (generic_pexpr 'ty 'sym) * list (generic_pexpr 'ty 'sym)
  | Eaction of (generic_paction 'a 'ty 'sym)
  | Eunseq of list (generic_expr 'a 'ty 'sym)
  | Ewseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
  | Esseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
  | Easeq of maybe (Symbol.t * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym)
- | Eindet of (generic_expr 'a 'ty 'sym)
+ | Eindet of nat * (generic_expr 'a 'ty 'sym)
  | Ebound of nat * (generic_expr 'a 'ty 'sym)
  | Esave of Symbol.t * list (Symbol.t * ctype) * (generic_expr 'a 'ty 'sym)
  | Erun of 'a * Symbol.t * list (Symbol.t * (generic_pexpr 'ty 'sym))
- | Ereturn of (generic_pexpr 'ty 'sym)
  | End of list (generic_expr 'a 'ty 'sym)
  | Epar of list (generic_expr 'a 'ty 'sym)
  | Ewait of Thread.thread_id
