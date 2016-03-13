@@ -378,7 +378,7 @@ let string_of_undefined_behaviours ubs =
 (* Exception monad for possibly undefined executions *)
 type t 'a =
   | Defined of 'a
-  | Undef of list undefined_behaviour
+  | Undef of Loc.t * list undefined_behaviour
   | Error of Loc.t * string
 
 val return: forall 'a. 'a -> t 'a
@@ -388,7 +388,7 @@ val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bind m f =
   match m with
     | Defined x -> f x
-    | Undef us  -> Undef us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
+    | Undef loc us  -> Undef loc us (* TODO: we probably want to collect as much undefs as possible, ie. continue that exec ? *)
     | Error loc str -> Error loc str
 end 
 
@@ -402,8 +402,8 @@ val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
 let mapM f xs = sequence (List.map f xs)
 
 
-val undef: forall 'a. list undefined_behaviour -> t 'a
-let undef us = Undef us
+val undef: forall 'a. Loc.t -> list undefined_behaviour -> t 'a
+let undef loc us = Undef loc us
 
 val error: forall 'a. Loc.t -> string -> t 'a
 let error loc str = Error loc str
@@ -413,6 +413,6 @@ val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
 let fmap f m =
   match m with
     | Defined x -> Defined (f x)
-    | Undef us  -> Undef us
+    | Undef loc us  -> Undef loc us
     | Error loc str -> Error loc str
   end

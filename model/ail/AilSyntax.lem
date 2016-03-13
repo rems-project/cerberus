@@ -45,17 +45,19 @@ type encodingPrefix =
 type stringLiteral =
   maybe encodingPrefix * list string
 
-type arithmeticOperator [name = "aop.*"] =  (*r 6.5.5 Multiplicative operators *)
- | Mul
- | Div
- | Mod (*r 6.5.6 Additive operators *)
- | Add
- | Sub (*r 6.5.7 Bitwise shift operators *)
- | Shl
- | Shr (*r 6.5.10 Bitwise AND operator *)
- | Band (*r 6.5.11 Bitwise exclusive OR operator *)
- | Bor (*r 6.5.12 Bitwise inclusive OR operator *)
- | Bxor (*r Binary operators from 6.5.5-14, 6.5.17 *)
+type arithmeticOperator [name = "aop.*"] =
+ (* STD §6.5.5 Multiplicative operators *)
+ | Mul | Div | Mod
+ (* STD §6.5.6 Additive operators *)
+ | Add | Sub
+ (* STD §6.5.7 Bitwise shift operators *)
+ | Shl | Shr
+ (* STD §6.5.10 Bitwise AND operator *)
+ | Band
+ (* STD §6.5.11 Bitwise exclusive OR operator *)
+ | Bxor
+ (* STD §6.5.12 Bitwise inclusive OR operator *)
+ | Bor
 
 type constant [name = "c*"] = 
  | ConstantIndeterminate of ctype

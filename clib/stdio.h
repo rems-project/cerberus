@@ -27,6 +27,9 @@ typedef __cerbty_fpos_t fpos_t;
 #define stdout       __cerbvar_stdout
 
 
+// TEMPORARY HACK
+#define restrict
+
 int remove(const char *filename); // FILE
 int rename(const char *old, const char *new); // FILE
 FILE *tmpfile(void); // FILE

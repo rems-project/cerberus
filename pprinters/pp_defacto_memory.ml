@@ -15,8 +15,10 @@ let string_of_integer_operator = function
       "*"
   | Mem_common.IntDiv ->
       "/"
-  | Mem_common.IntMod ->
-      "mod"
+  | Mem_common.IntRem_t ->
+      "rem_t"
+  | Mem_common.IntRem_f ->
+      "rem_f"
   | Mem_common.IntExp ->
       "^"
 
@@ -57,7 +59,7 @@ and pp_shift_path_element = function
   | SPE_array (ty, ival_) ->
       !^ "SPE_array" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^ pp_integer_value_base ival_)
   | SPE_member (tag_sym, (Cabs.CabsIdentifier (_, memb_str))) ->
-      !^ "SPE_post_padding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
+      !^ "SPE_member" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
  
 and pp_shift_path sh =
   P.brackets (comma_list pp_shift_path_element sh)
@@ -95,12 +97,16 @@ and pp_integer_value (IV (prov, ival_)) =
 and pp_mem_value = function
   | MVsymbolic symb ->
       !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic pp_mem_value pp_pointer_value symb)
+(*
   | MVunspecified ty ->
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+*)
   | MVinteger (ity, ival) ->
       !^ "MVinteger" ^^ P.parens (Pp_ail.pp_integerType_raw ity ^^ P.comma ^^^ pp_integer_value ival)
-  | MVfloating (fty, str) ->
-      !^ ("MVfloating(TODO, " ^ str ^ ")")
+  | MVfloating (fty, FVconcrete str) ->
+      !^ ("MVfloating(" ^ str ^ ")")
+  | MVfloating (fty, FVunspecified) ->
+      !^ ("MVfloating(unspec)")
   | MVpointer (ty, ptr_val) ->
       !^ "MVpointer" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value ptr_val)
   | MVarray mem_vals ->
@@ -167,9 +173,13 @@ let pp_pretty_mem_value format = function
            List.iteri (Bytes.set bts) chars;
            Bytes.to_string bts
       end
-  | MVfloating (fty, str) ->
+  | MVfloating (fty, FVconcrete str) ->
       !^ str
+  | MVfloating (fty, FVunspecified) ->
+      !^ "unspec(floating)"
+(*
   | MVunspecified ty ->
       !^ "unspec" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+*)
   | mval ->
       pp_mem_value mval

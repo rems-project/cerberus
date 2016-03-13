@@ -12,8 +12,8 @@ let bind m f =
   match m with
     | Exception.Result (Undefined.Defined z) ->
         f z
-    | Exception.Result (Undefined.Undef ubs) ->
-        Exception.return (Undefined.undef ubs)
+    | Exception.Result (Undefined.Undef loc ubs) ->
+        Exception.return (Undefined.undef loc ubs)
     | Exception.Result (Undefined.Error loc str) ->
         Exception.return (Undefined.error loc str)
     | Exception.Exception err ->
@@ -55,3 +55,10 @@ let rec foldM f a = function                                                    
   | x::xs ->                                                                            (* GENERIC Monad *)
       f a x >>= fun fax -> foldM f fax xs                                               (* GENERIC Monad *)
 end
+
+val     foldrM: forall 'a 'b 'msg. ('a -> 'b -> t 'b 'msg) -> 'b -> list 'a -> t 'b 'msg
+let rec foldrM f a l =
+  match l with
+    | [] -> return a
+    | x::xs -> foldrM f a xs >>= f x
+  end

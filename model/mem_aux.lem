@@ -6,9 +6,7 @@ import Symbolic AilTypes Core_ctype
 
 val integerFromIntegerValue: integer_value -> maybe integer
 let integerFromIntegerValue ival =
-  case_integer_value ival
-    (fun n -> Just n)
-    (fun () -> Nothing)
+  eval_integer_value ival
 
 (*
 val symbolicFromIntegerValue: integer_value -> maybe Symbolic.symbolic
@@ -23,7 +21,6 @@ val integerValueFromMemValue: mem_value -> maybe (AilTypes.integerType * integer
 let integerValueFromMemValue mval =
   case_mem_value mval
     (fun _ -> Nothing)
-    (fun _ -> Nothing)
     (fun ity ival -> Just (ity, ival))
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
@@ -31,6 +28,7 @@ let integerValueFromMemValue mval =
     (fun _ _ -> Nothing)
     (fun _ _ _ -> Nothing)
 
+(*
 val unspecifiedFromMemValue: mem_value -> maybe Core_ctype.ctype
 let unspecifiedFromMemValue mval =
   case_mem_value mval
@@ -42,6 +40,7 @@ let unspecifiedFromMemValue mval =
     (fun _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ _ -> Nothing)
+*)
 
 val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
 let symbolicFromMemValue mval =
@@ -50,7 +49,6 @@ let symbolicFromMemValue mval =
 *)
   case_mem_value mval
     (fun symb -> Just symb)
-    (fun _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
@@ -64,7 +62,6 @@ let symbolicFromMemValue mval =
 val pointerValueFromMemValue: mem_value -> maybe (Core_ctype.ctype * pointer_value)
 let pointerValueFromMemValue mval =
   case_mem_value mval
-    (fun _ -> Nothing)
     (fun _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)

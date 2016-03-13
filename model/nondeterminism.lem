@@ -28,14 +28,14 @@ declare ocaml target_rep function current_execution_mode = `Global_ocaml.current
 
 
 type kill_reason =
-  | Undef of list Undefined.undefined_behaviour
+  | Undef of Loc.t * list Undefined.undefined_behaviour
   | Error of Loc.t * string
   | Other of string
 
 instance (Show kill_reason)
   let show reason = 
     match reason with
-    | Undef l     -> "Undef (" ^ show l ^ ")"
+    | Undef loc l     -> "Undef ([" ^ Loc.stringFromLocation loc ^ "]" ^ show l ^ ")"
     | Error loc s -> "Error ([" ^ Loc.stringFromLocation loc ^ "] " ^ show s ^ ")"
     | Other s     -> "Other (" ^ show s ^ ")"
     end
