@@ -289,7 +289,7 @@ instance (Eq storageDuration)
 end
 
 
-let setElemCompare_integerBaseType ibty1 ibty2 =
+let ~{hol} setElemCompare_integerBaseType ibty1 ibty2 =
   let ord = function
     | Ichar ->
         (0 : nat)
@@ -336,7 +336,7 @@ instance (SetType integerBaseType)
 end
 
 
-let setElemCompare_integerType ity1 ity2 =
+let ~{hol} setElemCompare_integerType ity1 ity2 =
   let ord = function
     | Char ->
         (0 : nat)
@@ -373,7 +373,7 @@ instance (SetType integerType)
 end
 
 
-let setElemCompare_basicType bty1 bty2 =
+let ~{hol} setElemCompare_basicType bty1 bty2 =
   let ord = function
     | Integer _ ->
         (0 : nat)

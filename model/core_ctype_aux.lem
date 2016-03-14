@@ -10,6 +10,9 @@ val set_tagDefs: map Symbol.t (list (Cabs.cabs_identifier * ctype)) -> unit
 declare ocaml target_rep function tagDefs = `Tags.tagDefs`
 declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
 
+(* TODO: HOL hack *)
+declare hol target_rep function tagDefs u = `FEMPTY`
+declare hol target_rep function set_tagDefs m = `()`
 
 val get_membersDefs: Symbol.t -> list (Cabs.cabs_identifier * ctype)
 let get_membersDefs tag_sym =

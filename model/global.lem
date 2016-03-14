@@ -13,7 +13,7 @@ end
 
 val error: forall 'a. string -> 'a
 declare ocaml target_rep function error = `Debug.error`
-
+declare hol target_rep function error = `ABS`
 
 
 val     numerote_: forall 'a. nat -> list 'a -> list (nat * 'a)
