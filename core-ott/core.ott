@@ -25,7 +25,7 @@ module Cmm = Cmm_csem
 % *)
 
 
-metavar Symbol_t {{ tex sym }} {{ lem Symbol.t }}  ::=  {{ phantom }} 
+metavar Symbol_t {{ tex ident }} {{ lem Symbol.t }}  ::=  {{ phantom }} 
 metavar tag {{ lem Symbol.t }}  ::=  {{ phantom }}  {{ com struct/union tag }}
 
 indexvar n, i ::= {{ phantom }}
@@ -130,14 +130,14 @@ embed {{ lem
 
 grammar
  polarity :: '' ::= {{ com memory action polarities }}
-   | Pos   :: ::  Pos {{ com sequenced by both [[let]] [[weak]] and [[let]] [[strong]] }}
-   | Neg   :: ::  Neg {{ com only sequenced by [[let]] [[strong]] }}
+   | Pos   :: ::  Pos {{ com sequenced by \ottkw{let\ weak} and \ottkw{let\ strong} }}
+   | Neg   :: ::  Neg {{ com only sequenced by \ottkw{let\ strong} }}
 
 
 metavar 
 Implementation__implementation_constant {{ lem Implementation_.implementation_constant }} {{ tex \ottnt{\texttt{<}impl\textit{-}const\texttt{>} } }}::= {{ phantom }}
 
-metavar tyvarsym {{ lem 'sym }} {{tex \mathit{sym} }}::= {{ phantom }}
+metavar tyvarsym {{ lem 'sym }} {{tex \mathit{ident} }}::= {{ phantom }}
 
 grammar 
 generic_name {{ tex name }} :: '' ::= {{ auxparam 'sym }}
@@ -172,22 +172,22 @@ generic_name {{ tex name }} :: '' ::= {{ auxparam 'sym }}
 % *)
  
  
-metavar Mem_integer_value {{ tex integer\_const }} {{ lem Mem.integer_value }} ::= {{ phantom }}  {{ com integer constant }}
-metavar Mem_floating_value {{ tex float\_const }} {{ lem Mem.floating_value }} ::= {{ phantom }}  {{ com float constant }}
+metavar Mem_integer_value {{ tex intval }} {{ lem Mem.integer_value }} ::= {{ phantom }}  {{ com integer value }}
+metavar Mem_floating_value {{ tex floatval }} {{ lem Mem.floating_value }} ::= {{ phantom }}  {{ com floating value }}
 %metavar Mem_pointer_value {{ lem Mem.pointer_value }} ::= {{ phantom }}  
 metavar Mem_mem_value {{ lem Mem.mem_value }} {{ tex memval }} ::= {{ phantom }}  
 metavar Cabs_cabs_identifier {{ tex member }} {{ lem Cabs.cabs_identifier }} ::= {{ phantom }} {{ com C struct/union member name }}
  
 grammar 
-Mem_pointer_value {{ tex pointer\_const }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_value }}
+Mem_pointer_value {{ tex ptrval }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_value }}
    | nullptr ( ctype ) :: :: nullptr
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
 grammar
 generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
-   | Mem_integer_value :: :: integer  {{ com integer constant }}
-   | Mem_floating_value :: :: floating {{ com floating-point constant }}
-   | Mem_pointer_value :: :: pointer {{ com pointer constant (e.g.~null) }}
+   | Mem_integer_value :: :: integer  {{ com integer value }}
+   | Mem_floating_value :: :: floating {{ com floating-point value }}
+   | Mem_pointer_value :: :: pointer {{ com pointer value }}
    | generic_name  :: :: cfunction {{ com C function pointer }}
 %   | array ( generic_object_value1 , .. , generic_object_valuen ) :: :: array {{ com C array value }}
    | array ( </ generic_object_valuei // , // i /> ) :: :: array {{ com C array value }}
@@ -241,15 +241,15 @@ generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
 
 maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
    | _   :: :: Nothing 
-   | sym :: :: Just
+   | tyvarsym :: :: Just
 
 
 generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
    | maybesym                                                  :: X :: Base
    | _                                                         :: M :: Nothing
     {{ lem Nothing }} {{ com wildcard pattern}}
-   | sym                                                       :: M :: Just 
-    {{ lem Just [[sym]] }} {{ com identifier pattern }} 
+   | tyvarsym                                                       :: M :: Just 
+    {{ lem Just [[tyvarsym]] }} {{ com identifier pattern }} 
    | generic_ctor ( generic_pattern1 , .. , generic_patternn ) ::   :: Ctor
     {{ com constructor pattern }}
 
@@ -265,23 +265,22 @@ type ksym = Symbol.t
 
 grammar
 pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expressions }} 
-%   (* undefined behaviour and late static error / failed assert *)
-   | undef ( Undefined_undefined_behaviour ) :: :: undef {{ com undefined behaviour }} 
-   | error ( string , generic_pexpr )        :: :: error {{ com impl-def static error }}
- 
-%(* the expression is for debug purpose *)
- 
+%   (* names *)
+   | tyvarsym                          :: :: sym {{ com Core identifier }}
+   | Implementation__implementation_constant :: :: impl {{ com implementation-defined constant }} 
+   
 %   (* values *)
    | generic_value                     :: :: val {{ com value }}
    | constrained ( list_Mem_mem_constraint1 , generic_pexpr1 ) .. ( list_Mem_mem_constraintn , generic_pexprn )  :: X :: constrained {{ com constrained value }}
    
-%   (* names *)
-   | tyvarsym                          :: :: sym {{ com core identifier }}
-   | Implementation__implementation_constant :: :: impl {{ com implementation-defined constant }} 
-   
+%   (* undefined behaviour and late static error / failed assert *)
+   | undef ( Undefined_undefined_behaviour ) :: :: undef {{ com undefined behaviour }} 
+   | error ( string , generic_pexpr )        :: :: error {{ com impl-defined static error }}
+ 
+%(* the expression is for debug purpose *)
+ 
 %   (* data (de|con)structors *)
    | generic_ctor ( generic_pexpr1 , ..  , generic_pexprn )  :: :: ctor  {{ com constructor application }}
-%   | case generic_pexpr with | generic_pattern1 => generic_pexpr1 .. | generic_patternn => generic_pexprn end :: :: case {{ com pattern matching }}
    | case generic_pexpr with </ | generic_patterni => generic_pexpri // i /> end :: :: case {{ com pattern matching }}
    
 %   (* operators on pointer values *)
@@ -293,16 +292,14 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
    |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binary operators }}
    
 %   (* pure operations provided by the memory layout model *)
-%   | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com pure memory operation }}
 %   (* these two are annoying *) 
-%   | ( struct tag ) { . Cabs_cabs_identifier1 = generic_pexpr1 , .. , . Cabs_cabs_identifiern = generic_pexprn } :: :: struct {{ com C struct expression }}
    | ( struct tag ) { </ . Cabs_cabs_identifieri = generic_pexpri // , // i /> } :: :: struct {{ com C struct expression }}
    | ( union tag ) { . Cabs_cabs_identifier = generic_pexpr } :: :: union {{ com C union expression }}
  
 
 %   (* call to a pure function *)
    | generic_name ( generic_pexpr1 , .. , generic_pexprn ) :: :: call {{ com pure Core function call }}
-   
+
    | let generic_pattern = generic_pexpr1 in generic_pexpr2  :: :: let {{ com pure Core let }}
    | if generic_pexpr then generic_pexpr1 else generic_pexpr2  :: :: if {{ com pure Core if }}
    
@@ -310,9 +307,9 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
  
  
  %  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
-   | is_scalar ( generic_pexpr   ) :: :: is_scalar
-   | is_integer ( generic_pexpr  ) :: :: is_integer
-   | is_signed ( generic_pexpr   ) :: :: is_signed
+   | is_scalar ( generic_pexpr ) :: :: is_scalar
+   | is_integer ( generic_pexpr ) :: :: is_integer
+   | is_signed ( generic_pexpr ) :: :: is_signed
    | is_unsigned ( generic_pexpr ) :: :: is_unsigned
  
 generic_pexpr {{ tex pe }} :: 'P' ::= {{ auxparam 'ty 'sym }}
@@ -330,7 +327,7 @@ grammar
 
 maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
 
- Mem_memop {{ tex memop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
+ Mem_memop {{ tex ptrop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
    | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }} {{ com pointer equality comparison}}
    | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }} {{ com pointer relational comparison}}
    | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
@@ -353,7 +350,6 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 %   (* pure expression *)
    | generic_pexpr :: :: pure  {{ com  pure expression }}
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
-   | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
 % (*
 % (TODO C signals)
 %   (* these two are to deal with C signals *)
@@ -361,41 +357,44 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
 %   | Eregister handler_event * name
 % *)
 %   (* potentially effectful *)
-   | skip :: :: skip {{ com  skip }}
+   | ptrop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com pointer op involving memory }}
+   | generic_paction  :: :: action {{ com memory action }}
+
+   | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
    | let generic_pattern = generic_pexpr in generic_expr :: :: let {{ com Core let  }}
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
-%   | case generic_pexpr with | generic_pattern1 => generic_expr1 .. | generic_patternn => generic_exprn end :: :: case {{ com pattern matching }}
-   | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
+   | skip :: :: skip {{ com  skip }}
+
    | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com procedure call }}
-   | generic_paction  :: :: action {{ com memory action }}
+
 %   (* sequencing operators *)
    | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq {{ com unsequenced expressions }}
    | let weak generic_pattern = generic_expr1 in generic_expr2 :: :: wseq {{ com weak sequencing }}
    | let strong generic_pattern = generic_expr1 in generic_expr2 :: :: sseq {{ com strong sequencing }}
    | let atomic maybe_Symbol_t_core_base_type = generic_action1 in generic_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
 %   (* indeterminately-sequenced expressions and boundary *) 
-   | indet [ nat ] ( generic_expr ) :: :: indet  {{ com indeterminately sequenced expression }} % (* this ctor doesn't exist at runtine *)
-   | bound [ nat ] ( generic_expr ) :: :: bound  {{ com indeterminate sequencing boundary }} %(* this ctor doesn't exist at runtine *)
+   | indet [ nat ] ( generic_expr ) :: :: indet  {{ com indeterminately sequenced expr }} % (* this ctor doesn't exist at runtine *)
+   | bound [ nat ] ( generic_expr ) :: :: bound  {{ com $\ldots$and boundary }} %(* this ctor doesn't exist at runtine *)
 %   (* Continuation operators *)
 %   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
-%   | save label ( Symbol_t1 : ctype1 ,  .. , Symbol_tn : ctypen ) in generic_expr :: :: save
-   | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondetermnistic sequencing }}
+   | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondeterministic sequencing }}
    | save label ( </ Symbol_ti : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
-%   | run a label ( Symbol_t1 := generic_pexpr1 , .. , Symbol_tn := generic_pexprn ) :: :: run
    | run a label ( </ Symbol_ti := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
-   | return ( generic_pexpr ) :: :: return
+   | return ( generic_pexpr ) :: :: return {{ com Core procedure return }}
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
 %   (* Thread operators *)
 %   (* TODO: this ctor is kind redundant once we add Espawn, since we have Eunseq ... *)
    | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com cppmem thread creation }}%(* Parallel composition: for cppmem-style composition *)
-   | wait ( Thread_thread_id ) :: X :: wait  %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+   | wait ( Thread_thread_id ) ::  :: wait  %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
+      {{ com wait for thread termination }} 
    | Eloc Loc_t generic_expr :: X :: loc 
 
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
  generic_actionB {{ tex a }} {{ lem generic_action_ }} :: '' ::= {{ auxparam 'ty 'sym }} {{ com memory actions }}
    | create ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Create %(* the expr arguments are: alignment requirement, effective type *)
+%      {{ com create object with alignment constraint [[generic_pexpr1]] and C type [[generic_pexpr2]] }}
    | alloc ( generic_pexpr1 , generic_pexpr2 Symbol_prefix ) :: :: Alloc  %(* the expr arguments are: alignment requirement, space size *)
    | kill ( generic_pexpr ) :: :: Kill
    | store ( generic_pexpr1 , generic_pexpr2 , generic_pexpr , Cmm_memory_order ) :: :: Store
@@ -417,15 +416,15 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
     |  Action Loc_t a generic_actionB  :: :: Action 
 
  generic_paction {{ tex pa }} :: '' ::= {{ auxparam 'a 'ty 'sym }} {{ com memory actions with polarity }}
-    |  Paction polarity generic_action :: :: Paction
+    |  Paction polarity generic_action :: X :: Paction
+    |  generic_action :: M :: Positive {{ com positive, sequenced by both \ottkw{let\ weak} and \ottkw{let\ strong} }} {{ lem Paction Pos [[generic_action]] }}
+    |  neg ( generic_action ) :: M :: Negative {{ com negative, only sequenced by \ottkw{let\ strong} }} {{ lem Paction Neg [[generic_action]] }}
 
-
-
- declaration :: '' ::= {{ phantom }} {{ com Core declarations }}
+ definition :: '' ::= {{ phantom }} {{ com Core definitions }}
 %    | fun generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : core_base_type := generic_pexpr :: :: Fun    
 %    | proc generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : eff core_base_type := generic_expr :: :: Proc
-    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun
-    | proc generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc
+    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun {{ com Core function definition }}
+    | proc generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc {{ com Core procedure definition }}
 
 
 
@@ -447,13 +446,13 @@ terminals :: 'terminal' ::=
    | ,     :: :: comma {{ tex \texttt{,} }}
    | .     :: :: dot {{ tex \texttt{.} }}
    | :     :: :: colon {{ tex \texttt{:} }}
-   | :=     :: :: coloneq {{ tex \texttt{:=}\, }}
+   | :=     :: :: coloneq {{ tex \,\texttt{:=}\, }}
 
    | array_shift :: :: array_shift {{ tex \ottkw{array\_shift} }}
    | member_shift :: :: member_shift {{ tex \ottkw{member\_shift} }}
-   | is_scalar   :: :: is_scalar   {{ tex \ottkw{is\_scalar  } }}
-   | is_integer  :: :: is_integer  {{ tex \ottkw{is\_integer } }}
-   | is_signed   :: :: is_signed   {{ tex \ottkw{is\_signed  } }}
+   | is_scalar   :: :: is_scalar   {{ tex \ottkw{is\_scalar} }}
+   | is_integer  :: :: is_integer  {{ tex \ottkw{is\_integer} }}
+   | is_signed   :: :: is_signed   {{ tex \ottkw{is\_signed} }}
    | is_unsigned :: :: is_unsigned {{ tex \ottkw{is\_unsigned} }}
    | ptrdiff :: :: Ptrdiff {{ tex \ottkw{ptrdiff} }}
    | intFromPtr :: :: IntFromPtr {{ tex \ottkw{intFromPtr} }}
