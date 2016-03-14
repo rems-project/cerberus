@@ -37,11 +37,11 @@ let rec mk_list_pe = function
 let mk_file _ =
   if Pmap.is_empty M.std then
     Rstd begin
-      Pmap.add (Symbol.Symbol (8, Some "catch_exceptional_condition")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (7, Some "is_representable")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (6, Some "ctype_width")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (5, Some "wrapI")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (4, Some "conv")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (8, Some "catch_exceptional_condition")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (7, Some "is_representable")) (Fun (BTy_boolean, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (6, Some "ctype_width")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (5, Some "wrapI")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
+      Pmap.add (Symbol.Symbol (4, Some "conv")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
       Pmap.add (Symbol.Symbol (3, Some "bitwise_OR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
       Pmap.add (Symbol.Symbol (2, Some "bitwise_XOR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
       Pmap.add (Symbol.Symbol (1, Some "bitwise_AND")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
@@ -1042,7 +1042,7 @@ let subst name =
 %token DEF GLOB FUN PROC
 
 (* Core types *)
-%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF
+%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED
 
 (* Core constant keywords *)
 %token TRUE FALSE
@@ -1091,7 +1091,7 @@ let subst name =
 
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
-%token NIL CONS TUPLE ARRAY LOADED UNSPECIFIED
+%token NIL CONS TUPLE ARRAY LOADED_VALUE UNSPECIFIED
 
 %token CASE PIPE EQ_GT OF
 
@@ -1377,7 +1377,7 @@ ctor:
     { Civsizeof }
 | IVALIGNOF
     { Civalignof }
-| LOADED
+| LOADED_VALUE
     { Cloaded }
 | UNSPECIFIED
     { Cunspecified }
@@ -1388,9 +1388,11 @@ pattern:
     { CaseBase (Some _sym) }
 | UNDERSCORE
     { CaseBase None }
-| ctor=ctor _pat= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
-    { CaseCtor (ctor, _pat) }
+| ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
+    { CaseCtor (ctor, _pats) }
 (* Syntactic sugar for tuples and lists *)
+| LPAREN _pat= pattern COMMA _pats= separated_nonempty_list(COMMA, pattern) RPAREN
+    { CaseCtor (Ctuple, _pat :: _pats) }
 ;
 
 pattern_pair(X):
@@ -1429,7 +1431,7 @@ value:
 pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
-| UNDEF ub= UB
+| UNDEF LPAREN ub= UB RPAREN
     { Pexpr ((), PEundef ub) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
     { Pexpr ((), PEerror (str, _pe))  }
@@ -1443,7 +1445,7 @@ pexpr:
 | iCst= IMPL
     { Pexpr ((), PEimpl iCst) }
 (* Syntactic sugar for tuples and lists *)
-| LPAREN _pe= pexpr COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+| LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Pexpr ((), PEctor (Ctuple, _pe :: _pes)) }
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
     { mk_list_pe _pes }

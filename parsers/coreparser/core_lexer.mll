@@ -159,7 +159,8 @@ let keywords =
       ("Cons",   T.CONS);
       ("Tuple",  T.TUPLE);
       ("Array",  T.ARRAY);
-      ("Loaded", T.LOADED);
+      ("loaded", T.LOADED);
+      ("Loaded", T.LOADED_VALUE);
 
       
     ]

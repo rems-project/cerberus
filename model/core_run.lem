@@ -2058,7 +2058,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
         match to_pures es with
           | Just pes ->
               one $ Step_tau "Eunseq pure" (
-                E.return <| th_st with arena= Epure (Caux.mk_tuple pes) |>
+                E.return <| th_st with arena= Epure (Caux.mk_tuple_pe pes) |>
               )
           | Nothing ->
               let is_wait = function

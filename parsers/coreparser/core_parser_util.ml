@@ -192,6 +192,7 @@ type token =
   | TUPLE
   | ARRAY
   | LOADED
+  | LOADED_VALUE
   
   | PURE
 

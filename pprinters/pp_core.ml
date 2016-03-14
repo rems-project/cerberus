@@ -48,7 +48,6 @@ let precedence = function
   | PEarray_shift _
   | PEmember_shift _
   | PEnot _
-  | PEmemop _
   | PEstruct _
   | PEcall _
   | PElet _
@@ -308,11 +307,13 @@ let pp_pexpr pe =
         | PEctor (ctor, pes) ->
             pp_ctor ctor ^^ P.parens (comma_list pp pes)
         | PEcase (pe, pat_pes) ->
-            pp_keyword "case" ^^^ pp pe ^^^ pp_keyword "of" ^^ P.break 1 ^^
-            P.separate_map (P.break 1) (fun (cpat, pe) ->
-              P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle ^^
-              pp pe
-            ) pat_pes ^^ pp_keyword "end"
+            pp_keyword "case" ^^^ pp pe ^^^ pp_keyword "of" ^^
+            P.nest 2 (
+              P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, pe) ->
+                P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle ^^^
+                pp pe
+              ) pat_pes 
+            ) ^^ P.break 1 ^^ pp_keyword "end"
         | PEarray_shift (pe1, ty, pe2) ->
             pp_keyword "array_shift" ^^ P.parens (
               pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
@@ -325,8 +326,10 @@ let pp_pexpr pe =
             pp_keyword "not" ^^ P.parens (pp pe)
         | PEop (bop, pe1, pe2) ->
             pp pe1 ^^^ pp_binop bop ^^^ pp pe2
+(*
         | PEmemop (pure_memop, pes) ->
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
+*)
         | PEstruct (tag_sym, xs) ->
             pp_keyword "struct" ^^ P.parens (
               pp_symbol tag_sym ^^ P.comma ^^^ comma_list (
@@ -370,7 +373,7 @@ let pp_pexpr pe =
 
 let rec pp_expr = function
   | Epure pe ->
-      pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
+      pp_pexpr pe (* pp_keyword "pure" ^^ P.parens (pp_pexpr pe) *)
   | Ememop (memop, pes) ->
       failwith "Ememop"
       (*

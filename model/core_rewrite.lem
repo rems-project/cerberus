@@ -224,7 +224,7 @@ let rec remove_unseqs expr =
           | _ ->
               Nothing
         end) (Just []) es in
-      maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple pes)) pes_opt
+      maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple_pe pes)) pes_opt
   
 (* TODO
   | Ewseq pat (Eunseq es) e2 ->
@@ -559,8 +559,10 @@ let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
         PEnot (remove_conv_int_pexpr pe)
     | PEop bop pe1 pe2 ->
         PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+(*
     | PEmemop memop pes ->
         PEmemop memop (List.map remove_conv_int_pexpr pes)
+*)
     | PEstruct _ _ ->
         (* TODO *)
         _pe
@@ -876,7 +878,7 @@ let rec pure_propagation2 expr =
         let es' = List.map pure_propagation2 es in
         match to_pures' es' with
           | Just pes ->
-              Epure (Caux.mk_tuple pes)
+              Epure (Caux.mk_tuple_pe pes)
           | Nothing ->
               Eunseq es'
         end

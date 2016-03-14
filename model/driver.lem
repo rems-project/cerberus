@@ -135,8 +135,10 @@ let rec resolve_read_pexpr write_sym symb_v (Core.Pexpr bTy pexpr_ as pexpr) =
         Core.Pexpr bTy (Core.PEnot (fpe pe))
     | Core.PEop bop pe1 pe2 ->
         Core.Pexpr bTy (Core.PEop bop (fpe pe1) (fpe pe2))
+(*
     | Core.PEmemop memop pes ->
         Core.Pexpr bTy (Core.PEmemop memop (List.map fpe pes))
+*)
     | Core.PEstruct sym xs ->
         Core.Pexpr bTy (Core.PEstruct sym (List.map (fun (ident, pe) -> (ident, fpe pe)) xs))
     | Core.PEcall nm pes ->

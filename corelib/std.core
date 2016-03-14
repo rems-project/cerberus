@@ -103,7 +103,7 @@ fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
   if is_representable(n, ty) then
     n
   else
-    undef <<Exceptional_condition>>
+    undef(<<Exceptional_condition>>)
 
 
 -- [conv_int ty n] returns the value [n] converted to the integer type [ty]
@@ -462,5 +462,36 @@ fun unsigned_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
         loaded(wrapI(result_ty, conv1 * conv2))
     | _ =>
         unspecified(result_ty)
+  end
+-}
+
+{-
+fun foo(result_ty: ctype, ty1: ctype, ty1_: ctype, ty2: ctype, ty2_: ctype, _n1: loaded integer, _n2: loaded integer): integer :=
+  case (_n1, _n2) of
+   | (_, Unspecified(_)) =>
+       undef(<<Exceptional_condition>>)
+   | (Unspecified(_), _) =>
+       IF is_unsigned_integer_type (ctype_of e1) THEN
+       Unspecified(result_ty)
+       ELSE
+       undef(<<Exceptional_condition>>)
+   | (Loaded(n1), Loaded(n2)) =>
+       let promoted1 = conv(ty1, ty1_, n1) in
+       let promoted2 = conv(ty2, ty2_, n2) in
+       if promoted2 < 0 then
+         undef(<<Negative_shift>>) else
+       if promoted2 >= ctype_width(result_ty) then
+         undef(<<Shift_too_large>>) else
+       IF is_unsigned_integer_type (ctype_of e1) THEN
+         Loaded ((promoted1 * 2^promoted2) rem_t (Ivmax(result_ty) + 1))
+       ELSE
+       if promoted1 < 0 then
+         undef(<<Exceptional_condition>>)
+       else
+         let res = promoted1 * 2^promoted2 in
+         if is_representable(res, result_ty) then
+           Loaded(res)
+         else
+           undef(<<Exceptional_condition>>)
   end
 -}
