@@ -401,6 +401,8 @@ let rec hack expr =
 *)
     | Core.Eskip ->
         expr
+    | Core.Ecase pe xs ->
+        Core.Ecase pe (List.map (fun (pat, e) -> (pat, hack e)) xs)
     | Core.Elet sym pe1 e2 ->
         Core.Elet sym pe1 (hack e2)
     | Core.Eif pe1 e2 e3 ->
@@ -433,10 +435,8 @@ let rec hack expr =
         Core.Esave d a_tys (hack e)
     | Core.Erun bs d a_vs ->
         Core.Erun bs d a_vs
-(*
     | Core.Ereturn _ ->
         expr
-*)
     | Core.End es ->
         Core.End (map hack es)
     | Core.Epar es ->
@@ -445,6 +445,8 @@ let rec hack expr =
         Core.Ewait tid
     | Core.Eloc loc e ->
         Core.Eloc loc (hack e)
+    | _ ->
+        error ("Core_indet ==> " ^ Boot.pp_core_expr expr)
 end
 
 

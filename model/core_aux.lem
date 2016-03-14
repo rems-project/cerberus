@@ -488,9 +488,11 @@ let rec valueFromPexpr (Pexpr bTy pexpr_) =
     | PEop _ _ _ ->
         (* TODO: do better *)
         Nothing
+(*
     | PEmemop _ _ ->
         (* TODO: do better *)
         Nothing
+*)
 (*
     | PEtuple pes ->
         let cvals_opt = List.foldr (fun pe acc_opt ->
@@ -694,8 +696,10 @@ let rec subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
         PEnot (subst_sym_pexpr sym pe' pe)
     | PEop bop pe1 pe2 ->
         PEop bop (subst_sym_pexpr sym pe' pe1) (subst_sym_pexpr sym pe' pe2)
+(*
     | PEmemop pure_memop pes ->
         PEmemop pure_memop (List.map (subst_sym_pexpr sym pe') pes)
+*)
 (*
   | PEtuple pes ->
       PEtuple (List.map (subst_sym_pexpr sym pe') pes)
@@ -1378,8 +1382,8 @@ let is_unspec pe mk_ =
 
 
 
-val mk_tuple: list pexpr -> pexpr
-let mk_tuple pes =
+val mk_tuple_pe: list pexpr -> pexpr
+let mk_tuple_pe pes =
   Pexpr (BTy_tuple $ List.foldr (fun (Pexpr bTy _) acc -> bTy :: acc) [] pes) (PEctor Ctuple pes)
 
 
@@ -1432,7 +1436,16 @@ let mk_op_pe bop (Pexpr bTy1 _ as pe1) (Pexpr bTy2 _ as pe2) =
         Pexpr BTy_boolean (PEop bop pe1 pe2)
     | (OpOr, BTy_boolean, BTy_boolean) ->
         Pexpr BTy_boolean (PEop bop pe1 pe2)
+    | _ ->
+        error ("[Core_aux.mk_op_pe] " ^ Boot.pp_core_pexpr pe1 ^ " <-> " ^ Boot.pp_core_pexpr pe2)
   end
+
+
+val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
+let mk_let_pe pat pe1 ( Pexpr bTy _ as pe2) =
+  (* TODO: check that the pattern matchs pe1 *)
+  Pexpr bTy (PElet pat pe1 pe2)
+
 
 
 val mk_empty_pat: pattern
@@ -1449,6 +1462,10 @@ let mk_tuple_pat pats =
       error "[Core_aux.mk_tuple_pat] called with |pats| < 2"
   else
     CaseCtor Ctuple pats
+
+val mk_loaded_pat: pattern -> pattern
+let mk_loaded_pat pat =
+  CaseCtor Cloaded [pat]
 
 
 (*
@@ -1467,3 +1484,8 @@ let rec mk_sseqs_e es =
         Esseq mk_empty_pat e (mk_sseq_e es')
   end
 *)
+
+
+val mk_loaded_pe: pexpr -> pexpr
+let mk_loaded_pe (Pexpr (BTy_object oTy) _ as pe) =
+    Pexpr (BTy_loaded oTy) (PEctor Cloaded [pe])

@@ -11,7 +11,7 @@ open import Thread Core_ctype
 module Cmm = Cmm_csem
 
 
-type core_object_type =  (* Core object types *)
+type core_object_type =  (* types for C objects *)
  | OTy_integer
  | OTy_floating
  | OTy_pointer
@@ -24,11 +24,11 @@ type core_object_type =  (* Core object types *)
 type core_base_type =  (* Core base types *)
  | BTy_unit (* unit *)
  | BTy_boolean (* boolean *)
- | BTy_ctype (* C type *)
+ | BTy_ctype (* Core type of C type exprs *)
  | BTy_list of core_base_type (* list *)
  | BTy_tuple of list core_base_type (* tuple *)
  | BTy_object of core_object_type (* C object value *)
- | BTy_loaded of core_object_type (* C object value or unspecified value *)
+ | BTy_loaded of core_object_type (* core_object_type or unspecified value *)
 
 
 type core_type =  (* Core types *)
@@ -79,9 +79,9 @@ type binop =
  end
 
 
-type polarity =  (* Polarity for actions *)
- | Pos
- | Neg
+type polarity =  (* memory action polarities *)
+ | Pos (* sequenced by \ottkw{let\ weak} and \ottkw{let\ strong} *)
+ | Neg (* only sequenced by \ottkw{let\ strong} *)
 
 
 type generic_name 'sym = 
@@ -89,27 +89,27 @@ type generic_name 'sym =
  | Impl of Implementation_.implementation_constant (* implementation-defined constant *)
 
 
-type generic_object_value 'sym = 
- | OVinteger of Mem.integer_value (* integer constant *)
- | OVfloating of Mem.floating_value (* floating-point constant *)
- | OVpointer of Mem.pointer_value (* TODO: CHECK  null pointer constant *)
+type generic_object_value 'sym =  (* C object values *)
+ | OVinteger of Mem.integer_value (* integer value *)
+ | OVfloating of Mem.floating_value (* floating-point value *)
+ | OVpointer of Mem.pointer_value (* pointer value *)
  | OVcfunction of (generic_name 'sym) (* C function pointer *)
  | OVarray of list (generic_object_value 'sym) (* C array value *)
  | OVstruct of Symbol.t * list (Cabs.cabs_identifier * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.t * Cabs.cabs_identifier * Mem.mem_value (* C union value *)
 
 
-type generic_value 'sym = 
+type generic_value 'sym =  (* Core values *)
  | Vconstrained of list (list Mem.mem_constraint * (generic_value 'sym))
- | Vobject of (generic_object_value 'sym)
- | Vloaded of (generic_object_value 'sym)
- | Vunspecified of ctype
- | Vunit
- | Vtrue
- | Vfalse
- | Vctype of ctype
- | Vlist of core_base_type * list (generic_value 'sym)
- | Vtuple of list (generic_value 'sym)
+ | Vobject of (generic_object_value 'sym) (* C object value *)
+ | Vloaded of (generic_object_value 'sym) (* non-unspecified loaded value *)
+ | Vunspecified of ctype (* unspecified loaded value *)
+ | Vunit (* unit *)
+ | Vtrue (* true *)
+ | Vfalse (* false *)
+ | Vctype of ctype (* C type expr as value *)
+ | Vlist of core_base_type * list (generic_value 'sym) (* list *)
+ | Vtuple of list (generic_value 'sym) (* tuple *)
 
 
 type generic_ctor 'ty = 
@@ -127,31 +127,30 @@ type generic_ctor 'ty =
 
 type generic_pattern 'ty 'sym = 
  | CaseBase of maybe 'sym
- | CaseCtor of (generic_ctor 'ty) * list (generic_pattern 'ty 'sym)
+ | CaseCtor of (generic_ctor 'ty) * list (generic_pattern 'ty 'sym) (* constructor pattern *)
 
 type sym = Symbol.t
 type ksym = Symbol.t
 
 
-type pexpr_ 'ty 'sym = 
- | PEundef of Undefined.undefined_behaviour (* undefined behaviour *)
- | PEerror of string * (generic_pexpr 'ty 'sym) (* static error dependent on implementation-defined constant *)
+type pexpr_ 'ty 'sym =  (* Core pure expressions *)
+ | PEsym of 'sym (* Core identifier *)
+ | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
  | PEval of (generic_value 'sym) (* value *)
  | PEconstrained of list (list Mem.mem_constraint * (generic_pexpr 'ty 'sym)) (* constrained value *)
- | PEsym of 'sym (* core identifier *)
- | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
+ | PEundef of Undefined.undefined_behaviour (* undefined behaviour *)
+ | PEerror of string * (generic_pexpr 'ty 'sym) (* impl-defined static error *)
  | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
  | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
  | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
  | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.t * Cabs.cabs_identifier (* pointer struct/union member shift *)
- | PEnot of (generic_pexpr 'ty 'sym) (* not *)
- | PEop of binop * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* binop *)
- | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym) (* memory operation *)
+ | PEnot of (generic_pexpr 'ty 'sym) (* boolean not *)
+ | PEop of binop * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* binary operators *)
  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
  | PEunion of Symbol.t * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
  | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
- | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core let *)
- | PEif of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* Core if *)
+ | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* pure Core let *)
+ | PEif of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* pure Core if *)
  | PEis_scalar of (generic_pexpr 'ty 'sym)
  | PEis_integer of (generic_pexpr 'ty 'sym)
  | PEis_signed of (generic_pexpr 'ty 'sym)
@@ -161,7 +160,7 @@ and generic_pexpr 'ty 'sym =
  | Pexpr of 'ty * (pexpr_ 'ty 'sym)
 
 
-type generic_action_ 'ty 'sym = 
+type generic_action_ 'ty 'sym =  (* memory actions *)
  | Create of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Symbol.prefix
  | Alloc of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Symbol.prefix
  | Kill of (generic_pexpr 'ty 'sym)
@@ -170,34 +169,35 @@ type generic_action_ 'ty 'sym =
  | RMW of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm.memory_order * Cmm.memory_order
 
 
-type generic_action 'a 'ty 'sym = 
+type generic_action 'a 'ty 'sym =  (* memory actions *)
  | Action of Loc.t * 'a * (generic_action_ 'ty 'sym)
 
 
-type generic_paction 'a 'ty 'sym = 
+type generic_paction 'a 'ty 'sym =  (* memory actions with polarity *)
  | Paction of polarity * (generic_action 'a 'ty 'sym)
 
 
-type generic_expr 'a 'ty 'sym = 
- | Epure of (generic_pexpr 'ty 'sym)
- | Ememop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
- | Eskip
- | Elet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym)
- | Eif of (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
+type generic_expr 'a 'ty 'sym =  (* Core expressions *)
+ | Epure of (generic_pexpr 'ty 'sym) (* pure expression *)
+ | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym) (* pointer op involving memory *)
+ | Eaction of (generic_paction 'a 'ty 'sym) (* memory action *)
  | Ecase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym)) (* pattern matching *)
- | Eproc of 'a * (generic_pexpr 'ty 'sym) * list (generic_pexpr 'ty 'sym)
- | Eaction of (generic_paction 'a 'ty 'sym)
- | Eunseq of list (generic_expr 'a 'ty 'sym)
- | Ewseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
- | Esseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym)
- | Easeq of maybe (Symbol.t * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym)
- | Eindet of nat * (generic_expr 'a 'ty 'sym)
- | Ebound of nat * (generic_expr 'a 'ty 'sym)
- | Esave of Symbol.t * list (Symbol.t * ctype) * (generic_expr 'a 'ty 'sym)
- | Erun of 'a * Symbol.t * list (Symbol.t * (generic_pexpr 'ty 'sym))
- | End of list (generic_expr 'a 'ty 'sym)
- | Epar of list (generic_expr 'a 'ty 'sym)
- | Ewait of Thread.thread_id
+ | Elet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* Core let *)
+ | Eif of (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* Core if *)
+ | Eskip (* skip *)
+ | Eproc of 'a * (generic_pexpr 'ty 'sym) * list (generic_pexpr 'ty 'sym) (* procedure call *)
+ | Eunseq of list (generic_expr 'a 'ty 'sym) (* unsequenced expressions *)
+ | Ewseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* weak sequencing *)
+ | Esseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* strong sequencing *)
+ | Easeq of maybe (Symbol.t * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym) (* atomic sequencing *)
+ | Eindet of nat * (generic_expr 'a 'ty 'sym) (* indeterminately sequenced expr *)
+ | Ebound of nat * (generic_expr 'a 'ty 'sym) (* $\ldots$and boundary *)
+ | End of list (generic_expr 'a 'ty 'sym) (* nondeterministic sequencing *)
+ | Esave of Symbol.t * list (Symbol.t * ctype) * (generic_expr 'a 'ty 'sym) (* save label *)
+ | Erun of 'a * Symbol.t * list (Symbol.t * (generic_pexpr 'ty 'sym)) (* run from label *)
+ | Ereturn of (generic_pexpr 'ty 'sym) (* Core procedure return *)
+ | Epar of list (generic_expr 'a 'ty 'sym) (* cppmem thread creation *)
+ | Ewait of Thread.thread_id (* wait for thread termination *)
  | Eloc of Loc.t * (generic_expr 'a 'ty 'sym)
 
 
@@ -237,7 +237,7 @@ type generic_expr 'a 'ty 'sym =
  type fun_map 'a = map Symbol.t (fun_map_decl 'a)
  
  
- (* a Core file is just a set named functions *)
+ (* a Core file is just a set of named functions *)
  type file 'a = <|
    main   : Symbol.t;
    stdlib : fun_map 'a;
