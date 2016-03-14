@@ -1,0 +1,3 @@
+# Include HOL-LIB directory from LEM
+INCLUDES = ../../lem/hol-lib ../hol
+

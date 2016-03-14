@@ -1,0 +1,143 @@
+open import Pervasives
+
+open import Core_ctype Mem_common
+import Symbol
+
+
+(* TODO *)
+type allocation_id = nat
+
+type provenance_id = nat
+
+
+
+(* A 'provenance' keeps track of a how a pointer value was constructed *)
+type provenance =
+    (* the associated pointer do reference something but we don't know anything
+       about the associated allocation (e.g. the pointer was build using scanf()) *)
+  | Prov_wildcard
+  
+    (* the associated pointer do not reference anything (e.g. null pointer, function pointers) *)
+  | Prov_none
+  
+    (* the associated pointer was create using a provenance-less integer value
+       within the memory range reserved for devices *)
+  | Prov_device
+    
+    (* in this case we know of at least one allocation event *)
+  | Prov_some of set provenance_id (* INVARIANT: non empty set *)
+
+
+
+
+type address =
+  | Address of Symbol.prefix * nat
+
+
+
+(*** Pointer value ****************************************************************************** *)
+type pointer_value =
+    (* pointer values are annotated with a provenance *)
+  | PV of provenance * pointer_value_base * shift_path
+
+and pointer_value_base =
+  | PVunspecified of ctype (* TODO: maybe put this ctor in pointer_value ? *)
+    (* a null pointer constructed with an expression of the given ctype. *)
+  | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
+     (* the result of a dynamic or automatic/static/thread-local allocation *)
+     (* generated (and perhaps always?) with Prov_some with the singleton set of its allocation_id  *)
+  
+  | PVfunction of Symbol.t (* INVARIANT: the associated provenance must be Prov_none *)
+  
+  | PVbase of allocation_id * Symbol.prefix (* TODO: not sure about having the prefix here *)
+  | PVfromint of integer_value_base (* INVARIANT: never a null pointer *)
+(* in memory-value, kayvan wants byte-n-of-memory-value too *)
+
+
+(* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
+and shift_path_element =
+  | SPE_array of ctype * integer_value_base
+(*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
+  | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+ 
+and shift_path =
+  list shift_path_element
+
+
+
+
+and integer_value_base =
+  | IVunspecified
+  | IVconcrete of integer (* of Symbolic.symbolic *)
+  | IVaddress of address (* NOTE: this should never get out of this module *)
+  | IVfromptr of ctype * (* ctype * *) pointer_value_base (* the first parameter is the referenced type of the pointer value,
+                                                       the second is the integer type *)
+  | IVop of integer_operator * list integer_value_base
+  | IVmin of AilTypes.integerType
+  | IVmax of AilTypes.integerType
+  | IVsizeof of ctype
+  | IValignof of ctype
+  | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+  | IVptrdiff of pointer_value_base * pointer_value_base
+  (* TODO: tentative *)
+  | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
+  | IVcomposite of list integer_value_base
+
+
+and integer_value =
+  IV of provenance (* * AilTypes.integerType *) * integer_value_base
+
+
+and floating_value =
+  | FVunspecified
+  | FVconcrete of string
+
+(* The mem_value represents what can be stored in memory. *)
+and mem_value =
+  | MVsymbolic of Symbolic.symbolic mem_value pointer_value (* symbolicity coming from the concurrency *)
+(*  | MVunspecified of ctype (* INVARIANT: the ctype must be base or union type *) *)
+  | MVinteger of AilTypes.integerType * integer_value
+  | MVfloating of AilTypes.floatingType * floating_value
+  | MVpointer of ctype * pointer_value (* the first parameter is the referenced type of the pointer value *)
+  | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
+  | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+
+(*  
+  | MVmodified of list (shift_path * mem_value) * mem_value (* this is for when an object is modified as an
+                                                               uchar array (or the generalisation to other types of that) *)
+*)
+  
+(*  | MVbytes of byte_mask * mem_value * mem_value *)
+
+
+
+
+type allocation =
+  | Alloc_static  of ctype * address
+  | Alloc_dynamic of integer_value_base * address
+
+
+(*
+(* TODO: tentative *)
+type address_constraint =
+    (* the first address is distinct for the addresses in the set *)
+  | AC_distinct of address_id * set address_id
+    (* the address is equal to a specific integer value *)
+  | AC_equals of address_id * integer_value_base
+*)
+
+(*
+type address_expression =
+  | Addr_address_id of address_id
+  | Addr_ival of integer_value_base
+  | Addr_add of address_expression * address_expression
+  | Addr_sub of address_expression * address_expression
+*)
+
+
+type mem_constraint =
+  | MC_eqIV of string (* TMP debug *) * integer_value_base * integer_value_base (* equality between integer values *)
+  | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
+  | MC_leIV of integer_value_base * integer_value_base
+  | MC_addr_distinct of address * set address  (* the first address is distinct for the addresses in the set *)

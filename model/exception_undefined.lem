@@ -1,0 +1,64 @@
+open import Pervasives
+import Exception Undefined
+
+type t 'a 'msg = Exception.t (Undefined.t 'a) 'msg
+
+val return: forall 'a 'b 'msg. 'a -> t 'a 'msg
+let return z =
+  Exception.return (Undefined.return z)
+
+val bind: forall 'a 'b 'msg. t 'a 'msg -> ('a -> t 'b 'msg) -> t 'b 'msg
+let bind m f =
+  match m with
+    | Exception.Result (Undefined.Defined z) ->
+        f z
+    | Exception.Result (Undefined.Undef loc ubs) ->
+        Exception.return (Undefined.undef loc ubs)
+    | Exception.Result (Undefined.Error loc str) ->
+        Exception.return (Undefined.error loc str)
+    | Exception.Exception err ->
+        Exception.fail err
+  end
+
+val fail: forall 'a 'msg. 'msg -> t 'a 'msg
+let fail err = Exception.fail err
+
+
+val     mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+let rec mapM f xs =
+  Exception.bind (Exception.mapM f xs)
+    (fun us -> Exception.return $ Undefined.mapM id us)
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+end
+
+
+open Operators
+val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
+let sequence ms =
+  foldr
+    (fun m ms' ->
+      m   >>= fun x  ->
+      ms' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
+
+
+(* NOTE: this is foldl *)
+val     foldM: forall 'a 'b 'msg. ('a -> 'b -> t 'a 'msg) -> 'a -> list 'b -> t 'a 'msg (* GENERIC Monad *)
+let rec foldM f a = function                                                            (* GENERIC Monad *)
+  | [] ->                                                                               (* GENERIC Monad *)
+      return a                                                                          (* GENERIC Monad *)
+  | x::xs ->                                                                            (* GENERIC Monad *)
+      f a x >>= fun fax -> foldM f fax xs                                               (* GENERIC Monad *)
+end
+
+val     foldrM: forall 'a 'b 'msg. ('a -> 'b -> t 'b 'msg) -> 'b -> list 'a -> t 'b 'msg
+let rec foldrM f a l =
+  match l with
+    | [] -> return a
+    | x::xs -> foldrM f a xs >>= f x
+  end

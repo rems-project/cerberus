@@ -1,0 +1,12 @@
+metavar z ::=
+  {{ phantom }}
+  {{ lex numeral }}
+  {{ coq Z }}
+metavar n ::=
+  {{ phantom }}
+  {{ coq nat }}
+  {{ lex numeral }}
+indexvar i, j, k ::=
+  {{ phantom }}
+  {{ coq nat }}
+  {{ lex numeral }}
