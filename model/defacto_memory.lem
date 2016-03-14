@@ -12,13 +12,20 @@ open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
 
+(* TODO: HOL hack *)
+declare hol target_rep function print_debug n s = `()`
+
 val warn: string -> unit
 declare ocaml target_rep function warn = `Debug.warn`
 
+(* TODO: HOL hack *)
+declare hol target_rep function warn s = `()`
 
 val stringFromCtype: ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
 
+(* TODO: HOL hack *)
+declare hol target_rep function stringFromCtype c = ""
 
 (* Semantic switches *)
 type mode =
@@ -47,6 +54,15 @@ declare ocaml target_rep function is_unsat            = `Sat_solving.is_unsat`
 declare ocaml target_rep function add_constraint      = `Sat_solving.add_mem_constraint`
 declare ocaml target_rep function check_sat           = `Sat_solving.check`
 declare ocaml target_rep function declare_address     = `Sat_solving.declare_address`
+
+(* TODO: HOL hack *)
+declare hol target_rep type     constraints         = ``
+declare hol target_rep function initial_constraints = ``
+declare hol target_rep function is_unsat            = ``
+declare hol target_rep function add_constraint      = ``
+declare hol target_rep function check_sat           = ``
+declare hol target_rep function declare_address     = ``
+
 
 
 type write_event =
@@ -127,6 +143,12 @@ val stringFromShift_path: shift_path -> string (* DEBUG *)
 declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
 declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
 declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
+
+(* TODO: HOL hack *)
+declare hol target_rep function stringFromPointer_value = ``
+declare hol target_rep function stringFromMem_value = ``
+declare hol target_rep function stringFromShift_path = `` (* DEBUG *)
+
 
 
 

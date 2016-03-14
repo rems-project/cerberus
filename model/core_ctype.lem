@@ -319,7 +319,7 @@ let rec setElemCompare_ctype ty1 ty2 =
   end
 *)
 
-let rec setElemCompare_ctype_aux qs_tys1 qs_tys2 =
+let rec ~{hol} setElemCompare_ctype_aux qs_tys1 qs_tys2 =
   match (qs_tys1, qs_tys2) with
     | ([], []) ->
         EQ

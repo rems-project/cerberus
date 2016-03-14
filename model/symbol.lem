@@ -6,7 +6,8 @@ import UniqueId
 val debug_level: unit -> nat
 declare ocaml target_rep function debug_level = `Debug.get_debug_level`
 
-
+(* TODO: HOL hack *)
+declare hol target_rep function debug_level u = 0
 
 type t =
   Symbol of nat * maybe string

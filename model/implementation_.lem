@@ -239,7 +239,7 @@ instance (Eq implementation_constant)
   let (<>) x y = not (implementation_constant_equal x y)
 end
 
-let implementation_constant_compare x y =
+let ~{hol} implementation_constant_compare x y =
   match (x, y) with
     | (StdFunction name1, StdFunction name2) -> setElemCompare name1 name2
     | _ -> setElemCompare (implementation_constant_to_nat x) (implementation_constant_to_nat y)

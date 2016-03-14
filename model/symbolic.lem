@@ -81,7 +81,7 @@ instance (Eq symbolic_name)
   let (<>) = fun n1 n2 -> not (symbolic_nameEquality n1 n2)
 end
 
-let setElemCompare_symbolic_name n1 n2 =
+let ~{hol} setElemCompare_symbolic_name n1 n2 =
   let ord = function
     | SYMBfsym _ ->
         (0: nat)
@@ -167,7 +167,7 @@ end
 *)
 
 
-let rec setElemCompare_symbolic symb1 symb2 =
+let rec ~{hol} setElemCompare_symbolic symb1 symb2 =
   let ord = function
     | SYMBtrue ->
         (0 : nat)

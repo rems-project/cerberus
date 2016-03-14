@@ -63,7 +63,8 @@ CORE = \
 MODEL := $(UTILS) $(CABS) $(CORE) $(DEFACTO)
 SOURCE := $(MODEL) $(AIL) $(CMM)
 
-HOL_SCRIPTS := $(addsuffix Script.sml, $(basename $(SOURCE)))
+HOL_SCRIPTS := $(addprefix $(HOL_DIR), \
+               $(addsuffix Script.sml, $(basename $(SOURCE))))
 
 # Create the directory where HOL files will be generated
 $(HOL_DIR):
@@ -95,17 +96,19 @@ $(AUX_DIR): $(HOL_DIR)
 	@echo $(BOLD)CREATING the auxiliary script directory$(RESET)
 	@mkdir $(AUX_DIR) || true
 
-$(HOL_SCRIPTS):%Script.sml: $(addprefix $(HOL_DIR), $(SOURCE)) | $(AUX_DIR)
+$(HOL_SCRIPTS): $(addprefix $(HOL_DIR), $(SOURCE)) | $(AUX_DIR)
 	@echo $(BOLD)"Generating HOL Script files"$(RESET)
 	$(LEM) -hol $(LEM_FLAGS) $^
-	@mv -vf *AuxiliaryScript.sml $(AUX_DIR) || true
+	@echo $(BOLD)"Moving auxiliary scripts to aux directory"
+	@cd $(HOL_DIR); mv -f *AuxiliaryScript.sml $(AUX_DIR) || true
 
 # Run Holmake
-hol: $(HOL_SCRIPTS)
+hol: $(HOL_SCRIPTS) $(AUX_DIR)
 	@echo $(BOLD)Running Holmake$(RESET)
 	Holmake
 
-all: $(AUX_DIR)
+all:
+	@echo $(HOL_SCRIPTS)
 
 # Cleaning stuff
 clean:
