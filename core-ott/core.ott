@@ -220,7 +220,6 @@ generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core values
 metavar ty {{ tex ty }} {{ lem 'ty }} ::= {{ phantom }}
  
 
-% TODO: maybe suppress ty in latex 
 grammar
 generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
    | Nil ty      :: :: nil         {{ com empty list  }} %  : [bTy] 
@@ -352,7 +351,7 @@ maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Sym
 
 generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expressions }} 
 %   (* pure expression *)
-   | pure ( generic_pexpr ) :: :: pure  {{ com  pure expression }}
+   | generic_pexpr :: :: pure  {{ com  pure expression }}
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
    | memop ( Mem_memop , generic_pexpr1 , .. , generic_pexprn ) :: :: memop {{ com memory operation }}
 % (*
@@ -375,18 +374,16 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | let strong generic_pattern = generic_expr1 in generic_expr2 :: :: sseq {{ com strong sequencing }}
    | let atomic maybe_Symbol_t_core_base_type = generic_action1 in generic_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
 %   (* indeterminately-sequenced expressions and boundary *) 
-   | indet [ nat ] ( generic_expr ) :: :: indet  {{ com indeterminately sequenced expression }} %(* TODO: add unique indices *) (* this ctor doesn't exist at runtine *)
+   | indet [ nat ] ( generic_expr ) :: :: indet  {{ com indeterminately sequenced expression }} % (* this ctor doesn't exist at runtine *)
    | bound [ nat ] ( generic_expr ) :: :: bound  {{ com indeterminate sequencing boundary }} %(* this ctor doesn't exist at runtine *)
 %   (* Continuation operators *)
 %   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
 %   | save label ( Symbol_t1 : ctype1 ,  .. , Symbol_tn : ctypen ) in generic_expr :: :: save
    | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondetermnistic sequencing }}
-% TODO shouldn't this come with the other sequencing operations?
-
    | save label ( </ Symbol_ti : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
 %   | run a label ( Symbol_t1 := generic_pexpr1 , .. , Symbol_tn := generic_pexprn ) :: :: run
    | run a label ( </ Symbol_ti := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
-%   | return ( generic_pexpr ) :: :: return
+   | return ( generic_pexpr ) :: :: return
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
 %   (* Thread operators *)
@@ -394,7 +391,6 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | par ( generic_expr1 , .. , generic_exprn ) :: :: par  {{ com cppmem thread creation }}%(* Parallel composition: for cppmem-style composition *)
    | wait ( Thread_thread_id ) :: X :: wait  %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
    | Eloc Loc_t generic_expr :: X :: loc 
-% TODO: P suppressed Eloc in latex - is that right? 
 
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
