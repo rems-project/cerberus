@@ -366,6 +366,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | skip :: :: skip {{ com  skip }}
 
    | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com Core procedure call }}
+   | return ( generic_pexpr ) :: :: return {{ com Core procedure return }}
 
 %   (* sequencing operators *)
    | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq {{ com unsequenced expressions }}
@@ -380,7 +381,6 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondeterministic sequencing }}
    | save label ( </ Symbol_ti : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
    | run a label ( </ Symbol_ti := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
-   | return ( generic_pexpr ) :: :: return {{ com Core procedure return }}
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
 %   (* Thread operators *)
