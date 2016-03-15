@@ -348,7 +348,7 @@ maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Sym
 
 generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expressions }} 
 %   (* pure expression *)
-   | generic_pexpr :: :: pure  {{ com  pure expression }}
+   | pure ( generic_pexpr ) :: :: pure  {{ com  pure expression }}
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
 % (*
 % (TODO C signals)
