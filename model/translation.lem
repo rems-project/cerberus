@@ -34,7 +34,6 @@ module Operators = struct
   let inline (>>) m f   = E.bind m (fun _ -> f)
   let inline (<$>) f ma = E.bind ma (fun a -> E.return (f a))
   let inline (<*>) mf m = E.bind mf (fun f -> f <$> m)
-
 end
 
 open Operators
@@ -735,6 +734,123 @@ TODO: NEW TYPED CORE
       
 *)
 
+
+
+      | A.AilEbinary e1 (A.Arithmetic A.Shl) e2 ->
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun sym_e1        ->
+          E.fresh_symbol      >>= fun sym_e2        ->
+          E.fresh_symbol      >>= fun sym_obj1      ->
+          E.fresh_symbol      >>= fun sym_obj2      ->
+          E.fresh_symbol      >>= fun sym_promoted1 ->
+          E.fresh_symbol      >>= fun sym_promoted2 ->
+          E.fresh_symbol      >>= fun sym_res       ->
+          let sym_e1_pe        = C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEsym sym_e1)        in
+          let sym_e2_pe        = C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEsym sym_e2)        in
+          let sym_obj1_pe      = C.Pexpr (C.BTy_object C.OTy_integer) (C.PEsym sym_obj1)      in
+          let sym_obj2_pe      = C.Pexpr (C.BTy_object C.OTy_integer) (C.PEsym sym_obj2)      in
+          let sym_promoted1_pe = C.Pexpr (C.BTy_object C.OTy_integer) (C.PEsym sym_promoted1) in
+          let sym_promoted2_pe = C.Pexpr (C.BTy_object C.OTy_integer) (C.PEsym sym_promoted2) in
+          let sym_res_pe       = C.Pexpr (C.BTy_object C.OTy_integer) (C.PEsym sym_res)       in
+          E.return $
+            C.Ewseq (C.CaseCtor C.Ctuple [C.CaseBase (Just sym_e1); C.CaseBase (Just sym_e2)]) (C.Eunseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr (C.BTy_loaded C.OTy_integer) (
+                  C.PEcase (C.Pexpr (C.BTy_tuple [C.BTy_object C.OTy_integer; C.BTy_object C.OTy_integer]) (C.PEctor C.Ctuple [sym_e1_pe; sym_e2_pe]))
+                    [ (C.CaseCtor C.Ctuple [C.CaseBase Nothing; C.CaseCtor C.Cunspecified [C.CaseBase Nothing]],
+                       C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Exceptional_condition))
+                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cunspecified [C.CaseBase Nothing]; C.CaseBase Nothing],
+(if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
+else
+                       C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Exceptional_condition)))
+                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cloaded [C.CaseBase (Just sym_obj1)]; C.CaseCtor C.Cloaded [C.CaseBase (Just sym_obj2)]],
+                       Caux.mk_let_pe (C.CaseBase (Just sym_promoted1))
+                         (integer_promotion (ctype_of e1) sym_obj1_pe)
+                       (Caux.mk_let_pe (C.CaseBase (Just sym_promoted2))
+                         (integer_promotion (ctype_of e2) sym_obj2_pe)
+                       (* (§6.5.7#2) if promoted2 < 0 then undef *)
+                       (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt sym_promoted2_pe (Caux.integer_pe 0))
+                         (C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Negative_shift))
+                       
+                       (* ctype_width(result_ty) <= promoted2 *)
+                       (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (ctype_width [Caux.mk_ail_ctype_pe result_ty]) sym_promoted2_pe)
+                                                            (Caux.mk_op_pe C.OpEq (ctype_width [Caux.mk_ail_ctype_pe result_ty]) sym_promoted2_pe))
+                          (C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Shift_too_large))
+(if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                       (Caux.mk_loaded_pe (
+                          Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul sym_promoted1_pe (Caux.mk_op_pe C.OpExp (Caux.integer_pe 2) sym_promoted2_pe))
+                                                  (Caux.mk_op_pe C.OpAdd (Caux.ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) (Caux.integer_pe 1))
+                        ))
+else
+                       (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt sym_promoted1_pe (Caux.integer_pe 0))
+                         (C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Exceptional_condition))
+                       (Caux.mk_let_pe (Caux.mk_sym_pat sym_res)
+                         (Caux.mk_op_pe C.OpMul sym_promoted1_pe (Caux.mk_op_pe C.OpExp (Caux.integer_pe 2) sym_promoted2_pe))
+                       (Caux.mk_if_pe (is_representable [sym_res_pe; Caux.mk_ail_ctype_pe result_ty])
+                          (Caux.mk_loaded_pe sym_res_pe)
+                         (C.Pexpr (C.BTy_loaded C.OTy_integer) (C.PEundef Undefined.Exceptional_condition)))))
+)
+                       )))) ]
+                )
+              )
+            )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* ORIGINAL
+
       | A.AilEbinary e1 (A.Arithmetic A.Shl) e2 ->
           translate_rvalue e1 >>= fun core_e1       ->
           translate_rvalue e2 >>= fun core_e2       ->
@@ -752,17 +868,6 @@ TODO: NEW TYPED CORE
           let sym_promoted1_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_promoted1 in
           let sym_promoted2_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_promoted2 in
           let sym_res_pe       = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_res       in
-(*
-          E.fresh_typed_symbol false (ctype_of e1) >>= fun sym_ty_obj1  ->
-          E.fresh_typed_symbol false (ctype_of e2) >>= fun sym_ty_obj2  ->
-          E.fresh_typed_symbol false (ctype_of e1) >>= fun sym_ty_conv1 ->
-          E.fresh_typed_symbol false (ctype_of e2) >>= fun sym_ty_conv2 ->
-*)
-(*
-          let (promoted_e1, conved_e2) =
-            usual_arithmetic_conversion (ctype_of e1) (ctype_of e2)
-              (Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_obj1) (Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_obj2) in
-*)
           E.return $
             C.Ewseq (Caux.mk_tuple_pat [Caux.mk_sym_pat sym_e1; Caux.mk_sym_pat sym_e2]) (Caux.mk_unseq [core_e1; core_e2]) (
               C.Epure (
@@ -806,6 +911,7 @@ else
                 )
               )
             )
+*)
 
 (*
 (*
