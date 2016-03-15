@@ -136,7 +136,8 @@ CERBERUS_LEM=\
   $(SOURCE_core_dynamics) \
   $(SOURCE_elaboration) \
   $(SOURCE_defacto) \
-  $(SOURCE_concurrency_interface)
+  $(SOURCE_concurrency_interface) \
+  tmp_shift.lem
 
 
 # Where and how ocamlbuild will be called
