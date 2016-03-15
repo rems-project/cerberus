@@ -40,8 +40,8 @@ val shift_left:
 
 let shift_left translate_rvalue e1 e2 =
   let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
-  let ctype_width = error "assert false" in
-  let is_representable = error "assert false" in
+  let ctype_width : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let is_representable : list untyped_pexpr -> untyped_pexpr = error "assert false" in
   let result_ty : Aty.ctype = error "assert false" in
   
   translate_rvalue e1 >>= fun core_e1       ->
@@ -88,7 +88,7 @@ else
                          (C.Pexpr () (C.PEundef Undefined.Exceptional_condition))
                        (C.Pexpr () (C.PElet (C.CaseBase (Just sym_res))
                          (C.Pexpr () (C.PEop C.OpMul (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEop C.OpExp (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 2))))) (C.Pexpr () (C.PEsym sym_promoted2))))))
-                       (C.Pexpr () (C.PElet (is_representable [C.Pexpr () (C.PEsym sym_res); C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])
+                       (C.Pexpr () (C.PEif (is_representable [C.Pexpr () (C.PEsym sym_res); C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])
                           (C.Pexpr () (C.PEctor C.Cloaded [C.Pexpr () (C.PEsym sym_res)]))
                          (C.Pexpr () (C.PEundef Undefined.Exceptional_condition))))))
 ))
