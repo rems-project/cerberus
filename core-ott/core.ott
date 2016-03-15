@@ -207,7 +207,7 @@ list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.m
 generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core values }}
    | Constrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: X :: constrained
    | generic_object_value :: :: object {{ com C object value }} 
-   | Loaded ( generic_object_value ) :: :: loaded {{ com non-unspecified loaded value }}
+   | Specified ( generic_object_value ) :: :: loaded {{ com non-unspecified loaded value }}
    | Unspecified ( ctype ) :: :: unspecified      {{ com unspecified loaded value }} 
    | Unit :: :: unit                              {{ com unit }}
    | True :: :: true                              {{ com true }}
