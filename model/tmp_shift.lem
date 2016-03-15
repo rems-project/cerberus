@@ -39,10 +39,10 @@ val shift_left:
   E.t untyped_expr
 
 let shift_left translate_rvalue e1 e2 =
-  let integer_promotion: Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
   let ctype_width = error "assert false" in
   let is_representable = error "assert false" in
-  let result_ty = error "assert false" in
+  let result_ty : Aty.ctype = error "assert false" in
   
   translate_rvalue e1 >>= fun core_e1       ->
   translate_rvalue e2 >>= fun core_e2       ->
