@@ -98,3 +98,73 @@ else
             )
 
 
+(* ********************************************************** *)
+
+      
+
+let shift_left translate_rvalue e1 e2 =
+  let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let ctype_width : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let is_representable : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let result_ty : Aty.ctype = error "assert false" in
+  
+is_unsigned_integer_type
+
+  translate_rvalue e1 >>= fun core_e1       ->
+  translate_rvalue e2 >>= fun core_e2       ->
+  E.fresh_symbol      >>= fun sym_e1        ->
+  E.fresh_symbol      >>= fun sym_e2        ->
+  E.fresh_symbol      >>= fun sym_obj1      ->
+  E.fresh_symbol      >>= fun sym_obj2      ->
+  E.fresh_symbol      >>= fun sym_promoted1 ->
+  E.fresh_symbol      >>= fun sym_promoted2 ->
+  E.fresh_symbol      >>= fun sym_res       ->
+  E.return $
+
+  core_e1 := translate_rvalue e1;
+  core_e2 := translate_rvalue e2;
+  sym_e1 := E.fresh_symbol;       sym_e2 := E.fresh_symbol; 
+  sym_obj1 := E.fresh_symbol;     sym_obj2 := E.fresh_symbol; 
+  sym_promoted1 := E.fresh_symbol();sym_promoted2 := E.fresh_symbol; 
+  sym_res:= E.fresh_symbol;
+  E.return(
+    let weak (sym_e1, sym_e2) = unseq(core_e1, core_e2) in 
+    pure(
+      case (sym_e1, sym_e2) with
+        | (_, Unspecified(_)) => 
+          undef(Exceptional_condition)
+        | (Unspecified(_), _) => 
+          (IF is_unsigned_integer_type(ctype_of e1) THEN
+          Unspecified(result_ty)
+          ELSE
+          undef(Exceptional_condition))
+        | (Loaded(sym_obj1), Loaded(sym_obj2)) => 
+          let sym_promoted1 = 
+            integer_promotion (ctype_of e1) sym_obj1 in
+          let sym_promoted2 = 
+            integer_promotion (ctype_of e2) sym_obj2 in 
+          (* (§6.5.7#2) if promoted2 < 0 then undef *)
+          if sym_promoted2 < 0 then 
+            undef(Undefined.Negative_shift)
+          else if ctype_width(result_ty) <= sym_promoted2 then
+            undef(Undefined.Shift_too_large)
+          else
+            (IF is_unsigned_integer_type (ctype_of e1) THEN
+            Loaded(sym_promoted1*(2^sym_promoted2) 
+                     rem_t (Ivmax(result_ty)+1))
+            ELSE
+            if sym_promoted1 < 0 then 
+              undef(Exceptional_condition)
+            else
+              let sym_res = 
+                sym_promoted1*(2^sym_promoted2) in 
+              if is_representable(sym_res, result_ty) then
+                Loaded(sym_res) 
+              else 
+                undef(Exceptional_condition) )))
+
+
+    
+
+
+
