@@ -365,7 +365,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
    | skip :: :: skip {{ com  skip }}
 
-   | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com procedure call }}
+   | pcall ( a  generic_pexpr , generic_pexpr1 , .. , generic_pexprn ) :: :: proc {{ com Core procedure call }}
 
 %   (* sequencing operators *)
    | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq {{ com unsequenced expressions }}
