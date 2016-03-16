@@ -54,16 +54,14 @@ type cabs_integer_suffix =
   | CabsSuffix_L
   | CabsSuffix_LL
 
-type cabs_integer_constant =
-    string * maybe cabs_integer_suffix
+type cabs_integer_constant = string * maybe cabs_integer_suffix
 
 type cabs_character_prefix =
   | CabsPrefix_L
   | CabsPrefix_u
   | CabsPrefix_U
 
-type cabs_character_constant =
-    maybe cabs_character_prefix * string
+type cabs_character_constant = maybe cabs_character_prefix * string
 
 
 (* TODO *)
@@ -81,8 +79,7 @@ type cabs_encoding_prefix =
   | CabsEncPrefix_U
   | CabsEncPrefix_L
 
-type cabs_string_literal =
-  maybe cabs_encoding_prefix * list string
+type cabs_string_literal = maybe cabs_encoding_prefix * list string
 
 
 (* §6.5 Expressions *)
@@ -220,7 +217,8 @@ and cabs_type_specifier =
   | TSpec_Atomic of type_name (* §6.7.2.4 Atomic type specifiers, Syntax *)
   | TSpec_struct of maybe cabs_identifier * maybe (list struct_declaration)
   | TSpec_union  of maybe cabs_identifier * maybe (list struct_declaration)
-  | TSpec_enum   of maybe cabs_identifier * maybe (list enumerator)
+  | TSpec_enum   of maybe cabs_identifier * maybe (list (cabs_identifier * maybe
+                                                           cabs_expression))
   | TSpec_name   of cabs_identifier
 
 (* §6.7.2.1 Structure and union specifiers, Syntax *)
@@ -231,10 +229,6 @@ and struct_declaration =
 and struct_declarator =
   | SDecl_simple   of declarator
   | SDecl_bitfield of maybe declarator * cabs_expression
-
-(* §6.7.2.2 Enumeration specifiers, Syntax *)
-and enumerator = cabs_identifier * maybe cabs_expression
-
 
 (* §6.7.3 Type qualifiers, Syntax *)
 and cabs_type_qualifier =
@@ -311,6 +305,8 @@ and designator =
 and static_assert_declaration =
  | Static_assert of cabs_expression * cabs_string_literal
 
+(* §6.7.2.2 Enumeration specifiers, Syntax *)
+type enumerator = cabs_identifier * maybe cabs_expression
 
 (* §6.8 Statements and blocks, Syntax *)
 type cabs_statement_ =

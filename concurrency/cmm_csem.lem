@@ -1013,7 +1013,9 @@ let sbasw Xo = transitiveClosure (Xo.sb union Xo.asw)
    (7.22.3 p1 says that the objects do not overlap, so only unused parts of                             (* CSEM *)
    the malloced regions overlap and that might be not-racy. *)                                          (* CSEM *)
 let disjoint_allocs actions =                                                                          (* CSEM *)
-  (forall (a IN actions) (b IN actions). is_alloc a && is_alloc b && (loc_of a = loc_of b) --> a = b) (* CSEM *)
+  (forall (a IN actions) (b IN actions). is_alloc a && is_alloc b && (loc_of a =
+                                                                      loc_of b)
+                                                                     --> (a = b)) (* CSEM *)
 
 val well_formed_threads: (pre_execution * execution_witness * relation_list) -> bool
 let well_formed_threads ((Xo,_,_):(pre_execution * execution_witness * relation_list)) =
@@ -1211,7 +1213,7 @@ let well_formed_rf (Xo,Xw,_) =
       loc_of a = loc_of b &&
       is_write a && is_read b &&
       value_read_by b = value_written_by a &&
-      forall (a' IN Xo.actions). (a',b) IN Xw.rf --> a = a'
+      forall (a' IN Xo.actions). (a',b) IN Xw.rf --> (a = a')
 
 val sc_mo_lo_empty: pre_execution * execution_witness * relation_list -> bool
 let sc_mo_lo_empty (_,Xw,_) = null Xw.sc && null Xw.mo && null Xw.lo
@@ -2381,7 +2383,7 @@ let standard_vsses actions lk mo hb vse =
     is_at_atomic_location lk r &&
     (head,r) IN vse &&
     not (exists (v' IN actions). (v',r) IN vse && (head,v') IN mo) &&
-    ( v = head ||
+    ( (v = head) ||
       ( (head,v) IN mo && not ((r,v) IN hb) &&
         forall (w IN actions).
           ((head,w) IN mo && (w,v) IN mo) --> not ((r,w) IN hb)
@@ -3285,12 +3287,12 @@ let well_formed_rf_fp (Xo,Xw,_) =
        is_write w && is_read r && 
        not (footprint_is_empty f) &&
        (is_at_non_atomic_location Xo.lk r --> 
-          (forall ((w',f',r') IN Xw.rf_fp). r = r' && w = w' --> f = f')) &&
+          (forall ((w',f',r') IN Xw.rf_fp). (r = r') && (w = w') --> f = f')) &&
        (is_at_atomic_location Xo.lk r --> 
-          (forall ((w',f',r') IN Xw.rf_fp). r = r' --> w = w' && f = f'))) &&
+          (forall ((w',f',r') IN Xw.rf_fp). (r = r') --> (w = w') && (f = f')))) &&
 
     (forall (r IN Xo.actions). 
-       let writes_of_r = {(w, f) | forall ((w, f, r') IN Xw.rf_fp) | r = r'} in
+       let writes_of_r = {(w, f) | forall ((w, f, r') IN Xw.rf_fp) | (r = r')} in
        (not (null writes_of_r)) -->
        footprint_leq 
          (footprint_bigunion {f | forall ((w, f) IN writes_of_r) | true})
@@ -3305,14 +3307,14 @@ let well_formed_rf_fp (Xo,Xw,_) =
 val consistent_non_atomic_rf_fp: candidate_execution_fp -> bool
 let consistent_non_atomic_rf_fp (Xo,Xw,rel) =
     forall ((w,f,r) IN Xw.rf_fp). is_at_non_atomic_location Xo.lk r -->
-      exists ((w',f',r') IN rel.vse_fp). w = w' && r = r' && footprint_leq f f'
+      exists ((w',f',r') IN rel.vse_fp). (w = w') && (r = r') && footprint_leq f f'
 
 val det_read_fp: candidate_execution_fp -> bool
 let det_read_fp (Xo,Xw,rel) =
     forall (r IN Xo.actions).
       is_load r -->
-      footprint_bigunion {f | forall ((w,f,r') IN rel.vse_fp) | r = r'} =
-      footprint_bigunion {f | forall ((w,f,r') IN Xw.rf_fp)   | r = r'}
+      footprint_bigunion {f | forall ((w,f,r') IN rel.vse_fp) | (r = r')} =
+      footprint_bigunion {f | forall ((w,f,r') IN Xw.rf_fp)   | (r = r')}
 
 val overlap_consistent_execution: named_predicate_tree_fp
 let overlap_consistent_execution =

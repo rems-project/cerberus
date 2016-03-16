@@ -38,7 +38,7 @@ type address =
 (*** Pointer value ****************************************************************************** *)
 type pointer_value =
     (* pointer values are annotated with a provenance *)
-  | PV of provenance * pointer_value_base * shift_path
+  | PV of provenance * pointer_value_base * (list shift_path_element)
 
 and pointer_value_base =
   | PVunspecified of ctype (* TODO: maybe put this ctor in pointer_value ? *)
@@ -60,11 +60,6 @@ and shift_path_element =
 (*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
   | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
  
-and shift_path =
-  list shift_path_element
-
-
-
 
 and integer_value_base =
   | IVunspecified
@@ -110,6 +105,7 @@ and mem_value =
   
 (*  | MVbytes of byte_mask * mem_value * mem_value *)
 
+type shift_path = list shift_path_element
 
 
 
