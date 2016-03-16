@@ -4,6 +4,8 @@ import State
 type t 'a = 'a
 type supply 'a = t 'a
 
+declare hol target_rep type t = ``
+declare hol target_rep type supply = ``
 
 val new_supply: forall 'a. Enum 'a => supply 'a
 let new_supply =

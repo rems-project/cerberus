@@ -8,6 +8,8 @@ import Symbolic Thread Cabs AilTypes Dlist
 
 open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 
+open import {hol} `utilTheory`
+
 
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
@@ -56,12 +58,12 @@ declare ocaml target_rep function check_sat           = `Sat_solving.check`
 declare ocaml target_rep function declare_address     = `Sat_solving.declare_address`
 
 (* TODO: HOL hack *)
-declare hol target_rep type     constraints         = ``
-declare hol target_rep function initial_constraints = ``
-declare hol target_rep function is_unsat            = ``
-declare hol target_rep function add_constraint      = ``
-declare hol target_rep function check_sat           = ``
-declare hol target_rep function declare_address     = ``
+declare hol target_rep type     constraints         = `string`
+declare hol target_rep function initial_constraints = `ARB`
+declare hol target_rep function is_unsat            s = `True`
+declare hol target_rep function add_constraint      u s = s
+declare hol target_rep function check_sat           m c = Just true
+declare hol target_rep function declare_address     a u = u
 
 
 
@@ -145,9 +147,12 @@ declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.s
 declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
 
 (* TODO: HOL hack *)
-declare hol target_rep function stringFromPointer_value = ``
-declare hol target_rep function stringFromMem_value = ``
-declare hol target_rep function stringFromShift_path = `` (* DEBUG *)
+declare hol target_rep function stringFromPointer_value p = "??NOT IMPLEMENTED??"
+declare hol target_rep function stringFromMem_value p = "??NOT IMPLEMENTED??"
+
+declare hol target_rep function stringFromShift_path p = "??NOT IMPLEMENTED??"
+
+(* DEBUG *)
 
 
 
@@ -362,7 +367,6 @@ let integer_range = function
  | AilTypes.Unsigned AilTypes.Intptr_t ->
      (0, 2**64-1)
 end
-
 
 
 val     simplify_integer_value_base: bool -> integer_value_base -> either integer integer_value_base
@@ -2148,7 +2152,7 @@ let can_store (PV prov ptr_val_ sh) =
 
 
 
-
+(* TODO: bug HOL -- "failure in internal translation to tupled format" *)
 (* TODO: with temporary simplification *)
 val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> mem_value -> mem_value -> mem_value
 let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
@@ -2190,6 +2194,10 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
         else
           error ("WIP: easy_update_mem_value_aux ===> sh = " ^ stringFromShift_path sh ^ "; current_mval = " ^ stringFromMem_value current_mval)
   end
+
+(* TODO: bug HOL -- "failure in internal translation to tupled format" *)
+declare hol target_rep function easy_update_mem_value_aux =
+                                `util$easy_update_mem_value_aux`
 
 
 val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
