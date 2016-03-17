@@ -1,0 +1,8 @@
+embed {{ coq
+Require Export ZArith.
+Require Import Range AilTypes.
+}}
+
+metavar impl, P ::=
+  {{ phantom }}
+  {{ tex \Pi }}

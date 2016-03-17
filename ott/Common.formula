@@ -1,0 +1,25 @@
+  | not formula :: M :: Not
+      {{ tex \neg [[formula]] }}
+      {{ coq ~ ([[formula]]) }}
+  | formula1 \/ formula2 :: M :: Disj
+      {{ coq [[formula1]] \/ [[formula2]] }}
+  | formula1 /\ formula2 :: M :: Conj
+      {{ coq [[formula1]] /\ [[formula2]] }}
+  | formula1 --> formula2 :: M :: Impl
+      {{ coq [[formula1]] -> [[formula2]] }}
+  | ( formula ) :: S :: Parens
+      {{ icho [[formula]] }}
+  | formula1 ... formulak :: :: dots
+  | b1 = b2 :: M :: BoolEq
+      {{ coq [[b1]] = [[b2]] }}
+  | w1 = w2 :: M :: ZEq
+      {{ coq [[w1]] = [[w2]] }}
+  | nat1 = nat2 :: M :: NatEq
+      {{ coq [[nat1]] = [[nat2]] }}
+  | w1 <= w2 :: M :: LeZ
+      {{ tex [[w1]] \leqslant [[w2]] }}
+      {{ coq [[w1]] <= [[w2]] }}
+  | nat1 <= nat2 :: M :: LeNat
+      {{ tex [[nat1]] \leqslant [[nat2]] }}
+      {{ coq [[nat1]] <= [[nat2]] }}
+  | judgement :: :: judgement

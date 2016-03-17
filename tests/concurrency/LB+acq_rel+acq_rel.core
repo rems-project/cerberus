@@ -1,0 +1,44 @@
+{- LB+acq_rel+acq_rel Load Buffering, with acquire/release pairs The
+   values of a1 and a2 cannot both be 1. They can be both 0, or one of
+   them can be 1.  An exhaustive execution of this program should
+   therefore return the values 0, 1 and 2.  -}
+
+{-
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0);
+  y <- create(_Atomic(signed int));
+  store(_Atomic(signed int), y, 0);
+  (a1, a2) <- {{{
+       a1 <- load(_Atomic(signed int), x, acquire);
+       store(_Atomic(signed int), y, 1, release);
+       a1
+  |||
+       a2 <- load(_Atomic(signed int), y, acquire);
+       store(_Atomic(signed int), x, 1, release);
+       a2
+  }}};
+  kill(x);
+  kill(y);
+  ret a1 + (2 * a2)
+-}
+proc main () : eff integer :=
+  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong _ = store("_Atomic(signed int)", x, 0) in
+  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong _ = store("_Atomic(signed int)", y, 0) in
+  let strong (a1, a2) = par(
+    let strong a1 = load("_Atomic(signed int)", x, acquire) in
+    let strong _ = store("_Atomic(signed int)", y, 1, release) in
+    return (a1)
+    end end
+  ,
+    let strong a2 = load("_Atomic(signed int)", y, acquire) in
+    let strong _ = store("_Atomic(signed int)", x, 1, release) in
+    return (a2)
+    end end
+  ) in
+  let strong _ = kill(x) in
+  let strong _ = kill(y) in
+  return(a1 + (2 * a2))
+  end end end end end end end

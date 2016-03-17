@@ -1,0 +1,14 @@
+type big_int
+
+val add_big_int : big_int -> big_int -> big_int
+val sub_big_int : big_int -> big_int -> big_int
+val mult_big_int : big_int -> big_int -> big_int
+val power_big_int_positive_int : big_int -> num -> big_int
+val div_big_int : big_int -> big_int -> big_int
+val mod_big_int : big_int -> big_int -> big_int
+val lt_big_int : big_int -> big_int -> bool
+val le_big_int : big_int -> big_int -> bool
+val gt_big_int : big_int -> big_int -> bool
+val ge_big_int : big_int -> big_int -> bool
+val big_int_of_int : num -> big_int
+val minus_big_int : big_int -> big_int

@@ -1,0 +1,175 @@
+open import Pervasives Global
+import Exception Loc Errors
+
+open import Core Core_aux
+import Core_ctype Core_ctype_aux
+module Cty = struct
+  include Core_ctype
+  include Core_ctype_aux
+end
+
+type core_typing_error =
+  | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
+  | EmptyArray
+  | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
+  | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
+  | InvalidMember of Symbol.t * Cabs.cabs_identifier
+
+module E = struct
+  type eff 'a = Exception.t 'a core_typing_error
+  include Exception
+end
+
+let inline (>>=) =
+  E.bind
+let inline (>>) m1 m2 =
+  m1 >>= fun _ -> m2
+let inline (<$>) =
+  E.fmap
+
+
+
+val     typeof_object_value: object_value -> E.eff core_object_type
+let rec typeof_object_value oval =
+  match oval with
+   | OVinteger _ ->
+       E.return OTy_integer
+   | OVfloating _ ->
+       E.return OTy_floating
+   | OVpointer _ ->
+       E.return OTy_pointer
+   | OVcfunction _ ->
+       E.return OTy_cfunction
+   | OVarray [] ->
+       E.fail EmptyArray
+   | OVarray (oval'::ovals') ->
+       typeof_object_value oval' >>= fun oTy ->
+       E.mapM (fun oval ->
+         typeof_object_value oval >>= fun oTy' ->
+         if oTy <> oTy' then
+           E.fail (HeterogenousArray oTy oTy')
+         else
+           E.return ()
+       ) ovals' >>
+       E.return (OTy_array oTy)
+   | OVstruct tag_sym _ ->
+       E.return (OTy_struct tag_sym)
+(*
+       E.foldlM (fun ((found_ident, mval), (expected_ident, expected_ty)) () ->
+         if found_ident <> expected_ident then
+           E.fail (InvalidMember tag_sym found_ident)
+         else
+           TODO
+       ) () (List.zip xs (Cty.get_membersDefs tag_sym)) >>
+       E.return (OTy_struct tag_sym)
+*)
+   | OVunion tag_sym _ _ ->
+       E.return (OTy_union tag_sym)
+  end
+
+
+val     typeof_value: Core.value -> E.eff core_base_type
+let rec typeof_value cval =
+  match cval with
+    | Vobject oval ->
+        BTy_object <$> typeof_object_value oval
+    | Vloaded oval ->
+        BTy_loaded <$> typeof_object_value oval
+    | Vunspecified ty ->
+        E.return (BTy_loaded $ core_object_type_of_ctype ty)
+    | Vunit ->
+        E.return BTy_unit
+    | Vtrue ->
+        E.return BTy_boolean
+    | Vfalse ->
+        E.return BTy_boolean
+    | Vctype _ ->
+        E.return BTy_ctype
+    | Vlist bTy cvals' ->
+       E.mapM (fun cval ->
+         typeof_value cval >>= fun bTy' ->
+         if bTy <> bTy' then
+           E.fail (HeterogenousList bTy bTy')
+         else
+           E.return ()
+       ) cvals' >>
+       E.return (BTy_list bTy)
+    | Vtuple cvals ->
+        BTy_tuple <$> E.mapM typeof_value cvals
+  end
+
+
+val     typeof_pexpr: map sym core_base_type -> pexpr -> E.eff core_base_type
+let rec typeof_pexpr env (Pexpr bTy pe_) =
+  match pe_ with
+(*
+    | PEundef _ ->
+        E.return Nothing
+    | PEerror _ _ (* TODO typecheck the debug operand *) ->
+        E.return Nothing
+*)
+    | PEval cval ->
+        typeof_value cval
+    | PEsym sym ->
+        E.return bTy
+  end
+(*
+  | PEsym of (sym * core_base_type) (* TODO: remove the type annotation at some point *)
+  | PEimpl of Implementation_.implementation_constant
+  
+  (* data (de|con)structors *)
+  | PEctor of ctor * list pexpr
+  | PEcase of pexpr * list (case_pattern * pexpr)
+  
+  (* BEGIN OBSOLETE *)
+(*
+  | PEcons of pexpr * pexpr
+  | PEtuple of list pexpr
+(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
+  | PEarray of list pexpr
+*)
+  (* END OBSOLETE *)
+  
+  (* operators on pointer values *)
+
+  | PEarray_shift of pexpr * ctype * pexpr
+  | PEmember_shift of pexpr * Symbol.t * Cabs.cabs_identifier
+
+
+  (* operators on integers *)
+  | PEnot of pexpr
+  | PEop of binop * pexpr * pexpr
+  
+(*
+  | PEis_unspec of pexpr
+*)
+  
+  (* pure operations provide by the memory layout model *)
+  | PEmemop of Mem.pure_memop * list pexpr
+  (* these two are annoying *)
+  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
+
+  (* call to a pure function *)
+  | PEcall of (name * core_base_type) * list (pexpr * core_base_type) (* TODO: remove the type annot *)
+  
+  | PElet of (sym * core_base_type) * pexpr * pexpr
+  | PEif of pexpr * pexpr * pexpr
+  
+(*  | PEvla of ctype * pexpr *)
+
+
+  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
+  | PEis_scalar of pexpr
+  | PEis_integer of pexpr
+  | PEis_signed of pexpr
+  | PEis_unsigned of pexpr
+*)
+
+
+
+
+(* TODO: add a check for the existence of main *)
+val typecheck_program: Core.file unit -> Exception.t unit Errors.t
+let typecheck_program file =
+(*  Exception.fail (Loc.unknown, Errors.Core_typing) *)
+  Exception.return ()

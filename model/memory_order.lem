@@ -1,0 +1,10 @@
+import Pervasives
+
+type memory_order =
+  | NA
+  | Seq_cst
+  | Relaxed
+  | Release
+  | Acquire
+  | Consume
+  | Acq_rel
