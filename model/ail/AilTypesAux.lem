@@ -1,8 +1,11 @@
 open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
 import Loc
 
+open import {hol} `utilTheory`
+
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
+declare hol   target_rep function print_debug = `util$print_debug`
 
 
 let unatomic = function

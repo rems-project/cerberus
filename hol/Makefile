@@ -27,47 +27,99 @@ AIL_DIR = ../model/ail/
 
 # Util
 UTIL_DIR = util/
-UTIL = utilScript.sml
+UTIL = utilScript.sml \
+ ppScript.sml \
+ modeScript.sml
 
 # Patches
 PATCH_DIR = patches/
-PATCH = defacto_memoryScript.patch \
+PATCH = defacto_memoryScript.patch 
+#\
  memScript.patch
 
 # Cerberus model files
 CMM = \
  cmm_aux.lem \
- cmm_csem.lem
+ cmm_csem.lem \
+  cmm_op.lem
 
 UTILS =\
- global.lem \
- enum.lem \
- loc.lem \
- state.lem \
- uniqueId.lem \
+	boot.lem \
+  decode.lem \
+  dlist.lem \
+  driver_util.lem \
+  enum.lem \
+  errors.lem \
+  exception.lem \
+  exception_undefined.lem \
+  global.lem \
+  loc.lem \
+  multiset.lem \
+  product.lem \
+  state_exception.lem \
+  state_exception_undefined.lem \
+  state.lem \
+  state_operators.lem \
+  symbol.lem \
+  thread.lem \
+  uniqueId.lem \
+  std.lem \
+  monadic_parsing.lem \
+  output.lem \
  undefined.lem \
  implementation_.lem \
- symbol.lem \
- symbolic.lem \
- thread.lem \
- dlist.lem
+ symbolic.lem
 
 DEFACTO =\
  defacto_memory.lem \
  defacto_memory_types.lem \
  mem_common.lem \
- mem.lem
+ mem.lem \
+  mem_aux.lem \
 
 CABS = \
- cabs.lem
+ cabs.lem \
+  builtins.lem \
+  cabs_to_ail_aux.lem \
+  cabs_to_ail_effect.lem \
+  cabs_to_ail.lem \
+  scope_table.lem 
 
 AIL = \
- AilTypes.lem
+ AilTypes.lem \
+ AilSyntax.lem \
+  GenTypes.lem \
+  AilSyntaxAux.lem \
+  AilTypesAux.lem \
+  AilTyping.lem \
+  AilWf.lem \
+  Annotation.lem \
+  Common.lem \
+  Context.lem \
+  ErrorMonad.lem \
+  GenTypesAux.lem \
+  GenTyping.lem \
+  Range.lem \
+  TypingError.lem \
+  Implementation.lem 
 
 CORE = \
  core_ctype_aux.lem \
  core_ctype.lem \
- core.lem
+ core.lem \
+  core_aux.lem \
+  core_typing.lem \
+  core_indet.lem \
+  core_rewrite.lem \
+  constraints.lem \
+  nondeterminism.lem \
+  translation_aux.lem \
+  translation_effect.lem \
+  translation.lem
+  #core_run.lem \
+  core_run_aux.lem \
+  driver.lem \
+  driver_effect.lem \
 
 
 MODEL := $(UTILS) $(CABS) $(CORE) $(DEFACTO)
@@ -122,8 +174,10 @@ patch: $(addprefix $(PATCH_DIR), $(PATCH))
 	@echo $(BOLD)Applying patch $<...$(RESET)
 	for p in $^; do patch < $$p; done
 
+lem: $(UTIL) | $(HOL_SCRIPTS) $(AUX_DIR)
+
 # Run Holmake
-hol: $(HOL_SCRIPTS) $(AUX_DIR) $(UTIL) patch
+hol: lem patch
 	@echo $(BOLD)Running Holmake$(RESET)
 	Holmake
 
