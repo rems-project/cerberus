@@ -239,18 +239,18 @@ generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
 %     list (maybe (sym * core_base_type))
 % *)
 
-maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
-   | _   :: :: Nothing 
-   | tyvarsym :: :: Just
+maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} %{{ phantom }}
+   | _   :: :: Nothing  (+ b = {} +)
+   | tyvarsym :: :: Just (+ b = tyvarsym +)
 
 
 generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
-   | maybesym                                                  :: X :: Base
-   | _                                                         :: M :: Nothing
+   | maybesym                                                  :: X :: Base (+ b = b(maybesym) +)
+   | _                                                         :: M :: Nothing %(+ b = {} +)
     {{ lem Nothing }} {{ com wildcard pattern}}
-   | tyvarsym                                                       :: M :: Just 
+   | tyvarsym                                                       :: M :: Just %(+ b = tyvarsym +)
     {{ lem Just [[tyvarsym]] }} {{ com identifier pattern }} 
-   | generic_ctor ( generic_pattern1 , .. , generic_patternn ) ::   :: Ctor
+   | generic_ctor ( generic_pattern1 , .. , generic_patternn ) ::   :: Ctor (+ b = b(generic_pattern1 .. generic_patternn) +)
     {{ com constructor pattern }}
 
 metavar Undefined_undefined_behaviour {{ tex \ottnt{ub\textit{-}name} }} {{ lem Undefined.undefined_behaviour }}  ::=  {{ phantom }} 
@@ -361,7 +361,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | generic_paction  :: :: action {{ com memory action }}
 
    | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
-   | let generic_pattern = generic_pexpr in generic_expr :: :: let {{ com Core let  }}
+   | let generic_pattern = generic_pexpr in generic_expr :: :: let (+ bind b(generic_pattern) in generic_expr +) {{ com Core let  }} 
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
    | skip :: :: skip {{ com  skip }}
 
@@ -423,7 +423,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
  definition :: '' ::= {{ phantom }} {{ com Core definitions }}
 %    | fun generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : core_base_type := generic_pexpr :: :: Fun    
 %    | proc generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : eff core_base_type := generic_expr :: :: Proc
-    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun {{ com Core function definition }}
+    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun {{ com Core function definition }} 
     | proc generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc {{ com Core procedure definition }}
 
 
@@ -458,6 +458,12 @@ terminals :: 'terminal' ::=
    | intFromPtr :: :: IntFromPtr {{ tex \ottkw{intFromPtr} }}
    | ptrFromInt :: :: PtrFromInt {{ tex \ottkw{ptrFromInt} }}
    | ptrValidForDeref :: :: PtrValidForDeref {{ tex \ottkw{ptrValidForDeref} }}
+
+substitutions
+
+single pexpr_ tyvarsym :: subst
+multiple pexpr_ tyvarsym :: msubst
+
 embed {{ lem 
  
  type name         = generic_name Symbol.t

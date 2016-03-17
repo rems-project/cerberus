@@ -61,7 +61,6 @@ let has_sbBefore_on_thread tid annot =
 
 val using_concurrency: unit -> bool
 declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
-declare hol  target_rep function using_concurrency u = false
 
 val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids expr =

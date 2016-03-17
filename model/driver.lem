@@ -27,16 +27,13 @@ module U = Undefined
 module SEU = State_exception_undefined
 module ND  = Nondeterminism
 
-open import {hol} `ppTheory`
+
 
 val stringFromPointerValue: Mem.pointer_value -> string
 declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
-declare hol   target_rep function stringFromPointerValue =
-                                  `pp$stringFromPointerValue`
 
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
-declare hol   target_rep function stringFromMemValue = `pp$stringFromMemValue`
 
 (*
 val stringPrettyFromMemValue: formatting -> Mem.mem_value -> string
@@ -46,16 +43,13 @@ declare ocaml target_rep function stringPrettyFromMemValue = `String_mem.string_
 (* TODO: debug *)
 val pp_core_state: forall 'a. core_state -> string
 declare ocaml target_rep function pp_core_state = `String_core_run.string_of_core_state`
-declare hol   target_rep function pp_core_state = `pp$pp_core_state`
 
 val stringSymState: Cmm_op.symState -> string
 declare ocaml target_rep function stringSymState = `Pp_cmm.string_of_exeState`
-declare hol   target_rep function stringSymState = `pp$sym_state`
 
 
 val stringFromSymbolic: Symbolic.symbolic Core.object_value Mem.pointer_value -> string
 declare ocaml target_rep function stringFromSymbolic = `Pp_cmm.pp_constraints_symbolic`
-declare hol   target_rep function stringFromSymbolic = `pp$pp_symbolic`
 
 
 
@@ -1504,7 +1498,6 @@ let driver_globals with_concurrency sym_supply file =
 
 val pp_exeState: Cmm_op.symState -> string
 declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
-declare hol   target_rep function pp_exeState = `pp$sym_state`
 
 
 

@@ -4,7 +4,6 @@ open import Std Loc
 
 import Builtins
 
-open import {hol} `ppTheory`
 
 import ErrorMonad
 module E = ErrorMonad
@@ -17,15 +16,14 @@ let inline (<$>) = E.fmap
 (* BEGIN debug *)
 val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
 declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype`
-declare hol   target_rep function pp_ail_ctype x = ""
 
 val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
 declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
-declare hol   target_rep function pp_ail_expr x = ""
+
+
 
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
-declare hol   target_rep function print_debug = `pp$print_debug`
 
 (* END debug *)
 
@@ -984,7 +982,7 @@ TODO
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-STD_ "§6.5.2.1#1" $
+_STD "§6.5.2.1#1" $
         if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
