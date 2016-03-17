@@ -1,12 +1,17 @@
 open import Pervasives
 import AilSyntax
 
+open import {hol} `ppTheory`
+
 val decode_integer_constant: forall 'a. string -> AilSyntax.basis * integer
 declare ocaml target_rep function decode_integer_constant = `Decode_ocaml.decode_integer_constant`
+declare hol   target_rep function decode_integer_constant = `pp$decode_int`
 
 val decode_character_constant: string -> integer
 declare ocaml target_rep function decode_character_constant = `Decode_ocaml.decode_character_constant`
+declare hol   target_rep function decode_character_constant = `pp$decode_char`
 
 
 val encode_character_constant: integer -> char
 declare ocaml target_rep function encode_character_constant = `Decode_ocaml.encode_character_constant`
+declare hol   target_rep function encode_character_constant = `pp$encode_char`

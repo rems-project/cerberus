@@ -1,8 +1,11 @@
 open HolKernel Parse boolLib bossLib finite_mapTheory;
 
-open core_ctypeTheory defacto_memory_typesTheory;
+open ailTypesTheory core_ctypeTheory defacto_memory_typesTheory;
 
 val _ = new_theory "util"
+
+val _ = Define `
+  print_debug (n:nat) (s:string) = ()`;
 
 (**
  * Suporting defintion for core_ctype_aux

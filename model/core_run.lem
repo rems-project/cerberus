@@ -14,6 +14,7 @@ open import Thread Driver_util Core_run_aux Errors
 
 (* TODO: tmp*) import Defacto_memory_types
 
+open import {hol} `ppTheory`
 
 module Caux = Core_aux
 
@@ -30,7 +31,9 @@ module SEU = State_exception_undefined
 val stringFromValue: Core.value -> string
 val stringFromPexpr: Core.pexpr -> string 
 declare ocaml target_rep function stringFromValue = `String_core.string_of_value`
+declare hol   target_rep function stringFromValue = `pp$pp_core_value`
 declare ocaml target_rep function stringFromPexpr = `String_core.string_of_pexpr`
+declare hol   target_rep function stringFromPexpr = `pp$pp_core_pexpr`
 
 
 open Exception.Operators

@@ -13,4 +13,5 @@ end
 
 val stringFromLocation: t -> string
 declare ocaml target_rep function stringFromLocation = `Pp_errors.location_to_string`
+declare hol   target_rep function stringFromLocation u = ""
 

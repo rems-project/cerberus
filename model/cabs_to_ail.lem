@@ -6,6 +6,7 @@ import Cabs_to_ail_effect
 import Boot Cabs Multiset Decode UniqueId
 import AilSyntaxAux AilTypes AilTypesAux Builtins
 
+open import {hol} `ppTheory`
 
 module ATypes = AilTypes
 
@@ -22,6 +23,8 @@ let inline (<*>)    = E.app
 
 val stringFromQualifiers: ATypes.qualifiers -> string
 declare ocaml target_rep function stringFromQualifiers = `String_ail.string_of_qualifiers_human`
+declare hol   target_rep function stringFromQualifiers =
+                                  `pp$stringFromQualifiers`
 
 
 
@@ -911,7 +914,7 @@ List.all (function
 
 val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.t (ATypes.basicType)
 let desugar_basic_type_specifiers specs =
-_STD "§6.7.2#2, sentence 2 (non `void' case)" $
+STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
   if      specs = Multiset.from_list [BTSpec_char] then
     (* STD §6.7.2#2, item 2 *)
     E.return $ ATypes.Integer ATypes.Char
@@ -995,7 +998,7 @@ _STD "§6.7.2#2, sentence 2 (non `void' case)" $
 
 val translate_type_qualifiers: list cabs_type_qualifier -> ATypes.qualifiers
 let translate_type_qualifiers qs =
-_STD "§6.7.3#5" $
+STD_ "§6.7.3#5" $
   ATypes.make_qualifiers
     (List.elem Q_const qs) (List.elem Q_restrict qs)
     (List.elem Q_volatile qs) (List.elem Q_Atomic qs)
@@ -1005,11 +1008,11 @@ val     desugar_type_specifiers : list cabs_type_specifier -> E.t (ATypes.qualif
 let rec desugar_type_specifiers specs =
   match specs with
   | [] ->
-_STD "§6.7.2#2, sentence 1"
+STD_ "§6.7.2#2, sentence 1"
       E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
   
   | [TSpec_void] ->
-_STD "§6.7.2#2, sentence 2 (`void' case)"
+STD_ "§6.7.2#2, sentence 2 (`void' case)"
       E.return (ATypes.no_qualifiers, ATypes.Void)
   
   | [TSpec_struct Nothing Nothing] ->
@@ -1257,7 +1260,7 @@ and desugar_expression (CabsExpression loc expr) =
     | CabsEident ident ->
         let (CabsIdentifier _ str) = ident in (* DEBUG *)
         let _ = Boot.print_debug 2 ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
-_STD "§6.5.1#2" $
+STD_ "§6.5.1#2" $
         E.resolve_identifier ident E.Namespace_ordinary >>= function
           | Just (_, (id, E.Kind_member E.Kind_enum, _)) ->
               E.resolve_enum_constant id
@@ -1288,7 +1291,7 @@ _STD "§6.5.1#2" $
                     <*> E.mapM desugar_generic_association gas
     
     | CabsEsubscript e1 e2 ->
-_STD "§6.5.2.1#2, sentence 2" $
+STD_ "§6.5.2.1#2, sentence 2" $
         AilEunary Indirection <$> (
           AnnotatedExpression () loc <$>
           (AilEbinary <$> desugar_expression e1
@@ -1314,7 +1317,7 @@ _STD "§6.5.2.1#2, sentence 2" $
         (* TODO: the storage duration is wrong here, if we are inside the body of a function, it should be automatic *)
         AilEcompound ty <$> wip_desugar_initializer_ loc ATypes.Static ty (Init_list inits)
     | CabsEpreincr e ->
-_STD "§6.5.3.1#2, sentence 3" $
+STD_ "§6.5.3.1#2, sentence 3" $
 (*
         desugar_expression e >>= fun d_e ->
         E.return $ AilEcompoundAssign d_e Add oneAil
@@ -1323,7 +1326,7 @@ _STD "§6.5.3.1#2, sentence 3" $
         desugar_expression e >>= fun d_e ->
         E.return $ AilEassign d_e (AnnotatedExpression () loc (AilEbinary d_e (Arithmetic Add) oneAil))
     | CabsEpredecr e ->
-_STD "§6.5.3.1#3" $
+STD_ "§6.5.3.1#3" $
 (*
         desugar_expression e >>= fun d_e ->
         E.return $ AilEcompoundAssign d_e Sub oneAil
@@ -1420,26 +1423,26 @@ and desugar_specifiers decl_ctxt scope specifs =
   let scs = specifs.storage_classes in
   if not (List.length scs <= 1 || List.elem SC_Thread_local scs &&
                                   (List.elem SC_static scs || List.elem SC_extern scs))then
-_STD "§6.7.1#2" $
+STD_ "§6.7.1#2" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#2")
   
   else if not (decl_ctxt = Object_decl_context && E.is_block_scope scope &&
                List.elem SC_Thread_local scs -->
                  (List.elem SC_static scs || List.elem SC_extern scs)
               ) then
-_STD "§6.7.1#3, sentence 1" $
+STD_ "§6.7.1#3, sentence 1" $
          E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#3, 1st sentence")
   
   else if decl_ctxt = Function_decl_context && List.elem SC_Thread_local scs then
-_STD "§6.7.1#4" $
+STD_ "§6.7.1#4" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#4")
   
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
-_STD "§6.7.1#7" $
+STD_ "§6.7.1#7" $
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#7")
   else
-_STD "§6.7.1#8" $ (* TODO *)
+STD_ "§6.7.1#8" $ (* TODO *)
     error "WIP 33"
 
 (*
@@ -1570,7 +1573,7 @@ and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype ->
 
 
 (* WIP
-_STD "§6.7.6.3#5" $
+STD_ "§6.7.6.3#5" $
           E.return (sym, fun ty -> mk_ty (ATypes.Function ty bs is_variadic))
         end
 *)
@@ -1604,13 +1607,13 @@ and desugar_array_declarator is_under_array a_decltor =
         E.get_scope >>= function
           | E.Scope_prototype ->
               if is_under_array then
-_STD "§6.7.6.2#1, sentence 5" $
+STD_ "§6.7.6.2#1, sentence 5" $
                 E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence")
               else
                 E.return ()
           | _ ->
               if qs <> [] || is_static then
-_STD "§6.7.6.2#1, sentence 5" $
+STD_ "§6.7.6.2#1, sentence 5" $
                 E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence")
               else
                 E.return ()

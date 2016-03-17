@@ -305,12 +305,16 @@ let inline (>>=) = Mem.bind
 (* DEBUG *)
 val stringFromMemValue: Mem.mem_value -> string
 declare ocaml target_rep function stringFromMemValue = `String_mem.string_of_mem_value`
+declare hol   target_rep function stringFromMemValue = `pp$stringFromMemValue`
 
 val stringFromPointerValue: Mem.pointer_value -> string
 declare ocaml target_rep function stringFromPointerValue = `String_mem.string_of_pointer_value`
+declare hol   target_rep function stringFromPointerValue =
+                                  `pp$stringFromPointerValue`
 
 val stringFromCtype: Cty.ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
+declare hol   target_rep function stringFromCtype = `pp$stringFromCtype`
 
 
 (* the third argument specify have many characters to load at most *)
