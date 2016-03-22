@@ -49,6 +49,7 @@ let precedence = function
   | PEmember_shift _
   | PEnot _
   | PEstruct _
+  | PEunion _
   | PEcall _
   | PElet _
   | PEif _
@@ -144,13 +145,13 @@ let pp_name = function
 
 
 let pp_memory_order = function
-  | Cmm.NA      -> !^ "NA"
-  | Cmm.Seq_cst -> pp_keyword "seq_cst"
-  | Cmm.Relaxed -> pp_keyword "relaxed"
-  | Cmm.Release -> pp_keyword "release"
-  | Cmm.Acquire -> pp_keyword "acquire"
-  | Cmm.Consume -> pp_keyword "consume"
-  | Cmm.Acq_rel -> pp_keyword "acq_rel"
+  | Cmm_csem.NA      -> !^ "NA"
+  | Cmm_csem.Seq_cst -> pp_keyword "seq_cst"
+  | Cmm_csem.Relaxed -> pp_keyword "relaxed"
+  | Cmm_csem.Release -> pp_keyword "release"
+  | Cmm_csem.Acquire -> pp_keyword "acquire"
+  | Cmm_csem.Consume -> pp_keyword "consume"
+  | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
   
 
 let pp_mem_addr (pref, addr) =
@@ -270,8 +271,8 @@ let pp_ctor = function
 let rec pp_pattern = function
   | CaseBase None ->
       P.underscore
-  | CaseBase (Some sym) ->
-      pp_symbol sym
+  | CaseBase (Some (sym, bTy)) ->
+      pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 (* Syntactic sugar for tuples and lists *)
   | CaseCtor (Ctuple, pats) ->
       P.parens (comma_list pp_pattern pats)
@@ -331,10 +332,14 @@ let pp_pexpr pe =
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
 *)
         | PEstruct (tag_sym, xs) ->
-            pp_keyword "struct" ^^ P.parens (
-              pp_symbol tag_sym ^^ P.comma ^^^ comma_list (
-                (fun (ident, pe) -> Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe)
+            P.parens (pp_keyword "struct" ^^^ pp_symbol tag_sym) ^^ P.braces (
+              comma_list (fun (ident, pe) ->
+                P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe
               ) xs
+            )
+        | PEunion (tag_sym, member_ident, pe) ->
+            P.parens (pp_keyword "union" ^^^ pp_symbol tag_sym) ^^ P.braces (
+              P.dot ^^ Pp_cabs.pp_cabs_identifier member_ident ^^ P.equals ^^^ pp pe
             )
 (*
         | PEarray xs -> (* of ( (Mem.mem_value, sym)Either.either) list *)
@@ -493,7 +498,7 @@ and pp_shift_path sh_path =
 
 and pp_action act =
   let pp_args args mo =
-    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)

@@ -239,7 +239,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser_base = struct
     include Core_parser.Make (struct
         let sym_counter = core_sym_counter
-        let mode = Core_parser_util.FileMode
+        let mode = Core_parser_util.ImplORFileMode
         let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
           let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
@@ -359,7 +359,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
                          sequentialise $ concurrency $ preEx $ args $ compile) in
-  let info       = Term.info "cerberus" ~version:"b3e67754f25e+ tip -- 20/11/2015@15:12" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

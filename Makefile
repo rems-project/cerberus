@@ -142,12 +142,8 @@ CERBERUS_LEM=\
   $(SOURCE_core_dynamics) \
   $(SOURCE_elaboration) \
   $(SOURCE_defacto) \
-  $(SOURCE_concurrency_interface) \
-  tmp_shift.lem
+  $(SOURCE_concurrency_interface)
 
-
-wtf:
-	@echo $(SOURCE_utils)
 
 
 
