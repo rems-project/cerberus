@@ -11,9 +11,7 @@ embed {{ tex-preamble
 embed {{ lem
 open import Core_ctype Thread
 import Symbol Implementation_ Undefined Loc Cmm_csem
-import Mem
-
-module Cmm = Cmm_csem
+import Mem Mem_common
 }}
 
 
@@ -295,14 +293,14 @@ metavar a {{ tex }} {{ lem 'a }} ::= {{ phantom }}
 metavar nat {{ tex n }} {{ lem nat }} ::= {{ phantom }}
 metavar Thread_thread_id {{ tex \ottnt{thread\textit{-}id} }} {{ lem Thread.thread_id }} ::= {{ phantom }}
 metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
-metavar Cmm_memory_order {{ tex \ottnt{memory\textit{-}order} }} {{ lem Cmm.memory_order }} ::= {{ phantom }}
+metavar Cmm_memory_order {{ tex \ottnt{memory\textit{-}order} }} {{ lem Cmm_csem.memory_order }} ::= {{ phantom }}
 metavar Symbol_prefix {{ tex }} {{ lem Symbol.prefix }}  ::=  {{ phantom }} 
 
 grammar
 
 maybe_Symbol_sym_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.sym * core_base_type) }} {{ phantom }}
 
- Mem_memop {{ tex ptrop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
+ Mem_memop {{ tex ptrop }}  {{ lem Mem_common.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
    | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }} {{ com pointer equality comparison}}
    | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }} {{ com pointer relational comparison}}
    | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
@@ -376,6 +374,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | load ( generic_pexpr1 , generic_pexpr2 , Cmm_memory_order ) :: :: Load
    | rmw ( generic_pexpr1 ,  generic_pexpr2 , generic_pexpr3 , generic_pexpr4 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: RMW
 %   | RMW generic_pexpr(* ctype *) generic_pexpr(* object_ptr *) generic_pexpr(* expected_val *) generic_pexpr(* desired_val *) Cmm.memory_order Cmm.memory_order
+   | fence ( generic_pexpr ) :: :: Fence
  
 % (*
 %   | CompareExchangeStrong pexpr pexpr pexpr pexpr Cmm.memory_order Cmm.memory_order

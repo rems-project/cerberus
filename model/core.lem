@@ -3,10 +3,7 @@ open import Pervasives
 
 open import Core_ctype Thread
 import Symbol Implementation_ Undefined Loc Cmm_csem
-import Mem
-
-module Cmm = Cmm_csem
-
+import Mem Mem_common
 
 type core_object_type =  (* types for C objects *)
  | OTy_integer
@@ -161,10 +158,10 @@ type generic_action_ 'ty 'sym =  (* memory actions *)
  | Create of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Symbol.prefix
  | Alloc of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Symbol.prefix
  | Kill of (generic_pexpr 'ty 'sym)
- | Store of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm.memory_order
- | Load of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm.memory_order
- | RMW of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm.memory_order * Cmm.memory_order
- | Fence of Cmm.memory_order
+ | Store of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm_csem.memory_order
+ | Load of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm_csem.memory_order
+ | RMW of (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | Fence of Cmm_csem.memory_order
 
 
 type generic_action 'a 'ty 'sym =  (* memory actions *)
@@ -177,7 +174,7 @@ type generic_paction 'a 'ty 'sym =  (* memory actions with polarity *)
 
 type generic_expr 'a 'ty 'sym =  (* Core expressions *)
  | Epure of (generic_pexpr 'ty 'sym) (* pure expression *)
- | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym) (* pointer op involving memory *)
+ | Ememop of Mem_common.memop * list (generic_pexpr 'ty 'sym) (* pointer op involving memory *)
  | Eaction of (generic_paction 'a 'ty 'sym) (* memory action *)
  | Ecase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym)) (* pattern matching *)
  | Elet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* Core let *)
