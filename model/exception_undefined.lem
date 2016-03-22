@@ -62,3 +62,7 @@ let rec foldrM f a l =
     | [] -> return a
     | x::xs -> foldrM f a xs >>= f x
   end
+
+
+val fmap: forall 'a 'b 'msg. ('a -> 'b) -> t 'a 'msg -> t 'b 'msg
+let fmap f m = bind m (fun z -> return $ f z)

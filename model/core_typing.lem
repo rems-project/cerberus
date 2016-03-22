@@ -13,7 +13,7 @@ type core_typing_error =
   | EmptyArray
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
   | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
-  | InvalidMember of Symbol.t * Cabs.cabs_identifier
+  | InvalidMember of Symbol.sym * Cabs.cabs_identifier
 
 module E = struct
   type eff 'a = Exception.t 'a core_typing_error
@@ -73,7 +73,7 @@ let rec typeof_value cval =
   match cval with
     | Vobject oval ->
         BTy_object <$> typeof_object_value oval
-    | Vloaded oval ->
+    | Vspecified oval ->
         BTy_loaded <$> typeof_object_value oval
     | Vunspecified ty ->
         E.return (BTy_loaded $ core_object_type_of_ctype ty)
@@ -133,7 +133,7 @@ let rec typeof_pexpr env (Pexpr bTy pe_) =
   (* operators on pointer values *)
 
   | PEarray_shift of pexpr * ctype * pexpr
-  | PEmember_shift of pexpr * Symbol.t * Cabs.cabs_identifier
+  | PEmember_shift of pexpr * Symbol.sym * Cabs.cabs_identifier
 
 
   (* operators on integers *)
@@ -147,7 +147,7 @@ let rec typeof_pexpr env (Pexpr bTy pe_) =
   (* pure operations provide by the memory layout model *)
   | PEmemop of Mem.pure_memop * list pexpr
   (* these two are annoying *)
-  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * pexpr)
+  | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * pexpr)
 
   (* call to a pure function *)
   | PEcall of (name * core_base_type) * list (pexpr * core_base_type) (* TODO: remove the type annot *)

@@ -228,9 +228,9 @@ let rec pp_value = function
   | Vunit ->
       pp_const "unit"
   | Vtrue ->
-      pp_const "true"
+      pp_const "True"
   | Vfalse ->
-      pp_const "false"
+      pp_const "False"
   | Vlist (_, cvals) ->
       P.brackets (comma_list pp_value cvals)
   | Vtuple cvals ->
@@ -238,9 +238,9 @@ let rec pp_value = function
   | Vctype ty ->
       P.dquotes (Pp_core_ctype.pp_ctype ty)
   | Vunspecified ty ->
-      pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
-  | Vloaded oval ->
-      pp_const "loaded" ^^ P.parens (pp_object_value oval)
+      pp_const "Unspecified" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+  | Vspecified oval ->
+      pp_const "Specified" ^^ P.parens (pp_object_value oval)
   | Vobject oval ->
       pp_object_value oval
 
@@ -261,8 +261,8 @@ let pp_ctor = function
       !^ "Ivsizeof"
   | Civalignof ->
       !^ "Ivalignof"
-  | Cloaded ->
-      !^ "Loaded"
+  | Cspecified ->
+      !^ "Specified"
   | Cunspecified ->
       !^ "Unspecified"
 
@@ -394,8 +394,14 @@ let rec pp_expr = function
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
       P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
       pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3)
-  | Ecase _ ->
-      failwith "Ecase"
+  | Ecase (pe, pat_es) ->
+      pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
+      P.nest 2 (
+        P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
+          P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle ^^^
+          pp_expr e
+        ) pat_es 
+      ) ^^ P.break 1 ^^ pp_keyword "end"
   | Eproc (_, pe, pes) ->
       !^ "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
   | Eaction (Paction (p, (Action (_, bs, act)))) ->
@@ -439,7 +445,7 @@ let rec pp_expr = function
       pp_expr e2
 *)
   | Ewseq (pat, e1, e2) ->
-      pp_control "letw" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2)
 (*
@@ -449,7 +455,7 @@ let rec pp_expr = function
       pp_expr e2
 *)
   | Esseq (pat, e1, e2) -> 
-      pp_control "lets" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2)
   | Easeq (None, act1, pact2) ->
@@ -504,6 +510,8 @@ and pp_action act =
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | Fence0 mo ->
+        pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
 (*
     | Ptr (ptr_act, es) ->
        pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)
@@ -531,7 +539,7 @@ let std = [
 ]
 
 let symbol_compare =
-  Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
+  Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
 
 
 
@@ -601,7 +609,7 @@ let pp_file file =
   isatty := Unix.isatty Unix.stdout;
   
   begin
-    if Debug.get_debug_level () > 1 then
+    if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
         pp_fun_map file.stdlib ^^ P.break 1 ^^
@@ -621,3 +629,34 @@ let pp_file file =
   List.fold_left pp_glob P.empty file.globs ^^
   pp_fun_map file.funs
   end
+
+
+(* Runtime stuff *)
+let mk_pp_continuation_element cont_elem = fun z ->
+  match cont_elem with
+    | Kunseq (es1, es2) ->
+        pp_control "unseq" ^^ P.parens (
+          comma_list pp_expr es1 ^^ P.comma ^^^ z ^^ P.comma ^^^ comma_list pp_expr es2
+        )
+    | Kwseq (pat, e2) ->
+        pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
+        pp_control "in" ^^^ pp_expr e2
+    | Ksseq (pat, e2) ->
+        pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
+        pp_control "in" ^^^ pp_expr e2
+
+let rec pp_continuation = function
+  | [] ->
+      !^ "[]"
+  | cont_elem :: cont ->
+      (mk_pp_continuation_element cont_elem) (pp_continuation cont)
+
+
+
+
+(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a
+
+type stack 'a =
+  | Stack_empty
+  | Stack_cons of continuation 'a * stack 'a
+*)

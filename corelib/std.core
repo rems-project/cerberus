@@ -249,36 +249,34 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
 -}
 fun encodeTwos (ty : ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
-    if n < Ivmin(ty) \/ Ivmax(ty) < n then
-      error(<<<encodeTwos>>>, (width, ty, n))
-    else
-      if 0 <= n then
-        n
-      else
-        2^width + n
+  let width: integer = ctype_width(ty) in
+  if n < Ivmin(ty) \/ Ivmax(ty) < n then
+    error(<<<encodeTwos>>>, (width, ty, n))
+  else if 0 <= n then
+    n
+  else
+    2^width + n
 
 
 
 -- the inverse of the previous function
 fun decodeTwos (ty: ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
-    if (n < 0) \/ (2^width <= n) then
-      error(<<<decodeTwos>>>, (ty, n))
-    else
-      if n <= 2^(width - 1) - 1 then
-        n
-      else
-        n - 2^width
+  let width: integer = ctype_width(ty) in
+  if (n < 0) \/ (2^width <= n) then
+    error(<<<decodeTwos>>>, (ty, n))
+  else if n <= 2^(width - 1) - 1 then
+    n
+  else
+    n - 2^width
 
 -- bitwise complement of a two's complement encoded integer
 fun complementTwos_aux (n: integer, w: integer) : integer :=
   if w = 0 then
     n
   else
-    let n_ = n / 2 in
-      (1 - (n rem_f 2)) + 2 * complementTwos_aux(n_, w - 1)
+    let n_: integer = n / 2 in
+    (1 - (n rem_f 2)) + 2 * complementTwos_aux(n_, w - 1)
 
 fun complementTwos (ty:ctype, n: integer) : integer :=
   complementTwos_aux(n, ctype_width(ty))
@@ -289,35 +287,34 @@ fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
   if w = 0 then
     0
   else
-    let n1_ = n1 / 2 in
-      let n2_ = n2 / 2 in
-        (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_AND_aux(n1_, n2_, w-1)
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_AND_aux(n1_, n2_, w-1)
 
 fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
     error(<<<WIP_bAND>>>, (ty, n1, n2))
   else
-
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
+    let n1_: integer = <Integer.encode>(ty, n1) in
+    let n2_: integer = <Integer.encode>(ty, n2) in
+    <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
 
 -- bitwise XOR
 fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
   if w = 0 then
     0
   else
-    let n1_ = n1 / 2 in
-      let n2_ = n2 / 2 in
-        (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0) + 2 * bitwise_XOR_aux(n1_, n2_, w-1)
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0) + 2 * bitwise_XOR_aux(n1_, n2_, w-1)
 
 fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
     error(<<<WIP_bXOR>>>, unit)
   else
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
+  let n1_: integer = <Integer.encode>(ty, n1) in
+  let n2_: integer = <Integer.encode>(ty, n2) in
+  <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
 
 
 -- bitwise OR
@@ -325,18 +322,17 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
   if w = 0 then
     0
   else
-    let n1_ = n1 / 2 in
-      let n2_ = n2 / 2 in
-        (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_OR_aux(n1_, n2_, w-1)
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_OR_aux(n1_, n2_, w-1)
 
 fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" /\ (n1 = -39 \/ n2 = -39) then
     error(<<<WIP_bOR>>>, unit)
   else
-
-  let n1_ = <Integer.encode>(ty, n1) in
-    let n2_ = <Integer.encode>(ty, n2) in
-      <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
+    let n1_: integer = <Integer.encode>(ty, n1) in
+    let n2_: integer = <Integer.encode>(ty, n2) in
+    <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
 
 -- ones_prefix(0, k, width) returns an positive integer whose binary
 -- representation is 1    ...   1 0      ...       0
@@ -353,7 +349,7 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
-  lets c = load("char", array_shift(str, "char", 0)) in
+  let strong c: integer = load("char", array_shift(str, "char", 0)) in
   if c = 0 then
     pure(acc)
   else
@@ -376,8 +372,8 @@ proc rev_listFromStr(str: pointer) : eff [integer] :=
 
 
 proc printf_proxy(tmp_ptr: pointer, args: [(ctype, pointer)]) : eff integer :=
-  lets frmt_ptr = load("char*", tmp_ptr)                      in
-  lets xs       = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
+  let strong frmt_ptr: pointer = load("char*", tmp_ptr)                      in
+  let strong xs: [integer]     = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
   pcall(Cfunction(<std_function_printf>), xs, args)
 {-
   lets ret = pcall(Cfunction(<std_function_printf>), xs, args) in
@@ -408,7 +404,7 @@ proc printf_loader(tys: [ctype], args: [pointer]) : eff integer :=
 
 
 proc malloc_proxy (size_ptr: pointer) : eff pointer :=
-  lets size = load("size_t", size_ptr) in
+  let strong size: integer = load("size_t", size_ptr) in
   alloc(4, size)
 {-
   lets ret = alloc(4, size) in
@@ -422,8 +418,8 @@ proc malloc_proxy (size_ptr: pointer) : eff pointer :=
 
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
 fun wrapI(ty: ctype, n: integer) : integer :=
-  let dlt = Ivmax(ty) - Ivmin(ty) + 1 in
-  let r = n rem_f dlt in
+  let dlt: integer = Ivmax(ty) - Ivmin(ty) + 1 in
+  let r: integer = n rem_f dlt in
   if r <= Ivmax(ty) then
     r
   else

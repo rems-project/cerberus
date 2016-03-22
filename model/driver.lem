@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode Output
-open import Global Show Core_run Core_run_aux Errors
+open import Global Show Core_eval Core_run Core_run_aux Errors
 import Cmm_op Cmm_csem
 
 import Translation_aux
@@ -57,7 +57,7 @@ type driver_error =
   | DERR_core_run of core_run_error
 
 type driver_state = <|
-  symbol_supply:     UniqueId.supply Symbol.t;
+  symbol_supply:     UniqueId.supply Symbol.sym;
   
   core_file:         Core.file core_run_annotation;
   core_state:        core_state;       (* state of the core program *)
@@ -65,7 +65,7 @@ type driver_state = <|
   layout_state:      Mem.mem_state;    (* state of memory layout model *)
   concurrency_state: Cmm_op.symState; (* state of the concurrency memory model *)
   
-  symbolic_assoc: map Symbol.t Core.object_value;
+  symbolic_assoc: map Symbol.sym Core.object_value;
   
   blocked: bool; (* concurrency model ended by blocking *)
   (* DEBUG *)
@@ -107,7 +107,7 @@ let liftMem m dr_st =
 
 
 (* BEGIN reads resolving ======================================================================== *)
-val     resolve_read_pexpr: Symbol.t -> Symbolic.symbolic Core.object_value Mem.pointer_value -> Core.pexpr -> Core.pexpr
+val     resolve_read_pexpr: Symbol.sym -> Symbolic.symbolic Core.object_value Mem.pointer_value -> Core.pexpr -> Core.pexpr
 let rec resolve_read_pexpr write_sym symb_v (Core.Pexpr bTy pexpr_ as pexpr) =
   let fpe = resolve_read_pexpr write_sym symb_v in
   match pexpr_ with
@@ -262,7 +262,7 @@ let rec resolve_read_stack write_sym symb_v = function
 end
 
 
-val resolve_read: Symbol.t -> Symbolic.symbolic Core.object_value Mem.pointer_value -> core_state -> core_state
+val resolve_read: Symbol.sym -> Symbolic.symbolic Core.object_value Mem.pointer_value -> core_state -> core_state
 let resolve_read write_sym symb_v core_st =
   (* let _ = Boot.output_string $ "RESOLVING: " ^ Boot.pp_core_expr ((Core.Etuple [Core.Esym write_sym; Core.Econst v]) : Core.expr unit) ^ "\n" in *)
   <| core_st with
@@ -291,7 +291,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
         end
 *)
     | _ ->
-        let _ = Boot.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ stringFromValue (Core.Vobject oval)) in
+        let () = Debug.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ Pp.stringFromCore_value (Core.Vobject oval)) in
         Map.insert sym oval concur_sym_map
   end
 
@@ -525,7 +525,7 @@ let printf_loader dr_st format_tys args mk_str =
             let pe_conv =
               Translation_aux.mk_stdcall dr_st''.core_file.Core.stdlib "conv_int"
                 [Core.PEval (Core.Vctype ty); Core.PEval (Core_aux.valueFromMemValue mval)] in
-            match Core_run.full_core_eval Loc.unknown dr_st''.core_file dr_st''.symbolic_assoc false pe_conv with
+            match Core_run.full_eval_pexpr Loc.unknown dr_st''.core_file dr_st''.symbolic_assoc false pe_conv with
               | Right (Undefined.Defined cval) ->
                   ND.return (stringPrettyFromMemValue format (fromJust "Driver.printf_loader" $ Core_aux.memValueFromValue ty cval) :: acc, dr_st'')
               | _ ->
@@ -535,7 +535,7 @@ let printf_loader dr_st format_tys args mk_str =
             ND.return (stringPrettyFromMemValue format mval :: acc, dr_st'')
 
 (*
-val     core_eval: Core.file core_run_annotation -> bool -> Core.pexpr ->
+val     eval_pexpr: Core.file core_run_annotation -> bool -> Core.pexpr ->
                    EU.t Core.pexpr core_run_error
 *)
 
@@ -585,7 +585,7 @@ let rec drive_core_thread tid dr_st =
         let pre_arena = (* DEBUG *)
           (snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.thread_states)).arena in
         (* DEBUG *) ND.print_debug 6 ("tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
-        (* DEBUG *)                   Boot.pp_core_expr pre_arena) >>
+        (* DEBUG *)                   Pp.stringFromCore_expr pre_arena) >>
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
@@ -714,7 +714,7 @@ let rec drive_core_thread tid dr_st =
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
         let eval_conv ty1 ty2 mval =
-          full_core_eval Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
+          eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
               [ Core.Pexpr Core.BTy_ctype (Core.PEval (Core.Vctype ty1))
@@ -855,7 +855,7 @@ let update_core_run_state run_st dr_st =
 val action_request_concurrency: driver_state -> action_request -> ND.t driver_state
 let action_request_concurrency dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST ALLOC" in
+      let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in
       (* TODO: hack, hack, hack *)
       ND.msum "action_request_concurrency, Alloc" $ map (function
         | Left mem_err ->
@@ -869,7 +869,7 @@ let action_request_concurrency dr_st = function
       end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
   | CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST CREATE" in
+      let () = Debug.print_debug_located 3 loc "REQUEST CREATE" in
       (* TODO: hack, hack, hack *)
       ND.msum "action_request_concurrency, Create" $ map (function
         | Left mem_err ->
@@ -914,7 +914,7 @@ let action_request_concurrency dr_st = function
       |>
   
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST KILL" in
+      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
         (* TODO: the kill ... *)
@@ -1010,7 +1010,7 @@ end
 val action_request_sequential: driver_state -> action_request -> ND.t driver_state
 let action_request_sequential dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST ALLOC" in
+      let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in
       ND.msum "action_request_sequential, Alloc" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -1023,7 +1023,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
   | CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST CREATE" in
+      let () = Debug.print_debug_located 3 loc "REQUEST CREATE" in
       ND.msum "action_request_sequential, Create" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -1036,7 +1036,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
   
   | LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST LOAD" in
+      let () = Debug.print_debug_located 3 loc "REQUEST LOAD" in
       ND.msum "action_request_sequential, Load" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -1049,7 +1049,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.load lvalue_ty ptr_val) dr_st.layout_state)
   
   | StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST STORE" in
+      let () = Debug.print_debug_located 3 loc "REQUEST STORE" in
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       ND.msum "action_request_sequential, Store" $ map (function
@@ -1068,7 +1068,7 @@ let action_request_sequential dr_st = function
       error "WIP: Driver.seq ==> RMWRequest"
 
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let _ = Boot.print_debug_located 3 loc "REQUEST KILL" in
+      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
         (* TODO: the kill ... *)
@@ -1162,7 +1162,7 @@ let rec driver with_concurrency dr_st =
 *)
         
         | _ ->
-            error ("WIP memop request: " ^ show memop ^ " ==> " ^ Boot.pp_core_value (Core.Vtuple cvals) )
+            error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
       end
 
   | Step_tau debug_str _ ->
@@ -1177,7 +1177,7 @@ let rec driver with_concurrency dr_st =
   | Step_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
 *)
   | Step_done cval ->
-      ND.print_debug 3 ("driver.process_core_step ==> Step_done with value: " ^ Boot.pp_core_value cval) >> (* DEBUG *)
+      ND.print_debug 3 ("driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval) >> (* DEBUG *)
       ND.return dr_st
 (*
   | Step_spawn_threads of list thread_state (* initial states for the children *)
@@ -1296,9 +1296,9 @@ let rec driver with_concurrency dr_st =
 
 
 
-val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.t Core.object_value -> Core.pexpr -> Core.core_base_type * Core.value
+val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.core_base_type * Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
-  match core_eval Loc.unknown mem_st core_file concur_sym_map false pexpr with
+  match step_eval_pexpr Loc.unknown mem_st core_file concur_sym_map false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just bTy_cval ->
@@ -1307,7 +1307,7 @@ let rec hack mem_st core_file concur_sym_map pexpr =
               hack mem_st core_file concur_sym_map pexpr'
         end
     | _ ->
-        error ("Driver.hack, UNDEF/ERROR:" ^ Boot.pp_core_pexpr pexpr)
+        error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
 (*
     | _ ->
         (* TODO: this is wrong *)
@@ -1364,12 +1364,12 @@ let finalize debug_str dr_st =
               | Just pe ->
                   pe
               | Nothing ->
-                  error ("Driver.finalize: the arena wasn't pure ==> " ^ Boot.pp_core_expr th_st.arena)
+                  error ("Driver.finalize: the arena wasn't pure ==> " ^ Pp.stringFromCore_expr th_st.arena)
             end in
         (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, bTy_cval),
          (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
     | xs ->
-        let () = Boot.print_debug 3 ("ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state) in
+        let () = Debug.print_debug 3 ("ERROR (end of the Driver)\n" ^ pp_core_state dr_st.core_state) in
         error ("BOOM finalize [" ^ debug_str ^ "]")
   end
 
@@ -1429,7 +1429,7 @@ let initial_driver_state sym_supply file =
 
 
 
-val driver_globals: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> ND.t (Thread.thread_id * driver_state)
+val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> ND.t (Thread.thread_id * driver_state)
 let driver_globals with_concurrency sym_supply file =
   let dr_st = initial_driver_state sym_supply file in
   
@@ -1452,7 +1452,7 @@ let driver_globals with_concurrency sym_supply file =
   |> in
   
   ND.foldM (fun (to_subst, dr_st) (sym, cTy, e) ->
-    let _ = Boot.print_debug 6 ("eval GLOB: " ^ show sym) in
+    let () = Debug.print_debug 6 ("eval GLOB: " ^ show sym) in
     
     (* setting up the initialisation of the current global in thread 0 *)
     let dr_st = <| dr_st with
@@ -1501,7 +1501,7 @@ declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
 
-val drive: bool -> UniqueId.supply Symbol.t -> Core.file core_run_annotation -> list string ->
+val drive: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> list string ->
            ND.t (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
