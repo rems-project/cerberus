@@ -21,11 +21,12 @@ let load_stdlib () =
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
-    Debug.print_debug 5 ("reading Core standard library from `" ^ filepath ^ "'.");
+    Debug_ocaml.print_debug 5 ("reading Core standard library from `" ^ filepath ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
       include Core_parser.Make (struct
                                  let sym_counter = core_sym_counter
+                                 let mode = Core_parser_util.StdMode
                                  let std = Pmap.empty Core_parser_util._sym_compare
                                end)
 (*      type token = Core_parser_util.token *)
@@ -38,8 +39,13 @@ let load_stdlib () =
       | Exception.Result (Core_parser_util.Rstd z) -> z
       | Exception.Result _ ->
           error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
-      | Exception.Exception (loc, Errors.PARSER msg) ->
-          error ("Core parsing error @ " ^ Pp_errors.location_to_string loc  ^ ": " ^ msg)
+      | Exception.Exception (loc, err) ->
+          begin match err with
+            | Errors.PARSER msg ->
+                error ("Core parsing error @ " ^ Pp_errors.location_to_string loc  ^ ": " ^ msg)
+            | _ ->
+                assert false
+          end
 
 
 (* == load the implementation file ============================================================== *)
@@ -50,8 +56,10 @@ let load_impl core_parse impl_name =
   else
     (* TODO: yuck *)
     match core_parse (Input.file iname) with
-      | Exception.Result (Core_parser_util.Rimpl (impl_map, fun_map)) ->
-          (fun_map, impl_map)
+      | Exception.Result (Core_parser_util.Rimpl impl_map) ->
+          impl_map
+      | Exception.Result (Core_parser_util.Rfile _ | Core_parser_util.Rstd _) ->
+          assert false
       | Exception.Exception err ->
           error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
 
@@ -69,7 +77,7 @@ let set_progress n =
 let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
-      Debug.print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
+      Debug_ocaml.print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
       if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name ^ " 2> /dev/null") <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
@@ -93,7 +101,8 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.sequentialise !!cerb_conf.core_stdlib (match !!cerb_conf.core_impl_opt with Some x -> x ))
+    |> Exception.fmap (Translation.translate !!cerb_conf.sequentialise !!cerb_conf.core_stdlib
+                         (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
 (*
@@ -115,11 +124,11 @@ let (>>=) = Exception.bind2
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
-        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_t_dict.Lem_pervasives.setElemCompare_method));
+        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
         Exception.return2 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= !!cerb_conf.core_stdlib;
-           Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x);
+           Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
            Core.globs=  globs;
            Core.funs=   funs
          })
@@ -181,10 +190,10 @@ let pipeline filename args =
   let f = Input.file filename in
   begin
     if Filename.check_suffix filename ".c" then (
-      Debug.print_debug 2 "Using the C frontend";
+      Debug_ocaml.print_debug 2 "Using the C frontend";
       c_frontend f
      ) else if Filename.check_suffix filename ".core" then (
-       Debug.print_debug 2 "Using the Core frontend";
+       Debug_ocaml.print_debug 2 "Using the Core frontend";
        core_frontend f
       ) else
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
@@ -196,7 +205,7 @@ let pipeline filename args =
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.rewrite then Core_rewrite.rewrite_file core_file else core_file) in
   
-  if !!cerb_conf.rewrite && !Debug.debug_level >= 5 then
+  if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
       run_pp $ Pp_core.pp_file core_file;
@@ -205,7 +214,7 @@ let pipeline filename args =
   
   if List.mem Core !!cerb_conf.pps then (
     run_pp $ Pp_core.pp_file rewritten_core_file;
-    if !!cerb_conf.rewrite && !Debug.debug_level >= 5 then
+    if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
   
@@ -218,24 +227,24 @@ let pipeline filename args =
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args compile =
-  Debug.debug_level := debug_level;
+  Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
-  Debug.print_success "0.1. - Core standard library loaded.";
+  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
   
   (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
   let module Core_parser_base = struct
     include Core_parser.Make (struct
         let sym_counter = core_sym_counter
+        let mode = Core_parser_util.FileMode
         let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
           let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
         ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
       end)
-(*    type token = Core_parser_util.token *)
     type result = Core_parser_util.result
   end in
   let module Core_parser =
@@ -244,10 +253,10 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
   
   (* Looking for and parsing the implementation file *)
-  let (impl_fun_map, core_impl) = load_impl Core_parser.parse impl_name in
-  Debug.print_success "0.2. - Implementation file loaded.";
+  let core_impl = load_impl Core_parser.parse impl_name in
+  Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps (Pmap.union impl_fun_map core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
 
   
   

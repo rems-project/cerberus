@@ -63,8 +63,8 @@ let keywords =
       
       (* for Core.expr *)
       ("list",   T.LIST     );
-      ("true",   T.TRUE);
-      ("false",  T.FALSE);
+      ("True",   T.TRUE);
+      ("False",  T.FALSE);
 (*  | Econst of Cmm_aux.constant *)
 (*  | Ectype of ctype *)
 (*  | Eaddr of Memory.mem_addr *)
@@ -87,9 +87,9 @@ let keywords =
 (*  | Eunseq of list (expr 'a) *)
       ("pure", T.PURE);
       ("unseq", T.UNSEQ);
-      ("letw", T.LETW);
-      ("lets", T.LETS);
-      ("leta", T.LETA);
+      ("weak", T.WEAK);
+      ("strong", T.STRONG);
+      ("atom", T.ATOM);
       ("save", T.SAVE);
       ("run", T.RUN);
       ("indet", T.INDET);
@@ -116,6 +116,7 @@ let keywords =
       ("store",   T.STORE );
       ("load",    T.LOAD  );
       ("rmw",     T.RMW   );
+      ("fence",   T.FENCE );
      
       
       
@@ -160,7 +161,7 @@ let keywords =
       ("Tuple",  T.TUPLE);
       ("Array",  T.ARRAY);
       ("loaded", T.LOADED);
-      ("Loaded", T.LOADED_VALUE);
+      ("Specified", T.SPECIFIED);
 
       
     ]

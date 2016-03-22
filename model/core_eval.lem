@@ -1,0 +1,222 @@
+open import Pervasives
+
+open import Global
+open import Core Core_aux
+open import Core_run_aux Errors
+import Mem
+import Loc Symbol Exception_undefined
+
+module EU  = Exception_undefined
+
+
+(*
+val valueFromPExpr: typed_pexpr -> maybe value
+let to_pure expr =
+  match eval Loc.unknown 
+*)
+
+
+(* takes the symbolic names of a function, some pure expressions and produce
+   the function body where the arguments have been substituted *)
+val call_function: Core.file core_run_annotation -> name -> list Core.value ->
+                   Exception.t Core.pexpr core_run_error
+let call_function file f_nm arg_cvals =
+  Exception.bind match f_nm with
+    | Sym f_a ->
+        match Map.lookup f_a file.stdlib with
+          | Just z ->
+              (* callign a function from the Core standard library *)
+              Exception.return z
+          | Nothing ->
+              match Map.lookup f_a file.funs with
+                | Just z ->
+                    (* calling a user function *)
+                    Exception.return z
+                | Nothing ->
+                    Exception.fail (Illformed_program "calling an unknown function")
+              end
+        end
+    | Impl f ->
+        match Map.lookup f file.impl with
+          | Just (IFun bty params pe) ->
+              Exception.return (Fun bty params pe)
+          | _ ->
+              Exception.fail (Illformed_program ("calling an unknown impl-function: " ^
+                                                 Implementation_.string_of_implementation_constant f))
+        end
+  end function
+    | Fun _ params (Pexpr annot _ as body_pe) ->
+        if List.length params <> List.length arg_cvals then
+          error "$ \"CALL #args <> #params, params= \" ^ Pp.pp_core_params params"
+        else
+          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
+    | Proc _ _ _ ->
+        error "Core_run.call_function, called on a Proc"
+  end
+
+
+
+
+let inline (>>=)    = EU.bind
+let inline (>>) m f = m >>= fun _ -> f
+let inline (<$>) = EU.fmap
+
+(* evaluation of pure expressions (will crash on ill-typed and/or non pure
+   expressions).  Note that this evaluation may be partial; that is, the
+   result of eval may be another unevaluated expression rather than a value.
+   This is to ensure that the eval function will always terminate (which is
+   important for the Coq backend).  To fully evaluate a pure expression,
+   it is necessary to call eval repeatedly until is_value returns True. *)
+val     step_eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
+                         map Symbol.sym Core.object_value -> bool -> Core.pexpr  ->
+                         EU.t Core.pexpr core_run_error
+let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexpr_ as pexpr) =
+  let self pe = step_eval_pexpr loc mem_st file concur_sym_map inside_if pe in
+  Pexpr bTy <$> match pexpr_ with
+    | PEsym sym ->
+(*      if inside_if then
+          EU.return pexpr
+        else *)
+          EU.fail $ Unresolved_symbol sym
+    | PEimpl iCst ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEimpl"
+    | PEval _ ->
+        EU.return pexpr_
+    | PEconstrained xs ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEconstrained"
+    | PEundef ub ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEundef"
+    | PEerror str debug_pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEerror"
+    | PEctor ctor pes ->
+        EU.mapM self pes >>= fun pes' ->
+        match (ctor, Maybe.map (List.map snd) (valueFromPexprs pes')) with
+          | (Cnil bTy, Just []) ->
+              EU.return $ PEval (Vlist bTy [])
+          | (Ccons, Just [cval1; Vlist bTy' cvals]) ->
+              if bTy <> bTy' then
+                EU.fail (Illformed_program "illtyped operand for Ccons")
+              else
+                EU.return $ PEval (Vlist bTy' (cval1 :: cvals))
+          | (Ctuple, Just cvals) ->
+              EU.return $ PEval (Vtuple cvals)
+          | (Carray, Just cvals) ->
+              error "WIP: step_eval, PEctor Carray"
+          | (Civmax, Just [Vctype ty]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
+                | _ ->
+                    error ("Core_run ivmax" ^
+                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
+              end
+          | (Civmin, Just [Vctype ty]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
+                | _ ->
+                    error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^
+                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
+              end
+          | (Civsizeof, Just [Vctype ty]) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.sizeof_ival ty)))
+          | (Civalignof, Just [Vctype ty]) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
+          | (Cunspecified, Just [Vctype ty]) ->
+              EU.return $ PEval (Vunspecified ty)
+          
+          | (_, Just _) ->
+              EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " (*^
+                                         Pp.stringFromCore_expr (Epure (PEctor ctor pes') : Core.expr unit) *))
+          | (_, Nothing) ->
+              EU.return $ PEctor ctor pes'
+        end
+    | PEcase pe pat_pes ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEcase"
+    | PEarray_shift pe1 ty pe2 ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEarray_shift"
+    | PEmember_shift pe tag_sym member_ident ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEmember_shift"
+    | PEnot (Pexpr pe_bTy _ as pe) ->
+        self pe >>= fun (Pexpr pe_bTy pe_' as pe') ->
+        match pe_' with
+          | PEval Vtrue ->
+              EU.return (PEval Vfalse)
+          | PEval Vfalse ->
+              EU.return (PEval Vtrue)
+(* TODO: OLD CONCUR
+          | PEval (Vobject (OVsymbolic symb)) ->
+              EU.return (PEval (Vobject (OVsymbolic (Symbolic.SYMBnot symb))))
+*)
+          | PEval _ ->
+              EU.fail (Illformed_program "PEnot: operand should be a boolean")
+          | _ ->
+              EU.return (PEnot pe')
+        end
+    | PEop bop pe1 pe2 ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEop"
+    | PEstruct tag_sym ident_pes ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEstruct"
+    | PEunion tag_sym member_ident pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEunion"
+    | PEcall nm pes ->
+        EU.mapM self pes >>= fun pes' ->
+        match Maybe.map (List.map snd) (valueFromPexprs pes') with
+          | Just cvals ->
+              (* We do not immediately call eval on the result of call_function,
+                 as that could lead to non-termination. *)
+              Exception.bind (call_function file nm cvals) (fun (Pexpr _ pe_) ->
+                (* TODO: maybe annyoing to have stripping if we want a proof of type preservation? *)
+                EU.return pe_)
+(* TODO OLD CONCUR
+              if List.all Core_aux.is_concrete cvals then
+                (* We do not immediately call eval on the result of call_function,
+                   as that could lead to non-termination. *)
+                Exception.bind (call_function file nm cvals)
+                  EU.return
+              else
+                let symb_nm = match nm with
+                  | Sym f -> Symbolic.SYMBfsym f
+                  | Impl i -> Symbolic.SYMBimpl i
+                end in
+                EU.return $ PEval (Vobject (OVsymbolic (Symbolic.make_call symb_nm (List.map symbolify cvals))))
+*)
+          | Nothing ->
+              EU.return (PEcall nm pes')
+        end
+    | PElet pat pe1 pe2 ->
+        error "WIP: Core_Eval.step_eval_pexpr, PElet"
+    | PEif pe1 pe2 pe3 ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEif"
+    | PEis_scalar pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEis_scalar"
+    | PEis_integer pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEis_integer"
+    | PEis_signed pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEis_signed"
+    | PEis_unsigned pe ->
+        error "WIP: Core_Eval.step_eval_pexpr, PEis_unsigned"
+  end
+
+
+val     eval_pexpr_aux: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
+                        map Symbol.sym Core.object_value -> bool -> Core.pexpr ->
+                        EU.t Core.value core_run_error
+let rec eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe =
+  step_eval_pexpr loc mem_st file concur_sym_map inside_if pe >>= fun pe' ->
+  match valueFromPexpr pe' with
+    | Just (_, cval) ->
+        EU.return cval
+    | Nothing ->
+        eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe'
+  end
+val eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
+                map Symbol.sym Core.object_value -> bool -> Core.pexpr ->
+                either Errors.t (Undefined.t Core.value)
+let eval_pexpr loc mem_st file concur_sym_map inside_if pe =
+  match eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe with
+    | Exception.Result z ->
+        Right z
+    | Exception.Exception err ->
+        Left (loc, Errors.Core_run_cause err)
+  end

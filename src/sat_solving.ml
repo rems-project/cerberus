@@ -139,7 +139,7 @@ let is_unsat (Assertions (_, _, strs)) =
         Printf.sprintf "(declare-fun %s () %s)" str_name str_sort :: acc
       ) !declared_consts *) (List.filter (fun z -> z <> "") (Dlist.toList strs))
     ) in
-  Debug.print_debug 3 ("IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
+  Debug_ocaml.print_debug 3 ("IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
   let ic, oc = Unix.open_process "z3 -nw -t:100 -smt2 -in" in
   Pervasives.output_string oc (str_problem ^ "\n(check-sat)\n(exit)\n");
   Pervasives.flush oc;
@@ -154,7 +154,7 @@ let is_unsat (Assertions (_, _, strs)) =
   | "unsat\n" ->
       true
   | output ->
-      Debug.print_debug 3 ("DEBUG Z3 ==> " ^ output);
+      Debug_ocaml.print_debug 3 ("DEBUG Z3 ==> " ^ output);
       false
 
 let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
@@ -162,14 +162,14 @@ let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
 
 
 let check constr (Assertions (n, addrs, strs)) =
-  Debug.print_debug 3 ("CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
+  Debug_ocaml.print_debug 3 ("CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
   let assert_strs = assertion_of_memory_constraint constr in
   if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
-    (Debug.print_debug 3 "check returned FALSE";
+    (Debug_ocaml.print_debug 3 "check returned FALSE";
     Some false)
   else if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
-    (Debug.print_debug 3 "check returned TRUE";
+    (Debug_ocaml.print_debug 3 "check returned TRUE";
     Some true)
   else
-    (Debug.print_debug 3 "check returned NONE";
+    (Debug_ocaml.print_debug 3 "check returned NONE";
     None)

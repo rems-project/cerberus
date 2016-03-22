@@ -1,6 +1,5 @@
 open import Pervasives
 open import Global Show Core Driver_util
-import Boot
 
 open import Errors
 
@@ -87,6 +86,8 @@ let rec add_to_sb p_aids expr =
           Elet a pe1 (add_to_sb p_aids e2)
       | Eif pe1 e2 e3 ->
           Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+      | Ecase pe pat_es ->
+          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_sb p_aids e)) pat_es)
       | Eproc annots nm pes ->
           Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
       | Eaction (Paction p' (Action loc annots a)) ->
@@ -111,11 +112,9 @@ let rec add_to_sb p_aids expr =
           Esave k a_tys (add_to_sb p_aids e)
       | Erun annots k a_vs ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-(*
       | Ereturn _ ->
           (* no change *)
           expr
-*)
       | End es ->
           End (List.map (add_to_sb p_aids) es)
       | Epar es ->
@@ -269,17 +268,18 @@ let rec comma_list f = function
 end
  
 
+  (*
 let mk_string_of_continuation_element = function
   | Kunseq es1 es2 ->
       fun z ->
-        "unseq(" ^ comma_list Boot.pp_core_expr es1 ^ ", " ^ z ^ ", " ^
-                   comma_list Boot.pp_core_expr es2 ^ ")"
+        "unseq(" ^ comma_list Pp.pp_core_expr es1 ^ ", " ^ z ^ ", " ^
+                   comma_list Pp.pp_core_expr es2 ^ ")"
   | Kwseq sym_opts e2 ->
       fun z ->
-        "let weak SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+        "let weak SYMS = " ^ z ^ " in " ^ Pp.pp_core_expr e2
   | Ksseq sym_opts e2 ->
       fun z ->
-        "let strong SYMS = " ^ z ^ " in " ^ Boot.pp_core_expr e2
+        "let strong SYMS = " ^ z ^ " in " ^ Pp.pp_core_expr e2
 end
 
 let rec string_of_continuation cont =
@@ -301,3 +301,4 @@ let rec string_of_stack_aux sk =
 
 let string_of_stack sk =
   "[" ^ string_of_stack_aux sk ^ "]"
+*)

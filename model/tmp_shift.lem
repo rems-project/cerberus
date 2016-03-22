@@ -21,8 +21,8 @@ end
 
 open Operators
 
-type untyped_pexpr = C.generic_pexpr unit Symbol.t
-type untyped_expr  = C.generic_expr unit unit Symbol.t
+type untyped_pexpr = C.generic_pexpr unit Symbol.sym
+type untyped_expr  = C.generic_expr unit unit Symbol.sym
 
 
 
@@ -65,7 +65,7 @@ let shift_left translate_rvalue e1 e2 =
                        C.Pexpr () (C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
 else
                        C.Pexpr () (C.PEundef Undefined.Exceptional_condition)))
-                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cloaded [C.CaseBase (Just sym_obj1)]; C.CaseCtor C.Cloaded [C.CaseBase (Just sym_obj2)]],
+                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cspecified [C.CaseBase (Just sym_obj1)]; C.CaseCtor C.Cspecified [C.CaseBase (Just sym_obj2)]],
                        C.Pexpr () (C.PElet (C.CaseBase (Just sym_promoted1))
                          (integer_promotion (ctype_of e1) (C.Pexpr () (C.PEsym sym_obj1)))
                        (C.Pexpr () (C.PElet (C.CaseBase (Just sym_promoted2))
@@ -79,7 +79,7 @@ else
                                                                       (C.Pexpr () (C.PEop C.OpEq (ctype_width [C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))]) (C.Pexpr () (C.PEsym sym_promoted2))))))
                           (C.Pexpr () (C.PEundef Undefined.Shift_too_large))
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
-                       C.Pexpr () (C.PEctor C.Cloaded [
+                       C.Pexpr () (C.PEctor C.Cspecified [
                           C.Pexpr () (C.PEop C.OpRem_t (C.Pexpr () (C.PEop C.OpMul (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEop C.OpExp (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 2))))) (C.Pexpr () (C.PEsym sym_promoted2))))))
                                                        (C.Pexpr () (C.PEop C.OpAdd (C.Pexpr () (C.PEctor C.Civmax [C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])) (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 1))))))))
                       ])
@@ -89,7 +89,7 @@ else
                        (C.Pexpr () (C.PElet (C.CaseBase (Just sym_res))
                          (C.Pexpr () (C.PEop C.OpMul (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEop C.OpExp (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 2))))) (C.Pexpr () (C.PEsym sym_promoted2))))))
                        (C.Pexpr () (C.PEif (is_representable [C.Pexpr () (C.PEsym sym_res); C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])
-                          (C.Pexpr () (C.PEctor C.Cloaded [C.Pexpr () (C.PEsym sym_res)]))
+                          (C.Pexpr () (C.PEctor C.Cspecified [C.Pexpr () (C.PEsym sym_res)]))
                          (C.Pexpr () (C.PEundef Undefined.Exceptional_condition))))))
 ))
                        ))))))))) ]
@@ -101,7 +101,7 @@ else
 (* ********************************************************** *)
 
       
-
+(*
 let shift_left translate_rvalue e1 e2 =
   let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
   let ctype_width : list untyped_pexpr -> untyped_pexpr = error "assert false" in
@@ -168,3 +168,4 @@ is_unsigned_integer_type
 
 
 
+*)

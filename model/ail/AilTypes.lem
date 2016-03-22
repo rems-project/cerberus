@@ -3,7 +3,7 @@ import Symbol Cabs
 
 
 (** Types *************************************************************************************** *)
-type identifier = Symbol.t
+type identifier = Symbol.sym
 
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
