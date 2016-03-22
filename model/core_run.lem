@@ -2114,11 +2114,12 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
           (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
           let kill_es = List.map snd $ List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_tys)) sym_vs in
           let e =
-            Ewseq (CaseBase Nothing) (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
-              (Ewseq (CaseCtor Ctuple (List.map (fun z -> CaseBase (Just z)) create_syms)) (mk_unseq $ List.map (fun ty ->
-                let pe_ty = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                pcreate Loc.unknown (Caux.alignof_pe pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
-              ) create_tys)
+            Ewseq Caux.mk_empty_pat (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
+              (Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just (z, BTy_object OTy_pointer))) create_syms))
+                 (mk_unseq $ List.map (fun ty ->
+                    let pe_ty = Pexpr BTy_ctype (PEval (Vctype ty)) in
+                    pcreate Loc.unknown (Caux.alignof_pe pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
+                 ) create_tys)
                  (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
           let e' = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)

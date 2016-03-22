@@ -20,9 +20,9 @@ let pp_pos (_, (start_p, end_p)) =
 
 
 type mode =
-  | FileMode
   | StdMode
-  | ImplMode
+  | ImplORFileMode
+
 
 
 (* Type of Core parser outputs *)

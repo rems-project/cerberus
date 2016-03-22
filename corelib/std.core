@@ -353,7 +353,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   if c = 0 then
     pure(acc)
   else
-    pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), cons(c,acc))
+    pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), Cons(c,acc))
 {-
     lets ret = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), cons(c,acc)) in
     return(ret)

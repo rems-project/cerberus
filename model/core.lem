@@ -120,7 +120,7 @@ type generic_ctor 'ty =
 
 
 type generic_pattern 'ty 'sym = 
- | CaseBase of maybe 'sym
+ | CaseBase of maybe ('sym * core_base_type)
  | CaseCtor of (generic_ctor 'ty) * list (generic_pattern 'ty 'sym) (* constructor pattern *)
 
 type sym = Symbol.sym

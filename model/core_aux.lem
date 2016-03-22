@@ -523,8 +523,8 @@ let rec to_pures es =
 val in_pattern: Symbol.sym -> pattern -> bool
 let rec in_pattern sym pat =
   match pat with
-    | CaseBase sym_opt ->
-        maybe false (fun sym' -> sym = sym') sym_opt
+    | CaseBase sym_bTy_opt ->
+        maybe false (fun (sym', _) -> sym = sym') sym_bTy_opt
     | CaseCtor _ pats' ->
         List.any (in_pattern sym) pats'
   end
@@ -689,7 +689,7 @@ let rec subst_pattern pat pe' expr =
   match (pat, pe') with
     | (CaseBase Nothing, _) ->
         expr
-    | (CaseBase (Just sym), _) ->
+    | (CaseBase (Just (sym, _)), _) ->
         subst_sym sym pe' expr
     | (CaseCtor (Cnil _) [], Pexpr _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
@@ -1289,9 +1289,9 @@ val mk_empty_pat: pattern
 let mk_empty_pat =
   CaseBase Nothing
 
-val mk_sym_pat: Symbol.sym -> pattern
-let mk_sym_pat sym =
-  CaseBase (Just sym)
+val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
+let mk_sym_pat sym bTy =
+  CaseBase (Just (sym, bTy))
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat pats =
