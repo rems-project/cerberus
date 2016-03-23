@@ -324,9 +324,17 @@ let rec stepConcurrency n dr_st =
       | Cmm_op.ReadsFrom (new_concrete_mval: Mem.mem_value) (previous_symbolic_mval: Mem.mem_value) performed_act concur_st' ->
           ND.print_debug 2 ("ReadsFrom with aid: " ^ aid_to_string performed_act ^ "\n") >> (* DEBUG *)
           
+          let () = Debug.print_debug 0 ("CONCRETE MVAL = " ^ Pp.stringFromCore_value (* DEBUG *)
+            (Core.Vobject (snd $ Core_aux.objectValueFromMemValue new_concrete_mval))) in (* DEBUG *)
+          
           let new_concrete_cst = Symbolic.SYMBconst (snd $ Core_aux.objectValueFromMemValue new_concrete_mval) in
+(*
           let (Symbolic.SYMBsym _ previous_sym as previous_symb) = fromJust "stepConcurrency" $
             maybe Nothing (fun z -> Just (Symbolic.map_const (snd -| Core_aux.objectValueFromMemValue) z)) (Mem.symbolicFromMemValue previous_symbolic_mval) in
+*)
+          let (Defacto_memory_types.MVinteger _ (Defacto_memory_types.IV ity1
+                (Defacto_memory_types.IVconcurRead ity2 previous_sym))) = previous_symbolic_mval in
+          let previous_symb = Symbolic.SYMBsym Symbolic.SYMBint previous_sym in
           
           ND.add_constraint (Constraints.assert_eq previous_symb new_concrete_cst) >>
           
@@ -565,6 +573,14 @@ val     eval_pexpr: Core.file core_run_annotation -> bool -> Core.pexpr ->
   ND.return (mem_st', mk_str strs)
 *)
 
+let symbolicFromIntegerValue ((Defacto_memory_types.IV _ ival_) as ival) =
+  match ival_ with
+  | Defacto_memory_types.IVconcurRead _ sym ->
+      Symbolic.SYMBsym Symbolic.SYMBint sym
+  | _ ->
+      Symbolic.SYMBconst (Core.OVinteger ival)
+  end
+
 (* For a given thread, perform all possible step that are not action requests *)
 val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
 let rec drive_core_thread tid dr_st =
@@ -575,6 +591,52 @@ let rec drive_core_thread tid dr_st =
         error "drive_core_thread, wrong tid"
   end in
   ND.msum "drive_core_thread" $ List.map (function
+    | Step_constrained debug_str xs ->
+        (* DEBUG *) ND.print_debug 6 (">> STEP_CONSTRAINED") >>
+        ND.msum "step_constrained" (
+          List.map (fun (constrs, step_m) ->
+            (* TODO HACK *)
+            ND.add_constraint match constrs with
+              | [Defacto_memory.MC_eq_ival ival1 ival2] ->
+                  Constraints.assert_eq
+                    (symbolicFromIntegerValue ival1) (symbolicFromIntegerValue ival2)
+(*                    (Symbolic.SYMBconst (Core.OVinteger ival1)) (Symbolic.SYMBconst (Core.OVinteger ival2)) *)
+              | [Defacto_memory.MC_ne_ival ival1 ival2] ->
+                  Constraints.assert_neq
+                    (symbolicFromIntegerValue ival1) (symbolicFromIntegerValue ival2)
+(*                    (Symbolic.SYMBconst (Core.OVinteger ival1)) (Symbolic.SYMBconst (Core.OVinteger ival2)) *)
+            end >>
+            runCore step_m dr_st >>= fun (th_st', dr_st') ->
+            drive_core_thread tid <| dr_st' with
+              core_state= update_thread_state tid th_st' dr_st'.core_state;
+              dr_step_counter= dr_st'.dr_step_counter + 1
+            |>
+          ) xs
+        )
+
+(*
+    | Step_branch debug_str mk_constr_then mk_constr_else step_then step_else ->
+        ND.print_debug 6 ("Step_branch(" ^ debug_str ^ ")") >>
+        ND.mplus
+          begin
+            ND.add_constraint mk_constr_then >>
+            runCore step_then dr_st >>= fun (th_st', dr_st') ->
+            drive_core_thread tid <| dr_st' with
+              core_state= update_thread_state tid th_st' dr_st'.core_state;
+              dr_step_counter= dr_st'.dr_step_counter + 1
+            |>
+          end
+          begin
+            ND.add_constraint mk_constr_else >>
+            runCore step_else dr_st >>= fun (th_st', dr_st') ->
+            drive_core_thread tid <| dr_st' with
+              core_state= update_thread_state tid th_st' dr_st'.core_state;
+              dr_step_counter= dr_st'.dr_step_counter + 1
+            |>
+          end
+*)
+
+
     | Step_action_request _ ->
         (* DEBUG *) ND.print_debug 6 (">> ACTION_REQUEST") >>
         ND.return dr_st
@@ -622,16 +684,38 @@ let rec drive_core_thread tid dr_st =
             not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
           ) actions_of_current_thread in
 
+(*
+        let () = Debug.print_debug 1 ("Thread " ^ show tid ^ " - !!!!! actions_of_current_thread") in
+        let _ = Set.map (fun act ->
+            Debug.print_debug 1 ("AID ==> " ^ show (Cmm.aid_of act))
+        ) actions_of_current_thread in
+
+        let () = Debug.print_debug 1 ("Thread " ^ show tid ^ " - !!!!! last_actions_of_current_thread") in
+        let _ = Set.map (fun act ->
+            Debug.print_debug 1 ("AID ==> " ^ show (Cmm.aid_of act))
+        ) last_actions_of_current_thread in
+        
+        let actions_of_parent_thread: set Cmm.action =
+          Set.filter (fun act -> Cmm.tid_of act = parent_tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
+        let first_actions_of_parent_thread: set Cmm.action =
+          Set.filter (fun act ->
+            not (Set.any (fun (_, act') -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
+          ) actions_of_parent_thread in
         
         (* DEBUG *)
-(*
+        (* Adding asw edges for the thread join *)
         let concur_st' =
           <| dr_st.concurrency_state with
             Cmm_op.symPre= <| dr_st.concurrency_state.Cmm_op.symPre with
-              Cmm.asw= Set.map (fun act -> (act, act)) last_actions_of_current_thread union dr_st.concurrency_state.Cmm_op.symPre.Cmm.asw
+              Cmm.asw= (Set.cross last_actions_of_current_thread first_actions_of_parent_thread)
+(*
+Set.map (fun act -> (act, act)) first_actions_of_parent_thread
+*)
+ union dr_st.concurrency_state.Cmm_op.symPre.Cmm.asw
             |>
           |> in
 *)
+        
         ND.return <| dr_st with
           core_state= kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
           dr_step_counter= dr_st.dr_step_counter + 1;
@@ -883,6 +967,7 @@ let action_request_concurrency dr_st = function
       end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
   
   | StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
+      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST STORE" in
       let preEx_step = <|
           Cmm_op.newAction=    Cmm.Store aid tid mo ptr_val mem_val;
           Cmm_op.sbBefore=     sb_edges;
@@ -898,7 +983,15 @@ let action_request_concurrency dr_st = function
       |>
   
   | LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val sym mk_th_st' ->
-      let mval = Mem.symbolic_mval (Symbolic.SYMBsym Symbolic.SYMBint sym) in
+      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST LOAD" in
+(*      let mval = Mem.symbolic_mval (Symbolic.SYMBsym Symbolic.SYMBint sym) in *)
+      let ity = match lvalue_ty with
+        | Core_ctype.Basic (AilTypes.Integer ity) ->
+            ity
+        | _ ->
+            AilTypes.Char (* TODO DUMMY *)
+      end in
+      let mval = Mem.integer_value_mval ity (Mem.concurRead_ival ity sym) in
       let preEx_step = <|
           Cmm_op.newAction=    Cmm.Load aid tid mo ptr_val mval;
           Cmm_op.sbBefore=     sb_edges;
@@ -913,8 +1006,21 @@ let action_request_concurrency dr_st = function
         trace= "store" :: dr_st.trace
       |>
   
-  | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st ->
-      error "FenceRequest: action_request_concurrency"
+  | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
+      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST FENCE" in
+      let preEx_step = <|
+          Cmm_op.newAction=    Cmm.Fence aid tid mo;
+          Cmm_op.sbBefore=     sb_edges;
+          Cmm_op.ddBefore=     dd_edges;
+          Cmm_op.aswBefore=    asw_edges;
+          Cmm_op.locationKind= Nothing;
+      |> in
+      ND.return <| dr_st with
+        core_state=        update_thread_state tid th_st' dr_st.core_state;
+        concurrency_state= Cmm_op.symUpdatePreEx dr_st.concurrency_state preEx_step;
+        trace=             "fence" :: dr_st.trace
+      |>
+
   
   | RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
 (*
@@ -1327,8 +1433,10 @@ end
 
 let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
+(*
     | Symbolic.SYMBop op symb1 symb2 ->
         error "WIP Driver.finalize_constraints"
+*)
 (*
 
 (*

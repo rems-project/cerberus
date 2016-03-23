@@ -85,6 +85,7 @@ val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> 
 
 
 (* Integer value constructors *)
+val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
 val integer_ival: integer -> integer_value
 val max_ival: integerType -> integer_value
 val min_ival: integerType -> integer_value
@@ -109,7 +110,7 @@ val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference
 (* val is_concrete_ival: integer_value -> bool *)
 
 (* Memory value constructors *)
-val symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value
+(*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
 val unspecified_mval: ctype -> mem_value
 val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
 val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
@@ -122,7 +123,7 @@ val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
 val case_mem_value: forall 'a.
   mem_value ->
   (Core_ctype.ctype -> 'a) -> (* unspecified case *)
-  (Symbolic.symbolic mem_value pointer_value -> 'a) ->
+(*  (Symbolic.symbolic mem_value pointer_value -> 'a) -> *)
   (AilTypes.integerType -> integer_value -> 'a) ->
   (AilTypes.floatingType -> floating_value -> 'a) ->
   (Core_ctype.ctype -> pointer_value -> 'a) ->
@@ -156,6 +157,7 @@ let validForDeref_ptrval                = Impl.validForDeref_ptrval
 (* let shift_ptrval                        = Impl.shift_ptrval *)
 let array_shift_ptrval                  = Impl.array_shift_ptrval
 let member_shift_ptrval                 = Impl.member_shift_ptrval
+let concurRead_ival = Impl.concurRead_ival
 let integer_ival                        = Impl.integer_ival
 let max_ival                            = Impl.max_ival
 let min_ival                            = Impl.min_ival
@@ -169,7 +171,7 @@ let lt_ival                             = Impl.lt_ival
 let le_ival                             = Impl.le_ival
 let ptrcast_ival                        = Impl.ptrcast_ival
 (* let is_concrete_ival                    = Impl.is_concrete_ival *)
-let symbolic_mval                       = Impl.symbolic_mval
+(*let symbolic_mval                       = Impl.symbolic_mval*)
 let unspecified_mval                    = Impl.unspecified_mval
 let integer_value_mval                  = Impl.integer_value_mval
 let floating_value_mval                 = Impl.floating_value_mval
@@ -197,4 +199,10 @@ let eval_integer_value = Impl.eval_integer_value
 
 
 (* TODO: move this up *)
-type mem_constraint = Impl.mem_constraint
+type mem_constraint2 = Impl.mem_constraint2
+
+val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
+val constraint_neIV: integer_value -> integer_value -> mem_constraint2
+
+let constraint_eqIV = Impl.constraint_eqIV
+let constraint_neIV = Impl.constraint_neIV

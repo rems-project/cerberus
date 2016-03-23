@@ -90,8 +90,10 @@ end
 
 let rec fake_mem_value_eq mval1 mval2 =
   match (mval1, mval2) with
+(*
     | (MVsymbolic symb1, MVsymbolic symb2) ->
         symb1 = symb2
+*)
     | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
         n1 = n2
     | (MVarray mvals1, MVarray mvals2) ->
@@ -1302,6 +1304,8 @@ let member_shift_ptrval ptr_val tag_sym memb_ident =
 
 
 
+let concurRead_ival ity sym =
+  IV Prov_none (IVconcurRead ity sym)
 
 let integer_ival n =
   IV Prov_none (IVconcrete n)
@@ -1343,9 +1347,11 @@ let is_concrete_ival ival =
 
 
 (* Memory value constructors *)
+(*
 let symbolic_mval symb =
   let () = Debug.print_debug 0 "Mem.symbolic_mval !!!!!" in
   MVsymbolic symb
+*)
 
 let unspecified_mval ty =
   mkUnspec ty
@@ -1377,7 +1383,7 @@ let union_mval tag_sym memb_ident mval =
 
 
 (* Memory value destructor *)
-let case_mem_value mval funspec fsymb fival ffval fptrval farr fstruct funion =
+let case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct funion =
   match mval with
     | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
         funspec (Pointer AilTypes.no_qualifiers ref_ty)
@@ -1385,9 +1391,10 @@ let case_mem_value mval funspec fsymb fival ffval fptrval farr fstruct funion =
         funspec (Basic (AilTypes.Integer ity))
     | MVfloating fty (FVunspecified) ->
         funspec (Basic (AilTypes.Floating fty))
-    
+(*
     | MVsymbolic symb ->
         fsymb symb
+*)
     | MVinteger ity ival ->
         fival ity ival
     | MVfloating fty fval ->
@@ -1929,6 +1936,16 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
           | (IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
               Just true
 *)
+          | (IVmin ity, IVconcurRead ity' _) ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
+          | (IVconcurRead ity' _, IVmax ity) ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
           
           | (IVmin ity, IVconcrete n) ->
               let (is_exact, min, _) = minimal_range ity in
@@ -2249,5 +2266,14 @@ let store lvalue_ty ptr_val mval =
 
 
 (* TODO: move this up *)
-type mem_constraint =
+type mem_constraint2 =
   | MC_eq_ival of integer_value * integer_value
+  | MC_ne_ival of integer_value * integer_value
+
+val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
+let constraint_eqIV ival1 ival2 =
+  MC_eq_ival ival1 ival2
+
+val constraint_neIV: integer_value -> integer_value -> mem_constraint2
+let constraint_neIV ival1 ival2 =
+  MC_ne_ival ival1 ival2

@@ -36,7 +36,13 @@ val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_valu
 let rec objectValueFromMemValue mem_val =
   Mem.case_mem_value mem_val
     (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
-    (fun symb              -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
+(*
+    (fun symb              -> 
+                    (* WIP CONCUR *)
+                    (OTy_integer, OVinteger (Mem.integer_ival 420))
+(* error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))" *)
+)
+*)
     (fun _ ival            -> (OTy_integer, OVinteger ival))
     (fun _ fval            -> (OTy_floating, OVfloating fval))
     (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
@@ -48,7 +54,15 @@ val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
   Mem.case_mem_value mem_val
     (fun ty                -> (core_object_type_of_ctype ty, Vunspecified ty))
-    (fun symb              -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
+(*
+    (fun symb              ->
+                    (* WIP CONCUR *)
+                    (OTy_integer, (* Vspecified (OVinteger (Mem.integer_ival 420))*)
+Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))
+)
+(* error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))" *)
+)
+*)
     (fun _ ival            -> (OTy_integer, Vspecified (OVinteger ival)))
     (fun _ fval            -> (OTy_floating, Vspecified (OVfloating fval)))
     (fun _ ptr_val         -> (OTy_pointer, Vspecified (OVpointer ptr_val)))

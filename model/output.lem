@@ -324,7 +324,7 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
         Mem.case_mem_value mval
           (fun _ -> error "Output.load_character_array, unspecified")
-          (fun _ -> error "Output.load_character_array, Symbolic")
+(*          (fun _ -> error "Output.load_character_array, Symbolic") *)
           (fun ity ival ->
             Mem.case_integer_value ival
               (fun n -> if n = 0 then
