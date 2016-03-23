@@ -1249,6 +1249,10 @@ let spawn_thread parent_tid_opt th_st st =
 
 val kill_thread: thread_id -> thread_id -> set action_id -> Core.value -> core_state -> core_state
 let kill_thread tid parent_tid aswBefores v st =
+  let () = Debug.print_debug 5 ("KILLING Thread " ^ show tid ^ " (child of thread " ^ show parent_tid ^ ")") in
+  let _ = Set.map (fun aid ->
+    Debug.print_debug 5 ("AID ==> " ^ show aid)
+  ) aswBefores in
   <| st with
        thread_states= assoc_adjust (fun (parent_tid_opt, th_st) ->
          (parent_tid_opt, <| th_st with
@@ -1488,6 +1492,9 @@ type core_step =
   | Step_blocked
   | Step_error of string
   | Step_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
+
+  | Step_constrained of string * list (list Mem.mem_constraint2 * core_runM thread_state)
+
   | Step_done of Core.value
   | Step_spawn_threads of (Core.expr core_run_annotation -> thread_state) * list thread_state (* initial states for the children *)
   | Step_output of (* DEBUG *) string * string * thread_state
@@ -1825,6 +1832,12 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
     
     | (Ecase pe pat_es, _) ->
         one match pe with
+          | Pexpr bTy (PEval (Vconstrained xs)) ->
+              Step_constrained "Ecase" (
+                List.map (fun (constrs, cval) ->
+                    (constrs, E.return <| th_st with arena= Ecase (Pexpr bTy (PEval cval)) pat_es |>)
+                ) xs 
+              )
           | Pexpr _ (PEval _) ->
               match select_case subst_sym_expr pe pat_es with
                 | Just e' ->
@@ -2165,7 +2178,10 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                        (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
               end in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
-          let e' = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)
+          let e' = 
+let () = Debug.print_debug 5 "HELLO Erun" in
+add_to_asw annots.asw_before $
+add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)
           E.return <| th_st with arena= e';
                                  stack= push_empty_continuation sk;
                                  labels= Map.insert k cont th_st.labels

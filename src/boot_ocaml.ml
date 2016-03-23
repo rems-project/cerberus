@@ -19,5 +19,5 @@ let sort_assoc_list xs =
 let random_select xs =
 (*  Printf.printf "random_select >> %d\n" (List.length xs); *)
   if List.length xs > 1 then
-    Debug_ocaml.print_debug 1 ("CALLED ND.random_select (|xs| = " ^ string_of_int (List.length xs) ^ ")");
+    Debug_ocaml.print_debug 4 ("CALLED ND.random_select (|xs| = " ^ string_of_int (List.length xs) ^ ")");
   List.nth xs (Random.int (List.length xs))

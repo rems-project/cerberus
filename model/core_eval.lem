@@ -76,6 +76,61 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
   let strip (Pexpr _ pe_) = pe_ in
   let self pe = step_eval_pexpr loc mem_st file concur_sym_map inside_if pe in
   Pexpr bTy <$> match pexpr_ with
+    (* pulling the constrained up *)
+    | PEconstrained xs ->
+        EU.mapM (fun (constrs, pe) ->
+          self pe >>= fun pe' ->
+          EU.return (constrs, pe')
+        ) xs >>= fun xs' ->
+        let (constrs, pe') = List.unzip xs' in
+        match Maybe.map (List.map snd) (valueFromPexprs pe') with
+          | Just cvals ->
+              EU.return $ PEval (Vconstrained (List.zip constrs cvals))
+          | Nothing ->
+              EU.return $ PEconstrained (List.zip constrs pe')
+        end
+(*
+ | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
+ | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
+ | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
+ | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
+*)
+    | PEnot (Pexpr _ (PEconstrained xs)) ->
+        EU.return $ PEconstrained (
+          List.map (fun (constrs, pe) ->
+            (constrs, Core_aux.mk_not_pe pe)
+          ) xs
+        )
+    | PEop binop (Pexpr _ (PEconstrained xs)) pe2 ->
+        let () = Debug.print_debug 1 "PEop CONSTRAINED" in
+        EU.return $
+          PEconstrained (
+            List.map (fun (constrs, pe) ->
+              (constrs, Pexpr bTy (PEop binop pe pe2))
+            ) xs
+          )
+(*
+ | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
+ | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
+ | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
+ | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* pure Core let *)
+*)
+    | PEif (Pexpr _ (PEconstrained xs)) pe2 pe3 ->
+        EU.return $ PEconstrained (
+          List.map (fun (constrs, pe) ->
+            (constrs, Pexpr bTy (PEif pe pe2 pe3))
+          ) xs
+        )
+
+(*
+ | PEis_scalar of (generic_pexpr 'ty 'sym)
+ | PEis_integer of (generic_pexpr 'ty 'sym)
+ | PEis_signed of (generic_pexpr 'ty 'sym)
+ | PEis_unsigned of (generic_pexpr 'ty 'sym)
+*)
+
+
+
     | PEsym sym ->
 (*      if inside_if then
           EU.return pexpr
@@ -90,8 +145,10 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEval _ ->
         EU.return pexpr_
+(*
     | PEconstrained xs ->
         error "WIP: Core_Eval.step_eval_pexpr, PEconstrained"
+*)
     | PEundef ub ->
         Exception.return (Undefined.undef loc [ub])
     | PEerror str debug_pe ->
@@ -164,10 +221,6 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
               EU.return (PEval Vfalse)
           | PEval Vfalse ->
               EU.return (PEval Vtrue)
-(* TODO: OLD CONCUR
-          | PEval (Vobject (OVsymbolic symb)) ->
-              EU.return (PEval (Vobject (OVsymbolic (Symbolic.SYMBnot symb))))
-*)
           | PEval _ ->
               EU.fail (Illformed_program "PEnot: operand should be a boolean")
           | _ ->
@@ -187,8 +240,13 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
                 | Just b ->
                     EU.return (PEval (if b then Vtrue else Vfalse))
                 | Nothing ->
+(*
                     (* the current constraints allow both outcomes *)
-                    error ("WIP: symbolic integer_value equality")
+                    error ("WIP: symbolic integer_value equality ==> " ^
+                           Pp.stringFromCore_pexpr pe1' ^ " =?= " ^ Pp.stringFromCore_pexpr pe2')
+*)
+                    EU.return (PEconstrained [ ([Mem.constraint_eqIV ival1 ival2], Pexpr BTy_boolean (PEval Vtrue))
+                                             ; ([Mem.constraint_neIV ival1 ival2], Pexpr BTy_boolean (PEval Vfalse)) ])
               end
           
           | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -197,7 +255,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
                     EU.return (PEval (if b then Vtrue else Vfalse))
                 | Nothing ->
                     (* the current constraints allow both outcomes *)
-                    error ("WIP: symbolic integer_value less-than")
+                    error ("WIP: symbolic integer_value less-than ==> " ^ Pp.stringFromCore_pexpr pexpr)
               end
           
           | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -216,7 +274,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
                     EU.return (PEval (if b then Vtrue else Vfalse))
                 | Nothing ->
                     (* the current constraints allow both outcomes *)
-                    error ("WIP: symbolic integer_value greater_equal-than")
+                    error ("WIP: symbolic integer_value greater_equal-than ==> " ^ Pp.stringFromCore_pexpr pexpr)
               end
           
           | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -226,7 +284,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
                     EU.return (PEval (if b then Vtrue else Vfalse))
                 | Nothing ->
                     (* the current constraints allow both outcomes *)
-                    error ("WIP: symbolic integer_value greater-than")
+                    error ("WIP: symbolic integer_value greater-than ==> " ^ Pp.stringFromCore_pexpr pexpr)
               end
           
           | (_, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
