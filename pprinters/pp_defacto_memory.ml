@@ -66,6 +66,8 @@ and pp_shift_path sh =
 
 
 and pp_integer_value_base = function
+  | IVunspecified ->
+      !^ "IVunspecified"
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
   | IVaddress (Address (pref, n)) ->

@@ -121,6 +121,7 @@ val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
 (* Memory value destructor *)
 val case_mem_value: forall 'a.
   mem_value ->
+  (Core_ctype.ctype -> 'a) -> (* unspecified case *)
   (Symbolic.symbolic mem_value pointer_value -> 'a) ->
   (AilTypes.integerType -> integer_value -> 'a) ->
   (AilTypes.floatingType -> floating_value -> 'a) ->

@@ -1344,6 +1344,7 @@ let is_concrete_ival ival =
 
 (* Memory value constructors *)
 let symbolic_mval symb =
+  let () = Debug.print_debug 0 "Mem.symbolic_mval !!!!!" in
   MVsymbolic symb
 
 let unspecified_mval ty =
@@ -1376,8 +1377,15 @@ let union_mval tag_sym memb_ident mval =
 
 
 (* Memory value destructor *)
-let case_mem_value mval fsymb fival ffval fptrval farr fstruct funion =
+let case_mem_value mval funspec fsymb fival ffval fptrval farr fstruct funion =
   match mval with
+    | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
+        funspec (Pointer AilTypes.no_qualifiers ref_ty)
+    | MVinteger ity (IV _ IVunspecified) ->
+        funspec (Basic (AilTypes.Integer ity))
+    | MVfloating fty (FVunspecified) ->
+        funspec (Basic (AilTypes.Floating fty))
+    
     | MVsymbolic symb ->
         fsymb symb
     | MVinteger ity ival ->
@@ -2210,6 +2218,15 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
                 true
           end in
           Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w current_mval) st.allocations
+      | Just (alloc, Nothing) ->
+          (* TODO WIP hack *)
+          let is_strong = match alloc with
+            | Alloc_static _ _ ->
+                false
+            | Alloc_dynamic _ _ ->
+                true
+          end in
+          Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w mval) st.allocations
       | Nothing ->
           error "Mem.register_write_event, Nothing"
     end

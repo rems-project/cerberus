@@ -263,6 +263,8 @@ let rec symbolify_pattern _pat : pattern Eff.t =
     | CaseBase (Some (_sym, bTy)) ->
         register_sym _sym (Some bTy) >>= fun sym ->
         Eff.return (CaseBase (Some (sym, bTy)))
+
+(*
     | CaseCtor (Cnil (), []) ->
         failwith "Eff.return (CaseCtor (Cnil bTy', []))"
     | CaseCtor (Ccons, [_pat1; _pat2]) ->
@@ -289,6 +291,10 @@ let rec symbolify_pattern _pat : pattern Eff.t =
     | CaseCtor (Cunspecified, [_pat]) ->
         symbolify_pattern _pat >>= fun pat ->
         Eff.return (CaseCtor (Cunspecified, [pat]))
+*)
+    | CaseCtor (_ctor, _pats) ->
+        Eff.mapM symbolify_pattern _pats >>= fun pat ->
+        Eff.return (CaseCtor (convert_ctor _ctor, pat))
     | _ ->
         failwith "WIP: symbolify_pattern"
 
@@ -418,12 +424,22 @@ let rec symbolify_pexpr expected_bTy (Pexpr ((), _pexpr): parsed_pexpr) : pexpr 
     | PEctor (Civalignof, [_pe]) ->
         symbolify_pexpr BTy_ctype _pe >>= fun pe ->
         Eff.return (Pexpr (BTy_object OTy_integer, PEctor (Civalignof, [pe])))
-    | PEctor (Cspecified, _pes) ->
-        failwith "WIP: PEctor Cspecified"
-    | PEctor (Cunspecified, _pes) ->
-        failwith "WIP: PEctor Cunspecified"
+    | PEctor (Cspecified, [_pe]) ->
+        symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*) _pe >>= fun pe ->
+        Eff.return (Pexpr (expected_bTy, PEctor (Cspecified, [pe])))
+    | PEctor (Cunspecified, [_pe]) ->
+        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
+        Eff.return (Pexpr (expected_bTy, PEctor (Cunspecified, [pe])))
     | PEcase (_pe, _pat_pes) ->
-        failwith "WIP: PEcase"
+        symbolify_pexpr BTy_unit(* WIP: TYPE IS WRONG*) _pe >>= fun pe ->
+        Eff.mapM (fun (_pat, _pe) ->
+          under_scope (
+            symbolify_pattern _pat >>= fun pat ->
+            symbolify_pexpr BTy_unit(* WIP: TYPE IS WRONG*) _pe >>= fun pe ->
+            Eff.return (pat, pe)
+          )
+        ) _pat_pes >>= fun pat_pes ->
+        Eff.return (Pexpr (expected_bTy, PEcase (pe, pat_pes)))
     | PEarray_shift (_pe1, ty, _pe2) ->
         symbolify_pexpr (BTy_object OTy_pointer) _pe1 >>= fun pe1 ->
         symbolify_pexpr (BTy_object OTy_integer) _pe2 >>= fun pe2 ->

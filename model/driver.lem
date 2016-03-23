@@ -913,13 +913,9 @@ let action_request_concurrency dr_st = function
         trace= "store" :: dr_st.trace
       |>
   
-  | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in
-      ND.return <| dr_st with
-        core_state= update_thread_state tid th_st' dr_st.core_state;
-        (* TODO: the kill ... *)
-      |>
-
+  | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st ->
+      error "FenceRequest: action_request_concurrency"
+  
   | RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
 (*
       let preEx_step = <|
@@ -937,6 +933,13 @@ let action_request_concurrency dr_st = function
       |>
 *)
       error "WIP: Driver ==> RMWRequest"
+
+  | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in
+      ND.return <| dr_st with
+        core_state= update_thread_state tid th_st' dr_st.core_state;
+        (* TODO: the kill ... *)
+      |>
 
 (*
   | StoreRequest sb_edges dd_edges asw_edges aid tid mo ty ptr_val mem_val core_st' ->
@@ -1066,7 +1069,13 @@ let action_request_sequential dr_st = function
   
   | RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
       error "WIP: Driver.seq ==> RMWRequest"
-
+  
+  | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
+      let () = Debug.print_debug_located 3 loc "REQUEST FENCE" in
+      ND.return <| dr_st with
+        core_state= update_thread_state tid th_st' dr_st.core_state;
+      |>
+  
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
       let () = Debug.print_debug_located 3 loc "REQUEST KILL" in
       ND.return <| dr_st with
@@ -1459,7 +1468,7 @@ let driver_globals with_concurrency sym_supply file =
       core_state=
         update_thread_state tid0 <|
           arena=  List.foldl (fun acc (sym', pe) ->
-                    if sym <> sym' then Core_aux.subst_sym sym' pe acc else acc
+                    if sym <> sym' then Core_aux.subst_sym_expr sym' pe acc else acc
                   ) e to_subst;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty;
