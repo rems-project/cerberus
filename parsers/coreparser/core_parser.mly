@@ -514,8 +514,9 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
      symbolify_pexpr (BTy_object OTy_cfunction) _pe >>= fun pe ->
      Eff.mapM (symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*)) _pes >>= fun pes ->
      Eff.return (Eproc ((), pe, pes))
- | Ereturn _pes ->
-     failwith "WIP: Ereturn"
+ | Ereturn _pe ->
+     symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*) _pe >>= fun pe ->
+     Eff.return (Ereturn pe)
  | Eunseq _es ->
      failwith "WIP: Eunseq"
  | Ewseq (_pat, _e1, _e2) ->
@@ -540,7 +541,8 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Erun _ ->
      failwith "WIP: Erun"
  | Epar _es ->
-     failwith "WIP: Epar"
+     Eff.mapM symbolify_expr _es >>= fun es ->
+     Eff.return (Epar es)
  | Ewait tid ->
      failwith "WIP: Ewait"
  | Eloc (loc, _e) ->

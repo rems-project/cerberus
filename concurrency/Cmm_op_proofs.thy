@@ -2369,7 +2369,7 @@ proof -
   have prefixes_final: "selective_prefixes_are_final (is_na_or_non_write pre) actions (getHb pre wit) (getHb ?pre' ?wit')"
     using hbCalcIsFinalForPrefixes downclosed_rf downclosed_mo 
           downclosed_sbMinus selective_downclosed trans_sb dd_subset_sb
-    unfolding hbCalcIsFinalForPrefixes_def  
+    unfolding hbCalcIsFinalForPrefixes_def hbMinus_def 
     by auto
 
   have hbSubset: "getHb ?pre' ?wit' \<subseteq> getHb pre wit"

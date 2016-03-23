@@ -799,7 +799,8 @@ let rec subst_wait tid v = function
    | Ewait tid' ->
        if tid = tid' then
          if v <> Vunit then
-           error "TODO CONCUR: Core_aux.subst_wait ==> v <> Vunit"
+(*           error "TODO CONCUR: Core_aux.subst_wait ==> v <> Vunit" *)
+           Epure (Pexpr BTy_unit(*TODO TYPE IS WRONG*) (PEval v))
          else
            Epure (Pexpr BTy_unit (PEval Vunit))
        else
