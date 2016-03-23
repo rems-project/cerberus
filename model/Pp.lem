@@ -1,0 +1,32 @@
+import Symbol
+import AilSyntax AilTypes
+import Core Core_ctype
+
+
+val stringFromSymbol_prefix: Symbol.prefix -> string
+
+declare ocaml target_rep function stringFromSymbol_prefix = `String_symbol.string_of_prefix`
+
+
+val stringFromAil_ctype:      AilTypes.ctype -> string
+val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
+
+declare ocaml target_rep function stringFromAil_ctype = `String_ail.string_of_ctype_raw`
+declare ocaml target_rep function stringFromAil_expression = `String_ail.string_of_expression`
+
+
+val stringFromCore_ctype:  Core_ctype.ctype -> string
+val stringFromCore_value:  Core.value -> string
+val stringFromCore_pexpr:  Core.pexpr -> string
+val stringFromCore_expr:   forall 'a. Core.expr 'a -> string
+val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) -> string
+val stringFromCore_file:   forall 'a. Core.file 'a -> string
+val stringFromCore_stack:  forall 'a. Core.stack 'a -> string
+
+declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
+declare ocaml target_rep function stringFromCore_value  = `String_core.string_of_value`
+declare ocaml target_rep function stringFromCore_pexpr  = `String_core.string_of_pexpr`
+declare ocaml target_rep function stringFromCore_expr   = `String_core.string_of_expr`
+declare ocaml target_rep function stringFromCore_params = `String_core.string_of_params`
+declare ocaml target_rep function stringFromCore_file   = `String_core.string_of_file`
+declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`

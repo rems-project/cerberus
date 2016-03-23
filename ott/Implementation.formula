@@ -1,0 +1,12 @@
+  | P |= isCharSigned :: :: IsCharSigned
+      {{ coq Implementation.isCharSigned [[P]] = true }}
+  | P |= size_t = ty :: M :: SizeT
+      {{ coq Implementation.size_t [[P]] = [[ty]] }}
+  | P |= ptrdiff_t = ty :: M :: PtrdiffT
+      {{ coq Implementation.ptrdiff_t [[P]] = [[ty]] }}
+  | P |= it1 <precision it2 :: M :: LtPrecision
+      {{ coq (precision [[P]] [[it1]] < precision [[P]] [[it2]])%Z }}
+  | P |= size ty = n :: M :: TypeSize
+      {{ coq Implementation.size [[P]] = [[ty]] }}
+  | P |= isNull s n :: M :: IsNull
+      {{ coq Implementation.isNull [[P]] [[s]] [[n]] = true }}

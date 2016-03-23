@@ -1,0 +1,13 @@
+(* TODO: get rid of this module? *)
+open import Pervasives
+
+val nat_of_string: string -> natural
+declare ocaml target_rep function nat_of_string = `Nat_big_int.of_string`
+
+val begin_timing: string -> unit
+declare ocaml target_rep function begin_timing = `Debug_ocaml.begin_timing`
+
+val end_timing: unit -> unit
+declare ocaml target_rep function end_timing = `Debug_ocaml.end_timing`
+
+
