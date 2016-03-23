@@ -1,0 +1,35 @@
+
+
+
+
+§6.5.1    primary-expression          OK
+§6.5.1.1  generic-selection           OK
+§6.5.1.1  generic-assoc-list          OK
+§6.5.1.1  generic-association         OK
+§6.5.2    postfix-expression          OK
+§6.5.2    argument-expression-list    OK
+§6.5.3    unary-expression            OK
+§6.5.3    unary-operator              OK
+§6.5.4    cast-expression             OK
+§6.5.5    multiplicative-expression   OK
+
+
+§6.8    statement               OK (MODIFIED to remove conflict)
+§6.8.1  label-statement         OK (MODIFIED to remove conflict)
+§6.8.2  compound-statement      OK
+§6.8.2  block-item-list         OK (NOTE: semantic value in reverse)
+§6.8.2  block-item              OK (MODIFIED to remove conflict)
+§6.8.3  expression_statement    OK
+§6.8.4  selection-statement     OK (MODIFIED to remove conflict)
+§6.8.5  iteration-statement     OK (MODIFIED to remove conflict)
+§6.8.6  jump-statement          OK
+
+
+§6.9    translation-unit        OK
+§6.9    external-declaration    OK
+§6.9.1  function_definition     OK (PARTIAL: not doing K&R)
+§6.9.1  declaration_list        TODO (K&R)
+
+
+
+
