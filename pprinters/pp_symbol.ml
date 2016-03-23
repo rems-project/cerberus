@@ -9,7 +9,7 @@ let to_string (Symbol (n, str_opt)) =
 let to_string_pretty (Symbol (n, name_opt) as s) =
   match name_opt with
     | Some name ->
-        if !Debug.debug_level > 4 then
+        if !Debug_ocaml.debug_level > 4 then
           name ^ "{" ^ string_of_int n ^ "}"
         else
           name

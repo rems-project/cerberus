@@ -1,6 +1,6 @@
 open import Pervasives Cabs Std Show Show_extra
 open import Global
-import Boot Loc Errors Scope_table State_exception UniqueId Symbol
+import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
 
@@ -174,7 +174,7 @@ type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: UniqueId.supply nat;
   (* Counter for the symbol generator *)
-  symbol_supply: UniqueId.supply Symbol.t;
+  symbol_supply: UniqueId.supply Symbol.sym;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   
   (* IMPORTANT: the two scope tables must be updated in sync *)
@@ -287,7 +287,7 @@ let get_scope =
 val with_scope: forall 'a. scope -> t 'a -> t (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
-    let _ = Boot.print_debug 2 ("ENTERING Scope: " ^ string_of_scope scope) in
+    let () = Debug.print_debug 2 ("ENTERING Scope: " ^ string_of_scope scope) in
     
     <| st with registered_identifiers=      Scope_table.create_scope scope st.registered_identifiers;
 (*               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations *) |> 
@@ -297,7 +297,7 @@ let with_scope scope m =
     let (idents_map, ident_table'  ) = Scope_table.destroy_scope st.registered_identifiers      in
 (*    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in *)
     
-    let _ = Boot.print_debug 2 ("EXITING Scope: " ^ string_of_scope scope) in
+    let () = Debug.print_debug 2 ("EXITING Scope: " ^ string_of_scope scope) in
     
     (Set_helpers.fold (fun (sym, kind, _) acc ->
       match kind with
@@ -354,7 +354,7 @@ let initial_state n = <|
   is_inside_switch= false;
 |>
 
-val eval: forall 'a. nat -> t 'a -> Exception.t (UniqueId.supply Symbol.t * 'a) Errors.t
+val eval: forall 'a. nat -> t 'a -> Exception.t (UniqueId.supply Symbol.sym * 'a) Errors.t
 let eval n m =
   State_exception.eval (
     m                                                 >>= fun res    ->
@@ -402,11 +402,11 @@ val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> lin
 let _register_identifier ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Boot.print_debug 7 ("DESUGARING, attempting to register identifier `" ^ show ident ^
-                        "' with scope= " ^ string_of_scope sc ^
-                        " with namespace= " ^ show namespace ^
-                        ", kind= " ^ show kind ^
-                        ", linkage= " ^ show link)
+    Debug.print_debug 7 ("DESUGARING, attempting to register identifier `" ^ show ident ^
+                         "' with scope= " ^ string_of_scope sc ^
+                         " with namespace= " ^ show namespace ^
+                         ", kind= " ^ show kind ^
+                         ", linkage= " ^ show link)
   ) >>
   
   let do_fresh =
@@ -536,7 +536,7 @@ let register_tag loc tag_ident_opt =
 
 val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> t unit
 let register_tag_definition loc tag_sym tag_decl =
-  let _ = Boot.print_debug 5 ("REGISTERING TAG: " ^ show tag_sym) in
+  let () = Debug.print_debug 5 ("REGISTERING TAG: " ^ show tag_sym) in
   State_exception.read (fun st ->
     Map.member tag_sym st.tag_definitions
   ) >>= function
@@ -708,7 +708,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Boot.print_debug 8 ("DESUGAR: registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 8 ("DESUGAR: registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -731,7 +731,7 @@ val register_function_declaration: Loc.t -> A.identifier -> bool -> (ATypes.ctyp
 let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
   let string_of_decl (ty, xs, _, _, _) =
-    Boot.pp_ail_ctype ty ^ "(" ^ stringFromList (stringFromPair (fun _ -> "") Boot.pp_ail_ctype) xs ^ ")" in
+    Pp.stringFromAil_ctype ty ^ "(" ^ stringFromList (stringFromPair (fun _ -> "") Pp.stringFromAil_ctype) xs ^ ")" in
   
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
@@ -744,8 +744,8 @@ let register_function_declaration loc sym is_proto decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          let () = Boot.print_debug 8 ("DESUGAR: registering function declaration of '" ^ show sym ^
-                                       (if is_proto then "' with PROTOTYPE" else "'")) in
+          let () = Debug.print_debug 8 ("DESUGAR: registering function declaration of '" ^ show sym ^
+                                        (if is_proto then "' with PROTOTYPE" else "'")) in
           <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
         )
   end
@@ -755,7 +755,7 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
 let register_external_object_declaration sym decl =
   return (
-    Boot.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
+    Debug.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
   ) >>
   
   State_exception.read (fun st ->
@@ -766,7 +766,7 @@ let register_external_object_declaration sym decl =
           (* TODO: msg and location *)
           fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
-          let _ = Boot.print_debug 7 ("DESUGARING found a valid redeclaration of `" ^ show sym ^ "'") in
+          let () = Debug.print_debug 7 ("DESUGARING found a valid redeclaration of `" ^ show sym ^ "'") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
@@ -877,7 +877,7 @@ let perform_inside_loop m =
 val add_used_identifier: A.identifier -> t unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
-    let _ = Boot.print_debug 2 "USED IDENTIFIER" in
+    let () = Debug.print_debug 2 "USED IDENTIFIER" in
     <| st with used_identifier= Global.list_insert sym st.used_identifier |>
   )
 
@@ -980,7 +980,7 @@ let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) ->
         State_exception.read (fun st ->
-          let _ = Boot.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
+          let () = Debug.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
           let decls = Map_extra.toList (
             map_union
               (Map.map (fun (has_proto, (ty, params, b1, b2, b3)) -> A.Decl_function has_proto ty params b1 b2 b3) st.function_declarations)
@@ -1013,5 +1013,5 @@ let extract_program startup_str =
 
 val print_debug: nat -> string -> t unit
 let print_debug n msg =
-  let _ = Boot.print_debug n msg in
+  let () = Debug.print_debug n msg in
   return ()

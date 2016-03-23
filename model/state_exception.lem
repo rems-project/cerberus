@@ -64,11 +64,11 @@ let rec foldlM f l a =
     | x::xs -> f x a >>= foldlM f xs
   end
 
-let rec foldrM f l a =
-  match l with
-    | [] -> return a
-    | x::xs -> foldrM f xs a >>= f x
-  end
+val     foldrM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'b 's 'msg) -> 'b -> list 'a -> t 'b 's 'msg
+let rec foldrM f a = function
+  | [] -> return a
+  | x::xs -> foldrM f a xs >>= f x
+end
 
 let iter f l = foldlM (fun a () -> f a) l ()
 

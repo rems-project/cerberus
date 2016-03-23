@@ -3,7 +3,7 @@ open import Global Pervasives Cabs AilSyntax Std
 open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 
-import Boot Cabs Multiset Decode UniqueId
+import Debug Pp Cabs Multiset Decode UniqueId
 import AilSyntaxAux AilTypes AilTypesAux Builtins
 
 
@@ -116,7 +116,7 @@ end
 
 val inject_qualifiers: ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)
 let inject_qualifiers qs ty =
-  let () = Boot.print_debug 2 ("INJECTING " ^ stringFromQualifiers qs ^ " INTO " ^ Boot.pp_ail_ctype ty) in
+  let () = Debug.print_debug 2 ("INJECTING " ^ stringFromQualifiers qs ^ " INTO " ^ Pp.stringFromAil_ctype ty) in
   inject_qualifiers_aux qs ty
 
 
@@ -333,7 +333,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () loc
         if not (AilTypesAux.is_arithmetic ty) then
           E.return false
         else
-          let () = Boot.print_debug 0 "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e..." in
+          let () = Debug.print_debug 0 "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e..." in
           E.return true
         
     | _ ->
@@ -1256,7 +1256,7 @@ and desugar_expression (CabsExpression loc expr) =
   match expr with
     | CabsEident ident ->
         let (CabsIdentifier _ str) = ident in (* DEBUG *)
-        let _ = Boot.print_debug 2 ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
+        let () = Debug.print_debug 2 ("DESUGARING, CabsEident: " ^ str) in (* DEBUG *)
 _STD "§6.5.1#2" $
         E.resolve_identifier ident E.Namespace_ordinary >>= function
           | Just (_, (id, E.Kind_member E.Kind_enum, _)) ->
@@ -1581,7 +1581,7 @@ and desugar_array_declarator is_under_array a_decltor =
     | ADecl loc tquals _ Nothing ->
         (* E.fail loc (Errors.Desugar_NotyetSupported "array type with no size") *)
         let qs = translate_type_qualifiers tquals in
-        let () = Boot.print_debug 2 ("ADecl ==> " ^ stringFromQualifiers qs) in
+        let () = Debug.print_debug 2 ("ADecl ==> " ^ stringFromQualifiers qs) in
         E.return (fun ty -> ATypes.Array (snd $ inject_qualifiers qs ty) Nothing) (* TODO: check *)
     
     | ADecl loc _ _ (Just ADeclSize_asterisk) ->
@@ -1642,8 +1642,8 @@ and desugar_pointer_declarator ptr_decltor =
         maybe (E.return (ATypes.no_qualifiers, id))
           desugar_pointer_declarator ptr_decltor_opt >>= fun (ptr_qs, mk_ty) ->
         let ref_qs = translate_type_qualifiers tquals in
-        let () = Boot.print_debug 2 ("PDecl ====> ref_qs= " ^ stringFromQualifiers ref_qs) in
-        let () = Boot.print_debug 2 ("PDecl ====> ptr_qs= " ^ stringFromQualifiers ptr_qs) in
+        let () = Debug.print_debug 2 ("PDecl ====> ref_qs= " ^ stringFromQualifiers ref_qs) in
+        let () = Debug.print_debug 2 ("PDecl ====> ptr_qs= " ^ stringFromQualifiers ptr_qs) in
         E.return (ptr_qs, fun ty -> mk_ty (ATypes.Pointer ref_qs ty))
   end
 
@@ -1704,7 +1704,7 @@ and desugar_abstract_declarator is_under_array abs_decltor =
           desugar_pointer_declarator ptr_decltor_opt >>= fun (qs, mk_ptr_ctype) ->
         desugar_direct_abstract_declarator is_under_array dabs_decltor >>= fun mk_ty ->
 (*        E.return (fun ty -> mk_ty (mk_ptr_ctype ty)) *)
-          let () = Boot.print_debug 2 ("AbsDecl_direct ====> " ^ stringFromQualifiers qs) in
+          let () = Debug.print_debug 2 ("AbsDecl_direct ====> " ^ stringFromQualifiers qs) in
         E.return (fun ty -> mk_ty (snd $ inject_qualifiers qs (mk_ptr_ctype ty)))
   end
 
@@ -1763,7 +1763,7 @@ OTHER
 
 
 and static_thread_implicit_initializer tagDefs ty =
-  let _ = Boot.print_debug 8 ("ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Boot.pp_ail_ctype ty) in
+  let () = Debug.print_debug 8 ("ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromAil_ctype ty) in
 
   match ty with
     | ATypes.Pointer _ _ ->
@@ -1772,7 +1772,7 @@ and static_thread_implicit_initializer tagDefs ty =
         if AilTypesAux.is_arithmetic ty then
           ConstantInteger (IConstant 0 Octal Nothing)
         else
-          error ("type error 1: " ^ Boot.pp_ail_ctype ty)
+          error ("type error 1: " ^ Pp.stringFromAil_ctype ty)
     | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
@@ -1793,7 +1793,7 @@ and static_thread_implicit_initializer tagDefs ty =
         end
 
     | _ ->
-        error ("type error 2: " ^ Boot.pp_ail_ctype ty)
+        error ("type error 2: " ^ Pp.stringFromAil_ctype ty)
 (*
     | Function ty qs_tys is_variadic ->
         
@@ -2139,19 +2139,19 @@ let desugar_declaration_base specifs idecltors =
           E.foldrM (fun (ident, qs, ty, d_e_opt) acc ->
             (* TODO!!!: do something with qs *)
             let base_qs = translate_type_qualifiers specifs.type_qualifiers in
-            let _ = Boot.print_debug 2
+            let () = Debug.print_debug 2
               (if base_qs.ATypes.const then "FOUND CONST" else "DIDN'T FIND CONST") in (* DEBUG *)
             
             
-            let _ = Boot.print_debug 2 $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
+            let () = Debug.print_debug 2 $ "BEFORE_INJECT " ^ Pp.stringFromAil_ctype ty in
             let (qs', ty') = inject_qualifiers base_qs ty in
 (*
             if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
               error "TODO: desugar_declaration_base: is this case legal?"
             else
 *) (* KKK PLDI *)
-              let _ = Boot.print_debug 2 ("AA> " ^ Boot.pp_ail_ctype ty) in (* DEBUG *)
-              let _ = Boot.print_debug 2 ("BB> " ^ Boot.pp_ail_ctype ty') in (* DEBUG *)
+              let () = Debug.print_debug 2 ("AA> " ^ Pp.stringFromAil_ctype ty) in (* DEBUG *)
+              let () = Debug.print_debug 2 ("BB> " ^ Pp.stringFromAil_ctype ty') in (* DEBUG *)
               
               if specifs.storage_classes = [SC_typedef] then
                 (* Case of a typedef *)
@@ -2184,7 +2184,7 @@ let desugar_declaration_base specifs idecltors =
                           E.return acc
                     end
               end
-          ) xs []
+          ) [] xs
 
 
 (*
@@ -2495,7 +2495,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                           E.return (acc1, acc2)
                     end
               end
-            ) (List.reverse xs) ([], []) >>= fun (sym_d_es, bs) ->
+            ) ([], []) (List.reverse xs) >>= fun (sym_d_es, bs) ->
             
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
@@ -2782,12 +2782,12 @@ let desugar_and_register_external_declaration edecl =
           E.mapM_ (fun (ident, qs, ty, d_e_opt) ->
             (* TODO!!!: do something with qs *)
             let base_qs = translate_type_qualifiers specifs.type_qualifiers in
-            let _ = Boot.print_debug 2 (show ident ^ " base_qs = " ^ stringFromQualifiers base_qs) in (* DEBUG *)
+            let () = Debug.print_debug 2 (show ident ^ " base_qs = " ^ stringFromQualifiers base_qs) in (* DEBUG *)
             
             
-            let _ = Boot.print_debug 2 $ "BEFORE_INJECT " ^ Boot.pp_ail_ctype ty in
+            let () = Debug.print_debug 2 $ "BEFORE_INJECT " ^ Pp.stringFromAil_ctype ty in
             let (qs', ty') = inject_qualifiers base_qs ty in
-            let _ = Boot.print_debug 2 $ "AFTER_INJECT " ^ stringFromQualifiers qs' ^ " <|> " ^ Boot.pp_ail_ctype ty' in
+            let () = Debug.print_debug 2 $ "AFTER_INJECT " ^ stringFromQualifiers qs' ^ " <|> " ^ Pp.stringFromAil_ctype ty' in
 
 (*
             if not (AilTypesAux.is_unqualified qs) && not (AilTypesAux.is_unqualified qs') then
@@ -2831,7 +2831,7 @@ let desugar_and_register_external_declaration edecl =
     end
 
 
-val desugar: nat -> string -> translation_unit -> Exception.t (UniqueId.supply Symbol.t * program unit) Errors.t
+val desugar: nat -> string -> translation_unit -> Exception.t (UniqueId.supply Symbol.sym * program unit) Errors.t
 let desugar sym_counter startup_str (TUnit edecls) =
   E.eval sym_counter (
     E.with_scope E.Scope_file (

@@ -46,7 +46,7 @@ type cerberus_conf = {
   pps:               language list;
   core_stdlib:       unit Core.fun_map;
   core_impl_opt:     Core.impl option;
-  core_parser:       Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3;
+  core_parser:       Input.t -> (Core_parser_util.result, Errors.t5) Exception.t2;
   exec_mode_opt:     execution_mode option;
   compile:           bool;
   progress:          bool;
@@ -104,7 +104,7 @@ let progress_sofar = ref 1
 (* some block functions used by the pipeline *)
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
-let pass_message      msg = Exception.fmap (fun v -> Debug.print_success msg; v)
+let pass_message      msg = Exception.fmap (fun v -> Debug_ocaml.print_success msg; v)
 let return_none m         = Exception.bind2 m (fun _ -> Exception.return2 None)
 let return_empty m        = Exception.bind2 m (fun _ -> Exception.return2 [])
 

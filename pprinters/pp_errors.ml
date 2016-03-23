@@ -253,9 +253,10 @@ let std_ref = function
       "TODO: core_run_cause"
   | Core_typing ->
       "TODO: core typing"
+  | PARSER str ->
+      "TODO: parsing error ==> " ^ str
   | _ ->
-      "TODO: pp_erors std_ref"
-
+      "TODO: pp_errors std_ref"
 
 
 let short_message = function
