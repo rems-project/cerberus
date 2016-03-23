@@ -37,8 +37,8 @@ typedef enum memory_order {
 // type kill_dependency(type y);
 
 
-void atomic_thread_fence(memory_order order);
-void atomic_signal_fence(memory_order order);
+#define atomic_thread_fence(order)    __cerbvar_atomic_thread_fence(order)
+#define atomic_signal_fence(order)    __cerbvar_atomic_signal_fence(order)
 
 
 #define atomic_is_lock_free(obj)    __cerbvar_atomic_is_lock_free(sizeof(obj))

@@ -49,7 +49,6 @@ let precedence = function
   | PEmember_shift _
   | PEnot _
   | PEstruct _
-  | PEunion _
   | PEcall _
   | PElet _
   | PEif _
@@ -94,7 +93,7 @@ let rec pp_core_base_type = function
   | BTy_object bty ->
       pp_core_object_type bty
   | BTy_loaded bty ->
-      !^ "loaded" ^^^ pp_core_object_type bty
+      !^ "loaded" ^^ pp_core_object_type bty
   | BTy_boolean    -> !^ "boolean"
   | BTy_ctype      -> !^ "ctype"
   | BTy_unit       -> !^ "unit"
@@ -145,13 +144,13 @@ let pp_name = function
 
 
 let pp_memory_order = function
-  | Cmm_csem.NA      -> !^ "NA"
-  | Cmm_csem.Seq_cst -> pp_keyword "seq_cst"
-  | Cmm_csem.Relaxed -> pp_keyword "relaxed"
-  | Cmm_csem.Release -> pp_keyword "release"
-  | Cmm_csem.Acquire -> pp_keyword "acquire"
-  | Cmm_csem.Consume -> pp_keyword "consume"
-  | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
+  | Cmm.NA      -> !^ "NA"
+  | Cmm.Seq_cst -> pp_keyword "seq_cst"
+  | Cmm.Relaxed -> pp_keyword "relaxed"
+  | Cmm.Release -> pp_keyword "release"
+  | Cmm.Acquire -> pp_keyword "acquire"
+  | Cmm.Consume -> pp_keyword "consume"
+  | Cmm.Acq_rel -> pp_keyword "acq_rel"
   
 
 let pp_mem_addr (pref, addr) =
@@ -229,9 +228,9 @@ let rec pp_value = function
   | Vunit ->
       pp_const "unit"
   | Vtrue ->
-      pp_const "True"
+      pp_const "true"
   | Vfalse ->
-      pp_const "False"
+      pp_const "false"
   | Vlist (_, cvals) ->
       P.brackets (comma_list pp_value cvals)
   | Vtuple cvals ->
@@ -239,9 +238,9 @@ let rec pp_value = function
   | Vctype ty ->
       P.dquotes (Pp_core_ctype.pp_ctype ty)
   | Vunspecified ty ->
-      pp_const "Unspecified" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
-  | Vspecified oval ->
-      pp_const "Specified" ^^ P.parens (pp_object_value oval)
+      pp_const "unspec" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+  | Vloaded oval ->
+      pp_const "loaded" ^^ P.parens (pp_object_value oval)
   | Vobject oval ->
       pp_object_value oval
 
@@ -262,8 +261,8 @@ let pp_ctor = function
       !^ "Ivsizeof"
   | Civalignof ->
       !^ "Ivalignof"
-  | Cspecified ->
-      !^ "Specified"
+  | Cloaded ->
+      !^ "Loaded"
   | Cunspecified ->
       !^ "Unspecified"
 
@@ -271,8 +270,8 @@ let pp_ctor = function
 let rec pp_pattern = function
   | CaseBase None ->
       P.underscore
-  | CaseBase (Some (sym, bTy)) ->
-      pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
+  | CaseBase (Some sym) ->
+      pp_symbol sym
 (* Syntactic sugar for tuples and lists *)
   | CaseCtor (Ctuple, pats) ->
       P.parens (comma_list pp_pattern pats)
@@ -332,14 +331,10 @@ let pp_pexpr pe =
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
 *)
         | PEstruct (tag_sym, xs) ->
-            P.parens (pp_keyword "struct" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              comma_list (fun (ident, pe) ->
-                P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe
+            pp_keyword "struct" ^^ P.parens (
+              pp_symbol tag_sym ^^ P.comma ^^^ comma_list (
+                (fun (ident, pe) -> Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe)
               ) xs
-            )
-        | PEunion (tag_sym, member_ident, pe) ->
-            P.parens (pp_keyword "union" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_cabs.pp_cabs_identifier member_ident ^^ P.equals ^^^ pp pe
             )
 (*
         | PEarray xs -> (* of ( (Mem.mem_value, sym)Either.either) list *)
@@ -399,14 +394,8 @@ let rec pp_expr = function
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
       P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
       pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3)
-  | Ecase (pe, pat_es) ->
-      pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
-      P.nest 2 (
-        P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
-          P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle ^^^
-          pp_expr e
-        ) pat_es 
-      ) ^^ P.break 1 ^^ pp_keyword "end"
+  | Ecase _ ->
+      failwith "Ecase"
   | Eproc (_, pe, pes) ->
       !^ "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
   | Eaction (Paction (p, (Action (_, bs, act)))) ->
@@ -450,7 +439,7 @@ let rec pp_expr = function
       pp_expr e2
 *)
   | Ewseq (pat, e1, e2) ->
-      pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_control "letw" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2)
 (*
@@ -460,7 +449,7 @@ let rec pp_expr = function
       pp_expr e2
 *)
   | Esseq (pat, e1, e2) -> 
-      pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_control "lets" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2)
   | Easeq (None, act1, pact2) ->
@@ -498,7 +487,7 @@ and pp_shift_path sh_path =
 
 and pp_action act =
   let pp_args args mo =
-    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)
@@ -515,8 +504,6 @@ and pp_action act =
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | Fence0 mo ->
-        pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
 (*
     | Ptr (ptr_act, es) ->
        pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)
@@ -544,7 +531,7 @@ let std = [
 ]
 
 let symbol_compare =
-  Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
+  Symbol.instance_Basic_classes_Ord_Symbol_t_dict.compare_method
 
 
 
@@ -614,7 +601,7 @@ let pp_file file =
   isatty := Unix.isatty Unix.stdout;
   
   begin
-    if Debug_ocaml.get_debug_level () > 1 then
+    if Debug.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
         pp_fun_map file.stdlib ^^ P.break 1 ^^
@@ -634,34 +621,3 @@ let pp_file file =
   List.fold_left pp_glob P.empty file.globs ^^
   pp_fun_map file.funs
   end
-
-
-(* Runtime stuff *)
-let mk_pp_continuation_element cont_elem = fun z ->
-  match cont_elem with
-    | Kunseq (es1, es2) ->
-        pp_control "unseq" ^^ P.parens (
-          comma_list pp_expr es1 ^^ P.comma ^^^ z ^^ P.comma ^^^ comma_list pp_expr es2
-        )
-    | Kwseq (pat, e2) ->
-        pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
-        pp_control "in" ^^^ pp_expr e2
-    | Ksseq (pat, e2) ->
-        pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
-        pp_control "in" ^^^ pp_expr e2
-
-let rec pp_continuation = function
-  | [] ->
-      !^ "[]"
-  | cont_elem :: cont ->
-      (mk_pp_continuation_element cont_elem) (pp_continuation cont)
-
-
-
-
-(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a
-
-type stack 'a =
-  | Stack_empty
-  | Stack_cons of continuation 'a * stack 'a
-*)

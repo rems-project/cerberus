@@ -12,7 +12,7 @@ open import Core_run Core_run_aux
 
 type driver_state = <|
   (* Dynamic but non-semantic stuff *)
-  symbol_supply:     UniqueId.supply Symbol.sym;
+  symbol_supply:     UniqueId.supply Symbol.t;
   core_run_state:    core_run_state;   (* state of the core evaluator *)
   (* DEBUG *)
   trace: list string;

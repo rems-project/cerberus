@@ -1,5 +1,9 @@
 open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
-import Debug Loc
+import Loc
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
 
 let unatomic = function
   | Atomic ty ->
@@ -323,7 +327,7 @@ let is_complete S ty =
         | Just (StructDef _) ->
             true
         | _ ->
-            let _ = Debug.print_debug 5 ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show S.tag_definitions) in
+            let _ = print_debug 5 ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show S.tag_definitions) in
             false
       end
   | Union sym ->

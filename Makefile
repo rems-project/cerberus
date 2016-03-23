@@ -19,8 +19,7 @@ else
 endif
 
 LEM0=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
-	-only_changed_output
- #       -report_default_instance_invocation -only_changed_output 
+        -only_changed_output 
 
 LEM=$(LEM0) -outdir $(BUILD_DIR) -add_loc_annots
 
@@ -34,101 +33,96 @@ CMM_EXEC_DIR=concurrency
 CMM_EXEC_LEM =\
   cmm_op.lem
 
-include Makefile-source
+SOURCE_utils=\
+  boot.lem \
+  decode.lem \
+  dlist.lem \
+  driver_util.lem \
+  enum.lem \
+  errors.lem \
+  exception.lem \
+  exception_undefined.lem \
+  global.lem \
+  loc.lem \
+  multiset.lem \
+  product.lem \
+  state_exception.lem \
+  state_exception_undefined.lem \
+  state.lem \
+  state_operators.lem \
+  symbol.lem \
+  thread.lem \
+  uniqueId.lem \
+  std.lem \
+  monadic_parsing.lem \
+  output.lem
 
+SOURCE_cabs=\
+  cabs.lem \
+  undefined.lem 
 
-# SOURCE_utils=\
-#   debug.lem \
-#   boot.lem \
-#   decode.lem \
-#   dlist.lem \
-#   driver_util.lem \
-#   enum.lem \
-#   errors.lem \
-#   exception.lem \
-#   exception_undefined.lem \
-#   global.lem \
-#   loc.lem \
-#   multiset.lem \
-#   product.lem \
-#   state_exception.lem \
-#   state_exception_undefined.lem \
-#   state.lem \
-#   state_operators.lem \
-#   symbol.lem \
-#   thread.lem \
-#   uniqueId.lem \
-#   std.lem \
-#   monadic_parsing.lem \
-#   output.lem
+SOURCE_ail=\
+  ail/AilSyntax.lem \
+  ail/AilTypes.lem \
+  ail/GenTypes.lem \
 
-# SOURCE_cabs=\
-#   cabs.lem \
-#   undefined.lem 
+SOURCE_ail_typing=\
+  ail/AilSyntaxAux.lem \
+  ail/AilTypesAux.lem \
+  ail/AilTyping.lem \
+  ail/AilWf.lem \
+  ail/Annotation.lem \
+  ail/Common.lem \
+  ail/Context.lem \
+  ail/ErrorMonad.lem \
+  ail/GenTypesAux.lem \
+  ail/GenTyping.lem \
+  ail/Range.lem \
+  ail/TypingError.lem \
+  ail/Implementation.lem 
 
-# SOURCE_ail=\
-#   ail/AilSyntax.lem \
-#   ail/AilTypes.lem \
-#   ail/GenTypes.lem \
+SOURCE_cabs_to_ail=\
+  builtins.lem \
+  cabs_to_ail_aux.lem \
+  cabs_to_ail_effect.lem \
+  cabs_to_ail.lem \
+  scope_table.lem 
 
-# SOURCE_ail_typing=\
-#   ail/AilSyntaxAux.lem \
-#   ail/AilTypesAux.lem \
-#   ail/AilTyping.lem \
-#   ail/AilWf.lem \
-#   ail/Annotation.lem \
-#   ail/Common.lem \
-#   ail/Context.lem \
-#   ail/ErrorMonad.lem \
-#   ail/GenTypesAux.lem \
-#   ail/GenTyping.lem \
-#   ail/Range.lem \
-#   ail/TypingError.lem \
-#   ail/Implementation.lem 
+SOURCE_core=\
+  core_aux.lem \
+  core_ctype.lem \
+  core_ctype_aux.lem \
+  core.lem \
+  core_typing.lem
 
-# SOURCE_cabs_to_ail=\
-#   builtins.lem \
-#   cabs_to_ail_aux.lem \
-#   cabs_to_ail_effect.lem \
-#   cabs_to_ail.lem \
-#   scope_table.lem 
+SOURCE_core_to_core=\
+  core_indet.lem \
+  core_rewrite.lem 
 
-# SOURCE_core=\
-#   core_aux.lem \
-#   core_ctype.lem \
-#   core_ctype_aux.lem \
-#   core.lem \
-#   core_typing.lem
+SOURCE_core_dynamics=\
+  constraints.lem \
+  core_run_aux.lem \
+  core_run.lem \
+  driver.lem \
+  driver_effect.lem \
+  nondeterminism.lem \
+  symbolic.lem 
 
-# SOURCE_core_to_core=\
-#   core_indet.lem \
-#   core_rewrite.lem 
+SOURCE_elaboration=\
+  implementation_.lem \
+  translation_aux.lem \
+  translation_effect.lem \
+  translation.lem 
 
-# SOURCE_core_dynamics=\
-#   constraints.lem \
-#   core_eval.lem \
-#   core_run.lem \
-#   core_run_aux.lem \
-#   driver.lem \
-#   driver_effect.lem \
-#   nondeterminism.lem \
-#   symbolic.lem 
+SOURCE_defacto =\
+  mem.lem \
+  mem_aux.lem \
+  mem_common.lem \
+  defacto_memory_types.lem \
+  defacto_memory.lem 
 
-# SOURCE_elaboration=\
-#   implementation_.lem \
-#   translation_aux.lem \
-#   translation_effect.lem \
-#   translation.lem 
-
-# SOURCE_defacto =\
-#   mem.lem \
-#   mem_aux.lem \
-#   mem_common.lem \
-#   defacto_memory_types.lem \
-#   defacto_memory.lem 
-
-# SOURCE_concurrency_interface =\
-#   cmm_aux.lem
+SOURCE_concurrency_interface =\
+  cmm_aux.lem
 
 
 CERBERUS_LEM=\
@@ -142,9 +136,8 @@ CERBERUS_LEM=\
   $(SOURCE_core_dynamics) \
   $(SOURCE_elaboration) \
   $(SOURCE_defacto) \
-  $(SOURCE_concurrency_interface)
-
-
+  $(SOURCE_concurrency_interface) \
+  tmp_shift.lem
 
 
 # Where and how ocamlbuild will be called
@@ -170,12 +163,12 @@ copy_cmm_exec: $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) | $(BUILD_DIR)
 # Copy the cerberus model files to the build dir
 copy_cerberus: $(addprefix model/, $(CERBERUS_LEM)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING cerberus .lem files$(RESET)
-	cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
+	@cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
 
 dependencies:
 #	@if [ "2" == "$(shell ocamlfind query pprint > /dev/null 2>&1; echo $$?)" ]; then \
-# #	  $(error "Please install pprint"); \
-# #	fi
+#	  $(error "Please install pprint"); \
+#	fi
 	mkdir dependencies
 	cd dependencies; make -f ../Makefile.dependencies
 
@@ -191,7 +184,7 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 DOC_BUILD_DIR = generated_doc
 
 alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
-        # @OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+	#@OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 	@OCAMLRUNPARAM=b $(LEM0)  -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 
 alldoc.pdf: alldoc.tex
@@ -221,6 +214,7 @@ ocaml_byte:
 
 # LOS-count the spec
 
+include Makefile-source
 
 los:
 	./mysloc   $(addprefix model/,$(SOURCE_ail) )
@@ -238,20 +232,20 @@ los:
 
 losparser:
 	./mysloc \
-# 	parsers/cparser/Cparser_driver.ml  \
-# 	parsers/cparser/Parser_errors.ml   \
-# 	parsers/cparser/Parser_errors.mli  \
-# 	parsers/cparser/tokens.ml
+	parsers/cparser/Cparser_driver.ml  \
+	parsers/cparser/Parser_errors.ml   \
+	parsers/cparser/Parser_errors.mli  \
+	parsers/cparser/tokens.ml
 	wc \
-# 	parsers/cparser/Lexer.mll	       \
-# 	parsers/cparser/Parser.mly \
-# 	parsers/cparser/pre_parser.mly    
+	parsers/cparser/Lexer.mll	       \
+	parsers/cparser/Parser.mly \
+	parsers/cparser/pre_parser.mly    
 
 losconc:
 	./mysloc \
-# 	~/rsem/cpp/newmm_op/executableOpsem.lem \
-# 	~/rsem/cpp/newmm_op/minimalOpsem.lem \
-# 	~/rsem/cpp/newmm_op/relationalOpsem.lem 
+	~/rsem/cpp/newmm_op/executableOpsem.lem \
+	~/rsem/cpp/newmm_op/minimalOpsem.lem \
+	~/rsem/cpp/newmm_op/relationalOpsem.lem 
 	wc ~/rsem/cpp/newmm_op/*.thy
 
 
@@ -261,7 +255,6 @@ los_snapshot-2015-11-20.txt:
 
 clean:
 	rm -rf _build
-	rm -rf {src,pprinters}/*.{cmx,cmi}
 	rm -rf alldoc*
 	rm -rf generated_doc/*.html
 

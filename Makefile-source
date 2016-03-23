@@ -42,7 +42,6 @@ SOURCE_core_to_core=\
 
 SOURCE_core_dynamics=\
   constraints.lem \
-  core_eval.lem \
   core_run_aux.lem \
   core_run.lem \
   driver.lem \
@@ -57,8 +56,6 @@ SOURCE_elaboration=\
   translation.lem 
 
 SOURCE_utils=\
-  debug.lem \
-  pp.lem \
   boot.lem \
   decode.lem \
   dlist.lem \

@@ -35,7 +35,7 @@ type cerberus_conf = {
   pps:           language list;
   core_stdlib:   unit Core.fun_map;
   core_impl_opt: Core.impl option;
-  core_parser:   Input.t -> (Core_parser_util.result, Errors.t5) Exception.t2;
+  core_parser:   Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3;
   exec_mode_opt: execution_mode option;
   compile:       bool;
   progress:      bool;
@@ -63,7 +63,7 @@ val set_cerb_conf:
     Core.impl option ->
     bool ->
     execution_mode ->
-    (Input.t -> (Core_parser_util.result, Errors.t5) Exception.t2) ->
+    (Input.t -> (Core_parser_util.result, Errors.t6) Exception.t3) ->
     bool ->
     bool ->
     bool ->
@@ -77,8 +77,8 @@ val progress_sofar: int ref
 
 
 (* let pass_through        f = Exception.fmap (fun v ->           f v        ; v) *)
-val pass_through_test: bool -> ('a -> unit) -> ('a, 'msg) Exception.t2 -> ('a, 'msg) Exception.t2
-val pass_message: string -> ('a, 'msg) Exception.t2 -> ('a, 'msg) Exception.t2
+val pass_through_test: bool -> ('a -> unit) -> ('a, 'msg) Exception.t3 -> ('a, 'msg) Exception.t3
+val pass_message: string -> ('a, 'msg) Exception.t3 -> ('a, 'msg) Exception.t3
 (* let return_none m         = Exception.bind0 m (fun _ -> Exception.return0 None) *)
 (* let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 []) *)
 

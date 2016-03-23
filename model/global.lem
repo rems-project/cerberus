@@ -12,7 +12,7 @@ end
 
 
 val error: forall 'a. string -> 'a
-declare ocaml target_rep function error = `Debug_ocaml.error`
+declare ocaml target_rep function error = `Debug.error`
 declare hol target_rep function error = `ARB`
 
 

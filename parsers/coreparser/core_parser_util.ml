@@ -19,21 +19,16 @@ let pp_pos (_, (start_p, end_p)) =
     Printf.sprintf "%s:%d:%d - %d:%d" filename l1 c1 l2 c2
 
 
-type mode =
-  | StdMode
-  | ImplORFileMode
-
-
-
 (* Type of Core parser outputs *)
 type result =
     (* main symbol, globals, fun_map *)
-  | Rfile of Symbol.sym * (Symbol.sym * Core.core_type * unit Core.expr) list * unit Core.fun_map
+  | Rfile of Core.sym * (Core.sym * Core.core_type * unit Core.expr) list * unit Core.fun_map
   | Rstd  of unit Core.fun_map
-  | Rimpl of Core.impl (* * unit Core.fun_map *)
+  | Rimpl of Core.impl * unit Core.fun_map
 
 
 type token =
+  | ATOMIC
   | SHORT
   | INT
   | LONG
@@ -57,7 +52,6 @@ type token =
   | UINT32_T
   | UINT64_T
   
-  | ATOMIC
   | STRUCT
   | UNION
   | ENUM
@@ -88,9 +82,9 @@ type token =
   | THEN
   | ELSE
   | UNSEQ
-  | WEAK
-  | STRONG
-  | ATOM
+  | LETW
+  | LETS
+  | LETA
   | SAVE
   | RUN
   | RAISE
@@ -107,7 +101,6 @@ type token =
   | STORE
   | LOAD
   | RMW
-  | FENCE
   | DEF
   | GLOB
   | FUN
@@ -199,7 +192,7 @@ type token =
   | TUPLE
   | ARRAY
   | LOADED
-  | SPECIFIED
+  | LOADED_VALUE
   
   | PURE
 

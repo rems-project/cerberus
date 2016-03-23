@@ -66,10 +66,6 @@ and pp_shift_path sh =
 
 
 and pp_integer_value_base = function
-  | IVconcurRead (ity, sym) ->
-      !^ "IVconcurRead" ^^ P.parens (Pp_ail.pp_integerType ity ^^ P.comma ^^^ !^ (Pp_symbol.to_string_pretty sym))
-  | IVunspecified ->
-      !^ "IVunspecified"
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
   | IVaddress (Address (pref, n)) ->
@@ -99,10 +95,8 @@ and pp_integer_value (IV (prov, ival_)) =
   !^ "IV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_integer_value_base ival_)
 
 and pp_mem_value = function
-(*
   | MVsymbolic symb ->
       !^ "MVsymbolic" ^^ P.parens (Pp_symbolic.pp_symbolic pp_mem_value pp_pointer_value symb)
-*)
 (*
   | MVunspecified ty ->
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)

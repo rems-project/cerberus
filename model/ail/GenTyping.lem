@@ -2,7 +2,7 @@ open import Pervasives Common Global AilSyntax AilTypes AilSyntaxAux AilWf Typin
 open import GenTypes GenTypesAux Annotation
 open import Std Loc
 
-import Builtins Debug Pp
+import Builtins
 
 
 import ErrorMonad
@@ -11,6 +11,23 @@ module E = ErrorMonad
 let inline (>>=) m f = E.bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = E.fmap
+
+
+(* BEGIN debug *)
+val pp_ail_ctype: forall 'a. 'a (* Ail.ctype *) -> string
+declare ocaml target_rep function pp_ail_ctype = `String_ail.string_of_ctype`
+
+val pp_ail_expr: forall 'a. 'a (* Ail.expression_l *) -> string
+declare ocaml target_rep function pp_ail_expr = `String_ail.string_of_expr`
+
+
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
+(* END debug *)
+
+
 
 
 val lookup_tag_definition: forall 'a. sigma 'a -> identifier -> maybe tag_definition
@@ -78,7 +95,7 @@ val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.
 let well_typed_assignment S ty1 gty2 null2 =
   (* §6.5.16.1#1, bullet 1 *)
   if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && GenTypesAux.is_arithmetic gty2 then
-    let () = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 1" in
+    let _ = print_debug 2 "[well_typed_assignment] OK: bullet 1" in
     E.return true
   
   (* §6.5.16.1#1, bullet 2 *)
@@ -104,18 +121,18 @@ let well_typed_assignment S ty1 gty2 null2 =
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
           if AilTypesAux.compatible ref_ty1 ref_ty2 && AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
+            let _ = print_debug 2 "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
           else if (AilTypesAux.is_void ref_ty1 || AilTypesAux.is_void ref_ty2) &&
                   AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 4" in                     (* DEBUG *)
-            let _ = Debug.print_debug 2 $ "qs1: " ^ (if ref_qs1.const    then "const "    else "") ^  (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] OK: bullet 4" in                     (* DEBUG *)
+            let _ = print_debug 2 $ "qs1: " ^ (if ref_qs1.const    then "const "    else "") ^  (* DEBUG *)
                                               (if ref_qs1.restrict then "restrict " else "") ^  (* DEBUG *)
                                               (if ref_qs1.volatile then "volatile " else "") ^  (* DEBUG *)
                                               (if ref_qs1.atomic   then "atomic "   else "") in (* DEBUG *)
-            let _ = Debug.print_debug 2 $ "qs2: " ^ (if ref_qs2.const    then "const "    else "") ^  (* DEBUG *)
+            let _ = print_debug 2 $ "qs2: " ^ (if ref_qs2.const    then "const "    else "") ^  (* DEBUG *)
                                               (if ref_qs2.restrict then "restrict " else "") ^  (* DEBUG *)
                                               (if ref_qs2.volatile then "volatile " else "") ^  (* DEBUG *)
                                               (if ref_qs2.atomic   then "atomic "   else "") in (* DEBUG *)
@@ -123,27 +140,27 @@ let well_typed_assignment S ty1 gty2 null2 =
           
           (* §6.5.16.1#1, bullet 5 *)
           else if null2 then
-            let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
             E.return true
           
           else
-            let _ = Debug.print_debug 2 "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
+            let _ = print_debug 2 "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
             E.return false
       | (Pointer ref_qs1 ref_ty1, _) ->
           (* §6.5.16.1#1, bullet 5 *)
           E.return null2
       | _ ->
-          let _ = Debug.print_debug 2 "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
+          let _ = print_debug 2 "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
           E.return false
     end
   
   (* §6.5.16.1#1, bullet 6 *)
   else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool ty1 && GenTypesAux.is_pointer gty2 then
-    let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
+    let _ = print_debug 2 "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
     E.return true
   
   else
-    let _ = Debug.print_debug 2 "[well_typed_assignment] KO: the end" in (* DEBUG *)
+    let _ = print_debug 2 "[well_typed_assignment] KO: the end" in (* DEBUG *)
     E.return false
 
 
@@ -1217,7 +1234,7 @@ and annotate_initialization annot sigm gamm ty e =
   
   (* STD §6.7.9#14 *)
   else if AilTypesAux.is_array_of_character ty then
-    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ Pp.stringFromAil_ctype ty)
+    error ("WIP: annotate_initialization, is_array_of_character ty ==> " ^ pp_ail_ctype ty)
   
   (* STD §6.7.9#15 *)
   else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
@@ -1235,13 +1252,13 @@ and annotate_initialization annot sigm gamm ty e =
             E.return (a_e, Array elem_ty1 (Just n2))
           else
             error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
+                   pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
      | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
          if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
            E.return (a_e, Array elem_ty1 (Just n1))
          else
             error ("TODO(annotate_initialisation, 2): error message: array object definition, types didn't match ==> " ^
-                   Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
+                   pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
      | _ ->
          error "WIP: annotate_initialization, not(is_scalar ty), not array (or had no size)"
     end
@@ -1268,7 +1285,7 @@ and annotate_definition_aux A S G (ty, e) =
      || (AilTypesAux.is_complete_object S ty --> not (AilTypesAux.is_vla ty)) then
     if AilTypesAux.is_scalar ty then
       (* STD §6.7.9#11, sentence 3 *)
-      let _ = Debug.print_debug 2 $ "HELLLOO: " ^ Pp.stringFromAil_expression e in
+      let _ = print_debug 2 $ "HELLLOO: " ^ pp_ail_expr e in
       annotate_assignee A S G (AilTypesAux.unqualify ty) e >>= fun a_e ->
       E.return a_e
       
@@ -1298,18 +1315,18 @@ and annotate_definition_aux A S G (ty, e) =
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
+                       pp_ail_ctype elem_ty1 ^ " <-> " ^ pp_ail_ctype elem_ty2)
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
              (* TODO: check that is correct to unqualify *)
               if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype (AilTypesAux.unqualify elem_ty1) ^ " <-> " ^ Pp.stringFromAil_ctype (AilTypesAux.unqualify elem_ty2))
+                       pp_ail_ctype (AilTypesAux.unqualify elem_ty1) ^ " <-> " ^ pp_ail_ctype (AilTypesAux.unqualify elem_ty2))
          | _ ->
              (* STD §6.7.9#14 *)
              if AilTypesAux.is_array_of_character ty then
-               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^ Pp.stringFromAil_ctype ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
+               error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^ pp_ail_ctype ty ^ " <===> " ^ pp_ail_expr a_e)
              else
                error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
         end

@@ -32,9 +32,9 @@ declare ocaml target_rep function string_of_ail_qualifiers_human = `String_ail.s
 
 
 
-type struct_tag = Symbol.sym
-type union_tag  = Symbol.sym
-type member_id  = Symbol.sym
+type struct_tag = Symbol.t
+type union_tag  = Symbol.t
+type member_id  = Symbol.t
 
 
 

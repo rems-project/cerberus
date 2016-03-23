@@ -11,6 +11,18 @@ open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 open import {hol} `utilTheory`
 
 
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+
+(* TODO: HOL hack *)
+declare hol target_rep function print_debug n s = `()`
+
+val warn: string -> unit
+declare ocaml target_rep function warn = `Debug.warn`
+
+(* TODO: HOL hack *)
+declare hol target_rep function warn s = `()`
+
 val stringFromCtype: ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
 
@@ -90,10 +102,8 @@ end
 
 let rec fake_mem_value_eq mval1 mval2 =
   match (mval1, mval2) with
-(*
     | (MVsymbolic symb1, MVsymbolic symb2) ->
         symb1 = symb2
-*)
     | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
         n1 = n2
     | (MVarray mvals1, MVarray mvals2) ->
@@ -423,10 +433,10 @@ let rec simplify_integer_value_base do_unfolding ival_ =
             | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
                 Left 1
             | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
-                let () = Debug.warn "assuming one byte = 8 bits" in
+                let () = warn "assuming one byte = 8 bits" in
                 Left (integerFromNat (n / 8))
             | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
-                let () = Debug.warn "assuming one byte = 8 bits" in
+                let () = warn "assuming one byte = 8 bits" in
                 Left (integerFromNat (n / 8))
             (* TODO !!!!, fixing impl for testing purpose *)
             | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
@@ -577,7 +587,7 @@ let ifM constr (MemM m_then) (MemM m_else) =
                       (* TODO: check, but it doesn't seem useful to add the constraint *)
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                   | Nothing ->
-                      (* DEBUG *) let () = Debug.print_debug 1 "Defacto_memory.ifM ==> DID A ND SPLIT" in
+                      (* DEBUG *) let () = print_debug 1 "Defacto_memory.ifM ==> DID A ND SPLIT" in
                       (m_then <| mem_st with constraints= add_constraint (MC_eqIV ("ifM(then)[" ^ debug_str ^ "]") ival_1' ival_2') mem_st.constraints |>) ++
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                 end
@@ -635,7 +645,7 @@ let condM constr =
 val print_debugM: nat -> string -> memM unit
 let print_debugM n str =
   MemM (fun st ->
-    let _ = Debug.print_debug n str in
+    let _ = print_debug n str in
     [Right ((), st)]
   )
 
@@ -1294,7 +1304,7 @@ let internal_shift_ptrval ptr_val spe : pointer_value =
 
 
 let array_shift_ptrval ptr_val ty (IV _ ival_) =
-  let () = Debug.print_debug 5 ("Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
+  let () = print_debug 5 ("Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
   internal_shift_ptrval ptr_val (SPE_array ty ival_)
 
 let member_shift_ptrval ptr_val tag_sym memb_ident =
@@ -1304,8 +1314,6 @@ let member_shift_ptrval ptr_val tag_sym memb_ident =
 
 
 
-let concurRead_ival ity sym =
-  IV Prov_none (IVconcurRead ity sym)
 
 let integer_ival n =
   IV Prov_none (IVconcrete n)
@@ -1347,11 +1355,8 @@ let is_concrete_ival ival =
 
 
 (* Memory value constructors *)
-(*
 let symbolic_mval symb =
-  let () = Debug.print_debug 0 "Mem.symbolic_mval !!!!!" in
   MVsymbolic symb
-*)
 
 let unspecified_mval ty =
   mkUnspec ty
@@ -1383,18 +1388,10 @@ let union_mval tag_sym memb_ident mval =
 
 
 (* Memory value destructor *)
-let case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct funion =
+let case_mem_value mval fsymb fival ffval fptrval farr fstruct funion =
   match mval with
-    | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
-        funspec (Pointer AilTypes.no_qualifiers ref_ty)
-    | MVinteger ity (IV _ IVunspecified) ->
-        funspec (Basic (AilTypes.Integer ity))
-    | MVfloating fty (FVunspecified) ->
-        funspec (Basic (AilTypes.Floating fty))
-(*
     | MVsymbolic symb ->
         fsymb symb
-*)
     | MVinteger ity ival ->
         fival ity ival
     | MVfloating fty fval ->
@@ -1863,10 +1860,10 @@ let lt_ival eqs (IV prov1 ival_1) (IV prov2 ival_2) =
           Nothing
     
     | (IVmin _, IVsizeof _) ->
-        let () = Debug.warn "assuming that no integer type has a strictly positive minimal value" in
+        let () = warn "assuming that no integer type has a strictly positive minimal value" in
         Just true
     | (IVmin _, IValignof _) ->
-        let () = Debug.warn "assuming that no integer type has a strictly positive minimal value" in
+        let () = warn "assuming that no integer type has a strictly positive minimal value" in
         Just true
     
     | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
@@ -1936,16 +1933,6 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
           | (IVfromptr _ _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
               Just true
 *)
-          | (IVmin ity, IVconcurRead ity' _) ->
-              if ity = ity' then
-                Just true
-              else
-                Nothing
-          | (IVconcurRead ity' _, IVmax ity) ->
-              if ity = ity' then
-                Just true
-              else
-                Nothing
           
           | (IVmin ity, IVconcrete n) ->
               let (is_exact, min, _) = minimal_range ity in
@@ -1963,10 +1950,10 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               else
                 Nothing
           | (IVmin _, IVsizeof _) ->
-              let () = Debug.warn "assuming that no integer type has a strictly positive minimal value" in
+              let () = warn "assuming that no integer type has a strictly positive minimal value" in
               Just true
           | (IVmin _, IValignof _) ->
-              let () = Debug.warn "assuming that no integer type has a strictly positive minimal value" in
+              let () = warn "assuming that no integer type has a strictly positive minimal value" in
               Just true
 
           
@@ -1981,13 +1968,13 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                   Nothing
           
           | (IVmin (AilTypes.Size_t), IVoffsetof tag_sym membr_ident) ->
-              let () = Debug.warn ("we are assuming that struct/union type '" ^ show tag_sym ^
+              let () = warn ("we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
               (* TODO: check that *)
               Just true
           | (IVoffsetof tag_sym membr_ident, IVmax (AilTypes.Size_t)) ->
-              let () = Debug.warn ("we are assuming that struct/union type '" ^ show tag_sym ^
+              let () = warn ("we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
               Just true
@@ -2015,10 +2002,10 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               Just true
 
           | (IVmin (AilTypes.Signed AilTypes.Int_), IVbyteof _ _) ->
-              let () = Debug.warn "TODO: check + document" in
+              let () = warn "TODO: check + document" in
               Just true
           | (IVbyteof _ _, IVmax (AilTypes.Signed AilTypes.Int_)) ->
-              let () = Debug.warn "TODO: check + document" in
+              let () = warn "TODO: check + document" in
               Just true
           
           (* sizeof and alignof are always in range of size_t *)
@@ -2037,7 +2024,7 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
           
           | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax AilTypes.Size_t) ->
               if tag_sym1 = tag_sym2 then
-                let () = Debug.warn ("we are assuming that the delta between members '" ^ show membr_ident1 ^
+                let () = warn ("we are assuming that the delta between members '" ^ show membr_ident1 ^
                                "' and '" ^ show membr_ident2 ^ "' of struct/union type '" ^ show tag_sym1 ^
                                "' is representable in size_t") in
                 Just true
@@ -2050,7 +2037,7 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                 Nothing
           
           | (IVsizeof (Core_ctype.Pointer _ _), IVmax _) ->
-              let () = Debug.warn "TODO: document" in
+              let () = warn "TODO: document" in
               Just true
 
           | _ ->
@@ -2215,7 +2202,7 @@ declare hol target_rep function easy_update_mem_value_aux =
 
 val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
 let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
-  (*DEBUG*)let () = Debug.print_debug 2 ("easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
+  (*DEBUG*)let () = print_debug 2 ("easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
   easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval
 
 
@@ -2235,15 +2222,6 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
                 true
           end in
           Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w current_mval) st.allocations
-      | Just (alloc, Nothing) ->
-          (* TODO WIP hack *)
-          let is_strong = match alloc with
-            | Alloc_static _ _ ->
-                false
-            | Alloc_dynamic _ _ ->
-                true
-          end in
-          Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w mval) st.allocations
       | Nothing ->
           error "Mem.register_write_event, Nothing"
     end
@@ -2266,14 +2244,5 @@ let store lvalue_ty ptr_val mval =
 
 
 (* TODO: move this up *)
-type mem_constraint2 =
+type mem_constraint =
   | MC_eq_ival of integer_value * integer_value
-  | MC_ne_ival of integer_value * integer_value
-
-val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
-let constraint_eqIV ival1 ival2 =
-  MC_eq_ival ival1 ival2
-
-val constraint_neIV: integer_value -> integer_value -> mem_constraint2
-let constraint_neIV ival1 ival2 =
-  MC_ne_ival ival1 ival2

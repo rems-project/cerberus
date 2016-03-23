@@ -608,11 +608,11 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEcond (e1, e2, e3) ->
             P.group (pp e1 ^^^ P.qmark ^^^ pp e2 ^^^ P.colon ^^^ pp e3)
         | AilEcast (qs, ty, e) ->
-            if !Debug_ocaml.debug_level > 5 then
-              (* printing the types in a human readable format *)
-              P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp e
-            else
-              pp_qualifiers qs (P.parens (pp_ctype ty)) ^^^ pp e
+            (* TODO *)
+            P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp e
+(*
+            pp_qualifiers qs (P.parens (pp_ctype ty)) ^^^ pp e
+*)
         | AilEcall (e, es) ->
             pp e ^^ P.parens (comma_list pp es)
         | AilEassert e ->
@@ -636,19 +636,15 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEident x ->
             pp_id x
         | AilEsizeof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
-              (* printing the types in a human readable format *)
-              pp_keyword "sizeof" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
-            else
-              pp_keyword "sizeof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
+            (* TODO *)
+            pp_keyword "sizeof" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+(*            pp_keyword "sizeof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty)) *)
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
-            if !Debug_ocaml.debug_level > 5 then
-              (* printing the types in a human readable format *)
-              pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
-            else
-              pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
+            (* TODO *)
+            pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+(*            pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers qs (pp_ctype ty)) *)
 
         | AilEmemberof (e, ident) ->
             pp e ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier ident
@@ -722,23 +718,14 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         P.semi
     | AilSexpr e ->
         pp_expression_aux pp_annot e ^^ P.semi
-    | AilSblock ([], []) ->
-        P.lbrace ^^ P.rbrace
     | AilSblock ([], ss) ->
-        P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)
-        ) ^^ P.rbrace
+        P.lbrace ^^ P.nest 2 (P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)) ^/^ P.rbrace
     | AilSblock (ids, ss) ->
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
-            (fun (id, (dur_opt, qs, ty)) ->
-              if !Debug_ocaml.debug_level > 5 then
-                (* printing the types in a human readable format *)
-                P.parens (P.optional pp_storageDuration dur_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp_id_obj id
-              else
-                pp_qualifiers qs (pp_ctype ty) ^^^ pp_id_obj id
-               ) ids ^^ P.semi ^^ P.break 1 ^^
+            (fun (id, (dur_opt, qs, ty)) -> (* TODO: pp_qualifiers qs (pp_ctype ty) *) P.parens (P.optional pp_storageDuration dur_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp_id_obj id)
+            ids ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | AilSif (e, s1, s2) ->
@@ -775,9 +762,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression_aux pp_annot e) defs ^^
         P.semi ^^^ pp_comment "// decl"
     | AilSpar ss ->
-        P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
-          P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss
-        ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
+        P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
 
 
 
@@ -837,12 +822,11 @@ let pp_program pp_annot (startup, sigm) =
           !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
           (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
           
-          (if !Debug_ocaml.debug_level > 5 then
-            (* printing the types in a human readable format *)
-            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
-          else
-            pp_qualifiers qs (pp_ctype_declaration (pp_id_obj sym) ty)) ^^^
-          
+(* TODO:
+          (pp_qualifiers qs (pp_ctype_declaration (pp_id_obj sym) ty)) ^^^
+*)
+          pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^
+
           P.optional (fun e ->
             P.equals ^^^ pp_expression_aux pp_annot e
           ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi ^^
@@ -859,22 +843,15 @@ let pp_program pp_annot (startup, sigm) =
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
             (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
-              begin
-                if !Debug_ocaml.debug_level > 5 then
-                  (* printing the types in a human readable format *)
-                  pp_ctype_raw return_ty ^^^ pp_id_func sym
-                else
-                  pp_ctype_declaration (pp_id_func sym) return_ty
-              end ^^
+(* TODO:              pp_ctype_declaration (pp_id_func sym) return_ty ^^ *)
+              pp_ctype_raw return_ty ^^^ pp_id_func sym ^^
               (match Context.lookup identifierEqual sigm.function_definitions sym with
                 | Some (param_syms, stmt) ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty)) ->
-                        if !Debug_ocaml.debug_level > 5 then
-                          (* printing the types in a human readable format *)
-                          pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
-                        else
-                          (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id_obj sym
+                        pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                        
+(* TODO:                        (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id_obj sym *)
                       ) (List.combine param_syms params) ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -885,11 +862,8 @@ let pp_program pp_annot (startup, sigm) =
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty) ->
-                        if !Debug_ocaml.debug_level > 5 then
-                          (* printing the types in a human readable format *)
-                          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
-                        else
-                          pp_qualifiers qs (pp_ctype ty)
+                        P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+(* TODO:                        pp_qualifiers qs (pp_ctype ty) *)
                       ) params ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -967,12 +941,4 @@ let pp_genTypeCategory = function
 let pp_expression e = pp_expression_aux (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
 let pp_statement s = pp_statement_aux (fun _ d -> d) s
-
-let pp_program_with_annot prog =
-  let pp_annot =
-    if !Debug_ocaml.debug_level > 5 then
-      (* printing the annotation *)
-      (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z)
-    else
-      (fun _ z -> z) in
-  pp_program pp_annot prog
+let pp_program_with_annot prog = pp_program (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z) prog

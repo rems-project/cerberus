@@ -8,73 +8,94 @@ embed {{ tex-preamble
 }}
 
 
-embed {{ lem
-open import Core_ctype Thread
-import Symbol Implementation_ Undefined Loc Cmm_csem
-import Mem Mem_common
+embed {{ lem 
+open import Pervasives String_extra Global
+import Symbol AilTypes Implementation_ Undefined Loc Cmm_csem
+import Mem
+
+open import Thread Core_ctype
+
+module Cmm = Cmm_csem
 }}
 
+% (*
+% (TODO C signals)
+% type handler_event =
+%   string (* TODO: fixed ctors? *)
+% *)
 
-metavar Symbol_sym {{ tex ident }} {{ lem Symbol.sym }} ::=
-  {{ phantom }} {{ com Core identifier }}
-metavar tag {{ lem Symbol.sym }} ::=
-  {{ phantom }} {{ com struct/union tag }}
+
+metavar Symbol_t {{ tex ident }} {{ lem Symbol.t }}  ::=  {{ phantom }} 
+metavar tag {{ lem Symbol.t }}  ::=  {{ phantom }}  {{ com struct/union tag }}
 
 indexvar n, i ::= {{ phantom }}
 
-
 grammar
-  % Inhabitant of these types may be read and stored from the memory (hence they match C types)
-  core_object_type {{ tex \textit{oTy} }} :: 'OTy_' ::= {{ com types for C objects}}
-    | integer                    :: ::  integer
-    | floating                   :: ::  floating
-    | pointer                    :: ::  pointer
-    | cfunction                  :: ::  cfunction
-    | array ( core_object_type ) :: ::  array
-    | struct tag                 :: ::  struct
-    | union tag                  :: ::  union
-  
-  core_base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types}}
-    | unit                                :: ::   unit    {{ com unit }}
-    | boolean                             :: ::   boolean {{ com boolean }}
-    | Ctype                               :: ::   ctype   {{ com Core type of C type exprs}} {{ tex \ottkw{ctype} }}
-    | [ core_base_type ]                  :: ::   list    {{ com list }}
-    | ( </ core_base_typei // , // i /> ) :: ::   tuple   {{ com tuple }}
-    | core_object_type                    :: ::   object  {{ com specified C object value }}
-    | loaded core_object_type             :: ::   loaded  {{ com possibly unspecified [[core_object_type]] value }} {{ tex [[loaded]]\ [[core_object_type]] }}
+
+core_object_type {{ tex \textit{oTy} }} :: 'OTy_' ::= {{ com types for C objects}}
+%(those that may be memory read/stored, hence matching C object types) }}
+  | integer                    :: ::  integer
+  | floating                   :: ::  floating
+  | pointer                    :: ::  pointer
+  | cfunction                  :: ::  cfunction
+  | array ( core_object_type ) :: ::  array
+  | struct tag            :: ::  struct
+  | union tag             :: ::  union
+
+core_base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types}}
+   | unit                                       :: ::   unit    {{ com unit }}
+   | boolean                                    :: ::   boolean {{ com boolean }}
+   | Ctype                                      :: ::   ctype   {{ com Core type of C type exprs}} {{ tex \ottkw{ctype} }}
+   | [ core_base_type ]                         :: ::   list    {{ com list }}
+%   | ( core_base_type1 , .. , core_base_typen ) :: ::   tuple   {{ com tuple }}
+   | ( </ core_base_typei // , // i /> ) :: ::   tuple   {{ com tuple }}
+   | core_object_type                           :: ::   object  {{ com C object value }}
+   | loaded core_object_type                    :: ::   loaded  {{ com [[core_object_type]] or unspecified value }} {{ tex [[loaded]]\ [[core_object_type]] }}
+
+% NOTE: loaded is the same as object, but has just been loaded from
+% memory so the value may be unspecified
+ 
 
 
 % Types discriminate between pure (TyBase) and effectful
 % expressions (TyEffect)
+
 core_type {{ tex \textit{coreTy} }} :: 'Ty' ::= {{ com Core types }}
-   | core_base_type     :: :: Base   {{ com pure base type }}
-   | eff core_base_type :: :: Effect {{ com effectful base type }}
+   | core_base_type     :: :: Base        {{ com pure base type }}
+   | eff core_base_type :: :: Effect      {{ com effectful base type }}
+ 
+ 
+%TODO: maybe split apart this sym into different nonterminals? 
+metavar sym {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Symbolic names }}
+
+metavar label {{ lem Symbol.t }} ::= {{ phantom }}  {{ com Continuation names }}
 
 
-metavar sym {{ lem Symbol.sym }} ::= {{ phantom }}  {{ com Symbolic names }}
-metavar label {{ lem Symbol.sym }} ::= {{ phantom }}  {{ com Continuation names }}
+% (* Binary operators *)
 
-
-% Binary operators
 grammar
- binop :: 'Op' ::= {{ com binary operators }}
-   % arithmetic operators (integer -> integer -> integer)
-   | +     :: :: Add
-   | -     :: :: Sub
-   | *     :: :: Mul
-   | /     :: :: Div
-   | rem_t :: :: Rem_t % This is the % of C. Hence, rem_t(x,y) = x - (truncate(x/y) * y)
-   | rem_f :: :: Rem_f % rem_t(x,y) = x - (foor(x/y) * y)
+ binop :: 'Op' ::= 
+%   (* arithmetic operators *)
+   | +     :: :: Add    
+   | -     :: :: Sub    
+   | *     :: :: Mul    
+   | /     :: :: Div    
+   | rem_t :: :: Rem_t  
+%(* this the % of C ===> rem_t(x,y) = x - ((truncate(x/y) * y) *)
+   | rem_f :: :: Rem_f 
+%(* rem_t(x,y) = x - ((foor(x/y) * y) *)
    | ^     :: :: Exp
-   % relational operators
-   | =     :: :: Eq % defined both for integer and ctype
+%   (* relational operators *)
+   | =     :: :: Eq
    | >     :: :: Gt
    | <     :: :: Lt
    | >=    :: :: Ge
    | <=    :: :: Le
-   % logical connectives
+%   (* logical connectives *)
    | /\    :: :: And 
    | \/    :: :: Or
+
+
 
 
 embed {{ lem
@@ -186,7 +207,7 @@ list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.m
 generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core values }}
    | Constrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: X :: constrained
    | generic_object_value :: :: object {{ com C object value }} 
-   | Specified ( generic_object_value ) :: :: specified {{ com non-unspecified loaded value }}
+   | Specified ( generic_object_value ) :: :: loaded {{ com non-unspecified loaded value }}
    | Unspecified ( ctype ) :: :: unspecified      {{ com unspecified loaded value }} 
    | Unit :: :: unit                              {{ com unit }}
    | True :: :: true                              {{ com true }}
@@ -209,7 +230,7 @@ generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
    | Ivmin       :: :: ivmin       {{ com min integer value  }} %  : ctype -> integer 
    | Ivsizeof    :: :: ivsizeof    {{ com sizeof value  }} %  : ctype -> integer 
    | Ivalignof   :: :: ivalignof   {{ com alignof value  }} %  : ctype -> integer 
-   | Specified   :: :: specified   {{ com non-unspecified loaded value  }} %  : objTy -> loaded objTy 
+   | Loaded      :: :: loaded      {{ com non-unspecified loaded value  }} %  : objTy -> loaded objTy 
    | Unspecified :: :: unspecified {{ com unspecified value }} %  : ctype -> loaded (integer|floating|pointer|array|struct|union) 
 
 
@@ -221,6 +242,7 @@ generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
 maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} %{{ phantom }}
    | _   :: :: Nothing  (+ b = {} +)
    | tyvarsym :: :: Just (+ b = tyvarsym +)
+
 
 generic_pattern {{ tex pat }} :: 'Case' ::= {{ auxparam 'ty 'sym }}
    | maybesym                                                  :: X :: Base (+ b = b(maybesym) +)
@@ -235,6 +257,11 @@ metavar Undefined_undefined_behaviour {{ tex \ottnt{ub\textit{-}name} }} {{ lem 
 metavar string {{ lem string }}  ::=  {{ phantom }} 
 
 % metavar Mem_memop {{ lem Mem.memop }} {{ tex memop }} ::= {{ phantom }}  
+
+embed {{ lem
+type sym = Symbol.t
+type ksym = Symbol.t
+}}
 
 grammar
 pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expressions }} 
@@ -293,14 +320,14 @@ metavar a {{ tex }} {{ lem 'a }} ::= {{ phantom }}
 metavar nat {{ tex n }} {{ lem nat }} ::= {{ phantom }}
 metavar Thread_thread_id {{ tex \ottnt{thread\textit{-}id} }} {{ lem Thread.thread_id }} ::= {{ phantom }}
 metavar Loc_t {{ lem Loc.t }} ::= {{ phantom }}
-metavar Cmm_memory_order {{ tex \ottnt{memory\textit{-}order} }} {{ lem Cmm_csem.memory_order }} ::= {{ phantom }}
+metavar Cmm_memory_order {{ tex \ottnt{memory\textit{-}order} }} {{ lem Cmm.memory_order }} ::= {{ phantom }}
 metavar Symbol_prefix {{ tex }} {{ lem Symbol.prefix }}  ::=  {{ phantom }} 
 
 grammar
 
-maybe_Symbol_sym_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.sym * core_base_type) }} {{ phantom }}
+maybe_Symbol_t_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (Symbol.t * core_base_type) }} {{ phantom }}
 
- Mem_memop {{ tex ptrop }}  {{ lem Mem_common.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
+ Mem_memop {{ tex ptrop }}  {{ lem Mem.memop }} :: '' ::= {{ phantom }} {{ com pointer operations involving the memory state}}
    | pointer_equality_operator :: :: PtrEqNe {{ tex \textit{pointer-equality-operator} }} {{ com pointer equality comparison}}
    | pointer_relational_operator :: :: PtrRel {{ tex \textit{pointer-relational-operator} }} {{ com pointer relational comparison}}
    | ptrdiff :: :: Ptrdiff {{ com pointer subtraction }}
@@ -334,7 +361,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | generic_paction  :: :: action {{ com memory action }}
 
    | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
-   | let generic_pattern = generic_pexpr in generic_expr :: :: let (+ bind b(generic_pattern) in generic_expr +) {{ com Core let  }}
+   | let generic_pattern = generic_pexpr in generic_expr :: :: let (+ bind b(generic_pattern) in generic_expr +) {{ com Core let  }} 
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
    | skip :: :: skip {{ com  skip }}
 
@@ -345,15 +372,15 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | unseq ( generic_expr1 , .. , generic_exprn ) :: :: unseq {{ com unsequenced expressions }}
    | let weak generic_pattern = generic_expr1 in generic_expr2 :: :: wseq {{ com weak sequencing }}
    | let strong generic_pattern = generic_expr1 in generic_expr2 :: :: sseq {{ com strong sequencing }}
-   | let atomic maybe_Symbol_sym_core_base_type = generic_action1 in generic_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
+   | let atomic maybe_Symbol_t_core_base_type = generic_action1 in generic_paction2 :: :: aseq  {{ com atomic sequencing }}% (* this ctor doesn't exist at runtine *)
 %   (* indeterminately-sequenced expressions and boundary *) 
    | indet [ nat ] ( generic_expr ) :: :: indet  {{ com indeterminately sequenced expr }} % (* this ctor doesn't exist at runtine *)
    | bound [ nat ] ( generic_expr ) :: :: bound  {{ com $\ldots$and boundary }} %(* this ctor doesn't exist at runtine *)
 %   (* Continuation operators *)
 %   (* TODO: may have to add the possibility storing a number instead a ctype (for dynamically allocated objects) *)
    | nd ( generic_expr1 , .. , generic_exprn ) :: ::  nd {{ com nondeterministic sequencing }}
-   | save label ( </ Symbol_symi : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
-   | run a label ( </ Symbol_symi := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
+   | save label ( </ Symbol_ti : ctypei // , // i /> ) in generic_expr :: :: save  {{ com save label }}
+   | run a label ( </ Symbol_ti := generic_pexpri // , // i /> ) :: :: run  {{ com run from label }}
 %   (* Non deterministic choice (resulting from indet expressions) *)
 %   (* TODO: this only exists for the second stage dynamics (after core_indet) *)
 %   (* Thread operators *)
@@ -374,7 +401,6 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | load ( generic_pexpr1 , generic_pexpr2 , Cmm_memory_order ) :: :: Load
    | rmw ( generic_pexpr1 ,  generic_pexpr2 , generic_pexpr3 , generic_pexpr4 , Cmm_memory_order1 , Cmm_memory_order2 ) :: :: RMW
 %   | RMW generic_pexpr(* ctype *) generic_pexpr(* object_ptr *) generic_pexpr(* expected_val *) generic_pexpr(* desired_val *) Cmm.memory_order Cmm.memory_order
-   | fence ( generic_pexpr ) :: :: Fence
  
 % (*
 %   | CompareExchangeStrong pexpr pexpr pexpr pexpr Cmm.memory_order Cmm.memory_order
@@ -397,8 +423,8 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
  definition :: '' ::= {{ phantom }} {{ com Core definitions }}
 %    | fun generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : core_base_type := generic_pexpr :: :: Fun    
 %    | proc generic_name ( generic_pexpr1 : core_base_type1 , .. , generic_pexprn : core_base_typen ) : eff core_base_type := generic_expr :: :: Proc
-    | fun generic_name ( </ Symbol_symi : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun {{ com Core function definition }}
-    | proc generic_name ( </ Symbol_symi : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc {{ com Core procedure definition }}
+    | fun generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : core_base_type := generic_pexpr :: :: Fun {{ com Core function definition }} 
+    | proc generic_name ( </ Symbol_ti : core_base_typei // , // i /> ) : eff core_base_type := generic_expr :: :: Proc {{ com Core procedure definition }}
 
 
 
@@ -440,14 +466,14 @@ multiple pexpr_ tyvarsym :: msubst
 
 embed {{ lem 
  
- type name         = generic_name Symbol.sym
- type object_value = generic_object_value Symbol.sym
- type value        = generic_value Symbol.sym
- type ctor         = generic_ctor Symbol.sym
- type pattern      = generic_pattern core_base_type Symbol.sym
- type pexpr        = generic_pexpr core_base_type Symbol.sym
- type expr 'a      = generic_expr 'a core_base_type Symbol.sym
- type paction 'a   = generic_paction 'a core_base_type Symbol.sym
+ type name         = generic_name Symbol.t
+ type object_value = generic_object_value Symbol.t
+ type value        = generic_value Symbol.t
+ type ctor         = generic_ctor Symbol.t
+ type pattern      = generic_pattern core_base_type Symbol.t
+ type pexpr        = generic_pexpr core_base_type Symbol.t
+ type expr 'a      = generic_expr 'a core_base_type Symbol.t
+ type paction 'a   = generic_paction 'a core_base_type Symbol.t
  
  
  
@@ -458,7 +484,7 @@ embed {{ lem
  (* TODO: don't we need any impl proc? *)
  type impl_decl =
    | Def of core_base_type * pexpr
-   | IFun of core_base_type * list (Symbol.sym * core_base_type) * pexpr
+   | IFun of core_base_type * list (Symbol.t * core_base_type) * pexpr
  type impl = map Implementation_.implementation_constant impl_decl
  (*
  type impl_decl =
@@ -469,18 +495,18 @@ embed {{ lem
  
  
  type fun_map_decl 'a =
-   | Fun of core_base_type * list (Symbol.sym * core_base_type) * pexpr
-   | Proc of core_base_type * list (Symbol.sym * core_base_type) * expr 'a
+   | Fun of core_base_type * list (Symbol.t * core_base_type) * pexpr
+   | Proc of core_base_type * list (Symbol.t * core_base_type) * expr 'a
  
- type fun_map 'a = map Symbol.sym (fun_map_decl 'a)
+ type fun_map 'a = map Symbol.t (fun_map_decl 'a)
  
  
  (* a Core file is just a set of named functions *)
  type file 'a = <|
-   main   : Symbol.sym;
+   main   : Symbol.t;
    stdlib : fun_map 'a;
    impl   : impl;
-   globs  : list (Symbol.sym * core_type * expr 'a);
+   globs  : list (Symbol.t * core_type * expr 'a);
    funs   : fun_map 'a;
  |>
  declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
@@ -505,7 +531,7 @@ embed {{ lem
  type continuation 'a = list (continuation_element 'a)
  
  
- type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a
+ type labeled_continuation 'a = list (Symbol.t * ctype) * expr 'a
  
  
  type stack 'a =
@@ -522,14 +548,3 @@ embed {{ lem
    let setElemCompare = defaultCompare
  end
 }}
-
-
-% TODO
-
-
-% (*
-% (TODO C signals)
-% type handler_event =
-%   string (* TODO: fixed ctors? *)
-% *)
-

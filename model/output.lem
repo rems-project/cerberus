@@ -323,8 +323,7 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
         Mem.bind (Mem.load elem_ty ptrval) (fun mval ->
         Mem.case_mem_value mval
-          (fun _ -> error "Output.load_character_array, unspecified")
-(*          (fun _ -> error "Output.load_character_array, Symbolic") *)
+          (fun _ -> error "Output.load_character_array, Symbolic")
           (fun ity ival ->
             Mem.case_integer_value ival
               (fun n -> if n = 0 then
@@ -593,8 +592,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
           let conv_ty_opt = match expected_ty_opt with
             | Just expected_ty ->
                 if arg_ty <> expected_ty then
-                  let () = Debug.warn $ "printf() was expecting a(n) " ^ stringFromCtype expected_ty ^
-                                        " but got a(n) " ^ stringFromCtype arg_ty ^ " instead." in
+                  let () = Boot.warn $ "printf() was expecting a(n) " ^ stringFromCtype expected_ty ^
+                                       " but got a(n) " ^ stringFromCtype arg_ty ^ " instead." in
                   Just expected_ty
                 else
                   _conv_ty_opt
@@ -607,7 +606,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 match eval_conv arg_ty conv_ty mval with
                   | Left err ->
                       Mem.return (Left err)
-                  | Right (U.Defined (Core.Vspecified (Core.OVinteger ival))) ->
+                  | Right (U.Defined (Core.Vobject (Core.OVinteger ival))) ->
                       match Mem_aux.integerFromIntegerValue ival with
                         | Just n ->
                             Mem.return $ Right (U.return (
@@ -618,7 +617,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                             ))
                         | Nothing ->
                             error ("WIP: convert --> not a concrete integer: " ^
-                                   stringFromMemValue (fromJust "Output, not a concrete integer" $ Core_aux.memValueFromValue conv_ty (Core.Vspecified (Core.OVinteger ival))))
+                                   stringFromMemValue (fromJust "Output, not a concrete integer" $ Core_aux.memValueFromValue conv_ty (Core.Vobject (Core.OVinteger ival))))
                       end
                   | Right (U.Defined (Core.Vunspecified _)) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
@@ -631,10 +630,12 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 end
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
-                match snd (Core_aux.valueFromMemValue mval) with
+                match snd (Core_aux.objectValueFromMemValue mval) with
+(*
                   | Core.Vunspecified _ ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Core.Vspecified (Core.OVinteger ival) ->
+*)
+                  | Core.OVinteger ival ->
                       match Mem_aux.integerFromIntegerValue ival with
                         | Just n ->
                             Mem.return $ Right (U.return (
@@ -644,7 +645,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                                 (cont n, args')
                             ))
                       end
-                  | Core.Vspecified (Core.OVfloating fval) ->
+                  | Core.OVfloating fval ->
                       Mem.return $ Right (U.return (
                         Mem.case_fval fval
                           (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])

@@ -179,7 +179,7 @@ let ctype_of a_expr =
     | Right (AilTypes.RValueType   ty) -> ty
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
         error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
-                            (Pp.stringFromAil_expression a_expr)
+                            (Boot.pp_ail_expr a_expr)
     | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
         error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
                             show n

@@ -1,24 +1,5 @@
-import Loc
+(* A hackish module regrouping debug related stuff. *)
 
-val get_level: unit -> nat
-declare ocaml target_rep function get_level   = `Debug_ocaml.get_debug_level`
-declare hol   target_rep function get_level u = 0 (* TODO: HOL hack *)
-
-
-val output_string: string -> unit
-declare ocaml target_rep function output_string = `Debug_ocaml.output_string2`
-
-val print_debug: nat -> string -> unit
-declare ocaml target_rep function print_debug = `Debug_ocaml.print_debug`
-
-val print_debug_located: nat -> Loc.t -> string -> unit
-declare ocaml target_rep function print_debug_located = `Debug_ocaml.print_debug_located`
-
-val warn: string -> unit
-declare ocaml target_rep function warn = `Debug_ocaml.warn`
-
-
-(*
 open import Pervasives Global
 import Boot
 
@@ -40,9 +21,4 @@ let print_cont_map cont_map k =
    ) "" $ Pmap.bindings cont_map))
   k
 *)
-
-*)
-
-
-(* val debug: forall 'a. string -> 'a *)
 
