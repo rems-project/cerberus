@@ -6,7 +6,7 @@ import Symbol ErrorMonad Cmm_csem
 
 
 (* == Ail syntax datatypes ================================================== *)
-type identifier = Symbol.t
+type identifier = Symbol.sym
 
 type integerSuffix = 
  | U

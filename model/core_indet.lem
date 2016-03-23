@@ -1,5 +1,5 @@
 open import Pervasives Global
-import Core (* Memory *) Exception Errors Boot (* Memory_order *)
+import Core (* Memory *) Exception Errors Pp (* Memory_order *)
 
 
 (* TODO: lem non termination bug *)
@@ -419,7 +419,7 @@ let rec hack expr =
         Core.Esseq as_opt (hack e1) (hack e2)
 (* TODO: lem non termination bug *)
     | Core.Easeq (Just (sym, bTy)) act pact ->
-        Core.Ewseq (Core.CaseBase (Just sym))
+        Core.Ewseq (Core.CaseBase (Just (sym, bTy)))
           (Core.Eaction (Core.Paction Core.Pos act))
           (Core.Ewseq (Core.CaseBase Nothing) (Core.Eaction pact) (Core.Epure (Core.Pexpr bTy (Core.PEsym sym))))
 (*
@@ -446,7 +446,7 @@ let rec hack expr =
     | Core.Eloc loc e ->
         Core.Eloc loc (hack e)
     | _ ->
-        error ("Core_indet ==> " ^ Boot.pp_core_expr expr)
+        error ("Core_indet ==> " ^ Pp.stringFromCore_expr expr)
 end
 
 

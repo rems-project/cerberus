@@ -1,7 +1,7 @@
 open import Pervasives String_extra Show
 open import List Function
 open import Global
-import Boot Dlist Constraints Symbolic Undefined Loc
+import Debug Dlist Constraints Symbolic Undefined Loc
 
 
 
@@ -175,7 +175,7 @@ let bindRandom (ND m) f =
       (* this changes the type variable ... *)
       List.map (function (id, Killed a b c) -> (id, Killed a b c) | _ -> error "bindRandom 1" end) killed in
     match actives with
-      | [] -> let _ = Boot.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
+      | [] -> let _ = Debug.print_debug 4 ("bindRandom FOUND NO ACTIVES. Killed: " ^ 
                                  show (List.map (function (_, Killed r _ _) -> r | _ -> error "ND.bindRandom 2" end) killed)) in 
               killed
 
@@ -249,7 +249,7 @@ open Operators
 val mzero: forall 'a. t 'a
 val mplus: forall 'a. t 'a -> t 'a -> t 'a
 
-let mzero = let _ = Boot.print_debug 3 "WARNING: mzero is called" in ND []
+let mzero = let _ = Debug.print_debug 3 "WARNING: mzero is called" in ND []
 let mplus (ND ma) (ND mb) = ND (ma ++ mb)
 
 
@@ -285,7 +285,7 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 val msum: forall 'a. string -> list (t 'a) -> t 'a (* GENERIC MonadPlus *)
 let msum debug_str ms =
   let () = if List.null ms then
-    Boot.print_debug 5 ("ND.msum(" ^ debug_str ^ "), empty list")
+    Debug.print_debug 5 ("ND.msum(" ^ debug_str ^ "), empty list")
   else
     () in
   List.foldr mplus mzero ms        (* GENERIC MonadPlus *)
@@ -297,7 +297,7 @@ let msum debug_str ms =
 val pick: forall 'a. string -> list 'a -> t 'a
 let pick debug_str xs =
   let () = if List.null xs then
-    Boot.print_debug 5 ("ND.pick(" ^ debug_str ^ "), empty list")
+    Debug.print_debug 5 ("ND.pick(" ^ debug_str ^ "), empty list")
   else
     () in
   ND $ List.map (fun (n, z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote xs)
@@ -306,7 +306,7 @@ let pick debug_str xs =
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
 let rec _pickWith pred acc debug_n = function
   | [] ->
-      let _ = Boot.print_debug 3 "WARNING: pickWith returns []" in
+      let _ = Debug.print_debug 3 "WARNING: pickWith returns []" in
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
@@ -317,7 +317,7 @@ let pickWith pred xs =
 (*
   let _ = 
     if List.null ret then
-      Boot.print_debug 3 ("pickWith called with xs of length " ^ show (List.length xs) ^
+      Debug.print_debug 3 ("pickWith called with xs of length " ^ show (List.length xs) ^
                           " and returns a list with length " ^ show (List.length ret))
     else 
       ()
@@ -334,7 +334,7 @@ let tryM (ND ma) mend =
 
 val kill: forall 'a. kill_reason -> t 'a
 let kill reason =
-  let _ = Boot.print_debug 3 ("WARNING: kill (\"" ^ show reason ^ "\") is called") in
+  let _ = Debug.print_debug 3 ("WARNING: kill (\"" ^ show reason ^ "\") is called") in
   ND [([], Killed reason Dlist.nil Constraints.empty)]
 (*  ND [] *)
 
@@ -384,7 +384,7 @@ end
 let warns_if_no_active_ex (ND xs) =
   let _ =
     if not (List.any is_active xs) then
-      Boot.print_debug 4 "There are no active executions"
+      Debug.print_debug 4 "There are no active executions"
     else
       () in
   ND xs
@@ -407,7 +407,7 @@ let apply_to_constraints f (ND xs) =
 
 val print_debug: nat -> string -> t unit
 let print_debug n str =
-  return (Boot.print_debug n ("[DRIVER] " ^ str))
+  return (Debug.print_debug n ("[DRIVER] " ^ str))
 
 
 
