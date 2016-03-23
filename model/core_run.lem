@@ -63,7 +63,7 @@ let call_proc file psym cvals =
 
 (* TODO[newLem] ^ Pp.pp_core_expr (Esym psym) ^ "'" *)
         else
-          Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym sym (Pexpr bTy (PEval cval)) acc) body params cvals)
+          Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym_expr sym (Pexpr bTy (PEval cval)) acc) body params cvals)
     | Nothing ->
         Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
@@ -1465,13 +1465,16 @@ type action_request =
                       is able to give one right away, or is equal to the symbolic value provided by the
                       present LoadRequest *)
                    (Mem.mem_value -> thread_state)
-
+  
   | StoreRequest of Loc.t * set action_id * set action_id * set action_id *
                     action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
                     thread_state
   | RMWRequest of Loc.t * set action_id * set action_id * set action_id *
                   action_id * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
                   Mem.mem_value * Mem.mem_value * thread_state
+  | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
+                    action_id * thread_id * Cmm.memory_order *
+                    thread_state
   | KillRequest of Loc.t * set action_id * set action_id * set action_id *
                    action_id * thread_id * Mem.pointer_value * thread_state
 
@@ -1622,8 +1625,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                       )
                     )
                 | Nothing ->
-                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " (* ^
-                      Pp.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^ Pp.stringFromCore_expr ((Epure (PEval cval)) : Core.expr unit) ^ "" *))
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
               end
           | (Just (_, cval1), Just (_, cval2), Just (_, cval3)) ->
               Step_error ("found a store() with ill-typed operands: " ^
@@ -1661,8 +1663,8 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                     load_aid current_tid mo ty ptr_val val_sym
                     (fun mem_val -> <| th_st with
                         (* NOTE: the parenthesis are needed because of a Lem's bug... *)
-                        arena= (let (oTy, oval) = objectValueFromMemValue mem_val in
-                               Epure (Pexpr (BTy_loaded oTy) (PEval (Vspecified oval))));
+                        arena= (let (oTy, cval) = valueFromMemValue mem_val in
+                                Epure (Pexpr (BTy_loaded oTy) (PEval cval)));
                         stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
                     |>)
                 )
@@ -1700,8 +1702,6 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                           |>
                       )
                     )
-
-
 (*
   | RMW of aid * tid * memory_order * location * cvalue * cvalue  (* first val = value read; second val = value written *)
 *)
@@ -1791,6 +1791,23 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               )
         end
 *)
+    | Fence mo ->
+        Step_action_request (
+          E.fresh_action_id >>= fun fence_aid ->
+          E.return (
+            FenceRequest loc sb_before dd_before asw_before
+              fence_aid current_tid mo
+              <| th_st with
+                arena= Eskip;
+                stack= add_to_sb_stack {(p, (current_tid, fence_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+              |>
+          )
+        )
+(*
+  | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
+                    action_id * thread_id * Cmm.memory_order * ctype *
+                    thread_state
+*)
   end
 
 
@@ -1805,6 +1822,24 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
         one $ Step_tau "Eskip" (
           E.return <| th_st with arena= apply_continuation cont (Epure (Pexpr BTy_unit (PEval Vunit))); stack= Stack_cons [] sk' |>
         )
+    
+    | (Ecase pe pat_es, _) ->
+        one match pe with
+          | Pexpr _ (PEval _) ->
+              match select_case subst_sym_expr pe pat_es with
+                | Just e' ->
+                    Step_tau "Ecase" (
+                      E.return <| th_st with arena= e' |>
+                    )
+                | Nothing ->
+                    Step_error ("Ecase, mismatched ==> " ^ Pp.stringFromCore_expr th_st.arena)
+              end
+          | _ ->
+              Step_eval "Ecase" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
+                E.return <| th_st with arena= Ecase pe' pat_es |>
+              )
+        end
     
     | (Elet pat pe1 e2, _) ->
         (*                [| pe1 |] = v
@@ -2110,17 +2145,25 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
 (*          let _ = Boot.output_string ("stepping Erun ===> " ^ Pp.stringFromCore_expr e_cont) in *)
           
           (* we have to create the objects which are visible at the level of the save but not from the run *)
-          let (create_syms, create_tys) = unzip $ List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_vs)) sym_tys in
+          let (create_syms, create_tys) = unzip $
+            List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_vs)) sym_tys in
           (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
-          let kill_es = List.map snd $ List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_tys)) sym_vs in
+          let kill_es = List.map snd $ List.filter (fun (sym, _) ->
+            not (List.any (fun (z, _) -> z = sym) sym_tys)
+          ) sym_vs in
           let e =
             Ewseq Caux.mk_empty_pat (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
-              (Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just (z, BTy_object OTy_pointer))) create_syms))
-                 (mk_unseq $ List.map (fun ty ->
-                    let pe_ty = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                    pcreate Loc.unknown (Caux.alignof_pe pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
-                 ) create_tys)
-                 (foldl (fun acc (a, v) -> subst_sym a v acc) e_cont sym_vs)) in
+              match create_syms with
+                | [] ->
+                    (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
+                | _ ->
+                    Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just (z, BTy_object OTy_pointer))) create_syms))
+                       (mk_unseq $ List.map (fun ty ->
+                          let pe_ty = Pexpr BTy_ctype (PEval (Vctype ty)) in
+                          pcreate Loc.unknown (Caux.alignof_pe pe_ty) pe_ty (Symbol.PrefOther "core_run, Erun")
+                       ) create_tys)
+                       (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
+              end in
           (* TODO: it seems strange that annotate_expr need to know the polarity *)
           let e' = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)
           E.return <| th_st with arena= e';
@@ -2135,10 +2178,10 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
 
 
 
-(*
     | (Ereturn pe, Stack_cons _ sk) ->
-*)
+(*
     | (Epure pe, Stack_cons [] sk) ->
+*)
         one match valueFromPexpr pe with
           | Just (bTy, cval) ->
               match sk with
@@ -2168,9 +2211,9 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     )
               end
           | Nothing ->
-              Step_eval "Epure" (
+              Step_eval "Ereturn" (
                 E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map false pe >>= fun pe' ->
-                E.return <| th_st with arena= Epure pe' |>
+                E.return <| th_st with arena= Ereturn pe' |>
               )
         end
     
@@ -2237,7 +2280,10 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                       | _ ->
                           (* -----------------------------------
                              <v, κ.κs, Λ> --τ--> <κ(v), ɛ.κs, Λ> *)
-                          E.return <| th_st with arena= apply_continuation cont (Epure (Pexpr bTy (PEval cval))); stack= push_empty_continuation sk |>
+                          E.return <| th_st with
+                            arena= apply_continuation cont (Epure (Pexpr bTy (PEval cval)));
+                            stack= push_empty_continuation sk
+                          |>
                     end)
                   | Nothing ->
                       (*          [| pe |] = v
@@ -2249,7 +2295,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                       )
                 end
           | Nothing ->
-              error "(Pp.stringFromCore_expr e)" (* TODO: better error message *)
+              error (Pp.stringFromCore_expr e) (* TODO: better error message *)
         end
   end
 

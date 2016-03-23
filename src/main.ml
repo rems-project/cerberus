@@ -359,7 +359,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
                          sequentialise $ concurrency $ preEx $ args $ compile) in
-  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"d187e20b1ef5+ tip -- 22/03/2016@17:15" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

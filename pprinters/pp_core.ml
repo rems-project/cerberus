@@ -94,7 +94,7 @@ let rec pp_core_base_type = function
   | BTy_object bty ->
       pp_core_object_type bty
   | BTy_loaded bty ->
-      !^ "loaded" ^^ pp_core_object_type bty
+      !^ "loaded" ^^^ pp_core_object_type bty
   | BTy_boolean    -> !^ "boolean"
   | BTy_ctype      -> !^ "ctype"
   | BTy_unit       -> !^ "unit"

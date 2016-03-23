@@ -35,29 +35,32 @@ let rec core_object_type_of_ctype ty =
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
 let rec objectValueFromMemValue mem_val =
   Mem.case_mem_value mem_val
-    (fun symb              -> error "Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
+    (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
+    (fun symb              -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
     (fun _ ival            -> (OTy_integer, OVinteger ival))
     (fun _ fval            -> (OTy_floating, OVfloating fval))
     (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
-    (fun mem_vals          -> error "Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
+    (fun mem_vals          -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
     (fun sym xs            -> (OTy_struct sym, OVstruct sym xs))
     (fun sym ident mem_val -> (OTy_union sym, OVunion sym ident mem_val))
+
+val     valueFromMemValue: Mem.mem_value -> core_object_type * value
+let rec valueFromMemValue mem_val =
+  Mem.case_mem_value mem_val
+    (fun ty                -> (core_object_type_of_ctype ty, Vunspecified ty))
+    (fun symb              -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))")
+    (fun _ ival            -> (OTy_integer, Vspecified (OVinteger ival)))
+    (fun _ fval            -> (OTy_floating, Vspecified (OVfloating fval)))
+    (fun _ ptr_val         -> (OTy_pointer, Vspecified (OVpointer ptr_val)))
+    (fun mem_vals          -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
+    (fun sym xs            -> (OTy_struct sym, Vspecified (OVstruct sym xs)))
+    (fun sym ident mem_val -> (OTy_union sym, Vspecified (OVunion sym ident mem_val)))
+
+
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue ty cval =
   match (ty, cval) with
-(*
-    | (_, Vsymbolic symb) ->
-      (* TODO: check *)
-      Just (Mem.symbolic_mval (Symbolic.map_const (fun z -> fromJust $ memValueFromValue ty z) symb))
-*)
-(*
-    | (_, Vobject (OVsymbolic symb)) ->
-      Just (Mem.symbolic_mval (Symbolic.map_const (fun z ->
-          match memValueFromValue ty z with
-           | Just mval -> mval
-        end) symb))
-*)
     | (_, Vunit) ->
         Nothing
     | (_, Vtrue) ->
@@ -72,15 +75,15 @@ let rec memValueFromValue ty cval =
         Nothing
     | (_, Vunspecified ty') ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
-    | (Basic (AilTypes.Integer ity), Vobject (OVinteger ival)) ->
+    | (Basic (AilTypes.Integer ity), Vspecified (OVinteger ival)) ->
         Just (Mem.integer_value_mval ity ival)
-    | (Basic (AilTypes.Floating fty), Vobject (OVfloating fval)) ->
+    | (Basic (AilTypes.Floating fty), Vspecified (OVfloating fval)) ->
         Just (Mem.floating_value_mval fty fval)
-    | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) ->
+    | (Pointer _ ref_ty, Vspecified (OVpointer ptr_val)) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
 (*
 TODO
-    | (Array elem_ty _, Vobject (OVarray cvals)) ->
+    | (Array elem_ty _, Vspecified (OVarray cvals)) ->
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
           List.foldr (fun cval acc_opt ->
@@ -92,12 +95,12 @@ TODO
             end
           ) (Just []) cvals
 *)
-    | (Struct tag_sym1, Vobject (OVstruct tag_sym2 xs)) ->
+    | (Struct tag_sym1, Vspecified (OVstruct tag_sym2 xs)) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.struct_mval tag_sym1 xs)
         else
           Nothing
-    | (Union tag_sym1, Vobject (OVunion tag_sym2 ident mem_val)) ->
+    | (Union tag_sym1, Vspecified (OVunion tag_sym2 ident mem_val)) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.union_mval tag_sym1 ident mem_val)
         else
@@ -234,8 +237,10 @@ val zeros: ctype -> pexpr
 let zeros ty =
   (* TODO: yucky *)
   Pexpr (BTy_object (core_object_type_of_ctype ty))
+(*
     (PEval (Vobject (snd $ objectValueFromMemValue (zeros_aux ty))))
-
+*)
+    (PEval (snd $ valueFromMemValue (zeros_aux ty)))
 
 
 (*
@@ -500,12 +505,18 @@ let rec to_pure expr =
         Nothing
     | Eloc _ _ ->
         Nothing
-    | Ecase _ _ ->
-        error "WIP [Core_aux.to_pure], Ecase"
+    | Ecase pe pat_es ->
+       let (pats, es) = List.unzip pat_es in
+        match to_pures es with
+          | Just ((Pexpr bTy _ :: _) as pes) ->
+              Just (Pexpr bTy (PEcase pe (List.zip pats pes)))
+          | _ ->
+            Nothing
+        end
 end
 
-val     to_pures: forall 'a. list (expr 'a) -> maybe (list pexpr)
-let rec to_pures es =
+(* val     to_pures: forall 'a. list (expr 'a) -> maybe (list pexpr)*)
+and to_pures (es: list (expr 'a)) =
   List.foldr (fun e acc_opt ->
     match (to_pure e, acc_opt) with
       | (Just pe, Just acc) ->
@@ -581,8 +592,8 @@ let rec subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
 end
 
 
-val     subst_sym: forall 'a. Symbol.sym -> pexpr -> expr 'a -> expr 'a
-let rec subst_sym sym pe' = function
+val     subst_sym_expr: forall 'a. Symbol.sym -> pexpr -> expr 'a -> expr 'a
+let rec subst_sym_expr sym pe' = function
 (*
   let () =
     (* TODO: debug *)
@@ -590,7 +601,7 @@ let rec subst_sym sym pe' = function
       | Just _ ->
           ()
       | Nothing ->
-          error ("DEBUG [Caux.subst_sym]: called on a non-value: " ^ Pp.stringFromCore_expr (Epure pe'))
+          error ("DEBUG [Caux.subst_sym_expr]: called on a non-value: " ^ Pp.stringFromCore_expr (Epure pe'))
     end
   in
   match _pe with
@@ -602,23 +613,23 @@ let rec subst_sym sym pe' = function
   | (Eskip as expr) ->
       expr
   | Elet pat pe1 e2 ->
-      Elet pat (subst_sym_pexpr sym pe' pe1) (if in_pattern sym pat then e2 else subst_sym sym pe' e2)
+      Elet pat (subst_sym_pexpr sym pe' pe1) (if in_pattern sym pat then e2 else subst_sym_expr sym pe' e2)
   | Eif pe1 e2 e3 ->
-      Eif (subst_sym_pexpr sym pe' pe1) (subst_sym sym pe' e2) (subst_sym sym pe' e3)
+      Eif (subst_sym_pexpr sym pe' pe1) (subst_sym_expr sym pe' e2) (subst_sym_expr sym pe' e3)
   | Ecase pe pat_es ->
       Ecase (subst_sym_pexpr sym pe' pe) (List.map (fun (pat, e) ->
-        (pat, if in_pattern sym pat then e else subst_sym sym pe' e)
+        (pat, if in_pattern sym pat then e else subst_sym_expr sym pe' e)
       ) pat_es)
   | Eproc annot pe pes ->
       Eproc annot (subst_sym_pexpr sym pe' pe) (List.map (subst_sym_pexpr sym pe') pes)
   | Eaction pact ->
       Eaction (subst_sym_paction sym pe' pact)
   | Eunseq es ->
-      Eunseq (List.map (subst_sym sym pe') es)
+      Eunseq (List.map (subst_sym_expr sym pe') es)
   | Ewseq pat e1 e2 ->
-      Ewseq pat (subst_sym sym pe' e1) (if in_pattern sym pat then e2 else subst_sym sym pe' e2)
+      Ewseq pat (subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else subst_sym_expr sym pe' e2)
   | Esseq pat e1 e2 ->
-      Esseq pat (subst_sym sym pe' e1) (if in_pattern sym pat then e2 else subst_sym sym pe' e2)
+      Esseq pat (subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else subst_sym_expr sym pe' e2)
   | Easeq pat act1 pact2 ->
       Easeq pat (subst_sym_action sym pe' act1) (
         match pat with
@@ -629,23 +640,23 @@ let rec subst_sym sym pe' = function
         end
       )
   | Eindet i e ->
-      Eindet i (subst_sym sym pe' e)
+      Eindet i (subst_sym_expr sym pe' e)
   | Ebound i e ->
-      Ebound i (subst_sym sym pe' e)
+      Ebound i (subst_sym_expr sym pe' e)
   | Esave ksym sym_tys e ->
-      Esave ksym sym_tys (subst_sym sym pe' e)
+      Esave ksym sym_tys (subst_sym_expr sym pe' e)
   | Erun annot ksym sym_pes ->
       Erun annot ksym (list_update sym pe' sym_pes)
   | Ereturn pe ->
       Ereturn (subst_sym_pexpr sym pe' pe)
   | End es ->
-      End (List.map (subst_sym sym pe') es)
+      End (List.map (subst_sym_expr sym pe') es)
   | Epar es ->
-      Epar (List.map (subst_sym sym pe') es)
+      Epar (List.map (subst_sym_expr sym pe') es)
   | (Ewait _ as expr) ->
       expr
   | Eloc loc e ->
-      Eloc loc (subst_sym sym pe' e)
+      Eloc loc (subst_sym_expr sym pe' e)
 end
 
 
@@ -690,7 +701,7 @@ let rec subst_pattern pat pe' expr =
     | (CaseBase Nothing, _) ->
         expr
     | (CaseBase (Just (sym, _)), _) ->
-        subst_sym sym pe' expr
+        subst_sym_expr sym pe' expr
     | (CaseCtor (Cnil _) [], Pexpr _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         expr
@@ -959,7 +970,7 @@ let subst_sym_fun_map sym pe' funs =
     | Fun ty params pe ->
         Fun ty params (subst_sym_pexpr sym pe' pe)
     | Proc ty params e ->
-        Proc ty params (subst_sym sym pe' e)
+        Proc ty params (subst_sym_expr sym pe' e)
   end) funs
 
 
@@ -1294,11 +1305,21 @@ let mk_sym_pat sym bTy =
   CaseBase (Just (sym, bTy))
 
 val mk_tuple_pat: list pattern -> pattern
+let mk_tuple_pat = function
+  | [] ->
+      error "[Core_aux.mk_tuple_pat] called with |pats| = 0"
+  | [pat] ->
+      pat
+  | pats ->
+      CaseCtor Ctuple pats
+end
+(*
 let mk_tuple_pat pats =
   if List.length pats < 2 then
       error "[Core_aux.mk_tuple_pat] called with |pats| < 2"
   else
     CaseCtor Ctuple pats
+*)
 
 val mk_specified_pat: pattern -> pattern
 let mk_specified_pat pat =
@@ -1326,3 +1347,47 @@ let rec mk_sseqs_e es =
 val mk_specified_pe: pexpr -> pexpr
 let mk_specified_pe (Pexpr (BTy_object oTy) _ as pe) =
     Pexpr (BTy_loaded oTy) (PEctor Cspecified [pe])
+
+
+
+
+val     match_pattern: pattern -> pexpr -> maybe (list (sym * pexpr))
+let rec match_pattern pat ((Pexpr bTy pe_) as pexpr) =
+  match (pat, bTy, pe_) with
+    | (CaseBase Nothing, _, _) ->
+        Just []
+    | (CaseBase (Just (sym, _)), _, _) ->
+        Just [(sym, pexpr)]
+(*      | Vobject of (generic_object_value 'sym) *)
+    | (CaseCtor Cspecified [pat'], _(*BTy_loaded oTy*), PEval (Vspecified oval)) ->
+        match_pattern pat' (Pexpr (BTy_object (*oTy*)OTy_integer) (PEval (Vobject oval)))
+    | (CaseCtor Cunspecified [pat'], _(*BTy_loaded oTy*), PEval (Vunspecified ty)) ->
+        match_pattern pat' (mk_ctype_pe ty)
+(*      | Vlist of core_base_type * list (generic_value 'sym) *)
+    | (CaseCtor Ctuple pats', _(*BTy_tuple bTys'*), PEval (Vtuple cvals')) -> 
+        List.foldr (fun (pat', ((*bTy',*) cval')) acc ->
+          Maybe.bind acc (fun xs ->
+            Maybe.bind (match_pattern pat' (Pexpr BTy_unit(*bTy'*) (PEval cval'))) (fun x ->
+              Just (x++xs)
+            )
+          )
+        ) (Just []) (List.zip pats' cvals' (*(List.zip bTys' cvals')*))
+    | _ ->
+        Nothing
+  end
+
+val     select_case: forall 'a. (Symbol.sym -> pexpr -> 'a -> 'a) -> pexpr -> list (pattern * 'a) -> maybe 'a
+let rec select_case subst_sym pexpr = function
+  | [] ->
+      Nothing
+  | (pat, pe) :: pat_pes' ->
+      match match_pattern pat pexpr with
+        | Nothing ->
+            (* trying the next branch *)
+            select_case subst_sym pexpr pat_pes'
+        | Just (sym_pes) ->
+            Just $ List.foldr (fun (sym, pe') acc ->
+              subst_sym sym pe' acc
+            ) pe sym_pes
+      end
+end
