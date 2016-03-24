@@ -1,0 +1,49 @@
+open import Pervasives
+
+import Driver_util Mem
+
+
+type program_impl  = nat
+type location_impl = Mem.pointer_value
+type cvalue_impl   = Mem.mem_value
+type aid_impl      = Driver_util.action_id
+type tid_impl      = Thread.thread_id
+
+(* TODO *)
+type footprint_impl =
+  | FOOTPRINT
+
+instance (Show footprint_impl)
+  let show x = "FOOTPRINT"
+end
+
+instance (Eq footprint_impl)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (SetType footprint_impl)
+  let setElemCompare = defaultCompare
+end
+
+val footprint_of_loc_impl: location_impl -> footprint_impl
+val footprint_leq: footprint_impl -> footprint_impl -> bool
+val footprint_empty_impl: footprint_impl
+val footprint_is_empty_impl: footprint_impl -> bool
+val footprint_difference_impl: footprint_impl -> footprint_impl -> footprint_impl
+val footprint_intersection_impl: footprint_impl -> footprint_impl -> footprint_impl
+val footprint_bigunion_impl: set footprint_impl -> footprint_impl
+
+val combine_cvalues: set (maybe cvalue_impl * footprint_impl * footprint_impl) -> maybe cvalue_impl
+
+
+let footprint_of_loc_impl _ = FOOTPRINT
+let footprint_leq_impl _ _ = false
+let footprint_empty_impl = FOOTPRINT
+let footprint_is_empty_impl _ = false
+let footprint_difference_impl x _ = x
+let footprint_intersection_impl x _ = x
+let footprint_bigunion_impl _ = FOOTPRINT
+let combine_cvalues_impl _ = Nothing
+
+

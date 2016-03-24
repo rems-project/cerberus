@@ -1,0 +1,5 @@
+% FIXME: function argument indentifiers
+  | id : qs ty in G :: M :: InGamma
+      {{ coq ([[G]] [ [[id]] ] = Some ([[qs]], [[ty]]))%gamma }}
+  | id : ty = s in S :: M :: InSigma
+      {{ coq ([[S]] [ [[id]] ] = Some ([[ty]], [[s]]))%sigma }}

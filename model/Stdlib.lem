@@ -1,0 +1,15 @@
+(* implementation of some functions from the C standard library *)
+
+
+(* STD: The abort function causes abnormal program termination to occur, unless
+        the signal SIGABRT is being caught and the signal handler does not
+        return. Whether open streams with unwritten buffered data are flushed,
+        open streams are closed, or temporary files are removed is
+        implementation-defined. An implementation-defined form of the status
+        unsuccessful termination is returned to the host environment by means of
+        the function call raise(SIGABRT). *)
+
+(* TODO: not dealing with signals for now, or the implementation defined stuff *)
+val std_function_abort: SEU.t core_state core_run_state core_run_error
+let std_function_abort =
+  TODO

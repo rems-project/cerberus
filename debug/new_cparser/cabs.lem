@@ -1,0 +1,488 @@
+(* AST type used by Jacques-Henri Jourdan's parser *)
+open import Pervasives
+
+
+type identifier = string
+
+
+
+type constant =
+  | CONSTANT_TODO
+
+type string_literal =
+  | STRING_LITERAL_TODO
+
+
+(* §6.7 Declarations *)
+type declaration =
+  | DECLARATION_TODO
+
+
+
+
+
+
+
+
+(* §6.5 Expressions *)
+type expression =
+  | Eident of identifier
+  | Econst of constant
+  | Estring of string_literal
+  | Egeneric of expression * list generic_association
+  | Esubscript of expression * expression
+  | Ecall of expression * list expression
+  | Ememberof of expression * identifier
+  | Ememberofptr of expression * identifier
+  | Epostincr of expression
+  | Epostdecr of expression
+  | Ecompound of type_name * list (maybe (list designator) * initializer_)
+  | Epreincr of expression
+  | Epredecr of expression
+  | Eunary of unary_operator * expression
+  | Ebinary of binary_operator * expression * expression
+  | Esizeof_expr of expression
+  | Esizeof_type of type_name
+  | Ealignof of type_name
+  | Ecast of type_name * expression
+  | Econd of expression * expression * expression
+  | Eassign of assignment_operator * expression * expression
+  | Ecomma of expression * expression
+
+and generic_association =
+  | GA_type of type_name * expression
+  | GA_default of expression
+
+
+(* §6.5.3 Unary operators *)
+and unary_operator =
+  | Address
+  | Indirection
+  | Plus
+  | Minus
+  | Bnot
+  | Not
+
+and binary_operator =
+  (* §6.5.5 Multiplicative operators *)
+  | Mul | Div | Mod
+  (* §6.5.6 Additive operators *)
+  | Add | Sub
+  (* §6.5.7 Shift operators *)
+  | Shl | Shr
+  (* §6.5.8 Relational operators *)
+  | Lt | Gt | Le | Ge
+  (* §6.5.9 Equality operators *)
+  | Eq | Ne
+  (* §6.5.10 Bitwise AND operator *)
+  | Band
+  (* §6.5.11 Bitwise exclusive OR operator *)
+  | Bxor
+  (* §6.5.12 Bitwise inclusive OR operator *)
+  | Bor
+  (* §6.5.13 Logical AND operator *)
+  | And
+  (* §6.5.14 Logical OR operator *)
+  | Or
+
+(* §6.5.16 Assignment operator *)
+and assignment_operator =
+  | Assign
+  | Assign_Mul
+  | Assign_Div
+  | Assign_Mod
+  | Assign_Add
+  | Assign_Sub
+  | Assign_Shl
+  | Assign_Shr
+  | Assign_Band
+  | Assign_Bxor
+  | Assign_Bor
+
+and statement =
+  | Slabel of identifier * statement
+  | Scase of expression * statement
+  | Sdefault of statement
+  | Sblock of list statement
+  | Sdecl of declaration
+  | Snull
+  | Sexpr of expression
+  | Sif of expression * statement * maybe statement
+  | Sswitch of expression * statement
+  | Swhile of expression * statement
+  | Sdo of expression * statement
+  | Sfor of maybe for_clause * maybe expression * maybe expression * statement
+  | Sgoto of identifier
+  | Scontinue
+  | Sbreak
+  | Sreturn of maybe expression
+
+and for_clause =
+ | FC_expr of expression
+ | FC_decl of declaration
+
+
+(* §6.7.10 Static assertions *)
+and static_assert_declaration =
+ | Static_assert of expression * string
+
+
+
+(* §6.7.9 Initialization *)
+and designator =
+  | Desig_array of expression
+  | Desig_member of identifier
+
+and initializer_ =
+  | Init_expr of expression
+  | Init_list of list (maybe (list designator) * initializer_)
+
+
+
+and type_specifier =
+  | TSpec_void
+  | TSpec_char
+  | TSpec_short
+  | TSpec_int
+  | TSpec_long
+  | TSpec_float
+  | TSpec_double
+  | TSpec_signed
+  | TSpec_unsigned
+  | TSpec_Bool
+  | TSpec_Complex
+  | TSpec_Atomic of type_name
+  | TSpec_struct of maybe identifier * maybe (list struct_declaration)
+  | TSpec_union  of maybe identifier * maybe (list struct_declaration)
+  | TSpec_enum   of maybe identifier * maybe (list enumerator)
+  | TSpec_name   of identifier
+
+
+
+(* §6.7.2.1 *)
+and struct_declaration =
+  | Struct_declaration of list type_specifier * list type_qualifier * list struct_declarator
+  | Struct_assert      of static_assert_declaration
+
+
+and struct_declarator =
+  | SDecl_simple   of declarator
+  | SDecl_bitfield of maybe declarator * expression
+
+
+
+and enumerator = identifier * maybe expression
+
+
+
+
+
+
+
+
+
+
+
+and storage_class_specifier =
+  | SC_typedef
+  | SC_extern
+  | SC_static
+  | SC_Thread_local
+  | SC_auto
+  | SC_register
+
+and type_qualifier =
+  | Q_const
+  | Q_restrict
+  | Q_volatile
+  | Q_Atomic
+
+
+
+
+
+
+(* §6.7.4 Function specifiers *)
+and function_specifier =
+  | FS_inline
+  | FS_Noreturn
+
+(* §6.7.5 Alignment specifier *)
+and alignment_specifier =
+  | AS_type of type_name
+  | AS_expr of expression
+
+
+
+
+(* §6.7.6 Declarators *)
+and declarator =
+  | Declarator of maybe pointer_declarator * direct_declarator
+
+and direct_declarator =
+  | DDecl_identifier of identifier
+  | DDecl_declarator of declarator
+  | DDecl_array of array_declarator
+and array_declarator =
+  | ADecl of list type_qualifier * bool * array_declarator_size
+and array_declarator_size =
+  | ADeclSize_expression of expression
+  | ADeclSize_asterisk
+
+and pointer_declarator =
+  | PDecl of list type_qualifier * maybe pointer_declarator
+
+and parameter_type_list =
+  | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
+
+and parameter_declaration =
+  | PDeclaration_decl     of specifiers * declarator
+  | PDeclaration_abs_decl of specifiers * maybe abstract_declarator
+
+
+(* §6.7.7 Type names *)
+and type_name =
+  | Type_name of list type_specifier * list type_qualifier * maybe abstract_declarator
+
+and abstract_declarator =
+  | AbsDecl_pointer of pointer_declarator
+  | AbsDecl_direct  of maybe pointer_declarator * direct_abstract_declarator
+
+(* TODO: ctor names *)
+and direct_abstract_declarator =
+  | DAbs_decl_abs of abstract_declarator
+  | DAbs_A of maybe direct_abstract_declarator * list type_qualifier * maybe expression
+  | DAbs_B of maybe direct_abstract_declarator * list type_qualifier * expression
+  | DAbs_C of maybe direct_abstract_declarator * list type_qualifier * expression
+  | DAbs_D of maybe direct_abstract_declarator
+  | DAbs_E of maybe direct_abstract_declarator * parameter_type_list
+
+
+
+
+
+
+(* §6.7 Declarations *)
+
+and specifiers = <|
+  storage_classes:      list storage_class_specifier;
+  type_specifiers:      list type_specifier;
+  type_qualifiers:      list type_qualifier;
+  function_specifiers:  list function_specifier;
+  alignment_specifiers: list alignment_specifier;
+|>
+
+type init_declarator =
+  | InitDecl of declarator * maybe initializer_
+
+
+
+
+type definition =
+  | DEFINITION_TODO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+
+
+
+
+
+
+
+
+
+type declarator =
+  | Declarator of maybe pointer * direct_declarator
+
+
+
+*)
+
+
+
+
+
+(*
+
+
+
+
+type atom = string
+
+(* Context information. *)
+type cabsloc_ (* TODO(Hack): there should be another way *)
+declare ocaml target_rep type cabsloc_ = `Lexing.position`
+type cabsloc = cabsloc_ (* Location.t *)
+
+(* §6.7.2 #1 *)
+type type_specifier = (* Merge all specifiers into one type *)
+  | TSpec_void
+  | TSpec_char
+  | TSpec_short
+  | TSpec_int
+  | TSpec_long
+  | TSpec_float
+  | TSpec_double
+  | TSpec_signed
+  | TSpec_unsigned
+  | TSpec_Bool
+(*  | TSpec_Complex *)
+  | TSpec_atomic of(list spec_elem * decl_type)
+  (* each of the following three kinds of specifiers contains a field
+   * or list item iff it corresponds to a definition (as opposed to
+   * a forward declaration or simple reference to the type).
+   * They also have a list of __attribute__s that appeared between the
+   * keyword and the type name (definitions only) *)
+  | TSpec_struct of maybe atom * maybe (list field_group) * list attribute
+  | TSpec_union of maybe atom * maybe (list field_group) * list attribute
+  | TSpec_enum of maybe atom * maybe (list (atom * maybe expression * cabsloc)) * list attribute
+  
+  | TSpec_name of identifier
+
+(* §6.7.1 #1 *)
+
+and 
+
+(* Type specifier elements. These appear at the start of a declaration *)
+(* Everywhere they appear in this file, they appear as a 'list spec_elem', *)
+(* which is not interpreted by cabs -- rather, this "word soup" is passed *)
+(* on to the compiler.  Thus, we can represent e.g. 'int long float x' even *)
+(* though the compiler will of course choke. *)
+and spec_elem =
+  | SpecQualifier of type_qualifier
+  | SpecAttr of attribute
+  | SpecStorage of storage_class_specifier
+  | SpecInline
+  | SpecType of type_specifier
+
+(* Declarator type. They modify the base type given in the specifier. Keep
+ * them in the order as they are printed (this means that the top level
+ * constructor for ARRAY and PTR is the inner-level in the meaning of the
+ * declared type) *)
+and decl_type =
+ | JUSTBASE
+ | ARRAY of decl_type * list type_qualifier * list attribute * maybe expression
+ | PTR of list type_qualifier * list attribute * decl_type
+(* The bool is true for variable length parameters. *)
+ | PROTO of decl_type * (list parameter * bool)
+
+and parameter =
+  | PARAM of list spec_elem * maybe atom * decl_type * list attribute * cabsloc
+
+(* The optional expression is the bitfield *)
+and field_group =
+  | Field_group of list spec_elem * list (maybe name * maybe expression) * cabsloc
+
+(* The decl_type is in the order in which they are printed. Only the name of
+ * the declared identifier is pulled out. *)
+(* e.g: in "int *x", "*x" is the declarator; "x" will be pulled out as *)
+(* the atom, and decl_type will be PTR([], JUSTBASE) *)
+and name =
+  | Name of atom * decl_type * list attribute * cabsloc
+
+(* A variable declarator ("name") with an initializer *)
+and init_name =
+  | Init_name of name * init_expression
+
+(*
+** Expressions
+*)
+and binary_operator =
+  | Add | Sub | Mul | Div | Mod
+  | And | Or
+  | Band | Bor | Xor | Shl | Shr
+  | Eq | Ne | Lt | Gt | Le | Ge
+  | Assign
+  | Add_assign | Sub_assign | Mul_assign | Div_assign | Mod_assign
+  | Band_assign | Bor_assign | Xor_assign | Shl_assign | Shr_assign
+  | Comma
+
+and unary_operator =
+  | Minus | Plus | Not | Bnot | Indirection | Address
+  | PrefixIncr | PrefixDecr | PostfixIncr | PostfixDecr
+
+
+and integer_suffix =
+  | SUFFIX_UNSIGNED
+  | SUFFIX_UNSIGNED_LONG
+  | SUFFIX_UNSIGNED_LONG_LONG
+  | SUFFIX_LONG
+  | SUFFIX_LONG_LONG
+
+and character_prefix =
+  | PREFIX_L
+  | PREFIX_u
+  | PREFIX_U
+
+and encoding_prefix =
+  | ENCODING_u8
+  | ENCODING_u
+  | ENCODING_U
+  | ENCODING_L
+
+and constant =
+  (* The atom is the textual representation of the constant in
+     the source code. It does include quotes. *)
+  | CONST_INT of atom * maybe integer_suffix
+  | CONST_FLOAT of atom
+  | CONST_CHAR of maybe character_prefix * atom
+  | CONST_STRING of atom (* TODO *)
+
+and init_expression =
+  | NO_INIT
+  | SINGLE_INIT of expression
+  | COMPOUND_INIT of list (list initwhat * init_expression)
+
+and initwhat =
+  | INFIELD_INIT of atom
+  | ATINDEX_INIT of expression
+
+and attribute =
+  | ATTR of atom * list expression
+
+(* like name_group, except the declared variables are allowed to have initializers *)
+(* e.g.: int x=1, y=2; *)
+type init_name_group = (list spec_elem * list init_name)
+
+(* The base type and the storage are common to all names. Each name might
+ * contain type or storage modifiers *)
+(* e.g.: int x, y; *)
+type name_group = (list spec_elem * list name)
+
+(*
+** Declaration definition (at toplevel)
+*)
+type definition =
+ | FUNDEF of list spec_elem * name * statement * cabsloc
+ | DECDEF of init_name_group * cabsloc  (* global variable(s), or function prototype *)
+ | PRAGMA of atom * cabsloc
+
+(*
+** statements
+*)
+
+
+
+(* list of toplevel definitions *)
+type file = list definition
+
+
+*)

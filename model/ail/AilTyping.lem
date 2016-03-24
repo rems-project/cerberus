@@ -1,0 +1,613 @@
+open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Implementation
+
+open import ErrorMonad TypingError
+
+
+(* following the table from (§6.4.4.1#5) *)
+val type_of_constant: implementation -> integerConstant -> errorM integerType
+let type_of_constant impl = function
+  | IConstant n Decimal Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  
+  (* Octal or Hexadecimal *)
+  | IConstant n _ Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+    (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just U) ->
+      if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstant n Decimal (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just UL) ->
+      if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstant n Decimal (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just ULL) ->
+      if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstantMax ity ->
+      return ity
+  | IConstantMin ity ->
+      return ity
+end
+
+(*
+
+  TODO(dead code)
+
+
+
+
+
+let type_of_rvalue_aux (type_of_expression : expression 'A -> errorM typeCategory) e =
+  type_of_expression e >>= function
+    | RValueType   ty ->
+        return (rvalue_coercion ty)
+    | LValueType _ ty ->
+        lvalue_coercion ty
+  end
+
+let well_typed_assignment t1 t2 null2 =
+  match (t1, t2) with
+  | (Pointer q1 t1, Pointer q2 t2) -> null2 ||
+                                      sub_qualifiers q2 q1 && (compatible t1 t2 || void t1 && object_ t2 || void t2 && object_ t1) 
+  | (Pointer _  _ , _            ) -> null2
+  | (_            , Pointer _  _ ) -> boolean t1
+  | (_            , _            ) -> arithmetic t1 && arithmetic t2
+  end
+
+let assignable_aux (type_of_rvalue : expression 'A -> maybe ctype) t1 e2 =
+    match runM (type_of_rvalue e2) with
+    | Just t2 -> well_typed_assignment t1 t2 (null_pointer_constant e2)
+    | Nothing -> false
+    end
+
+let well_typed_binary_arithmetic t1 aop t2 : bool =
+  match aop with
+  | Mul  -> arithmetic t1 && arithmetic t2
+  | Div  -> arithmetic t1 && arithmetic t2
+  | Mod  -> integer    t1 && integer    t2
+  | Add  -> arithmetic t1 && arithmetic t2
+  | Sub  -> arithmetic t1 && arithmetic t2
+  | Shl  -> integer    t1 && integer    t2
+  | Shr  -> integer    t1 && integer    t2
+  | Band -> integer    t1 && integer    t2
+  | Xor  -> integer    t1 && integer    t2
+  | Bor  -> integer    t1 && integer    t2
+  end
+
+let well_typed_equality t1 t2 is_null1 is_null2 : bool =
+     pointer t1 && is_null2
+  || pointer t2 && is_null1
+  || pointer_to_void t1 && pointer_to_object t2
+  || pointer_to_void t2 && pointer_to_object t1
+  || pointers_to_compatible_types t1 t2
+  || arithmetic t1 && arithmetic t2
+
+let combine_qualifiers_left t1 t2 : ctype =
+  match (t1, t2) with
+  | (Pointer q1 t1, Pointer q2 _) -> Pointer (combine_qualifiers q1 q2) t1
+  | (Pointer _  _ , _           ) -> t1
+  | (_            , _           ) -> t1
+  end
+
+let combine_qualifiers_right t1 t2 : ctype =
+  match (t1, t2) with
+  | (Pointer q1 _, Pointer q2 t2) -> Pointer (combine_qualifiers q1 q2) t2
+  | (_           , Pointer _  _ ) -> t2
+  | (_           , _            ) -> t2
+  end
+
+let composite_pointer t1 t2 : optionM ctype =
+  match (t1, t2) with
+  | (Pointer q1 t1, Pointer q2 t2) -> if compatible t1 t2
+                                        then Maybe.map (Pointer (combine_qualifiers q1 q2)) (composite t1 t2)
+                                        else fail
+  | (_            , _            ) -> fail
+  end
+
+let well_typed_conditional P t1 t2 t3 null2 null3 : optionM typeCategory =
+  if scalar t1 then
+    if arithmetic t2 && arithmetic t3 then
+      Maybe.map RValueType (usual_arithmetic P t2 t3)
+    else
+      match composite_pointer t2 t3 with
+      | Just t  -> Just (RValueType t)
+      | Nothing -> if void t2 && void t3 then
+                     Just (RValueType Void)
+                   else if pointer t2 && null3 then
+                     Just (RValueType (combine_qualifiers_left t2 t3))
+                   else if pointer t3 && null2 then
+                     Just (RValueType (combine_qualifiers_right t2 t3))
+                   else if pointer_to_object t2 && pointer_to_void t3 then
+                     Just (RValueType (combine_qualifiers_right t2 t3))
+                   else if pointer_to_object t3 && pointer_to_void t2 then
+                     Just (RValueType (combine_qualifiers_left t2 t3))
+                   else Nothing
+      end
+  else
+    Nothing
+
+let rec well_typed_arguments_aux (assignable : ctype -> expression 'A -> bool) (es : list (expression 'A)) (ps : list (qualifiers * ctype)) : bool =
+  match (es, ps) with
+  | ([]     , []           ) -> true
+  | (e :: es, (_, t1) :: ps) -> assignable (rvalue_coercion t1) e && well_typed_arguments_aux assignable es ps 
+  | (_      , _            ) -> false
+  end
+
+let rec type_of_expression' P (S : sigma 'B1 'B2) (G : gamma) (e : expression' 'A) : maybe typeCategory =
+  let type_of_rvalue       = type_of_rvalue_aux (type_of_expression P S G) in
+  let assignable           = assignable_aux type_of_rvalue                 in
+  let well_typed_arguments = well_typed_arguments_aux assignable           in
+  match e with
+    | Var v ->
+        match (lookup G v, lookup S v) with
+          | (Just (qs, ty), Nothing) ->
+              (* block variable *)
+              Just (LValueType qs ty)
+          | (Nothing, Just (Right (qs, ty, _))) ->
+              (* global variable *)
+              Just (LValueType qs ty)
+          | (Nothing    , Just (Left p)) ->
+              (* function name *)
+              Just (RValueType (type_from_sigma p))
+          | (_, _) ->
+              Nothing
+        end
+  | Binary e1 Comma e2 -> 
+     type_of_rvalue e1 >>= fun _  ->
+     type_of_rvalue e2 >>= fun t2 ->
+     Just (RValueType t2)
+  | Unary Address e ->
+      match type_of_expression P S G e with
+      | Just (LValueType q t)            -> Just (RValueType (Pointer q t))
+      | Just (RValueType (Function t p b)) -> Just (RValueType (Pointer no_qualifiers (Function t p b)))
+      | _                                -> Nothing
+      end
+  | Unary Plus e ->
+      type_of_rvalue e >>= fun t ->
+      if arithmetic t then
+        Maybe.map RValueType (promotion P t)
+      else
+        Nothing
+  | Unary Minus e ->
+      type_of_rvalue e >>= fun t ->
+      if arithmetic t then
+        Maybe.map RValueType (promotion P t)
+      else
+        Nothing
+  | Unary Bnot e ->
+      type_of_rvalue e >>= fun t ->
+      if integer t then
+        Maybe.map RValueType (promotion P t)
+      else
+        Nothing
+  | Unary Indirection e ->
+      type_of_rvalue e >>= fun t ->
+      match t with
+      | Pointer q (Function t p b) -> if unqualified q
+                                      then Just (RValueType (Pointer q (Function t p b)))
+                                      else Nothing
+      | Pointer q t              -> if complete t && object_ t
+                                      then Just (LValueType q t)
+                                      else Nothing
+      | _                        -> Nothing
+      end
+  | Unary PostfixIncr e ->
+      match type_of_expression P S G e with
+      | Just (LValueType q' t') ->
+          lvalue_coercion t' >>= fun t ->
+          if modifiable q' t' && (real t' || pointer t')
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
+      end
+  | Unary PostfixDecr e ->
+      match type_of_expression P S G e with
+      | Just (LValueType q' t') ->
+          lvalue_coercion t' >>= fun t ->
+          if modifiable q' t' && (real t' || pointer t')
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
+      end
+  | Call e es ->
+      match type_of_rvalue e with
+      | Just (Pointer q (Function t ps b)) -> if unqualified q && well_typed_arguments es ps
+                                                then Just (RValueType t)
+                                                else Nothing
+      | _                                  -> Nothing
+      end
+  | Assign e1 e2 ->
+      match type_of_expression P S G e1 with
+      | Just (LValueType q1 t1) ->
+          let t = rvalue_coercion t1 in
+          if modifiable q1 t1 && assignable t e2
+            then Just (RValueType t)
+            else Nothing
+      | _ -> Nothing
+      end
+  | Binary e1 (Arithmetic (Mul  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Div  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Mod  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Band as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Xor  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Bor  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (usual_arithmetic P t1 t2)
+        else Nothing
+  | Binary e1 (Arithmetic (Shl  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (promotion P t1)
+        else Nothing
+  | Binary e1 (Arithmetic (Shr  as aop)) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_binary_arithmetic t1 aop t2
+        then Maybe.map RValueType (promotion P t1)
+        else Nothing
+  | Binary e1 (Arithmetic Add) e2 ->
+      type_of_rvalue e1 >>= fun t1 -> 
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointer_to_complete_object t1 && integer t2 then
+        Just (RValueType t1)
+      else if pointer_to_complete_object t2 && integer t1 then
+        Just (RValueType t2)
+      else if well_typed_binary_arithmetic t1 Add t2 then
+        Maybe.map RValueType (usual_arithmetic P t1 t2)
+      else Nothing
+  | Binary e1 (Arithmetic Sub) e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointers_to_compatible_complete_objects t1 t2 then
+        Just (RValueType (Basic (Integer P.ptrdiff_t)))
+      else if pointer_to_complete_object t1 && integer t2 then
+        Just (RValueType t1)
+      else if well_typed_binary_arithmetic t1 Sub t2 then
+        Maybe.map RValueType (usual_arithmetic P t1 t2)
+      else Nothing
+  | Binary e1 And e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if scalar t1 && scalar t2
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
+  | Binary e1 Or  e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if scalar t1 && scalar t2
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
+  | Binary e1 Lt e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointers_to_compatible_objects t1 t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else if real t1 && real t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
+  | Binary e1 Gt e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointers_to_compatible_objects t1 t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else if real t1 && real t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
+  | Binary e1 Le e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointers_to_compatible_objects t1 t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else if real t1 && real t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
+  | Binary e1 Ge e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if pointers_to_compatible_objects t1 t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else if real t1 && real t2 then
+        Just (RValueType (Basic (Integer (Signed Int_))))
+      else Nothing
+  | Binary e1 Eq e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
+  | Binary e1 Ne e2 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      if well_typed_equality t1 t2 (null_pointer_constant e1) (null_pointer_constant e2)
+        then Just (RValueType (Basic (Integer (Signed Int_))))
+        else Nothing
+  | SizeOf  q t ->
+      if wf_lvalue q t && not (is_function t) && not (incomplete t)
+        then Just (RValueType (Basic (Integer P.size_t)))
+        else Nothing
+  | AlignOf q t ->
+      if wf_lvalue q t && not (is_function t) && not (incomplete t)
+        then Just (RValueType (Basic (Integer P.size_t)))
+        else Nothing
+  | Cast q Void e ->
+      if wf_lvalue q Void then
+        match type_of_rvalue e with
+        | Just _  -> Just (RValueType Void)
+        | Nothing -> Nothing
+        end
+      else
+        Nothing
+  | Cast q t e ->
+      if wf_lvalue q t then
+        match type_of_rvalue e with
+        | Just t' -> if scalar t' && scalar t
+                        then Just (RValueType t)
+                        else Nothing
+        | Nothing -> Nothing
+        end
+      else
+        Nothing
+  | Constant (ConstantInteger ic) ->
+      type_of_constant P ic >>= fun it ->
+      Just (RValueType (Basic (Integer it)))
+  | Conditional e1 e2 e3 ->
+      type_of_rvalue e1 >>= fun t1 ->
+      type_of_rvalue e2 >>= fun t2 ->
+      type_of_rvalue e3 >>= fun t3 ->
+      well_typed_conditional P t1 t2 t3 (null_pointer_constant e2) (null_pointer_constant e3)
+  | CompoundAssign e1 Add e2 ->
+      match (type_of_expression P S G e1, type_of_rvalue e2) with
+      | (Just (LValueType q t), Just t2) -> 
+          lvalue_coercion t >>= fun t1 ->
+          if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
+            then Just (RValueType t1)
+            else Nothing
+      | (_ , _)  -> Nothing
+      end
+  | CompoundAssign e1 Sub e2 ->
+      match (type_of_expression P S G e1, type_of_rvalue e2) with
+      | (Just (LValueType q t), Just t2) -> 
+          lvalue_coercion t >>= fun t1 ->
+          if modifiable q t && (arithmetic t1 && arithmetic t2 || pointer_to_complete_object t && integer t2)
+            then Just (RValueType t1)
+            else Nothing
+      | (_ , _)  -> Nothing
+      end
+  | CompoundAssign e1 aop e2 ->
+      match (type_of_expression P S G e1, type_of_rvalue e2) with
+      | (Just (LValueType q t), Just t2) -> 
+          lvalue_coercion t >>= fun t1 ->
+          if modifiable q t && well_typed_binary_arithmetic t1 aop t2
+            then Just (RValueType t1)
+            else Nothing
+      | (_, _)  -> Nothing
+      end
+  end
+and type_of_expression P (S : sigma 'B1 'B2) (G : gamma) (e : expression 'A) : maybe typeCategory =
+  match e with
+  | AnnotatedExpression _ e -> type_of_expression' P S G e
+  end
+
+let type_of_rvalue P (S : sigma 'B1 'B2) G : expression 'A -> maybe ctype = 
+  type_of_rvalue_aux (type_of_expression P S G)
+
+let assignable P (S : sigma 'B1 'B2) G : ctype -> expression 'A -> bool =
+  assignable_aux (type_of_rvalue P S G)
+
+let well_typed_arguments P (S : sigma 'B1 'B2) G : list (expression 'A) -> list (qualifiers * ctype) -> bool =
+  well_typed_arguments_aux (assignable P S G)
+
+let typeable P (S : sigma 'B1 'B2) G (e : expression 'A) : bool =
+  match type_of_expression P S G e with
+  | Just _  -> true
+  | Nothing -> false
+  end
+
+
+
+ *)
+
+
+
+
+
+val well_formed_bindings: forall 'a. sigma 'a -> bindings -> errorM unit
+let well_formed_bindings S bs =
+  mapM_ (comb (uncurry (wf_lvalue S)) (fun (_, (_, qs, ty)) -> (qs, ty))) bs >>
+  guard (TError "found non disjoint bindings") (
+    disjoint_bindings identifierEqual bs
+  )
+
+
+
+
+
+(* TODO
+
+
+let well_typed_block_aux (well_typed_statement : statement 'A1 'A2 -> bool) =
+  all_list well_typed_statement
+
+let well_typed_definition P (S : sigma 'B1 'B2) G (d : identifier * expression 'A) =
+  let (v, e) = d in
+  match lookup G v with
+  | Just (_, t) -> assignable P S G t e
+  | _           -> false
+  end
+
+let well_typed_definitions P (S : sigma 'B1 'B2) G (ds : list (identifier * expression 'A)) =
+  all_list (well_typed_definition P S G) ds
+
+let rec well_typed_statement' P (S : sigma 'B1 'B2) (G : gamma) t_return (s : statement' 'A1 'A2) : bool =
+  let well_typed_block bs = well_typed_block_aux (well_typed_statement P S (add_bindings bs G) t_return) in
+  match s with
+  | Label _ s -> well_typed_statement P S G t_return s
+  | Case ic s -> match type_of_constant P ic with
+                 | Just _  -> well_typed_statement P S G t_return s 
+                 | Nothing -> false
+                 end
+  | Default s -> well_typed_statement P S G t_return s
+  | Block bs ss -> well_formed_bindings bs && fresh_bindings bs S && well_typed_block bs ss
+  | Skip      -> true
+  | Expression e -> typeable P S G e
+  | If e s1 s2 -> match type_of_rvalue P S G e with
+                  | Just t  -> scalar t && well_typed_statement P S G t_return s1
+                                        && well_typed_statement P S G t_return s2
+                  | Nothing -> false
+                  end
+  | Switch e s -> match type_of_rvalue P S G e with
+                  | Just t  -> integer t && well_typed_statement P S G t_return s
+                  | Nothing -> false
+                  end
+  | While e s -> match type_of_rvalue P S G e with
+                 | Just t  -> scalar t && well_typed_statement P S G t_return s
+                 | Nothing -> false
+                 end
+  | Do s e -> match type_of_rvalue P S G e with
+              | Just t  -> scalar t && well_typed_statement P S G t_return s
+              | Nothing -> false
+              end
+  | Goto _    -> true
+  | Continue  -> true
+  | Break     -> true
+  | ReturnVoid -> eq_ctype t_return Void
+  | Return e   -> assignable P S G t_return e
+  | Declaration ds -> well_typed_definitions P S G ds
+  end
+and well_typed_statement P (S : sigma 'B1 'B2) (G : gamma) t_return (s : statement 'A1 'A2) : bool =
+  match s with
+  | AnnotatedStatement _ s -> well_typed_statement' P S G t_return s
+  end
+
+let well_typed_block P (S : sigma 'B1 'B2) G t_return (ss : list (statement 'A1 'A2)) =
+  well_typed_block_aux (well_typed_statement P S G t_return) ss
+
+let well_typed_function P (S : sigma 'B1 'B2) (p : (ctype * bindings * bool) * maybe (statement 'A1 'A2)) =
+  let ((t_return, bs , is_variadic), s_opt) = p in
+     fresh_bindings bs S
+  && well_formed_bindings bs
+  && wf_type (Function t_return (parameters_of_bindings bs) is_variadic)
+  && option_bool s_opt (well_typed_statement P S (add_bindings bs empty) t_return)
+
+
+val well_typed_global: forall 'A1 'A2.
+                       Implementation.implementation                 ->
+                       sigma 'A1 'A2                                 ->
+                       (qualifiers * ctype * maybe (expression 'A2)) ->
+                       bool
+(* TODO: check *)
+let well_typed_global P S (qs, ty, e_opt) =
+     wf_type ty
+  && option_bool e_opt (typeable P S empty)
+
+let well_typed_sigma P (S : sigma 'A1 'A2) : bool =
+  Context.all identifierEqual (fun _ x ->
+    match x with
+      | Left func    -> well_typed_function P S func
+      | Right global -> well_typed_global P S global
+    end) S
+
+
+let well_typed_program P (p:program 'A1 'A2) : bool =
+  let (startup, S) = p in
+  match lookup S startup with
+  (* TODO: this doesn't allow the use of argc, argv ... *)
+  | Just (Left ((Basic (Integer (Signed Int_)), [], _), _)) -> well_typed_sigma P S
+  | Just _                                                  -> false
+  | Nothing                                                 -> false
+  end
+
+ *)
