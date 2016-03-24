@@ -102,7 +102,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
           ) xs
         )
     | PEop binop (Pexpr _ (PEconstrained xs)) pe2 ->
-        let () = Debug.print_debug 1 "PEop CONSTRAINED" in
+        let () = Debug.print_debug 2 "PEop CONSTRAINED" in
         EU.return $
           PEconstrained (
             List.map (fun (constrs, pe) ->

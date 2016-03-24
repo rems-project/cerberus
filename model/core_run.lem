@@ -222,7 +222,7 @@ val     foldrM: forall 'a 'b 'msg. ('a -> 'b -> t 'b 'msg) -> 'b -> list 'a -> t
         | Just cval ->
             PEval cval
         | Nothing ->
-            let _ = Boot.print_debug 1 ("CORE_EVAL SYM FAILED: " ^ show sym) in
+            let _ = Boot.print_debug 2 ("CORE_EVAL SYM FAILED: " ^ show sym) in
             pexpr
       end
 *)
@@ -1491,8 +1491,6 @@ type core_step =
 (*  | Step_nd of string * list core_step *)
   | Step_blocked
   | Step_error of string
-  | Step_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
-
   | Step_constrained of string * list (list Mem.mem_constraint2 * core_runM thread_state)
 
   | Step_done of Core.value
