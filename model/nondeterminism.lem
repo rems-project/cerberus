@@ -246,7 +246,7 @@ let add_constraint mk_assert =
     if Constraints.isUnsat eqs' then
       [(Killed (Other "reached unsatisfiable constraints"), <| st with eqs= eqs' |>)]
     else
-      let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 1 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
+      let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
       [(Active (), <| st with eqs= eqs' |>)])
 
 val log: string -> t unit
@@ -267,7 +267,7 @@ let apply_to_constraints f (ND xs) =
           if Constraints.isUnsat eqs' then
             (Killed (Other "reached unsatisfiable constraints"), <| st' with eqs= eqs' |>)
           else
-            let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 1 ("STILL SAT (apply) ==> " ^ stringFromConstraints eqs') in
+            let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 ("STILL SAT (apply) ==> " ^ stringFromConstraints eqs') in
             (Active x, <| st' with eqs= eqs' |>)
       | (Killed r, st') ->
           (Killed r, st')
@@ -372,7 +372,7 @@ let bindExhaustive (ND m) f =
                         if Constraints.isUnsat eqs' then
                           Killed (Other "reached unsatisfiable constraints") log' eqs'
                         else
-                          let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 1 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
+                          let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
                           Active log' eqs' vB
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
@@ -486,7 +486,7 @@ let bindRandom (ND m) f =
                         Killed (Other "reached unsatisfiable constraints") log' eqs'
                       else
                         let () =
-                          if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 1 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
+                          if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
                         Active log' eqs' vB
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)
@@ -524,7 +524,7 @@ let bindRandom_kyndylan (ND m) f =
                         if Constraints.isUnsat eqs' then
                           Killed (Other "reached unsatisfiable constraints") log' eqs'
                         else
-                          let () = Debug.print_debug 1 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
+                          let () = Debug.print_debug 2 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
                           Active log' eqs' vB
                   | Killed reason logB eqsB ->
                       Killed reason (Dlist.append logA logB) ((* Constraints.simplify $ *) Constraints.combine eqsA eqsB)

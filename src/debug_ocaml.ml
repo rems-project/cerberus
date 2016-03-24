@@ -77,15 +77,17 @@ let timing_stack =
   ref []
 
 let begin_timing (fun_name: string) =
-  timing_stack := (fun_name, Unix.gettimeofday ()) :: !timing_stack
+  if !debug_level > 8 then
+    timing_stack := (fun_name, Unix.gettimeofday ()) :: !timing_stack
 
 let end_timing () =
-  let t' = Unix.gettimeofday () in
-  match !timing_stack with
-    | [] ->
-        () (* this implies an improper use of end_timing, but we silently ignore *)
-    | (str, t) :: xs ->
-        let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb.prof" in
-        Printf.fprintf oc "[%s] %f\n" str (t' -. t);
-        close_out oc;
-        timing_stack := xs
+  if !debug_level > 8 then
+    let t' = Unix.gettimeofday () in
+    match !timing_stack with
+      | [] ->
+          () (* this implies an improper use of end_timing, but we silently ignore *)
+      | (str, t) :: xs ->
+          let oc = open_out_gen [Open_creat; Open_wronly; Open_append] 0o666 "cerb.prof" in
+          Printf.fprintf oc "[%s] %f\n" str (t' -. t);
+          close_out oc;
+          timing_stack := xs
