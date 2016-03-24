@@ -1105,9 +1105,34 @@ val pp_exeState: Cmm_op.symState -> string
 declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
 
+open Defacto_memory_types
+let rec process_integer_value_base sym_assoc = function
+  | (IVconcurRead _ sym as ival_) ->
+      match Map.lookup sym sym_assoc with
+        | Just (Core.OVinteger (IV _ ival_)) ->
+            process_integer_value_base sym_assoc ival_
+        | Nothing ->
+            ival_
+      end
+  | IVop iop ivals_ ->
+      IVop iop (List.map (process_integer_value_base sym_assoc) ivals_)
+  | ival_ ->
+      (* WIP *)
+      ival_
+end
+
 
 (* TODO: move somewhere else, and do it nicer *)
 let rec process_objet_value sym_assoc = function
+  | (Core.Vobject (Core.OVinteger (IV prov ival_)) as cval) ->
+      let ival_' =
+        either (fun z -> IVconcrete z) id (Defacto_memory.simplify_integer_value_base false (process_integer_value_base sym_assoc ival_)) in
+      Core.Vobject (Core.OVinteger (IV prov ival_'))
+  | (Core.Vspecified (Core.OVinteger (IV prov ival_)) as cval) ->
+      let ival_' =
+        either (fun z -> IVconcrete z) id (Defacto_memory.simplify_integer_value_base false (process_integer_value_base sym_assoc ival_)) in
+      Core.Vspecified (Core.OVinteger (IV prov ival_'))
+(*
   | (Core.Vobject (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcurRead _ sym))) as cval) ->
       match Map.lookup sym sym_assoc with
         | Just oval ->
@@ -1122,6 +1147,7 @@ let rec process_objet_value sym_assoc = function
         | Nothing ->
             cval
       end
+*)
   | cval ->
       cval
 end
