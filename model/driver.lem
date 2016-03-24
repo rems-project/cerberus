@@ -831,7 +831,7 @@ let action_request_concurrency dr_st = function
         | Core_ctype.Basic (AilTypes.Integer ity) ->
             ity
         | _ ->
-            AilTypes.Char (* TODO DUMMY *)
+            AilTypes.Signed (AilTypes.Int_) (* TODO DUMMY *)
       end in
       let mval = Mem.integer_value_mval ity (Mem.concurRead_ival ity sym) in
       let preEx_step = <|

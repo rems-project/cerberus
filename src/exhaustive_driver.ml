@@ -77,7 +77,7 @@ end
                       pe
               end in
           let str_v_ = str_v ^ stdout in
-          if not (List.mem str_v_ !ky) then (
+          if true (* not (List.mem str_v_ !ky) *) then (
             if Debug_ocaml.get_debug_level () = 0 then
               (print_string stdout; flush_all());
             
