@@ -365,7 +365,7 @@ begin
    >>= fun (new_rf, value_w, value_r) ->
    Nondeterminism.return (new_rf, Just (value_w, value_r)))
 end >>= fun ((_, x) as ret) ->
-Nondeterminism.log ("CONCUR CHOOSED ==> " ^ match x with
+Nondeterminism.log ("CONCUR CHOSE ==> " ^ match x with
 | Just (y,z) ->
     pretty_stringFromMem_mem_value y ^ " --- " ^ pretty_stringFromMem_mem_value z
 | Nothing -> "nothing"
@@ -420,17 +420,17 @@ let monAddToSc pre a s =
 
 val monCheckConsistency: candidate_execution -> Nondeterminism.t unit
 let monCheckConsistency ex =
-  Nondeterminism.guard (assumptions ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (locks_only_consistent_locks ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (locks_only_consistent_lo ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (sc_accesses_consistent_sc ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (sc_fenced_sc_fences_heeded ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (consistent_hb ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (det_read_alt ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (consistent_non_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (consistent_atomic_rf ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (coherent_memory_use ex) (Nondeterminism.Other "Inconsistent") >>
-  Nondeterminism.guard (sc_accesses_sc_reads_restricted ex) (Nondeterminism.Other "Inconsistent")
+  Nondeterminism.guard (assumptions ex) (Nondeterminism.Other "Inconsistent (assumptions)") >>
+  Nondeterminism.guard (locks_only_consistent_locks ex) (Nondeterminism.Other "Inconsistent (locks_only_consistent_locks)") >>
+  Nondeterminism.guard (locks_only_consistent_lo ex) (Nondeterminism.Other "Inconsistent (locks_only_consistent_lo)") >>
+  Nondeterminism.guard (sc_accesses_consistent_sc ex) (Nondeterminism.Other "Inconsistent (sc_accesses_consistent_sc)") >>
+  Nondeterminism.guard (sc_fenced_sc_fences_heeded ex) (Nondeterminism.Other "Inconsistent (sc_fenced_sc_fences_heeded)") >>
+  Nondeterminism.guard (consistent_hb ex) (Nondeterminism.Other "Inconsistent (consistent_hb)") >>
+  Nondeterminism.guard (det_read_alt ex) (Nondeterminism.Other "Inconsistent (det_read_alt)") >>
+  Nondeterminism.guard (consistent_non_atomic_rf ex) (Nondeterminism.Other "Inconsistent (consistent_non_atomic_rf)") >>
+  Nondeterminism.guard (consistent_atomic_rf ex) (Nondeterminism.Other "Inconsistent (consistent_atomic_rf)") >>
+  Nondeterminism.guard (coherent_memory_use ex) (Nondeterminism.Other "Inconsistent (coherent_memory_use)") >>
+  Nondeterminism.guard (sc_accesses_sc_reads_restricted ex) (Nondeterminism.Other "Inconsistent (sc_accesses_sc_reads_restricted)")
 
 val monCheckWitRestrict: execution_witness -> set action -> execution_witness -> Nondeterminism.t unit
 let monCheckWitRestrict new_wit committed old_wit =

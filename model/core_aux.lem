@@ -21,8 +21,8 @@ let rec core_object_type_of_ctype ty =
        OTy_cfunction
    | Pointer _ _ ->
        OTy_pointer
-   | Atomic _ ->
-       error "TODO: Caux.object_type_of_ctype Atomic"
+   | Atomic ty ->
+       core_object_type_of_ctype ty
    | Struct tag_sym ->
        OTy_struct tag_sym
    | Union tag_sym ->
