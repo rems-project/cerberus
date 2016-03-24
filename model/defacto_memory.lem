@@ -2053,6 +2053,30 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               let () = Debug.warn "TODO: document" in
               Just true
 
+
+
+
+(* !!!!!! BEGIN HACK FOR CONCURRENCY, WILL FIX LATER *)
+          
+          | (IVmin _, _) ->
+              Just true
+          | (_, IVmax _) ->
+              Just true
+
+
+
+
+(* !!!!!! END HACK FOR CONCURRENCY, WILL FIX LATER *)
+
+
+
+
+
+
+
+
+
+
           | _ ->
               let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
               let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
