@@ -1,5 +1,6 @@
 open Core
 
+val pp_core_base_type: core_base_type -> PPrint.document
 val pp_object_value: object_value -> PPrint.document
 val pp_value: value -> PPrint.document
 val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
