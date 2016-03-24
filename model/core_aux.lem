@@ -1002,6 +1002,8 @@ let rec collect_labeled_continuations expr =
         collect_labeled_continuations e2
     | Eif pe1 e2 e3 ->
         Map.(union) (collect_labeled_continuations e2) (collect_labeled_continuations e3)
+    | Ecase pe pat_es ->
+        Map.empty (* TODO THIS IS WRONG!!!!! *)
     | Eproc _ _ _ ->
         Map.empty
     | Eaction _ ->
@@ -1024,10 +1026,8 @@ let rec collect_labeled_continuations expr =
         Map.insert k (a_tys, e) $ collect_labeled_continuations e
     | Erun _ _ _ ->
         Map.empty
-(*
     | Ereturn _ ->
         Map.empty
-*)
     | End _ ->
         (* TODO: check *)
         Map.empty

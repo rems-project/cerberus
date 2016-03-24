@@ -165,6 +165,8 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
 
 
 let pp_pretty_mem_value format = function
+  | MVinteger (_, (IV (_, IVconcurRead (_, sym)))) ->
+      !^ ("concur(" ^ Pp_symbol.to_string_pretty sym ^ ")")
   | MVinteger (ity, (IV (_, IVconcrete n))) ->
       !^ begin
            let b = match format.Boot_printf.basis with
