@@ -1876,49 +1876,29 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                                                    .- <e2, κs>  IF v = true
            <if pe1 then e2 else e3, κs, Λ> --τ--> <
                                                    '- <e3, κs>  IF v = false *)
-        match valueFromPexpr pe1 with
-          | Just (_, Vtrue) ->
-              one $ Step_tau "Eif (then)" (
+        one $ match pe1 with
+          | Pexpr bTy (PEval (Vconstrained xs)) ->
+              Step_constrained "Eif" (
+                List.map (fun (constrs, cval) ->
+                    (constrs, E.return <| th_st with arena= Eif (Pexpr bTy (PEval cval)) e2 e3 |>)
+                ) xs 
+              )
+          | Pexpr _ (PEval Vtrue) ->
+              Step_tau "Eif (then)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
                 E.return <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
               )
-          | Just (_, Vfalse) ->
-              one $ Step_tau "Eif (else)" (
+          | Pexpr _ (PEval Vfalse) ->
+              Step_tau "Eif (else)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
                 E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
-                                          )
-(*
-          | Just (Vobject (OVsymbolic symb)) ->
-              let (constr_then, constr_else) =
-                match symb with
-                  | Symbolic.SYMBop Symbolic.Eq symb1 symb2 ->
-                      (Constraints.assert_eq symb1 symb2, Constraints.assert_neq symb1 symb2)
-                  | Symbolic.SYMBop Symbolic.Neq symb1 symb2 ->
-                      (Constraints.assert_neq symb1 symb2, Constraints.assert_eq symb1 symb2)
-                  | Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Eq symb1 symb2) ->
-                      (Constraints.assert_neq symb1 symb2, Constraints.assert_eq symb1 symb2)
-                  | Symbolic.SYMBnot (Symbolic.SYMBop Symbolic.Neq symb1 symb2) ->
-                      (Constraints.assert_eq symb1 symb2, Constraints.assert_neq symb1 symb2)
-                end in
-              one $ Step_branch "Eif (symbolic)" constr_then constr_else
-                begin
-                  let labeled_conts =
-                    Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
-                  E.return <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
-                end
-                begin
-                  let labeled_conts =
-                    Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
-                  E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
-                end
-*)
-
-          | Just _ ->
-              one $ Step_error "the first operand of an Eif didn't evaluated to a boolean"
-          | Nothing ->
-              one $ Step_eval "Eif" (
+              )
+          | Pexpr _ (PEval _) ->
+              Step_error "the first operand of an Eif didn't evaluated to a boolean"
+          | _ ->
+              Step_eval "Eif" (
                 E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map true pe1 >>= fun pe1' ->
                 E.return <| th_st with arena= Eif pe1' e2 e3 |>
               )

@@ -6,6 +6,9 @@
 open import Pervasives Show Show_extra
 open import Cmm_aux Cmm_csem
 
+val pretty_stringFromMem_mem_value: Mem.mem_value -> string
+declare ocaml target_rep function pretty_stringFromMem_mem_value = `String_mem.string_pretty_of_mem_value_decimal`
+
 import Loc (* Somebody is going to hate me for this *)
 
 
@@ -350,6 +353,8 @@ let auxAddPairToRf old_rf w r =
 val auxAddToRfLoad: pre_execution -> action -> incState -> 
                     Nondeterminism.t (set (action * action) * maybe (cvalue * cvalue))
 let auxAddToRfLoad pre a s =
+  Nondeterminism.log ("CONCUR CHOICE ==> " ^ (show (List.map (fun act -> show (aid_of act)) (sameLocWrites s.incCommitted a)))) >>
+begin
   Nondeterminism.mplus
   (* We do not add an rf-edge. This should happen when there is no vse-edge in the resulting state. *)
   (Nondeterminism.return (s.incWit.rf, Nothing))
@@ -359,6 +364,16 @@ let auxAddToRfLoad pre a s =
    auxAddPairToRf s.incWit.rf w a
    >>= fun (new_rf, value_w, value_r) ->
    Nondeterminism.return (new_rf, Just (value_w, value_r)))
+end >>= fun ((_, x) as ret) ->
+Nondeterminism.log ("CONCUR CHOOSED ==> " ^ match x with
+| Just (y,z) ->
+    pretty_stringFromMem_mem_value y ^ " --- " ^ pretty_stringFromMem_mem_value z
+| Nothing -> "nothing"
+end) >>
+
+
+Nondeterminism.return ret
+
 
 val monAddToRfLoad: pre_execution -> action -> incState -> 
                     Nondeterminism.t (set (action * action))

@@ -35,7 +35,7 @@ type cerberus_conf = {
   pps:           language list;
   core_stdlib:   unit Core.fun_map;
   core_impl_opt: Core.impl option;
-  core_parser:   Input.t -> (Core_parser_util.result, Errors.t5) Exception.t2;
+  core_parser:   Input.t -> (Core_parser_util.result, Errors.t7) Exception.t2;
   exec_mode_opt: execution_mode option;
   compile:       bool;
   progress:      bool;
@@ -63,7 +63,7 @@ val set_cerb_conf:
     Core.impl option ->
     bool ->
     execution_mode ->
-    (Input.t -> (Core_parser_util.result, Errors.t5) Exception.t2) ->
+    (Input.t -> (Core_parser_util.result, Errors.t7) Exception.t2) ->
     bool ->
     bool ->
     bool ->
