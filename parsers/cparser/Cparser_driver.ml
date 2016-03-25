@@ -53,17 +53,17 @@ let parse input =
     (* This wrapper is feed to the pre_parser and incrementaly save the list of tokens *)
     let lexer_wrapper lexbuf =
       let tok = Lexer.initial lexbuf in
-      print_endline ("TOKEN => " ^ Tokens.string_of_token tok);
+(*      print_endline ("TOKEN => " ^ Tokens.string_of_token tok); *)
       saved_tokens := (tok, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) :: !saved_tokens;
       tok in
     
     let hack lexbuf =
       match !saved_tokens with
         | (tok, (start_p, end_p)) :: xs ->
-            Printf.printf "TOKEN => %s @ line: %d, char: %d -- line: %d, char: %d\n" (Tokens.string_of_token tok)
+(*            Printf.printf "TOKEN => %s @ line: %d, char: %d -- line: %d, char: %d\n" (Tokens.string_of_token tok)
               start_p.Lexing.pos_lnum (start_p.Lexing.pos_cnum - start_p.Lexing.pos_bol)
               end_p.Lexing.pos_lnum (end_p.Lexing.pos_cnum - end_p.Lexing.pos_bol);
-            flush_all ();
+            flush_all (); *)
             saved_tokens := xs;
             lexbuf.Lexing.lex_start_p <- start_p;
             lexbuf.Lexing.lex_curr_p <- end_p;
@@ -119,9 +119,9 @@ let parse input =
     
     try
       
-      print_endline "BEFORE PRE PARSER";
+(*      print_endline "BEFORE PRE PARSER"; *)
       Pre_parser.translation_unit_file lexer_wrapper lexbuf;
-      print_endline "AFTER PRE PARSER";
+(*      print_endline "AFTER PRE PARSER"; *)
 (*
       print_endline "==== BEFORE LEXER HACK ====";
       List.iter (fun (tok, loc) ->
