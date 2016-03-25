@@ -8,7 +8,7 @@ let cerb_path =
       error "expecting the environment variable CERB_PATH set to point to the location cerberus."
 
 let corelib_path =
-  Filename.concat cerb_path "corelib"
+  Filename.concat cerb_path "include/core"
 
 
 (* == Symbol counter for the Core parser ======================================================== *)
@@ -306,7 +306,7 @@ let impl =
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
   (* TODO: use to be "gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime" *)
-  Arg.(value & opt string ("cc -E -nostdinc -undef -I "  ^ cerb_path ^ "/clib/libc -I "  ^ cerb_path ^ "/clib/posix")
+  Arg.(value & opt string ("cc -E -nostdinc -undef -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let exec =
