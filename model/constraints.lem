@@ -58,8 +58,6 @@ let combine (Constraints xs) (Constraints ys) =
   Constraints (xs ++ ys) (* TODO: simplification ? *)
 
 
-
-
 val assert_eq: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> t -> t
 let assert_eq symb1 symb2 (Constraints xs) =
   Constraints (SYMBop Eq symb1 symb2 :: xs)

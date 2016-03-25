@@ -1916,6 +1916,41 @@ let lt_ival eqs (IV prov1 ival_1) (IV prov2 ival_2) =
         end
   end
 
+
+(* TODO: temporary hack for concurrency (need to use a sat solver) *)
+let rec has_concurRead ival_ =
+  match ival_ with
+    | IVunspecified ->
+        false
+    | IVconcurRead _ _ ->
+        true
+    | IVconcrete _ ->
+        false
+    | IVaddress _ ->
+        false
+    | IVfromptr _ _ ->
+        false
+    | IVop _ ival_s ->
+        List.any has_concurRead ival_s
+    | IVmin _ ->
+        false
+    | IVmax _ ->
+        false
+    | IVsizeof _ ->
+        false
+    | IValignof _ ->
+        false
+    | IVoffsetof _ _ ->
+        false
+    | IVptrdiff _ _ ->
+        false
+    | IVbyteof _ _ ->
+        false
+    | IVcomposite ival_s ->
+        List.any has_concurRead ival_s
+  end
+
+
 let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
   match lt_ival eqs ival1 ival2 with
     | Just true ->
@@ -2056,19 +2091,6 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 
 
-(* !!!!!! BEGIN HACK FOR CONCURRENCY, WILL FIX LATER *)
-          
-(*
-          | (IVmin _, _) ->
-              Just true
-          | (_, IVmax _) ->
-              Just true
-*)
-
-
-
-
-(* !!!!!! END HACK FOR CONCURRENCY, WILL FIX LATER *)
 
 
 
@@ -2085,6 +2107,12 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               match (ival_1'', ival_2'') with
                 | (IVconcrete n1, IVconcrete n2) ->
                     Just (n1 <= n2)
+(* !!!!!! BEGIN HACK FOR CONCURRENCY, WILL FIX LATER *)
+          | (IVmin _, _) ->
+              Just true (* if has_concurRead ival_2'' then Just true else Nothing *)
+          | (_, IVmax _) ->
+              Just true (* if has_concurRead ival_1'' then Just true else Nothing *)
+(* !!!!!! END HACK FOR CONCURRENCY, WILL FIX LATER *)
                 | _ ->
                     (* TODO *)
                     Nothing
