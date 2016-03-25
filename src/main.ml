@@ -105,6 +105,7 @@ let c_frontend f =
                          (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
+
 (*
 
 
@@ -119,7 +120,7 @@ let c_frontend f =
 *)
 
 let (>>=) = Exception.bind2
-
+let (>>) ma mb = ma >>= fun _ -> mb
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
@@ -199,7 +200,8 @@ let pipeline filename args =
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
-  Core_typing.typecheck_program core_file >>= fun _ ->
+  (Core_typing.typecheck_program core_file |>
+  pass_message "5. Core typechecking completed!") >>
   
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
@@ -360,7 +362,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
                          sequentialise $ concurrency $ preEx $ args $ compile) in
-  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"ecd2ae6db47b+ tip -- 25/03/2016@05:52" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

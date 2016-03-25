@@ -195,58 +195,62 @@ type generic_expr 'a 'ty 'sym =  (* Core expressions *)
  | Ewait of Thread.thread_id (* wait for thread termination *)
  | Eloc of Loc.t * (generic_expr 'a 'ty 'sym)
 
+(* TODO: don't we need any impl proc? *)
+type generic_impl_decl 'ty =
+  | Def of core_base_type * generic_pexpr 'ty Symbol.sym
+  | IFun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'ty Symbol.sym
+type generic_impl 'ty = map Implementation_.implementation_constant (generic_impl_decl 'ty)
+
+type generic_fun_map_decl 'ty 'a =
+  | Fun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'ty Symbol.sym
+  | Proc of core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'ty Symbol.sym
+
+type generic_fun_map 'ty 'a = map Symbol.sym (generic_fun_map_decl 'ty 'a)
 
 
-type name         = generic_name Symbol.sym
-type object_value = generic_object_value Symbol.sym
-type value        = generic_value Symbol.sym
-type ctor         = generic_ctor unit
-type pattern      = generic_pattern unit Symbol.sym
-type pexpr        = generic_pexpr unit Symbol.sym
-type expr 'a      = generic_expr 'a unit Symbol.sym
-type paction 'a   = generic_paction 'a unit Symbol.sym
+(* a Core file is just a set of named functions *)
+type generic_file 'ty 'a = <|
+  main   : Symbol.sym;
+  stdlib : generic_fun_map 'ty 'a;
+  impl   : generic_impl 'ty;
+  globs  : list (Symbol.sym * core_base_type * generic_expr 'a 'ty Symbol.sym);
+  funs   : generic_fun_map 'ty 'a;
+|>
 
 
-type typed_ctor         = generic_ctor core_base_type
-type typed_pattern = generic_pattern core_base_type Symbol.sym
-type typed_pexpr   = generic_pexpr core_base_type Symbol.sym
-type typed_expr 'a = generic_expr 'a core_base_type Symbol.sym
+type name            = generic_name Symbol.sym
+type object_value    = generic_object_value Symbol.sym
+type value           = generic_value Symbol.sym
+type ctor            = generic_ctor unit
+type pattern         = generic_pattern unit Symbol.sym
+type pexpr           = generic_pexpr unit Symbol.sym
+type expr 'a         = generic_expr 'a unit Symbol.sym
+type paction 'a      = generic_paction 'a unit Symbol.sym
+type impl_decl       = generic_impl_decl unit
+type impl            = generic_impl unit
+type fun_map_decl 'a = generic_fun_map_decl unit 'a
+type fun_map 'a      = generic_fun_map unit 'a
+type file 'a         = generic_file unit 'a
+
+type typed_ctor            = generic_ctor core_base_type
+type typed_pattern         = generic_pattern core_base_type Symbol.sym
+type typed_pexpr           = generic_pexpr core_base_type Symbol.sym
+type typed_expr 'a         = generic_expr 'a core_base_type Symbol.sym
+type typed_impl_decl       = generic_impl_decl core_base_type
+type typed_impl            = generic_impl core_base_type
+type typed_fun_map_decl 'a = generic_fun_map_decl core_base_type 'a
+type typed_fun_map 'a      = generic_fun_map core_base_type 'a
+type typed_file 'a         = generic_file core_base_type 'a
 
 
 
- (* TODO: don't we need any impl proc? *)
- type impl_decl =
-   | Def of core_base_type * pexpr
-   | IFun of core_base_type * list (Symbol.sym * core_base_type) * pexpr
- type impl = map Implementation_.implementation_constant impl_decl
- (*
- type impl_decl =
-   | IConst  core_base_type * value
-   | IFun core_base_type * list (sym * core_base_type) * pexpr
- type impl = map Impl_types.impl_name impl_decl
- *)
- 
- 
- type fun_map_decl 'a =
-   | Fun of core_base_type * list (Symbol.sym * core_base_type) * pexpr
-   | Proc of core_base_type * list (Symbol.sym * core_base_type) * expr 'a
- 
- type fun_map 'a = map Symbol.sym (fun_map_decl 'a)
- 
- 
- (* a Core file is just a set of named functions *)
- type file 'a = <|
-   main   : Symbol.sym;
-   stdlib : fun_map 'a;
-   impl   : impl;
-   globs  : list (Symbol.sym * core_type * expr 'a);
-   funs   : fun_map 'a;
- |>
- declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
- 
- 
- 
- 
+declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
+
+
+
+
+
+
  
  
  

@@ -28,7 +28,7 @@ type mode =
 (* Type of Core parser outputs *)
 type result =
     (* main symbol, globals, fun_map *)
-  | Rfile of Symbol.sym * (Symbol.sym * Core.core_type * unit Core.expr) list * unit Core.fun_map
+  | Rfile of Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map
   | Rstd  of unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
