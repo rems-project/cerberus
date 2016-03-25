@@ -40,7 +40,7 @@ open Operators
 
 val translate_program:
   bool -> C.fun_map unit -> A.program GenTypes.genTypeCategory ->
-  E.t (list (C.sym * C.core_type * C.expr unit) * C.fun_map unit)
+  E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 
 val translate:
     bool -> C.fun_map unit -> C.impl -> (UniqueId.supply Symbol.sym) * A.program GenTypes.genTypeCategory ->
@@ -3150,7 +3150,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                     Caux.mk_sym_pe bTy_e sym_e in
                 E.return
                   ((sym,
-                    C.TyEffect (C.BTy_object C.OTy_pointer),
+                    C.BTy_object C.OTy_pointer,
                     C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create
                       (C.Esseq (Caux.mk_sym_pat sym_e bTy_e) core_e
                          (* TODO: proper memory order *)
@@ -3163,7 +3163,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 (* otherwise *)
                 E.return
                   ((sym,
-                    C.TyEffect (C.BTy_object C.OTy_pointer),
+                    C.BTy_object C.OTy_pointer,
                     C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create
                       (* TODO: proper memory order *)
                       (C.Esseq Caux.mk_empty_pat (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global) (Caux.zeros (Caux.proj_ctype ty)) Cmm.NA)
@@ -3221,7 +3221,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
       C.Esseq (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate Loc.unknown (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
         (C.Esseq Caux.mk_empty_pat (Caux.pstore Loc.unknown (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit) e_init Cmm.NA)
           (C.Ereturn (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit))) in
-    E.return $ (sym, C.TyEffect (C.BTy_object C.OTy_pointer), expr) :: acc
+    E.return $ (sym, C.BTy_object C.OTy_pointer, expr) :: acc
   ) (List.reverse globs) xs >>= fun globs' ->
   E.return (List.reverse globs', cfuns)
 (*

@@ -130,3 +130,17 @@ let onException m1 m2 =
   end
 
 
+val     trysM: forall 'a 'b 'msg. 'msg -> ('a -> exceptM 'b 'msg) -> list 'a -> exceptM 'b 'msg
+let rec trysM err f = function
+  | [] ->
+      throw err
+  | [x] ->
+      f x
+  | x::xs ->
+      match f x with
+        | Result b ->
+            Result b
+        | Exception _ ->
+            trysM err f xs
+      end
+end

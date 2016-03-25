@@ -1,5 +1,8 @@
-open import Pervasives Global
-import Exception Loc Errors
+open import Pervasives
+import Map_extra
+
+open import Global Errors
+import Exception Loc
 
 open import Core Core_aux
 import Core_ctype Core_ctype_aux
@@ -8,24 +11,35 @@ module Cty = struct
   include Core_ctype_aux
 end
 
-type core_typing_error =
-  | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
-  | EmptyArray
-  | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
-  | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
-  | InvalidMember of Symbol.sym * Cabs.cabs_identifier
 
 module E = struct
-  type eff 'a = Exception.exceptM 'a core_typing_error
+  type eff 'a = Exception.exceptM 'a Errors.core_typing_cause
   include Exception
+  
+  val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a => ('a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
+  let mapMapM f xs =
+    Map_extra.fold (fun k a acc ->
+      bind (f a) (fun b ->
+        bind acc (fun bs ->
+          return (Map.insert k b bs)
+        )
+      )
+    ) xs (return Map.empty)
+  
+  val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.core_typing_cause
+  let runM m = m
 end
 
-let inline (>>=) =
-  E.bind
-let inline (>>) m1 m2 =
-  m1 >>= fun _ -> m2
-let inline (<$>) =
-  E.fmap
+let inline (>>=)      = E.bind
+let inline (>>) m1 m2 = m1 >>= fun _ -> m2
+let inline (<$>)      = E.fmap
+let inline (<*>)      = E.app
+
+
+
+
+type typing_env =
+    map Symbol.sym (either core_base_type (core_base_type * list core_base_type))
 
 
 
@@ -100,77 +114,213 @@ let rec typeof_value cval =
 
 
 
-val     typeof_pexpr: map sym core_base_type -> pexpr -> E.eff core_base_type
-let rec typeof_pexpr env (Pexpr () pe_) =
-  match pe_ with
+val     typecheck_pexpr: typing_env -> core_base_type -> pexpr -> E.eff typed_pexpr
+let rec typecheck_pexpr env bTy (Pexpr () pexpr_) =
 (*
-    | PEundef _ ->
-        E.return Nothing
-    | PEerror _ _ (* TODO typecheck the debug operand *) ->
-        E.return Nothing
+  let expect bTy env pe =
+    typecheck_pexpr env pe >>= fun (Pexpr bTy' _ as tpe) ->
+    E.guard (bTy = bTy') (CoreTyping_TODO "mismatch") >>
+    E.return tpe in
+*)
+  Pexpr bTy <$> match pexpr_ with
+    | PEsym sym ->
+        match Map.lookup sym env with
+          | Just (Left bTy') ->
+              E.guard (bTy = bTy') (CoreTyping_TODO "illtyped PEsym") >>
+              E.return (PEsym sym)
+          | Just (Right _) ->
+              E.fail (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
+          | Nothing ->
+              E.fail (CoreTyping_TODO "unresolved PEsym")
+        end
+(*
+    | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
 *)
     | PEval cval ->
-        typeof_value cval
-    | PEsym sym ->
-        error "E.return bTy"
+        typeof_value cval >>= fun bTy' ->
+        E.guard (bTy = bTy') (CoreTyping_TODO "illtyped value") >>
+        E.return (PEval cval)
+(*
+    | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *)
+*)
+    | PEundef ub ->
+        E.return (PEundef ub)
+(*
+    | PEerror str pe ->
+        (* TODO need to check pe somehow ... *)
+*)
+(*
+    | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
+    | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
+    | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
+    | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
+*)
+    | PEnot pe ->
+        E.guard (bTy = BTy_boolean) (CoreTyping_TODO "PEnot") >>
+        (PEnot <$> typecheck_pexpr env BTy_boolean pe)
+    | PEop bop pe1 pe2 ->
+        (* TODO: this is going to give horrible error messages ... *)
+        E.trysM (CoreTyping_TODO "PEop") (fun (bTy', bTy1, bTy2) ->
+          E.guard (bTy = bTy') (CoreTyping_TODO "PEop bTy") >>
+          (PEop bop <$> typecheck_pexpr env bTy1 pe1
+                    <*> typecheck_pexpr env bTy2 pe2)
+        ) match bop with
+          | OpAdd ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_object OTy_floating, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpSub ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_object OTy_floating, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpMul ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_object OTy_floating, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpDiv ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_object OTy_floating, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpRem_t ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer) ]
+          | OpRem_f ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer) ]
+          | OpExp ->
+              [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer) ]
+          | OpEq ->
+              [ (BTy_boolean, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_boolean, BTy_object OTy_floating, BTy_object OTy_floating)
+              ; (BTy_boolean, BTy_ctype, BTy_ctype) ]
+          | OpGt ->
+              [ (BTy_boolean, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_boolean, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpLt ->
+              [ (BTy_boolean, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_boolean, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpGe ->
+              [ (BTy_boolean, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_boolean, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpLe ->
+              [ (BTy_boolean, BTy_object OTy_integer, BTy_object OTy_integer)
+              ; (BTy_boolean, BTy_object OTy_floating, BTy_object OTy_floating) ]
+          | OpAnd ->
+              [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
+          | OpOr ->
+              [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
+        end
+
+(*
+    | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
+    | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
+    | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
+    | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* pure Core let *)
+*)
+    | PEif pe1 pe2 pe3 ->
+        PEif <$> typecheck_pexpr env BTy_boolean pe1
+             <*> typecheck_pexpr env bTy pe2
+             <*> typecheck_pexpr env bTy pe3
+    | PEis_scalar pe ->
+        E.guard (bTy = BTy_boolean) (CoreTyping_TODO "PEis_scalar") >>
+        (PEis_scalar <$> typecheck_pexpr env BTy_ctype pe)
+    | PEis_integer pe ->
+        E.guard (bTy = BTy_boolean) (CoreTyping_TODO "PEis_integer") >>
+        (PEis_integer <$> typecheck_pexpr env BTy_ctype pe)
+    | PEis_signed pe ->
+        E.guard (bTy = BTy_boolean) (CoreTyping_TODO "PEis_signed") >>
+        (PEis_signed <$> typecheck_pexpr env BTy_ctype pe)
+    | PEis_unsigned pe ->
+        E.guard (bTy = BTy_boolean) (CoreTyping_TODO "PEis_unsigned") >>
+        (PEis_unsigned <$> typecheck_pexpr env BTy_ctype pe)
   end
+
+val     typecheck_expr: typing_env -> core_base_type -> Core.expr unit -> E.eff (Core.typed_expr unit)
+let rec typecheck_expr env bTy = function
+ | Epure pe ->
+     Epure <$> typecheck_pexpr env bTy pe
 (*
-  | PEsym of (sym * core_base_type) (* TODO: remove the type annotation at some point *)
-  | PEimpl of Implementation_.implementation_constant
-  
-  (* data (de|con)structors *)
-  | PEctor of ctor * list pexpr
-  | PEcase of pexpr * list (case_pattern * pexpr)
-  
-  (* BEGIN OBSOLETE *)
+ | Ememop of Mem_common.memop * list (generic_pexpr 'ty 'sym) (* pointer op involving memory *)
+ | Eaction of (generic_paction 'a 'ty 'sym) (* memory action *)
+ | Ecase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym)) (* pattern matching *)
+ | Elet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* Core let *)
+*)
+ | Eif pe1 e2 e3 ->
+     Eif <$> typecheck_pexpr env BTy_boolean pe1
+         <*> typecheck_expr env bTy e2
+         <*> typecheck_expr env bTy e3
+ | Eskip ->
+     E.guard (bTy = BTy_unit) (CoreTyping_TODO "Eskip") >>
+     E.return Eskip
 (*
-  | PEcons of pexpr * pexpr
-  | PEtuple of list pexpr
-(*  | PEarray of list (either Mem.mem_value sym) (* TODO: this is just wrong *) *)
-  | PEarray of list pexpr
+ | Eproc of 'a * (generic_pexpr 'ty 'sym) * list (generic_pexpr 'ty 'sym) (* Core procedure call *)
 *)
-  (* END OBSOLETE *)
-  
-  (* operators on pointer values *)
+ | Ereturn pe ->
+     Ereturn <$> typecheck_pexpr env bTy pe
 
-  | PEarray_shift of pexpr * ctype * pexpr
-  | PEmember_shift of pexpr * Symbol.sym * Cabs.cabs_identifier
-
-
-  (* operators on integers *)
-  | PEnot of pexpr
-  | PEop of binop * pexpr * pexpr
-  
 (*
-  | PEis_unspec of pexpr
+ | Eunseq of list (generic_expr 'a 'ty 'sym) (* unsequenced expressions *)
+ | Ewseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* weak sequencing *)
+ | Esseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* strong sequencing *)
+ | Easeq of maybe ('sym * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym) (* atomic sequencing *)
+ | Eindet of nat * (generic_expr 'a 'ty 'sym) (* indeterminately sequenced expr *)
+ | Ebound of nat * (generic_expr 'a 'ty 'sym) (* $\ldots$and boundary *)
+ | End of list (generic_expr 'a 'ty 'sym) (* nondeterministic sequencing *)
+ | Esave of Symbol.sym * list (Symbol.sym * ctype) * (generic_expr 'a 'ty 'sym) (* save label *)
+ | Erun of 'a * Symbol.sym * list (Symbol.sym * (generic_pexpr 'ty 'sym)) (* run from label *)
+ | Epar of list (generic_expr 'a 'ty 'sym) (* cppmem thread creation *)
+ | Ewait of Thread.thread_id (* wait for thread termination *)
 *)
-  
-  (* pure operations provide by the memory layout model *)
-  | PEmemop of Mem.pure_memop * list pexpr
-  (* these two are annoying *)
-  | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * pexpr)
-
-  (* call to a pure function *)
-  | PEcall of (name * core_base_type) * list (pexpr * core_base_type) (* TODO: remove the type annot *)
-  
-  | PElet of (sym * core_base_type) * pexpr * pexpr
-  | PEif of pexpr * pexpr * pexpr
-  
-(*  | PEvla of ctype * pexpr *)
+  | Eloc _ e ->
+      typecheck_expr env bTy e
+end
 
 
-  (* TODO: this is a temporary, because I don't want to add pattern matching in Core, and those functions need it *)
-  | PEis_scalar of pexpr
-  | PEis_integer of pexpr
-  | PEis_signed of pexpr
-  | PEis_unsigned of pexpr
+
+
+
+(*
+val fold : forall 'k 'v 'r. MapKeyType 'k, SetType 'k, SetType 'v => ('k -> 'v -> 'r -> 'r) -> map 'k 'v -> 'r -> 'r
 *)
-
-
 
 
 (* TODO: add a check for the existence of main *)
-val typecheck_program: Core.file unit -> Exception.exceptM unit Errors.t
+val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit) Errors.t
 let typecheck_program file =
-(*  Exception.fail (Loc.unknown, Errors.Core_typing) *)
-  Exception.return ()
+  let aux =
+    (* The startup function/procedure must be defined *)
+    E.guard (Map.member file.main file.funs) (Undefined_startup file.main) >>
+    
+    (* Register the functions/procedures from the stdlib *)
+    let env = (*TODO*)Map.empty in
+    
+    E.mapMapM (function
+      | Fun bTy sym_bTys pe ->
+          let env' = List.foldr (fun (sym, bTy) acc -> Map.insert sym (Left bTy) acc) env sym_bTys in
+          Fun bTy sym_bTys <$> typecheck_pexpr env' bTy pe
+      | Proc bTy sym_bTys e ->
+          let env' = List.foldr (fun (sym, bTy) acc -> Map.insert sym (Left bTy) acc) env sym_bTys in
+          Proc bTy sym_bTys <$> typecheck_expr env' bTy e
+    end) file.stdlib >>= fun stdlib' ->
+
+    
+    E.mapM (fun (sym, bTy, e) ->
+      typecheck_expr env bTy e >>= fun te ->
+      E.return (sym, bTy, te)
+    ) file.globs >>= fun globs' ->
+    
+    
+    let impl' = Map.empty in
+    let funs' = Map.empty in
+    
+    E.return <| main= file.main; stdlib= stdlib'; impl= impl'; globs= globs'; funs= funs' |>
+  in
+  match E.runM aux with
+    | Exception.Result file' ->
+        Exception.return file'
+    | Exception.Exception cause ->
+        Exception.Exception (Loc.unknown, Errors.Core_typing_cause cause)
+  end
+(*
+ type file 'a = <|
+   main   : Symbol.sym;
+   stdlib : fun_map 'a;
+   impl   : impl;
+   globs  : list (Symbol.sym * core_type * expr 'a);
+   funs   : fun_map 'a;
+ |>
+*)

@@ -251,7 +251,9 @@ let std_ref = function
       str
   | Core_run_cause _  ->
       "TODO: core_run_cause"
-  | Core_typing ->
+  | Core_typing_cause (CoreTyping_TODO str) ->
+      "TODO: core typing ==> " ^ str
+  | Core_typing_cause _ ->
       "TODO: core typing"
   | PARSER str ->
       "TODO: parsing error ==> " ^ str

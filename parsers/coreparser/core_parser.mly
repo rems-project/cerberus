@@ -22,7 +22,7 @@ type parsed_expr  = (unit, unit, _sym) generic_expr
 type declaration =
   | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * parsed_pexpr
   | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
-  | Glob_decl of _sym * Core.core_type * parsed_expr
+  | Glob_decl of _sym * Core.core_base_type * parsed_expr
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
 
@@ -557,7 +557,7 @@ and symbolify_paction = function
 
 
 
-let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.core_type * unit Core.expr) list * unit Core.fun_map) either) Eff.t =
+let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map) either) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
   open_scope >>
   Eff.foldrM (fun decl acc ->
@@ -949,9 +949,9 @@ core_base_type:
 
 core_type:
 | baseTy = core_base_type
-    { TyBase baseTy }
+    { (*TyBase*) baseTy }
 | EFF baseTy= core_base_type
-    { TyEffect baseTy }
+    { (*TyEffect*) baseTy }
 ;
 
 

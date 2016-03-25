@@ -596,9 +596,9 @@ let mk_comment doc =
 
 
 let pp_file file =
-  let pp_glob acc (sym, coreTy, e) =
+  let pp_glob acc (sym, bTy, e) =
     acc ^^
-    pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_type coreTy ^^^
+    pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
   begin

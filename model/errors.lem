@@ -1,4 +1,4 @@
-open import Global Cabs AilSyntax
+open import Global Cabs AilSyntax Core
 import Loc TypingError Undefined
 
 
@@ -43,6 +43,16 @@ type desugar_cause =
 
 
 
+type core_typing_cause =
+    (* Found no definition of the startup fun/proc *)
+  | Undefined_startup of Symbol.sym
+  | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
+  | EmptyArray
+  | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
+  | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
+  | InvalidMember of Symbol.sym * Cabs.cabs_identifier
+  | CoreTyping_TODO of string
+
 
 type core_run_error =
   | Illformed_program of string (* typing or name-scope error *)
@@ -68,7 +78,7 @@ type cause =
   
   | Desugar_cause of desugar_cause
   | Core_run_cause of core_run_error
-  | Core_typing
+  | Core_typing_cause of core_typing_cause
 
   (* Constraint violation *)
 
