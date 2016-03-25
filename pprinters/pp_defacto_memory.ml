@@ -46,6 +46,8 @@ let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
   !^ "PV" ^^ P.parens (pp_provenance prov ^^ P.comma ^^^ pp_pointer_value_base ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
 
 and pp_pointer_value_base = function
+  | PVunspecified ty ->
+      !^ "PVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | PVnull ty ->
       !^ "PVnull" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | PVfunction sym ->
@@ -92,6 +94,8 @@ and pp_integer_value_base = function
       !^ "IVptrdiff" ^^ P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_pointer_value_base ptr_val_2)
   | IVbyteof (ival_, mval) ->
       !^ "IVbyteof" ^^ P.parens (pp_integer_value_base ival_ ^^ P.comma ^^^ pp_mem_value mval)
+  | IVcomposite _ ->
+      !^ "IVcomposite(TODO)"
 
 
 
@@ -161,6 +165,8 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
         Pp_symbol.pp_prefix pref
     | PVfromint _ ->
         pp_pointer_value ptr_val
+    | _ ->
+        assert false
 
 
 
@@ -191,3 +197,19 @@ let pp_pretty_mem_value format = function
 *)
   | mval ->
       pp_mem_value mval
+
+
+let pp_integer_value_for_core (IV (_, ival)) =
+  match ival with
+    | IVconcrete n ->
+        !^ (Nat_big_num.to_string n)
+    | IVmax ity ->
+        !^ "Ivmax" ^^ P.parens (P.dquotes (Pp_ail.pp_integerType ity))
+    | IVmin ity ->
+        !^ "Ivmin" ^^ P.parens (P.dquotes (Pp_ail.pp_integerType ity))
+    | IVsizeof ty ->
+        !^ "Ivsizeof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+    | IValignof ty ->
+        !^ "Ivalignof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+    | _ ->
+        assert false

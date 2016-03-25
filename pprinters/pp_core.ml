@@ -8,12 +8,6 @@ open Colour
 
 open Pp_prelude
 
-let isatty = ref false
-
-
-
-
-
 let precedence = function
   | PEop (OpExp, _, _) -> Some 1
 
@@ -65,13 +59,12 @@ let lt_precedence p1 p2 =
     | _                  -> true
 
 
-let pp_keyword w = !^ (if !isatty then ansi_format [Bold; Magenta] w else w)
-let pp_const   c = !^ (if !isatty then ansi_format [Magenta] c else c)
-let pp_control w = !^ (if !isatty then ansi_format [Bold; Blue] w else w)
-let pp_symbol  a = !^ (if !isatty then ansi_format [Blue] (Pp_symbol.to_string_pretty a) else (Pp_symbol.to_string_pretty a))
-let pp_number  n = !^ (if !isatty then ansi_format [Yellow] n else n)
-let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)
-                                            else Implementation_.string_of_implementation_constant i))
+let pp_keyword w = !^ (ansi_format [Bold; Magenta] w)
+let pp_const   c = !^ (ansi_format [Magenta] c)
+let pp_control w = !^ (ansi_format [Bold; Blue] w)
+let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
+let pp_number  n = !^ (ansi_format [Yellow] n)
+let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
 
 
 let rec pp_core_object_type = function
@@ -193,9 +186,7 @@ let pp_pointer_action = function
 
 let rec pp_object_value = function
   | OVinteger ival ->
-      Mem.case_integer_value0 ival
-        (fun n -> !^ (Nat_big_num.to_string n))
-        (fun () -> Pp_mem.pp_integer_value ival)
+      Pp_mem.pp_integer_value_for_core ival
   | OVfloating (Defacto_memory_types.FVconcrete str) ->
       !^ str
   | OVfloating (Defacto_memory_types.FVunspecified) ->
@@ -287,9 +278,9 @@ let pp_pexpr pe =
     begin
       match pe with
         | PEundef ub ->
-            pp_keyword "undef" ^^ P.angles (P.angles (!^ (
-              if !isatty then ansi_format [Magenta] (Undefined.string_of_undefined_behaviour ub)
-                         else Undefined.string_of_undefined_behaviour ub)))
+            pp_keyword "undef" ^^ P.parens (P.angles (P.angles (!^ (
+              ansi_format [Magenta] (Undefined.string_of_undefined_behaviour ub)
+            ))))
         | PEerror (str, pe) ->
             pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp pe)
         | PEval cval ->
@@ -378,7 +369,7 @@ let pp_pexpr pe =
 
 let rec pp_expr = function
   | Epure pe ->
-      pp_pexpr pe (* pp_keyword "pure" ^^ P.parens (pp_pexpr pe) *)
+      pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
   | Ememop (memop, pes) ->
       failwith "Ememop"
       (*
@@ -610,9 +601,6 @@ let pp_file file =
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_type coreTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
-  
-  isatty := Unix.isatty Unix.stdout;
-  
   begin
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
