@@ -1665,6 +1665,53 @@ end
 *)
 
 *)
+      | A.AilEbinary e1 A.Eq e2 ->
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun e1_sym        ->
+          E.fresh_symbol      >>= fun e2_sym        ->
+          E.fresh_symbol      >>= fun obj1_sym      ->
+          E.fresh_symbol      >>= fun obj2_sym      ->
+          (* The object type on which the Core Eq operator is going to work on.
+             It's enough to look at the type of one of the operand (see STD §6.5.9#2) *)
+          let oTy = match ctype_of e1 with
+            | Aty.Basic (Aty.Integer _) ->
+                C.OTy_integer
+            |Aty.Basic (Aty.Floating _) ->
+                C.OTy_floating
+            | Aty.Pointer _ _ ->
+                C.OTy_pointer
+            | _ ->
+                error "[Translate.translate_expression, AilEbinary Eq] the Ail expression was ill-typed"
+          end in
+          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [Caux.mk_empty_pat; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]; Caux.mk_empty_pat],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+(if AilTypesAux.is_integer (ctype_of e1) && AilTypesAux.is_integer (ctype_of e2) then
+                       Caux.mk_if_pe (Caux.mk_op_pe C.OpEq promoted1_pe promoted2_pe)
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
+else
+                       error "WIP: translation of AilEbinary Eq, pointer cases")) ]
+                )
+              )
+            )
       
       | A.AilEbinary e1 A.Ne e2 ->
           translate_rvalue e1 >>= fun core_e1       ->
@@ -2047,15 +2094,18 @@ else
                 C.Alloc (C.PEval (C.Vobject (C.OVinteger (Mem.alignof_ival Cty.unsigned_char)))) (C.PEsym sym_ty_e) (Symbol.PrefOther "malloc")
               ))))
 
+*)
+
       | A.AilEcall e [] ->
           translate_rvalue e >>= fun core_e ->
-          E.fresh_symbol     >>= fun sym_e  ->
+          E.fresh_symbol     >>= fun e_sym  ->
           (* if there are no arguments, we don't need all the temporary object creation stuff *)
           E.return $
             (* TODO: indet + check that wseq is right *)
-            C.Ewseq [Just (sym_e, C.BTy_object C.OTy_cfunction)] core_e (
-              C.Eproc default (C.PEsym (sym_e, C.BTy_object C.OTy_cfunction)) []
+            C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_object C.OTy_cfunction)) core_e (
+              C.Eproc default (Caux.mk_sym_pe (C.BTy_object C.OTy_cfunction) e_sym) []
             )
+(*
       
       | A.AilEcall e es ->
           translate_rvalue e >>= fun core_e ->
