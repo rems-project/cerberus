@@ -6,3 +6,6 @@ type t =
 
 let unknown =
   Loc_unknown
+
+let point pos =
+  Loc_point pos

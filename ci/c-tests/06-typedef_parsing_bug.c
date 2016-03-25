@@ -5,7 +5,3 @@ typedef int T;
 void f(T);
 typedef int T;
 
-int main(void)
-{
-
-}

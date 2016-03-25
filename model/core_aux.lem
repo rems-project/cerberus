@@ -6,6 +6,13 @@ open import Thread Errors
 
 import Debug Pp
 
+
+val strip: forall 'ty 'sym. generic_pexpr 'ty 'sym -> pexpr_ 'ty 'sym
+let strip (Pexpr _ pexpr_) =
+  pexpr_
+
+
+
 val     core_object_type_of_ctype: ctype -> core_object_type
 let rec core_object_type_of_ctype ty =
   match ty with
@@ -36,13 +43,6 @@ val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_valu
 let rec objectValueFromMemValue mem_val =
   Mem.case_mem_value mem_val
     (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
-(*
-    (fun symb              -> 
-                    (* WIP CONCUR *)
-                    (OTy_integer, OVinteger (Mem.integer_ival 420))
-(* error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))" *)
-)
-*)
     (fun _ ival            -> (OTy_integer, OVinteger ival))
     (fun _ fval            -> (OTy_floating, OVfloating fval))
     (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
@@ -54,22 +54,12 @@ val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
   Mem.case_mem_value mem_val
     (fun ty                -> (core_object_type_of_ctype ty, Vunspecified ty))
-(*
-    (fun symb              ->
-                    (* WIP CONCUR *)
-                    (OTy_integer, (* Vspecified (OVinteger (Mem.integer_ival 420))*)
-Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))
-)
-(* error "[Core_aux.objectValueFromMemValue] Vspecified (OVsymbolic (Symbolic.map_const objectValueFromMemValue symb))" *)
-)
-*)
     (fun _ ival            -> (OTy_integer, Vspecified (OVinteger ival)))
     (fun _ fval            -> (OTy_floating, Vspecified (OVfloating fval)))
     (fun _ ptr_val         -> (OTy_pointer, Vspecified (OVpointer ptr_val)))
     (fun mem_vals          -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
     (fun sym xs            -> (OTy_struct sym, Vspecified (OVstruct sym xs)))
     (fun sym ident mem_val -> (OTy_union sym, Vspecified (OVunion sym ident mem_val)))
-
 
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
@@ -124,53 +114,7 @@ TODO
   end
 
 
-val sizeof_pe:  pexpr -> pexpr
-val alignof_pe: pexpr -> pexpr
-val ivmin_pe:   pexpr -> pexpr
-val ivmax_pe:   pexpr -> pexpr
 
-let sizeof_pe  pe = Pexpr (BTy_object OTy_integer) (PEctor Civsizeof [pe])
-let alignof_pe pe = Pexpr (BTy_object OTy_integer) (PEctor Civalignof [pe])
-let ivmin_pe   pe = Pexpr (BTy_object OTy_integer) (PEctor Civmin [pe])
-let ivmax_pe   pe = Pexpr (BTy_object OTy_integer) (PEctor Civmax [pe])
-
-
-val bitwise_complement_pe: pexpr -> pexpr -> pexpr
-val integer_encode_pe:     pexpr -> pexpr -> pexpr
-val integer_decode_pe:     pexpr -> pexpr -> pexpr
-
-let bitwise_complement_pe pe1 pe2 =
-  Pexpr (BTy_object OTy_integer) (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
-let integer_encode_pe pe1 pe2 =
-  Pexpr (BTy_object OTy_integer) (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
-let integer_decode_pe pe1 pe2 =
-  Pexpr (BTy_object OTy_integer) (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
-
-(* Some aliases for positive actions *)
-let pcreate loc al ty pref = Eaction (Paction Pos (Action loc default (Create al ty pref )))
-let palloc loc al e pref   = Eaction (Paction Pos (Action loc default (Alloc al e pref   )))
-let pkill loc x            = Eaction (Paction Pos (Action loc default (Kill x         )))
-let pstore loc ty x n mo   = Eaction (Paction Pos (Action loc default (Store ty x n mo)))
-let pload loc ty x mo      = Eaction (Paction Pos (Action loc default (Load ty x mo   )))
-let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2)))
-
-
-val integer_pe: integer -> pexpr
-let integer_pe n =
-  Pexpr (BTy_object OTy_integer) (PEval (Vobject (OVinteger (Mem.integer_ival n))))
-
-val floating_value_pe: Mem.floating_value -> pexpr
-let floating_value_pe fval =
-  Pexpr (BTy_object OTy_floating) (PEval (Vobject (OVfloating fval)))
-
-val nullptr_pe: Core_ctype.ctype -> pexpr
-let nullptr_pe ref_ty =
-  Pexpr (BTy_object OTy_pointer) (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
-
-val mk_cfunction_pe: Symbol.sym -> pexpr
-let mk_cfunction_pe fsym =
-(*  PEval (Vpointer (Mem.fun_ptrval fsym)) *)
-  Pexpr (BTy_object OTy_cfunction) (PEval (Vobject (OVcfunction (Sym fsym))))
 
 
 (* Project an AilTypes.ctype into a Core.ctype *)
@@ -204,6 +148,192 @@ let rec proj_ctype ty =
     | AilTypes.Builtin str ->
         Core_ctype.Builtin str
   end
+
+
+
+
+(* Core pattern builders **************************************************** *)
+
+val mk_empty_pat: pattern
+let mk_empty_pat =
+  CaseBase Nothing
+
+val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
+let mk_sym_pat sym bTy =
+  CaseBase (Just (sym, bTy))
+
+val mk_tuple_pat: list pattern -> pattern
+let mk_tuple_pat = function
+  | [] ->
+      error "[Core_aux.mk_tuple_pat] called with |pats| = 0"
+  | [pat] ->
+      pat
+  | pats ->
+      CaseCtor Ctuple pats
+end
+
+val mk_specified_pat: pattern -> pattern
+let mk_specified_pat pat =
+  CaseCtor Cspecified [pat]
+
+
+
+
+(* Core pexpr builders  ***************************************************** *)
+val mk_sym_pe: core_base_type -> Symbol.sym -> pexpr (* TODO: remove the bTy *)
+let mk_sym_pe bTy sym =
+  Pexpr () (PEsym sym)
+
+(* TODO: mk_impl_pe *)
+
+(* TODO: PEval Vconstrained, Vobject *)
+
+val mk_integer_pe: integer -> pexpr
+let mk_integer_pe n =
+  Pexpr () (PEval (Vobject (OVinteger (Mem.integer_ival n))))
+
+val mk_floating_value_pe: Mem.floating_value -> pexpr
+let mk_floating_value_pe fval =
+  Pexpr () (PEval (Vobject (OVfloating fval)))
+
+val mk_nullptr_pe: Core_ctype.ctype -> pexpr
+let mk_nullptr_pe ref_ty =
+  Pexpr () (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
+
+val mk_cfunction_pe: Symbol.sym -> pexpr
+let mk_cfunction_pe fsym =
+  Pexpr () (PEval (Vobject (OVcfunction (Sym fsym))))
+
+val mk_specified_pe: pexpr -> pexpr
+let mk_specified_pe pe =
+    Pexpr () (PEctor Cspecified [pe])
+
+val mk_unspecified_pe: Core_ctype.ctype -> pexpr
+let mk_unspecified_pe ty =
+  Pexpr () (PEval (Vunspecified ty))
+
+val mk_unit_pe: pexpr
+let mk_unit_pe =
+  Pexpr () (PEval Vunit)
+
+(* TODO: PEval Vtrue, Vfalse *)
+
+val mk_ail_ctype_pe: AilTypes.ctype -> pexpr
+let mk_ail_ctype_pe ty =
+  Pexpr () (PEval (Vctype (proj_ctype ty)))
+
+val mk_ctype_pe: ctype -> pexpr
+let mk_ctype_pe ty =
+  Pexpr () (PEval (Vctype ty))
+
+val     mk_list_pe: list pexpr -> pexpr
+let rec mk_list_pe pes =
+  Pexpr () match pes with
+    | [] ->
+        PEctor (Cnil ()) []
+    | pe :: pes' ->
+        PEctor Ccons [pe; mk_list_pe pes']
+  end
+
+val mk_tuple_pe: list pexpr -> pexpr
+let mk_tuple_pe pes =
+  Pexpr () (PEctor Ctuple pes)
+
+val mk_ivmax_pe: pexpr -> pexpr
+let mk_ivmax_pe pe =
+  Pexpr () (PEctor Civmax [pe])
+
+val mk_ivmin_pe: pexpr -> pexpr
+let mk_ivmin_pe pe =
+  Pexpr () (PEctor Civmin [pe])
+
+val mk_sizeof_pe: pexpr -> pexpr
+let mk_sizeof_pe pe =
+  Pexpr () (PEctor Civsizeof [pe])
+
+val mk_alignof_pe: pexpr -> pexpr
+let mk_alignof_pe pe =
+  Pexpr () (PEctor Civalignof [pe])
+
+(* TODO: PEconstrained *)
+
+val mk_undef_pe: Undefined.undefined_behaviour -> pexpr
+let mk_undef_pe ub =
+  Pexpr () (PEundef ub)
+
+val mk_error_pe: string -> pexpr -> pexpr
+let mk_error_pe str pe =
+  Pexpr () (PEerror str pe)
+
+val mk_not_pe: pexpr -> pexpr
+let mk_not_pe pe =
+  Pexpr () (PEnot pe)
+
+val mk_op_pe: binop -> pexpr -> pexpr -> pexpr
+let mk_op_pe bop pe1 pe2 =
+  Pexpr () (PEop bop pe1 pe2)
+
+val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
+let mk_let_pe pat pe1 pe2 =
+  Pexpr () (PElet pat pe1 pe2)
+
+val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
+let mk_if_pe pe1 pe2 pe3 =
+  Pexpr () (PEif pe1 pe2 pe3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val bitwise_complement_pe: pexpr -> pexpr -> pexpr
+val integer_encode_pe:     pexpr -> pexpr -> pexpr
+val integer_decode_pe:     pexpr -> pexpr -> pexpr
+
+let bitwise_complement_pe pe1 pe2 =
+  Pexpr () (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
+let integer_encode_pe pe1 pe2 =
+  Pexpr () (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
+let integer_decode_pe pe1 pe2 =
+  Pexpr () (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
+
+(* Some aliases for positive actions *)
+let pcreate loc al ty pref = Eaction (Paction Pos (Action loc default (Create al ty pref )))
+let palloc loc al e pref   = Eaction (Paction Pos (Action loc default (Alloc al e pref   )))
+let pkill loc x            = Eaction (Paction Pos (Action loc default (Kill x         )))
+let pstore loc ty x n mo   = Eaction (Paction Pos (Action loc default (Store ty x n mo)))
+let pload loc ty x mo      = Eaction (Paction Pos (Action loc default (Load ty x mo   )))
+let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2)))
+
+
+
+
 
 
 (* for a given Ctype returns the corresponding "zero" value *)
@@ -250,7 +380,7 @@ let rec zeros_aux ty =
 val zeros: ctype -> pexpr
 let zeros ty =
   (* TODO: yucky *)
-  Pexpr (BTy_object (core_object_type_of_ctype ty))
+  Pexpr ()
 (*
     (PEval (Vobject (snd $ objectValueFromMemValue (zeros_aux ty))))
 *)
@@ -345,24 +475,6 @@ end
 
 
 
-val mk_ail_ctype_pe: AilTypes.ctype -> pexpr
-let mk_ail_ctype_pe ty =
-  Pexpr BTy_ctype (PEval (Vctype (proj_ctype ty)))
-
-val mk_ctype_pe: ctype -> pexpr
-let mk_ctype_pe ty =
-  Pexpr BTy_ctype (PEval (Vctype ty))
-
-val mk_sym_pe: core_base_type -> Symbol.sym -> pexpr
-let mk_sym_pe bTy sym =
-  Pexpr bTy (PEsym sym)
-
-val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
-let mk_if_pe (Pexpr bTy1 _ as pe1) (Pexpr bTy2 _ as pe2) (Pexpr bTy3 _ as pe3) =
-  if bTy1 <> BTy_boolean || bTy2 <> bTy3 then
-    error "[Caux.mk_if_pe] found an illtyped operand"
-  else
-    Pexpr bTy2 (PEif pe1 pe2 pe3)
 
 
 let rec mk_wseq_aux end_e a_opts_es =
@@ -405,16 +517,6 @@ let mk_unseq = function
 end
 
 
-val     mk_cons: forall 'a. core_base_type -> list pexpr -> pexpr
-let rec mk_cons bTy pes =
-  (* TODO: maybe try to evaluate? *)
-  Pexpr (BTy_list bTy) match pes with
-    | [] ->
-        PEctor (Cnil bTy) []
-    | pe :: pes' ->
-        PEctor Ccons [pe; mk_cons bTy pes']
-  end
-
 
 
 let rec concat_sseq e e' =
@@ -435,21 +537,20 @@ let is_negative_action = function
 end
 
 
-val     valueFromPexpr: pexpr -> maybe (core_base_type * value)
-let rec valueFromPexpr (Pexpr bTy pexpr_) =
-  match pexpr_ with
-    | PEval cval ->
-        Just (bTy, cval)
-    | _ ->
-        Nothing
+val valueFromPexpr: pexpr -> maybe value
+let valueFromPexpr = function
+  | Pexpr () (PEval cval) ->
+      Just cval
+  | _ ->
+      Nothing
   end
 
-val     valueFromPexprs: list pexpr -> maybe (list (core_base_type * value))
+val     valueFromPexprs: list pexpr -> maybe (list value)
 let rec valueFromPexprs pes =
   List.foldr (fun pe acc_opt ->
     match (valueFromPexpr pe, acc_opt) with
-      | (Just bTy_cval, Just acc) ->
-          Just (bTy_cval :: acc)
+      | (Just cval, Just acc) ->
+          Just (cval :: acc)
       | _ ->
           Nothing
     end) (Just []) pes
@@ -458,7 +559,7 @@ let rec valueFromPexprs pes =
 val to_integer: pexpr -> maybe integer
 let to_integer pe =
   match valueFromPexpr pe with
-    | Just (_, Vobject (OVinteger ival)) ->
+    | Just (Vobject (OVinteger ival)) ->
         Mem_aux.integerFromIntegerValue ival
     | _ ->
         Nothing
@@ -716,24 +817,24 @@ let rec subst_pattern pat pe' expr =
         expr
     | (CaseBase (Just (sym, _)), _) ->
         subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil _) [], Pexpr _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil ()) [], Pexpr _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         expr
     | (CaseCtor (Cnil _) [], Pexpr _ (PEctor (Cnil _) [])) ->
         (* empty list (pure expr) *)
         expr
-    | (CaseCtor Ccons [pat1; pat2], Pexpr bTy (PEval (Vlist bTy_elem (v::vs)))) ->
+    | (CaseCtor Ccons [pat1; pat2], Pexpr () (PEval (Vlist bTy_elem (v::vs)))) ->
         (* populated list (value) *)
-        subst_pattern pat1 (Pexpr bTy_elem (PEval v)) $
-          subst_pattern pat2 (Pexpr bTy (PEval (Vlist bTy vs))) expr
+        subst_pattern pat1 (Pexpr () (PEval v)) $
+          subst_pattern pat2 (Pexpr () (PEval (Vlist bTy_elem vs))) expr
     | (CaseCtor Ccons [pat1; pat2], Pexpr _ (PEctor Ccons [pe1; pe2])) ->
         (* populated list (pure expr) *)
         subst_pattern pat1 pe1 $
           subst_pattern pat2 pe2 expr
-    | (CaseCtor Ctuple pats', Pexpr (BTy_tuple bTys) (PEval (Vtuple vs))) ->
-        let pes = List.map (fun (bTy, v) ->
-          Pexpr bTy (PEval v)
-        ) (List.zip bTys vs) in
+    | (CaseCtor Ctuple pats', Pexpr () (PEval (Vtuple vs))) ->
+        let pes = List.map (fun v ->
+          Pexpr () (PEval v)
+        ) vs in
         List.foldr (fun (pat', pe) acc ->
           subst_pattern pat' pe acc
         ) expr (List.zip pats' pes)
@@ -743,14 +844,16 @@ let rec subst_pattern pat pe' expr =
         ) expr (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cloaded [pat'], Pexpr (BTy_loaded oTy) (PEval (Vspecified oval))) ->
-        subst_pattern pat' (Pexpr (BTy_object oTy) (PEval (Vobject oval))) expr
-    | (CaseCtor Cspecified [pat'], Pexpr _ (PEctor Cspecified [pe''])) ->
+    | (CaseCtor Cloaded [pat'], Pexpr () (PEval (Vspecified oval))) ->
+        subst_pattern pat' (Pexpr () (PEval (Vobject oval))) expr
+    | (CaseCtor Cspecified [pat'], Pexpr () (PEctor Cspecified [pe''])) ->
         subst_pattern pat' pe'' expr
-    | (CaseCtor Cunspecified [pat'], Pexpr _ (PEval (Vunspecified ty))) ->
-        subst_pattern pat' (Pexpr BTy_ctype (PEval (Vctype ty))) expr
-    | (CaseCtor Cunspecified [pat'], Pexpr _ (PEctor Cunspecified [pe''])) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr () (PEval (Vunspecified ty))) ->
+        subst_pattern pat' (Pexpr () (PEval (Vctype ty))) expr
+    | (CaseCtor Cunspecified [pat'], Pexpr () (PEctor Cunspecified [pe''])) ->
         subst_pattern pat' pe'' expr
+    | _ ->
+        error "WIP: Core_aux.subst_pattern"
   end
 
 
@@ -800,9 +903,9 @@ let rec subst_wait tid v = function
        if tid = tid' then
          if v <> Vunit then
 (*           error "TODO CONCUR: Core_aux.subst_wait ==> v <> Vunit" *)
-           Epure (Pexpr BTy_unit(*TODO TYPE IS WRONG*) (PEval v))
+           Epure (Pexpr () (PEval v))
          else
-           Epure (Pexpr BTy_unit (PEval Vunit))
+           Epure (Pexpr () (PEval Vunit))
        else
          Ewait tid'
    | Eloc loc e ->
@@ -940,7 +1043,7 @@ val push_empty_continuation: forall 'a. stack 'a -> stack 'a
 let push_empty_continuation sk =
   Stack_cons [] sk
 
-val pop_stack: forall 'a. stack 'a -> Exception.t (continuation 'a * stack 'a) core_run_error
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_error
 let pop_stack = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_stack")
@@ -948,7 +1051,7 @@ let pop_stack = function
       Exception.return (cont, sk)
 end
 
-val pop_continuation_element: forall 'a. stack 'a -> Exception.t (continuation_element 'a * stack 'a) core_run_error
+val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_error
 let pop_continuation_element = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_continuation_element")
@@ -959,7 +1062,7 @@ let pop_continuation_element = function
 end
 
 
-val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.t (stack 'a) core_run_error
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
 let push_continuation_element cont_elem = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "push_continuation_element")
@@ -969,7 +1072,7 @@ end
 
 
 
-val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.t (stack 'a) core_run_error
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
 let append_to_current_continuation cont = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)
@@ -1102,291 +1205,29 @@ let rec has_sseqs expr =
   end
 
 
-(* val rewind_upto_sseq: forall 'a. stack 'a -> expr 'a -> (expr 'a * stack 'a) *)
-
-
-val is_concrete: value -> bool
-let is_concrete = function
-(*
-  | Vobject (OVsymbolic _) ->
-      false
-*)
-  | _ ->
-      true
-end
-
-(* assumes a value expression *)
-
-val symbolify: value -> Symbolic.symbolic object_value Mem.pointer_value
-let symbolify = function
-  | Vtrue ->
-      Symbolic.SYMBtrue
-  | Vfalse ->
-      Symbolic.SYMBfalse
-  | Vctype ty ->
-      Symbolic.SYMBctype ty
-(*
-  | Vobject (OVsymbolic symb) ->
-      symb
-*)
-  | Vobject oval ->
-      Symbolic.SYMBconst oval
-  | _ ->
-      error "Core_aux.symbolify"
-end
-
-(*
-val     pexprFromSymbolic: map Symbol.sym object_value -> Symbolic.symbolic object_value Mem.pointer_value -> maybe pexpr
-let rec pexprFromSymbolic concur_sym_map symb =
-  let pexprFromSymbolic = pexprFromSymbolic concur_sym_map in
-  let convert_operator = function
-    | Symbolic.Add ->
-        OpAdd
-    | Symbolic.Sub ->
-        OpSub
-    | Symbolic.Mul ->
-        OpMul
-    | Symbolic.Div ->
-        OpDiv
-    | Symbolic.Rem_t ->
-        OpRem_t
-    | Symbolic.Rem_f ->
-        OpRem_f
-    | Symbolic.Exp ->
-        OpExp
-    | Symbolic.Eq ->
-        OpEq
-    | Symbolic.Lt ->
-        OpLt
-    | Symbolic.And ->
-        OpAnd
-    | Symbolic.Or ->
-        OpOr
-    | Symbolic.Ge ->
-        OpGe
-    | Symbolic.Neq ->
-        error "Core_aux.conver_operator, Symbolic.Neq"
-  end in
-  let convert_name = function
-    | Symbolic.SYMBfsym sym ->
-        Sym sym
-    | Symbolic.SYMBimpl i ->
-        Impl i
-  end in
-  match symb with
-    | Symbolic.SYMBtrue ->
-        Just (Pexpr BTy_boolean (PEval Vtrue))
-    | Symbolic.SYMBfalse ->
-        Just (Pexpr BTy_boolean (PEval Vfalse))
-(*
-TODO: CONCUR
-| Symbolic.SYMBconst oval ->
-        Just (PEval (Vobject oval))
-        *)
-    | Symbolic.SYMBptrval ptr_val ->
-        Just (Pexpr BTy_pointer (PEval (Vobject (OVpointer ptr_val))))
-    | Symbolic.SYMBctype ty ->
-        Just (Pexpr BTy_ctype (PEval (Vctype ty)))
-(*
-TODO: CONCUR
-    | Symbolic.SYMBsym _ sym ->
-        Maybe.map (fun z -> PEval (Vobject z)) (Map.lookup sym concur_sym_map)
-*)
-    | Symbolic.SYMBop Symbolic.Neq symb1 symb2 ->
-        match (pexprFromSymbolic symb1, pexprFromSymbolic symb2) with
-          | (Just pe1, Just pe2) ->
-              Just (Pexpr BTy_boolean (PEnot (PEop OpEq pe1 pe2)))
-          | _ ->
-              Nothing
-        end
-    | Symbolic.SYMBop symb_op symb1 symb2 ->
-        match (pexprFromSymbolic symb1, pexprFromSymbolic symb2) with
-          | (Just pe1, Just pe2) -> 
-              Just (Pexpr BTy_integer (PEop (convert_operator symb_op) pe1 pe2))
-          | _ ->
-              Nothing
-        end
-    | Symbolic.SYMBite symb1 symb2 symb3 ->
-        match (pexprFromSymbolic symb1, pexprFromSymbolic symb2, pexprFromSymbolic symb3) with
-          | (Just pe1, Just pe2, Just pe3) ->
-              Just (PEif pe1 pe2 pe3)
-          | _ ->
-              Nothing
-        end
-(*
-TODO
-    | Symbolic.SYMBcall symb_nm symbs ->
-        let pes_opt = List.foldr (fun symb acc_opt ->
-          match (pexprFromSymbolic symb, acc_opt) with
-            | (Just pe, Just acc) ->
-                Just (pe :: acc)
-            | _ ->
-                Nothing
-          end
-        ) (Just []) symbs in
-        match pes_opt with
-          | Just pes ->
-              Just (PEcall (convert_name symb_nm) pes)
-          | _ ->
-              Nothing
-        end
-*)
-  end
-*)
-
-
-(*
-let is_unspec pe mk_ =
-  
-*)
-
-
-
-
-
-
-val mk_tuple_pe: list pexpr -> pexpr
-let mk_tuple_pe pes =
-  Pexpr (BTy_tuple $ List.foldr (fun (Pexpr bTy _) acc -> bTy :: acc) [] pes) (PEctor Ctuple pes)
-
-
-val mk_unspecified_pe: Core_ctype.ctype -> pexpr
-let mk_unspecified_pe ty =
-  Pexpr (BTy_loaded (core_object_type_of_ctype ty)) (PEval (Vunspecified ty))
-
-
-val unit_pe: pexpr
-let unit_pe =
-  Pexpr BTy_unit (PEval Vunit)
-
-val mk_not_pe: pexpr -> pexpr
-let mk_not_pe pe =
-  Pexpr BTy_boolean (PEnot pe)
-
-
-val mk_op_pe: binop -> pexpr -> pexpr -> pexpr
-let mk_op_pe bop (Pexpr bTy1 _ as pe1) (Pexpr bTy2 _ as pe2) =
-  match (bop, bTy1, bTy2) with
-    | (OpAdd, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpSub, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpMul, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpDiv, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpRem_t, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpRem_f, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    | (OpExp, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr (BTy_object OTy_integer) (PEop bop pe1 pe2)
-    
-    | (OpEq, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpEq, BTy_ctype, BTy_ctype) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpGt, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpLt, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpGe, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpLe, BTy_object OTy_integer, BTy_object OTy_integer) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    
-    | (OpAnd, BTy_boolean, BTy_boolean) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | (OpOr, BTy_boolean, BTy_boolean) ->
-        Pexpr BTy_boolean (PEop bop pe1 pe2)
-    | _ ->
-        error ("[Core_aux.mk_op_pe] " ^ Pp.stringFromCore_pexpr pe1 ^ " <-> " ^ Pp.stringFromCore_pexpr pe2)
-  end
-
-
-val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
-let mk_let_pe pat pe1 ( Pexpr bTy _ as pe2) =
-  (* TODO: check that the pattern matchs pe1 *)
-  Pexpr bTy (PElet pat pe1 pe2)
-
-
-
-val mk_empty_pat: pattern
-let mk_empty_pat =
-  CaseBase Nothing
-
-val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
-let mk_sym_pat sym bTy =
-  CaseBase (Just (sym, bTy))
-
-val mk_tuple_pat: list pattern -> pattern
-let mk_tuple_pat = function
-  | [] ->
-      error "[Core_aux.mk_tuple_pat] called with |pats| = 0"
-  | [pat] ->
-      pat
-  | pats ->
-      CaseCtor Ctuple pats
-end
-(*
-let mk_tuple_pat pats =
-  if List.length pats < 2 then
-      error "[Core_aux.mk_tuple_pat] called with |pats| < 2"
-  else
-    CaseCtor Ctuple pats
-*)
-
-val mk_specified_pat: pattern -> pattern
-let mk_specified_pat pat =
-  CaseCtor Cspecified [pat]
-
-
-(*
-val     mk_sseqs_e: list (expr unit) -> expr unit
-let rec mk_sseqs_e es =
-  match es with
-    | [] ->
-        error "[Caux.mk_sseq_e] called on empty list"
-    | [e] ->
-        e (* TODO: maybe make this an error *)
-    | Eskip :: es' ->
-        (* NOTE: doing a little optimisation here *)
-        (* TODO: maybe better to leave that for the Core to Core phase *)
-        mk_sseq_e es'
-    | e :: es' ->
-        Esseq mk_empty_pat e (mk_sseq_e es')
-  end
-*)
-
-
-val mk_specified_pe: pexpr -> pexpr
-let mk_specified_pe (Pexpr (BTy_object oTy) _ as pe) =
-    Pexpr (BTy_loaded oTy) (PEctor Cspecified [pe])
-
-
 
 
 val     match_pattern: pattern -> pexpr -> maybe (list (sym * pexpr))
-let rec match_pattern pat ((Pexpr bTy pe_) as pexpr) =
-  match (pat, bTy, pe_) with
-    | (CaseBase Nothing, _, _) ->
+let rec match_pattern pat ((Pexpr () pe_) as pexpr) =
+  match (pat, pe_) with
+    | (CaseBase Nothing, _) ->
         Just []
-    | (CaseBase (Just (sym, _)), _, _) ->
+    | (CaseBase (Just (sym, _)), _) ->
         Just [(sym, pexpr)]
 (*      | Vobject of (generic_object_value 'sym) *)
-    | (CaseCtor Cspecified [pat'], _(*BTy_loaded oTy*), PEval (Vspecified oval)) ->
-        match_pattern pat' (Pexpr (BTy_object (*oTy*)OTy_integer) (PEval (Vobject oval)))
-    | (CaseCtor Cunspecified [pat'], _(*BTy_loaded oTy*), PEval (Vunspecified ty)) ->
+    | (CaseCtor Cspecified [pat'], PEval (Vspecified oval)) ->
+        match_pattern pat' (Pexpr () (PEval (Vobject oval)))
+    | (CaseCtor Cunspecified [pat'], PEval (Vunspecified ty)) ->
         match_pattern pat' (mk_ctype_pe ty)
 (*      | Vlist of core_base_type * list (generic_value 'sym) *)
-    | (CaseCtor Ctuple pats', _(*BTy_tuple bTys'*), PEval (Vtuple cvals')) -> 
-        List.foldr (fun (pat', ((*bTy',*) cval')) acc ->
+    | (CaseCtor Ctuple pats', PEval (Vtuple cvals')) -> 
+        List.foldr (fun (pat', cval') acc ->
           Maybe.bind acc (fun xs ->
-            Maybe.bind (match_pattern pat' (Pexpr BTy_unit(*bTy'*) (PEval cval'))) (fun x ->
+            Maybe.bind (match_pattern pat' (Pexpr () (PEval cval'))) (fun x ->
               Just (x++xs)
             )
           )
-        ) (Just []) (List.zip pats' cvals' (*(List.zip bTys' cvals')*))
+        ) (Just []) (List.zip pats' cvals')
     | _ ->
         Nothing
   end

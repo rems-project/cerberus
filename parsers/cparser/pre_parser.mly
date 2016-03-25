@@ -114,9 +114,11 @@ declare_typename(nt):
 translation_unit_file: (* NOTE: this is not present in the standard *)
 | translation_unit EOF
     {}
+(*
 | error
     { Parser_errors.fatal_error "%s:%d:%d Error:@ parse error"
         $startpos.Lexing.pos_fname $startpos.Lexing.pos_lnum $startpos.Lexing.pos_bol }
+*)
 
 
 (* Actual grammar *)
@@ -126,6 +128,8 @@ translation_unit_file: (* NOTE: this is not present in the standard *)
 primary_expression:
 | id= VAR_NAME
     { set_id_type id VarId }
+| id= UNKNOWN_NAME
+    { failwith ("Found undeclared identifier: " ^ (fst id)) }
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN

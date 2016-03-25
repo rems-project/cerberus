@@ -101,6 +101,7 @@ type token =
 *)
   | RETURN
   | INDET
+  | BOUND
   | CREATE
   | ALLOC
   | KILL

@@ -40,7 +40,7 @@ let seen_typedefs : (identifier_type M.t) ref =
   ref M.empty
 
 
-let parse input : Cabs.translation_unit =
+let parse input =
   (* TODO: hack *)
   Lexer.contexts := [];
   Input.read (fun ic ->
@@ -53,16 +53,23 @@ let parse input : Cabs.translation_unit =
     (* This wrapper is feed to the pre_parser and incrementaly save the list of tokens *)
     let lexer_wrapper lexbuf =
       let tok = Lexer.initial lexbuf in
+      print_endline ("TOKEN => " ^ Tokens.string_of_token tok);
       saved_tokens := (tok, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) :: !saved_tokens;
       tok in
     
     let hack lexbuf =
       match !saved_tokens with
         | (tok, (start_p, end_p)) :: xs ->
+            Printf.printf "TOKEN => %s @ line: %d, char: %d -- line: %d, char: %d\n" (Tokens.string_of_token tok)
+              start_p.Lexing.pos_lnum (start_p.Lexing.pos_cnum - start_p.Lexing.pos_bol)
+              end_p.Lexing.pos_lnum (end_p.Lexing.pos_cnum - end_p.Lexing.pos_bol);
+            flush_all ();
             saved_tokens := xs;
             lexbuf.Lexing.lex_start_p <- start_p;
             lexbuf.Lexing.lex_curr_p <- end_p;
-            tok in
+            tok
+        | [] ->
+            print_endline "ERROR (Cparser_driver.hack ==> []"; exit 1 in
     
     let modify_tokens () =
       let modify = function
@@ -112,7 +119,9 @@ let parse input : Cabs.translation_unit =
     
     try
       
+      print_endline "BEFORE PRE PARSER";
       Pre_parser.translation_unit_file lexer_wrapper lexbuf;
+      print_endline "AFTER PRE PARSER";
 (*
       print_endline "==== BEFORE LEXER HACK ====";
       List.iter (fun (tok, loc) ->
@@ -129,7 +138,7 @@ let parse input : Cabs.translation_unit =
       ) !saved_tokens;
       print_endline "===========================";
 *)
-      Parser.translation_unit_file hack (Lexing.from_string "")
+      Exception.return2 (Parser.translation_unit_file hack (Lexing.from_string ""))
     with
       | Failure msg -> raise (Failure msg)
       | err ->
@@ -139,7 +148,10 @@ let parse input : Cabs.translation_unit =
             | NonStandard_string_concatenation ->
                 print_endline "ERROR: unsupported non-standard concatenation of string literals"
             | _ -> ());
+          Exception.fail0 (Location_ocaml.point spos, Errors.(Cparser_cause (Cparser_unexpectedToken tok)))
+(*
           Printf.printf "PARSING ERROR: unexpected token: `%s' @ line: %d, char: %d\n"
             tok spos.Lexing.pos_lnum (spos.Lexing.pos_cnum - spos.Lexing.pos_bol);
           exit 1
+*)
   ) input

@@ -46,7 +46,7 @@ let runEU m = fun st ->
   end
 
 
-val runE: forall 'a 's 'msg. Exception.t 'a 'msg -> t 'a 's 'msg
+val runE: forall 'a 's 'msg. Exception.exceptM 'a 'msg -> t 'a 's 'msg
 let runE m =
   runEU (Exception.bind m Exception_undefined.return)
 
@@ -63,7 +63,7 @@ let runSE m =
     (fun z -> State_exception.return (Undefined.return z))
 
 
-val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t (Undefined.t 'a * 's) 'msg
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.exceptM (Undefined.t 'a * 's) 'msg
 let run m st = m st
 
 
