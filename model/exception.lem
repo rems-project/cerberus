@@ -1,6 +1,6 @@
 open import Pervasives Global
 
-type t 'a 'msg =
+type exceptM 'a 'msg =
   | Result of 'a
   | Exception of 'msg
 
@@ -17,10 +17,10 @@ let throw m = Exception m
 let fail = throw
 let join m = bind m (fun x -> x)
 
-val fmap: forall 'a 'b 'msg. ('a -> 'b) -> t 'a 'msg -> t 'b 'msg
+val fmap: forall 'a 'b 'msg. ('a -> 'b) -> exceptM 'a 'msg -> exceptM 'b 'msg
 let fmap f m = bind m (return -| f)
 
-val app: forall 'a 'b 'msg. t ('a -> 'b) 'msg -> t 'a 'msg -> t 'b 'msg
+val app: forall 'a 'b 'msg. exceptM ('a -> 'b) 'msg -> exceptM 'a 'msg -> exceptM 'b 'msg
 let app mf m = bind mf (fun f -> fmap f m)
 
 let of_maybe m = function
@@ -44,7 +44,7 @@ open Operators
 let map2 f mx my    = app (fmap f mx) my
 let map3 f mx my mz = app (map2 f mx my) mz
 
-val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
+val sequence: forall 'a 'msg. list (exceptM 'a 'msg) -> exceptM (list 'a) 'msg
 let sequence ms =
   foldr
     (fun m ms' ->
@@ -53,14 +53,14 @@ let sequence ms =
       return (x::xs)
     ) (return []) ms
 
-val listM: forall 'a 'b 'msg. ('a -> list (t 'b 'msg)) -> 'a -> t (list 'b) 'msg
+val listM: forall 'a 'b 'msg. ('a -> list (exceptM 'b 'msg)) -> 'a -> exceptM (list 'b) 'msg
 let listM t xs = sequence (t xs)
 
-val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+val mapM: forall 'a 'b 'msg. ('a -> exceptM 'b 'msg) -> list 'a -> exceptM (list 'b) 'msg
 let mapM f = listM (List.map f)
 
 
-val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> t 'a 'msg) -> 'a -> list 'b -> t 'a 'msg
+val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg
 let rec foldlM f a = function
   | [] ->
       return a
@@ -113,7 +113,7 @@ let rbind_exception k m = bind_exception m k
 
 
 
-val guard: forall 'msg. bool -> 'msg -> t unit 'msg
+val guard: forall 'msg. bool -> 'msg -> exceptM unit 'msg
 let guard pred err =
   if pred then
     return ()
@@ -122,7 +122,7 @@ let guard pred err =
 
 
 
-val onException: forall 'a 'msg. t 'a 'msg -> t 'a 'msg -> t 'a 'msg
+val onException: forall 'a 'msg. exceptM 'a 'msg -> exceptM 'a 'msg -> exceptM 'a 'msg
 let onException m1 m2 =
   match m1 with
     | Result z    -> Result z

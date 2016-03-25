@@ -1,11 +1,14 @@
 open import Pervasives
 
 open import Global
-open import Core Core_aux
+open import Core
 open import Core_run_aux Errors
 import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
+
+import Core_aux
+module Caux = Core_aux
 
 module EU  = Exception_undefined
 
@@ -20,7 +23,7 @@ let to_pure expr =
 (* takes the symbolic names of a function, some pure expressions and produce
    the function body where the arguments have been substituted *)
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
-                   Exception.t Core.pexpr core_run_error
+                   Exception.exceptM Core.pexpr core_run_error
 let call_function file f_nm arg_cvals =
   Exception.bind match f_nm with
     | Sym f_a ->
@@ -53,7 +56,7 @@ let call_function file f_nm arg_cvals =
             ") |params|= " ^ show (List.length params) ^ " <> |args|= " ^ show (List.length arg_cvals)
           )
         else
-          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
+          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
     | Proc _ _ _ ->
         error "Core_run.call_function, called on a Proc"
   end
@@ -72,10 +75,10 @@ let inline (<$>) = EU.fmap
 val     step_eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
                          map Symbol.sym Core.object_value -> bool -> Core.pexpr  ->
                          EU.t Core.pexpr core_run_error
-let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexpr_ as pexpr) =
+let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr () pexpr_ as pexpr) =
   let strip (Pexpr _ pe_) = pe_ in
   let self pe = step_eval_pexpr loc mem_st file concur_sym_map inside_if pe in
-  Pexpr bTy <$> match pexpr_ with
+  Pexpr () <$> match pexpr_ with
     (* pulling the constrained up *)
     | PEconstrained xs ->
         EU.mapM (fun (constrs, pe) ->
@@ -83,7 +86,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
           EU.return (constrs, pe')
         ) xs >>= fun xs' ->
         let (constrs, pe') = List.unzip xs' in
-        match Maybe.map (List.map snd) (valueFromPexprs pe') with
+        match Caux.valueFromPexprs pe' with
           | Just cvals ->
               EU.return $ PEval (Vconstrained (List.zip constrs cvals))
           | Nothing ->
@@ -98,7 +101,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
     | PEnot (Pexpr _ (PEconstrained xs)) ->
         EU.return $ PEconstrained (
           List.map (fun (constrs, pe) ->
-            (constrs, Core_aux.mk_not_pe pe)
+            (constrs, Caux.mk_not_pe pe)
           ) xs
         )
     | PEop binop (Pexpr _ (PEconstrained xs)) pe2 ->
@@ -106,7 +109,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         EU.return $
           PEconstrained (
             List.map (fun (constrs, pe) ->
-              (constrs, Pexpr bTy (PEop binop pe pe2))
+              (constrs, Caux.mk_op_pe binop pe pe2)
             ) xs
           )
 (*
@@ -118,7 +121,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
     | PEif (Pexpr _ (PEconstrained xs)) pe2 pe3 ->
         EU.return $ PEconstrained (
           List.map (fun (constrs, pe) ->
-            (constrs, Pexpr bTy (PEif pe pe2 pe3))
+            (constrs, Caux.mk_if_pe pe pe2 pe3)
           ) xs
         )
 
@@ -155,33 +158,30 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         error "WIP: Core_Eval.step_eval_pexpr, PEerror"
     | PEctor ctor pes ->
         EU.mapM self pes >>= fun pes' ->
-        match (ctor, Maybe.map (List.map snd) (valueFromPexprs pes')) with
-          | (Cnil bTy, Just []) ->
-              EU.return $ PEval (Vlist bTy [])
+        match (ctor, Caux.valueFromPexprs pes') with
+          | (Cnil (), Just []) ->
+              EU.return $ PEval (Vlist BTy_unit(*TODO this is wrong*) [])
           | (Ccons, Just [cval1; Vlist bTy' cvals]) ->
-              if bTy <> bTy' then
-                EU.fail (Illformed_program "illtyped operand for Ccons")
-              else
                 EU.return $ PEval (Vlist bTy' (cval1 :: cvals))
           | (Ctuple, Just cvals) ->
               EU.return $ PEval (Vtuple cvals)
           | (Carray, Just cvals) ->
-              error "WIP: step_eval, PEctor Carray"
+              error "WIP: step_eval, PEctor Carray" (* WIP *)
           | (Civmax, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
-                    error ("Core_run ivmax" ^
-                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
+                    error ("Core_run ivmax" ^ (* DEBUG *)
+                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr () (Core.PEval (Vctype ty))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civmin, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
-                    error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^
-                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr Core.BTy_ctype (Core.PEval (Vctype ty))) : Core.expr unit))
+                    error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
+                               Pp.stringFromCore_expr (Core.Epure (Core.Pexpr () (Core.PEval (Vctype ty))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civsizeof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.sizeof_ival ty)))
@@ -201,7 +201,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
     | PEcase pe pat_pes ->
         self pe >>= function
           | (Pexpr _ (PEval _) as pe') ->
-              match select_case subst_sym_pexpr pe' pat_pes with
+              match Caux.select_case Caux.subst_sym_pexpr pe' pat_pes with
                 | Just pe'' ->
                     EU.return (strip pe'')
                 | Nothing ->
@@ -229,7 +229,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
     | PEop binop pe1 pe2 ->
         self pe1 >>= fun pe1' ->
         self pe2 >>= fun pe2' ->
-        match (binop, Maybe.map snd (valueFromPexpr pe1'), Maybe.map snd (valueFromPexpr pe2')) with
+        match (binop, Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
           (* Ctype equality *)
           | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
               EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
@@ -240,13 +240,9 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
                 | Just b ->
                     EU.return (PEval (if b then Vtrue else Vfalse))
                 | Nothing ->
-(*
-                    (* the current constraints allow both outcomes *)
-                    error ("WIP: symbolic integer_value equality ==> " ^
-                           Pp.stringFromCore_pexpr pe1' ^ " =?= " ^ Pp.stringFromCore_pexpr pe2')
-*)
-                    EU.return (PEconstrained [ ([Mem.constraint_eqIV ival1 ival2], Pexpr BTy_boolean (PEval Vtrue))
-                                             ; ([Mem.constraint_neIV ival1 ival2], Pexpr BTy_boolean (PEval Vfalse)) ])
+                    (* when both outcomes are still possible *)
+                    EU.return (PEconstrained [ ([Mem.constraint_eqIV ival1 ival2], Pexpr () (PEval Vtrue))
+                                             ; ([Mem.constraint_neIV ival1 ival2], Pexpr () (PEval Vfalse)) ])
               end
           
           | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -353,7 +349,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         error "WIP: Core_Eval.step_eval_pexpr, PEunion"
     | PEcall nm pes ->
         EU.mapM self pes >>= fun pes' ->
-        match Maybe.map (List.map snd) (valueFromPexprs pes') with
+        match Caux.valueFromPexprs pes' with
           | Just cvals ->
               (* We do not immediately call eval on the result of call_function,
                  as that could lead to non-termination. *)
@@ -379,7 +375,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
     | PElet pat pe1 pe2 ->
         self pe1 >>= function
           | (Pexpr _ (PEval _) as pe1') ->
-              match select_case subst_sym_pexpr pe1' [(pat, pe2)] with
+              match Caux.select_case Caux.subst_sym_pexpr pe1' [(pat, pe2)] with
                 | Nothing ->
                     EU.fail $ Illformed_program "PElet: the pattern didn't match pe1"
                 | Just pe' ->
@@ -390,7 +386,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEif pe1 pe2 pe3 ->
         self pe1 >>= fun pe1' ->
-        match Maybe.map snd (valueFromPexpr pe1') with
+        match Caux.valueFromPexpr pe1' with
           | Just Vtrue ->
               strip <$> self pe2
           | Just Vfalse ->
@@ -402,9 +398,9 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEis_scalar pe ->
         self pe >>= fun pe' ->
-        match Maybe.map snd (valueFromPexpr pe') with
+        match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_scalar (unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_scalar (Caux.unproj_ctype ty) then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_scalar: the operand should be a ctype"
           | Nothing ->
@@ -412,9 +408,9 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEis_integer pe ->
         self pe >>= fun pe' ->
-        match Maybe.map snd (valueFromPexpr pe') with
+        match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_integer (unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_integer (Caux.unproj_ctype ty) then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_integer: the operand should be a ctype"
           | Nothing ->
@@ -422,9 +418,9 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEis_signed pe ->
         self pe >>= fun pe' ->
-        match Maybe.map snd (valueFromPexpr pe') with
+        match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_signed_integer_type (unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_signed_integer_type (Caux.unproj_ctype ty) then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_signed: the operand should be a ctype"
           | Nothing ->
@@ -432,9 +428,9 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr bTy pexp
         end
     | PEis_unsigned pe ->
         self pe >>= fun pe' ->
-        match Maybe.map snd (valueFromPexpr pe') with
+        match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_unsigned_integer_type (unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_unsigned_integer_type (Caux.unproj_ctype ty) then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_unsigned: the operand should be a ctype"
           | Nothing ->
@@ -448,8 +444,8 @@ val     eval_pexpr_aux: Loc.t -> Mem.mem_state -> Core.file core_run_annotation 
                         EU.t Core.value core_run_error
 let rec eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe =
   step_eval_pexpr loc mem_st file concur_sym_map inside_if pe >>= fun pe' ->
-  match valueFromPexpr pe' with
-    | Just (_, cval) ->
+  match Caux.valueFromPexpr pe' with
+    | Just cval ->
         EU.return cval
     | Nothing ->
         eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe'

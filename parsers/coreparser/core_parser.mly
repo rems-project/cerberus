@@ -38,13 +38,11 @@ let rec mk_list_pe = function
 
 
 type symbolify_state = {
-(*  expected_bTy: core_base_type; *)
-  sym_scopes: ((Core_parser_util._sym, Symbol.sym * core_base_type option * Location_ocaml.t) Pmap.map) list
+  sym_scopes: ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) list
 }
 
 let initial_symbolify_state = {
-(*  expected_bTy= bTy; *)
-  sym_scopes= [Pmap.map (fun sym -> (sym, None, Location_ocaml.unknown)) M.std];
+  sym_scopes= [Pmap.map (fun sym -> (sym, Location_ocaml.unknown)) M.std];
 }
 
 type parsing_error =
@@ -70,7 +68,6 @@ module Eff : sig
   val runM: 'a t -> symbolify_state -> (parsing_error, 'a * symbolify_state) either
   val get: symbolify_state t
   val put: symbolify_state -> unit t
-(*  val with_expected_bTy: core_base_type -> 'a t -> 'a t *)
 end = struct
   open Either
   type 'a t = symbolify_state -> (parsing_error, 'a * symbolify_state) either
@@ -122,16 +119,6 @@ end = struct
   
   let put st' =
     fun _ -> Right ((), st')
-  
-(*
-  let with_expected_bTy bTy m =
-    fun st ->
-      match m {st with expected_bTy= bTy} with
-        | Left err ->
-            Left err
-        | Right (z, st') ->
-            Right (z, {st' with expected_bTy= st.expected_bTy})
-*)
 end
 
 let (>>=)    = Eff.bind
@@ -143,16 +130,16 @@ let (<*>)    = Eff.app
 
 let open_scope : unit Eff.t =
   Eff.get >>= fun st ->
-  Eff.put {st with sym_scopes= Pmap.empty Core_parser_util._sym_compare :: st.sym_scopes} >>
+  Eff.put {sym_scopes= Pmap.empty Core_parser_util._sym_compare :: st.sym_scopes} >>
   Eff.return ()
   
-let close_scope : ((Core_parser_util._sym, Symbol.sym * core_base_type option * Location_ocaml.t) Pmap.map) Eff.t =
+let close_scope : ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) Eff.t =
   Eff.get >>= fun st ->
   match st.sym_scopes with
     | [] ->
         failwith "Core_parser.close_scope: found open scope"
     | scope :: scopes ->
-        Eff.put {st with sym_scopes= scopes} >>
+        Eff.put {sym_scopes= scopes} >>
         Eff.return scope
 
 
@@ -164,21 +151,21 @@ let under_scope (m: 'a Eff.t) : 'a Eff.t =
 
 
 
-let register_sym ((_, (start_p, end_p)) as _sym) bTy : Symbol.sym Eff.t =
+let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
   let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
   M.sym_counter := !M.sym_counter + 1;
-  Eff.put {st with
+  Eff.put {
     sym_scopes=
       match st.sym_scopes with
         | [] ->
             failwith "Core_parser.register_sym: found open scope"
         | scope::scopes ->
-            Pmap.add _sym (sym, bTy, Location_ocaml.Loc_region (start_p, end_p, None)) scope :: scopes
+            Pmap.add _sym (sym, Location_ocaml.Loc_region (start_p, end_p, None)) scope :: scopes
   } >>
   Eff.return sym
 
-let lookup_sym _sym : ((Symbol.sym * core_base_type option * Location_ocaml.t) option) Eff.t =
+let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
   Eff.get >>= fun st ->
   Eff.return (match st.sym_scopes with
     | [] ->
@@ -203,7 +190,7 @@ let lookup_sym _sym : ((Symbol.sym * core_base_type option * Location_ocaml.t) o
 let symbolify_name = function
  | Sym _sym ->
      lookup_sym _sym >>= (function
-       | Some (sym, None, _) ->
+       | Some (sym, _) ->
            Eff.return (Sym sym)
        | None ->
            Eff.fail (Unresolved_symbol _sym))
@@ -212,13 +199,6 @@ let symbolify_name = function
 
 let rec symbolify_value _cval =
   match _cval with
-(*
-   | Vconstrained of list (list Mem.mem_constraint * (generic_value 'sym))
-   | Vobject of (generic_object_value 'sym) (* C object value *)
-   | Vspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
-   | Vunspecified ty ->
-      Eff.return (Vunspecified ty)
-*)
    | Vunit ->
        Eff.return Vunit
    | Vtrue ->
@@ -227,15 +207,12 @@ let rec symbolify_value _cval =
        Eff.return Vfalse
    | Vctype ty ->
        Eff.return (Vctype ty)
-(*
-   | Vlist of core_base_type * list (generic_value 'sym) (* list *)
-   | Vtuple _cvals ->
-       Vtuple <$> Eff.mapM symbolify_value _cvals
-*)
+   | _ ->
+       assert false
 
 let convert_ctor : unit generic_ctor -> ctor = function
  | Cnil () ->
-     failwith "Cnil"
+     failwith "TODO: Core parser ==> Cnil"
  | Ccons ->
      Ccons
  | Ctuple ->
@@ -261,7 +238,7 @@ let rec symbolify_pattern _pat : pattern Eff.t =
     | CaseBase None ->
         Eff.return (CaseBase None)
     | CaseBase (Some (_sym, bTy)) ->
-        register_sym _sym (Some bTy) >>= fun sym ->
+        register_sym _sym >>= fun sym ->
         Eff.return (CaseBase (Some (sym, bTy)))
 
 (*
@@ -296,12 +273,12 @@ let rec symbolify_pattern _pat : pattern Eff.t =
         Eff.mapM symbolify_pattern _pats >>= fun pat ->
         Eff.return (CaseCtor (convert_ctor _ctor, pat))
     | _ ->
-        failwith "WIP: symbolify_pattern"
+        failwith "WIP: Core parser ==> symbolify_pattern"
 
 
 
 
-
+(*
 (* WIP: TEMPORARY HACK *)
 let mk_if_pe pe1 (Pexpr (bTy, _) as pe2) pe3 =
   Pexpr (bTy, PEif (pe1, pe2, pe3))
@@ -338,6 +315,7 @@ let mk_op_pe bop pe1 pe2 : pexpr =
         Pexpr( BTy_boolean, (PEop( bop, pe1, pe2)))
     | OpOr ->
         Pexpr( BTy_boolean, (PEop( bop, pe1, pe2)))
+*)
 
 
 
@@ -349,148 +327,129 @@ let mk_op_pe bop pe1 pe2 : pexpr =
 
 
 
-
-let rec symbolify_pexpr expected_bTy (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
+let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
   match _pexpr with
     | PEsym _sym ->
         Eff.get         >>= fun st ->
         lookup_sym _sym >>= (function
-          | Some (sym, Some bTy, _) ->
-              Eff.return (Caux.mk_sym_pe bTy sym)
+          | Some (sym, _) ->
+              Eff.return (Caux.mk_sym_pe BTy_unit(*TODO: remove when mk_syn_pe doesn't require a bTy anymore*) sym)
           | None ->
               Eff.fail (Unresolved_symbol _sym)
         )
     | PEimpl iCst ->
-        (* WIP: THIS TYPE IS WRONG *)
-        Eff.return (Pexpr (BTy_unit, PEimpl iCst))
+        Eff.return (Pexpr ((), PEimpl iCst))
     | PEval (Vobject (OVinteger ival)) ->
-        Eff.return (Pexpr (BTy_object OTy_integer, PEval (Vobject (OVinteger ival))))
+        Eff.return (Pexpr ((), PEval (Vobject (OVinteger ival))))
     | PEval (Vobject (OVcfunction _nm)) ->
         symbolify_name _nm >>= fun nm ->
-        Eff.return (Pexpr (BTy_object OTy_cfunction, PEval (Vobject (OVcfunction nm))))
+        Eff.return (Pexpr ((), PEval (Vobject (OVcfunction nm))))
     | PEval Vunit ->
-        Eff.return (Pexpr (BTy_unit, PEval Vunit))
+        Eff.return (Pexpr ((), PEval Vunit))
     | PEval Vtrue ->
-        Eff.return (Pexpr (BTy_boolean, PEval Vtrue))
+        Eff.return (Pexpr ((), PEval Vtrue))
     | PEval Vfalse ->
-        Eff.return (Pexpr (BTy_boolean, PEval Vfalse))
+        Eff.return (Pexpr ((), PEval Vfalse))
     | PEval (Vctype ty) ->
-        Eff.return (Pexpr (BTy_ctype, PEval (Vctype ty)))
+        Eff.return (Pexpr ((), PEval (Vctype ty)))
     | PEval _cval ->
-        failwith "WIP: PEval"
-(*  | PEconstrained of list (list Mem.mem_constraint * (generic_pexpr 'ty 'sym)) (* constrained value *) *)
+        failwith "WIP: Core parser -> PEval"
+    | PEconstrained _ ->
+        assert false
     | PEundef ub ->
-        (* WIP: THIS TYPE IS WRONG *)
-        Eff.return (Pexpr (BTy_unit, PEundef ub))
+        Eff.return (Pexpr ((), PEundef ub))
     | PEerror (str, _pe) ->
-        (* WIP: THE TYPES ARE WRONG *)
-        symbolify_pexpr BTy_unit _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_unit, PEerror (str, pe)))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEerror (str, pe)))
     | PEctor (Cnil (), []) ->
-        (match expected_bTy with
-          | BTy_list bTy ->
-              Eff.return (Pexpr (expected_bTy, PEctor (Cnil bTy, [])))
-          | _ ->
-              (* WIP THIS IS WRONG *)
-              Eff.return (Pexpr (BTy_list BTy_unit, PEctor (Cnil BTy_unit, [])))
-        )
+        Eff.return (Pexpr ((), PEctor (Cnil (), [])))
     | PEctor (Ccons, [_pe1; _pe2]) ->
-        (match expected_bTy with
-          | BTy_list bTy ->
-              symbolify_pexpr bTy _pe1          >>= fun pe1 ->
-              symbolify_pexpr expected_bTy _pe2 >>= fun pe2 ->
-              Eff.return (Pexpr (expected_bTy, PEctor (Ccons, [pe1; pe2])))
-          | _ ->
-              (* WIP THIS IS WRONG *)
-              symbolify_pexpr BTy_unit _pe1            >>= fun pe1 ->
-              symbolify_pexpr (BTy_list BTy_unit) _pe2 >>= fun pe2 ->
-              Eff.return (Pexpr (BTy_list BTy_unit, PEctor (Ccons, [pe1; pe2])))
-        )
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Pexpr ((), PEctor (Ccons, [pe1; pe2])))
     | PEctor (Ctuple, _pes) ->
         Eff.get >>= fun st ->
-        Eff.mapM (symbolify_pexpr BTy_unit(*WIP*)) _pes >>= fun pes ->
-        Eff.return (Pexpr (expected_bTy, PEctor (Ctuple, pes)))
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Core_aux.mk_tuple_pe pes)
     | PEctor (Carray, _pes) ->
         failwith "WIP: PEctor Carray"
     | PEctor (Civmax, [_pe]) ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_object OTy_integer, PEctor (Civmax, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEctor (Civmax, [pe])))
     | PEctor (Civmin, [_pe]) ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_object OTy_integer, PEctor (Civmin, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEctor (Civmin, [pe])))
     | PEctor (Civsizeof, [_pe]) ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_object OTy_integer, PEctor (Civsizeof, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEctor (Civsizeof, [pe])))
     | PEctor (Civalignof, [_pe]) ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_object OTy_integer, PEctor (Civalignof, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEctor (Civalignof, [pe])))
     | PEctor (Cspecified, [_pe]) ->
-        symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*) _pe >>= fun pe ->
-        Eff.return (Pexpr (expected_bTy, PEctor (Cspecified, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Core_aux.mk_specified_pe pe)
     | PEctor (Cunspecified, [_pe]) ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (expected_bTy, PEctor (Cunspecified, [pe])))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEctor (Cunspecified, [pe])))
     | PEcase (_pe, _pat_pes) ->
-        symbolify_pexpr BTy_unit(* WIP: TYPE IS WRONG*) _pe >>= fun pe ->
+        symbolify_pexpr _pe >>= fun pe ->
         Eff.mapM (fun (_pat, _pe) ->
           under_scope (
             symbolify_pattern _pat >>= fun pat ->
-            symbolify_pexpr BTy_unit(* WIP: TYPE IS WRONG*) _pe >>= fun pe ->
+            symbolify_pexpr _pe >>= fun pe ->
             Eff.return (pat, pe)
           )
         ) _pat_pes >>= fun pat_pes ->
-        Eff.return (Pexpr (expected_bTy, PEcase (pe, pat_pes)))
+        Eff.return (Pexpr ((), PEcase (pe, pat_pes)))
     | PEarray_shift (_pe1, ty, _pe2) ->
-        symbolify_pexpr (BTy_object OTy_pointer) _pe1 >>= fun pe1 ->
-        symbolify_pexpr (BTy_object OTy_integer) _pe2 >>= fun pe2 ->
-        Eff.return (Pexpr (BTy_object OTy_pointer, PEarray_shift (pe1, ty, pe2)))
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Pexpr ((), PEarray_shift (pe1, ty, pe2)))
     | PEmember_shift (_pe, tag_sym, member_ident) ->
         failwith "WIP: PEmember_shift"
     | PEnot _pe ->
-        Caux.mk_not_pe <$> symbolify_pexpr BTy_boolean _pe
+        Caux.mk_not_pe <$> symbolify_pexpr _pe
     | PEop (bop, _pe1, _pe2) ->
-        symbolify_pexpr ((*WIP*)BTy_object OTy_integer) _pe1 >>= fun pe1 ->
-        symbolify_pexpr ((*WIP*)BTy_object OTy_integer) _pe2 >>= fun pe2 ->
-        Eff.return (mk_op_pe bop pe1 pe2)
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Core_aux.mk_op_pe bop pe1 pe2)
     | PEstruct (tag_sym, ident_pes) ->
         failwith "WIP: PEstruct"
     | PEunion (tag_sym, member_ident, _pe) ->
         failwith "WIP: PEunion"
     | PEcall (_nm, _pes) ->
         symbolify_name _nm >>= fun nm ->
-        (* WIP: this is wrong *)
-        Eff.mapM (symbolify_pexpr BTy_unit) _pes >>= fun pes ->
-        Eff.return (Pexpr (BTy_unit, PEcall (nm, pes)))
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Pexpr ((), PEcall (nm, pes)))
     | PElet (_pat, _pe1, _pe2) ->
-        symbolify_pexpr BTy_unit(*WIP*) _pe1   >>= fun pe1 ->
+        symbolify_pexpr _pe1   >>= fun pe1 ->
         open_scope             >>
         symbolify_pattern _pat >>= fun pat ->
-        symbolify_pexpr BTy_unit(*WIP*) _pe2   >>= fun pe2  ->
+        symbolify_pexpr _pe2   >>= fun pe2  ->
         close_scope >>
         Eff.return (Caux.mk_let_pe pat pe1 pe2)
     | PEif (_pe1, _pe2, _pe3) ->
-        mk_if_pe
-          <$> symbolify_pexpr BTy_boolean _pe1
-          <*> symbolify_pexpr BTy_unit(*WIP*) _pe2
-          <*> symbolify_pexpr BTy_unit(*WIP*) _pe3
+        Core_aux.mk_if_pe
+          <$> symbolify_pexpr _pe1
+          <*> symbolify_pexpr _pe2
+          <*> symbolify_pexpr _pe3
     | PEis_scalar _pe ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_boolean, PEis_scalar pe))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEis_scalar pe))
     | PEis_integer _pe ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_boolean, PEis_integer pe))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEis_integer pe))
     | PEis_signed _pe ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_boolean, PEis_signed pe))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEis_signed pe))
     | PEis_unsigned _pe ->
-        symbolify_pexpr BTy_ctype _pe >>= fun pe ->
-        Eff.return (Pexpr (BTy_boolean, PEis_unsigned pe))
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEis_unsigned pe))
 
 
 let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Epure _pe ->
-     (* WIP: THIS IS WRONG *)
-     symbolify_pexpr BTy_unit _pe >>= fun pe ->
+     symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Epure pe)
  | Ememop (memop, _pes) ->
      failwith "WIP: Ememop"
@@ -500,27 +459,38 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Ecase (_pe, _pat_es) ->
      failwith "WIP: Ecase"
  | Elet (_pat, _pe1, _e2) ->
-     failwith "WIP: Elet"
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     under_scope (
+       symbolify_pattern _pat >>= fun pat ->
+       symbolify_expr _e2     >>= fun e2  ->
+       Eff.return (Elet (pat, pe1, e2))
+     )
   | Eif (_pe1, _e2, _e3) ->
-      symbolify_pexpr BTy_boolean _pe1 >>= fun pe1 ->
-      symbolify_expr _e2               >>= fun e2  ->
-      symbolify_expr _e3               >>= fun e3  ->
+      symbolify_pexpr _pe1 >>= fun pe1 ->
+      symbolify_expr _e2   >>= fun e2  ->
+      symbolify_expr _e3   >>= fun e3  ->
       Eff.return (
         Eif (pe1, e2, e3)
       )
   | Eskip ->
       Eff.return Eskip
  | Eproc ((), _pe, _pes) ->
-     symbolify_pexpr (BTy_object OTy_cfunction) _pe >>= fun pe ->
-     Eff.mapM (symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*)) _pes >>= fun pes ->
+     symbolify_pexpr _pe           >>= fun pe ->
+     Eff.mapM symbolify_pexpr _pes >>= fun pes ->
      Eff.return (Eproc ((), pe, pes))
  | Ereturn _pe ->
-     symbolify_pexpr BTy_unit(*WIP THIS IS WRONG*) _pe >>= fun pe ->
+     symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Ereturn pe)
  | Eunseq _es ->
-     failwith "WIP: Eunseq"
+     Eff.mapM symbolify_expr _es >>= fun es ->
+     Eff.return (Eunseq es)
  | Ewseq (_pat, _e1, _e2) ->
-     failwith "WIP: Ewseq"
+     symbolify_expr _e1 >>= fun e1 ->
+     under_scope (
+       symbolify_pattern _pat >>= fun pat ->
+       symbolify_expr _e2     >>= fun e2  ->
+       Eff.return (Ewseq (pat, e1, e2))
+     )
  | Esseq (_pat, _e1, _e2) ->
      symbolify_expr _e1 >>= fun e1 ->
      under_scope (
@@ -531,11 +501,14 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Easeq _ ->
      failwith "WIP: Easeq"
  | Eindet (n, _e) ->
-     failwith "WIP: Eindet"
+     symbolify_expr _e >>= fun e ->
+     Eff.return (Eindet (n, e))
  | Ebound (n, _e) ->
-     failwith "WIP: Ebound"
+     symbolify_expr _e >>= fun e ->
+     Eff.return (Ebound (n, e))
  | End _es ->
-     failwith "WIP: End"
+     Eff.mapM symbolify_expr _es >>= fun es ->
+     Eff.return (End es)
  | Esave _ ->
      failwith "WIP: Esave"
  | Erun _ ->
@@ -543,41 +516,37 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Epar _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (Epar es)
- | Ewait tid ->
-     failwith "WIP: Ewait"
- | Eloc (loc, _e) ->
-     failwith "WIP: Eloc"
+ | Ewait _
+ | Eloc _ ->
+     assert false
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
-     symbolify_pexpr BTy_ctype                _pe1 >>= fun pe1 ->
-     symbolify_pexpr (BTy_object OTy_integer) _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Create (pe1, pe2, pref))
  | Alloc0 (_pe1, _pe2, pref) ->
-     symbolify_pexpr (BTy_object OTy_integer) _pe1 >>= fun pe1 ->
-     symbolify_pexpr (BTy_object OTy_integer) _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Alloc0 (pe1, pe2, pref))
  | Kill _pe -> 
-     symbolify_pexpr (BTy_object OTy_pointer) _pe >>= fun pe ->
+     symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Kill pe)
  | Store0 (_pe1, _pe2, _pe3, mo) ->
-     symbolify_pexpr BTy_ctype _pe1 >>= fun pe1 ->
-     symbolify_pexpr (BTy_object OTy_pointer) _pe2 >>= fun pe2 ->
-     symbolify_pexpr (BTy_loaded OTy_integer (*WIP THIS IS WRONG*)) _pe3 >>= fun pe3 ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
      Eff.return (Store0 (pe1, pe2, pe3, mo))
  | Load0 (_pe1, _pe2, mo) ->
-     symbolify_pexpr BTy_ctype _pe1 >>= fun pe1 ->
-     symbolify_pexpr (BTy_object OTy_pointer) _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Load0 (pe1, pe2, mo))
  | RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
-     failwith "WIP: RMW"
-(*
-     symbolify_pexpr BTy_ctype _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
      symbolify_pexpr _pe4 >>= fun pe4 ->
      Eff.return (RMW0 (pe1, pe2, pe3, pe4, mo1, mo2))
-*)
  | Fence0 mo ->
      Eff.return (Fence0 mo)
 
@@ -597,10 +566,10 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Fun_decl (_sym, _)
       | Proc_decl (_sym, _) ->
           lookup_sym _sym >>= (function
-            | Some (_, _, loc) ->
+            | Some (_, loc) ->
                 Eff.fail (Multiple_declaration (loc, _sym))
             | None ->
-                register_sym _sym None >>= fun sym ->
+                register_sym _sym >>= fun sym ->
                 if fst _sym = "main" then
                   Eff.return (Some sym)
                 else
@@ -612,20 +581,20 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
   Eff.foldrM (fun decl (impl_acc, globs_acc, fun_map_acc) ->
     match decl with
       | Def_decl (iCst, bTy, _pe) ->
-          symbolify_pexpr bTy _pe >>= fun pe ->
+          symbolify_pexpr _pe >>= fun pe ->
           Eff.return (Pmap.add iCst (Def (bTy, pe)) impl_acc, globs_acc, fun_map_acc)
       | IFun_decl (iCst, (bTy, _sym_bTys, _pe)) ->
           under_scope (
             Eff.foldrM (fun (_sym, bTy) acc ->
-              register_sym _sym (Some bTy) >>= fun sym ->
+              register_sym _sym >>= fun sym ->
               Eff.return ((sym, bTy) :: acc)
             ) [] _sym_bTys      >>= fun sym_bTys ->
-            symbolify_pexpr BTy_unit(*WIP: TYPE IS WRONG*) _pe >>= fun pe ->
+            symbolify_pexpr _pe >>= fun pe ->
             Eff.return (Pmap.add iCst (IFun (bTy, sym_bTys, pe)) impl_acc, globs_acc, fun_map_acc)
           )
       | Glob_decl (_sym, bTy, _e) ->
           lookup_sym _sym >>= (function
-            | Some (decl_sym, None, _) ->
+            | Some (decl_sym, _) ->
                 symbolify_expr _e >>= fun e ->
                 Eff.return (impl_acc, (decl_sym, bTy, e) :: globs_acc, fun_map_acc)
             | None ->
@@ -633,13 +602,13 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
           )
       | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
           lookup_sym _sym >>= (function
-            | Some (decl_sym, None, _) ->
+            | Some (decl_sym, _) ->
                 open_scope >>
                 Eff.foldrM (fun (_sym, bTy) acc ->
-                  register_sym _sym (Some bTy) >>= fun sym ->
+                  register_sym _sym >>= fun sym ->
                   Eff.return ((sym, bTy) :: acc)
                 ) [] _sym_bTys      >>= fun sym_bTys ->
-                symbolify_pexpr BTy_unit(*WIP*) _pe >>= fun pe ->
+                symbolify_pexpr _pe >>= fun pe ->
                 close_scope >>
                 Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc)
             | None ->
@@ -647,10 +616,10 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
           )
       | Proc_decl (_sym, (bTy, _sym_bTys, _e)) ->
           lookup_sym _sym >>= (function
-            | Some (decl_sym, None, _) ->
+            | Some (decl_sym, _) ->
                 open_scope >>
                 Eff.foldrM (fun (_sym, bTy) acc ->
-                  register_sym _sym (Some bTy) >>= fun sym ->
+                  register_sym _sym >>= fun sym ->
                   Eff.return ((sym, bTy) :: acc)
                 ) [] _sym_bTys    >>= fun sym_bTys ->
                 symbolify_expr _e >>= fun e        ->
@@ -680,10 +649,10 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
       | Fun_decl (_sym, _)
       | Proc_decl (_sym, _) ->
           lookup_sym _sym >>= (function
-            | Some (_, None, loc) ->
+            | Some (_, loc) ->
                 Eff.fail (Multiple_declaration (loc, _sym))
             | None ->
-                register_sym _sym None >>= fun sym ->
+                register_sym _sym >>= fun sym ->
                 Eff.return ()
           )
       | _ ->
@@ -697,13 +666,13 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
          failwith "ERROR: TODO(msg) this is not a valid std file"
       | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
           lookup_sym _sym >>= (function
-            | Some (decl_sym, None, _) ->
+            | Some (decl_sym, _) ->
                 open_scope >>
                 Eff.foldrM (fun (_sym, bTy) acc ->
-                  register_sym _sym (Some bTy) >>= fun sym ->
+                  register_sym _sym >>= fun sym ->
                   Eff.return ((sym, bTy) :: acc)
                 ) [] _sym_bTys      >>= fun sym_bTys ->
-                symbolify_pexpr BTy_unit(*WIP*) _pe >>= fun pe       ->
+                symbolify_pexpr _pe >>= fun pe       ->
                 close_scope >>
                 Eff.return (Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc)
             | None ->
@@ -711,10 +680,10 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
           )
       | Proc_decl (_sym, (bTy, _sym_bTys, _e)) ->
           lookup_sym _sym >>= (function
-            | Some (decl_sym, None, _) ->
+            | Some (decl_sym, _) ->
                 open_scope >>
                 Eff.foldrM (fun (_sym, bTy) acc ->
-                  register_sym _sym (Some bTy) >>= fun sym ->
+                  register_sym _sym >>= fun sym ->
                   Eff.return ((sym, bTy) :: acc)
                 ) [] _sym_bTys    >>= fun sym_bTys ->
                 symbolify_expr _e >>= fun e        ->
@@ -729,7 +698,7 @@ let symbolify_impl decls : impl Eff.t =
   Eff.foldrM (fun decl impl_acc ->
     match decl with
       | Def_decl (iCst, bTy, _pe) ->
-          symbolify_pexpr bTy _pe >>= fun pe ->
+          symbolify_pexpr _pe >>= fun pe ->
           Eff.return (Pmap.add iCst (Def (bTy, pe)) impl_acc)
       | IFun_decl (iCst, (bTy, _sym_bTys, _pe)) ->
           failwith "WIP"
@@ -737,56 +706,6 @@ let symbolify_impl decls : impl Eff.t =
           failwith "ERROR: TODO(msg) this is not a valid impl file"
   ) (Pmap.empty iCst_compare) decls
 
-
-
-
-(*
-decls None >>= function
-    | Some sym ->
-        let file = {
-          main=   sym;
-          stdlib= Pmap.empty sym_compare; (* TODO hackish *)
-          impl=   Pmap.empty iCst_compare;
-          globs=  [];
-          funs=   Pmap.empty sym_compare;
-          
-
- 
-
-
-(* foldrM f xs a *)
-  Eff.foldrM (fun
-
-  ) decls 
-{
-   main   : Symbol.sym;
-   stdlib : fun_map 'a;
-   impl   : impl;
-   globs  : list (Symbol.sym * core_type * expr 'a);
-   funs   : fun_map 'a;
-}
-
-
-
- function
-  | Def_decl (iCst, bTy, _pe) ->
-      St.with_expected_bTy bTy (symbolify_pexpr _pe) >>= fun pe ->
-      St.return (Def_decl (iCst, bTy, pe))
-(*
-  | IFun_decl (iCst, (bTy, _sym_bTys, _pe)) ->
-      
-  | Glob_decl (_sym, coreTy, _e) ->
-      
-*)
-  | Fun_decl (_sym, _sym_bTys, _pe) ->
-      lookup_register _sym >>= fun sym ->
-      KKK
-(*
-  | Proc_decl (_sym, _sym_bTys, _e) ->
-      
-*)
-
-*)
 
 (* TODO ... *)
 let mk_file decls =
@@ -805,33 +724,6 @@ let mk_file decls =
               failwith (string_of_parsing_error err)
           | Right (fun_map, _) ->
               Rstd fun_map)
-
-(*
-    | StdMode ->
-        match Eff.runM (symbolify_std decls) (initial_symbolify_state BTy_unit(* TODO *)) with
-          | Right (fun_map, _) ->
-              Rstd fun_map
-*)
-
-
-(*
-  if Pmap.is_empty M.std then
-    Rstd begin
-      Pmap.add (Symbol.Symbol (8, Some "catch_exceptional_condition")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (7, Some "is_representable")) (Fun (BTy_boolean, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (6, Some "ctype_width")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (5, Some "wrapI")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (4, Some "conv")) (Fun (BTy_object OTy_integer, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (3, Some "bitwise_OR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (2, Some "bitwise_XOR")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (1, Some "bitwise_AND")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (
-      Pmap.add (Symbol.Symbol (0, Some "conv_int")) (Fun (BTy_unit, [], Pexpr (BTy_unit, PEval Vunit))) (Pmap.empty compare)
-     ))))))))
-    end
-  else
-     Rimpl (Pmap.empty compare)
-*)
-
 
 %}
 
@@ -866,14 +758,14 @@ let mk_file decls =
 
 
 (* Core exception operators *)
-%token RAISE REGISTER (* TRY WITH PIPE MINUS_GT *)
+(* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END INDET RETURN PURE PCALL
-%nonassoc IN DOT
+%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE PCALL
+%nonassoc IN
 
 
-%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA LBRACE RBRACE NEG
+%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA NEG
 
 %token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
 
@@ -893,7 +785,7 @@ let mk_file decls =
 %token CREATE ALLOC STORE LOAD KILL RMW FENCE
 
 (* continuation operators *)
-%token SAVE RUN DOT
+%token SAVE RUN
 
 (* binder patterns *)
 %token UNDERSCORE
@@ -1253,8 +1145,13 @@ expr:
     { Ewseq (_pat, _e1, _e2) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Esseq (_pat, _e1, _e2) }
+| LET ATOM _sym_bTy_opt= option(pair(SYM, core_base_type)) EQ _act1= action IN _pact2= paction
+    { Easeq (_sym_bTy_opt, Action (Location_ocaml.unknown, (), _act1), _pact2) }
+| INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
+    { Eindet (Nat_big_num.to_int n, _e) }
+| BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
+    { Ebound (Nat_big_num.to_int n, _e) }
 (*
-  | Easeq of maybe (Symbol.t * core_base_type) * generic_action 'a 'ty 'sym * generic_paction 'a 'ty 'sym
 | Eindet of generic_expr 'a 'ty 'sym
   | Ebound of nat * generic_expr 'a 'ty 'sym
   | Esave of ksym * list (Symbol.t * ctype) * generic_expr 'a 'ty 'sym
@@ -1266,9 +1163,6 @@ expr:
     { End _es }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Epar _es }
-(*
-  | Ewait of Thread.thread_id
-*)
 ;
 
 action:
@@ -1293,21 +1187,11 @@ action:
 ;
 
 paction:
-| act= action
-    { Paction (Pos, Action (Location_ocaml.unknown, (), act)) }
-| NEG act= delimited(LPAREN, action, RPAREN)
-    { Paction (Neg, Action (Location_ocaml.unknown, (), act)) }
+| _act= action
+    { Paction (Pos, Action (Location_ocaml.unknown, (), _act)) }
+| NEG _act= delimited(LPAREN, action, RPAREN)
+    { Paction (Neg, Action (Location_ocaml.unknown, (), _act)) }
 ;
-
-
-
-
-
-
-
-
-
-
 
 def_declaration:
 | DEF dname= IMPL COLON bTy= core_base_type COLON_EQ pe_= pexpr
@@ -1339,7 +1223,6 @@ proc_declaration:
   COLON_EQ fbody= expr
     { Proc_decl (_sym, (bTy, params, fbody)) }
 ;
-
 
 declaration:
 | decl= def_declaration

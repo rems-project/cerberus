@@ -93,6 +93,7 @@ let keywords =
       ("save", T.SAVE);
       ("run", T.RUN);
       ("indet", T.INDET);
+      ("bound", T.BOUND);
       ("return", T.RETURN);
 (*
       ("try", T.TRY);

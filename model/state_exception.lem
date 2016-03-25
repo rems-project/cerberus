@@ -1,7 +1,7 @@
 open import Pervasives Global
 import Exception
 
-type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
+type t 'a 's 'msg = 's -> Exception.exceptM ('a * 's) 'msg
 
 val return: forall 'a 's 'msg. 'a -> t 'a 's 'msg
 let return a = fun s -> Exception.return (a, s)
@@ -100,11 +100,11 @@ let tryWith msg m =
 val read:   forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
 val update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
 val modify: forall 'a 's 'msg. ('s -> 'a * 's) -> t 'a 's 'msg
-val eval:   forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.t 'a 'msg
+val eval:   forall 'a 'b 's 'msg. t 'a 's 'msg -> 's -> Exception.exceptM 'a 'msg
 let read   f = fun s -> Exception.return (f s, s)
 let update f = fun s -> Exception.return ((), f s)
 let modify f = fun s -> Exception.return (f s)
 let eval   m = fun s -> Exception.fmap fst (m s)
 
-val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.t ('a * 's) 'msg
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.exceptM ('a * 's) 'msg
 let run m = fun st -> m st

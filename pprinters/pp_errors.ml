@@ -260,7 +260,10 @@ let std_ref = function
 
 
 let short_message = function
-  | Desugar_cause (Desugar_MultipleDeclaration (CabsIdentifier (_, str))) ->
+  | Cparser_cause (Cparser_unexpectedToken str) ->
+      "unexpected token '"^ str ^ "'"
+
+  | Desugar_cause (Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str))) ->
       "redeclaration of '" ^ str ^ "'"
   | Desugar_cause (Desugar_NoStartup str) ->
       "expecting declaration of a startup function '" ^ str ^ "'"

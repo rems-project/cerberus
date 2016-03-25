@@ -185,7 +185,7 @@ type generic_expr 'a 'ty 'sym =  (* Core expressions *)
  | Eunseq of list (generic_expr 'a 'ty 'sym) (* unsequenced expressions *)
  | Ewseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* weak sequencing *)
  | Esseq of (generic_pattern 'ty 'sym) * (generic_expr 'a 'ty 'sym) * (generic_expr 'a 'ty 'sym) (* strong sequencing *)
- | Easeq of maybe (Symbol.sym * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym) (* atomic sequencing *)
+ | Easeq of maybe ('sym * core_base_type) * (generic_action 'a 'ty 'sym) * (generic_paction 'a 'ty 'sym) (* atomic sequencing *)
  | Eindet of nat * (generic_expr 'a 'ty 'sym) (* indeterminately sequenced expr *)
  | Ebound of nat * (generic_expr 'a 'ty 'sym) (* $\ldots$and boundary *)
  | End of list (generic_expr 'a 'ty 'sym) (* nondeterministic sequencing *)
@@ -196,22 +196,24 @@ type generic_expr 'a 'ty 'sym =  (* Core expressions *)
  | Eloc of Loc.t * (generic_expr 'a 'ty 'sym)
 
 
- 
- type name         = generic_name Symbol.sym
- type object_value = generic_object_value Symbol.sym
- type value        = generic_value Symbol.sym
- type ctor         = generic_ctor core_base_type
- type pattern      = generic_pattern core_base_type Symbol.sym
- type pexpr        = generic_pexpr core_base_type Symbol.sym
- type expr 'a      = generic_expr 'a core_base_type Symbol.sym
- type paction 'a   = generic_paction 'a core_base_type Symbol.sym
- 
- 
- 
- 
- 
- 
- 
+
+type name         = generic_name Symbol.sym
+type object_value = generic_object_value Symbol.sym
+type value        = generic_value Symbol.sym
+type ctor         = generic_ctor unit
+type pattern      = generic_pattern unit Symbol.sym
+type pexpr        = generic_pexpr unit Symbol.sym
+type expr 'a      = generic_expr 'a unit Symbol.sym
+type paction 'a   = generic_paction 'a unit Symbol.sym
+
+
+type typed_ctor         = generic_ctor core_base_type
+type typed_pattern = generic_pattern core_base_type Symbol.sym
+type typed_pexpr   = generic_pexpr core_base_type Symbol.sym
+type typed_expr 'a = generic_expr 'a core_base_type Symbol.sym
+
+
+
  (* TODO: don't we need any impl proc? *)
  type impl_decl =
    | Def of core_base_type * pexpr

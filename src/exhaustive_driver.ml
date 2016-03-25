@@ -16,7 +16,7 @@ let isActive = function
 
 
 
-type execution_result = (Core.pexpr list, Errors.t7) Exception.t2
+type execution_result = (Core.pexpr list, Errors.t6) Exception.exceptM
 
 let drive sym_supply file args with_concurrency : execution_result =
   Random.self_init ();

@@ -52,7 +52,15 @@ type core_run_error =
   | Unresolved_symbol of Symbol.sym (* found an unresolved symbolic name in core_eval *)
 
 
+
+type cparser_cause =
+  | Cparser_unexpectedToken of string
+
+
+
 type cause =
+  | Cparser_cause of cparser_cause
+
   | CSEM_NOT_SUPPORTED of string
   | CSEM_HIP of string (* this is for features we plan to support,
 			  but that does not work yet *)

@@ -1,7 +1,7 @@
 open import Pervasives
 import Exception Undefined
 
-type t 'a 'msg = Exception.t (Undefined.t 'a) 'msg
+type t 'a 'msg = Exception.exceptM (Undefined.t 'a) 'msg
 
 val return: forall 'a 'b 'msg. 'a -> t 'a 'msg
 let return z =

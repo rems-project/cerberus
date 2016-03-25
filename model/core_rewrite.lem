@@ -572,7 +572,7 @@ let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
           (* TODO: hack !!!!!!!!! *)
           | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
-                | (Just (_, Vctype ty), Just (_, ((Vobject (OVinteger ival)) as cval))) ->
+                | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
                     match Mem_aux.integerFromIntegerValue ival with
                       | Just n ->
                           if in_minimal_range ty n then

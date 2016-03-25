@@ -421,7 +421,7 @@ let rec hack expr =
     | Core.Easeq (Just (sym, bTy)) act pact ->
         Core.Ewseq (Core.CaseBase (Just (sym, bTy)))
           (Core.Eaction (Core.Paction Core.Pos act))
-          (Core.Ewseq (Core.CaseBase Nothing) (Core.Eaction pact) (Core.Epure (Core.Pexpr bTy (Core.PEsym sym))))
+          (Core.Ewseq (Core.CaseBase Nothing) (Core.Eaction pact) (Core.Epure (Core.Pexpr () (Core.PEsym sym))))
 (*
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
@@ -454,7 +454,7 @@ end
 
 (* TODO: hack *)
 (*  *)
-val order: Core.file unit -> Exception.t (list (nat * Core.file unit)) (Errors.t)
+val order: Core.file unit -> Exception.exceptM (list (nat * Core.file unit)) (Errors.t)
 let order (f: Core.file unit) =
 (*  let fbodies' = map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
   

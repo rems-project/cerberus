@@ -1,6 +1,10 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode Output
+import Core_aux
+module Caux = Core_aux
+
+
 open import Global Show Core_eval Core_run Core_run_aux Errors
 import Cmm_op Cmm_csem
 
@@ -351,10 +355,10 @@ let rec drive_core_thread tid dr_st =
           eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
-              [ Core.Pexpr Core.BTy_ctype (Core.PEval (Core.Vctype ty1))
-              ; Core.Pexpr Core.BTy_ctype (Core.PEval (Core.Vctype ty2))
+              [ Caux.mk_ctype_pe ty1
+              ; Caux.mk_ctype_pe ty2
               ; let (oTy, oval) = Core_aux.objectValueFromMemValue mval in
-                Core.Pexpr (Core.BTy_object oTy) (Core.PEval (Core.Vobject oval)) ] in
+                Core.Pexpr () (Core.PEval (Core.Vobject oval)) ] in
         
         liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
         match out_chars_ with
@@ -900,13 +904,13 @@ let rec driver with_concurrency dr_st =
 
 
 
-val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.core_base_type * Core.value
+val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
   match step_eval_pexpr Loc.unknown mem_st core_file concur_sym_map false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
-          | Just bTy_cval ->
-              bTy_cval
+          | Just cval ->
+              cval
           | Nothing ->
               hack mem_st core_file concur_sym_map pexpr'
         end
@@ -956,11 +960,11 @@ let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraint
 
 
 
-val finalize: string -> driver_state -> (string * (bool * Cmm_op.symState * (Core.core_base_type * Core.value)) * (nat * nat))
+val finalize: string -> driver_state -> (string * (bool * Cmm_op.symState * Core.value) * (nat * nat))
 let finalize debug_str dr_st =
   match dr_st.core_state.thread_states with
     | [(tid, (_, th_st))] ->
-        let bTy_cval = hack dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
+        let cval = hack dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
@@ -972,7 +976,7 @@ let finalize debug_str dr_st =
               | Nothing ->
                   error ("Driver.finalize: the arena wasn't pure ==> " ^ Pp.stringFromCore_expr th_st.arena)
             end in
-        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, bTy_cval),
+        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, cval),
          (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
     | xs ->
         let () = Debug.print_debug 3 ("ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
@@ -1230,7 +1234,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               ND.return $
                 (Core_aux.subst_pattern (Caux.mk_tuple_pat [ Caux.mk_sym_pat argc_sym (Core.BTy_object Core.OTy_pointer)
                                                            ; Caux.mk_sym_pat argv_sym (Core.BTy_object Core.OTy_pointer) ])
-                   (Core.Pexpr (Core.BTy_tuple [Core.BTy_object Core.OTy_pointer; Core.BTy_object Core.OTy_pointer])
+                   (Core.Pexpr ()
                    (Core.PEval (Core.Vtuple [Core.Vobject (Core.OVpointer argc_ptr_val); Core.Vobject (Core.OVpointer argv_ptr_val)])))
 (*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
                   expr, post_argv_dr_st)
@@ -1258,7 +1262,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                undef/error monad. Not a Core.pexpr like we currently do *)
             match dr_st'.concurrency_state.Cmm_op.symUndefinedness with
               | [] ->
-                  let (str, (is_blocked, conc_st, (bTy, cval)), steps) = finalize "drive (with concur)" dr_st' in
+                  let (str, (is_blocked, conc_st, cval), steps) = finalize "drive (with concur)" dr_st' in
                   ND.print_debug 2 ("FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
                   ND.print_debug 2 "BEGIN SYMBOLIC ASSOC" >>
                   let _ = Map.mapi (fun sym oval ->
@@ -1269,29 +1273,29 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                   ND.print_debug 2 ("CLEANED FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
                   
                   
-                  ND.return (str, (is_blocked, conc_st, Core.Pexpr bTy (Core.PEval cval)), steps)
+                  ND.return (str, (is_blocked, conc_st, Core.Pexpr () (Core.PEval cval)), steps)
               | (Cmm.DataRaces _)::_ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Pexpr (Core.BTy_unit (* TODO: hack *)) (Core.PEundef U.Data_race)),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.Data_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.UnsequencedRaces _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Pexpr (Core.BTy_unit (* TODO: hack *)) (Core.PEundef U.Unsequenced_race)),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.Unsequenced_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.IndeterminateReads _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Pexpr (Core.BTy_unit (* TODO: hack *)) (Core.PEundef U.DUMMY)),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.BadMutexes _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Pexpr (Core.BTy_unit (* TODO: hack *)) (Core.PEundef U.DUMMY)),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | Cmm.NotInSublanguage::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Core.Pexpr (Core.BTy_unit (* TODO: hack *)) (Core.PEundef U.DUMMY)),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
             end
         else
           ND.return $
-            (fun (str, (is_blocked, conc_st, (bTy, cval)), steps) -> (str, (is_blocked, conc_st, Core.Pexpr bTy (Core.PEval cval)), steps)) (finalize "drive (without concur)" dr_st')
+            (fun (str, (is_blocked, conc_st, cval), steps) -> (str, (is_blocked, conc_st, Core.Pexpr () (Core.PEval cval)), steps)) (finalize "drive (without concur)" dr_st')
 end

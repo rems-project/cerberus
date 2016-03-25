@@ -83,7 +83,7 @@ let c_frontend f =
       Input.file temp_name in
     
        Exception.return2 (c_preprocessing f)
-    |> Exception.fmap Cparser_driver.parse
+    |> Exception.rbind Cparser_driver.parse
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
@@ -305,7 +305,8 @@ let impl =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime")
+  (* TODO: use to be "gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime" *)
+  Arg.(value & opt string ("cc -E -nostdinc -undef -I "  ^ cerb_path ^ "/clib/libc -I "  ^ cerb_path ^ "/clib/posix")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let exec =
@@ -359,7 +360,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
                          sequentialise $ concurrency $ preEx $ args $ compile) in
-  let info       = Term.info "cerberus" ~version:"d187e20b1ef5+ tip -- 22/03/2016@17:15" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

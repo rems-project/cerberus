@@ -16,7 +16,7 @@ type core_typing_error =
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
 
 module E = struct
-  type eff 'a = Exception.t 'a core_typing_error
+  type eff 'a = Exception.exceptM 'a core_typing_error
   include Exception
 end
 
@@ -99,8 +99,9 @@ let rec typeof_value cval =
   end
 
 
+
 val     typeof_pexpr: map sym core_base_type -> pexpr -> E.eff core_base_type
-let rec typeof_pexpr env (Pexpr bTy pe_) =
+let rec typeof_pexpr env (Pexpr () pe_) =
   match pe_ with
 (*
     | PEundef _ ->
@@ -111,7 +112,7 @@ let rec typeof_pexpr env (Pexpr bTy pe_) =
     | PEval cval ->
         typeof_value cval
     | PEsym sym ->
-        E.return bTy
+        error "E.return bTy"
   end
 (*
   | PEsym of (sym * core_base_type) (* TODO: remove the type annotation at some point *)
@@ -169,7 +170,7 @@ let rec typeof_pexpr env (Pexpr bTy pe_) =
 
 
 (* TODO: add a check for the existence of main *)
-val typecheck_program: Core.file unit -> Exception.t unit Errors.t
+val typecheck_program: Core.file unit -> Exception.exceptM unit Errors.t
 let typecheck_program file =
 (*  Exception.fail (Loc.unknown, Errors.Core_typing) *)
   Exception.return ()
