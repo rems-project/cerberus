@@ -1,4 +1,0 @@
-type t
-
-val write : string -> t -> unit
-val file  : string -> t
