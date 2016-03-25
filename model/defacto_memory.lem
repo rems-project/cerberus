@@ -2058,10 +2058,12 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 (* !!!!!! BEGIN HACK FOR CONCURRENCY, WILL FIX LATER *)
           
+(*
           | (IVmin _, _) ->
               Just true
           | (_, IVmax _) ->
               Just true
+*)
 
 
 
