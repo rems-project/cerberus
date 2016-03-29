@@ -28,14 +28,18 @@ AIL_DIR = ../model/ail/
 # Util
 UTIL_DIR = util/
 UTIL = utilScript.sml \
- ppScript.sml \
- modeScript.sml
+ tagsScript.sml \
+ pp_coreScript.sml \
+ pp_memScript.sml \
+ pp_ailScript.sml
 
 # Patches
 PATCH_DIR = patches/
-PATCH = defacto_memoryScript.patch 
-#\
- memScript.patch
+PATCH = # defacto_memoryScript.patch
+# memScript.patch \
+# builtinsScript.patch \
+# cabs_to_ail_auxScript.patch
+# cabs_to_ailScript.patch
 
 # Cerberus model files
 CMM = \
@@ -169,15 +173,25 @@ $(UTIL): $(addprefix $(UTIL_DIR), $(UTIL))
 	@echo $(BOLD)Copying util script files...$(RESET)
 	@cp $^ .
 
-.PHONY: patch
-patch: $(addprefix $(PATCH_DIR), $(PATCH))
+.PHONY: patch name_patch
+name_patch:
+	sed -i.bck 's|impl\$$||g' memScript.sml
+	sed -i.bck 's|atypes\$$|ailTypes\$$|g' builtinsScript.sml
+	sed -i.bck 's|a\$$|ailSyntax\$$|g' builtinsScript.sml
+	sed -i.bck 's|atypes\$$|ailTypes\$$|g' cabs_to_ail_auxScript.sml
+	sed -i.bck 's|atypes\$$||g' cabs_to_ail_effectScript.sml
+	sed -i.bck 's|a\$$||g' cabs_to_ail_effectScript.sml
+	sed -i.bck 's|atypes\$$|ailTypes\$$|g' cabs_to_ailScript.sml
+	sed -i.bck 's|e\$$||g' cabs_to_ailScript.sml
+
+patch: $(addprefix $(PATCH_DIR), $(PATCH)) | name_patch
 	@echo $(BOLD)Applying patch $<...$(RESET)
 	for p in $^; do patch < $$p; done
 
 lem: $(UTIL) | $(HOL_SCRIPTS) $(AUX_DIR)
 
 # Run Holmake
-hol: lem patch
+hol: lem name_patch
 	@echo $(BOLD)Running Holmake$(RESET)
 	Holmake
 

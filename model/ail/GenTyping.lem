@@ -1382,8 +1382,8 @@ end
 
 
 
-val     annotate_statement': annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement' unit -> E.t (statement' genTypeCategory)
-let rec annotate_statement' annot sigm gamm ty stmt =
+val     annotate_statement_: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement_ unit -> E.t (statement_ genTypeCategory)
+let rec annotate_statement_ annot sigm gamm ty stmt =
   let annotate_expression = annotate_expression annot sigm gamm   in
   let annotate_rvalue     = annotate_rvalue annot sigm gamm       in
   let annotate_block bs =
@@ -1469,7 +1469,7 @@ let rec annotate_statement' annot sigm gamm ty stmt =
   end
 
 and annotate_statement annot sigm gamm ty (AnnotatedStatement loc stmt) =
-  annotate_statement' annot sigm gamm ty stmt >>= fun stmt' ->
+  annotate_statement_ annot sigm gamm ty stmt >>= fun stmt' ->
   E.return (AnnotatedStatement loc stmt')
 
 

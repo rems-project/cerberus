@@ -1,7 +1,7 @@
 open import Pervasives Global
 import Exception
 
-type t 'a 's 'msg = 's -> Exception.t ('a * 's) 'msg
+type t 'a 'b_s 'c_msg = 'b_s -> Exception.t ('a * 'b_s) 'c_msg
 
 val return: forall 'a 's 'msg. 'a -> t 'a 's 'msg
 let return a = fun s -> Exception.return (a, s)

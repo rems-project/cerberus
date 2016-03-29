@@ -8,7 +8,7 @@ endif
 
 BOLD="\033[1m"
 RED="\033[31m"
-YELLOW="\033[33m"
+YELLOW="\033[33m”
 RESET="\033[0m"
 
 # Looking for Lem
