@@ -3,7 +3,7 @@ open import Pervasives
 import Symbol Cabs
 open import Global Core_ctype
 
-open import {hol} `utilTheory`
+open import {hol} `tagsTheory`
 
 (* SEE src/tags.mli for the documentation *)
 val tagDefs: unit -> map Symbol.t (list (Cabs.cabs_identifier * ctype))

@@ -1,6 +1,6 @@
 open import Pervasives Cabs Std Show Show_extra
 open import Global
-import Boot Loc Errors Scope_table State_exception UniqueId Symbol
+import Boot Loc Errors Scope_table State_exception UniqueId Symbol Decode
 
 open import Cabs_to_ail_aux
 
@@ -10,6 +10,8 @@ import Map_extra
 
 module A      = AilSyntax
 module ATypes = AilTypes
+
+open import {hol} `pp_ailTheory`
 
 
 type tag_definition =
@@ -28,7 +30,7 @@ type member_kind =
 type identifier_kind =
   (* the boolean is true iff we are dealing with a function parameter (needed to determinate the linkage ...) *)
     (* TODO: should be a different ctor, but using a bool for now to make sure all the occurences
-             of the normal Kind_object also apply to `Kind_parameter_object' *)
+             of the normal Kind_object also apply to Kind_parameter_object' *)
   | Kind_object of bool
 
   | Kind_function
@@ -204,7 +206,7 @@ type state = <|
 (*
   enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
 *)
-  enumeration_constants: map A.identifier (A.expression' unit);
+  enumeration_constants: map A.identifier (A.expression_ unit);
   
   (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
@@ -219,21 +221,21 @@ type state = <|
 type t 'a = State_exception.t 'a state Errors.t
 
 val return: forall 'a. 'a -> t 'a
-let return = State_exception.return
+let return = (State_exception.return : 'a -> t 'a)
 
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let bind = State_exception.bind
+let bind = (State_exception.bind : t 'a -> ('a -> t 'b) -> t 'b)
 
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> t 'a
-let fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
+let fail loc dcause = ((State_exception.fail (loc, Errors.Desugar_cause dcause)) : t 'a) 
 
 
 
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
 val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
-let mapM = State_exception.mapM
-let mapM_ = State_exception.mapM_
+let mapM = (State_exception.mapM : ('a -> t 'b) -> list 'a -> t (list 'b))
+let mapM_ = (State_exception.mapM_ : ('a -> t 'b) -> list 'a -> t unit)
 
 let foldlM = State_exception.foldlM
 let foldrM = State_exception.foldrM
@@ -245,10 +247,10 @@ let tryWith = State_exception.tryWith
 
 
 val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
-let fmap = State_exception.fmap
+let fmap = (State_exception.fmap : ('a -> 'b) -> t 'a -> t 'b)
 
 val app: forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
-let app  = State_exception.app
+let app  = (State_exception.app : t ('a -> 'b) -> t 'a -> t 'b)
 
 
 let inline (>>=)    = bind
@@ -283,7 +285,7 @@ let get_scope =
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
 
-(* TODO: revert this to simply return a `a, and add a collect_bindings function *)
+(* TODO: revert this to simply return a a, and add a collect_bindings function *)
 val with_scope: forall 'a. scope -> t 'a -> t (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
@@ -398,11 +400,11 @@ let ident_is_in_current_scope ident namespace =
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
-val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
-let _register_identifier ident namespace kind link =
+val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
+let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Boot.print_debug 7 ("DESUGARING, attempting to register identifier `" ^ show ident ^
+    Boot.print_debug 7 ("DESUGARING, attempting to register identifier " ^ show ident ^
                         "' with scope= " ^ string_of_scope sc ^
                         " with namespace= " ^ show namespace ^
                         ", kind= " ^ show kind ^
@@ -448,7 +450,7 @@ let _register_identifier ident namespace kind link =
           if kind = kind' && link = link' then
             return sym
           else
-            error "Cabs_to_ail_effect._register_identifier"
+            error "Cabs_to_ail_effect.register_identifier_"
     | Nothing ->
         do_fresh
   end
@@ -508,7 +510,7 @@ STD_ "§6.2.2#6" $
 val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
 let register_identifier ident namespace kind storage_classes =
   determinate_linkage ident namespace kind storage_classes >>= fun link ->
-  _register_identifier ident namespace kind link           >>= fun sym  ->
+  register_identifier_ ident namespace kind link           >>= fun sym  ->
   return (link, sym)
 
 
@@ -755,7 +757,7 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
 let register_external_object_declaration sym decl =
   return (
-    Boot.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
+    Boot.print_debug 7 ("DESUGARING attempting to register external object declaration of " ^ show sym ^ "'")
   ) >>
   
   State_exception.read (fun st ->
@@ -766,7 +768,7 @@ let register_external_object_declaration sym decl =
           (* TODO: msg and location *)
           fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
-          let _ = Boot.print_debug 7 ("DESUGARING found a valid redeclaration of `" ^ show sym ^ "'") in
+          let _ = Boot.print_debug 7 ("DESUGARING found a valid redeclaration of " ^ show sym ^ "'") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
@@ -806,7 +808,7 @@ let register_static_assertion e strCst =
 
 val register_label: cabs_identifier -> t unit
 let register_label ident =
-  void (_register_identifier ident Namespace_label Kind_label Linkage_none)
+  void (register_identifier_ ident Namespace_label Kind_label Linkage_none)
 
 val resolve_label: cabs_identifier -> t A.identifier
 let resolve_label ident =
@@ -906,13 +908,13 @@ let resolve_typedef sym =
   )
 
 
-val register_enum_constant: A.identifier -> A.expression' unit -> t unit
+val register_enum_constant: A.identifier -> A.expression_ unit -> t unit
 let register_enum_constant sym expr =
   State_exception.update (fun st ->
     <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
   )
 
-val resolve_enum_constant: A.identifier -> t (A.expression' unit)
+val resolve_enum_constant: A.identifier -> t (A.expression_ unit)
 let resolve_enum_constant sym =
   State_exception.read (fun st ->
     st.enumeration_constants
