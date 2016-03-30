@@ -1,6 +1,6 @@
 open HolKernel Parse boolLib bossLib finite_mapTheory;
 
-open ailTypesTheory core_ctypeTheory defacto_memory_typesTheory;
+open lem_pervasivesTheory;
 
 val _ = new_theory "util"
 

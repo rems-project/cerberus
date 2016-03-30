@@ -526,7 +526,7 @@ val desugar_enumerator:                 enumerator -> E.t unit (* TODO *)
 val desugar_alignment_specifier:        alignment_specifier -> E.t unit (* TODO *)
 
 (* NOTE: these twos functions do NOT register identifier being declared, this is
-         left to the called (who can know the `kind' of the identifier from its
+         left to the called (who can know the kind' of the identifier from its
          type *)
 val desugar_declarator:                 declarator        -> E.t (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
 val desugar_direct_declarator:          direct_declarator -> E.t (cabs_identifier (* * ATypes.qualifiers *) * (ATypes.ctype -> ATypes.ctype))
@@ -645,7 +645,7 @@ let rec evaluate_integer_constant_expression loc (AnnotatedExpression () _(*TODO
           | Minus ->
               E.return (0-n)
           | Bnot ->
-              E.fail Loc.unknown (Errors.Desugar_NotyetSupported "Bnot operator in `integer constant expressions'")
+              E.fail Loc.unknown (Errors.Desugar_NotyetSupported "Bnot operator in integer constant expressions'")
         end
 *)
         E.fail loc (Errors.Desugar_NotyetSupported "unary operator in `integer constant expressions'")
@@ -1697,7 +1697,7 @@ and desugar_type_name (Type_name specs tquals abs_decltor_opt) =
 
 
 (* TODO: yuck *)
-(* the bool argument `is_under_array' is true iff we went through array type derivation
+(* the bool argument is_under_array' is true iff we went through array type derivation
    since the last call to desugar_type_name *)
 and desugar_abstract_declarator is_under_array abs_decltor =
   match abs_decltor with

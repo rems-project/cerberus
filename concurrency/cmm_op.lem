@@ -6,13 +6,13 @@
 open import Pervasives Show Show_extra
 open import Cmm_aux Cmm_csem
 
-open import {hol} `pp_memTheory`
+open import {hol} `pp_memTheory` `utilTheory`
 
 (* TODO: It was not type checking with Mem.mem_value *)
 val pretty_stringFromMem_mem_value: forall 'a. 'a -> string
 declare ocaml target_rep function pretty_stringFromMem_mem_value = `String_mem.string_pretty_of_mem_value_decimal`
 declare hol  target_rep function pretty_stringFromMem_mem_value =
-                                 `pp_mem$pp_mem_value`
+                                 `util$emptyString`
 
 import Loc (* Somebody is going to hate me for this *)
 
@@ -238,7 +238,7 @@ let incStep pre s1 s2 a =
   (* The new execution_witness extends the previous (only new
   relations are added, and new relations are from or to the committed
   action). *)
-  incWitRestrict s2.incWit (incCommittedSet s1) = s1.incWit &&
+  (incWitRestrict s2.incWit (incCommittedSet s1) = s1.incWit) &&
 
   (* The new execution satisfies the consistency predicates. *)
   axsimpConsistent s2_ex
@@ -270,8 +270,8 @@ let ~{ocaml} consistencyFromTrace trace (pre, wit, rel) =
   rel = getRelations pre wit &&
   exists s. 
   trace pre (incInitialState pre) s &&
-  s.incWit = wit &&
-  incCommittedSet s = pre.actions
+  (s.incWit = wit) &&
+  (incCommittedSet s = pre.actions)
 
 val incConsistent: candidate_execution -> bool
 let ~{ocaml} incConsistent =
@@ -295,11 +295,12 @@ let inline (>>) m1 m2 = Nondeterminism.bindExhaustive m1 (fun _ -> m2)
 
 val sameLocWrites: list action -> action -> list action
 let sameLocWrites actions a =
-  [b | forall (b MEM actions) | is_write b && loc_of b = loc_of a]
+  [b | forall (b MEM actions) | is_write b && (loc_of b = loc_of a)]
 
 val sameLocLocksUnlocks: list action -> action -> list action
 let sameLocLocksUnlocks actions a =
-  [b | forall (b MEM actions) | (is_lock b || is_unlock b) && loc_of b = loc_of a]
+  [b | forall (b MEM actions) | (is_lock b || is_unlock b) && (loc_of b = loc_of
+                                                                 a)]
 
 val scActions: list action -> list action
 let scActions actions =
@@ -561,7 +562,7 @@ monReflexive: forall pre s.
 and
 monStep: forall pre x y z a.
   monTrace pre x y && 
-  Nondeterminism.mem (a, z) (monStep pre y)
+  Nondeterminism.mem (a : unit, z) (monStep pre y)
 ==>
   monTrace pre x z
 

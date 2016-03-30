@@ -30,7 +30,7 @@ val _ = Define `
   pp_core_stack (f :'a core$stack) = ""`;
 
 val _ = Define `
-  pp_core_params (p :(symbol$t1 # core$core_base_type) list) = ""`;
+  pp_core_params (p :(symbol$sym # core$core_base_type) list) = ""`;
 
 
 val _ = export_theory()
