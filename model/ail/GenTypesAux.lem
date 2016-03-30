@@ -4,6 +4,12 @@ import AilTypesAux AilTyping
 
 open import Global
 
+open import {hol} `ppTheory`
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+declare hol   target_rep function print_debug = `pp$print_debug`
+
 
 
 (* == constructor predicates on ctypes =========================================================== *)

@@ -25,16 +25,14 @@ type integerConstant (*[name = "ic*"]*) =
   | IConstantMax of integerType
   | IConstantMin of integerType
 
-type floatingConstant =
-  string
+type floatingConstant = string
 
 type characterPrefix =
   | Pref_L
   | Pref_u
   | Pref_U
 
-type characterConstant =
-    maybe characterPrefix * string
+type characterConstant = maybe characterPrefix * string
 
 type encodingPrefix =
   | Enc_u8
@@ -42,8 +40,7 @@ type encodingPrefix =
   | Enc_U
   | Enc_L
 
-type stringLiteral =
-  maybe encodingPrefix * list string
+type stringLiteral = maybe encodingPrefix * list string
 
 type arithmeticOperator [name = "aop.*"] =
  (* STD §6.5.5 Multiplicative operators *)
@@ -94,30 +91,30 @@ type binaryOperator [name = "bop*"] =  (*r Group of operators also used for assi
  | Eq
  | Ne
 
-type expression' 'A [name = "e*"] = 
-  | AilEunary of unaryOperator * expression 'A
-  | AilEbinary of expression 'A * binaryOperator * expression 'A
-  | AilEassign of expression 'A * expression 'A
-  | AilEcompoundAssign of expression 'A * arithmeticOperator * expression 'A
-  | AilEcond of expression 'A * expression 'A * expression 'A
-  | AilEcast of qualifiers * ctype * expression 'A
-  | AilEcall of expression 'A * list (expression 'A)
-  | AilEassert of expression 'A
+type expression_ 'a [name = "e*"] = 
+  | AilEunary of unaryOperator * expression 'a
+  | AilEbinary of expression 'a * binaryOperator * expression 'a
+  | AilEassign of expression 'a * expression 'a
+  | AilEcompoundAssign of expression 'a * arithmeticOperator * expression 'a
+  | AilEcond of expression 'a * expression 'a * expression 'a
+  | AilEcast of qualifiers * ctype * expression 'a
+  | AilEcall of expression 'a * list (expression 'a)
+  | AilEassert of expression 'a
   | AilEoffsetof of ctype * Cabs.cabs_identifier
-  | AilEgeneric of expression 'A * list (generic_association 'A)
+  | AilEgeneric of expression 'a * list (generic_association 'a)
   
   (* TODO: hackish? *)
   (* TODO: these two don't exist in C (apart from in decl) *)
-  | AilEarray of ctype * list (maybe (expression 'A))
-  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *)
+  | AilEarray of ctype * list (maybe (expression 'a))
+  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
   
   (* NOTE: the expression obviously need to match the type, and will typically be
            a AilEarray or AilEstruct *)
-  | AilEcompound of ctype * expression 'A
+  | AilEcompound of ctype * expression 'a
   
   
-  | AilEmemberof of expression 'A * Cabs.cabs_identifier
-  | AilEmemberofptr of expression 'A * Cabs.cabs_identifier
+  | AilEmemberof of expression 'a * Cabs.cabs_identifier
+  | AilEmemberofptr of expression 'a * Cabs.cabs_identifier
   
   | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
   
@@ -125,21 +122,21 @@ type expression' 'A [name = "e*"] =
   | AilEconst of constant
   | AilEident of identifier
   | AilEsizeof of qualifiers * ctype
-  | AilEsizeof_expr of expression 'A
+  | AilEsizeof_expr of expression 'a
   | AilEalignof of qualifiers * ctype
   
   (* NOTE: type annotation on expression, used to remember the type of desugared
            enumeration constants *)
-  | AilEannot of ctype * (expression 'A)
-  | AilEva_start of expression 'A * identifier
-  | AilEva_arg of expression 'A * ctype
+  | AilEannot of ctype * (expression 'a)
+  | AilEva_start of expression 'a * identifier
+  | AilEva_arg of expression 'a * ctype
 
-and generic_association 'A =
-  | AilGAtype of ctype * expression 'A
-  | AilGAdefault of expression 'A
+and generic_association 'a =
+  | AilGAtype of ctype * expression 'a
+  | AilGAdefault of expression 'a
 
-and expression 'A [name = "e*"] =
-  | AnnotatedExpression of 'A * Loc.t * expression' 'A
+and expression 'a [name = "e*"] =
+  | AnnotatedExpression of 'a * Loc.t * expression_ 'a
 
 instance forall 'a. (Located (expression 'a))
   let locOf a_expr =
@@ -151,26 +148,26 @@ end
 (* the storage duration must be Nothing iff the identifier is that of a function *)
 type bindings (*[name="b*"]*) = list (identifier * (maybe storageDuration * qualifiers * ctype))
 
-type statement' 'A [name="s*"] = 
+type statement_ 'a [name="s*"] = 
   | AilSskip
-  | AilSexpr of expression 'A
-  | AilSblock of bindings * list (statement 'A)
-  | AilSif of expression 'A * statement 'A * statement 'A
-  | AilSwhile of expression 'A * statement 'A
-  | AilSdo of statement 'A * expression 'A
+  | AilSexpr of expression 'a
+  | AilSblock of bindings * list (statement 'a)
+  | AilSif of expression 'a * statement 'a * statement 'a
+  | AilSwhile of expression 'a * statement 'a
+  | AilSdo of statement 'a * expression 'a
   | AilSbreak
   | AilScontinue
   | AilSreturnVoid
-  | AilSreturn of expression 'A
-  | AilSswitch of expression 'A * statement 'A
-  | AilScase of integerConstant * statement 'A
-  | AilSdefault of statement 'A
-  | AilSlabel of identifier * statement 'A
+  | AilSreturn of expression 'a
+  | AilSswitch of expression 'a * statement 'a
+  | AilScase of integerConstant * statement 'a
+  | AilSdefault of statement 'a
+  | AilSlabel of identifier * statement 'a
   | AilSgoto of identifier
-  | AilSdeclaration of list (identifier * expression 'A)
-  | AilSpar of list (statement 'A) (* NON-STD cppmem threads *)
-and statement 'A [name="s*"] =
-  | AnnotatedStatement of Loc.t * statement' 'A
+  | AilSdeclaration of list (identifier * expression 'a)
+  | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
+and statement 'a [name="s*"] =
+  | AnnotatedStatement of Loc.t * statement_ 'a
 
 
 type declaration =
@@ -193,12 +190,12 @@ instance (Show tag_definition)
 end
 
 
-type sigma 'A = <|
+type sigma 'a = <|
   declarations: Context.context identifier declaration;
-  object_definitions: Context.context identifier (expression 'A);
+  object_definitions: Context.context identifier (expression 'a);
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: Context.context identifier (list identifier * statement 'A);
-  static_assertions: list (expression 'A * stringLiteral);
+  function_definitions: Context.context identifier (list identifier * statement 'a);
+  static_assertions: list (expression 'a * stringLiteral);
   
   tag_definitions: Context.context identifier tag_definition
 |>
@@ -206,7 +203,7 @@ type sigma 'A = <|
 
 type gamma = Context.context identifier (maybe storageDuration * qualifiers * ctype)
 
-type program 'A = identifier * sigma 'A
+type program 'a = identifier * sigma 'a
 
 
 
@@ -250,68 +247,68 @@ val unaryOperatorEqual:      unaryOperator      -> unaryOperator      -> bool
 val binaryOperatorEqual:     binaryOperator     -> binaryOperator     -> bool
 
 (* NOTE: this is an internal function *)
-val argumentsEqual_aux: forall 'A.
-                      ('A -> 'A -> bool)                                             ->
-                      (('A -> 'A -> bool) -> expression 'A -> expression 'A -> bool) ->
-                      list (expression 'A) -> list (expression 'A)                   ->
+val argumentsEqual_aux: forall 'a.
+                      ('a -> 'a -> bool)                                             ->
+                      (('a -> 'a -> bool) -> expression 'a -> expression 'a -> bool) ->
+                      list (expression 'a) -> list (expression 'a)                   ->
                       bool
 
 (* NOTE: this is an internal function *)
-val expressionEqual': forall 'A.
-                    ('A -> 'A -> bool)               ->
-                    expression' 'A -> expression' 'A ->
+val expressionEqual': forall 'a.
+                    ('a -> 'a -> bool)               ->
+                    expression_ 'a -> expression_ 'a ->
                     bool
 
-val expressionEqual: forall 'A.
-                   ('A -> 'A -> bool)             ->
-                   expression 'A -> expression 'A ->
+val expressionEqual: forall 'a.
+                   ('a -> 'a -> bool)             ->
+                   expression 'a -> expression 'a ->
                    bool
 
-val argumentsEqual: forall 'A.
-                  ('A -> 'A -> bool)                           ->
-                  list (expression 'A) -> list (expression 'A) ->
+val argumentsEqual: forall 'a.
+                  ('a -> 'a -> bool)                           ->
+                  list (expression 'a) -> list (expression 'a) ->
                   bool
 
 val bindingsEqual: bindings -> bindings -> bool
 
-val definitionEqual: forall 'A.
-                   ('A -> 'A -> bool)                                           ->
-                   (identifier * expression 'A) -> (identifier * expression 'A) ->
+val definitionEqual: forall 'a.
+                   ('a -> 'a -> bool)                                           ->
+                   (identifier * expression 'a) -> (identifier * expression 'a) ->
                    bool
 
 val declarationEqual: declaration -> declaration -> bool
 
-val blockEqual_aux: forall 'A.
-                  ('A -> 'A -> bool)                                           ->
-                  (('A -> 'A -> bool) -> statement 'A -> statement 'A -> bool) ->
-                  list (statement 'A) -> list (statement 'A)                   ->
+val blockEqual_aux: forall 'a.
+                  ('a -> 'a -> bool)                                           ->
+                  (('a -> 'a -> bool) -> statement 'a -> statement 'a -> bool) ->
+                  list (statement 'a) -> list (statement 'a)                   ->
                   bool
 
-val statementEqual': forall 'A.
-                   ('A -> 'A -> bool)             ->
-                   statement' 'A -> statement' 'A ->
+val statementEqual': forall 'a.
+                   ('a -> 'a -> bool)             ->
+                   statement_ 'a -> statement_ 'a ->
                    bool
 
-val statementEqual: forall 'A.
-                  ('A -> 'A -> bool)           ->
-                  statement 'A -> statement 'A ->
+val statementEqual: forall 'a.
+                  ('a -> 'a -> bool)           ->
+                  statement 'a -> statement 'a ->
                   bool
 
-val blockEqual: forall 'A.
-              ('A -> 'A -> bool)                         ->
-              list (statement 'A) -> list (statement 'A) ->
+val blockEqual: forall 'a.
+              ('a -> 'a -> bool)                         ->
+              list (statement 'a) -> list (statement 'a) ->
               bool
 
-val sigmaEqual: forall 'A.
-              ('A -> 'A -> bool)   ->
-              sigma 'A -> sigma 'A ->
+val sigmaEqual: forall 'a.
+              ('a -> 'a -> bool)   ->
+              sigma 'a -> sigma 'a ->
               bool
 
 val gammaEqual: gamma -> gamma -> bool
 
-val programEqual: forall 'A.
-                ('A -> 'A -> bool)       ->
-                program 'A -> program 'A ->
+val programEqual: forall 'a.
+                ('a -> 'a -> bool)       ->
+                program 'a -> program 'a ->
                 bool
 
 
@@ -447,8 +444,10 @@ let rec argumentsEqual_aux eq_A expressionEqual a1 a2 =
     | (_       , _       ) -> false
   end
 
-let rec expressionEqual' eq_A e1 e2 =
-  let argumentsEqual = argumentsEqual_aux eq_A expressionEqual in
+let rec expressionEqual' (eq_A : 'a -> 'a -> bool) e1 e2 =
+  let argumentsEqual = argumentsEqual_aux eq_A 
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+        (fun eq a b -> expressionEqual eq a b) in
   match (e1, e2) with
     | (AilEunary uop1 e1, AilEunary uop2 e2) ->
         unaryOperatorEqual uop1 uop2 &&
@@ -531,7 +530,9 @@ let rec eq_block_aux eq_A equiv_statement ss1 ss2 =
   end
 
 let rec statementEqual' eq_A s1 s2 =
-  let eq_block = eq_block_aux eq_A statementEqual in
+  let eq_block = eq_block_aux eq_A 
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+      (fun eq a b -> statementEqual eq a b) in
   match (s1, s2) with
     | (AilSskip, AilSskip) -> true
     | (AilSexpr e1, AilSexpr e2) ->
@@ -646,40 +647,40 @@ let eq_program eq_A p1 p2 =
 
 (* == Equivalence functions ================================================= *)
 
-val equiv_arguments_aux: forall 'A1 'A2.
-                         (expression 'A1 -> expression 'A2 -> bool)     ->
-                         list (expression 'A1) -> list (expression 'A2) ->
+val equiv_arguments_aux: forall 'a1 'a2.
+                         (expression 'a1 -> expression 'a2 -> bool)     ->
+                         list (expression 'a1) -> list (expression 'a2) ->
                          bool
 
-val equiv_expression': forall 'A1 'A2. expression' 'A1                    -> expression' 'A2                    -> bool
-val equiv_expression:  forall 'A1 'A2. expression  'A1                    -> expression  'A2                    -> bool
-val equiv_arguments:   forall 'A1 'A2. list (expression 'A1)              -> list (expression 'A2)              -> bool
-val equiv_definition:  forall 'A1 'A2. identifier * expression 'A1        -> identifier * expression 'A2        -> bool
-val equiv_declaration: forall 'A1 'A2. list (identifier * expression 'A1) -> list (identifier * expression 'A2) -> bool
+val equiv_expression_: forall 'a1 'a2. expression_ 'a1                    -> expression_ 'a2                    -> bool
+val equiv_expression:  forall 'a1 'a2. expression  'a1                    -> expression  'a2                    -> bool
+val equiv_arguments:   forall 'a1 'a2. list (expression 'a1)              -> list (expression 'a2)              -> bool
+val equiv_definition:  forall 'a1 'a2. identifier * expression 'a1        -> identifier * expression 'a2        -> bool
+val equiv_declaration: forall 'a1 'a2. list (identifier * expression 'a1) -> list (identifier * expression 'a2) -> bool
 
-val equiv_block_aux: forall 'A1 'A2.
-                     (statement 'A1 -> statement 'A2 -> bool) ->
-                     list (statement 'A1) -> list (statement 'A2) ->
+val equiv_block_aux: forall 'a1 'a2.
+                     (statement 'a1 -> statement 'a2 -> bool) ->
+                     list (statement 'a1) -> list (statement 'a2) ->
                      bool
 
-val equiv_statement': forall 'A1 'A2. statement' 'A1       -> statement' 'A2       -> bool
-val equiv_statement:  forall 'A1 'A2. statement  'A1       -> statement  'A2       -> bool
-val equiv_block:      forall 'A1 'A2. list (statement 'A1) -> list (statement 'A2) -> bool
+val equiv_statement_: forall 'a1 'a2. statement_ 'a1       -> statement_ 'a2       -> bool
+val equiv_statement:  forall 'a1 'a2. statement  'a1       -> statement  'a2       -> bool
+val equiv_block:      forall 'a1 'a2. list (statement 'a1) -> list (statement 'a2) -> bool
 
 (* WIP
-val equiv_sigma: forall 'A1 'A2 'B1 'B2. sigma 'A1 'B1 -> sigma 'A2 'B2 -> bool
-val equiv_eq_sigma: forall 'A 'B.
-                    ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-                    sigma 'A 'B -> sigma 'A 'B               ->
+val equiv_sigma: forall 'a1 'a2 'B1 'B2. sigma 'a1 'B1 -> sigma 'a2 'B2 -> bool
+val equiv_eq_sigma: forall 'a 'B.
+                    ('a -> 'a -> bool) -> ('B -> 'B -> bool) ->
+                    sigma 'a 'B -> sigma 'a 'B               ->
                     bool
 
 val equiv_gamma : gamma -> gamma -> bool
 
-val equiv_program: forall 'A1 'A2 'B1 'B2. program 'A1 'B1 -> program 'A2 'B2 -> bool
+val equiv_program: forall 'a1 'a2 'B1 'B2. program 'a1 'B1 -> program 'a2 'B2 -> bool
 
-val equiv_eq_program: forall 'A 'B.
-                      ('A -> 'A -> bool) -> ('B -> 'B -> bool) ->
-                      program 'A 'B -> program 'A 'B ->
+val equiv_eq_program: forall 'a 'B.
+                      ('a -> 'a -> bool) -> ('B -> 'B -> bool) ->
+                      program 'a 'B -> program 'a 'B ->
                       bool
 *)
 
@@ -691,8 +692,10 @@ let rec equiv_arguments_aux equiv_expression a1 a2 =
   | (_       , _       ) -> false
     end
 
-let rec equiv_expression' e1 e2 =
-  let equiv_arguments = equiv_arguments_aux equiv_expression in
+let rec equiv_expression_ e1 e2 =
+  let equiv_arguments = equiv_arguments_aux 
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+      (fun a b -> equiv_expression a b) in
   match (e1, e2) with
     | (AilEunary uop1 e1, AilEunary uop2 e2) ->
         unaryOperatorEqual uop1 uop2 &&
@@ -732,7 +735,7 @@ let rec equiv_expression' e1 e2 =
   end
 and equiv_expression e1 e2 =
   match (e1, e2) with
-  | (AnnotatedExpression _ _ e1, AnnotatedExpression _ _ e2) -> equiv_expression' e1 e2
+  | (AnnotatedExpression _ _ e1, AnnotatedExpression _ _ e2) -> equiv_expression_ e1 e2
   end
 
 let equiv_arguments a1 a2 =
@@ -756,8 +759,10 @@ let rec equiv_block_aux equiv_statement ss1 ss2 =
   | (_        , _        ) -> false
   end
 
-let rec equiv_statement' s1 s2 =
-  let equiv_block = equiv_block_aux equiv_statement in
+let rec equiv_statement_ s1 s2 =
+  let equiv_block = equiv_block_aux 
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+      (fun a b -> equiv_statement a b) in
   match (s1, s2) with
     | (AilSskip, AilSskip) -> true
     | (AilSexpr e1, AilSexpr e2) ->
@@ -800,11 +805,21 @@ let rec equiv_statement' s1 s2 =
 and equiv_statement s1 s2 =
   match (s1, s2) with
     | (AnnotatedStatement _ s1, AnnotatedStatement _ s2) ->
-        equiv_statement' s1 s2
+        equiv_statement_ s1 s2
   end
 
 let equiv_block ss1 ss2 =
  equiv_block_aux equiv_statement ss1 ss2
+
+
+(* HOL Hack
+declare hol target_rep function expressionEqual' f a b = (a = b)
+declare hol target_rep function expressionEqual  f a b = (a = b)
+declare hol target_rep function statementEqual' f a b = (a = b)
+declare hol target_rep function statementEqual  f a b = (a = b)
+declare hol target_rep function equiv_expression_ a b = (a = b)
+declare hol target_rep function equiv_expression  a b = (a = b)
+*)
 
 
 (* Currently unused.
@@ -889,7 +904,7 @@ let equiv_eq_program eq_A eq_B p1 p2 =
 *)
 
 (* *)
-val     sigma_lookup: forall 'A. sigma 'A -> identifier -> maybe ((* sigma_declaration 'A 'B *) unit)
+val     sigma_lookup: forall 'a. sigma 'a -> identifier -> maybe ((* sigma_declaration 'a 'B *) unit)
 (*
 let rec sigma_lookup S a =
   match S with
@@ -911,19 +926,19 @@ let rec sigma_lookup S a =
 *)
 
 (*
-val sigma_mem: forall 'A 'B. identifier -> sigma 'A 'B -> bool
+val sigma_mem: forall 'a 'B. identifier -> sigma 'a 'B -> bool
 let sigma_mem a S =
   match sigma_lookup S a with
   | Just _  -> true
   | Nothing -> false
   end
 
-val sigma_fresh: forall 'A 'B. identifier -> sigma 'A 'B -> bool
+val sigma_fresh: forall 'a 'B. identifier -> sigma 'a 'B -> bool
 let sigma_fresh a S =
   not (sigma_mem a S)
 *)
 
-val sigma_fresh_bindings: forall 'A. bindings -> sigma 'A -> bool
+val sigma_fresh_bindings: forall 'a. bindings -> sigma 'a -> bool
 let sigma_fresh_bindings bs S =
   List.all (fun (ident, _) -> Context.fresh identifierEqual ident S.declarations) bs
 
@@ -950,7 +965,7 @@ let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 
 val parameters_of_bindings: bindings -> list (maybe storageDuration * qualifiers * ctype)
 
-val type_from_sigma: forall 'A. (ctype * bindings * bool) * maybe (statement 'A) -> ctype
+val type_from_sigma: forall 'a. (ctype * bindings * bool) * maybe (statement 'a) -> ctype
 
 let parameters_of_bindings bs =
   List.map snd bs

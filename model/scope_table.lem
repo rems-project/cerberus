@@ -2,7 +2,7 @@
 open import Pervasives Global Symbol
 import Global Set_extra
 
-type t 'scope 'ident 'a = list ('scope * map 'ident 'a)
+type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)
 
 
 val empty: forall 'scope 'ident 'a. t 'scope 'ident 'a
@@ -14,7 +14,7 @@ let register ident a = function
   | (scope, m) :: ms ->
       (scope, Map.insert ident a m) :: ms
   | _ ->
-      error "`Scope_table.register' called on a table without any opened scope"
+      error "Scope_table.register' called on a table without any opened scope"
 end
 
 

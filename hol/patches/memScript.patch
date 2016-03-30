@@ -1,5 +1,5 @@
---- memScript.sml	2016-03-16 16:09:35.000000000 +0000
-+++ memScript_new	2016-03-16 16:19:08.000000000 +0000
+--- memScript.sml	2016-03-18 14:57:18.000000000 +0000
++++ memScript.sml_new	2016-03-18 14:57:10.000000000 +0000
 @@ -32,15 +32,15 @@
  
  (* The API *)
@@ -26,12 +26,12 @@
  
  
  val _ = Define `
-- (return2 = impl$return1)`;
-+ (return2 = return1)`;
+- (return1 = impl$return0)`;
++ (return1 = return0)`;
  
  val _ = Define `
-- (bind2 = impl$bind1)`;
-+ (bind2 = bind1)`;
+- (bind1 = impl$bind0)`;
++ (bind1 = bind0)`;
  
  
  

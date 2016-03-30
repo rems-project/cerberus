@@ -26,15 +26,16 @@ and is_null_pointer_constant e =
 (* ========== CLEAN UP TO HERE ========== *)
 
 (* TODO: doc *)
-let rec fv_arguments_aux (fv : identifier -> expression 'A -> bool) (v : identifier) a : bool =
+let rec fv_arguments_aux (fv : identifier -> expression 'a -> bool) (v : identifier) a : bool =
   match a with
   | []     -> false
   | e :: a -> fv v e || fv_arguments_aux fv v a
   end
 
 (* TODO: doc *)
-let rec fv' v (e : expression' 'A) : bool =
-  let fv_arguments = fv_arguments_aux fv in
+let rec fv' (v : identifier) (e : expression_ 'a) : bool =
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+  let fv_arguments = fv_arguments_aux (fun x y -> fv x y) in
   match e with
   | AilEunary _ e -> fv v e
   | AilEbinary e1 _ e2 -> fv v e1 || fv v e2
@@ -46,10 +47,10 @@ let rec fv' v (e : expression' 'A) : bool =
   | AilEident v' -> identifierEqual v v'
   | _ -> false
   end
-and fv v e : bool =
-  match e with
+and fv (v : identifier) (ex : expression 'a) : bool =
+  match ex with
   | AnnotatedExpression _ _ e -> fv' v e
   end
 
 (* TODO: doc *)
-let fv_arguments (v : identifier) (a: list (expression 'A)) : bool = fv_arguments_aux fv v a
+let fv_arguments (v : identifier) (a: list (expression 'a)) : bool = fv_arguments_aux fv v a

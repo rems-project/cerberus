@@ -5,10 +5,7 @@ import UniqueId
 
 import Debug
 
-
-
-
-
+open import {hol} `utilTheory`
 
 (* Symbolic identifiers *)
 type sym =

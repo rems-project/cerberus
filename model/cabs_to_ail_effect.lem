@@ -11,6 +11,8 @@ import Map_extra
 module A      = AilSyntax
 module ATypes = AilTypes
 
+open import {hol} `pp_ailTheory`
+
 
 type tag_definition =
   | Struct_definition of list (Cabs.cabs_identifier * ATypes.ctype)
@@ -204,7 +206,7 @@ type state = <|
 (*
   enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
 *)
-  enumeration_constants: map A.identifier (A.expression' unit);
+  enumeration_constants: map A.identifier (A.expression_ unit);
   
   (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
@@ -467,15 +469,15 @@ let rec determinate_linkage ident namespace kind storage_classes =
   get_scope >>= fun scope ->
   match (scope, kind, List.delete SC_Thread_local storage_classes) with
     | (Scope_file, Kind_object false, [SC_static]) ->
-_STD "§6.2.2#3" $
+STD_ "§6.2.2#3" $
         return Linkage_internal
     
     | (Scope_file, Kind_function, [SC_static]) ->
-_STD "§6.2.2#3" $
+STD_ "§6.2.2#3" $
         return Linkage_internal
     
     | (_, _, [SC_extern]) ->
-_STD "§6.2.2#4" $
+STD_ "§6.2.2#4" $
         resolve_identifier ident namespace >>= function
           | Just (_, (_, _, link)) ->
               if link = Linkage_internal || link = Linkage_external then
@@ -487,15 +489,15 @@ _STD "§6.2.2#4" $
         end
     
     | (_, Kind_function, []) ->
-_STD "§6.2.2#5, sentence 1" $
+STD_ "§6.2.2#5, sentence 1" $
         determinate_linkage ident namespace kind [SC_extern]
     
     | (Scope_file, Kind_object false, []) ->
-_STD "§6.2.2#5, sentence 2" $
+STD_ "§6.2.2#5, sentence 2" $
         return Linkage_external
     
     | (_, _, storage_class) ->
-_STD "§6.2.2#6" $
+STD_ "§6.2.2#6" $
         if    not (is_object_kind kind || kind = Kind_function)
            || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
            || is_block_scope scope && is_object_kind kind && storage_class <> [SC_extern] then
@@ -515,7 +517,7 @@ let register_identifier ident namespace kind storage_classes =
 (*
 val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> t A.identifier
 let register_function_parameter ident kind storage_classes =
-_STD "§6.2.2#6" $
+STD_ "§6.2.2#6" $
   _register_identifier ident Namespace_ordinary kind Linkage_none
 *)
 
@@ -906,13 +908,13 @@ let resolve_typedef sym =
   )
 
 
-val register_enum_constant: A.identifier -> A.expression' unit -> t unit
+val register_enum_constant: A.identifier -> A.expression_ unit -> t unit
 let register_enum_constant sym expr =
   State_exception.update (fun st ->
     <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
   )
 
-val resolve_enum_constant: A.identifier -> t (A.expression' unit)
+val resolve_enum_constant: A.identifier -> t (A.expression_ unit)
 let resolve_enum_constant sym =
   State_exception.read (fun st ->
     st.enumeration_constants

@@ -14,6 +14,7 @@ open import Thread Driver_util Core_run_aux Errors
 
 (* TODO: tmp*) import Defacto_memory_types
 
+open import {hol} `ppTheory`
 
 open import Core_eval
 

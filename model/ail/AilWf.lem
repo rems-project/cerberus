@@ -1,10 +1,12 @@
-open import Pervasives Common AilSyntax AilTypes AilSyntax AilTypesAux
+open import Pervasives Common AilSyntax AilTypes AilTypesAux
 
 open import TypingError ErrorMonad
 
+open import {hol} `utilTheory` `pp_coreTheory` `pp_ailTheory`
+
 val print_debug: forall 'a. string -> 'a -> 'a
 declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
-
+declare hol   target_rep function print_debug = `pp$print_debug2`
 
 
 (* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
@@ -17,9 +19,11 @@ let is_adjusted ty =
 
 val stringFromCtype: ctype -> string
 declare ocaml target_rep function stringFromCtype = `String_ail.string_of_ctype_raw`
+declare hol   target_rep function stringFromCtype = `pp_core$pp_core_ctype`
 
 val stringFromQualifiers: qualifiers -> string
 declare ocaml target_rep function stringFromQualifiers = `String_ail.string_of_qualifiers_human`
+declare hol   target_rep function stringFromQualifiers = `pp_ail$pp_qualifiers`
 
 
 val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
