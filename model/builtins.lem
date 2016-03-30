@@ -522,7 +522,7 @@ let translate_builtin_typenames = function
 end
 
 
-val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (A.expression' unit * maybe ATypes.ctype)
+val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (A.expression_ unit * maybe ATypes.ctype)
 let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
   match str with
     | "__cerbvar_EDOM" -> Just (A.AilEbuiltin "EDOM", Nothing)

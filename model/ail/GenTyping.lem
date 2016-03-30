@@ -4,6 +4,7 @@ open import Std Loc
 
 import Builtins Debug Pp
 
+open import {hol} `ppTheory`
 
 import ErrorMonad
 module E = ErrorMonad
@@ -965,7 +966,7 @@ TODO
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-_STD "§6.5.2.1#1" $
+STD_ "§6.5.2.1#1" $
         if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
@@ -1363,8 +1364,8 @@ end
 
 
 
-val     annotate_statement': annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement' unit -> E.t (statement' genTypeCategory)
-let rec annotate_statement' annot sigm gamm ty stmt =
+val     annotate_statement_: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement_ unit -> E.t (statement_ genTypeCategory)
+let rec annotate_statement_ annot sigm gamm ty stmt =
   let annotate_expression = annotate_expression annot sigm gamm   in
   let annotate_rvalue     = annotate_rvalue annot sigm gamm       in
   let annotate_block bs =
@@ -1450,7 +1451,7 @@ let rec annotate_statement' annot sigm gamm ty stmt =
   end
 
 and annotate_statement annot sigm gamm ty (AnnotatedStatement loc stmt) =
-  annotate_statement' annot sigm gamm ty stmt >>= fun stmt' ->
+  annotate_statement_ annot sigm gamm ty stmt >>= fun stmt' ->
   E.return (AnnotatedStatement loc stmt')
 
 

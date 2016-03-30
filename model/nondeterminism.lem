@@ -3,8 +3,11 @@ open import List Function
 open import Global
 import Debug Dlist Constraints Symbolic Undefined Loc
 
+open import {hol} `modeTheory` `utilTheory`
+
 val stringFromConstraints: Constraints.t -> string
 declare ocaml target_rep function stringFromConstraints = `Pp_constraints.pp_constraints`
+declare hol   target_rep function stringFromConstraints = `util$emptyString`
 
 
 import UniqueId
@@ -26,8 +29,14 @@ declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
 declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
 declare ocaml target_rep function Random         = `Global_ocaml.Random`
 
+declare hol target_rep type     execution_mode = `mode$execution_mode`
+declare hol target_rep function Interactive    = `mode$Interactive`
+declare hol target_rep function Exhaustive     = `mode$Exhaustive`
+declare hol target_rep function Random         = `mode$Random`
+
 val current_execution_mode: unit -> maybe execution_mode
 declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
+declare hol   target_rep function current_execution_mode = `mode$current_execution_mode`
 
 
 
@@ -90,6 +99,7 @@ let bindExhaustive (ND m) f =
 
 val random_select: forall 'a. list 'a -> 'a
 declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
+declare hol   target_rep function random_select = `HD`
 
 val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
 let bindRandom (ND m) f =
@@ -380,11 +390,6 @@ let bindExhaustive (ND m) f =
           | Killed reason log eqs ->
               [(a_id, Killed reason log eqs)]
         end) m
-
-
-(* TODO *)
-val random_select: forall 'a. list 'a -> 'a
-declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 
 (*
 val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b

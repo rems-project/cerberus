@@ -6,8 +6,13 @@
 open import Pervasives Show Show_extra
 open import Cmm_aux Cmm_csem
 
-val pretty_stringFromMem_mem_value: Mem.mem_value -> string
+open import {hol} `pp_memTheory`
+
+(* TODO: It was not type checking with Mem.mem_value *)
+val pretty_stringFromMem_mem_value: forall 'a. 'a -> string
 declare ocaml target_rep function pretty_stringFromMem_mem_value = `String_mem.string_pretty_of_mem_value_decimal`
+declare hol  target_rep function pretty_stringFromMem_mem_value =
+                                 `pp_mem$pp_mem_value`
 
 import Loc (* Somebody is going to hate me for this *)
 

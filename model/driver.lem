@@ -32,6 +32,7 @@ module U = Undefined
 module SEU = State_exception_undefined
 module ND  = Nondeterminism
 
+open import {hol} `ppTheory`
 
 
 (* DEBUG *)

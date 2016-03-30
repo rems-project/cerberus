@@ -8,7 +8,7 @@ import Symbolic Thread Cabs AilTypes Dlist
 
 open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 
-open import {hol} `utilTheory`
+open import {hol} `utilTheory` `tagsTheory`
 
 
 val stringFromCtype: ctype -> string
@@ -2264,7 +2264,7 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
 
 (* TODO: bug HOL -- "failure in internal translation to tupled format" *)
 declare hol target_rep function easy_update_mem_value_aux =
-                                `util$easy_update_mem_value_aux`
+                                `tags$easy_update_mem_value_aux`
 
 
 val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
