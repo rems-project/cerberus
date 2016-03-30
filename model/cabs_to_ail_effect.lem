@@ -30,7 +30,7 @@ type member_kind =
 type identifier_kind =
   (* the boolean is true iff we are dealing with a function parameter (needed to determinate the linkage ...) *)
     (* TODO: should be a different ctor, but using a bool for now to make sure all the occurences
-             of the normal Kind_object also apply to `Kind_parameter_object' *)
+             of the normal Kind_object also apply to Kind_parameter_object' *)
   | Kind_object of bool
 
   | Kind_function
@@ -285,7 +285,7 @@ let get_scope =
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
 
-(* TODO: revert this to simply return a `a, and add a collect_bindings function *)
+(* TODO: revert this to simply return a a, and add a collect_bindings function *)
 val with_scope: forall 'a. scope -> t 'a -> t (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
@@ -400,8 +400,8 @@ let ident_is_in_current_scope ident namespace =
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
-val _register_identifier: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
-let _register_identifier ident namespace kind link =
+val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
+let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
     Debug.print_debug 7 ("DESUGARING, attempting to register identifier `" ^ show ident ^
@@ -450,7 +450,7 @@ let _register_identifier ident namespace kind link =
           if kind = kind' && link = link' then
             return sym
           else
-            error "Cabs_to_ail_effect._register_identifier"
+            error "Cabs_to_ail_effect.register_identifier_"
     | Nothing ->
         do_fresh
   end
@@ -510,7 +510,7 @@ STD_ "§6.2.2#6" $
 val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
 let register_identifier ident namespace kind storage_classes =
   determinate_linkage ident namespace kind storage_classes >>= fun link ->
-  _register_identifier ident namespace kind link           >>= fun sym  ->
+  register_identifier_ ident namespace kind link           >>= fun sym  ->
   return (link, sym)
 
 
@@ -518,7 +518,7 @@ let register_identifier ident namespace kind storage_classes =
 val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> t A.identifier
 let register_function_parameter ident kind storage_classes =
 STD_ "§6.2.2#6" $
-  _register_identifier ident Namespace_ordinary kind Linkage_none
+  register_identifier_ ident Namespace_ordinary kind Linkage_none
 *)
 
 
@@ -808,7 +808,7 @@ let register_static_assertion e strCst =
 
 val register_label: cabs_identifier -> t unit
 let register_label ident =
-  void (_register_identifier ident Namespace_label Kind_label Linkage_none)
+  void (register_identifier_ ident Namespace_label Kind_label Linkage_none)
 
 val resolve_label: cabs_identifier -> t A.identifier
 let resolve_label ident =

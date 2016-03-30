@@ -3,7 +3,7 @@ open import List Function
 open import Global
 import Debug Dlist Constraints Symbolic Undefined Loc
 
-open import {hol} `modeTheory` `utilTheory`
+open import {hol} `utilTheory`
 
 val stringFromConstraints: Constraints.t -> string
 declare ocaml target_rep function stringFromConstraints = `Pp_constraints.pp_constraints`
@@ -29,14 +29,14 @@ declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
 declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
 declare ocaml target_rep function Random         = `Global_ocaml.Random`
 
-declare hol target_rep type     execution_mode = `mode$execution_mode`
-declare hol target_rep function Interactive    = `mode$Interactive`
-declare hol target_rep function Exhaustive     = `mode$Exhaustive`
-declare hol target_rep function Random         = `mode$Random`
+declare hol target_rep type     execution_mode = `util$execution_mode`
+declare hol target_rep function Interactive    = `util$Interactive`
+declare hol target_rep function Exhaustive     = `util$Exhaustive`
+declare hol target_rep function Random         = `util$Random`
 
 val current_execution_mode: unit -> maybe execution_mode
 declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
-declare hol   target_rep function current_execution_mode = `mode$current_execution_mode`
+declare hol   target_rep function current_execution_mode = `util$current_execution_mode`
 
 
 
@@ -212,16 +212,16 @@ let pick debug_str xs =
 
 (* The same but with a predicate and the pick is paired with it context *)
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
-let rec _pickWith pred acc debug_n = function
+let rec pickWith_ pred acc debug_n = function
   | [] ->
       let _ = Debug.print_debug 3 "WARNING: pickWith returns []" in
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
-        _pickWith pred (x::acc) (debug_n + (1:nat)) xs
+        pickWith_ pred (x::acc) (debug_n + (1:nat)) xs
 end
 let pickWith pred xs =
-  ND (fun st -> List.map (fun x -> (Active x, st)) (_pickWith pred [] 0 xs))
+  ND (fun st -> List.map (fun x -> (Active x, st)) (pickWith_ pred [] 0 xs))
 
 
 
@@ -662,16 +662,16 @@ let pick debug_str xs =
 
 (* The same but with a predicate and the pick is paired with it context *)
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
-let rec _pickWith pred acc debug_n = function
+let rec pickWith_ pred acc debug_n = function
   | [] ->
       let _ = Debug.print_debug 3 "WARNING: pickWith returns []" in
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
-        _pickWith pred (x::acc) (debug_n + (1:nat)) xs
+        pickWith_ pred (x::acc) (debug_n + (1:nat)) xs
 end
 let pickWith pred xs =
-  let ret = List.map (fun (n,z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote $ _pickWith pred [] 0 xs) in
+  let ret = List.map (fun (n,z) -> ([n], Active Dlist.nil Constraints.empty z)) (numerote $ pickWith_ pred [] 0 xs) in
 (*
   let _ = 
     if List.null ret then
