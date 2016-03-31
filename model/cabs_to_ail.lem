@@ -477,6 +477,8 @@ let is_initializer_constant_expression (AnnotatedExpression () loc expr as a_exp
         is_address_constant e2            >>= fun b21 ->
         is_integer_constant_expression e1 >>= fun b22 ->
         E.return (b11 && b12 || b21 && b22)
+    | AilEstr _ ->
+        E.return true
     | _ ->
         E.return false
   end
@@ -1823,7 +1825,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
             error "not possible"
         (* Static | Thread *)
         | _ ->
-            desugar_expression e               >>= fun d_e ->
+            desugar_expression e                   >>= fun d_e ->
             is_initializer_constant_expression d_e >>= function
               | true ->
                   E.return d_e
