@@ -200,8 +200,9 @@ let pipeline filename args =
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
+(*
   (Core_typing.typecheck_program core_file |>
-  pass_message "5. Core typechecking completed!") >>
+  pass_message "5. Core typechecking completed!") >> *)
   
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order

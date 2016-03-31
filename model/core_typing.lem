@@ -43,6 +43,96 @@ type typing_env =
 
 
 
+val     annotate_pattern: core_base_type -> pattern -> E.eff (typing_env * typed_pattern)
+let rec annotate_pattern bTy = function
+  | CaseBase Nothing ->
+      E.return (Map.empty, CaseBase Nothing)
+  | CaseBase (Just (sym, bTy')) ->
+      E.guard (bTy = bTy') (CoreTyping_TODO "annotate CaseBase") >>
+      E.return (Map.singleton sym (Left bTy'), CaseBase (Just (sym, bTy')))
+  | CaseCtor ctor pats ->
+      match (ctor, bTy, pats) with
+        | (Cnil (), BTy_list elem_bTy, []) ->
+            E.return (Map.empty, CaseCtor (Cnil elem_bTy) [])
+        | (Cnil (), _, []) ->
+            E.fail (CoreTyping_TODO "annotate Cnil, illtyped 1")
+        | (Cnil (), _, _) ->
+            E.fail (CoreTyping_TODO "annotate Cnil, illtyped 2")
+        
+        | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
+            annotate_pattern elem_bTy pat1 >>= fun (env1, tpat1) ->
+            annotate_pattern bTy      pat2 >>= fun (env2, tpat2) ->
+            E.return (Map.(union) env1 env2, CaseCtor Ccons [tpat1; tpat2])
+        | (Ccons, _, []) ->
+            E.fail (CoreTyping_TODO "annotate Ccons, illtyped 1")
+        | (Ccons, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Ccons, illtyped 2")
+        
+        | (Ctuple, BTy_tuple bTys, _) ->
+            List.unzip <$> E.mapM (fun (bTy, pat) ->
+              annotate_pattern bTy pat
+            ) (List.zip bTys pats) >>= fun (envs, tpats) ->
+            E.return (List.foldl (Map.(union)) Map.empty envs, CaseCtor Ctuple tpats)
+        | (Ctuple, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Ctuple, illtyped")
+        
+        | (Carray, _, _) ->
+            error "Core_typing.Carray: WIP, Carray"
+        
+        | (Civmax, BTy_object OTy_integer, [pat']) ->
+            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Civmax [tpat'])
+        | (Civmax, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Civmax, illtyped 1")
+        | (Civmax, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Civmax, illtyped 2")
+        
+        | (Civmin, BTy_object OTy_integer, [pat']) ->
+            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Civmin [tpat'])
+        | (Civmin, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Civmin, illtyped 1")
+        | (Civmin, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Civmin, illtyped 2")
+        
+        | (Civsizeof, BTy_object OTy_integer, [pat']) ->
+            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Civsizeof [tpat'])
+        | (Civsizeof, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Civsizeof, illtyped 1")
+        | (Civsizeof, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Civsizeof, illtyped 2")
+        
+        | (Civalignof, BTy_object OTy_integer, [pat']) ->
+            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Civalignof [tpat'])
+        | (Civalignof, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Civalignof, illtyped 1")
+        | (Civalignof, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Civalignof, illtyped 2")
+        
+        | (Cspecified, BTy_loaded oTy, [pat']) ->
+            annotate_pattern (BTy_object oTy) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Cspecified [tpat'])
+        | (Cspecified, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Cspecified, illtyped 1")
+        | (Cspecified, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Cspecified, illtyped 2")
+        
+        | (Cunspecified, BTy_loaded oTy, [pat']) ->
+            (* TODO: dependent types here .... *)
+            annotate_pattern BTy_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Cunspecified [tpat'])
+        | (Cunspecified, _, [_]) ->
+            E.fail (CoreTyping_TODO "annotate Cunspecified, illtyped 1")
+        | (Cunspecified, _, _) ->
+            E.fail (CoreTyping_TODO "annotate Cunspecified, illtyped 2")
+      end
+end
+
+
+
+
 val     typeof_object_value: object_value -> E.eff core_object_type
 let rec typeof_object_value oval =
   match oval with
@@ -113,6 +203,13 @@ let rec typeof_value cval =
   end
 
 
+val annotate_pexpr: typing_env -> pexpr -> E.eff typed_pexpr
+let annotate_pexpr env (Pexpr () pexpr_) =
+  match pexpr_ with
+    |  _ ->
+        error "WIP: annotate_pexpr"
+  end
+
 
 val     typecheck_pexpr: typing_env -> core_base_type -> pexpr -> E.eff typed_pexpr
 let rec typecheck_pexpr env bTy (Pexpr () pexpr_) =
@@ -151,7 +248,19 @@ let rec typecheck_pexpr env bTy (Pexpr () pexpr_) =
 *)
 (*
     | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
-    | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
+*)
+(*
+    | PEcase pe pat_pes ->
+        annotate_pexpr env pe >>= fun (Pexpr bTy _ as tpe) ->
+        E.mapM (fun (pat, pe) ->
+          annotate_pattern bTy pat >>= fun tpat ->
+          typecheck_pexpr pe       >>= fun tpe  ->
+          E.return (tpat, tpe)
+        ) pat_pes >>= fun tpat_tpes ->
+        E.return (PEcase tpe tpat_tpes)
+*)
+
+(*
     | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
     | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
 *)
@@ -209,7 +318,11 @@ let rec typecheck_pexpr env bTy (Pexpr () pexpr_) =
     | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
     | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
     | PEcall of (generic_name 'sym) * list (generic_pexpr 'ty 'sym) (* pure Core function call *)
-    | PElet of (generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym) * (generic_pexpr 'ty 'sym) (* pure Core let *)
+*)
+(*
+    | PElet pat pe1 pe2 ->
+        annotate_pexr env pe1 >>= fun (Pexpr bTy1 _ as tpe1) ->
+        annotate_pattern bTy1 
 *)
     | PEif pe1 pe2 pe3 ->
         PEif <$> typecheck_pexpr env BTy_boolean pe1

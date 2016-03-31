@@ -562,7 +562,7 @@ monReflexive: forall pre s.
 and
 monStep: forall pre x y z a.
   monTrace pre x y && 
-  Nondeterminism.mem (a : unit, z) (monStep pre y)
+  Nondeterminism.mem ((a: action), z) (monStep pre y)
 ==>
   monTrace pre x z
 
