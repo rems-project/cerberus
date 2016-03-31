@@ -183,7 +183,7 @@ name_patch:
 	sed -i.bck 's|atypes\$$|ailTypes\$$|g' cabs_to_ail_auxScript.sml
 	sed -i.bck 's|atypes\$$||g' cabs_to_ail_effectScript.sml
 	sed -i.bck 's|a\$$||g' cabs_to_ail_effectScript.sml
-	sed -i.bck 's|atypes\$$|ailTypes\$$|g' cabs_to_ailScript.sml
+	sed -i.bck 's|atypes\$$||g' cabs_to_ailScript.sml
 	sed -i.bck 's|e\$$||g' cabs_to_ailScript.sml
 
 patch: $(addprefix $(PATCH_DIR), $(PATCH)) | name_patch
