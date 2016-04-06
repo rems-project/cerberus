@@ -1,0 +1,3 @@
+expected:
+  - { value: "Specified(10)", stdout: "" }
+  - { value: "Specified(20)", stdout: "" }
