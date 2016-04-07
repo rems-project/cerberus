@@ -399,8 +399,7 @@ let typecheck_program file =
     E.guard (Map.member file.main file.funs) (Undefined_startup file.main) >>
     
     (* Register the functions/procedures from the stdlib *)
-    let env = (*TODO*)Map.empty in
-    
+    let env = (*TODO*)(Map.empty : map Symbol.sym (either core_base_type (core_base_type * (list core_base_type)))) in
     E.mapMapM (function
       | Fun bTy sym_bTys pe ->
           let env' = List.foldr (fun (sym, bTy) acc -> Map.insert sym (Left bTy) acc) env sym_bTys in

@@ -104,10 +104,10 @@ AIL = \
   Context.lem \
   ErrorMonad.lem \
   GenTypesAux.lem \
-  GenTyping.lem \
   Range.lem \
   TypingError.lem \
   Implementation.lem 
+  #GenTyping.lem \
 
 CORE = \
  core_ctype_aux.lem \
@@ -115,17 +115,14 @@ CORE = \
  core.lem \
   core_aux.lem \
   core_typing.lem \
-  core_indet.lem \
-  core_rewrite.lem \
   constraints.lem \
   nondeterminism.lem \
-  translation_aux.lem \
+  core_eval.lem \
+  core_run.lem \
+  core_run_aux.lem
+  #translation_aux.lem \
   translation_effect.lem \
-  translation.lem
-  #core_run.lem \
-  core_run_aux.lem \
-  driver.lem \
-  driver_effect.lem \
+  translation.lem \
 
 
 MODEL := $(UTILS) $(CABS) $(CORE) $(DEFACTO)
@@ -185,6 +182,14 @@ name_patch:
 	sed -i.bck 's|a\$$||g' cabs_to_ail_effectScript.sml
 	sed -i.bck 's|atypes\$$||g' cabs_to_ailScript.sml
 	sed -i.bck 's|e\$$||g' cabs_to_ailScript.sml
+	sed -i.bck 's|e\$$||g' core_typingScript.sml
+	sed -i.bck 's|cty\$$||g' core_typingScript.sml
+	sed -i.bck 's|e\$$||g' genTypingScript.sml
+	sed -i.bck 's|cty\$$||g' outputScript.sml
+	sed -i.bck 's|u\$$||g' outputScript.sml
+	sed -i.bck 's|caux\$$||g' core_evalScript.sml
+	sed -i.bck 's|eu\$$||g' core_evalScript.sml
+#	sed -i.bck 's|core\$$||g' core_indent.sml
 
 patch: $(addprefix $(PATCH_DIR), $(PATCH)) | name_patch
 	@echo $(BOLD)Applying patch $<...$(RESET)

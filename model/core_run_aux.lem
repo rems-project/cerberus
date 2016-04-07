@@ -4,6 +4,8 @@ open import Global Show Core Driver_util
 open import Errors
 import Pp
 
+import {hol} `pp_coreTheory`
+
 
 instance (Show core_run_error)
   let show = function

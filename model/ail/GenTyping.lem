@@ -4,7 +4,7 @@ open import Std Loc
 
 import Builtins Debug Pp
 
-open import {hol} `ppTheory`
+open import {hol} `utilTheory`
 
 import ErrorMonad
 module E = ErrorMonad
@@ -15,8 +15,8 @@ let inline (<$>) = E.fmap
 
 
 val lookup_tag_definition: forall 'a. sigma 'a -> identifier -> maybe tag_definition
-let lookup_tag_definition S sym =
-  Context.lookup (=) S.tag_definitions sym
+let lookup_tag_definition s sym =
+  Context.lookup (=) s.tag_definitions sym
 
 
 
@@ -29,13 +29,13 @@ let lookup_tag_definition S sym =
 
 (* ============== *)
 
-let annotate_rvalue_aux (S : sigma unit) A annotate_expression e =
+let annotate_rvalue_aux (s : sigma unit) a annotate_expression e =
   annotate_expression e >>= fun e ->
-  match type_of A e with
+  match type_of a e with
     | GenRValueType gty ->
         E.return (e, rvalue_coercion gty)
     | GenLValueType _ ty ->
-        AilTypesAux.lvalue_coercion S ty >>= fun ty' ->
+        AilTypesAux.lvalue_coercion s ty >>= fun ty' ->
         E.return (e, inject_type ty')
   end
 
@@ -76,7 +76,7 @@ let type_of_constant iCst =
 
 (* TODO: is only used once, could be inlined *)
 val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.t bool
-let well_typed_assignment S ty1 gty2 null2 =
+let well_typed_assignment s ty1 gty2 null2 =
   (* §6.5.16.1#1, bullet 1 *)
   if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && GenTypesAux.is_arithmetic gty2 then
     let () = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 1" in
@@ -100,7 +100,7 @@ let well_typed_assignment S ty1 gty2 null2 =
     end
   
   else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_pointer ty1 then
-    AilTypesAux.lvalue_conversion S ty1 >>= fun conv_ty1 ->
+    AilTypesAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
     match (conv_ty1, gty2) with
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
@@ -230,9 +230,9 @@ let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
 
 
 val annotate_assignee_aux: forall 's 'A1 'A2. sigma 's -> (expression 'A1 -> E.t (expression 'A2 * genType)) -> ctype -> expression 'A1 -> E.t (expression 'A2)
-let annotate_assignee_aux S annotate_rvalue ty1 e2 =
+let annotate_assignee_aux s annotate_rvalue ty1 e2 =
   annotate_rvalue e2                                             >>= fun (e2, gty2) ->
-  well_typed_assignment S ty1 gty2 (is_null_pointer_constant e2) >>= function
+  well_typed_assignment s ty1 gty2 (is_null_pointer_constant e2) >>= function
     | true ->
         E.return e2
     | false ->
@@ -251,8 +251,8 @@ val annotate_arguments_aux: forall 'A1 'A2.
 
 
 
-(* let rec annotate_arguments_aux (A : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.t (expression 'A2)) es (p : list (qualifiers * _)) : E.t (list (expression 'A2)) = *)
-let rec annotate_arguments_aux A annotate_expression annotate_assignee has_proto is_variadic args params =
+(* let rec annotate_arguments_aux (a : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.t (expression 'A2)) es (p : list (qualifiers * _)) : E.t (list (expression 'A2)) = *)
+let rec annotate_arguments_aux a annotate_expression annotate_assignee has_proto is_variadic args params =
   match (args, params) with
     | ([], []) ->
         E.return []
@@ -264,7 +264,7 @@ let rec annotate_arguments_aux A annotate_expression annotate_assignee has_proto
         if has_proto then
 *)
           annotate_assignee (AilTypesAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e  ->
-          annotate_arguments_aux A annotate_expression annotate_assignee has_proto is_variadic args' params' >>= fun a_args' ->
+          annotate_arguments_aux a annotate_expression annotate_assignee has_proto is_variadic args' params' >>= fun a_args' ->
           E.return (a_arg_e :: a_args')
 (*
         else
@@ -382,8 +382,9 @@ let rec are_all_eq xs =
   end
 
 let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
-  let annotate_expression = annotate_expression annot sigm gamm                                in
-  let annotate_rvalue     = annotate_rvalue_aux sigm annot annotate_expression                 in
+  let annotate_expression = (fun x -> annotate_expression annot sigm gamm x)                               in
+  let annotate_rvalue     = annotate_rvalue_aux sigm annot
+                                annotate_expression                 in
   let annotate_assignee   = annotate_assignee_aux sigm annotate_rvalue                         in
   let annotate_arguments  = annotate_arguments_aux annot annotate_expression annotate_assignee in
   match expr with
@@ -523,7 +524,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
           E.fail Loc.unknown (TError "AilEcompound")
 
 
-(* of identifier * list (Cabs.cabs_identifier * maybe (expression 'A)) (* tag, pairs of member id, expression *) *)
+(* of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *) *)
 
 
     | AilEbuiltin str ->
@@ -583,10 +584,10 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
               E.fail loc (TError_TODO 13)
         end
 (* TODO(clean)
-        tryM (lookup G v)
+        tryM (lookup g v)
           (* block variable *)
           (fun (qs, ty) -> E.return (Var v, GenLValueType qs ty))
-          (lookup S v >>= function
+          (lookup s v >>= function
             | Right (qs, ty, _) ->
                 (* global variable *)
                 E.return (Var v, GenLValueType qs ty)
@@ -599,7 +600,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
 (*
 OLD(sigma_declaration)
 
-        match (lookup G v, sigma_lookup S v) with
+        match (lookup g v, sigma_lookup s v) with
           | (Just (qs, ty), Nothing) ->
               E.return (AilEident v, GenLValueType qs ty)
           | (Nothing, Just (SDecl_global _ (qs, ty, _))) ->
@@ -614,7 +615,7 @@ OLD(sigma_declaration)
         end
 *)
 (* (OLD)
-      match (lookup G v, lookup S v) with
+      match (lookup g v, lookup s v) with
       | (Just (q, t), Nothing) -> Just (Var v, GenLValueType q t)
       | (Nothing    , Just p ) -> Just (Var v, GenRValueType (inject_type (type_from_sigma p)))
       | (_          , _      ) -> Nothing
@@ -699,9 +700,9 @@ OLD(sigma_declaration)
         E.fail Loc.unknown (TError "WIP: GenTyping AilEgeneric")
 (*
         annotate_expression e                     >>= fun e'   ->
-        E.mapM (annotate_generic_association A S G) gas >>= fun gas' ->
+        E.mapM (annotate_generic_association a s g) gas >>= fun gas' ->
         
-        let ty_e' = match interpret_genTypeCategory (type_of A e') with
+        let ty_e' = match interpret_genTypeCategory (type_of a e') with
           | LValueType _ ty ->
               ty  KKK
           | RValueType ty ->
@@ -1178,16 +1179,16 @@ end
 
 
 
-and annotate_expression A S G (AnnotatedExpression a loc e) =
-  annotate_expression' loc A S G e >>= fun (e, gty) ->
-  E.return (AnnotatedExpression (A.Annotation.add_type gty a) loc e)
+and annotate_expression annot s g (AnnotatedExpression a loc e) =
+  annotate_expression' loc annot s g e >>= fun (e, gty) ->
+  E.return (AnnotatedExpression (annot.add_type gty a) loc e)
 
 
-and annotate_rvalue A S G =
-  annotate_rvalue_aux S A (annotate_expression A S G)
+and annotate_rvalue a s g e =
+  annotate_rvalue_aux s a (fun x -> annotate_expression a s g x) e
 
-and annotate_assignee A S G =
-  annotate_assignee_aux S (annotate_rvalue A S G)
+and annotate_assignee a s g =
+  annotate_assignee_aux s (annotate_rvalue a s g)
 
 
 
@@ -1264,20 +1265,20 @@ and annotate_initialization annot sigm gamm ty e =
 
 
 
-and annotate_definition_aux A S G (ty, e) =
+and annotate_definition_aux a s g (ty, e) =
   if    (AilTypesAux.is_array ty --> AilTypesAux.has_unknown_size ty)
-     || (AilTypesAux.is_complete_object S ty --> not (AilTypesAux.is_vla ty)) then
+     || (AilTypesAux.is_complete_object s ty --> not (AilTypesAux.is_vla ty)) then
     if AilTypesAux.is_scalar ty then
       (* STD §6.7.9#11, sentence 3 *)
       let _ = Debug.print_debug 2 $ "HELLLOO: " ^ Pp.stringFromAil_expression e in
-      annotate_assignee A S G (AilTypesAux.unqualify ty) e >>= fun a_e ->
+      annotate_assignee a s g (AilTypesAux.unqualify ty) e >>= fun a_e ->
       E.return a_e
       
       (* TODO: "(...) that has automatic storage duration" *)
       (* STD §6.7.9#13 *)
       else if AilTypesAux.is_struct_or_union ty then
         (* TODO: check *)
-        annotate_rvalue A S G e >>= fun (a_e, gty) ->
+        annotate_rvalue a s g e >>= fun (a_e, gty) ->
         (* TODO: need to make sure that gty is compatible with ty *)
         E.return a_e
       
@@ -1291,8 +1292,8 @@ and annotate_definition_aux A S G (ty, e) =
       (* TODO: at this point we should now have a non character array *)
       else if AilTypesAux.is_array ty then
         (* TODO: check the std. (not that it says anything useful here ...) *)
-        annotate_expression A S G e >>= fun a_e ->
-        match (ty, Annotation.type_of A a_e) with
+        annotate_expression a s g e >>= fun a_e ->
+        match (ty, Annotation.type_of a a_e) with
           | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
              (* TODO: check that is correct to unqualify *)
               if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) then
@@ -1320,10 +1321,10 @@ and annotate_definition_aux A S G (ty, e) =
     (* STD §6.7.9#3 *)
     E.fail Loc.unknown (TError "§6.7.9#3")
 
-let annotate_definition A S G (sym, e) =
-  match Context.lookup identifierEqual G sym with
+let annotate_definition a s g (sym, e) =
+  match Context.lookup identifierEqual g sym with
     | Just (_, _, ty) ->
-        annotate_definition_aux A S G (ty, e) >>= fun a_e ->
+        annotate_definition_aux a s g (ty, e) >>= fun a_e ->
         E.return (sym, a_e)
     
     | Nothing ->
@@ -1331,12 +1332,12 @@ let annotate_definition A S G (sym, e) =
                                   coming from Cabs_to_ail *)
   end
 
-let rec annotate_definitions A S G = function
+let rec annotate_definitions a s g = function
   | [] ->
       E.return []
   | d :: ds ->
-      annotate_definition  A S G d  >>= fun d  ->
-      annotate_definitions A S G ds >>= fun ds ->
+      annotate_definition  a s g d  >>= fun d  ->
+      annotate_definitions a s g ds >>= fun ds ->
       E.return (d :: ds)
 end
 
@@ -1345,17 +1346,17 @@ end
 
 
 
-let annotate_arguments A S G =
-  annotate_arguments_aux A (annotate_expression A S G) (annotate_assignee A S G)
+let annotate_arguments a s g =
+  annotate_arguments_aux a (annotate_expression a s g) (annotate_assignee a s g)
 
 
 (*
-let rec annotate_block_aux A annotate_statement = function
+let rec annotate_block_aux a annotate_statement = function
   | [] ->
       E.return []
   | s :: ss ->
       annotate_statement s                       >>= fun s  ->
-      annotate_block_aux A annotate_statement ss >>= fun ss ->
+      annotate_block_aux a annotate_statement ss >>= fun ss ->
       E.return (s :: ss)
 end
 *)
@@ -1462,12 +1463,12 @@ let annotate_block annot sigm gamm ty stmts =
 (*  annotate_block_aux annot (annotate_statement annot sigm gamm return_ty) bs *)
 
 (*
-let rec annotate_block_aux A annotate_statement = function
+let rec annotate_block_aux a annotate_statement = function
   | [] ->
       E.return []
   | s :: ss ->
       annotate_statement s                       >>= fun s  ->
-      annotate_block_aux A annotate_statement ss >>= fun ss ->
+      annotate_block_aux a annotate_statement ss >>= fun ss ->
       E.return (s :: ss)
 end
 *)
@@ -1475,17 +1476,17 @@ end
 
 
 (*
-let annotate_function_declaration A S p =
+let annotate_function_declaration a s p =
   let ty_return   = p.fun_return_ty   in
   let bs          = p.fun_bindings    in
   let is_variadic = p.fun_is_variadic in
   let s_opt       = p.fun_body        in
-  if sigma_fresh_bindings bs S &&
+  if sigma_fresh_bindings bs s &&
      (* AilTyping.well_formed_bindings bs && *)
      wf_type (Function ty_return (parameters_of_bindings bs) is_variadic)
   then
     match s_opt with
-      | Just s ->  annotate_statement A S (Context.add_bindings bs Context.empty) ty_return s >>= fun s' ->
+      | Just s ->  annotate_statement a s (Context.add_bindings bs Context.empty) ty_return s >>= fun s' ->
                    (* TODO: using the "with" construct of lem doesn't typecheck like we need here, is this
                             a necessary restriction of the type system ? *)
                    E.return <| fun_return_ty=   ty_return;
@@ -1508,10 +1509,10 @@ let annotate_function_declaration A S p =
 
 (*
 (* TODO: check with J *)
-let annotate_global A S (qs, ty, e_opt) =
+let annotate_global a s (qs, ty, e_opt) =
   if wf_type ty then
     match e_opt with
-      | Just e  -> annotate_assignee A S Context.empty ty e >>= fun e ->
+      | Just e  -> annotate_assignee a s Context.empty ty e >>= fun e ->
                    E.return (qs, ty, Just e)
       | Nothing -> E.return (qs, ty, Nothing)
     end
@@ -1521,23 +1522,23 @@ let annotate_global A S (qs, ty, e_opt) =
 
 
 (*
-let annotate_sigma A S =
+let annotate_sigma a s =
   sigma_mapP (function
     | SDecl_fun id fdecl ->
-        annotate_function_declaration A S fdecl >>= fun fdecl' ->
+        annotate_function_declaration a s fdecl >>= fun fdecl' ->
         E.return (SDecl_fun id fdecl')
     | SDecl_global id glob ->
-        annotate_global A S glob >>= fun glob'->
+        annotate_global a s glob >>= fun glob'->
         E.return (SDecl_global id glob')
     | SDecl_static_assert _ _ ->
         error "TODO_"
 (*
 TODO
-        annotate_assignee A S Context.empty ty e >>= fun e' ->
+        annotate_assignee a s Context.empty ty e >>= fun e' ->
         annotate_stringConstant sc               >>= fun sc' ->
         E.return (SDecl_static_assert e' sc')
 *)
-  end) S
+  end) s
 *)
 
 

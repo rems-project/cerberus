@@ -4,6 +4,8 @@ import Product Symbolic Exception Mem Mem_aux
 
 open import Thread Errors
 
+open import `pp_coreTheory`
+
 import Debug Pp
 
 
@@ -568,10 +570,10 @@ let to_integer pe =
 
 
 val     to_pure: forall 'a. expr 'a -> maybe pexpr
-let rec to_pure expr =
+let rec to_pure (expr : expr 'a) =
   match expr with
     | Epure pe ->
-        Just pe
+        Just (pe : pexpr)
     | Ememop _ _ ->
         Nothing
     | Eskip ->

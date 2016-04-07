@@ -4,11 +4,11 @@ import AilTypesAux AilTyping
 
 open import Global
 
-open import {hol} `ppTheory`
+open import {hol} `utilTheory`
 
 val print_debug: nat -> string -> unit
 declare ocaml target_rep function print_debug = `Debug.print_debug`
-declare hol   target_rep function print_debug = `pp$print_debug`
+declare hol   target_rep function print_debug = `util$print_debug`
 
 
 
@@ -243,23 +243,23 @@ let usual_arithmetic gt1 gt2 =
   | (_ , _) -> Nothing
   end
 
-let rec interpret_genIntegerType P git : errorM integerType =
+let rec interpret_genIntegerType impl git : errorM integerType =
   match git with
   | Concrete ity ->
       return ity
   | SizeT ->
-      return P.Implementation.size_t
+      return impl.size_t
   | PtrdiffT ->
-      return P.Implementation.ptrdiff_t
+      return impl.ptrdiff_t
   | Unknown ic ->
-      AilTyping.type_of_constant P ic
+      AilTyping.type_of_constant impl ic
   | Promote git ->
-      interpret_genIntegerType P git >>= fun ity ->
-      return (AilTypesAux.integer_promotion P ity)
+      interpret_genIntegerType impl git >>= fun ity ->
+      return (AilTypesAux.integer_promotion impl ity)
   | Usual git1 git2 ->
-      interpret_genIntegerType P git1 >>= fun ity1 ->
-      interpret_genIntegerType P git2 >>= fun ity2 ->
-      return (AilTypesAux.usual_arithmetic_integer P ity1 ity2)
+      interpret_genIntegerType impl git1 >>= fun ity1 ->
+      interpret_genIntegerType impl git2 >>= fun ity2 ->
+      return (AilTypesAux.usual_arithmetic_integer impl ity1 ity2)
   end
 
 val interpret_genBasicType: implementation -> genBasicType -> errorM basicType

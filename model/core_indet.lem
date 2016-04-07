@@ -1,6 +1,7 @@
 open import Pervasives Global
 import Core (* Memory *) Exception Errors Pp (* Memory_order *)
 
+open import {hol} `pp_coreTheory`
 
 (* TODO: lem non termination bug *)
 (*

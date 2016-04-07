@@ -2,6 +2,8 @@
 open import Pervasives Global
 import String_extra Boot
 
+open import {hol} `pp_coreTheory` `pp_memTheory`
+
 open import Monadic_parsing
 import Errors AilTypesAux Core Core_aux Core_ctype Mem Mem_aux
 import Decode

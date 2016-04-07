@@ -14,7 +14,6 @@ open import Thread Driver_util Core_run_aux Errors
 
 (* TODO: tmp*) import Defacto_memory_types
 
-open import {hol} `ppTheory`
 
 open import Core_eval
 
@@ -1182,16 +1181,16 @@ let kill_thread tid parent_tid aswBefores v st =
   |>
 
 
-val fresh_symbol: State.t Symbol.sym core_run_state
-let fresh_symbol =
+val fresh_symbol': State.t Symbol.sym core_run_state
+let fresh_symbol' =
   State.modify (fun run_st ->
     let (sym, symbol_suppl') = UniqueId.fresh_id run_st.symbol_supply in
     (sym, <| run_st with symbol_supply= symbol_suppl' |>)
   )
 
 
-val fresh_action_id: State.t action_id core_run_state
-let fresh_action_id =
+val fresh_action_id': State.t action_id core_run_state
+let fresh_action_id' =
   State.modify (fun run_st ->
     let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
     (aid, <| run_st with aid_supply= aid_suppl' |>)
@@ -1361,9 +1360,9 @@ module E = struct
   let step_eval_pexpr loc mem_st file concur_sym_map inside_if pe =
     SEU.runEU (step_eval_pexpr loc mem_st file concur_sym_map inside_if pe)
   let fresh_action_id =
-    SEU.runS fresh_action_id
+    SEU.runS fresh_action_id'
   let fresh_symbol =
-    SEU.runS fresh_symbol
+    SEU.runS fresh_symbol'
 end
 
 

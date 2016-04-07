@@ -194,7 +194,7 @@ let is_lvalue a_expr =
 
 val is_defined_ail_function: forall 'A. AilSyntax.identifier -> AilSyntax.program 'A -> bool
 let is_defined_ail_function sym (_, sigm) =
-  (* NOTE: the `Nothing' case could technically also mean that [sym] is not event registered *)
+  (* NOTE: the Nothing' case could technically also mean that [sym] is not event registered *)
   isJust (Context.lookup (=) sigm.AilSyntax.function_definitions sym)
 
 
