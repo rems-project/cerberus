@@ -1,0 +1,1343 @@
+open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
+import Loc
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug.print_debug`
+declare hol   target_rep function print_debug u s = `()`
+
+
+let unatomic = function
+  | Atomic ty ->
+      ty
+  | ty ->
+      ty
+end
+
+
+
+(* == Function on qualifiers ==================================================================== *)
+val is_unqualified: qualifiers -> bool
+let is_unqualified = function
+  | <|
+      const    = false;
+      restrict = false;
+      volatile = false;
+      atomic   = false
+    |> ->
+      true
+  | _ ->
+      false
+end
+
+val combine_qualifiers: qualifiers -> qualifiers -> qualifiers
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+  atomic   = qs1.atomic   || qs2.atomic  ;
+|>
+
+val sub_qualifiers: qualifiers -> qualifiers -> bool
+let sub_qualifiers qs1 qs2 =
+     (qs1.const    --> qs2.const)
+  && (qs1.restrict --> qs2.restrict)
+  && (qs1.volatile --> qs2.volatile)
+  && (qs1.atomic   --> qs2.atomic)
+
+
+(* == predicates on integerTypes ================================================================= *)
+(* TODO: change name *)
+val is_unsigned: implementation -> integerType -> bool
+let is_unsigned impl ity =
+  not (impl.signed ity)
+
+val signed_type: integerType -> bool
+let signed_type = function
+  | Char ->
+      false (* TODO: impl-def *)
+  | Bool ->
+      false
+  | Signed _ ->
+      true
+  | Unsigned _ ->
+      false
+  | IBuiltin _ ->
+      false (* TODO: builtins here are of impl-def signess*)
+  | Enum _ ->
+      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+      true
+  | Size_t ->
+      false
+  | Ptrdiff_t ->
+      true
+end
+
+val unsigned_type: integerType -> bool
+let unsigned_type = function
+  | Char ->
+      false (* TODO: impl-def *)
+  | Bool ->
+      true
+  | Signed _ ->
+      false
+  | Unsigned _ ->
+      true
+  | IBuiltin _ ->
+      false (* TODO: builtins here are of impl-def signess*)
+  | Enum _ ->
+      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
+      false
+  | Size_t ->
+      true
+  | Ptrdiff_t ->
+      false
+ end
+
+
+
+(* == constructor predicates on ctypes =========================================================== *)
+val is_integer: ctype -> bool
+let is_integer ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Basic (Integer _) ->
+      true
+  | _ ->
+      false
+end
+
+
+val is_floating: ctype -> bool
+let is_floating ty =
+  match unatomic ty with
+    | Basic (Floating _) ->
+        true
+    | _ ->
+        false
+  end
+
+val is_void: ctype -> bool
+let is_void ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Void ->
+      true
+  | _ ->
+      false
+end
+
+val is_pointer: ctype -> bool
+let is_pointer ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Pointer _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_atomic: ctype -> bool
+let is_atomic = function
+  | Atomic _ ->
+      (* STD §6.2.5#20, bullet 6 *)
+      true
+  | Pointer qs _ ->
+      (* STD §6.2.5#27 *)
+      qs.atomic
+  | _ ->
+      false
+end
+
+(* TODO: I don't like that, in particular if pred = is_atomic this doesn't work... *)
+val atomic_qualified_unqualified: (ctype -> bool) -> ctype -> bool
+let atomic_qualified_unqualified pred = function
+  | Atomic ty ->
+      pred ty
+  | ty ->
+      pred ty
+end
+  
+
+val is_character: ctype -> bool
+let is_character ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Basic (Integer Char) ->
+      true
+  | Basic (Integer (Signed Ichar)) ->
+      true
+  | Basic (Integer (Unsigned Ichar)) ->
+      true
+  | _ ->
+      false
+end
+
+val is_Bool: ctype -> bool
+let is_Bool ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Basic (Integer Bool) ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO: STD doc *)
+val     is_array: ctype -> bool
+let is_array ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Array _ _ ->
+      true
+  | Builtin "jmp_buf" ->
+      true
+  | Builtin "fpos_t" ->
+      false
+  | _ ->
+      false
+end
+
+val is_array_unknown_size: ctype -> bool
+let is_array_unknown_size ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+    | Array _ Nothing ->
+        true
+    | _ ->
+        (* TODO: check builtins *)
+        false
+  end
+
+
+val is_array_of_character: ctype -> bool
+let is_array_of_character ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Array elem_ty _ ->
+      is_character elem_ty
+  | _ ->
+      false
+end
+
+(* STD §6.2.5#1, sentence 3 *)
+val is_function: ctype -> bool
+let is_function ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Function _ _ _ _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_struct: ctype -> bool
+let is_struct ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Struct _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_union: ctype -> bool
+let is_union ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Union _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_struct_or_union: ctype -> bool
+let is_struct_or_union ty =
+  is_struct ty || is_union ty
+
+
+(* == generic predicates on ctypes ============================================================== *)
+(* STD §6.2.5#1, sentence 3 *)
+val is_object: ctype -> bool
+let is_object ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Builtin "FILE" ->
+      true
+  | Builtin "cnd_t" ->
+      true
+  | Builtin "fpos_t" ->
+      true
+  | Builtin "mtx_t" ->
+      true
+  | Builtin "once_flag" ->
+      true
+  | Builtin "thrd_t" ->
+      true
+  | Builtin "tss_t" ->
+      true
+  | Builtin "va_list" ->
+      true
+  | ty ->
+      not (is_function ty)
+end
+
+(* STD §6.2.5#18, sentence 1 *)
+val is_arithmetic: ctype -> bool
+let is_arithmetic ty =
+  is_integer ty || is_floating ty
+
+(* STD §6.2.5#21, sentence 1 *)
+val is_scalar: ctype -> bool
+let is_scalar ty =
+  is_pointer ty || is_arithmetic ty
+
+(* STD §6.2.5#21, sentence 2 *)
+val is_aggregate: ctype -> bool
+let is_aggregate ty =
+  is_array ty || is_struct ty
+
+
+
+(* TODO *)
+val is_complete: forall 'a. sigma 'a -> ctype -> bool
+let is_complete S ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Basic _ ->
+      true
+  | Pointer _ _ ->
+      true
+  | Array _ _ ->
+      true
+  | Builtin "cnd_t" ->
+      true
+  | Builtin "fpos_t" ->
+      true
+  | Builtin "mtx_t" ->
+      true
+  | Builtin "once_flag" ->
+      true
+  | Builtin "thrd_t" ->
+      true
+  | Builtin "tss_t" ->
+      true
+  | Builtin "va_list" ->
+      true
+  | Struct sym ->
+      match Context.lookup (=) S.tag_definitions sym with
+        | Just (StructDef _) ->
+            true
+        | _ ->
+            let _ = Debug.print_debug 5 ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show S.tag_definitions) in
+            false
+      end
+  | Union sym ->
+      match Context.lookup (=) S.tag_definitions sym with
+        | Just (UnionDef _) ->
+            true
+        | _ ->
+            false
+      end
+  | _ ->
+      false
+end
+
+(* TODO *)
+val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
+let is_incomplete S ty =
+  not (is_complete S ty)
+
+
+
+
+(* ============================================================================================== *)
+val in_integer_range: implementation -> integer -> integerType -> bool
+let in_integer_range impl n ity =
+  Range.mem n (integer_range impl ity)
+
+val in_min_integer_range: integer -> integerType -> bool
+let in_min_integer_range n ity =
+  Range.mem n (Implementation.min_integer_range ity)
+
+
+val le_integer_range: implementation -> integerType -> integerType -> bool
+let le_integer_range impl ity1 ity2 =
+  match (ity1, ity2) with
+    (* reflexive cases *)
+    | (Char, Char) ->
+        true
+    | (Bool, Bool) ->
+        true
+    | (Signed Short, Signed Short) ->
+        true
+    | (Signed Int_, Signed Int_) ->
+        true
+    | (Signed Long, Signed Long) ->
+        true
+    | (Signed LongLong, Signed LongLong) ->
+        true
+    | (Unsigned Short, Unsigned Short) ->
+        true
+    | (Unsigned Int_, Unsigned Int_) ->
+        true
+    | (Unsigned Long, Unsigned Long) ->
+        true
+    | (Unsigned LongLong, Unsigned LongLong) ->
+        true
+    
+    | (Char, Signed Ichar) ->
+        impl.signed Char
+    | (Char, Signed ibty) ->
+        impl.signed Char || (impl.precision Char) < (impl.precision (Signed ibty))
+    | (Signed Ichar, Char) ->
+        impl.signed Char
+    | (Signed ibty, Char) ->
+        impl.signed Char && impl.precision (Signed ibty) = impl.precision Char
+    | (Unsigned Ichar, Char) ->
+        not (impl.signed Char)
+    | (Unsigned ibty, Char) ->
+        not (impl.signed Char) && impl.precision (Unsigned ibty) = impl.precision Char
+    | (Char, Unsigned _) ->
+        not (impl.signed Char)
+    | (Char, Bool) ->
+        not (impl.signed Char) && impl.precision Char = impl.precision Bool
+    | (Bool, Char) ->
+        not (impl.signed Char) || (impl.precision Bool) < (impl.precision Char)
+
+    | (Signed Ichar, Signed _) ->
+        true
+    | (Signed Short, Signed Int_) ->
+        true
+    | (Signed Short, Signed Long) ->
+        true
+    | (Signed Short, Signed LongLong) ->
+        true
+    | (Signed Int_, Signed Long) ->
+        true
+    | (Signed Int_, Signed LongLong) ->
+        true
+    | (Signed Long, Signed LongLong) ->
+        true
+    | (Signed ibty1, Signed ibty2) ->
+        impl.precision (Signed ibty1) = impl.precision (Signed ibty2)
+    | (Signed _, Bool) ->
+        false
+    | (Bool, Signed ibty2) ->
+        (impl.precision Bool) < (impl.precision (Signed ibty2))
+    
+    | (Bool, Unsigned _) ->
+        true
+    | (Unsigned Ichar, Unsigned _) ->
+        true
+    | (Unsigned Short, Unsigned Int_) ->
+        true
+    | (Unsigned Short, Unsigned Long) ->
+        true
+    | (Unsigned Short, Unsigned LongLong) ->
+        true
+    | (Unsigned Int_, Unsigned Long) ->
+        true
+    | (Unsigned Int_, Unsigned LongLong) ->
+        true
+    | (Unsigned Long, Unsigned LongLong) ->
+        true
+    | (Unsigned ibty, Bool) ->
+        impl.precision (Unsigned ibty) = impl.precision Bool
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        impl.precision (Unsigned ibty1) = impl.precision (Unsigned ibty2)
+    
+    | (Signed _, Unsigned _) ->
+        false
+    
+    | (Unsigned _, Signed Ichar) ->
+        false
+    | (Unsigned Short, Signed Short) ->
+        false
+    | (Unsigned Int_, Signed Int_) ->
+        false
+    | (Unsigned Long, Signed Long) ->
+        false
+    | (Unsigned LongLong, Signed LongLong) ->
+        false
+    | (Unsigned ibty1, Signed ibty2) ->
+        (impl.precision (Unsigned ibty1)) < (impl.precision (Signed ibty2))
+      
+    (* TODO: check *)
+    | (IBuiltin str1, IBuiltin str2) ->
+        str1 = str2
+  
+  
+
+(*  
+  | (Signed Int8_t    , Signed Int8_t    ) -> true
+  | (Signed Int8_t    , Signed Int16_t   ) -> true
+  | (Signed Int8_t    , Signed Int32_t   ) -> true
+  | (Signed Int8_t    , Signed Int64_t   ) -> true
+  
+  | (Signed Int16_t   , Signed Int8_t    ) -> false
+  | (Signed Int16_t   , Signed Int16_t   ) -> true
+  | (Signed Int16_t   , Signed Int32_t   ) -> true
+  | (Signed Int16_t   , Signed Int64_t   ) -> true
+  
+  | (Signed Int32_t   , Signed Int8_t    ) -> false
+  | (Signed Int32_t   , Signed Int16_t   ) -> false
+  | (Signed Int32_t   , Signed Int32_t   ) -> true
+  | (Signed Int32_t   , Signed Int64_t   ) -> true
+  
+  | (Signed Int64_t   , Signed Int8_t    ) -> false
+  | (Signed Int64_t   , Signed Int16_t   ) -> false
+  | (Signed Int64_t   , Signed Int32_t   ) -> false
+  | (Signed Int64_t   , Signed Int64_t   ) -> true
+  
+  
+  | (Unsigned Int8_t  , Unsigned Int8_t  ) -> true
+  | (Unsigned Int8_t  , Unsigned Int16_t ) -> true
+  | (Unsigned Int8_t  , Unsigned Int32_t ) -> true
+  | (Unsigned Int8_t  , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int16_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int16_t , Unsigned Int16_t ) -> true
+  | (Unsigned Int16_t , Unsigned Int32_t ) -> true
+  | (Unsigned Int16_t , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int32_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int32_t , Unsigned Int16_t ) -> false
+  | (Unsigned Int32_t , Unsigned Int32_t ) -> true
+  | (Unsigned Int32_t , Unsigned Int64_t ) -> true
+  
+  | (Unsigned Int64_t , Unsigned Int8_t  ) -> false
+  | (Unsigned Int64_t , Unsigned Int16_t ) -> false
+  | (Unsigned Int64_t , Unsigned Int32_t ) -> false
+  | (Unsigned Int64_t , Unsigned Int64_t ) -> true
+  
+  
+  | (Unsigned Int8_t  , Signed Int8_t    ) -> false
+  | (Unsigned Int8_t  , Signed Int16_t   ) -> false
+  | (Unsigned Int8_t  , Signed Int32_t   ) -> false
+  | (Unsigned Int8_t  , Signed Int64_t   ) -> false
+*)
+
+  | (IBuiltin str, _) -> error ("WIP le_integer_range (left): " ^ str)
+  | (_, IBuiltin str) -> error ("WIP le_integer_range (right): " ^ str)
+  | _ -> error "WIP: le_integer_range"
+
+
+(*
+ | Int8_t
+ | Int16_t
+ | Int32_t
+ | Int64_t
+
+
+
+ | Wchar_t
+ | Char16_t
+ | Char32_t
+
+
+*)
+  end
+
+
+(* TODO: this is not symmetric ... *)
+val eq_integer_rank_base: integerType -> integerType -> bool
+let eq_integer_rank_base ity1 ity2 =
+  match (ity1, ity2) with
+  | (Signed ibty1, Unsigned ibty2) ->
+      ibty1 = ibty2
+  | (Char, Unsigned Ichar) ->
+      true
+  | (Char, Signed Ichar) ->
+      true
+  | _ ->
+      false
+  end
+
+
+(* TODO: K this looks wrong, in particular the STD says "No two signed integer types shall have the same rank" *)
+val eq_integer_rank: integerType -> integerType -> bool
+let eq_integer_rank ity1 ity2 =
+  ity1 = ity2 || eq_integer_rank_base ity1 ity2 || eq_integer_rank_base ity2 ity1
+
+val lt_integer_rank_base: implementation -> integerType -> integerType -> bool
+let lt_integer_rank_base impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (Bool, _) ->
+        not (Bool = ity2)
+    | (Signed Long, Signed LongLong) ->
+        true
+    | (Signed Int_, Signed Long) ->
+        true
+    | (Signed Short, Signed Int_) ->
+        true
+    | (Signed Ichar, Signed Short) ->
+        true
+    | (Signed ibty1, Signed ibty2) ->
+        (impl.precision (Signed ibty1)) < (impl.precision (Signed ibty2))
+    | _ ->
+        false
+  end
+
+val lt_integer_rank_congruence: implementation -> integerType -> integerType -> bool
+let lt_integer_rank_congruence impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (_, Bool) ->
+        false
+    | (Bool, _) ->
+        true
+    | (_, Char) ->
+        false
+    | (Char, Unsigned ibty2) ->
+        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
+    | (Char, Signed ibty2) ->
+        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
+    | (Signed ibty1, Signed ibty2) ->
+        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
+    | (Unsigned ibty1, Unsigned ibty2) ->
+        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
+    | (Unsigned ibty1, ity2) ->
+        lt_integer_rank_base impl (Signed  ibty1) ity2
+    | (ity1, Unsigned ibty2) ->
+        lt_integer_rank_base impl ity1 (Signed ibty2)
+    | _ ->
+        error "WIP lt_integer_rank_congruence"
+  end
+
+val lt_integer_rank: integerType -> integerType -> bool
+let lt_integer_rank ity1 ity2 =
+  match (ity1, ity2) with
+    | (_, Bool) ->
+        false
+    | (Bool, _) ->
+        true
+    
+    | (_, Char) ->
+        false
+    | (_, Signed Ichar) ->
+        false
+    | (_, Unsigned Ichar) ->
+        false
+    | (Char, Signed _) ->
+        true
+    | (Char, Unsigned _) ->
+        true
+    | (Signed Ichar, Signed _) ->
+        true
+    | (Signed Ichar, Unsigned _) ->
+        true
+    | (Unsigned Ichar, Signed _) ->
+        true
+    | (Unsigned Ichar, Unsigned _) ->
+        true
+    
+    | (_, Signed Short) ->
+        false
+    | (_, Unsigned Short) ->
+        false
+    | (Signed Short, Signed _) ->
+        true
+    | (Signed Short, Unsigned _) ->
+        true
+    | (Unsigned Short, Signed _) ->
+        true
+    | (Unsigned Short, Unsigned _) ->
+        true
+    
+    | (_, Signed Int_) ->
+        false
+    | (_, Unsigned Int_) ->
+        false
+    | (Signed Int_, Signed _) ->
+        true
+    | (Signed Int_, Unsigned _) ->
+        true
+    | (Unsigned Int_, Signed _) ->
+        true
+    | (Unsigned Int_, Unsigned _) ->
+        true
+    
+    | (_, Signed Long) ->
+        false
+    | (_, Unsigned Long) ->
+        false
+    | (Signed Long, Signed _) ->
+        true
+    | (Signed Long, Unsigned _) ->
+        true
+    | (Unsigned Long, Signed _) ->
+        true
+    | (Unsigned Long, Unsigned _) ->
+        true
+    
+    | _ ->
+        false
+  end
+
+val le_integer_rank: integerType -> integerType -> bool
+let le_integer_rank ity1 ity2 =
+  eq_integer_rank ity1 ity2 || lt_integer_rank ity1 ity2
+
+val ge_integer_rank: integerType -> integerType -> bool
+let ge_integer_rank ity1 ity2 =
+  le_integer_rank ity2 ity1
+
+
+val is_corresponding_unsigned: integerType -> integerType -> bool
+let is_corresponding_unsigned ity1 ity2 =
+  match (ity1, ity2) with
+    | (Signed ibty1, Unsigned ibty2) ->
+        ibty1 = ibty2
+    | (_, _) ->
+        false
+  end
+
+val corresponding_unsigned: integerType -> maybe integerType
+let corresponding_unsigned = function
+  | Signed ibty ->
+      Just (Unsigned ibty)
+  | _ ->
+      Nothing
+end
+
+val make_corresponding_unsigned: integerType -> integerType
+let make_corresponding_unsigned = function
+  | Signed ibty ->
+      Unsigned ibty
+  | ity ->
+      ity
+end
+
+val is_integer_promotion: implementation -> integerType -> integerType -> bool
+let is_integer_promotion impl ity1 ity2 =
+  match (ity1, ity2) with
+    | (Signed Int_, Signed Int_) ->
+        true
+    | (Unsigned Int_, Signed Int_) ->
+        false
+    | (Unsigned Int_, Unsigned Int_) ->
+        true
+    | (Signed Int_, Unsigned Int_) ->
+        false
+    | (_, Signed Int_) ->
+        le_integer_rank ity1 (Signed Int_) && le_integer_range impl ity1 (Signed Int_)
+    | (_, Unsigned Int_) ->
+        le_integer_rank ity1 (Signed Int_) && not (le_integer_range impl ity1 (Signed Int_))
+    | (Size_t, Size_t) ->
+        true (* TODO: check ==> not has the standard says *)
+    | _ ->
+        ity1 = ity2 && not (le_integer_rank ity1 (Signed Int_))
+  end
+
+val integer_promotion: implementation -> integerType -> integerType
+let integer_promotion impl = function
+  | Signed   Int_ ->
+      Signed   Int_
+  | Unsigned Int_ ->
+      Unsigned Int_
+  | Size_t ->
+      (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased types *)
+      Size_t
+  | ity ->
+      if le_integer_rank ity (Signed Int_) then
+        if le_integer_range impl ity (Signed Int_) then
+          Signed Int_
+        else
+          Unsigned Int_
+      else
+        ity
+  end
+
+val is_promotion: implementation -> ctype -> ctype -> bool
+let is_promotion impl ty1 ty2 =
+  match (ty1, ty2) with
+  | (Basic (Integer ity1), Basic (Integer ity2)) ->
+      is_integer_promotion impl ity1 ity2
+  | _ ->
+      false
+  end
+
+val promotion: implementation -> ctype -> maybe ctype
+let promotion impl = function
+  | Basic (Integer ity) ->
+      Just (Basic (Integer (integer_promotion impl ity)))
+  | _ ->
+      Nothing
+end
+
+val is_usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType -> bool
+let is_usual_arithmetic_promoted_integer impl ity1 ity2 ity3 =
+  if signed_type ity1 then
+    if signed_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1 = ity3
+      else
+        ity2 = ity3
+    else if unsigned_type ity2 then
+      if le_integer_rank ity1 ity2 then
+        ity2 = ity3
+      else
+        if le_integer_range impl ity2 ity1 then
+          ity1 = ity3
+        else
+          is_corresponding_unsigned ity1 ity3
+    else
+      false
+  else if unsigned_type ity1 then
+    if unsigned_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1 = ity3
+      else
+        ity2 = ity3
+    else if signed_type ity2 then
+      if le_integer_rank ity2 ity1 then
+        ity1 = ity3
+      else if le_integer_range impl ity1 ity2 then
+        ity2 = ity3
+      else
+        is_corresponding_unsigned ity2 ity3
+    else
+      false
+  else
+    false
+
+val usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType
+let usual_arithmetic_promoted_integer impl ity1 ity2 =
+  if signed_type ity1 then
+    if signed_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1
+      else
+        ity2
+    else
+      if le_integer_rank ity1 ity2 then
+        ity2
+      else
+        if le_integer_range impl ity2 ity1 then
+          ity1
+        else
+          make_corresponding_unsigned ity1
+  else
+    if unsigned_type ity2 then
+      if lt_integer_rank ity2 ity1 then
+        ity1
+      else
+        ity2
+    else
+      if le_integer_rank ity2 ity1 then
+        ity1
+      else if le_integer_range impl ity1 ity2 then
+        ity2
+      else
+        make_corresponding_unsigned ity2
+
+val is_usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType -> bool
+let is_usual_arithmetic_integer impl ity1 ity2 ity3 =
+  is_usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
+                                            (integer_promotion impl ity2) ity3
+
+val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
+let usual_arithmetic_integer impl ity1 ity2 =
+  usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
+                                         (integer_promotion impl ity2)
+
+val is_usual_arithmetic: implementation -> ctype -> ctype -> ctype -> bool
+let is_usual_arithmetic impl ty1 ty2 ty3 =
+  match (ty1, ty2, ty3) with
+  | (Basic (Integer ity1), Basic (Integer ity2), Basic (Integer ity3)) ->
+      is_usual_arithmetic_integer impl ity1 ity2 ity3
+  | _ ->
+      false
+  end
+
+val usual_arithmetic: implementation -> ctype -> ctype -> maybe ctype
+let usual_arithmetic impl ty1 ty2 =
+  match (ty1, ty2) with
+  | (Basic (Integer ity1), Basic (Integer ity2)) ->
+      Just (Basic (Integer (usual_arithmetic_integer impl ity1 ity2)))
+  | _ ->
+      error "AilTypesAux.usual_arithmetic" (* Nothing *)
+  end
+
+
+
+(* assuming [ty] is an lvalue type, [modifiable ty] is true iff
+   [ty] is modifiable lvalue type (see §6.3.2.1#1, sentence 3) *)
+
+(*
+A modifiable lvalue is an lvalue that does not have array type, does not have an incomplete type, does not have a const- qualified type, and if it is a structure or union, does not have any member (including, recursively, any member or element of all contained aggregates or unions) with a const- qualified type.
+*)
+val modifiable: forall 'a. sigma 'a -> qualifiers -> ctype -> bool
+let modifiable S qs ty =
+  not (is_array ty) &&
+  not (qs.const) &&
+  is_object ty &&
+  not (is_incomplete S ty)
+
+val real: ctype -> bool
+let real ty =
+  is_integer ty
+
+val            compatible_params_aux: (ctype -> ctype -> bool) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let rec ~{coq} compatible_params_aux is_compatible p1 p2 =
+  match (p1, p2) with
+    | ([], []) ->
+        true
+    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
+        is_compatible ty1 ty2 && compatible_params_aux is_compatible p1 p2
+    | _ ->
+        false
+  end
+
+(* (§6.2.7) Compatible type *)
+val            compatible: ctype -> ctype -> bool
+let rec ~{coq} compatible ty1 ty2 =
+  let compatible_params = compatible_params_aux compatible in
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        bty1 = bty2
+    | (Array ty1 n1, Array ty2 n2) ->
+        compatible ty1 ty2 && n1 = n2
+    | (Function _ ty1 p1 b1, Function _ ty2 p2 b2) ->
+        compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        compatible ty1 ty2 && qs1 = qs2
+    | (Struct tag1, Struct tag2) ->
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
+    | (Union tag1, Union tag2) ->
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
+    | (Builtin str1, Builtin str2) ->
+        str1 = str2
+    | _ ->
+        false
+  end
+
+val        compatible_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let ~{coq} compatible_params p1 p2 =
+  compatible_params_aux compatible p1 p2
+
+val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
+                                        list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
+  match (p1, p2, p3) with
+    | ([], [], []) ->
+        true
+    | ((_, ty1) :: p1, (_, ty2) :: p2, (qs3, ty3) :: p3) ->
+        is_unqualified qs3 && is_composite ty1 ty2 ty3 &&
+        is_composite_params_aux is_composite p1 p2 p3
+    | _ ->
+      false
+  end
+
+val            is_composite: ctype -> ctype -> ctype -> bool
+let rec ~{coq} is_composite ty1 ty2 ty3 =
+  let is_composite_params = is_composite_params_aux is_composite in
+  match (ty1, ty2, ty3) with
+    | (Void, Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2, Basic bty3) ->
+        bty1 = bty2 && bty1 = bty3
+    | (Array ty1 n1, Array ty2 n2, Array ty3 n3) ->
+        is_composite ty1 ty2 ty3 && n1 = n2 && n1 = n3
+    | (Function _ ty1 p1 _, Function _ ty2 p2 _, Function _ ty3 p3 _) ->
+        is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
+    | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
+        is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
+    | _ ->
+        false
+  end
+
+val        is_composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+let ~{coq} is_composite_params p1 p2 p3 =
+  is_composite_params_aux is_composite p1 p2 p3
+
+val            composite_params_aux: (ctype -> ctype -> maybe ctype) ->
+                                     list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
+let rec ~{coq} composite_params_aux composite p1 p2 =
+  match (p1, p2) with
+    | ([], []) ->
+        Just []
+    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
+        match (composite ty1 ty2, composite_params_aux composite p1 p2) with
+          | (Just ty, Just p) ->
+              Just ((no_qualifiers, ty) :: p)
+          | _ ->
+              Nothing
+        end
+    | _ ->
+        Nothing
+    end
+
+(* (§6.2.7#3) composite type *)
+val            composite: ctype -> ctype -> maybe ctype
+let rec ~{coq} composite ty1 ty2 =
+  let composite_params = composite_params_aux composite in
+  match (ty1, ty2) with
+    | (Void, Void) ->
+        Just Void
+    | (Basic bty1, Basic bty2) ->
+        if bty1 = bty2 then
+          Just (Basic bty1)
+        else
+          Nothing
+    | (Array ty1 n1, Array ty2 n2) ->
+        if n1 = n2 then
+          Maybe.map (fun ty -> Array ty n1) (composite ty1 ty2)
+        else
+          Nothing
+    | (Function has_proto1 ty1 p1 b1, Function has_proto2 ty2 p2 b2) ->
+        match (composite ty1 ty2, composite_params p1 p2) with
+          | (Just ty, Just p) ->
+              if b1 = b2 then
+                (* TODO: check the prototype thing *)
+                Just (Function (has_proto1 || has_proto2) ty p b1)
+              else
+                Nothing
+          | _ ->
+              Nothing
+        end
+    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
+        if qs1 = qs2 then
+          Maybe.map (Pointer qs1) (composite ty1 ty2)
+        else
+          Nothing
+    | _ ->
+        Nothing
+  end
+
+val        composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
+let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
+
+
+(* following (§6.3.2.1)#3 *)
+val array_coercion: ctype -> ctype
+let array_coercion = function
+  | Array ty _ ->
+      Pointer no_qualifiers ty
+  | ty ->
+      ty
+end
+
+(* following (§6.3.2.1)#4 *)
+val function_coercion: ctype -> ctype
+let function_coercion = function
+  | Function has_proto ty' params is_variadic ->
+      Pointer no_qualifiers (Function has_proto ty' params is_variadic)
+  | ty ->
+      ty
+end
+
+(* following (§6.3.2.1)#2 *)
+val lvalue_convertible: forall 'a. sigma 'a -> ctype -> bool
+let lvalue_convertible S ty =
+  not (is_array ty) && is_complete S ty
+
+(* following (§6.3.2.1)#2 and #3 *)
+val lvalue_coercion: forall 'a. sigma 'a -> ctype -> errorM ctype
+let lvalue_coercion S ty =
+  if lvalue_convertible S ty then
+    return ty
+  else if is_array ty then
+    return (array_coercion ty)
+  else
+    fail Loc.unknown (TError_lvalue_coercion ty)
+
+(* following (§6.3.2.1)#3 and #4 *)
+val rvalue_coercion: ctype -> ctype
+let rvalue_coercion ty =
+  if is_array ty then
+    array_coercion ty
+  else if is_function ty then
+    function_coercion ty
+  else
+    ty
+
+val is_pointer_to_complete_object: forall 'a. sigma 'a -> ctype -> bool
+let is_pointer_to_complete_object S = function
+  | Pointer _ ty ->
+      is_complete S ty
+  | _ ->
+      false
+  end
+
+val        pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_complete_objects S ty1 ty2 =
+  match (ty1, ty2) with
+    | (Pointer _ ty1, Pointer _ ty2) ->
+        is_complete S ty1 && is_complete S ty2 && compatible ty1 ty2
+    | _ ->
+        false
+  end  
+
+val        pointers_to_compatible_objects: ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_objects ty1 ty2 =
+  match (ty1, ty2) with
+    | (Pointer _ ty1, Pointer _ ty2) ->
+        is_object ty1 && is_object ty2 && compatible ty1 ty2
+    | _ ->
+        false
+  end  
+
+val pointer_to_object: ctype -> bool
+let pointer_to_object = function
+  | Pointer _ ty ->
+      is_object ty
+  | _ ->
+      false
+end
+
+val pointer_to_void: ctype -> bool
+let pointer_to_void = function
+  | Pointer _ Void ->
+      true
+  | _ ->
+      false
+end
+
+val is_pointer_to_function: ctype -> bool
+let is_pointer_to_function = function
+  | Pointer _ ref_ty ->
+      is_function ref_ty
+  | _ ->
+      false
+end
+
+
+val        pointers_to_compatible_types: ctype -> ctype -> bool
+let ~{coq} pointers_to_compatible_types ty1 ty2 =
+  match (ty1, ty2) with
+  | (Pointer _ ty1, Pointer _ ty2) ->
+      compatible ty1 ty2
+  | _ ->
+      false
+  end  
+
+
+(* STD §6.2.5#4, first sentence *)
+val is_standard_signed_integer_type: ctype -> bool
+let is_standard_signed_integer_type = function
+  | Basic (Integer (Signed Ichar)) ->
+      true
+  | Basic (Integer (Signed Short)) ->
+      true
+  | Basic (Integer (Signed Int_)) ->
+      true
+  | Basic (Integer (Signed Long)) ->
+      true
+  | Basic (Integer (Signed LongLong)) ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO: no extended types for now *)
+val is_extended_signed_integer_type: ctype -> bool
+let is_extended_signed_integer_type _ =
+  false
+
+(* STD §6.2.5#4, fourth sentence *)
+val is_signed_integer_type: ctype -> bool
+let is_signed_integer_type ty =
+  is_standard_signed_integer_type ty || is_extended_signed_integer_type ty
+
+
+(* STD §6.2.5#6, first and second sentence *)
+val is_standard_unsigned_integer_type: ctype -> bool
+let is_standard_unsigned_integer_type = function
+  | Basic (Integer Bool) ->
+      true
+  | Basic (Integer (Unsigned Ichar)) ->
+      true
+  | Basic (Integer (Unsigned Short)) ->
+      true
+  | Basic (Integer (Unsigned Int_)) ->
+      true
+  | Basic (Integer (Unsigned Long)) ->
+      true
+  | Basic (Integer (Unsigned LongLong)) ->
+      true
+  | _ ->
+       false
+end
+
+(* STD §6.2.5#6, fourth sentence *)
+val is_unsigned_integer_type: ctype -> bool
+let is_unsigned_integer_type = function
+  | Basic (Integer Bool) ->
+      true
+  | Basic (Integer (Unsigned _)) ->
+      true
+  | _ ->
+      false
+end
+  (* TODO: later, extended types *)
+(*
+  is_standard_unsigned_integer_type ty ||
+*)
+
+
+
+
+
+
+
+val variably_modified: ctype -> bool
+let variably_modified _ =
+  (* TODO *)
+  false
+
+
+
+val had_unknown_size: ctype -> bool
+let has_unknown_size = function
+  | _ ->
+      false (* TODO !!!!!!! *)
+end
+
+val is_vla: ctype -> bool
+let is_vla = function
+  | _ ->
+      false (* TODO !!!!!!! *)
+end
+
+val is_complete_object: forall 'a. sigma 'a -> ctype -> bool
+let is_complete_object S ty =
+  is_complete S ty && is_object ty
+
+
+(* TODO: check *)
+val unqualify: ctype -> ctype
+let rec unqualify ty =
+  match ty with
+  | Array elem_ty n ->
+      Array (unqualify elem_ty) n
+(*
+ | Function ty qs_tys is_variadic ->
+     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
+*)
+  | Pointer _ Void ->
+      Pointer no_qualifiers Void
+  | Pointer _ (Basic bty) ->
+      Pointer no_qualifiers (Basic bty)
+  | Pointer ref_qs ref_ty ->
+      Pointer ref_qs (unqualify ref_ty)
+ | Atomic ty' ->
+     Atomic (unqualify ty')
+  | _ ->
+      ty
+end
+(*
+function
+ | Void ->
+     Void
+ | Basic bty ->
+     Basic bty
+ | Array ty n ->
+     Array (unqualify ty) n
+ | Function ty qs_tys is_variadic ->
+     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
+ | Atomic ty ->
+     Atomic (unqualify ty)
+ | Struct sym ids_ty ->
+     Struct sym 
+ | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
+ | Builtin of string
+end
+*)
+
+
+val adjust: ctype -> ctype
+let adjust = function
+  | Array elem_ty _ ->
+      (* STD §6.7.6.3#7 *)
+      (* TODO: qualifiers *)
+      Pointer no_qualifiers elem_ty
+ | Function has_proto ret_ty params is_variadic ->
+      (* STD §6.7.6.3#8 *)
+     Pointer no_qualifiers (Function has_proto ret_ty params is_variadic)
+ | ty ->
+     ty
+end
+
+
+
+(* STD §6.3.2.1#2 *)
+val lvalue_conversion: forall 'a. sigma 'a -> ctype -> errorM ctype
+let lvalue_conversion S ty =
+  if is_array ty then
+    fail Loc.unknown (TError "trying to do a lvalue conversion on an array type")
+  
+  else if is_incomplete S ty && not (is_array ty) then
+    fail Loc.unknown (TError_undef "§6.3.2.1#2, sentence 3: lvalue conversion of an incomplete non-array type")
+  
+  (* STD §6.3.2.1#2, sentence 2 *)
+  else match ty with
+    | Atomic ty' ->
+        return ty'
+    | _ ->
+        return (unqualify ty)
+  end
+
+val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
+let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
+  (* TODO: the qualified unqualified part *)
+  List.any (compatible ty) tys
+
+
+val referenced_type: ctype -> maybe ctype
+let referenced_type ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | Pointer _ ty' ->
+      Just ty'
+  | _ ->
+      Nothing
+end
+
+
+
+
+(* STD §6.2.5#12 *)
+val corresponding_real_type: ctype -> maybe ctype
+let corresponding_real_type ty =
+  if is_floating ty then
+    match ty with
+    | Basic (Floating (RealFloating _)) ->
+        Just ty
+(*
+    | Basic (Floating (Complex fty))
+        Basic (Floating fty)
+*)
+    | _ ->
+        error "AilTypesAux.corresponding_real_type"
+    end
+  else
+    Nothing
+
+(* TODO: this is such a bad name ... *)
+val     has_pointer_at_leafs: ctype -> bool
+let rec has_pointer_at_leafs ty =
+  match ty with
+    | Void ->
+        false
+    | Basic _ ->
+        false
+    | Array ref_ty _ ->
+        has_pointer_at_leafs ref_ty
+    | Function _ _ _ _ ->
+        false
+    | Pointer _ _ ->
+        true
+    | Atomic ty ->
+        has_pointer_at_leafs ty
+    | Struct _ ->
+        false
+    | Union _ ->
+        false
+    | Builtin _ ->
+        (* TODO *)
+        false
+  end

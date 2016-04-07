@@ -1,0 +1,53 @@
+import Loc
+
+val get_level: unit -> nat
+declare ocaml target_rep function get_level   = `Debug_ocaml.get_debug_level`
+declare hol   target_rep function get_level u = 0 (* TODO: HOL hack *)
+
+
+val output_string: string -> unit
+declare ocaml target_rep function output_string = `Debug_ocaml.output_string2`
+declare hol   target_rep function output_string = `util$output_string`
+
+val print_debug: nat -> string -> unit
+declare ocaml target_rep function print_debug = `Debug_ocaml.print_debug`
+declare hol   target_rep function print_debug = `util$print_debug`
+
+val print_debug_located: nat -> Loc.t -> string -> unit
+declare ocaml target_rep function print_debug_located = `Debug_ocaml.print_debug_located`
+declare hol   target_rep function print_debug_located =
+                                  `util$print_debug_located`
+
+val warn: string -> unit
+declare ocaml target_rep function warn = `Debug_ocaml.warn`
+declare hol   target_rep function warn = `util$output_string`
+
+
+(*
+open import Pervasives Global
+import Boot
+
+let _DEBUG level f k =
+  if level <= Boot.debug_level then
+    f k
+  else
+    k
+
+
+(* Used in [core_run.lem], print the collected continuation in a Core program *)
+let print_cont_map cont_map k =
+  Boot.print_debug "TODO[newLem]" k
+(*
+  (  "COLLECTED CONTINUATIONS:\n" ^
+  (List.fold_left (fun acc (f, ks) ->
+    "In function `" ^ Boot.pp_core_expr (Core.Esym f) ^ "': [" ^
+      (List.fold_left (fun acc k -> Boot.pp_core_expr (Core.Esym k) ^ ", " ^ acc) "" (List.map fst $ Pmap.bindings ks)) ^ "]\n" ^ acc
+   ) "" $ Pmap.bindings cont_map))
+  k
+*)
+
+*)
+
+
+(* val debug: forall 'a. string -> 'a *)
+
