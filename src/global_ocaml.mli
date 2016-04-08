@@ -31,19 +31,20 @@ type error_verbosity =
   | QuoteStd (* print a full quote of the std text *)
 
 type cerberus_conf = {
-  cpp_cmd:       string;
-  pps:           language list;
-  core_stdlib:   unit Core.fun_map;
-  core_impl_opt: Core.impl option;
-  core_parser:   Input.t -> (Core_parser_util.result, Errors.t6) Exception.exceptM;
-  exec_mode_opt: execution_mode option;
-  compile:       bool;
-  progress:      bool;
-  rewrite:       bool;
-  sequentialise: bool;
-  concurrency:   bool;
-  preEx:         bool;
+  cpp_cmd:         string;
+  pps:             language list;
+  core_stdlib:     unit Core.fun_map;
+  core_impl_opt:   Core.impl option;
+  core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
+  exec_mode_opt:   execution_mode option;
+  compile:         bool;
+  progress:        bool;
+  rewrite:         bool;
+  sequentialise:   bool;
+  concurrency:     bool;
+  preEx:           bool;
   error_verbosity: error_verbosity;
+  batch:           bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -63,7 +64,7 @@ val set_cerb_conf:
     Core.impl option ->
     bool ->
     execution_mode ->
-    (Input.t -> (Core_parser_util.result, Errors.t6) Exception.exceptM) ->
+    (Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM) ->
     bool ->
     bool ->
     bool ->
@@ -71,6 +72,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     error_verbosity ->
+    bool ->
     unit
 
 val progress_sofar: int ref

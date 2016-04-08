@@ -29,15 +29,25 @@ let lookup_tag_definition s sym =
 
 (* ============== *)
 
-let annotate_rvalue_aux (s : sigma unit) a annotate_expression e =
-  annotate_expression e >>= fun e ->
-  match type_of a e with
+let annotate_rvalue_aux (sigm : sigma unit) annot annotate_expression e =
+  annotate_expression e >>= fun (AnnotatedExpression annot loc e_ as e') ->
+   match annot with
+     | GenRValueType gty ->
+         let gty' = rvalue_coercion gty in
+         E.return (AnnotatedExpression (GenRValueType gty') loc e_, gty')
+     | GenLValueType qs ty ->
+        AilTypesAux.lvalue_coercion sigm ty >>= fun ty' ->
+        E.return (AnnotatedExpression (GenLValueType qs ty') loc e_, inject_type ty')
+   end
+(*
+  match type_of A e with
     | GenRValueType gty ->
         E.return (e, rvalue_coercion gty)
     | GenLValueType _ ty ->
         AilTypesAux.lvalue_coercion s ty >>= fun ty' ->
         E.return (e, inject_type ty')
   end
+*)
 
 
 (* TODO: check if something needs to done regarding the basis *)
@@ -410,12 +420,17 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         else
           E.fail (locOf e) (TError "§6.5.3.3#1, sentence 2")
     | AilEunary (Address as uop) e ->
+        (* STD §6.5.3.2#1 *)
         annotate_expression e >>= fun a_e ->
         match type_of annot a_e with
-          | GenLValueType qs ty ->
-              E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
           | GenRValueType (GenFunction has_proto ty p b) ->
+              (* e is a 'function designator' *)
               E.return (AilEunary Address a_e, GenRValueType (GenPointer no_qualifiers (Function has_proto ty p b)))
+          | GenLValueType qs ty ->
+              (* e is an 'lvalue' *)
+              (* TODO: e must designates an object that is not a bit-field and is not declared with the register storage-class specifier *)
+              let () = Debug.warn "GenTyping, AilEunary Address - must check operand is not lvalue to bit-field and not declared with register" in
+              E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
           | _ ->
               E.fail (locOf e) (TError_TODO 14)
         end
@@ -571,15 +586,18 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         E.return (AilEbuiltin str, GenRValueType (GenBasic (GenInteger (Concrete ity))))
 *)
     
-    | AilEident v ->
-        match (Context.lookup identifierEqual gamm v, Context.lookup identifierEqual sigm.declarations v) with
+    | AilEident sym ->
+        match (Context.lookup identifierEqual gamm sym, Context.lookup identifierEqual sigm.declarations sym) with
           | (Just (dur_opt, qs, ty), Nothing) ->
-              E.return (AilEident v, GenLValueType qs ty)
+              E.return (AilEident sym, GenLValueType qs ty)
           | (Nothing, Just (Decl_object _ qs ty)) ->
-              E.return (AilEident v, GenLValueType qs ty)
+              E.return (AilEident sym, GenLValueType qs ty)
           | (Nothing, Just (Decl_function has_proto ret_ty params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
-              E.return (AilEident v, GenRValueType (inject_type (Function has_proto ret_ty params is_variadic)))
+              (* NOTE: here sym is a 'function designator', hence it has function type. BUT
+                 other part of the typechecker MUST perform the 'function_coercion' as described in
+                 (§6.3.2.1#4). *)
+              E.return (AilEident sym, GenRValueType (inject_type (Function has_proto ret_ty params is_variadic)))
           | _ ->
               E.fail loc (TError_TODO 13)
         end
@@ -675,10 +693,14 @@ OLD(sigma_declaration)
     | AilEcall e es ->
         (* STD §6.5.2.2#1 *)
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Function has_proto ty params is_variadic)) ->
-              if AilTypesAux.is_unqualified qs then
+          | (e', GenPointer qs (Function has_proto return_ty params is_variadic)) ->
+              (* NOTE: I don't see how the C syntax would allow one to have
+                 a "pointer to function returning array" anyway... *)
+              if not (return_ty = Void || (AilTypesAux.is_complete_object sigm return_ty && not (AilTypesAux.is_array return_ty))) then
+                E.fail Loc.unknown (TError "§6.5.2.2#1")
+              else if AilTypesAux.is_unqualified qs then
                 annotate_arguments has_proto is_variadic es params >>= fun es' ->
-                E.return (AilEcall e' es', GenRValueType (inject_type ty))
+                E.return (AilEcall e' es', GenRValueType (inject_type return_ty))
               else
                 E.fail Loc.unknown (TError_TODO 25)
           | _ ->

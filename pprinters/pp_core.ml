@@ -279,7 +279,7 @@ let pp_pexpr pe =
       match pe with
         | PEundef ub ->
             pp_keyword "undef" ^^ P.parens (P.angles (P.angles (!^ (
-              ansi_format [Magenta] (Undefined.string_of_undefined_behaviour ub)
+              ansi_format [Magenta] (Undefined.stringFromUndefined_behaviour ub)
             ))))
         | PEerror (str, pe) ->
             pp_keyword "error" ^^ P.parens (P.dquotes (!^ str) ^^ P.comma ^^^ pp pe)

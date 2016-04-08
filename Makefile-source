@@ -57,6 +57,7 @@ SOURCE_elaboration=\
   translation.lem 
 
 SOURCE_utils=\
+  bimap.lem \
   debug.lem \
   pp.lem \
   boot.lem \

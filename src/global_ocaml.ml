@@ -46,7 +46,7 @@ type cerberus_conf = {
   pps:               language list;
   core_stdlib:       unit Core.fun_map;
   core_impl_opt:     Core.impl option;
-  core_parser:       Input.t -> (Core_parser_util.result, Errors.t6) Exception.exceptM;
+  core_parser:       Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:     execution_mode option;
   compile:           bool;
   progress:          bool;
@@ -55,6 +55,7 @@ type cerberus_conf = {
   concurrency:       bool;
   preEx:             bool;
   error_verbosity:   error_verbosity;
+  batch:             bool;
 }
 
 let (!!) z = !z()
@@ -72,7 +73,8 @@ let current_execution_mode () =
   !cerb_exec_mode_opt
 
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite sequentialise concurrency preEx compile error_verbosity =
+let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
+                  sequentialise concurrency preEx compile error_verbosity batch =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -88,6 +90,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;
+    batch= batch;
   }
 
 

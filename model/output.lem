@@ -355,9 +355,9 @@ let load_character_array elem_ty ptrval prec_n_opt =
 
 
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
-val convert: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
+val convert: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
              maybe precision -> maybe length_modifier -> conversion_specifier -> list (Cty.ctype * Mem.pointer_value) ->
-             Mem.memM (either Errors.t (U.t (list char * list (Cty.ctype * Mem.pointer_value))))
+             Mem.memM (either Errors.error (U.t (list char * list (Cty.ctype * Mem.pointer_value))))
 let convert eval_conv prec_opt lm_opt cspec args =
   let prec = match prec_opt with
     | Just (P_num z) ->
@@ -589,7 +589,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
     match args with
       | [] ->
           Mem.return $
-            Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+            Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
           Mem.load arg_ty arg_ptr >>= fun mval ->
           (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
@@ -747,7 +747,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+                      Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
                     )
                 | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
@@ -779,7 +779,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef Loc.unknown [U.Insufficient_arguments_for_format])
+                Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
               Mem.load arg_ty arg_ptr >>= function
@@ -808,8 +808,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
 
 
 
-val     printf_aux: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
-                    list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.t (Undefined.t (list char)))
+val     printf_aux: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+                    list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let rec printf_aux eval_conv acc fs ty_ptrvals =
   match (fs, ty_ptrvals) with
     | (F_text str :: fs, ty_ptrvals) ->
@@ -844,8 +844,8 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
 
 
 
-val printf: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.t (Undefined.t Core.value)) ->
-            list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.t (Undefined.t (list char)))
+val printf: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+            list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let printf eval_conv frmt args =
   match parse format frmt with
     | [(fs, [])] ->

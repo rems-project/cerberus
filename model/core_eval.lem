@@ -73,11 +73,11 @@ let inline (<$>) = EU.fmap
    important for the Coq backend).  To fully evaluate a pure expression,
    it is necessary to call eval repeatedly until is_value returns True. *)
 val     step_eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                         map Symbol.sym Core.object_value -> bool -> Core.pexpr  ->
+                         map Symbol.sym Core.object_value -> Core.pexpr  ->
                          EU.t Core.pexpr core_run_error
-let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr () pexpr_ as pexpr) =
+let rec step_eval_pexpr loc mem_st file concur_sym_map (Pexpr () pexpr_ as pexpr) =
   let strip (Pexpr _ pe_) = pe_ in
-  let self pe = step_eval_pexpr loc mem_st file concur_sym_map inside_if pe in
+  let self pe = step_eval_pexpr loc mem_st file concur_sym_map pe in
   Pexpr () <$> match pexpr_ with
     (* pulling the constrained up *)
     | PEconstrained xs ->
@@ -205,7 +205,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr () pexpr
                 | Just pe'' ->
                     EU.return (strip pe'')
                 | Nothing ->
-                    error "PEcase, mismatched"
+                    error ("PEcase, mismatched ==> " ^ Pp.stringFromCore_pexpr pe')
               end
           | pe' ->
               EU.return (PEcase pe' pat_pes)
@@ -440,21 +440,21 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map inside_if (Pexpr () pexpr
 
 
 val     eval_pexpr_aux: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                        map Symbol.sym Core.object_value -> bool -> Core.pexpr ->
+                        map Symbol.sym Core.object_value -> Core.pexpr ->
                         EU.t Core.value core_run_error
-let rec eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe =
-  step_eval_pexpr loc mem_st file concur_sym_map inside_if pe >>= fun pe' ->
+let rec eval_pexpr_aux loc mem_st file concur_sym_map pe =
+  step_eval_pexpr loc mem_st file concur_sym_map pe >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
     | Nothing ->
-        eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe'
+        eval_pexpr_aux loc mem_st file concur_sym_map pe'
   end
 val eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                map Symbol.sym Core.object_value -> bool -> Core.pexpr ->
-                either Errors.t (Undefined.t Core.value)
-let eval_pexpr loc mem_st file concur_sym_map inside_if pe =
-  match eval_pexpr_aux loc mem_st file concur_sym_map inside_if pe with
+                map Symbol.sym Core.object_value -> Core.pexpr ->
+                either Errors.error (Undefined.t Core.value)
+let eval_pexpr loc mem_st file concur_sym_map pe =
+  match eval_pexpr_aux loc mem_st file concur_sym_map pe with
     | Exception.Result z ->
         Right z
     | Exception.Exception err ->

@@ -345,7 +345,7 @@ type cause =
   | PARSER of string
   | OTHER of string
 
-type t = Loc.t * cause
+type error = Loc.t * cause
 
 
 

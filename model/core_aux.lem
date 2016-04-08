@@ -218,6 +218,10 @@ val mk_unit_pe: pexpr
 let mk_unit_pe =
   Pexpr () (PEval Vunit)
 
+val mk_boolean_pe: bool -> pexpr
+let mk_boolean_pe b =
+  Pexpr () (PEval (if b then Vtrue else Vfalse))
+
 (* TODO: PEval Vtrue, Vfalse *)
 
 val mk_ail_ctype_pe: AilTypes.ctype -> pexpr

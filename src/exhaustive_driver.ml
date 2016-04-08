@@ -14,18 +14,49 @@ let isActive = function
   | _ ->
       false
 
+type execution_result = (Core.pexpr list, Errors.error) Exception.exceptM
 
 
-type execution_result = (Core.pexpr list, Errors.t6) Exception.exceptM
 
 let drive sym_supply file args with_concurrency : execution_result =
   Random.self_init ();
-  let file = Core_run.convert_file file in
-  let (ND.ND _vs) = Driver.drive with_concurrency sym_supply file args in 
-  let vs = _vs { ND.eqs= Constraints.empty0; ND.log= Dlist.nil } in
   
-  let n_actives = List.length (List.filter isActive vs) in
-  let n_execs   = List.length vs in
+  (* changing the annotations type from unit to core_run_annotation *)
+  let file = Core_run.convert_file file in
+  
+  (* computing the value (or values if exhaustive) *)
+  let values = ND.runM0 (Driver.drive with_concurrency sym_supply file args) in
+  
+  let n_actives = List.length (List.filter isActive values) in
+  let n_execs   = List.length values                        in
+  
+  if !!cerb_conf.batch then
+    begin
+    List.iter (function
+      | ND.Active (stdout, (_, _, pe), _) ->
+          let str_v = String_core.string_of_pexpr
+              begin
+                match pe with
+                | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
+                      Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
+                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
+                  | _ ->
+                      pe
+              end in
+          Printf.printf "{value: \"%s\", stdout=\"%s\"}\n"
+            str_v stdout
+      | ND.Killed (ND.Undef0 (_, ubs)) ->
+          Printf.printf "UNDEF(%s)\n"
+            (Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs)
+      | ND.Killed (ND.Error0 (_, str)) ->
+          failwith "ERROR"
+      | ND.Killed (ND.Other str) ->
+          failwith "KILLED"
+    ) (List.map fst values);
+    Exception.return2 [] (* TODO: HACK *)
+    end
+  else
+  begin
   
   Debug_ocaml.print_debug 1 (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
   
@@ -36,7 +67,7 @@ let drive sym_supply file args with_concurrency : execution_result =
     List.iteri (fun n (ND.Killed reason, st) ->
       let reason_str = match reason with
         | ND.Undef0 (loc, ubs) ->
-            "undefined behaviour[" ^ Pp_errors.location_to_string loc ^ "]: " ^ Lem_show.stringFromList Undefined.string_of_undefined_behaviour ubs
+            "undefined behaviour[" ^ Pp_errors.location_to_string loc ^ "]: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
         | ND.Error0 (loc , str) ->
             "static error[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str
         | ND.Other str ->
@@ -58,7 +89,7 @@ else
               n reason_str (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
 
 end
-    ) vs
+    ) values
   end;
   
   let ky  = ref [] in
@@ -126,8 +157,9 @@ end
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
           )
-  ) vs;
+  ) values;
   Exception.return2 !ret
+end
 
 
 (*  
@@ -174,6 +206,6 @@ end
             Debug_ocaml.print_debug 1 (
               Printf.sprintf "\n\n\n\n\nExecution #%d (KILLED %s) under constraints:\n=====\n%s\n=====\n" n reason (Pp_cmm.pp_constraints constraints)
             );
-  ) vs;
+  ) values;
   Exception.return2 !ret
 *)
