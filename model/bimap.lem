@@ -1,0 +1,26 @@
+open import Pervasives
+
+type bimap 'a 'b =
+  Bimap of map 'a 'b * map 'b 'a
+
+
+
+
+val lookupL:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'a -> bimap 'a 'b -> maybe 'b
+let lookupL a (Bimap mapa _) =
+  Map.lookup a mapa
+
+val lookupR:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'b -> bimap 'a 'b -> maybe 'a
+let lookupR b (Bimap _ mapb) =
+  Map.lookup b mapb
+
+
+val fromList: forall 'a 'b. MapKeyType 'a, MapKeyType 'b => list ('a * 'b) -> bimap 'a 'b
+let rec fromList_aux (Bimap mapa mapb as acc) = function
+  | [] ->
+      acc
+  | (a, b) :: xs ->
+      fromList_aux (Bimap (Map.insert a b mapa) (Map.insert b a mapb)) xs
+end
+let fromList =
+  fromList_aux (Bimap Map.empty Map.empty)
