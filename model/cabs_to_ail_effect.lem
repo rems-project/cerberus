@@ -218,7 +218,7 @@ type state = <|
   is_inside_switch: bool;
 |>
 
-type t 'a = State_exception.t 'a state Errors.t
+type t 'a = State_exception.t 'a state Errors.error
 
 val return: forall 'a. 'a -> t 'a
 let return = State_exception.return
@@ -242,7 +242,7 @@ let foldrM = State_exception.foldrM
 
 let iter = State_exception.iter
 
-val tryWith: forall 'a. Errors.t -> t 'a -> t 'a
+val tryWith: forall 'a. Errors.error -> t 'a -> t 'a
 let tryWith = State_exception.tryWith
 
 
@@ -356,7 +356,7 @@ let initial_state n = <|
   is_inside_switch= false;
 |>
 
-val eval: forall 'a. nat -> t 'a -> Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.t
+val eval: forall 'a. nat -> t 'a -> Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
 let eval n m =
   State_exception.eval (
     m                                                 >>= fun res    ->

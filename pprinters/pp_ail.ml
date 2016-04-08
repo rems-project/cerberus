@@ -23,7 +23,10 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 let precedence = function
   | AilEunary (PostfixIncr, _)
-  | AilEunary (PostfixDecr, _) -> Some 1
+  | AilEunary (PostfixDecr, _)
+  | AilEcall _
+  | AilEmemberof _
+  | AilEmemberofptr _ -> Some 1
 
   | AilEunary (Plus, _)
   | AilEunary (Minus, _)

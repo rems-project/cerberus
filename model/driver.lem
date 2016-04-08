@@ -83,7 +83,7 @@ open ND.Operators
 
 
 
-val liftMem: forall 'a. Mem.memM 'a -> driver_state -> ND.t ('a * driver_state)
+val liftMem: forall 'a. Mem.memM 'a -> driver_state -> ND.ndM ('a * driver_state)
 let liftMem m dr_st =
   ND.msum "liftMem" $ map (function
     | Left mem_err ->
@@ -107,7 +107,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 
 
 (* Perform a given number of successive steps of the concurrency model *)
-val     stepConcurrency: nat -> driver_state -> ND.t driver_state
+val     stepConcurrency: nat -> driver_state -> ND.ndM driver_state
 let rec stepConcurrency n dr_st =
   if n = 0 then
     ND.return dr_st
@@ -158,7 +158,7 @@ let rec stepConcurrency n dr_st =
 
 
 
-val runCore: forall 'a. core_runM 'a -> driver_state -> ND.t ('a * driver_state)
+val runCore: forall 'a. core_runM 'a -> driver_state -> ND.ndM ('a * driver_state)
 let runCore m dr_st =
   match SEU.run m dr_st.core_run_state with
     | Exception.Result (U.Defined z, run_st') ->
@@ -195,7 +195,7 @@ let symbolicFromIntegerValue ((Defacto_memory_types.IV _ ival_) as ival) =
   end
 
 (* For a given thread, perform all possible step that are not action requests *)
-val     drive_core_thread: Thread.thread_id -> driver_state -> ND.t driver_state
+val     drive_core_thread: Thread.thread_id -> driver_state -> ND.ndM driver_state
 let rec drive_core_thread tid dr_st =
   let th_info = match List.lookup tid dr_st.core_state.thread_states with
     | Just z ->
@@ -353,7 +353,7 @@ let rec drive_core_thread tid dr_st =
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
         let eval_conv ty1 ty2 mval =
-          eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc false $
+          eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv"
               [ Caux.mk_ctype_pe ty1
@@ -440,7 +440,7 @@ let rec drive_core_thread tid dr_st =
 
 
 (* perform drive_core_thread for all the core threads *)
-val     drive_core_threads: driver_state -> ND.t driver_state
+val     drive_core_threads: driver_state -> ND.ndM driver_state
 let rec drive_core_threads dr_st =
   ND.foldM (fun acc (tid, _) ->
 (*
@@ -491,7 +491,7 @@ let update_core_run_state run_st dr_st =
 (* ========================================================================== *)
 
 
-val action_request_concurrency: driver_state -> action_request -> ND.t driver_state
+val action_request_concurrency: driver_state -> action_request -> ND.ndM driver_state
 let action_request_concurrency dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
       let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in (* DEBUG *)
@@ -680,7 +680,7 @@ end
 
 
 (* This version only uses the memory layout model (note that is deterministic) *)
-val action_request_sequential: driver_state -> action_request -> ND.t driver_state
+val action_request_sequential: driver_state -> action_request -> ND.ndM driver_state
 let action_request_sequential dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
       let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in (* DEBUG *)
@@ -761,7 +761,7 @@ end
 
 
 
-val     driver: bool -> driver_state -> ND.t driver_state
+val     driver: bool -> driver_state -> ND.ndM driver_state
 let rec driver with_concurrency dr_st =
   let process_core_step2 dr_st = function
   | Step_action_request request_m ->
@@ -907,7 +907,7 @@ let rec driver with_concurrency dr_st =
 
 val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
-  match step_eval_pexpr Loc.unknown mem_st core_file concur_sym_map false pexpr with
+  match step_eval_pexpr Loc.unknown mem_st core_file concur_sym_map pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
@@ -1040,7 +1040,7 @@ let initial_driver_state sym_supply file =
 
 
 
-val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> ND.t (Thread.thread_id * driver_state)
+val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> ND.ndM (Thread.thread_id * driver_state)
 let driver_globals with_concurrency sym_supply file =
   let dr_st = initial_driver_state sym_supply file in
   
@@ -1161,7 +1161,7 @@ end
 
 
 val drive: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> list string ->
-           ND.t (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
+           ND.ndM (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
 let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
@@ -1277,11 +1277,11 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
                   ND.return (str, (is_blocked, conc_st, Core.Pexpr () (Core.PEval cval)), steps)
               | (Cmm.DataRaces _)::_ ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.Data_race),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.UB005_data_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.UnsequencedRaces _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.Unsequenced_race),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.UB035_unsequenced_race),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.IndeterminateReads _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),

@@ -2842,7 +2842,7 @@ let desugar_and_register_external_declaration edecl =
     end
 
 
-val desugar: nat -> string -> translation_unit -> Exception.exceptM (UniqueId.supply Symbol.sym * program unit) Errors.t
+val desugar: nat -> string -> translation_unit -> Exception.exceptM (UniqueId.supply Symbol.sym * program unit) Errors.error
 let desugar sym_counter startup_str (TUnit edecls) =
   E.eval sym_counter (
     E.with_scope E.Scope_file (
