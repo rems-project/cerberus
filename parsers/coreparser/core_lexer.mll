@@ -186,10 +186,12 @@ let scan_impl lexbuf =
 
 let scan_ub lexbuf =
   let id = Lexing.lexeme lexbuf in
-  try
-    T.UB (Pmap.find id Undefined.ub_map)
-  with Not_found ->
-    failwith ("Found an invalid undefined-behaviour: " ^ id)
+  match Bimap.lookupR compare compare (String.sub id 2 (String.length id - 4)) Undefined.ub_str_bimap with
+    | Some ub ->
+        T.UB ub
+    | None ->
+        failwith ("Found an invalid undefined-behaviour: " ^ id)
+
 
 
 

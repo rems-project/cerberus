@@ -72,6 +72,9 @@ type mem_state = <|
   dead_allocations:    set allocation_id;
   addresses:           set address;
   constraints:         constraints;
+  
+  (* For the detection of races, need to be flushed at every sequence point *)
+  access_log: list allocation_id;
 |>
 
 
@@ -852,6 +855,7 @@ let initial_mem_state = <|
   addresses= Set.empty;
   constraints= initial_constraints ();
 (*  writes= []; *)
+  access_log= [];
 |>
 
 
@@ -1206,10 +1210,40 @@ let apply_shift_path ty sh mval =
   ) mval sh
 
 
+
+
+
+
+
+val addToLog: allocation_id -> memM unit
+let addToLog alloc_id =
+  let () = Debug.print_debug 0 ("addToLog: " ^ show alloc_id) in
+  get >>= fun mem_st ->
+  if List.elem alloc_id mem_st.access_log then
+    fail (MerrOther ("unsequenced race: " ^ show alloc_id))
+  else
+    put <| mem_st with access_log= alloc_id :: mem_st.access_log |>
+
+val sequencePoint: memM unit
+let sequencePoint =
+  get >>= fun mem_st ->
+  put <| mem_st with access_log= [] |>
+
+
+
+
+
+
+
+
+
+
+
 let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
   print_debugM 5 ("LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
+(*        addToLog alloc_id >> *)
         get >>= fun mem_st ->
         match Map.lookup alloc_id mem_st.allocations with
           | Just (_, Just mval) ->
@@ -2312,6 +2346,7 @@ let store lvalue_ty ptr_val mval =
   (*DEBUG*)                stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval) >>
   can_store ptr_val >>= function
     | Just alloc_id ->
+(*        addToLog alloc_id >> *)
         register_write_event alloc_id (WriteEvent lvalue_ty ptr_val mval) >>
         (*DEBUG*)print_debugM 5 "STORE DONE"
     | Nothing ->
