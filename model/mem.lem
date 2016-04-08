@@ -133,6 +133,10 @@ val case_mem_value: forall 'a.
   'a
 
 
+(* For race detection *)
+val sequencePoint: memM unit
+let sequencePoint = Impl.sequencePoint
+
 (* ========== *)
 
 

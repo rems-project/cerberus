@@ -66,21 +66,27 @@ type nd_state = <|
   log: Dlist.dlist string
 |>
 
-type t 'a =
+val initial_nd_state: nd_state
+let initial_nd_state =
+  <| eqs= Constraints.empty; log= Dlist.nil |>
+
+
+
+type ndM 'a =
   ND of (nd_state -> list (nd_status 'a * nd_state))
 (*  ND of list (nd_id * nd_state 'a) *)
 
 
 (* Monadic operations *)
-val return: forall 'a.    'a -> t 'a
-val bind:   forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+val return: forall 'a.    'a -> ndM 'a
+val bind:   forall 'a 'b. ndM 'a -> ('a -> ndM 'b) -> ndM 'b
 
 let return a =
   ND (fun st -> [(Active a, st)])
 
 
 
-val bindExhaustive: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+val bindExhaustive: forall 'a 'b. ndM 'a -> ('a -> ndM 'b) -> ndM 'b
 let bindExhaustive (ND m) f =
   ND (fun st ->
     List.concatMap (function
@@ -101,7 +107,7 @@ val random_select: forall 'a. list 'a -> 'a
 declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 declare hol   target_rep function random_select = `HD`
 
-val bindRandom: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+val bindRandom: forall 'a 'b. ndM 'a -> ('a -> ndM 'b) -> ndM 'b
 let bindRandom (ND m) f =
   ND (fun st ->
     let (actives, killed) = List.foldl (fun (actives_, killed_) x ->
@@ -140,7 +146,7 @@ let bind m f =
         bindRandom m f
   end
 
-val mem : forall 'a. Eq 'a => 'a -> t 'a -> bool
+val mem : forall 'a. Eq 'a => 'a -> ndM 'a -> bool
 let mem x m = 
   error "mem"
 
@@ -152,8 +158,8 @@ end
 open Operators
 
 (* MonadPlus operations *)
-val mzero: forall 'a. t 'a
-val mplus: forall 'a. t 'a -> t 'a -> t 'a
+val mzero: forall 'a. ndM 'a
+val mplus: forall 'a. ndM 'a -> ndM 'a -> ndM 'a
 
 (* let mzero = let _ = Debug.print_debug 3 "WARNING: mzero is called" in ND (fun z -> []) *)
 let mplus (ND ma) (ND mb) =
@@ -161,7 +167,7 @@ let mplus (ND ma) (ND mb) =
 
 
 (* Instanciating generic functions (...) *)
-val sequence: forall 'a. list (t 'a) -> t (list 'a) (* GENERIC Monad *)
+val sequence: forall 'a. list (ndM 'a) -> ndM (list 'a) (* GENERIC Monad *)
 let sequence ms =                                   (* GENERIC Monad *)
   List.foldr (fun m ms' ->                          (* GENERIC Monad *)
    m   >>= fun x  ->                                (* GENERIC Monad *)
@@ -169,11 +175,11 @@ let sequence ms =                                   (* GENERIC Monad *)
   return (x :: xs)                                  (* GENERIC Monad *)
   ) (return []) ms                                  (* GENERIC Monad *)
 
-val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b) (* GENERIC Monad *)
+val mapM: forall 'a 'b. ('a -> ndM 'b) -> list 'a -> ndM (list 'b) (* GENERIC Monad *)
 let mapM f xs =  sequence (List.map f xs)                      (* GENERIC Monad *)
 
 (* NOTE: this is foldl *)
-val     foldM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a (* GENERIC Monad *)
+val     foldM: forall 'a 'b. ('a -> 'b -> ndM 'a) -> 'a -> list 'b -> ndM 'a (* GENERIC Monad *)
 let rec foldM f a = function                                             (* GENERIC Monad *)
   | [] ->                                                                (* GENERIC Monad *)
       return a                                                           (* GENERIC Monad *)
@@ -189,7 +195,7 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 *)
 
 
-val msum: forall 'a. string -> list (t 'a) -> t 'a (* GENERIC MonadPlus *)
+val msum: forall 'a. string -> list (ndM 'a) -> ndM 'a (* GENERIC MonadPlus *)
 let msum debug_str ms =
   if List.null ms then
     error ("ND.msum(" ^ debug_str ^ "), empty list")
@@ -200,7 +206,7 @@ let msum debug_str ms =
 (* Specific operations *)
 
 (* Non-deterministically pick from a list *)
-val pick: forall 'a. string -> list 'a -> t 'a
+val pick: forall 'a. string -> list 'a -> ndM 'a
 let pick debug_str xs =
   let () = if List.null xs then
     Debug.print_debug 5 ("ND.pick(" ^ debug_str ^ "), empty list")
@@ -211,7 +217,7 @@ let pick debug_str xs =
 
 
 (* The same but with a predicate and the pick is paired with it context *)
-val pickWith: forall 'a. ('a -> bool) -> list 'a -> t (list 'a * 'a * list 'a)
+val pickWith: forall 'a. ('a -> bool) -> list 'a -> ndM (list 'a * 'a * list 'a)
 let rec pickWith_ pred acc debug_n = function
   | [] ->
       let _ = Debug.print_debug 3 "WARNING: pickWith returns []" in
@@ -227,7 +233,7 @@ let pickWith pred xs =
 
 
 (* Perform the first computation and if it is not empty forward the result, otherwise run the third computation *)
-val tryM: forall 'a 'b. t 'a -> (unit -> t 'a) -> t 'a
+val tryM: forall 'a 'b. ndM 'a -> (unit -> ndM 'a) -> ndM 'a
 let tryM (ND ma) mend =
   ND (fun st ->
     match ma st with
@@ -238,18 +244,18 @@ let tryM (ND ma) mend =
     end)
 
 
-val kill: forall 'a. kill_reason -> t 'a
+val kill: forall 'a. kill_reason -> ndM 'a
 let kill reason =
   ND (fun st -> [(Killed reason, st)])
 
 (* The reason contains the message in the case the guard is FALSE. *)
-val guard: bool -> kill_reason -> t unit
+val guard: bool -> kill_reason -> ndM unit
 let guard b reason =
   if b then return () else kill reason
 
 
 (* Add a constraint to the current execution *)
-val add_constraint: (Constraints.t -> Constraints.t) -> t unit
+val add_constraint: (Constraints.t -> Constraints.t) -> ndM unit
 let add_constraint mk_assert =
   ND (fun st ->
     let eqs' = Constraints.simplify (mk_assert st.eqs) in
@@ -259,7 +265,7 @@ let add_constraint mk_assert =
       let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 ("STILL SAT ==> " ^ stringFromConstraints eqs') in
       [(Active (), <| st with eqs= eqs' |>)])
 
-val log: string -> t unit
+val log: string -> ndM unit
 let log msg =
   ND (fun st -> [(Active (), <| st with log= Dlist.cons msg st.log |>)])
 
@@ -287,13 +293,13 @@ let apply_to_constraints f (ND xs) =
 
 
 
-val print_debug: nat -> string -> t unit
+val print_debug: nat -> string -> ndM unit
 let print_debug n str =
   return (Debug.print_debug n ("[DRIVER] " ^ str))
 
 
 
-val collapse: forall 'a. Eq 'a => t 'a -> t 'a
+val collapse: forall 'a. Eq 'a => ndM 'a -> ndM 'a
 let collapse (ND xs) =
   error "collapse"
 
@@ -802,3 +808,7 @@ let forget m =
   end
 
 *)
+
+val runM: forall 'a. ndM 'a -> list (nd_status 'a * nd_state)
+let runM (ND f) =
+  f initial_nd_state

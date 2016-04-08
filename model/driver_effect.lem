@@ -32,7 +32,7 @@ type driver_state = <|
 
 
 type driverM 'a =
-  driver_state -> ND.t ('a * driver_state)
+  driver_state -> ND.ndM ('a * driver_state)
 
 
 val return: forall 'a. 'a -> driverM 'a

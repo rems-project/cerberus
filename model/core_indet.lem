@@ -454,7 +454,7 @@ end
 
 (* TODO: hack *)
 (*  *)
-val order: Core.file unit -> Exception.exceptM (list (nat * Core.file unit)) (Errors.t)
+val order: Core.file unit -> Exception.exceptM (list (nat * Core.file unit)) Errors.error
 let order (f: Core.file unit) =
 (*  let fbodies' = map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
   

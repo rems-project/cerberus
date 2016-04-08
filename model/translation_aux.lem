@@ -226,4 +226,19 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
 
 
 
+val     combine_params_args: list (AilTypes.qualifiers * AilTypes.ctype) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
+                             list (AilTypes.ctype * AilSyntax.expression GenTypes.genTypeCategory)
+let rec combine_params_args params es =
+  match (params, es) with
+    | ((_, ty) :: params', e :: es') ->
+        (ty, e) :: combine_params_args params' es'
+    | ([], e :: es') ->
+        (* argument promotion for variadic functions *)
+        (AilTypesAux.rvalue_coercion (ctype_of e), e) :: combine_params_args [] es'
+    | (_::_, []) ->
+        error "Translation_aux.combine_params_args"
+    | ([], []) ->
+        []
+  end
+
 

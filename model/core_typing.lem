@@ -392,7 +392,7 @@ val fold : forall 'k 'v 'r. MapKeyType 'k, SetType 'k, SetType 'v => ('k -> 'v -
 
 
 (* TODO: add a check for the existence of main *)
-val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit) Errors.t
+val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit) Errors.error
 let typecheck_program file =
   let aux =
     (* The startup function/procedure must be defined *)

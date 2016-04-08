@@ -157,12 +157,10 @@ let backend sym_supply core_file args =
   match !!cerb_conf.exec_mode_opt with
     | None ->
         0
-(*
     | Some Interactive ->
         print_endline "Interactive mode not yet supported";
         exit 1
-*)
-    | Some (Exhaustive | Random | Interactive) ->
+    | Some (Exhaustive | Random) ->
         (* TODO: temporary hack for the command name *)
         match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) (!!cerb_conf.concurrency) with
           | Exception.Result (pe::_) ->
@@ -229,7 +227,7 @@ let pipeline filename args =
     Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args compile =
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite sequentialise concurrency preEx args compile batch =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -253,13 +251,15 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
 
-  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
+    sequentialise concurrency preEx compile (* TODO *) RefStd batch;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd;
+  set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
+    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile (* TODO *) RefStd batch;
 
   
   
@@ -349,6 +349,10 @@ let preEx =
   let doc = "only generate and output the concurrency pre-execution (activates the C11 concurrency)" in
   Arg.(value & flag & info["preEx"] ~doc)
 
+let batch =
+  let doc = "makes the execution driver produce batch friendly output" in
+  Arg.(value & flag & info["batch"] ~doc)
+
 (*
 let concurrency_tests =
   let doc = "Runs the concurrency regression tests" in
@@ -362,7 +366,9 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args $ compile) in
+                         sequentialise $ concurrency $ preEx $ args $ compile $ batch) in
+
+
   let info       = Term.info "cerberus" ~version:"ecd2ae6db47b+ tip -- 25/03/2016@05:52" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->

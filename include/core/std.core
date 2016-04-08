@@ -103,7 +103,7 @@ fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
   if is_representable(n, ty) then
     n
   else
-    undef(<<Exceptional_condition>>)
+    undef(<<UB036_exceptional_condition>>)
 
 
 -- [conv_int ty n] returns the value [n] converted to the integer type [ty]
