@@ -4,7 +4,7 @@ import Product Symbolic Exception Mem Mem_aux
 
 open import Thread Errors
 
-open import `pp_coreTheory`
+open import{hol} `pp_coreTheory`
 
 import Debug Pp
 
