@@ -457,7 +457,15 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
      symbolify_paction _pact >>= fun pact ->
      Eff.return (Eaction pact)
  | Ecase (_pe, _pat_es) ->
-     failwith "WIP: Ecase"
+     symbolify_pexpr _pe >>= fun pe ->
+     Eff.mapM (fun (_pat, _e) ->
+       under_scope (
+         symbolify_pattern _pat >>= fun pat ->
+         symbolify_expr _e      >>= fun e   ->
+         Eff.return (pat, e)
+       )
+     ) _pat_es >>= fun pat_es ->
+     Eff.return (Ecase (pe, pat_es))
  | Elet (_pat, _pe1, _e2) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      under_scope (

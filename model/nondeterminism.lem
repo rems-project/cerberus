@@ -102,7 +102,6 @@ let bindExhaustive (ND m) f =
     end) (m st)
   )
 
-
 val random_select: forall 'a. list 'a -> 'a
 declare ocaml target_rep function random_select = `Boot_ocaml.random_select`
 declare hol   target_rep function random_select = `HD`
@@ -122,6 +121,11 @@ let bindRandom (ND m) f =
       | [] ->
           (List.map (fun (Killed r, st) -> (Killed r, st)) killed)
       | xs ->
+          let () =
+            if List.length xs > 1 then
+              Debug.print_debug 0 "ND.bindRandom: |xs| > 1"
+            else () in
+
           let (Active a, st') = random_select actives in
 (*
           if Constraints.isUnsat st'.eqs then
@@ -197,6 +201,7 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 
 val msum: forall 'a. string -> list (ndM 'a) -> ndM 'a (* GENERIC MonadPlus *)
 let msum debug_str ms =
+  let () = Debug.print_debug 10 ("ND.msum[" ^ debug_str ^ "], |ms| = " ^ show (List.length ms)) in (* DEBUG *)
   if List.null ms then
     error ("ND.msum(" ^ debug_str ^ "), empty list")
   else

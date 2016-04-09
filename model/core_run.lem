@@ -9,7 +9,7 @@ import Dlist
 
 open import Implementation_ Decode
 
-open import Thread Driver_util Core_run_aux Errors
+open import Cthread Driver_util Core_run_aux Errors
 
 
 open import Core_eval
@@ -401,7 +401,6 @@ type core_step =
 
   | Step_done of Core.value
   | Step_spawn_threads of (Core.expr core_run_annotation -> thread_state) * list thread_state (* initial states for the children *)
-  | Step_output of (* DEBUG *) string * string * thread_state
 (*  | Step_printf of list (formatting * Core_ctype.ctype) * list Core.value * (list string -> string) * (integer -> thread_state) *)
   
     (* format string; arg pointers; callback taking as argument the length of the printed string *)
@@ -534,7 +533,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                       )
                     )
                 | Nothing ->
-                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store() didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^ ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
               end
           | (Just cval1, Just cval2, Just cval3) ->
               Step_error ("found a store() with ill-typed operands: " ^
@@ -826,60 +825,33 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                           match cvals with
                             | [Vlist (BTy_object OTy_integer) frmt_cvals;
                                Vlist (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) args_cvals] ->
-(*
-                          (* building an OCaml string for the format *)
-                          let frmt_str =
-                            String.toString $ List.map (function
-                              | Vinteger ival ->
-                                  match Mem_aux.integerFromIntegerValue ival with
-                                    | Just n ->
-                                        Decode.encode_character_constant n
-                                    | Nothing ->
-                                        error "printf_hack: one of the element of the format array was invalid (1)"
-                                  end
-                              | z ->
-                                  error "printf_hack: one of the element of the format array was invalid (2)"
-                            end) (List.reverse chars) in
-                          
-                          (* get the list of types specified by the format string, and a builder function
-                             for the string to be printed *)
-                          let (format_tys, mk_str) = pseudo_printf frmt_str in
-                          Step_printf format_tys args mk_str (fun n ->
-                            <| th_st with arena= Epure (PEval (Vinteger (Mem.integer_ival n))) |>
-                          )
-*)
-                          let frmt_chars = List.map (function
-                            | Vobject (OVinteger ival) ->
-                                match Mem_aux.integerFromIntegerValue ival with
-                                  | Just n ->
-                                      Decode.encode_character_constant n
-                                  | Nothing ->
-                                      error "Core_run, printf one of the element of the format array was invalid (1)"
-                                end
-                              | z ->
-                                  error "Core_run, printf one of the element of the format array was invalid (2)"
-                          end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
-                          let args_ptrvals = List.map (function
-                            | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
-                                (* TODO: WIP *)
-                                (ty, ptr_val)
+                                 let frmt_chars = List.map (function
+                                   | Vobject (OVinteger ival) ->
+                                       match Mem_aux.integerFromIntegerValue ival with
+                                         | Just n ->
+                                             Decode.encode_character_constant n
+                                         | Nothing ->
+                                             error "Core_run, printf one of the element of the format array was invalid (1)"
+                                       end
+                                   | z ->
+                                       error "Core_run, printf one of the element of the format array was invalid (2)"
+                                 end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
+                                 let args_ptrvals = List.map (function
+                                   | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
+                                       (* TODO: WIP *)
+                                       (ty, ptr_val)
+                                   | _ ->
+                                       error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
+                                 end) args_cvals in
+                                 Step_printf2 frmt_chars args_ptrvals (fun n ->
+                                   <| th_st with arena= Epure (Caux.mk_integer_pe n) |>
+                                 )
                             | _ ->
-                                error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
-                          end) args_cvals in
-                          Step_printf2 frmt_chars args_ptrvals (fun n ->
-                            <| th_st with arena= Epure (Caux.mk_integer_pe n) |>
-                          )
-(*
-  | Step_printf2 of list Core.value * list Mem.pointer_value * (integer -> thread_state)
-*)
-
+                                error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                          end
                       | _ ->
-                          error "Core_run, printf giving arguments of wrong types"
+                          error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
                     end
-                | _ ->
-                    error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
-              end
-              
                 | Nothing ->
                     Step_eval "Eproc" (
                       E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->

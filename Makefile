@@ -8,7 +8,7 @@ endif
 
 BOLD="\033[1m"
 RED="\033[31m"
-YELLOW="\033[33m”
+YELLOW="\033[33m"
 RESET="\033[0m"
 
 # Looking for Lem
@@ -213,8 +213,12 @@ ocaml_native:
 #cmdliner,
 
 ocaml_byte:
-	@echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte
-	@ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,cmdliner,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
+	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
+	@cp src/main.ml src/main.ml_
+	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml_ > src/main.ml
+	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
+	@mv src/main.ml_ src/main.ml
+	@cp -L main.byte cerberus
 
 
 

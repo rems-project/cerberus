@@ -1,12 +1,12 @@
 open import Pervasives
 
 import Core Core_ctype Boot UniqueId Decode Output
-import Core_aux
+import Core_aux 
 module Caux = Core_aux
 
 
 open import Global Show Core_eval Core_run Core_run_aux Errors
-import Cmm_op Cmm_csem
+import Cmm_op Cmm_csem Cthread
 
 import Translation_aux
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
@@ -109,6 +109,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.ndM driver_state
 let rec stepConcurrency n dr_st =
+  let () = Debug.print_debug 10 "Driver.stepConcurrency" in (* DEBUG *)
   if n = 0 then
     ND.return dr_st
   else begin
@@ -152,12 +153,6 @@ let rec stepConcurrency n dr_st =
   end >>= stepConcurrency (n-1)
 
 
-
-
-
-
-
-
 val runCore: forall 'a. core_runM 'a -> driver_state -> ND.ndM ('a * driver_state)
 let runCore m dr_st =
   match SEU.run m dr_st.core_run_state with
@@ -175,15 +170,10 @@ let runCore m dr_st =
   end
 
 
-
-
-
 (* Returns the number of uncommitted action in the concurency memory model state *)
 val number_of_uncommitted: Cmm_op.symState -> nat
 let number_of_uncommitted concur_st =
   Set.size concur_st.Cmm_op.symPre.Cmm.actions - List.length concur_st.Cmm_op.symCommitted
-
-
 
 
 let symbolicFromIntegerValue ((Defacto_memory_types.IV _ ival_) as ival) =
@@ -194,8 +184,9 @@ let symbolicFromIntegerValue ((Defacto_memory_types.IV _ ival_) as ival) =
       Symbolic.SYMBconst (Core.OVinteger ival)
   end
 
+
 (* For a given thread, perform all possible step that are not action requests *)
-val     drive_core_thread: Thread.thread_id -> driver_state -> ND.ndM driver_state
+val     drive_core_thread: Cthread.thread_id -> driver_state -> ND.ndM driver_state
 let rec drive_core_thread tid dr_st =
   let th_info = match List.lookup tid dr_st.core_state.thread_states with
     | Just z ->
@@ -280,29 +271,6 @@ let rec drive_core_thread tid dr_st =
         (* error "WIP: Step_blocked" *) ND.return dr_st
     | Step_error debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
-(*
-    | Step_branch debug_str mk_constr_then mk_constr_else step_then step_else ->
-        ND.print_debug 6 ("Step_branch(" ^ debug_str ^ ")") >>
-        ND.mplus
-          begin
-            ND.add_constraint mk_constr_then >>
-            runCore step_then dr_st >>= fun (th_st', dr_st') ->
-            drive_core_thread tid <| dr_st' with
-              core_state= update_thread_state tid th_st' dr_st'.core_state;
-              dr_step_counter= dr_st'.dr_step_counter + 1
-            |>
-          end
-          begin
-            ND.add_constraint mk_constr_else >>
-            runCore step_else dr_st >>= fun (th_st', dr_st') ->
-            drive_core_thread tid <| dr_st' with
-              core_state= update_thread_state tid th_st' dr_st'.core_state;
-              dr_step_counter= dr_st'.dr_step_counter + 1
-            |>
-          end
-*)
-
-
     | Step_done cval ->
         ND.return dr_st
     | Step_spawn_threads mk_th_st th_sts ->
@@ -326,30 +294,7 @@ let rec drive_core_thread tid dr_st =
         ) dr_st' th_tids >>= fun dr_st'' ->
         
         drive_core_thread tid dr_st''
-
-
-    | Step_output debug_str str th_st' ->
-        ND.print_debug 6 ("Step_output [" ^ debug_str ^ "] ==> " ^ str) >>
-        let core_st' = update_thread_state tid th_st' dr_st.core_state in
-        drive_core_thread tid <| dr_st with
-          core_state= <| core_st' with
-            io= <| dr_st.core_state.io with stdout= Dlist.append (Dlist.singleton str) dr_st.core_state.io.stdout |>
-          |>;
-          dr_step_counter= dr_st.dr_step_counter + 1;
-        |>
-(*
-    | Step_printf format_tys args mk_str mk_th_st ->
-        ND.print_debug 6 ("Step_printf") >>
-        printf_loader dr_st format_tys args mk_str >>= fun (str, dr_st') ->
-        let core_st' = update_thread_state tid (mk_th_st (integerFromNat (String.stringLength str))) dr_st'.core_state in
-        drive_core_thread tid <| dr_st' with
-          core_state= <| core_st' with
-            io= <| dr_st'.core_state.io with stdout= Dlist.append (Dlist.singleton str) dr_st'.core_state.io.stdout |>
-          |>;
-          dr_step_counter= dr_st'.dr_step_counter + 1;
-        |>
-*)
-        
+    
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
         let eval_conv ty1 ty2 mval =
@@ -382,61 +327,19 @@ let rec drive_core_thread tid dr_st =
         end
   end) (core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
 
-(*
-  match core_thread_step dr_st.core_file th_info dr_st.core_state with
 
-(*
-    | Step_nd debug_str step_ms ->
-(*        runCore2  *)
-        ND.print_debug 9 ("drive_core_thread (" ^ show tid ^ ") ==> Step_nd " ^ debug_str) >> (* DEBUG *)
-        ND.foldM (fun acc step_m ->
-          runCore step_m acc >>= fun (core_st', dr_st') ->
-          let acc' = <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |> in
-          ND.tryM (drive_core_thread tid acc')
-            (fun () -> ND.return acc')
-        ) dr_st step_ms
-*)
-        
 
-    | Step_spawn_threads parent_tid parent_th_st th_sts ->
-        let ((th_tids, core_st'), run_st') = State.run (
-          State.foldM (fun (th_tids_, core_st_) th_st ->
-            State.bind (spawn_thread (Just parent_tid) th_st core_st_)
-              (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
-          ) ([], dr_st.core_state) th_sts
-        ) dr_st.core_run_state in
-        
-        let dr_st' = <| dr_st with
-          core_run_state= run_st';
-          core_state= update_thread_state parent_tid <| parent_th_st with
-                        arena= Core.Eunseq $ List.reverse (List.map (fun z -> Core.Ewait z) th_tids)
-                      |> core_st';
-        |> in
-        
-        ND.foldM (fun acc tid ->
-          drive_core_thread tid acc
-        ) dr_st' th_tids >>= fun dr_st'' ->
-        
-        drive_core_thread parent_tid dr_st''
 
-(*    
-  | Step_branch of (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_step * core_step
-*)        
 
-    | Step_branch debug_str parent_tid mk_then_constrs mk_else_constrs step_then_m step_else_m ->
-        ND.mplus
-          begin
-            ND.add_constraint mk_then_constrs >>
-            runCore step_then_m dr_st >>= fun (core_st', dr_st') ->
-            drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
-          end
-          begin
-            ND.add_constraint mk_else_constrs >>
-            runCore step_else_m dr_st >>= fun (core_st', dr_st') ->
-            drive_core_thread tid <| dr_st' with core_state= core_st'; dr_step_counter= dr_st'.dr_step_counter + 1 |>
-          end
-  end
-*)
+
+
+
+
+
+
+
+
+
 
 
 (* perform drive_core_thread for all the core threads *)
@@ -1040,7 +943,7 @@ let initial_driver_state sym_supply file =
 
 
 
-val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> ND.ndM (Thread.thread_id * driver_state)
+val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> ND.ndM (Cthread.thread_id * driver_state)
 let driver_globals with_concurrency sym_supply file =
   let dr_st = initial_driver_state sym_supply file in
   

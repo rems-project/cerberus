@@ -11,7 +11,7 @@ type state = <|
   visible_objects: list (list Symbol.sym);     (* visible C objects with scoping (used to properly
                                                   annotate Esave/Erun ctors) *)
   
-  string_literals: list (Symbol.sym * Core_ctype.ctype * pexpr)
+  string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * pexpr)
 |>
 
 
@@ -151,11 +151,11 @@ let get_visible_objects = fun st ->
 
 
 
-val register_string_literal: Symbol.sym -> Core_ctype.ctype -> pexpr -> t unit
-let register_string_literal a ty pe = fun st ->
-  ((), <| st with string_literals= (a, ty, pe) :: st.string_literals |>)
+val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> pexpr -> t unit
+let register_string_literal loc sym ty pe = fun st ->
+  ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
 
-val get_string_literals: t (list (Symbol.sym * Core_ctype.ctype * pexpr))
+val get_string_literals: t (list (Loc.t * Symbol.sym * Core_ctype.ctype * pexpr))
 let get_string_literals = fun st ->
   (st.string_literals, st)
 

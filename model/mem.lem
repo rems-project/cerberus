@@ -3,7 +3,7 @@
 open import Pervasives
 
 import Symbol Cabs
-open import AilTypes Core_ctype Thread
+open import AilTypes Core_ctype Cthread
 
 include import Mem_common
 
@@ -40,13 +40,13 @@ val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_
 val initial_mem_state: mem_state
 
 (* Memory actions *)
-val allocate_static:    Thread.thread_id  (* the allocating thread *)
+val allocate_static:    Cthread.thread_id  (* the allocating thread *)
                      -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
                      -> integer_value     (* alignment constraint *)
                      -> Core_ctype.ctype  (* type of the allocation *)
                      -> memM pointer_value
 
-val allocate_dynamic:   Thread.thread_id  (* the allocating thread *)
+val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
                      -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
                      -> integer_value     (* alignment constraint *)
                      -> integer_value     (* size *)

@@ -77,7 +77,7 @@ SOURCE_utils=\
   state.lem \
   state_operators.lem \
   symbol.lem \
-  thread.lem \
+  cthread.lem \
   uniqueId.lem \
   std.lem \
   monadic_parsing.lem \
