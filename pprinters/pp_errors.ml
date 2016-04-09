@@ -157,16 +157,16 @@ let location_to_string  = function
 
 let location_to_string loc =
   let string_of_pos pos =
-    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+    Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
   
   match loc with
     | Loc_unknown ->
         "unknown location"
     | Loc_point pos ->
-        string_of_pos pos
-    | Loc_region (pos, _, _) ->
+        string_of_pos pos ^ ":"
+    | Loc_region (pos1, pos2, _) ->
         (* TODO *)
-        string_of_pos pos
+        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
 
 
 

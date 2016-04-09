@@ -205,14 +205,27 @@ let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
 
 
 
-let rec translate_function_designator (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
+let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
   match (ctype_of a_expr, expr) with
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
+        let fid_pe = match fid with
+          | Symbol.Symbol _ (Just "printf") ->
+              (* TODO: do this the clean way *)
+              match mk_stdcall_aux (function ((Symbol.Symbol _ (Just z)), _) -> z = "printf_proxy" | _ -> false end) (Map_extra.toList stdlib) with
+                | Just (f, C.Proc bTy params _) ->
+                    C.Pexpr () (C.PEval (C.Vobject (C.OVcfunction (C.Sym f))))
+                | Nothing ->
+                    error "Translaion.translate_function_designator: couldn't find printf_proxy"
+              end
+          | _ ->
+              Caux.mk_cfunction_pe fid
+        end in
+
         (* TODO: check the std regarding prototype stuff *)
         E.return $
           C.Epure (
             Caux.mk_tuple_pe
-              [ Caux.mk_cfunction_pe fid
+              [ fid_pe
               ; Caux.mk_integer_pe (integerFromNat $ List.length params)
               ; Caux.mk_boolean_pe is_variadic ]
           )
@@ -481,7 +494,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           if AilTypesAux.is_object result_ty then
              translate_lvalue e
           else
-            translate_function_designator e
+            translate_function_designator stdlib e
       
 (*
 TODO: NEW TYPED CORE
@@ -1053,7 +1066,7 @@ else
         (* NOTE: this is not enought *)
       | A.AilEident id ->
           if AilTypesAux.is_pointer_to_function result_ty then
-            translate_function_designator a_expr
+            translate_function_designator stdlib a_expr
 (*            E.return (C.Epure $ Caux.mk_cfunction_pe id) *)
           else
             let id_sym_pe =
@@ -2225,7 +2238,11 @@ TODO: #9
             end
               (Caux.mk_unseq (core_e :: core_creates))
               <$> begin
-                C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments))))
+                      (* not (if is_variadic then nparams <= args else nparams = args) *)
+                C.Eif (Caux.mk_not_pe
+                         (Caux.mk_if_pe is_variadic_sym_pe
+                            (Caux.mk_op_pe C.OpLe nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))
+                            (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))))
                   (C.Epure (Caux.mk_undef_pe Undefined.UB039))
                   <$> begin
                     if numberOfArguments = 0 then
@@ -2236,7 +2253,14 @@ TODO: #9
                       E.return (
                         C.Esseq (Caux.mk_sym_pat call_sym call_sym_bTy)
                           (* the actual call *)
-                          (C.Eproc default fun_sym_pe (List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) arg_ptr_syms))
+                          begin
+                            (* merging the additional arguments of a variadic function into a list *)
+                            let arg_ptr_syms_pes =
+                              let (xs, ys) = List.splitAt (List.length params)
+                                               (List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) arg_ptr_syms) in
+                              xs ++ [Caux.mk_list_pe ys] in
+                            C.Eproc default fun_sym_pe arg_ptr_syms_pes
+                          end
                           begin
                             C.Esseq Caux.mk_empty_pat
                               (* killing of the temporary objects *)
@@ -2245,6 +2269,8 @@ TODO: #9
                               (C.Epure call_sym_pe)
                           end
                       )
+
+
 
 
 
@@ -2641,7 +2667,8 @@ TODO: #9
                 error ( "Translation AilEbuiltin> " ^ str)
           end
       
-        (* TODO: prefix + check, §6.4.5#6 *)
+*)
+      (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->
           let elem_ty = match pref_opt with
             | Nothing ->
@@ -2666,10 +2693,13 @@ TODO: #9
           let elems = List.map (fun c_str ->
             C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str))
           ) strs ++ [C.OVinteger (Mem.integer_ival 0)] in
-          E.register_string_literal sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems))) (C.PEval (C.Vobject (C.OVarray elems))) >>
+          E.register_string_literal loc sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems)))
+             (Caux.mk_specified_pe (C.Pexpr () (C.PEval (C.Vobject (C.OVarray elems))))) >>
           E.return (
-            C.Epure (C.PEsym (sym, C.BTy_object C.OTy_pointer (* TODO: check *)))
+            C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) sym))
           )
+
+(*
 
 (*
 
@@ -3378,11 +3408,11 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
   
   (* adding string literals *)
   E.get_string_literals >>= fun xs ->
-  E.foldlM (fun acc (sym, ty, e_init) ->
+  E.foldlM (fun acc (loc, sym, ty, e_init) ->
   E.fresh_symbol >>= fun sym_lit ->
     let expr =
-      C.Esseq (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate Loc.unknown (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
-        (C.Esseq Caux.mk_empty_pat (Caux.pstore Loc.unknown (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit) e_init Cmm.NA)
+      C.Esseq (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
+        (C.Esseq Caux.mk_empty_pat (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit) e_init Cmm.NA)
           (C.Ereturn (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit))) in
     E.return $ (sym, C.BTy_object C.OTy_pointer, expr) :: acc
   ) (List.reverse globs) xs >>= fun globs' ->

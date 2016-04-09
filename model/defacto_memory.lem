@@ -4,7 +4,7 @@ import Num_extra Set_helpers (* fold *)
 
 open import Global
 
-import Symbolic Thread Cabs AilTypes Dlist
+import Symbolic Cthread Cabs AilTypes Dlist
 
 open import Mem_common Defacto_memory_types Core_ctype Core_ctype_aux
 

@@ -2,7 +2,7 @@ open import Pervasives
 open import Global Show Core Driver_util
 
 open import Errors
-import Pp
+import Pp Cthread
 
 import {hol} `pp_coreTheory`
 
@@ -25,7 +25,7 @@ end
 
 
 type core_run_annotation = <|
-  sb_before:  set (Thread.thread_id * action_id);
+  sb_before:  set (Cthread.thread_id * action_id);
   dd_before:  set action_id;
   asw_before: set action_id;
 |>
@@ -43,7 +43,7 @@ end
 
 
 
-val has_sbBefore_on_thread: Thread.thread_id -> core_run_annotation -> bool
+val has_sbBefore_on_thread: Cthread.thread_id -> core_run_annotation -> bool
 let has_sbBefore_on_thread tid annot =
   Set.any (fun (tid', _) ->
     tid = tid'
@@ -65,7 +65,7 @@ val using_concurrency: unit -> bool
 declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
 declare hol  target_rep function using_concurrency u = false
 
-val     add_to_sb: set (polarity * (Thread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+val     add_to_sb: set (polarity * (Cthread.thread_id * action_id)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids expr =
   if using_concurrency () then
     match expr with
@@ -133,7 +133,7 @@ let rec add_to_sb p_aids expr =
     expr
 
 
-val add_to_sb_stack: set (polarity * (Thread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+val add_to_sb_stack: set (polarity * (Cthread.thread_id * action_id)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
 
 let rec add_to_sb_continuation p_aids = function
   | [] ->

@@ -95,7 +95,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map (Pexpr () pexpr_ as pexpr
 (*
  | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
  | PEcase of (generic_pexpr 'ty 'sym) * list ((generic_pattern 'ty 'sym) * (generic_pexpr 'ty 'sym)) (* pattern matching *)
- | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
+    | PEarray_shift pe1 ty pe2 ->
  | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
 *)
     | PEnot (Pexpr _ (PEconstrained xs)) ->
@@ -211,7 +211,17 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map (Pexpr () pexpr_ as pexpr
               EU.return (PEcase pe' pat_pes)
         end
     | PEarray_shift pe1 ty pe2 ->
-        error "WIP: Core_Eval.step_eval_pexpr, PEarray_shift"
+        self pe1 >>= fun pe1' ->
+        self pe2 >>= fun pe2' ->
+        match (Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+          | (Just (Vobject (OVpointer ptr_val)), Just (Vobject (OVinteger ival))) ->
+              EU.return $ PEval (Vobject (OVpointer (Mem.array_shift_ptrval ptr_val ty ival)))
+          | (Just _, Just _) ->
+              EU.fail $ Illformed_program ("PEarray_shift: type error ==> " ^
+                                           Pp.stringFromCore_pexpr (Pexpr () (PEarray_shift pe1' ty pe2')))
+          | _ ->
+              EU.return $ PEarray_shift pe1' ty pe2'
+        end
     | PEmember_shift pe tag_sym member_ident ->
         error "WIP: Core_Eval.step_eval_pexpr, PEmember_shift"
     | PEnot (Pexpr pe_bTy _ as pe) ->

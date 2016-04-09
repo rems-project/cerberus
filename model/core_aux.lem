@@ -2,7 +2,7 @@ open import Pervasives Global Show Core Core_ctype
 import AilSyntax AilTypes
 import Product Symbolic Exception Mem Mem_aux
 
-open import Thread Errors
+open import Cthread Errors
 
 open import{hol} `pp_coreTheory`
 
@@ -87,20 +87,17 @@ let rec memValueFromValue ty cval =
         Just (Mem.floating_value_mval fty fval)
     | (Pointer _ ref_ty, Vspecified (OVpointer ptr_val)) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
-(*
-TODO
-    | (Array elem_ty _, Vspecified (OVarray cvals)) ->
+    | (Array elem_ty _, Vspecified (OVarray ovals)) ->
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
-          List.foldr (fun cval acc_opt ->
-            match (memValueFromValue elem_ty cval, acc_opt) with
+          List.foldr (fun oval acc_opt ->
+            match (memValueFromValue elem_ty (Vspecified oval), acc_opt) with
               | (Just mem_val, Just acc) ->
                   Just (mem_val :: acc)
               | _ ->
                   Nothing
             end
-          ) (Just []) cvals
-*)
+          ) (Just []) ovals
     | (Struct tag_sym1, Vspecified (OVstruct tag_sym2 xs)) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.struct_mval tag_sym1 xs)
@@ -573,78 +570,7 @@ let to_integer pe =
 
 
 
-val     to_pure: forall 'a. expr 'a -> maybe pexpr
-let rec to_pure (expr : expr 'a) =
-  match expr with
-    | Epure pe ->
-        Just (pe : pexpr)
-    | Ememop _ _ ->
-        Nothing
-    | Eskip ->
-        Nothing
-    | Elet pat pe1 e2 ->
-        match to_pure e2 with
-          | Just (Pexpr bTy _ as pe2) ->
-              Just (Pexpr bTy (PElet pat pe1 pe2))
-          | _ ->
-              Nothing
-        end
-    | Eif pe1 e2 e3 ->
-        match (to_pure e2, to_pure e3) with
-          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
-              Just (Pexpr bTy (PEif pe1 pe2 pe3))
-          | _ ->
-              Nothing
-        end
-    | Eproc _ _ _ ->
-        Nothing
-    | Eaction _ ->
-        Nothing
-    | Eunseq _ ->
-        Nothing
-    | Ewseq _ _ _ ->
-        Nothing
-    | Esseq _ _ _ ->
-        Nothing
-    | Easeq _ _ _ ->
-      Nothing
-    | Eindet _ _ ->
-        Nothing
-    | Ebound _ _ ->
-        Nothing
-    | Esave _ _ _ ->
-        Nothing
-    | Erun _ _ _ ->
-        Nothing
-    | Ereturn _ ->
-        Nothing
-    | End _ ->
-        Nothing
-    | Epar _ ->
-        Nothing
-    | Ewait _ ->
-        Nothing
-    | Eloc _ _ ->
-        Nothing
-    | Ecase pe pat_es ->
-       let (pats, es) = List.unzip pat_es in
-        match to_pures es with
-          | Just ((Pexpr bTy _ :: _) as pes) ->
-              Just (Pexpr bTy (PEcase pe (List.zip pats pes)))
-          | _ ->
-            Nothing
-        end
-end
 
-(* val     to_pures: forall 'a. list (expr 'a) -> maybe (list pexpr)*)
-and to_pures (es: list (expr 'a)) =
-  List.foldr (fun e acc_opt ->
-    match (to_pure e, acc_opt) with
-      | (Just pe, Just acc) ->
-          Just (pe :: acc)
-      | _ ->
-          Nothing
-    end) (Just []) es
 
 
 
@@ -862,6 +788,94 @@ let rec subst_pattern pat pe' expr =
         error "WIP: Core_aux.subst_pattern"
   end
 
+
+val     to_pure: forall 'a. expr 'a -> maybe pexpr
+let rec to_pure (expr : expr 'a) =
+  match expr with
+    | Epure pe ->
+        Just pe
+    | Ememop _ _ ->
+        Nothing
+    | Eskip ->
+        Nothing
+    | Elet pat pe1 e2 ->
+        match to_pure e2 with
+          | Just (Pexpr bTy _ as pe2) ->
+              Just (Pexpr bTy (PElet pat pe1 pe2))
+          | _ ->
+              Nothing
+        end
+    | Eif pe1 e2 e3 ->
+        match (to_pure e2, to_pure e3) with
+          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
+              Just (Pexpr bTy (PEif pe1 pe2 pe3))
+          | _ ->
+              Nothing
+        end
+    | Eproc _ _ _ ->
+        Nothing
+    | Eaction _ ->
+        Nothing
+    | Eunseq es ->
+        match to_pures es with
+          | Just pes ->
+              Just (Pexpr () (PEctor Ctuple pes))
+          | Nothing ->
+              Nothing
+        end
+    | Ewseq pat e1 e2 ->
+        match to_pure e1 with
+          | Just pe1 ->
+              to_pure (subst_pattern pat pe1 e2)
+          | Nothing ->
+              Nothing
+        end
+    | Esseq pat e1 e2 ->
+        match to_pure e1 with
+          | Just pe1 ->
+              to_pure (subst_pattern pat pe1 e2)
+          | Nothing ->
+              Nothing
+        end
+    | Easeq _ _ _ ->
+      Nothing
+    | Eindet _ _ ->
+        Nothing
+    | Ebound _ _ ->
+        Nothing
+    | Esave _ _ _ ->
+        Nothing
+    | Erun _ _ _ ->
+        Nothing
+    | Ereturn _ ->
+        Nothing
+    | End _ ->
+        Nothing
+    | Epar _ ->
+        Nothing
+    | Ewait _ ->
+        Nothing
+    | Eloc _ e ->
+        to_pure e
+    | Ecase pe pat_es ->
+       let (pats, es) = List.unzip pat_es in
+        match to_pures es with
+          | Just ((Pexpr bTy _ :: _) as pes) ->
+              Just (Pexpr bTy (PEcase pe (List.zip pats pes)))
+          | _ ->
+            Nothing
+        end
+end
+
+(* val     to_pures: forall 'a. list (expr 'a) -> maybe (list pexpr)*)
+and to_pures (es: list (expr 'a)) =
+  List.foldr (fun e acc_opt ->
+    match (to_pure e, acc_opt) with
+      | (Just pe, Just acc) ->
+          Just (pe :: acc)
+      | _ ->
+          Nothing
+    end) (Just []) es
 
 
 
