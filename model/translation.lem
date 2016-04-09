@@ -2964,8 +2964,13 @@ let rec translate_stmt stdlib program f labs (A.AnnotatedStatement loc stmt) =
         E.mapM (fun s -> translate_stmt_ s >>= fun core_s -> E.return core_s) ss >>= fun core_ss ->
         E.pop_block_objects >>
         E.return (
-          C.Esseq (Caux.mk_tuple_pat pats) (Caux.mk_unseq core_creates)
+          let () = Debug.warn "Translation, AilSblock: sequencing the creates and kills" in
+(*        C.Esseq (Caux.mk_tuple_pat pats) (Caux.mk_unseq core_creates)
             (foldr (fun core_s acc -> C.Esseq (C.CaseBase Nothing) core_s acc) (Caux.mk_unseq core_kills) core_ss)
+        ) *)
+          Caux.mk_wseqs
+            (foldr (fun core_s acc -> C.Esseq (C.CaseBase Nothing) core_s acc) (Caux.mk_unit_sseq core_kills) core_ss)
+            (List.zip pats core_creates)
         )
 (*
 

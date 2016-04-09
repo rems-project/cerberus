@@ -480,19 +480,20 @@ end
 
 
 
-let rec mk_wseq_aux end_e a_opts_es =
-  match a_opts_es with
+let rec mk_wseqs_aux end_e pat_es =
+  match pat_es with
     | []               -> end_e
-(*    | [(_, e)]         -> e *)
-    | (a_opts, e)::es' -> Ewseq a_opts e (mk_wseq_aux end_e es')
+    | (pat, e) :: pat_es' -> Ewseq pat e (mk_wseqs_aux end_e pat_es')
 end
-let mk_wseq end_e = function
+
+val mk_wseqs: expr unit -> list (pattern * expr unit) -> expr unit
+let mk_wseqs end_e = function
   | [] ->
       end_e
   | [(_, e)] ->
       e
-  | a_opts_es ->
-      mk_wseq_aux end_e a_opts_es
+  | pat_es ->
+      mk_wseqs_aux end_e pat_es
 end
 
 (* val     mk_sseq: forall 'a. list (pattern * expr 'a) -> expr 'a *)
@@ -518,6 +519,15 @@ let mk_unseq = function
   | [e] -> e
   | es  -> Eunseq es
 end
+
+val     mk_unit_sseq: list (expr unit) -> expr unit
+let rec mk_unit_sseq es =
+  match es with
+    | [] ->
+        Eskip
+    | e::es' ->
+        Esseq mk_empty_pat e (mk_unit_sseq es')
+  end
 
 
 
