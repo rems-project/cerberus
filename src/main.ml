@@ -219,11 +219,11 @@ let pipeline filename args =
       print_endline "====================";
    );
   
-(*
+
   if !!cerb_conf.compile then
-    Codegen_ocaml.compile filename true rewritten_core_file
+    (*Exception.bind2 (Core_typing.typecheck_program rewritten_core_file)*)
+      (Codegen_ocaml.compile filename rewritten_core_file)
   else
-*)
     Exception.return2 (backend sym_supply rewritten_core_file args)
 
 
