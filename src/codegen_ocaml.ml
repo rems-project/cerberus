@@ -267,31 +267,31 @@ let print_ail_qualifier {
     ) ^^ P.break 1 ^^ !^"}"
 
 let print_ail_integer_base_type = function
-  | Ichar             -> !^"T.Ichar"
-  | Short             -> !^"T.Short"
-  | Int_              -> !^"T.Int_"
-  | Long              -> !^"T.Long"
-  | LongLong          -> !^"T.LongLong"
+  | Ichar          -> !^"T.Ichar"
+  | Short          -> !^"T.Short"
+  | Int_           -> !^"T.Int_"
+  | Long           -> !^"T.Long"
+  | LongLong       -> !^"T.LongLong"
    (* Things defined in the standard libraries *)
-  | IntN_t n          -> !^"T.IntN_t" ^^^ !^(string_of_int n)
-  | Int_leastN_t n    -> !^"T.Int_leastN_t" ^^^ todo "int_leastnt"
-  | Int_fastN_t n     -> !^"T.Int_fastN_t" ^^^ todo "int+fastnt"
-  | Intmax_t          -> !^"T.Intmax_t"
-  | Intptr_t          -> !^"T.Intptr_t"
+  | IntN_t n       -> !^"T.IntN_t" ^^^ !^(string_of_int n)
+  | Int_leastN_t n -> !^"T.Int_leastN_t" ^^^ todo "int_leastnt"
+  | Int_fastN_t n  -> !^"T.Int_fastN_t" ^^^ todo "int+fastnt"
+  | Intmax_t       -> !^"T.Intmax_t"
+  | Intptr_t       -> !^"T.Intptr_t"
 
 let print_ail_integer_type = function
-  | Char           -> !^"T.Char"
-  | Bool           -> !^"T.Bool"
-  | Signed ibt     -> !^"T.Signed" ^^^ P.parens (print_ail_integer_base_type ibt)
-  | Unsigned ibt   -> !^"T.Unsigned" ^^^ P.parens (print_ail_integer_base_type ibt)
-  | IBuiltin str   -> !^"T.IBuiltin" ^^^ !^str
-  | Enum ident     -> !^"T.Enum" ^^^ todo "identifier"
-  | Size_t         -> !^"T.Size_t"
-  | Ptrdiff_t      -> !^"T.Ptrdiff_t"
+  | Char         -> !^"T.Char"
+  | Bool         -> !^"T.Bool"
+  | Signed ibt   -> !^"T.Signed" ^^^ P.parens (print_ail_integer_base_type ibt)
+  | Unsigned ibt -> !^"T.Unsigned" ^^^ P.parens (print_ail_integer_base_type ibt)
+  | IBuiltin str -> !^"T.IBuiltin" ^^^ !^str
+  | Enum ident   -> !^"T.Enum" ^^^ todo "identifier"
+  | Size_t       -> !^"T.Size_t"
+  | Ptrdiff_t    -> !^"T.Ptrdiff_t"
 
 let print_ail_basic_type = function
-  | Integer it    -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
-  | Floating ft   -> todo "floating type"
+  | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
+  | Floating ft -> todo "floating type"
 
 let print_option_type pp = function
   | Some e  -> !^"Some" ^^^ P.parens (pp e)
@@ -314,10 +314,10 @@ let rec print_ctype = function
   | Builtin0 str -> !^"C.Builtin0" ^^^ !^str
 
 let print_provenance = function
-  | Prov_wildcard     -> !^"I.Prov_wildcard"
-  | Prov_none         -> !^"I.Prov_none"
-  | Prov_device       -> !^"I.Prov_device"
-  | Prov_some ids     -> todo "prov_some"
+  | Prov_wildcard -> !^"I.Prov_wildcard"
+  | Prov_none     -> !^"I.Prov_none"
+  | Prov_device   -> !^"I.Prov_device"
+  | Prov_some ids -> todo "prov_some"
 
 let print_iv_value = function
   | IV (prov, ivb) -> !^"I.IV" ^^^ P.parens (print_provenance prov ^^ P.comma
@@ -350,13 +350,12 @@ let print_floating_value = function
 
 let rec print_object_value = function
   | OVstruct _
-  | OVunion _ -> todo "print_obj_value"
-    (* weird -- not sure *)
+  | OVunion _      -> todo "print_obj_value"
   | OVcfunction nm -> print_name nm
-  | OVinteger iv -> print_iv_value iv
-  | OVfloating fv -> print_floating_value fv
-  | OVpointer pv -> print_pointer_value pv
-  | OVarray obvs -> print_list print_object_value obvs
+  | OVinteger iv   -> print_iv_value iv
+  | OVfloating fv  -> print_floating_value fv
+  | OVpointer pv   -> print_pointer_value pv
+  | OVarray obvs   -> print_list print_object_value obvs
 
 (* Print type values *)
 let rec print_value = function
