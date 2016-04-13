@@ -221,8 +221,8 @@ let pipeline filename args =
   
 
   if !!cerb_conf.compile then
-    (*Exception.bind2 (Core_typing.typecheck_program rewritten_core_file)*)
-      (Codegen_ocaml.compile filename rewritten_core_file)
+    Exception.bind2 (Core_typing.typecheck_program rewritten_core_file)
+      (Codegen_ocaml.compile filename)
   else
     Exception.return2 (backend sym_supply rewritten_core_file args)
 

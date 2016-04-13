@@ -49,3 +49,12 @@ load "state_exceptionTheory";
 load "uniqueIdTheory";
 load "symbolTheory";
 load "cabs_to_ail_auxTheory";
+load "coreTheory";
+load "exception_undefinedTheory";
+load "ppTheory";
+load "ailTypesAuxTheory";
+load "core_auxTheory";
+load "memTheory";
+load "core_run_auxTheory";
+load "errorsTheory";
+
