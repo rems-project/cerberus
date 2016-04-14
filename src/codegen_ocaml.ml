@@ -86,10 +86,6 @@ let print_core_type = function
 
 (* Binary operations and precedences *)
 
-let print_binop binop pp pe1 pe2 =
-  !^"raise (A.Error \"Type check not implemented\")"
-(*
-   FIXME: Use this function when type check is ready
 let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
   if t1 != t2 then raise Type_mismatch else
   match binop with
@@ -164,7 +160,6 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
     )
   | OpAnd -> pp pe1 ^^^ !^" && " ^^^ pp pe2
   | OpOr  -> pp pe1 ^^^ !^ "||" ^^^ pp pe2
-*)
 
 let binop_precedence (Pexpr (_, pe)) = match pe with
   | PEop (OpExp, _, _) -> Some 1
