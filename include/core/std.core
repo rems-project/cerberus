@@ -341,7 +341,7 @@ proc printf_loader(tys: [ctype], args: [pointer]) : eff integer :=
 
 
 proc malloc_proxy (size_ptr: pointer) : eff pointer :=
-  let strong size: integer = load("size_t", size_ptr) in
+  let strong size: loaded integer = load("size_t", size_ptr) in
   alloc(4, size)
 {-
   lets ret = alloc(4, size) in

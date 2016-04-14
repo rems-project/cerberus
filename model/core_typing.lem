@@ -2,7 +2,7 @@ open import Pervasives
 import Map_extra
 
 open import Global Errors
-import Exception Loc
+import Exception Loc Pp
 
 open import Core Core_aux
 import Core_ctype Core_ctype_aux
@@ -43,7 +43,10 @@ let rec annotate_pattern bTy = function
   | CaseBase Nothing ->
       E.return (Map.empty, CaseBase Nothing)
   | CaseBase (Just (sym, bTy')) ->
-      E.guard (bTy = bTy') (CoreTyping_TODO "annotate CaseBase") >>
+      E.guard (bTy = bTy') (CoreTyping_TODO ("annotate CaseBase" ^
+        " expected type: " ^ Pp.stringFromCore_core_base_type bTy ^
+        " current type:" ^ Pp.stringFromCore_core_base_type bTy' ^
+        " symbol:" ^ show sym )) >>
       E.return (Map.singleton sym (Left bTy'), CaseBase (Just (sym, bTy')))
   | CaseCtor ctor pats ->
       match (ctor, bTy, pats) with
@@ -223,7 +226,9 @@ let rec annotate_pexpr env (Pexpr () pexpr_) =
         let ret_ctor bTy ctor pe = E.return (Pexpr bTy (PEctor ctor [pe])) in
         match (ctor, pes) with
           | (Cnil (), []) ->
-              error "annotate cnil: list of ????"
+              (* FIXME: hack *)
+              E.return (Pexpr (BTy_list (BTy_object OTy_integer))
+                          (PEctor (Cnil (BTy_object OTy_integer)) []))
           | (Cnil _, _) ->
               E.fail (CoreTyping_TODO "illtyped list")
           | (Ccons, [pe]) ->
@@ -619,7 +624,7 @@ let rec annotate_expr env = function
       E.return (BTy_unit, Ememop memop pes')
   | Eaction pact ->
       annotate_paction env pact >>= fun pact' ->
-      E.return (BTy_unit, Eaction pact')
+      E.return (BTy_loaded OTy_integer, Eaction pact')
   | Ecase pe cases ->
       annotate_pexpr env pe >>= fun (Pexpr mbTy _ as pe') ->
       E.mapM (fun (pat, e) -> annotate_pattern mbTy pat >>=
