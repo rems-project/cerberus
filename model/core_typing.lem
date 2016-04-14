@@ -222,7 +222,7 @@ let rec annotate_pexpr env (Pexpr () pexpr_) =
     | PEctor ctor pes ->
         let ret_ctor bTy ctor pe = E.return (Pexpr bTy (PEctor ctor [pe])) in
         match (ctor, pes) with
-          | (Cnil _, []) ->
+          | (Cnil (), []) ->
               error "annotate cnil: list of ????"
           | (Cnil _, _) ->
               E.fail (CoreTyping_TODO "illtyped list")
@@ -337,9 +337,14 @@ let rec annotate_pexpr env (Pexpr () pexpr_) =
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
-
-    | PEstruct _ _ -> error "pestruct"
-    | PEunion _ _ _ -> error "peunion"
+    (* FIXME: fields in struct and union should be checked *)
+    | PEstruct sym fields ->
+        let (ids, pes) = List.unzip fields in
+        Pexpr (BTy_object (OTy_struct sym)) <$>
+          (PEstruct sym <$> (List.zip ids <$> E.mapM (annotate_pexpr env) pes))
+    | PEunion sym id pe ->
+        Pexpr (BTy_object (OTy_union sym)) <$>
+          (PEunion sym id <$> annotate_pexpr env pe)
     | PEcall (Sym sym) pes ->
         match Map.lookup sym env with
           | Just (Left _) ->
@@ -393,6 +398,7 @@ and typecheck_pexpr env bTy (Pexpr () pexpr_) =
           | Nothing ->
               E.fail (CoreTyping_TODO "unresolved PEsym")
         end
+    (* FIXME: check type per implementation constant ?*)
     | PEimpl impl -> E.return (PEimpl impl)
     | PEval cval ->
         typeof_value cval >>= fun bTy' ->
@@ -413,7 +419,7 @@ and typecheck_pexpr env bTy (Pexpr () pexpr_) =
     | PEctor ctor pes ->
         let ret_ctor ctor pe = PEctor ctor [pe] in
         match (ctor, bTy, pes) with
-          | (Cnil _, BTy_list elem_bTy, []) ->
+          | (Cnil (), BTy_list elem_bTy, []) ->
               E.return (PEctor (Cnil elem_bTy) [])
           | (Cnil _, _, _) ->
               E.fail (CoreTyping_TODO "illtyped list")
@@ -518,13 +524,15 @@ and typecheck_pexpr env bTy (Pexpr () pexpr_) =
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
-
-(*
-    | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
-    | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
-*)
-    | PEstruct _ _ -> error "pestruct"
-    | PEunion _ _ _ -> error "peunion"
+    | PEstruct sym fields ->
+        E.guard (bTy = BTy_object (OTy_struct sym))
+          (CoreTyping_TODO "PEstruct illtyped") >>
+        let (ids, pes) = List.unzip fields in
+        PEstruct sym <$> (List.zip ids <$> E.mapM (annotate_pexpr env) pes)
+    | PEunion sym id pe ->
+        E.guard (bTy = BTy_object (OTy_union sym))
+          (CoreTyping_TODO "PEunion illtyped") >>
+        (PEunion sym id <$> annotate_pexpr env pe)
     | PEcall (Sym sym) pes ->
         match Map.lookup sym env with
           | Just (Left _) ->
@@ -564,16 +572,34 @@ val     annotate_action: typing_env -> generic_action unit unit Symbol.sym ->
           E.eff (generic_action unit core_base_type Symbol.sym)
 let rec annotate_action env (Action loc x act) =
   Action loc x <$> match act with
-    | Create pe1 pe2 pre -> error "create"
-    | Alloc pe1 pe2 pre -> error "alloc"
-    | Kill pe -> error "kill"
-    | Store pe1 pe2 pe3 mo -> error "store"
+    | Create pe1 pe2 pre ->
+        Create <$> annotate_pexpr env pe1
+               <*> annotate_pexpr env pe2
+               <*> E.return pre
+    | Alloc pe1 pe2 pre ->
+        Alloc <$> annotate_pexpr env pe1
+              <*> annotate_pexpr env pe2
+              <*> E.return pre
+    | Kill pe ->
+        Kill <$> annotate_pexpr env pe
+    | Store pe1 pe2 pe3 mo ->
+        Store <$> annotate_pexpr env pe1
+              <*> annotate_pexpr env pe2
+              <*> annotate_pexpr env pe3
+              <*> E.return mo
     | Load pe1 pe2 mo ->
         Load <$> annotate_pexpr env pe1
              <*> annotate_pexpr env pe2
              <*> E.return mo
-    | RMW pe1 pe2 pe3 pe4 mo1 mo2 -> error "rmw"
-    | Fence mo -> error "fence"
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        RMW <$> annotate_pexpr env pe1
+            <*> annotate_pexpr env pe2
+            <*> annotate_pexpr env pe3
+            <*> annotate_pexpr env pe4
+            <*> E.return mo1
+            <*> E.return mo2
+    | Fence mo ->
+        E.return (Fence mo)
   end
 
 val annotate_paction: typing_env -> generic_paction unit unit Symbol.sym ->
@@ -587,7 +613,10 @@ let rec annotate_expr env = function
   | Epure pe ->
      annotate_pexpr env pe >>= fun (Pexpr bTy _ as pe') ->
      E.return (bTy, Epure pe')
-  | Ememop memop pes -> error "annotate memop"
+  (* FIXME: are ememop and eaction of type unit? *)
+  | Ememop memop pes ->
+      E.mapM (annotate_pexpr env) pes >>= fun pes' ->
+      E.return (BTy_unit, Ememop memop pes')
   | Eaction pact ->
       annotate_paction env pact >>= fun pact' ->
       E.return (BTy_unit, Eaction pact')
@@ -617,7 +646,13 @@ let rec annotate_expr env = function
   | Ereturn pe ->
       annotate_pexpr env pe >>= fun (Pexpr bTy _ as pe') ->
       E.return (bTy, Ereturn pe')
-  | Eunseq es -> error "eunseq"
+  | Eunseq []  ->
+      E.fail (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
+  | Eunseq [e] ->
+      E.fail (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
+  | Eunseq es ->
+      (List.unzip <$> E.mapM (annotate_expr env) es) >>= fun (bTys, es') ->
+      E.return (BTy_tuple bTys, Eunseq es')
   | Ewseq pat e1 e2 ->
       annotate_expr env e1 >>= fun (bTy1, e1') ->
       annotate_pattern bTy1 pat >>= fun (env', pat') ->
@@ -644,9 +679,12 @@ val typecheck_expr: typing_env -> core_base_type -> Core.expr unit ->
 let rec typecheck_expr env bTy = function
   | Epure pe ->
       Epure <$> typecheck_pexpr env bTy pe
-  | Ememop memop pes -> error "memop"
+  | Ememop memop pes ->
+      E.guard (bTy = BTy_unit) (CoreTyping_TODO "Ememop illtyped") >>
+      (Ememop memop <$> E.mapM (annotate_pexpr env) pes)
   | Eaction pact ->
-      Eaction <$> annotate_paction env pact
+      E.guard (bTy = BTy_unit) (CoreTyping_TODO "Eaction illtyped") >>
+      (Eaction <$> annotate_paction env pact)
   | Ecase pe cases ->
       annotate_pexpr env pe >>= fun (Pexpr mbTy _ as pe') ->
       E.mapM (fun (pat, e) -> annotate_pattern mbTy pat >>=
@@ -669,7 +707,17 @@ let rec typecheck_expr env bTy = function
                <*> E.mapM (annotate_pexpr env) pes
   | Ereturn pe ->
       Ereturn <$> typecheck_pexpr env bTy pe
-  | Eunseq e -> error "unseq"
+  | Eunseq []  ->
+      E.fail (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
+  | Eunseq [e] ->
+      E.fail (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
+  | Eunseq es ->
+      match bTy with
+        | BTy_tuple bTys ->
+            Eunseq <$> E.mapM (fun (bTy, e) -> typecheck_expr env bTy e)
+                        (List.zip bTys es)
+        | _ -> E.fail (CoreTyping_TODO "UNSEQ illtyped")
+      end
   | Ewseq pat e1 e2 ->
       annotate_expr env e1 >>= fun (bTy1, e1') ->
       annotate_pattern bTy1 pat >>= fun (env', pat') ->
