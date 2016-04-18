@@ -91,7 +91,7 @@ let rec pp_core_base_type = function
   | BTy_boolean    -> !^ "boolean"
   | BTy_ctype      -> !^ "ctype"
   | BTy_unit       -> !^ "unit"
-  | BTy_list bTys  -> !^ "TODO(BTy_list)"
+  | BTy_list bTy  -> P.brackets (pp_core_base_type bTy)
   | BTy_tuple bTys -> P.parens (P.separate_map P.comma pp_core_base_type bTys)
 
 
@@ -478,8 +478,9 @@ let rec pp_expr = function
       pp_expr e
   | End es ->
       pp_keyword "nd" ^^ P.parens (comma_list pp_expr es)
-  | Ebound _ ->
-      failwith "pp_core ==> Ebound"
+  | Ebound (i, e) ->
+      pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
+      P.parens (pp_expr e)
 
 and pp_shift_path sh_path =
   P.braces (

@@ -27,6 +27,14 @@ type mem_value      = Impl.mem_value
 type integer_value  = Impl.integer_value
 type floating_value = Impl.floating_value
 
+
+(* This abstract in returns by memory actions and two footprints can be checked for overlapping.
+   They are in particular useful to detect races. *)
+type footprint = Impl.footprint
+val do_overlap: footprint -> footprint -> bool
+let do_overlap = Impl.do_overlap
+
+
 type mem_state = Impl.mem_state
 
 
@@ -52,8 +60,8 @@ val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
                      -> integer_value     (* size *)
                      -> memM pointer_value
 
-val load: ctype -> pointer_value -> memM mem_value
-val store: ctype -> pointer_value -> mem_value -> memM unit
+val load: ctype -> pointer_value -> memM (footprint * mem_value)
+val store: ctype -> pointer_value -> mem_value -> memM footprint
 
 (* TODO: put somewhere *)
 val prettyStringFromMem_value: mem_value -> string

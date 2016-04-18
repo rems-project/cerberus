@@ -10,6 +10,14 @@ type allocation_id = nat
 type provenance_id = nat
 
 
+(* TODO: simplified for now (only work for scalars) *)
+type footprint = allocation_id
+val do_overlap: footprint -> footprint -> bool
+let do_overlap = (=)
+
+
+
+
 
 (* A 'provenance' keeps track of a how a pointer value was constructed *)
 type provenance =

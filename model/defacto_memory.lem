@@ -1239,7 +1239,7 @@ let sequencePoint =
 
 
 
-let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
+let load ty (PV _ ptr_val_ sh as ptr_val) : memM (footprint * mem_value) =
   print_debugM 5 ("LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
@@ -1249,11 +1249,11 @@ let load ty (PV _ ptr_val_ sh as ptr_val) : memM mem_value =
           | Just (_, Just mval) ->
               let mval' = apply_shift_path ty sh mval in
               print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
-              return mval'
+              return (alloc_id, mval')
           | Just (_, Nothing) ->
 (*              fail (MerrUnitialised (stringFromPointer_value ptr_val)) *)
               (* NOTE: going beyond the STD here *)
-              return (mkUnspec ty)
+              return (alloc_id, mkUnspec ty)
           | Nothing ->
               error "Mem.load, couldn't find some allocation"
         end
@@ -2348,7 +2348,8 @@ let store lvalue_ty ptr_val mval =
     | Just alloc_id ->
 (*        addToLog alloc_id >> *)
         register_write_event alloc_id (WriteEvent lvalue_ty ptr_val mval) >>
-        (*DEBUG*)print_debugM 5 "STORE DONE"
+        (*DEBUG*)print_debugM 5 "STORE DONE" >>
+        return alloc_id
     | Nothing ->
         fail (MerrWIP $ "attempted to store with pointer: " ^ stringFromPointer_value ptr_val)
   end

@@ -926,6 +926,10 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               if List.all (fun e -> is_wait e || to_pure e <> Nothing) es then
                 one Step_blocked
               else
+                if false(*EXPERIMENTAL UNSEQ*) then
+                  []
+                else
+begin
                 let xs = 
                 List.map (fun (es1, ej, es2) ->
                   Step_tau "Eunseq" (
@@ -936,6 +940,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                   error ("BOOM Core_run, Eunseq, empty list ==> " ^ Pp.stringFromCore_expr (Eunseq es)) (* TODO: debug *)
                 else
                   xs
+end
         end
     
     | (Ewseq pat e1 e2, Stack_cons cont sk) ->

@@ -26,8 +26,8 @@ let rec core_object_type_of_ctype ty =
        OTy_floating
    | Array ty _ ->
        OTy_array (core_object_type_of_ctype ty)
-   | Function _ _ _ ->
-       OTy_cfunction
+   | Function ty xs _ ->
+       OTy_cfunction (*ty (List.map snd xs)*)
    | Pointer _ _ ->
        OTy_pointer
    | Atomic ty ->
@@ -851,8 +851,9 @@ let rec to_pure (expr : expr 'a) =
       Nothing
     | Eindet _ _ ->
         Nothing
-    | Ebound _ _ ->
-        Nothing
+    | Ebound _ e ->
+        (* TODO: checl *)
+        to_pure e
     | Esave _ _ _ ->
         Nothing
     | Erun _ _ _ ->

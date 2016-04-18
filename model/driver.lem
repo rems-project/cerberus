@@ -617,7 +617,7 @@ let action_request_sequential dr_st = function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
             ND.kill (ND.Other ("memory layout error (load seq) ==> " ^ show mem_err))
-        | Right (mem_val, layout_st') ->
+        | Right ((fp, mem_val), layout_st') ->
             ND.return <| dr_st with
               core_state=   update_thread_state tid (mk_th_st' mem_val) dr_st.core_state;
               layout_state= layout_st'
@@ -633,7 +633,7 @@ let action_request_sequential dr_st = function
             (* TODO: map memory error to something sensible ... *)
             ND.kill (ND.Other ("memory layout error (store seq) ==> " ^ show mem_err))
 
-        | Right ((), layout_st') ->
+        | Right (fp, layout_st') ->
             ND.return <| dr_st with
               core_state=   update_thread_state tid th_st' dr_st.core_state;
               layout_state= layout_st'
@@ -1063,9 +1063,9 @@ end
 
 
 
-val drive: bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> list string ->
+val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> list string ->
            ND.ndM (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
-let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
+let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
   driver_globals with_concurrency sym_supply file >>= fun (tid0, post_globals_dr_st) ->
@@ -1117,7 +1117,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               ND.foldM (fun (ptr_vals, dr_st) (arg_mem_val, arg_ty) ->
                 liftMem (
                   Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
-                    Mem.bind (Mem.store arg_ty ptr_val arg_mem_val) (fun () ->
+                    Mem.bind (Mem.store arg_ty ptr_val arg_mem_val) (fun _ ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
                   )
@@ -1129,7 +1129,7 @@ let drive (with_concurrency: bool) sym_supply file (arg_strs: list string) =
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [post_args_dr_st.core_file.Core.main; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
-                  Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun () ->
+                  Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun _ ->
                     Mem.return ptr_val
                   )
                 )

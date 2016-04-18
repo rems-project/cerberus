@@ -45,6 +45,7 @@ type cerberus_conf = {
   preEx:           bool;
   error_verbosity: error_verbosity;
   batch:           bool;
+  experimental_unseq: bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -72,6 +73,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     error_verbosity ->
+    bool ->
     bool ->
     unit
 
