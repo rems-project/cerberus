@@ -21,6 +21,9 @@ val _ = Define `
   pp_core_value (v :value) = ""`;
 
 val _ = Define `
+  pp_core_base_type (t : core_base_type) = ""`;
+
+val _ = Define `
   pp_prefix (s :symbol$prefix) = ""`;
 
 val _ = Define `

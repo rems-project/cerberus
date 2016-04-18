@@ -16,11 +16,13 @@ let lookupR b (Bimap _ mapb) =
 
 
 val fromList: forall 'a 'b. MapKeyType 'a, MapKeyType 'b => list ('a * 'b) -> bimap 'a 'b
-let rec fromList_aux (Bimap mapa mapb as acc) = function
+let rec fromList_aux (Bimap mapa mapb as acc) xs =
+  match xs with
   | [] ->
       acc
   | (a, b) :: xs ->
       fromList_aux (Bimap (Map.insert a b mapa) (Map.insert b a mapb)) xs
-end
+  end
+
 let fromList =
   fromList_aux (Bimap Map.empty Map.empty)
