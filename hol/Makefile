@@ -65,7 +65,7 @@ UTILS =\
   state.lem \
   state_operators.lem \
   symbol.lem \
-  thread.lem \
+  cthread.lem \
   uniqueId.lem \
   std.lem \
   monadic_parsing.lem \
@@ -74,6 +74,7 @@ UTILS =\
  implementation_.lem \
  symbolic.lem \
  pp.lem \
+ bimap.lem \
  debug.lem
 
 DEFACTO =\
@@ -182,14 +183,20 @@ name_patch:
 	sed -i.bck 's|a\$$||g' cabs_to_ail_effectScript.sml
 	sed -i.bck 's|atypes\$$||g' cabs_to_ailScript.sml
 	sed -i.bck 's|e\$$||g' cabs_to_ailScript.sml
-	sed -i.bck 's|e\$$||g' core_typingScript.sml
 	sed -i.bck 's|cty\$$||g' core_typingScript.sml
-	sed -i.bck 's|e\$$||g' genTypingScript.sml
+#	sed -i.bck 's|e\$$||g' genTypingScript.sml
 	sed -i.bck 's|cty\$$||g' outputScript.sml
 	sed -i.bck 's|u\$$||g' outputScript.sml
 	sed -i.bck 's|caux\$$||g' core_evalScript.sml
 	sed -i.bck 's|eu\$$||g' core_evalScript.sml
+	sed -i.bck 's|seu\$$||g' core_runScript.sml
+	sed -i.bck 's|eu\$$||g' core_runScript.sml
+	sed -i.bck 's|caux\$$||g' core_runScript.sml
+	sed -i.bck 's|cmm\$$||g' core_runScript.sml
+	sed -i.bck 's|e\$$||g' core_runScript.sml
 #	sed -i.bck 's|core\$$||g' core_indent.sml
+
+# val _ = PmatchHeuristics.set_classic_heuristic ();
 
 patch: $(addprefix $(PATCH_DIR), $(PATCH)) | name_patch
 	@echo $(BOLD)Applying patch $<...$(RESET)

@@ -38,11 +38,11 @@ declare ocaml target_rep function stringFromCore_file   = `String_core.string_of
 declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`
 
 declare hol target_rep function stringFromCore_ctype  = `pp_core$pp_core_ctype`
+declare hol target_rep function stringFromCore_core_base_type  = `pp_core.pp_core_base_type`
 declare hol target_rep function stringFromCore_value  = `pp_core$pp_core_value`
 declare hol target_rep function stringFromCore_pexpr  = `pp_core$pp_core_pexpr`
 declare hol target_rep function stringFromCore_expr   = `pp_core$pp_core_expr`
-declare hol target_rep function stringFromCore_params =
-                                  `pp_core$pp_core_params`
+declare hol target_rep function stringFromCore_params = `pp_core$pp_core_params`
 declare hol target_rep function stringFromCore_file   = `pp_core$pp_core_file`
 declare hol target_rep function stringFromCore_stack  = `pp_core$pp_core_stack`
 
