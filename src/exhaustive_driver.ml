@@ -18,19 +18,19 @@ type execution_result = (Core.pexpr list, Errors.error) Exception.exceptM
 
 
 
-let drive sym_supply file args with_concurrency : execution_result =
+let drive sym_supply file args cerb_conf : execution_result =
   Random.self_init ();
   
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run.convert_file file in
   
   (* computing the value (or values if exhaustive) *)
-  let values = ND.runM0 (Driver.drive with_concurrency sym_supply file args) in
+  let values = ND.runM0 (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
   
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
   
-  if !!cerb_conf.batch then
+  if cerb_conf.batch then
     begin
     List.iter (function
       | ND.Active (stdout, (_, _, pe), _) ->
@@ -123,7 +123,7 @@ end
             );
           );
           if not (List.mem str_v_ !ky) && not is_blocked then (
-            if with_concurrency then
+            if cerb_conf.concurrency then
               Debug_ocaml.print_debug 2 (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_constraints st.ND.eqs));
 (*            print_string stdout; *)
             
@@ -191,7 +191,7 @@ end
             );
           );
           if not (List.mem str_v_ !ky) && not is_blocked then (
-            if with_concurrency then
+            if cerb_conf.concurrency then
               Debug_ocaml.print_debug 2 (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_constraints constraints));
 (*            print_string stdout; *)
             

@@ -430,7 +430,7 @@ let rec hack expr =
                                                                                            | _ -> Boot.assert_false "[Core_indet.hack Easeq] impossible case" end))*)
     | Core.Eindet _ e ->
         hack e
-    | Core.Ebound _ e ->
+    | Core.Ebound i e ->
         hack e
     | Core.Esave d a_tys e ->
         Core.Esave d a_tys (hack e)

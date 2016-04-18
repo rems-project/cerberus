@@ -56,6 +56,7 @@ type cerberus_conf = {
   preEx:             bool;
   error_verbosity:   error_verbosity;
   batch:             bool;
+  experimental_unseq: bool;
 }
 
 let (!!) z = !z()
@@ -74,7 +75,7 @@ let current_execution_mode () =
 
 
 let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
-                  sequentialise concurrency preEx compile error_verbosity batch =
+                  sequentialise concurrency preEx compile error_verbosity batch experimental_unseq =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -91,6 +92,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     preEx=         preEx;
     error_verbosity= error_verbosity;
     batch= batch;
+    experimental_unseq= experimental_unseq;
   }
 
 

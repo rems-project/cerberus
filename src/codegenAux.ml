@@ -55,9 +55,9 @@ let create pre al ty = lift $ M.allocate_static0 0 pre al ty
 
 let alloc pre al n = lift $ M.allocate_dynamic0 0 pre al n
 
-let load_integer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_integer)
+let load_integer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_integer % snd)
 
-let load_pointer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_pointer)
+let load_pointer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_pointer % snd)
 
 let store ty e1 e2 = lift $ M.store0 ty e1 e2
 
