@@ -455,7 +455,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         match type_of annot e' with
           | GenLValueType qs' ty' ->
               AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
+              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.is_real ty' || AilTypesAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.fail Loc.unknown (TError_TODO 21)
@@ -466,7 +466,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         match type_of annot e' with
           | GenLValueType qs' ty' ->
               AilTypesAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.real ty' || AilTypesAux.is_pointer ty') then
+              if AilTypesAux.modifiable sigm qs' ty' && (AilTypesAux.is_real ty' || AilTypesAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.fail Loc.unknown (TError_TODO 23)
@@ -1038,7 +1038,7 @@ STD_ "§6.5.2.1#1" $
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if are_pointers_to_compatible_objects gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if real gty1 && real gty2 then
+        else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
           E.fail Loc.unknown (TError_TODO 41)
@@ -1047,7 +1047,7 @@ STD_ "§6.5.2.1#1" $
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if are_pointers_to_compatible_objects gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else if real gty1 && real gty2 then
+        else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else E.fail Loc.unknown (TError_TODO 42)
   | AilEbinary e1 (Le as bop) e2 ->
@@ -1055,7 +1055,7 @@ STD_ "§6.5.2.1#1" $
       annotate_rvalue e2 >>= fun (e2', gty2) ->
       if are_pointers_to_compatible_objects gty1 gty2 then
         E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else if real gty1 && real gty2 then
+      else if is_real gty1 && is_real gty2 then
         E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else
         E.fail Loc.unknown (TError_TODO 43)
@@ -1064,7 +1064,7 @@ STD_ "§6.5.2.1#1" $
       annotate_rvalue e2 >>= fun (e2', gty2) ->
       if are_pointers_to_compatible_objects gty1 gty2 then
         E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-      else if real gty1 && real gty2 then
+      else if is_real gty1 && is_real gty2 then
         E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
       else
         E.fail Loc.unknown (TError_TODO 44)

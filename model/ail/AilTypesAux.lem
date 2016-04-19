@@ -873,9 +873,16 @@ let modifiable S qs ty =
   is_object ty &&
   not (is_incomplete S ty)
 
-val real: ctype -> bool
-let real ty =
-  is_integer ty
+val is_real: ctype -> bool
+let is_real ty =
+  match ty with
+    | Basic (Integer _) ->
+        true
+    | Basic (Floating (RealFloating _)) ->
+        true
+    | _ ->
+        false
+  end
 
 val            compatible_params_aux: (ctype -> ctype -> bool) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
 let rec ~{coq} compatible_params_aux is_compatible p1 p2 =

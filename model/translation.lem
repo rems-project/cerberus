@@ -1817,8 +1817,102 @@ else
                 )
               )
             )
-
-
+      
+      | A.AilEbinary e1 A.Le e2 ->
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun e1_sym        ->
+          E.fresh_symbol      >>= fun e2_sym        ->
+          E.fresh_symbol      >>= fun obj1_sym      ->
+          E.fresh_symbol      >>= fun obj2_sym      ->
+          (* The object type on which the Core operator is going to work on.
+             It's enough to look at the type of one of the operand (see STD §6.5.9#2) *)
+          let oTy = match ctype_of e1 with
+            | Aty.Basic (Aty.Integer _) ->
+                C.OTy_integer
+            |Aty.Basic (Aty.Floating _) ->
+                C.OTy_floating
+            | Aty.Pointer _ _ ->
+                C.OTy_pointer
+            | _ ->
+                error "[Translate.translate_expression, AilEbinary Le] the Ail expression was ill-typed"
+          end in
+          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [Caux.mk_empty_pat; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]; Caux.mk_empty_pat],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+(if AilTypesAux.is_real (ctype_of e1) && AilTypesAux.is_real (ctype_of e2) then
+                       Caux.mk_if_pe (Caux.mk_op_pe C.OpLe promoted1_pe promoted2_pe)
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
+else
+                       error "WIP: translation of AilEbinary Le, pointer cases")) ]
+                )
+              )
+            )
+      
+      | A.AilEbinary e1 A.Lt e2 ->
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun e1_sym        ->
+          E.fresh_symbol      >>= fun e2_sym        ->
+          E.fresh_symbol      >>= fun obj1_sym      ->
+          E.fresh_symbol      >>= fun obj2_sym      ->
+          (* The object type on which the Core operator is going to work on.
+             It's enough to look at the type of one of the operand (see STD §6.5.9#2) *)
+          let oTy = match ctype_of e1 with
+            | Aty.Basic (Aty.Integer _) ->
+                C.OTy_integer
+            |Aty.Basic (Aty.Floating _) ->
+                C.OTy_floating
+            | Aty.Pointer _ _ ->
+                C.OTy_pointer
+            | _ ->
+                error "[Translate.translate_expression, AilEbinary Lt] the Ail expression was ill-typed"
+          end in
+          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [Caux.mk_empty_pat; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]; Caux.mk_empty_pat],
+                       (* TODO: check with Peter *)
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+(if AilTypesAux.is_real (ctype_of e1) && AilTypesAux.is_real (ctype_of e2) then
+                       Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted1_pe promoted2_pe)
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+                         (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
+else
+                       error "WIP: translation of AilEbinary Lt, pointer cases")) ]
+                )
+              )
+            )      
 
 
 
@@ -2216,8 +2310,14 @@ TODO: #9
           let fun_sym_pe         = Caux.mk_sym_pe (C.BTy_object C.OTy_cfunction) fun_sym         in
           let nparams_sym_pe     = Caux.mk_sym_pe (C.BTy_object C.OTy_integer)   nparams_sym     in
           let is_variadic_sym_pe = Caux.mk_sym_pe C.BTy_boolean                  is_variadic_sym in
-          let call_sym_bTy       = C.BTy_loaded (Caux.core_object_type_of_ctype (Caux.proj_ctype result_ty)) in
-          let call_sym_pe        = Caux.mk_sym_pe call_sym_bTy call_sym in
+          let call_sym_bTy =
+            match Caux.proj_ctype result_ty with
+              | Core_ctype.Void ->
+                C.BTy_unit
+              | ty ->
+                  C.BTy_loaded (Caux.core_object_type_of_ctype ty)
+             end in
+          let call_sym_pe = Caux.mk_sym_pe call_sym_bTy call_sym in
           
           (* symbolic names for the arguments temporary objects *)
           E.replicateM numberOfArguments E.fresh_symbol >>= fun arg_ptr_syms ->
@@ -2808,8 +2908,48 @@ a
           match e with
             | A.AilEunary _ _ ->
                 error "AilEunary"
-            | A.AilEbinary _ _ _ ->
-                error "AilEbinary"
+            | A.AilEbinary _ bop _ ->
+                let str = match bop with
+                  | A.Arithmetic A.Mul ->
+                      "Mul"
+                  | A.Arithmetic A.Div ->
+                      "Div"
+                  | A.Arithmetic A.Mod ->
+                      "Mod"
+                  | A.Arithmetic A.Add ->
+                      "Add"
+                  | A.Arithmetic A.Sub ->
+                      "Sub"
+                  | A.Arithmetic A.Shl ->
+                      "Shl"
+                  | A.Arithmetic A.Shr ->
+                      "Shr"
+                  | A.Arithmetic A.Band ->
+                      "Band"
+                  | A.Arithmetic A.Bxor ->
+                      "Bxor"
+                  | A.Arithmetic A.Bor ->
+                      "Bor"
+                  | A.Comma ->
+                      "Comma"
+                  | A.And ->
+                      "And"
+                  | A.Or ->
+                      "Or"
+                  | A.Lt ->
+                      "Lt"
+                  | A.Gt ->
+                      "Gt"
+                  | A.Le ->
+                      "Le"
+                  | A.Ge ->
+                      "Ge"
+                  | A.Eq ->
+                      "Eq"
+                  | A.Ne ->
+                      "Ne"
+                end in
+                error ("AilEbinary " ^ str)
             | A.AilEassign _ _ ->
                 error "AilEassign"
             | A.AilEcompoundAssign _ _ _ ->
@@ -3432,7 +3572,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
                 E.return
                   (gacc,
                    Map.insert sym
-                     (C.Proc (C.BTy_object (if AilTypesAux.is_pointer return_ty then C.OTy_pointer else C.OTy_integer))
+                     (C.Proc (C.BTy_loaded (if AilTypesAux.is_pointer return_ty then C.OTy_pointer else C.OTy_integer))
                              (List.map (fun sym -> (sym, C.BTy_object C.OTy_pointer)) param_syms)
                              (C.Esseq (C.CaseBase Nothing) core_body core_return)
                      ) facc)
