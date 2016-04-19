@@ -106,7 +106,7 @@ let is_scalar gty =
 
 
 
-let real gt : bool = is_integer gt
+let is_real gt : bool = is_integer gt
 
 
 
