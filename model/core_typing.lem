@@ -617,63 +617,55 @@ and typecheck_pexpr loc env bTy (Pexpr () pexpr_) =
         (PEis_unsigned <$> typecheck_pexpr loc env BTy_ctype pe)
   end
 
-
-val annotate_paction: typing_env -> generic_paction unit unit Symbol.sym ->
-      E.eff (core_base_type * generic_paction unit core_base_type Symbol.sym)
-let rec annotate_paction env (Paction p (Action loc annot act_)) =
-  match act_ with
-    | Create pe1 pe2 pref ->
-        typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-        typecheck_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
-        E.return (BTy_object OTy_pointer, Create tpe1 tpe2 pref)
-    | Alloc pe1 pe2 pref ->
-        typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-        typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
-        E.return (BTy_object OTy_pointer, Alloc tpe1 tpe2 pref)
-    | Kill pe ->
-        typecheck_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
-        E.return (BTy_unit, Kill tpe)
-    | Store pe1 pe2 pe3 mo ->
-        match pe1 with
-          | Pexpr () (PEval (Vctype ty)) ->
-              let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-              let lvalue_bTy = core_object_type_of_ctype ty in
-              typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-              typecheck_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
-              E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
-          | _ ->
-              E.err loc (CoreTyping_TODO "Store, non-trivial ctype")
-        end
-    | Load pe1 pe2 mo ->
-        match pe1 with
-          | Pexpr () (PEval (Vctype ty)) ->
-              let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-              let lvalue_bTy = core_object_type_of_ctype ty in
-              typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-              E.return (BTy_loaded lvalue_bTy, Load tpe1 tpe2 mo)
-          | _ ->
-              E.err loc (CoreTyping_TODO "Load, non-trivial ctype")
-        end
-    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
-        error "WIP annotate_paction: RMW"
-    | Fence mo ->
-        E.return (BTy_unit, Fence mo)
-  end >>= fun (bTy, act_') ->
-  E.return (bTy, Paction p (Action loc annot act_'))
-
 val annotate_expr: Loc.t -> typing_env -> Core.expr unit ->
       E.eff (core_base_type * Core.typed_expr unit)
 let rec annotate_expr loc env = function
   | Epure pe ->
      annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
      E.return (bTy, Epure pe')
-  (* FIXME: are ememop and eaction of type unit? *)
   | Ememop memop pes ->
       E.mapM (annotate_pexpr loc env) pes >>= fun pes' ->
       E.return (BTy_unit, Ememop memop pes')
-  | Eaction pact ->
-      annotate_paction env pact >>= fun (bTy, pact') ->
-      E.return (bTy, Eaction pact')
+  | Eaction (Paction p (Action loc annot act_)) ->
+      (fun (bTy, act) -> (bTy, Eaction (Paction p (Action loc annot act)))) <$>
+        match act_ with
+          | Create pe1 pe2 pref ->
+              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+              typecheck_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
+              E.return (BTy_object OTy_pointer, Create tpe1 tpe2 pref)
+          | Alloc pe1 pe2 pref ->
+              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+              typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
+              E.return (BTy_object OTy_pointer, Alloc tpe1 tpe2 pref)
+          | Kill pe ->
+              typecheck_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
+              E.return (BTy_unit, Kill tpe)
+          | Store pe1 pe2 pe3 mo ->
+              match pe1 with
+                | Pexpr () (PEval (Vctype ty)) ->
+                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+                    let lvalue_bTy = core_object_type_of_ctype ty in
+                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    typecheck_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
+                    E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
+                | _ ->
+                    E.err loc (CoreTyping_TODO "Store, non-trivial ctype")
+              end
+          | Load pe1 pe2 mo ->
+              match pe1 with
+                | Pexpr () (PEval (Vctype ty)) ->
+                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+                    let lvalue_bTy = core_object_type_of_ctype ty in
+                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    E.return (BTy_loaded lvalue_bTy, Load tpe1 tpe2 mo)
+                | _ ->
+                    E.err loc (CoreTyping_TODO "Load, non-trivial ctype")
+              end
+          | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+              error "WIP: RMW"
+          | Fence mo ->
+              E.return (BTy_unit, Fence mo)
+      end
   | Ecase pe cases ->
       annotate_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
       E.mapM (fun (pat, e) -> annotate_pattern mbTy pat >>=
