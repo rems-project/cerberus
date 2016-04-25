@@ -198,7 +198,7 @@ let rec pp_object_value = function
   | OVpointer ptr_val ->
       Pp_mem.pp_pointer_value ptr_val
   | OVarray cvals ->
-      pp_const "array" ^^ P.parens (comma_list pp_object_value cvals)
+      pp_const "Array" ^^ P.parens (comma_list pp_object_value cvals)
   | OVstruct (sym, xs) ->
       !^ "TODO(Vstruct)" 
       (* pp_const "struct" ^^ P.parens *)
@@ -206,7 +206,7 @@ let rec pp_object_value = function
       !^ "TODO(Vunion)" 
       (* pp_const "struct" ^^ P.parens *)
   | OVcfunction nm ->
-      P.braces (pp_name nm)
+      !^ "Cfunction" ^^ P.parens (pp_name nm)
 
 
 let rec pp_value = function
@@ -371,25 +371,11 @@ let rec pp_expr = function
   | Epure pe ->
       pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
   | Ememop (memop, pes) ->
-      failwith "Ememop"
-      (*
       pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
-*)
-(*
-  | Eraise str ->
-      pp_keyword "raise" ^^ P.parens (!^ str)
-  | Eregister (str, nm) ->
-      pp_keyword "register" ^^ P.parens (!^ str ^^ P.comma ^^^ pp_name nm)
-*)
-  | Eskip ->
-      pp_keyword "skip"
-  | Elet (pat, pe1, e2) ->
-      (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
-      pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2
-  | Eif (pe1, e2, e3) ->
-      pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
-      P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
-      pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3)
+  | Eaction (Paction (p, (Action (_, bs, act)))) ->
+      (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
+         P.rangle ^^ P.space) ^^ *)
+      pp_polarity p ^^ pp_action act
   | Ecase (pe, pat_es) ->
       pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
       P.nest 2 (
@@ -398,12 +384,19 @@ let rec pp_expr = function
           pp_expr e
         ) pat_es 
       ) ^^ P.break 1 ^^ pp_keyword "end"
+  | Elet (pat, pe1, e2) ->
+      (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2
+  | Eif (pe1, e2, e3) ->
+      pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
+      P.nest 2 (P.break 1 ^^ pp_expr e2) ^^ P.break 1 ^^
+      pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_expr e3)
+  | Eskip ->
+      pp_keyword "skip"
   | Eproc (_, pe, pes) ->
       !^ "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
-  | Eaction (Paction (p, (Action (_, bs, act)))) ->
-      (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
-         P.rangle ^^ P.space) ^^ *)
-      pp_polarity p ^^ pp_action act
+  | Ereturn pe ->
+      pp_keyword "return" ^^^ P.parens (pp_pexpr pe)
   | Eunseq [] ->
       !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
   | Eunseq [e] ->
@@ -468,13 +461,11 @@ let rec pp_expr = function
       P.dot ^^^ pp_expr e ^^^ pp_control "end"
   | Erun (_, sym, sym_pes) ->
       pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list (fun (sym, pe) -> pp_symbol sym ^^ P.colon ^^^ pp_pexpr pe) sym_pes)
-  | Ereturn pe ->
-      pp_keyword "return" ^^^ P.parens (pp_pexpr pe)
   | Epar es ->
       pp_keyword "par" ^^ P.parens (comma_list pp_expr es)
   | Ewait tid ->
       pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-  | Eloc (_, e) ->
+  | Eloc (loc, e) ->
       pp_expr e
   | End es ->
       pp_keyword "nd" ^^ P.parens (comma_list pp_expr es)

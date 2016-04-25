@@ -7,6 +7,8 @@ import Exception Loc Pp
 open import Core Core_aux
 import Core_ctype Core_ctype_aux Implementation_
 
+open import Core_typing_aux
+
 module I = Implementation_
 
 module Cty = struct
@@ -14,131 +16,98 @@ module Cty = struct
   include Core_ctype_aux
 end
 
-module E = struct
-  type eff 'a = Exception.exceptM 'a Errors.error
-  include Exception
-
-  val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a => ('k -> 'a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
-  let mapMapM f xs =
-    Map_extra.fold (fun k a acc ->
-      bind (f k a) (fun b ->
-        bind acc (fun bs ->
-          return (Map.insert k b bs)
-        )
-      )
-    ) xs (return Map.empty)
-
-  val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
-  let runM m = m
-  
-  val err: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
-  let err loc cause =
-    fail (loc, Errors.Core_typing_cause cause)
-end
-
-let inline (>>=)      = E.bind
-let inline (>>) m1 m2 = m1 >>= fun _ -> m2
-let inline (<$>)      = E.fmap
-let inline (<*>)      = E.app
 
 
-type typing_decl =
-  | TDsym  of core_base_type
-  | TDfun  of core_base_type * list core_base_type
-  | TDproc of core_base_type * list core_base_type
 
-type typing_env =
-    map name typing_decl (* (either core_base_type (core_base_type * list core_base_type)) *)
 
-val     annotate_pattern: core_base_type -> pattern -> E.eff (typing_env * typed_pattern)
-let rec annotate_pattern bTy = function
+val     typecheck_pattern: core_base_type -> pattern -> E.eff (typing_env * inferred_pattern)
+let rec typecheck_pattern bTy = function
   | CaseBase Nothing ->
       E.return (Map.empty, CaseBase Nothing)
   | CaseBase (Just (sym, bTy')) ->
-      E.guard (bTy = bTy') (Loc.unknown, Core_typing_cause (CoreTyping_TODO ("annotate CaseBase" ^
-        " expected type: " ^ Pp.stringFromCore_core_base_type bTy ^
-        " current type:" ^ Pp.stringFromCore_core_base_type bTy' ^
-        " symbol:" ^ show sym ))) >>
+      E.guard (bTy = bTy')
+        Loc.unknown (Mismatch ("pattern symbol " ^ show sym) bTy bTy') >>
       E.return (Map.singleton (Sym sym) (TDsym bTy'), CaseBase (Just (sym, bTy')))
   | CaseCtor ctor pats ->
       match (ctor, bTy, pats) with
         | (Cnil (), BTy_list elem_bTy, []) ->
-            E.return (Map.empty, CaseCtor (Cnil elem_bTy) [])
+            E.return (Map.empty, CaseCtor (Cnil (toInferred elem_bTy)) [])
         | (Cnil (), _, []) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cnil, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cnil, illtyped 1")
         | (Cnil (), _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cnil, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cnil, illtyped 2")
 
         | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
-            annotate_pattern elem_bTy pat1 >>= fun (env1, tpat1) ->
-            annotate_pattern bTy      pat2 >>= fun (env2, tpat2) ->
+            typecheck_pattern elem_bTy pat1 >>= fun (env1, tpat1) ->
+            typecheck_pattern bTy      pat2 >>= fun (env2, tpat2) ->
             E.return (Map.(union) env1 env2, CaseCtor Ccons [tpat1; tpat2])
         | (Ccons, _, []) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Ccons, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Ccons, illtyped 1")
         | (Ccons, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Ccons, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Ccons, illtyped 2")
 
         | (Ctuple, BTy_tuple bTys, _) ->
             List.unzip <$> E.mapM (fun (bTy, pat) ->
-              annotate_pattern bTy pat
+              typecheck_pattern bTy pat
             ) (List.zip bTys pats) >>= fun (envs, tpats) ->
             E.return (List.foldl (Map.(union)) Map.empty envs, CaseCtor Ctuple tpats)
         | (Ctuple, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Ctuple, illtyped")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Ctuple, illtyped")
 
         | (Carray, _, _) ->
             error "Core_typing.Carray: WIP, Carray"
 
         | (Civmax, BTy_object OTy_integer, [pat']) ->
-            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Civmax [tpat'])
         | (Civmax, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civmax, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civmax, illtyped 1")
         | (Civmax, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civmax, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civmax, illtyped 2")
 
         | (Civmin, BTy_object OTy_integer, [pat']) ->
-            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Civmin [tpat'])
         | (Civmin, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civmin, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civmin, illtyped 1")
         | (Civmin, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civmin, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civmin, illtyped 2")
 
         | (Civsizeof, BTy_object OTy_integer, [pat']) ->
-            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Civsizeof [tpat'])
         | (Civsizeof, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civsizeof, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civsizeof, illtyped 1")
         | (Civsizeof, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civsizeof, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civsizeof, illtyped 2")
 
         | (Civalignof, BTy_object OTy_integer, [pat']) ->
-            annotate_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
+            typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Civalignof [tpat'])
         | (Civalignof, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civalignof, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civalignof, illtyped 1")
         | (Civalignof, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Civalignof, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Civalignof, illtyped 2")
 
         | (Cspecified, BTy_loaded oTy, [pat']) ->
-            annotate_pattern (BTy_object oTy) pat' >>= fun (env, tpat') ->
+            typecheck_pattern (BTy_object oTy) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Cspecified [tpat'])
         | (Cspecified, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cspecified, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cspecified, illtyped 1")
         | (Cspecified, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cspecified, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cspecified, illtyped 2")
 
         | (Cunspecified, BTy_loaded oTy, [pat']) ->
             (* TODO: dependent types here .... *)
-            annotate_pattern BTy_ctype pat' >>= fun (env, tpat') ->
+            typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Cunspecified [tpat'])
         | (Cunspecified, _, [_]) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cunspecified, illtyped 1")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cunspecified, illtyped 1")
         | (Cunspecified, _, _) ->
-            E.err Loc.unknown (CoreTyping_TODO "annotate Cunspecified, illtyped 2")
+            E.fail Loc.unknown (CoreTyping_TODO "typecheck Cunspecified, illtyped 2")
       end
 end
+
 
 val     typeof_object_value: object_value -> E.eff core_object_type
 let rec typeof_object_value oval =
@@ -152,13 +121,13 @@ let rec typeof_object_value oval =
    | OVcfunction _ ->
        E.return OTy_cfunction
    | OVarray [] ->
-       E.err Loc.unknown EmptyArray
+       E.fail Loc.unknown EmptyArray
    | OVarray (oval'::ovals') ->
        typeof_object_value oval' >>= fun oTy ->
        E.mapM (fun oval ->
          typeof_object_value oval >>= fun oTy' ->
          if oTy <> oTy' then
-           E.err Loc.unknown (HeterogenousArray oTy oTy')
+           E.fail Loc.unknown (HeterogenousArray oTy oTy')
          else
            E.return ()
        ) ovals' >>
@@ -168,7 +137,7 @@ let rec typeof_object_value oval =
 (*
        E.foldlM (fun ((found_ident, mval), (expected_ident, expected_ty)) () ->
          if found_ident <> expected_ident then
-           E.err Loc.unknown (InvalidMember tag_sym found_ident)
+           E.fail Loc.unknown (InvalidMember tag_sym found_ident)
          else
            TODO
        ) () (List.zip xs (Cty.get_membersDefs tag_sym)) >>
@@ -200,7 +169,7 @@ let rec typeof_value cval =
        E.mapM (fun cval ->
          typeof_value cval >>= fun bTy' ->
          if bTy <> bTy' then
-           E.err Loc.unknown (HeterogenousList bTy bTy')
+           E.fail Loc.unknown (HeterogenousList bTy bTy')
          else
            E.return ()
        ) cvals' >>
@@ -210,115 +179,128 @@ let rec typeof_value cval =
   end
 
 
-val annotate_pexpr: Loc.t -> typing_env -> pexpr -> E.eff typed_pexpr
-let rec annotate_pexpr loc env (Pexpr () pexpr_) =
+val     infer_pexpr: Loc.t -> typing_env -> pexpr -> E.eff inferred_pexpr
+let rec infer_pexpr loc env (Pexpr () pexpr_) =
   match pexpr_ with
     | PEsym sym ->
         match Map.lookup (Sym sym) env with
           | Just (TDsym bTy) ->
-              E.return (Pexpr bTy (PEsym sym))
+              E.return (Pexpr (toInferred bTy) (PEsym sym))
           | Just _ ->
-              E.err loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
+              E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
           | Nothing ->
-              E.err loc (CoreTyping_TODO "unresolved PEsym")
+              E.fail loc (CoreTyping_TODO "unresolved PEsym")
         end
     (* FIXME: match type for each impl constant??? *)
     | PEimpl impl ->
-        E.return (Pexpr (BTy_object OTy_integer) (PEimpl impl))
+        error "E.return (Pexpr (BTy_object OTy_integer) (PEimpl impl))"
     | PEval cval ->
-        typeof_value cval >>= fun bTy -> E.return (Pexpr bTy (PEval cval))
-    | PEconstrained cs -> error "peconstrained"
-(*
-    | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *)
-*)
-    | PEundef ub -> error "annotate peundef"
-    | PEerror str pe -> error "annotate peerror"
-
+        typeof_value cval >>= fun bTy ->
+        E.return (Pexpr (toInferred bTy) (PEval cval))
+    | PEconstrained cs ->
+        (* list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *) *)
+        error "WIP: Core_typing.infer_pexpr, PEconstrained"
+    | PEundef ub ->
+        E.return (Pexpr InferredUnknown (PEundef ub))
+    | PEerror str pe ->
+        infer_pexpr loc env pe >>= fun tpe ->
+        E.return (Pexpr InferredUnknown (PEerror str tpe))
     | PEctor ctor pes ->
         let ret_ctor bTy ctor pe = E.return (Pexpr bTy (PEctor ctor [pe])) in
         match (ctor, pes) with
           | (Cnil (), []) ->
-              (* FIXME: hack *)
-              E.return (Pexpr (BTy_list (BTy_object OTy_integer))
-                          (PEctor (Cnil (BTy_object OTy_integer)) []))
+              E.return (Pexpr InferredUnknown (PEctor (Cnil InferredUnknown) []))
           | (Cnil _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped list")
-          | (Ccons, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
-              ret_ctor (BTy_list bTy) Ccons pe'
+              E.fail loc (CtorWrongNumber 0 (List.length pes))
           | (Ccons, [pe1; pe2]) ->
-              annotate_pexpr loc env pe1 >>= fun (Pexpr bTy1 _ as pe1') ->
-              annotate_pexpr loc env pe2 >>= fun (Pexpr bTy2 _ as pe2') ->
-              E.guard (BTy_list bTy1 = bTy2)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "annotate Ccons: illtyped list")) >>
-              E.return (Pexpr bTy2 (PEctor Ccons [pe1'; pe2']))
+              infer_pexpr loc env pe1 >>= fun (Pexpr infer1 _ as pe1') ->
+              infer_pexpr loc env pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+              E.guard (InferredType_list infer1 = infer2)
+                loc (CoreTyping_TODO "annotate Ccons: illtyped list") >>
+              E.return (Pexpr infer2 (PEctor Ccons [pe1'; pe2']))
           | (Ccons, _) ->
-              E.err loc (CoreTyping_TODO "illtyped list")
+              E.fail loc (CtorWrongNumber 2 (List.length pes))
           | (Ctuple, _) ->
-            E.mapM (annotate_pexpr loc env) pes >>= fun pes' ->
-            let (bTys, pes') = List.unzip (
-                List.map (fun (Pexpr bTy _ as pe') -> (bTy, pe')) pes'
-            ) in E.return (Pexpr (BTy_tuple bTys) (PEctor Ctuple pes'))
+            E.mapM (infer_pexpr loc env) pes >>= fun pes' ->
+            let (infers, pes') = List.unzip (
+                List.map (fun (Pexpr infers _ as pe') -> (infers, pe')) pes'
+            ) in E.return (Pexpr (InferredType_tuple infers) (PEctor Ctuple pes'))
           | (Civmax, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
-              E.guard (bTy = BTy_ctype)
-                  (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped Civmax")) >>
-              ret_ctor (BTy_object OTy_integer) Civmax pe'
+              typecheck_pexpr loc env BTy_ctype pe >>= fun pe' ->
+              ret_ctor (InferredType_object OTy_integer) Civmax pe'
           | (Civmax, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civmax")
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civmin, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
-              E.guard (bTy = BTy_ctype)
-                  (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped Civmin")) >>
-              ret_ctor (BTy_object OTy_integer) Civmax pe'
+              typecheck_pexpr loc env BTy_ctype pe >>= fun pe' ->
+              ret_ctor (InferredType_object OTy_integer) Civmax pe'
+          | (Civmin, _) ->
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civsizeof, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
-              E.guard (bTy = BTy_ctype)
-                  (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped Civsizeof")) >>
-              ret_ctor (BTy_object OTy_integer) Civmax pe'
+              typecheck_pexpr loc env BTy_ctype pe >>= fun pe' ->
+              ret_ctor (InferredType_object OTy_integer) Civmax pe'
           | (Civsizeof, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civsizeof")
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civalignof, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
-              E.guard (bTy = BTy_ctype)
-                  (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped Civalignof")) >>
-              ret_ctor (BTy_object OTy_integer) Civmax pe'
+              typecheck_pexpr loc env BTy_ctype pe >>= fun pe' ->
+              ret_ctor (InferredType_object OTy_integer) Civmax pe'
           | (Civalignof, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civalignof")
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Cspecified, [pe]) ->
-              annotate_pexpr loc env pe >>= fun (Pexpr (BTy_object oTy) _ as pe') ->
-              ret_ctor (BTy_loaded oTy) Cspecified pe'
+              infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
+              match infer with
+                | InferredType_object oTy ->
+                    ret_ctor (InferredType_loaded oTy) Cspecified pe'
+                | _ ->
+                    E.fail loc TooGeneral
+              end
           | (Cspecified, _) ->
-              E.err loc (CoreTyping_TODO ("illtyped Cspecified ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
+          | (Cunspecified, [Pexpr () (PEval (Vctype ty))]) ->
+              let pe' = Pexpr InferredType_ctype (PEval (Vctype ty)) in
+              let oTy = core_object_type_of_ctype ty in
+              ret_ctor (InferredType_loaded oTy) Cunspecified pe'
           | (Cunspecified, [pe]) ->
-              error "cunspecified type ????"
-              (*
-              annotate_pexpr loc env pe >>= fun (Pexpr (BTy_ctype) _ as pe') ->
+              error "Core_typing, Cunspecified non-trivial"
+(*
+              typecheck_pexpr loc env BTy_ctype pe >>= fun pe' ->
               ret_ctor (BTy_loaded oTy) Cunspecified pe'
-                 *)
+*)
           | (Cunspecified, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Cunspecified")
+              E.fail loc (CtorWrongNumber 1 (List.length pes))
         end
+(*
     | PEcase pe cases ->
-        annotate_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
-        E.mapM (fun (pat, pe) -> annotate_pattern mbTy pat >>=
-                 fun (env', pat') -> annotate_pexpr loc (Map.(union) env env') pe >>=
-                 fun pe' -> E.return (pat', pe')
-               ) cases >>= fun cases' ->
+        infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
+        match toCoreBaseType infer with
+          | Nothing ->
+              E.fail loc TooGeneral
+          | Just bTy ->
+              E.mapM (fun (ret_bTy_opt, (pat, pe)) ->
+                typecheck_pattern bTy pat                 >>= fun (env', pat') ->
+                match ret_bTy_opt with
+                  | Just ret_bTy ->
+                      typecheck_pexpr loc (Map.(union) env env') pe >>= fun pe' ->
+                      
+                end
+                infer_pexpr loc (Map.(union) env env') pe >>= fun pe'          ->
+                E.return (pat', pe')
+              ) (Nothing, cases) >>= fun cases' ->
         E.return (Pexpr mbTy (PEcase pe' cases'))
+        end
+*)
     | PEarray_shift pe1 cty pe2 ->
-        (*FIXME: this is probably wrong *)
-        annotate_pexpr loc env pe1 >>= fun pe1' ->
-        annotate_pexpr loc env pe2 >>= fun (Pexpr bTy _ as pe2') ->
-        E.return (Pexpr bTy (PEarray_shift pe1' cty pe2'))
-    | PEmember_shift _ _ _ -> error "pemember shift 1"
+        typecheck_pexpr loc env (BTy_object OTy_pointer) pe1 >>= fun pe1' ->
+        typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+        E.return (Pexpr (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
+    | PEmember_shift _ _ _ ->
+        error "WIP: Core_typing.infer_pexpr, PEmember_shift"
     | PEnot pe ->
-        Pexpr BTy_boolean <$> (PEnot <$> typecheck_pexpr loc env BTy_boolean pe)
+        Pexpr InferredType_boolean <$> (PEnot <$> typecheck_pexpr loc env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
         E.trysM (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEop"))
         (fun (bTy, bTy1, bTy2) ->
-          Pexpr bTy <$> (PEop bop <$> typecheck_pexpr loc env bTy1 pe1
-                                  <*> typecheck_pexpr loc env bTy2 pe2)
+          Pexpr (toInferred bTy) <$> (PEop bop <$> typecheck_pexpr loc env bTy1 pe1
+                                               <*> typecheck_pexpr loc env bTy2 pe2)
         ) match bop with
           | OpAdd ->
               [ (BTy_object OTy_integer, BTy_object OTy_integer, BTy_object OTy_integer)
@@ -359,107 +341,109 @@ let rec annotate_pexpr loc env (Pexpr () pexpr_) =
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
-    (* FIXME: fields in struct and union should be checked *)
     | PEstruct sym fields ->
+        (* FIXME: fields in struct and union should be checked *)
         let (ids, pes) = List.unzip fields in
-        Pexpr (BTy_object (OTy_struct sym)) <$>
-          (PEstruct sym <$> (List.zip ids <$> E.mapM (annotate_pexpr loc env) pes))
+        Pexpr (InferredType_object (OTy_struct sym)) <$>
+          (PEstruct sym <$> (List.zip ids <$> E.mapM (infer_pexpr loc env) pes))
     | PEunion sym id pe ->
-        Pexpr (BTy_object (OTy_union sym)) <$>
-          (PEunion sym id <$> annotate_pexpr loc env pe)
+        (* FIXME: fields in struct and union should be checked *)
+        Pexpr (InferredType_object (OTy_union sym)) <$>
+          (PEunion sym id <$> infer_pexpr loc env pe)
     | PEcall nm pes ->
         match Map.lookup nm env with
           | Just (TDfun ret_bTy bTys) ->
-              Pexpr ret_bTy <$> (PEcall nm <$> E.mapM (fun (bTy, pe) ->
+              Pexpr (toInferred ret_bTy) <$> (PEcall nm <$> E.mapM (fun (bTy, pe) ->
                 typecheck_pexpr loc env bTy pe) (List.zip bTys pes))
           | Just _ ->
-              E.err loc (CoreTyping_TODO "PEcall, the name wasn't a function")
+              E.fail loc (CoreTyping_TODO "PEcall, the name wasn't a function")
           | Nothing ->
-              E.err loc (CoreTyping_TODO ("PEcall, couldn't resolve the name: " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
+              E.fail loc (CoreTyping_TODO ("PEcall, couldn't resolve the name: " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
         end
-(*
-    | PEcall (Impl impl) pes ->
-        annotate_pexpr loc env (Pexpr () (PEimpl impl)) >>= fun (Pexpr impl_bTy _) ->
-        Pexpr impl_bTy <$> (PEcall (Impl impl) <$> E.mapM (annotate_pexpr loc env) pes)
-*)
     | PElet pat pe1 pe2 ->
-        annotate_pexpr loc env pe1 >>= fun (Pexpr bTy1 _ as pe1') ->
-        annotate_pattern bTy1 pat >>= fun (env', pat') ->
-        annotate_pexpr loc (Map.(union) env env') pe2 >>= fun (Pexpr bTy2 _ as pe2') ->
-        E.return (Pexpr bTy2 (PElet pat' pe1' pe2'))
+        infer_pexpr loc env pe1 >>= fun (Pexpr infer1 _ as pe1') ->
+        match toCoreBaseType infer1 with
+          | Nothing ->
+              E.fail loc TooGeneral
+          | Just bTy1 ->
+              typecheck_pattern bTy1 pat >>= fun (env', pat') ->
+              infer_pexpr loc (Map.(union) env env') pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+              E.return (Pexpr infer2 (PElet pat' pe1' pe2'))
+        end
     | PEif pe1 pe2 pe3 ->
-        annotate_pexpr loc env pe3 >>= fun (Pexpr bTy _ as pe3') ->
-        Pexpr bTy <$> (PEif <$> typecheck_pexpr loc env BTy_boolean pe1
-             <*> typecheck_pexpr loc env bTy pe2
+        infer_pexpr loc env pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+        infer_pexpr loc env pe3 >>= fun (Pexpr infer3 _ as pe3') ->
+        match (toCoreBaseType infer2, toCoreBaseType infer3) with
+          | (Nothing, Nothing) ->
+              E.fail loc TooGeneral
+          | (Just bTy2, Nothing) ->
+              typecheck_pexpr loc env bTy2 pe3 >>= fun pe3' ->
+              E.return (toInferred bTy2, pe2', pe3')
+          | (Nothing, Just bTy3) ->
+              typecheck_pexpr loc env bTy3 pe2 >>= fun pe2' ->
+              E.return (toInferred bTy3, pe2', pe3')
+          | (Just bTy2, Just bTy3) ->
+              E.guard (bTy2 = bTy3)
+                loc (MismatchIf bTy2 bTy3) >>
+              E.return (toInferred bTy2, pe2', pe3')
+        end >>= fun (infer, pe2', pe3') ->
+        Pexpr infer <$> (PEif <$> typecheck_pexpr loc env BTy_boolean pe1
+             <*> E.return pe2'
              <*> E.return pe3')
     | PEis_scalar pe ->
-        Pexpr BTy_boolean <$> (PEis_scalar <$> typecheck_pexpr loc env BTy_ctype pe)
+        Pexpr InferredType_boolean <$> (PEis_scalar <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_integer pe ->
-        Pexpr BTy_boolean <$> (PEis_integer <$> typecheck_pexpr loc env BTy_ctype pe)
+        Pexpr InferredType_boolean <$> (PEis_integer <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_signed pe ->
-        Pexpr BTy_boolean <$> (PEis_signed <$> typecheck_pexpr loc env BTy_ctype pe)
+        Pexpr InferredType_boolean <$> (PEis_signed <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_unsigned pe ->
-        Pexpr BTy_boolean <$> (PEis_unsigned <$> typecheck_pexpr loc env BTy_ctype pe)
+        Pexpr InferredType_boolean <$> (PEis_unsigned <$> typecheck_pexpr loc env BTy_ctype pe)
   end
+
+
 (*
 val     typecheck_pexpr: typing_env -> core_base_type -> pexpr -> E.eff
 typed_pexpr*)
-and typecheck_pexpr loc env bTy (Pexpr () pexpr_) =
-(*
-  let expect bTy env pe =
-    typecheck_pexpr env pe >>= fun (Pexpr bTy' _ as tpe) ->
-    E.guard (bTy = bTy') (CoreTyping_TODO "mismatch") >>
-    E.return tpe in
-*)
-  Pexpr bTy <$> match pexpr_ with
+and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff inferred_pexpr =
+  Pexpr (toInferred bTy) <$> match pexpr_ with
     | PEsym sym ->
         match Map.lookup (Sym sym) env with
           | Just (TDsym bTy') ->
-              E.guard (bTy = bTy')
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped PEsym")) >>
+              guard_match loc "symbol" bTy bTy' >>
               E.return (PEsym sym)
           | Just _ ->
-              E.err loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
+              E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
           | Nothing ->
-              E.err loc (CoreTyping_TODO "unresolved PEsym")
+              E.fail loc (CoreTyping_TODO "unresolved PEsym")
         end
     | PEimpl iCst ->
         match Map.lookup (Impl iCst) env with
           | Just (TDsym bTy') ->
-              E.guard (bTy = bTy')
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "illtyped PEimpl")) >>
+              guard_match loc "impl-name" bTy bTy' >>
               E.return (PEimpl iCst)
           | Just _ ->
-              E.err loc (CoreTyping_TODO "found a fun/proc symbolic in a PEimpl")
+              E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEimpl")
           | Nothing ->
-              E.err loc (CoreTyping_TODO "unresolved PEimpl")
+              E.fail loc (CoreTyping_TODO "unresolved PEimpl")
         end
-
     | PEval cval ->
         typeof_value cval >>= fun bTy' ->
-        E.guard (bTy = bTy')
-            (Loc.unknown, Core_typing_cause (CoreTyping_TODO ("illtyped value: " ^ Pp.stringFromCore_value cval ^
-                                               ", expecting: " ^ Pp.stringFromCore_core_base_type bTy))) >>
+        guard_match loc "value" bTy bTy' >>
         E.return (PEval cval)
-
-    | PEconstrained cs -> error "peconstrained"
-(*
-    | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *)
-*)
+    | PEconstrained cs ->
+        (* list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *) *)
+        error "WIP: Core_typing.typecheck_pexpr, PEconstrained"
     | PEundef ub ->
         E.return (PEundef ub)
-
-    (* TODO need to check pe somehow ... *)
     | PEerror str pe ->
-        PEerror str <$> annotate_pexpr loc env pe
-
+        PEerror str <$> infer_pexpr loc env pe
     | PEctor ctor pes ->
         let ret_ctor ctor pe = PEctor ctor [pe] in
         match (ctor, bTy, pes) with
           | (Cnil (), BTy_list elem_bTy, []) ->
-              E.return (PEctor (Cnil elem_bTy) [])
+              E.return (PEctor (Cnil (toInferred elem_bTy)) [])
           | (Cnil _, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped list")
+              E.fail loc (CoreTyping_TODO "illtyped list")
           | (Ccons, BTy_list elem_bTy, [pe]) ->
               ret_ctor Ccons <$> typecheck_pexpr loc env elem_bTy pe
           | (Ccons, BTy_list elem_bTy, [pe1; pe2]) ->
@@ -467,68 +451,68 @@ and typecheck_pexpr loc env bTy (Pexpr () pexpr_) =
               fun pe1' -> typecheck_pexpr loc env bTy pe2 >>=
               fun pe2' -> E.return (PEctor Ccons [pe1'; pe2'])
           | (Ccons, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped list")
+              E.fail loc (CoreTyping_TODO "illtyped list")
           | (Ctuple, BTy_tuple bTys, _) ->
               E.mapM (fun (bTy, pe) -> typecheck_pexpr loc env bTy pe)
                 (List.zip bTys pes) >>=
               (fun pes' -> E.return (PEctor Ctuple pes'))
           | (Ctuple, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped tuple")
+              E.fail loc (CoreTyping_TODO "illtyped tuple")
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civmax, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civmax")
+              E.fail loc (CoreTyping_TODO "illtyped Civmax")
           | (Civmin, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmin <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civmin, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civmin")
+              E.fail loc (CoreTyping_TODO "illtyped Civmin")
           | (Civsizeof, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civsizeof <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civsizeof, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civsizeof")
+              E.fail loc (CoreTyping_TODO "illtyped Civsizeof")
           | (Civalignof, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civalignof <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civalignof, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Civalignof")
+              E.fail loc (CoreTyping_TODO "illtyped Civalignof")
           | (Cspecified, BTy_loaded oTy, [pe]) ->
               ret_ctor Cspecified <$> typecheck_pexpr loc env (BTy_object oTy) pe
           | (Cspecified, _, _) ->
-              E.err loc (CoreTyping_TODO ("illtyped Cspecified typecheck ==> " ^
+              E.fail loc (CoreTyping_TODO ("illtyped Cspecified typecheck ==> " ^
                                           Pp.stringFromCore_core_base_type bTy ^ " -- " ^
                                           Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
           | (Cunspecified, BTy_loaded _, [pe]) ->
               ret_ctor Cunspecified <$> typecheck_pexpr loc env BTy_ctype pe
           | (Cunspecified, _, _) ->
-              E.err loc (CoreTyping_TODO "illtyped Cunspecified")
+              E.fail loc (CoreTyping_TODO "illtyped Cunspecified")
         end
-
     | PEcase pe cases ->
-        annotate_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
-        E.mapM (fun (pat, pe) -> annotate_pattern mbTy pat >>=
-                 fun (env', pat') -> typecheck_pexpr loc (Map.(union) env env') bTy pe >>=
-                 fun pe' -> E.return (pat', pe')
-               ) cases >>= fun cases' -> E.return (PEcase pe' cases')
+        infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
+        match toCoreBaseType infer with
+          | Nothing ->
+              E.fail loc TooGeneral
+          | Just bTy ->
+              E.mapM (fun (pat, pe) ->
+                typecheck_pattern bTy pat                         >>= fun (env', pat') ->
+                typecheck_pexpr loc (Map.(union) env env') bTy pe >>= fun pe'          ->
+                E.return (pat', pe')
+              ) cases >>= fun cases' ->
+              E.return (PEcase pe' cases')
+        end
     | PEarray_shift pe1 cTy pe2 ->
-        E.guard (bTy = BTy_object OTy_pointer)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEarray_shift")) >>
+        guard_match loc "array_shift()" bTy (BTy_object OTy_pointer) >>
         (PEarray_shift <$> typecheck_pexpr loc env (BTy_object OTy_pointer) pe1
                        <*> E.return cTy
                        <*> typecheck_pexpr loc env (BTy_object OTy_integer) pe2)
-    | PEmember_shift pe1 sym id -> error "pemember_shift"
-(*
-    | PEarray_shift of (generic_pexpr 'ty 'sym) * ctype * (generic_pexpr 'ty 'sym) (* pointer array shift *)
-    | PEmember_shift of (generic_pexpr 'ty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
-*)
+    | PEmember_shift pe1 sym id ->
+        error "WIP: Core_typing.typecheck_pexpr, PEmember_shift"
     | PEnot pe ->
-        E.guard (bTy = BTy_boolean)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEnot")) >>
+        guard_match loc "not()" bTy BTy_boolean >>
         (PEnot <$> typecheck_pexpr loc env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
         (* TODO: this is going to give horrible error messages ... *)
         E.trysM (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEop"))
         (fun (bTy', bTy1, bTy2) ->
-          E.guard (bTy = bTy')
-            (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEop bTy")) >>
+          guard_match loc "operator" bTy bTy' >>
           (PEop bop <$> typecheck_pexpr loc env bTy1 pe1
                     <*> typecheck_pexpr loc env bTy2 pe2)
         ) match bop with
@@ -572,120 +556,145 @@ and typecheck_pexpr loc env bTy (Pexpr () pexpr_) =
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
     | PEstruct sym fields ->
-        E.guard (bTy = BTy_object (OTy_struct sym))
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEstruct illtyped")) >>
+        guard_match loc "struct()" bTy (BTy_object (OTy_struct sym)) >>
         let (ids, pes) = List.unzip fields in
-        PEstruct sym <$> (List.zip ids <$> E.mapM (annotate_pexpr loc env) pes)
+        PEstruct sym <$> (List.zip ids <$> E.mapM (infer_pexpr loc env) pes)
     | PEunion sym id pe ->
-        E.guard (bTy = BTy_object (OTy_union sym))
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEunion illtyped")) >>
-        (PEunion sym id <$> annotate_pexpr loc env pe)
+        guard_match loc "union()" bTy (BTy_object (OTy_union sym)) >>
+        (PEunion sym id <$> infer_pexpr loc env pe)
     | PEcall nm pes ->
         match Map.lookup nm env with
           | Just (TDfun ret_bTy bTys) ->
             PEcall nm <$> E.mapM (fun (bTy, pe) ->
                 typecheck_pexpr loc env bTy pe) (List.zip bTys pes)
           | Just _ ->
-              E.err loc (CoreTyping_TODO "illtyped a fun/proc symbolic")
+              E.fail loc (CoreTyping_TODO "illtyped a fun/proc symbolic")
           | Nothing ->
-              E.err loc (CoreTyping_TODO "unresolved PEcall")
+              E.fail loc (CoreTyping_TODO "unresolved PEcall")
         end
     | PElet pat pe1 pe2 ->
-        annotate_pexpr loc env pe1 >>= fun ((Pexpr bTy1 _) as pe1') ->
-        annotate_pattern bTy1 pat >>= fun (env', pat') ->
-        typecheck_pexpr loc (Map.(union) env env') bTy pe2 >>= fun pe2' ->
-        E.return (PElet pat' pe1' pe2')
+        infer_pexpr loc env pe1 >>= fun ((Pexpr infer1 _) as pe1') ->
+        match toCoreBaseType infer1 with
+          | Nothing ->
+              E.fail loc TooGeneral
+          | Just bTy1 ->
+              typecheck_pattern bTy1 pat >>= fun (env', pat') ->
+              PElet pat' pe1' <$> typecheck_pexpr loc (Map.(union) env env') bTy pe2
+        end
     | PEif pe1 pe2 pe3 ->
         PEif <$> typecheck_pexpr loc env BTy_boolean pe1
              <*> typecheck_pexpr loc env bTy pe2
              <*> typecheck_pexpr loc env bTy pe3
     | PEis_scalar pe ->
-        E.guard (bTy = BTy_boolean)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEis_scalar")) >>
+        guard_match loc "is_scalar()" bTy BTy_boolean >>
         (PEis_scalar <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_integer pe ->
-        E.guard (bTy = BTy_boolean)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEis_integer")) >>
+        guard_match loc "is_integer()" bTy BTy_boolean >>
         (PEis_integer <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_signed pe ->
-        E.guard (bTy = BTy_boolean)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEis_signed")) >>
+        guard_match loc "is_signed()" bTy BTy_boolean >>
         (PEis_signed <$> typecheck_pexpr loc env BTy_ctype pe)
     | PEis_unsigned pe ->
-        E.guard (bTy = BTy_boolean)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "PEis_unsigned")) >>
+        guard_match loc "is_unsigned()" bTy BTy_boolean >>
         (PEis_unsigned <$> typecheck_pexpr loc env BTy_ctype pe)
   end
 
-val annotate_expr: Loc.t -> typing_env -> Core.expr unit ->
-      E.eff (core_base_type * Core.typed_expr unit)
-let rec annotate_expr loc env = function
+
+val typecheck_export_pexpr: Loc.t -> typing_env -> core_base_type -> Core.pexpr -> E.eff typed_pexpr
+let typecheck_export_pexpr loc env bTy pe =
+  typecheck_pexpr loc env bTy pe
+    >>= export_pexpr loc
+
+
+val infer_paction: typing_env -> paction unit -> E.eff (core_base_type * typed_paction unit)
+let rec infer_paction env (Paction p (Action loc annot act_)) =
+  match act_ with
+    | Create pe1 pe2 pref ->
+        typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+        typecheck_export_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
+        E.return (BTy_object OTy_pointer, Create tpe1 tpe2 pref)
+    | Alloc pe1 pe2 pref ->
+        typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+        typecheck_export_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
+        E.return (BTy_object OTy_pointer, Alloc tpe1 tpe2 pref)
+    | Kill pe ->
+        typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
+        E.return (BTy_unit, Kill tpe)
+    | Store pe1 pe2 pe3 mo ->
+        match pe1 with
+          | Pexpr () (PEval (Vctype ty)) ->
+              let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+              let lvalue_bTy = core_object_type_of_ctype ty in
+              typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+              typecheck_export_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
+              E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
+          | _ ->
+              E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
+        end
+    | Load pe1 pe2 mo ->
+        match pe1 with
+          | Pexpr () (PEval (Vctype ty)) ->
+              let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+              let lvalue_bTy = core_object_type_of_ctype ty in
+              typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+              E.return (BTy_loaded lvalue_bTy, Load tpe1 tpe2 mo)
+          | _ ->
+              E.fail loc (CoreTyping_TODO "Load, non-trivial ctype")
+        end
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP infer_paction: RMW"
+    | Fence mo ->
+        E.return (BTy_unit, Fence mo)
+  end >>= fun (bTy, act_') ->
+  E.return (bTy, Paction p (Action loc annot act_'))
+
+
+val     infer_expr: Loc.t -> typing_env -> Core.expr unit -> E.eff (core_base_type * typed_expr unit)
+let rec infer_expr loc env = function
   | Epure pe ->
-     annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
+     infer_pexpr loc env pe
+        >>= export_pexpr loc >>= fun (Pexpr bTy _ as pe') ->
      E.return (bTy, Epure pe')
+  (* FIXME: are ememop and eaction of type unit? *)
+(* KKK
   | Ememop memop pes ->
-      E.mapM (annotate_pexpr loc env) pes >>= fun pes' ->
+      E.mapM (infer_pexpr loc env) pes >>= fun pes' ->
       E.return (BTy_unit, Ememop memop pes')
-  | Eaction (Paction p (Action loc annot act_)) ->
-      (fun (bTy, act) -> (bTy, Eaction (Paction p (Action loc annot act)))) <$>
-        match act_ with
-          | Create pe1 pe2 pref ->
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
-              E.return (BTy_object OTy_pointer, Create tpe1 tpe2 pref)
-          | Alloc pe1 pe2 pref ->
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
-              E.return (BTy_object OTy_pointer, Alloc tpe1 tpe2 pref)
-          | Kill pe ->
-              typecheck_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
-              E.return (BTy_unit, Kill tpe)
-          | Store pe1 pe2 pe3 mo ->
-              match pe1 with
-                | Pexpr () (PEval (Vctype ty)) ->
-                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                    let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    typecheck_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
-                    E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
-                | _ ->
-                    E.err loc (CoreTyping_TODO "Store, non-trivial ctype")
-              end
-          | Load pe1 pe2 mo ->
-              match pe1 with
-                | Pexpr () (PEval (Vctype ty)) ->
-                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                    let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    E.return (BTy_loaded lvalue_bTy, Load tpe1 tpe2 mo)
-                | _ ->
-                    E.err loc (CoreTyping_TODO "Load, non-trivial ctype")
-              end
-          | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
-              error "WIP: RMW"
-          | Fence mo ->
-              E.return (BTy_unit, Fence mo)
-      end
+*)
+  | Eaction pact ->
+      infer_paction env pact >>= fun (bTy, pact') ->
+      E.return (bTy, Eaction pact')
+(*
   | Ecase pe cases ->
-      annotate_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
-      E.mapM (fun (pat, e) -> annotate_pattern mbTy pat >>=
-              fun (env', pat') -> annotate_expr loc (Map.(union) env env') e >>=
-              fun (_, e') -> E.return (pat', e')
-             ) cases >>= fun cases' -> E.return (mbTy, Ecase pe' cases')
+      infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
+      match infer with
+        | Nothing ->
+            E.fail loc TooGeneral
+        | Just bTy ->
+            E.mapM (fun (pat, e) ->
+              typecheck_pattern bTy pat >>= fun (env', pat') ->
+              infer_expr loc (Map.(union) env env') e >>= fun (_, e') ->
+              E.return (pat', e')
+            ) cases >>= fun cases' ->
+            E.return (????, Ecase pe' cases')
+*)
   | Elet pat pe1 e2 ->
-      annotate_pexpr loc env pe1 >>= fun ((Pexpr bTy1 _) as pe1') ->
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
-      annotate_expr loc (Map.(union) env env') e2 >>= fun (bTy, e2') ->
+      infer_pexpr loc env pe1
+        >>= export_pexpr loc >>= fun ((Pexpr bTy1 _) as pe1') ->
+      typecheck_pattern bTy1 pat >>= fun (env', _pat') ->
+      export_pattern loc _pat' >>= fun pat' ->
+      infer_expr loc (Map.(union) env env') e2 >>= fun (bTy, e2') ->
       E.return (bTy, Elet pat' pe1' e2')
   | Eif pe1 e2 e3 ->
-      typecheck_pexpr loc env BTy_boolean pe1 >>= fun pe1' ->
-      annotate_expr loc env e2 >>= fun (bTy2, e2') ->
-      annotate_expr loc env e3 >>= fun (bTy3, e3') ->
+      typecheck_export_pexpr loc env BTy_boolean pe1 >>= fun pe1'        ->
+      infer_expr loc env e2                          >>= fun (bTy2, e2') ->
+      infer_expr loc env e3                          >>= fun (bTy3, e3') ->
       E.guard (bTy2 = bTy3)
-          (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Eif illtyped")) >>
+        loc (MismatchIf bTy2 bTy3) >>
       E.return (bTy2, Eif pe1' e2' e3')
   | Eskip ->
       E.return (BTy_unit, Eskip)
+(*
   | Eproc () pe pes ->
       match pe with
         | Pexpr () (PEval (Vobject (OVcfunction nm))) ->
@@ -698,34 +707,38 @@ let rec annotate_expr loc env = function
                   ) (List.zip bTys pes) >>= fun tpes ->
                   E.return (ret_bTy, Eproc () tpe tpes)
               | Just _ ->
-                  E.err loc (CoreTyping_TODO ("found a def in a Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+                  E.fail loc (CoreTyping_TODO ("found a def in a Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
               | Nothing ->
-                  E.err loc (CoreTyping_TODO ("unresolved sym in Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+                  E.fail loc (CoreTyping_TODO ("unresolved sym in Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
             end
         | _ ->
             error "Eproc annotate, non-trivial call"
       end
+*)
   | Ereturn pe ->
-      annotate_pexpr loc env pe >>= fun (Pexpr bTy _ as pe') ->
+      infer_pexpr loc env pe
+        >>= export_pexpr loc >>= fun (Pexpr bTy _ as pe') ->
       E.return (bTy, Ereturn pe')
   | Eunseq []  ->
-      E.err loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
+      E.fail loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
   | Eunseq [e] ->
-      E.err loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
+      E.fail loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
+(*
   | Eunseq es ->
       (List.unzip <$> E.mapM (annotate_expr loc env) es) >>= fun (bTys, es') ->
       E.return (BTy_tuple bTys, Eunseq es')
   | Ewseq pat e1 e2 ->
       annotate_expr loc env e1 >>= fun (bTy1, e1') ->
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
+      typecheck_pattern bTy1 pat >>= fun (env', pat') ->
       annotate_expr loc (Map.(union) env env') e2 >>= fun (bTy2, e2') ->
       E.return (bTy2, Ewseq pat' e1' e2')
   | Esseq pat e1 e2 ->
       annotate_expr loc env e1 >>= fun (bTy1, e1') ->
       let () = Debug.print_debug 0 ("Esseq annotate ==> " ^ Pp.stringFromCore_core_base_type bTy1) in
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
+      typecheck_pattern bTy1 pat >>= fun (env', pat') ->
       annotate_expr loc (Map.(union) env env') e2 >>= fun (bTy2, e2') ->
       E.return (bTy2, Esseq pat' e1' e2')
+*)
   | Easeq m act pact -> error "annotate easeq"
   | Eindet n e -> error "annotate eindet"
   | Ebound n e -> error "annotate ebound"
@@ -735,88 +748,90 @@ let rec annotate_expr loc env = function
   | Epar e -> error "annotate epar"
   | Ewait id -> error "annotate ewait"
   | Eloc loc' e ->
-      annotate_expr loc' env e
+      infer_expr loc' env e
+  | expr ->
+        error ("WIP: infer_expr ==> "  ^ Pp.stringFromCore_expr expr)
 end
 
-val typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit ->
-      E.eff (Core.typed_expr unit)
+
+val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit)
 let rec typecheck_expr loc env bTy = function
   | Epure pe ->
-      Epure <$> typecheck_pexpr loc env bTy pe
+      Epure <$> typecheck_export_pexpr loc env bTy pe
+(* KKK
   | Ememop memop pes ->
       E.guard (bTy = BTy_unit)
         (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Ememop illtyped")) >>
-      (Ememop memop <$> E.mapM (annotate_pexpr loc env) pes)
+      (Ememop memop <$> E.mapM (infer_pexpr loc env) pes)
+*)
   | Eaction (Paction p (Action loc annot act_)) ->
       (Eaction -| (Paction p) -| (Action loc annot)) <$>
         match act_ with
           | Create pe1 pe2 pref ->
-              E.guard (bTy = BTy_object OTy_pointer)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Create")) >>
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
+              guard_match loc "create()" bTy (BTy_object OTy_pointer) >>
+              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+              typecheck_export_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
               E.return (Create tpe1 tpe2 pref)
           | Alloc pe1 pe2 pref ->
-              E.guard (bTy = BTy_object OTy_pointer)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Alloc")) >>
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
+              guard_match loc "alloc()" bTy (BTy_object OTy_pointer) >>
+              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
               E.return (Alloc tpe1 tpe2 pref)
           | Kill pe ->
-              E.guard (bTy = BTy_unit)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Free")) >>
-              typecheck_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
+              guard_match loc "kill()" bTy BTy_unit >>
+              typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
               E.return (Kill tpe)
           | Store pe1 pe2 pe3 mo ->
-              E.guard (bTy = BTy_unit)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Store")) >>
+              guard_match loc "store()" bTy BTy_unit >>
               match pe1 with
                 | Pexpr () (PEval (Vctype ty)) ->
                     let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
                     let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    typecheck_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
+                    typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    typecheck_export_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
                     E.return (Store tpe1 tpe2 tpe3 mo)
                 | _ ->
-                    E.err loc (CoreTyping_TODO "Store, non-trivial ctype")
+                    E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
               end
           | Load pe1 pe2 mo ->
               match pe1 with
                 | Pexpr () (PEval (Vctype ty)) ->
                     let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
                     let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    E.guard (bTy = BTy_loaded lvalue_bTy)
-                        (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Load")) >>
+                    typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    guard_match loc "load()" bTy (BTy_loaded lvalue_bTy) >>
                     E.return (Load tpe1 tpe2 mo)
                 | _ ->
-                    E.err loc (CoreTyping_TODO "Load, non-trivial ctype")
+                    E.fail loc (CoreTyping_TODO "Load, non-trivial ctype")
               end
           | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
               error "WIP: RMW"
           | Fence mo ->
-              E.guard (bTy = BTy_unit)
-                (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Fence")) >>
+              guard_match loc "fence()" bTy BTy_unit >>
               E.return (Fence mo)
       end
+(*
   | Ecase pe cases ->
-      annotate_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
-      E.mapM (fun (pat, e) -> annotate_pattern mbTy pat >>=
+      infer_pexpr loc env pe >>= fun (Pexpr mbTy _ as pe') ->
+      E.mapM (fun (pat, e) -> typecheck_pattern mbTy pat >>=
               fun (env', pat') -> typecheck_expr loc (Map.(union) env env') bTy e >>=
               fun e' -> E.return (pat', e')
              ) cases >>= fun cases' -> E.return (Ecase pe' cases')
+*)
   | Elet pat pe1 e2 ->
-      annotate_pexpr loc env pe1 >>= fun ((Pexpr bTy1 _) as pe1') ->
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
+      infer_pexpr loc env pe1
+        >>= export_pexpr loc     >>= fun (Pexpr bTy1 _ as pe1') ->
+      typecheck_pattern bTy1 pat >>= fun (env', _pat')          ->
+      export_pattern loc _pat'   >>= fun pat'                   ->
       Elet pat' pe1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
   | Eif pe1 e2 e3 ->
-      Eif <$> typecheck_pexpr loc env BTy_boolean pe1
+      Eif <$> typecheck_export_pexpr loc env BTy_boolean pe1
           <*> typecheck_expr loc env bTy e2
           <*> typecheck_expr loc env bTy e3
   | Eskip ->
-      E.guard (bTy = BTy_unit)
-        (Loc.unknown, Core_typing_cause (CoreTyping_TODO "Eskip")) >>
+      E.guard (bTy = BTy_unit) loc (Mismatch "skip" bTy BTy_unit) >>
       E.return Eskip
+(*
   | Eproc () pe pes ->
       match pe with
         | Pexpr () (PEval (Vobject (OVcfunction nm))) ->
@@ -829,35 +844,36 @@ let rec typecheck_expr loc env bTy = function
                   ) (List.zip bTys pes) >>= fun tpes ->
                   E.return (Eproc () tpe tpes)
               | Just _ ->
-                  E.err loc (CoreTyping_TODO ("found a def in a Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+                  E.fail loc (CoreTyping_TODO ("found a def in a Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
               | Nothing ->
-                  E.err loc (CoreTyping_TODO ("unresolved sym in Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+                  E.fail loc (CoreTyping_TODO ("unresolved sym in Eproc: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
             end
         | _ ->
             error "Eproc typecheck, non-trivial call"
       end
-
+*)
   | Ereturn pe ->
-      Ereturn <$> typecheck_pexpr loc env bTy pe
+      Ereturn <$> typecheck_export_pexpr loc env bTy pe
   | Eunseq []  ->
-      E.err loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
+      E.fail loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")
   | Eunseq [e] ->
-      E.err loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
+      E.fail loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 1)")
   | Eunseq es ->
       match bTy with
         | BTy_tuple bTys ->
             Eunseq <$> E.mapM (fun (bTy, e) -> typecheck_expr loc env bTy e)
                         (List.zip bTys es)
-        | _ -> E.err loc (CoreTyping_TODO "UNSEQ illtyped")
+        | _ -> E.fail loc (CoreTyping_TODO "UNSEQ illtyped")
       end
   | Ewseq pat e1 e2 ->
-      annotate_expr loc env e1  >>= fun (bTy1, e1')  ->
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
+      infer_expr loc env e1      >>= fun (bTy1, e1')   ->
+      typecheck_pattern bTy1 pat >>= fun (env', _pat') ->
+      export_pattern loc _pat'   >>= fun pat'          ->
       Ewseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
   | Esseq pat e1 e2 ->
-      annotate_expr loc env e1 >>= fun (bTy1, e1') ->
-      let () = Debug.print_debug 0 ("Esseq typecheck ==> " ^ Pp.stringFromCore_core_base_type bTy1) in
-      annotate_pattern bTy1 pat >>= fun (env', pat') ->
+      infer_expr loc env e1      >>= fun (bTy1, e1')   ->
+      typecheck_pattern bTy1 pat >>= fun (env', _pat') ->
+      export_pattern loc _pat'   >>= fun pat'          ->
       Esseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
   | Easeq m act pact -> error "easeq"
   | Eindet n e -> error "eindet"
@@ -869,7 +885,13 @@ let rec typecheck_expr loc env bTy = function
   | Ewait id -> error "ewait"
   | Eloc loc' e ->
       typecheck_expr loc' env bTy e
+  | expr ->
+        error ("WIP: infer_expr ==> "  ^ Pp.stringFromCore_expr expr)
 end
+
+
+
+
 
 (* TODO: add a check for the existence of main *)
 val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit) Errors.error
@@ -877,7 +899,7 @@ let typecheck_program file =
   let aux =
     (* The startup function/procedure must be defined *)
     E.guard (Map.member file.main file.funs)
-      (Loc.unknown, Core_typing_cause (Undefined_startup file.main)) >>
+      Loc.unknown (Undefined_startup file.main) >>
     
     (* Register the functions/procedures from the stdlib and the impl constants *)
     let env = Map_extra.fold (fun sym decl acc ->
@@ -904,7 +926,7 @@ let typecheck_program file =
       match decl with
         | Fun bTy sym_bTys pe ->
             let env' = List.foldr (fun (sym, bTy) acc -> Map.insert (Sym sym) (TDsym bTy) acc) env sym_bTys in
-            Fun bTy sym_bTys <$> typecheck_pexpr Loc.unknown env' bTy pe
+            Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown env' bTy pe
         | Proc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> Map.insert (Sym sym) (TDsym bTy) acc) env sym_bTys in
             Proc bTy sym_bTys <$> typecheck_expr Loc.unknown env' bTy e
@@ -914,10 +936,10 @@ let typecheck_program file =
     E.mapMapM (fun _ decl ->
       match decl with
         | Def bTy pe ->
-            Def bTy <$> typecheck_pexpr Loc.unknown env bTy pe
+            Def bTy <$> typecheck_export_pexpr Loc.unknown env bTy pe
         | IFun bTy sym_bTys pe ->
             let env' = List.foldr (fun (sym, bTy) acc -> Map.insert (Sym sym) (TDsym bTy) acc) env sym_bTys in
-            IFun bTy sym_bTys <$> typecheck_pexpr Loc.unknown env' bTy pe
+            IFun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown env' bTy pe
       end) file.impl >>= fun impl' ->
     
     E.mapM (fun (sym, bTy, e) ->
@@ -938,7 +960,7 @@ let typecheck_program file =
       match decl with
         | Fun bTy sym_bTys pe ->
             let env' = List.foldr (fun (sym, bTy) acc -> Map.insert (Sym sym) (TDsym bTy) acc) env sym_bTys in
-            Fun bTy sym_bTys <$> typecheck_pexpr Loc.unknown env' bTy pe
+            Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown env' bTy pe
         | Proc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> Map.insert (Sym sym) (TDsym bTy) acc) env sym_bTys in
             Proc bTy sym_bTys <$> typecheck_expr Loc.unknown env' bTy e

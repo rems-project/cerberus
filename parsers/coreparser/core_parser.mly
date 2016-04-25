@@ -368,11 +368,11 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         symbolify_pexpr _pe2 >>= fun pe2 ->
         Eff.return (Pexpr ((), PEctor (Ccons, [pe1; pe2])))
     | PEctor (Ctuple, _pes) ->
-        Eff.get >>= fun st ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
         Eff.return (Core_aux.mk_tuple_pe pes)
     | PEctor (Carray, _pes) ->
-        failwith "WIP: PEctor Carray"
+        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+        Eff.return (Pexpr ((), PEctor (Carray, pes)))
     | PEctor (Civmax, [_pe]) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr ((), PEctor (Civmax, [pe])))
@@ -524,9 +524,11 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Epar _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (Epar es)
- | Ewait _
- | Eloc _ ->
+ | Ewait _ ->
      assert false
+ | Eloc (loc, _e) ->
+     symbolify_expr _e >>= fun e ->
+     Eff.return (Eloc (loc, e))
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
@@ -1131,46 +1133,59 @@ pexpr:
 
 expr:
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Epure pe_ }
+    { Eloc (Loc_region ($startpos, $endpos, None), Epure pe_) }
 (*
   | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym)
 *)
 | SKIP
-    { Eskip }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Elet (_pat, _pe1, _e2) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Eif (_pe1, _e2, _e3) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Ecase (_pe, _pat_es) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _pe= pexpr COMMA _pes= separated_list(COMMA, pexpr) RPAREN
-    { Core.Eproc ((), _pe, _pes) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eproc ((), _pe, _pes) ) }
 | _pact= paction
-    { Eaction _pact }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Eunseq _es }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Ewseq (_pat, _e1, _e2) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Ewseq (_pat, _e1, _e2) ) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Esseq (_pat, _e1, _e2) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Esseq (_pat, _e1, _e2) ) }
 | LET ATOM _sym_bTy_opt= option(pair(SYM, core_base_type)) EQ _act1= action IN _pact2= paction
-    { Easeq (_sym_bTy_opt, Action (Location_ocaml.unknown, (), _act1), _pact2) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Easeq (_sym_bTy_opt, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Eindet (Nat_big_num.to_int n, _e) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eindet (Nat_big_num.to_int n, _e) ) }
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Ebound (Nat_big_num.to_int n, _e) }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Ebound (Nat_big_num.to_int n, _e) ) }
 (*
-| Eindet of generic_expr 'a 'ty 'sym
-  | Ebound of nat * generic_expr 'a 'ty 'sym
   | Esave of ksym * list (Symbol.t * ctype) * generic_expr 'a 'ty 'sym
   | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
   *)
 | RETURN _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Ereturn _pe }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Ereturn _pe ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { End _es }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Epar _es }
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Epar _es ) }
 ;
 
 action:

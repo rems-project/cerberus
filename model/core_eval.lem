@@ -7,7 +7,7 @@ import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Core_aux
+import Core_ctype Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -287,7 +287,24 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
           | (Ctuple, Just cvals) ->
               EU.return $ PEval (Vtuple cvals)
           | (Carray, Just cvals) ->
-              error "WIP: step_eval, PEctor Carray" (* WIP *)
+              match List.foldr (fun cval acc ->
+                match (cval, acc) with
+                  | (_, Left _) ->
+                      acc
+                  | (Vunspecified ty, _) ->
+                      Left ty
+                  | (Vobject oval, Right ovals) ->
+                      Right (oval :: ovals)
+                end
+              ) (Right []) cvals with
+                | Left ty ->
+                    (* HUM: this is ill-typed!!! *)
+                    let () = Debug.warn "(check with P) turning any array with at least one unspec element into an unspec" in
+                    EU.return $ PEval (Vunspecified (Core_ctype.Array ty (Just (integerFromNat $ List.length cvals))))
+                | Right ovals ->
+                    EU.return $ PEval (Vobject (OVarray ovals))
+                    
+              end
           | (Civmax, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->

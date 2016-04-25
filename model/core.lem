@@ -236,6 +236,7 @@ type typed_ctor            = generic_ctor core_base_type
 type typed_pattern         = generic_pattern core_base_type Symbol.sym
 type typed_pexpr           = generic_pexpr core_base_type Symbol.sym
 type typed_expr 'a         = generic_expr 'a core_base_type Symbol.sym
+type typed_paction 'a      = generic_paction 'a core_base_type Symbol.sym
 type typed_impl_decl       = generic_impl_decl core_base_type
 type typed_impl            = generic_impl core_base_type
 type typed_fun_map_decl 'a = generic_fun_map_decl core_base_type 'a

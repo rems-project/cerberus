@@ -492,10 +492,111 @@ and translate_expression stdlib program is_lvalue a_expr =
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
           if AilTypesAux.is_object result_ty then
-             translate_lvalue e
+             E.fresh_symbol     >>= fun sym    ->
+             translate_lvalue e >>= fun core_e ->
+             let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+             E.return $
+               C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object oTy)) core_e
+                 (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object oTy) sym)))
           else
             translate_function_designator stdlib e
       
+      (* TODO: promotion? + atomicity *)
+      | A.AilEunary A.PostfixIncr e ->
+          (* TODO: qualifiers temporarily not dealt with *)
+(*          E.fresh_symbol     >>= fun lvalue_sym ->
+          E.fresh_symbol     >>= fun load_sym   -> *)
+          E.fresh_symbol     >>= fun lvalue_sym ->
+          E.fresh_symbol     >>= fun load_sym   ->
+          E.fresh_symbol     >>= fun obj_sym    ->
+          translate_lvalue e >>= fun core_e     ->
+          let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype ty)    in
+          let core_ty_e = Caux.mk_ail_ctype_pe ty in
+          
+          let lvalue_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) lvalue_sym in
+          let load_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) load_sym             in
+          let obj_sym_pe    = Caux.mk_sym_pe (C.BTy_object oTy) obj_sym              in
+          
+          E.return $
+            C.Ewseq (Caux.mk_sym_pat lvalue_sym (C.BTy_object C.OTy_pointer)) core_e
+              (C.Easeq (Just (load_sym, C.BTy_loaded oTy))
+                 (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
+                 (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
+                    lvalue_sym_pe
+                    (C.Pexpr () begin
+                      C.PEcase load_sym_pe
+                        [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
+if AilTypesAux.is_integer ty then
+                           conv_loaded_int [Caux.mk_ail_ctype_pe (ctype_of e); (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))]
+else
+  error "AilEunary PostfixIncr, non-integer"
+)
+                        ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat],
+                          Caux.mk_unspecified_pe (Caux.proj_ctype ty)(*TODO:check*))
+                        ]
+                    end)
+                    Cmm.NA))
+                 )
+              )
+      
+      | A.AilEunary A.Indirection e ->
+          (* TODO: if e is a pointer to a function *)
+if AilTypesAux.is_pointer_to_function (ctype_of e) then
+          error "WIP: Elaboration, A.Indirection, function designator"
+else
+          E.fresh_symbol      >>= fun e_sym    ->
+          E.fresh_symbol      >>= fun obj_sym  ->
+          E.fresh_symbol      >>= fun test_sym -> (* symbol for the PtrValidForDeref test *)
+          translate_rvalue e  >>= fun core_e   ->
+          E.return $
+            C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded C.OTy_pointer)) core_e
+              (C.Ecase (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) e_sym)
+                 [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer)),
+                    C.Ewseq (Caux.mk_sym_pat test_sym C.BTy_boolean)
+                      (C.Ememop Mem.PtrValidForDeref [Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) obj_sym])
+                      (C.Eif (Caux.mk_sym_pe C.BTy_boolean test_sym)
+                         begin
+                           let obj_sym_pe = 
+                             Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) obj_sym in
+                           if is_lvalue then
+                             C.Epure obj_sym_pe
+                           else
+                             Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) obj_sym_pe Cmm.NA
+                         end
+                         (C.Epure (Caux.mk_undef_pe Undefined.UB043_indirection_invalid_value)))
+                     )
+                 ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat],
+                    C.Epure (Caux.mk_undef_pe Undefined.UB043_indirection_invalid_value(*TODO:check*)))
+                 ])
+(*
+The unary * operator denotes indirection.
+
+If the operand points to a function, the result is a function designator; if it points to an object, the result is an lvalue designating the object.
+
+If the operand has type ‘‘pointer to type’’, the result has type ‘‘type’’.
+
+If an invalid value has been assigned to the pointer, the behavior of the unary * operator is undefined.
+*)
+
+      
+      | A.AilEunary op _ ->
+          match op with
+            | A.Plus ->
+                error "AilEunary Plus"
+            | A.Minus ->
+                error "AilEunary Minus"
+            | A.Bnot ->
+                error "AilEunary Bnot"
+            | A.Address ->
+                error "AilEunary Address"
+            | A.Indirection ->
+                error "AilEunary Indirection"
+            | A.PostfixIncr ->
+                error "AilEunary PostfixIncr"
+            | A.PostfixDecr ->
+                error "AilEunary PostfixDecr"
+          end
 (*
 TODO: NEW TYPED CORE
 
@@ -1108,7 +1209,7 @@ else
                   (* STD §6.3.2.1# *)
                 else
 *)
-                C.Epure id_sym_pe
+                C.Epure ((*Caux.mk_specified_pe*)id_sym_pe)
               else
                 Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) id_sym_pe Cmm.NA
 
