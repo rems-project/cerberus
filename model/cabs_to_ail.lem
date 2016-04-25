@@ -1821,7 +1821,8 @@ and wip_desugar_initializer_ loc dur current_ty init =
          errors later *)
       match dur with
         | ATypes.Automatic ->
-            desugar_expression e
+            desugar_expression e >>= fun d_e ->
+            E.return d_e
         | ATypes.Allocated ->
             error "not possible"
         (* Static | Thread *)
@@ -2141,11 +2142,10 @@ and desugar_and_register_static_assert_declaration sa_decl =
 val desugar_declaration_base: specifiers -> list init_declarator -> E.t (list (identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs (* TODO: use qualifiers *), _ty) ->
-          E.mapM (fun init -> desugar_init_declarator _ty
-                     specifs.storage_classes init) idecltors >>= fun xs ->
-          
           (* for each [init_declarator] *)
-          E.foldrM (fun (ident, qs, ty, d_e_opt) acc ->
+          E.foldlM (fun init acc ->
+            desugar_init_declarator _ty specifs.storage_classes init >>= fun (ident, qs, ty, d_e_opt) ->
+            
             (* TODO!!!: do something with qs *)
             let base_qs = translate_type_qualifiers specifs.type_qualifiers in
             let () = Debug.print_debug 2
@@ -2193,7 +2193,7 @@ let desugar_declaration_base specifs idecltors =
                           E.return acc
                     end
               end
-          ) [] xs
+          ) idecltors []
 
 
 (*

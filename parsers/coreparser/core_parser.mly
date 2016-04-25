@@ -3,6 +3,8 @@ open Lem_pervasives
 open Either
 open Global
 
+open Location_ocaml
+
 open Core_parser_util
 
 open Core
@@ -161,7 +163,7 @@ let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
         | [] ->
             failwith "Core_parser.register_sym: found open scope"
         | scope::scopes ->
-            Pmap.add _sym (sym, Location_ocaml.Loc_region (start_p, end_p, None)) scope :: scopes
+            Pmap.add _sym (sym, Loc_region (start_p, end_p, None)) scope :: scopes
   } >>
   Eff.return sym
 
@@ -452,7 +454,8 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
      symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Epure pe)
  | Ememop (memop, _pes) ->
-     failwith "WIP: Ememop"
+     Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+     Eff.return (Ememop (memop, pes))
  | Eaction _pact ->
      symbolify_paction _pact >>= fun pact ->
      Eff.return (Eaction pact)
@@ -741,6 +744,7 @@ let mk_file decls =
 %token <Core_parser_util._sym> SYM
 %token <Implementation_.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
+%token <Mem_common.memop> MEMOP_OP
 
 (* ctype tokens *)
 %token VOID ATOMIC (* SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T *) (* DOTS *)
@@ -759,7 +763,7 @@ let mk_file decls =
 %token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED
 
 (* Core constant keywords *)
-%token TRUE FALSE
+%token TRUE FALSE UNIT_VALUE
 %token ARRAY_SHIFT MEMBER_SHIFT
 %token UNDEF ERROR
 %token<string> STRING
@@ -771,7 +775,7 @@ let mk_file decls =
 (* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE PCALL
+%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE MEMOP PCALL
 %nonassoc IN
 
 
@@ -1063,7 +1067,7 @@ value:
     { Vobject (OVinteger (Mem.integer_ival0 n)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
-| UNIT
+| UNIT_VALUE
     { Vunit }
 | TRUE
     { Vtrue }
@@ -1134,9 +1138,8 @@ pexpr:
 expr:
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
     { Eloc (Loc_region ($startpos, $endpos, None), Epure pe_) }
-(*
-  | Ememop of Mem.memop * list (generic_pexpr 'ty 'sym)
-*)
+| MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
+    { Eloc (Loc_region ($startpos, $endpos, None), Ememop (memop, pes)) }
 | SKIP
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Eskip ) }

@@ -125,8 +125,8 @@ let pp_ctype ty =
 
 
 let pp_polarity = function
-  | Pos -> P.empty
-  | Neg -> P.tilde
+  | Pos -> fun z -> z
+  | Neg -> fun z -> pp_keyword "neg" ^^ P.parens z
 
 let pp_name = function
   | Sym a  -> pp_symbol a
@@ -297,7 +297,11 @@ let pp_pexpr pe =
         | PEimpl iCst ->
             pp_impl iCst
         | PEctor (ctor, pes) ->
-            pp_ctor ctor ^^ P.parens (comma_list pp pes)
+            (match ctor with
+              | Ctuple ->
+                  P.parens (comma_list pp pes)
+              | _ ->
+                  pp_ctor ctor ^^ P.parens (comma_list pp pes))
         | PEcase (pe, pat_pes) ->
             pp_keyword "case" ^^^ pp pe ^^^ pp_keyword "of" ^^
             P.nest 2 (
@@ -375,7 +379,7 @@ let rec pp_expr = function
   | Eaction (Paction (p, (Action (_, bs, act)))) ->
       (* (if Set.is_empty bs then P.empty else P.langle ^^ (P.sepmap P.space pp_trace_action (Set.to_list bs)) ^^
          P.rangle ^^ P.space) ^^ *)
-      pp_polarity p ^^ pp_action act
+      pp_polarity p (pp_action act)
   | Ecase (pe, pat_es) ->
       pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
       P.nest 2 (
