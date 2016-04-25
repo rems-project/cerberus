@@ -47,11 +47,15 @@ type core_typing_cause =
     (* Found no definition of the startup fun/proc *)
   | Undefined_startup of Symbol.sym
   | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
+  | Mismatch of string (* syntax info *) * core_base_type (* expected *) * core_base_type (* found *)
+  | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
   | EmptyArray
+  | CtorWrongNumber of nat (* expected *) * nat (* found *)
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
   | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
   | CoreTyping_TODO of string
+  | TooGeneral
 
 
 type core_run_error =

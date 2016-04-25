@@ -34,6 +34,7 @@ SOURCE_core=\
   core_ctype.lem \
   core_ctype_aux.lem \
   core.lem \
+  core_typing_aux.lem \
   core_typing.lem 
 
 SOURCE_core_to_core=\

@@ -107,11 +107,6 @@ let c_frontend f =
     |> pass_message "4. Translation to Core completed!"
 
 (*
-
-
-
-      
-      
 (*
       |> Exception.fmap Core_simpl.simplify
 
@@ -198,9 +193,14 @@ let pipeline filename args =
        Exception.fail0 (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun (sym_supply, core_file) ->
   
-  (Core_typing.typecheck_program core_file |>
-  pass_message "5. Core typechecking completed!") >>
-  
+  begin
+    if !!cerb_conf.typecheck_core then
+      Core_typing.typecheck_program core_file |>
+        pass_message "5. Core typechecking completed!" >>
+      Exception.return2 ()
+    else
+      Exception.return2 ()
+  end >>
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.rewrite then Core_rewrite.rewrite_file core_file else core_file) in
@@ -227,7 +227,7 @@ let pipeline filename args =
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
-             sequentialise concurrency preEx args compile batch experimental_unseq =
+             sequentialise concurrency preEx args compile batch experimental_unseq typecheck_core =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -252,7 +252,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
 
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx compile (* TODO *) RefStd batch experimental_unseq;
+    sequentialise concurrency preEx compile (* TODO *) RefStd batch experimental_unseq typecheck_core;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
@@ -260,7 +260,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
 
   set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile
-    (* TODO *) RefStd batch experimental_unseq;
+    (* TODO *) RefStd batch experimental_unseq typecheck_core;
 
   
   
@@ -358,6 +358,10 @@ let experimental_unseq =
   let doc = "use a new (experimental) semantics for unseq() in Core_run" in
   Arg.(value & flag & info["experimental-unseq"] ~doc)
 
+let typecheck_core =
+  let doc = "typecheck the elaborated Core program" in
+  Arg.(value & flag & info["typecheck-core"] ~doc)
+
 (*
 let concurrency_tests =
   let doc = "Runs the concurrency regression tests" in
@@ -371,10 +375,10 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq) in
+                         sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
 
 
-  let info       = Term.info "cerberus" ~version:"ecd2ae6db47b+ tip -- 25/03/2016@05:52" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"add57e62d95d+ tip -- 24/04/2016@19:51" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

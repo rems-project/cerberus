@@ -871,20 +871,18 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
     | (Eaction pact, _) ->
         one $ core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) pact
     | (Ememop memop pes, _) ->
-        error "Core_run, WIP Ememop"
-(*
+(*        error "Core_run, WIP Ememop" *)
         one match valueFromPexprs pes with
           | Just bTy_cvals ->
-              Step_memop_request memop bTy_cvals current_tid (fun (bTy, cval) ->
-                <| th_st with arena= Epure (Pexpr bTy (PEval cval)) |>
+              Step_memop_request memop bTy_cvals current_tid (fun cval ->
+                <| th_st with arena= Epure (Pexpr () (PEval cval)) |>
               )
           | Nothing ->
               Step_eval "Ememop" (
-                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map false pes >>= fun pes' ->
+                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
                 E.return <| th_st with arena= Ememop memop pes' |>
               )
         end
-*)
 
 (*
           | (Ptreq, Just cvals) ->
@@ -1149,17 +1147,23 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove fo
           | Just pe ->
               one match valueFromPexpr pe with
                 | Just cval ->
-                    Step_tau "value" (match cont with
+                    match cont with
                       | [] ->
-                          error ("<e, Stack_cons []> with e= " ^ Pp.stringFromCore_expr e) (* TODO: what case is that? *)
+                          match parent_tid_opt with
+                            | Nothing ->
+                                (* TODO: check, this should only occur at the end of a pure main function *)
+                                Step_done cval
+                            | Just _ ->
+                                error ("<e, Stack_cons []> with e= " ^ Pp.stringFromCore_expr e) (* TODO: what case is that? *)
+                          end
                       | _ ->
                           (* -----------------------------------
                              <v, κ.κs, Λ> --τ--> <κ(v), ɛ.κs, Λ> *)
-                          E.return <| th_st with
+                          Step_tau "value" (E.return <| th_st with
                             arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
                             stack= push_empty_continuation sk
-                          |>
-                    end)
+                          |>)
+                    end
                   | Nothing ->
                       (*          [| pe |] = v
                          -----------------------------
