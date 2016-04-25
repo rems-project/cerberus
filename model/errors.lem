@@ -49,6 +49,7 @@ type core_typing_cause =
   | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
   | Mismatch of string (* syntax info *) * core_base_type (* expected *) * core_base_type (* found *)
   | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
+  | MismatchIfCfunction of (core_base_type * list core_base_type) (* then *) * (core_base_type * list core_base_type) (* else *)
   | EmptyArray
   | CtorWrongNumber of nat (* expected *) * nat (* found *)
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)

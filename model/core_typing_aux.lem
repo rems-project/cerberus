@@ -125,7 +125,7 @@ let rec toCoreBaseType infer =
         maybe Nothing (Just -| BTy_list) (toCoreBaseType infer')
     | InferredType_tuple infers ->
         (flip Maybe.bind) (Just -| BTy_tuple) $
-          List.foldl (fun acc_opt infer ->
+          List.foldr (fun infer acc_opt  ->
             match acc_opt with
               | Just acc ->
                   Maybe.bind (toCoreBaseType infer) (fun z -> Just (z::acc))
@@ -181,7 +181,7 @@ end
 
 val     export_pexpr: Loc.t -> inferred_pexpr -> E.eff typed_pexpr
 let rec export_pexpr loc (Pexpr infer pexpr_) =
-  flip (maybe (E.fail loc (CoreTyping_TODO "export_pexpr")))
+  flip (maybe (E.fail loc TooGeneral))
     (toCoreBaseType infer) $ fun bTy ->
   Pexpr bTy <$> match pexpr_ with
     | PEsym sym ->

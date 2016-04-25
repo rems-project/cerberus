@@ -9,6 +9,8 @@ open TypingError
 
 open Colour
 
+open Pp_prelude
+
 
 type kind =
   | Error
@@ -251,10 +253,38 @@ let std_ref = function
       str
   | Core_run_cause _  ->
       "TODO: core_run_cause"
-  | Core_typing_cause (CoreTyping_TODO str) ->
-      "TODO: core typing ==> " ^ str
-  | Core_typing_cause _ ->
-      "TODO: core typing"
+  | Core_typing_cause cause ->
+      "Core typing error: " ^ 
+      begin match cause with
+        | Undefined_startup sym ->
+            "undefined startup fun/proc '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
+        | MismatchObject (oTy1, oTy2) ->
+            "mismatching object types, expecting: " ^ String_core.string_of_core_object_type oTy1 ^
+            "found: " ^ String_core.string_of_core_object_type oTy2
+        | Mismatch (str, bTy1, bTy2) ->
+            "mismatching base types (in " ^ str ^ "), expecting: " ^ String_core.string_of_core_base_type bTy1 ^
+            " -- found: " ^ String_core.string_of_core_base_type bTy2
+        | MismatchIf (bTy1, bTy2) ->
+            "mismatching types in a if-expression, then branch: " ^ String_core.string_of_core_base_type bTy1 ^
+            " -- else branch: " ^ String_core.string_of_core_base_type bTy2
+        | MismatchIfCfunction ((ret_bTy1, bTys1), (ret_bTy2, bTys2)) ->
+            "mismatching signatures in a Cfunction if-expression, then branch: " ^
+            Pp_utils.to_plain_string (Pp_core.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.pp_core_base_type bTys1)) ^
+            " -- else branch: " ^
+            Pp_utils.to_plain_string (Pp_core.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.pp_core_base_type bTys1))
+        | EmptyArray ->
+            "found an empty array"
+(*
+        | CtorWrongNumber of nat (* expected *) * nat (* found *)
+        | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
+        | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
+        | InvalidMember of Symbol.sym * Cabs.cabs_identifier
+*)
+        | CoreTyping_TODO str ->
+            "TODO(msg) " ^ str
+        | TooGeneral ->
+            "too general"
+      end
   | PARSER str ->
       "TODO: parsing error ==> " ^ str
   | _ ->

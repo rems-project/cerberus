@@ -56,13 +56,14 @@ let keywords =
       ("ctype",     T.CTYPE    );
       ("cfunction", T.CFUNCTION);
       ("unit",      T.UNIT     );
+      ("list",      T.LIST     );
 
       
       ("eff", T.EFF);
 (*    | Tuple of list core_base_type *)
       
       (* for Core.expr *)
-      ("list",   T.LIST     );
+      ("Unit",      T.UNIT_VALUE);
       ("True",   T.TRUE);
       ("False",  T.FALSE);
 (*  | Econst of Cmm_aux.constant *)
@@ -163,8 +164,20 @@ let keywords =
       ("Array",  T.ARRAY);
       ("loaded", T.LOADED);
       ("Specified", T.SPECIFIED);
-
       
+      (* TODO: I really need to rewrite this lexer properly... *)
+      ("memop", T.MEMOP);
+
+      ("PtrEq", T.MEMOP_OP Mem_common.PtrEq);
+      ("PtrNe", T.MEMOP_OP Mem_common.PtrNe);
+      ("PtrLt", T.MEMOP_OP Mem_common.PtrLt);
+      ("PtrGt", T.MEMOP_OP Mem_common.PtrGt);
+      ("PtrLe", T.MEMOP_OP Mem_common.PtrLe);
+      ("PtrGe", T.MEMOP_OP Mem_common.PtrGe);
+      ("Ptrdiff", T.MEMOP_OP Mem_common.Ptrdiff);
+      ("IntFromPtr", T.MEMOP_OP Mem_common.IntFromPtr);
+      ("PtrFromInt", T.MEMOP_OP Mem_common.PtrFromInt);
+      ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref)
     ]
 
 let scan_sym lexbuf =

@@ -241,7 +241,7 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
 
 fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
-    error(<<<WIP_bXOR>>>, unit)
+    error(<<<WIP_bXOR>>>, Unit)
   else
   let n1_: integer = <Integer.encode>(ty, n1) in
   let n2_: integer = <Integer.encode>(ty, n2) in
@@ -259,7 +259,7 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
 
 fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
   if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
-    error(<<<WIP_bOR>>>, unit)
+    error(<<<WIP_bOR>>>, Unit)
   else
     let n1_: integer = <Integer.encode>(ty, n1) in
     let n2_: integer = <Integer.encode>(ty, n2) in
@@ -307,7 +307,7 @@ proc rev_listFromStr(str: pointer) : eff [integer] :=
 
 
 
-proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff integer :=
+proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   let strong frmt_ptr_: loaded pointer = load("char*", tmp_ptr) in
   case frmt_ptr_ of
     | Specified(frmt_ptr: pointer) =>

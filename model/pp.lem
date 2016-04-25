@@ -22,7 +22,7 @@ declare hol   target_rep function stringFromAil_expression =
 val stringFromCore_ctype:  Core_ctype.ctype -> string
 val stringFromCore_core_base_type:  Core.core_base_type -> string
 val stringFromCore_value:  Core.value -> string
-val stringFromCore_pexpr:  Core.pexpr -> string
+val stringFromCore_pexpr:  forall 'ty. Core.generic_pexpr 'ty Symbol.sym -> string
 val stringFromCore_expr:   forall 'a. Core.expr 'a -> string
 val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) -> string
 val stringFromCore_file:   forall 'a. Core.file 'a -> string

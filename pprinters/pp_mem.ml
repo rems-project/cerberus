@@ -12,25 +12,25 @@ let pp_pure_memop = function
 
 let pp_memop = function
   | PtrEq ->
-      !^ "\"ptreq\""
+      !^ "PtrEq"
   | PtrNe ->
-      !^ "\"ptrne\""
+      !^ "PtrNe"
   | PtrLt ->
-      !^ "\"ptrlt\""
+      !^ "PtrLt"
   | PtrGt ->
-      !^ "\"ptrgt\""
+      !^ "PtrGt"
   | PtrLe ->
-      !^ "\"ptrle\""
+      !^ "PtrLe"
   | PtrGe ->
-      !^ "\"ptrge\""
+      !^ "PtrGe"
   | Ptrdiff ->
-      !^ "\"ptrdiff\""
+      !^ "Ptrdiff"
   | IntFromPtr ->
-      !^ "\"intfromptr\""
+      !^ "IntFromPtr"
   | PtrFromInt ->
-      !^ "\"ptrfromint\""
+      !^ "PtrFromInt"
   | PtrValidForDeref ->
-      !^ "\"ptrvalidforderef\""
+      !^ "PtrValidForDeref"
 
 
 (* let pp_pointer_shift = Impl.pp_pointer_shift *)

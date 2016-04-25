@@ -58,6 +58,7 @@ let mapM_ f _as = sequence_ (List.map f _as)
 
 
 
+val     foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'b 's 'msg) -> list 'a -> 'b -> t 'b 's 'msg
 let rec foldlM f l a =
   match l with
     | [] -> return a

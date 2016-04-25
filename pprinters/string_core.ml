@@ -1,6 +1,8 @@
 open Core
 open Pp_core
 
+let string_of_core_object_type oTy =
+  Pp_utils.to_plain_string (pp_core_object_type oTy)
 let string_of_core_base_type bTy =
   Pp_utils.to_plain_string (pp_core_base_type bTy)
 let string_of_value cval =

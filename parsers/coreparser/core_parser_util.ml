@@ -74,6 +74,7 @@ type token =
   | CTYPE
   | CFUNCTION
   | UNIT
+  | UNIT_VALUE
   | EFF
   | LIST
   | TRUE
@@ -203,6 +204,9 @@ type token =
   | SPECIFIED
   
   | PURE
+  
+  | MEMOP
+  | MEMOP_OP of Mem_common.memop
 
 
 
