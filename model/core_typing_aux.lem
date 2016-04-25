@@ -1,0 +1,255 @@
+open import Pervasives
+import Map_extra
+
+open import Global Exception Core Errors
+
+module E = struct
+  type eff 'a = Exception.exceptM 'a Errors.error
+  include Exception
+
+  val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a =>
+               ('k -> 'a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
+  let mapMapM f xs =
+    Map_extra.fold (fun k a acc ->
+      bind (f k a) (fun b ->
+        bind acc (fun bs ->
+          return (Map.insert k b bs)
+        )
+      )
+    ) xs (return Map.empty)
+
+  val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
+  let runM m = m
+  
+  val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
+  let fail loc cause =
+    Exception (loc, Errors.Core_typing_cause cause)
+  
+  val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
+  let guard pred loc cause =
+    if pred then
+      return ()
+    else
+      Exception (loc, Errors.Core_typing_cause cause)
+(* BUG in Lem (see issue #197)
+      fail loc cause
+*)
+end
+
+let inline (>>=)      = E.bind
+let inline (>>) m1 m2 = m1 >>= fun _ -> m2
+let inline (<$>)      = E.fmap
+let inline (<*>)      = E.app
+
+
+type typing_decl =
+  | TDsym  of core_base_type
+  | TDfun  of core_base_type * list core_base_type
+  | TDproc of core_base_type * list core_base_type
+
+type typing_env =
+    map name typing_decl (* (either core_base_type (core_base_type * list core_base_type)) *)
+
+
+type inferred =
+  | InferredUnknown
+  | InferredType_unit
+  | InferredType_boolean
+  | InferredType_ctype
+  | InferredType_list of inferred
+  | InferredType_tuple of list inferred
+  | InferredType_object of core_object_type
+  | InferredType_loaded of core_object_type
+
+val     equalInferred: inferred -> inferred -> bool
+let rec equalInferred infer1 infer2 =
+  match (infer1, infer2) with
+    | (InferredUnknown, _) ->
+        false
+    | (_, InferredUnknown) ->
+        false
+    | (InferredType_unit, InferredType_unit) ->
+        true
+    | (InferredType_boolean, InferredType_boolean) ->
+        true
+    | (InferredType_ctype, InferredType_ctype) ->
+        true
+    | (InferredType_list infer1', InferredType_list infer2') ->
+        equalInferred infer1' infer2'
+    | (InferredType_tuple infers1, InferredType_tuple infers2) ->
+        List.all (uncurry equalInferred) (List.zip infers1 infers2)
+    | (InferredType_object oTy1, InferredType_object oTy2) ->
+        oTy1 = oTy2
+    | (InferredType_loaded oTy1, InferredType_loaded oTy2) ->
+        oTy1 = oTy2
+    | _ ->
+        false
+  end
+
+instance (Eq inferred)
+  let (=) = equalInferred
+  let (<>) = curry (not -| uncurry equalInferred)
+end
+
+val     toInferred: core_base_type -> inferred
+let rec toInferred bTy =
+  match bTy with
+    | BTy_unit ->
+        InferredType_unit
+    | BTy_boolean ->
+        InferredType_boolean
+    | BTy_ctype ->
+        InferredType_ctype
+    | BTy_list bTy' ->
+        InferredType_list (toInferred bTy')
+    | BTy_tuple bTys ->
+        InferredType_tuple (List.map toInferred bTys)
+    | BTy_object oTy ->
+        InferredType_object oTy
+    | BTy_loaded oTy ->
+        InferredType_loaded oTy
+  end
+
+val     toCoreBaseType: inferred -> maybe core_base_type
+let rec toCoreBaseType infer =
+  match infer with
+    | InferredUnknown ->
+        Nothing
+    | InferredType_unit ->
+        Just BTy_unit
+    | InferredType_boolean ->
+        Just BTy_boolean
+    | InferredType_ctype ->
+        Just BTy_ctype
+    | InferredType_list infer' ->
+        maybe Nothing (Just -| BTy_list) (toCoreBaseType infer')
+    | InferredType_tuple infers ->
+        (flip Maybe.bind) (Just -| BTy_tuple) $
+          List.foldl (fun acc_opt infer ->
+            match acc_opt with
+              | Just acc ->
+                  Maybe.bind (toCoreBaseType infer) (fun z -> Just (z::acc))
+              | Nothing ->
+                  Nothing
+            end
+          ) (Just []) infers
+    | InferredType_object oTy ->
+        Just (BTy_object oTy)
+    | InferredType_loaded oTy ->
+        Just (BTy_loaded oTy)
+  end
+
+
+type inferred_pattern    = generic_pattern inferred Symbol.sym
+type inferred_pexpr      = generic_pexpr   inferred Symbol.sym
+type inferred_paction 'a = generic_paction 'a inferred Symbol.sym
+type inferred_expr 'a    = generic_expr 'a inferred Symbol.sym
+
+
+let export_ctor loc = function
+ | Cnil infer ->
+     maybe (E.fail loc (CoreTyping_TODO "export_ctor"))
+       (E.return -| Cnil) (toCoreBaseType infer)
+ | Ccons ->
+     E.return Ccons
+ | Ctuple ->
+     E.return Ctuple
+ | Carray ->
+     E.return Carray
+ | Civmax ->
+     E.return Civmax
+ | Civmin ->
+     E.return Civmin
+ | Civsizeof ->
+     E.return Civsizeof
+ | Civalignof ->
+     E.return Civalignof
+ | Cspecified ->
+     E.return Cspecified
+ | Cunspecified ->
+     E.return Cunspecified
+end
+
+val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
+let rec export_pattern loc = function
+ | CaseBase z ->
+     E.return (CaseBase z)
+ | CaseCtor ctor pats ->
+     CaseCtor <$> export_ctor loc ctor <*> E.mapM (export_pattern loc) pats
+end
+
+
+val     export_pexpr: Loc.t -> inferred_pexpr -> E.eff typed_pexpr
+let rec export_pexpr loc (Pexpr infer pexpr_) =
+  flip (maybe (E.fail loc (CoreTyping_TODO "export_pexpr")))
+    (toCoreBaseType infer) $ fun bTy ->
+  Pexpr bTy <$> match pexpr_ with
+    | PEsym sym ->
+        E.return (PEsym sym)
+    | PEimpl iCst ->
+        E.return (PEimpl iCst)
+    | PEval cval ->
+        E.return (PEval cval)
+(*
+    | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'bty 'sym)) (* constrained value *)
+*)
+    | PEundef ub ->
+        E.return (PEundef ub)
+    | PEerror str pe ->
+        PEerror str <$> export_pexpr loc pe
+    | PEctor ctor pes ->
+        PEctor <$> export_ctor loc ctor
+               <*> E.mapM (export_pexpr loc) pes
+    | PEcase pe pat_pes ->
+        PEcase <$> export_pexpr loc pe
+               <*> E.mapM (fun (pat, pe) ->
+                     export_pattern loc pat >>= fun pat' ->
+                     export_pexpr loc pe    >>= fun pe'  ->
+                     E.return (pat', pe')
+                   ) pat_pes
+    | PEarray_shift pe1 ty pe2 ->
+        PEarray_shift <$> export_pexpr loc pe1
+                      <*> E.return ty
+                      <*> export_pexpr loc pe2
+    | PEmember_shift pe1 sym member_ident ->
+        PEmember_shift <$> export_pexpr loc pe1
+                       <*> E.return sym
+                       <*> E.return member_ident
+    | PEnot pe ->
+        PEnot <$> export_pexpr loc pe
+    | PEop binop pe1 pe2 ->
+        PEop binop <$> export_pexpr loc pe1
+          <*> export_pexpr loc pe2
+    | PEstruct tag_sym xs ->
+        PEstruct tag_sym <$>
+          E.mapM (fun (ident, pe) ->
+            export_pexpr loc pe >>= fun pe' ->
+            E.return (ident, pe')
+          ) xs
+    | PEunion sym member_ident pe ->
+        PEunion sym member_ident <$>
+          export_pexpr loc pe
+    | PEcall nm pes ->
+        PEcall nm <$> E.mapM (export_pexpr loc) pes
+    | PElet pat pe1 pe2 ->
+        PElet <$> export_pattern loc pat
+              <*> export_pexpr loc pe1
+              <*> export_pexpr loc pe2
+    | PEif pe1 pe2 pe3 ->
+        PEif <$> export_pexpr loc pe1
+             <*> export_pexpr loc pe2
+             <*> export_pexpr loc pe3
+    | PEis_scalar pe ->
+        PEis_scalar <$> export_pexpr loc pe
+    | PEis_integer pe ->
+        PEis_integer <$> export_pexpr loc pe
+    | PEis_signed pe ->
+        PEis_signed <$> export_pexpr loc pe
+    | PEis_unsigned pe ->
+        PEis_unsigned <$> export_pexpr loc pe
+  end
+
+
+val guard_match: Loc.t -> string -> core_base_type -> core_base_type -> E.eff unit
+let guard_match loc str bTy1 bTy2 =
+  E.guard (bTy1 = bTy2) loc (Mismatch str bTy1 bTy2)
