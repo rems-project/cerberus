@@ -38,6 +38,7 @@ SOURCE_core=\
   core_typing.lem 
 
 SOURCE_core_to_core=\
+  core_sequentialise.lem \
   core_indet.lem \
   core_rewrite.lem 
 

@@ -218,7 +218,7 @@ let rec pp_value = function
         ) xs
       )
   | Vunit ->
-      pp_const "unit"
+      pp_const "Unit"
   | Vtrue ->
       pp_const "True"
   | Vfalse ->
