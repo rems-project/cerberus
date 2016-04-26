@@ -89,7 +89,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     compile=       compile;
     progress=      progress;
     rewrite=       rewrite;
-    sequentialise= sequentialise ;
+    sequentialise= sequentialise || compile;
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;

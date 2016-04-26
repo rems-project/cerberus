@@ -15,10 +15,6 @@ exception No_value
 
 let cons x l = x :: l
 
-(* TODO: delete these two functions *)
-let is_unspecified n = false
-let unspecified ty = I.IV (I.Prov_none, I.IVconcrete (Nat_big_num.of_string "0"))
-
 (* IV min/max wraps *)
 
 let ivctor memf errmsg = function
@@ -29,6 +25,13 @@ let ivmin = ivctor M.min_ival0 "ivmin"
 
 let ivmax = ivctor M.max_ival0 "ivmax"
 
+(* Loaded - Specified and unspecified values *)
+
+type 'a loaded =
+  | Specified of 'a
+  | Unspecified of C.ctype0
+
+let specified x = Specified x
 
 (* Cast from memory values *)
 
@@ -55,15 +58,15 @@ let create pre al ty = lift $ M.allocate_static0 0 pre al ty
 
 let alloc pre al n = lift $ M.allocate_dynamic0 0 pre al n
 
-let load_integer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_integer % snd)
+let load_integer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % specified % mv_to_integer % snd)
 
-let load_pointer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % mv_to_pointer % snd)
+let load_pointer ty e = lift $ M.bind1 (M.load0 ty e) (M.return1 % specified % mv_to_pointer % snd)
 
 let store ty e1 e2 = lift $ M.store0 ty e1 e2
 
 (* Cast types functions *)
 
-let int_of_integer_value iv = M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int
+let int_of_integer_value (Specified iv) = M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int
 
 let pointer_from_integer_value = function
   | I.IV (p, ivb) -> I.PV (p, I.PVfromint ivb, [])

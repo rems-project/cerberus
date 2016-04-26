@@ -9,7 +9,7 @@ open Defacto_memory_types
 open Core_ctype
 open CodegenAux
 
-exception Type_mismatch
+exception Type_expected of core_base_type
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
@@ -19,7 +19,7 @@ let string_tr target replace str =
   String.map (fun c -> if c = target then replace else c) str
 
 (* Print TODO *)
-let todo str = !^"TODO(" ^^ !^str ^^ !^")"
+let todo str = !^"raise (A.Error " ^^ !^str ^^ !^")"
 
 (* Extend pretty printer *)
 let print_comment doc = P.parens (P.star ^^^ doc ^^^ P.star)
@@ -49,6 +49,10 @@ let print_raw_symbol = function
 let print_impl_name i = !^("_"
   ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
 
+(* It was print an unknown location *)
+let print_cabs_id (Cabs.CabsIdentifier (_, str)) =
+  !^("Cabs.CabsIdentifier (Location_ocaml.unknown, " ^ str ^ ")")
+
 let print_list pp xs =
   let rec print_elem xs =
     match xs with
@@ -66,10 +70,10 @@ let rec print_core_object = function
  | OTy_integer    -> !^"M.integer_value0"
  | OTy_floating   -> !^"M.floating_value0"
  | OTy_pointer    -> !^"M.pointer_value0"
- | OTy_cfunction  -> todo "cfunction"
+ | OTy_cfunction  -> !^"M.pointer_value0" (* cfunction is a pointer value? *)
  | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
- | OTy_struct sym -> todo "struct"
- | OTy_union sym  -> todo "union"
+ | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
+ | OTy_union sym  -> !^"union" ^^^ print_symbol sym
 
 let rec print_base_type = function
   | BTy_unit       -> P.parens P.empty
@@ -78,7 +82,7 @@ let rec print_base_type = function
   | BTy_list bTys  -> !^"(" ^^ print_base_type bTys ^^ !^") list"
   | BTy_tuple bTys -> P.parens (P.separate_map P.star print_base_type bTys)
   | BTy_object obj -> print_core_object obj
-  | BTy_loaded obj -> print_core_object obj
+  | BTy_loaded obj -> P.parens (print_core_object obj) ^^^ !^"A.loaded" 
 
 let print_core_type = function
   | TyBase   baseTy -> print_base_type baseTy
@@ -86,8 +90,8 @@ let print_core_type = function
 
 (* Binary operations and precedences *)
 
+(* FIXME: test if t1 and t2 are the same up to loaded *)
 let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
-  if t1 != t2 then raise Type_mismatch else
   match binop with
   | OpAdd -> !^"(M.op_ival0 M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
   | OpSub -> !^"(M.op_ival0 M.IntSub (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
@@ -191,9 +195,9 @@ let print_ctor = function
   | Civmax       -> !^"A.ivmax"
   | Civmin       -> !^"A.ivmin"
   | Civsizeof    -> !^"M.sizeof_ival0"
-  | Civalignof   -> !^ "M.alignof_ival0"
-  | Cspecified   -> P.empty (* FIXME: what is this cspecfied ? *)
-  | Cunspecified -> !^"A.unspecified"
+  | Civalignof   -> !^"M.alignof_ival0"
+  | Cspecified   -> !^"A.Specified"
+  | Cunspecified -> !^"A.Unspecified"
 
 (* Print let expression patterns *)
 
@@ -206,8 +210,8 @@ let print_match_ctor arg = function
   | Civmin       -> !^"A.ivmin"
   | Civsizeof    -> !^"M.sizeof_ival0"
   | Civalignof   -> !^"M.alignof_ival0"
-  | Cspecified   -> arg
-  | Cunspecified -> !^"I.IV (_, I.IVunspecified)"
+  | Cspecified   -> !^"A.Specified" ^^ P.parens arg
+  | Cunspecified -> !^"A.Unspecified" ^^ P.parens arg
 
 let rec print_pattern = function
   | CaseBase None -> P.underscore
@@ -217,8 +221,8 @@ let rec print_pattern = function
     | [pa] -> print_pattern pa
     | _    -> P.parens (comma_list print_pattern pas)) ctor
 
-let print_match pp pe pas =
-  !^"match" ^^^ pp pe ^^^ !^"with" ^^ !> (List.fold_right (
+let print_match pe pp pas =
+  !^"match" ^^^ pe ^^^ !^"with" ^^ !> (List.fold_right (
       fun (pat, pe) acc -> !^"|" ^^^print_pattern pat ^^^ !^"->" ^^^ pp pe ^/^ acc
     ) pas P.empty)
 
@@ -280,7 +284,7 @@ let print_ail_integer_type = function
   | Signed ibt   -> !^"T.Signed" ^^^ P.parens (print_ail_integer_base_type ibt)
   | Unsigned ibt -> !^"T.Unsigned" ^^^ P.parens (print_ail_integer_base_type ibt)
   | IBuiltin str -> !^"T.IBuiltin" ^^^ !^str
-  | Enum ident   -> !^"T.Enum" ^^^ todo "identifier"
+  | Enum ident   -> !^"T.Enum" ^^^ P.parens (print_symbol ident)
   | Size_t       -> !^"T.Size_t"
   | Ptrdiff_t    -> !^"T.Ptrdiff_t"
 
@@ -299,13 +303,17 @@ let rec print_ctype = function
   | Array0 (cty, num) ->
     !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
                                ^^^ print_option_type print_nat_big_num num)
-  | Function0 (cty, params, res) ->
-    !^"C.Function0" ^^^ P.parens (print_ctype cty ^^ P.comma ^^^ todo "function0")
+  | Function0 (cty, params, variad) ->
+    !^"C.Function0" ^^^ P.parens
+      (print_ctype cty ^^ P.comma ^^^ print_list
+         (fun (q, cty) -> print_ail_qualifier q ^^ P.comma ^^^ print_ctype cty)
+         params
+       ^^ P.comma ^^^ print_bool variad)
   | Pointer0 (q, cty) ->
     !^"C.Pointer0" ^^^ P.parens (print_ail_qualifier q ^^ P.comma ^^^ print_ctype cty)
   | Atomic0 cty -> !^"C.Atomic0" ^^^ P.parens (print_ctype cty)
-  | Struct0 strct -> !^"C.Struct0" ^^^ todo "struct0"
-  | Union0 union -> !^"C.Union0" ^^^ todo "union0"
+  | Struct0 strct -> !^"C.Struct0" ^^^ P.parens (print_raw_symbol strct)
+  | Union0 union -> !^"C.Union0" ^^^ P.parens (print_raw_symbol union)
   | Builtin0 str -> !^"C.Builtin0" ^^^ !^str
 
 let print_provenance = function
@@ -319,11 +327,12 @@ let print_iv_value = function
                                              ^^^ print_integer_value_base ivb)
 
 let rec print_pointer_value_base = function
-  | PVnull cty    -> !^"I.PVnull" ^^^ P.parens (print_ctype cty)
-  | PVfunction _  -> todo "pvfunction"
-  | PVbase (_, _) -> todo "pvbase"
-  | PVfromint ivb -> !^"I.PVfromint" ^^^ print_integer_value_base ivb 
-  | PVunspecified _ -> todo "pvunspec"
+  | PVnull cty        -> !^"I.PVnull" ^^^ P.parens (print_ctype cty)
+  | PVfunction sym    -> !^"I.PVfunction" ^^^ P.parens (print_symbol sym)
+  | PVbase (id, pre)  -> !^"I.PVbase" ^^^ P.parens (!^(string_of_int id) ^^ P.comma
+                                                    ^^^ print_symbol_prefix pre)
+  | PVfromint ivb     -> !^"I.PVfromint" ^^^ P.parens (print_integer_value_base ivb)
+  | PVunspecified cty -> !^"I.PVunspecified" ^^^ P.parens (print_ctype cty)
 
 and print_shift_path_element = function
   | SPE_array (cty, ivb)  ->
@@ -345,12 +354,26 @@ let print_floating_value = function
 
 let rec print_object_value = function
   | OVstruct _
-  | OVunion _      -> todo "print_obj_value"
+  | OVunion  _     -> todo "print_obj_value"
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
   | OVpointer pv   -> print_pointer_value pv
   | OVarray obvs   -> print_list print_object_value obvs
+
+let rec print_mem_value = function
+  | MVinteger (ait, iv) -> !^"I.MVinteger" ^^ P.parens
+                             (print_ail_integer_type ait ^^ P.comma ^^^ print_iv_value iv)
+  | MVfloating _        -> todo "mvfloating"
+  | MVpointer (cty, pv) -> !^"I.MVpointer" ^^ P.parens
+                             (print_ctype cty ^^P.comma ^^^ print_pointer_value pv)
+  | MVarray mvs         -> !^"I.MVarray" ^^^ print_list print_mem_value mvs
+  | MVstruct (sym, sls) -> !^"I.MVstruct" ^^^ print_list
+                             (fun (cid, mv) -> P.parens (print_cabs_id cid ^^ P.comma
+                                                         ^^^ print_mem_value mv)) sls
+  | MVunion (sym,cid,mv) -> !^"I.MVunion" ^^^ P.parens
+                             (print_symbol sym ^^ P.comma ^^^ print_cabs_id cid
+                              ^^ P.comma ^^^ print_mem_value mv)
 
 (* Print type values *)
 let rec print_value = function
@@ -360,10 +383,10 @@ let rec print_value = function
   | Vlist (_, cvals) -> print_list print_value cvals
   | Vtuple cvals     -> P.parens (comma_list print_value cvals)
   | Vctype ty        -> print_ctype ty
-  | Vunspecified ty  -> !^"A.unspecified" ^^^ P.parens (print_ctype ty)
+  | Vunspecified ty  -> !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
   | Vobject obv      -> print_object_value obv
   | Vconstrained _   -> todo "vconstrained"
-  | Vspecified v     -> print_object_value v
+  | Vspecified v     -> !^"A.Specified" ^^^ P.parens (print_object_value v)
 
 
 (* Print expressions (pure and eff) *)
@@ -386,29 +409,28 @@ let print_pure_expr pe =
         )
       | PEerror (str, pe) ->
         !^"raise" ^^^ !^"(A.Error" ^^^ P.dquotes (!^str ^^^ pp pe) ^^ !^")"
-      | PEctor (ctor, pes) -> 
+      | PEctor (ctor, pes) ->
           let pp_args sep = P.separate_map sep (fun x -> P.parens (pp x)) pes in
           begin
           match ctor with
           | Cnil _ -> !^"[]"
           | Ccons ->
             (match pes with
-             | []       -> raise Type_mismatch
+             | []       -> raise (CodegenAux.Error "Ccons: empty list")
              | [pe]     -> !^"[" ^^ pp pe ^^ !^"]"
              | [pe;pes] -> pp pe ^^^ !^"::" ^^^ pp pes
-             | _        -> raise Type_mismatch
+             | _        -> raise (CodegenAux.Error "Ccons: more than 2 args")
             )
           | Ctuple       -> pp_args P.comma
           | Carray       -> !^"array"
           | Civmax       -> !^"A.ivmax" ^^^ pp_args P.space
           | Civmin       -> !^"A.ivmin" ^^^ pp_args P.space
           | Civsizeof    -> !^"M.sizeof_ival0" ^^^ pp_args P.space
-          | Civalignof   -> !^ "M.alignof_ival0" ^^^ pp_args P.space
-            (* FIXME: what is this cspecfied ? *)
-          | Cspecified   -> pp_args P.space
-          | Cunspecified -> !^"A.unspecified"  ^^^ pp_args P.space
+          | Civalignof   -> !^"M.alignof_ival0" ^^^ pp_args P.space
+          | Cspecified   -> !^"A.Specified" ^^^ pp_args P.space
+          | Cunspecified -> !^"A.Unspecified"  ^^^ pp_args P.space
           end
-      | PEcase (pe, pas) -> print_match pp pe pas
+      | PEcase (pe, pas) -> print_match (pp pe) pp pas
       | PEarray_shift (pe1, ty, pe2) -> 
         !^"(M.array_shift_ptrval0 (" ^^ pp pe1 ^^ !^") ("
           ^^ print_ctype ty ^^ !^") (" ^^ pp pe2 ^^ !^"))"
@@ -474,7 +496,8 @@ let rec print_expr = function
   | Epure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr pe)
   | Ememop (memop, pes) -> todo "memop"
   | Eaction (Paction (p, (Action (_, bs, act)))) -> print_action act
-  | Ecase _             -> todo "ecase"
+  | Ecase (pe, cases) ->
+    print_match (print_pure_expr pe) print_expr cases
   | Elet (pat, pe1, e2) ->
     print_let false (print_pattern pat) (print_pure_expr pe1) (print_expr e2)
   | Eif (pe1, e2, e3) ->
@@ -543,7 +566,7 @@ and print_memory_order = function
 and get_ctype (Pexpr (_, pe)) =
   match pe with
   | PEval (Vctype ty) -> ty
-  | _ -> print_string "ctype"; raise Type_mismatch
+  | _ -> print_string "ctype"; raise (Type_expected BTy_ctype)
 
 and choose_load_type (Pexpr (_, pe)) =
   match pe with
@@ -563,7 +586,7 @@ and print_mem_value ty e =
     | Pexpr(t, PEval (Vobject (OVarray cvals))) ->
       !^"I.MVarray" ^^^ print_list (print_mem_value cty)
         (List.map (fun x -> Pexpr (t, PEval (Vobject x))) cvals)
-    | _ -> raise Type_mismatch
+    | _ -> raise (CodegenAux.Error "Array expected")
   )
   | Pointer0 (_, cty) ->
     !^"I.MVpointer" ^^^ P.parens (print_ctype cty ^^ P.comma 
@@ -677,4 +700,3 @@ let compile filename core =
     )
     |> Exception.return2
   end
-
