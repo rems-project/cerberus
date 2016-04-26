@@ -204,21 +204,17 @@ alldoc.pdf: alldoc.tex
 
 ocaml_native:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.native
-	@cp src/main.ml src/main.ml_
-	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml_ > src/main.ml
-	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main.native | ./tools/colours.sh
-	@mv src/main.ml_ src/main.ml
-	@cp -L main.native cerberus
+	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
+	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native | ./tools/colours.sh
+	@cp -L main_.native cerberus
 
 #cmdliner,
 
 ocaml_byte:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
-	@cp src/main.ml src/main.ml_
-	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml_ > src/main.ml
-	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main.byte | ./tools/colours.sh
-	@mv src/main.ml_ src/main.ml
-	@cp -L main.byte cerberus
+	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
+	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte | ./tools/colours.sh
+	@cp -L main_.byte cerberus
 
 
 
