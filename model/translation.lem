@@ -50,90 +50,6 @@ val translate:
 (* ========================================================================== *)
 
 
-
-(* TODO: doc *)
-val     sequentialise_expr: C.expr unit -> E.t (C.expr unit)
-let rec sequentialise_expr expr =
-  match expr with
-    | C.Epure _ ->
-        E.return expr
-    | C.Ememop _ _ ->
-        E.return expr
-    | C.Eaction _ ->
-        E.return expr
-    | C.Ecase _ _ ->
-        error "WIP: Translation.sequentialise_expr, Ecase"
-    | C.Elet sym pe1 e2 ->
-        C.Elet sym pe1 <$> sequentialise_expr e2
-    | C.Eif pe1 e2 e3 ->
-        C.Eif pe1 <$> sequentialise_expr e2 <*> sequentialise_expr e3
-    | C.Eskip ->
-        E.return expr
-    | C.Eproc _ _ _ ->
-        E.return expr
-    | C.Ereturn _ ->
-        E.return expr
-    | C.Eunseq es ->
-        (* TODO!!!!!  (now need a core typechecker ...) *)
-        E.return expr
-(*
-        E.replicateM (List.length es) E.fresh_symbol >>= fun syms ->
-        E.mapM sequentialise_expr es >>= fun es' ->
-        E.return (
-          Caux.mk_wseq (C.Epure (C.PEtuple (List.map (fun sym -> C.PEsym sym) syms)))
-            (Global.map2 (fun sym e -> ([Just sym], e)) syms es')
-        )
-*)
-    | C.Ewseq sym_opts e1 e2 ->
-        C.Ewseq sym_opts <$> sequentialise_expr e1 <*> sequentialise_expr e2
-    | C.Esseq sym_opts e1 e2 ->
-        C.Esseq sym_opts <$> sequentialise_expr e1 <*> sequentialise_expr e2
-    | C.Easeq _ _ _ ->
-        E.return expr
-    | C.Eindet i e ->
-        C.Eindet i <$> sequentialise_expr e
-    | C.Ebound i e ->
-        C.Ebound i <$> sequentialise_expr e
-    | C.End es ->
-        C.End <$> E.mapM sequentialise_expr es
-    | C.Esave ksym sym_tys e ->
-        C.Esave ksym sym_tys <$> sequentialise_expr e
-    | C.Erun _ _ _ ->
-        E.return expr
-    | C.Epar es ->
-        C.Epar <$> E.mapM sequentialise_expr es
-    | C.Ewait _ ->
-        E.return expr
-    | C.Eloc loc e ->
-        C.Eloc loc <$> sequentialise_expr e
-  end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (*
 val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Cabs.cabs_identifier -> C.shift_path
 let shiftPathFromMember program tag ident =
@@ -3683,13 +3599,7 @@ let translate_program sequentialise stdlib ((startup_sym, sigm) as program) =
 
                   E.fresh_named_symbol "return"  >>= fun sym_return  ->
                   translate_stmt stdlib program sym <| return= sym_return; default= Nothing; cases= []; loop= Nothing; break= Nothing |> stmt
-                ) >>= fun _core_body ->
-                
-                (* TODO: sequentialisation is only a debug feature *)
-                (if sequentialise then
-                  sequentialise_expr _core_body
-                else
-                  E.return _core_body) >>= fun core_body ->
+                ) >>= fun core_body ->
                 
                 let core_return =
                   if startup_sym = sym then
