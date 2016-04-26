@@ -182,7 +182,7 @@ dependencies:
 
 lem: copy_cmm copy_cmm_exec copy_cerberus
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
-	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) 2>&1 | ./tools/colours.sh lem
+	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 
@@ -205,7 +205,7 @@ alldoc.pdf: alldoc.tex
 ocaml_native:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.native
 	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
-	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native | ./tools/colours.sh
+	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
 	@cp -L main_.native cerberus
 
 #cmdliner,
@@ -213,7 +213,7 @@ ocaml_native:
 ocaml_byte:
 	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
 	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
-	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte | ./tools/colours.sh
+	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte
 	@cp -L main_.byte cerberus
 
 
