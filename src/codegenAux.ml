@@ -63,11 +63,11 @@ let mk_int s = I.IV (I.Prov_none, I.IVconcrete (Nat_big_num.of_string s))
 
 (* Binary operations wrap *)
 
-let eq n m = O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO m n)
-let lt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO m n)
-let gt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO n m)
-let le n m = O.get (M.le_ival0 Symbolic.Constraints_TODO m n)
-let ge n m = O.get (M.le_ival0 Symbolic.Constraints_TODO n m)
+let eq n m = O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO n m)
+let lt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO n m)
+let gt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO m n)
+let le n m = O.get (M.le_ival0 Symbolic.Constraints_TODO n m)
+let ge n m = O.get (M.le_ival0 Symbolic.Constraints_TODO m n)
 
 (* Memory actions wrap *)
 
