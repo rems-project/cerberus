@@ -9,7 +9,7 @@ type core_object_type =  (* types for C objects *)
  | OTy_integer
  | OTy_floating
  | OTy_pointer
- | OTy_cfunction (*of ctype * list ctype*)
+ | OTy_cfunction (* of ctype * list ctype *)
  | OTy_array of core_object_type
  | OTy_struct of Symbol.sym
  | OTy_union of Symbol.sym

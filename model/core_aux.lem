@@ -27,7 +27,7 @@ let rec core_object_type_of_ctype ty =
    | Array ty _ ->
        OTy_array (core_object_type_of_ctype ty)
    | Function ty xs _ ->
-       OTy_cfunction (*ty (List.map snd xs)*)
+       OTy_cfunction (* ty (List.map snd xs) *)
    | Pointer _ _ ->
        OTy_pointer
    | Atomic ty ->
