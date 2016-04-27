@@ -334,7 +334,7 @@ and translate_expression stdlib program is_lvalue a_expr =
                 C.Pexpr () (
                   C.PEcase (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
                     [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
-                       integer_promotion (ctype_of e) (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym))
+                       Caux.mk_specified_pe (integer_promotion (ctype_of e) (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym)))
                     ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat],
                        (* TODO: check that result_ty = promoted (ctype_of e) *)
                        Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]

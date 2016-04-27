@@ -352,7 +352,6 @@ let rec infer_pexpr loc env (Pexpr () pexpr_) =
               error ("WIP: infer_pexpr, " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_))
         end
     | PEcase pe cases ->
-        let () = Debug.print_debug 0 ("infer_pexpr ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)) in
         infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
         match toCoreBaseType infer with
           | Nothing ->
@@ -599,7 +598,6 @@ and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff infe
               Pp.stringFromCore_core_base_type bTy ^ ", " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_))
         end
     | PEcase pe cases ->
-        let () = Debug.print_debug 0 ("typecheck_pexpr ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)) in
         infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
         match toCoreBaseType infer with
           | Nothing ->
@@ -679,8 +677,9 @@ and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff infe
     | PEcall nm pes ->
         match Map.lookup nm env with
           | Just (TDfun ret_bTy bTys) ->
-            PEcall nm <$> E.mapM (fun (bTy, pe) ->
-                typecheck_pexpr loc env bTy pe) (List.zip bTys pes)
+            guard_match loc "function call" bTy ret_bTy >>
+            (PEcall nm <$> E.mapM (fun (bTy, pe) ->
+              typecheck_pexpr loc env bTy pe) (List.zip bTys pes))
           | Just _ ->
               E.fail loc (CoreTyping_TODO "illtyped a fun/proc symbolic")
           | Nothing ->

@@ -9,7 +9,6 @@ open Defacto_memory_types
 open Core_ctype
 open CodegenAux
 
-exception Unsupported
 exception Type_expected of core_base_type
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
@@ -236,6 +235,36 @@ let print_symbol_prefix = function
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
 
+let print_integer_value_base = function
+  | IVconcrete bignum             ->
+    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
+  | IVaddress (Address (sym, n))  ->
+    !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
+                                   ^^ P.comma ^^^ !^(string_of_int n)))
+  | IVop (op, ivs)                -> todo "value base"
+  | IVmin ait                     -> todo "value base"
+  | IVmax ait                     -> todo "value base"
+  | IVsizeof cty                  -> todo "value base"
+  | IValignof cty                 -> todo "value base"
+  | IVoffsetof (sym, cabs_id)     -> todo "value base"
+  | IVbyteof (ivb, mv)            -> todo "value base"
+  | IVcomposite ivs               -> todo "value base"
+  | IVfromptr (ivb, mv)           -> todo "value base"
+  | IVptrdiff (ivb, mv)           -> todo "value base"
+  | _                             -> todo "value base"
+
+let print_ail_qualifier {
+  AilTypes.const = c;
+  AilTypes.restrict = r;
+  AilTypes.volatile = v;
+  AilTypes.atomic = a;
+} = !^"{" ^^ P.nest 2 (P.break 1 ^^
+    !^"T.const = " ^^ print_bool c ^^ !^";" ^/^
+    !^"T.restrict = " ^^ print_bool r ^^ !^";" ^/^
+    !^"T.volatile = " ^^ print_bool v ^^ !^";" ^/^
+    !^"T.atomic = " ^^ print_bool a ^^ !^";"
+    ) ^^ P.break 1 ^^ !^"}"
+
 let print_ail_integer_base_type = function
   | Ichar          -> !^"T.Ichar"
   | Short          -> !^"T.Short"
@@ -258,40 +287,6 @@ let print_ail_integer_type = function
   | Enum ident   -> !^"T.Enum" ^^^ P.parens (print_symbol ident)
   | Size_t       -> !^"T.Size_t"
   | Ptrdiff_t    -> !^"T.Ptrdiff_t"
-
-let print_integer_value_base = function
-  | IVconcrete bignum             ->
-    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
-  | IVaddress (Address (sym, n))  ->
-    !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
-                                   ^^ P.comma ^^^ !^(string_of_int n)))
-  | IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
-                                       (print_ail_integer_type ait)
-  | IVunspecified                 -> !^"I.IVunspecified"
-  | IVop (op, ivs)                -> raise Unsupported
-  | IVmin ait                     -> raise Unsupported
-  | IVsizeof cty                  -> raise Unsupported
-  | IValignof cty                 -> raise Unsupported
-  | IVoffsetof (sym, cabs_id)     -> raise Unsupported
-  | IVbyteof (ivb, mv)            -> raise Unsupported
-  | IVcomposite ivs               -> raise Unsupported
-  | IVfromptr (ivb, mv)           -> raise Unsupported
-  | IVptrdiff (ivb, mv)           -> raise Unsupported
-  | IVconcurRead (_, _)           -> raise Unsupported
-
-let print_ail_qualifier {
-  AilTypes.const = c;
-  AilTypes.restrict = r;
-  AilTypes.volatile = v;
-  AilTypes.atomic = a;
-} = !^"{" ^^ P.nest 2 (P.break 1 ^^
-    !^"T.const = " ^^ print_bool c ^^ !^";" ^/^
-    !^"T.restrict = " ^^ print_bool r ^^ !^";" ^/^
-    !^"T.volatile = " ^^ print_bool v ^^ !^";" ^/^
-    !^"T.atomic = " ^^ print_bool a ^^ !^";"
-    ) ^^ P.break 1 ^^ !^"}"
-
-
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
@@ -517,8 +512,8 @@ let rec print_expr = function
   | Ereturn pe -> !^"return" ^^^ P.parens (print_pure_expr pe)
   | Eunseq []  -> !^"BUG: UNSEQ must have at least two arguments (seen 0)"
   | Eunseq [e] -> !^"BUG: UNSEQ must have at least two arguments (seen 1)"
-  | Eunseq es -> raise Unsupported
-      (*!^"A.value" ^^^ P.parens (P.separate_map P.comma print_unseq_expr es)*)
+  | Eunseq es ->
+      !^"A.value" ^^^ P.parens (P.separate_map P.comma print_unseq_expr es)
   | Ewseq (pas, e1, e2) ->
     print_seq (print_pattern pas) (print_expr e1) (print_expr e2)
   | Esseq (pas, e1, e2) ->
@@ -578,6 +573,7 @@ and choose_load_type (Pexpr (_, pe)) =
   | PEval (Vctype (Basic0 (Integer _)))  -> !^"A.load_integer"
   | PEval (Vctype (Pointer0 (_, _)))     -> !^"A.load_pointer"
   | _ -> todo "load not implemented"
+
 
 and print_mem_value ty e =
   match ty with

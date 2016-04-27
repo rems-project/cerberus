@@ -1376,6 +1376,14 @@ let case_integer_value (IV _ ival) fint fother =
         fother ()
   end
 
+let is_specified_ival (IV _ ival) =
+  match ival with
+    | IVunspecified ->
+        false
+    | _ ->
+        true
+end
+
 let is_concrete_ival ival =
   error "WIP: is_concrete_ival"
 
