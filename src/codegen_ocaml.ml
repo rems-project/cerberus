@@ -9,6 +9,7 @@ open Defacto_memory_types
 open Core_ctype
 open CodegenAux
 
+exception Unsupported
 exception Type_expected of core_base_type
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
@@ -82,7 +83,7 @@ let rec print_base_type = function
   | BTy_list bTys  -> !^"(" ^^ print_base_type bTys ^^ !^") list"
   | BTy_tuple bTys -> P.parens (P.separate_map P.star print_base_type bTys)
   | BTy_object obj -> print_core_object obj
-  | BTy_loaded obj -> P.parens (print_core_object obj) ^^^ !^"A.loaded" 
+  | BTy_loaded obj -> P.parens (print_core_object obj)  ^^^ !^"A.loaded"
 
 let print_core_type = function
   | TyBase   baseTy -> print_base_type baseTy
@@ -104,8 +105,9 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
-        !^"(O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO  ("
-          ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^")))"
+        !^"A.eq" ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2)
+        (*!^"(O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO  ("
+          ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
         !^"(M.eq_ptrval0 Symbolic.Constraints_TODO  (" ^^ pp pe1 ^^ !^") ("
@@ -118,8 +120,10 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
+        !^"A.lt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
+        (*
         !^"(O.get (M.lt_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
+          ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
         !^"(O.get (M.lt_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
@@ -130,8 +134,9 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
-        !^"(O.get (M.le_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
+        !^"A.le" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
+       (* !^"(O.get (M.le_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+          ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
         !^"(O.get (M.le_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
@@ -142,8 +147,9 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
-        !^"(O.get (M.gt_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
+        !^"A.gt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
+        (*!^"(O.get (M.gt_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+          ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
         !^"(O.get (M.gt_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
@@ -154,8 +160,9 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
-        !^"(O.get (M.ge_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
+        !^"A.ge" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
+        (*!^"(O.get (M.ge_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+          ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
         !^"(O.get (M.ge_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
@@ -201,7 +208,14 @@ let print_ctor = function
 
 (* Print let expression patterns *)
 
-let print_match_ctor arg = function
+let rec print_pattern = function
+  | CaseBase None -> P.underscore
+  | CaseBase (Some (sym, _)) -> print_symbol sym
+  | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
+    | []   -> P.underscore
+    | [pa] -> print_pattern pa
+    | _    -> P.parens (comma_list print_pattern pas)) ctor
+and print_match_ctor arg = function
   | Cnil _       -> !^"[]"
   | Ccons        -> !^"Cons"
   | Ctuple       -> arg
@@ -212,14 +226,6 @@ let print_match_ctor arg = function
   | Civalignof   -> !^"M.alignof_ival0"
   | Cspecified   -> !^"A.Specified" ^^ P.parens arg
   | Cunspecified -> !^"A.Unspecified" ^^ P.parens arg
-
-let rec print_pattern = function
-  | CaseBase None -> P.underscore
-  | CaseBase (Some (sym, _)) -> print_symbol sym
-  | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
-    | []   -> P.underscore
-    | [pa] -> print_pattern pa
-    | _    -> P.parens (comma_list print_pattern pas)) ctor
 
 let print_match pe pp pas =
   !^"match" ^^^ pe ^^^ !^"with" ^^ !> (List.fold_right (
@@ -234,36 +240,6 @@ let print_symbol_prefix = function
     !^"Symbol.PrefSource" ^^^ print_list print_raw_symbol syms
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
-
-let print_integer_value_base = function
-  | IVconcrete bignum             ->
-    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
-  | IVaddress (Address (sym, n))  ->
-    !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
-                                   ^^ P.comma ^^^ !^(string_of_int n)))
-  | IVop (op, ivs)                -> todo "value base"
-  | IVmin ait                     -> todo "value base"
-  | IVmax ait                     -> todo "value base"
-  | IVsizeof cty                  -> todo "value base"
-  | IValignof cty                 -> todo "value base"
-  | IVoffsetof (sym, cabs_id)     -> todo "value base"
-  | IVbyteof (ivb, mv)            -> todo "value base"
-  | IVcomposite ivs               -> todo "value base"
-  | IVfromptr (ivb, mv)           -> todo "value base"
-  | IVptrdiff (ivb, mv)           -> todo "value base"
-  | _                             -> todo "value base"
-
-let print_ail_qualifier {
-  AilTypes.const = c;
-  AilTypes.restrict = r;
-  AilTypes.volatile = v;
-  AilTypes.atomic = a;
-} = !^"{" ^^ P.nest 2 (P.break 1 ^^
-    !^"T.const = " ^^ print_bool c ^^ !^";" ^/^
-    !^"T.restrict = " ^^ print_bool r ^^ !^";" ^/^
-    !^"T.volatile = " ^^ print_bool v ^^ !^";" ^/^
-    !^"T.atomic = " ^^ print_bool a ^^ !^";"
-    ) ^^ P.break 1 ^^ !^"}"
 
 let print_ail_integer_base_type = function
   | Ichar          -> !^"T.Ichar"
@@ -287,6 +263,40 @@ let print_ail_integer_type = function
   | Enum ident   -> !^"T.Enum" ^^^ P.parens (print_symbol ident)
   | Size_t       -> !^"T.Size_t"
   | Ptrdiff_t    -> !^"T.Ptrdiff_t"
+
+let print_integer_value_base = function
+  | IVconcrete bignum             ->
+    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
+  | IVaddress (Address (sym, n))  ->
+    !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
+                                   ^^ P.comma ^^^ !^(string_of_int n)))
+  | IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
+                                       (print_ail_integer_type ait)
+  | IVunspecified                 -> !^"I.IVunspecified"
+  | IVop (op, ivs)                -> raise Unsupported
+  | IVmin ait                     -> raise Unsupported
+  | IVsizeof cty                  -> raise Unsupported
+  | IValignof cty                 -> raise Unsupported
+  | IVoffsetof (sym, cabs_id)     -> raise Unsupported
+  | IVbyteof (ivb, mv)            -> raise Unsupported
+  | IVcomposite ivs               -> raise Unsupported
+  | IVfromptr (ivb, mv)           -> raise Unsupported
+  | IVptrdiff (ivb, mv)           -> raise Unsupported
+  | IVconcurRead (_, _)           -> raise Unsupported
+
+let print_ail_qualifier {
+  AilTypes.const = c;
+  AilTypes.restrict = r;
+  AilTypes.volatile = v;
+  AilTypes.atomic = a;
+} = !^"{" ^^ P.nest 2 (P.break 1 ^^
+    !^"T.const = " ^^ print_bool c ^^ !^";" ^/^
+    !^"T.restrict = " ^^ print_bool r ^^ !^";" ^/^
+    !^"T.volatile = " ^^ print_bool v ^^ !^";" ^/^
+    !^"T.atomic = " ^^ print_bool a ^^ !^";"
+    ) ^^ P.break 1 ^^ !^"}"
+
+
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
@@ -323,6 +333,7 @@ let print_provenance = function
   | Prov_some ids -> todo "prov_some"
 
 let print_iv_value = function
+  | IV (Prov_none, IVconcrete n) -> !^"A.mk_int" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
   | IV (prov, ivb) -> !^"I.IV" ^^^ P.parens (print_provenance prov ^^ P.comma
                                              ^^^ print_integer_value_base ivb)
 
@@ -387,6 +398,7 @@ let rec print_value = function
   | Vobject obv      -> print_object_value obv
   | Vconstrained _   -> todo "vconstrained"
   | Vspecified v     -> !^"A.Specified" ^^^ P.parens (print_object_value v)
+                          (* TODO: it shouldn't be possible v evaluates to IVunspecified *)
 
 
 (* Print expressions (pure and eff) *)
@@ -410,7 +422,7 @@ let print_pure_expr pe =
       | PEerror (str, pe) ->
         !^"raise" ^^^ !^"(A.Error" ^^^ P.dquotes (!^str ^^^ pp pe) ^^ !^")"
       | PEctor (ctor, pes) ->
-          let pp_args sep = P.separate_map sep (fun x -> P.parens (pp x)) pes in
+          let pp_args sep = P.parens (P.separate_map sep (fun x -> P.parens (pp x)) pes) in
           begin
           match ctor with
           | Cnil _ -> !^"[]"
@@ -510,10 +522,7 @@ let rec print_expr = function
       else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
     ) ^^^ !^"return"
   | Ereturn pe -> !^"return" ^^^ P.parens (print_pure_expr pe)
-  | Eunseq []  -> !^"BUG: UNSEQ must have at least two arguments (seen 0)"
-  | Eunseq [e] -> !^"BUG: UNSEQ must have at least two arguments (seen 1)"
-  | Eunseq es ->
-      !^"A.value" ^^^ P.parens (P.separate_map P.comma print_unseq_expr es)
+  | Eunseq es -> raise Unsupported
   | Ewseq (pas, e1, e2) ->
     print_seq (print_pattern pas) (print_expr e1) (print_expr e2)
   | Esseq (pas, e1, e2) ->
@@ -522,58 +531,37 @@ let rec print_expr = function
       todo "aseq"
   | Easeq (Some sym, act1, pact2) ->
       todo "aseq"
-  | Eindet _ ->
-      todo "ident"
-  | Ebound _ -> todo "bound"
-  | End _ -> todo "end"
+  | Eindet (_, e) -> print_expr e
+  | Ebound (_, e) -> print_expr e
+  | End [] -> raise Unsupported
+  | End (e::_) -> print_expr e
   | Esave (sym, sym_tys, e) ->
     !^"let rec" ^^^ print_symbol sym ^^^ !^"return =" ^^ !> (print_expr e)
      ^/^ !^"in" ^^^ print_symbol sym ^^^ !^"return"
   | Erun (_, sym, sym_pes) -> print_symbol sym ^^^ !^"return"
-  | Epar es                -> todo "par"
-  | Ewait tid              -> todo "wait"
-  | Eloc (_, e)            -> print_expr e
-
-and print_unseq_expr = function
-  | Epure pe -> print_pure_expr pe
-  | Eskip -> !^"()"
-  | Elet (pat, pe1, e2) ->
-    print_let false (print_pattern pat) (print_pure_expr pe1)
-      (print_unseq_expr e2)
-  | Eif (pe1, e2, e3) ->
-    print_if (print_pure_expr pe1) (print_unseq_expr e2) (print_unseq_expr e3)
-  | Eaction (Paction (p, (Action (_, bs, act)))) -> print_action act
-  | Ewseq (_as, e1, e2) ->
-    print_seq (print_pattern _as) (print_unseq_expr e1) (print_unseq_expr e2)
-  | Esseq (_as, e1, e2) ->
-    print_seq (print_pattern _as) (print_unseq_expr e1) (print_unseq_expr e2)
-  | Esave (sym, sym_tys, e) ->
-    !^"let rec" ^^^ print_symbol sym ^^^ !^"return =" ^^ !>
-      (print_unseq_expr e) ^/^ !^"in" ^^^ print_symbol sym ^^^ !^"return"
-  | Eloc (_, e) ->
-      print_unseq_expr e
-  |  _ -> todo "unsuported unseq"
-
-and print_memory_order = function
-  | Cmm_csem.NA      -> !^"NA"
-  | Cmm_csem.Seq_cst -> !^"seq_cst"
-  | Cmm_csem.Relaxed -> !^"relaxed"
-  | Cmm_csem.Release -> !^"release"
-  | Cmm_csem.Acquire -> !^"acquire"
-  | Cmm_csem.Consume -> !^"consume"
-  | Cmm_csem.Acq_rel -> !^"acq_rel"
+  | Epar _ -> raise Unsupported
+  | Ewait _ -> raise Unsupported
+  | Eloc (_, e) -> print_expr e
 
 and get_ctype (Pexpr (_, pe)) =
   match pe with
   | PEval (Vctype ty) -> ty
   | _ -> print_string "ctype"; raise (Type_expected BTy_ctype)
 
-and choose_load_type (Pexpr (_, pe)) =
-  match pe with
-  | PEval (Vctype (Basic0 (Integer _)))  -> !^"A.load_integer"
-  | PEval (Vctype (Pointer0 (_, _)))     -> !^"A.load_pointer"
+and choose_load_type (Pexpr (_, PEval cty)) =
+  match cty with
+  | Vctype (Basic0 (Integer ity)) ->
+    !^"A.load_integer" ^^^ P.parens (print_ail_integer_type ity)
+  | Vctype (Pointer0 (q, cty)) ->
+    !^"A.load_pointer" ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
   | _ -> todo "load not implemented"
 
+and choose_store_type (Pexpr (_, PEval cty)) =
+  match cty with
+  | Vctype (Basic0 (Integer ity)) ->
+    !^"A.store_integer" ^^^ P.parens (print_ail_integer_type ity)
+  | _ -> todo "store not implemented"
 
 and print_mem_value ty e =
   match ty with
@@ -603,19 +591,13 @@ and print_action act =
       P.parens (print_pure_expr al) ^^^ P.parens (print_pure_expr n)
   | Kill e ->
     !^"kill" ^^ P.parens (print_pure_expr e)
-  | Store0 (ty, pe1, pe2, mo) ->
-    !^"A.store" ^^^ P.parens (print_pure_expr ty) ^^^
-      P.parens (print_pure_expr pe1) ^^^
-      P.parens (print_mem_value (get_ctype ty) pe2)
-  | Load0 (pe, e, mo) ->
-    choose_load_type pe ^^^ P.parens (print_pure_expr pe) ^^^
-      P.parens (print_pure_expr e)
-  | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
-     !^"rmw" ^^
-     P.parens (print_pure_expr ty ^^ P.comma ^^^ print_pure_expr e1 ^^ P.comma ^^^
-               print_pure_expr e2 ^^ P.comma ^^^ print_pure_expr e3 ^^ P.comma ^^^
-               print_memory_order mo1 ^^ P.comma ^^^ print_memory_order mo2)
-  | Fence0 _ -> todo "fence"
+  | Store0 (ty, pe1, pe2, _) ->
+    choose_store_type ty ^^^ P.parens (print_pure_expr pe1) ^^^
+      P.parens (print_pure_expr pe2)
+  | Load0 (ty, e, _) ->
+    choose_load_type ty ^^^ P.parens (print_pure_expr e)
+  | RMW0 _ -> raise Unsupported
+  | Fence0 _ -> raise Unsupported
 
 (* Print functions and function implementation specific *)
 let print_params params =
