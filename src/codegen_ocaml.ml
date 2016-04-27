@@ -696,7 +696,7 @@ let compile filename core =
     close_out oc;
     Sys.command (
       "ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs pprint,zarith \
-       -libs unix,nums,str " ^ fl_native ^ " | ./tools/colours.sh"
+       -libs unix,nums,str " ^ fl_native (* ^ " | ./tools/colours.sh" *)
     )
     |> Exception.return2
   end

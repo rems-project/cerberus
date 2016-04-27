@@ -16,7 +16,79 @@ module Cty = struct
   include Core_ctype_aux
 end
 
+val     typecheck_pattern2: Loc.t -> inferred -> pattern -> E.eff (typing_env * inferred_pattern)
+let rec typecheck_pattern2 loc infer = function
+  | _ ->
+      error "WIP: typecheck_pattern2"
+end
 
+val     infer_pattern: Loc.t -> pattern -> E.eff (typing_env * inferred * inferred_pattern)
+let rec infer_pattern loc = function
+  | CaseBase Nothing ->
+      E.return (Map.empty, InferredUnknown, CaseBase Nothing)
+  | CaseBase (Just (sym, bTy)) ->
+      E.return (Map.singleton (Sym sym) (TDsym bTy), toInferred bTy, CaseBase (Just (sym, bTy)))
+  | CaseCtor ctor pats ->
+      let fail_ctorArity n = E.fail loc (CtorWrongNumber n (List.length pats))in
+      match (ctor, pats) with
+        
+        | (Cnil (), []) ->
+            let infer = InferredType_list InferredUnknown in
+            E.return (Map.empty, infer, CaseCtor (Cnil infer) [])
+        | (Ccons, [pat1; pat2]) ->
+            infer_pattern loc pat1                                 >>= fun (env1, infer1, tpat1) ->
+            typecheck_pattern2 loc (InferredType_list infer1) pat2 >>= fun (env2, tpat2)         ->
+            E.return (Map.(union) env1 env2, InferredType_list infer1, CaseCtor Ccons [tpat1; tpat2])
+(*
+        | (Ctuple, BTy_tuple bTys, _) ->
+            List.unzip <$> E.mapM (fun (bTy, pat) ->
+              typecheck_pattern loc bTy pat
+            ) (List.zip bTys pats) >>= fun (envs, tpats) ->
+            E.return (List.foldl (Map.(union)) Map.empty envs, CaseCtor Ctuple tpats)
+        | (Ctuple, _, _) ->
+            E.fail loc (Mismatch "tuple pattern (TODO: the found type is dummy)" bTy (BTy_tuple [BTy_unit]))
+        | (Carray, _, _) ->
+            error "Core_typing.Carray: WIP, Carray"
+*)
+        | (Civmax, [pat']) ->
+            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civmax [tpat'])
+        | (Civmin, [pat']) ->
+            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civmin [tpat'])
+        | (Civsizeof, [pat']) ->
+            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civsizeof [tpat'])
+        | (Civalignof, [pat']) ->
+            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civalignof [tpat'])
+
+
+
+        | (Cnil ()      , _) -> fail_ctorArity 0
+        | (Ccons        , _) -> fail_ctorArity 2
+        | (Civmax       , _) -> fail_ctorArity 1
+        | (Civmin       , _) -> fail_ctorArity 1
+        | (Civsizeof    , _) -> fail_ctorArity 1
+        | (Civalignof   , _) -> fail_ctorArity 1
+        | (Cspecified   , _) -> fail_ctorArity 1
+        | (Cunspecified , _) -> fail_ctorArity 1
+
+
+(*
+
+
+        | (Cspecified, BTy_loaded oTy, [pat']) ->
+            typecheck_pattern loc (BTy_object oTy) pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Cspecified [tpat'])
+
+        | (Cunspecified, BTy_loaded oTy, [pat']) ->
+            (* TODO: dependent types here .... *)
+            typecheck_pattern loc BTy_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, CaseCtor Cunspecified [tpat'])
+*)
+      end
+end
 
 
 
@@ -117,8 +189,18 @@ let rec typeof_object_value loc oval =
        E.return OTy_floating
    | OVpointer _ ->
        E.return OTy_pointer
-   | OVcfunction _ ->
+   | OVcfunction nm ->
        E.return OTy_cfunction
+(* KKK
+        match Map.lookup nm env with
+          | Just (TDproc ret_bTy bTys) ->
+              E.return (OTy_cfunction ret_bTy bTys)
+          | Just _ ->
+              E.fail loc (CoreTyping_TODO ("found a def in a cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+          | Nothing ->
+              E.fail loc (CoreTyping_TODO ("unresolved sym in cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+        end
+*)
    | OVarray [] ->
        E.fail loc EmptyArray
    | OVarray (oval'::ovals') ->
@@ -270,6 +352,7 @@ let rec infer_pexpr loc env (Pexpr () pexpr_) =
               error ("WIP: infer_pexpr, " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_))
         end
     | PEcase pe cases ->
+        let () = Debug.print_debug 0 ("infer_pexpr ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)) in
         infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
         match toCoreBaseType infer with
           | Nothing ->
@@ -481,6 +564,10 @@ and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff infe
               (fun pes' -> E.return (PEctor Ctuple pes'))
           | (Ctuple, _, _) ->
               E.fail loc (CoreTyping_TODO "illtyped tuple")
+(* KKK
+          | (Carray, BTy_object (OTy_array oTy), pes) ->
+              typecheck_pexpr loc env (BTy_object oTy) pes
+*)
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civmax, _, _) ->
@@ -512,6 +599,7 @@ and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff infe
               Pp.stringFromCore_core_base_type bTy ^ ", " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_))
         end
     | PEcase pe cases ->
+        let () = Debug.print_debug 0 ("typecheck_pexpr ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)) in
         infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
         match toCoreBaseType infer with
           | Nothing ->
@@ -834,6 +922,7 @@ and fetch_cfunction_signature loc env (Pexpr _ pexpr_ as pexpr) : E.eff (Core.co
  | PEerror _ _ ->
      E.fail loc TooGeneral
  | PEcase _ cases ->
+     let () = Debug.print_debug 0 "fetch_cfunction_signature" in
      E.mapM (fun (_, pe) -> fetch_cfunction_signature loc env pe) cases >>= fun signas ->
      match signas with
        | [signa] ->
@@ -988,6 +1077,12 @@ and typecheck_expr loc env bTy = function
   | Eloc loc' e ->
       typecheck_expr loc' env bTy e
 end
+
+
+
+(*
+val fetch_labeled_continuations_expr: Core.expr unit -> map Symbol.sym 
+*)
 
 
 
