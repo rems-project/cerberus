@@ -1,0 +1,142 @@
+(* i686-apple-darwin10-gcc-4.2.1 (GCC) 4.2.1 (Apple Inc. build 5666) (dot 3) *)
+
+(** J.3.2 Environment *)
+
+(* The mapping between physical source file multibyte characters and the source character set in translation phase 1 (5.1.1.2). *)
+(* [GCC] Currently, CPP requires its input to be ASCII or UTF-8. The execution character set may be controlled by the user, with
+         the -fexec-charset and -fwide-exec-charset options. *)
+
+
+(* The name and type of the function called at program startup in a freestanding environment (5.1.2.1). *)
+
+
+
+(* The effect of program termination in a freestanding environment (5.1.2.1). *)
+
+
+
+(* An alternative manner in which the main function may be defined (5.1.2.2.1). *)
+
+
+
+
+(* ... *)
+
+
+(** J.3.4 Characters *)
+
+(* The number of bits in a byte (3.6). *)
+def bits_in_byte = 8
+
+
+(* The values of the members of the execution character set (5.2.1). *)
+(* [GCC] Determined by ABI. *)
+
+
+(* The unique value of the member of the execution character set produced for each of the standard alphabetic escape sequences (5.2.2). *)
+(* [GCC] Determined by ABI. *)
+
+
+(* The value of a char object into which has been stored any character other than a member of the basic execution character set (6.2.5). *)
+(* [GCC] Determined by ABI. *)
+
+
+(* Which of signed char or unsigned char has the same range, representation, and behavior as ‘‘plain’’ char (6.2.5, 6.3.1.1). *)
+(* [GCC] Determined by ABI. The options -funsigned-char and -fsigned-char change the default. *)
+
+
+(* The mapping of members of the source character set (in character constants and string literals) to members of the execution
+   character set (6.4.4.4, 5.1.1.2). *)
+(* [GCC] Determined by ABI. *)
+
+
+(* The value of an integer character constant containing more than one character or containing a character or escape sequence that does
+   not map to a single-byte execution character (6.4.4.4). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+(* The value of a wide character constant containing more than one multibyte character or a single
+   multibyte character that maps to multiple members of the extended execution character set, or
+   containing a multibyte character or escape sequence not represented in the extended execution
+   character set (6.4.4.4). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+  (* The current locale used to convert a wide character constant consisting of a
+     single multibyte character that maps to a member of the extended execution
+     character set into a corresponding wide character code (6.4.4.4). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+  (* Whether differently-prefixed wide string literal tokens can be concatenated
+     and, if so, the treatment of the resulting multibyte character sequence
+     (6.4.5). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+  (* The current locale used to convert a wide string literal into corresponding
+     wide character codes (6.4.5). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+  (* The value of a string literal containing a multibyte character or escape
+     sequence not represented in the execution character set (6.4.5). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+  (* The encoding of any of wchar_t, char16_t, and char32_t where the
+     corresponding standard encoding macro (__STDC_ISO_10646__, __STDC_UTF_16__,
+     or__STDC_UTF_32__) is not defined (6.10.8.2). *)
+(* [GCC] See Implementation-defined behavior. *)
+
+
+fun sizeof (ty: ctype) : integer :=
+  case ty of
+    | char               -> 1
+    | signed   ichar     -> 1
+    | unsigned ichar     -> 1
+    | signed   short     -> 2
+    | unsigned short     -> 2
+    | signed   int       -> 4
+    | unsigned int       -> 4
+    | signed   long      -> 8
+    | unsigned long      -> 8
+    | signed   long_long -> 8
+    | unsigned long_long -> 8
+    | size_t             -> 8
+  end
+
+
+fun min (ty: ctype) : integer :=
+  case ty of
+    | char               -> -128
+    | signed   ichar     -> -128
+    | unsigned ichar     -> 0
+    | signed   short     -> -32768
+    | unsigned short     -> 0
+    | signed   int       -> -2147483648
+    | unsigned int       -> 0
+    | signed   long      -> -9223372036854775808
+    | unsigned long      -> 0
+    | signed   long_long -> -9223372036854775808
+    | unsigned long_long -> 0
+    | size_t             -> 0
+  end
+
+
+fun max (ty: ctype) : integer :=
+  case ty of
+    | char               -> 127
+    | signed   ichar     -> 127
+    | unsigned ichar     -> 255
+    | signed   short     -> 32767
+    | unsigned short     -> 65535
+    | signed   int       -> 2147483647
+    | unsigned int       -> 4294967295
+    | signed   long      -> 9223372036854775807
+    | unsigned long      -> 18446744073709551615
+    | signed   long_long -> 9223372036854775807
+    | unsigned long_long -> 18446744073709551615
+    | size_t             -> 18446744073709551615
+  end
+

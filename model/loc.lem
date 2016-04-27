@@ -1,0 +1,17 @@
+type t
+declare ocaml target_rep type t = `Location_ocaml.t`
+declare hol target_rep type t = `unit`
+
+val unknown: t
+declare ocaml target_rep function unknown = `Location_ocaml.unknown`
+declare hol target_rep function unknown = `()`
+
+
+class (Located 'a)
+  val locOf: 'a -> t
+end
+
+val stringFromLocation: t -> string
+declare ocaml target_rep function stringFromLocation = `Pp_errors.location_to_string`
+declare hol   target_rep function stringFromLocation u = ""
+

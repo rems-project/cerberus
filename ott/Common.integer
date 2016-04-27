@@ -1,0 +1,15 @@
+  | ( w ) :: S :: Parens
+      {{ icho ([[w]]) }}
+  | Z nat :: M :: Nat
+      {{ coq Z_of_nat [[nat]] }}
+      {{ tex [[nat]] }}
+  | Z n :: M :: N
+      {{ coq Z_of_nat [[n]] }}
+      {{ tex [[n]] }}
+  | Z z :: S :: Int
+      {{ icho [[z]] }}
+      {{ tex [[z]] }}
+  | w1 + w2 :: M :: Plus
+      {{ coq [[w1]] + [[w2]] }}
+  | w1 * w2 :: M :: Times
+      {{ coq [[w1]] * [[w2]] }}
