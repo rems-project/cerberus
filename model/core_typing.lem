@@ -719,8 +719,8 @@ let typecheck_export_pexpr loc env bTy pe =
     >>= export_pexpr loc
 
 
-val infer_paction: typing_env -> paction unit -> E.eff (core_base_type * typed_paction unit)
-let rec infer_paction env (Paction p (Action loc annot act_)) =
+val infer_action: typing_env -> action unit -> E.eff (core_base_type * typed_action unit)
+let rec infer_action env (Action loc annot act_) =
   match act_ with
     | Create pe1 pe2 pref ->
         typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
@@ -759,7 +759,56 @@ let rec infer_paction env (Paction p (Action loc annot act_)) =
     | Fence mo ->
         E.return (BTy_unit, Fence mo)
   end >>= fun (bTy, act_') ->
-  E.return (bTy, Paction p (Action loc annot act_'))
+  E.return (bTy, Action loc annot act_')
+
+
+val typecheck_action: typing_env -> core_base_type -> action unit -> E.eff (typed_action unit)
+let typecheck_action env bTy (Action loc annot act_) =
+  Action loc annot <$> match act_ with
+  | Create pe1 pe2 pref ->
+      guard_match loc "create()" bTy (BTy_object OTy_pointer) >>
+      typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+      typecheck_export_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
+      E.return (Create tpe1 tpe2 pref)
+  | Alloc pe1 pe2 pref ->
+      guard_match loc "alloc()" bTy (BTy_object OTy_pointer) >>
+      typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+      typecheck_export_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
+      E.return (Alloc tpe1 tpe2 pref)
+  | Kill pe ->
+      guard_match loc "kill()" bTy BTy_unit >>
+      typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
+      E.return (Kill tpe)
+  | Store pe1 pe2 pe3 mo ->
+      guard_match loc "store()" bTy BTy_unit >>
+      match pe1 with
+        | Pexpr () (PEval (Vctype ty)) ->
+            let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+            let lvalue_bTy = core_object_type_of_ctype ty in
+            typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+            typecheck_export_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
+            E.return (Store tpe1 tpe2 tpe3 mo)
+        | _ ->
+            E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
+      end
+  | Load pe1 pe2 mo ->
+      match pe1 with
+        | Pexpr () (PEval (Vctype ty)) ->
+            let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
+            let lvalue_bTy = core_object_type_of_ctype ty in
+            typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+            guard_match loc "load()" bTy (BTy_loaded lvalue_bTy) >>
+            E.return (Load tpe1 tpe2 mo)
+        | _ ->
+            E.fail loc (CoreTyping_TODO "Load, non-trivial ctype")
+      end
+  | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+      error "WIP: RMW"
+  | Fence mo ->
+      guard_match loc "fence()" bTy BTy_unit >>
+      E.return (Fence mo)
+  end
+
 
 
 val memop_signature: Mem_common.memop -> core_base_type * list core_base_type
@@ -798,9 +847,9 @@ let rec infer_expr loc env = function
         typecheck_export_pexpr loc env bTy pe
       ) (List.zip bTys pes) >>= fun pes' ->
       E.return (ret_bTy, Ememop memop pes')
-  | Eaction pact ->
-      infer_paction env pact >>= fun (bTy, pact') ->
-      E.return (bTy, Eaction pact')
+  | Eaction (Paction p act) ->
+      infer_action env act >>= fun (bTy, act') ->
+      E.return (bTy, Eaction (Paction p act'))
   | Ecase pe cases ->
       infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
       match toCoreBaseType infer with
@@ -877,7 +926,17 @@ let rec infer_expr loc env = function
       export_pattern loc pat'                  >>= fun pat'         ->
       infer_expr loc (Map.(union) env env') e2 >>= fun (bTy2, e2')  ->
       E.return (bTy2, Esseq pat' e1' e2')
-  | Easeq m act pact -> error "annotate easeq"
+  | Easeq sym_bTy_opt act1 (Paction p act2) ->
+      match sym_bTy_opt with
+        | Just (sym, bTy) ->
+            typecheck_action env bTy act1                            >>= fun act1'        ->
+            infer_action (Map.insert (Sym sym) (TDsym bTy) env) act2 >>= fun (bTy, act2') ->
+            E.return (bTy, Easeq sym_bTy_opt act1' (Paction p act2'))
+        | Nothing ->
+            infer_action env act1 >>= fun (_, act1')   ->
+            infer_action env act2 >>= fun (bTy, act2') ->
+            E.return (bTy, Easeq sym_bTy_opt act1' (Paction p act2'))
+      end
   | Eindet _ e ->
       let () = Debug.warn "TODO: typing of indet[_]() should check it is inside a bound[_]()" in
       infer_expr loc env e
@@ -958,52 +1017,9 @@ and typecheck_expr loc env bTy = function
       ) (List.zip bTys pes) >>= fun pes' ->
       guard_match loc "memop()" bTy ret_bTy >>
       E.return (Ememop memop pes')
-  | Eaction (Paction p (Action loc annot act_)) ->
-      (Eaction -| (Paction p) -| (Action loc annot)) <$>
-        match act_ with
-          | Create pe1 pe2 pref ->
-              guard_match loc "create()" bTy (BTy_object OTy_pointer) >>
-              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_export_pexpr loc env BTy_ctype                pe2 >>= fun tpe2 ->
-              E.return (Create tpe1 tpe2 pref)
-          | Alloc pe1 pe2 pref ->
-              guard_match loc "alloc()" bTy (BTy_object OTy_pointer) >>
-              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
-              typecheck_export_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
-              E.return (Alloc tpe1 tpe2 pref)
-          | Kill pe ->
-              guard_match loc "kill()" bTy BTy_unit >>
-              typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe >>= fun tpe ->
-              E.return (Kill tpe)
-          | Store pe1 pe2 pe3 mo ->
-              guard_match loc "store()" bTy BTy_unit >>
-              match pe1 with
-                | Pexpr () (PEval (Vctype ty)) ->
-                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                    let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    typecheck_export_pexpr loc env (BTy_loaded lvalue_bTy)  pe3 >>= fun tpe3 ->
-                    E.return (Store tpe1 tpe2 tpe3 mo)
-                | _ ->
-                    E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
-              end
-          | Load pe1 pe2 mo ->
-              match pe1 with
-                | Pexpr () (PEval (Vctype ty)) ->
-                    let tpe1 = Pexpr BTy_ctype (PEval (Vctype ty)) in
-                    let lvalue_bTy = core_object_type_of_ctype ty in
-                    typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
-                    guard_match loc "load()" bTy (BTy_loaded lvalue_bTy) >>
-                    E.return (Load tpe1 tpe2 mo)
-                | _ ->
-                    E.fail loc (CoreTyping_TODO "Load, non-trivial ctype")
-              end
-          | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
-              error "WIP: RMW"
-          | Fence mo ->
-              guard_match loc "fence()" bTy BTy_unit >>
-              E.return (Fence mo)
-      end
+  | Eaction (Paction p act) ->
+      (Eaction -| Paction p)
+        <$> typecheck_action env bTy act
   | Ecase pe cases ->
       infer_pexpr loc env pe >>= fun (Pexpr infer _ as pe') ->
       match toCoreBaseType infer with
@@ -1065,7 +1081,18 @@ and typecheck_expr loc env bTy = function
       typecheck_pattern loc bTy1 pat >>= fun (env', _pat') ->
       export_pattern loc _pat'   >>= fun pat'          ->
       Esseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
-  | Easeq m act pact -> error "easeq"
+  | Easeq sym_bTy_opt act1 (Paction p act2) ->
+      match sym_bTy_opt with
+        | Just (sym, sym_bTy) ->
+            let env' = Map.insert (Sym sym) (TDsym sym_bTy) env in
+            typecheck_action env  sym_bTy act1 >>= fun act1' ->
+            typecheck_action env' bTy     act2 >>= fun act2' ->
+            E.return (Easeq sym_bTy_opt act1' (Paction p act2'))
+        | Nothing ->
+            infer_action env act1         >>= fun (_, act1')   ->
+            typecheck_action env bTy act2 >>= fun act2'        ->
+            E.return (Easeq sym_bTy_opt act1' (Paction p act2'))
+      end
   | Eindet n e -> error "eindet"
   | Ebound n e -> error "ebound"
   | End es -> error "end"

@@ -420,6 +420,10 @@ and translate_expression stdlib program is_lvalue a_expr =
       
       (* TODO: promotion? + atomicity *)
       | A.AilEunary A.PostfixIncr e ->
+          let () = if AilTypesAux.is_atomic (ctype_of e) then
+            Debug.warn "TODO: elaboration is wrong for atomic types"
+          else
+            () in
           (* TODO: qualifiers temporarily not dealt with *)
 (*          E.fresh_symbol     >>= fun lvalue_sym ->
           E.fresh_symbol     >>= fun load_sym   -> *)
@@ -444,11 +448,17 @@ and translate_expression stdlib program is_lvalue a_expr =
                     (C.Pexpr () begin
                       C.PEcase load_sym_pe
                         [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
-if AilTypesAux.is_integer ty then
+match AilTypesAux.unatomic ty with
+  | Aty.Basic (Aty.Integer _) ->
                            conv_loaded_int [Caux.mk_ail_ctype_pe (ctype_of e); (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))]
-else
-  error "AilEunary PostfixIncr, non-integer"
-)
+  | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
+                           error "AilEunary PostfixIncr, floating type"
+  | Aty.Pointer _ ref_ty ->
+                           Caux.mk_specified_pe (Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe 1))
+  | _ ->
+      error "[Translate.translate_expression, AilEunary PostfixIncr] the Ail expression was ill-typed"
+end
+                           )
                         ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat],
                           Caux.mk_unspecified_pe (Caux.proj_ctype ty)(*TODO:check*))
                         ]
