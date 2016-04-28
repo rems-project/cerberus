@@ -36,6 +36,10 @@ let print_seq p x y = x ^^ !> (!^">>= fun" ^^^ p ^^ !^" ->") ^/^ y
 
 let print_bool b = if b then !^"true" else !^"false"
 
+let print_option_type pp = function
+  | Some e  -> !^"Some" ^^^ P.parens (pp e)
+  | None    -> !^"None"
+
 (* Print symbols (variables name, function names, etc...) *)
 let print_symbol a = !^(Pp_symbol.to_string_pretty a)
 
@@ -72,15 +76,16 @@ let rec print_core_object = function
  | OTy_floating   -> !^"M.floating_value0"
  | OTy_pointer    -> !^"M.pointer_value0"
  | OTy_cfunction  -> !^"M.pointer_value0" (* cfunction is a pointer value? *)
+                       (*TODO: I am not sure about these: *)
  | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
  | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
  | OTy_union sym  -> !^"union" ^^^ print_symbol sym
 
 let rec print_base_type = function
-  | BTy_unit       -> P.parens P.empty
+  | BTy_unit       -> !^"()"
   | BTy_boolean    -> !^"bool"
   | BTy_ctype      -> !^"C.ctype0"
-  | BTy_list bTys  -> !^"(" ^^ print_base_type bTys ^^ !^") list"
+  | BTy_list bTys  -> P.parens (print_base_type bTys) ^^^ !^"list"
   | BTy_tuple bTys -> P.parens (P.separate_map P.star print_base_type bTys)
   | BTy_object obj -> print_core_object obj
   | BTy_loaded obj -> P.parens (print_core_object obj)  ^^^ !^"A.loaded"
@@ -92,6 +97,7 @@ let print_core_type = function
 (* Binary operations and precedences *)
 
 (* FIXME: test if t1 and t2 are the same up to loaded *)
+(* TODO: all the binops case *)
 let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
   match binop with
   | OpAdd -> !^"(M.op_ival0 M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
@@ -194,20 +200,9 @@ let lt_precedence p1 p2 =
     | (Some n1, Some n2) -> n1 <= n2
     | _                  -> true
 
-let print_ctor = function
-  | Cnil _       -> !^"[]"
-  | Ccons        -> !^"A.cons"
-  | Ctuple       -> P.empty
-  | Carray       -> !^"array"
-  | Civmax       -> !^"A.ivmax"
-  | Civmin       -> !^"A.ivmin"
-  | Civsizeof    -> !^"M.sizeof_ival0"
-  | Civalignof   -> !^"M.alignof_ival0"
-  | Cspecified   -> !^"A.Specified"
-  | Cunspecified -> !^"A.Unspecified"
-
 (* Print let expression patterns *)
 
+(* These will not really match *)
 let rec print_pattern = function
   | CaseBase None -> P.underscore
   | CaseBase (Some (sym, _)) -> print_symbol sym
@@ -241,6 +236,7 @@ let print_symbol_prefix = function
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
 
+(* TODO: Int_leastN_t *)
 let print_ail_integer_base_type = function
   | Ichar          -> !^"T.Ichar"
   | Short          -> !^"T.Short"
@@ -272,9 +268,10 @@ let print_integer_value_base = function
                                    ^^ P.comma ^^^ !^(string_of_int n)))
   | IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
                                        (print_ail_integer_type ait)
+  | IVmin ait                     -> !^"I.IVmin" ^^^ P.parens
+                                       (print_ail_integer_type ait)
   | IVunspecified                 -> !^"I.IVunspecified"
   | IVop (op, ivs)                -> raise Unsupported
-  | IVmin ait                     -> raise Unsupported
   | IVsizeof cty                  -> raise Unsupported
   | IValignof cty                 -> raise Unsupported
   | IVoffsetof (sym, cabs_id)     -> raise Unsupported
@@ -296,15 +293,9 @@ let print_ail_qualifier {
     !^"T.atomic = " ^^ print_bool a ^^ !^";"
     ) ^^ P.break 1 ^^ !^"}"
 
-
-
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
   | Floating ft -> todo "floating type"
-
-let print_option_type pp = function
-  | Some e  -> !^"Some" ^^^ P.parens (pp e)
-  | None    -> !^"None"
 
 let rec print_ctype = function
   | Void0 -> !^"C.Void0"
