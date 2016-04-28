@@ -284,7 +284,9 @@ val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
 let mk_if_pe pe1 pe2 pe3 =
   Pexpr () (PEif pe1 pe2 pe3)
 
-
+val mk_array_shift: pexpr -> ctype -> pexpr -> pexpr
+let mk_array_shift pe1 ty pe2 =
+  Pexpr () (PEarray_shift pe1 ty pe2)
 
 
 
