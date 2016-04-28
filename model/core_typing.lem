@@ -929,12 +929,12 @@ let rec infer_expr loc env = function
   | Easeq sym_bTy_opt act1 (Paction p act2) ->
       match sym_bTy_opt with
         | Just (sym, bTy) ->
-            typecheck_action env bTy act1                            >>= fun act1'        ->
-            infer_action (Map.insert (Sym sym) (TDsym bTy) env) act2 >>= fun (bTy, act2') ->
+            typecheck_action env bTy act1                            >>= fun act1'      ->
+            infer_action (Map.insert (Sym sym) (TDsym bTy) env) act2 >>= fun (_, act2') ->
             E.return (bTy, Easeq sym_bTy_opt act1' (Paction p act2'))
         | Nothing ->
-            infer_action env act1 >>= fun (_, act1')   ->
-            infer_action env act2 >>= fun (bTy, act2') ->
+            infer_action env act1 >>= fun (bTy, act1')   ->
+            infer_action env act2 >>= fun (_, act2') ->
             E.return (bTy, Easeq sym_bTy_opt act1' (Paction p act2'))
       end
   | Eindet _ e ->
@@ -1084,6 +1084,7 @@ and typecheck_expr loc env bTy = function
   | Easeq sym_bTy_opt act1 (Paction p act2) ->
       match sym_bTy_opt with
         | Just (sym, sym_bTy) ->
+            guard_match loc "atomic seq" bTy sym_bTy >>
             let env' = Map.insert (Sym sym) (TDsym sym_bTy) env in
             typecheck_action env  sym_bTy act1 >>= fun act1' ->
             typecheck_action env' bTy     act2 >>= fun act2' ->
