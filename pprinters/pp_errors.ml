@@ -237,7 +237,12 @@ let desugar_cause_to_string = function
   
   | Desugar_impossible ->
       "impossible error"
-
+  | Desugar_NonvoidReturn ->
+      "Desugar_NonvoidReturn"
+  | Desugar_ExternalObjectRedefinition ident ->
+      "Desugar_ExternalObjectRedefinition: " ^ Pp_symbol.to_string ident
+  | Desugar_Redefinition loc ->
+      "Desugar_Redefinition"
 
 
 
