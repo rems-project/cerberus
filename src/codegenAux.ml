@@ -41,9 +41,7 @@ let mv_to_integer_loaded mv =
     if M.is_specified_ival0 iv then
       Specified iv
     else
-      (print_string (Pp_utils.to_plain_string (Pp_defacto_memory.pp_integer_value
-                                                iv));
-      Unspecified (C.Basic0 (T.Integer at)))
+      Unspecified (C.Basic0 (T.Integer at))
   | _ -> raise (Error "type mismatch")
 
 let mv_to_pointer mv =
@@ -91,8 +89,6 @@ let store_integer ity e1 le2 =
 
 (* Cast types functions *)
 
-let int_of_integer_value (Specified iv) = M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int
-
 let pointer_from_integer_value = function
   | I.IV (p, ivb) -> I.PV (p, I.PVfromint ivb, [])
 
@@ -108,5 +104,8 @@ let get_first_value mv =
 
 let value = return
 
-let exit f = let res = run f |> get_first_value |> int_of_integer_value
-             in print_int res; exit res
+let exit f =
+  match get_first_value (run f) with
+  | Specified iv -> M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int |>
+                    (fun res -> print_int res; exit res)
+  | Unspecified _ -> print_string "Unspecified value"
