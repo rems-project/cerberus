@@ -182,8 +182,7 @@ dependencies:
 
 lem: copy_cmm copy_cmm_exec copy_cerberus
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
-#	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
-	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
+	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 
@@ -204,19 +203,27 @@ alldoc.pdf: alldoc.tex
 
 
 ocaml_native:
-	@echo $(BOLD)OCAMLBUILD$(RESET) main.native
-	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
-	@ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
-#	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
-	@cp -L main_.native cerberus
+	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
+	else \
+	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
+	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
+	  cp -L main_.native cerberus; \
+	fi
+##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
 
 #cmdliner,
 
 ocaml_byte:
-	@echo $(BOLD)OCAMLBUILD$(RESET) main.byte
-	@sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml
-	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte
-	@cp -L main_.byte cerberus
+	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
+	else \
+	  echo $(BOLD)OCAMLBUILD$(RESET) main.byte; \
+	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte; \
+	  cp -L main_.byte cerberus; \
+	fi
 
 
 
