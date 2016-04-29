@@ -1,0 +1,12 @@
+type position = <|
+  pos_fname: string;
+  pos_lnum:  nat;
+  pos_bol:   nat;
+  pos_cnum:  nat
+|>
+
+declare ocaml target_rep type position   = `Lexing.position`
+declare ocaml target_rep field pos_fname = `Lexing.pos_fname`
+declare ocaml target_rep field pos_lnum  = `Lexing.pos_lnum`
+declare ocaml target_rep field pos_bol   = `Lexing.pos_bol`
+declare ocaml target_rep field pos_cnum  = `Lexing.pos_cnum`

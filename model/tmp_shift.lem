@@ -1,0 +1,171 @@
+open import Pervasives Global
+import AilSyntax GenTypes AilTypesAux Core Core_aux
+import Translation_effect
+open import Translation_aux
+
+import Mem
+
+module C = Core
+module Caux = Core_aux
+module A = AilSyntax
+module Aty = AilTypes
+
+
+module E = Translation_effect
+module Operators = struct
+  let inline (>>=)      = E.bind
+  let inline (>>) m f   = E.bind m (fun _ -> f)
+  let inline (<$>) f ma = E.bind ma (fun a -> E.return (f a))
+  let inline (<*>) mf m = E.bind mf (fun f -> f <$> m)
+end
+
+open Operators
+
+type untyped_pexpr = C.generic_pexpr unit Symbol.sym
+type untyped_expr  = C.generic_expr unit unit Symbol.sym
+
+
+
+
+
+
+
+
+
+
+val shift_left:
+  (A.expression GenTypes.genTypeCategory -> E.t untyped_expr) ->
+  A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory ->
+  E.t untyped_expr
+
+let shift_left translate_rvalue e1 e2 =
+  let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let ctype_width : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let is_representable : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let result_ty : Aty.ctype = error "assert false" in
+  
+  translate_rvalue e1 >>= fun core_e1       ->
+  translate_rvalue e2 >>= fun core_e2       ->
+  E.fresh_symbol      >>= fun sym_e1        ->
+  E.fresh_symbol      >>= fun sym_e2        ->
+  E.fresh_symbol      >>= fun sym_obj1      ->
+  E.fresh_symbol      >>= fun sym_obj2      ->
+  E.fresh_symbol      >>= fun sym_promoted1 ->
+  E.fresh_symbol      >>= fun sym_promoted2 ->
+  E.fresh_symbol      >>= fun sym_res       ->
+  E.return $
+            C.Ewseq (C.CaseCtor C.Ctuple [C.CaseBase (Just sym_e1); C.CaseBase (Just sym_e2)]) (C.Eunseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (C.Pexpr () (C.PEctor C.Ctuple [C.Pexpr () (C.PEsym sym_e1); C.Pexpr () (C.PEsym sym_e2)]))
+                    [ (C.CaseCtor C.Ctuple [C.CaseBase Nothing; C.CaseCtor C.Cunspecified [C.CaseBase Nothing]],
+                       C.Pexpr () (C.PEundef Undefined.Exceptional_condition))
+                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cunspecified [C.CaseBase Nothing]; C.CaseBase Nothing],
+(if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                       C.Pexpr () (C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
+else
+                       C.Pexpr () (C.PEundef Undefined.Exceptional_condition)))
+                    ; (C.CaseCtor C.Ctuple [C.CaseCtor C.Cspecified [C.CaseBase (Just sym_obj1)]; C.CaseCtor C.Cspecified [C.CaseBase (Just sym_obj2)]],
+                       C.Pexpr () (C.PElet (C.CaseBase (Just sym_promoted1))
+                         (integer_promotion (ctype_of e1) (C.Pexpr () (C.PEsym sym_obj1)))
+                       (C.Pexpr () (C.PElet (C.CaseBase (Just sym_promoted2))
+                         (integer_promotion (ctype_of e2) (C.Pexpr () (C.PEsym sym_obj2)))
+                       (* (§6.5.7#2) if promoted2 < 0 then undef *)
+                       (C.Pexpr () (C.PEif (C.Pexpr () (C.PEop C.OpLt (C.Pexpr () (C.PEsym sym_promoted2)) (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 0)))))))
+                         (C.Pexpr () (C.PEundef Undefined.Negative_shift))
+                       
+                       (* ctype_width(result_ty) <= promoted2 *)
+                       (C.Pexpr () (C.PEif (C.Pexpr () (C.PEop C.OpOr (C.Pexpr () (C.PEop C.OpLt (ctype_width [C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))]) (C.Pexpr () (C.PEsym sym_promoted2))))
+                                                                      (C.Pexpr () (C.PEop C.OpEq (ctype_width [C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))]) (C.Pexpr () (C.PEsym sym_promoted2))))))
+                          (C.Pexpr () (C.PEundef Undefined.Shift_too_large))
+(if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
+                       C.Pexpr () (C.PEctor C.Cspecified [
+                          C.Pexpr () (C.PEop C.OpRem_t (C.Pexpr () (C.PEop C.OpMul (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEop C.OpExp (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 2))))) (C.Pexpr () (C.PEsym sym_promoted2))))))
+                                                       (C.Pexpr () (C.PEop C.OpAdd (C.Pexpr () (C.PEctor C.Civmax [C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])) (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 1))))))))
+                      ])
+else
+                       (C.Pexpr () (C.PEif (C.Pexpr () (C.PEop C.OpLt (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 0)))))))
+                         (C.Pexpr () (C.PEundef Undefined.Exceptional_condition))
+                       (C.Pexpr () (C.PElet (C.CaseBase (Just sym_res))
+                         (C.Pexpr () (C.PEop C.OpMul (C.Pexpr () (C.PEsym sym_promoted1)) (C.Pexpr () (C.PEop C.OpExp (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.integer_ival 2))))) (C.Pexpr () (C.PEsym sym_promoted2))))))
+                       (C.Pexpr () (C.PEif (is_representable [C.Pexpr () (C.PEsym sym_res); C.Pexpr () (C.PEval (C.Vctype (Caux.proj_ctype result_ty)))])
+                          (C.Pexpr () (C.PEctor C.Cspecified [C.Pexpr () (C.PEsym sym_res)]))
+                         (C.Pexpr () (C.PEundef Undefined.Exceptional_condition))))))
+))
+                       ))))))))) ]
+                )
+              )
+            )
+
+
+(* ********************************************************** *)
+
+      
+(*
+let shift_left translate_rvalue e1 e2 =
+  let integer_promotion : Aty.ctype -> untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let ctype_width : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let is_representable : list untyped_pexpr -> untyped_pexpr = error "assert false" in
+  let result_ty : Aty.ctype = error "assert false" in
+  
+is_unsigned_integer_type
+
+  translate_rvalue e1 >>= fun core_e1       ->
+  translate_rvalue e2 >>= fun core_e2       ->
+  E.fresh_symbol      >>= fun sym_e1        ->
+  E.fresh_symbol      >>= fun sym_e2        ->
+  E.fresh_symbol      >>= fun sym_obj1      ->
+  E.fresh_symbol      >>= fun sym_obj2      ->
+  E.fresh_symbol      >>= fun sym_promoted1 ->
+  E.fresh_symbol      >>= fun sym_promoted2 ->
+  E.fresh_symbol      >>= fun sym_res       ->
+  E.return $
+
+  core_e1 := translate_rvalue e1;
+  core_e2 := translate_rvalue e2;
+  sym_e1 := E.fresh_symbol;       sym_e2 := E.fresh_symbol; 
+  sym_obj1 := E.fresh_symbol;     sym_obj2 := E.fresh_symbol; 
+  sym_promoted1 := E.fresh_symbol();sym_promoted2 := E.fresh_symbol; 
+  sym_res:= E.fresh_symbol;
+  E.return(
+    let weak (sym_e1, sym_e2) = unseq(core_e1, core_e2) in 
+    pure(
+      case (sym_e1, sym_e2) with
+        | (_, Unspecified(_)) => 
+          undef(Exceptional_condition)
+        | (Unspecified(_), _) => 
+          (IF is_unsigned_integer_type(ctype_of e1) THEN
+          Unspecified(result_ty)
+          ELSE
+          undef(Exceptional_condition))
+        | (Loaded(sym_obj1), Loaded(sym_obj2)) => 
+          let sym_promoted1 = 
+            integer_promotion (ctype_of e1) sym_obj1 in
+          let sym_promoted2 = 
+            integer_promotion (ctype_of e2) sym_obj2 in 
+          (* (§6.5.7#2) if promoted2 < 0 then undef *)
+          if sym_promoted2 < 0 then 
+            undef(Undefined.Negative_shift)
+          else if ctype_width(result_ty) <= sym_promoted2 then
+            undef(Undefined.Shift_too_large)
+          else
+            (IF is_unsigned_integer_type (ctype_of e1) THEN
+            Loaded(sym_promoted1*(2^sym_promoted2) 
+                     rem_t (Ivmax(result_ty)+1))
+            ELSE
+            if sym_promoted1 < 0 then 
+              undef(Exceptional_condition)
+            else
+              let sym_res = 
+                sym_promoted1*(2^sym_promoted2) in 
+              if is_representable(sym_res, result_ty) then
+                Loaded(sym_res) 
+              else 
+                undef(Exceptional_condition) )))
+
+
+    
+
+
+
+*)
