@@ -97,7 +97,8 @@ let rec typecheck_pattern loc bTy = function
   | CaseBase Nothing ->
       E.return (Map.empty, CaseBase Nothing)
   | CaseBase (Just (sym, bTy')) ->
-      guard_match loc ("pattern symbol " ^ show sym) bTy bTy' >>
+      E.guard (bTy = bTy')
+        loc (Mismatch ("pattern symbol " ^ show sym) bTy bTy') >>
       E.return (Map.singleton (Sym sym) (TDsym bTy'), CaseBase (Just (sym, bTy')))
   | CaseCtor ctor pats ->
       match (ctor, bTy, pats) with
@@ -513,7 +514,7 @@ and typecheck_pexpr loc env (bTy: core_base_type) (Pexpr () pexpr_) : E.eff infe
     | PEsym sym ->
         match Map.lookup (Sym sym) env with
           | Just (TDsym bTy') ->
-              guard_match loc ("symbol: " ^ show sym) bTy bTy' >>
+              guard_match loc "symbol" bTy bTy' >>
               E.return (PEsym sym)
           | Just _ ->
               E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
@@ -943,30 +944,13 @@ let rec infer_expr loc env = function
       let () = Debug.warn "TODO: typing of bound[_]() should check then absence of jumps" in
       infer_expr loc env e
   | End es ->
-      match es with
-        | [] ->
-            E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
-        | [_] ->
-            E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
-        | e :: es ->
-            infer_expr loc env e >>= fun (bTy, e') ->
-            E.mapM (typecheck_expr loc env bTy) es >>= fun es' ->
-            E.return (bTy, End (e'::es'))
-      end
+      error "annotate end"
   | Esave _ _ _  ->
       error "annotate esave"
   | Erun _ _ _ ->
       error "annotate erun"
-  | Epar es ->
-      match es with
-        | [] ->
-            E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
-        | [_] ->
-            E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
-        | e :: es ->
-            (List.unzip <$> E.mapM (infer_expr loc env) es) >>= fun (bTys, es') ->
-            E.return (BTy_tuple bTys, Epar es')
-      end
+  | Epar e ->
+      error "annotate epar"
   | Ewait id ->
       error "annotate ewait"
   | Eloc loc' e ->
@@ -1112,12 +1096,7 @@ and typecheck_expr loc env bTy = function
       end
   | Eindet n e -> error "eindet"
   | Ebound n e -> error "ebound"
-  | End es ->
-      if List.length es < 2 then
-        E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
-      else
-        E.mapM (typecheck_expr loc env bTy) es >>= fun es' ->
-        E.return (End es')
+  | End es -> error "end"
   | Esave _ _ _  -> error "esave"
   | Erun _ _ _ -> error "erun"
   | Epar e -> error "epar"
