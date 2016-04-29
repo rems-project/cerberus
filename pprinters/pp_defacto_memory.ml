@@ -212,4 +212,4 @@ let pp_integer_value_for_core (IV (_, ival_)) =
     | IValignof ty ->
         !^ "Ivalignof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
     | _ ->
-        !^ "TODO" ^^ P.parens (pp_integer_value_base ival_)
+        !^ "TODO[IV] " ^^ P.parens (pp_integer_value_base ival_)
