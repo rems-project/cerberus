@@ -823,8 +823,8 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                           )
                       | Impl (StdFunction "printf") ->
                           match cvals with
-                            | [Vlist (BTy_object OTy_integer) frmt_cvals;
-                               Vlist (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) args_cvals] ->
+                            | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
+                               Vlist (*(BTy_tuple [BTy_ctype; BTy_object OTy_pointer])*)_ args_cvals] ->
                                  let frmt_chars = List.map (function
                                    | Vobject (OVinteger ival) ->
                                        match Mem_aux.integerFromIntegerValue ival with

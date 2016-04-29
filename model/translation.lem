@@ -1099,21 +1099,42 @@ else
 
 
 
-
+*)
       
-      (* CHECKED IN NOV2015 *)
+      (* CHECKED IN APR2016 *)
       | A.AilEbinary e1 (A.Arithmetic A.Bxor) e2 ->
-          error "WIP: Bxor"
-(*
           E.fresh_symbol      >>= fun e1_sym    ->
           E.fresh_symbol      >>= fun e2_sym    ->
+          E.fresh_symbol      >>= fun obj1_sym    ->
+          E.fresh_symbol      >>= fun obj2_sym    ->
           E.fresh_symbol      >>= fun sym_conv1 ->
           E.fresh_symbol      >>= fun sym_conv2 ->
           translate_rvalue e1 >>= fun core_e1   ->
           translate_rvalue e2 >>= fun core_e2   ->
           (* by the Ail typing, result_ty = usual_arithmetic ty1 ty2 *)
+          let oTy = C.OTy_integer in
+          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
+          let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
+          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
+          let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
           E.return $
-            C.Ewseq [Just e1_sym; Just e2_sym] (C.Eunseq [core_e1; core_e2]) (
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (C.Eunseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+                       (* Both operand are specified *)
+                       Caux.mk_specified_pe (bitwise_XOR [Caux.mk_ail_ctype_pe result_ty; promoted1_pe; promoted2_pe])
+                       )
+                    ; (Caux.mk_empty_pat,
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
+                )
+              )
+            )
+(*
               C.Epure (
                 C.PElet sym_conv1 (conv [Caux.mk_ail_ctype_pe (ctype_of e1); Caux.mk_ail_ctype_pe result_ty;  C.PEsym e1_sym]) (
                 C.PElet sym_conv2 (conv [Caux.mk_ail_ctype_pe (ctype_of e2); Caux.mk_ail_ctype_pe result_ty;  C.PEsym e2_sym]) (
@@ -1126,6 +1147,9 @@ else
             )
            )
 *)
+
+
+(*
       
       (* CHECKED IN NOV2015 *)
       | A.AilEbinary e1 (A.Arithmetic A.Bor) e2 ->
@@ -2503,9 +2527,20 @@ TODO: #9
                           begin
                             (* merging the additional arguments of a variadic function into a list *)
                             let arg_ptr_syms_pes =
+(*
                               let (xs, ys) = List.splitAt (List.length params)
                                                (List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) arg_ptr_syms) in
+*)
+                              let (xs_syms, ys_syms) = List.splitAt (List.length params) arg_ptr_syms  in
+                              (* these are the arguments corresponding to declared parameters *)
+                              let xs = List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) xs_syms in
+                              
                               if isVariadic then
+                                 let ys = List.map (fun (e, sym) ->
+                                   Caux.mk_tuple_pe
+                                     [ Caux.mk_ail_ctype_pe (ctype_of e)
+                                     ; Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym ]
+                                 ) (List.zip (List.drop (List.length params) es) ys_syms) in
                                  xs ++ [Caux.mk_list_pe ys]
                               else
                                  xs in
