@@ -13,48 +13,58 @@ else
 endif
 
 
-default: cmdliner pprint zarith
+default:
+	@if (command -v opam >/dev/null 2>&1); then \
+	  echo "Please install the following packages with opam: cmdliner, pprint, zarith"; \
+	else \
+	  make -f Makefile.dependencies cmdliner pprint zarith ; \
+	fi
+#  make cmdliner pprint zarith
 
-
-downloads:
-	$(CMD) $(PPRINT_SOURCE)
-	$(CMD) $(ZARITH_SOURCE)
-	tar -zxf pprint-20140424.tar.gz && rm pprint-20140424.tar.gz
-	tar -zxf zarith-1.3.tgz && rm zarith-1.3.tgz
 
 cmdliner:
-	@if [ ! -d $(CMDLINER_PATH) ] ; then \
-	  echo DOWNLOADING $(CMDLINER_SOURCE) ; \
-	  $(CMD) $(CMDLINER_SOURCE) && tar -jxf $(shell basename $(CMDLINER_SOURCE)) && rm -f $(shell basename $(CMDLINER_SOURCE)) ; \
-	fi
-	cd $(CMDLINER_PATH); ocaml pkg/build.ml native=true native-dynlink=false
+	@if ! (ocamlfind query cmdliner >/dev/null 2>&1); then \
+	  echo "INSTALLING cmdliner"; \
+	  if [ ! -d $(CMDLINER_PATH) ] ; then \
+	    echo DOWNLOADING $(CMDLINER_SOURCE) ; \
+	    $(CMD) $(CMDLINER_SOURCE) && tar -jxf $(shell basename $(CMDLINER_SOURCE)) && rm -f $(shell basename $(CMDLINER_SOURCE)) ; \
+	  fi; \
+	  cd $(CMDLINER_PATH); \
+	  ocaml pkg/build.ml native=true native-dynlink=true; \
+	  ocamlfind install cmdliner pkg/META _build/src/cmdliner.a _build/src/cmdliner.cma \
+	  _build/src/cmdliner.cmi _build/src/cmdliner.cmx _build/src/cmdliner.cmxa _build/src/cmdliner.cmxs _build/src/cmdliner.mli; \
+        fi
 
 pprint:
-	@if [ ! -d $(PPRINT_PATH) ] ; then \
-	  echo DOWNLOADING $(PPRINT_SOURCE) ; \
-	  $(CMD) $(PPRINT_SOURCE) && tar -zxf $(shell basename $(PPRINT_SOURCE)) && rm -f $(shell basename $(PPRINT_SOURCE)) ; \
-	fi
-	@if [ ! `command -v ocamlfind` ]; then \
-	  mv $(PPRINT_PATH)/Makefile $(PPRINT_PATH)/Makefile_ ; \
-	  sed s/-use-ocamlfind// $(PPRINT_PATH)/Makefile_ > $(PPRINT_PATH)/Makefile ; \
-	  make -C $(PPRINT_PATH) ; \
-	  mv  $(PPRINT_PATH)/Makefile_ $(PPRINT_PATH)/Makefile ; \
-        else \
-          make -C $(PPRINT_PATH) install; \
+	@if ! (ocamlfind query pprint >/dev/null 2>&1); then \
+	  echo "INSTALLING pprint"; \
+	  if [ ! -d $(PPRINT_PATH) ] ; then \
+	    echo DOWNLOADING $(PPRINT_SOURCE) ; \
+	    $(CMD) $(PPRINT_SOURCE) && tar -zxf $(shell basename $(PPRINT_SOURCE)) && rm -f $(shell basename $(PPRINT_SOURCE)) ; \
+	  fi; \
+	  if [ ! `command -v ocamlfind` ]; then \
+	    mv $(PPRINT_PATH)/Makefile $(PPRINT_PATH)/Makefile_ ; \
+	    sed s/-use-ocamlfind// $(PPRINT_PATH)/Makefile_ > $(PPRINT_PATH)/Makefile ; \
+	    make -C $(PPRINT_PATH) ; \
+	    mv  $(PPRINT_PATH)/Makefile_ $(PPRINT_PATH)/Makefile ; \
+          else \
+            make -C $(PPRINT_PATH) install; \
+          fi; \
         fi
 
 zarith:
-	@if [ ! -d $(ZARITH_PATH) ] ; then \
-	  echo DOWNLOADING $(ZARITH_SOURCE) ; \
-	  $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
+	@if ! (ocamlfind query zarith >/dev/null 2>&1); then \
+	  echo "INSTALLING pprint"; \
+	  if [ ! -d $(ZARITH_PATH) ] ; then \
+	    echo DOWNLOADING $(ZARITH_SOURCE) ; \
+	    $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
+	  fi; \
+	  cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make && make install; \
 	fi
-	cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make && make install
 
 clean:
-	rm -f $(CMDLINE_PATH)/*.o $(PPRINT_PATH)/*.o $(ZARITH_PATH)/*.o
-	rm -f $(CMDLINE_PATH)/*.cm{i,x,o} $(PPRINT_PATH)/*.cm{i,x,o} $(ZARITH_PATH)/*.cm{i,x,o}
+	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) $(shell basename $(PPRINT_SOURCE) .tar.gz) $(shell basename $(ZARITH_SOURCE) .tgz)
 
-clear:
-	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) \
-	       $(shell basename $(PPRINT_SOURCE) .tar.gz) \
-	       $(shell basename $(ZARITH_SOURCE) .tgz)
+
+foo:
+	echo FOO
