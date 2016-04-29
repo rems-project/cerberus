@@ -155,7 +155,7 @@ let pp_mem_addr (pref, addr) =
   in
   P.at ^^ P.braces (pp_prefix pref ^^ P.colon ^^^ pp addr)
 *)
-  P.at ^^ P.braces (Pp_symbol.pp_prefix pref ^^ P.colon ^^^ (!^ "TODO"))
+  P.at ^^ P.braces (Pp_symbol.pp_prefix pref ^^ P.colon ^^^ (!^ "TODO(addr)"))
 
 
 let pp_thread_id n =
@@ -288,7 +288,7 @@ let pp_pexpr pe =
         | PEconstrained xs ->
             pp_keyword "constrained" ^^ P.parens (
               comma_list (fun (cs, pe) ->
-                P.brackets (!^ "TODO" (*comma_list Pp_mem.mem_constraint cs*)) ^^^
+                P.brackets (!^ "TODO(constr)" (*comma_list Pp_mem.mem_constraint cs*)) ^^^
                 P.equals ^^ P.rangle ^^ pp pe
               ) xs
             )
@@ -389,7 +389,7 @@ let rec pp_expr = function
         ) pat_es 
       ) ^^ P.break 1 ^^ pp_keyword "end"
   | Elet (pat, pe1, e2) ->
-      (* DEBUG *) !^ "{-e-}" ^^^ pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
+      pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_pexpr pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp_expr e2
   | Eif (pe1, e2, e3) ->
       pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
