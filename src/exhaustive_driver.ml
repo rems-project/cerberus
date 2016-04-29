@@ -44,7 +44,7 @@ let drive sym_supply file args cerb_conf : execution_result =
                       pe
               end in
           Printf.printf "{value: \"%s\", stdout=\"%s\"}\n"
-            str_v stdout
+            str_v (String.escaped stdout)
       | ND.Killed (ND.Undef0 (_, ubs)) ->
           Printf.printf "UNDEF(%s)\n"
             (Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs)

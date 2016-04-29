@@ -78,7 +78,7 @@ let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
       Debug_ocaml.print_debug 5 ("C prepocessor outputed in: `" ^ temp_name ^ "`");
-      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " > " ^ temp_name ^ " 2> /dev/null") <> 0 then
+      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " 1> " ^ temp_name (*^ " 2> /dev/null"*)) <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
     
