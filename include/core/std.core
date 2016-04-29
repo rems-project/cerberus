@@ -313,8 +313,8 @@ proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff l
   case frmt_ptr_ of
     | Specified(frmt_ptr: pointer) =>
         let strong xs: [integer] = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
-        let strong ret: integer = pcall(Cfunction(<std_function_printf>), xs, args) in
-        return(Specified(ret))
+        let strong ret: loaded integer = pcall(Cfunction(<std_function_printf>), xs, args) in
+        return(ret)
     | Unspecified(_) =>
         return (undef(<<DUMMY>>)) -- TODO think about that
   end
