@@ -344,7 +344,7 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
                 | Just pe'' ->
                     EU.return (strip pe'')
                 | Nothing ->
-                    error ("PEcase, mismatched ==> " ^ Pp.stringFromCore_pexpr pe')
+                    error ("PEcase, mismatched ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromCore_pexpr pe')
               end
           | pe' ->
               EU.return (PEcase pe' pat_pes)
