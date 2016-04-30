@@ -223,9 +223,9 @@ fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_AND_aux(n1_, n2_, w-1)
 
 fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
-  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
-    error(<<<WIP_bAND>>>, (ty, n1, n2))
-  else
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bAND>>>, (ty, n1, n2))
+--  else
     let n1_: integer = <Integer.encode>(ty, n1) in
     let n2_: integer = <Integer.encode>(ty, n2) in
     <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
@@ -240,9 +240,9 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0) + 2 * bitwise_XOR_aux(n1_, n2_, w-1)
 
 fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
-  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
-    error(<<<WIP_bXOR>>>, Unit)
-  else
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bXOR>>>, Unit)
+--  else
   let n1_: integer = <Integer.encode>(ty, n1) in
   let n2_: integer = <Integer.encode>(ty, n2) in
   <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
@@ -258,9 +258,9 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_OR_aux(n1_, n2_, w-1)
 
 fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
-  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
-    error(<<<WIP_bOR>>>, Unit)
-  else
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bOR>>>, Unit)
+--  else
     let n1_: integer = <Integer.encode>(ty, n1) in
     let n2_: integer = <Integer.encode>(ty, n2) in
     <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
