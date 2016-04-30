@@ -272,10 +272,10 @@ and translate_equality_operator translate_rvalue usual_arithmetic_conversion res
     | A.Eq -> Caux.mk_op_pe C.OpEq
     | A.Ne -> fun x y -> Caux.mk_not_pe (Caux.mk_op_pe C.OpEq x y)
   end in
-  let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
-  let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
-  let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
-  let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+  let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
+  let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
+  let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
+  let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
   E.return $
     C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
                                ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
@@ -1173,41 +1173,6 @@ end
 
 
 
-(*
-      
-      | A.AilEbinary e1 A.And e2 ->
-          (* TODO: use mkTestExpression *)
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          E.return $
-            C.Ewseq [Just sym_ty_e1] core_e1
-              (C.Eif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e1) (Caux.mk_integer_pe 0))
-                 (C.Epure (Caux.mk_integer_pe 0))
-                 (C.Ewseq [Just sym_ty_e2] core_e2
-                    (C.Epure $ C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e2) (Caux.mk_integer_pe 0)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-                 )
-              )
-      
-      | A.AilEbinary e1 A.Or e2 ->
-          (* TODO: use mkTestExpression *)
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          E.return $
-            C.Ewseq [Just sym_ty_e1] core_e1
-              (C.Eif (C.PEnot (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e1) (Caux.mk_integer_pe 0)))
-                 (C.Epure (Caux.mk_integer_pe 1))
-                 (C.Ewseq [Just sym_ty_e2] core_e2
-                    (C.Epure $ C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e2) (Caux.mk_integer_pe 0)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-                 )
-              )
-      
-
-*)
-
 
 
 
@@ -1252,9 +1217,66 @@ end
           translate_bitwise_operator
             translate_rvalue usual_arithmetic_conversion mk_stdcall
             result_ty aop e1 e2
+      
+      | A.AilEbinary e1 A.And e2 ->
+          let () = Debug.warn "TODO: make the elab of A.And use mkTestExpression" in
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun e1_sym        ->
+          E.fresh_symbol      >>= fun e2_sym        ->
+          E.fresh_symbol      >>= fun obj1_sym      ->
+          E.fresh_symbol      >>= fun obj2_sym      ->
+          (* The object type on which the Core operator is going to work on. *)
+          (* By typing it is enough to look at the type of one of the operand (see STD §6.5.8#2) *)
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          E.return $
+            C.Ewseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)) core_e1 (
+              C.Ecase e1_sym_pe
+                [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy)),
+                   C.Eif (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
+                         (C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 0)))
+                         (C.Ewseq (Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy)) core_e2 (
+                            C.Epure (
+                              C.Pexpr () (
+                                C.PEcase e2_sym_pe
+                                  [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)),
+                                     Caux.mk_specified_pe (
+                                       Caux.mk_if_pe (Caux.mk_op_pe C.OpEq obj2_sym_pe (Caux.mk_integer_pe 0))
+                                         (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1)
+                                     ))
+                                  ; (Caux.mk_empty_pat,
+                                     (* TODO: check with Peter *)
+                                     Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
+                              )
+                            )
+                         )))
+                ; (Caux.mk_empty_pat,
+                       (* TODO: check with Peter *)
+                       C.Epure (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))) ]
+            )
 
 
-
+(*
+      | A.AilEbinary e1 A.Or e2 ->
+          let () = Debug.warn "TODO: make the elab of A.Or use mkTestExpression" in
+          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
+          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
+          translate_rvalue e1 >>= fun core_e1 ->
+          translate_rvalue e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq [Just sym_ty_e1] core_e1
+              (C.Eif (C.PEnot (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e1) (Caux.mk_integer_pe 0)))
+                 (C.Epure (Caux.mk_integer_pe 1))
+                 (C.Ewseq [Just sym_ty_e2] core_e2
+                    (C.Epure $ C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e2) (Caux.mk_integer_pe 0)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
+                 )
+              )
+      
+*)
 
 
 
