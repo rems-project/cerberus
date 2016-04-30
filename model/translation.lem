@@ -1258,30 +1258,93 @@ end
                        (* TODO: check with Peter *)
                        C.Epure (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))) ]
             )
-
-
-(*
+      
       | A.AilEbinary e1 A.Or e2 ->
           let () = Debug.warn "TODO: make the elab of A.Or use mkTestExpression" in
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
+          translate_rvalue e1 >>= fun core_e1       ->
+          translate_rvalue e2 >>= fun core_e2       ->
+          E.fresh_symbol      >>= fun e1_sym        ->
+          E.fresh_symbol      >>= fun e2_sym        ->
+          E.fresh_symbol      >>= fun obj1_sym      ->
+          E.fresh_symbol      >>= fun obj2_sym      ->
+          (* The object type on which the Core operator is going to work on. *)
+          (* By typing it is enough to look at the type of one of the operand (see STD §6.5.8#2) *)
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
           E.return $
-            C.Ewseq [Just sym_ty_e1] core_e1
-              (C.Eif (C.PEnot (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e1) (Caux.mk_integer_pe 0)))
-                 (C.Epure (Caux.mk_integer_pe 1))
-                 (C.Ewseq [Just sym_ty_e2] core_e2
-                    (C.Epure $ C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e2) (Caux.mk_integer_pe 0)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-                 )
-              )
+            C.Ewseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)) core_e1 (
+              C.Ecase e1_sym_pe
+                [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy)),
+                   C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0)))
+                         (C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1)))
+                         (C.Ewseq (Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy)) core_e2 (
+                            C.Epure (
+                              C.Pexpr () (
+                                C.PEcase e2_sym_pe
+                                  [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)),
+                                     Caux.mk_specified_pe (
+                                       Caux.mk_if_pe (Caux.mk_op_pe C.OpEq obj2_sym_pe (Caux.mk_integer_pe 0))
+                                         (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1)
+                                     ))
+                                  ; (Caux.mk_empty_pat,
+                                     (* TODO: check with Peter *)
+                                     Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
+                              )
+                            )
+                         )))
+                ; (Caux.mk_empty_pat,
+                       (* TODO: check with Peter *)
+                       C.Epure (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))) ]
+            )
       
-*)
-
-
-
-
-
+      | A.AilEcond e1 e2 e3 ->
+          let () = Debug.warn "TODO: make the elab of AilEcond use mkTestExpression" in
+          E.fresh_symbol      >>= fun e1_sym   ->
+          E.fresh_symbol      >>= fun obj1_sym ->
+          translate_rvalue e1 >>= fun core_e1  ->
+          translate_rvalue e2 >>= fun core_e2  ->
+          translate_rvalue e3 >>= fun core_e3  ->
+          let e1_oTy =
+            (* NOTE: [e1] must be a scalar *)
+            Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+          
+          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded e1_oTy) e1_sym   in
+          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object e1_oTy) obj1_sym in
+          
+          E.return $
+            (* STD (§6.5.15#4, second sentence) says there is a sequenced point between the
+               evaluation of e1 and the e2/e3. Hence the strong sequencing *)
+            C.Esseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded e1_oTy)) core_e1
+            begin
+              let () = Debug.warn "Translation, AilEcond ==> TODO: the conversions for e2 and e3" in
+              C.Ecase e1_sym_pe
+                [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj1_sym (C.BTy_object e1_oTy)],
+                   let core_test =
+                     if AilTypesAux.is_integer (ctype_of e1) then
+                       Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
+                     else
+                       error "WIP: AilEcond, pointer e1" in
+                   C.Eif core_test
+                     (* TODO: conversions *)
+                     core_e2
+                     core_e3)
+                  (* non-deterministic branching if the test expression had unspecified value *)
+                ; (C.CaseCtor C.Cunspecified [C.CaseBase Nothing],
+                   (* TODO: conversions *)
+                   C.End [core_e2; core_e3]) ]
+            end
+      
+      
+      
+      
+      
+      
+      
+      
+      
       | A.AilEbinary e1 A.Comma e2 ->
           translate_rvalue e1 >>= fun core_e1 ->
           translate_rvalue e2 >>= fun core_e2 ->
@@ -1475,42 +1538,6 @@ else
 
 
 
-      | A.AilEcond e1 e2 e3 ->
-          let () = Debug.warn "TODO: make the elab of AilEcond use mkTestExpression" in
-          E.fresh_symbol      >>= fun e1_sym   ->
-          E.fresh_symbol      >>= fun obj1_sym ->
-          translate_rvalue e1 >>= fun core_e1  ->
-          translate_rvalue e2 >>= fun core_e2  ->
-          translate_rvalue e3 >>= fun core_e3  ->
-          let e1_oTy =
-            (* NOTE: [e1] must be a scalar *)
-            Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          
-          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded e1_oTy) e1_sym   in
-          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object e1_oTy) obj1_sym in
-          
-          E.return $
-            (* STD (§6.5.15#4, second sentence) says there is a sequenced point between the
-               evaluation of e1 and the e2/e3. Hence the strong sequencing *)
-            C.Esseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded e1_oTy)) core_e1
-            begin
-              let () = Debug.warn "Translation, AilEcond ==> TODO: the conversions for e2 and e3" in
-              C.Ecase e1_sym_pe
-                [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj1_sym (C.BTy_object e1_oTy)],
-                   let core_test =
-                     if AilTypesAux.is_integer (ctype_of e1) then
-                       Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
-                     else
-                       error "WIP: AilEcond, pointer e1" in
-                   C.Eif core_test
-                     (* TODO: conversions *)
-                     core_e2
-                     core_e3)
-                  (* non-deterministic branching if the test expression had unspecified value *)
-                ; (C.CaseCtor C.Cunspecified [C.CaseBase Nothing],
-                   (* TODO: conversions *)
-                   C.End [core_e2; core_e3]) ]
-            end
 
       
 
