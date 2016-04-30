@@ -970,206 +970,61 @@ else
                 )
               )
             )
-
-
-
-
-
-
-
-(*
       
-      | A.AilEbinary e1 (A.Arithmetic A.Add) e2 ->
-          let ty1 = ctype_of e1 in
-          let ty2 = ctype_of e2 in
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          
-          if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
-            (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
-                          performed on them. *)
-            translate_rvalue e1 >>= fun core_e1 ->
-            translate_rvalue e2 >>= fun core_e2 ->
-            E.print_debug 3 ("ADD(1) " ^ Boot.pp_ail_ctype ty1 ^ " vs " ^ Boot.pp_ail_ctype ty2) >>
-            E.print_debug 3 ("ADD(2) " ^ Boot.pp_ail_ctype (ctype_of e1) ^ " vs " ^ Boot.pp_ail_ctype (ctype_of e2)) >>
-            
-            E.print_debug 3 ("ADD(3) usual = " ^ match AilTypesAux.usual_arithmetic tmp_implementation (ctype_of e1) (ctype_of e2) with
-              | Just ty ->
-                  Boot.pp_ail_ctype ty
-              | Nothing ->
-                  "Nothing"
-            end) >>
-            
-            let common_ty = fromJust "Translation.translate_expression, Add" $ AilTypesAux.usual_arithmetic tmp_implementation (ctype_of e1) (ctype_of e2) in
-            let conv_pe1 = conv_int [Caux.mk_ail_ctype_pe common_ty; C.PEsym sym_ty_e1] in
-§            let conv_pe2 = conv_int [Caux.mk_ail_ctype_pe common_ty; C.PEsym sym_ty_e2] in
-            E.return $
-              C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (Caux.mk_unseq [core_e1; core_e2])
-                (C.Epure $ if AilTypesAux.is_signed_integer_type (ctype_of a_expr) then
-                   (* if the E.return type is signed, then there is an undefined behaviour
-                      in the presence of an arithmetic overflow *)
-                  catch_exceptional_condition
-                    [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpAdd conv_pe1 conv_pe2]
-                 else
-                   (* otherwise, bring back the value from Z to the result type *)
-                   wrapI [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpAdd conv_pe1 conv_pe2])
-          else
-            (* otherwise, we have some pointer arithmetic *)
-            (if AilTypesAux.is_arithmetic ty1 then translate_rvalue else translate_lvalue) e1 >>= fun core_e1 ->
-            (if AilTypesAux.is_arithmetic ty2 then translate_rvalue else translate_lvalue) e2 >>= fun core_e2 ->
-(*
-            (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
-            (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
-*)
-            (* TODO: check *)
-            (* TODO: do something with the qualifiers *)
-            match (AilTypesAux.lvalue_coercion sigm ty1, AilTypesAux.lvalue_coercion sigm ty2) with
-              | (Right (AilTypes.Pointer _ ptr_ty), _) ->
-                  E.return $
-                    C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_ty_e1) (Caux.proj_ctype ptr_ty) (C.PEsym sym_ty_e2))
-              
-              | (_, Right (AilTypes.Pointer _ ptr_ty)) ->
-                  E.return $
-                    C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_ty_e2) (Caux.proj_ctype ptr_ty) (C.PEsym sym_ty_e1))
-              
-              | (_, _) ->
-                  error "WTF: A.Add" (* "this case implies the expression was ill-typed." *)
-            end            
-
-(*
-              if AilTypesAux.pointer (exp_type_of e1) then
-                (* TODO: temporary hack *)
-                E.return $
-                  C.PEsseq [Just a_e1; Just a_e2] (Caux.mk_unseq [core_e1; core_e2])
-                    (C.Elet a_shift (C.PEshift a_e1 (Caux.mk_op_pe C.OpMul (C.PEsym a_e2) (C.sizeof $ Caux.mk_ail_ctype_pe (exp_type_of e1))))
-                       (C.Esseq [] (C.Esame (C.PEsym a_e1) (C.PEsym a_shift))
-                          (C.PEsym a_shift)))
-              else
-              
- *)
-
-              
-      
-      | A.AilEbinary e1 (A.Arithmetic A.Sub) e2 ->
-          error "WIP: Sub"
-
-(*
-letw (_e1: loaded integer, _e2: loaded integer) = unseq(C1, C2) in
-case (_e1, _e2) of
-  | (object(e1), object(e2)) =>
-      let conv1: integer = conv(ty1, ty1', e1) in
-      let conv2: integer = conv(ty2, ty2', e2) in
-      LET SUB = conv1 - conv2 IN
-      IF is_signed_integer result_ty THEN
-        catch_exceptional_condition(result_ty, SUB)
-      ELSE
-        wrapI(result_ty, SUB)
-  | _ =>
-      IF is_signed_integer_type(result_ty) THEN
-        undef(Exception_condition)
-      ELSE
-        unspecified(result_ty)
-end
-*)
-
-
-(*
-          let ty1 = ctype_of e1 in
-          let ty2 = ctype_of e2 in
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          
-          if AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
-            (* (§6.5.6#4) If both operands have arithmetic type, the usual arithmetic conversions are
-                          performed on them. *)
-            translate_rvalue e1 >>= fun core_e1   ->
-            translate_rvalue e2 >>= fun core_e2   ->
-            E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_conv1 ->
-            E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_conv2 ->
-            let (conved_e1, conved_e2) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) (C.PEsym sym_ty_e1) (C.PEsym sym_ty_e2) in
-            (* NOTE: result_ty is the usual arithmetic conv *)
-            E.return $
-              C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (Caux.mk_unseq [core_e1; core_e2]) (
-                C.Epure (
-                  C.PElet sym_ty_conv1 conved_e1 (
-                    C.PElet sym_ty_conv2 conved_e2 (
-                      C.PEif (Caux.mk_op_pe C.OpOr (C.PEis_unspec conved_e1) (C.PEis_unspec conved_e2))
-                        (if AilTypesAux.is_signed_integer_type result_ty then
-                          (* NOTE: unspecified value are daemonic *)
-                          C.PEundef Undefined.Exceptional_condition
-                        else
-                          (* NOTE: arithmetic is strict on unspecified values *)
-                          C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
-                        
-                        (if AilTypesAux.is_signed_integer_type result_ty then
-                          catch_exceptional_condition [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpSub (C.PEsym sym_ty_conv1) (C.PEsym sym_ty_conv2)]
-                        else
-                          wrapI [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpSub (C.PEsym sym_ty_conv1) (C.PEsym sym_ty_conv2)])
-                    )
-                  )
+      | A.AilEbinary e1 (A.Arithmetic A.Div) e2 ->
+          translate_rvalue e1 >>= fun core_e1   ->
+          translate_rvalue e2 >>= fun core_e2   ->
+          E.fresh_symbol      >>= fun e1_sym    ->
+          E.fresh_symbol      >>= fun e2_sym    ->
+          E.fresh_symbol      >>= fun obj1_sym  ->
+          E.fresh_symbol      >>= fun obj2_sym  ->
+          E.fresh_symbol      >>= fun conv2_sym ->
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+          let e1_sym_pe    = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym    in
+          let e2_sym_pe    = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym    in
+          let obj1_sym_pe  = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym  in
+          let obj2_sym_pe  = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym  in
+          let conv2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) conv2_sym in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
+          (* TODO[check]: When integers are divided, the result of the / operator is the algebraic
+                          quotient with any fractional part discarded.105) If the quotient a/b is
+                          representable, the expression (a/b)*b + a%b shall equal a; otherwise, the
+                          behavior of both a/b and a%b is undefined. *)
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]; Caux.mk_empty_pat],
+if AilTypesAux.is_signed_integer_type result_ty then
+                       Caux.mk_undef_pe Undefined.UB036_exceptional_condition
+else
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
+                    ; (Caux.mk_tuple_pat [Caux.mk_empty_pat; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat]],
+                       Caux.mk_undef_pe Undefined.UB045a_division_by_zero)
+                    ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+                       Caux.mk_let_pe (Caux.mk_sym_pat conv2_sym (C.BTy_object oTy))
+                         promoted2_pe
+                         (Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_sym_pe (Caux.mk_integer_pe 0))
+                            (Caux.mk_undef_pe Undefined.UB045a_division_by_zero)
+                            (let core_div = (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) in
+                             Caux.mk_specified_pe $
+if AilTypesAux.is_signed_integer_type result_ty then
+                               catch_exceptional_condition [Caux.mk_ail_ctype_pe result_ty; core_div]
+else
+                               wrapI [Caux.mk_ail_ctype_pe result_ty; core_div] ))) ]
                 )
               )
-
-(*
-            E.print_debug 9 ("ty1 = " ^ Boot.pp_ail_ctype ty1) >>
-            E.print_debug 9 ("ty2 = " ^ Boot.pp_ail_ctype ty2) >>
-
-            let common_ty = fromJust "Translation.translate_expression, Sub" $ AilTypesAux.usual_arithmetic tmp_implementation (ctype_of e1) (ctype_of e2) in
-
-            E.print_debug 9 "AFTER fromJust" >>
-            let conv_e1 = conv_int [Caux.mk_ail_ctype_pe common_ty; C.PEsym e1_sym] in
-            let conv_e2 = conv_int [Caux.mk_ail_ctype_pe common_ty; C.PEsym e2_sym] in
-            E.return $
-              C.Ewseq [Just e1_sym; Just e2_sym] (Caux.mk_unseq [core_e1; core_e2])
-                (C.Epure $ if AilTypesAux.is_signed_integer_type (ctype_of a_expr) then
-                   (* if the E.return type is signed, then there is an undefined behaviour
-                      in the presence of an arithmetic overflow *)
-                  catch_exceptional_condition
-                    [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpSub conv_e1 conv_e2]
-                 else
-                   (* otherwise, bring back the value from Z to the result type *)
-                   conv_int [Caux.mk_ail_ctype_pe (ctype_of a_expr); Caux.mk_op_pe C.OpSub conv_e1 conv_e2])
-*)
+            )
 
 
 
 
-          else
-            (* otherwise, we have some pointer arithmetic *)
-            translate_lvalue e1 >>= fun core_e1 ->
-            translate_lvalue e2 >>= fun core_e2 ->
-(*
-            (if AilTypesAux.is_arithmetic ty1 then translate_expression e1 else  translate_lvalue e1) >>= fun core_e1 ->
-            (if AilTypesAux.is_arithmetic ty2 then translate_expression e2 else  translate_lvalue e2) >>= fun core_e2 ->
-*)
-            (* TODO: check *)
-            (* TODO: do something with the qualifiers *)
-            match (AilTypesAux.lvalue_coercion sigm ty1, AilTypesAux.lvalue_coercion sigm ty2) with
-              | (Right (AilTypes.Pointer (*TODO: qs1 ptr_ty1 *) _ _), Right (AilTypes.Pointer (* TODO: qs2 ptr_ty2 *) _ _)) ->
-                  (* TODO: check *)
-                  E.return $
-                    C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Ememop Mem.Ptrdiff [C.PEsym sym_ty_e1; C.PEsym sym_ty_e2])
-              
-              | (Right (AilTypes.Pointer _ ptr_ty), _) ->
-                  E.return $
-                    C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_ty_e1) (Caux.proj_ctype ptr_ty) (Caux.mk_op_pe C.OpSub (Caux.mk_integer_pe 0) (C.PEsym sym_ty_e2)))
-              
-              | (_, Right (AilTypes.Pointer _ ptr_ty)) ->
-                  E.return $
-                    C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-                      (C.Epure $ C.PEarray_shift (C.PEsym sym_ty_e2) (Caux.proj_ctype ptr_ty) (Caux.mk_op_pe C.OpSub (Caux.mk_integer_pe 0) (C.PEsym sym_ty_e1)))
-              
-              | (_, _) ->
-                  error "WTF: A.Sub" (* "this case implies the expression was ill-typed." *)
-            end
 
-*)
 
-*)
+
 
 
 
@@ -1337,115 +1192,6 @@ end
                    C.End [core_e2; core_e3]) ]
             end
       
-      
-      
-      
-      
-      
-      
-      
-      
-      | A.AilEbinary e1 A.Comma e2 ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          (* STD (§6.5.17, second sentence) says there is a sequence point between the
-             evaluation of the two operand. Hence the strong sequencing *)
-          E.return $
-            C.Esseq Caux.mk_empty_pat core_e1 core_e2
-
-
-(*
-
-1- both operands have arithmetic type;
-2- both operands are pointers to qualified or unqualified versions of compatible types;
-3- one operand is a pointer to an object type and the other is a pointer to a qualified or unqualified version of void; or
-4- one operand is a pointer and the other is a null pointer constant.
-
-  
-  - e1: C.BTy_loaded C.OTy_integer  <-> e2: C.BTy_loaded C.OTy_integer    (1)
-  - e1: C.BTy_loaded C.OTy_floating <-> e2: C.BTy_loaded C.OTy_floating   (1)
-  - e1: C.BTy_loaded C.OTy_pointer  <-> e2: C.BTy_loaded C.OTy_pointer    (2) (3) (4)
-*)
-
-
-
-
-
-
-(*
-          (* TODO: factorise *)
-          E.fresh_typed_symbol true (ctype_of e1) >>= fun sym_ty_e1 ->
-          E.fresh_typed_symbol true (ctype_of e2) >>= fun sym_ty_e2 ->
-          E.fresh_symbol          >>= fun sym_memop ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          E.return $
-            C.Ewseq [Just sym_ty_e1; Just sym_ty_e2] (C.Eunseq [core_e1; core_e2])
-              
-              begin
-                  if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
-                    C.Epure (
-                      C.PEif (Caux.mk_op_pe C.OpOr (C.PEis_unspec (integer_promotion (ctype_of e1)(C.PEsym sym_ty_e1)))
-                                            (C.PEis_unspec (integer_promotion (ctype_of e1)(C.PEsym sym_ty_e2))))
-                        (* if either operand is unspecified, then the result is unspecified *)
-                        (* TODO: it's wrong that the semantics of unspec is defined outside of the Mem module *)
-                        (C.PEval (C.Vunspecified (Caux.proj_ctype result_ty)))
-                        (* else *)
-                        (C.PEif (Caux.mk_op_pe C.OpEq
-                          (integer_promotion (ctype_of e1) (C.PEsym sym_ty_e1))
-                          (integer_promotion (ctype_of e2) (C.PEsym sym_ty_e2))
-                        ) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-
-                    )
-(* BEFORE UNSPEC
-                    C.Epure (C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym e1_sym) (C.PEsym e2_sym)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-*)
-                  
-                  else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
-                    (* TODO: experimenting *)
-                    C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [C.PEsym sym_ty_e1; C.PEsym sym_ty_e2])
-                      (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.mk_integer_pe 1) (Caux.mk_integer_pe 0)))
-                  
-                  else if Aaux.is_null_pointer_constant e1 then
-                    (* STD §6.5.9#5, second sentence *)
-                    match Core_aux.proj_ctype (ctype_of e2) with
-                      | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [Caux.nullptr_pexpr ref_ty; C.PEsym sym_ty_e2])
-                            (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.mk_integer_pe 1) (Caux.mk_integer_pe 0)))
-                    end
-                  else if Aaux.is_null_pointer_constant e2 then
-                    (* STD §6.5.9#5, second sentence *)
-                    match Core_aux.proj_ctype (ctype_of e1) with
-                      | Cty.Pointer _ ref_ty ->
-                          C.Ewseq [Just (sym_memop, C.BTy_boolean)] (C.Ememop Mem.PtrNe [Caux.nullptr_pexpr ref_ty; C.PEsym sym_ty_e1])
-                            (C.Epure (C.PEif (C.PEsym (sym_memop, C.BTy_boolean)) (Caux.mk_integer_pe 1) (Caux.mk_integer_pe 0)))
-                    end
-                  else
-                    error "[Translation.translate_expression] #A.BINARY A.NE e1 e2 <both pointers case, and e1 NOT null constant>: TODO"
-                end
-
-(*
-          E.fresh_symbol          >>= fun e1_sym  ->
-          E.fresh_symbol          >>= fun e2_sym  ->
-          E.fresh_symbol          >>= fun sym_memop ->
-          translate_rvalue e1 >>= fun core_e1 ->
-          translate_rvalue e2 >>= fun core_e2 ->
-          E.return $
-            C.Ewseq [Just e1_sym; Just e2_sym] (C.Eunseq [core_e1; core_e2])
-              
-              begin
-                if AilTypesAux.is_arithmetic (exp_type_of e1) && AilTypesAux.is_arithmetic (exp_type_of e2) then
-                  C.Epure (C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym e1_sym) (C.PEsym e2_sym)) (Caux.mk_integer_pe 0) (Caux.mk_integer_pe 1))
-                else if AilTypesAux.is_pointer (exp_type_of e1) && AilTypesAux.is_pointer (exp_type_of e2) then
-                  (* TODO: experimenting *)
-                    C.Ewseq [Just sym_memop] (C.Ememop Mem.PtrNe [C.PEsym e1_sym; C.PEsym e2_sym])
-                      (C.Epure (C.PEif (C.PEsym sym_memop) (Caux.mk_integer_pe 1) (Caux.mk_integer_pe 0)))
-                else
-                  error "WIP: Binary Ne"
-              end
-*)
-*)
-      
       | A.AilEassign e1 e2 ->
           E.fresh_symbol      >>= fun e1_sym  ->
           E.fresh_symbol      >>= fun e2_sym  ->
@@ -1481,36 +1227,17 @@ else (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
                  (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store core_ty_pe1 e1_sym_pe stored_pe Cmm.NA))))
                  (C.Epure e2_sym_pe))
 
-(*
-          begin
-            if AilTypesAux.is_pointer (ctype_of e1) && Aaux.is_null_pointer_constant e2 then
-              match (ctype_of e1) with
-                | Aty.Pointer _ ref_ty ->
-                    E.return (C.Epure (Caux.mk_nullptr_pe (Caux.proj_ctype ref_ty)))
-                | _ ->
-                    error "[Translate.translate_expression, AilEassign] the Ail expression was ill-typed"
-              end
-            else
-              translate_rvalue e2
-          end >>= fun core_e2 ->
-          
-          
-          E.return $
-            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_object C.OTy_pointer)
-                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy2) ]) (C.Eunseq [core_e1; core_e2])
-              (C.Ewseq (Caux.mk_empty_pat) (C.Eaction (C.Paction C.Neg (C.Action loc default
-                 (C.Store core_ty_pe1
-                          e1_sym_pe
-(if AilTypesAux.is_integer (ctype_of e2) then
-                          (conv_loaded_int [Caux.mk_ail_ctype_pe (ctype_of e1); e2_sym_pe])
-else
-                          error "WIP: non-integer AilEassign"
-)
-                          Cmm.NA)
-                 )))
-                 (C.Epure e2_sym_pe))
-*)
 
+
+
+      
+      | A.AilEbinary e1 A.Comma e2 ->
+          translate_rvalue e1 >>= fun core_e1 ->
+          translate_rvalue e2 >>= fun core_e2 ->
+          (* STD (§6.5.17, second sentence) says there is a sequence point between the
+             evaluation of the two operand. Hence the strong sequencing *)
+          E.return $
+            C.Esseq Caux.mk_empty_pat core_e1 core_e2
 
 
 
