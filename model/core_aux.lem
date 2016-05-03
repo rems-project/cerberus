@@ -153,13 +153,13 @@ let rec proj_ctype ty =
 
 (* Core pattern builders **************************************************** *)
 
-val mk_empty_pat: pattern
-let mk_empty_pat =
-  CaseBase Nothing
+val mk_empty_pat: core_base_type -> pattern
+let mk_empty_pat bTy =
+  CaseBase (Nothing, bTy)
 
 val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
 let mk_sym_pat sym bTy =
-  CaseBase (Just (sym, bTy))
+  CaseBase (Just sym, bTy)
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
@@ -175,7 +175,9 @@ val mk_specified_pat: pattern -> pattern
 let mk_specified_pat pat =
   CaseCtor Cspecified [pat]
 
-
+val mk_unspecified_pat: pattern -> pattern
+let mk_unspecified_pat pat =
+  CaseCtor Cunspecified [pat]
 
 
 (* Core pexpr builders  ***************************************************** *)
@@ -528,7 +530,7 @@ let rec mk_unit_sseq es =
     | [] ->
         Eskip
     | e::es' ->
-        Esseq mk_empty_pat e (mk_unit_sseq es')
+        Esseq (mk_empty_pat BTy_unit) e (mk_unit_sseq es')
   end
 
 
@@ -538,7 +540,7 @@ let rec concat_sseq e e' =
    match e with
      | Esseq pat e1 e2 -> Esseq pat e1 (concat_sseq e2 e')
      | Eskip           -> e'
-     | _               -> Esseq (CaseBase Nothing) e e'
+     | _               -> Esseq (mk_empty_pat BTy_unit) e e'
   end
 
 let is_negative = function
@@ -593,8 +595,8 @@ let to_integer pe =
 val in_pattern: Symbol.sym -> pattern -> bool
 let rec in_pattern sym pat =
   match pat with
-    | CaseBase sym_bTy_opt ->
-        maybe false (fun (sym', _) -> sym = sym') sym_bTy_opt
+    | CaseBase (sym_opt, _) ->
+        maybe false (fun sym' -> sym = sym') sym_opt
     | CaseCtor _ pats' ->
         List.any (in_pattern sym) pats'
   end
@@ -757,9 +759,9 @@ val     subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> expr 'a
 let rec subst_pattern pat pe' expr =
   
   match (pat, pe') with
-    | (CaseBase Nothing, _) ->
+    | (CaseBase (Nothing, _), _) ->
         expr
-    | (CaseBase (Just (sym, _)), _) ->
+    | (CaseBase (Just sym, _), _) ->
         subst_sym_expr sym pe' expr
     | (CaseCtor (Cnil ()) [], Pexpr _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
@@ -1243,9 +1245,9 @@ let rec has_sseqs expr =
 val     match_pattern: pattern -> pexpr -> maybe (list (sym * pexpr))
 let rec match_pattern pat ((Pexpr () pe_) as pexpr) =
   match (pat, pe_) with
-    | (CaseBase Nothing, _) ->
+    | (CaseBase (Nothing, _), _) ->
         Just []
-    | (CaseBase (Just (sym, _)), _) ->
+    | (CaseBase (Just sym, _), _) ->
         Just [(sym, pexpr)]
 (*      | Vobject of (generic_object_value 'sym) *)
     | (CaseCtor Cspecified [pat'], PEval (Vspecified oval)) ->

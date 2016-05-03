@@ -3,6 +3,8 @@ open import Pervasives
 open import Global Core Core_aux Core_ctype
 import Symbol Symbolic AilTypes Mem
 
+import Pp
+
 module ATypes = AilTypes
 module Caux = Core_aux
 
@@ -495,6 +497,10 @@ let rec flatten_seqs expr =
         End (List.map flatten_seqs es)
     | Epar es ->
         Epar (List.map flatten_seqs es)
+    | Eloc _ e ->
+        flatten_seqs e
+    | Ecase pe pat_es ->
+        Ecase pe (List.map (fun (pat, e) -> (pat, flatten_seqs e)) pat_es)
     | _ ->
         expr
   end
@@ -711,7 +717,7 @@ let rec sequentialise_creates_kills expr =
     | Eunseq es ->
         if List.all is_kill es then
           List.foldr (fun e acc ->
-            Esseq (CaseBase Nothing) e acc
+            Esseq (CaseBase (Nothing, BTy_unit)) e acc
           ) Eskip es
         else
           Eunseq (List.map sequentialise_creates_kills es)
@@ -933,12 +939,17 @@ let rec pure_propagation2 expr =
 (* ========================================================================== *)
 
 let rewrite_pexpr pexpr =
-  remove_conv_int_pexpr pexpr
+(*  remove_conv_int_pexpr pexpr *)
+  pexpr
+
 
 let rewrite_expr expr =
+  flatten_seqs expr
+(*
   (pure_propagation2 -| remove_conv_int -| flatten_seqs -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
+*)
 
 let rewrite_fun_map fun_map =
   Map.map (function
@@ -953,6 +964,5 @@ let rewrite_fun_map fun_map =
 
 (* TODO *)
 let rewrite_file file =
-  let () = Debug.print_debug 0 "PERFORMING CORE REWRITES" in
-  error "<| file with funs=  rewrite_fun_map file.funs;
-               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>"
+  <| file with funs=  rewrite_fun_map file.funs;
+               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>
