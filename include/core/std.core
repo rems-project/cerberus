@@ -147,7 +147,7 @@ fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
   case _n of
     | Specified(n:integer) =>
         Specified(conv_int(ty, n))
-    | Unspecified(_) =>
+    | Unspecified(_: ctype) =>
         Unspecified(ty)
   end
 
@@ -288,7 +288,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
         else
           let strong ret: [integer] = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), Cons(c,acc)) in
           return(ret)
-    | Unspecified(_) =>
+    | Unspecified(_: ctype) =>
         return (undef(<<DUMMY>>)) -- TODO think about that
   end
 {-
@@ -315,7 +315,7 @@ proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff l
         let strong xs: [integer] = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
         let strong ret: loaded integer = pcall(Cfunction(<std_function_printf>), xs, args) in
         return(ret)
-    | Unspecified(_) =>
+    | Unspecified(_: ctype) =>
         return (undef(<<DUMMY>>)) -- TODO think about that
   end
 
@@ -346,8 +346,10 @@ proc malloc_proxy (size_ptr: pointer) : eff pointer :=
   let strong size_: loaded integer = load("size_t", size_ptr) in
   case size_ of
     | Specified(size: integer) =>
+--        let strong ret : pointer = alloc(4, size) in
+--        return (ret)
         alloc(4, size)
-    | Unspecified(_) =>
+    | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))
   end
 
