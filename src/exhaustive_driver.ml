@@ -46,9 +46,10 @@ let drive sym_supply file args cerb_conf : execution_result =
           Printf.printf "{value: \"%s\", stdout=\"%s\"}\n"
             str_v (String.escaped stdout)
       | ND.Killed (ND.Undef0 (_, ubs)) ->
-          print_endline ("UNDEF(" ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ ")")
+          Printf.printf "UNDEF(%s)\n"
+            (Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs)
       | ND.Killed (ND.Error0 (_, str)) ->
-          print_endline ("ERROR(" ^ str ^ ")")
+          failwith "ERROR"
       | ND.Killed (ND.Other str) ->
           failwith "KILLED"
     ) (List.map fst values);

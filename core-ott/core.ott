@@ -262,7 +262,7 @@ pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expres
    
 %   (* operators on integers *)
    | not ( generic_pexpr )          :: :: not {{ com boolean not }} 
-   |  generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binary operators }}
+   | generic_pexpr1 binop generic_pexpr2  :: :: op {{ order [[binop]] [[generic_pexpr1]] [[generic_pexpr2]] }} {{ com binary operators }}
    
 %   (* pure operations provided by the memory layout model *)
 %   (* these two are annoying *) 

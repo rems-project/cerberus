@@ -260,9 +260,9 @@ let pp_ctor = function
 
 
 let rec pp_pattern = function
-  | CaseBase (None, bTy) ->
-      P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
-  | CaseBase (Some sym, bTy) ->
+  | CaseBase None ->
+      P.underscore
+  | CaseBase (Some (sym, bTy)) ->
       pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 (* Syntactic sugar for tuples and lists *)
   | CaseCtor (Ctuple, pats) ->
@@ -408,13 +408,45 @@ let rec pp_expr = function
   | Eunseq es ->
       pp_control "unseq" ^^ P.parens (comma_list pp_expr es)
 (*
-  | Esseq (CaseBase None, e1, e2) ->
-      pp_expr e1 ^^ P.semi ^^ P.break 1 ^^ pp_expr e2
+(*      | Ewseq es ret -> (P.sepmap (wseq ^^ P.break1) pp_wseq es) ^^^ wseq ^^ P.break1 ^^ f ret *)
+        | Ewseq ([], e1, e2) ->
+            pp_control "let" ^^^ pp_control "weak" ^^ P.lparen ^^ P.rparen ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+(*            P.parens (pp e1 ^^^ wseq ^^ P.break 1 ^^ pp e2) *)
+        | Ewseq ([Some a], e1, e2) ->
+            pp_symbol a ^^^ !^ "<-" ^^^ ((* P.align $ *) pp e1) ^^^ wseq ^^ P.break 1 ^^
+            pp e2  ^^^ pp_control "end"
+        | Ewseq ([None], e1, e2) ->
+            pp e1 ^^^ (!^ ">>") ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+        | Ewseq (_as, e1, e2) ->
+            let g = function
+              | Some x -> pp_symbol x
+              | None   -> P.underscore in
+            
+            pp_control "let" ^^^ pp_control "weak" ^^^ P.parens (comma_list g _as) ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in"  ^^ P.break 1 ^^ pp e2 ^^^ pp_control "end"
+ *)
+          (* TODO: update the parser to be sync ... *)
+(*
+        | Ewseq ([], e1, e2) ->
+            pp e1 ^^ P.semi ^^ P.break 1 ^^ pp e2
+*)
+(*
+  | Ewseq (([] as _as), e1, e2)
+  | Ewseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
+      pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
+      pp_expr e2
 *)
   | Ewseq (pat, e1, e2) ->
       pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^
       (* P.nest 2 *) (pp_expr e2)
+(*
+  | Esseq (([] as _as), e1, e2)
+  | Esseq (_as, e1, e2) when List.for_all (function None -> true | _ -> false) _as ->
+      pp_expr e1 ^^ P.semi ^^ P.break 1 ^^
+      pp_expr e2
+*)
   | Esseq (pat, e1, e2) -> 
       pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
       pp_expr e1 ^^^ pp_control "in" ^^ P.break 1 ^^

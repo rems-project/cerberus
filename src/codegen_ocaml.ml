@@ -204,8 +204,8 @@ let lt_precedence p1 p2 =
 
 (* These will not really match *)
 let rec print_pattern = function
-  | CaseBase (None, _) -> P.underscore
-  | CaseBase (Some sym, _) -> print_symbol sym
+  | CaseBase None -> P.underscore
+  | CaseBase (Some (sym, _)) -> print_symbol sym
   | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
     | []   -> P.underscore
     | [pa] -> print_pattern pa

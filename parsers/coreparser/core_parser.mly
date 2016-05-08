@@ -237,11 +237,11 @@ let convert_ctor : unit generic_ctor -> ctor = function
 let rec symbolify_pattern _pat : pattern Eff.t =
   Eff.get >>= fun st ->
   match _pat with
-    | CaseBase (None, bTy) ->
-        Eff.return (CaseBase (None, bTy))
-    | CaseBase (Some _sym, bTy) ->
+    | CaseBase None ->
+        Eff.return (CaseBase None)
+    | CaseBase (Some (_sym, bTy)) ->
         register_sym _sym >>= fun sym ->
-        Eff.return (CaseBase (Some sym, bTy))
+        Eff.return (CaseBase (Some (sym, bTy)))
 
 (*
     | CaseCtor (Cnil (), []) ->
@@ -1035,9 +1035,9 @@ ctor:
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
-    { CaseBase (Some _sym, bTy) }
-| UNDERSCORE COLON bTy= core_base_type
-    { CaseBase (None, bTy) }
+    { CaseBase (Some (_sym, bTy)) }
+| UNDERSCORE
+    { CaseBase None }
 | ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
     { CaseCtor (ctor, _pats) }
 (* Syntactic sugar for tuples and lists *)

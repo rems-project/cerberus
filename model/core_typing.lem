@@ -24,10 +24,10 @@ end
 
 val     infer_pattern: Loc.t -> pattern -> E.eff (typing_env * inferred * inferred_pattern)
 let rec infer_pattern loc = function
-  | CaseBase (Nothing, bTy) ->
-      E.return (Map.empty, toInferred bTy, CaseBase (Nothing, bTy))
-  | CaseBase (Just sym, bTy) ->
-      E.return (Map.singleton (Sym sym) (TDsym bTy), toInferred bTy, CaseBase (Just sym, bTy))
+  | CaseBase Nothing ->
+      E.return (Map.empty, InferredUnknown, CaseBase Nothing)
+  | CaseBase (Just (sym, bTy)) ->
+      E.return (Map.singleton (Sym sym) (TDsym bTy), toInferred bTy, CaseBase (Just (sym, bTy)))
   | CaseCtor ctor pats ->
       let fail_ctorArity n = E.fail loc (CtorWrongNumber n (List.length pats))in
       match (ctor, pats) with
@@ -39,13 +39,17 @@ let rec infer_pattern loc = function
             infer_pattern loc pat1                                 >>= fun (env1, infer1, tpat1) ->
             typecheck_pattern2 loc (InferredType_list infer1) pat2 >>= fun (env2, tpat2)         ->
             E.return (Map.(union) env1 env2, InferredType_list infer1, CaseCtor Ccons [tpat1; tpat2])
-        | (Ctuple, _) ->
-            unzip3 <$> E.mapM (infer_pattern loc) pats >>= fun (envs, infers, pats') ->
-            E.return (List.foldl (Map.(union)) Map.empty envs,
-                      InferredType_tuple infers,
-                      CaseCtor Ctuple pats')
-        | (Carray, _) ->
+(*
+        | (Ctuple, BTy_tuple bTys, _) ->
+            List.unzip <$> E.mapM (fun (bTy, pat) ->
+              typecheck_pattern loc bTy pat
+            ) (List.zip bTys pats) >>= fun (envs, tpats) ->
+            E.return (List.foldl (Map.(union)) Map.empty envs, CaseCtor Ctuple tpats)
+        | (Ctuple, _, _) ->
+            E.fail loc (Mismatch "tuple pattern (TODO: the found type is dummy)" bTy (BTy_tuple [BTy_unit]))
+        | (Carray, _, _) ->
             error "Core_typing.Carray: WIP, Carray"
+*)
         | (Civmax, [pat']) ->
             typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, CaseCtor Civmax [tpat'])
@@ -58,7 +62,9 @@ let rec infer_pattern loc = function
         | (Civalignof, [pat']) ->
             typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, CaseCtor Civalignof [tpat'])
-        
+
+
+
         | (Cnil ()      , _) -> fail_ctorArity 0
         | (Ccons        , _) -> fail_ctorArity 2
         | (Civmax       , _) -> fail_ctorArity 1
@@ -87,15 +93,14 @@ end
 
 
 val     typecheck_pattern: Loc.t -> core_base_type -> pattern -> E.eff (typing_env * inferred_pattern)
-let rec typecheck_pattern loc expected_bTy = function
-  | CaseBase (Nothing, bTy) ->
-      guard_match loc "empty pattern" expected_bTy bTy >>
-      E.return (Map.empty, CaseBase (Nothing, bTy))
-  | CaseBase (Just sym, bTy) ->
-      guard_match loc ("pattern symbol " ^ show sym) expected_bTy bTy >>
-      E.return (Map.singleton (Sym sym) (TDsym bTy), CaseBase (Just sym, bTy))
+let rec typecheck_pattern loc bTy = function
+  | CaseBase Nothing ->
+      E.return (Map.empty, CaseBase Nothing)
+  | CaseBase (Just (sym, bTy')) ->
+      guard_match loc ("pattern symbol " ^ show sym) bTy bTy' >>
+      E.return (Map.singleton (Sym sym) (TDsym bTy'), CaseBase (Just (sym, bTy')))
   | CaseCtor ctor pats ->
-      match (ctor, expected_bTy, pats) with
+      match (ctor, bTy, pats) with
         | (Cnil (), BTy_list elem_bTy, []) ->
             E.return (Map.empty, CaseCtor (Cnil (toInferred elem_bTy)) [])
         | (Cnil (), _, []) ->
@@ -104,8 +109,8 @@ let rec typecheck_pattern loc expected_bTy = function
             E.fail loc (CoreTyping_TODO "typecheck Cnil, illtyped 2")
 
         | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
-            typecheck_pattern loc elem_bTy     pat1 >>= fun (env1, tpat1) ->
-            typecheck_pattern loc expected_bTy pat2 >>= fun (env2, tpat2) ->
+            typecheck_pattern loc elem_bTy pat1 >>= fun (env1, tpat1) ->
+            typecheck_pattern loc bTy      pat2 >>= fun (env2, tpat2) ->
             E.return (Map.(union) env1 env2, CaseCtor Ccons [tpat1; tpat2])
         | (Ccons, _, []) ->
             E.fail loc (CoreTyping_TODO "typecheck Ccons, illtyped 1")
@@ -118,7 +123,7 @@ let rec typecheck_pattern loc expected_bTy = function
             ) (List.zip bTys pats) >>= fun (envs, tpats) ->
             E.return (List.foldl (Map.(union)) Map.empty envs, CaseCtor Ctuple tpats)
         | (Ctuple, _, _) ->
-            E.fail loc (Mismatch "tuple pattern (TODO: the found type is dummy)" expected_bTy (BTy_tuple [BTy_unit]))
+            E.fail loc (Mismatch "tuple pattern (TODO: the found type is dummy)" bTy (BTy_tuple [BTy_unit]))
         | (Carray, _, _) ->
             error "Core_typing.Carray: WIP, Carray"
 
@@ -829,7 +834,6 @@ let memop_signature = function
       (BTy_boolean, [BTy_object OTy_pointer])
 end
 
-(*
 val     infer_expr: Loc.t -> typing_env -> Core.expr unit -> E.eff (core_base_type * typed_expr unit)
 let rec infer_expr loc env = function
   | Epure pe ->
@@ -949,7 +953,7 @@ let rec infer_expr loc env = function
             E.mapM (typecheck_expr loc env bTy) es >>= fun es' ->
             E.return (bTy, End (e'::es'))
       end
-  | Esave sym _ e  ->
+  | Esave _ _ _  ->
       error "annotate esave"
   | Erun _ _ _ ->
       error "annotate erun"
@@ -968,9 +972,8 @@ let rec infer_expr loc env = function
   | Eloc loc' e ->
       infer_expr loc' env e
 end
-*)
 
-let rec fetch_cfunction_signature loc env (Pexpr _ pexpr_ as pexpr) : E.eff (Core.core_base_type * (list Core.core_base_type)) =
+and fetch_cfunction_signature loc env (Pexpr _ pexpr_ as pexpr) : E.eff (Core.core_base_type * (list Core.core_base_type)) =
   match pexpr_ with
     | PEsym nm ->
         error "WIP: fetch_cfunction_signature, PEsym"
@@ -1085,37 +1088,15 @@ and typecheck_expr loc env bTy = function
         | _ -> E.fail loc (CoreTyping_TODO "UNSEQ illtyped")
       end
   | Ewseq pat e1 e2 ->
-      infer_pattern loc pat >>= fun (env', infer, _pat') ->
-      match toCoreBaseType infer with
-        | Nothing ->
-            E.fail loc TooGeneral
-        | Just pat_bTy ->
-            Ewseq <$> export_pattern loc _pat'
-                  <*> typecheck_expr loc env pat_bTy e1
-                  <*> typecheck_expr loc (Map.(union) env env') bTy e2
-      end
-(*
-      infer_expr loc env e1          >>= fun (bTy1, e1')   ->
+      infer_expr loc env e1      >>= fun (bTy1, e1')   ->
       typecheck_pattern loc bTy1 pat >>= fun (env', _pat') ->
-      export_pattern loc _pat'       >>= fun pat'          ->
+      export_pattern loc _pat'   >>= fun pat'          ->
       Ewseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
-*)
   | Esseq pat e1 e2 ->
-      infer_pattern loc pat >>= fun (env', infer, _pat') ->
-      match toCoreBaseType infer with
-        | Nothing ->
-            E.fail loc TooGeneral
-        | Just pat_bTy ->
-            Esseq <$> export_pattern loc _pat'
-                  <*> typecheck_expr loc env pat_bTy e1
-                  <*> typecheck_expr loc (Map.(union) env env') bTy e2
-      end
-(*
-      infer_expr loc env e1          >>= fun (bTy1, e1')   ->
+      infer_expr loc env e1      >>= fun (bTy1, e1')   ->
       typecheck_pattern loc bTy1 pat >>= fun (env', _pat') ->
-      export_pattern loc _pat'       >>= fun pat'          ->
+      export_pattern loc _pat'   >>= fun pat'          ->
       Esseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
-*)
   | Easeq sym_bTy_opt act1 (Paction p act2) ->
       match sym_bTy_opt with
         | Just (sym, sym_bTy) ->
@@ -1129,40 +1110,18 @@ and typecheck_expr loc env bTy = function
             typecheck_action env bTy act2 >>= fun act2'        ->
             E.return (Easeq sym_bTy_opt act1' (Paction p act2'))
       end
-  | Eindet n e ->
-      (* TODO *)
-      Eindet n <$> typecheck_expr loc env bTy e
-  | Ebound n e ->
-      (* TODO *)
-      Ebound n <$> typecheck_expr loc env bTy e
+  | Eindet n e -> error "eindet"
+  | Ebound n e -> error "ebound"
   | End es ->
       if List.length es < 2 then
         E.fail loc (CoreTyping_TODO "nd() should have at least 2 operand")
       else
         E.mapM (typecheck_expr loc env bTy) es >>= fun es' ->
         E.return (End es')
-  | Esave sym sym_tys e ->
-      (* TODO *)
-      Esave sym sym_tys <$> typecheck_expr loc env bTy e
-  | Erun () sym sym_pes ->
-      (* TODO !!! (check against bTy) *)
-      E.mapM (fun (sym, pe) ->
-        typecheck_pexpr loc env (BTy_object OTy_pointer) pe
-          >>= export_pexpr loc >>= fun pe' ->
-        E.return (sym, pe')
-      ) sym_pes >>= fun sym_pes' ->
-      E.return (Erun () sym sym_pes')
-  | Epar es ->
-      if List.length es < 2 then
-        E.fail loc (CoreTyping_TODO "Epar must have at least 2 operands")
-      else match bTy with
-        | BTy_tuple bTys ->
-            Epar <$> E.mapM (uncurry $ typecheck_expr loc env) (List.zip bTys es)
-        | _ ->
-            E.fail loc (CoreTyping_TODO "Epar has as tuple type")
-      end
-  | Ewait id ->
-      error "typecheck_expr, Ewait"
+  | Esave _ _ _  -> error "esave"
+  | Erun _ _ _ -> error "erun"
+  | Epar e -> error "epar"
+  | Ewait id -> error "ewait"
   | Eloc loc' e ->
       typecheck_expr loc' env bTy e
 end

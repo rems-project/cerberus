@@ -420,10 +420,9 @@ let rec hack expr =
         Core.Esseq as_opt (hack e1) (hack e2)
 (* TODO: lem non termination bug *)
     | Core.Easeq (Just (sym, bTy)) act pact ->
-        let () = Debug.warn "Core_indet, Easeq ==> assuming pact is a store()" in
-        Core.Ewseq (Core.CaseBase (Just sym, bTy))
+        Core.Ewseq (Core.CaseBase (Just (sym, bTy)))
           (Core.Eaction (Core.Paction Core.Pos act))
-          (Core.Ewseq (Core.CaseBase (Nothing, Core.BTy_unit)) (Core.Eaction pact) (Core.Epure (Core.Pexpr () (Core.PEsym sym))))
+          (Core.Ewseq (Core.CaseBase Nothing) (Core.Eaction pact) (Core.Epure (Core.Pexpr () (Core.PEsym sym))))
 (*
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))

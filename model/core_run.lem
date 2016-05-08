@@ -1022,12 +1022,12 @@ end
             not (List.any (fun (z, _) -> z = sym) sym_tys)
           ) sym_vs in
           let e =
-            Ewseq (Caux.mk_empty_pat BTy_unit) (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
+            Ewseq Caux.mk_empty_pat (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
               match create_syms with
                 | [] ->
                     (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
                 | _ ->
-                    Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just z, BTy_object OTy_pointer)) create_syms))
+                    Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just (z, BTy_object OTy_pointer))) create_syms))
                        (mk_unseq $ List.map (fun ty ->
                          let ty_pe = Caux.mk_ctype_pe ty in
                          pcreate Loc.unknown (Caux.mk_alignof_pe ty_pe) ty_pe (Symbol.PrefOther "core_run, Erun")

@@ -123,7 +123,7 @@ let bindRandom (ND m) f =
       | xs ->
           let () =
             if List.length xs > 1 then
-              Debug.print_debug 1 "ND.bindRandom: |xs| > 1"
+              Debug.print_debug 0 "ND.bindRandom: |xs| > 1"
             else () in
 
           let (Active a, st') = random_select actives in
