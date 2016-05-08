@@ -1,0 +1,16 @@
+embed {{ coq
+Require Import Containers.Maps.
+Require Import MapNotations.
+Open Scope map_scope.
+
+Notation "M '@' N" :=
+  (MapFacts.update M N)
+  (at level 0, no associativity)
+: map_scope.
+
+Notation "'Map' '[' A ',' B ']'" :=
+  (MapInterface.dict A B)
+  (at level 0, no associativity)
+: map_scope.
+
+}}

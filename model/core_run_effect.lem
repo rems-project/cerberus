@@ -1,0 +1,448 @@
+(* Effects for Core_run *)
+open import Pervasives Global Core Core_aux Core_ctype
+import Undefined Boot State_exception Memory_order Cmm_aux_old
+
+module Cmm = Memory_order
+module U   = Undefined
+
+
+(* Fully evaluated description of an action *)
+type trace_action =
+  | Tcreate of ctype   * Cmm_aux_old.location * Cmm_aux_old.tid (* the second argument is the created object *)
+  | Talloc  of integer * Cmm_aux_old.location * Cmm_aux_old.tid (* TODO: nat *) (* the second argument is the created object *)
+  | Tkill   of           Cmm_aux_old.location * Cmm_aux_old.tid
+  | Tstore  of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue              * Cmm.memory_order * Cmm_aux_old.tid
+  | Tload   of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue              * Cmm.memory_order * Cmm_aux_old.tid (* the argument Cmm.cvalue is the read value *)
+  | Trmw    of ctype   * Cmm_aux_old.location * Cmm_aux_old.cvalue * Cmm_aux_old.cvalue * Cmm.memory_order * Cmm_aux_old.tid
+  (* TODO: this may be hackish *)
+  | Toutput of string * Cmm_aux_old.tid
+
+val trace_action_kind_to_nat : trace_action -> nat
+let trace_action_kind_to_nat a =
+  match a with
+    | Tcreate _ _ _    -> 0
+    | Talloc _ _ _     -> 1
+    | Tkill _ _        -> 2
+    | Tstore _ _ _ _ _ -> 3
+    | Tload _ _ _ _ _  -> 4
+    | Trmw _ _ _ _ _ _ -> 5
+    | Toutput _ _      -> 6
+  end
+
+instance (SetType trace_action)
+  let setElemCompare a1 a2 =
+    match (a1, a2) with
+      | (Tcreate ct1 l1 t1, Tcreate ct2 l2 t2) ->
+          tripleCompare setElemCompare setElemCompare setElemCompare (ct1, l1, t1) (ct2, l2, t2)
+      | (Talloc i1 l1 t1, Talloc i2 l2 t2) ->
+          tripleCompare setElemCompare setElemCompare setElemCompare (i1, l1, t1) (i2, l2, t2)
+      | (Tkill l1 t1, Tkill l2 t2) ->
+          pairCompare setElemCompare setElemCompare (l1, t1) (l2, t2)
+      | (Tstore ct1 l1 cv1 mo1 t1, Tstore ct2 l2 cv2 mo2 t2) ->
+          pairCompare (pairCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1), (cv1, mo1, t1)) ((ct2, l2), (cv2, mo2, t2))
+      | (Tload ct1 l1 cv1 mo1 t1, Tload ct2 l2 cv2 mo2 t2) ->
+          pairCompare (pairCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1), (cv1, mo1, t1)) ((ct2, l2), (cv2, mo2, t2))
+      | (Trmw ct1 l1 cv1 cv1' mo1 t1, Trmw ct2 l2 cv2 cv2' mo2 t2) ->
+          pairCompare (tripleCompare setElemCompare setElemCompare setElemCompare) (tripleCompare setElemCompare setElemCompare setElemCompare)
+                      ((ct1, l1, cv1), (cv1', mo1, t1)) ((ct2, l2, cv2), (cv2', mo2, t2))
+      | (Toutput str1 _, Toutput str2 _) ->
+          if stringEquality str1 str2 then EQ else setElemCompare (stringLength str1) (stringLength str2)
+      | (_, _) ->
+          setElemCompare (trace_action_kind_to_nat a1) (trace_action_kind_to_nat a2)
+    end
+end
+
+type trace_paction = polarity * trace_action
+
+val tid_of: trace_action -> Cmm_aux_old.tid
+let tid_of = function
+  | Tcreate _ _ tid    -> tid
+  | Talloc _ _ tid     -> tid
+  | Tkill _ tid        -> tid
+  | Tstore _ _ _ _ tid -> tid
+  | Tload _ _ _ _ tid  -> tid
+  | Trmw _ _ _ _ _ tid -> tid
+  | Toutput _ tid      -> tid
+  end 
+
+type taction_id = nat
+
+
+
+(* this type represents reduction rules and is used for annotating trace element
+   (for debug purpose) *)
+type dyn_rule =
+  | Rule_Pos
+  | Rule_Neg
+  | Rule_Pure_Hole
+  | Rule_Pure
+  | Rule_If
+  | Rule_Let
+  | Rule_Ret
+  | Rule_Skip
+  | Rule_Proc
+  | Rule_Wseq
+  | Rule_Wseq_Neg
+  | Rule_Sseq
+  | Rule_Run
+  | Rule_Save
+  | Rule_Unseq
+  | Rule_ND
+  | Rule_Par
+  | Rule_Output of string (* TODO: hack *)
+
+(* BEGIN: DEBUG *)
+let string_of_rule = function
+  | Rule_Pos        -> "pos"
+  | Rule_Neg        -> "neg"
+  | Rule_Pure_Hole  -> "pure_hole"
+  | Rule_Pure       -> "pure"
+  | Rule_If         -> "if"
+  | Rule_Ret        -> "ret"
+  | Rule_Let        -> "let"
+  | Rule_Skip       -> "skip"
+  | Rule_Proc       -> "proc"
+  | Rule_Wseq       -> "wseq"
+  | Rule_Wseq_Neg   -> "wseq_neg"
+  | Rule_Sseq       -> "sseq"
+  | Rule_Run        -> "run"
+  | Rule_Save       -> "save"
+  | Rule_Unseq      -> "unseq"
+  | Rule_ND         -> "nd"
+  | Rule_Par        -> "par"
+  | Rule_Output str -> "output> " ^ str
+
+end
+(* END: DEBUG *)
+
+
+
+(* the elements of a trace are triple, where:
+     - the first element is a description of the reduction rules used for this
+       step (this is for a DEBUG feature)
+     - the second element is the set of actions sequenced before the action
+       that has just been performed
+     - the third element is the action that as been performed during that step
+   *)
+type trace = list (dyn_rule * maybe (set taction_id * taction_id))
+
+type execution_mode =
+  | Exhaustive
+  | Random
+
+
+type io_state = <|
+  stdout: string;
+|>
+
+type state = <|
+  (* The memory layout state *)
+  mem_layout: Memory.memory_state;
+  
+  (* the execution trace so far (stored in reversed) *)
+  trace: trace;
+  
+  (* IO (TODO: hackish for now) *)
+  io: io_state;
+    
+  (* The followings have to do with the state of your implementation, not the
+     state of the evaluated Core program *)
+  (* TODO: it's a bit silly that this is here, since the setting won't change *)
+  execution_mode: execution_mode;
+  (* the C function whose body we are reducing (if any) *)
+  current_proc:   maybe sym;
+  file: file taction_id;
+  (* maps of labeled continuations (per function) *)
+  registered_labeled_continuations: map sym (map ksym (list (sym * ctype) * expr taction_id));
+  (* counter for the trace actions map *)
+  tact_counter: nat;
+  tact_map: Map.map taction_id trace_action;
+|>
+declare {coq} rename type execution_mode = execution_mode_ (* workaround for Lem issue #74 *)
+declare {coq} rename type file = file_ (* workaround for Lem issue #74 *)
+declare {coq} rename type trace = trace_ (* workaround for Lem issue #74 *)
+
+type t 'a = state -> list (U.t 'a * state)
+
+
+(* monadic operations *)
+val return: forall 'a. 'a -> t 'a
+let return x = fun st -> [(U.return x, st)]
+
+
+(* TODO: note that now being undef in one execution doesn't makes the thing
+         undef *)
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+let bind ms f = fun st ->
+  List.concat $ List.map (function
+    | (U.Defined x, st') -> f x st'
+    | (U.Undef u,   st') -> [(U.Undef u, st')]
+    | (U.Error,     st') -> [(U.Error,   st')]
+  end) (ms st)
+(*
+  (* TODO: looks fishy *)
+  val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+  let bind m f = fun s ->
+    match m s with
+      | U.Defined zs -> foldr (fun (a, s') acc ->
+                          match acc with
+                            | U.Defined y -> match f a s' with U.Defined z' -> U.Defined (z' ++ y) | U.Undef us -> U.Undef us | U.Error -> U.Error end
+                            | U.Undef us  -> U.Undef us
+                            | U.Error     -> U.Error
+                          end) (U.Defined []) zs
+      | U.Undef us -> U.Undef us
+      | U.Error    -> U.Error
+    end
+*)
+
+
+(* running a U computation *)
+val runU: forall 'a. U.t 'a -> t 'a
+let runU = function
+  | U.Defined x -> return x
+  | U.Undef us  -> fun st -> [(U.undef us, st)]
+  | U.Error     -> fun st -> [(U.error, st)]
+end
+
+
+(* MonadPlus operations *)
+val mzero: forall 'a. t 'a
+let mzero = fun _ -> []
+
+val mplus: forall 'a. t 'a -> t 'a -> t 'a
+let mplus ma mb = fun st ->
+  ma st ++ mb st
+(*
+    match (a s, b s) with
+      | (U.Defined x, U.Defined y) -> U.Defined (x ++ y)
+      (* TODO: ahem, now this isn't very associative *)
+      (* TODO2: may be better now *)
+      | (U.Undef us1, U.Undef us2) -> U.Undef (us1 ++ us2)
+      | (U.Undef us, _)            -> U.Undef us
+      | (_, U.Undef us)            -> U.Undef us
+      | _                          -> U.error
+    end
+*)
+
+
+(* generic functions (that should be moved out once we have type-classes) *)
+val msum: forall 'a. list (t 'a) -> t 'a
+let msum xs = foldr mplus mzero xs
+
+
+
+(* like msum, but the order matter, so it's not a like msum (ahem) *)
+val     dmsum: forall 'a. list (t 'a) -> t 'a
+
+(*
+dmsum :  list (state -> list (U.t 'a * state)) -> (state -> list (U.t 'a * state))
+*)
+let rec dmsum ms =
+  fun st ->
+    match ms with
+      | []     -> []
+      | m::ms' -> match m st with
+                    | [] -> (dmsum ms') st
+                    | v  -> v
+                  end
+    end
+(*
+    fun s ->
+      match ms with
+        | []     -> U.return []
+        | m::ms' -> match m s with
+                      | U.Defined [] -> (dmsum ms') s
+                      | v            -> v
+                    end
+      end
+*)
+
+
+val     foldlM: forall 'a 'b. ('a -> 'b -> t 'b) -> list 'a -> 'b -> t 'b
+let rec foldlM f l a =
+  match l with
+    | []    -> return a
+    | x::xs -> bind (f x a) (foldlM f xs)
+  end
+
+let sequence ms =
+  foldr (fun m acc ->
+    bind m (fun x ->
+      bind acc (fun xs -> return (x::xs))
+    )
+  ) (return []) ms
+let mapM f xs = sequence (List.map f xs)
+
+let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
+val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+let mapM_ f _as = sequence_ (List.map f _as)
+
+
+val set_current_proc: sym -> t unit
+let set_current_proc pname = fun st ->
+  [(U.return (), <| st with current_proc= Just pname |>)]
+
+val get_file: t (file taction_id)
+let get_file = fun st ->
+  [(U.return st.file, st)]
+  
+(*
+  val get_fun: name -> t (core_type * list (sym * core_base_type) * expr taction_id)
+  let get_fun fname = fun s ->
+    match fname with
+      | Sym  f -> U.return [(Map.find f s.funs, s)]
+      | Impl f ->
+          match Map.find f s.impl_map with
+            | IFun bty fargs fbody -> U.return [((TyBase bty, fargs, fbody), s)]
+            | _ -> Boot.assert_false "[Core_run.get_fun] found a Def used as  IFun"
+          end
+  end
+*)
+
+val get_proc: sym -> t (core_type * list (sym * core_base_type) * expr taction_id)
+let get_proc psym = fun st ->
+  match Map.lookup psym st.file.funs with
+    | Just z  -> [(U.return z, st)]
+    | Nothing -> Boot.error "HIP: get_proc failure" (* "[Core_run.get_proc] " ^ Boot.pp_core_expr (Esym psym) *)
+  end
+
+val register_labeled_continuation: ksym -> list (sym * ctype) * expr taction_id) -> t unit
+let register_labeled_continuation k cont = fun st ->
+  match st.current_proc with
+    | Nothing ->
+        Boot.error "register_labeled_continuation: current_proc = Nothing"
+    | Just proc ->
+        [(U.return (), <| st with registered_labeled_continuations= Map.insert proc (k, cont) st.registered_labeled_continuations |>)]
+  end
+
+
+
+
+let rec map_from_list xs =
+  match xs with
+    | [] -> Map.empty
+    | (a,b) :: xs' -> Map.insert a b (map_from_list xs')
+  end
+
+(*
+val get_cont: ksym -> t (list (sym * ctype) * expr taction_id)
+let get_cont k = fun st ->
+  [(U.return (fromJust $ Map.lookup d (fromJust $ Map.lookup (fromJust st.current_proc) st.cont_map)), st)]
+*)
+
+(*
+  val get_sym: sym -> t (expr taction_id)
+  let get_sym _a =
+    fun s ->
+      if Map.mem _a s.sym_map then
+        [ (Map.find _a s.sym_map, s) ]
+      else
+        Boot.assert_false "BUG: Core_run.get_sym"
+  
+  val put_sym: sym -> expr taction_id -> t unit
+  let put_sym _a e =
+    fun s -> 
+      [((), <| s with sym_map= Map.insert _a e s.sym_map |>)]
+*)
+
+
+(*
+      (* TODO: this is disgusting *)
+      let e' = match e with
+                 | Esym _a' -> match Symbol_table.find _a' s.sym_map with
+                                 | Nothing -> Boot.assert_false "BUG: Core_run.put_sym"
+                                 | Just z  -> z
+                               end
+                 | _        -> e
+               end
+      in [((), <| s with sym_map= Symbol_table.add _a e' s.sym_map |>)]
+      *)
+
+val set_execution_mode: execution_mode -> t unit
+let set_execution_mode mode = fun st ->
+  [(U.return (), <| st with execution_mode= mode |>)]
+
+val get_execution_mode: t execution_mode
+let get_execution_mode = fun st ->
+  [(U.return st.execution_mode, st)]
+
+
+(* KN: probably not needed anymore
+val register_sequencing: set taction_id -> taction_id -> Cmm_aux_old.tid -> t unit
+let register_sequencing bs aid tid = fun st ->
+  let (sb_, asw_) = Set_helpers.fold (fun b (sb_acc, asw_acc) ->
+    if tid = tid_of (fromJust $ Map.lookup b st.tact_map) then
+      (Set.insert (b, aid) sb_acc, asw_acc)
+    else
+      if Set.any (fun z -> tid_of (fromJust $ Map.lookup z st.tact_map) = tid) $ Map.domain st.tact_map then
+        (sb_acc, asw_acc)
+      else
+        (sb_acc, Set.insert (b, aid) asw_acc)
+
+(*
+      if Set.any (fun z -> false && tid_of (Map.find z st.tact_map) = tid && accessible z aid $ Set.to_list st.sb) $ Map.domain st.tact_map then
+        (sb_acc, asw_acc)
+      else
+        (sb_acc, Set.insert (b, aid) asw_acc)
+*)
+  ) bs (st.sb, st.asw) in
+  
+  [(U.return (), <| st with sb= sb_; asw= asw_ |>)]
+*)
+
+
+
+
+
+
+
+
+val initial_io_state: io_state
+let initial_io_state = <|
+  stdout= "";
+|>
+
+val initial_state: execution_mode -> file taction_id -> map sym (map ksym (list (sym * ctype) * expr taction_id)) -> state
+let initial_state execution_mode file cont_map = <|
+  execution_mode= execution_mode;
+  mem_layout=     (Map.empty, 0);
+  current_proc=   Just file.main;
+  file=           file;
+  cont_map=       cont_map;
+  tact_counter=   0;
+  tact_map=       Map.empty;
+  trace=          [];
+  io=             initial_io_state;
+|>
+
+
+
+val put_stdout: string -> t unit
+let put_stdout str = fun st ->
+  [(U.return (), <| st with io=    <| st.io with stdout= st.io.stdout ^ str |>;
+                            trace= (Rule_Output str, Nothing) :: st.trace
+                  |>)]
+
+
+
+
+
+
+
+(* substitute a symbol by a Core value in all the function bodies and continuations *)
+val subst_inAll: Core.sym -> Core.expr taction_id -> t unit
+let subst_inAll _a v = fun st ->
+  let st' = <| st with
+    file=     <| st.file with Core.funs= Map.map  (fun (f_Ty, f_args, f_body) -> (f_Ty, f_args, Core_aux.subst_sym _a v f_body)) st.file.Core.funs;
+                              Core.globs= List.map (fun (g_a, g_Ty, g_e) ->
+(* Boot.print_debug ("substs in " ^ (let (Symbol.Symbol _ (Just foo)) = g_a in foo)) *)
+
+Boot.print_debug ("substs >>> " ^ Boot.pp_core_expr (Core_aux.subst_sym _a v g_e))
+
+
+(g_a, g_Ty, Core_aux.subst_sym _a v g_e)) st.file.Core.globs |>;
+    cont_map= Map.map (Map.map (fun (xs, e) -> (xs, Core_aux.subst_sym _a v e))) st.cont_map
+  |> in
+  [(U.return (), st')]
