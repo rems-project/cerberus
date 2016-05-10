@@ -62,9 +62,9 @@ copy_cmm_exec: $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) | $(BUILD_DIR)
 	@cp $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) $(BUILD_DIR)
 
 # Copy the cerberus model files to the build dir
-copy_cerberus: $(addprefix model/, $(CERBERUS_LEM)) | $(BUILD_DIR)
+copy_cerberus: $(addprefix model/, $(CERBERUS_LEM_SOURCES)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING cerberus .lem files$(RESET)
-	cp $(addprefix model/, $(CERBERUS_LEM)) $(BUILD_DIR)
+	@cp $(addprefix model/, $(CERBERUS_LEM_SOURCES)) $(BUILD_DIR)
 
 dependencies:
 #	@if [ "2" == "$(shell ocamlfind query pprint > /dev/null 2>&1; echo $$?)" ]; then \
@@ -85,11 +85,12 @@ lem: copy_cmm copy_cmm_exec copy_cerberus
 
 DOC_BUILD_DIR = generated_doc
 
-alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus
-        # @OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
-	@OCAMLRUNPARAM=b $(LEM0)  -outdir $(DOC_BUILD_DIR) -no_dep_reorder -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+$(DOC_BUILD_DIR):
+	mkdir $(DOC_BUILD_DIR)
 
-# TODO: replace with the $(BUILD_DIR) copy of $(CERBERUS_LEM_SOURCES)
+alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus | $(DOC_BUILD_DIR)
+        # @OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
+	@OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(addprefix $(BUILD_DIR)/,$(CERBERUS_LEM_FLAT_SOURCES))
 
 alldoc.pdf: alldoc.tex
 	pdflatex alldoc.tex

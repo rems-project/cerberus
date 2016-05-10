@@ -9,7 +9,7 @@ import Dlist
 
 open import Implementation_ Decode
 
-open import Cthread Driver_util Core_run_aux Errors
+open import Cthread Core_run_aux Errors
 
 
 open import Core_eval
@@ -19,8 +19,10 @@ module SEU = State_exception_undefined
 
 
 module Caux = Core_aux
-module Cmm = Cmm_csem
-
+module Cmm = struct
+  include Cmm_aux
+  include Cmm_csem
+end
 
 
 val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
@@ -111,7 +113,7 @@ end
 type core_run_state = <|
   tid_supply:    UniqueId.supply thread_id;
   symbol_supply: UniqueId.supply Symbol.sym;
-  aid_supply:    UniqueId.supply action_id;
+  aid_supply:    UniqueId.supply Cmm.aid;
   
   (* DEBUG *)
   step_counter: nat;
@@ -153,7 +155,7 @@ let spawn_thread parent_tid_opt th_st st =
   )
 
 
-val kill_thread: thread_id -> thread_id -> set action_id -> Core.value -> core_state -> core_state
+val kill_thread: thread_id -> thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
 let kill_thread tid parent_tid aswBefores v st =
   let () = Debug.print_debug 5 ("KILLING Thread " ^ show tid ^ " (child of thread " ^ show parent_tid ^ ")") in
   let _ = Set.map (fun aid ->
@@ -179,7 +181,7 @@ let fresh_symbol' =
   )
 
 
-val fresh_action_id': State.t action_id core_run_state
+val fresh_action_id': State.t Cmm.aid core_run_state
 let fresh_action_id' =
   State.modify (fun run_st ->
     let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
@@ -360,33 +362,33 @@ type action_request =
   (* RequestName  of location * sbBefore * ddBefore * aswBefore
                      parameters of request *
                      the new state or a callback *)
-  | AllocRequest of Loc.t * set action_id * set action_id * set action_id *
-                    action_id * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
+  | AllocRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
                     (Mem.pointer_value -> thread_state)
   
-  | CreateRequest of Loc.t * set action_id * set action_id * set action_id *
-                     action_id * thread_id * Symbol.prefix * Mem.integer_value * ctype *
+  | CreateRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                     Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * ctype *
                      (Mem.pointer_value -> thread_state)
   
-  | LoadRequest of Loc.t * set action_id * set action_id * set action_id * 
+  | LoadRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid * 
                    (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
-                   action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.sym *
+                   Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.sym *
                    (* the argument of the callback is either a concrete value if the memory model
                       is able to give one right away, or is equal to the symbolic value provided by the
                       present LoadRequest *)
                    (Mem.mem_value -> thread_state)
   
-  | StoreRequest of Loc.t * set action_id * set action_id * set action_id *
-                    action_id * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+  | StoreRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
                     thread_state
-  | RMWRequest of Loc.t * set action_id * set action_id * set action_id *
-                  action_id * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
+  | RMWRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                  Cmm.aid * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
                   Mem.mem_value * Mem.mem_value * thread_state
-  | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
-                    action_id * thread_id * Cmm.memory_order *
+  | FenceRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Cmm.memory_order *
                     thread_state
-  | KillRequest of Loc.t * set action_id * set action_id * set action_id *
-                   action_id * thread_id * Mem.pointer_value * thread_state
+  | KillRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                   Cmm.aid * thread_id * Mem.pointer_value * thread_state
 
 type core_step =
   | Step_action_request of core_runM action_request
