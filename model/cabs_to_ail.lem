@@ -2431,7 +2431,12 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           E.return (AilSblock bs d_ss')
       
       | CabsSdecl (Declaration_base specifs idecltors) ->
-          AilSdeclaration <$> desugar_declaration_base specifs idecltors
+          function
+            | [] ->
+                AilSskip
+            | xs ->
+                AilSdeclaration xs
+          end <$> desugar_declaration_base specifs idecltors
       
       | CabsSdecl (Declaration_static_assert sa_decl) ->
           desugar_and_register_static_assert_declaration sa_decl >>

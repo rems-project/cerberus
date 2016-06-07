@@ -772,7 +772,7 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
     | AilSgoto l ->
         pp_keyword "goto" ^^^ pp_id_label l ^^ P.semi
     | AilSdeclaration [] ->
-        P.empty
+        pp_comment "// empty decl"
     (* TODO: looks odd *)
     | AilSdeclaration defs ->
         comma_list (fun (id, e) -> pp_id_obj id ^^^ P.equals ^^^ pp_expression_aux pp_annot e) defs ^^

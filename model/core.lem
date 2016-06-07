@@ -193,7 +193,7 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Erun of 'a * Symbol.sym * list (Symbol.sym * (generic_pexpr 'bty 'sym)) (* run from label *)
  
  | Esave2 of Symbol.sym * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty 'sym
- | Erun2 of 'a * Symbol.sym * list (generic_expr 'a 'bty 'sym)
+ | Erun2 of 'a * Symbol.sym * list (generic_pexpr 'bty 'sym)
  
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem thread creation *)
  | Ewait of Cthread.thread_id (* wait for thread termination *)

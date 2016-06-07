@@ -60,6 +60,8 @@ val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
                      -> integer_value     (* size *)
                      -> memM pointer_value
 
+val kill: pointer_value -> memM unit
+
 val load: ctype -> pointer_value -> memM (footprint * mem_value)
 val store: ctype -> pointer_value -> mem_value -> memM footprint
 
@@ -208,6 +210,7 @@ let str_fval = Impl.str_fval
 
 let allocate_static                     = Impl.allocate_static
 let allocate_dynamic                    = Impl.allocate_dynamic
+let kill                                = Impl.kill
 let load                                = Impl.load
 let store                               = Impl.store
 
