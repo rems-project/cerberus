@@ -1025,8 +1025,14 @@ let allocate_dynamic tid pref align_ival (IV _ size_ival) =
   )
 
 
-
-
+let kill (PV _ ptr_val_ sh as ptr_val) =
+  print_debugM 5 ("KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+    | Just alloc_id ->
+        (* TODO: turn the live pointers to this alloc_id into unspec values *)
+        get >>= fun mem_st ->
+        put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
+  end
 
 
 
@@ -1245,7 +1251,9 @@ let load ty (PV _ ptr_val_ sh as ptr_val) : memM (footprint * mem_value) =
     | Just alloc_id ->
 (*        addToLog alloc_id >> *)
         get >>= fun mem_st ->
-        match Map.lookup alloc_id mem_st.allocations with
+        if Set.member alloc_id mem_st.dead_allocations then
+          fail MerrReadFromDead
+        else match Map.lookup alloc_id mem_st.allocations with
           | Just (_, Just mval) ->
               let mval' = apply_shift_path ty sh mval in
               print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)

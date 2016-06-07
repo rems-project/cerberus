@@ -153,13 +153,13 @@ let rec proj_ctype ty =
 
 (* Core pattern builders **************************************************** *)
 
-val mk_empty_pat: pattern
-let mk_empty_pat =
-  CaseBase Nothing
+val mk_empty_pat: core_base_type -> pattern
+let mk_empty_pat bTy =
+  CaseBase (Nothing, bTy)
 
 val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
 let mk_sym_pat sym bTy =
-  CaseBase (Just (sym, bTy))
+  CaseBase (Just sym, bTy)
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
@@ -175,7 +175,9 @@ val mk_specified_pat: pattern -> pattern
 let mk_specified_pat pat =
   CaseCtor Cspecified [pat]
 
-
+val mk_unspecified_pat: pattern -> pattern
+let mk_unspecified_pat pat =
+  CaseCtor Cunspecified [pat]
 
 
 (* Core pexpr builders  ***************************************************** *)
@@ -481,7 +483,7 @@ end
 
 
 
-
+(*
 let rec mk_wseqs_aux end_e pat_es =
   match pat_es with
     | []               -> end_e
@@ -497,7 +499,21 @@ let mk_wseqs end_e = function
   | pat_es ->
       mk_wseqs_aux end_e pat_es
 end
+*)
 
+val     mk_sseqs: list (pattern * expr unit) -> (expr unit -> expr unit)
+let rec mk_sseqs pat_es =
+  fun z ->
+  match pat_es with
+    | [] ->
+        z
+    | (pat, e) :: pat_es' ->
+        Esseq pat e (mk_sseqs pat_es' z)
+  end
+
+
+
+(*
 (* val     mk_sseq: forall 'a. list (pattern * expr 'a) -> expr 'a *)
 let rec mk_sseq a_opts_es =
   match a_opts_es with
@@ -513,7 +529,7 @@ let rec mk_sseq' a_opts_es z =
     | [(_, e)]         -> e
     | (a_opts, e)::es' -> Esseq a_opts e (mk_sseq' es' z)
 end
-
+*)
 
 
 let mk_unseq = function
@@ -522,23 +538,32 @@ let mk_unseq = function
   | es  -> Eunseq es
 end
 
-val     mk_unit_sseq: list (expr unit) -> expr unit
+val     mk_unit_sseq: list (expr unit) -> (expr unit -> expr unit)
 let rec mk_unit_sseq es =
-  match es with
+  fun z ->
+    match es with
+      | [] ->
+          z
+      | e::es' ->
+          Esseq (mk_empty_pat BTy_unit) e (mk_unit_sseq es' z)
+    end
+
+val     mk_bTy_sseqs: list (core_base_type * expr unit) -> expr unit
+let rec mk_bTy_sseqs bTy_es =
+  match bTy_es with
     | [] ->
         Eskip
-    | e::es' ->
-        Esseq mk_empty_pat e (mk_unit_sseq es')
+    | [(_, e)] ->
+        e
+    | (bTy, e) :: bTy_es' ->
+        Esseq (mk_empty_pat bTy) e (mk_bTy_sseqs bTy_es')
   end
-
-
-
 
 let rec concat_sseq e e' =
    match e with
      | Esseq pat e1 e2 -> Esseq pat e1 (concat_sseq e2 e')
      | Eskip           -> e'
-     | _               -> Esseq (CaseBase Nothing) e e'
+     | _               -> Esseq (mk_empty_pat BTy_unit) e e'
   end
 
 let is_negative = function
@@ -593,8 +618,8 @@ let to_integer pe =
 val in_pattern: Symbol.sym -> pattern -> bool
 let rec in_pattern sym pat =
   match pat with
-    | CaseBase sym_bTy_opt ->
-        maybe false (fun (sym', _) -> sym = sym') sym_bTy_opt
+    | CaseBase (sym_opt, _) ->
+        maybe false (fun sym' -> sym = sym') sym_opt
     | CaseCtor _ pats' ->
         List.any (in_pattern sym) pats'
   end
@@ -706,6 +731,14 @@ let rec subst_sym_expr sym pe' = function
       Esave ksym sym_tys (subst_sym_expr sym pe' e)
   | Erun annot ksym sym_pes ->
       Erun annot ksym (list_update sym pe' sym_pes)
+  | (Esave2 lab_sym sym_bTys e as expr) ->
+      if List.any (fun (z, _) -> sym = z) sym_bTys then
+        let () = Debug.warn "subst, Esave2 ==> shadowing" in
+        expr
+      else
+        Esave2 lab_sym sym_bTys (subst_sym_expr sym pe' e)
+  | Erun2 annot lab_sym pes ->
+      Erun2 annot lab_sym (List.map (subst_sym_pexpr sym pe') pes)
   | Ereturn pe ->
       Ereturn (subst_sym_pexpr sym pe' pe)
   | End es ->
@@ -757,9 +790,9 @@ val     subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> expr 'a
 let rec subst_pattern pat pe' expr =
   
   match (pat, pe') with
-    | (CaseBase Nothing, _) ->
+    | (CaseBase (Nothing, _), _) ->
         expr
-    | (CaseBase (Just (sym, _)), _) ->
+    | (CaseBase (Just sym, _), _) ->
         subst_sym_expr sym pe' expr
     | (CaseCtor (Cnil ()) [], Pexpr _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
@@ -860,6 +893,10 @@ let rec to_pure (expr : expr 'a) =
         Nothing
     | Erun _ _ _ ->
         Nothing
+    | Esave2 _ _ _ ->
+        Nothing
+    | Erun2 _ _ _ ->
+        Nothing
     | Ereturn _ ->
         Nothing
     | End _ ->
@@ -925,6 +962,10 @@ let rec subst_wait tid v = function
    | Esave ksym sym_tys e ->
        Esave ksym sym_tys (subst_wait tid v e)
    | (Erun _ _ _ as expr) ->
+       expr
+   | Esave2 sym sym_bTys e ->
+       Esave2 sym sym_bTys (subst_wait tid v e)
+   | (Erun2 _ _ _ as expr) ->
        expr
    | (Ereturn _ as expr) ->
        expr
@@ -1023,6 +1064,11 @@ match expr with
         find_labeled_continuation ksym e
   | Erun _ _ _ ->
       Nothing
+  | Esave2 sym' sym_bTys e ->
+      error "find_labeled_continuation: Esave2 sym sym_bTys (subst_sym_expr sym pe' e)"
+  | Erun2 annot sym pes ->
+      Nothing
+
 (*
   | Ereturn _ ->
       Nothing
@@ -1036,6 +1082,87 @@ match expr with
   | Eloc _ e ->
       find_labeled_continuation ksym e
   end
+
+
+
+let rec find_labeled_continuation2 sym = function
+  | Epure _ ->
+      Nothing
+  | Ememop _ _ ->
+      Nothing
+  | Eaction _ ->
+      Nothing
+  | Ecase _ pat_es ->
+      error "TODO: do we allow Esave inside a case?"
+  | Elet _ _ e2 ->
+      find_labeled_continuation2 sym e2
+  | Eif _ e2 e3 ->
+      (* NOTE: in a well formed Core expr, [sym] cannot be bound in both e2 and e3. *)
+      match find_labeled_continuation2 sym e2 with
+        | Just z ->
+            Just z
+        | Nothing ->
+            find_labeled_continuation2 sym e3
+      end
+  | Eskip ->
+      Nothing
+  | Eproc _ _ _ ->
+      Nothing
+  | Ereturn _ ->
+      Nothing
+  | Eunseq _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside unseq() *)
+      Nothing
+  | Ewseq pat e1 e2 ->
+      let () = Debug.warn "find_labeled_continuation2 assumes the bindings of an Esave inside a Ewseq don't clash" in
+      match find_labeled_continuation2 sym e1 with
+        | Just (syms, cont_expr) ->
+            Just (syms, Ewseq pat cont_expr e2)
+        | Nothing ->
+            find_labeled_continuation2 sym e2
+      end
+  | Esseq pat e1 e2 ->
+      let () = Debug.warn "find_labeled_continuation2 assumes the bindings of an Esave inside a Esseq don't clash" in
+      match find_labeled_continuation2 sym e1 with
+        | Just (syms, cont_expr) ->
+            Just (syms, Ewseq pat cont_expr e2)
+        | Nothing ->
+            find_labeled_continuation2 sym e2
+      end
+  | Easeq _ _ _ ->
+      Nothing
+  | Eindet  _ _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside indet() *)
+      Nothing
+  | Ebound _ _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
+      Nothing
+  | End _ ->
+      (* NOTE: Typing forbids labeled continuation bindings in inside nd() *)
+      Nothing
+  | Esave _ _ e ->
+        find_labeled_continuation2 sym e
+  | Erun _ _ _ ->
+      Nothing
+  | Esave2 sym' sym_bTys e ->
+      if sym = sym' then
+        Just (List.map fst sym_bTys, e)
+      else
+        find_labeled_continuation2 sym e
+  | Erun2 annot sym pes ->
+      Nothing
+  | Epar es ->
+      let () = Debug.warn "find_labeled_continuation2 assumes there are no Esave inside par()" in
+      Nothing
+  | Ewait _ ->
+      Nothing
+  | Eloc _ e ->
+      find_labeled_continuation2 sym e
+end
+
+
+
+
 
 
 
@@ -1243,9 +1370,9 @@ let rec has_sseqs expr =
 val     match_pattern: pattern -> pexpr -> maybe (list (sym * pexpr))
 let rec match_pattern pat ((Pexpr () pe_) as pexpr) =
   match (pat, pe_) with
-    | (CaseBase Nothing, _) ->
+    | (CaseBase (Nothing, _), _) ->
         Just []
-    | (CaseBase (Just (sym, _)), _) ->
+    | (CaseBase (Just sym, _), _) ->
         Just [(sym, pexpr)]
 (*      | Vobject of (generic_object_value 'sym) *)
     | (CaseCtor Cspecified [pat'], PEval (Vspecified oval)) ->
