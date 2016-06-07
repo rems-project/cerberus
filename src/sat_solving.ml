@@ -26,10 +26,10 @@ let declare_const str_name str_ty =
   vars := Printf.sprintf "(define %s::%s)" str_name str_ty :: !vars
 *)
 
-let string_of_address (Address (pref, n)) =
+let string_of_address (Address0 (pref, n)) =
   "addr_" ^ string_of_int n
 
-let declare_address (Address (pref, _) as addr) (Assertions (n, addrs, xs) as asserts) =
+let declare_address (Address0 (pref, _) as addr) (Assertions (n, addrs, xs) as asserts) =
   let addr_str = string_of_address addr in
   if StringSet.mem addr_str addrs then
     asserts

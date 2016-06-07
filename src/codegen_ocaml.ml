@@ -263,7 +263,7 @@ let print_ail_integer_type = function
 let print_integer_value_base = function
   | IVconcrete bignum             ->
     !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
-  | IVaddress (Address (sym, n))  ->
+  | IVaddress (Address0 (sym, n))  ->
     !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
                                    ^^ P.comma ^^^ !^(string_of_int n)))
   | IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
@@ -671,5 +671,5 @@ let compile filename core =
       "ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs pprint,zarith \
        -libs unix,nums,str " ^ fl_native (* ^ " | ./tools/colours.sh" *)
     )
-    |> Exception.return2
+    |> Exception.return0
   end

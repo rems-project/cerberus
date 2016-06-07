@@ -138,7 +138,7 @@ let parse input =
       ) !saved_tokens;
       print_endline "===========================";
 *)
-      Exception.return2 (Parser.translation_unit_file hack (Lexing.from_string ""))
+      Exception.return0 (Parser.translation_unit_file hack (Lexing.from_string ""))
     with
       | Failure msg -> raise (Failure msg)
       | err ->
@@ -148,7 +148,7 @@ let parse input =
             | NonStandard_string_concatenation ->
                 print_endline "ERROR: unsupported non-standard concatenation of string literals"
             | _ -> ());
-          Exception.fail0 (Location_ocaml.point spos, Errors.(Cparser_cause (Cparser_unexpectedToken tok)))
+          Exception.fail (Location_ocaml.point spos, Errors.(Cparser_cause (Cparser_unexpectedToken tok)))
 (*
           Printf.printf "PARSING ERROR: unexpected token: `%s' @ line: %d, char: %d\n"
             tok spos.Lexing.pos_lnum (spos.Lexing.pos_cnum - spos.Lexing.pos_bol);

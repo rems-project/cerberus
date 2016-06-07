@@ -113,10 +113,10 @@ let progress_sofar = ref 1
 let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
 let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
 let pass_message      msg = Exception.fmap (fun v -> Debug_ocaml.print_success msg; v)
-let return_none m         = Exception.bind2 m (fun _ -> Exception.return2 None)
-let return_empty m        = Exception.bind2 m (fun _ -> Exception.return2 [])
+let return_none m         = Exception.bind0 m (fun _ -> Exception.return0 None)
+let return_empty m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
-let return_value m        = Exception.bind2 m (fun _ -> Exception.return2 [])
+let return_value m        = Exception.bind0 m (fun _ -> Exception.return0 [])
 
 
 

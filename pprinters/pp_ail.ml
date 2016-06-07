@@ -32,24 +32,24 @@ let precedence = function
   | AilEunary (Minus, _)
   | AilEunary (Bnot, _)
   | AilEunary (Indirection, _)
-  | AilEunary (Address0, _) -> Some 2
+  | AilEunary (Address, _) -> Some 2
   
-  | AilEbinary (_, Arithmetic Mul0, _)
-  | AilEbinary (_, Arithmetic Div0, _)
+  | AilEbinary (_, Arithmetic Mul, _)
+  | AilEbinary (_, Arithmetic Div, _)
   | AilEbinary (_, Arithmetic Mod, _) -> Some 3
   
-  | AilEbinary (_, Arithmetic Add0, _)
-  | AilEbinary (_, Arithmetic Sub0, _) -> Some 4
+  | AilEbinary (_, Arithmetic Add, _)
+  | AilEbinary (_, Arithmetic Sub, _) -> Some 4
   
   | AilEbinary (_, Arithmetic Shl, _)
   | AilEbinary (_, Arithmetic Shr, _) -> Some 5
   
-  | AilEbinary (_, Lt0, _)
+  | AilEbinary (_, Lt, _)
   | AilEbinary (_, Gt, _)
   | AilEbinary (_, Le, _)
-  | AilEbinary (_, Ge0, _) -> Some 6
+  | AilEbinary (_, Ge, _) -> Some 6
   
-  | AilEbinary (_, Eq0, _)
+  | AilEbinary (_, Eq, _)
   | AilEbinary (_, Ne, _) -> Some 7
   
   | AilEbinary (_, Arithmetic Band, _) -> Some 8
@@ -58,9 +58,9 @@ let precedence = function
   
   | AilEbinary (_, Arithmetic Bor, _) -> Some 10
   
-  | AilEbinary (_, And0, _) -> Some 11
+  | AilEbinary (_, And, _) -> Some 11
   
-  | AilEbinary (_, Or0, _) -> Some 12
+  | AilEbinary (_, Or, _) -> Some 12
   
   | AilEcond _ -> Some 13
   
@@ -447,11 +447,11 @@ let rec pp_ctype_human qs ty =
 
 
 let pp_arithmeticOperator = function
-  | Mul0  -> P.star
-  | Div0  -> P.slash
+  | Mul  -> P.star
+  | Div  -> P.slash
   | Mod  -> P.percent
-  | Add0  -> P.plus
-  | Sub0  -> P.minus
+  | Add  -> P.plus
+  | Sub  -> P.minus
   | Shl  -> P.langle ^^ P.langle
   | Shr  -> P.rangle ^^ P.rangle
   | Band -> P.ampersand
@@ -462,13 +462,13 @@ let pp_arithmeticOperator = function
 let pp_binaryOperator = function
   | Arithmetic o -> pp_arithmeticOperator o
   | Comma        -> P.comma
-  | And0          -> P.ampersand ^^ P.ampersand
-  | Or0           -> P.bar ^^ P.bar
-  | Lt0           -> P.langle
+  | And          -> P.ampersand ^^ P.ampersand
+  | Or           -> P.bar ^^ P.bar
+  | Lt           -> P.langle
   | Gt           -> P.rangle
   | Le           -> P.langle ^^ P.equals
-  | Ge0           -> P.rangle ^^ P.equals
-  | Eq0           -> P.equals ^^ P.equals
+  | Ge           -> P.rangle ^^ P.equals
+  | Eq           -> P.equals ^^ P.equals
   | Ne           -> P.bang   ^^ P.equals
 
 
@@ -476,7 +476,7 @@ let pp_unaryOperator = function
   | Plus        -> P.plus
   | Minus       -> P.minus
   | Bnot        -> P.tilde
-  | Address0    -> P.ampersand
+  | Address     -> P.ampersand
   | Indirection -> P.star
   | PostfixIncr -> P.plus ^^ P.plus
   | PostfixDecr -> P.minus ^^ P.minus
