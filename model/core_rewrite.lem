@@ -3,6 +3,8 @@ open import Pervasives
 open import Global Core Core_aux Core_ctype
 import Symbol Symbolic AilTypes Mem
 
+import Pp
+
 module ATypes = AilTypes
 module Caux = Core_aux
 
@@ -467,6 +469,14 @@ let rec flatten_seqs expr =
         Eif pe1 (flatten_seqs e2) (flatten_seqs e3)
     | Eunseq es ->
         Eunseq (List.map flatten_seqs es)
+    
+    | Ewseq (CaseBase (Nothing, _)) Eskip e2 ->
+        (* TODO: could be generalised to any "always defined" Epure *)
+        flatten_seqs e2
+    | Esseq (CaseBase (Nothing, _)) Eskip e2 ->
+        (* TODO: could be generalised to any "always defined" Epure *)
+        flatten_seqs e2
+    
     | Ewseq _as e1 e2 ->
         match (flatten_seqs e1, flatten_seqs e2) with
           | (Ewseq _bs e1' e2', e3') ->
@@ -491,10 +501,16 @@ let rec flatten_seqs expr =
         Ebound i (flatten_seqs e)
     | Esave k a_tys e ->
         Esave k a_tys (flatten_seqs e)
+    | Esave2 sym sym_bTys e ->
+        Esave2 sym sym_bTys (flatten_seqs e)
     | End es ->
         End (List.map flatten_seqs es)
     | Epar es ->
         Epar (List.map flatten_seqs es)
+    | Eloc _ e ->
+        flatten_seqs e
+    | Ecase pe pat_es ->
+        Ecase pe (List.map (fun (pat, e) -> (pat, flatten_seqs e)) pat_es)
     | _ ->
         expr
   end
@@ -711,7 +727,7 @@ let rec sequentialise_creates_kills expr =
     | Eunseq es ->
         if List.all is_kill es then
           List.foldr (fun e acc ->
-            Esseq (CaseBase Nothing) e acc
+            Esseq (CaseBase (Nothing, BTy_unit)) e acc
           ) Eskip es
         else
           Eunseq (List.map sequentialise_creates_kills es)
@@ -829,15 +845,60 @@ let rec pure_propagation expr =
 
 
 
+let rec isAlwaysDefined (Pexpr _ pexpr_) =
+  match pexpr_ with
+    | PEsym _ ->
+        true
+    | PEimpl _ ->
+        true (* TODO: check *)
+    | PEval _ ->
+        true
+    | PEconstrained xs ->
+        List.all (fun (_, pe) -> isAlwaysDefined pe) xs
+    | PEundef _ ->
+        false
+    | PEerror _ _ ->
+        false
+    | PEctor _ pes ->
+        List.all isAlwaysDefined pes
+    | PEcase pe pat_pes ->
+        isAlwaysDefined pe && List.all (fun (_, pe) -> isAlwaysDefined pe) pat_pes
+    | PEarray_shift pe1 _ pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEmember_shift pe _ _ ->
+        isAlwaysDefined pe
+    | PEnot pe ->
+        isAlwaysDefined pe
+    | PEop _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEstruct _ ident_pes ->
+        List.all (fun (_, pe) -> isAlwaysDefined pe) ident_pes
+    | PEunion _ _ pe ->
+        isAlwaysDefined pe
+    | PEcall _ pes ->
+        false (* List.all isAlwaysDefined pes *)
+    | PElet _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEif pe1 pe2 pe3 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2 && isAlwaysDefined pe3
+    | PEis_scalar pe ->
+        isAlwaysDefined pe
+    | PEis_integer pe ->
+        isAlwaysDefined pe
+    | PEis_signed pe ->
+        isAlwaysDefined pe
+    | PEis_unsigned pe ->
+        isAlwaysDefined pe
+end
+
 let rec pure_propagation2 expr =
   let to_pure' e =
     match to_pure e with
-      | Just (Pexpr _ (PEundef _)) ->
-          Nothing
-      | Just (Pexpr _ (PEerror _ _)) ->
-          Nothing
       | Just pe ->
-          Just pe
+          if isAlwaysDefined pe then
+            Just pe
+          else
+            Nothing
       | Nothing ->
           Nothing
     end in
@@ -880,7 +941,15 @@ let rec pure_propagation2 expr =
           | Just pes ->
               Epure (Caux.mk_tuple_pe pes)
           | Nothing ->
-              Eunseq es'
+              let es'' =
+                List.map (fun e ->
+                  match to_pure e with
+                    | Just pe ->
+                        Epure pe
+                    | Nothing ->
+                        e
+                  end) es' in
+              Eunseq es''
         end
     | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
@@ -933,12 +1002,17 @@ let rec pure_propagation2 expr =
 (* ========================================================================== *)
 
 let rewrite_pexpr pexpr =
-  remove_conv_int_pexpr pexpr
+(*  remove_conv_int_pexpr pexpr *)
+  pexpr
+
 
 let rewrite_expr expr =
+  (pure_propagation2 -| flatten_seqs) expr
+(*
   (pure_propagation2 -| remove_conv_int -| flatten_seqs -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
    sequentialise_creates_kills) expr
+*)
 
 let rewrite_fun_map fun_map =
   Map.map (function
@@ -953,6 +1027,5 @@ let rewrite_fun_map fun_map =
 
 (* TODO *)
 let rewrite_file file =
-  let () = Debug.print_debug 0 "PERFORMING CORE REWRITES" in
-  error "<| file with funs=  rewrite_fun_map file.funs;
-               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>"
+  <| file with funs=  rewrite_fun_map file.funs;
+               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>

@@ -6,6 +6,7 @@ type mem_error =
   | MerrUnitialised of string (* mem_read_request *)
   | MerrInternal of string
   | MerrOther of string
+  | MerrReadFromDead (* of string *)
   
   | MerrWIP of string
 
@@ -17,6 +18,8 @@ instance (Show mem_error)
         "MerrInternal \"" ^  str ^ "\""
     | MerrOther str ->
         "MerrOther \"" ^  str ^ "\""
+    | MerrReadFromDead ->
+        "MerrReadFromDead"
     | MerrWIP str ->
         "Memory WIP: " ^ str
   end

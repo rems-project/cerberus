@@ -230,10 +230,11 @@ let rec drive_core_thread tid dr_st =
         ND.return dr_st
     | Step_tau debug_str step_m ->
         let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
-        let pre_arena = (* DEBUG *)
-          (snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.thread_states)).arena in
+        let pre_th_st = (* DEBUG *)
+          snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.thread_states) in
         (* DEBUG *) ND.print_debug 6 ("tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
-        (* DEBUG *)                   Pp.stringFromCore_expr pre_arena) >>
+        (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.arena ^ ";\nstack= " ^
+        (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.stack) >>
         (* case where the Core program does a non pure but non memory-related
            step (typically ordering related stuff) *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
@@ -651,10 +652,16 @@ let action_request_sequential dr_st = function
   
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
       let () = Debug.print_debug_located 3 loc "REQUEST KILL" in (* DEBUG *)
-      ND.return <| dr_st with
-        core_state= update_thread_state tid th_st' dr_st.core_state;
-        (* TODO: the kill ... *)
-      |>
+      ND.msum "action_request_sequential, Kill" $ map (function
+        | Left mem_err ->
+            (* TODO: map memory error to something sensible ... *)
+            ND.kill (ND.Other ("memory layout error (load seq) ==> " ^ show mem_err))
+        | Right ((), layout_st') ->
+            ND.return <| dr_st with
+              core_state=   update_thread_state tid th_st' dr_st.core_state;
+              layout_state= layout_st'
+            |>
+      end) (Mem.runMem (Mem.kill ptr_val) dr_st.layout_state)
 end
 
 
@@ -954,6 +961,7 @@ let driver_globals with_concurrency sym_supply file =
           arena=  Core.Eskip;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty;
+          labels2= Map.empty;
           current_loc= Loc.unknown;
           exec_loc= ELoc_globals;
     |> dr_st.core_state
@@ -976,6 +984,7 @@ let driver_globals with_concurrency sym_supply file =
                   ) e to_subst;
           stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
           labels= Map.empty;
+          labels2= Map.empty;
           current_loc= Loc.unknown;
           exec_loc= ELoc_globals;
         |> dr_st.core_state
@@ -1150,6 +1159,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
                         arena=  expr;
                         stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
                         labels= Map.empty;
+                        labels2= Map.empty;
                         current_loc= Loc.unknown;
                         exec_loc= ELoc_normal [post_argv_dr_st.core_file.Core.main];
                       |> post_argv_dr_st.core_state

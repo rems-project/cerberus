@@ -66,7 +66,8 @@ let load_impl core_parse impl_name =
 
 (* use this when calling a pretty printer *)
 let run_pp =
-    PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
+  (* TODO(someday): dynamically get the width of the terminal *)
+  PPrint.ToChannel.pretty 1.0 100 Pervasives.stdout
 
 
 let set_progress n =
@@ -218,6 +219,7 @@ let pipeline filename args =
       print_endline "====================";
    );
   
+(*  run_pp $ Pp_core_ast.pp_file rewritten_core_file; *)
 
   if !!cerb_conf.compile then
     Exception.bind2 (Core_typing.typecheck_program rewritten_core_file)
