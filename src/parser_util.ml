@@ -30,7 +30,7 @@ struct
   let parse_exn lexbuf =
     try
       let result = B.start L.main lexbuf in
-      Exception.return2 result
+      Exception.return0 result
     with B.Error ->
       let token = Lexing.lexeme lexbuf in
       let spos  = Lexing.lexeme_start_p lexbuf in

@@ -25,19 +25,19 @@ let rec pp_symbolic ppA ppB = function
       !^ "not" ^^ P.parens (pp_symbolic ppA ppB symb)
   | SYMBop (op, symb1, symb2) ->
       let str_opt = match op with
-        | Add -> "+"
-        | Sub -> "-"
-        | Mul -> "*"
-        | Div -> "/"
+        | Add0 -> "+"
+        | Sub0 -> "-"
+        | Mul0 -> "*"
+        | Div0 -> "/"
         | Rem_t -> "rem_t"
         | Rem_f -> "rem_f"
         | Exp -> "exp"
-        | Eq  -> "=="
+        | Eq0  -> "=="
         | Neq -> "/="
-        | Lt  -> "<"
-        | Ge  -> ">="
-        | And -> "and"
-        | Or  -> "or" in
+        | Lt0  -> "<"
+        | Ge0  -> ">="
+        | And0 -> "and"
+        | Or0  -> "or" in
       P.parens (!^ str_opt ^^^ pp_symbolic ppA ppB symb1 ^^^ pp_symbolic ppA ppB symb2)
   | SYMBite (symb1, symb2, symb3) ->
       P.parens (!^ "ite" ^^^ pp_symbolic ppA ppB symb1 ^^^ pp_symbolic ppA ppB symb2 ^^^ pp_symbolic ppA ppB symb3)

@@ -21,11 +21,11 @@ let callCC f = contT $ fun k -> let ret x = contT $ fun _ -> k x in
                                   runContT (f ret) k
 
 (* It runs the continuation monad with calcc and the state memory one *)
-let run f = runMem0 (runContT (callCC (fun ret -> f ret)) return1) initial_mem_state0
+let run f = runMem0 (runContT (callCC (fun ret -> f ret)) return3) initial_mem_state0
 
-let evalContT m = runContT m return1
+let evalContT m = runContT m return3
 
-let lift m = ContT (bind1 m)
+let lift m = ContT (bind3 m)
 (*
 let reset = lift % evalContT
 

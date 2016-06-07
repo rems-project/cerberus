@@ -52,7 +52,7 @@ let drive sym_supply file args cerb_conf : execution_result =
       | ND.Killed (ND.Other str) ->
           failwith "KILLED"
     ) (List.map fst values);
-    Exception.return2 [] (* TODO: HACK *)
+    Exception.return0 [] (* TODO: HACK *)
     end
   else
   begin
@@ -157,7 +157,7 @@ end
               n reason (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
           )
   ) values;
-  Exception.return2 !ret
+  Exception.return0 !ret
 end
 
 
