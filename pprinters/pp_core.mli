@@ -8,3 +8,5 @@ val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
 val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
 val pp_expr: 'a expr -> PPrint.document
 val pp_file: 'a file -> PPrint.document
+
+val pp_stack: 'a stack -> PPrint.document

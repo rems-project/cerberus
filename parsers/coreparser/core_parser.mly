@@ -776,10 +776,13 @@ let mk_file decls =
 
 (* Core sequencing operators *)
 %token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE MEMOP PCALL
+%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
+
+(* SEMICOLON has higher priority than IN *)
+%right SEMICOLON
 %nonassoc IN
 
 
-%token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON (* SEMICOLON *) COMMA NEG
 
 %token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
 
@@ -1136,6 +1139,8 @@ pexpr:
 
 
 expr:
+| e_= delimited(LPAREN, expr, RPAREN)
+    { Eloc (Loc_region ($startpos, $endpos, None), e_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
     { Eloc (Loc_region ($startpos, $endpos, None), Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
@@ -1152,7 +1157,10 @@ expr:
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Ecase (_pe, _pat_es) ) }
-| PCALL LPAREN _pe= pexpr COMMA _pes= separated_list(COMMA, pexpr) RPAREN
+| PCALL LPAREN _pe= pexpr RPAREN
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eproc ((), _pe, []) ) }
+| PCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Eproc ((), _pe, _pes) ) }
 | _pact= paction
@@ -1164,6 +1172,9 @@ expr:
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Ewseq (_pat, _e1, _e2) ) }
+| _e1= expr SEMICOLON _e2= expr
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Esseq (CaseBase (None, BTy_unit), _e1, _e2) ) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Esseq (_pat, _e1, _e2) ) }

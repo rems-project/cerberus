@@ -67,6 +67,8 @@ type thread_state = <|
   stack:  stack core_run_annotation;
   labels: map ksym (list (sym * ctype) * expr core_run_annotation);
   
+  labels2: map sym (list sym * expr core_run_annotation);
+  
   current_loc: Loc.t; (* DEBUG *)
   exec_loc: exec_location; (* DEBUG *)
 |>
@@ -1044,49 +1046,82 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove fo
                                  labels= Map.insert k cont th_st.labels
                    |>
       )
+    
+    | (Esave2 sym sym_bTys e, Stack_cons cont _) ->
+        (* TODO check *)
+        one $ Step_tau "Esave2" (
+          E.return <| th_st with arena= e; (* labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels *) |>
+        )
+    
+    | (Erun2 annots sym pes, Stack_cons cont sk) ->
+        one $ Step_tau "Erun2" (
+          match Map.lookup sym th_st.labels2 with
+            | Just z ->
+                (* either the execution already saw the associated Esave; *)
+                SEU.return z
+            | Nothing ->
+                (* or we need to find it in the current continuation. *)
+                match find_labeled_continuation2 sym (apply_continuation cont th_st.arena) with
+                  | Nothing ->
+                      SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show sym))
+                  | Just cont ->
+                      SEU.return cont
+                end
+          end >>= fun ((syms, cont_expr) as cont) ->
+          
+          let cont_expr' = List.foldl (fun acc (sym, pe) ->
+            subst_sym_expr sym pe acc
+          ) cont_expr (List.zip syms pes) in
+          
+          let cont_expr' =
+add_to_asw annots.asw_before $ (* TODO: remove for sequential !!! *)
+add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: remove for sequential !!! *)
+          E.return <| th_st with
+            arena= cont_expr';
+            stack= push_empty_continuation sk;
+            labels2= Map.insert sym cont th_st.labels2
+          |>
+        )
+    
+    
+    | (Ereturn _, _) ->
+        error "Ereturn is obsolete"
 
 
-
-
-
-
-
-    | (Ereturn pe, Stack_cons _ sk) ->
-(*
-    | (Epure pe, Stack_cons [] sk) ->
-*)
+    | (Epure pe, sk) ->
         one match valueFromPexpr pe with
           | Just cval ->
               match sk with
-                | Stack_empty ->
-                    (* "return" ending the execution of a thread. *)
+                | Stack_cons [] Stack_empty ->
+                    (* reached the end of the execution of a thread. *)
                     match parent_tid_opt with
                       | Just parent_tid ->
                           Step_thread_done parent_tid cval
                       | Nothing ->
-                          (* we reached the end of the startup thread's execution *)
-                          (* TODO: this seems like a silly indirection *)
-                          Step_tau "end of main thread" (
-                            E.return <| th_st with arena= Epure pe; stack= empty_stack |>
-                          )
+                          (* this was the startup thread *)
+                          Step_done cval
                     end
-                | Stack_cons cont sk' ->
-                    (* "return" only ending the execution of a procedure. *)
+                | Stack_cons [] (Stack_cons cont sk') ->
+                    (* reached the end of the execution of a procedure. *)
                     Step_tau "end of procedure" (
                       E.return <| th_st with
                         arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
                         stack= push_empty_continuation sk';
-(*
-(* TODO: need stacked scopes ... *)
                         labels= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
-*)
+                      |>
+                    )
+                | Stack_cons cont sk' ->
+                    Step_tau "Epure" (
+                      E.return <| th_st with
+                        arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
+                        stack= push_empty_continuation sk';
                       |>
                     )
               end
           | Nothing ->
-              Step_eval "Ereturn" (
+              Step_eval "Epure" (
                 E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
-                E.return <| th_st with arena= Ereturn pe' |>
+                E.return <| th_st with arena= Epure pe' |>
               )
         end
     
@@ -1104,6 +1139,7 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove fo
             arena= e;
             stack= push_empty_continuation empty_stack;
             labels= Map.empty;
+            labels2= Map.empty;
             current_loc= th_st.current_loc;
             exec_loc= ELoc_normal [];
           |>) es
@@ -1142,6 +1178,7 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove fo
               Step_error ("reached empty stack on a non-value arena: " ^ Pp.stringFromCore_expr e) (* TODO: better error message *)
         end
     
+(* WIP !!!
     | (e, Stack_cons cont sk) ->
         match to_pure e with
           | Just pe ->
@@ -1176,6 +1213,7 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove fo
           | Nothing ->
               error (Pp.stringFromCore_expr e) (* TODO: better error message *)
         end
+*)
   end
 
 
@@ -1281,6 +1319,10 @@ let rec convert_expr expr =
         Esave ksym sym_tys (convert_expr e)
     | Erun _ ksym sym_pes ->
         Erun empty_annotation ksym sym_pes
+    | Esave2 sym sym_bTys e ->
+        Esave2 sym sym_bTys (convert_expr e)
+    | Erun2 _ sym pes ->
+        Erun2 empty_annotation sym pes
     | Ereturn pe ->
         Ereturn pe
     | End es ->
