@@ -37,59 +37,66 @@ type provenance =
 
 
 
-
+(* a symbolic identifier representing the concrete address of a fresh allocation (the nat) together with the source location *)
 type address =
   | Address of Symbol.prefix * nat
 
 
-
 (*** Pointer value ****************************************************************************** *)
+
+(* Core values of type OTy_pointer will always be of this form *)
 type pointer_value =
     (* pointer values are annotated with a provenance *)
   | PV of provenance * pointer_value_base * (list shift_path_element)
 
 and pointer_value_base =
   | PVunspecified of ctype (* TODO: maybe put this ctor in pointer_value ? *)
-    (* a null pointer constructed with an expression of the given ctype. *)
+    (* a null pointer constructed by an expression of the given ctype. *)
+
   | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
-     (* the result of a dynamic or automatic/static/thread-local allocation *)
-     (* generated (and perhaps always?) with Prov_some with the singleton set of its allocation_id  *)
   
   | PVfunction of Symbol.sym (* INVARIANT: the associated provenance must be Prov_none *)
   
   | PVbase of allocation_id * Symbol.prefix (* TODO: not sure about having the prefix here *)
-  | PVfromint of integer_value_base (* INVARIANT: never a null pointer *)
-(* in memory-value, kayvan wants byte-n-of-memory-value too *)
+     (* the result of a dynamic or automatic/static/thread-local
+        allocation, generated with Prov_some
+        with the singleton set of its allocation_id *)
+     (* the Symbol.prefix is roughly the source location - the "syntactic provenance" :-*)
 
+  | PVfromint of integer_value_base (* INVARIANT: never an IVconcrete(0) or IVfromptr(PVnull), but could be a more complex integer_value_base which (perhaps after constraint solving) will always be zero *)
 
 (* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
 and shift_path_element =
   | SPE_array of ctype * integer_value_base
-(*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
   | SPE_member of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
  
 
+(* Core values of type OTy_integer will always be of this form *)
+and integer_value =
+  IV of provenance (* * AilTypes.integerType *) * integer_value_base
+
 and integer_value_base =
   | IVunspecified
-  | IVconcurRead of AilTypes.integerType * Symbol.sym
-  | IVconcrete of integer (* of Symbolic.symbolic *)
+  | IVconcurRead of AilTypes.integerType * Symbol.sym (* a fresh symbol from a concurrency-model read *)
+  | IVconcrete of integer 
   | IVaddress of address (* NOTE: this should never get out of this module *)
-  | IVfromptr of ctype * (* ctype * *) pointer_value_base (* the first parameter is the referenced type of the pointer value,
-                                                       the second is the integer type *)
+  | IVfromptr of ctype * pointer_value_base 
+    (* the result of a cast from pointer to integer. The first
+       parameter is the referenced type of the pointer value, the
+       second is the integer type *)
   | IVop of integer_operator * list integer_value_base
   | IVmin of AilTypes.integerType
   | IVmax of AilTypes.integerType
   | IVsizeof of ctype
   | IValignof of ctype
-  | IVoffsetof of Symbol.sym * Cabs.cabs_identifier
+  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
   | IVptrdiff of pointer_value_base * pointer_value_base
   (* TODO: tentative *)
   | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
-  | IVcomposite of list integer_value_base
+  | IVcomposite of list integer_value_base 
+      (* a list of byte values reassembled *)
 
 
-and integer_value =
-  IV of provenance (* * AilTypes.integerType *) * integer_value_base
 
 
 and floating_value =
