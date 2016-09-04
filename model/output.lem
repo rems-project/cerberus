@@ -355,7 +355,7 @@ let load_character_array elem_ty ptrval prec_n_opt =
 
 
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
-val convert: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val convert: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
              maybe precision -> maybe length_modifier -> conversion_specifier -> list (Cty.ctype * Mem.pointer_value) ->
              Mem.memM (either Errors.error (U.t (list char * list (Cty.ctype * Mem.pointer_value))))
 let convert eval_conv prec_opt lm_opt cspec args =
@@ -610,7 +610,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
           
           match conv_ty_opt with
             | Just conv_ty ->
-                match eval_conv arg_ty conv_ty mval with
+                match eval_conv (*arg_ty*) conv_ty mval with
                   | Left err ->
                       Mem.return (Left err)
                   | Right (U.Defined (Core.Vspecified (Core.OVinteger ival))) ->
@@ -808,7 +808,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
 
 
 
-val     printf_aux: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val     printf_aux: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
                     list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let rec printf_aux eval_conv acc fs ty_ptrvals =
   match (fs, ty_ptrvals) with
@@ -844,7 +844,7 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
 
 
 
-val printf: (Cty.ctype -> Cty.ctype -> Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
             list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let printf eval_conv frmt args =
   match parse format frmt with

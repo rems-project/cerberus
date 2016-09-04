@@ -1,17 +1,20 @@
-(* Effects for Translation: state + exception *)
+(* Effects for Translation: state *)
 open import Pervasives Global Show Show_extra
 import Boot UniqueId Symbol Undefined Core_ctype AilTypes AilTypesAux
 
-open import Core
+import Core
+module C = Core
+
 
 
 type state = <|
   symbol_supply:   UniqueId.supply Symbol.sym; (* counter for Core's symbolic names (all of them) *)
+  
   visible_objects_types: map Symbol.sym AilTypes.ctype;
   visible_objects: list (list Symbol.sym);     (* visible C objects with scoping (used to properly
                                                   annotate Esave/Erun ctors) *)
   
-  string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * pexpr)
+  string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr);
 |>
 
 
@@ -63,7 +66,6 @@ let replicateM n x = sequence (replicate n x)
 (* END: reinventing the wheel *)
 
 
-(* build an initial state from a given Core standard library *)
 val init: UniqueId.supply Symbol.sym -> state
 let init suppl = <|
   symbol_supply=   suppl;
@@ -71,7 +73,6 @@ let init suppl = <|
   visible_objects= [[]];
   string_literals= [];
 |>
-
 
 (* returns a fresh Core symbolic name. *)
 val fresh_symbol: t Symbol.sym
@@ -130,6 +131,20 @@ let pop_block_objects = fun st ->
       end |>)
 
 
+val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> t 'a -> t 'a
+let with_block_objects binds ma = fun st ->
+  let st' = <| st with
+    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |> in
+  let (a, st'') = ma st' in
+  (a, <| st'' with visible_objects=
+      match st''.visible_objects with
+        | _ :: xs -> xs
+        | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
+      end |>)
+
+
 let inline (>>=)    = bind
 let inline (>>) m f = bind m (fun _ -> f)
 
@@ -151,11 +166,11 @@ let get_visible_objects = fun st ->
 
 
 
-val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> pexpr -> t unit
+val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> C.pexpr -> t unit
 let register_string_literal loc sym ty pe = fun st ->
   ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
 
-val get_string_literals: t (list (Loc.t * Symbol.sym * Core_ctype.ctype * pexpr))
+val get_string_literals: t (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr))
 let get_string_literals = fun st ->
   (st.string_literals, st)
 
@@ -183,3 +198,10 @@ let print_debug n str =
   fun st ->
     let () = Debug.print_debug n str in
     ((), st)
+
+
+val with_symbol_supply: forall 'a. (UniqueId.supply Symbol.sym -> UniqueId.supply Symbol.sym * 'a) -> t 'a
+let with_symbol_supply f =
+  fun st ->
+    let (suppl', z) = f st.symbol_supply in
+    (z, <| st with symbol_supply= suppl' |>)

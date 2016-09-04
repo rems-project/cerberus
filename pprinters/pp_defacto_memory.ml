@@ -169,11 +169,10 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
         assert false
 
 
-
-let pp_pretty_mem_value format = function
-  | MVinteger (_, (IV (_, IVconcurRead (_, sym)))) ->
+let pp_pretty_integer_value format = function
+  | IV (_, IVconcurRead (_, sym)) ->
       !^ ("concur(" ^ Pp_symbol.to_string_pretty sym ^ ")")
-  | MVinteger (ity, (IV (_, IVconcrete n))) ->
+  | IV (_, IVconcrete n) ->
       !^ begin
            let b = match format.Boot_printf.basis with
              | Some AilSyntax.Octal ->
@@ -187,6 +186,12 @@ let pp_pretty_mem_value format = function
            List.iteri (Bytes.set bts) chars;
            Bytes.to_string bts
       end
+  | _ ->
+      !^ "(symbolic ival)"
+
+let pp_pretty_mem_value format = function
+  | MVinteger (_, ival) ->
+      pp_pretty_integer_value format ival
   | MVfloating (fty, FVconcrete str) ->
       !^ str
   | MVfloating (fty, FVunspecified) ->

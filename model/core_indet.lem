@@ -433,18 +433,10 @@ let rec hack expr =
         hack e
     | Core.Ebound i e ->
         hack e
-    | Core.Esave d a_tys e ->
-        Core.Esave d a_tys (hack e)
-    | Core.Erun bs d a_vs ->
-        Core.Erun bs d a_vs
-    | Core.Esave2 sym sym_bTys e ->
-        Core.Esave2 sym sym_bTys (hack e)
-    | Core.Erun2 bs sym pes ->
-        Core.Erun2 bs sym pes
-
-
-    | Core.Ereturn _ ->
-        expr
+    | Core.Esave sym sym_bTys e ->
+        Core.Esave sym sym_bTys (hack e)
+    | Core.Erun bs sym pes ->
+        Core.Erun bs sym pes
     | Core.End es ->
         Core.End (map hack es)
     | Core.Epar es ->

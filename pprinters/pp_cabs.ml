@@ -1086,7 +1086,7 @@ and pp_for_clause = function
 
 
 let pp_function_definition (FunDef (specifs, decltor, stmt)) =
-  pp_ctor "Fundec" ^^ P.brackets (pp_specifiers specifs ^^ P.comma ^^^ pp_declarator decltor ^^ P.comma ^^^ pp_cabs_statement stmt)
+  pp_ctor "Fundef" ^^ P.brackets (pp_specifiers specifs ^^ P.comma ^^^ pp_declarator decltor ^^ P.comma ^^^ pp_cabs_statement stmt)
 
 let pp_external_declaration = function
   | EDecl_func fdef -> pp_ctor "EDecl_func" ^^ P.brackets (pp_function_definition fdef)

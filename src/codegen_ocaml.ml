@@ -512,7 +512,6 @@ let rec print_expr = function
       then P.parens P.space
       else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
     ) ^^^ !^"return"
-  | Ereturn pe -> !^"return" ^^^ P.parens (print_pure_expr pe)
   | Eunseq es -> raise Unsupported
   | Ewseq (pas, e1, e2) ->
     print_seq (print_pattern pas) (print_expr e1) (print_expr e2)
@@ -526,10 +525,12 @@ let rec print_expr = function
   | Ebound (_, e) -> print_expr e
   | End [] -> raise Unsupported
   | End (e::_) -> print_expr e
+(*
   | Esave (sym, sym_tys, e) ->
     !^"let rec" ^^^ print_symbol sym ^^^ !^"return =" ^^ !> (print_expr e)
      ^/^ !^"in" ^^^ print_symbol sym ^^^ !^"return"
   | Erun (_, sym, sym_pes) -> print_symbol sym ^^^ !^"return"
+*)
   | Epar _ -> raise Unsupported
   | Ewait _ -> raise Unsupported
   | Eloc (_, e) -> print_expr e

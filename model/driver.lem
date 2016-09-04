@@ -298,12 +298,12 @@ let rec drive_core_thread tid dr_st =
     
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
-        let eval_conv ty1 ty2 mval =
+        let eval_conv (*ty1*) ty2 mval =
           eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_int"
-              [ Caux.mk_ctype_pe ty1
-              ; Caux.mk_ctype_pe ty2
+              [ (*Caux.mk_ctype_pe ty1
+              ;*) Caux.mk_ctype_pe ty2
               ; let (oTy, oval) = Core_aux.objectValueFromMemValue mval in
                 Core.Pexpr () (Core.PEval (Core.Vobject oval)) ] in
         

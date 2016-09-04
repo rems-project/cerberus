@@ -284,12 +284,12 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   case c_ of
     | Specified(c: integer) =>
         if c = 0 then
-          return(acc)
+          pure(acc)
         else
           let strong ret: [integer] = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), Cons(c,acc)) in
-          return(ret)
+          pure(ret)
     | Unspecified(_: ctype) =>
-        return (undef(<<DUMMY>>)) -- TODO think about that
+        pure (undef(<<DUMMY>>)) -- TODO think about that
   end
 {-
     lets ret = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), cons(c,acc)) in
@@ -302,7 +302,7 @@ proc rev_listFromStr(str: pointer) : eff [integer] :=
 --  pcall(Cfunction(rev_listFromStr_aux), str, [])
 
   let strong ret: [integer] = pcall(Cfunction(rev_listFromStr_aux), str, []) in
-  return(ret)
+  pure(ret)
 
 
 
@@ -314,9 +314,9 @@ proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff l
     | Specified(frmt_ptr: pointer) =>
         let strong xs: [integer] = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
         let strong ret: loaded integer = pcall(Cfunction(<std_function_printf>), xs, args) in
-        return(ret)
+        pure(ret)
     | Unspecified(_: ctype) =>
-        return (undef(<<DUMMY>>)) -- TODO think about that
+        pure (undef(<<DUMMY>>)) -- TODO think about that
   end
 
 
@@ -437,4 +437,15 @@ fun foo(result_ty: ctype, ty1: ctype, ty1_: ctype, ty2: ctype, ty2_: ctype, _n1:
          else
            undef(<<Exceptional_condition>>)
   end
+-}
+
+{-
+proc ub_if_overlaps(store_ptr: pointer, ptrs: [pointer]) : eff unit :=
+  case ptrs of
+    | Nil() =>
+        pure(Unit)
+    | Cons(ptr: pointer, _ptrs: [pointer]) =>
+        let strong b: boolean = do
+  end
+
 -}

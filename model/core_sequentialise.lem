@@ -20,8 +20,6 @@ let rec sequentialise_expr expr =
         expr
     | Eproc _ _ _ ->
         expr
-    | Ereturn _ ->
-        expr
     | Eunseq es ->
         expr
 (*
@@ -64,10 +62,12 @@ let rec sequentialise_expr expr =
         Ebound i (sequentialise_expr e)
     | End es ->
         End (List.map sequentialise_expr es)
+(*
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (sequentialise_expr e)
     | Erun _ _ _ ->
         expr
+*)
     | Epar es ->
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->

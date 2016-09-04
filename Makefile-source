@@ -39,7 +39,8 @@ SOURCE_core=\
 
 SOURCE_core_typing=\
   core_typing.lem \
-  core_typing_aux.lem
+  core_typing_aux.lem \
+  core_typing_effect.lem
 
 SOURCE_utils=\
   boot.lem \

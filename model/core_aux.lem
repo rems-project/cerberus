@@ -544,6 +544,10 @@ let rec mk_unit_sseq es =
     match es with
       | [] ->
           z
+(*
+      | [e] ->
+          e
+*)
       | e::es' ->
           Esseq (mk_empty_pat BTy_unit) e (mk_unit_sseq es' z)
     end
@@ -727,20 +731,18 @@ let rec subst_sym_expr sym pe' = function
       Eindet i (subst_sym_expr sym pe' e)
   | Ebound i e ->
       Ebound i (subst_sym_expr sym pe' e)
-  | Esave ksym sym_tys e ->
-      Esave ksym sym_tys (subst_sym_expr sym pe' e)
-  | Erun annot ksym sym_pes ->
-      Erun annot ksym (list_update sym pe' sym_pes)
-  | (Esave2 lab_sym sym_bTys e as expr) ->
-      if List.any (fun (z, _) -> sym = z) sym_bTys then
-        let () = Debug.warn "subst, Esave2 ==> shadowing" in
-        expr
+  | (Esave lab_sym sym_bTy_pes e as expr) ->
+      let sym_bTy_pes' = List.map (fun (z, (bTy, pe)) ->
+        (z, (bTy, subst_sym_pexpr sym pe' pe))
+      ) sym_bTy_pes in
+      if List.any (fun (z, _) -> sym = z) sym_bTy_pes then
+        let () = Debug.warn "subst, Esave ==> shadowing" in
+        (* TODO: check *)
+        Esave lab_sym sym_bTy_pes' e 
       else
-        Esave2 lab_sym sym_bTys (subst_sym_expr sym pe' e)
-  | Erun2 annot lab_sym pes ->
-      Erun2 annot lab_sym (List.map (subst_sym_pexpr sym pe') pes)
-  | Ereturn pe ->
-      Ereturn (subst_sym_pexpr sym pe' pe)
+        Esave lab_sym sym_bTy_pes' (subst_sym_expr sym pe' e)
+  | Erun annot lab_sym pes ->
+      Erun annot lab_sym (List.map (subst_sym_pexpr sym pe') pes)
   | End es ->
       End (List.map (subst_sym_expr sym pe') es)
   | Epar es ->
@@ -893,12 +895,6 @@ let rec to_pure (expr : expr 'a) =
         Nothing
     | Erun _ _ _ ->
         Nothing
-    | Esave2 _ _ _ ->
-        Nothing
-    | Erun2 _ _ _ ->
-        Nothing
-    | Ereturn _ ->
-        Nothing
     | End _ ->
         Nothing
     | Epar _ ->
@@ -959,15 +955,15 @@ let rec subst_wait tid v = function
        Eindet i (subst_wait tid v e)
    | Ebound i e ->
        Ebound i (subst_wait tid v e)
+(*
    | Esave ksym sym_tys e ->
        Esave ksym sym_tys (subst_wait tid v e)
    | (Erun _ _ _ as expr) ->
        expr
-   | Esave2 sym sym_bTys e ->
-       Esave2 sym sym_bTys (subst_wait tid v e)
-   | (Erun2 _ _ _ as expr) ->
-       expr
-   | (Ereturn _ as expr) ->
+*)
+   | Esave sym sym_bTys e ->
+       Esave sym sym_bTys (subst_wait tid v e)
+   | (Erun _ _ _ as expr) ->
        expr
    | End es ->
        End (List.map (subst_wait tid v) es)
@@ -1057,6 +1053,7 @@ match expr with
       error "Core_aux.find_labeled_continuation: Eindet shouldn't exists at this point"
   | Ebound _ _ ->
       error "Core_aux.find_labeled_continuation: Ebound shouldn't exists at this point"
+(*
   | Esave ksym' sym_tys e ->
       if ksym = ksym' then
         Just (sym_tys, e)
@@ -1064,15 +1061,11 @@ match expr with
         find_labeled_continuation ksym e
   | Erun _ _ _ ->
       Nothing
-  | Esave2 sym' sym_bTys e ->
-      error "find_labeled_continuation: Esave2 sym sym_bTys (subst_sym_expr sym pe' e)"
-  | Erun2 annot sym pes ->
-      Nothing
-
-(*
-  | Ereturn _ ->
-      Nothing
 *)
+  | Esave sym' sym_bTys e ->
+      error "find_labeled_continuation: Esave sym sym_bTys (subst_sym_expr sym pe' e)"
+  | Erun annot sym pes ->
+      Nothing
   | End _ ->
       Nothing
   | Epar _ ->
@@ -1093,7 +1086,20 @@ let rec find_labeled_continuation2 sym = function
   | Eaction _ ->
       Nothing
   | Ecase _ pat_es ->
-      error "TODO: do we allow Esave inside a case?"
+      let () = Debug.warn "find_labeled_continuation2 assumes there is atmost single match inside a Ecase" in
+      List.foldl (fun acc (_, e) ->
+        match acc with
+          | Just _ ->
+              acc
+          | Nothing ->
+              match find_labeled_continuation2 sym e with
+                | Nothing ->
+                    Nothing
+                | Just ret ->
+                    Just ret
+              end
+        end
+      ) Nothing pat_es
   | Elet _ _ e2 ->
       find_labeled_continuation2 sym e2
   | Eif _ e2 e3 ->
@@ -1107,8 +1113,6 @@ let rec find_labeled_continuation2 sym = function
   | Eskip ->
       Nothing
   | Eproc _ _ _ ->
-      Nothing
-  | Ereturn _ ->
       Nothing
   | Eunseq _ ->
       (* NOTE: Typing forbids labeled continuation bindings inside unseq() *)
@@ -1140,16 +1144,12 @@ let rec find_labeled_continuation2 sym = function
   | End _ ->
       (* NOTE: Typing forbids labeled continuation bindings in inside nd() *)
       Nothing
-  | Esave _ _ e ->
-        find_labeled_continuation2 sym e
-  | Erun _ _ _ ->
-      Nothing
-  | Esave2 sym' sym_bTys e ->
+  | Esave (sym', _) sym_bTys e ->
       if sym = sym' then
         Just (List.map fst sym_bTys, e)
       else
         find_labeled_continuation2 sym e
-  | Erun2 annot sym pes ->
+  | Erun annot sym pes ->
       Nothing
   | Epar es ->
       let () = Debug.warn "find_labeled_continuation2 assumes there are no Esave inside par()" in
@@ -1252,7 +1252,7 @@ let subst_sym_fun_map sym pe' funs =
   end) funs
 
 
-val     collect_labeled_continuations: forall 'a. expr 'a -> map Symbol.sym (list (Symbol.sym * Core_ctype.ctype) * expr 'a)
+val     collect_labeled_continuations: forall 'a. expr 'a -> map Symbol.sym (list (Symbol.sym (* * core_base_type*)) * expr 'a)
 let rec collect_labeled_continuations expr =
   match expr with
     | Epure _ ->
@@ -1285,11 +1285,9 @@ let rec collect_labeled_continuations expr =
         Map.empty
     | Ebound _ _ ->
         Map.empty
-    | Esave k a_tys e ->
-        Map.insert k (a_tys, e) $ collect_labeled_continuations e
+    | Esave (sym_lab, _) sym_bTys e ->
+        Map.insert sym_lab (List.map fst sym_bTys, e) $ collect_labeled_continuations e
     | Erun _ _ _ ->
-        Map.empty
-    | Ereturn _ ->
         Map.empty
     | End _ ->
         (* TODO: check *)
@@ -1345,12 +1343,10 @@ let rec has_sseqs expr =
         has_sseqs e
     | Ebound _ e ->
         has_sseqs e
+(*
     | Esave _ _ e ->
         has_sseqs e
     | Erun _ _ _ ->
-        false
-(*
-    | Ereturn _ ->
         false
 *)
     | End es ->

@@ -69,7 +69,7 @@ let parse input =
             lexbuf.Lexing.lex_curr_p <- end_p;
             tok
         | [] ->
-            print_endline "ERROR (Cparser_driver.hack ==> []"; exit 1 in
+            prerr_endline "ERROR (Cparser_driver.hack ==> []"; exit 1 in
     
     let modify_tokens () =
       let modify = function
@@ -131,22 +131,29 @@ let parse input =
 *)
 
       modify_tokens ();
-(*
-      print_endline "==== AFTER LEXER HACK ====";
+(* *)
+      Debug_ocaml.print_debug 8 "==== AFTER LEXER HACK ====";
       List.iter (fun (tok, loc) ->
-        Printf.printf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc)
+        Debug_ocaml.print_debug 8 (Printf.sprintf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc))
       ) !saved_tokens;
-      print_endline "===========================";
-*)
+      Debug_ocaml.print_debug 8 "===========================";
+(* *)
       Exception.return0 (Parser.translation_unit_file hack (Lexing.from_string ""))
     with
-      | Failure msg -> raise (Failure msg)
+      | Failure msg ->
+          prerr_endline "DEBUG: CPARSER_DRIVER, Failure";
+          raise (Failure msg)
+      
+      | PreParser_undeclared_identifier (str, loc) ->
+          prerr_endline "DEBUG: CPARSER_DRIVER, PreParser_undeclared_identifier";
+          Exception.fail (loc, Errors.(Cparser_cause (Cparser_undeclaredIdentifier str)))
+      
       | err ->
           let tok  = Lexing.lexeme lexbuf in
           let spos = Lexing.lexeme_start_p lexbuf in
           (match err with
             | NonStandard_string_concatenation ->
-                print_endline "ERROR: unsupported non-standard concatenation of string literals"
+                prerr_endline "ERROR: unsupported non-standard concatenation of string literals"
             | _ -> ());
           Exception.fail (Location_ocaml.point spos, Errors.(Cparser_cause (Cparser_unexpectedToken tok)))
 (*

@@ -295,6 +295,105 @@ let rec is_integer_constant_expression (AnnotatedExpression () loc expr) =
 end
 
 
+(*
+val     eval_integer_constant_expression: expression unit -> E.t integer
+let rec eval_integer_constant_expression (AnnotatedExpression () loc expr) =
+  match expr with
+    | AilEunary uop e ->
+        match uop with
+          | Plus ->
+              is_integer_constant_expression e
+          | Minus ->
+              is_integer_constant_expression e
+          | Bnot ->
+              is_integer_constant_expression e
+          | Address ->
+              E.return false
+          | Indirection ->
+              E.return false
+          | PostfixIncr ->
+              E.return false
+          | PostfixDecr ->
+              E.return false
+        end
+    
+(*
+    | AilEbinary _ Comma _ ->
+        E.return false
+    | AilEbinary e1 _ e2 ->
+        is_integer_constant_expression e1 >>= fun b1 ->
+        if b1 then
+          is_integer_constant_expression e2
+        else
+          E.return false
+    
+    | AilEassign _ _ ->
+        E.return false
+    | AilEcompoundAssign _ _ _ ->
+        E.return false
+    
+    | AilEcond _ _ _ ->
+        (* TODO: location *)
+        E.fail loc (Errors.Desugar_NotyetSupported "conditional operator in `integer constant expressions'")
+    
+    | AilEcast _ _ _ ->
+        E.fail loc (Errors.Desugar_NotyetSupported "cast operator in `integer constant expressions'")
+    
+    | AilEcall _ _ ->
+        E.return false
+    | AilEmemberof _ _ ->
+        E.return false
+    | AilEmemberofptr _ _ ->
+        E.return false
+    
+    | AilEconst (ConstantInteger _) ->
+        E.return true
+    | AilEconst (ConstantCharacter _) ->
+        E.return true
+    
+    | AilEident _ ->
+        E.return false
+    
+    | AilEsizeof _ _ ->
+        E.fail loc (Errors.Desugar_NotyetSupported "sizeof operator in `integer constant expressions'")
+
+    | AilEalignof _ _ ->
+        E.fail loc (Errors.Desugar_NotyetSupported "_Alignof operator in `integer constant expressions'")
+    | _ ->
+        error "WIP: Cabs_to_ail.is_integer_constant_expression, wildcard"
+*)
+end
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (* STD §6.6#8 *)
@@ -834,35 +933,72 @@ let register_simple_enumerators ty enums =
 
 
 
+val register_enumerators: Symbol.sym -> list enumerator -> E.t unit
+let register_enumerators enum_tag enums =
+  let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum enum_tag)) in
+  (* STD §6.7.2.2#3, 3rd sentence *)
+  let initN: integer = 0 in
+  Global.error "WIP register_enumerators"
+(*
+  E.foldlM (fun (n, enums) ->
+    let (ident, n) = match enums with
+      | (ident, Nothing) ->
+          (ident, n)
+      | (ident, Just expr) ->
+          KKK
+    end in
+    let expr_ = AilSyntaxAux.expression_FromNat loc ty n
+  ) (initN, enums) ()
+*)
 
 
-val project_base_type_specifier: cabs_type_specifier -> cabs_base_type_specifier
+
+
+
+val project_base_type_specifier: cabs_type_specifier -> maybe cabs_base_type_specifier
 let project_base_type_specifier = function
   | TSpec_void ->
-      BTSpec_void
+      Just BTSpec_void
   | TSpec_char ->
-      BTSpec_char
+      Just BTSpec_char
   | TSpec_short ->
-      BTSpec_short
+      Just BTSpec_short
   | TSpec_int ->
-      BTSpec_int
+      Just BTSpec_int
   | TSpec_long ->
-      BTSpec_long
+      Just BTSpec_long
   | TSpec_float ->
-      BTSpec_float
+      Just BTSpec_float
   | TSpec_double ->
-      BTSpec_double
+      Just BTSpec_double
   | TSpec_signed ->
-      BTSpec_signed
+      Just BTSpec_signed
   | TSpec_unsigned ->
-      BTSpec_unsigned
+      Just BTSpec_unsigned
   | TSpec_Bool ->
-      BTSpec_Bool
+      Just BTSpec_Bool
   | TSpec_Complex ->
-      BTSpec_Complex
+      Just BTSpec_Complex
   | _ ->
-      error "Cabs_to_ail.project_base_type_specifier found a non-base specifier"
+      Nothing
  end
+
+val     project_base_type_specifiers: list cabs_type_specifier -> maybe (list cabs_base_type_specifier)
+let rec project_base_type_specifiers_aux acc = function
+  | [] ->
+      Just (List.reverse acc)
+  | spec :: specs' ->
+      match project_base_type_specifier spec with
+        | Just z ->
+            project_base_type_specifiers_aux (z::acc) specs'
+        | Nothing ->
+            Nothing
+      end
+  end
+
+let project_base_type_specifiers =
+  project_base_type_specifiers_aux []
+
 
 val unproject_base_type_specifier: cabs_base_type_specifier -> cabs_type_specifier
 let unproject_base_type_specifier = function
@@ -916,78 +1052,10 @@ List.all (function
 
 
 
-val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.t (ATypes.basicType)
+val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.t (maybe ATypes.basicType)
 let desugar_basic_type_specifiers specs =
 STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
-  if      specs = Multiset.from_list [BTSpec_char] then
-    (* STD §6.7.2#2, item 2 *)
-    E.return $ ATypes.Integer ATypes.Char
-  else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
-    (* STD §6.7.2#2, item 3 *)
-    E.return $ ATypes.Integer (ATypes.Signed ATypes.Ichar)
-  else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
-    (* STD §6.7.2#2, item 4 *)
-    E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Ichar)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_short];
-            Multiset.from_list [BTSpec_signed; BTSpec_short];
-            Multiset.from_list [BTSpec_short; BTSpec_int];
-            Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 5 *)
-    E.return $ ATypes.Integer (ATypes.Signed ATypes.Short)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_unsigned; BTSpec_short];
-            Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 6 *)
-    E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Short)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_int];
-            Multiset.from_list [BTSpec_signed];
-            Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 7 *)
-    E.return $ ATypes.Integer (ATypes.Signed ATypes.Int_)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_unsigned];
-            Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 8 *)
-    E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Int_)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_long];
-            Multiset.from_list [BTSpec_signed; BTSpec_long];
-            Multiset.from_list [BTSpec_long; BTSpec_int];
-            Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
-    (* STD §6.7.2#2, item 9 *)
-    E.return $ ATypes.Integer (ATypes.Signed ATypes.Long)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_unsigned; BTSpec_long];
-            Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 10 *)
-    E.return $ ATypes.Integer (ATypes.Unsigned ATypes.Long)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_long; BTSpec_long];
-            Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
-            Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
-            Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 11 *)
-    E.return $ ATypes.Integer (ATypes.Signed ATypes.LongLong)
-  else if List.any (fun z -> specs = z) [
-            Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
-            Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
-    (* STD §6.7.2#2, item 12 *)
-    E.return $ ATypes.Integer (ATypes.Unsigned ATypes.LongLong)
-  else if specs = Multiset.from_list [BTSpec_float] then
-    (* STD §6.7.2#2, item 13 *)
-    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.Float)
-  else if specs = Multiset.from_list [BTSpec_double] then
-    (* STD §6.7.2#2, item 14 *)
-    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.Double)
-  else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
-    (* STD §6.7.2#2, item 15 *)
-    E.return $ ATypes.Floating (ATypes.RealFloating ATypes.LongDouble)
-  else if specs = Multiset.from_list [BTSpec_Bool] then
-    (* STD §6.7.2#2, item 16 *)
-    E.return $ ATypes.Integer (ATypes.Bool)
-  else if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
+  if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
     (* STD §6.7.2#2, item 17 *)
     E.fail Loc.unknown $ Errors.Desugar_NeverSupported "_Complex types"
   else if specs = Multiset.from_list [BTSpec_double; BTSpec_Complex] then
@@ -996,8 +1064,79 @@ STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
   else if specs = Multiset.from_list [BTSpec_long; BTSpec_double; BTSpec_Complex] then
     (* STD §6.7.2#2, item 19 *)
     E.fail Loc.unknown $ Errors.Desugar_NeverSupported "_Complex types"
+  
   else
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
+    E.return $
+      if specs = Multiset.from_list [BTSpec_char] then
+        (* STD §6.7.2#2, item 2 *)
+        Just (ATypes.Integer ATypes.Char)
+      else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
+        (* STD §6.7.2#2, item 3 *)
+        Just (ATypes.Integer (ATypes.Signed ATypes.Ichar))
+      else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
+        (* STD §6.7.2#2, item 4 *)
+        Just (ATypes.Integer (ATypes.Unsigned ATypes.Ichar))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_short];
+                Multiset.from_list [BTSpec_signed; BTSpec_short];
+                Multiset.from_list [BTSpec_short; BTSpec_int];
+                Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 5 *)
+        Just (ATypes.Integer (ATypes.Signed ATypes.Short))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_unsigned; BTSpec_short];
+                Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 6 *)
+        Just (ATypes.Integer (ATypes.Unsigned ATypes.Short))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_int];
+                Multiset.from_list [BTSpec_signed];
+                Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 7 *)
+        Just (ATypes.Integer (ATypes.Signed ATypes.Int_))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_unsigned];
+                Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 8 *)
+        Just (ATypes.Integer (ATypes.Unsigned ATypes.Int_))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_long];
+                Multiset.from_list [BTSpec_signed; BTSpec_long];
+                Multiset.from_list [BTSpec_long; BTSpec_int];
+                Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
+        (* STD §6.7.2#2, item 9 *)
+        Just (ATypes.Integer (ATypes.Signed ATypes.Long))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_unsigned; BTSpec_long];
+                Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 10 *)
+        Just (ATypes.Integer (ATypes.Unsigned ATypes.Long))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_long; BTSpec_long];
+                Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
+                Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
+                Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 11 *)
+        Just (ATypes.Integer (ATypes.Signed ATypes.LongLong))
+      else if List.any (fun z -> specs = z) [
+                Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
+                Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
+        (* STD §6.7.2#2, item 12 *)
+        Just (ATypes.Integer (ATypes.Unsigned ATypes.LongLong))
+      else if specs = Multiset.from_list [BTSpec_float] then
+        (* STD §6.7.2#2, item 13 *)
+        Just (ATypes.Floating (ATypes.RealFloating ATypes.Float))
+      else if specs = Multiset.from_list [BTSpec_double] then
+        (* STD §6.7.2#2, item 14 *)
+        Just (ATypes.Floating (ATypes.RealFloating ATypes.Double))
+      else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
+        (* STD §6.7.2#2, item 15 *)
+        Just (ATypes.Floating (ATypes.RealFloating ATypes.LongDouble))
+      else if specs = Multiset.from_list [BTSpec_Bool] then
+        (* STD §6.7.2#2, item 16 *)
+        Just (ATypes.Integer (ATypes.Bool))
+      else
+        Nothing
 
 
 val translate_type_qualifiers: list cabs_type_qualifier -> ATypes.qualifiers
@@ -1010,10 +1149,19 @@ STD_ "§6.7.3#5" $
 
 val     desugar_type_specifiers : list cabs_type_specifier -> E.t (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
-  match specs with
-  | [] ->
-STD_ "§6.7.2#2, sentence 1"
-      E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
+  match project_base_type_specifiers specs with
+    | Just z ->
+        desugar_basic_type_specifiers (Multiset.from_list z)
+    | Nothing ->
+        E.return Nothing
+  end >>= function
+    | Just bty ->
+        E.return (ATypes.no_qualifiers, ATypes.Basic bty)
+    | Nothing ->
+        match specs with
+          | [] ->
+              STD_ "§6.7.2#2, sentence 1"
+                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
   
   | [TSpec_void] ->
 STD_ "§6.7.2#2, sentence 2 (`void' case)"
@@ -1181,11 +1329,10 @@ and struct_declaration =
                   E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case 1115")
             end
       end
-  | ss ->
-      desugar_basic_type_specifiers (Multiset.from_list $ List.map project_base_type_specifier ss) >>= fun bty ->
-      E.return (ATypes.no_qualifiers, ATypes.Basic bty)
+  | _ ->
+      E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
 end
-
+end
 
 
 
@@ -1816,80 +1963,79 @@ and static_thread_implicit_initializer tagDefs ty =
 (*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.t ? *)
 and wip_desugar_initializer_ loc dur current_ty init =
   match init with
-  | Init_expr e ->
-      (* we ignore the type here because the type checking will catch
-         errors later *)
-      match dur with
-        | ATypes.Automatic ->
-            desugar_expression e >>= fun d_e ->
-            E.return d_e
-        | ATypes.Allocated ->
-            error "not possible"
-        (* Static | Thread *)
-        | _ ->
-            desugar_expression e                   >>= fun d_e ->
-            is_initializer_constant_expression d_e >>= function
-              | true ->
-                  E.return d_e
+    | Init_expr e ->
+        (* we ignore the type here because the type checking will catch
+           errors later *)
+        match dur with
+          | ATypes.Automatic ->
+              desugar_expression e >>= fun d_e ->
+                E.return d_e
+          | ATypes.Allocated ->
+              error "not possible"
+          (* Static | Thread *)
+          | _ ->
+              desugar_expression e                   >>= fun d_e ->
+              is_initializer_constant_expression d_e >>= function
+                | true ->
+                    E.return d_e
 (*
                   evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun cst ->
                   E.return $
                     AnnotatedExpression () (AilEconst (ConstantInteger cst))
 *)
-              | false ->
-                  E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
-            end
-      end
-  
-  | Init_list desigs_opt_inits ->
-      E.get_tag_definitions >>= fun tagDefs ->
-      match current_ty with
-        | ATypes.Array elem_ty (Just n) ->
-            (* STD §6.7.9#10 *)
-            let implicit = AnnotatedExpression () Loc.unknown (* TODO *) $ AilEconst match dur with
-              | ATypes.Automatic ->
-                  ConstantIndeterminate elem_ty
-              | ATypes.Allocated ->
-                  error "not possible"
-              (* Static | Thread *)
-              | _ ->
-                  static_thread_implicit_initializer tagDefs elem_ty
-            end in
-            
-            E.foldlM (fun (desigs_opt, init) (i, acc) ->
-              match desigs_opt with
-                | Just [Desig_array e] ->
-                    desugar_expression e               >>= fun d_e ->
-                    is_integer_constant_expression d_e >>= function
-                      | true ->
-                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= function
-                            | IConstant j _ _ ->
-                                wip_desugar_initializer_ loc dur elem_ty init             >>= fun d_e               ->
-                                match compare j i with
-                                  | LT ->
-                                      E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
-                                  | EQ ->
-                                      E.return (i+1, acc)
-                                  | GT ->
-                                      E.return (j+1, Just d_e :: (Global.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
-                                end
-                            | _ ->
-                                error "WIP: Cabs_to_ail.wip_desugar_initializer_, Init_list, Desig_array, not IConstant"
-                          end
-                      
-                      | false ->
-                          E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
-                    end
+                | false ->
+                    E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
+              end
+        end
+    
+    | Init_list desigs_opt_inits ->
+        E.get_tag_definitions >>= fun tagDefs ->
+        match current_ty with
+          | ATypes.Array elem_ty (Just n) ->
+              (* STD §6.7.9#10 *)
+              let implicit = AnnotatedExpression () Loc.unknown (* TODO *) $ AilEconst match dur with
+                | ATypes.Automatic ->
+                    ConstantIndeterminate elem_ty
+                | ATypes.Allocated ->
+                    error "not possible"
+                (* Static | Thread *)
+                | _ ->
+                    static_thread_implicit_initializer tagDefs elem_ty
+              end in
+              
+              E.foldlM (fun (desigs_opt, init) (i, acc) ->
+                match desigs_opt with
+                  | Just [Desig_array e] ->
+                      desugar_expression e               >>= fun d_e ->
+                      is_integer_constant_expression d_e >>= function
+                        | true ->
+                            evaluate_integer_constant_expression (Loc.locOf e) d_e >>= function
+                              | IConstant j _ _ ->
+                                  wip_desugar_initializer_ loc dur elem_ty init >>= fun d_e ->
+                                  match compare j i with
+                                    | LT ->
+                                        E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
+                                    | EQ ->
+                                        E.return (i+1, acc)
+                                    | GT ->
+                                        E.return (j+1, Just d_e :: (Global.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
+                                  end
+                              | _ ->
+                                  error "WIP: Cabs_to_ail.wip_desugar_initializer_, Init_list, Desig_array, not IConstant"
+                            end
+                        | false ->
+                            E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+                      end
 (*
                 | Just [Desig_member id] ->
 *)
 
-                | Nothing ->
-                    wip_desugar_initializer_ loc dur elem_ty init >>= fun cst ->
-                    E.return (i+1, Just cst :: acc)
-                | _ ->
-                    (* Multi-array designator *)
-                    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
+                  | Nothing ->
+                      wip_desugar_initializer_ loc dur elem_ty init >>= fun cst ->
+                      E.return (i+1, Just cst :: acc)
+                  | _ ->
+                      (* Multi-array designator *)
+                      E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
               end
             ) desigs_opt_inits (0, []) >>= fun (_, xs) ->
             E.return $
@@ -2083,6 +2229,18 @@ and designator =
 (*
         | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
 *)
+
+        | ATypes.Union tag ->
+            (* TODO: check the STD!!!!! *)
+            E.resolve_tag_definition tag >>= function
+              | E.Union_definition ident_tys ->
+                  E.fail loc (Errors.Desugar_OtherViolation "TODO union init")
+
+              | _ ->
+                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Union init thing")
+            end
+
+
         | ATypes.Array elem_ty Nothing ->
             error "TODO: not allowing array with no size for now"
 
@@ -2096,7 +2254,7 @@ and designator =
               | _ ->
                   (* TODO: this (at leat) possible with something like:
                        int a = {1, 2}; *)
-                  error "WIP: error message. is that even a possible case?"
+                  error "WIP: error message. is that even a possible case? (11)"
             end
 (*
 (§6.7.9#11, sentence 1) The initializer for a scalar shall be a single expression, optionally enclosed in braces.

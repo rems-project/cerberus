@@ -102,7 +102,7 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.sequentialise !!cerb_conf.core_stdlib
+    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.sequentialise
                          (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
@@ -158,17 +158,19 @@ let backend sym_supply core_file args =
         exit 1
     | Some (Exhaustive | Random) ->
         (* TODO: temporary hack for the command name *)
-        match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
-          | Exception.Result (pe::_) ->
+        Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
+          | Exception.Result (Pexpr (_, PEval (Vspecified (OVinteger ival))) :: _) ->
             begin
               (* TODO: yuck *)
               try
-                int_of_string (String_core.string_of_pexpr pe)
+                int_of_string (String_mem.string_pretty_of_integer_value ival)
               with | _ ->
+                Debug_ocaml.warn "Return value was not a (simple) specified integer";
                 0
             end
           | _ ->
-              0
+              Debug_ocaml.warn "Return value was not a specified integer or was an undef/error";
+              0)
 
 
 
@@ -252,7 +254,6 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   end in
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
     sequentialise concurrency preEx compile (* TODO *) RefStd batch experimental_unseq typecheck_core;
   
@@ -263,8 +264,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile
     (* TODO *) RefStd batch experimental_unseq typecheck_core;
-
-  
+  (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
   if !!cerb_conf.concurrency_tests then
@@ -386,5 +386,6 @@ let () =
         exit 1
     | `Ok n ->
         exit n
-    | _ ->
+    | `Version
+    | `Help ->
         exit 0

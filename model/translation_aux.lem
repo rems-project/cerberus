@@ -10,6 +10,26 @@ module Aty  = AilTypes
 
 
 
+
+val     fetch_stdlib_symbol_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
+let rec fetch_stdlib_symbol_aux pred xs =
+ match xs with
+    | []     -> Nothing
+    | x::xs' -> if pred x then Just x else fetch_stdlib_symbol_aux pred xs'
+  end
+
+val fetch_stdlib_symbol: list Symbol.sym -> string -> Symbol.sym
+let fetch_stdlib_symbol syms str =
+  match fetch_stdlib_symbol_aux (function (Symbol.Symbol _ (Just z)) -> z = str | _ -> false end) syms with
+    | Just sym ->
+        sym
+    | Nothing ->
+        error ("[Translate_aux.fetch_stdlib_symbol] `" ^ str ^ "' is required to be defined by the Core standard library.")
+ end
+
+
+
+
 (* this is only used by [mk_stdcall] *)
 val     mk_stdcall_aux: forall 'a. ('a -> bool) -> list 'a -> maybe 'a
 let rec mk_stdcall_aux pred xs =
