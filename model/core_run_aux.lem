@@ -113,13 +113,12 @@ let rec add_to_sb p_aids expr =
           error "Core_run_aux.add_to_sb, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_sb, Ebound"
+(*
       | Esave k a_tys e ->
           Esave k a_tys (add_to_sb p_aids e)
       | Erun annots k a_vs ->
           Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-      | Ereturn _ ->
-          (* no change *)
-          expr
+*)
       | End es ->
           End (List.map (add_to_sb p_aids) es)
       | Epar es ->
@@ -211,13 +210,12 @@ let rec add_to_asw aids expr =
           error "Core_run_aux.add_to_asw, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_asw, Ebound"
+(*
       | Esave k a_tys e ->
           Esave k a_tys (add_to_asw aids e)
       | Erun annots k a_vs ->
           Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
-      | Ereturn _ ->
-          (* no change *)
-          expr
+*)
       | End es ->
           End (List.map (add_to_asw aids) es)
       | Epar es ->

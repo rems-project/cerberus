@@ -3,38 +3,8 @@ import Map_extra
 
 open import Global Exception Core Errors
 
-module E = struct
-  type eff 'a = Exception.exceptM 'a Errors.error
-  include Exception
-
-  val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a =>
-               ('k -> 'a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
-  let mapMapM f xs =
-    Map_extra.fold (fun k a acc ->
-      bind (f k a) (fun b ->
-        bind acc (fun bs ->
-          return (Map.insert k b bs)
-        )
-      )
-    ) xs (return Map.empty)
-
-  val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
-  let runM m = m
-  
-  val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
-  let fail loc cause =
-    Exception (loc, Errors.Core_typing_cause cause)
-  
-  val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
-  let guard pred loc cause =
-    if pred then
-      return ()
-    else
-      Exception (loc, Errors.Core_typing_cause cause)
-(* BUG in Lem (see issue #197)
-      fail loc cause
-*)
-end
+import Core_typing_effect
+module E = Core_typing_effect
 
 let inline (>>=)      = E.bind
 let inline (>>) m1 m2 = m1 >>= fun _ -> m2
@@ -47,8 +17,27 @@ type typing_decl =
   | TDfun  of core_base_type * list core_base_type
   | TDproc of core_base_type * list core_base_type
 
-type typing_env =
-    map name typing_decl (* (either core_base_type (core_base_type * list core_base_type)) *)
+
+type typing_env = <|
+  decls: map name typing_decl; (* (either core_base_type (core_base_type * list core_base_type)) *)
+  labs: map Symbol.sym (core_base_type * list core_base_type)
+|>
+
+val empty_env: typing_env
+let empty_env =
+  <| decls= Map.empty; labs= Map.empty |>
+
+let singleton_tdecl_env nm tdecl =
+  <| decls= Map.singleton nm tdecl; labs= Map.empty |>
+
+let env_union env1 env2 =
+  <| decls= Map.(union) env1.decls env2.decls; labs= Map.(union) env1.labs env2.labs |>
+
+let env_unions envs =
+  List.foldl env_union empty_env envs
+
+let insert_tdecl nm decl env =
+  <| env with decls= Map.insert nm decl env.decls |>
 
 
 type inferred =

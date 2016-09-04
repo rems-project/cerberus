@@ -351,3 +351,14 @@ let rec pickWith_ pred acc = function
 end
 let pickWith pred xs =
   pickWith_ pred [] xs
+
+val     last: forall 'a. list 'a -> maybe 'a
+let rec last xs =
+  match xs with
+    | [] ->
+        Nothing
+    | [x] ->
+        Just x
+    | _::xs ->
+        last xs
+  end

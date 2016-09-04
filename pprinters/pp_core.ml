@@ -59,13 +59,11 @@ let rec precedence_expr = function
  | Ecase _
  | Eskip
  | Eproc _
- | Ereturn _
  | Eunseq _
  | Eindet _
  | Ebound _
  | End _
  | Erun _
- | Erun2 _
  | Epar _
  | Ewait _ ->
      None
@@ -80,8 +78,7 @@ let rec precedence_expr = function
      Some 3
  | Ewseq _ ->
      Some 4
- | Esave _
- | Esave2 _ ->
+ | Esave _ ->
      Some 5
  | Eloc (_, e) ->
      None
@@ -459,8 +456,6 @@ let rec pp_expr expr =
           pp_keyword "skip"
       | Eproc (_, pe, pes) ->
           pp_keyword "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
-      | Ereturn pe ->
-          pp_keyword "return" ^^^ P.parens (pp_pexpr pe)
       | Eunseq [] ->
           !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
       | Eunseq [e] ->
@@ -485,18 +480,14 @@ let rec pp_expr expr =
           pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
       | Eindet (i, e) ->
           pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
-      | Esave (sym, sym_tys, e) ->
-          pp_control "save" ^^^ pp_symbol sym ^^
-          P.parens (comma_list (fun (sym,ty) -> pp_symbol sym ^^ P.colon ^^^ Pp_core_ctype.pp_ctype ty) sym_tys) ^^
-          pp_control "in" ^^^ pp e ^^^ pp_control "end"
-      | Erun (_, sym, sym_pes) ->
-          pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list (fun (sym, pe) -> pp_symbol sym ^^ P.colon ^^^ pp_pexpr pe) sym_pes)
-      | Esave2 (sym, sym_bTys, e) ->
-          pp_keyword "save2" ^^^ pp_symbol sym ^^
-          P.parens (comma_list (fun (sym, bTy) -> pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy) sym_bTys) ^^^
+      | Esave ((sym, bTy), sym_bTy_pes, e) ->
+          pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          P.parens (comma_list (fun (sym, (bTy, pe)) ->
+            pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
+          ) sym_bTy_pes) ^^^
           pp_control "in" ^^^ pp e
-      | Erun2 (_, sym, pes) ->
-          pp_keyword "run2" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
+      | Erun (_, sym, pes) ->
+          pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
       | Epar es ->
           pp_keyword "par" ^^ P.parens (comma_list pp es)
       | Ewait tid ->
@@ -645,7 +636,10 @@ let pp_file file =
   mk_comment (pp_tagDefinitions (Tags.tagDefs ())) ^^
   P.break 1 ^^ P.break 1 ^^
   
+  !^ "-- Globals" ^^ P.break 1 ^^
   List.fold_left pp_glob P.empty file.globs ^^
+  
+  !^ "-- Fun map" ^^ P.break 1 ^^
   pp_fun_map file.funs
   end
 

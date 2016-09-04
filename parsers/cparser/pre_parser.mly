@@ -1,7 +1,9 @@
 %{
   open Pre_parser_aux
-
+  
   let set_id_type (z,r) t =
+    Debug_ocaml.print_debug 8 ("Pre_parser set_id_type: '" ^ z ^ "' (was " ^
+                               string_of_typ !r ^ ") <== " ^ string_of_typ t);
     r := t
 
   let declare_varname (str, _) =
@@ -129,7 +131,8 @@ primary_expression:
 | id= VAR_NAME
     { set_id_type id VarId }
 | id= UNKNOWN_NAME
-    { failwith ("Found undeclared identifier: " ^ (fst id)) }
+(*    { failwith ("Found undeclared identifier: " ^ (fst id)) } *)
+    { raise (PreParser_undeclared_identifier (fst id, Location_ocaml.Loc_region ($startpos, $endpos, None))) }
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN

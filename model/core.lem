@@ -82,6 +82,19 @@ type generic_name 'sym =
  | Sym of 'sym (* Core identifier *)
  | Impl of Implementation_.implementation_constant (* implementation-defined constant *)
 
+instance forall 'sym. MapKeyType 'sym => (MapKeyType (generic_name 'sym))
+  let mapKeyCompare nm1 nm2 =
+    match (nm1, nm2) with
+      | (Sym sym1, Sym sym2) ->
+          mapKeyCompare sym1 sym2
+      | (Impl iCst1, Impl iCst2) ->
+          mapKeyCompare iCst1 iCst2
+      | (Sym _, Impl _) ->
+          LT
+      | (Impl _, Sym _) ->
+          GT
+    end
+end
 
 type generic_object_value 'sym =  (* C object values *)
  | OVinteger of Mem.integer_value (* integer value *)
@@ -181,7 +194,6 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core if *)
  | Eskip (* skip *)
  | Eproc of 'a * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
- | Ereturn of (generic_pexpr 'bty 'sym) (* Core procedure return *)
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
  | Ewseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
  | Esseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
@@ -189,11 +201,10 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
  | Ebound of nat * (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
  | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
- | Esave of Symbol.sym * list (Symbol.sym * ctype) * (generic_expr 'a 'bty 'sym) (* save label *)
- | Erun of 'a * Symbol.sym * list (Symbol.sym * (generic_pexpr 'bty 'sym)) (* run from label *)
- 
- | Esave2 of Symbol.sym * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty 'sym
- | Erun2 of 'a * Symbol.sym * list (generic_pexpr 'bty 'sym)
+   (* the pexpr associated to the symbols are their value when the control flows throught the Esave (i.e. when
+      doesn't come from a Erun) *)
+ | Esave of (Symbol.sym * core_base_type) * list (Symbol.sym * (core_base_type * generic_pexpr 'bty 'sym)) * generic_expr 'a 'bty 'sym
+ | Erun of 'a * Symbol.sym * list (generic_pexpr 'bty 'sym)
  
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem thread creation *)
  | Ewait of Cthread.thread_id (* wait for thread termination *)

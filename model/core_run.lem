@@ -265,14 +265,12 @@ let rec hoist_negatives expr =
     | Ebound i e ->
         hoist_negatives e >>= fun e' ->
         State.return (Ebound i e')
+(*
     | Esave ksym sym_tys e ->
         hoist_negatives e >>= fun e' ->
         State.return (Esave ksym sym_tys e')
     | Erun _ _ _ ->
       State.return expr
-(*
-    | Ereturn _ ->
-        State.return expr
 *)
     | End es ->
         State.mapM hoist_negatives es >>= fun es' ->
@@ -792,13 +790,13 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_tau "Eif (then)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
-                E.return <| th_st with arena= e2; labels= Map.(union) labeled_conts th_st.labels |>
+                E.return <| th_st with arena= e2; labels2= Map.(union) labeled_conts th_st.labels2 |>
               )
           | PEval Vfalse ->
               Step_tau "Eif (else)" (
                 let labeled_conts =
                   Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
-                E.return <| th_st with arena= e3; labels= Map.(union) labeled_conts th_st.labels |>
+                E.return <| th_st with arena= e3; labels2= Map.(union) labeled_conts th_st.labels2 |>
               )
           | PEval _ ->
               Step_error "the first operand of an Eif didn't evaluated to a boolean"
@@ -994,69 +992,16 @@ end
                 |>
               )
         end
-
     
-    | (Esave k a_tys e, Stack_cons cont _) ->
-        (* TODO: this is partial *)
-        one $ Step_tau "Esave" (
-          E.return <| th_st with arena= e; labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels |>
-        )
-    
-    | (Erun annots k sym_vs, Stack_cons cont sk) ->
-        one $ Step_tau "Erun" (
-          match Map.lookup k th_st.labels with
-            | Just cont ->
-                SEU.return cont
-            | Nothing ->
-                match find_labeled_continuation k (apply_continuation cont th_st.arena) with
-                  | Nothing ->
-                      SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show k))
-                  | Just cont ->
-                      SEU.return cont
-                end
-          end >>= fun ((sym_tys, e_cont) as cont) ->
-          (* TODO: debug *)
-(*          let _ = Boot.output_string ("stepping Erun ===> " ^ Pp.stringFromCore_expr e_cont) in *)
-          
-          (* we have to create the objects which are visible at the level of the save but not from the run *)
-          let (create_syms, create_tys) = unzip $
-            List.filter (fun (sym, _) -> not (List.any (fun (z, _) -> z = sym) sym_vs)) sym_tys in
-          (* symmetrically, we have to kill the objects which are visible at the level of the run but not from the save.*)
-          let kill_es = List.map snd $ List.filter (fun (sym, _) ->
-            not (List.any (fun (z, _) -> z = sym) sym_tys)
-          ) sym_vs in
-          let e =
-            Ewseq (Caux.mk_empty_pat BTy_unit) (mk_unseq $ List.map (fun e -> pkill Loc.unknown e) kill_es)
-              match create_syms with
-                | [] ->
-                    (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
-                | _ ->
-                    Ewseq (Caux.mk_tuple_pat (List.map (fun z -> CaseBase (Just z, BTy_object OTy_pointer)) create_syms))
-                       (mk_unseq $ List.map (fun ty ->
-                         let ty_pe = Caux.mk_ctype_pe ty in
-                         pcreate Loc.unknown (Caux.mk_alignof_pe ty_pe) ty_pe (Symbol.PrefOther "core_run, Erun")
-                       ) create_tys)
-                       (foldl (fun acc (a, v) -> subst_sym_expr a v acc) e_cont sym_vs)
-              end in
-          (* TODO: it seems strange that annotate_expr need to know the polarity *)
-          let e' = 
-let () = Debug.print_debug 5 "HELLO Erun" in
-add_to_asw annots.asw_before $
-add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) e in (* TODO: remove for sequential !!! *)
-          E.return <| th_st with arena= e';
-                                 stack= push_empty_continuation sk;
-                                 labels= Map.insert k cont th_st.labels
-                   |>
-      )
-    
-    | (Esave2 sym sym_bTys e, Stack_cons cont _) ->
+    | (Esave (sym, _) sym_bTy_pes e, Stack_cons cont _) ->
         (* TODO check *)
-        one $ Step_tau "Esave2" (
-          E.return <| th_st with arena= e; (* labels= Map.insert k (a_tys, apply_continuation cont e) th_st.labels *) |>
+        one $ Step_tau "Esave" (
+          E.return <| th_st with arena= List.foldl (fun acc (sym, (_, pe)) -> subst_sym_expr sym pe acc) e sym_bTy_pes;
+                                 labels2= Map.insert sym (List.map fst sym_bTy_pes, apply_continuation cont e) th_st.labels2 |>
         )
     
-    | (Erun2 annots sym pes, Stack_cons cont sk) ->
-        one $ Step_tau "Erun2" (
+    | (Erun annots sym pes, Stack_cons cont sk) ->
+        one $ Step_tau "Erun" (
           match Map.lookup sym th_st.labels2 with
             | Just z ->
                 (* either the execution already saw the associated Esave; *)
@@ -1085,11 +1030,6 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: 
           |>
         )
     
-    
-    | (Ereturn _, _) ->
-        error "Ereturn is obsolete"
-
-
     | (Epure pe, sk) ->
         one match valueFromPexpr pe with
           | Just cval ->
@@ -1317,16 +1257,10 @@ let rec convert_expr expr =
         Eindet i (convert_expr e)
     | Ebound i e ->
         Ebound i (convert_expr e)
-    | Esave ksym sym_tys e ->
-        Esave ksym sym_tys (convert_expr e)
-    | Erun _ ksym sym_pes ->
-        Erun empty_annotation ksym sym_pes
-    | Esave2 sym sym_bTys e ->
-        Esave2 sym sym_bTys (convert_expr e)
-    | Erun2 _ sym pes ->
-        Erun2 empty_annotation sym pes
-    | Ereturn pe ->
-        Ereturn pe
+    | Esave sym sym_bTys e ->
+        Esave sym sym_bTys (convert_expr e)
+    | Erun _ sym pes ->
+        Erun empty_annotation sym pes
     | End es ->
         End (List.map convert_expr es)
     | Epar es ->

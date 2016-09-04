@@ -297,6 +297,8 @@ let std_ref = function
 
 
 let short_message = function
+  | Cparser_cause (Cparser_undeclaredIdentifier str) ->
+      "undeclared identifier '"^ str ^ "'"
   | Cparser_cause (Cparser_unexpectedToken str) ->
       "unexpected token '"^ str ^ "'"
 

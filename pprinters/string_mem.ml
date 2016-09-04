@@ -1,5 +1,8 @@
 open Pp_mem
 
+let string_pretty_of_integer_value ival =
+  Pp_utils.to_plain_string (pp_pretty_integer_value { Boot_printf.basis= Some AilSyntax.Decimal; Boot_printf.use_upper= false } ival)
+
 let string_of_mem_value mval =
   Pp_utils.to_plain_string (pp_mem_value mval)
 

@@ -1,4 +1,4 @@
-open import Pervasives Common AilTypes AilTypesAux AilSyntax
+open import Pervasives Common AilTypes AilTypesAux AilSyntax Loc
 
 
 (* STD §6.3.2.3#3, sentence 1 *)
@@ -54,3 +54,15 @@ and fv (v : identifier) (ex : expression 'a) : bool =
 
 (* TODO: doc *)
 let fv_arguments (v : identifier) (a: list (expression 'a)) : bool = fv_arguments_aux fv v a
+
+
+
+
+val expression_FromNat: Loc.t -> AilTypes.ctype -> nat -> expression_ unit
+let expression_FromNat loc ty n =
+  let basis =
+    if n = 0 then Octal else Decimal in
+  AilEannot ty (
+    AnnotatedExpression () loc (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
+  )
+

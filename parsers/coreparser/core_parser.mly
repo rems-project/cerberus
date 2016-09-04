@@ -489,9 +489,6 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
      symbolify_pexpr _pe           >>= fun pe ->
      Eff.mapM symbolify_pexpr _pes >>= fun pes ->
      Eff.return (Eproc ((), pe, pes))
- | Ereturn _pe ->
-     symbolify_pexpr _pe >>= fun pe ->
-     Eff.return (Ereturn pe)
  | Eunseq _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (Eunseq es)
@@ -520,10 +517,6 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | End _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (End es)
- | Esave _ ->
-     failwith "WIP: Esave"
- | Erun _ ->
-     failwith "WIP: Erun"
  | Epar _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (Epar es)
@@ -1188,12 +1181,14 @@ expr:
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Ebound (Nat_big_num.to_int n, _e) ) }
 (*
+| SAVE _sym= SYM LPAREN RPAREN IN _e= expr
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Esave2 () ) }
+
+
   | Esave of ksym * list (Symbol.t * ctype) * generic_expr 'a 'ty 'sym
   | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
   *)
-| RETURN _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
-           , Ereturn _pe ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , End _es ) }

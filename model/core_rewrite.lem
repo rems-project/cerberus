@@ -199,8 +199,10 @@ let rec remove_skips expr =
       Eindet i (remove_skips e)
   | Ebound i e ->
       Ebound i (remove_skips e)
+(*
   | Esave k sym_tys e ->
       Esave k sym_tys (remove_skips e)
+*)
   | End es ->
       End (List.map remove_skips es)
   | Epar es ->
@@ -295,10 +297,12 @@ let rec remove_unseqs expr =
       Eindet i (remove_unseqs e)
   | Ebound i e ->
       Ebound i (remove_unseqs e)
+(*
   | Esave k sym_tys e ->
       Esave k sym_tys (remove_unseqs e)
   | End es ->
       End (List.map remove_unseqs es)
+*)
   | Epar es ->
       Epar (List.map remove_unseqs es)
   | _ ->
@@ -499,10 +503,8 @@ let rec flatten_seqs expr =
         Eindet i (flatten_seqs e)
     | Ebound i e ->
         Ebound i (flatten_seqs e)
-    | Esave k a_tys e ->
-        Esave k a_tys (flatten_seqs e)
-    | Esave2 sym sym_bTys e ->
-        Esave2 sym sym_bTys (flatten_seqs e)
+    | Esave sym sym_bTys e ->
+        Esave sym sym_bTys (flatten_seqs e)
     | End es ->
         End (List.map flatten_seqs es)
     | Epar es ->
@@ -658,10 +660,12 @@ let rec remove_conv_int expr =
         Eindet i (remove_conv_int e)
     | Ebound i e ->
         Ebound i (remove_conv_int e)
+(*
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (remove_conv_int e)
     | Erun () ksym sym_pes ->
         Erun () ksym (List.map (fun (sym, pe) -> (sym, remove_conv_int_pexpr pe)) sym_pes)
+*)
 (*
     | Ereturn pe ->
         Ereturn (remove_conv_int_pexpr pe)
@@ -761,8 +765,10 @@ let rec sequentialise_creates_kills expr =
         Eindet i (sequentialise_creates_kills e)
     | Ebound i e ->
         Ebound i (sequentialise_creates_kills e)
+(*
     | Esave k a_tys e ->
         Esave k a_tys (sequentialise_creates_kills e)
+*)
     | End es ->
         End (List.map sequentialise_creates_kills es)
     | Epar es ->
@@ -971,8 +977,10 @@ let rec pure_propagation2 expr =
         Eindet i (pure_propagation2 e)
     | Ebound i e ->
         Ebound i (pure_propagation2 e)
+(*
     | Esave sym sym_tys e ->
         Esave sym sym_tys (pure_propagation2 e)
+*)
     | End es ->
         End (List.map pure_propagation2 es)
     | Epar es ->

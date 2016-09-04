@@ -69,6 +69,7 @@ type core_run_error =
 
 
 type cparser_cause =
+  | Cparser_undeclaredIdentifier of string
   | Cparser_unexpectedToken of string
 
 

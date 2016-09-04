@@ -1,4 +1,17 @@
 open import Pervasives
+import AilTypes
+
+(* NEW WAY *)
+type implementation = <|
+  (* we use partial maps for sizeof/alignof *)
+  sizeof:  map AilTypes.ctype integer;
+  alignof: map AilTypes.ctype integer;
+  
+  (* TODO: more *)
+|>
+
+
+
 
 type implementation_constant =
   (* J.3.2 Environment *)

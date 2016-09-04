@@ -246,10 +246,11 @@ enumeration_constant:
 primary_expression:
 | str= VAR_NAME2
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEident (CabsIdentifier (Loc_point $startpos(str), str))) }
-(*
 | str= OTHER_NAME
-    { failwith ("Found undeclared name: " ^ str) }
-*)
+(*    { failwith ("OTHER_NAME in Parser: " ^ str) } *)
+    (* TODO TEMPORARY, should have scopes and namespaces in pre_parser .... *)
+    { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEident (CabsIdentifier (Loc_point $startpos(str), str))) }
+
 | cst= CONSTANT
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEconst cst) }
 | lit= STRING_LITERAL
