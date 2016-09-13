@@ -83,7 +83,7 @@ let make_message loc k str =
             | Some l ->
                 let cpos = pos.pos_cnum - pos.pos_bol in
                 l ^ "\n" ^
-                ansi_format [Bold; Green] ((* Bytes.init *) my_string_init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+                ansi_format [Bold; Green] (my_string_init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
             | None ->
                 "")
       | Loc_region (start_p, end_p, cursor_p_opt) ->
@@ -102,13 +102,10 @@ let make_message loc k str =
                   | None ->
                       cpos1 in
                 l ^ "\n" ^
-                ansi_format [Bold; Green] ((* String.init *) my_string_init (cpos2 + 1)
-                                             (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                                          )
-
-
-
-
+                ansi_format [Bold; Green] (
+                  my_string_init ((max cursor cpos2) + 1)
+                    (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
+                )
             | None ->
                 "")
 
@@ -336,7 +333,7 @@ let short_message = function
            within a subexpression that is not evaluated.'\n"
 
     | AIL_TYPING (TError std) ->
-        "[Ail typing error] (" ^ std ^ ")\n \"" ^ Pp_std.quote std ^ "\""
+        "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
 
     | AIL_TYPING (TError_lvalue_coercion ty) ->
         "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype ty) ^ "\""

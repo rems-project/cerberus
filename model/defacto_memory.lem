@@ -1726,6 +1726,7 @@ let ge_ptrval eqs ptrval1 ptrval2 =
 
 
 let diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : integer_value =
+  (* STD says "When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object" *)
   (* TODO: too permissive for now *)
   let prov = match (prov1, prov2) with
     | (Prov_none, Prov_none) ->
@@ -2175,12 +2176,42 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 let ptrcast_ival int_ty ref_ty (IV prov ival) =
   (* TODO: check the types *)
   match ival with
-  | IVfromptr ty ptrval_ ->
-      PV prov ptrval_ []
-  | _  ->
-  (* TODO: for integer_value with no provenance, this is define only if the value is within
-           the range of "device memory addresses" and the resulting pointer_value has Prov_device *)
-  error "WIP: ptrcast_ival"
+    | IVfromptr ty ptrval_ ->
+        PV prov ptrval_ []
+    | _  ->
+      (* TODO: for integer_value with no provenance, this is define only if the value is within
+         the range of "device memory addresses" and the resulting pointer_value has Prov_device *)
+      let str = match ival with
+        | IVunspecified ->
+            "IVunspecified"
+        | IVconcurRead _ _ ->
+            "IVconcurRead"
+        | IVconcrete _ ->
+            "IVconcrete"
+        | IVaddress _ ->
+            "IVaddress"
+        | IVfromptr _ _ ->
+            "IVfromptr"
+        | IVop _ _ ->
+            "IVop"
+        | IVmin _ ->
+            "IVmin"
+        | IVmax _ ->
+            "IVmax"
+        | IVsizeof _ ->
+            "IVsizeof"
+        | IValignof _ ->
+            "IValignof"
+        | IVoffsetof _ _ ->
+            "IVoffsetof"
+        | IVptrdiff _ _ ->
+            "IVptrdiff"
+        | IVbyteof _ _ ->
+            "IVbyteof"
+        | IVcomposite _ ->
+            "IVcomposite"
+      end in
+      error ("WIP: ptrcast_ival ==> " ^ str)
   end
 
 

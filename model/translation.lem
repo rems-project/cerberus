@@ -1177,41 +1177,83 @@ else
           E.fresh_symbol      >>= fun obj1_sym      ->
           E.fresh_symbol      >>= fun obj2_sym      ->
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e1) then
-            let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-            let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
-            let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
-            let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
-            let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
-            let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
-            E.return $
-              C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
-                                         ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
-                C.Epure (
-                  C.Pexpr () (
-                    C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-                      [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
-                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
-                         (* Both operand are specified *)
-                         let core_sub = Caux.mk_op_pe C.OpSub promoted1_pe promoted2_pe in
-                         Caux.mk_specified_pe $
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
+          let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
+          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
+          let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+          let (promoted1_pe, promoted2_pe) = usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
+                                       ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+              C.Epure (
+                C.Pexpr () (
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                    [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
+                                         ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+                       (* Both operand are specified *)
+                       let core_sub = Caux.mk_op_pe C.OpSub promoted1_pe promoted2_pe in
+                       Caux.mk_specified_pe $
   if AilTypesAux.is_signed_integer_type result_ty then
-                           stdlib.mkcall_catch_exceptional_condition result_ty core_sub
+                         stdlib.mkcall_catch_exceptional_condition result_ty core_sub
   else
-                           stdlib.mkcall_wrapI result_ty core_sub )
-                      
-                      ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
-                         (* If either operand is unspecified, the result is also unspecified is the
-                            result type of unsigned. Otherwise it is undef, since the addition
-                            may overflow *)
-  if AilTypesAux.is_unsigned_integer_type result_ty then
-                         Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
+                         stdlib.mkcall_wrapI result_ty core_sub )
+                    ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
+                       (* If either operand is unspecified, the result is also unspecified is the
+                          result type of unsigned. Otherwise it is undef, since the addition
+                          may overflow *)
+  if AilTypesAux.is_signed_integer_type result_ty then
+                       Caux.mk_undef_pe Undefined.UB036_exceptional_condition
   else
-                         Caux.mk_undef_pe Undefined.UB036_exceptional_condition) ]
-                  )
+                       Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
                 )
               )
+            )
+
+else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of e2) then
+          error "WIP: elaboration of ptrdiff"
+
 else
-            error "WIP: elaboration of Sub involving pointers"
+            (* Here one of the operand is pointer *)
+            let (ptr_ty, ptr_core_e, integer_core_e) =
+              if AilTypesAux.is_arithmetic (ctype_of e1) then
+                (ctype_of e2, core_e2, core_e1)
+              else
+                (ctype_of e1, core_e1, core_e2) in
+            
+            let ref_ty = match AilTypesAux.unatomic ptr_ty with
+              | Aty.Pointer _ ty ->
+                  ty
+            end in
+
+            
+            E.fresh_symbol >>= fun ptr_sym         ->
+            E.fresh_symbol >>= fun integer_sym     ->
+            E.fresh_symbol >>= fun ptr_obj_sym     ->
+            E.fresh_symbol >>= fun integer_obj_sym ->
+            let ptr_sym_pe         = Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) ptr_sym         in
+            let ptr_obj_sym_pe     = Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_obj_sym     in
+            let integer_sym_pe     = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) integer_sym     in
+            let integer_obj_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) integer_obj_sym in
+            E.return $
+              C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
+                                         ; Caux.mk_sym_pat integer_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) (
+                C.Epure (
+                  Caux.mk_case_pe (Caux.mk_tuple_pe [ptr_sym_pe; integer_sym_pe])
+                      [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
+                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ],
+                         (* Both operand are specified *)
+                         Caux.mk_specified_pe (
+                           Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_neg_pe integer_obj_sym_pe)
+                         ))
+                      
+(*
+                      ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
+                        error "UNSPEC pointer + integer") *) ]
+                )
+              )
+
+
 
 
 
@@ -1915,17 +1957,29 @@ TODO: #9
           end
 *)
 
+*)
       
       | A.AilEassert e ->
-          E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-          translate_rvalue e >>= fun core_e   ->
+          (* TODO: this is temporary *)
+          (* TODO: should do something more sensible when the expression is unspecified *)
+          E.fresh_symbol     >>= fun e_sym   ->
+          E.fresh_symbol     >>= fun obj_sym ->
+          translate_rvalue e >>= fun core_e  ->
+          let oTy = Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
           E.return $
-            C.Esseq [Just sym_ty_e] core_e 
-              (C.Epure (C.PEif (Caux.mk_op_pe C.OpEq (C.PEsym sym_ty_e) (Caux.mk_integer_pe 0))
-                          (C.PEerror "assert() failure" (C.PEval C.Vunit))
-                          (C.PEval C.Vunit)
-                       )
+            C.Esseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              C.Epure (
+                Caux.mk_case_pe (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
+                  [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
+                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym) (Caux.mk_integer_pe 0))
+                       (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
+                      Caux.mk_unit_pe
+                     )
+                  ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                     Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe) ]
               )
+            )
+(*
       
       | A.AilEoffsetof ty membr_ident ->
           let tag_sym = match ty with

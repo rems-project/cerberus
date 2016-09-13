@@ -20,6 +20,9 @@ let quote = function
   | "§6.5.3.3#1, sentence 3" ->
       "[The operand] of the **!** operator, scalar type."
   
+  | "§6.5.16#2" ->
+      "An assignment operator shall have a modifiable lvalue as its left operand."
+  
   | "§6.5.16.1#1" ->
       "One of the following shall hold:\n— the left operand has atomic, qualified, or unqualified arithmetic type, and the right has arithmetic type;\n— the left operand has an atomic, qualified, or unqualified version of a structure or union type compatible with the type of the right;\n— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) both operands are pointers to qualified or unqualified versions of compatible types, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;\n— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) one operand is a pointer to an object type, and the other is a pointer to a qualified or unqualified version of void, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;\n— the left operand is an atomic, qualified, or unqualified pointer, and the right is a null pointer constant; or\n— the left operand has type atomic, qualified, or unqualified _Bool, and the right is a pointer."
   
