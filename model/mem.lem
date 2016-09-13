@@ -14,10 +14,21 @@ module Impl = Naive_memory
 *)
 
 import Defacto_memory
+import Defacto_memory_types
 module Impl = struct
   include import Defacto_memory
   include import Defacto_memory_types
 end
+
+(*
+import Concrete_memory
+import Concrete_memory_types
+module Impl = struct
+  include import Concrete_memory
+  include import Concrete_memory_types
+end
+*)
+
 
 
 (* The API *)

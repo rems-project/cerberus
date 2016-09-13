@@ -880,6 +880,9 @@ TODO
       end
 
   | AilEassign e1 e2 ->
+      let fail =
+        E.fail (Loc.with_cursor_from (Loc.locOf e1) loc)
+          (TError "§6.5.16#2") in
       annotate_expression e1 >>= fun e1' ->
       match type_of annot e1' with
         | GenLValueType qs1 ty1 ->
@@ -888,9 +891,9 @@ TODO
               annotate_assignee ty e2 >>= fun e2' -> 
               E.return (AilEassign e1' e2', GenRValueType (inject_type ty))
             else
-              E.fail Loc.unknown (TError "§6.5.16#2")
+              fail (* lvalue was not modifiable *)
         | _ ->
-            E.fail Loc.unknown (TError_TODO 28)
+            fail (* was not a lvalue *)
       end
     | AilEbinary e1 (Arithmetic (Mul  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->

@@ -290,9 +290,13 @@ val mk_array_shift: pexpr -> ctype -> pexpr -> pexpr
 let mk_array_shift pe1 ty pe2 =
   Pexpr () (PEarray_shift pe1 ty pe2)
 
+val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
+let mk_case_pe pe pat_pes =
+  Pexpr () (PEcase pe pat_pes)
 
-
-
+val mk_neg_pe: pexpr -> pexpr
+let mk_neg_pe pe =
+  Pexpr () (PEop OpSub (mk_integer_pe 0) pe)
 
 
 

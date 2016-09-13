@@ -256,7 +256,8 @@ primary_expression:
 | lit= STRING_LITERAL
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEstring lit) }
 | LPAREN expr= expression RPAREN
-    { expr }
+    { let CabsExpression (_, expr_) = expr in
+      CabsExpression (Loc_region ($startpos, $endpos, None), expr_ ) }
 | gs= generic_selection
     { gs }
 
