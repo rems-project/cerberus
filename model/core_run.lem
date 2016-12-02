@@ -227,6 +227,8 @@ let rec hoist_negatives expr =
         hoist_negatives e2 >>= fun e2' ->
         hoist_negatives e3 >>= fun e3' ->
         State.return (Eif pe1 e2' e3')
+    | Eccall _ _ _ ->
+        State.return expr
     | Eproc _ _ _ ->
         State.return expr
     | Eaction pact ->
@@ -807,14 +809,14 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               )
         end
     
-    | (Eproc annots pe pes, sk) ->
+    | (Eccall annots pe pes, sk) ->
         one match valueFromPexpr pe with
           | Just (Vobject (OVcfunction nm)) ->
               match valueFromPexprs pes with
                 | Just cvals ->
                     match nm with
                       | Sym psym ->
-                          Step_tau "Eproc" (
+                          Step_tau "Eccall" (
                             SEU.runEU (
                               Exception.bind (call_proc file psym cvals)
                                 EU.return
@@ -852,21 +854,45 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                                 error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                           end
                       | _ ->
-                          error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
+                          error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena)
                     end
                 | Nothing ->
-                    Step_eval "Eproc" (
+                    Step_eval "Eccall" (
                       E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
-                      E.return <| th_st with arena= Eproc annots pe pes' |>
+                      E.return <| th_st with arena= Eccall annots pe pes' |>
                     )
               end
           | Just cval ->
               Step_error ((Loc.stringFromLocation th_st.current_loc) ^ "the first argument of pcall() must evaluate to a cfunction, found: " ^
                 Pp.stringFromCore_value cval ^ "")
           | Nothing ->
-              Step_eval "Eproc" (
+              Step_eval "Eccall" (
                 E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
-                E.return <| th_st with arena= Eproc annots pe' pes |>
+                E.return <| th_st with arena= Eccall annots pe' pes |>
+              )
+        end
+    
+    | (Eproc annots nm pes, sk) ->
+        one match valueFromPexprs pes with
+          | Just cvals ->
+              match nm with
+                | Sym psym ->
+                    Step_tau "Eproc" (
+                      SEU.runEU (
+                        Exception.bind (call_proc file psym cvals)
+                          EU.return
+                      ) >>= fun expr ->
+                      (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                    )
+                | _ ->
+                    error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
+              end
+          | Nothing ->
+              Step_eval "Eproc" (
+                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                E.return <| th_st with arena= Eproc annots nm pes' |>
               )
         end
     
@@ -1241,8 +1267,10 @@ let rec convert_expr expr =
         Eif pe1 (convert_expr e2) (convert_expr e3)
     | Ecase pe pat_es ->
         Ecase pe (List.map (fun (pat, e) -> (pat, convert_expr e)) pat_es)
-    | Eproc _ pe pes ->
-        Eproc empty_annotation pe pes
+    | Eccall _ pe pes ->
+        Eccall empty_annotation pe pes
+    | Eproc _ nm pes ->
+        Eproc empty_annotation nm pes
     | Eaction pact ->
         Eaction (convert_paction pact)
     | Eunseq es ->

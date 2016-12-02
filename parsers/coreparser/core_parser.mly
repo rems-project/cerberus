@@ -485,10 +485,14 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
       )
   | Eskip ->
       Eff.return Eskip
- | Eproc ((), _pe, _pes) ->
-     symbolify_pexpr _pe           >>= fun pe ->
+  | Eproc ((), _nm, _pes) ->
+      symbolify_name _nm            >>= fun nm  ->
+      Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+      Eff.return (Eproc ((), nm, pes))
+  | Eccall ((), _pe, _pes) ->
+     symbolify_pexpr _pe           >>= fun pe  ->
      Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-     Eff.return (Eproc ((), pe, pes))
+     Eff.return (Eccall ((), pe, pes))
  | Eunseq _es ->
      Eff.mapM symbolify_expr _es >>= fun es ->
      Eff.return (Eunseq es)
@@ -768,7 +772,7 @@ let mk_file decls =
 (* %token RAISE REGISTER *)
 
 (* Core sequencing operators *)
-%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE MEMOP PCALL
+%token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND RETURN PURE MEMOP PCALL CCALL
 %token DQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
 
 (* SEMICOLON has higher priority than IN *)
@@ -928,8 +932,10 @@ core_object_type:
     { OTy_floating }
 | POINTER
     { OTy_pointer }
-| CFUNCTION
-    { OTy_cfunction }
+| CFUNCTION LPAREN UNDERSCORE COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
+    { OTy_cfunction (None, oTys) }
+| CFUNCTION LPAREN ret_oTy= core_object_type COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
+    { OTy_cfunction (Some ret_oTy, oTys) }
 | ARRAY oTy= delimited(LPAREN, core_object_type, RPAREN)
     { OTy_array oTy }
 (*
@@ -1150,12 +1156,18 @@ expr:
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Ecase (_pe, _pat_es) ) }
-| PCALL LPAREN _pe= pexpr RPAREN
+| PCALL LPAREN _nm= name RPAREN
     { Eloc ( Loc_region ($startpos, $endpos, None)
-           , Eproc ((), _pe, []) ) }
-| PCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
+           , Eproc ((), _nm, []) ) }
+| PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Eloc ( Loc_region ($startpos, $endpos, None)
-           , Eproc ((), _pe, _pes) ) }
+           , Eproc ((), _nm, _pes) ) }
+| CCALL LPAREN _pe= pexpr RPAREN
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eccall ((), _pe, []) ) }
+| CCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
+    { Eloc ( Loc_region ($startpos, $endpos, None)
+           , Eccall ((), _pe, _pes) ) }
 | _pact= paction
     { Eloc ( Loc_region ($startpos, $endpos, None)
            , Eaction _pact ) }

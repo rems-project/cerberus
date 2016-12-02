@@ -15,30 +15,58 @@ let strip (Pexpr _ pexpr_) =
 
 
 
-val     core_object_type_of_ctype: ctype -> core_object_type
+val     core_object_type_of_ctype: ctype -> maybe core_object_type
 let rec core_object_type_of_ctype ty =
   match ty with
    | Void ->
-       error "Caux.object_type_of_ctype Void"
+       Nothing
    | Basic (AilTypes.Integer _) ->
-       OTy_integer
+       Just OTy_integer
    | Basic (AilTypes.Floating _) ->
-       OTy_floating
+       Just OTy_floating
    | Array ty _ ->
-       OTy_array (core_object_type_of_ctype ty)
+       match core_object_type_of_ctype ty with
+         | Just oTy ->
+             Just (OTy_array oTy)
+         | Nothing ->
+             error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
+       end
    | Function ty xs _ ->
-       OTy_cfunction (* ty (List.map snd xs) *)
+       match maybe_mapM (core_object_type_of_ctype -| snd) xs with
+         | Just oTys ->
+             Just (OTy_cfunction (core_object_type_of_ctype ty) oTys)
+         | Nothing ->
+             error "Core_aux.core_object_type_of_ctype: Function found a Nothing"
+       end
    | Pointer _ _ ->
-       OTy_pointer
+       Just OTy_pointer
    | Atomic ty ->
        core_object_type_of_ctype ty
    | Struct tag_sym ->
-       OTy_struct tag_sym
+       Just (OTy_struct tag_sym)
    | Union tag_sym ->
-       OTy_union tag_sym
+       Just (OTy_union tag_sym)
    | Builtin _ ->
        error "TODO: Caux.object_type_of_ctype Builtin"
   end
+
+val oTy_of_bTy: core_base_type -> maybe core_object_type
+let oTy_of_bTy = function
+  | BTy_unit ->
+      Nothing
+ | BTy_boolean ->
+      Nothing
+ | BTy_ctype ->
+      Nothing
+ | BTy_list _ ->
+      Nothing
+ | BTy_tuple _ ->
+      Nothing
+ | BTy_object oTy ->
+     Just oTy
+ | BTy_loaded oTy ->
+     Just oTy
+end
 
 
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
@@ -55,7 +83,7 @@ let rec objectValueFromMemValue mem_val =
 val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
   Mem.case_mem_value mem_val
-    (fun ty                -> (core_object_type_of_ctype ty, Vunspecified ty))
+    (fun ty                -> (fromJust "Core_aux.valueFromMemValue" (core_object_type_of_ctype ty), Vunspecified ty))
     (fun _ ival            -> (OTy_integer, Vspecified (OVinteger ival)))
     (fun _ fval            -> (OTy_floating, Vspecified (OVfloating fval)))
     (fun _ ptr_val         -> (OTy_pointer, Vspecified (OVpointer ptr_val)))
@@ -289,6 +317,10 @@ let mk_if_pe pe1 pe2 pe3 =
 val mk_array_shift: pexpr -> ctype -> pexpr -> pexpr
 let mk_array_shift pe1 ty pe2 =
   Pexpr () (PEarray_shift pe1 ty pe2)
+
+val mk_member_shift_pe: pexpr -> Symbol.sym -> Cabs.cabs_identifier -> pexpr
+let mk_member_shift_pe pe1 tag_sym member_ident =
+  Pexpr () (PEmember_shift pe1 tag_sym member_ident)
 
 val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
 let mk_case_pe pe pat_pes =
@@ -712,8 +744,10 @@ let rec subst_sym_expr sym pe' = function
       Ecase (subst_sym_pexpr sym pe' pe) (List.map (fun (pat, e) ->
         (pat, if in_pattern sym pat then e else subst_sym_expr sym pe' e)
       ) pat_es)
-  | Eproc annot pe pes ->
-      Eproc annot (subst_sym_pexpr sym pe' pe) (List.map (subst_sym_pexpr sym pe') pes)
+  | Eccall annot pe pes ->
+      Eccall annot (subst_sym_pexpr sym pe' pe) (List.map (subst_sym_pexpr sym pe') pes)
+  | Eproc annot nm pes ->
+      Eproc annot nm (List.map (subst_sym_pexpr sym pe') pes)
   | Eaction pact ->
       Eaction (subst_sym_paction sym pe' pact)
   | Eunseq es ->
@@ -863,6 +897,8 @@ let rec to_pure (expr : expr 'a) =
           | _ ->
               Nothing
         end
+    | Eccall _ _ _ ->
+        Nothing
     | Eproc _ _ _ ->
         Nothing
     | Eaction _ ->
@@ -943,6 +979,8 @@ let rec subst_wait tid v = function
       Eif pe1 (subst_wait tid v e2) (subst_wait tid v e3)
   | Ecase pe pat_es ->
       Ecase pe (List.map (fun (pat, e) -> (pat, subst_wait tid v e)) pat_es)
+  | (Eccall _ _ _ as expr) ->
+      expr
   | (Eproc _ _ _ as expr) ->
       expr
   | (Eaction _ as expr) ->
@@ -1031,6 +1069,8 @@ match expr with
         | Nothing ->
             find_labeled_continuation ksym e3
       end
+  | Eccall _ _ _ ->
+      Nothing
   | Eproc _ _ _ ->
       Nothing
   | Eaction _ ->
@@ -1115,6 +1155,8 @@ let rec find_labeled_continuation2 sym = function
             find_labeled_continuation2 sym e3
       end
   | Eskip ->
+      Nothing
+  | Eccall _ _ _ ->
       Nothing
   | Eproc _ _ _ ->
       Nothing
@@ -1273,6 +1315,8 @@ let rec collect_labeled_continuations expr =
         Map.empty (* TODO THIS IS WRONG!!!!! *)
     | Eproc _ _ _ ->
         Map.empty
+    | Eccall _ _ _ ->
+        Map.empty
     | Eaction _ ->
         Map.empty
     | Eunseq _ ->
@@ -1330,6 +1374,9 @@ let rec has_sseqs expr =
         has_sseqs e2
     | Eif _ e2 e3 ->
         has_sseqs e2 || has_sseqs e3
+    | Eccall _ _ _ ->
+        (* TODO *)
+        false
     | Eproc _ _ _ ->
         (* TODO *)
         false

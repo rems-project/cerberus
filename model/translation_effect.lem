@@ -2,9 +2,9 @@
 open import Pervasives Global Show Show_extra
 import Boot UniqueId Symbol Undefined Core_ctype AilTypes AilTypesAux
 
-import Core
-module C = Core
-
+import Core Core_aux
+module C    = Core
+module Caux = Core_aux
 
 
 type state = <|
@@ -79,6 +79,13 @@ val fresh_symbol: t Symbol.sym
 let fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
   let (sym, suppl') = State.run Symbol.fresh suppl in
   (sym, <| st with symbol_supply= suppl' |>)
+
+
+val wrapped_fresh_symbol: C.core_base_type -> t (Symbol.sym * C.pattern * C.pexpr)
+let wrapped_fresh_symbol bTy =
+  bind fresh_symbol
+    (fun sym -> return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym))
+
 
 val     core_object_type_of_ctype: AilTypes.ctype -> maybe Core.core_object_type
 let rec core_object_type_of_ctype ty =

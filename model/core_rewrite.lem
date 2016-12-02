@@ -644,6 +644,8 @@ let rec remove_conv_int expr =
         Elet sym (remove_conv_int_pexpr pe1) (remove_conv_int e2)
     | Eif pe1 e2 e3 ->
         Eif (remove_conv_int_pexpr pe1) (remove_conv_int e2) (remove_conv_int e3)
+    | Eccall () pe pes ->
+        Eccall () (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
     | Eproc () nm pes ->
         Eproc () nm (List.map remove_conv_int_pexpr pes)
     | Eaction pact ->

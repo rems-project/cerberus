@@ -362,3 +362,32 @@ let rec last xs =
     | _::xs ->
         last xs
   end
+
+
+val     list_unfoldr: forall 'a 'b. ('b -> maybe ('a * 'b)) -> 'b -> list 'a
+let rec list_unfoldr_aux acc ctor b0 =
+  match ctor b0 with
+    | Just (a, b') ->
+        list_unfoldr_aux (a::acc) ctor b'
+    | Nothing ->
+        acc
+  end
+
+let list_unfoldr x = list_unfoldr_aux [] x
+
+
+
+val     maybe_mapM: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> maybe (list 'b)
+let rec maybe_mapM_aux acc f = function
+  | [] ->
+      Just acc
+  | x::xs' ->
+      match f x with
+        | Just x' ->
+            maybe_mapM_aux (x'::acc) f xs'
+        | Nothing ->
+            Nothing
+      end
+  end
+
+let maybe_mapM f xs = maybe_mapM_aux [] f xs

@@ -402,14 +402,18 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         (* STD §6.5.3.3#1, sentence 1 *)
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
-          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+          let mk_conversion =
+            if is_integer gty then integer_promote else (fun z -> z) in
+          E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
     | AilEunary (Minus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
-          E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
+          let mk_conversion =
+            if is_integer gty then integer_promote else (fun z -> z) in
+          E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
     | AilEunary (Bnot as uop) e ->
@@ -811,8 +815,74 @@ TODO
             E.fail Loc.unknown (TError "§6.5.2.3#2")
       end
 *)
-
+  
   | AilEmemberof e ident ->
+      (* TODO: factorise *)
+      annotate_expression e >>= fun a_e ->
+      match type_of annot a_e with
+        | GenLValueType qs ty ->
+            match ty with
+              | Struct tag_sym ->
+                  match lookup_tag_definition sigm tag_sym with
+                    | Just (StructDef ident_tys) ->
+                        match List.lookup ident ident_tys with
+                          | Just ty' ->
+                              (* TODO: check qualifiers *)
+                              E.return (AilEmemberof a_e ident, GenLValueType qs ty')
+                          | Nothing ->
+                              E.fail loc (TError "TODO[msg] Struct memberof: invalid member")
+                        end
+                    | _ ->
+                        E.fail loc (TError "TODO[msg] AilEmemberof Struct, failed to kind a valid tag definition")
+                  end
+              | Union tag_sym ->
+                  match lookup_tag_definition sigm tag_sym with
+                    | Just (UnionDef ident_tys) ->
+                        match List.lookup ident ident_tys with
+                          | Just ty' ->
+                              (* TODO: check qualifiers *)
+                              E.return (AilEmemberof a_e ident, GenLValueType qs ty')
+                          | Nothing ->
+                              E.fail loc (TError "TODO[msg] Union memberof: invalid member")
+                        end
+                    | _ ->
+                        E.fail loc (TError "TODO[msg] AilEmemberof Union, failed to kind a valid tag definition")
+                  end
+              | _ ->
+                  E.fail loc (TError "TODO[msg] AilEmemberof, the postfix-expression must have struct/union type")
+            end
+        | GenRValueType gty ->
+            match gty with
+              | GenStruct tag_sym ->
+                  match lookup_tag_definition sigm tag_sym with
+                    | Just (StructDef ident_tys) ->
+                        match List.lookup ident ident_tys with
+                          | Just ty' ->
+                              E.return (AilEmemberof a_e ident, GenRValueType (GenTypes.inject_type ty'))
+                          | Nothing ->
+                              E.fail loc (TError "TODO[msg] Struct memberof: invalid member")
+                        end
+                    | _ ->
+                        E.fail loc (TError "TODO[msg] AilEmemberof Struct, failed to kind a valid tag definition")
+                  end
+              | GenUnion tag_sym ->
+                  match lookup_tag_definition sigm tag_sym with
+                    | Just (UnionDef ident_tys) ->
+                        match List.lookup ident ident_tys with
+                          | Just ty' ->
+                              E.return (AilEmemberof a_e ident, GenRValueType (GenTypes.inject_type ty'))
+                          | Nothing ->
+                              E.fail loc (TError "TODO[msg] Union memberof: invalid member")
+                        end
+                    | _ ->
+                        E.fail loc (TError "TODO[msg] AilEmemberof Union, failed to kind a valid tag definition")
+                  end
+              | _ ->
+                  E.fail loc (TError "TODO[msg] AilEmemberof, the postfix-expression must have struct/union type")
+            end
+      end
+
+(*
       (* TODO: check, factorize *)
       annotate_rvalue e >>= function
         | (e', GenStruct tag_sym) ->
@@ -844,6 +914,12 @@ TODO
         | _ ->
             error "WIP: error, GenTyping.annotate_expression', AilEmemberof"
       end
+
+*)
+
+
+
+
   
   | AilEmemberofptr e ident ->
       (* TODO: check, factorize *)

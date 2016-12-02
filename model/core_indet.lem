@@ -408,6 +408,8 @@ let rec hack expr =
         Core.Elet sym pe1 (hack e2)
     | Core.Eif pe1 e2 e3 ->
         Core.Eif pe1 (hack e2) (hack e3)
+    | Core.Eccall _ _ _ ->
+        expr
     | Core.Eproc _ _ _ ->
         expr
     | Core.Eaction _ ->

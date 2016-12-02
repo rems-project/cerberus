@@ -157,6 +157,7 @@ let keywords =
 
       
       ("pcall", T.PCALL);
+      ("ccall", T.CCALL);
       
       ("Nil",    T.NIL);
       ("Cons",   T.CONS);
@@ -203,7 +204,11 @@ let scan_ub lexbuf =
     | Some ub ->
         T.UB ub
     | None ->
-        failwith ("Found an invalid undefined-behaviour: " ^ id)
+        (* TODO: hack *)
+        if id = "<<DUMMY>>" then
+          T.UB (Undefined.DUMMY "parser")
+        else
+          failwith ("Found an invalid undefined-behaviour: " ^ id)
 
 
 

@@ -301,12 +301,10 @@ let rec drive_core_thread tid dr_st =
         let eval_conv (*ty1*) ty2 mval =
           eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc $
             (* Core.PEcall (Core.Sym conv_sym) *)
-            Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_int"
-              [ (*Caux.mk_ctype_pe ty1
-              ;*) Caux.mk_ctype_pe ty2
-              ; let (oTy, oval) = Core_aux.objectValueFromMemValue mval in
-                Core.Pexpr () (Core.PEval (Core.Vobject oval)) ] in
-        
+            Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
+              [ Caux.mk_ctype_pe ty2
+              ; let (_, cval) = Core_aux.valueFromMemValue mval in
+                Core.Pexpr () (Core.PEval cval) ] in
         liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) dr_st >>= fun (out_chars_, dr_st') ->
         match out_chars_ with
           | Left err ->
@@ -1198,15 +1196,15 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.IndeterminateReads _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe (U.DUMMY "Driver.drive -- Cmm.IndeterminateReads")),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | (Cmm.BadMutexes _)::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe (U.DUMMY "Driver.drive -- Cmm.BadMutexes")),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
               | Cmm.NotInSublanguage::_  ->
                   ND.return (List.foldr String.stringAppend "" (Dlist.toList dr_st'.core_state.io.stdout),
-                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe U.DUMMY),
+                             (dr_st'.blocked, dr_st'.concurrency_state, Caux.mk_undef_pe (U.DUMMY "Driver.drive -- Cmm.NotInSublanguage")),
                              (dr_st'.dr_step_counter, dr_st'.core_run_state.step_counter))
             end
         else
