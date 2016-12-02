@@ -75,7 +75,9 @@ let rec print_core_object = function
  | OTy_integer    -> !^"M.integer_value0"
  | OTy_floating   -> !^"M.floating_value0"
  | OTy_pointer    -> !^"M.pointer_value0"
- | OTy_cfunction  -> !^"M.pointer_value0" (* cfunction is a pointer value? *)
+ | OTy_cfunction (ret_oTy, oTys) ->
+     (* TODO: K wip *)
+     !^"M.pointer_value0" (* cfunction is a pointer value? *)
                        (*TODO: I am not sure about these: *)
  | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
  | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
@@ -506,7 +508,7 @@ let rec print_expr = function
   | Eif (pe1, e2, e3) ->
     print_if (print_pure_expr pe1) (print_expr e2) (print_expr e3)
   | Eskip -> !^"A.value ()"
-  | Eproc (_, nm, es) ->
+  | Eccall (_, nm, es) ->
     print_pure_expr nm ^^^ (
       if List.length es = 0
       then P.parens P.space

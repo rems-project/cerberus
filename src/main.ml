@@ -116,7 +116,6 @@ let c_frontend f =
 *)
 
 let (>>=) = Exception.bind0
-let (>>) ma mb = ma >>= fun _ -> mb
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
@@ -157,6 +156,14 @@ let backend sym_supply core_file args =
         print_endline "Interactive mode not yet supported";
         exit 1
     | Some (Exhaustive | Random) ->
+        if !!cerb_conf.batch then
+          begin
+            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) !!cerb_conf;
+            0
+          end
+        else
+          
+        
         (* TODO: temporary hack for the command name *)
         Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
           | Exception.Result (Pexpr (_, PEval (Vspecified (OVinteger ival))) :: _) ->
@@ -168,9 +175,20 @@ let backend sym_supply core_file args =
                 Debug_ocaml.warn "Return value was not a (simple) specified integer";
                 0
             end
+          | Exception.Result (pe :: _) ->
+              Debug_ocaml.warn ("HELLO> " ^ String_core.string_of_pexpr pe); 0
+          | Exception.Result [] ->
+              Debug_ocaml.warn "BACKEND FOUND EMPTY RESULT";
+              0
+          | Exception.Exception _ ->
+              Debug_ocaml.warn "BACKEND FOUND EXCEPTION";
+              0
+(*
           | _ ->
               Debug_ocaml.warn "Return value was not a specified integer or was an undef/error";
               0)
+*)
+)
 
 
 
@@ -199,11 +217,12 @@ let pipeline filename args =
   begin
     if !!cerb_conf.typecheck_core then
       Core_typing.typecheck_program core_file |>
-        pass_message "5. Core typechecking completed!" >>
+        pass_message "5. Core typechecking completed!" >>= fun _ ->
       Exception.return0 ()
     else
       Exception.return0 ()
-  end >>
+  end >>= fun _ ->
+
   (* TODO: for now assuming a single order comes from indet expressions *)
   let rewritten_core_file = Core_indet.hackish_order
       (if !!cerb_conf.rewrite then Core_rewrite.rewrite_file core_file else core_file) in

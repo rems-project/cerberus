@@ -9,7 +9,10 @@ type core_object_type =  (* types for C objects *)
  | OTy_integer
  | OTy_floating
  | OTy_pointer
- | OTy_cfunction (* of ctype * list ctype *)
+ | OTy_cfunction of maybe core_object_type * list core_object_type
+     (* the return type is Nothing for void functions *)
+     (* NOTE: the types are core object type (instead of ctypes), because in the elaborated Core we have forgotten
+        about the latter since the signature of procedure have core types. *)
  | OTy_array of core_object_type
  | OTy_struct of Symbol.sym
  | OTy_union of Symbol.sym
@@ -193,7 +196,14 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Elet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core let *)
  | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core if *)
  | Eskip (* skip *)
+(*
  | Eproc of 'a * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
+*)
+ | Eccall of 'a * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core cfunction call *)
+ | Eproc of 'a * generic_name 'sym * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
+
+
+
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
  | Ewseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
  | Esseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)

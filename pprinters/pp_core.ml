@@ -59,6 +59,7 @@ let rec precedence_expr = function
  | Ecase _
  | Eskip
  | Eproc _
+ | Eccall _
  | Eunseq _
  | Eindet _
  | Ebound _
@@ -111,8 +112,13 @@ let rec pp_core_object_type = function
       !^ "struct(TODO)"
   | OTy_union ident  ->
       !^ "union(TODO)"
-  | OTy_cfunction ->
-      !^ "cfunction"
+  | OTy_cfunction (ret_oTy_opt, oTys) ->
+      let pp_ret = match ret_oTy_opt with
+        | Some ret_oTy ->
+            pp_core_object_type ret_oTy
+        | None ->
+            P.underscore in
+      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ comma_list pp_core_object_type oTys)
 
 let rec pp_core_base_type = function
   | BTy_object bty ->
@@ -454,8 +460,10 @@ let rec pp_expr expr =
           pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
       | Eskip ->
           pp_keyword "skip"
-      | Eproc (_, pe, pes) ->
-          pp_keyword "pcall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
+      | Eproc (_, nm, pes) ->
+          pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
+      | Eccall (_, pe, pes) ->
+          pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
       | Eunseq [] ->
           !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
       | Eunseq [e] ->

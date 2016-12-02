@@ -192,6 +192,7 @@ type token =
   | IVMIN
   | IVSIZEOF
   | IVALIGNOF
+  | CCALL
   | PCALL
   | CFUNCTION_VALUE
 

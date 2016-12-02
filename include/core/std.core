@@ -286,7 +286,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
         if c = 0 then
           pure(acc)
         else
-          let strong ret: [integer] = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), Cons(c,acc)) in
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, "char", 1), Cons(c,acc)) in
           pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY>>)) -- TODO think about that
@@ -301,7 +301,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
 proc rev_listFromStr(str: pointer) : eff [integer] :=
 --  pcall(Cfunction(rev_listFromStr_aux), str, [])
 
-  let strong ret: [integer] = pcall(Cfunction(rev_listFromStr_aux), str, []) in
+  let strong ret: [integer] = pcall(rev_listFromStr_aux, str, []) in
   pure(ret)
 
 
@@ -312,8 +312,8 @@ proc printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff l
   let strong frmt_ptr_: loaded pointer = load("char*", tmp_ptr) in
   case frmt_ptr_ of
     | Specified(frmt_ptr: pointer) =>
-        let strong xs: [integer] = pcall(Cfunction(rev_listFromStr), frmt_ptr) in
-        let strong ret: loaded integer = pcall(Cfunction(<std_function_printf>), xs, args) in
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_printf>, xs, args) in
         pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY>>)) -- TODO think about that

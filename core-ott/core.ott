@@ -9,7 +9,7 @@ embed {{ tex-preamble
 
 
 embed {{ lem
-open import Core_ctype Thread
+open import Core_ctype Cthread
 import Symbol Implementation_ Undefined Loc Cmm_csem
 import Mem Mem_common
 }}
@@ -22,17 +22,20 @@ metavar tag {{ lem Symbol.sym }} ::=
 
 indexvar n, i ::= {{ phantom }}
 
-
+embed {{ lem
+     (* NOTE: for OTy_cfunction, the types are core object type (instead of ctypes), because in
+        the elaborated Core we have forgotten about the latter since the signature of procedure have core types. *)
+}}
 grammar
   % Inhabitant of these types may be read and stored from the memory (hence they match C types)
   core_object_type {{ tex \textit{oTy} }} :: 'OTy_' ::= {{ com types for C objects}}
-    | integer                    :: ::  integer
-    | floating                   :: ::  floating
-    | pointer                    :: ::  pointer
-    | cfunction                  :: ::  cfunction
-    | array ( core_object_type ) :: ::  array
-    | struct tag                 :: ::  struct
-    | union tag                  :: ::  union
+    | integer                                                            :: ::  integer
+    | floating                                                           :: ::  floating
+    | pointer                                                            :: ::  pointer
+    | cfunction ( core_object_type , </ core_object_typei // , // i /> ) :: ::  cfunction
+    | array ( core_object_type )                                         :: ::  array
+    | struct tag                                                         :: ::  struct
+    | union tag                                                          :: ::  union
   
   core_base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types}}
     | unit                                :: ::   unit    {{ com unit }}
@@ -123,6 +126,22 @@ generic_name {{ tex name }} :: '' ::= {{ auxparam 'sym }}
    | tyvarsym                                :: :: Sym   {{ com Core identifier }} 
    | Implementation__implementation_constant :: :: Impl  {{ com implementation-defined constant }}
 
+embed {{ lem
+instance forall 'sym. MapKeyType 'sym => (MapKeyType (generic_name 'sym))
+  let mapKeyCompare nm1 nm2 =
+    match (nm1, nm2) with
+      | (Sym sym1, Sym sym2) ->
+          mapKeyCompare sym1 sym2
+      | (Impl iCst1, Impl iCst2) ->
+          mapKeyCompare iCst1 iCst2
+      | (Sym _, Impl _) ->
+          LT
+      | (Impl _, Sym _) ->
+          GT
+    end
+end
+}}
+
 
  
 % (*
@@ -175,11 +194,11 @@ generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ 
    | ( union tag ) { . Cabs_cabs_identifier = Mem_mem_value } :: :: union {{ com C union value }}
  
 
-metavar Mem_mem_constraint {{ tex Mem.mem\_constraint }} {{ lem Mem.mem_constraint }} ::= {{ phantom }}   
+metavar Mem_mem_constraint {{ tex Mem.mem\_constraint }} {{ lem Mem.mem_constraint2 }} ::= {{ phantom }}   
 metavar ctype {{ lem ctype }} ::= {{ phantom }}   
 
 grammar
-list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.mem_constraint }}
+list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.mem_constraint2 }}
 % {{ tex list Mem.mem\_constraint }}
    | </ Mem_mem_constrainti // , // i /> :: :: list_mem_constraint
 

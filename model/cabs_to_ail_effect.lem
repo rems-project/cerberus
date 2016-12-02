@@ -254,7 +254,7 @@ let app  = State_exception.app
 
 
 let inline (>>=)    = bind
-let inline (>>) m f = m >>= fun _ -> f
+let inline (>>) m f = m >>= fun _ -> f (* NOTE: the inline is important *)
 let inline (<$>)    = fmap
 let inline (<*>)    = app
 

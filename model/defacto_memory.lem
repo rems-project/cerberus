@@ -2304,6 +2304,7 @@ let can_store (PV prov ptr_val_ sh) =
 (* TODO: with temporary simplification *)
 val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> mem_value -> mem_value -> mem_value
 let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
+  let () = Debug.print_debug 0 ("ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
   let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
   match (current_mval, sh) with
     | (_, []) ->
@@ -2340,7 +2341,13 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
         else
-          error ("WIP: easy_update_mem_value_aux ===> sh = " ^ stringFromShift_path sh ^ "; current_mval = " ^ stringFromMem_value current_mval)
+(* TODO: this might need to be before the test on "is_strong" *)
+          match sh with
+            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
+                error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
+            | _ ->
+                error ("WIP: easy_update_mem_value_aux ===> sh = " ^ stringFromShift_path sh ^ "; current_mval = " ^ stringFromMem_value current_mval)
+          end
   end
 
 (* TODO: bug HOL -- "failure in internal translation to tupled format" *)
@@ -2370,15 +2377,14 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
                 true
           end in
           Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w current_mval) st.allocations
+
       | Just (alloc, Nothing) ->
-          (* TODO WIP hack *)
-          let is_strong = match alloc with
-            | Alloc_static _ _ ->
-                false
+          match alloc with
+            | Alloc_static obj_ty _ ->
+                Map.insert alloc_id (alloc, Just $ easy_update_mem_value false w (mkUnspec obj_ty)) st.allocations
             | Alloc_dynamic _ _ ->
-                true
-          end in
-          Map.insert alloc_id (alloc, Just $ easy_update_mem_value is_strong w mval) st.allocations
+                error "Mem.register write_event, TODO: case of a dynamically allocated region with no current value"
+          end
       | Nothing ->
           error "Mem.register_write_event, Nothing"
     end

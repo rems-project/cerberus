@@ -4,7 +4,7 @@ import Bimap
 
 (* C undefined behaviours *)
 type undefined_behaviour =
-  | DUMMY (* TODO: this is a hack (use by the Driver these days) *)
+  | DUMMY of string (* TODO: this is a hack (use by the Driver these days) *)
   
   (* A ‘‘shall’’ or ‘‘shall not’’ requirement that appears outside of a constraint is violated
      (clause 4). *)
@@ -672,8 +672,8 @@ type undefined_behaviour =
 val ub_str_bimap: Bimap.bimap undefined_behaviour string
 let ub_str_bimap =
   Bimap.fromList
-    [ (DUMMY, "DUMMY")
-    ; (UB001, "UB001")
+    [ (* (DUMMY "parser", "DUMMY[parser]") (* TODO: this is horrible *)
+    ; *) (UB001, "UB001")
     ; (UB002, "UB002")
     ; (UB003, "UB003")
     ; (UB004, "UB004")
@@ -888,7 +888,10 @@ let ub_str_bimap =
 
 
 val stringFromUndefined_behaviour: undefined_behaviour -> string
-let stringFromUndefined_behaviour ub =
+let stringFromUndefined_behaviour = function
+  | DUMMY str ->
+      "DUMMY[" ^ str ^ "]"
+  | ub ->
   match Bimap.lookupL ub ub_str_bimap with
     | Just str ->
         str
@@ -900,6 +903,7 @@ let stringFromUndefined_behaviour ub =
               error "Undefined.stringFromUndefined_behaviour"
         end
   end
+end
 
 instance (Show undefined_behaviour)
   let show = stringFromUndefined_behaviour
@@ -907,8 +911,8 @@ end
 
 val pretty_string_of_undefined_behaviour: undefined_behaviour -> string
 let pretty_string_of_undefined_behaviour = function
-  | DUMMY ->
-      "DUMMY undefined behaviour"
+  | DUMMY str ->
+      "DUMMY undefined behaviour (" ^ str ^ ")"
   | UB005_data_race ->
       "(§5.1.2.4#25) the execution of the program contains a data race."
   | UB009_outside_lifetime ->

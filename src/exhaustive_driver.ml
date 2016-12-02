@@ -18,6 +18,47 @@ type execution_result = (Core.pexpr list, Errors.error) Exception.exceptM
 
 
 
+(* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
+let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) args cerb_conf : unit =
+  Random.self_init ();
+  
+  (* changing the annotations type from unit to core_run_annotation *)
+  let file = Core_run.convert_file file in
+  
+  (* computing the value (or values if exhaustive) *)
+  let values = ND.runM0 (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
+  
+  List.iter (function
+    | ND.Active (stdout, (_, _, pe), _) ->
+        let str_v = String_core.string_of_pexpr
+            begin
+              match pe with
+              | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
+                      Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
+                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
+                  | _ ->
+                      pe
+              end in
+        print_endline begin
+          "Defined {value: \"" ^ str_v ^ "\", stdout=\"" ^ String.escaped stdout ^ "\"}"
+        end
+    | ND.Killed (ND.Undef0 (_, ubs)) ->
+        print_endline begin
+          "Undefined {id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
+        end
+    | ND.Killed (ND.Error0 (_, str)) ->
+        print_endline begin
+          "Error {msg: " ^ str ^ "}"
+        end
+    | ND.Killed (ND.Other str) ->
+        print_endline begin
+          "Killed {msg: " ^ str ^ "}"
+        end
+  ) (List.map fst values)
+
+
+
+
 let drive sym_supply file args cerb_conf : execution_result =
   Random.self_init ();
   
@@ -29,33 +70,6 @@ let drive sym_supply file args cerb_conf : execution_result =
   
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
-  
-  if cerb_conf.batch then
-    begin
-    List.iter (function
-      | ND.Active (stdout, (_, _, pe), _) ->
-          let str_v = String_core.string_of_pexpr
-              begin
-                match pe with
-                | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
-                      Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
-                  | _ ->
-                      pe
-              end in
-          Printf.printf "{value: \"%s\", stdout=\"%s\"}\n"
-            str_v (String.escaped stdout)
-      | ND.Killed (ND.Undef0 (_, ubs)) ->
-          print_endline ("UNDEF(" ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ ")")
-      | ND.Killed (ND.Error0 (_, str)) ->
-          print_endline ("ERROR(" ^ str ^ ")")
-      | ND.Killed (ND.Other str) ->
-          failwith "KILLED"
-    ) (List.map fst values);
-    Exception.return0 [] (* TODO: HACK *)
-    end
-  else
-  begin
   
   Debug_ocaml.print_debug 1 (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
   
@@ -158,7 +172,7 @@ end
           )
   ) values;
   Exception.return0 !ret
-end
+
 
 
 (*  

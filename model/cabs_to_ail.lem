@@ -17,7 +17,7 @@ module E = Cabs_to_ail_effect
 
 let inline (>>=)    = E.bind
 
-let inline (>>) m f = m >>= fun _ -> f
+let inline (>>) m f = m >>= fun _ -> f (* NOTE: the inline is important *)
 let inline (<$>)    = E.fmap
 let inline (<*>)    = E.app
 

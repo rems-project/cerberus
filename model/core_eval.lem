@@ -362,7 +362,15 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
               EU.return $ PEarray_shift pe1' ty pe2'
         end
     | PEmember_shift pe tag_sym member_ident ->
-        error "WIP: Core_Eval.step_eval_pexpr, PEmember_shift"
+        self pe >>= fun pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just (Vobject (OVpointer ptr_val)) ->
+              EU.return $ PEval (Vobject (OVpointer (Mem.member_shift_ptrval ptr_val tag_sym member_ident)))
+          | Just _ ->
+              EU.fail $ Illformed_program "PEmember_shift"
+          | _ ->
+              EU.return $ PEmember_shift pe' tag_sym member_ident
+        end
     | PEnot (Pexpr pe_bTy _ as pe) ->
         self pe >>= fun (Pexpr pe_bTy pe_' as pe') ->
         match pe_' with
