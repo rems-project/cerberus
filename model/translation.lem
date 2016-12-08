@@ -61,6 +61,7 @@ let force_core_object_type_of_ctype ty =
 
 (* TODO: I need functors ... *)
 type core_stdlib = <|
+  ailnames:                           map string Symbol.sym;
   mkcall_bitwise_AND:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_bitwise_XOR:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_bitwise_OR:                  Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
@@ -70,7 +71,6 @@ type core_stdlib = <|
   mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
   mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
   mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
-  printf_proxy_cfunction:             C.pexpr;
 |>
 
 
@@ -197,8 +197,13 @@ let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: l
   match (ctype_of a_expr, expr) with
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
         let fid_pe = match fid with
-          | Symbol.Symbol _ (Just "printf") ->
-              stdlib.printf_proxy_cfunction
+          | Symbol.Symbol _ (Just str) ->
+              match Map.lookup str stdlib.ailnames with
+                | Just sym ->
+                    Caux.mk_cfunction_pe sym
+                | Nothing ->
+              Caux.mk_cfunction_pe fid
+              end
           | _ ->
               Caux.mk_cfunction_pe fid
         end in
@@ -3790,15 +3795,16 @@ let translate_tag_definitions ctx =
 
 (* This is the entry function (called from main.ml) *)
 val translate:
-    C.fun_map unit ->
+    (map string Symbol.sym) * C.fun_map unit ->
     bool -> C.impl -> (UniqueId.supply Symbol.sym) * A.program GenTypes.genTypeCategory ->
     (UniqueId.supply Symbol.sym * C.file unit)
 
-let translate stdlib_fun_map sequentialise impl (symbol_counter, prog) =
+let translate (ailnames, stdlib_fun_map) sequentialise impl (symbol_counter, prog) =
   let stdlib =
     let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
     let mk_call str pes = Core.Pexpr () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
-    <| mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+    <| ailnames=                           ailnames
+     ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
      ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
      ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
      ; mkcall_conv_int=                    fun ty pe      -> mk_call "conv_int"                   [Caux.mk_ail_ctype_pe ty; pe]
@@ -3806,8 +3812,7 @@ let translate stdlib_fun_map sequentialise impl (symbol_counter, prog) =
      ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
      ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
      ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]
-     ; mkcall_catch_exceptional_condition= fun ty pe     -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe]
-     ; printf_proxy_cfunction=             C.Pexpr () (C.PEval (C.Vobject (C.OVcfunction (C.Sym (fetch_stdlib_symbol std_syms "printf_proxy"))))) |> in
+     ; mkcall_catch_exceptional_condition= fun ty pe     -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |> in
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   let () = Cty.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in

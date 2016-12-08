@@ -36,7 +36,7 @@ let load_stdlib () =
       Parser_util.Make (Core_std_parser_base) (Lexer_util.Make (Core_lexer)) in
     (* TODO: yuck *)
     match Core_std_parser.parse (Input.file filepath) with
-      | Exception.Result (Core_parser_util.Rstd z) -> z
+      | Exception.Result (Core_parser_util.Rstd (ailnames, std_funs)) -> (ailnames, std_funs)
       | Exception.Result _ ->
           error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
       | Exception.Exception (loc, err) ->
@@ -123,7 +123,7 @@ let core_frontend f =
         Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
         Exception.return0 (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
-           Core.stdlib= !!cerb_conf.core_stdlib;
+           Core.stdlib= snd !!cerb_conf.core_stdlib;
            Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
            Core.globs=  globs;
            Core.funs=   funs
@@ -267,7 +267,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
         let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
           let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
           Pmap.add (str, (std_pos, std_pos)) fsym acc
-        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list core_stdlib
+        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list (snd core_stdlib)
       end)
     type result = Core_parser_util.result
   end in
