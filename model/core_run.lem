@@ -537,7 +537,8 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                       )
                     )
                 | Nothing ->
-                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^ ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                                ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
               end
           | (Just cval1, Just cval2, Just cval3) ->
               Step_error ("found a store() with ill-typed operands: " ^
