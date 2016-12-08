@@ -112,13 +112,13 @@ let rec pp_core_object_type = function
       !^ "struct(TODO)"
   | OTy_union ident  ->
       !^ "union(TODO)"
-  | OTy_cfunction (ret_oTy_opt, oTys) ->
+  | OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
             pp_core_object_type ret_oTy
         | None ->
             P.underscore in
-      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ comma_list pp_core_object_type oTys)
+      !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
 
 let rec pp_core_base_type = function
   | BTy_object bty ->

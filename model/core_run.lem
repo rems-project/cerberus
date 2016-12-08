@@ -825,34 +825,6 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                             let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                             E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
                           )
-                      | Impl (StdFunction "printf") ->
-                          match cvals with
-                            | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
-                               Vlist (*(BTy_tuple [BTy_ctype; BTy_object OTy_pointer])*)_ args_cvals] ->
-                                 let frmt_chars = List.map (function
-                                   | Vobject (OVinteger ival) ->
-                                       match Mem_aux.integerFromIntegerValue ival with
-                                         | Just n ->
-                                             Decode.encode_character_constant n
-                                         | Nothing ->
-                                             error "Core_run, printf one of the element of the format array was invalid (1)"
-                                       end
-                                   | z ->
-                                       error "Core_run, printf one of the element of the format array was invalid (2)"
-                                 end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
-                                 let args_ptrvals = List.map (function
-                                   | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
-                                       (* TODO: WIP *)
-                                       (ty, ptr_val)
-                                   | _ ->
-                                       error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
-                                 end) args_cvals in
-                                 Step_printf2 frmt_chars args_ptrvals (fun n ->
-                                   <| th_st with arena= Epure (Caux.mk_integer_pe n) |>
-                                 )
-                            | _ ->
-                                error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-                          end
                       | _ ->
                           error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena)
                     end
@@ -886,6 +858,34 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                       let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                       E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
                     )
+                | Impl (StdFunction "printf") ->
+                    match cvals with
+                      | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
+                         Vlist (*(BTy_tuple [BTy_ctype; BTy_object OTy_pointer])*)_ args_cvals] ->
+                           let frmt_chars = List.map (function
+                             | Vobject (OVinteger ival) ->
+                                 match Mem_aux.integerFromIntegerValue ival with
+                                   | Just n ->
+                                       Decode.encode_character_constant n
+                                   | Nothing ->
+                                       error "Core_run, printf one of the element of the format array was invalid (1)"
+                                 end
+                             | z ->
+                                 error "Core_run, printf one of the element of the format array was invalid (2)"
+                           end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
+                           let args_ptrvals = List.map (function
+                             | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
+                                 (* TODO: WIP *)
+                                 (ty, ptr_val)
+                             | _ ->
+                                 error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
+                           end) args_cvals in
+                           Step_printf2 frmt_chars args_ptrvals (fun n ->
+                             <| th_st with arena= Epure (Caux.mk_integer_pe n) |>
+                           )
+                      | _ ->
+                          error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
               end

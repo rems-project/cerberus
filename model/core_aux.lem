@@ -31,13 +31,16 @@ let rec core_object_type_of_ctype ty =
          | Nothing ->
              error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
        end
-   | Function ty xs _ ->
+   | Function ty xs isVariadic ->
+       Just (OTy_cfunction (core_object_type_of_ctype ty) (List.length xs) isVariadic)
+(*
        match maybe_mapM (core_object_type_of_ctype -| snd) xs with
          | Just oTys ->
              Just (OTy_cfunction (core_object_type_of_ctype ty) oTys)
          | Nothing ->
              error "Core_aux.core_object_type_of_ctype: Function found a Nothing"
        end
+*)
    | Pointer _ _ ->
        Just OTy_pointer
    | Atomic ty ->

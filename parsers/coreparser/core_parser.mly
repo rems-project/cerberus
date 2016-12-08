@@ -744,7 +744,7 @@ let mk_file decls =
 %token <Mem_common.memop> MEMOP_OP
 
 (* ctype tokens *)
-%token VOID ATOMIC (* SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T *) (* DOTS *)
+%token VOID ATOMIC (* SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T *) DOTS
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
@@ -932,10 +932,20 @@ core_object_type:
     { OTy_floating }
 | POINTER
     { OTy_pointer }
+| CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST RPAREN
+    { OTy_cfunction (None, Nat_big_num.to_int nparams, false) }
+| CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST COMMA DOTS RPAREN
+    { OTy_cfunction (None, Nat_big_num.to_int nparams, true) }
+| CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST RPAREN
+    { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, false) }
+| CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST COMMA DOTS RPAREN
+    { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, true) }
+(*
 | CFUNCTION LPAREN UNDERSCORE COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
     { OTy_cfunction (None, oTys) }
 | CFUNCTION LPAREN ret_oTy= core_object_type COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
     { OTy_cfunction (Some ret_oTy, oTys) }
+*)
 | ARRAY oTy= delimited(LPAREN, core_object_type, RPAREN)
     { OTy_array oTy }
 (*
