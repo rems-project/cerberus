@@ -91,12 +91,12 @@ val gt_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bo
 val le_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
 val ge_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
 val diff_ptrval: pointer_value -> pointer_value -> integer_value
-val intcast_ptrval: ctype (* original reference type *) -> AilTypes.integerType (* target integer type *) -> pointer_value -> integer_value
+
 val validForDeref_ptrval: pointer_value -> bool
 
-(*
-val shift_ptrval: pointer_value -> list (Core_ctype.ctype * integer_value) -> memM pointer_value
-*)
+(* Cast operations *)
+val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> memM pointer_value
+val intcast_ptrval: ctype (* original reference type *) -> AilTypes.integerType (* target integer type *) -> pointer_value -> memM integer_value
 
 val array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> pointer_value
 val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
@@ -131,7 +131,6 @@ val is_specified_ival: integer_value -> bool
 val eq_ival: mem_state -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val lt_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
 val le_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
-val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> pointer_value
 (* val is_concrete_ival: integer_value -> bool *)
 
 (* Memory value constructors *)

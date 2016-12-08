@@ -1223,7 +1223,7 @@ let apply_shift_path ty sh mval =
 
 val addToLog: allocation_id -> memM unit
 let addToLog alloc_id =
-  let () = Debug.print_debug 0 ("addToLog: " ^ show alloc_id) in
+  let () = Debug.print_debug 1 ("addToLog: " ^ show alloc_id) in
   get >>= fun mem_st ->
   if List.elem alloc_id mem_st.access_log then
     fail (MerrOther ("unsequenced race: " ^ show alloc_id))
@@ -1765,8 +1765,10 @@ let diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : integer_valu
     
 (* TODO: looks too simple to be true *)
 let intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
-  IV Prov_none (
-    mk_op_ival_ IntAdd (IVfromptr ref_ty ptr_val_) (integer_value_baseFromShift_path sh)
+  return (
+    IV Prov_none (
+      mk_op_ival_ IntAdd (IVfromptr ref_ty ptr_val_) (integer_value_baseFromShift_path sh)
+    )
   )
 
 let validForDeref_ptrval ptr_val =
@@ -2173,47 +2175,21 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 
 
+(* Converting an integer value into a pointer value *)
 let ptrcast_ival int_ty ref_ty (IV prov ival) =
   (* TODO: check the types *)
   match ival with
     | IVfromptr ty ptrval_ ->
-        PV prov ptrval_ []
-    | _  ->
-      (* TODO: for integer_value with no provenance, this is define only if the value is within
-         the range of "device memory addresses" and the resulting pointer_value has Prov_device *)
-      let str = match ival with
-        | IVunspecified ->
-            "IVunspecified"
-        | IVconcurRead _ _ ->
-            "IVconcurRead"
-        | IVconcrete _ ->
-            "IVconcrete"
-        | IVaddress _ ->
-            "IVaddress"
-        | IVfromptr _ _ ->
-            "IVfromptr"
-        | IVop _ _ ->
-            "IVop"
-        | IVmin _ ->
-            "IVmin"
-        | IVmax _ ->
-            "IVmax"
-        | IVsizeof _ ->
-            "IVsizeof"
-        | IValignof _ ->
-            "IValignof"
-        | IVoffsetof _ _ ->
-            "IVoffsetof"
-        | IVptrdiff _ _ ->
-            "IVptrdiff"
-        | IVbyteof _ _ ->
-            "IVbyteof"
-        | IVcomposite _ ->
-            "IVcomposite"
-      end in
-      error ("WIP: ptrcast_ival ==> " ^ str)
+        (* The integer value was made from an pointer value. the provenance is passed on *)
+        return (PV prov ptrval_ [])
+    | _ ->
+        ifM (MC_eqIV "ptrcasl_ival, null pointer" ival (IVconcrete 0))
+          (* if the integer value is zero, then we make a null pointer (see Q28 in notes30) *)
+          (return (null_ptrval ref_ty))
+          
+          (* otherwise we produce a runtime error (check with P) *)
+          (fail (MerrWIP "tried to cast to a pointer type an integer value non-equal to zero"))
   end
-
 
 
 
@@ -2304,7 +2280,7 @@ let can_store (PV prov ptr_val_ sh) =
 (* TODO: with temporary simplification *)
 val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> mem_value -> mem_value -> mem_value
 let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
-  let () = Debug.print_debug 0 ("ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
+  let () = Debug.print_debug 1 ("ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
   let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
   match (current_mval, sh) with
     | (_, []) ->

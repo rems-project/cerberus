@@ -346,19 +346,11 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
   let strong size_: loaded integer = load(!(size_t), size_ptr) in
   case size_ of
     | Specified(size: integer) =>
---        let strong ret : pointer = alloc(4, size) in
---        return (ret)
-        let strong ptr: pointer = alloc(4, size) in
+        let strong ptr: pointer = alloc(4 {- TODO -}, size) in
         pure(Specified(ptr))
     | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))
   end
-
-{-
-  lets ret = alloc(4, size) in
-  return (ret)
--}
-
 
 
 

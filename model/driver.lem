@@ -705,11 +705,11 @@ let rec driver with_concurrency dr_st =
             let cval = Core.Vobject (Core.OVinteger (Mem.diff_ptrval ptr_val1 ptr_val2)) in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
         | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
-            let cval = Core.Vobject (Core.OVinteger (Mem.intcast_ptrval ref_ty ity ptr_val)) in
-            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+            liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) dr_st >>= fun (ival, dr_st) ->
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st (Core.Vobject (Core.OVinteger ival))) dr_st.core_state |>
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
-            let cval = Core.Vobject (Core.OVpointer (Mem.ptrcast_ival ty ref_ty ival)) in
-            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st.core_state |>
+            liftMem (Mem.ptrcast_ival ty ref_ty ival) dr_st >>= fun (ptrval, dr_st) ->
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st (Core.Vobject (Core.OVpointer ptrval))) dr_st.core_state |>
 
         | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVpointer _)]) ->
             error "WTF ptrFromInt"
