@@ -9,177 +9,135 @@ let keywords =
     (fun m (k, e) -> Pmap.add k e m)
     (Pmap.empty Pervasives.compare)
     [
-      (* ctype tokens *)
-      ("_Atomic",     T.ATOMIC);
-      ("short",       T.SHORT);
-      ("int",         T.INT);
-      ("long",        T.LONG);
-      ("long_long",   T.LONG_LONG);
-      ("_Bool",       T.BOOL);
-      ("signed",      T.SIGNED);
-      ("unsigned",    T.UNSIGNED);
-      ("float",       T.FLOAT);
-      ("double",      T.DOUBLE);
+      (* for Core ctypes *)
+      ("_Atomic",     T.ATOMIC     );
+      ("_Bool",       T.BOOL       );
+      ("char",        T.CHAR       );
+      ("double",      T.DOUBLE     );
+      ("enum",        T.ENUM       );
+      ("float",       T.FLOAT      );
+      ("int",         T.INT        );
+      ("ichar",       T.ICHAR      );
+      ("long",        T.LONG       );
       ("long_double", T.LONG_DOUBLE);
-(*      ("_Complex",    T.COMPLEX); *)
-      ("char",        T.CHAR);
-      ("ichar",       T.ICHAR);
-      ("void",        T.VOID);
-      ("struct",      T.STRUCT);
-      ("union",       T.UNION);
-      ("enum",        T.ENUM);
-(*
-      ("size_t",      T.SIZE_T);
-      ("intptr_t",    T.INTPTR_T);
-      ("ptrdiff_t",   T.PTRDIFF_T);
-      ("wchar_t",     T.WCHAR_T);
-      ("char16_t",    T.CHAR16_T);
-      ("char32_t",    T.CHAR32_T);
+      ("long_long",   T.LONG_LONG  );
+      ("short",       T.SHORT      );
+      ("signed",      T.SIGNED     );
+      ("struct",      T.STRUCT     );
+      ("union",       T.UNION      );
+      ("unsigned",    T.UNSIGNED   );
+      ("void",        T.VOID       );
       
-      ("int8_t",    T.INT8_T);
-      ("int16_t",   T.INT16_T);
-      ("int32_t",   T.INT32_T);
-      ("int64_t",   T.INT64_T);
-      ("uint8_t",   T.UINT8_T);
-      ("uint16_t",  T.UINT16_T);
-      ("uint32_t",  T.UINT32_T);
-      ("uint64_t",  T.UINT64_T);
-*)
-      
-      
-      
-      (* for Core.core_base_type *)
+      (* for Core object types *)
       ("integer",   T.INTEGER  );
-      ("floating",  T.FLOATING  );
-      ("boolean",   T.BOOLEAN  );
+      ("floating",  T.FLOATING );
       ("pointer",   T.POINTER  );
-      ("ctype",     T.CTYPE    );
       ("cfunction", T.CFUNCTION);
-      ("unit",      T.UNIT     );
-      ("list",      T.LIST     );
-
       
+      (* for Core base types *)
+      ("unit",    T.UNIT   );
+      ("boolean", T.BOOLEAN);
+      ("ctype",   T.CTYPE  );
+      ("list",    T.LIST   );
+      ("loaded",  T.LOADED );
+      
+      (* for Core types *)
       ("eff", T.EFF);
-(*    | Tuple of list core_base_type *)
       
-      (* for Core.expr *)
-      ("Unit",      T.UNIT_VALUE);
-      ("True",   T.TRUE);
-      ("False",  T.FALSE);
-(*  | Econst of Cmm_aux.constant *)
-(*  | Ectype of ctype *)
-(*  | Eaddr of Memory.mem_addr *)
-(*  | Esym of sym *)
-(*  | Eimpl of Implementation_.implementation_constant *)
-(*  | Etuple of list (expr 'a) *)
-      ("not", T.NOT);
-(*  | Eop of binop * expr 'a * expr 'a *)
-(*  | Ecall of name * list (expr 'a) *)
-      ("undef", T.UNDEF);
-      ("error", T.ERROR);
-      ("skip", T.SKIP);
-      ("let", T.LET);
-      ("in", T.IN);
-      ("if", T.IF);
-      ("then", T.THEN);
-      ("else", T.ELSE);
-(*  | Eproc of set 'a * name * list (expr 'a) *)
-(*  | Eaction of paction 'a *)
-(*  | Eunseq of list (expr 'a) *)
-      ("pure", T.PURE);
-      ("unseq", T.UNSEQ);
-      ("weak", T.WEAK);
-      ("strong", T.STRONG);
-      ("atom", T.ATOM);
-      ("save", T.SAVE);
-      ("run", T.RUN);
-      ("indet", T.INDET);
-      ("bound", T.BOUND);
-      ("return", T.RETURN);
-(*
-      ("try", T.TRY);
-      ("with", T.WITH);
-*)
-      ("raise", T.RAISE);
-      ("register", T.REGISTER);
-  
-      ("nd", T.ND);
-      ("par", T.PAR);
-      ("wait", T.WAIT);
-
-     
-      ("array_shift", T.ARRAY_SHIFT);
+      (* for Core values *)
+      ("Unit",        T.UNIT_VALUE     );
+      ("              True",  T.TRUE   );
+      ("False",       T.FALSE          );
+      ("Ivmax",       T.IVMAX          );
+      ("Ivmin",       T.IVMIN          );
+      ("Ivsizeof",    T.IVSIZEOF       );
+      ("Ivalignof",   T.IVALIGNOF      );
+      ("Unspecified", T.UNSPECIFIED    );
+      ("Cfunction",   T.CFUNCTION_VALUE);
+      ("Nil",         T.NIL            );
+      ("Cons",        T.CONS           );
+      ("              Tuple",  T.TUPLE );
+      ("Array",       T.ARRAY          );
+      ("Specified",   T.SPECIFIED      );
+      
+      (* for Core (pure) expressions *)
+      ("not",          T.NOT         );
+      ("undef",        T.UNDEF       );
+      ("error",        T.ERROR       );
+      ("skip",         T.SKIP        );
+      ("let",          T.LET         );
+      ("in",           T.IN          );
+      ("if",           T.IF          );
+      ("then",         T.THEN        );
+      ("else",         T.ELSE        );
+      ("pure",         T.PURE        );
+      ("unseq",        T.UNSEQ       );
+      ("weak",         T.WEAK        );
+      ("strong",       T.STRONG      );
+      ("atom",         T.ATOM        );
+      ("save",         T.SAVE        );
+      ("run",          T.RUN         );
+      ("indet",        T.INDET       );
+      ("bound",        T.BOUND       );
+      ("raise",        T.RAISE       );
+      ("register",     T.REGISTER    );
+      ("nd",           T.ND          );
+      ("par",          T.PAR         );
+      ("wait",         T.WAIT        );
+      ("array_shift",  T.ARRAY_SHIFT );
       ("member_shift", T.MEMBER_SHIFT);
+      ("case",         T.CASE        );
+      ("of"  ,         T.OF          );
+      ("end" ,         T.END         );
+      ("pcall",        T.PCALL       );
+      ("ccall",        T.CCALL       );
+      ("memop",        T.MEMOP       );
       
       (* for Core.action_ *)
-      ("create",  T.CREATE);
-      ("alloc",   T.ALLOC );
-      ("kill",    T.KILL  );
-      ("store",   T.STORE );
-      ("load",    T.LOAD  );
-      ("rmw",     T.RMW   );
-      ("fence",   T.FENCE );
-     
+      ("create", T.CREATE);
+      ("alloc",  T.ALLOC );
+      ("kill",   T.KILL  );
+      ("store",  T.STORE );
+      ("load",   T.LOAD  );
+      ("rmw",    T.RMW   );
+      ("fence",  T.FENCE );
       
+      (* for toplevel declarations *)
+      ("def",  T.DEF ); (* for implementation files only *)
+      ("glob", T.GLOB);
+      ("fun",  T.FUN );
+      ("proc", T.PROC);
       
-      ("def",     T.DEF     ); (* for implementation files only *)
-      ("glob",    T.GLOB     ); (* for implementation files only *)
-      ("fun",     T.FUN     );
-      ("proc",    T.PROC     );
-      
-      
+      (* for C11 memory orders *)
       ("seq_cst", T.SEQ_CST );
       ("relaxed", T.RELAXED );
       ("release", T.RELEASE );
       ("acquire", T.ACQUIRE );
       ("consume", T.CONSUME );
       ("acq_rel", T.ACQ_REL );
-
-      ("case", T.CASE);
-      ("of"  , T.OF  );
-      ("end" , T.END );
-
-
-(* TODO: temporary *)
+      
+      (* TODO: temporary *)
       ("is_scalar",   T.IS_SCALAR  );
       ("is_integer",  T.IS_INTEGER );
       ("is_signed",   T.IS_SIGNED  );
       ("is_unsigned", T.IS_UNSIGNED);
       
-      (* integer values *)
-      ("Ivmax",     T.IVMAX);
-      ("Ivmin",     T.IVMIN);
-      ("Ivsizeof",  T.IVSIZEOF);
-      ("Ivalignof", T.IVALIGNOF);
-      ("Unspecified", T.UNSPECIFIED);
-
-      ("Cfunction", T.CFUNCTION_VALUE);
-
+      (* for Memory operations *)
+      ("PtrEq",            T.MEMOP_OP Mem_common.PtrEq           );
+      ("PtrNe",            T.MEMOP_OP Mem_common.PtrNe           );
+      ("PtrLt",            T.MEMOP_OP Mem_common.PtrLt           );
+      ("PtrGt",            T.MEMOP_OP Mem_common.PtrGt           );
+      ("PtrLe",            T.MEMOP_OP Mem_common.PtrLe           );
+      ("PtrGe",            T.MEMOP_OP Mem_common.PtrGe           );
+      ("Ptrdiff",          T.MEMOP_OP Mem_common.Ptrdiff         );
+      ("IntFromPtr",       T.MEMOP_OP Mem_common.IntFromPtr      );
+      ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
+      ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
       
-      ("pcall", T.PCALL);
-      ("ccall", T.CCALL);
-      
-      ("Nil",    T.NIL);
-      ("Cons",   T.CONS);
-      ("Tuple",  T.TUPLE);
-      ("Array",  T.ARRAY);
-      ("loaded", T.LOADED);
-      ("Specified", T.SPECIFIED);
-      
-      (* TODO: I really need to rewrite this lexer properly... *)
-      ("memop", T.MEMOP);
-
-      ("PtrEq", T.MEMOP_OP Mem_common.PtrEq);
-      ("PtrNe", T.MEMOP_OP Mem_common.PtrNe);
-      ("PtrLt", T.MEMOP_OP Mem_common.PtrLt);
-      ("PtrGt", T.MEMOP_OP Mem_common.PtrGt);
-      ("PtrLe", T.MEMOP_OP Mem_common.PtrLe);
-      ("PtrGe", T.MEMOP_OP Mem_common.PtrGe);
-      ("Ptrdiff", T.MEMOP_OP Mem_common.Ptrdiff);
-      ("IntFromPtr", T.MEMOP_OP Mem_common.IntFromPtr);
-      ("PtrFromInt", T.MEMOP_OP Mem_common.PtrFromInt);
-      ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref)
+      (* for source attributes *)
+      ("ailname", T.AILNAME);
     ]
+
 
 let scan_sym lexbuf =
   let id = Lexing.lexeme lexbuf in
@@ -187,6 +145,7 @@ let scan_sym lexbuf =
     Pmap.find id keywords
   with Not_found ->
     T.SYM (id, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf))
+
 
 let scan_impl lexbuf =
   let id = Lexing.lexeme lexbuf in
@@ -197,6 +156,7 @@ let scan_impl lexbuf =
       T.IMPL (Implementation_.StdFunction (String.sub id 14 (String.length id - 15)))
     else
       failwith ("Found an invalid impl_name: " ^ id)
+
 
 let scan_ub lexbuf =
   let id = Lexing.lexeme lexbuf in
@@ -219,16 +179,39 @@ let lex_comment remainder lexbuf =
   let prefix = Int64.of_int (Char.code ch) in
   if ch = '\n' then Lexing.new_line lexbuf;
   prefix :: remainder lexbuf
-
 }
 
 
-let error_name = "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
-let ub_name = "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
-let impl_name = '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
-let symbolic_name = ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
+(* C-like strings *)
+let error_name =
+  "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
+let ub_name =
+  "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
+let impl_name =
+  '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
+let symbolic_name =
+  ['_' 'a'-'z' 'A'-'Z']['0'-'9' 'A'-'Z' 'a'-'z' '_']*
 
-rule main = parse
+let escape_sequence =
+    "\\'" | "\\\"" | "\\?" | "\\\\" | "\\a" | "\\b" | "\\f" | "\\n"
+  | "\\r" | "\\t" | "\\v"
+let c_char =
+    [^ '\'' '\\' '\n']
+  | escape_sequence
+let character_constant =
+  c_char+
+let s_char =
+    [^ '"' '\\' '\n']
+  | escape_sequence
+
+rule cstring = parse
+  | s_char as x
+      { let xs = cstring lexbuf in
+        x :: xs }
+  | '"'
+      { [] }
+
+and main = parse
   (* beginning of a comment *)
   | "{-"
       { let _ = comment lexbuf in main lexbuf }
@@ -244,6 +227,11 @@ rule main = parse
   (* integer constants *)
   | ['0'-'9']+ as integer
       { T.INT_CONST (Nat_big_num.of_string integer) }
+  (* C-like strings *)
+  | '"'
+      { let strs = cstring lexbuf in
+        (* TODO: check this *)
+        T.CSTRING (String.concat "" strs) }
   
   (* binary operators *)
   | '+'   { T.PLUS }
@@ -291,7 +279,7 @@ rule main = parse
   | ','   { T.COMMA }
   | ':'   { T.COLON }
   | ":="  { T.COLON_EQ }
-  | "\""  { T.DQUOTE }
+  | '!'  { T.BANG }
   
   | "=>" { T.EQ_GT }
   

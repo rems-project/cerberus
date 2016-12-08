@@ -29,7 +29,7 @@ type mode =
 type result =
     (* main symbol, globals, fun_map *)
   | Rfile of Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map
-  | Rstd  of unit Core.fun_map
+  | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
 
@@ -100,7 +100,7 @@ type token =
   | TRY
   | WITH
 *)
-  | RETURN
+
   | INDET
   | BOUND
   | CREATE
@@ -129,13 +129,14 @@ type token =
   | UNSPECIFIED
   
   | STRING of string
+  | CSTRING of string
   
   | SYM of _sym
   | IMPL of Implementation_.implementation_constant
   | UB of Undefined.undefined_behaviour
   | INT_CONST of Nat_big_num.num
   
-  | DQUOTE
+  | BANG
   
   | CASE
   | OF
@@ -208,8 +209,8 @@ type token =
   
   | MEMOP
   | MEMOP_OP of Mem_common.memop
-
-
+  
+  | AILNAME
 
 (*
   | UNION
