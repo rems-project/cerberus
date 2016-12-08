@@ -9,10 +9,13 @@ type core_object_type =  (* types for C objects *)
  | OTy_integer
  | OTy_floating
  | OTy_pointer
+(*
  | OTy_cfunction of maybe core_object_type * list core_object_type
      (* the return type is Nothing for void functions *)
      (* NOTE: the types are core object type (instead of ctypes), because in the elaborated Core we have forgotten
         about the latter since the signature of procedure have core types. *)
+*)
+ | OTy_cfunction of maybe core_object_type (* return type *) * nat (* number of params *) * bool (* isVariadic *)
  | OTy_array of core_object_type
  | OTy_struct of Symbol.sym
  | OTy_union of Symbol.sym

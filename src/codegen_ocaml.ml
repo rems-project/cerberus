@@ -75,7 +75,7 @@ let rec print_core_object = function
  | OTy_integer    -> !^"M.integer_value0"
  | OTy_floating   -> !^"M.floating_value0"
  | OTy_pointer    -> !^"M.pointer_value0"
- | OTy_cfunction (ret_oTy, oTys) ->
+ | OTy_cfunction (ret_oTy, naparams, isVariadic) ->
      (* TODO: K wip *)
      !^"M.pointer_value0" (* cfunction is a pointer value? *)
                        (*TODO: I am not sure about these: *)

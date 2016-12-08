@@ -262,7 +262,7 @@ val annotate_arguments_aux: forall 'A1 'A2.
 
 
 (* let rec annotate_arguments_aux (a : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.t (expression 'A2)) es (p : list (qualifiers * _)) : E.t (list (expression 'A2)) = *)
-let rec annotate_arguments_aux a annotate_expression annotate_assignee has_proto is_variadic args params =
+let rec annotate_arguments_aux annot annotate_expression annotate_assignee has_proto is_variadic args params =
   match (args, params) with
     | ([], []) ->
         E.return []
@@ -274,7 +274,7 @@ let rec annotate_arguments_aux a annotate_expression annotate_assignee has_proto
         if has_proto then
 *)
           annotate_assignee (AilTypesAux.rvalue_coercion param_ty1) arg_e >>= fun a_arg_e  ->
-          annotate_arguments_aux a annotate_expression annotate_assignee has_proto is_variadic args' params' >>= fun a_args' ->
+          annotate_arguments_aux annot annotate_expression annotate_assignee has_proto is_variadic args' params' >>= fun a_args' ->
           E.return (a_arg_e :: a_args')
 (*
         else
@@ -290,8 +290,15 @@ let rec annotate_arguments_aux a annotate_expression annotate_assignee has_proto
           E.fail Loc.unknown (TError_TODO 68)
         else
           (* following (§6.5.2.2#7) *)
-          (* TODO: check *)
-          E.mapM annotate_expression args
+          (* TODO: default argument promotion + checks (at least that there are no void-expression, though this might already be done by the promotion) *)
+E.mapM annotate_expression args
+(*
+          E.mapM annotate_expression args >>= fun a_args ->
+          if List.any (fun z -> type_of annot z = Void) a_args then
+            E.fail Loc.unknown (TError "called a variadic function with a void expression")
+          else
+            E.return a_args
+*)
     | (_, _) ->
         E.fail Loc.unknown (TError_TODO 12)
   end

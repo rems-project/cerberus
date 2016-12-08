@@ -1743,16 +1743,17 @@ TODO: #9
 *)
       (* LAST nov2016 *)
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
-          let (ret_bTy_opt, bTys) = match Caux.proj_ctype (ctype_of e) with
-            | Cty.Pointer _ (Cty.Function ret_ty qs_tys is_variadic) ->
+          let (ret_oTy_opt, nparams, isVariadic) = match Caux.proj_ctype (ctype_of e) with
+            | Cty.Pointer _ (Cty.Function ret_ty qs_tys isVariadic) ->
                 (Caux.core_object_type_of_ctype ret_ty,
-                 List.map (force_core_object_type_of_ctype -| snd) qs_tys)
+                 List.length qs_tys,
+                 isVariadic)
             | _ ->
                 illTypedAil loc "AilEcall"
           end in
-          
+          (* TODO: could do a check that |bTys| = 0 ? *)
           translate_rvalue e >>= fun core_e ->
-          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_bTy_opt bTys))
+          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)
             >>= fun (nparams_sym, nparams_sym_pat, nparams_sym_pe) ->
@@ -1771,15 +1772,121 @@ TODO: #9
               end
       
       | A.AilEcall e es ->
-          let (ret_bTy, bTys) = match Caux.proj_ctype (ctype_of e) with
-            | Cty.Pointer _ (Cty.Function ret_ty qs_tys is_variadic) ->
-                (Caux.core_object_type_of_ctype ret_ty,
-                 List.map (Caux.core_object_type_of_ctype -| snd) qs_tys)
+          let (ret_oTy_opt, params, nparams, isVariadic) = match ctype_of e with
+            | Aty.Pointer _ (Aty.Function _ ret_ty qs_tys isVariadic) ->
+                (Caux.core_object_type_of_ctype (Caux.proj_ctype ret_ty),
+                 qs_tys,
+                 List.length qs_tys,
+                 isVariadic)
             | _ ->
                 illTypedAil loc "AilEcall"
           end in
           
-          error "WIP AilEcall"
+          let numberOfArguments = List.length es in
+          translate_rvalue e >>= fun core_e ->
+          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
+            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (nparams_sym,    nparams_sym_pat,    nparams_sym_pe)    ->
+          E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (isVariadic_sym, isVariadic_sym_pat, isVariadic_sym_pe) ->
+          
+          let call_bTy = maybe C.BTy_unit C.BTy_loaded ret_oTy_opt in
+          E.wrapped_fresh_symbol call_bTy >>= fun (call_sym, call_sym_pat, call_sym_pe) ->
+          
+          (* symbolic names for the arguments temporary objects *)
+          E.replicateM numberOfArguments E.fresh_symbol >>= fun arg_ptr_syms ->
+          
+          (* Core code of the evaluation of the argument, with creation and initialisation of the
+             associated temporary objects *)
+          (* NOTE: combine_params_args does the argument promotion for variadic functions *)
+          E.mapM (fun (arg_ty, arg_e) ->
+            translate_rvalue arg_e >>= fun core_arg_e  ->
+            E.fresh_symbol         >>= fun arg_val_sym ->
+            E.fresh_symbol         >>= fun arg_ptr_sym ->
+            let arg_sym_bTy =
+              C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype arg_ty)) in
+            let arg_ctype_pe = Caux.mk_ail_ctype_pe arg_ty in
+            let arg_val_sym_pe = Caux.mk_sym_pe arg_sym_bTy arg_val_sym in
+            E.return (
+              C.Ewseq (Caux.mk_sym_pat arg_val_sym arg_sym_bTy)
+                core_arg_e
+              (C.Ewseq (Caux.mk_sym_pat arg_ptr_sym (C.BTy_object C.OTy_pointer))
+                (Caux.pcreate loc (Caux.mk_alignof_pe arg_ctype_pe) arg_ctype_pe (Symbol.PrefOther "translation, AilEcall temp"))
+                (C.Ewseq (Caux.mk_empty_pat C.BTy_unit)
+                   begin
+                     let conved_init =
+                       if AilTypesAux.is_integer arg_ty then
+                         stdlib.mkcall_conv_loaded_int arg_ty arg_val_sym_pe
+                       else if arg_ty = Aty.Basic (Aty.Floating (Aty.RealFloating Aty.Float)) then
+                         (* TODO: convert to double *)
+                         arg_val_sym_pe
+                       else
+                         arg_val_sym_pe in
+                     (Caux.pstore loc arg_ctype_pe
+                        (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) arg_ptr_sym) conved_init Cmm.NA)
+                   end
+                   (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) arg_ptr_sym))))
+            )
+          ) (combine_params_args params es) >>= fun core_creates ->
+          
+          (* STD (§6.5.2.2#10, first sentence) says there is sequence point "after the
+             evaluations of the function designator and the actual arguments but before
+             the actual call." *)
+          C.Esseq
+            begin
+             Caux.mk_tuple_pat $
+               (Caux.mk_tuple_pat [ fun_sym_pat; nparams_sym_pat; isVariadic_sym_pat ]) ::
+               List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
+            end
+              (Caux.mk_unseq (core_e :: core_creates))
+              <$> begin
+                      (* not (if isVariadic then nparams <= args else nparams = args) *)
+                C.Eif (Caux.mk_not_pe
+                         (Caux.mk_if_pe isVariadic_sym_pe
+                            (Caux.mk_op_pe C.OpLe nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))
+                            (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))))
+                  (C.Epure (Caux.mk_undef_pe Undefined.UB039))
+                  <$> begin
+                    if numberOfArguments = 0 then
+                      (* If there are no arguments, we don't need all the temporary object creation stuff *)
+                      E.return (C.Eccall default fun_sym_pe [])
+                    else
+                      (* TODO: WIP *)
+                      E.return (
+                        C.Esseq call_sym_pat
+                          (* the actual call *)
+                          begin
+                            (* merging the additional arguments of a variadic function into a list *)
+                            let arg_ptr_syms_pes =
+                              let (xs_syms, ys_syms) = List.splitAt (List.length params) arg_ptr_syms  in
+                              (* these are the arguments corresponding to declared parameters *)
+                              let xs = List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) xs_syms in
+                              
+                              if isVariadic then
+                                 let ys = List.map (fun (e, sym) ->
+                                   Caux.mk_tuple_pe
+                                     [ Caux.mk_ail_ctype_pe (ctype_of e)
+                                     ; Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym ]
+                                 ) (List.zip (List.drop (List.length params) es) ys_syms) in
+                                 xs ++ [Caux.mk_list_pe ys]
+                              else
+                                 xs in
+                            C.Eccall default fun_sym_pe arg_ptr_syms_pes
+                          end
+                          begin
+                            let bTy =
+                              if List.length arg_ptr_syms < 2 then
+                                C.BTy_unit
+                              else
+                                C.BTy_tuple (List.replicate (List.length arg_ptr_syms) C.BTy_unit) in
+                            C.Esseq (Caux.mk_empty_pat bTy)
+                              (* killing of the temporary objects *)
+                              (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) arg_ptr_syms))
+                              (* forwarding the value of call *)
+                              (C.Epure call_sym_pe)
+                          end
+                      )
+                  end
+              end
 (*
           let (params, isVariadic) = match ctype_of e with
             | Aty.Pointer _ (Aty.Function _ _ xs b) ->

@@ -196,18 +196,36 @@ let rec typeof_object_value loc env oval =
 (*       E.return OTy_cfunction *)
         match Map.lookup nm env.decls with
           | Just (TDproc ret_bTy bTys) ->
-              match (ret_bTy, maybe_mapM oTy_of_bTy bTys) with
-                | (_, Nothing) ->
-                    E.fail loc (CoreTyping_TODO "Core procedures associated to a (1)")
-                | (BTy_unit, Just oTys) ->
-                    E.return (OTy_cfunction Nothing oTys)
-                | (_, Just oTys) ->
+              match ret_bTy with
+                | BTy_unit ->
+                    E.return Nothing
+                | _ ->
                     match oTy_of_bTy ret_bTy with
                       | Just ret_oTy ->
-                          E.return (OTy_cfunction (Just ret_oTy) oTys)
+                          E.return (Just ret_oTy)
                       | Nothing ->
-                          E.fail loc (CoreTyping_TODO "Core procedures associated to a (2)")
+                          E.fail loc (CoreTyping_TODO "Core procedures used as C functions must return unit or an object value")
                     end
+              end >>= fun ret_oTy_opt ->
+              
+              match List.dest_init bTys with
+                | Just (bTys', last_bTy) ->
+                    E.guard (List.all (fun z -> z = BTy_object OTy_pointer) bTys')
+                      loc (CoreTyping_TODO "Core procedures used as C functions must only have pointer \
+                                            parameters (expect for the last one that may be a list of \
+                                            (ctype, pointer), for variadic C functions) (1)") >>
+                    match last_bTy with
+                      | BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ->
+                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys') true)
+                      | BTy_object OTy_pointer ->
+                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys' + 1) false)
+                      | bTy ->
+                          E.fail loc (CoreTyping_TODO ("Core procedures used as C functions must only have pointer \
+                                                       parameters (expect for the last one that may be a list of \
+                                                       (ctype, pointer), for variadic C functions) (2)" ^ Pp.stringFromCore_core_base_type bTy))
+                    end
+                | Nothing ->
+                    E.return (OTy_cfunction ret_oTy_opt 0 false)
               end
           | Just _ ->
               E.fail loc (CoreTyping_TODO ("found a def in a cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
@@ -584,11 +602,11 @@ and typecheck_pexpr loc (env: typing_env) (bTy: core_base_type) (Pexpr () pexpr_
                 (List.zip bTys pes) >>=
               (fun pes' -> E.return (PEctor Ctuple pes'))
           | (Ctuple, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped tuple")
-(* KKK
+              E.fail loc (CoreTyping_TODO ("illtyped tuple ==> " ^ Pp.stringFromCore_core_base_type bTy))
           | (Carray, BTy_object (OTy_array oTy), pes) ->
-              typecheck_pexpr loc env (BTy_object oTy) pes
-*)
+              PEctor Carray <$> E.mapM (fun pe ->
+                typecheck_pexpr loc env (BTy_object oTy) pe
+              ) pes
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr loc env (BTy_ctype) pe
           | (Civmax, _, _) ->
@@ -1170,10 +1188,24 @@ and typecheck_expr loc (env: typing_env) expected_bTy = function
       infer_pexpr loc env pe >>=
         export_pexpr loc >>= fun (Pexpr bTy _ as pe') ->
       match bTy with
-        | BTy_object (OTy_cfunction ret_oTy_opt oTys) ->
-            E.mapM (fun (oTy, pe) ->
-              typecheck_export_pexpr loc env (BTy_object oTy) pe
-            ) (List.zip oTys pes) >>= fun pes' ->
+        | BTy_object (OTy_cfunction ret_oTy_opt nparams isVariadic) ->
+            begin
+              if isVariadic then
+                match List.dest_init pes with
+                  | Nothing ->
+                      E.fail loc (CoreTyping_TODO "ccall to a variadic C procedure must at least have a list of pointers as last argument")
+                  | Just (first_pes, last_pe) ->
+                      E.mapM (fun pe ->
+                        typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe
+                      ) first_pes >>= fun first_pes' ->
+                      typecheck_export_pexpr loc env (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
+                      E.return (first_pes' ++ [last_pe'])
+                end
+              else
+                E.mapM (fun pe ->
+                  typecheck_export_pexpr loc env (BTy_object OTy_pointer) pe
+                ) pes
+            end >>= fun pes' ->
             guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
             E.return (Eccall () pe' pes')
       end
