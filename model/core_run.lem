@@ -912,30 +912,6 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                 E.return <| th_st with arena= Ememop memop pes' |>
               )
         end
-
-(*
-          | (Ptreq, Just cvals) ->
-              match Mem.eq_ptrval (* TODO *)Symbolic.Constraints_TODO ptr_val1 ptr_val2 with
-                | Just b ->
-                    one $ Step_tau "Ememop, Ptreq" (
-                      E.return <| th_st with arena= Epure (PEval (if b then Vtrue else Vfalse)) |>
-                    )
-                | Nothing ->
-                    error "TODO: symbolic case for pointer equality"
-              end
-          | (IntFromPtr, Just [Vctype ref_ty; Vctype ty; Vpointer ptr_val]) ->
-              EU.return $
-              PEval (Vinteger (Mem.intcast_ptrval ref_ty ty ptr_val))
-          | (PtrFromInt, Just [Vctype ty; Vctype ref_ty; Vinteger ival]) ->
-              EU.return $
-                PEval (Vpointer (Mem.ptrcast_ival ty ref_ty ival))
-          | (PtrValidForDeref, Just [Vpointer ptr_val]) ->
-              EU.return $ PEval
-                (if Mem.validForDeref_ptrval ptr_val then
-                  Vtrue
-                else
-                  Vfalse)
-*)
     
     | (Eunseq es, Stack_cons cont sk) ->
         match to_pures es with
