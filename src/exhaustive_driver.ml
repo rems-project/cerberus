@@ -29,7 +29,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
   let values = ND.runM0 (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
   
   List.iter (function
-    | ND.Active (stdout, (_, _, pe), _) ->
+    | ND.Active (stdout, (isBlocked, _, pe), _) ->
         let str_v = String_core.string_of_pexpr
             begin
               match pe with
@@ -40,7 +40,8 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
                       pe
               end in
         print_endline begin
-          "Defined {value: \"" ^ str_v ^ "\", stdout=\"" ^ String.escaped stdout ^ "\"}"
+          "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped stdout ^
+          "\", blocked: \"" ^ if isBlocked then "true\"}" else "false\"}"
         end
     | ND.Killed (ND.Undef0 (_, ubs)) ->
         print_endline begin
@@ -54,7 +55,15 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
         print_endline begin
           "Killed {msg: " ^ str ^ "}"
         end
-  ) (List.map fst values)
+  ) (List.map fst values);
+  
+  List.iter (fun (_, nd_st) ->
+    print_endline ("CONSTRS ==> " ^ (Pp_constraints.pp_constraints nd_st.ND.eqs))
+  ) values;
+  
+  List.iteri (fun i (_, nd_st) ->
+    print_endline ("Log[" ^ string_of_int i ^ "]\n" ^ String.concat "\n" (Dlist.toList nd_st.ND.log) ^ "\nEnd[" ^ string_of_int i ^ "]" )
+  ) values
 
 
 

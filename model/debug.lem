@@ -1,5 +1,11 @@
 import Loc
 
+type category =
+  | DB_ail_typing
+  | DB_driver_step
+
+declare ocaml target_rep type category = `Debug_ocaml.category`
+
 val get_level: unit -> nat
 declare ocaml target_rep function get_level   = `Debug_ocaml.get_debug_level`
 declare hol   target_rep function get_level u = 0 (* TODO: HOL hack *)
