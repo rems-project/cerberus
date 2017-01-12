@@ -6,10 +6,7 @@ open import Global
 
 open import {hol} `utilTheory`
 
-val print_debug: nat -> string -> unit
-declare ocaml target_rep function print_debug = `Debug.print_debug`
-declare hol   target_rep function print_debug = `util$print_debug`
-
+import Debug
 
 
 (* == constructor predicates on ctypes =========================================================== *)

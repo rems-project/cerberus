@@ -20,7 +20,7 @@ let string_tr target replace str =
   String.map (fun c -> if c = target then replace else c) str
 
 (* Print TODO *)
-let todo str = !^"raise (A.Error " ^^ !^str ^^ !^")"
+let todo str = !^"raise (A.Error \"" ^^ !^str ^^ !^"\")"
 
 (* Extend pretty printer *)
 let print_comment doc = P.parens (P.star ^^^ doc ^^^ P.star)
@@ -527,6 +527,15 @@ let rec print_expr = function
   | Ebound (_, e) -> print_expr e
   | End [] -> raise Unsupported
   | End (e::_) -> print_expr e
+  | Esave ((sym, bTy), xs, e) ->
+      print_expr e (* failwith "Codegen_ocaml.print_expr, Esave" *)
+  | Erun _ ->
+      todo "run" (* failwith "Codegen_ocaml.print_expr, Erun" *)
+  | Eproc ((), nm, pes) ->
+      print_name nm ^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes ^^^ !^"return"
+
+(*      failwith "Codegen_ocaml.print_expr, Eproc" *)
+
 (*
   | Esave (sym, sym_tys, e) ->
     !^"let rec" ^^^ print_symbol sym ^^^ !^"return =" ^^ !> (print_expr e)
@@ -670,9 +679,12 @@ let compile filename core =
     P.ToChannel.pretty 1. 80 oc
       (print_head filename ^^ generate_ocaml core ^//^ print_foot);
     close_out oc;
+(*
     Sys.command (
       "ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs pprint,zarith \
        -libs unix,nums,str " ^ fl_native (* ^ " | ./tools/colours.sh" *)
     )
     |> Exception.return0
+*)
+    Exception.return0 0
   end

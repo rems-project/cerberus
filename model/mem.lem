@@ -233,6 +233,10 @@ type mem_constraint2 = Impl.mem_constraint2
 
 val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
 val constraint_neIV: integer_value -> integer_value -> mem_constraint2
+val constraint_ltIV: integer_value -> integer_value -> mem_constraint2
+val constraint_leIV: integer_value -> integer_value -> mem_constraint2
 
 let constraint_eqIV = Impl.constraint_eqIV
 let constraint_neIV = Impl.constraint_neIV
+let constraint_ltIV = Impl.constraint_ltIV
+let constraint_leIV = Impl.constraint_leIV

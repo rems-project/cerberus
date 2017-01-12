@@ -1,4 +1,13 @@
 open Lexing
+
+type category =
+  | DB_ail_typing
+  | DB_driver_step
+
+
+
+
+
 (*
 module Loc = struct
   let of_tuple (file, line, _, _, _, _, _, _) = 

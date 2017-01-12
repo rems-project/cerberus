@@ -18,9 +18,12 @@ let rec sequentialise_expr expr =
         Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
     | Eskip ->
         expr
+    | Eccall _ _ _ ->
+        expr
     | Eproc _ _ _ ->
         expr
     | Eunseq es ->
+        let () = Debug.warn "Core_sequentialise ==> missed an unseq" in
         expr
 (*
         E.replicateM (List.length es) E.fresh_symbol >>= fun syms ->
@@ -62,6 +65,11 @@ let rec sequentialise_expr expr =
         Ebound i (sequentialise_expr e)
     | End es ->
         End (List.map sequentialise_expr es)
+    | Esave sym_ty xs e ->
+        Esave sym_ty xs (sequentialise_expr e)
+    | Erun () sym es ->
+        expr
+
 (*
     | Esave ksym sym_tys e ->
         Esave ksym sym_tys (sequentialise_expr e)

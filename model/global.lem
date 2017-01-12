@@ -391,3 +391,8 @@ let rec maybe_mapM_aux acc f = function
   end
 
 let maybe_mapM f xs = maybe_mapM_aux [] f xs
+
+
+val product_list: forall 'a 'b. list 'a -> list 'b -> list ('a * 'b)
+let product_list xs ys =
+  List.concatMap (fun x -> List.map (fun y -> (x,y)) ys) xs

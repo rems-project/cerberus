@@ -951,7 +951,7 @@ let rec pure_propagation2 expr =
           | Nothing ->
               let es'' =
                 List.map (fun e ->
-                  match to_pure e with
+                  match to_pure' e with
                     | Just pe ->
                         Epure pe
                     | Nothing ->
@@ -959,6 +959,42 @@ let rec pure_propagation2 expr =
                   end) es' in
               Eunseq es''
         end
+    | Ewseq (CaseCtor Ctuple pats) (Eunseq es) e2 ->
+        let (cont, pats', es') =
+          List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
+            let e = (pure_propagation2 e) in
+            match to_pure' e with
+              | Just pe ->
+                  (fun z -> subst_pattern pat pe (cont z), pats_acc, es_acc)
+              | Nothing ->
+                  (cont, pat :: pats_acc, e :: es_acc)
+            end) (id, [], []) (List.zip pats es) in
+       match (pats', es') with
+         | ([], []) ->
+             pure_propagation2 (cont e2)
+         | ([pat'], [e']) ->
+             Ewseq pat' e' (pure_propagation2 (cont e2))
+         | _ ->
+             Ewseq (CaseCtor Ctuple pats') (Eunseq es') (pure_propagation2 (cont e2))
+       end
+    | Esseq (CaseCtor Ctuple pats) (Eunseq es) e2 ->
+        let (cont, pats', es') =
+          List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
+            let e = (pure_propagation2 e) in
+            match to_pure' e with
+              | Just pe ->
+                  (fun z -> subst_pattern pat pe (cont z), pats_acc, es_acc)
+              | Nothing ->
+                  (cont, pat :: pats_acc, e :: es_acc)
+            end) (id, [], []) (List.zip pats es) in
+       match (pats', es') with
+         | ([], []) ->
+             pure_propagation2 (cont e2)
+         | ([pat'], [e']) ->
+             Esseq pat' e' (pure_propagation2 (cont e2))
+         | _ ->
+             Esseq (CaseCtor Ctuple pats') (Eunseq es') (pure_propagation2 (cont e2))
+       end
     | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
@@ -979,14 +1015,23 @@ let rec pure_propagation2 expr =
         Eindet i (pure_propagation2 e)
     | Ebound i e ->
         Ebound i (pure_propagation2 e)
-(*
     | Esave sym sym_tys e ->
         Esave sym sym_tys (pure_propagation2 e)
-*)
     | End es ->
         End (List.map pure_propagation2 es)
     | Epar es ->
         Epar (List.map pure_propagation2 es)
+
+(*
+    | Epure pe ->
+        let _ = Core_eval.eval_pexpr Loc.unknown  in
+        Epure pe
+*)
+(*
+        val eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
+                map Symbol.sym Core.object_value -> Core.pexpr ->
+                either Errors.error (Undefined.t Core.value)
+*)
     | _ ->
         expr
   end

@@ -4,11 +4,6 @@ open import TypingError ErrorMonad
 
 open import {hol} `utilTheory` `pp_coreTheory` `pp_ailTheory`
 
-val print_debug: forall 'a. string -> 'a -> 'a
-declare ocaml target_rep function print_debug = `Boot_ocaml.print_debug`
-declare hol   target_rep function print_debug = `pp$print_debug2`
-
-
 (* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
    NOTE: this function obviously doesn't whether the adjusting was properly
          done. *)

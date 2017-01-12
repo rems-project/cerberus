@@ -620,10 +620,29 @@ let is_negative_action = function
 end
 
 
+(* TODO: rewrite this in bottom-up *)
+val     flatten_constrained_value: value -> value
+let rec flatten_constrained_value v =
+  match v with
+    | Vconstrained xs ->
+        Vconstrained $ List.concatMap (fun (constrs, v') ->
+          match flatten_constrained_value v' with
+            | Vconstrained ys ->
+                List.map (fun (constrs', v'') ->
+                  (constrs ++ constrs', v'')
+                ) ys
+            | v'' ->
+                [(constrs, v'')]
+          end
+        ) xs
+    | _ ->
+        v
+  end
+
 val valueFromPexpr: pexpr -> maybe value
 let valueFromPexpr = function
   | Pexpr () (PEval cval) ->
-      Just cval
+      Just (flatten_constrained_value cval)
   | _ ->
       Nothing
   end

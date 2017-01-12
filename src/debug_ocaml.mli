@@ -1,3 +1,8 @@
+type category =
+  | DB_ail_typing
+  | DB_driver_step
+
+
 (* val assert_false: unit -> 'a *)
 val error: string -> 'a
 

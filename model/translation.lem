@@ -1281,7 +1281,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (e2_sym, e2_sym_pat, e2_sym_pe)          ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj1_sym, obj1_sym_pat, obj1_sym_pe)    ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj2_sym, obj2_sym_pat, obj2_sym_pe)    ->
-          E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (memop_sym, memop_sym_pat, memop_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (memop_sym, memop_sym_pat, memop_sym_pe) ->
           E.return $
             C.Ewseq (Caux.mk_tuple_pat [e1_sym_pat; e2_sym_pat]) (Caux.mk_unseq [core_e1; core_e2]) (
                   C.Ecase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
@@ -1289,14 +1289,19 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                                          ; Caux.mk_specified_pat obj2_sym_pat ],
                        (* Both operand are specified *)
                        C.Ewseq memop_sym_pat (C.Ememop Mem.Ptrdiff [obj1_sym_pe; obj2_sym_pe]) (
+                         C.Epure (Caux.mk_specified_pe memop_sym_pe)
+                       ))
+(*
+                       C.Ewseq memop_sym_pat (C.Ememop Mem.Ptrdiff [obj1_sym_pe; obj2_sym_pe]) (
                          C.Epure (
                            Caux.mk_specified_pe (
                              Caux.mk_if_pe memop_sym_pe (Caux.mk_integer_pe 1) (Caux.mk_integer_pe 0)
                            )
                          )
                        ))
+*)
                     ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_pointer]),
-                       C.Epure (Caux.mk_undef_pe (Undefined.DUMMY "Elab, Sub") (* TODO: put a proper ub *))) ]
+                       C.Epure (Caux.mk_undef_pe (Undefined.DUMMY "Elab, Sub ptrdiff") (* TODO: put a proper ub *))) ]
             )
 
 else
