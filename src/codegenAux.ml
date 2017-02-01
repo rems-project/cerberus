@@ -87,6 +87,14 @@ let store_integer ity e1 le2 =
     | Unspecified ty -> M.unspecified_mval0 ty
   )
 
+let store_pointer q cty e1 le2 =
+  lift $ M.store0 (C.Pointer0 (q, cty)) e1 (
+    match le2 with
+    | Specified e2 -> M.pointer_mval0 cty e2
+    | Unspecified ty -> M.unspecified_mval0 ty
+  )
+
+
 (* Cast types functions *)
 
 let pointer_from_integer_value = function

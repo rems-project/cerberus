@@ -7,6 +7,10 @@ let ( % ) f g = (fun x -> f (g x))
 
 let id = fun x -> x
 
+let flip f a b = f b a
+
+let apply f x = f x
+
 module Option = struct
 exception No_value
 

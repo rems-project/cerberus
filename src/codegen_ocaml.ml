@@ -15,6 +15,24 @@ exception Type_expected of core_base_type
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 
+let rec get_labels e ls =
+  match e with
+  | Elet (_, _, e) -> get_labels e ls
+  | Eloc (_, e) -> get_labels e ls
+  | Eindet (_, e) -> get_labels e ls
+  | Ebound (_, e) -> get_labels e ls
+  | End (e::_) -> get_labels e ls
+  | Eif (_, e2, e3) -> get_labels e2 ls |> get_labels e3
+  | Ewseq (_, e1, e2) -> get_labels e1 ls |> get_labels e2
+  | Esseq (_, e1, e2) -> get_labels e1 ls |> get_labels e2
+  | Esave ((sym, bT), ps, e) ->
+    let params = List.map (fun (s, (bt, _)) -> (s, bt)) ps in
+    get_labels e ((sym, bT, params, e)::ls)
+  | Ecase (_, cases) ->
+    List.map snd cases
+    |> List.fold_left (flip get_labels) ls
+  | _ -> ls
+
 (* String helper function *)
 let string_tr target replace str =
   String.map (fun c -> if c = target then replace else c) str
@@ -27,10 +45,6 @@ let print_comment doc = P.parens (P.star ^^^ doc ^^^ P.star)
 
 let print_if b x y =
   !^"if" ^^^ b ^^^ !^"then (" ^^ !> x ^/^ !^") else (" ^^ !> y ^/^ !^")"
-
-let print_let r p x y =
-  !^"let" ^^ (if r then !^" rec" else P.empty) ^^^ p ^^^ P.equals ^^^ x
-  ^^^ !^"in" ^/^ !> y
 
 let print_seq p x y = x ^^ !> (!^">>= fun" ^^^ p ^^ !^" ->") ^/^ y
 
@@ -95,6 +109,28 @@ let rec print_base_type = function
 let print_core_type = function
   | TyBase   baseTy -> print_base_type baseTy
   | TyEffect baseTy -> print_base_type baseTy
+
+(* Print functions and function implementation specific *)
+let print_params params =
+  if List.length params = 0
+  then P.parens P.empty
+  else
+    let args (sym, ty) = P.parens (print_symbol sym ^^ P.colon ^^ print_base_type ty)
+    in P.separate_map P.space args params
+
+
+let print_let r p args x y =
+  !^"let" ^^ (if r then !^" rec" else P.empty)
+  ^^^ p ^^ args ^^^ P.equals ^^^ x
+  ^^^ !^"in" ^/^ (if y = P.empty then P.empty else !> y)
+
+let print_function name pmrs ty body =
+  name ^^^ print_params pmrs (*^^ P.colon ^^^ ty *)^^^ P.equals ^^ !> body
+
+let print_eff_function name pmrs ty body =
+  name ^^^ print_params pmrs ^^^ !^"return" ^^^ P.equals ^^ !> body
+  (*name ^^^ print_params pmrs ^^^ P.parens (!^"return" ^^ P.colon ^^ ty
+    ^^ !^" -> ('a, b) Continuation") ^^^ P.equals ^^ !> body *)
 
 (* Binary operations and precedences *)
 
@@ -497,14 +533,34 @@ let print_pure_expr pe =
     end
   in pp None pe
 
+let print_args pes =
+  if List.length pes = 0
+  then P.parens P.empty
+  else (P.separate_map P.space (P.parens % print_pure_expr )) pes
+
+let print_memop memop pes =
+  (match memop with
+  | Mem.PtrEq -> !^"M.eq_ptrval0"
+  | Mem.PtrNe -> !^"M.ne_ptrval0"
+  | Mem.PtrGe -> !^"M.ge_ptrval0"
+  | Mem.PtrLt -> !^"M.lt_ptrval0"
+  | Mem.PtrGt -> !^"M.gt_ptrval0"
+  | Mem.PtrLe -> !^"M.le_ptrval0"
+  | Mem.Ptrdiff -> !^"M.diff_ptrval0"
+  | Mem.IntFromPtr -> !^"M.intcast_ptrval0"
+  | Mem.PtrFromInt -> !^"M.ptrvast_ival0"
+  | Mem.PtrValidForDeref -> !^"M.validForDeref_ptrval0"
+  ) ^^^ !^"Symbolic.Constraints_TODO"
+    ^^^ (P.separate_map P.space (P.parens % print_pure_expr)) pes
+
 let rec print_expr = function
   | Epure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr pe)
-  | Ememop (memop, pes) -> todo "memop"
+  | Ememop (memop, pes) -> print_memop memop pes
   | Eaction (Paction (p, (Action (_, bs, act)))) -> print_action act
   | Ecase (pe, cases) ->
     print_match (print_pure_expr pe) print_expr cases
   | Elet (pat, pe1, e2) ->
-    print_let false (print_pattern pat) (print_pure_expr pe1) (print_expr e2)
+    print_let false (print_pattern pat) P.empty (print_pure_expr pe1) (print_expr e2)
   | Eif (pe1, e2, e3) ->
     print_if (print_pure_expr pe1) (print_expr e2) (print_expr e3)
   | Eskip -> !^"A.value ()"
@@ -527,21 +583,13 @@ let rec print_expr = function
   | Ebound (_, e) -> print_expr e
   | End [] -> raise Unsupported
   | End (e::_) -> print_expr e
-  | Esave ((sym, bTy), xs, e) ->
-      print_expr e (* failwith "Codegen_ocaml.print_expr, Esave" *)
-  | Erun _ ->
-      todo "run" (* failwith "Codegen_ocaml.print_expr, Erun" *)
+  | Esave ((sym, bTy), ps, e) ->
+    let pes = List.map (fun (_, (_, pe)) -> pe) ps in
+    print_symbol sym ^^ print_args pes ^^^ !^"return"
+  | Erun (_, sym, pes) ->
+    print_symbol sym ^^ print_args pes ^^^ !^"return"
   | Eproc ((), nm, pes) ->
       print_name nm ^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes ^^^ !^"return"
-
-(*      failwith "Codegen_ocaml.print_expr, Eproc" *)
-
-(*
-  | Esave (sym, sym_tys, e) ->
-    !^"let rec" ^^^ print_symbol sym ^^^ !^"return =" ^^ !> (print_expr e)
-     ^/^ !^"in" ^^^ print_symbol sym ^^^ !^"return"
-  | Erun (_, sym, sym_pes) -> print_symbol sym ^^^ !^"return"
-*)
   | Epar _ -> raise Unsupported
   | Ewait _ -> raise Unsupported
   | Eloc (_, e) -> print_expr e
@@ -564,6 +612,9 @@ and choose_store_type (Pexpr (_, PEval cty)) =
   match cty with
   | Vctype (Basic0 (Integer ity)) ->
     !^"A.store_integer" ^^^ P.parens (print_ail_integer_type ity)
+  | Vctype (Pointer0 (q, cty)) ->
+    !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
   | _ -> todo "store not implemented"
 
 and print_mem_value ty e =
@@ -602,21 +653,6 @@ and print_action act =
   | RMW0 _ -> raise Unsupported
   | Fence0 _ -> raise Unsupported
 
-(* Print functions and function implementation specific *)
-let print_params params =
-  if List.length params = 0
-  then P.parens P.empty
-  else
-    let args (sym, ty) = P.parens (print_symbol sym ^^ P.colon ^^ print_base_type ty)
-    in P.separate_map P.space args params
-
-let print_function name pmrs ty body =
-  name ^^^ print_params pmrs (*^^ P.colon ^^^ ty *)^^^ P.equals ^^ !> body
-
-let print_eff_function name pmrs ty body =
-  name ^^^ print_params pmrs ^^^ !^"return" ^^^ P.equals ^^ !> body
-  (*name ^^^ print_params pmrs ^^^ P.parens (!^"return" ^^ P.colon ^^ ty
-    ^^ !^" -> ('a, b) Continuation") ^^^ P.equals ^^ !> body *)
 
 let print_impls impl =
   Pmap.fold (fun iCst iDecl acc ->
@@ -631,6 +667,17 @@ let print_impls impl =
         (print_pure_expr pe)
   ) impl P.empty
 
+let print_label (sym, bT, ps, e) =
+    (* TODO: Not sure of this hack! It should be ret to not clash with return *)
+  print_let true
+    (print_symbol sym ^^^ !^"(*" ^^^ print_base_type bT ^^^ !^"*)")
+    (print_params ps ^^^ !^"return")
+    (print_expr e ^/^ !^">>= return") P.empty
+
+let print_labels e =
+  get_labels e []
+  |> List.fold_left (fun acc lab -> acc ^^ print_label lab) P.empty
+
 let print_funs funs =
   Pmap.fold (fun sym decl acc ->
     acc ^//^ !^"and" ^^^
@@ -640,7 +687,8 @@ let print_funs funs =
         (print_pure_expr pe)
     | Proc (bTy, params, e) ->
       print_eff_function (print_symbol sym) params
-        (P.parens (print_base_type bTy) ^^^ !^"M.memM0") (print_expr e)
+        (P.parens (print_base_type bTy) ^^^ !^"M.memM0")
+        (print_labels e ^^ print_expr e)
   ) funs P.empty
 
 let print_head filename =
@@ -673,18 +721,10 @@ let generate_ocaml core =
 let compile filename core =
   let fl = Filename.chop_extension filename in
   let fl_ml = fl ^ ".ml" in
-  let fl_native = fl ^ ".native" in
   let oc = open_out fl_ml in
   begin
     P.ToChannel.pretty 1. 80 oc
       (print_head filename ^^ generate_ocaml core ^//^ print_foot);
     close_out oc;
-(*
-    Sys.command (
-      "ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs pprint,zarith \
-       -libs unix,nums,str " ^ fl_native (* ^ " | ./tools/colours.sh" *)
-    )
-    |> Exception.return0
-*)
     Exception.return0 0
   end
