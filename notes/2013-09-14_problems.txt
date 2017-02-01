@@ -1,0 +1,86 @@
+[Constants and implementation-defined choices]
+  
+  Ideally, I would like to translate integer and character constants
+  from Cabs into simple constants in Ail (e.g. for integer constants,
+  I want actual integers in Ail). But this doesn't appear to be doable
+  because the decoding of C constants (which can have suffix informing
+  on the desired type) is affected by both implementation-defined
+  choices and make use of type informations. In fact we are affected
+  here by the fact that implementation-defined constants affect what
+  type and integer constant has (see §6.4.4.1#5). For character
+  constants it is even worth, because basically everything is
+  implementation-defined, starting from the way letters are mapped to
+  integer values.
+  
+  For character constants, one obvious solution would be to add in Ail
+  a datatype for characters with a constructor for each element of the
+  standard charset, but this sound pretty silly. For the integer
+  constants, one solution is to add in Ail a subclass of expressions
+  meant to express things in term of implementation-defined (ie. bring
+  to Ail implementation symbol name that we currently only have in
+  Core). I've been avoiding that so far, but since
+  implementation-definedness pops up at different locations in the
+  "static" part of the semantics we'll probably have to do that.
+
+
+[Expressions in bit-field width]
+  
+  In a struct definition, any "constant-expression" may be used to
+  specify the width of a bit-field. As a result the datatype of Cabs0
+  (the new one, as it's name doesn't indicate) for type specifiers
+  depends on expression. But in Ail, the width of a bit-field I was
+  hopping to be able to simply put an integer. The main reason is that
+  otherwise this will pollute equality and comparison functions on C
+  types. Ideally, we should be able to evaluate that
+  constant-expression when we perform the Cabs to Ail transformation
+  (constant-expressions are exactly meant to be such that they "can be
+  evaluated during translation rather than runtime").  Unfortunately
+  in our case, they not are since they can contain constants which as
+  discussed in the previous point are implementation-defined and/or
+  require type informations (that we don't have at the stage of Csem's
+  pipeline since the typechecking is done on Ail).
+  
+  Also if the solution of the previous point ends up being a special
+  class of Ail expressions, type comparison/equality is probably going
+  to become a huge pain.
+
+
+[Fancy initialisations for arrays and structs]
+  
+  These are the braces enclosed, comma-list of values, for example:
+    
+    int a[3] = {1, 2, 3};
+  
+  In the Cabs to Ail, I would like to replace array/structs
+  initialisations with array/structs values that we have in Ail. We
+  could be [...]
+
+
+[translating the datatypes representing C types from Cabs to Ail]
+  
+  Their is nothing really fundamental here. I just keep improperly
+  reading the datatypes when writing the translation, between the fact
+  that constructors in the syntax of C type is the reverse from the
+  intuition; field groups in struct/union declaration; the fact that
+  complex type declaration and initialisation of object of complex
+  share basically the same representation ..., I've found plenty of
+  way to make mistakes.
+  
+  Something funny (or sad) is that for constants everything is done in
+  the lexer, so they do get decoded once but then the information is
+  lost when getting into the parser and we have to redo the decoding
+  by hand. This is error prone and painful (in particular in Lem). I
+  tried at some point to change the lexer/parser to preserve to avoid
+  this redoing of the decoding of constants, but ended up in a fight
+  with Coq.
+  
+  Related to the previous point about constant expressions, I try to
+  do some simplification inside the Cabs to Ail transformation.
+
+
+
+
+[understand how new Cabs represents casting and whether they or we are right]
+  
+  [...]
+  

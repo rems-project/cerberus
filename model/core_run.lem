@@ -1,0 +1,1355 @@
+
+open import Pervasives String_extra Global Core Core_ctype Core_ctype_aux Core_aux Show Show_extra
+import Set_extra (* Set_helpers *)
+import State State_operators Loc
+import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
+import Cmm_csem Mem Mem_common Mem_aux
+import AilSyntax AilTypes AilTypesAux
+import Dlist
+
+open import Implementation_ Decode
+
+open import Cthread Core_run_aux Errors
+
+
+open import Core_eval
+
+module EU  = Exception_undefined
+module SEU = State_exception_undefined
+
+
+module Caux = Core_aux
+module Cmm = struct
+  include Cmm_aux
+  include Cmm_csem
+end
+
+
+val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
+               Exception.exceptM (Core.expr core_run_annotation) core_run_error
+let call_proc file psym cvals =
+  let bTy_params_body_opt =
+    match Map.lookup psym file.stdlib with
+      | Just (Proc bTy params body) ->
+          Just (bTy, params, body)
+      | _ ->
+          match Map.lookup psym file.funs with
+            | Just (Proc bTy params body) ->
+                Just (bTy, params, body)
+            | _ ->
+                Nothing
+          end
+    end in
+  match bTy_params_body_opt with
+    | Just (bTy, params, body) ->
+        if List.length params <> List.length cvals then
+          error $ "[Core_run.call_proc] wrong number of args applied to `" ^ show psym  ^ "' |args|=" ^
+          show (List.length cvals) ^ "expecting: " ^ show (List.length params)
+        else
+          Exception.return (Global.foldl2 (fun acc (sym, _) cval -> subst_sym_expr sym (Pexpr () (PEval cval)) acc) body params cvals)
+    | Nothing ->
+        Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
+  end
+
+
+(* DEBUG *)
+type exec_location =
+  | ELoc_globals
+  | ELoc_normal of list Symbol.sym
+
+let push_exec_loc sym = function
+  | ELoc_globals ->
+      ELoc_normal [sym]
+  | ELoc_normal syms ->
+      ELoc_normal (sym :: syms)
+end
+
+type thread_state = <|
+  arena:  expr core_run_annotation;
+  stack:  stack core_run_annotation;
+  labels: map ksym (list (sym * ctype) * expr core_run_annotation);
+  
+  labels2: map sym (list sym * expr core_run_annotation);
+  
+  current_loc: Loc.t; (* DEBUG *)
+  exec_loc: exec_location; (* DEBUG *)
+|>
+
+
+(* TODO: more *)
+type io_state = <|
+  stdout: Dlist.dlist string;
+|>
+
+type core_state = <|
+  thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
+  io:            io_state;
+(*  handlers:      Map.map handler_event (list name); *)
+|>
+
+
+
+let string_of_thread_state th_st =
+  "Arena= " ^ Pp.stringFromCore_expr th_st.arena ^ "\nStack= " ^ Pp.stringFromCore_stack th_st.stack ^ "\n"
+(*
+  List.foldr (fun (n, arena) acc ->
+    "Arena[" ^ show n ^ "]= " ^ Pp.stringFromCore_expr arena
+  ) ("Stack= " ^ "TODO" ^ "\n") (numerote th_st.arenas)
+*)
+
+let string_of_core_state core_st =
+  List.foldr (fun (tid, (parent_tid_opt, th_st)) acc ->
+    "Thread " ^ show tid ^ (maybe "" (fun z -> "(spawn of thread " ^ show z ^ ")") parent_tid_opt) ^ "\n" ^
+    string_of_thread_state th_st ^
+    "-----------------------------\n\n" ^ acc
+  ) "" core_st.thread_states
+
+
+instance (Show core_state)
+  let show = string_of_core_state
+end
+
+
+
+
+type core_run_state = <|
+  tid_supply:    UniqueId.supply thread_id;
+  symbol_supply: UniqueId.supply Symbol.sym;
+  aid_supply:    UniqueId.supply Cmm.aid;
+  
+  (* DEBUG *)
+  step_counter: nat;
+|>
+
+
+
+
+(* Monad of the core evaluator (State + Exception + Undefined) *)
+type core_runM 'a = SEU.t 'a core_run_state core_run_error
+
+
+
+
+val increment_step_counter: core_runM unit
+let increment_step_counter =
+  SEU.runS (
+    State.update (fun run_st ->
+      <| run_st with step_counter= run_st.step_counter + 1 |>
+    )
+  )
+
+val register_handler: core_state -> core_state
+let register_handler st =
+  error "WIP: register_handler"
+
+val update_thread_state: thread_id -> thread_state -> core_state -> core_state
+let update_thread_state tid th_st st =
+  let f (parent_tid_opt, _) = (parent_tid_opt, th_st) in
+  <| st with thread_states= assoc_adjust f tid st.thread_states |>
+
+
+val spawn_thread: maybe thread_id -> thread_state -> core_state -> State.t (thread_id * core_state) core_run_state
+let spawn_thread parent_tid_opt th_st st =
+  State.modify (fun run_st ->
+    let (tid, tid_suppl') = UniqueId.fresh_id run_st.tid_supply in
+    ((tid, <| st with thread_states= assoc_insert tid (parent_tid_opt, th_st) st.thread_states |>),
+     <| run_st with tid_supply= tid_suppl' |>)
+  )
+
+
+val kill_thread: thread_id -> thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
+let kill_thread tid parent_tid aswBefores v st =
+  let () = Debug.print_debug 5 ("KILLING Thread " ^ show tid ^ " (child of thread " ^ show parent_tid ^ ")") in
+  let _ = Set.map (fun aid ->
+    Debug.print_debug 5 ("AID ==> " ^ show aid)
+  ) aswBefores in
+  <| st with
+       thread_states= assoc_adjust (fun (parent_tid_opt, th_st) ->
+         (parent_tid_opt, <| th_st with
+            arena= subst_wait tid v th_st.arena;
+(*
+            arenas= List.map (subst_wait tid v) th_st.arenas; (* NOTE!!!! ==> in fact here arenas must be a singleton (since Epar is not allowed inside Eunseq) *)
+*)
+            stack= add_to_asw_stack aswBefores (subst_wait_stack tid v th_st.stack) |>)
+       ) parent_tid $ assoc_remove tid st.thread_states
+  |>
+
+
+val fresh_symbol': State.t Symbol.sym core_run_state
+let fresh_symbol' =
+  State.modify (fun run_st ->
+    let (sym, symbol_suppl') = UniqueId.fresh_id run_st.symbol_supply in
+    (sym, <| run_st with symbol_supply= symbol_suppl' |>)
+  )
+
+
+val fresh_action_id': State.t Cmm.aid core_run_state
+let fresh_action_id' =
+  State.modify (fun run_st ->
+    let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
+    (aid, <| run_st with aid_supply= aid_suppl' |>)
+  )
+
+
+
+
+open State.Operators
+
+val     hoist_negatives: forall 'a. expr 'a -> State.t (expr 'a) (list (expr 'a) * core_run_state)
+let rec hoist_negatives expr =
+  let add_neg neg_e =
+    State.modify (fun (negs, run_st) ->
+      ((), (neg_e :: negs, run_st))
+    ) in
+(*
+  let flush_negs = 
+    State.modify (fun (negs, run_st) ->
+      (negs, ([], run_st))
+    ) in
+*)
+  match expr with
+    | Epure _ ->
+        State.return expr
+    | Ememop _ _ ->
+        State.return expr
+(*
+    | Eraise _ ->
+        State.return expr
+    | Eregister _ _ ->
+        State.return expr
+*)
+    | Eskip ->
+        State.return expr
+    | Elet sym pe1 e2 ->
+        hoist_negatives e2 >>= fun e2' ->
+        State.return (Elet sym pe1 e2')
+    | Eif pe1 e2 e3 ->
+        hoist_negatives e2 >>= fun e2' ->
+        hoist_negatives e3 >>= fun e3' ->
+        State.return (Eif pe1 e2' e3')
+    | Eccall _ _ _ ->
+        State.return expr
+    | Eproc _ _ _ ->
+        State.return expr
+    | Eaction pact ->
+        if is_negative_action pact then
+          add_neg expr >> State.return (Epure (Pexpr () (PEval Vunit)))
+        else
+          State.return expr
+    | Eunseq es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (Eunseq es')
+    | Ewseq _as e1 e2 ->
+        hoist_negatives e1 >>= fun e1'  ->
+        hoist_negatives e2 >>= fun e2'  ->
+        State.return (Ewseq _as e1' e2')
+    | Esseq _as e1 e2 ->
+        error "Core_run.hoist_negatives: found an Esseq"
+(*
+        hoist_negatives e1 >>= fun e1'  ->
+        flush_negs         >>= fun negs ->
+        hoist_negatives e2 >>= fun e2'  ->
+        let nothings = Global.replicate_list Nothing (List.length negs) in
+        match negs with
+          | [] ->
+              State.return (Esseq _as e1' e2')
+          | _ ->
+              State.return (
+                Esseq (nothings ++ _as) (Eunseq (negs ++ [e1'])) e2'
+              )
+        end
+*)
+    | Easeq sym_opt act1 pact2 ->
+        error "Core_run.hoist_negatives found an Easeq"
+    | Eindet i e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Eindet i e')
+    | Ebound i e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Ebound i e')
+(*
+    | Esave ksym sym_tys e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Esave ksym sym_tys e')
+    | Erun _ _ _ ->
+      State.return expr
+*)
+    | End es ->
+        State.mapM hoist_negatives es >>= fun es' ->
+        State.return (End es')
+    | Epar _ ->
+        (* TODO: check *)
+        State.return expr
+    | Ewait _ ->
+        State.return expr
+    | Eloc loc e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Eloc loc e')
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+open SEU.Operators
+
+
+(*
+val printf_hack: core_state -> list (expr core_run_annotation) -> ND.t core_step
+let printf_hack core_st pes =
+  let mk_string = function
+    | Mem.MVarray vs ->
+        let _ = Boot.output_string ("KKK> " ^ string_of_natural (naturalFromNat (List.length vs))) in (* DEBUG *)
+        String.toString $ List.map (function
+          | Mem.MVinteger (Symbolic.SYMBconst n) ->
+              Decode.encode_character_constant n
+          | _ ->
+              error "printf_hack: one of the element of the format array was invalid"
+        end) vs
+    | _ ->
+        error "printf_hack: the format argument was not an array"
+  end in
+  match pes with
+    | [Econst (Mem.MVpointer ptr1)] ->
+        ND.return $ Step_output (
+          liftMem (Mem.load ptr1)       >>= fun (Mem.MVpointer ptr_format) ->
+          liftMem (Mem.load ptr_format) >>= fun format                      ->
+          SEU.return (mk_string format, core_st)
+        )
+    | _ ->
+        error "invalid arguments for printf"
+  end
+*)
+
+(* TODO: hack *)
+(*
+type formatting
+declare ocaml target_rep type formatting = `Boot_printf.formatting`
+val pseudo_printf: string -> list (formatting * Core_ctype.ctype) * (list string -> string)
+declare ocaml target_rep function pseudo_printf = `Boot_printf.pseudo_printf`
+*)
+
+
+
+
+
+
+
+
+
+
+
+module E = struct
+  let return =
+    SEU.return
+  let step_eval_pexprs loc mem_st file concur_sym_map pes =
+    SEU.runEU (EU.mapM (step_eval_pexpr loc mem_st file concur_sym_map) pes)
+  let step_eval_pexpr loc mem_st file concur_sym_map pe =
+    SEU.runEU (step_eval_pexpr loc mem_st file concur_sym_map pe)
+  let fresh_action_id =
+    SEU.runS fresh_action_id'
+  let fresh_symbol =
+    SEU.runS fresh_symbol'
+end
+
+
+type action_request =
+  (* RequestName  of location * sbBefore * ddBefore * aswBefore
+                     parameters of request *
+                     the new state or a callback *)
+  | AllocRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
+                    (Mem.pointer_value -> thread_state)
+  
+  | CreateRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                     Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * ctype *
+                     (Mem.pointer_value -> thread_state)
+  
+  | LoadRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid * 
+                   (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
+                   Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.sym *
+                   (* the argument of the callback is either a concrete value if the memory model
+                      is able to give one right away, or is equal to the symbolic value provided by the
+                      present LoadRequest *)
+                   (Mem.mem_value -> thread_state)
+  
+  | StoreRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                    thread_state
+  | RMWRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                  Cmm.aid * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
+                  Mem.mem_value * Mem.mem_value * thread_state
+  | FenceRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                    Cmm.aid * thread_id * Cmm.memory_order *
+                    thread_state
+  | KillRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
+                   Cmm.aid * thread_id * Mem.pointer_value * thread_state
+
+type core_step =
+  | Step_action_request of core_runM action_request
+  | Step_memop_request of Mem.memop * list Core.value * thread_id * (Core.value -> thread_state)
+  | Step_tau of string * core_runM thread_state
+  | Step_eval of string * core_runM thread_state
+  | Step_thread_done of thread_id * Core.value
+(*  | Step_nd of string * list core_step *)
+  | Step_blocked
+  | Step_error of string
+  | Step_constrained of string * list (list Mem.mem_constraint2 * core_runM thread_state)
+
+  | Step_done of Core.value
+  | Step_spawn_threads of (Core.expr core_run_annotation -> thread_state) * list thread_state (* initial states for the children *)
+(*  | Step_printf of list (formatting * Core_ctype.ctype) * list Core.value * (list string -> string) * (integer -> thread_state) *)
+  
+    (* format string; arg pointers; callback taking as argument the length of the printed string *)
+  | Step_printf2 of list char * list (Core_ctype.ctype * Mem.pointer_value) * (integer -> thread_state)
+
+
+
+val core_action_step:
+    Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
+let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
+  let sb_before =
+    (* filter out actions from other threads *)
+    Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
+  let dd_before = {(* TODO *)} in
+  let asw_before_ =
+    if has_sbBefore_on_thread current_tid annots then
+      {}
+    else
+      Set.map snd $ Set.filter (fun (tid, _) ->
+        match parent_tid_opt with
+          | Just parent_tid ->
+              tid = parent_tid
+          | _ ->
+              false
+        end) annots.sb_before in
+  
+  let asw_before = annots.asw_before union asw_before_ in
+  match act with
+    | Create pe1 pe2 pref ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
+          | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun create_aid ->
+                E.return (
+                  CreateRequest loc sb_before dd_before asw_before
+                    create_aid current_tid pref ival ty
+                    (fun ptr_val -> <| th_st with
+                        arena= Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val))));
+                        stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                    |>)
+                    )
+                  )
+          | (Just _, Just _) ->
+              Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
+          | (Nothing, _) ->
+              Step_eval "first operand of a Create" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
+                |>
+              )
+          | (_, Nothing) ->
+              Step_eval "second operand of a Create" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
+                |>
+              )
+        end
+    | Alloc pe1 pe2 pref ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
+          | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun alloc_aid ->
+                E.return (
+                  AllocRequest loc sb_before dd_before asw_before
+                    alloc_aid current_tid pref ival1 ival2
+                    (fun ptr_val -> <| th_st with
+                        arena= Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val))));
+                        stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                    |>)
+                    )
+                  )
+          | (Just _, Just _) ->
+              Step_error "found a alloc() with ill-typed operands"
+          | (Nothing, _) ->
+              Step_eval "first operand of a Alloc" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref)))
+                |>
+              )
+          | (_, Nothing) ->
+              Step_eval "second operand of a Alloc" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref)))
+                |>
+              )
+        end
+    | Kill pe ->
+        match valueFromPexpr pe with
+          | Just (Vobject (OVpointer ptr_val)) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun kill_aid ->
+                E.return (
+                  KillRequest loc sb_before dd_before asw_before
+                    kill_aid current_tid ptr_val
+                    <| th_st with
+                      arena= Eskip;
+                      stack= add_to_sb_stack {(p, (current_tid, kill_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                    |>
+                )
+              )
+          | Just _ ->
+              Step_error "found a kill() with an ill-typed operand"
+          | Nothing ->
+              Step_eval "operand of kill()" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Kill pe')))
+                |>
+              )
+        end
+    | Store pe1 pe2 pe3 mo ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
+          | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval) ->
+              match memValueFromValue (Core_ctype.unatomic ty) cval with
+                | Just mem_val ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun store_aid ->
+                      E.fresh_symbol    >>= fun val_sym   ->
+                      E.return (
+                        StoreRequest loc sb_before dd_before asw_before
+                          store_aid current_tid mo ty ptr_val mem_val
+                          <| th_st with
+                            arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
+                            stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+                | Nothing ->
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                                ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
+              end
+          | (Just cval1, Just cval2, Just cval3) ->
+              Step_error ("found a store() with ill-typed operands: " ^
+                           Pp.stringFromCore_value cval1 ^ " <-> " ^ Pp.stringFromCore_value cval2 ^ " <-> " ^ Pp.stringFromCore_value cval3)
+          | (Nothing, _, _) ->
+              Step_eval "first operand of a Store" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo)))
+                |>
+              )
+          | (_, Nothing, _) ->
+              Step_eval "second operand of a Store" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo)))
+                |>
+              )
+          | (_, _, Nothing) ->
+              Step_eval "third operand of a Store" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe3 >>= fun pe3' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo)))
+                |>
+              )
+        end
+    | Load pe1 pe2 mo ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
+          | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val))) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun load_aid ->
+                E.fresh_symbol    >>= fun val_sym  ->
+                E.return (
+                  LoadRequest loc sb_before dd_before asw_before
+                    load_aid current_tid mo ty ptr_val val_sym
+                    (fun mem_val -> <| th_st with
+                        (* NOTE: the parenthesis are needed because of a Lem's bug... *)
+                        arena= (let (oTy, cval) = valueFromMemValue mem_val in
+                                Epure (Pexpr () (PEval cval)));
+                        stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
+                    |>)
+                )
+              )
+          | (Just _, Just _) ->
+              Step_error "found a load with ill-typed operands"
+          | (Nothing, _) ->
+              Step_eval "first operand of a Load" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
+                |>
+              )
+          | (_, Nothing) ->
+              Step_eval "second operand of a Load" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
+                |>
+              )
+        end
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3, valueFromPexpr pe4) with
+          | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval_expected, Just cval_desired) ->
+              match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
+                | (Just mval_expected, Just mval_desired) ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun rmw_aid ->
+                      E.return (
+                        RMWRequest loc sb_before dd_before asw_before
+                          rmw_aid current_tid mo1 mo2 ty ptr_val mval_expected mval_desired
+                          <| th_st with
+                            arena= Epure (Pexpr () (PEval Vtrue)); (* TODO *)
+                            stack= add_to_sb_stack {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+(*
+  | RMW of aid * tid * memory_order * location * cvalue * cvalue  (* first val = value read; second val = value written *)
+*)
+
+(*
+                    Step_action_request (
+                      E.fresh_action_id >>= fun rmw_aid ->
+                      E.fresh_symbol    >>= fun val_sym ->
+                      E.return (
+                        StoreRequest loc sb_before dd_before asw_before
+                          store_aid current_tid mo ty ptr_val mem_val
+                          <| th_st with
+                            arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
+                            stack= (* add_to_sb_stack {(p, (current_tid, store_aid))} *) (* TODO: bring back for concurrency !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+*)
+                | _ ->
+                    Step_error ("one of the values of a rmw() didn't match the lvalue type: " (* ^
+                      Pp.pp_ail_ctype (Core_aux.unproj_ctype ty) ^ " <-> " ^
+                                Pp.stringFromCore_expr ((Epure (PEval cval_expected)) : Core.expr unit) ^ " <-> " ^
+                                Pp.stringFromCore_expr ((Epure (PEval cval_desired)) : Core.expr unit) *))
+              end
+          | (Just _, Just _, Just _, Just _) ->
+              Step_error "found a rmw with ill-typed operands"
+          | (Nothing, _, _, _) ->
+              Step_eval "first operand of a RMW" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1' pe2 pe3 pe4 mo1 mo2)))
+                |>
+              )
+          | (_, Nothing, _, _) ->
+              Step_eval "second operand of a RMW" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2' pe3 pe4 mo1 mo2)))
+                |>
+              )
+          | (_, _, Nothing, _) ->
+              Step_eval "third operand of a RMW" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe3 >>= fun pe3' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3' pe4 mo1 mo2)))
+                |>
+              )
+          | (_, _, _, Nothing) ->
+              Step_eval "fourth operand of a RMW" (
+                E.step_eval_pexpr loc mem_st file concur_sym_map pe4 >>= fun pe4' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3 pe4' mo1 mo2)))
+                |>
+              )
+        end
+
+(*
+        match (valueFromPexpr pe1, valueFromPexpr pe2) with
+          | (Just (Vctype ty), Just (Vpointer ptr_val)) ->
+              Step_action_request (
+                E.fresh_action_id >>= fun load_aid ->
+                E.fresh_symbol    >>= fun val_sym  ->
+                E.return (
+                  LoadRequest loc sb_before dd_before asw_before
+                    load_aid current_tid mo ty ptr_val val_sym
+                    (fun mem_val -> <| th_st with
+                        arena= Epure (PEval (objectValueFromMemValue mem_val));
+                        stack= (* add_to_sb_stack {(p, (current_tid, load_aid))} *) th_st.stack
+                    |>)
+                )
+              )
+          | (Just _, Just _) ->
+              Step_error "found a load with ill-typed operands"
+          | (Nothing, _) ->
+              Step_eval "first operand of a Load" (
+                E.step_eval_pexpr file concur_sym_map false pe1 >>= fun pe1' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
+                |>
+              )
+          | (_, Nothing) ->
+              Step_eval "second operand of a Load" (
+                E.step_eval_pexpr file concur_sym_map false pe2 >>= fun pe2' ->
+                E.return <| th_st with arena=
+                  Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
+                |>
+              )
+        end
+*)
+    | Fence mo ->
+        Step_action_request (
+          E.fresh_action_id >>= fun fence_aid ->
+          E.return (
+            FenceRequest loc sb_before dd_before asw_before
+              fence_aid current_tid mo
+              <| th_st with
+                arena= Eskip;
+                stack= add_to_sb_stack {(p, (current_tid, fence_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+              |>
+          )
+        )
+(*
+  | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
+                    action_id * thread_id * Cmm.memory_order * ctype *
+                    thread_state
+*)
+  end
+
+
+
+val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
+let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) =
+  let one z = [z] in
+  match (th_st.arena, th_st.stack) with
+    | (Eskip, Stack_cons cont sk') ->
+        (* ---------------------------------------
+           <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
+        one $ Step_tau "Eskip" (
+          E.return <| th_st with arena= apply_continuation cont (Epure (Pexpr () (PEval Vunit))); stack= Stack_cons [] sk' |>
+        )
+    
+    | (Ecase pe pat_es, _) ->
+        one match pe with
+          | Pexpr () (PEval (Vconstrained xs)) ->
+              Step_constrained "Ecase" (
+                List.map (fun (constrs, cval) ->
+                    (constrs, E.return <| th_st with arena= Ecase (Pexpr () (PEval cval)) pat_es |>)
+                ) xs 
+              )
+          | Pexpr () (PEval _) ->
+              match select_case subst_sym_expr pe pat_es with
+                | Just e' ->
+                    Step_tau "Ecase" (
+                      E.return <| th_st with arena= e' |>
+                    )
+                | Nothing ->
+                    Step_error ("Ecase, mismatched ==> " ^ Pp.stringFromCore_expr th_st.arena)
+              end
+          | _ ->
+              Step_eval "Ecase" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.return <| th_st with arena= Ecase pe' pat_es |>
+              )
+        end
+    
+    | (Elet pat pe1 e2, _) ->
+        (*                [| pe1 |] = v
+           --------------------------------------------------
+           <let α = pe1 in e2, κs, Λ> --τ--> <e2[α\v], κs, Λ> *)
+        one match valueFromPexpr pe1 with
+          | Just cval ->
+              Step_tau "Elet" (
+                E.return <| th_st with arena= subst_pattern pat (Pexpr () (PEval cval)) e2 |>
+              )
+          | Nothing ->
+              Step_eval "Elet" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena= Elet pat pe1' e2 |>
+              )
+        end
+    
+    | (Eif pe1 e2 e3, Stack_cons cont _) ->
+        (* [| pe1 |] = v    e' = e2 labels e2
+           -----------------------------------------------------------------
+                                                   .- <e2, κs>  IF v = true
+           <if pe1 then e2 else e3, κs, Λ> --τ--> <
+                                                   '- <e3, κs>  IF v = false *)
+        one $ match Caux.strip pe1 with
+          | PEval (Vconstrained xs) ->
+              Step_constrained "Eif" (
+                List.map (fun (constrs, cval) ->
+                    (constrs, E.return <| th_st with arena= Eif (Pexpr () (PEval cval)) e2 e3 |>)
+                ) xs 
+              )
+          | PEval Vtrue ->
+              Step_tau "Eif (then)" (
+                let labeled_conts =
+                  Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e3 in
+                E.return <| th_st with arena= e2; labels2= Map.(union) labeled_conts th_st.labels2 |>
+              )
+          | PEval Vfalse ->
+              Step_tau "Eif (else)" (
+                let labeled_conts =
+                  Map.map (fun (sym_tys, e) -> (sym_tys, apply_continuation cont e)) $ collect_labeled_continuations e2 in
+                E.return <| th_st with arena= e3; labels2= Map.(union) labeled_conts th_st.labels2 |>
+              )
+          | PEval _ ->
+              Step_error "the first operand of an Eif didn't evaluated to a boolean"
+          | _ ->
+              Step_eval "Eif" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.return <| th_st with arena= Eif pe1' e2 e3 |>
+              )
+        end
+    
+    | (Eccall annots pe pes, sk) ->
+        one match valueFromPexpr pe with
+          | Just (Vobject (OVcfunction nm)) ->
+              match valueFromPexprs pes with
+                | Just cvals ->
+                    match nm with
+                      | Sym psym ->
+                          Step_tau "Eccall" (
+                            SEU.runEU (
+                              Exception.bind (call_proc file psym cvals)
+                                EU.return
+                            ) >>= fun expr ->
+                            (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                            let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                            E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                          )
+                      | _ ->
+                          error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena)
+                    end
+                | Nothing ->
+                    Step_eval "Eccall" (
+                      E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                      E.return <| th_st with arena= Eccall annots pe pes' |>
+                    )
+              end
+          | Just cval ->
+              Step_error ((Loc.stringFromLocation th_st.current_loc) ^ "the first argument of pcall() must evaluate to a cfunction, found: " ^
+                Pp.stringFromCore_value cval ^ "")
+          | Nothing ->
+              Step_eval "Eccall" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.return <| th_st with arena= Eccall annots pe' pes |>
+              )
+        end
+    
+    | (Eproc annots nm pes, sk) ->
+        one match valueFromPexprs pes with
+          | Just cvals ->
+              match nm with
+                | Sym psym ->
+                    Step_tau "Eproc" (
+                      SEU.runEU (
+                        Exception.bind (call_proc file psym cvals)
+                          EU.return
+                      ) >>= fun expr ->
+                      (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                      let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                    )
+                | Impl (StdFunction "printf") ->
+                    match cvals with
+                      | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
+                         Vlist (*(BTy_tuple [BTy_ctype; BTy_object OTy_pointer])*)_ args_cvals] ->
+                           let frmt_chars = List.map (function
+                             | Vobject (OVinteger ival) ->
+                                 match Mem_aux.integerFromIntegerValue ival with
+                                   | Just n ->
+                                       Decode.encode_character_constant n
+                                   | Nothing ->
+                                       error "Core_run, printf one of the element of the format array was invalid (1)"
+                                 end
+                             | z ->
+                                 error "Core_run, printf one of the element of the format array was invalid (2)"
+                           end) (List.reverse frmt_cvals) in (* TODO: why is this reversed?? *)
+                           let args_ptrvals = List.map (function
+                             | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] ->
+                                 (* TODO: WIP *)
+                                 (ty, ptr_val)
+                             | _ ->
+                                 error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
+                           end) args_cvals in
+                           Step_printf2 frmt_chars args_ptrvals (fun n ->
+                             <| th_st with arena= Epure (Caux.mk_integer_pe n) |>
+                           )
+                      | _ ->
+                          error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                | _ ->
+                    error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
+              end
+          | Nothing ->
+              Step_eval "Eproc" (
+                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                E.return <| th_st with arena= Eproc annots nm pes' |>
+              )
+        end
+    
+    | (Eaction pact, _) ->
+        one $ core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) pact
+    | (Ememop memop pes, _) ->
+(*        error "Core_run, WIP Ememop" *)
+        one match valueFromPexprs pes with
+          | Just bTy_cvals ->
+              Step_memop_request memop bTy_cvals current_tid (fun cval ->
+                <| th_st with arena= Epure (Pexpr () (PEval cval)) |>
+              )
+          | Nothing ->
+              Step_eval "Ememop" (
+                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                E.return <| th_st with arena= Ememop memop pes' |>
+              )
+        end
+    
+    | (Eunseq es, Stack_cons cont sk) ->
+        match to_pures es with
+          | Just pes ->
+              one $ Step_tau "Eunseq pure" (
+                E.return <| th_st with arena= Epure (Caux.mk_tuple_pe pes) |>
+              )
+          | Nothing ->
+              let is_wait = function
+                | Ewait _ ->
+                    true
+                | _ ->
+                  false
+              end in
+              if List.all (fun e -> is_wait e || to_pure e <> Nothing) es then
+                one Step_blocked
+              else
+                if false(*EXPERIMENTAL UNSEQ*) then
+                  []
+                else
+begin
+                let xs = 
+                List.map (fun (es1, ej, es2) ->
+                  Step_tau "Eunseq" (
+                    E.return <| th_st with arena= ej; stack= Stack_cons (Kunseq es1 es2 :: cont) sk |>
+                  )
+                ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
+                if List.length xs = 0 then
+                  error ("BOOM Core_run, Eunseq, empty list ==> " ^ Pp.stringFromCore_expr (Eunseq es)) (* TODO: debug *)
+                else
+                  xs
+end
+        end
+    
+    | (Ewseq pat e1 e2, Stack_cons cont sk) ->
+        (* TODO: negatives *)
+        one match to_pure e1 with
+          | Just pe ->
+              match valueFromPexpr pe with
+                | Just cval ->
+                    Step_tau "Ewseq subst" (
+                      E.return <| th_st with arena= subst_pattern pat (Pexpr () (PEval cval)) e2 |>
+                    )
+                | Nothing ->
+                    Step_eval "Ewseq" (
+                      E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                      E.return <| th_st with arena= Ewseq pat (Epure pe') e2 |>
+                    )
+              end
+          | Nothing ->
+              (* focus the execution on the first operand *)
+              Step_tau "Ewseq" (
+                E.return <| th_st with
+                  arena= e1;
+                  stack= Stack_cons (Kwseq pat e2 :: cont) sk
+                |>
+              )
+        end
+    
+    | (Esseq pat e1 e2, Stack_cons cont sk) ->
+        (* TODO: negatives *)
+        one match to_pure e1 with
+          | Just pe ->
+              match valueFromPexpr pe with
+                | Just cval ->
+                    Step_tau "Esseq subst" (
+                      E.return <| th_st with arena= subst_pattern pat (Pexpr () (PEval cval)) e2 |>
+                    )
+                | Nothing ->
+                    Step_eval "Esseq" (
+                      E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                      E.return <| th_st with arena= Esseq pat (Epure pe') e2 |>
+                    )
+              end
+          | Nothing ->
+              (* focus the execution on the first operand *)
+              Step_tau "Esseq" (
+                E.return <| th_st with
+                  arena= e1;
+                  stack= Stack_cons (Ksseq pat e2 :: cont) sk
+                |>
+              )
+        end
+    
+    | (Esave (sym, _) sym_bTy_pes e, Stack_cons cont _) ->
+        (* TODO check *)
+        one $ Step_tau "Esave" (
+          E.return <| th_st with arena= List.foldl (fun acc (sym, (_, pe)) -> subst_sym_expr sym pe acc) e sym_bTy_pes;
+                                 labels2= Map.insert sym (List.map fst sym_bTy_pes, apply_continuation cont e) th_st.labels2 |>
+        )
+    
+    | (Erun annots sym pes, Stack_cons cont sk) ->
+        one $ Step_tau "Erun" (
+          match Map.lookup sym th_st.labels2 with
+            | Just z ->
+                (* either the execution already saw the associated Esave; *)
+                SEU.return z
+            | Nothing ->
+                (* or we need to find it in the current continuation. *)
+                match find_labeled_continuation2 sym (apply_continuation cont th_st.arena) with
+                  | Nothing ->
+                      SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show sym))
+                  | Just cont ->
+                      SEU.return cont
+                end
+          end >>= fun ((syms, cont_expr) as cont) ->
+          
+          let cont_expr' = List.foldl (fun acc (sym, pe) ->
+            subst_sym_expr sym pe acc
+          ) cont_expr (List.zip syms pes) in
+          
+          let cont_expr' =
+add_to_asw annots.asw_before $ (* TODO: remove for sequential !!! *)
+add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: remove for sequential !!! *)
+          E.return <| th_st with
+            arena= cont_expr';
+            stack= push_empty_continuation sk;
+            labels2= Map.insert sym cont th_st.labels2
+          |>
+        )
+    
+    | (Epure pe, sk) ->
+        one match valueFromPexpr pe with
+          | Just cval ->
+              match sk with
+                | Stack_cons [] Stack_empty ->
+                    (* reached the end of the execution of a thread. *)
+                    match parent_tid_opt with
+                      | Just parent_tid ->
+                          Step_thread_done parent_tid cval
+                      | Nothing ->
+                          (* this was the startup thread *)
+                          Step_done cval
+                    end
+                | Stack_cons [] (Stack_cons cont sk') ->
+                    (* reached the end of the execution of a procedure. *)
+                    Step_tau "end of procedure" (
+                      E.return <| th_st with
+                        arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
+                        stack= push_empty_continuation sk';
+                        labels= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
+                      |>
+                    )
+                | Stack_cons cont sk' ->
+                    Step_tau "Epure" (
+                      E.return <| th_st with
+                        arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
+                        stack= push_empty_continuation sk';
+                      |>
+                    )
+              end
+          | Nothing ->
+              Step_eval "Epure" (
+                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.return <| th_st with arena= Epure pe' |>
+              )
+        end
+    
+    | (End es, _) ->
+        (* -------------------------------------------
+           <nd(e1, ..., eN), κs, Λ> --τ--> <ej, κs, Λ>    j ∈ {1, ..., N} *)
+        List.map (fun e ->
+          Step_tau "End" (E.return <| th_st with arena= e |>)
+       ) es
+    
+    | (Epar es, _) ->
+        (* TODO: doc *)
+        one $ Step_spawn_threads (fun e -> <| th_st with arena= e |>) (
+          List.map (fun e -> <|
+            arena= e;
+            stack= push_empty_continuation empty_stack;
+            labels= Map.empty;
+            labels2= Map.empty;
+            current_loc= th_st.current_loc;
+            exec_loc= ELoc_normal [];
+          |>) es
+        )
+    | (Ewait _, _) ->
+        (* We don't do anything here. When a thread terminated, the driver
+           substitute the corresponding wait in parent thread with the returned
+           value. *)
+        error "Core_run, Ewait"
+    
+    | (Eloc loc e, _) ->
+        one $ Step_tau "Eloc" (
+          E.return <| th_st with current_loc= loc; arena= e |>
+        )
+    
+(*
+    | (Eraise handl, sk) ->
+        error "WIP: Eraise"
+    | (Eregister handl nm, sk) ->
+        error "WIPL Eregister"
+*)
+    
+    | (Easeq _ _ _, _) ->
+        error "Core_run must be called after Core_indet"
+    | (Eindet _ _, _) ->
+        error "Core_run must be called after Core_indet"
+    | (Ebound _ _, _) ->
+        error "Core_run must be called after Core_indet"
+    
+    | (e, Stack_empty) ->
+        (* End of program execution *)
+        one match maybe Nothing valueFromPexpr (to_pure e) with
+          | Just cval ->
+              Step_done cval
+          | Nothing ->
+              Step_error ("reached empty stack on a non-value arena: " ^ Pp.stringFromCore_expr e) (* TODO: better error message *)
+        end
+    
+(* WIP !!!
+    | (e, Stack_cons cont sk) ->
+        match to_pure e with
+          | Just pe ->
+              one match valueFromPexpr pe with
+                | Just cval ->
+                    match cont with
+                      | [] ->
+                          match parent_tid_opt with
+                            | Nothing ->
+                                (* TODO: check, this should only occur at the end of a pure main function *)
+                                Step_done cval
+                            | Just _ ->
+                                error ("<e, Stack_cons []> with e= " ^ Pp.stringFromCore_expr e) (* TODO: what case is that? *)
+                          end
+                      | _ ->
+                          (* -----------------------------------
+                             <v, κ.κs, Λ> --τ--> <κ(v), ɛ.κs, Λ> *)
+                          Step_tau "value" (E.return <| th_st with
+                            arena= apply_continuation cont (Epure (Pexpr () (PEval cval)));
+                            stack= push_empty_continuation sk
+                          |>)
+                    end
+                  | Nothing ->
+                      (*          [| pe |] = v
+                         -----------------------------
+                         <pe, κs, Λ> --τ--> <v, κs, Λ> *)
+                      Step_eval "pure" (
+                        E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                        E.return <| th_st with arena= Epure pe' |>
+                      )
+                end
+          | Nothing ->
+              error (Pp.stringFromCore_expr e) (* TODO: better error message *)
+        end
+*)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* BEGIN silly *)
+(* Dummy function doing nothing, but required to typecheck *)
+val     convert_expr: forall 'a. Core.expr 'a -> Core.expr core_run_annotation
+let rec convert_expr expr =
+  match expr with
+    | Epure pe ->
+        Epure pe
+    | Ememop memop pes ->
+        Ememop memop pes
+(*
+    | Eraise h ->
+        Eraise h
+    | Eregister h nm ->
+        Eregister h nm
+*)
+    | Eskip ->
+        Eskip
+    | Elet sym pe1 e2 ->
+        Elet sym pe1 (convert_expr e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (convert_expr e2) (convert_expr e3)
+    | Ecase pe pat_es ->
+        Ecase pe (List.map (fun (pat, e) -> (pat, convert_expr e)) pat_es)
+    | Eccall _ pe pes ->
+        Eccall empty_annotation pe pes
+    | Eproc _ nm pes ->
+        Eproc empty_annotation nm pes
+    | Eaction pact ->
+        Eaction (convert_paction pact)
+    | Eunseq es ->
+        Eunseq (List.map convert_expr es)
+    | Ewseq _as e1 e2 ->
+        Ewseq _as (convert_expr e1) (convert_expr e2)
+    | Esseq _as e1 e2 ->
+        Esseq _as (convert_expr e1) (convert_expr e2)
+    | Easeq sym_opt act1 pact2 ->
+        Easeq sym_opt (convert_action act1) (convert_paction pact2)
+    | Eindet i e ->
+        Eindet i (convert_expr e)
+    | Ebound i e ->
+        Ebound i (convert_expr e)
+    | Esave sym sym_bTys e ->
+        Esave sym sym_bTys (convert_expr e)
+    | Erun _ sym pes ->
+        Erun empty_annotation sym pes
+    | End es ->
+        End (List.map convert_expr es)
+    | Epar es ->
+        Epar (List.map convert_expr es)
+    | Ewait tid ->
+        Ewait tid
+    | Eloc loc e ->
+        Eloc loc (convert_expr e)
+  end
+
+and convert_paction pact =
+  match pact with
+    | Paction p act ->
+        Paction p (convert_action act)
+  end
+
+and convert_action act =
+  match act with
+    | Action loc _ act_ -> Action loc empty_annotation act_
+  end
+
+
+
+val convert_file: forall 'a. file 'a -> file core_run_annotation
+let convert_file file =
+  let convert_fun_map_decl = function
+    | Fun bTy params pe ->
+        Fun bTy params pe
+    | Proc bTy params e ->
+        Proc bTy params (convert_expr e)
+  end in
+
+ <|
+  main=   file.main;
+  stdlib= Map.map convert_fun_map_decl file.stdlib;
+  impl=   file.impl;
+  globs=  List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
+  funs=   Map.map convert_fun_map_decl file.funs;
+ |>
+(* END silly *)
+
+
+
+
+
+val initial_io_state: io_state
+let initial_io_state = <|
+  stdout= Dlist.nil;
+|>
+
+val initial_core_state: core_state
+let initial_core_state = <|
+  thread_states= [];
+  io= initial_io_state;
+(*  handlers= Map.empty;*)
+|>
+
+
+(*
+val init: Core.file core_run_annotation -> core_runM core_state
+let init file =
+  match Map.lookup file.main file.funs with
+    | Nothing ->
+        SEU.fail (Illformed_program "couldn't find the startup function")
+    | Just (_, _, expr) ->
+        SEU.return expr
+  end >>= fun expr ->
+  
+  SEU.runS (spawn_thread Nothing <|
+    arena= expr;
+    stack= push_empty_continuation empty_stack;
+    labels= Map.empty
+  |> initial_core_state) >>= fun (_, st') ->
+  
+  SEU.return st'
+*)
+
+
+
+val initial_core_run_state: core_run_state
+let initial_core_run_state = <|
+  tid_supply=    UniqueId.new_supply;
+  symbol_supply= UniqueId.new_supply;
+  aid_supply=    UniqueId.new_supply;
+  
+  step_counter= 0;
+|>

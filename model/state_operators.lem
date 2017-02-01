@@ -1,0 +1,11 @@
+open import State
+
+val        (>>=): forall 'a 'b 's. t 'a 's -> ('a -> t 'b 's) -> t 'b 's
+let inline (>>=) = bind
+
+val        (>>): forall 'a 'b 's. t 'a 's -> t 'b 's -> t 'b 's
+let inline (>>) m f = m >>= fun _ -> f
+
+let inline (<$>) f ma = bind ma (fun a -> return (f a))
+  let inline (<*>)    = app
+

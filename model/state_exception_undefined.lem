@@ -1,0 +1,133 @@
+open import Pervasives
+import State State_exception Exception_undefined Undefined
+
+
+type t 'a 'bs 'msg = State_exception.t (Undefined.t 'a) 'bs 'msg
+
+val return: forall 'a 'b 's 'msg. 'a -> t 'a 's 'msg
+let return z =
+  State_exception.return (Undefined.return z)
+
+val bind: forall 'a 'b 's 'msg. t 'a 's 'msg         ->
+                                ('a -> t 'b 's 'msg) ->
+                                t 'b 's 'msg
+let bind m f = fun st ->
+  match m st with
+    | Exception.Result (Undefined.Defined z, st') ->
+        f z st'
+    | Exception.Result (Undefined.Undef loc ubs, st') ->
+        State_exception.return (Undefined.undef loc ubs) st'
+    | Exception.Result (Undefined.Error loc str, st') ->
+        State_exception.return (Undefined.error loc str) st'
+    | Exception.Exception err ->
+        State_exception.fail err st
+  end
+
+
+val     mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) ->
+                                    list 'a              ->
+                                    t (list 'b) 's 'msg
+let rec mapM f xs =
+  State_exception.bind (State_exception.mapM f xs)
+    (fun us -> State_exception.return $ Undefined.mapM id us)
+
+
+val runEU: forall 'a 's 'msg. Exception_undefined.t 'a 'msg -> t 'a 's 'msg
+let runEU m = fun st ->
+  match m with
+    | Exception.Result (Undefined.Defined z) ->
+        Exception.Result (Undefined.Defined z, st)
+    | Exception.Result (Undefined.Undef loc ubs) ->
+        Exception.Result (Undefined.Undef loc ubs, st)
+    | Exception.Result (Undefined.Error loc str) ->
+        Exception.Result (Undefined.Error loc str, st)
+    | Exception.Exception err ->
+        Exception.Exception err
+  end
+
+
+val runE: forall 'a 's 'msg. Exception.exceptM 'a 'msg -> t 'a 's 'msg
+let runE m =
+  runEU (Exception.bind m Exception_undefined.return)
+
+
+
+val runS: forall 'a 's 'msg. State.t 'a 's -> t 'a 's 'msg
+let runS m = fun st ->
+  let (a, st') = m st in
+  Exception.return (Undefined.return a, st')
+
+val runSE: forall 'a 's 'msg. State_exception.t 'a 's 'msg -> t 'a 's 'msg
+let runSE m =
+  State_exception.bind m
+    (fun z -> State_exception.return (Undefined.return z))
+
+
+val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.exceptM (Undefined.t 'a * 's) 'msg
+let run m st = m st
+
+
+(* NOTE: this is foldl *)
+val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'a 's 'msg) -> 'a -> list 'b -> t 'a 's 'msg
+let rec foldM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      bind (f a x) (fun z -> foldM f z xs)
+end
+
+val     filterM: forall 'a 's 'msg. ('a -> t bool 's 'msg) -> list 'a -> t (list 'a) 's 'msg
+let rec filterM pred = function
+  | [] ->
+      return []
+  | (x::xs) ->
+      bind (pred x)          (fun b  ->
+      bind (filterM pred xs) (fun ys ->
+      return (if b then x::ys else ys)
+      ))
+end
+
+
+val        sequence: forall 'a 's 'msg. list (t 'a 's 'msg) -> t (list 'a) 's 'msg
+let inline sequence ms =
+  let k m m' =
+    bind m (fun x ->
+      bind m' (fun xs ->
+        return (x::xs)
+      )
+    ) in
+  List.foldr k (return []) ms
+
+val     replicateM: forall 'a 's 'msg. nat -> (t 'a 's 'msg) -> t (list 'a) 's 'msg
+let rec replicateM n x =
+  sequence (List.replicate n x)
+
+
+val fail: forall 'a 's 'msg. 'msg -> t 'a 's 'msg
+let fail err =
+  runE (Exception.fail err)
+
+
+
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+let fmap f m =
+  bind m (fun z -> return (f z))
+
+
+
+module Operators = struct
+  let inline (>>=)      = bind
+  let inline (>>) m1 m2 = bind m1 (fun () -> m2)
+  let inline (<$>) = fmap
+end
+open Operators
+
+
+
+val        update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
+let inline update f =
+  runSE (State_exception.update f)
+
+val        read: forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
+let inline read f =
+  runSE (State_exception.read f)

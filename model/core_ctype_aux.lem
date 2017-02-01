@@ -1,0 +1,20 @@
+open import Pervasives
+
+import Symbol Cabs
+open import Global Core_ctype
+
+open import {hol} `tagsTheory`
+
+(* SEE src/tags.mli for the documentation *)
+val tagDefs: unit -> map Symbol.sym (list (Cabs.cabs_identifier * ctype))
+val set_tagDefs: map Symbol.sym (list (Cabs.cabs_identifier * ctype)) -> unit
+
+declare ocaml target_rep function tagDefs = `Tags.tagDefs`
+declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
+
+declare hol target_rep function tagDefs = `tagDefs`
+declare hol target_rep function set_tagDefs = `set_tagDefs`
+
+val get_membersDefs: Symbol.sym -> list (Cabs.cabs_identifier * ctype)
+let get_membersDefs tag_sym =
+  fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())
