@@ -10,4 +10,4 @@ int main(void) {
   return f(); // returns: 10
 }
 
-int x = 10;
+int x = 13;

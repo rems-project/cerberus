@@ -299,7 +299,7 @@ let rec drive_core_thread tid dr_st =
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ND.print_debug 6 "Step_printf2" >>
         let eval_conv (*ty1*) ty2 mval =
-          eval_pexpr Loc.unknown dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc $
+          eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
             (* Core.PEcall (Core.Sym conv_sym) *)
             Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
               [ Caux.mk_ctype_pe ty2
@@ -726,7 +726,7 @@ let rec driver with_concurrency dr_st =
 *)
 
         | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-            liftMem (Mem.eq_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_eq, dr_st') ->
+            liftMem (Mem.eq_ptrval ptr_val1 ptr_val2) dr_st >>= fun (is_eq, dr_st') ->
             let cval = if is_eq then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
         
@@ -737,9 +737,35 @@ let rec driver with_concurrency dr_st =
 *)
 
         | (Mem_common.PtrNe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-            liftMem (Mem.ne_ptrval Symbolic.Constraints_TODO ptr_val1 ptr_val2) dr_st >>= fun (is_ne, dr_st') ->
+            liftMem (Mem.ne_ptrval ptr_val1 ptr_val2) dr_st >>= fun (is_ne, dr_st') ->
             let cval = if is_ne then Core.Vtrue else Core.Vfalse in
             driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        
+        | (Mem_common.PtrLt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.lt_ptrval ptr_val1 ptr_val2) dr_st >>= fun (res, dr_st') ->
+            let cval = if res then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        | (Mem_common.PtrGt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.gt_ptrval ptr_val1 ptr_val2) dr_st >>= fun (res, dr_st') ->
+            let cval = if res then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        | (Mem_common.PtrLe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.le_ptrval ptr_val1 ptr_val2) dr_st >>= fun (res, dr_st') ->
+            let cval = if res then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+        | (Mem_common.PtrGe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.ge_ptrval ptr_val1 ptr_val2) dr_st >>= fun (res, dr_st') ->
+            let cval = if res then Core.Vtrue else Core.Vfalse in
+            driver with_concurrency <| dr_st with core_state= update_thread_state tid (mk_th_st cval) dr_st'.core_state |>
+(*
+  | PtrLt
+  | PtrGt
+  | PtrLe
+  | PtrGe
+*)
+
+
+
 
 (* TODO CONCUR
         | (Mem_common.PtrNe, [Core.Vobject (Core.OVsymbolic symb1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
@@ -815,7 +841,7 @@ let rec driver with_concurrency dr_st =
 
 val     hack: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
-  match step_eval_pexpr Loc.unknown mem_st core_file concur_sym_map pexpr with
+  match step_eval_pexpr Loc.unknown (Just mem_st) core_file pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->

@@ -9,6 +9,15 @@ declare ocaml target_rep function stringFromSymbol_prefix = `String_symbol.strin
 declare hol   target_rep function stringFromSymbol_prefix = `pp_core$pp_prefix`
 
 
+val stringFromCabs_type_specifier: Cabs.cabs_type_specifier -> string
+declare ocaml target_rep function stringFromCabs_type_specifier = `String_cabs.string_of_cabs_type_specifier`
+
+
+
+
+
+
+
 val stringFromAil_ctype:      AilTypes.ctype -> string
 val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
 

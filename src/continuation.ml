@@ -5,7 +5,7 @@ open Util
 
 open Mem
 
-type ('a, 'b) t = ContT of (('a -> 'b memM0) -> 'b memM0)
+type ('a, 'b) t = ContT of (('a -> 'b memM) -> 'b memM)
 
 let contT c = ContT c
 
@@ -21,11 +21,11 @@ let callCC f = contT $ fun k -> let ret x = contT $ fun _ -> k x in
                                   runContT (f ret) k
 
 (* It runs the continuation monad with calcc and the state memory one *)
-let run f = runMem0 (runContT (callCC (fun ret -> f ret)) return3) initial_mem_state0
+let run f = runMem (runContT (callCC (fun ret -> f ret)) return2) initial_mem_state
 
-let evalContT m = runContT m return3
+let evalContT m = runContT m return2
 
-let lift m = ContT (bind3 m)
+let lift m = ContT (bind2 m)
 (*
 let reset = lift % evalContT
 

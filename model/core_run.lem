@@ -349,10 +349,10 @@ declare ocaml target_rep function pseudo_printf = `Boot_printf.pseudo_printf`
 module E = struct
   let return =
     SEU.return
-  let step_eval_pexprs loc mem_st file concur_sym_map pes =
-    SEU.runEU (EU.mapM (step_eval_pexpr loc mem_st file concur_sym_map) pes)
-  let step_eval_pexpr loc mem_st file concur_sym_map pe =
-    SEU.runEU (step_eval_pexpr loc mem_st file concur_sym_map pe)
+  let step_eval_pexprs loc mem_st file (*concur_sym_map*) pes =
+    SEU.runEU (EU.mapM (step_eval_pexpr loc (Just mem_st) file (*concur_sym_map*)) pes)
+  let step_eval_pexpr loc mem_st file (*concur_sym_map*) pe =
+    SEU.runEU (step_eval_pexpr loc (Just mem_st) file (*concur_sym_map*) pe)
   let fresh_action_id =
     SEU.runS fresh_action_id'
   let fresh_symbol =
@@ -413,8 +413,8 @@ type core_step =
 
 
 val core_action_step:
-    Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
-let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
+    Mem.mem_state -> Core.file core_run_annotation -> thread_id -> (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
+let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
     Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
@@ -451,14 +451,14 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
           | (Nothing, _) ->
               Step_eval "first operand of a Create" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Create pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Create" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Create pe1 pe2' pref)))
                 |>
@@ -482,14 +482,14 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               Step_error "found a alloc() with ill-typed operands"
           | (Nothing, _) ->
               Step_eval "first operand of a Alloc" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref)))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Alloc" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref)))
                 |>
@@ -513,7 +513,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               Step_error "found a kill() with an ill-typed operand"
           | Nothing ->
               Step_eval "operand of kill()" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.step_eval_pexpr loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Kill pe')))
                 |>
@@ -545,21 +545,21 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
                            Pp.stringFromCore_value cval1 ^ " <-> " ^ Pp.stringFromCore_value cval2 ^ " <-> " ^ Pp.stringFromCore_value cval3)
           | (Nothing, _, _) ->
               Step_eval "first operand of a Store" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo)))
                 |>
               )
           | (_, Nothing, _) ->
               Step_eval "second operand of a Store" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo)))
                 |>
               )
           | (_, _, Nothing) ->
               Step_eval "third operand of a Store" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe3 >>= fun pe3' ->
+                E.step_eval_pexpr loc mem_st file pe3 >>= fun pe3' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo)))
                 |>
@@ -586,14 +586,14 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               Step_error "found a load with ill-typed operands"
           | (Nothing, _) ->
               Step_eval "first operand of a Load" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Load pe1' pe2 mo)))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Load" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (Load pe1 pe2' mo)))
                 |>
@@ -643,28 +643,28 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
               Step_error "found a rmw with ill-typed operands"
           | (Nothing, _, _, _) ->
               Step_eval "first operand of a RMW" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (RMW pe1' pe2 pe3 pe4 mo1 mo2)))
                 |>
               )
           | (_, Nothing, _, _) ->
               Step_eval "second operand of a RMW" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe2 >>= fun pe2' ->
+                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (RMW pe1 pe2' pe3 pe4 mo1 mo2)))
                 |>
               )
           | (_, _, Nothing, _) ->
               Step_eval "third operand of a RMW" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe3 >>= fun pe3' ->
+                E.step_eval_pexpr loc mem_st file pe3 >>= fun pe3' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3' pe4 mo1 mo2)))
                 |>
               )
           | (_, _, _, Nothing) ->
               Step_eval "fourth operand of a RMW" (
-                E.step_eval_pexpr loc mem_st file concur_sym_map pe4 >>= fun pe4' ->
+                E.step_eval_pexpr loc mem_st file pe4 >>= fun pe4' ->
                 E.return <| th_st with arena=
                   Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3 pe4' mo1 mo2)))
                 |>
@@ -726,7 +726,7 @@ let core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_
 
 
 val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
-let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) =
+let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   match (th_st.arena, th_st.stack) with
     | (Eskip, Stack_cons cont sk') ->
@@ -755,7 +755,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               end
           | _ ->
               Step_eval "Ecase" (
-                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena= Ecase pe' pat_es |>
               )
         end
@@ -771,7 +771,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               )
           | Nothing ->
               Step_eval "Elet" (
-                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr th_st.current_loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena= Elet pat pe1' e2 |>
               )
         end
@@ -805,7 +805,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               Step_error "the first operand of an Eif didn't evaluated to a boolean"
           | _ ->
               Step_eval "Eif" (
-                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe1 >>= fun pe1' ->
+                E.step_eval_pexpr th_st.current_loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena= Eif pe1' e2 e3 |>
               )
         end
@@ -831,7 +831,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                     end
                 | Nothing ->
                     Step_eval "Eccall" (
-                      E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                      E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
                       E.return <| th_st with arena= Eccall annots pe pes' |>
                     )
               end
@@ -840,7 +840,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
                 Pp.stringFromCore_value cval ^ "")
           | Nothing ->
               Step_eval "Eccall" (
-                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena= Eccall annots pe' pes |>
               )
         end
@@ -892,13 +892,13 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               end
           | Nothing ->
               Step_eval "Eproc" (
-                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
                 E.return <| th_st with arena= Eproc annots nm pes' |>
               )
         end
     
     | (Eaction pact, _) ->
-        one $ core_action_step mem_st file concur_sym_map current_tid (parent_tid_opt, th_st) pact
+        one $ core_action_step mem_st file current_tid (parent_tid_opt, th_st) pact
     | (Ememop memop pes, _) ->
 (*        error "Core_run, WIP Ememop" *)
         one match valueFromPexprs pes with
@@ -908,7 +908,7 @@ let core_thread_step2 mem_st file concur_sym_map current_tid (parent_tid_opt, th
               )
           | Nothing ->
               Step_eval "Ememop" (
-                E.step_eval_pexprs th_st.current_loc mem_st file concur_sym_map pes >>= fun pes' ->
+                E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
                 E.return <| th_st with arena= Ememop memop pes' |>
               )
         end
@@ -957,7 +957,7 @@ end
                     )
                 | Nothing ->
                     Step_eval "Ewseq" (
-                      E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                      E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                       E.return <| th_st with arena= Ewseq pat (Epure pe') e2 |>
                     )
               end
@@ -982,7 +982,7 @@ end
                     )
                 | Nothing ->
                     Step_eval "Esseq" (
-                      E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                      E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                       E.return <| th_st with arena= Esseq pat (Epure pe') e2 |>
                     )
               end
@@ -1065,7 +1065,7 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: 
               end
           | Nothing ->
               Step_eval "Epure" (
-                E.step_eval_pexpr th_st.current_loc mem_st file concur_sym_map pe >>= fun pe' ->
+                E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena= Epure pe' |>
               )
         end

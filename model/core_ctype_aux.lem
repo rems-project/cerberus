@@ -17,4 +17,5 @@ declare hol target_rep function set_tagDefs = `set_tagDefs`
 
 val get_membersDefs: Symbol.sym -> list (Cabs.cabs_identifier * ctype)
 let get_membersDefs tag_sym =
+  let () = Debug.print_debug 0 (show (Map.size (tagDefs ()))) in
   fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())

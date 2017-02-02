@@ -215,8 +215,8 @@ let rec export_pexpr loc (Pexpr infer pexpr_) =
             export_pexpr loc pe >>= fun pe' ->
             E.return (ident, pe')
           ) xs
-    | PEunion sym member_ident pe ->
-        PEunion sym member_ident <$>
+    | PEunion sym memb_ident pe ->
+        PEunion sym memb_ident <$>
           export_pexpr loc pe
     | PEcall nm pes ->
         PEcall nm <$> E.mapM (export_pexpr loc) pes
