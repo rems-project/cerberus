@@ -7,7 +7,7 @@ import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Core_ctype Core_aux
+import Core_ctype Core_ctype_aux Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -66,11 +66,11 @@ let inline (>>=)    = EU.bind
 let inline (>>) m f = m >>= fun _ -> f
 let inline (<$>) = EU.fmap
 
-val     step_eval_peop: Loc.t -> Mem.mem_state ->
-                         (Core.pexpr -> EU.t Core.pexpr core_run_error) -> Core.pexpr  ->
-                         EU.t (Core.pexpr_ unit Symbol.sym) core_run_error
+val     step_eval_peop: Loc.t -> maybe Mem.mem_state ->
+                        (Core.pexpr -> EU.t Core.pexpr core_run_error) -> Core.pexpr  ->
+                        EU.t (Core.pexpr_ unit Symbol.sym) core_run_error
 
-let step_eval_peop loc mem_st self pexpr =
+let step_eval_peop loc mem_st_opt self pexpr =
   match pexpr with Pexpr () pexpr_  ->
   match pexpr_ with
     | PEop binop pe1 pe2 ->
@@ -83,7 +83,7 @@ let step_eval_peop loc mem_st self pexpr =
         
         (* Integer equality *)
         | (OpEq, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.eq_ival mem_st Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.eq_ival mem_st_opt ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -93,7 +93,7 @@ let step_eval_peop loc mem_st self pexpr =
             end
         
         | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.lt_ival Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.lt_ival mem_st_opt ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -103,7 +103,7 @@ let step_eval_peop loc mem_st self pexpr =
             end
         
         | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-            match Mem.le_ival Symbolic.Constraints_TODO ival1 ival2 with
+            match Mem.le_ival mem_st_opt ival1 ival2 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -114,7 +114,7 @@ let step_eval_peop loc mem_st self pexpr =
         
         | (OpGe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
-            match Mem.le_ival Symbolic.Constraints_TODO ival2 ival1 with
+            match Mem.le_ival mem_st_opt ival2 ival1 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -125,7 +125,7 @@ let step_eval_peop loc mem_st self pexpr =
         
         | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
-            match Mem.lt_ival Symbolic.Constraints_TODO ival2 ival1 with
+            match Mem.lt_ival mem_st_opt ival2 ival1 with
               | Just b ->
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
@@ -224,13 +224,13 @@ let step_eval_peop loc mem_st self pexpr =
    This is to ensure that the eval function will always terminate (which is
    important for the Coq backend).  To fully evaluate a pure expression,
    it is necessary to call eval repeatedly until is_value returns True. *)
-val     step_eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                         map Symbol.sym Core.object_value -> Core.pexpr  ->
+val     step_eval_pexpr: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+                         Core.pexpr  ->
                          EU.t Core.pexpr core_run_error
-let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
+let rec step_eval_pexpr loc mem_st_opt file pexpr =
   match pexpr with Pexpr () pexpr_  ->
   let strip (Pexpr _ pe_) = pe_ in
-  let self pe = step_eval_pexpr loc mem_st file concur_sym_map pe in
+  let self pe = step_eval_pexpr loc mem_st_opt file pe in
   Pexpr () <$> match pexpr_ with
     (* pulling the constrained up *)
     | PEconstrained xs ->
@@ -412,13 +412,21 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
 
 
     | PEop binop pe1 pe2 ->
-       step_eval_peop loc mem_st self pexpr
+       step_eval_peop loc mem_st_opt self pexpr
 
 
     | PEstruct tag_sym ident_pes ->
         error "WIP: Core_Eval.step_eval_pexpr, PEstruct"
-    | PEunion tag_sym member_ident pe ->
-        error "WIP: Core_Eval.step_eval_pexpr, PEunion"
+    | PEunion tag_sym memb_ident pe ->
+        self pe >>= fun pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just cval ->
+              let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident (Core_ctype_aux.get_membersDefs tag_sym)) in
+              let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
+              EU.return (PEval (Vspecified (OVunion tag_sym memb_ident mval)))
+          | Nothing ->
+              EU.return (PEunion tag_sym memb_ident pe')
+        end
     | PEcall nm pes ->
         EU.mapM self pes >>= fun pes' ->
         match Caux.valueFromPexprs pes' with
@@ -535,22 +543,21 @@ let rec step_eval_pexpr loc mem_st file concur_sym_map pexpr =
   end
 
 
-val     eval_pexpr_aux: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                        map Symbol.sym Core.object_value -> Core.pexpr ->
+val     eval_pexpr_aux: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+                        Core.pexpr ->
                         EU.t Core.value core_run_error
-let rec eval_pexpr_aux loc mem_st file concur_sym_map pe =
-  step_eval_pexpr loc mem_st file concur_sym_map pe >>= fun pe' ->
+let rec eval_pexpr_aux loc mem_st_opt file pe =
+  step_eval_pexpr loc mem_st_opt file pe >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
     | Nothing ->
-        eval_pexpr_aux loc mem_st file concur_sym_map pe'
+        eval_pexpr_aux loc mem_st_opt file pe'
   end
-val eval_pexpr: Loc.t -> Mem.mem_state -> Core.file core_run_annotation ->
-                map Symbol.sym Core.object_value -> Core.pexpr ->
-                either Errors.error (Undefined.t Core.value)
-let eval_pexpr loc mem_st file concur_sym_map pe =
-  match eval_pexpr_aux loc mem_st file concur_sym_map pe with
+val eval_pexpr: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+                Core.pexpr -> either Errors.error (Undefined.t Core.value)
+let eval_pexpr loc mem_st_opt file pe =
+  match eval_pexpr_aux loc mem_st_opt file pe with
     | Exception.Result z ->
         Right z
     | Exception.Exception err ->

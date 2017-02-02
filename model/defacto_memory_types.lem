@@ -11,9 +11,9 @@ type provenance_id = nat
 
 
 (* TODO: simplified for now (only work for scalars) *)
-type footprint = allocation_id
-val do_overlap: footprint -> footprint -> bool
-let do_overlap = (=)
+type impl_footprint = allocation_id
+val impl_do_overlap: impl_footprint -> impl_footprint -> bool
+let impl_do_overlap = (=)
 
 
 
@@ -45,7 +45,7 @@ type address =
 (*** Pointer value ****************************************************************************** *)
 
 (* Core values of type OTy_pointer will always be of this form *)
-type pointer_value =
+type impl_pointer_value =
     (* pointer values are annotated with a provenance *)
   | PV of provenance * pointer_value_base * (list shift_path_element)
 
@@ -72,7 +72,7 @@ and shift_path_element =
  
 
 (* Core values of type OTy_integer will always be of this form *)
-and integer_value =
+and impl_integer_value =
   | IV of provenance (* * AilTypes.integerType *) * integer_value_base
 
 and integer_value_base =
@@ -93,26 +93,26 @@ and integer_value_base =
   | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
   | IVptrdiff of pointer_value_base * pointer_value_base
   (* TODO: tentative *)
-  | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
+  | IVbyteof of integer_value_base * impl_mem_value (* the integer value is the position (indexed from zero) *)
   | IVcomposite of list integer_value_base 
       (* a list of byte values reassembled *)
 
 
 
 
-and floating_value =
+and impl_floating_value =
   | FVunspecified
   | FVconcrete of string
 
 (* The mem_value represents what can be stored in memory. *)
 (* the types below exist so that when looking at the representations of mem_values one knows what mapping to use *)
-and mem_value =
-  | MVinteger of AilTypes.integerType * integer_value
-  | MVfloating of AilTypes.floatingType * floating_value
-  | MVpointer of ctype * pointer_value (* the first parameter is the referenced type of the pointer value *)
-  | MVarray of list mem_value (* INVARIANT: all of the same mem_value constructor and type *)
-  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * mem_value)
-  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * mem_value
+and impl_mem_value =
+  | MVinteger of AilTypes.integerType * impl_integer_value
+  | MVfloating of AilTypes.floatingType * impl_floating_value
+  | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
+  | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
+  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
 
 (*  not sure whether these analogues of IVbyteof and IVcomposite should exist (think not)
   | MVmodified of list (shift_path * mem_value) * mem_value (* this is for when an object is modified as an

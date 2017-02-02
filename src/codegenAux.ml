@@ -21,9 +21,9 @@ let ivctor memf errmsg = function
   | C.Basic0 (T.Integer it) -> memf it
   | _ -> raise (Error errmsg)
 
-let ivmin = ivctor M.min_ival0 "ivmin"
+let ivmin = ivctor M.min_ival "ivmin"
 
-let ivmax = ivctor M.max_ival0 "ivmax"
+let ivmax = ivctor M.max_ival "ivmax"
 
 (* Loaded - Specified and unspecified values *)
 
@@ -38,7 +38,7 @@ let specified x = Specified x
 let mv_to_integer_loaded mv =
   match mv with
   | I.MVinteger (at, iv) ->
-    if M.is_specified_ival0 iv then
+    if M.is_specified_ival iv then
       Specified iv
     else
       Unspecified (C.Basic0 (T.Integer at))
@@ -61,30 +61,30 @@ let mk_int s = I.IV (I.Prov_none, I.IVconcrete (Nat_big_num.of_string s))
 
 (* Binary operations wrap *)
 
-let eq n m = O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO n m)
-let lt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO n m)
-let gt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO m n)
-let le n m = O.get (M.le_ival0 Symbolic.Constraints_TODO n m)
-let ge n m = O.get (M.le_ival0 Symbolic.Constraints_TODO m n)
+let eq n m = O.get (M.eq_ival None n m)
+let lt n m = O.get (M.lt_ival None n m)
+let gt n m = O.get (M.lt_ival None m n)
+let le n m = O.get (M.le_ival None n m)
+let ge n m = O.get (M.le_ival None m n)
 
 (* Memory actions wrap *)
 
-let create pre al ty = lift $ M.allocate_static0 0 pre al ty
+let create pre al ty = lift $ M.allocate_static 0 pre al ty
 
-let alloc pre al n = lift $ M.allocate_dynamic0 0 pre al n
+let alloc pre al n = lift $ M.allocate_dynamic 0 pre al n
 
-let load_integer ity e = lift $ M.bind3 (M.load0 (C.Basic0 (T.Integer ity)) e)
-                           (M.return3 % mv_to_integer_loaded % snd)
+let load_integer ity e = lift $ M.bind2 (M.load (C.Basic0 (T.Integer ity)) e)
+                           (M.return2 % mv_to_integer_loaded % snd)
 
-let load_pointer q cty e = lift $ M.bind3 (M.load0 (C.Pointer0 (q, cty)) e) (M.return3 % specified % mv_to_pointer % snd)
+let load_pointer q cty e = lift $ M.bind2 (M.load (C.Pointer0 (q, cty)) e) (M.return2 % specified % mv_to_pointer % snd)
 
-let store ty e1 e2 = lift $ M.store0 ty e1 e2
+let store ty e1 e2 = lift $ M.store ty e1 e2
 
 let store_integer ity e1 le2 =
-  lift $ M.store0 (C.Basic0 (T.Integer ity)) e1 (
+  lift $ M.store (C.Basic0 (T.Integer ity)) e1 (
     match le2 with
-    | Specified e2 -> M.integer_value_mval0 ity e2
-    | Unspecified ty -> M.unspecified_mval0 ty
+    | Specified e2 -> M.integer_value_mval ity e2
+    | Unspecified ty -> M.unspecified_mval ty
   )
 
 (* Cast types functions *)
@@ -106,6 +106,6 @@ let value = return
 
 let exit f =
   match get_first_value (run f) with
-  | Specified iv -> M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int |>
+  | Specified iv -> M.eval_integer_value iv |> O.get |> Nat_big_num.to_int |>
                     (fun res -> print_int res; exit res)
   | Unspecified _ -> print_string "Unspecified value"

@@ -87,6 +87,7 @@ let wrapped_fresh_symbol bTy =
     (fun sym -> return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym))
 
 
+(*
 val     core_object_type_of_ctype: AilTypes.ctype -> maybe Core.core_object_type
 let rec core_object_type_of_ctype ty =
   match AilTypesAux.unatomic ty with
@@ -102,16 +103,17 @@ let rec core_object_type_of_ctype ty =
     | _ ->
         Nothing
   end
+*)
 
 val fresh_typed_symbol: bool -> AilTypes.ctype -> t (Symbol.sym * Core.core_base_type)
 let fresh_typed_symbol is_loaded ty =
   let ctor x = if is_loaded then Core.BTy_loaded x else Core.BTy_object x in
   bind fresh_symbol (fun sym ->
-    match core_object_type_of_ctype ty with
+    match Core_aux.core_object_type_of_ctype (Core_aux.proj_ctype ty) with
       | Just objTy ->
           return (sym, ctor objTy)
       | Nothing ->
-          error "Translation_effect.fresh_typed_symbol"
+          error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype ty)
     end)
 
 (* returns a fresh Core symbolic name with a specified name for pretty printing. *)

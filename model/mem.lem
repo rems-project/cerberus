@@ -33,23 +33,23 @@ end
 
 (* The API *)
 
-type pointer_value  = Impl.pointer_value
-type mem_value      = Impl.mem_value
-type integer_value  = Impl.integer_value
-type floating_value = Impl.floating_value
+type pointer_value  = Impl.impl_pointer_value
+type mem_value      = Impl.impl_mem_value
+type integer_value  = Impl.impl_integer_value
+type floating_value = Impl.impl_floating_value
 
 
 (* This abstract in returns by memory actions and two footprints can be checked for overlapping.
    They are in particular useful to detect races. *)
-type footprint = Impl.footprint
+type footprint = Impl.impl_footprint
 val do_overlap: footprint -> footprint -> bool
-let do_overlap = Impl.do_overlap
+let do_overlap = Impl.impl_do_overlap
 
 
-type mem_state = Impl.mem_state
+type mem_state = Impl.impl_mem_state
 
 
-type memM 'a = Impl.memM 'a
+type memM 'a = Impl.impl_memM 'a
 val return: forall 'a. 'a -> memM 'a
 val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
 val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_state))
@@ -84,12 +84,12 @@ val null_ptrval: ctype -> pointer_value
 val fun_ptrval: Symbol.sym -> pointer_value
 
 (* Operations on pointer values *)
-val eq_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
-val ne_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
-val lt_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
-val gt_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
-val le_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
-val ge_ptrval: Symbolic.constraints -> pointer_value -> pointer_value -> memM bool
+val eq_ptrval: pointer_value -> pointer_value -> memM bool
+val ne_ptrval: pointer_value -> pointer_value -> memM bool
+val lt_ptrval: pointer_value -> pointer_value -> memM bool
+val gt_ptrval: pointer_value -> pointer_value -> memM bool
+val le_ptrval: pointer_value -> pointer_value -> memM bool
+val ge_ptrval: pointer_value -> pointer_value -> memM bool
 val diff_ptrval: pointer_value -> pointer_value -> integer_value
 
 val validForDeref_ptrval: pointer_value -> bool
@@ -128,9 +128,9 @@ val is_specified_ival: integer_value -> bool
 
 
 (* Predicats on integer values *)
-val eq_ival: mem_state -> Symbolic.constraints -> integer_value -> integer_value -> maybe bool
-val lt_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
-val le_ival: Symbolic.constraints -> integer_value -> integer_value -> maybe bool
+val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val lt_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val le_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
 (* val is_concrete_ival: integer_value -> bool *)
 
 (* Memory value constructors *)
@@ -159,84 +159,84 @@ val case_mem_value: forall 'a.
 
 (* For race detection *)
 val sequencePoint: memM unit
-let sequencePoint = Impl.sequencePoint
+let sequencePoint = Impl.impl_sequencePoint
 
 (* ========== *)
 
 
-let return = Impl.return
-let bind = Impl.bind
+let return = Impl.impl_return
+let bind = Impl.impl_bind
 
 
-let prettyStringFromMem_value           = Impl.prettyStringFromMem_value
-let runMem                              = Impl.runMem
-let initial_mem_state                   = Impl.initial_mem_state
-let null_ptrval                         = Impl.null_ptrval
-let fun_ptrval                          = Impl.fun_ptrval
-let eq_ptrval                           = Impl.eq_ptrval
-let ne_ptrval                           = Impl.ne_ptrval
-let lt_ptrval                           = Impl.lt_ptrval
-let gt_ptrval                           = Impl.gt_ptrval
-let le_ptrval                           = Impl.le_ptrval
-let ge_ptrval                           = Impl.ge_ptrval
-let diff_ptrval                         = Impl.diff_ptrval
-let intcast_ptrval                      = Impl.intcast_ptrval
-let validForDeref_ptrval                = Impl.validForDeref_ptrval
-(* let shift_ptrval                        = Impl.shift_ptrval *)
-let array_shift_ptrval                  = Impl.array_shift_ptrval
-let member_shift_ptrval                 = Impl.member_shift_ptrval
-let concurRead_ival = Impl.concurRead_ival
-let integer_ival                        = Impl.integer_ival
-let max_ival                            = Impl.max_ival
-let min_ival                            = Impl.min_ival
-let op_ival                             = Impl.op_ival
-let offsetof_ival                       = Impl.offsetof_ival
-let sizeof_ival                         = Impl.sizeof_ival
-let alignof_ival                        = Impl.alignof_ival
-let case_integer_value                  = Impl.case_integer_value
-let is_specified_ival                   = Impl.is_specified_ival
-let eq_ival                             = Impl.eq_ival
-let lt_ival                             = Impl.lt_ival
-let le_ival                             = Impl.le_ival
-let ptrcast_ival                        = Impl.ptrcast_ival
-(* let is_concrete_ival                    = Impl.is_concrete_ival *)
-(*let symbolic_mval                       = Impl.symbolic_mval*)
-let unspecified_mval                    = Impl.unspecified_mval
-let integer_value_mval                  = Impl.integer_value_mval
-let floating_value_mval                 = Impl.floating_value_mval
-let pointer_mval                        = Impl.pointer_mval
-let array_mval                          = Impl.array_mval
-let struct_mval                         = Impl.struct_mval
-let union_mval                          = Impl.union_mval
-let case_mem_value                      = Impl.case_mem_value
+let prettyStringFromMem_value           = Impl.impl_prettyStringFromMem_value
+let runMem                              = Impl.impl_runMem
+let initial_mem_state                   = Impl.impl_initial_mem_state
+let null_ptrval                         = Impl.impl_null_ptrval
+let fun_ptrval                          = Impl.impl_fun_ptrval
+let eq_ptrval                           = Impl.impl_eq_ptrval
+let ne_ptrval                           = Impl.impl_ne_ptrval
+let lt_ptrval                           = Impl.impl_lt_ptrval
+let gt_ptrval                           = Impl.impl_gt_ptrval
+let le_ptrval                           = Impl.impl_le_ptrval
+let ge_ptrval                           = Impl.impl_ge_ptrval
+let diff_ptrval                         = Impl.impl_diff_ptrval
+let intcast_ptrval                      = Impl.impl_intcast_ptrval
+let validForDeref_ptrval                = Impl.impl_validForDeref_ptrval
+(* let shift_ptrval                        = Impl.impl_shift_ptrval *)
+let array_shift_ptrval                  = Impl.impl_array_shift_ptrval
+let member_shift_ptrval                 = Impl.impl_member_shift_ptrval
+let concurRead_ival = Impl.impl_concurRead_ival
+let integer_ival                        = Impl.impl_integer_ival
+let max_ival                            = Impl.impl_max_ival
+let min_ival                            = Impl.impl_min_ival
+let op_ival                             = Impl.impl_op_ival
+let offsetof_ival                       = Impl.impl_offsetof_ival
+let sizeof_ival                         = Impl.impl_sizeof_ival
+let alignof_ival                        = Impl.impl_alignof_ival
+let case_integer_value                  = Impl.impl_case_integer_value
+let is_specified_ival                   = Impl.impl_is_specified_ival
+let eq_ival                             = Impl.impl_eq_ival
+let lt_ival                             = Impl.impl_lt_ival
+let le_ival                             = Impl.impl_le_ival
+let ptrcast_ival                        = Impl.impl_ptrcast_ival
+(* let is_concrete_ival                    = Impl.impl_is_concrete_ival *)
+(*let symbolic_mval                       = Impl.impl_symbolic_mval*)
+let unspecified_mval                    = Impl.impl_unspecified_mval
+let integer_value_mval                  = Impl.impl_integer_value_mval
+let floating_value_mval                 = Impl.impl_floating_value_mval
+let pointer_mval                        = Impl.impl_pointer_mval
+let array_mval                          = Impl.impl_array_mval
+let struct_mval                         = Impl.impl_struct_mval
+let union_mval                          = Impl.impl_union_mval
+let case_mem_value                      = Impl.impl_case_mem_value
 
 val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (string -> 'a) -> 'a
-let case_fval = Impl.case_fval
+let case_fval = Impl.impl_case_fval
 val zero_fval: floating_value
-let zero_fval = Impl.zero_fval
+let zero_fval = Impl.impl_zero_fval
 
 val str_fval: string -> floating_value
-let str_fval = Impl.str_fval
+let str_fval = Impl.impl_str_fval
 
-let allocate_static                     = Impl.allocate_static
-let allocate_dynamic                    = Impl.allocate_dynamic
-let kill                                = Impl.kill
-let load                                = Impl.load
-let store                               = Impl.store
+let allocate_static                     = Impl.impl_allocate_static
+let allocate_dynamic                    = Impl.impl_allocate_dynamic
+let kill                                = Impl.impl_kill
+let load                                = Impl.impl_load
+let store                               = Impl.impl_store
 
 val eval_integer_value: integer_value -> maybe integer
-let eval_integer_value = Impl.eval_integer_value
+let eval_integer_value = Impl.impl_eval_integer_value
 
 
 (* TODO: move this up *)
-type mem_constraint2 = Impl.mem_constraint2
+type mem_constraint2 = Impl.impl_mem_constraint2
 
 val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
 val constraint_neIV: integer_value -> integer_value -> mem_constraint2
 val constraint_ltIV: integer_value -> integer_value -> mem_constraint2
 val constraint_leIV: integer_value -> integer_value -> mem_constraint2
 
-let constraint_eqIV = Impl.constraint_eqIV
-let constraint_neIV = Impl.constraint_neIV
-let constraint_ltIV = Impl.constraint_ltIV
-let constraint_leIV = Impl.constraint_leIV
+let constraint_eqIV = Impl.impl_constraint_eqIV
+let constraint_neIV = Impl.impl_constraint_neIV
+let constraint_ltIV = Impl.impl_constraint_ltIV
+let constraint_leIV = Impl.impl_constraint_leIV
