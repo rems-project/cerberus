@@ -28,13 +28,23 @@ let callCC f =
     let ret x = contT $ fun _ -> k x in
     runContT (f ret) k
 
+
 (* It runs the continuation monad with calcc and the state memory one *)
-let run f =
+let run_callcc f =
   apply f
   |> callCC
   |> (flip runContT) return3
   |> (flip runMem0) initial_mem_state0
 
+let run f =
+  runContT f return3
+  |> (flip runMem0) initial_mem_state0
+
 let evalContT m = runContT m return3
 
 let lift m = ContT (bind3 m)
+
+let reset e = ContT (fun k -> bind3 (runContT e return3) k)
+
+let shift e =
+  ContT (fun k -> runContT (e (fun v -> ContT (fun c -> bind3 (k v) c))) return3)

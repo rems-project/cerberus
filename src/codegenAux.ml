@@ -67,6 +67,14 @@ let gt n m = O.get (M.lt_ival0 Symbolic.Constraints_TODO m n)
 let le n m = O.get (M.le_ival0 Symbolic.Constraints_TODO n m)
 let ge n m = O.get (M.le_ival0 Symbolic.Constraints_TODO m n)
 
+let eq_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let ne_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let ge_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let lt_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let gt_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let le_ptrval p q = lift $ M.eq_ptrval0 Symbolic.Constraints_TODO p q
+let diff_ptrval p q = M.diff_ptrval0 p q
+
 (* Memory actions wrap *)
 
 let create pre al ty = lift $ M.allocate_static0 0 pre al ty
@@ -110,10 +118,9 @@ let get_first_value mv =
 
 (* Exit continuation *)
 
-let value = return
+let value x = reset (return x)
 
 let exit f =
   match get_first_value (run f) with
-  | Specified iv -> M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int |>
-                    (fun res -> print_int res; exit res)
+  | Specified iv -> M.eval_integer_value0 iv |> O.get |> Nat_big_num.to_int |> exit
   | Unspecified _ -> print_string "Unspecified value"
