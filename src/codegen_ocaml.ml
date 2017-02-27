@@ -128,7 +128,7 @@ let print_function name pmrs ty body =
   name ^^^ print_params pmrs (*^^ P.colon ^^^ ty *)^^^ P.equals ^^ !> body
 
 let print_eff_function name pmrs ty body =
-  name ^^^ print_params pmrs ^^^ !^"return" ^^^ P.equals ^^ !> body
+  name ^^^ print_params pmrs ^^^ P.equals ^^ !> body
   (*name ^^^ print_params pmrs ^^^ P.parens (!^"return" ^^ P.colon ^^ ty
     ^^ !^" -> ('a, b) Continuation") ^^^ P.equals ^^ !> body *)
 
@@ -540,18 +540,17 @@ let print_args pes =
 
 let print_memop memop pes =
   (match memop with
-  | Mem.PtrEq -> !^"M.eq_ptrval0"
-  | Mem.PtrNe -> !^"M.ne_ptrval0"
-  | Mem.PtrGe -> !^"M.ge_ptrval0"
-  | Mem.PtrLt -> !^"M.lt_ptrval0"
-  | Mem.PtrGt -> !^"M.gt_ptrval0"
-  | Mem.PtrLe -> !^"M.le_ptrval0"
-  | Mem.Ptrdiff -> !^"M.diff_ptrval0"
-  | Mem.IntFromPtr -> !^"M.intcast_ptrval0"
-  | Mem.PtrFromInt -> !^"M.ptrvast_ival0"
-  | Mem.PtrValidForDeref -> !^"M.validForDeref_ptrval0"
-  ) ^^^ !^"Symbolic.Constraints_TODO"
-    ^^^ (P.separate_map P.space (P.parens % print_pure_expr)) pes
+  | Mem.PtrEq -> !^"A.eq_ptrval"
+  | Mem.PtrNe -> !^"A.ne_ptrval"
+  | Mem.PtrGe -> !^"A.ge_ptrval"
+  | Mem.PtrLt -> !^"A.lt_ptrval"
+  | Mem.PtrGt -> !^"A.gt_ptrval"
+  | Mem.PtrLe -> !^"A.le_ptrval"
+  | Mem.Ptrdiff -> !^"A.diff_ptrval"
+  | Mem.IntFromPtr -> !^"A.intcast_ptrval"
+  | Mem.PtrFromInt -> !^"A.ptrvast_ival"
+  | Mem.PtrValidForDeref -> !^"A.validForDeref_ptrval"
+  ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr)) pes
 
 let rec print_expr = function
   | Epure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr pe)
@@ -569,7 +568,7 @@ let rec print_expr = function
       if List.length es = 0
       then P.parens P.space
       else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
-    ) ^^^ !^"return"
+    )
   | Eunseq es -> raise Unsupported
   | Ewseq (pas, e1, e2) ->
     print_seq (print_pattern pas) (print_expr e1) (print_expr e2)
@@ -585,11 +584,11 @@ let rec print_expr = function
   | End (e::_) -> print_expr e
   | Esave ((sym, bTy), ps, e) ->
     let pes = List.map (fun (_, (_, pe)) -> pe) ps in
-    print_symbol sym ^^ print_args pes ^^^ !^"return"
+    !^"Continuation.reset" ^^^ P.parens (print_symbol sym ^^ print_args pes)
   | Erun (_, sym, pes) ->
-    print_symbol sym ^^ print_args pes ^^^ !^"return"
+    print_symbol sym ^^ print_args pes
   | Eproc ((), nm, pes) ->
-      print_name nm ^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes ^^^ !^"return"
+      print_name nm ^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
   | Epar _ -> raise Unsupported
   | Ewait _ -> raise Unsupported
   | Eloc (_, e) -> print_expr e
@@ -668,11 +667,11 @@ let print_impls impl =
   ) impl P.empty
 
 let print_label (sym, bT, ps, e) =
-    (* TODO: Not sure of this hack! It should be ret to not clash with return *)
+    (* TODO: Not sure of this hack! *)
   print_let true
-    (print_symbol sym ^^^ !^"(*" ^^^ print_base_type bT ^^^ !^"*)")
-    (print_params ps ^^^ !^"return")
-    (print_expr e ^/^ !^">>= return") P.empty
+    (print_symbol sym) 
+    (print_params ps)
+    (!^"Continuation.shift (fun _ -> " ^^^ print_expr e ^^^ !^")") P.empty
 
 let print_labels e =
   get_labels e []
@@ -700,7 +699,7 @@ let print_head filename =
   !^"module C = Core_ctype" ^/^
   !^"module O = Util.Option" ^//^
   !^"let (>>=) = Continuation.bind" ^//^
-  !^"let _std_function_printf x y cont = (A.value [(I.IV (I.Prov_none, \
+  !^"let _std_function_printf x y = (A.value [(I.IV (I.Prov_none, \
                             I.IVconcrete (Nat_big_num.of_string \"0\")))])" ^/^
   !^"let kill x = A.value ()"
 
