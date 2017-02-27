@@ -56,10 +56,10 @@ declare hol target_rep function declare_address     a u = u
 
 
 type write_event =
-  WriteEvent of ctype * pointer_value * mem_value
+  WriteEvent of ctype * impl_pointer_value * impl_mem_value
 
 
-type mem_state = <|
+type impl_mem_state = <|
   (* this is read-only *)
   flags: list memory_flag;
   
@@ -68,7 +68,7 @@ type mem_state = <|
   suppl:    UniqueId.supply nat;
   
   (* the semantic stuff starts here *)
-  allocations:         map allocation_id (allocation * maybe mem_value);
+  allocations:         map allocation_id (allocation * maybe impl_mem_value);
   dead_allocations:    set allocation_id;
   addresses:           set address;
   constraints:         constraints;
@@ -86,7 +86,7 @@ let fake_pointer_value_eq (PV _ ptr_val_1 sh1) (PV _ ptr_val_2 sh2) =
     | _ ->
         error "DON'T USE Eq for pointer_value"
   end
-instance (Eq pointer_value)
+instance (Eq impl_pointer_value)
   let (=) = fake_pointer_value_eq
   let (<>) ptr_val1 ptr_val2 = not (fake_pointer_value_eq ptr_val1 ptr_val2)
 end
@@ -116,23 +116,23 @@ let rec fake_mem_value_eq mval1 mval2 =
 *)
 end
 
-instance (Eq mem_value)
+instance (Eq impl_mem_value)
   let (=) = fake_mem_value_eq
   let (<>) mval1 mval2 = not (fake_mem_value_eq mval1 mval2)
 end
 
 
 (* BEGIN string conversion functions ============================================================ *)
-instance (Show mem_value)
+instance (Show impl_mem_value)
   let show x = "WIP: show mem_value"
 end
 
-instance (Show pointer_value)
+instance (Show impl_pointer_value)
   let show x = "WIP: show pointer_value"
 end
 
-val stringFromPointer_value: pointer_value -> string
-val stringFromMem_value: mem_value -> string
+val stringFromPointer_value: impl_pointer_value -> string
+val stringFromMem_value: impl_mem_value -> string
 val stringFromShift_path: shift_path -> string (* DEBUG *)
 
 declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
@@ -178,18 +178,20 @@ type memM 'a =
 
 
 
-type memM 'a =
-  | MemM of (mem_state -> list (either mem_error ('a * mem_state)))
+type impl_memM 'a =
+  | MemM of (impl_mem_state -> list (either mem_error ('a * impl_mem_state)))
 
 
 
-val return: forall 'a. 'a -> memM 'a
-let return x =
+val impl_return: forall 'a. 'a -> impl_memM 'a
+let impl_return x =
   MemM (fun st -> [Right (x, st)])
 
+let inline return = impl_return (* TODO: ... *)
 
-val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
-let bind (MemM m) f =
+
+val impl_bind: forall 'a 'b. impl_memM 'a -> ('a -> impl_memM 'b) -> impl_memM 'b
+let impl_bind (MemM m) f =
   MemM (
     fun st ->
       concatMap (
@@ -204,15 +206,15 @@ let bind (MemM m) f =
     concatMap (either (fun z -> [Left z]) (fun (z, st') -> f z st')) (m st)
 *)
 
-let inline (>>=)      = bind
-let inline (>>) m1 m2 = bind m1 (fun _ -> m2)
+let inline (>>=)      = impl_bind
+let inline (>>) m1 m2 = impl_bind m1 (fun _ -> m2)
 
 let inline (<$>) f m =
   m >>= return -| f
 
 
 (* TODO: debug *)
-val wip: forall 'a. string -> memM 'a (* DEBUG *)
+val wip: forall 'a. string -> impl_memM 'a (* DEBUG *)
 let wip str =                         (* DEBUG *)
   MemM (                              (* DEBUG *)
     fun _ ->                          (* DEBUG *)
@@ -220,23 +222,23 @@ let wip str =                         (* DEBUG *)
   )                                   (* DEBUG *)
 
 
-val fail: forall 'a. mem_error -> memM 'a
+val fail: forall 'a. mem_error -> impl_memM 'a
 let fail err =
   MemM (fun st -> [Left err])
 
 
-val get: memM mem_state
+val get: impl_memM impl_mem_state
 let get =
   MemM (fun st -> [Right (st, st)])
 
-val put: mem_state -> memM unit
+val put: impl_mem_state -> impl_memM unit
 let put st =
   MemM (fun _ -> [Right ((), st)])
 
 
 
 
-val fresh_address: Symbol.prefix -> memM address
+val fresh_address: Symbol.prefix -> impl_memM address
 let fresh_address pref =
   get >>= fun mem_st ->
   let (n, suppl') = UniqueId.fresh_id mem_st.suppl in
@@ -248,7 +250,7 @@ let fresh_address pref =
   return addr
 
 
-val fresh_allocation_id: memM allocation_id
+val fresh_allocation_id: impl_memM allocation_id
 let fresh_allocation_id =
   get >>= fun mem_st ->
   let (id, suppl') = UniqueId.fresh_id mem_st.allocation_id_suppl in
@@ -256,7 +258,7 @@ let fresh_allocation_id =
   return id
 
 
-val register_allocation: allocation_id -> (allocation * maybe mem_value) -> memM unit
+val register_allocation: allocation_id -> (allocation * maybe impl_mem_value) -> impl_memM unit
 let register_allocation alloc_id alloc_mval_opt =
   get >>= fun mem_st ->
   put <| mem_st with allocations=
@@ -264,12 +266,12 @@ let register_allocation alloc_id alloc_mval_opt =
   |>
 
 
-val allocation_is_dead: allocation_id -> memM bool
+val allocation_is_dead: allocation_id -> impl_memM bool
 let allocation_is_dead alloc_id =
   get >>= fun mem_st ->
   return (alloc_id IN mem_st.dead_allocations)
 
-val resolve_allocation: allocation_id -> memM (allocation * maybe mem_value)
+val resolve_allocation: allocation_id -> impl_memM (allocation * maybe impl_mem_value)
 let resolve_allocation alloc_id =
   get >>= fun mem_st ->
   maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
@@ -277,7 +279,7 @@ let resolve_allocation alloc_id =
 
 (* END effect =================================================================================== *)
 
-val mzero: forall 'a. memM 'a
+val mzero: forall 'a. impl_memM 'a
 let mzero =
   MemM (fun st -> [])
 
@@ -496,8 +498,8 @@ let eval_integer_value_base ival_ =
   either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base true ival_)
 
 
-val eval_integer_value: integer_value -> maybe integer
-let eval_integer_value (IV _ ival_) =
+val impl_eval_integer_value: impl_integer_value -> maybe integer
+let impl_eval_integer_value (IV _ ival_) =
   eval_integer_value_base ival_
 
 (*
@@ -552,7 +554,7 @@ end
 *)
 
 
-val ifFlag: forall 'a. memory_flag -> memM 'a -> memM 'a -> memM 'a
+val ifFlag: forall 'a. memory_flag -> impl_memM 'a -> impl_memM 'a -> impl_memM 'a
 let ifFlag flag (MemM m_then) (MemM m_else) =
   MemM (fun mem_st ->
     (if List.elem flag mem_st.flags then m_then else m_else) mem_st
@@ -561,7 +563,7 @@ let ifFlag flag (MemM m_then) (MemM m_else) =
 
 
 
-val ifM: forall 'a. mem_constraint -> memM 'a -> memM 'a -> memM 'a
+val ifM: forall 'a. mem_constraint -> impl_memM 'a -> impl_memM 'a -> impl_memM 'a
 let ifM constr (MemM m_then) (MemM m_else) =
   match constr with
     | MC_eqIV debug_str ival_1 ival_2 ->
@@ -601,7 +603,7 @@ let ifM constr (MemM m_then) (MemM m_else) =
 
 
 
-val condM: mem_constraint -> memM bool
+val condM: mem_constraint -> impl_memM bool
 let condM constr =
   ifM constr (return true) (return false)
 
@@ -635,7 +637,7 @@ let condM constr =
 
 (* ============================================================================================== *)
 
-val print_debugM: nat -> string -> memM unit
+val print_debugM: nat -> string -> impl_memM unit
 let print_debugM n str =
   MemM (fun st ->
     let _ = Debug.print_debug n str in
@@ -644,7 +646,7 @@ let print_debugM n str =
 
 
 
-val debug_check: string -> bool -> memM unit
+val debug_check: string -> bool -> impl_memM unit
 let debug_check str = function
   | true ->
       return ()
@@ -717,7 +719,7 @@ let prov_union prov1 prov2 =
 
 
 (* Wellformedness predicates (following the comments in the definitions of the related types). *)
-val wf_pointer_value: pointer_value -> bool
+val wf_pointer_value: impl_pointer_value -> bool
 let wf_pointer_value = function
   | PV Prov_none (PVnull _) _ ->
       true
@@ -732,14 +734,14 @@ end
 
 
 (* Returns whether a given allocation has reached the end of its lifetime *)
-val is_dead: allocation_id -> memM bool
+val is_dead: allocation_id -> impl_memM bool
 let is_dead alloc_id =
   get >>= fun mem_st ->
   return (Set.member alloc_id mem_st.dead_allocations)
 
 
 (* TODO: why is that effectfull? *)
-val     explicitAllocationIdFromPointer_value_aux: pointer_value_base -> memM (maybe allocation_id)
+val     explicitAllocationIdFromPointer_value_aux: pointer_value_base -> impl_memM (maybe allocation_id)
 let rec explicitAllocationIdFromPointer_value_aux ptr_val_ =
   match ptr_val_ with
     | PVnull _ ->
@@ -828,7 +830,7 @@ let integer_value_baseFromShift_path sh =
 
 
 
-let prettyStringFromMem_value mval =
+let impl_prettyStringFromMem_value mval =
   error "WIP: prettyStringFromMem_value"
 
 
@@ -837,7 +839,7 @@ let prettyStringFromMem_value mval =
 type memM 'a =
   mem_state -> list (list Symbolic.symbolic * either mem_error ('a * mem_state))
 *)
-let runMem (MemM m) st =
+let impl_runMem (MemM m) st =
   let xs = m st in
   if List.null xs then
     error "runMem: empty"
@@ -845,7 +847,7 @@ let runMem (MemM m) st =
     xs
 
 
-let initial_mem_state = <|
+let impl_initial_mem_state = <|
   flags= [];
   allocation_id_suppl= UniqueId.new_supply;
   suppl= UniqueId.new_supply;
@@ -877,7 +879,7 @@ let rec get_allocation_id ptr_val_ =
 
 
 (* Make a given address disjoint to all other existing address *)
-val register_distinctness_constraints: address -> memM unit
+val register_distinctness_constraints: address -> impl_memM unit
 let register_distinctness_constraints addr =
   get >>= fun mem_st ->
   put <| mem_st with
@@ -892,7 +894,7 @@ let register_distinctness_constraints addr =
 
 
 
-val     mkUnspec: ctype -> mem_value
+val     mkUnspec: ctype -> impl_mem_value
 let rec mkUnspec ty =
   match ty with
     | Basic (AilTypes.Integer ity) ->
@@ -910,13 +912,16 @@ let rec mkUnspec ty =
     | Struct tag ->
         MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec ty)) (get_membersDefs tag)
 (*
-    | (Union _ as ty) ->
-        MVunspecified ty
+    | (Union tag as ty) ->
+        let () = Debug.warn "mkUnspec, Union ==> this is wrong" in
+        MVunion  ty
+*)
+(*
     | (Builtin _ as ty) ->
         MVunspecified ty
 *)
     | _ ->
-        error "Mem.mkUnspec: invalid type"
+        error ("Mem.mkUnspec: invalid type ==> " ^ stringFromCtype ty)
   end
 
 
@@ -996,7 +1001,7 @@ let update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_) mval') mval =
 
 
 
-let allocate_static tid pref align_ival ty =
+let impl_allocate_static tid pref align_ival ty =
   (* the allocated object is given a new address (distinct from all other
      existing addresses) *)
   fresh_address pref >>= fun addr ->
@@ -1011,7 +1016,7 @@ let allocate_static tid pref align_ival ty =
   return ptr_val
 
 
-let allocate_dynamic tid pref align_ival (IV _ size_ival) =
+let impl_allocate_dynamic tid pref align_ival (IV _ size_ival) =
   (* TODO *)
   fresh_address pref >>= fun addr ->
   register_distinctness_constraints addr >>
@@ -1025,7 +1030,7 @@ let allocate_dynamic tid pref align_ival (IV _ size_ival) =
   )
 
 
-let kill (PV _ ptr_val_ sh as ptr_val) =
+let impl_kill (PV _ ptr_val_ sh as ptr_val) =
   print_debugM 5 ("KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
@@ -1089,7 +1094,7 @@ and structural_equality_integer_value_base _ _ =
 
 
 
-val is_affecting: write_event -> ctype -> pointer_value -> memM bool
+val is_affecting: write_event -> ctype -> impl_pointer_value -> impl_memM bool
 let is_affection (WriteEvent w_ty w_ptr_val mval) r_ty r_ptr_val =
 (*
   get_allocation_id r_ptr_val >>= fun r_alloc_id_opt ->
@@ -1140,7 +1145,7 @@ let find_allocation_id (PV
 
 
 
-val     fetch_first_write_event: (write_event -> bool) -> memM (maybe write_event)
+val     fetch_first_write_event: (write_event -> bool) -> impl_memM (maybe write_event)
 let rec fetch_first_write_event_aux pred = function
   | [] ->
       Nothing
@@ -1177,7 +1182,7 @@ let try_to_dereference (PV prov ptr_val_ sh) =
 
 
 
-val apply_shift_path_element: ctype -> shift_path_element -> mem_value -> mem_value
+val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_mem_value
 let apply_shift_path_element ty spe mval =
 (* TODO: use ty *)
   match (spe, mval) with
@@ -1221,7 +1226,7 @@ let apply_shift_path ty sh mval =
 
 
 
-val addToLog: allocation_id -> memM unit
+val addToLog: allocation_id -> impl_memM unit
 let addToLog alloc_id =
   let () = Debug.print_debug 1 ("addToLog: " ^ show alloc_id) in
   get >>= fun mem_st ->
@@ -1230,8 +1235,8 @@ let addToLog alloc_id =
   else
     put <| mem_st with access_log= alloc_id :: mem_st.access_log |>
 
-val sequencePoint: memM unit
-let sequencePoint =
+val impl_sequencePoint: impl_memM unit
+let impl_sequencePoint =
   get >>= fun mem_st ->
   put <| mem_st with access_log= [] |>
 
@@ -1245,7 +1250,7 @@ let sequencePoint =
 
 
 
-let load ty (PV _ ptr_val_ sh as ptr_val) : memM (footprint * mem_value) =
+let impl_load ty (PV _ ptr_val_ sh as ptr_val) : impl_memM (impl_footprint * impl_mem_value) =
   print_debugM 5 ("LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
@@ -1289,10 +1294,10 @@ let load ty (PV _ ptr_val_ sh as ptr_val) : memM (footprint * mem_value) =
 
 
 
-let null_ptrval ty =
+let impl_null_ptrval ty =
   PV Prov_none (PVnull ty) []
 
-let fun_ptrval sym =
+let impl_fun_ptrval sym =
   PV Prov_none (PVfunction sym) []
 
 
@@ -1318,7 +1323,7 @@ let insert_element_to_path sh spe2 =
         [spe2]
   end
 
-let internal_shift_ptrval ptr_val spe : pointer_value =
+let internal_shift_ptrval ptr_val spe : impl_pointer_value =
   match ptr_val with
 (*
     | PV Prov_none _ ->
@@ -1335,48 +1340,48 @@ let internal_shift_ptrval ptr_val spe : pointer_value =
   end
 
 
-let array_shift_ptrval ptr_val ty (IV _ ival_) =
+let impl_array_shift_ptrval ptr_val ty (IV _ ival_) =
   let () = Debug.print_debug 5 ("Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
   internal_shift_ptrval ptr_val (SPE_array ty ival_)
 
-let member_shift_ptrval ptr_val tag_sym memb_ident =
+let impl_member_shift_ptrval ptr_val tag_sym memb_ident =
   internal_shift_ptrval ptr_val (SPE_member tag_sym memb_ident)
 
 
 
 
 
-let concurRead_ival ity sym =
+let impl_concurRead_ival ity sym =
   IV Prov_none (IVconcurRead ity sym)
 
-let integer_ival n =
+let impl_integer_ival n =
   IV Prov_none (IVconcrete n)
 
-let max_ival ity =
+let impl_max_ival ity =
   IV Prov_none (IVmax ity)
 
-let min_ival ity =
+let impl_min_ival ity =
   IV Prov_none (IVmin ity)
 
 
 
 
 
-let op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
+let impl_op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
   IV (prov_union prov1 prov2) (mk_op_ival_ iop ival_1 ival_2)
 
 
-let offsetof_ival tag_sym membr_ident =
+let impl_offsetof_ival tag_sym membr_ident =
   IV Prov_none (IVoffsetof tag_sym membr_ident)
 
 
-let sizeof_ival ty =
+let impl_sizeof_ival ty =
   IV Prov_none (IVsizeof ty)
-let alignof_ival ty =
+let impl_alignof_ival ty =
   IV Prov_none (IValignof ty)
 
 
-let case_integer_value (IV _ ival) fint fother =
+let impl_case_integer_value (IV _ ival) fint fother =
   match ival with
     | IVconcrete n ->
         fint n
@@ -1384,7 +1389,7 @@ let case_integer_value (IV _ ival) fint fother =
         fother ()
   end
 
-let is_specified_ival (IV _ ival) =
+let impl_is_specified_ival (IV _ ival) =
   match ival with
     | IVunspecified ->
         false
@@ -1403,37 +1408,37 @@ let symbolic_mval symb =
   MVsymbolic symb
 *)
 
-let unspecified_mval ty =
+let impl_unspecified_mval ty =
   mkUnspec ty
 
-let integer_value_mval ity ival =
+let impl_integer_value_mval ity ival =
   MVinteger ity ival
 
-let floating_value_mval fty fval =
+let impl_floating_value_mval fty fval =
   MVfloating fty fval
 
-let pointer_mval ref_ty ptr_val =
+let impl_pointer_mval ref_ty ptr_val =
   MVpointer ref_ty ptr_val
 
-let array_mval = function
+let impl_array_mval = function
   | [] ->
       error "Defacto_memory.array_mval, given an empty list"
   | mvals ->
       MVarray mvals
 end
 
-let struct_mval tag_sym xs =
+let impl_struct_mval tag_sym xs =
   if List.null xs then
     error "Defacto_memory.struct_mval, given an empty list of member values"
   else
     MVstruct tag_sym xs
 
-let union_mval tag_sym memb_ident mval =
+let impl_union_mval tag_sym memb_ident mval =
   MVunion tag_sym memb_ident mval
 
 
 (* Memory value destructor *)
-let case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct funion =
+let impl_case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct funion =
   match mval with
     | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
         funspec (Pointer AilTypes.no_qualifiers ref_ty)
@@ -1459,7 +1464,7 @@ let case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct fun
         funion tag_sym memb_ident mval
   end
 
-let case_fval fval funspec fconcrete =
+let impl_case_fval fval funspec fconcrete =
   match fval with
     | FVunspecified ->
         funspec ()
@@ -1467,12 +1472,12 @@ let case_fval fval funspec fconcrete =
         fconcrete str
   end
 
-val zero_fval: floating_value
-let zero_fval =
+val impl_zero_fval: impl_floating_value
+let impl_zero_fval =
   FVconcrete "0"
 
-val str_fval: string -> floating_value
-let str_fval str = FVconcrete str
+val impl_str_fval: string -> impl_floating_value
+let impl_str_fval str = FVconcrete str
 
 
 val address_of: allocation -> address
@@ -1492,7 +1497,7 @@ let isEmptyShift = function
       false
 end
 
-val     isBeginningShift: shift_path -> memM bool
+val     isBeginningShift: shift_path -> impl_memM bool
 let rec isBeginningShift sh =
   match sh with
     | [] ->
@@ -1513,7 +1518,7 @@ let rec isBeginningShift sh =
 
 
 
-val is_one_past_pointer: pointer_value -> memM bool
+val is_one_past_pointer: impl_pointer_value -> impl_memM bool
 let is_one_past_pointer (PV _ ptr_val_ sh) =
   match ptr_val_ with
     | PVnull _ ->
@@ -1539,7 +1544,7 @@ let is_one_past_pointer (PV _ ptr_val_ sh) =
         end
   end
 
-val address_expression_of_pointer: pointer_value -> memM integer_value_base
+val address_expression_of_pointer: impl_pointer_value -> impl_memM integer_value_base
 let address_expression_of_pointer (PV _ ptr_val_ sh) =
   match ptr_val_ with
     | PVnull _ ->
@@ -1594,7 +1599,7 @@ let rec integerTypes_of_ival ival =
 
 
 (* WIP *)
-let eq_ptrval eqs ptr_val1 ptr_val2 =
+let impl_eq_ptrval ptr_val1 ptr_val2 =
   print_debugM 6 ("Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
                   stringFromPointer_value ptr_val2) >>
   match (ptr_val1, ptr_val2) with
@@ -1688,7 +1693,7 @@ let rec silly_sh_eq sh1 sh2 =
   end
 
 (* TODO: more .... *)
-let ne_ptrval eqs (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
+let impl_ne_ptrval (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
   match (ptr_val_1, ptr_val_2) with
   | (PVnull _, PVnull _)->
       return false
@@ -1714,18 +1719,20 @@ let ne_ptrval eqs (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as
 
 
 
-let lt_ptrval eqs ptrval1 ptrval2 =
+let impl_lt_ptrval ptrval1 ptrval2 =
   error ("WIP: lt_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
-let gt_ptrval eqs ptrval1 ptrval2 =
+let impl_gt_ptrval ptrval1 ptrval2 =
   error ("WIP: gt_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
-let le_ptrval eqs ptrval1 ptrval2 =
+let impl_le_ptrval ptrval1 ptrval2 =
   error ("WIP: le_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
-let ge_ptrval eqs ptrval1 ptrval2 =
+
+let impl_ge_ptrval ptrval1 ptrval2 (* (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2)*) =
+(* integer_value_baseFromShift_path *)
   error ("WIP: ge_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
 
 
 
-let diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : integer_value =
+let impl_diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : impl_integer_value =
   (* STD says "When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object" *)
   (* TODO: too permissive for now *)
   let prov = match (prov1, prov2) with
@@ -1764,14 +1771,14 @@ let diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : integer_valu
 
     
 (* TODO: looks too simple to be true *)
-let intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
+let impl_intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
   return (
     IV Prov_none (
       mk_op_ival_ IntAdd (IVfromptr ref_ty ptr_val_) (integer_value_baseFromShift_path sh)
     )
   )
 
-let validForDeref_ptrval ptr_val =
+let impl_validForDeref_ptrval ptr_val =
   true (* error "WIP: validForDeref_ptrval" *)
 
 
@@ -1839,7 +1846,7 @@ end
 
 
 
-let rec eq_ival mem_st eqs (IV prov1 ival_1) (IV prov2 ival_2) =
+let rec impl_eq_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
   let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
   let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
   match (ival_1', ival_2') with
@@ -1873,14 +1880,15 @@ let rec eq_ival mem_st eqs (IV prov1 ival_1) (IV prov2 ival_2) =
         if ref_ty1 <> ref_ty2 then
           Just false
         (* TODO: check the provs *)
-        else match eq_ival mem_st eqs (IV prov1 ival_1') (IV prov2 ival_2') with
+        else match impl_eq_ival mem_st_opt (IV prov1 ival_1') (IV prov2 ival_2') with
           | Just true ->
-              match runMem (eq_ptrval eqs ptr_val1 ptr_val2) mem_st with
-                | [Right (b, _)] ->
-                    Just b
-                | _ ->
+              maybe Nothing (fun mem_st ->
+                match impl_runMem (impl_eq_ptrval ptr_val1 ptr_val2) mem_st with
+                  | [Right (b, _)] ->
+                      Just b
+                  | _ ->
                     Nothing
-              end
+                end) mem_st_opt
           | Just false ->
               Just false
           | Nothing ->
@@ -1902,7 +1910,7 @@ let rec eq_ival mem_st eqs (IV prov1 ival_1) (IV prov2 ival_2) =
 
 
 
-let lt_ival eqs (IV prov1 ival_1) (IV prov2 ival_2) =
+let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
   let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
   let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
   match (ival_1', ival_2') with
@@ -2004,8 +2012,8 @@ let rec has_concurRead ival_ =
   end
 
 
-let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
-  match lt_ival eqs ival1 ival2 with
+let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
+  match impl_lt_ival mem_st_opt ival1 ival2 with
     | Just true ->
         Just true
     | _ ->
@@ -2176,7 +2184,7 @@ let le_ival eqs (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 
 (* Converting an integer value into a pointer value *)
-let ptrcast_ival int_ty ref_ty (IV prov ival) =
+let impl_ptrcast_ival int_ty ref_ty (IV prov ival) =
   (* TODO: check the types *)
   match ival with
     | IVfromptr ty ptrval_ ->
@@ -2185,7 +2193,7 @@ let ptrcast_ival int_ty ref_ty (IV prov ival) =
     | _ ->
         ifM (MC_eqIV "ptrcasl_ival, null pointer" ival (IVconcrete 0))
           (* if the integer value is zero, then we make a null pointer (see Q28 in notes30) *)
-          (return (null_ptrval ref_ty))
+          (return (impl_null_ptrval ref_ty))
           
           (* otherwise we produce a runtime error (check with P) *)
           (fail (MerrWIP "tried to cast to a pointer type an integer value non-equal to zero"))
@@ -2208,7 +2216,7 @@ let ptrcast_ival int_ty ref_ty (IV prov ival) =
 
 
 (* Decide whether a given pointer value can be use to perform a store *)
-val can_store: pointer_value -> memM (maybe allocation_id)
+val can_store: impl_pointer_value -> impl_memM (maybe allocation_id)
 let can_store (PV prov ptr_val_ sh) =
   match ptr_val_ with
     (* null and function pointers obviously can't be used for stores. *)
@@ -2278,7 +2286,7 @@ let can_store (PV prov ptr_val_ sh) =
 
 (* TODO: bug HOL -- "failure in internal translation to tupled format" *)
 (* TODO: with temporary simplification *)
-val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> mem_value -> mem_value -> mem_value
+val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
 let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
   let () = Debug.print_debug 1 ("ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
   let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
@@ -2331,7 +2339,7 @@ declare hol target_rep function easy_update_mem_value_aux =
                                 `tags$easy_update_mem_value_aux`
 
 
-val easy_update_mem_value: bool -> write_event -> mem_value -> mem_value
+val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_mem_value
 let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
   (*DEBUG*)let () = Debug.print_debug 2 ("easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
   easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval
@@ -2339,7 +2347,7 @@ let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as
 
 
 (* update the memory state with a write event for a given allocation id *)
-val register_write_event: allocation_id -> write_event -> memM unit
+val register_write_event: allocation_id -> write_event -> impl_memM unit
 let register_write_event alloc_id (WriteEvent _ _ mval as w) =
   (*DEBUG*)print_debugM 5 ("REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
   get >>= fun st ->
@@ -2369,8 +2377,8 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
 
 
 
-(* val store: ctype -> pointer_value -> mem_value -> memM unit *)
-let store lvalue_ty ptr_val mval =
+(* val store: ctype -> impl_pointer_value -> mem_value -> memM unit *)
+let impl_store lvalue_ty ptr_val mval =
   (*DEBUG*)print_debugM 5 ("STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
   (*DEBUG*)                stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval) >>
   can_store ptr_val >>= function
@@ -2385,24 +2393,24 @@ let store lvalue_ty ptr_val mval =
 
 
 (* TODO: move this up *)
-type mem_constraint2 =
-  | MC_eq_ival of integer_value * integer_value
-  | MC_ne_ival of integer_value * integer_value
-  | MC_lt_ival of integer_value * integer_value
-  | MC_le_ival of integer_value * integer_value
+type impl_mem_constraint2 =
+  | MC_eq_ival of impl_integer_value * impl_integer_value
+  | MC_ne_ival of impl_integer_value * impl_integer_value
+  | MC_lt_ival of impl_integer_value * impl_integer_value
+  | MC_le_ival of impl_integer_value * impl_integer_value
 
-val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
-let constraint_eqIV ival1 ival2 =
+val impl_constraint_eqIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
+let impl_constraint_eqIV ival1 ival2 =
   MC_eq_ival ival1 ival2
 
-val constraint_neIV: integer_value -> integer_value -> mem_constraint2
-let constraint_neIV ival1 ival2 =
+val impl_constraint_neIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
+let impl_constraint_neIV ival1 ival2 =
   MC_ne_ival ival1 ival2
 
-val constraint_ltIV: integer_value -> integer_value -> mem_constraint2
-let constraint_ltIV ival1 ival2 =
+val impl_constraint_ltIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
+let impl_constraint_ltIV ival1 ival2 =
   MC_lt_ival ival1 ival2
 
-val constraint_leIV: integer_value -> integer_value -> mem_constraint2
-let constraint_leIV ival1 ival2 =
+val impl_constraint_leIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
+let impl_constraint_leIV ival1 ival2 =
   MC_le_ival ival1 ival2

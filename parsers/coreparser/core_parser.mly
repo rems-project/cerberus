@@ -1095,7 +1095,7 @@ value:
   | Vunspecified of ctype
 *)
 | n= INT_CONST
-    { Vobject (OVinteger (Mem.integer_ival0 n)) }
+    { Vobject (OVinteger (Mem.integer_ival n)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
 | UNIT_VALUE
@@ -1142,7 +1142,7 @@ pexpr:
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ((), PEnot _pe) }
 | MINUS _pe= pexpr
-    { Pexpr ((), PEop (OpSub, Pexpr ((), PEval (Vobject (OVinteger (Mem.integer_ival0 (Nat_big_num.of_int 0))))), _pe)) }
+    { Pexpr ((), PEop (OpSub, Pexpr ((), PEval (Vobject (OVinteger (Mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ((), PEop (bop, _pe1, _pe2)) }
 (*
