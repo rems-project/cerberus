@@ -299,7 +299,7 @@ let rec pp_ctype_raw = function
   | Atomic ty ->
       !^ "Atomic" ^^ P.brackets (pp_ctype_raw ty)
   | Struct sym ->
-      !^ "Struct" ^^ pp_id sym
+      !^ "Struct" ^^^ pp_id sym
 (*
       !^ "Struct" ^^ P.brackets (
         pp_id sym ^^ P.comma ^^^
@@ -307,7 +307,7 @@ let rec pp_ctype_raw = function
       )
 *)
   | Union sym ->
-      !^ "Union" ^^ pp_id sym
+      !^ "Union" ^^^ pp_id sym
 (*
       !^ "Union" ^^ P.brackets (
         pp_id sym ^^ P.comma ^^^
@@ -627,7 +627,11 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEarray (ty, e_opts) ->
             P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
         | AilEstruct (tag_sym, xs) ->
-            P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
+            P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
+        | AilEunion (tag_sym, memb_ident, e_opt) ->
+            P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
+              P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
+            )
         | AilEcompound (ty, e) ->
             P.parens (pp_ctype ty) ^^ P.braces (pp e)
         | AilEbuiltin str ->

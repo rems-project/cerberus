@@ -471,9 +471,11 @@ let rec pp_expr expr =
       | Eunseq es ->
           pp_control "unseq" ^^ P.parens (comma_list pp es)
       | Ewseq (pat, e1, e2) ->
-          pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
-          pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
-          (* P.nest 2 *) (pp e2)
+          P.align (
+            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
+            pp e1 ^^^ pp_control "in" ^^ P.break 1 ^^
+            (* P.nest 2 *) (pp e2)
+          )
       | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
           (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
       | Esseq (pat, e1, e2) -> 

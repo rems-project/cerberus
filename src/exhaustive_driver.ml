@@ -6,7 +6,7 @@ open Pp_run
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
-let (>>=) = SEU.bind9
+let (>>=) = SEU.bind8
 
 let isActive = function
   | (ND.Active _, _) ->
@@ -35,7 +35,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
               match pe with
               | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
                       Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
+                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival n))) ))
                   | _ ->
                       pe
               end in
@@ -125,7 +125,7 @@ end
                 match pe with
                   | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
                       Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival0 n))) ))
+                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival n))) ))
                   | _ ->
                       pe
               end in

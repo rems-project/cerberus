@@ -1162,176 +1162,80 @@ let rec desugar_type_specifiers specs =
           | [] ->
               STD_ "§6.7.2#2, sentence 1"
                 E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
-  
-  | [TSpec_void] ->
-STD_ "§6.7.2#2, sentence 2 (`void' case)"
-      E.return (ATypes.no_qualifiers, ATypes.Void)
-  
-  | [TSpec_struct Nothing Nothing] ->
-      error "WIP: TSpec_struct Nothing, Nothing"
-  
-  | [TSpec_struct tag_ident_opt sdecls_opt] ->
-      (* §6.7.2.3#7 *)
-      E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
-      
-      match sdecls_opt with
-        | Just sdecls ->
-            E.mapM desugar_struct_declaration sdecls >>= fun xs ->
-            (* TODO: hum, a bit silly here *)
-            (* TODO: not silly ==> catch redefinitions *)
-            E.register_tag_definition Loc.unknown tag_sym (E.Struct_definition $ List.concat xs) >>
-            E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
-(*
-            E.resolve_tag_definition tag_sym >>= function
-              | E.Struct_definition xs ->
-                  (* TODO: qs? *)
-                  E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym xs)
-              | _ ->
-                  error "desugar_type_specifiers: expecting a Struct_declarations"
-            end
-*)
-
-        | Nothing ->
-            (* TODO: bogus? *)
-            E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
-      end
-  
-  
-  | [TSpec_union tag_ident_opt sdecls_opt] ->
-      (* §6.7.2.3#7 *)
-      E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
-      
-      match sdecls_opt with
-        | Just sdecls ->
-            E.mapM desugar_struct_declaration sdecls >>= fun xs ->
-            (* TODO: hum, a bit silly here *)
-            (* TODO: not silly ==> catch redefinitions *)
-            E.register_tag_definition Loc.unknown tag_sym (E.Union_definition $ List.concat xs) >>
-            E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-        | Nothing ->
-            (* TODO: bogus? *)
-            E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-      end
-
-
-  
-(*
-      (* NOTE: in this case the struct type has already been declared *)
-      E.resolve_identifier ident E.Namespace_tag >>= function
-        | Just (_, (tag_sym, E.Kind_tag members, _)) ->
-            E.return (ATypes.Struct tag_sym members)
-        | Nothing ->
-            E.fail Loc.unknown (Errors.Desugar_OtherViolation "Couldn't resolve a struct identifier") (* TODO: check if this id the proper quote *)
-      end
-*)
-
-
-
-(*
-  | [TSpec_struct Nothing (Just sdecls)] ->
-      (* §6.7.3.2#5, sentence 2 *)
-      E.foldrM (fun z acc ->
-        desugar_struct_declaration z >>= fun xs ->
-        E.return (xs ++ acc)
-      ) sdecls []    >>= fun members ->
-      E.fresh_symbol >>= fun tag_sym ->
-      E.register_tag_declaration tag_sym (E.Struct_declaration members) >>
-      E.return (ATypes.Struct tag_sym members)
-
-  | [TSpec_struct ident_opt (Just sdecls)] ->
-      (* TODO: check std *)
-      E.foldrM (fun z acc ->
-        desugar_struct_declaration z >>= fun xs ->
-        E.return (xs ++ acc)
-      ) sdecls [] >>= fun members ->
-      maybe (E.register_unamed) (fun ident ->
-        E.register_identifier ident E.Namespace_tag (E.Kind_tag members) [(* TODO: check *)]
-      ) ident_opt >>= fun tag_sym ->
-      E.return (ATypes.Struct tag_sym members)
-*)
-
-
-(*
- | Struct of list (identifier * ctype) (* TODO: no bitfields for now *)
-*)
-
-(*
-TSpec_struct of maybe cabs_identifier * maybe (list struct_declaration)
-
-
-and struct_declaration =
-  | Struct_declaration of list cabs_type_specifier * list cabs_type_qualifier * list struct_declarator
-  | Struct_assert      of static_assert_declaration
-
-
-*)
-  
-  
-  | [TSpec_Atomic tyname] ->
-      desugar_type_name tyname >>= fun (qs, ty) ->
-      (* STD §6.7.2.4#3, the type name shall not refer to a qualified type *)
-      if not (AilTypesAux.is_unqualified qs) then
-        E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.4#3, qualified type")
-      else
-        (* TODO: qualifiers *)
-        E.return (qs, ATypes.Atomic ty)
-
-  (* TODO: partial *)
-  | [TSpec_enum (Just ident) enums_opt] ->
-      E.register_identifier ident E.Namespace_tag E.Kind_tag [] >>= fun (_, sym) ->
-      let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum sym)) in
-      maybe (E.return ()) (register_simple_enumerators ty) enums_opt >>
-      E.return (ATypes.no_qualifiers, ty)
-
-
-(*  WIP
-
-  
-  | [TSpec_Atomic tyname] -> do E
-      (qs, ty) <- desugar_type_name tyname; in
-        E.return (ATypes.Atomic ty)
-      end
-
-  | [TSpec_struct id_opt sdecls_opt] ->
-      error "TODO"
-  
-  | [TSpec_union id_opt sdecls_opt] ->
-      error "TODO"
-  
-  | [TSpec_enum id_opt enums_opt] ->
-      error "TODO"
-  
-    (* TODO: this break impl-def independance *)
-  | [TSpec_name str] ->
-      match Builtins.translate_builtin_typenames str with
-        | Just ty ->
-            E.return ty
-        | Nothing ->
-            (* TODO [tmp hack] removing the qualifiers *)
-            E.get_typedef str >>= fun (qs, ty) ->
-            E.return ty
-      end
-*)  
-  
-  (* *)
-  | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
-      E.print_debug 2 ("Cabs_to_ail, TSpec_name ==> " ^ str) >>
-      match Builtins.translate_builtin_typenames str with
-        | Just ty ->
-            E.return (ATypes.no_qualifiers, ty)
-        | Nothing ->
-            (* TODO: check the namespace *)
-            E.resolve_identifier ident E.Namespace_ordinary >>= function
-              | Just (_, (sym, E.Kind_typedef, _)) ->
-                  E.resolve_typedef sym >>= fun (qs, ty) ->
-                  E.return (qs, ty)
-              | _ ->
-                  E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case 1115")
-            end
-      end
-  | _ ->
-      E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
-end
+          
+          | [TSpec_void] ->
+              STD_ "§6.7.2#2, sentence 2 (`void' case)"
+                E.return (ATypes.no_qualifiers, ATypes.Void)
+          
+          | [TSpec_struct Nothing Nothing] ->
+              error "WIP: TSpec_struct Nothing, Nothing"
+          
+          | [TSpec_struct tag_ident_opt sdecls_opt] ->
+              (* §6.7.2.3#7 *)
+              E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
+              match sdecls_opt with
+                | Just sdecls ->
+                    E.mapM desugar_struct_declaration sdecls >>= fun xs ->
+                    (* TODO: hum, a bit silly here *)
+                    (* TODO: not silly ==> catch redefinitions *)
+                    E.register_tag_definition Loc.unknown tag_sym (E.Struct_definition $ List.concat xs) >>
+                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+                | Nothing ->
+                    (* TODO: bogus? *)
+                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+              end
+          
+          | [TSpec_union tag_ident_opt sdecls_opt] ->
+              (* §6.7.2.3#7 *)
+              E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
+              match sdecls_opt with
+                | Just sdecls ->
+                    E.mapM desugar_struct_declaration sdecls >>= fun xs ->
+                    (* TODO: hum, a bit silly here *)
+                    (* TODO: not silly ==> catch redefinitions *)
+                    E.register_tag_definition Loc.unknown tag_sym (E.Union_definition $ List.concat xs) >>
+                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+                | Nothing ->
+                    (* TODO: bogus? *)
+                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+              end
+          
+          | [TSpec_Atomic tyname] ->
+              desugar_type_name tyname >>= fun (qs, ty) ->
+              (* STD §6.7.2.4#3, the type name shall not refer to a qualified type *)
+              if not (AilTypesAux.is_unqualified qs) then
+                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.4#3, qualified type")
+              else
+                (* TODO: qualifiers *)
+                E.return (qs, ATypes.Atomic ty)
+          
+          (* TODO: partial *)
+          | [TSpec_enum (Just ident) enums_opt] ->
+              E.register_identifier ident E.Namespace_tag E.Kind_tag [] >>= fun (_, sym) ->
+              let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum sym)) in
+              maybe (E.return ()) (register_simple_enumerators ty) enums_opt >>
+              E.return (ATypes.no_qualifiers, ty)
+          (* *)
+          | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
+              E.print_debug 2 ("Cabs_to_ail, TSpec_name ==> " ^ str) >>
+              match Builtins.translate_builtin_typenames str with
+                | Just ty ->
+                    E.return (ATypes.no_qualifiers, ty)
+                | Nothing ->
+                    (* TODO: check the namespace *)
+                    E.resolve_identifier ident E.Namespace_ordinary >>= function
+                      | Just (_, (sym, E.Kind_typedef, _)) ->
+                          E.resolve_typedef sym >>= fun (qs, ty) ->
+                          E.return (qs, ty)
+                      | _ ->
+                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case 1115")
+                    end
+              end
+          
+          | _ ->
+              let () = Debug.print_debug 0 (stringFromList Pp.stringFromCabs_type_specifier specs) in
+              E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
+        end
 end
 
 
@@ -2119,15 +2023,10 @@ and wip_desugar_initializer_ loc dur current_ty init =
                       AnnotatedExpression () Loc.unknown(* TODO *) (
                         AilEstruct tag (List.reverse xs_rev)
                       )
-
                   
                   else
                     (* TODO: crazy stuff we don't deal with yet *)
                     E.fail loc (Errors.Desugar_NotyetSupported "crazy struct initializers")
-                  
-
-
-
 (*
 val foldl : forall 'a 'b. ('a -> 'b -> 'a) -> 'a -> list 'b -> 'a (* originally foldl *)
 *)
@@ -2146,53 +2045,14 @@ and designator =
 
 
 *)
-
-
-
-
 (*
 WIP
-
-
                   E.foldlM (fun (desigs_opt, init) (i, acc) ->
                     match desigs_opt with
                       |
                     end
                   ) desigs_opt_inits (0, []) >>= fun _ ->
-
-
-
-
-
-
-
-
 *)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-              
-
 (*
 desigs_opt_inits
 
@@ -2203,16 +2063,6 @@ and designator =
   | Desig_member of cabs_identifier
 
 *)
-                  
-                  
-                  
-                  
-                  
-
-
-
-
-
               | _ ->
                   E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
             end
@@ -2231,10 +2081,48 @@ and designator =
 *)
 
         | ATypes.Union tag ->
-            (* TODO: check the STD!!!!! *)
+            (* TODO: check the STD, the following is mostly improvised... *)
             E.resolve_tag_definition tag >>= function
               | E.Union_definition ident_tys ->
+                  match desigs_opt_inits with
+                    | [(Nothing, init')] ->
+                        let (first_ident, first_ty) = match ident_tys with
+                          | (ident, ty) :: _ ->
+                              (ident, ty)
+                          | [] ->
+                              error "Cabs_to_ail.wip_desugar_initializer_ ==> empty Union_definition"
+                        end in
+                        wip_desugar_initializer_ loc dur first_ty init' >>= fun d_e ->
+                        E.return (
+                          AnnotatedExpression () loc (
+                            AilEunion tag first_ident (Just d_e)
+                          )
+                        )
+                    | [(Just [Desig_member memb_ident], init')] ->
+                        let memb_ty = match List.lookup memb_ident ident_tys with
+                          | Just ty ->
+                              ty
+                          | Nothing ->
+                              error "Cabs_to_ail.wip_desugar_initializer_ ==> Desig_member didn't match a Union_definition"
+                        end in
+                        wip_desugar_initializer_ loc dur memb_ty init' >>= fun d_e ->
+                        E.return (
+                          AnnotatedExpression () loc (
+                            AilEunion tag memb_ident (Just d_e)
+                          )
+                        )
+                  end
+
+
+(*
+list (maybe (list designator) * initializer_)
+*)
+
+(*
+                  let () = Debug.print_debug 0
+                      ("UNION INIT ==> " ^ stringFromList (stringFromPair show Pp.stringFromAil_ctype) ident_tys)in
                   E.fail loc (Errors.Desugar_OtherViolation "TODO union init")
+*)
 
               | _ ->
                   E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Union init thing")
