@@ -86,12 +86,12 @@ let print_name = function
 
 (* Printing types *)
 let rec print_core_object = function
- | OTy_integer    -> !^"M.integer_value0"
- | OTy_floating   -> !^"M.floating_value0"
- | OTy_pointer    -> !^"M.pointer_value0"
+ | OTy_integer    -> !^"M.integer_value"
+ | OTy_floating   -> !^"M.floating_value"
+ | OTy_pointer    -> !^"M.pointer_value"
  | OTy_cfunction (ret_oTy, naparams, isVariadic) ->
      (* TODO: K wip *)
-     !^"M.pointer_value0" (* cfunction is a pointer value? *)
+     !^"M.pointer_value" (* cfunction is a pointer value? *)
                        (*TODO: I am not sure about these: *)
  | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
  | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
@@ -138,23 +138,23 @@ let print_eff_function name pmrs ty body =
 (* TODO: all the binops case *)
 let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
   match binop with
-  | OpAdd -> !^"(M.op_ival0 M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpSub -> !^"(M.op_ival0 M.IntSub (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpMul -> !^"(M.op_ival0 M.IntMul (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpDiv -> !^"(M.op_ival0 M.IntDiv (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_t -> !^"(M.op_ival0 M.IntRem_t (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_f -> !^"(M.op_ival0 M.IntRem_f (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpExp -> !^"(M.op_ival0 M.IntExp (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpAdd -> !^"(M.op_ival M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpSub -> !^"(M.op_ival M.IntSub (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpMul -> !^"(M.op_ival M.IntMul (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpDiv -> !^"(M.op_ival M.IntDiv (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpRem_t -> !^"(M.op_ival M.IntRem_t (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpRem_f -> !^"(M.op_ival M.IntRem_f (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
+  | OpExp -> !^"(M.op_ival M.IntExp (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
   | OpEq  -> (
       match t1 with
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
         !^"A.eq" ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2)
-        (*!^"(O.get (M.eq_ival0 M.initial_mem_state0 Symbolic.Constraints_TODO  ("
+        (*!^"(O.get (M.eq_ival M.initial_mem_state0 Symbolic.Constraints_TODO  ("
           ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
-        !^"(M.eq_ptrval0 Symbolic.Constraints_TODO  (" ^^ pp pe1 ^^ !^") ("
+        !^"(M.eq_ptrval Symbolic.Constraints_TODO  (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^"))"
       | BTy_ctype ->
         !^"(C.ctypeEqual0 (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
@@ -166,11 +166,11 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       | BTy_loaded (OTy_integer) ->
         !^"A.lt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
         (*
-        !^"(O.get (M.lt_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        !^"(O.get (M.lt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.lt_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        !^"(O.get (M.lt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"
       | _ -> todo "binop lt"
     )
@@ -179,11 +179,11 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
         !^"A.le" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-       (* !^"(O.get (M.le_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+       (* !^"(O.get (M.le_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.le_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        !^"(O.get (M.le_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"
       | _ -> todo "binop lt"
     )
@@ -192,11 +192,11 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
         !^"A.gt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.gt_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        (*!^"(O.get (M.gt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.gt_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        !^"(O.get (M.gt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"
       | _ -> todo "binop gt"
     )
@@ -205,11 +205,11 @@ let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
       | BTy_object (OTy_integer)
       | BTy_loaded (OTy_integer) ->
         !^"A.ge" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.ge_ival0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        (*!^"(O.get (M.ge_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"*)
       | BTy_object (OTy_pointer)
       | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.ge_ptrval0 Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
+        !^"(O.get (M.ge_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
           ^^ pp pe2 ^^ !^")))"
       | _ -> todo "binop ge"
     )
@@ -255,8 +255,8 @@ and print_match_ctor arg = function
   | Carray       -> !^"array"
   | Civmax       -> !^"A.ivmax"
   | Civmin       -> !^"A.ivmin"
-  | Civsizeof    -> !^"M.sizeof_ival0"
-  | Civalignof   -> !^"M.alignof_ival0"
+  | Civsizeof    -> !^"M.sizeof_ival"
+  | Civalignof   -> !^"M.alignof_ival"
   | Cspecified   -> !^"A.Specified" ^^ P.parens arg
   | Cunspecified -> !^"A.Unspecified" ^^ P.parens arg
 
@@ -466,14 +466,14 @@ let print_pure_expr pe =
           | Carray       -> !^"array"
           | Civmax       -> !^"A.ivmax" ^^^ pp_args P.space
           | Civmin       -> !^"A.ivmin" ^^^ pp_args P.space
-          | Civsizeof    -> !^"M.sizeof_ival0" ^^^ pp_args P.space
-          | Civalignof   -> !^"M.alignof_ival0" ^^^ pp_args P.space
+          | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
+          | Civalignof   -> !^"M.alignof_ival" ^^^ pp_args P.space
           | Cspecified   -> !^"A.Specified" ^^^ pp_args P.space
           | Cunspecified -> !^"A.Unspecified"  ^^^ pp_args P.space
           end
       | PEcase (pe, pas) -> print_match (pp pe) pp pas
       | PEarray_shift (pe1, ty, pe2) -> 
-        !^"(M.array_shift_ptrval0 (" ^^ pp pe1 ^^ !^") ("
+        !^"(M.array_shift_ptrval (" ^^ pp pe1 ^^ !^") ("
           ^^ print_ctype ty ^^ !^") (" ^^ pp pe2 ^^ !^"))"
       | PEmember_shift (pe, tag_sym, memb_ident) -> todo "pure: member_shift"
       | PEnot pe -> !^"not" ^^^ P.parens (pp pe)
@@ -686,7 +686,7 @@ let print_funs funs =
         (print_pure_expr pe)
     | Proc (bTy, params, e) ->
       print_eff_function (print_symbol sym) params
-        (P.parens (print_base_type bTy) ^^^ !^"M.memM0")
+        (P.parens (print_base_type bTy) ^^^ !^"M.memM")
         (print_labels e ^^ print_expr e)
   ) funs P.empty
 
