@@ -7,7 +7,7 @@ open Mem
 
 (* A CPS computation that produces an intermediate result of type 'a whose
    final result type is 'b memM0 *)
-type ('a, 'b) t = ContT of (('a -> 'b memM0) -> 'b memM0)
+type ('a, 'b) t = ContT of (('a -> 'b memM) -> 'b memM)
 
 let contT c = ContT c
 
@@ -33,18 +33,22 @@ let callCC f =
 let run_callcc f =
   apply f
   |> callCC
-  |> (flip runContT) return3
-  |> (flip runMem0) initial_mem_state0
+  |> (flip runContT) return2
+  |> (flip runMem) initial_mem_state
 
 let run f =
-  runContT f return3
-  |> (flip runMem0) initial_mem_state0
+  runContT f return2
+  |> (flip runMem) initial_mem_state
 
-let evalContT m = runContT m return3
+let evalContT m = runContT m return2
 
-let lift m = ContT (bind3 m)
+let lift m = ContT (bind2 m)
 
-let reset e = ContT (fun k -> bind3 (runContT e return3) k)
+let reset e = ContT (fun k -> bind2 (runContT e return2) k)
 
 let shift e =
-  ContT (fun k -> runContT (e (fun v -> ContT (fun c -> bind3 (k v) c))) return3)
+  ContT (fun k -> runContT (e (fun v -> ContT (fun c -> bind2 (k v) c))) return2)
+(*
+let try_catch a h = (reset (let x = a in (fun _ -> x))) h
+let throw e = shift (fun _ -> (fun h -> h e))
+*)
