@@ -117,10 +117,10 @@ ocaml_byte:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
-	  echo $(BOLD)OCAMLBUILD$(RESET) main.byte; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.byte; \
-	  cp -L main_.byte cerberus; \
+	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
+	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.d.ml > src/main_.d.ml; \
+	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.d.byte; \
+	  cp -L main_.d.byte cerberus; \
 	fi
 
 
