@@ -33,6 +33,8 @@ type 'a loaded =
 
 let specified x = Specified x
 
+exception Label of string * (M.integer_value) loaded
+
 (* Cast from memory values *)
 
 let mv_to_integer_loaded mv =
@@ -118,9 +120,17 @@ let get_first_value mv =
 
 (* Exit continuation *)
 
-let value x = reset (return x)
+let value x = M.return2 x (*reset (return x)*)
 
 let exit f =
-  match get_first_value (run f) with
+  match get_first_value (M.runMem f M.initial_mem_state) with
   | Specified iv -> M.eval_integer_value iv |> O.get |> Nat_big_num.to_int |> exit
-  | Unspecified _ -> print_string "Unspecified value"
+  | Unspecified _ -> raise (Error "Unspecified value")
+
+exception Exit of M.integer_value loaded
+
+let quit f =
+  try
+    exit (f (fun x -> raise (Exit x)) ())
+  with
+  | Exit x -> M.return2 x |> exit
