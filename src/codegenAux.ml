@@ -1,8 +1,9 @@
 (* Created by Victor Gomes 2016-02-02 *)
 
 open Util
+    (*
 open Continuation
-
+*)
 module M = Mem
 module I = Mem.Impl
 module T = AilTypes
@@ -69,36 +70,36 @@ let gt n m = O.get (M.lt_ival (Some M.initial_mem_state) m n)
 let le n m = O.get (M.le_ival (Some M.initial_mem_state) n m)
 let ge n m = O.get (M.le_ival (Some M.initial_mem_state) m n)
 
-let eq_ptrval p q = lift $ M.eq_ptrval p q
-let ne_ptrval p q = lift $ M.eq_ptrval p q
-let ge_ptrval p q = lift $ M.eq_ptrval p q
-let lt_ptrval p q = lift $ M.eq_ptrval p q
-let gt_ptrval p q = lift $ M.eq_ptrval p q
-let le_ptrval p q = lift $ M.eq_ptrval p q
+let eq_ptrval p q = M.eq_ptrval p q
+let ne_ptrval p q = M.eq_ptrval p q
+let ge_ptrval p q = M.eq_ptrval p q
+let lt_ptrval p q = M.eq_ptrval p q
+let gt_ptrval p q = M.eq_ptrval p q
+let le_ptrval p q = M.eq_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
 
 (* Memory actions wrap *)
 
-let create pre al ty = lift $ M.allocate_static 0 pre al ty
+let create pre al ty = M.allocate_static 0 pre al ty
 
-let alloc pre al n = lift $ M.allocate_dynamic 0 pre al n
+let alloc pre al n = M.allocate_dynamic 0 pre al n
 
-let load_integer ity e = lift $ M.bind2 (M.load (C.Basic0 (T.Integer ity)) e)
+let load_integer ity e = M.bind2 (M.load (C.Basic0 (T.Integer ity)) e)
                            (M.return2 % mv_to_integer_loaded % snd)
 
-let load_pointer q cty e = lift $ M.bind2 (M.load (C.Pointer0 (q, cty)) e) (M.return2 % specified % mv_to_pointer % snd)
+let load_pointer q cty e = M.bind2 (M.load (C.Pointer0 (q, cty)) e) (M.return2 % specified % mv_to_pointer % snd)
 
-let store ty e1 e2 = lift $ M.store ty e1 e2
+let store ty e1 e2 = M.store ty e1 e2
 
 let store_integer ity e1 le2 =
-  lift $ M.store (C.Basic0 (T.Integer ity)) e1 (
+  M.store (C.Basic0 (T.Integer ity)) e1 (
     match le2 with
     | Specified e2 -> M.integer_value_mval ity e2
     | Unspecified ty -> M.unspecified_mval ty
   )
 
 let store_pointer q cty e1 le2 =
-  lift $ M.store (C.Pointer0 (q, cty)) e1 (
+  M.store (C.Pointer0 (q, cty)) e1 (
     match le2 with
     | Specified e2 -> M.pointer_mval cty e2
     | Unspecified ty -> M.unspecified_mval ty
@@ -125,7 +126,7 @@ let value x = M.return2 x (*reset (return x)*)
 let exit f =
   match get_first_value (M.runMem f M.initial_mem_state) with
   | Specified iv -> M.eval_integer_value iv |> O.get |> Nat_big_num.to_int |> exit
-  | Unspecified _ -> raise (Error "Unspecified value")
+  | Unspecified _ -> print_string "Unspecified value"
 
 exception Exit of M.integer_value loaded
 
