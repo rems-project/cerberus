@@ -5,6 +5,8 @@ let ( $ ) f x = f x
 
 let ( % ) f g = (fun x -> f (g x))
 
+let ( %% ) f g = (fun x y -> f x (g y))
+
 let id = fun x -> x
 
 let flip f a b = f b a
@@ -18,3 +20,5 @@ let get = function
   | Some a -> a
   | None -> raise No_value
 end
+
+exception Unsupported of string

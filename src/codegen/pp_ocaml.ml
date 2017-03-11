@@ -1,12 +1,15 @@
+(* Created by Victor Gomes 2016-01-19 *)
+(* It generates an Ocaml file from CPS-Core AST *)
+
 open Util
 open Pp_prelude
 open Core
+open Cps_core
 open AilTypes
 open Defacto_memory_types
 open Core_ctype
 open CodegenAux
 
-exception Unsupported
 exception Type_expected of core_base_type
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
@@ -314,15 +317,15 @@ let print_integer_value_base = function
   | IVmin ait                     -> !^"I.IVmin" ^^^ P.parens
                                        (print_ail_integer_type ait)
   | IVunspecified                 -> !^"I.IVunspecified"
-  | IVop (op, ivs)                -> raise Unsupported
-  | IVsizeof cty                  -> raise Unsupported
-  | IValignof cty                 -> raise Unsupported
-  | IVoffsetof (sym, cabs_id)     -> raise Unsupported
-  | IVbyteof (ivb, mv)            -> raise Unsupported
-  | IVcomposite ivs               -> raise Unsupported
-  | IVfromptr (ivb, mv)           -> raise Unsupported
-  | IVptrdiff (ivb, mv)           -> raise Unsupported
-  | IVconcurRead (_, _)           -> raise Unsupported
+  | IVop (op, ivs)                -> raise (Unsupported "ivop")
+  | IVsizeof cty                  -> raise (Unsupported "ivssizeof")
+  | IValignof cty                 -> raise (Unsupported "ivalignod")
+  | IVoffsetof (sym, cabs_id)     -> raise (Unsupported "ivoffsetof")
+  | IVbyteof (ivb, mv)            -> raise (Unsupported "ifbyteof")
+  | IVcomposite ivs               -> raise (Unsupported "ivcomposite")
+  | IVfromptr (ivb, mv)           -> raise (Unsupported "ivfromptr")
+  | IVptrdiff (ivb, mv)           -> raise (Unsupported "ivptrdiff")
+  | IVconcurRead (_, _)           -> raise (Unsupported "ivconcured")
 
 let print_ail_qualifier {
   AilTypes.const = c;
@@ -574,7 +577,7 @@ let rec print_expr = function
       then P.parens P.space
       else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
     )
-  | Eunseq es -> raise Unsupported
+  | Eunseq es -> raise (Unsupported "unseq")
   | Ewseq (pas, e1, e2) ->
     print_seq (print_pattern pas) (print_expr e1) (print_expr e2)
   | Esseq (pas, e1, e2) ->
@@ -585,7 +588,7 @@ let rec print_expr = function
       todo "aseq"
   | Eindet (_, e) -> print_expr e
   | Ebound (_, e) -> print_expr e
-  | End [] -> raise Unsupported
+  | End [] -> raise (Unsupported "end")
   | End (e::_) -> print_expr e
   | Esave ((sym, bTy), ps, e) ->
     let pes = List.map (fun (_, (_, pe)) -> pe) ps in
@@ -599,8 +602,8 @@ let rec print_expr = function
     ^^^ !^")))"
   | Eproc ((), nm, pes) ->
       print_name nm ^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
-  | Epar _ -> raise Unsupported
-  | Ewait _ -> raise Unsupported
+  | Epar _ -> raise (Unsupported "epar")
+  | Ewait _ -> raise (Unsupported "ewait")
   | Eloc (_, e) -> print_expr e
 
 and get_ctype (Pexpr (_, pe)) =
@@ -659,8 +662,8 @@ and print_action act =
       P.parens (print_pure_expr pe2)
   | Load0 (ty, e, _) ->
     choose_load_type ty ^^^ P.parens (print_pure_expr e)
-  | RMW0 _ -> raise Unsupported
-  | Fence0 _ -> raise Unsupported
+  | RMW0 _ -> raise (Unsupported "rmw0")
+  | Fence0 _ -> raise (Unsupported "fence")
 
 
 let print_impls impl =
@@ -675,3 +678,98 @@ let print_impls impl =
       print_function (print_impl_name iCst) params (print_base_type bTy)
         (print_pure_expr pe)
   ) impl P.empty
+
+let print_label (sym, bT, ps, e) =
+  !^"| A.Label (\"" ^^ print_symbol sym ^^ !^"\"," ^^^ print_params ps ^^^ !^") ->\n"
+    ^^ print_expr e
+
+  (*
+    (* TODO: Not sure of this hack! *)
+  print_let true
+    (print_symbol sym) 
+    (print_params ps)
+    (!^"Continuation.shift (fun _ -> " ^^^ print_expr e ^^^ !^")") P.empty
+*)
+let print_labels e =
+  get_labels e []
+  |> List.fold_left (fun acc lab -> acc ^^ print_label lab) P.empty
+
+let rec print_basic_expr = function
+  | CpsPure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr pe)
+  | CpsMemop (memop, pes) -> print_memop memop pes
+  | CpsAction (Core.Paction (p, (Action (_, bs, act)))) -> print_action act
+  | CpsCcall (nm, es) ->
+    print_pure_expr nm ^^^ (
+      if List.length es = 0
+      then P.parens P.space
+      else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
+    )
+  | CpsProc (nm, pes) ->
+      print_name nm ^^^ !^"cont" ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
+
+let print_call (sym, pes) =
+  print_symbol sym ^^^
+  P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes)
+
+let rec print_control = function
+  | CpsGoto goto -> print_call goto
+  | CpsIf (pe1, goto2, goto3) -> print_if (print_pure_expr pe1) (print_control goto2) (print_control goto3)
+  | CpsCase (pe, cases) -> print_match (print_pure_expr pe) print_control cases
+
+let print_pato p =
+  !^">>= fun" ^^^
+  (match p with
+   | None -> !^"_"
+   | Some pat -> print_pattern pat
+  ) ^^ !^" ->"
+
+let print_bb (es, (pato, ct)) =
+  match es with
+  | [] -> print_control ct
+  | ((_, e)::es) -> print_basic_expr e ^^
+                         (List.fold_left (fun acc (p, e) ->
+                           acc ^/^ print_pato p ^/^ print_basic_expr e
+                            ) P.space es) ^^^ !> (print_pato pato) ^/^ print_control ct
+
+let print_decl (BB.BB ((sym, ps), bb)) =
+  print_symbol sym ^^^
+  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol ps) ^^^
+  !^"=" ^^ !> (print_bb bb)
+
+let print_transformed bbs bb =
+  let bbs = List.sort_uniq BB.cmp bbs in
+  if List.length bbs = 0 then
+    print_bb bb
+  else
+    !^"let rec" ^^^ print_decl (List.hd bbs) ^^^
+    List.fold_left (fun acc decl -> acc ^/^ !^"and" ^^^ print_decl decl) P.space (List.tl bbs)
+    ^/^ !^"in" ^/^ print_bb bb
+
+let print_funs funs =
+  Pmap.fold (fun sym decl acc ->
+    acc ^//^ !^"and" ^^^
+    match decl with
+    | CpsFun  (bTy, params, pe) ->
+      print_function (print_symbol sym) params (print_base_type bTy)
+        (print_pure_expr pe)
+    | CpsProc (bTy, params, bbs, bbody) ->
+      print_eff_function (print_symbol sym ^^^ print_symbol default) params
+        (P.parens (print_base_type bTy) ^^^ !^"M.memM")
+        (print_transformed bbs bbody)
+
+
+        (*
+        (print_labels e ^^ print_expr e)
+           *)
+        (*
+        (
+          !^"let rec goto k =\n"
+            ^^ !^"try\nlet _ = k() in\n"
+            ^^ print_expr e
+            ^^ !^"\nwith\n"
+            ^^ print_labels e
+            ^^ !^"\n| _ -> raise (A.Error \"no catch\")\n"
+            ^^ !^"\nin goto (fun x -> x)"
+        )
+           *)
+  ) funs P.empty
