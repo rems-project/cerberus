@@ -399,7 +399,7 @@ let () =
                          sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
 
 
-  let info       = Term.info "cerberus" ~version:"59d753e76d1f+ tip -- 11/03/2017@18:24" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"ec4e024b2524+ tip -- 13/03/2017@16:10" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
