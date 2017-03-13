@@ -234,19 +234,36 @@ let pipeline filename args =
       print_endline "===================="
     end;
   
+  (* TODO: do the sequentialised properly *)
   if List.mem Core !!cerb_conf.pps then (
-    run_pp $ Pp_core.pp_file rewritten_core_file;
+    if !!cerb_conf.sequentialise then begin
+      Debug_ocaml.warn "The normal backend is not actually using the sequentialised Core";
+      match (Core_typing.typecheck_program rewritten_core_file) with
+        | Exception.Result z ->
+            run_pp $ Pp_core.pp_file (Core_sequentialise.sequentialise_file z);
+        | Exception.Exception _ ->
+            ();
+    end else
+      run_pp $ Pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
   
-(*  run_pp $ Pp_core_ast.pp_file rewritten_core_file; *)
-
   if !!cerb_conf.compile then
     Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
     (Codegen_ocaml.compile filename -| Core_sequentialise.sequentialise_file)
   else
-    Exception.return0 (backend sym_supply rewritten_core_file args)
+(*
+    let final_core_file =
+      if !!cerb_conf.sequentialise then
+        Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
+          (fun z -> Exception.return0 (Core_sequentialise.sequentialise_file z))
+      else
+        failwith ""
+    in
+    Exception.bind0 final_core_file (fun z -> Exception.return0 (backend sym_supply z args))
+*)
+    Exception.return0 (backend sym_supply core_file args)
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
@@ -399,7 +416,7 @@ let () =
                          sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
 
 
-  let info       = Term.info "cerberus" ~version:"ec4e024b2524+ tip -- 13/03/2017@16:10" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"365176f3663e+ tip -- 13/03/2017@17:45" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
