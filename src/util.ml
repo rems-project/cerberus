@@ -13,6 +13,8 @@ let flip f a b = f b a
 
 let apply f x = f x
 
+let uncurry f = (fun (x, y) -> f x y)
+
 module Option = struct
 exception No_value
 

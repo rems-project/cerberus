@@ -6,17 +6,19 @@ open Core
 
 let sym_compare s1 s2 =
   match s1, s2 with
-  | Symbol (n, None), Symbol (m, None) -> n - m
-  | Symbol (n, Some l), Symbol (_, None) -> n
-  | Symbol (_, None), Symbol (m, Some l) -> m
   | Symbol (_, Some l1), Symbol (_, Some l2) -> String.compare l1 l2
+  | Symbol (n, Some _), Symbol (_, None) -> -1
+  | Symbol (_, None), Symbol (m, Some _) -> 1
+  | Symbol (n, None), Symbol (m, None) -> n - m
 
 let sort_uniq fvs =
   List.sort_uniq sym_compare fvs
 
 let rec fv_rm x = function
   | [] -> []
-  | (y::ys) -> if x=y then ys else y::(fv_rm x ys)
+  | (y::ys) ->
+    let xs = fv_rm x ys in
+    if x=y then xs else y::xs
 
 let rec fvs_rm xs ys =
   match xs with

@@ -707,8 +707,9 @@ let rec print_basic_expr = function
   | CpsProc (nm, pes) ->
       print_name nm ^^^ !^"cont" ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
 
-let print_call (sym, pes) =
+let print_call (sym, fvs, pes) =
   print_symbol sym ^^^
+  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes)
 
 let rec print_control = function
@@ -731,9 +732,10 @@ let print_bb (es, (pato, ct)) =
                            acc ^/^ print_pato p ^/^ print_basic_expr e
                             ) P.space es) ^^^ !> (print_pato pato) ^/^ print_control ct
 
-let print_decl (BB.BB ((sym, ps), bb)) =
+let print_decl (BB.BB ((sym, fvs, pes), bb)) =
   print_symbol sym ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol ps) ^^^
+  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
+  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol pes) ^^^
   !^"=" ^^ !> (print_bb bb)
 
 let print_transformed bbs bb =
