@@ -253,17 +253,7 @@ let pipeline filename args =
     Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
     (Codegen_ocaml.compile filename -| Core_sequentialise.sequentialise_file)
   else
-(*
-    let final_core_file =
-      if !!cerb_conf.sequentialise then
-        Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
-          (fun z -> Exception.return0 (Core_sequentialise.sequentialise_file z))
-      else
-        failwith ""
-    in
-    Exception.bind0 final_core_file (fun z -> Exception.return0 (backend sym_supply z args))
-*)
-    Exception.return0 (backend sym_supply core_file args)
+    Exception.return0 (backend sym_supply rewritten_core_file args)
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
