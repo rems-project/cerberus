@@ -141,7 +141,7 @@ and cps_transform_expr bbs es pato cont e =
     let (bbs2, (es2, cont2)) = cps_transform_expr bbs es (Some pat) cont e2 in
     cps_transform_expr_left bbs2 es2 pato cont2 e1
   | Erun (_, sym, pes) ->
-    (bbs, ([], (pato, CpsGoto (sym, [], pes))))
+    (bbs, ([], (pato, CpsGoto (sym, [], List.rev pes))))
   | End (e::_) -> cps_transform_expr bbs es pato cont e
   | Eskip ->
     if es != [] then
@@ -168,7 +168,7 @@ type cps_fun =
 
 (* return value passed to next continuation *)
 (* TODO: should review that *)
-let ret_sym = Symbol.Symbol (0, Some "_ret")
+let ret_sym = Symbol.Symbol (0, Some "__ret")
 let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit)
 let ret_pe  = Core.Pexpr (Core.BTy_unit, Core.PEsym ret_sym)
 let default = Symbol.Symbol (0, Some "cont")
