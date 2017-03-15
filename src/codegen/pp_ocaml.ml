@@ -708,7 +708,7 @@ let rec print_basic_expr = function
       print_name nm ^^^ !^"cont" ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
 
 let print_call (sym, fvs, pes) =
-  print_symbol sym ^^^
+  P.parens (print_symbol sym ^^  !^"[@tailcall]") ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes)
 
