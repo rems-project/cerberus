@@ -27,7 +27,7 @@ let fv_be fvs = function
   | CpsMemop (memop, pes) -> List.fold_left (flip fv_pe) fvs pes
   | CpsAction act -> fv_act act fvs
   | CpsCcall (pe, pes) ->  List.fold_left (flip fv_pe) fvs (pe::pes)
-  | CpsProc (_, pes) ->  List.fold_left (flip fv_pe) fvs pes
+  | CpsProc (_, pes) ->  List.fold_left (flip fv_pe) (fvs) pes
 
 let rec fv_ce ce fvs =
   match ce with

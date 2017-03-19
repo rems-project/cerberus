@@ -120,15 +120,17 @@ let get_first_value mv =
 
 let value x = M.return2 x (*reset (return x)*)
 
-let exit f =
-  match get_first_value (M.runMem f M.initial_mem_state) with
-  | Specified iv -> M.eval_integer_value iv |> O.get |> Nat_big_num.to_int |> exit
-  | Unspecified _ -> print_string "Unspecified value"
-
-exception Exit of M.integer_value loaded
+exception Exit of (M.integer_value loaded)
 
 let quit f =
   try
-    exit (f (fun x -> raise (Exit x)) ())
+    let _ = M.runMem (f (fun x -> raise (Exit x)) ()) M.initial_mem_state in
+    raise (Error "continuation not raised")
   with
-  | Exit x -> M.return2 x |> exit
+  | Exit x ->
+    (match x with
+     | Specified x -> M.eval_integer_value x |> O.get
+                      |> Nat_big_num.to_string
+                      |> print_string
+     | Unspecified _ -> print_string "Unspeciied value"
+    )
