@@ -707,10 +707,22 @@ let rec print_basic_expr = function
   | CpsProc (nm, pes) ->
       print_name nm ^^^ !^"cont" ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
 
-let print_call (sym, fvs, pes) =
-  P.parens (print_symbol sym ^^  !^"[@tailcall]") ^^^
+let rec print_pattern2 = function
+  | CaseBase (None, _) -> P.parens P.empty
+  | CaseBase (Some sym, _) -> print_symbol sym
+  | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
+    | []   -> P.parens P.empty
+    | [pa] -> print_pattern2 pa
+    | _    -> P.parens (comma_list print_pattern2 pas)) ctor
+
+let print_call (sym, fvs, pes, pato) =
+  P.parens (print_symbol sym (*^^  !^"[@tailcall]"*)) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes)
+  P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes) ^^^
+  P.parens (match pato with
+      | None -> P.empty
+      | Some pat -> print_pattern2 pat
+    )
 
 let rec print_control = function
   | CpsGoto goto -> print_call goto
@@ -732,10 +744,14 @@ let print_bb (es, (pato, ct)) =
                            acc ^/^ print_pato p ^/^ print_basic_expr e
                             ) P.space es) ^^^ !> (print_pato pato) ^/^ print_control ct
 
-let print_decl (BB.BB ((sym, fvs, pes), bb)) =
+let print_decl (BB.BB ((sym, fvs, pes, pato), bb)) =
   print_symbol sym ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol pes) ^^^
+  P.parens (match pato with
+      | None -> P.underscore
+      | Some pat -> print_pattern pat
+    ) ^^^
   !^"=" ^^ !> (print_bb bb)
 
 let print_transformed bbs bb =
