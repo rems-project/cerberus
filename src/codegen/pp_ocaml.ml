@@ -710,10 +710,11 @@ let rec print_basic_expr = function
 let rec print_pattern2 = function
   | CaseBase (None, _) -> P.parens P.empty
   | CaseBase (Some sym, _) -> print_symbol sym
-  | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
+  | CaseCtor (ctor, pas) -> print_match_ctor2 (match pas with
     | []   -> P.parens P.empty
     | [pa] -> print_pattern2 pa
     | _    -> P.parens (comma_list print_pattern2 pas)) ctor
+and print_match_ctor2 arg _ = arg
 
 let print_call (sym, fvs, pes, pato) =
   P.parens (print_symbol sym (*^^  !^"[@tailcall]"*)) ^^^
@@ -750,7 +751,7 @@ let print_decl (BB.BB ((sym, fvs, pes, pato), bb)) =
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol pes) ^^^
   P.parens (match pato with
       | None -> P.underscore
-      | Some pat -> print_pattern pat
+      | Some pat -> print_pattern2 pat
     ) ^^^
   !^"=" ^^ !> (print_bb bb)
 

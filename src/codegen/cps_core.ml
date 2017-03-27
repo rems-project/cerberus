@@ -93,24 +93,36 @@ struct
     - if es is empty return the previous control expression, otherwise
       build a goto to the created block
   *)
-  let add ret_pat (bbs, (es, (pato, ce))) =
+  let add2 ret_pat (bbs, (es, (pato, ce))) =
     match es with
     | [] -> (bbs, (pato, ce))
-    | (_, be)::es  ->
-      let bb = create ((ret_pat, be)::es) (pato, ce) in
-      (bb::bbs, (pato, goto ret_pat bb))
+    | (pat1, be1)::es  ->
+      let l = fresh_label() in
+      let fvs = uniq_fv es (pato, ce) in
+      let bb = BB ((l, fvs, [], pat1), ((None, be1)::es, (pato, ce))) in
+      (bb::bbs, (pato, goto pat1 bb))
+
+  let add (bbs, (es, (pat2, ce))) =
+    match es with
+    | [] -> (bbs, pat2, ce)
+    | (pat1, be1)::es  ->
+      let l = fresh_label() in
+      let fvs = uniq_fv ((pat1, be1)::es) (pat2, ce) in
+      let bb = BB ((l, fvs, [], pat1), ((None, be1)::es, (pat2, ce))) in
+      let goto = CpsGoto (l, fvs, [], pat1) in
+      (bb::bbs, pat1, goto)
 
   let cmp bb1 bb2 =
     match bb1, bb2 with
       BB ((l1, _, _, _), _), BB ((l2, _, _, _), _) -> sym_compare l1 l2
 end
 
-let rec cps_transform_expr_left bbs es pato cont e =
+let rec cps_transform_expr_left bbs pat1 es pat2 ce e =
   match e with
   | Esseq _ -> raise (CpsError "no assoc")
-  | e -> cps_transform_expr bbs es pato cont e
-and cps_transform_expr bbs es pato cont e =
-  let to_basic e = (bbs, ((pato, e)::es, cont)) in
+  | e -> cps_transform_expr bbs pat1 es pat2 ce e
+and cps_transform_expr bbs pat1 es pat2 ce e =
+  let to_basic e = (bbs, ((pat1, e)::es, (pat2, ce))) in
   match e with
   | Epure pe            -> to_basic (CpsPure pe)
   | Ememop (memop, pes) -> to_basic (CpsMemop (memop, pes))
@@ -118,44 +130,45 @@ and cps_transform_expr bbs es pato cont e =
   | Eccall (_, nm, pes) -> to_basic (CpsCcall (nm, pes))
   | Eproc  (_, nm, pes) -> to_basic (CpsProc (nm, pes))
   | Esave ((sym, _), xs, e) ->
-    let (bbs, cont) = BB.add pato (bbs, (es, cont)) in
+    (* WARN: pat1 is not used, is that normal? *)
+    let (bbs, pat', ce') = BB.add (bbs, (es, (pat2, ce))) in
     let (ps, pes) = List.fold_left (
         fun (ls, pes) (l, (_, pe)) -> (l::ls, pe::pes)
       ) ([], []) xs
     in
-    let (bbs, bb') = cps_transform_expr bbs [] None cont e in
+    let (bbs, bb') = cps_transform_expr bbs None [] pat' ce' e in
     (* TODO FIX: esave can have other free variables other than the parameters
        need to see how I will match with erun *)
     let fvs = (uncurry BB.uniq_fv) bb' |> fvs_rm ps in
-    (*let fvs_pes = List.map (fun s -> Pexpr (BTy_unit, PEsym s)) fvs in *)
-    let bb = BB.BB ((sym, fvs, ps, pato), bb') in
-    (bb::bbs, ([], (pato, CpsGoto (sym, fvs, pes, pato))))
+    let bb = BB.BB ((sym, fvs, ps, None), bb') in
+    (bb::bbs, ([], (None, CpsGoto (sym, fvs, pes, None))))
   | Eif (pe1, e2, e3) ->
-    let (bbs1, cont) = BB.add pato (bbs, (es, cont)) in
-    let (bbs2, (_, ce2)) = BB.add pato (cps_transform_expr bbs [] None cont e2) in
-    let (bbs3, (_, ce3)) = BB.add pato (cps_transform_expr bbs [] None cont e3) in
-    let cont = (pato, CpsIf (pe1, ce2, ce3)) in
-    (bbs3@bbs2@bbs1, (es, cont))
+    let (bbs1, pat', ce') = BB.add (bbs, (es, (pat2, ce))) in
+    let (bbs2, pat2', ce2) = BB.add (cps_transform_expr bbs pat1 [] pat' ce' e2) in
+    let (bbs3, pat3', ce3) = BB.add (cps_transform_expr bbs pat1 [] pat' ce' e3) in
+    (* is pat1 = pat2' = pat3' ? *)
+    let cont = (pat1, CpsIf (pe1, ce2, ce3)) in
+    (bbs3@bbs2@bbs1, ([], cont))
   | Ecase (pe, cases) ->
-    let (bbs, cont) = BB.add pato (bbs, (es, cont)) in
+    let (bbs, pat', ce') = BB.add (bbs, (es, (pat2, ce))) in
     let (bbs, cases) = List.fold_left (fun (acc, cases) (p, e) ->
-        let (bbs, (_, ce)) = BB.add pato (cps_transform_expr bbs [] None cont e) in
+        let (bbs, _, ce) = BB.add (cps_transform_expr bbs (Some p) [] pat' ce' e) in
         (bbs@acc, (p, ce)::cases)
       ) (bbs, []) cases
     in
-    (bbs, ([], (pato, CpsCase (pe, cases))))
+    (bbs, ([], (pat1, CpsCase (pe, cases))))
   | Esseq (pat, e1, e2) ->
-    let (bbs2, (es2, cont2)) = cps_transform_expr bbs es (Some pat) cont e2 in
-    cps_transform_expr_left bbs2 es2 pato cont2 e1
+    let (bbs2, (es2, (pat', ce'))) = cps_transform_expr bbs (Some pat) es pat2 ce e2 in
+    cps_transform_expr_left bbs2 pat1 es2 pat' ce' e1
   | Erun (_, sym, pes) ->
-    (bbs, ([], (pato, CpsGoto (sym, [], List.rev pes, pato))))
-  | End (e::_) -> cps_transform_expr bbs es pato cont e
+    (bbs, ([], (pat1, CpsGoto (sym, [], List.rev pes, None))))
+  | End (e::_) -> cps_transform_expr bbs pat1 es pat2 ce e
   | Eskip ->
     if es != [] then
       raise (CpsError "no skip elim")
     else
       (* eliminate pattern *)
-      (bbs, ([], (match cont with (_, jmp) -> (None, jmp))))
+      (bbs, ([], (None, ce))) 
   | Ewseq _  -> raise (CpsError "no only_sseq")
   | End []   -> raise (Unsupported "empty end")
   | Eunseq _ -> raise (Unsupported "unseq")
@@ -166,6 +179,7 @@ and cps_transform_expr bbs es pato cont e =
   | Epar   _ -> raise (Unsupported "par")
   | Ewait  _ -> raise (Unsupported "wait")
   | Eloc   _ -> raise (Unsupported "loc")
+
 
 
 type cps_fun =
@@ -180,11 +194,12 @@ let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit)
 let ret_pe  = Core.Pexpr (Core.BTy_unit, Core.PEsym ret_sym)
 let default = Symbol.Symbol (0, Some "cont")
 
+let cps_transform_expr_main = cps_transform_expr [] None [] (Some ret_pat) (CpsGoto (default, [ret_sym], [], Some ret_pat))
+
 let cps_transform_fun = function
   | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
   | Proc (bty, params, e) ->
-    let (bbs, bbody) = cps_transform_expr [] [] None
-        (Some ret_pat, CpsGoto (default, [ret_sym], [], Some ret_pat)) e
+    let (bbs, bbody) = cps_transform_expr_main e 
     in
     CpsProc (bty, params, bbs, bbody)
 
@@ -200,8 +215,7 @@ type cps_file = {
 
 let cps_transform (core : unit typed_file) =
   let globs = List.map (fun (s, bty, e) ->
-      let (bbs, bbody) = cps_transform_expr [] [] None
-          (Some ret_pat, CpsGoto (default, [ret_sym], [], None)) e
+      let (bbs, bbody) = cps_transform_expr_main e
       in
       (s, bty, bbs, bbody)
     ) core.globs
