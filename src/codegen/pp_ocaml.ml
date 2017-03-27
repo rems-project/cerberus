@@ -708,9 +708,8 @@ let rec print_pattern2 = function
     | _    -> P.parens (comma_list print_pattern2 pas)) ctor
 and print_match_ctor2 arg _ = arg
 
-let print_call (sym, fvs, pes, pato) =
+let print_call (sym, pes, pato) =
   P.parens (print_symbol sym (*^^  !^"[@tailcall]"*)) ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_pure_expr pes) ^^^
   P.parens (match pato with
       | None -> P.empty
@@ -722,11 +721,11 @@ let rec print_control = function
   | CpsIf (pe1, goto2, goto3) -> print_if (print_pure_expr pe1) (print_control goto2) (print_control goto3)
   | CpsCase (pe, cases) -> print_match (print_pure_expr pe) print_control cases
   | CpsProc (nm, (l, fvs), pes) ->
-      print_name nm ^^^ P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^ P.parens P.empty) ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
+      print_name nm ^^^ P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs)) ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
 
   | CpsCcall (nm, (l, fvs), es) ->
     print_pure_expr nm ^^^
-    P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^ P.parens P.empty) ^^^
+    P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs)) ^^^
     (
       if List.length es = 0
       then P.parens P.space
@@ -749,9 +748,8 @@ let print_bb (es, (pato, ct)) =
                            acc ^/^ print_pato p ^/^ print_basic_expr e
                             ) P.space es) ^^^ !> (print_pato pato) ^/^ print_control ct
 
-let print_decl (BB.BB ((sym, fvs, pes, pato), bb)) =
+let print_decl (BB ((sym, pes, pato), bb)) =
   print_symbol sym ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^
   P.parens (P.separate_map (P.comma ^^ P.space) print_symbol pes) ^^^
   P.parens (match pato with
       | None -> P.underscore
@@ -760,7 +758,7 @@ let print_decl (BB.BB ((sym, fvs, pes, pato), bb)) =
   !^"=" ^^ !> (print_bb bb)
 
 let print_transformed bbs bb =
-  let bbs = List.sort_uniq BB.cmp bbs in
+  let bbs = List.sort_uniq block_compare bbs in
   if List.length bbs = 0 then
     print_bb bb
   else

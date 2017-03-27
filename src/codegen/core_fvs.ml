@@ -30,6 +30,10 @@ let rec fv_pat fvs = function
   | CaseBase (Some l, _) -> l::fvs
   | CaseCtor (_, pats) -> List.fold_left fv_pat fvs pats
 
+let fv_pat_opt = function
+  | None -> []
+  | Some pat -> fv_pat [] pat
+
 let rec fv_pe (Pexpr (_, e)) fvs =
   match e with
   | PEsym l -> l::fvs
