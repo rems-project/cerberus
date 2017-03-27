@@ -698,14 +698,6 @@ let rec print_basic_expr = function
   | CpsPure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr pe)
   | CpsMemop (memop, pes) -> print_memop memop pes
   | CpsAction (Core.Paction (p, (Action (_, bs, act)))) -> print_action act
-  | CpsCcall (nm, es) ->
-    print_pure_expr nm ^^^ (
-      if List.length es = 0
-      then P.parens P.space
-      else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
-    )
-  | CpsProc (nm, pes) ->
-      print_name nm ^^^ !^"cont" ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
 
 let rec print_pattern2 = function
   | CaseBase (None, _) -> P.parens P.empty
@@ -729,6 +721,18 @@ let rec print_control = function
   | CpsGoto goto -> print_call goto
   | CpsIf (pe1, goto2, goto3) -> print_if (print_pure_expr pe1) (print_control goto2) (print_control goto3)
   | CpsCase (pe, cases) -> print_match (print_pure_expr pe) print_control cases
+  | CpsProc (nm, (l, fvs), pes) ->
+      print_name nm ^^^ P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^ P.parens P.empty) ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr z))) pes
+
+  | CpsCcall (nm, (l, fvs), es) ->
+    print_pure_expr nm ^^^
+    P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs) ^^^ P.parens P.empty) ^^^
+    (
+      if List.length es = 0
+      then P.parens P.space
+      else (P.separate_map P.space (fun x -> P.parens (print_pure_expr x)) es)
+    )
+  | CpsCont sym -> !^"cont" ^^^ print_symbol sym
 
 let print_pato p =
   !^">>= fun" ^^^
