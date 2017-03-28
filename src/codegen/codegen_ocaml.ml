@@ -27,8 +27,18 @@ let print_head filename =
                             I.IVconcrete (Nat_big_num.of_string \"0\")))])" ^/^
   !^"let kill x = A.value ()"
 
+let print_premain globs =
+  let globals acc sym =
+    let pp_sym = print_symbol sym in
+    acc ^^ !^"glob_" ^^ pp_sym ^^^ !^"M.return2 () >>= fun _" ^^ pp_sym ^^^ !^"->"
+      ^^^ pp_sym ^^^ !^":= _" ^^ pp_sym ^^ P.semi ^^ P.break 1
+  in
+  !^"let premain cont () =" ^^ !> (
+    List.fold_left globals P.empty globs ^^ !^"main cont ();;"
+  )
+
 let print_foot =
-    !^"A.quit main"
+  !^"A.quit premain"
 
 let opt_passes core =
   elim_wseq core
@@ -36,26 +46,29 @@ let opt_passes core =
   |> elim_skip
 
 (* Generate Ocaml *)
-let generate_ocaml core =
-  let cps_core = cps_transform (run opt_passes core) in
-  let globals acc (sym, coreTy, e) =
-    acc ^^ !^"and" ^^^ print_eff_function (print_symbol sym) []
-      (print_base_type coreTy) (print_expr e)
+let generate_ocaml sym_supply core =
+  let cps_core = cps_transform sym_supply (run opt_passes core) in
+  let globs_syms = List.map (fun (s,_,_,_) -> s) cps_core.globs in
+  let globals acc (sym, coreTy, bbs, bbody) =
+    acc
+    ^^ !^"and" ^^^ print_eff_function (!^"glob_" ^^ print_symbol sym
+                                       ^^^ print_symbol default) []
+      (print_base_type coreTy) (print_transformed globs_syms bbs bbody)
+    ^/^ !^"and" ^^^ print_symbol sym ^^^ !^"= ref (M.null_ptrval Core_ctype.Void0)"
   in
-    print_impls cps_core.impl ^^
-    print_funs cps_core.stdlib ^//^
-    (* TODO: missing globals
-       List.fold_left globals P.empty cps_core.globs ^^
-       *)
-    print_funs cps_core.funs ^^ P.semi ^^ P.semi
+    print_impls globs_syms cps_core.impl ^^
+    print_funs globs_syms cps_core.stdlib ^//^
+    List.fold_left globals P.empty cps_core.globs ^^
+    print_funs globs_syms cps_core.funs ^//^
+    print_premain globs_syms
 
-let compile filename core =
+let compile filename sym_supply core =
   let fl = Filename.chop_extension filename in
   let fl_ml = fl ^ ".ml" in
   let oc = open_out fl_ml in
   begin
     P.ToChannel.pretty 1. 80 oc
-      (print_head filename ^^ generate_ocaml core ^//^ print_foot);
+      (print_head filename ^^ generate_ocaml sym_supply core ^//^ print_foot);
     close_out oc;
     Exception.return0 0
   end

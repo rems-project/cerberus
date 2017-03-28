@@ -98,13 +98,11 @@ let block_call es pat2 ce =
 let block_compare (BB ((l1, _, _), _)) (BB ((l2, _, _), _)) = sym_compare l1 l2
 
 (* TODO: should review that *)
-let ret_sym = Symbol.Symbol (0, Some "__ret")
-let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit)
 let default = Symbol.Symbol (0, Some "cont")
 
 (* CPS transformation *)
 
-let cps_transform_expr bvs e =
+let cps_transform_expr sym_supply bvs e =
   let rec tr_left bbs pat1 es pat2 ce e =
     match e with
     | Esseq _ -> raise (CpsError "no assoc")
@@ -133,8 +131,8 @@ let cps_transform_expr bvs e =
       (bb::bbs, ([], (None, CpsGoto (sym, pes, None))))
     | Eif (pe1, e2, e3) ->
       let (bbs1, pat', ce') = block_goto (bbs, (es, (pat2, ce))) in
-      let (bbs2, pat2', ce2) = block_goto (tr_right bbs pat1 [] pat' ce' e2) in
-      let (bbs3, pat3', ce3) = block_goto (tr_right bbs pat1 [] pat' ce' e3) in
+      let (bbs2, _, ce2) = block_goto (tr_right bbs pat1 [] pat' ce' e2) in
+      let (bbs3, _, ce3) = block_goto (tr_right bbs pat1 [] pat' ce' e3) in
       (* is pat1 = pat2' = pat3' ? *)
       let cont = (pat1, CpsIf (pe1, ce2, ce3)) in
       (bbs3@bbs2@bbs1, ([], cont))
@@ -156,7 +154,7 @@ let cps_transform_expr bvs e =
       if es != [] then
         raise (CpsError "no skip elim")
       else
-        (bbs, ([], (None, ce))) 
+        (bbs, ([], (None, ce)))
     | Ewseq _  -> raise (CpsError "no only_sseq")
     | End []   -> raise (Unsupported "empty end")
     | Eunseq _ -> raise (Unsupported "unseq")
@@ -168,6 +166,9 @@ let cps_transform_expr bvs e =
     | Ewait  _ -> raise (Unsupported "wait")
     | Eloc   _ -> raise (Unsupported "loc")
   in
+  let (ret_sym, _) = Symbol.fresh sym_supply in
+  (* TODO: type check/annotate this symbol *)
+  let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit) in
   tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) e
 
 
@@ -176,10 +177,10 @@ type cps_fun =
   | CpsProc of core_base_type * (Symbol.sym * core_base_type) list
               * block list * block_body
 
-let cps_transform_fun = function
+let cps_transform_fun sym_supply = function
   | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
   | Proc (bty, params, e) ->
-    let (bbs, bbody) = cps_transform_expr (List.map fst params) e
+    let (bbs, bbody) = cps_transform_expr sym_supply (List.map fst params) e
     in
     CpsProc (bty, params, bbs, bbody)
 
@@ -192,18 +193,17 @@ type cps_file = {
 }
 
 
-let cps_transform (core : unit typed_file) =
+let cps_transform sym_supply (core : unit typed_file) =
   let globs = List.map (fun (s, bty, e) ->
-      let (bbs, bbody) = cps_transform_expr [] e
-      in
+      let (bbs, bbody) = cps_transform_expr sym_supply [] e in
       (s, bty, bbs, bbody)
     ) core.globs
   in
   {
     main = core.main;
-    stdlib = Pmap.map cps_transform_fun core.stdlib;
+    stdlib = Pmap.map (cps_transform_fun sym_supply) core.stdlib;
     impl = core.impl;
     globs = globs;
-    funs = Pmap.map cps_transform_fun core.funs;
+    funs = Pmap.map (cps_transform_fun sym_supply) core.funs;
   }
 
