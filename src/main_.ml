@@ -251,7 +251,7 @@ let pipeline filename args =
   
   if !!cerb_conf.compile then
     Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
-    (Codegen_ocaml.compile filename -| Core_sequentialise.sequentialise_file)
+    (Codegen_ocaml.compile filename sym_supply -| Core_sequentialise.sequentialise_file)
   else
     Exception.return0 (backend sym_supply rewritten_core_file args)
 
@@ -406,7 +406,7 @@ let () =
                          sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
 
 
-  let info       = Term.info "cerberus" ~version:"199f8a7fccc2+ tip -- 27/03/2017@19:51" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"9485dcdafca8+ tip -- 28/03/2017@19:14" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
