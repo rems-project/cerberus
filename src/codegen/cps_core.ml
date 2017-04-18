@@ -8,6 +8,8 @@ exception CpsError of string
 
 (* AST definitions *)
 
+let (@) xs ys = List.rev (List.rev_append xs ys)
+
 type basic_expr =
   | CpsPure of typed_pexpr
   | CpsMemop of Mem_common.memop * typed_pexpr list
@@ -58,10 +60,10 @@ let fv_pat_be (pat_opt, be) fvs =
 let fv_cont (pat_opt, ce) =
   fv_ce ce [] |> fvs_rm (fv_pat_opt pat_opt)
 
-let uniq_fv bes cont =
+let uniq_fv globs bes cont =
   let fv bes cont =
     List.fold_left (flip fv_pat_be) (fv_cont cont) (List.rev bes)
-  in fv bes cont |> sort_uniq
+  in fv bes cont |> fvs_rm globs |> sort_uniq
 
 (* TODO: this is ugly but whatever *)
 let label_id = ref 0
@@ -74,19 +76,19 @@ let pexpr_of_sym sym = Pexpr (BTy_unit, PEsym sym)
 
 (* helper functions *)
 
-let block_goto (bbs, (es, (pat2, ce))) =
+let block_goto globs (bbs, (es, (pat2, ce))) =
   match es with
   | [] -> (bbs, pat2, ce)
   | (pat1, be1)::es  ->
     let l = fresh_label() in
-    let fvs = uniq_fv ((pat1, be1)::es) (pat2, ce) in
+    let fvs = uniq_fv globs ((pat1, be1)::es) (pat2, ce) in
     let bb = BB ((l, fvs, pat1), ((None, be1)::es, (pat2, ce))) in
     let goto = CpsGoto (l, List.map pexpr_of_sym fvs, pat1) in
     (bb::bbs, pat1, goto)
 
 let block_call es pat2 ce =
   let l = fresh_label() in
-  let fvs = uniq_fv es (pat2, ce) in
+  let fvs = uniq_fv [] es (pat2, ce) in
   match es with
   | [] ->
     let bb = BB ((l, fvs, pat2), ([], (pat2, ce))) in
@@ -102,7 +104,7 @@ let default = Symbol.Symbol (0, Some "cont")
 
 (* CPS transformation *)
 
-let cps_transform_expr sym_supply bvs e =
+let cps_transform_expr sym_supply globs bvs e =
   let rec tr_left bbs pat1 es pat2 ce e =
     match e with
     | Esseq _ -> raise (CpsError "no assoc")
@@ -121,7 +123,7 @@ let cps_transform_expr sym_supply bvs e =
       (bb::bbs, ([], (pat1, CpsProc (nm, args, pes))))
     | Esave ((sym, _), xs, e) ->
       (* WARN: pat1 is not used, is that normal? *)
-      let (bbs, pat', ce') = block_goto (bbs, (es, (pat2, ce))) in
+      let (bbs, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
       let (ps, pes) = List.fold_left (
           fun (ls, pes) (l, (_, pe)) -> (l::ls, pe::pes)
         ) ([], []) xs
@@ -130,17 +132,17 @@ let cps_transform_expr sym_supply bvs e =
       let bb = BB ((sym, ps, None), bb') in
       (bb::bbs, ([], (None, CpsGoto (sym, pes, None))))
     | Eif (pe1, e2, e3) ->
-      let (bbs1, pat', ce') = block_goto (bbs, (es, (pat2, ce))) in
-      let (bbs2, _, ce2) = block_goto (tr_right bbs pat1 [] pat' ce' e2) in
-      let (bbs3, _, ce3) = block_goto (tr_right bbs pat1 [] pat' ce' e3) in
+      let (bbs1, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
+      let (bbs2, _, ce2) = block_goto globs (tr_right bbs1 pat1 [] pat' ce' e2) in
+      let (bbs3, _, ce3) = block_goto globs (tr_right bbs2 pat1 [] pat' ce' e3) in
       (* is pat1 = pat2' = pat3' ? *)
       let cont = (pat1, CpsIf (pe1, ce2, ce3)) in
-      (bbs3@bbs2@bbs1, ([], cont))
+      (bbs3, ([], cont))
     | Ecase (pe, cases) ->
-      let (bbs, pat', ce') = block_goto (bbs, (es, (pat2, ce))) in
+      let (bbs, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
       let (bbs, cases) = List.fold_left (fun (acc, cases) (p, e) ->
-          let (bbs, _, ce) = block_goto (tr_right bbs (Some p) [] pat' ce' e) in
-          (bbs@acc, (p, ce)::cases)
+          let (bbs, _, ce) = block_goto globs (tr_right acc (Some p) [] pat' ce' e) in
+          (bbs, (p, ce)::cases)
         ) (bbs, []) cases
       in
       (bbs, ([], (pat1, CpsCase (pe, cases))))
@@ -165,6 +167,7 @@ let cps_transform_expr sym_supply bvs e =
     | Epar   _ -> raise (Unsupported "par")
     | Ewait  _ -> raise (Unsupported "wait")
     | Eloc   _ -> raise (Unsupported "loc")
+    | _ -> (bbs, ([], (None, ce)))
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)
@@ -177,10 +180,11 @@ type cps_fun =
   | CpsProc of core_base_type * (Symbol.sym * core_base_type) list
               * block list * block_body
 
-let cps_transform_fun sym_supply = function
+let cps_transform_fun sym_supply globs = function
   | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
   | Proc (bty, params, e) ->
-    let (bbs, bbody) = cps_transform_expr sym_supply (List.map fst params) e
+    let (bbs, bbody) =
+      cps_transform_expr sym_supply globs (List.map fst params) e
     in
     CpsProc (bty, params, bbs, bbody)
 
@@ -193,17 +197,17 @@ type cps_file = {
 }
 
 
-let cps_transform sym_supply (core : unit typed_file) =
+let cps_transform sym_supply (core : unit typed_file) globs_sym =
   let globs = List.map (fun (s, bty, e) ->
-      let (bbs, bbody) = cps_transform_expr sym_supply [] e in
+      let (bbs, bbody) = cps_transform_expr sym_supply globs_sym [] e in
       (s, bty, bbs, bbody)
     ) core.globs
   in
   {
     main = core.main;
-    stdlib = Pmap.map (cps_transform_fun sym_supply) core.stdlib;
+    stdlib = Pmap.map (cps_transform_fun sym_supply globs_sym) core.stdlib;
     impl = core.impl;
     globs = globs;
-    funs = Pmap.map (cps_transform_fun sym_supply) core.funs;
+    funs = Pmap.map (cps_transform_fun sym_supply globs_sym) core.funs;
   }
 

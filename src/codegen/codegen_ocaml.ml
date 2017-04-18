@@ -27,14 +27,14 @@ let print_head filename =
                             I.IVconcrete (Nat_big_num.of_string \"0\")))])" ^/^
   !^"let kill x = A.value ()"
 
-let print_premain globs =
+let print_premain globs main =
   let globals acc sym =
     let pp_sym = print_symbol sym in
     acc ^^ !^"glob_" ^^ pp_sym ^^^ !^"M.return2 () >>= fun _" ^^ pp_sym ^^^ !^"->"
       ^^^ pp_sym ^^^ !^":= _" ^^ pp_sym ^^ P.semi ^^ P.break 1
   in
   !^"let premain cont () =" ^^ !> (
-    List.fold_left globals P.empty globs ^^ !^"main cont ();;"
+    List.fold_left globals P.empty globs ^^ print_symbol main ^^^ !^"cont ();;"
   )
 
 let print_foot =
@@ -47,8 +47,8 @@ let opt_passes core =
 
 (* Generate Ocaml *)
 let generate_ocaml sym_supply core =
-  let cps_core = cps_transform sym_supply (run opt_passes core) in
-  let globs_syms = List.map (fun (s,_,_,_) -> s) cps_core.globs in
+  let globs_syms = List.map (fun (s,_,_) -> s) core.Core.globs in
+  let cps_core = cps_transform sym_supply (run opt_passes core) globs_syms in
   let globals acc (sym, coreTy, bbs, bbody) =
     acc
     ^^ !^"and" ^^^ print_eff_function (!^"glob_" ^^ print_symbol sym
@@ -60,7 +60,7 @@ let generate_ocaml sym_supply core =
     print_funs globs_syms cps_core.stdlib ^//^
     List.fold_left globals P.empty cps_core.globs ^^
     print_funs globs_syms cps_core.funs ^//^
-    print_premain globs_syms
+    print_premain globs_syms core.main
 
 let compile filename sym_supply core =
   let fl = Filename.chop_extension filename in
