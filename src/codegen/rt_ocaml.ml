@@ -132,5 +132,5 @@ let quit f =
      | Specified x -> M.eval_integer_value x |> O.get
                       |> Nat_big_num.to_string
                       |> print_string
-     | Unspecified _ -> print_string "Unspeciied value"
+     | Unspecified _ -> print_string "Unspecified"
     )
