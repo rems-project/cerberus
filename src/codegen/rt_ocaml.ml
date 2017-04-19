@@ -102,6 +102,51 @@ let store_pointer q cty e1 le2 =
     | Unspecified ty -> M.unspecified_mval ty
   )
 
+(* TODO: it only support array of int *)
+let store_array cty size e1 le2 =
+  M.store (C.Array0 (cty, size)) e1 (
+    match le2 with
+    | Specified e2 ->
+      begin match cty with
+        | C.Basic0 (T.Integer ity) -> M.array_mval (List.map (M.integer_value_mval ity) e2)
+        | _ -> raise (Error "excepting an array of integers")
+      end
+    | Unspecified ty -> M.unspecified_mval ty
+  )
+
+(* Printf wrap *)
+
+let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
+    (xs:M.integer_value list)
+    (args:(C.ctype0 * M.pointer_value) list) =
+  let encode ival =
+    match Mem_aux.integerFromIntegerValue ival with
+    | Some n -> Decode_ocaml.encode_character_constant n
+    | None -> Debug_ocaml.error "Rt_ocaml.printf: one of the element of the format array was invalid"
+  in
+  let eval_conv cty x =
+    let throw_error () = raise (Error "Rt_ocaml.printf: expecting an integer") in
+    let n = M.case_mem_value x
+        (fun _ -> throw_error ())
+        (fun _ v -> conv cty v)
+        (fun _ _ -> throw_error ())
+        (fun _ _ -> throw_error ())
+        (fun _ -> throw_error ())
+        (fun _ _ -> throw_error ())
+        (fun _ _ -> throw_error ())
+    in Either.Right (Undefined.Defined0 (Core.Vspecified (Core.OVinteger n)))
+  in
+  M.bind2 (Output.printf eval_conv (List.rev (List.map encode xs)) args)
+    begin function
+      | Either.Right (Undefined.Defined0 xs) ->
+        let n = List.length xs in
+        print_string (String.init n (List.nth xs));
+        M.return2 (M.integer_ival (Nat_big_num.of_int n))
+      | Either.Right (Undefined.Undef (_, xs) ) -> raise (Error (String.concat "," (List.map Undefined.stringFromUndefined_behaviour xs)))
+      | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
+      | Either.Left z -> raise (Error (Pp_errors.to_string z))
+    end
+
 
 (* Cast types functions *)
 
