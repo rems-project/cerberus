@@ -36,13 +36,11 @@ let rec elim_skip e =
   match e with
   | Esseq (_, Eskip, e) -> elim_skip e
   | Esseq (_, e, Eskip) -> elim_skip e
-  | Esseq (pat, e1, Esseq (_, Eskip, e2)) ->
-    elim_skip (Esseq (pat, elim_skip e1, elim_skip e2))
   | Esseq (pat, e1, e2) -> Esseq (pat, elim_skip e1, elim_skip e2)
   | Esave (x, y, e) -> Esave (x, y, elim_skip e)
   | Eif (pe1, e2, e3) -> Eif (pe1, elim_skip e2, elim_skip e3)
   | Ecase (pe, cases) -> Ecase (pe, List.map (fun (p, e) -> (p, elim_skip e)) cases)
-  | End es -> End (List.map elim_wseq es)
+  | End es -> End (List.map elim_skip es)
   | Ewseq _ -> raise (PassError "elim_skip: Ewseq found.")
   | e -> e
 

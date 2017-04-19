@@ -50,7 +50,7 @@ let print_seq p x y = x ^^ !> (!^">>= fun" ^^^ p ^^ !^" ->") ^/^ y
 
 let print_bool b = if b then !^"true" else !^"false"
 
-let print_option_type pp = function
+let print_option pp = function
   | Some e  -> !^"Some" ^^^ P.parens (pp e)
   | None    -> !^"None"
 
@@ -350,7 +350,7 @@ let rec print_ctype = function
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
   | Array0 (cty, num) ->
     !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
-                               ^^^ print_option_type print_nat_big_num num)
+                               ^^^ print_option print_nat_big_num num)
   | Function0 (cty, params, variad) ->
     !^"C.Function0" ^^^ P.parens
       (print_ctype cty ^^ P.comma ^^^ print_list
@@ -584,6 +584,9 @@ let choose_store_type (Pexpr (_, PEval cty)) =
   | Vctype (Pointer0 (q, cty)) ->
     !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
+  | Vctype (Array0 (cty, n)) ->
+    !^"A.store_array" ^^^ P.parens (print_ctype cty)
+      ^^^ P.parens (print_option print_nat_big_num n)
   | _ -> todo "store not implemented"
 
 let rec print_mem_value globs ty e =
@@ -625,8 +628,9 @@ let print_action globs act =
 
 let print_impls globs impl =
   Pmap.fold (fun iCst iDecl acc ->
-    acc ^//^
-    (if acc = P.empty then !^"let rec" else !^"and") ^^^
+      acc ^//^
+      !^"and" ^^^
+    (*(if acc = P.empty then !^"let rec" else !^"and") ^^^ *)
     match iDecl with
     | Def (bTy, pe) ->
       print_function (print_impl_name iCst) [] (print_base_type bTy)
