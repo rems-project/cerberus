@@ -3078,7 +3078,12 @@ let rec translate_stmt2 stdlib program f env (A.AnnotatedStatement loc stmt) : E
         ) sym_es >>= fun z ->
         
         (* This pass combines the translated declarations *)
-        E.foldl1M (fun x y -> E.return $ Caux.concat_sseq x y) z
+        match z with
+          | [] ->
+              E.return C.Eskip
+          | z::zs' ->
+              E.foldlM (fun x y -> E.return $ Caux.concat_sseq x y) z zs'
+        end
     
     | A.AilSpar ss ->
           error "Translation.translate_stmt2, TODO AilSpar ss"

@@ -40,12 +40,6 @@ let rec foldlM f z0 xs =
     | x::xs' -> bind (f z0 x) (fun z -> foldlM f z xs')
   end
 
-val foldl1M: forall 'a. ('a -> 'a -> t 'a) -> list 'a -> t 'a
-let foldl1M f = function
-  | []    -> error "[Translation_effect.E.foldl1M] called on an empty list"
-  | x::xs -> foldlM f x xs
-end
-
 let sequence ms =
   foldr (fun m acc ->
     bind m (fun x  ->
