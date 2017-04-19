@@ -20,12 +20,9 @@ let print_head filename =
   !^"module C = Core_ctype" ^/^
   !^"module O = Util.Option" ^//^
   !^"let (>>=) = M.bind2" ^//^
-  (*
-  !^"let (>>=) = Continuation.bind" ^//^
-     *)
-  !^"let _std_function_printf cont x y = (A.value [(I.IV (I.Prov_none, \
-                            I.IVconcrete (Nat_big_num.of_string \"0\")))])" ^/^
-  !^"let kill x = A.value ()"
+  !^"let rec _std_function_printf cont xs args =\
+     A.printf conv_int_2 xs args >>= fun x -> cont x" ^//^
+  !^"and kill x = A.value ()"
 
 let print_premain globs main =
   let globals acc sym =
