@@ -12,4 +12,4 @@ B _build/pprinters
 B _build/parsers/cparser
 B _build/parsers/coreparser
 
-PKG pprint cmdliner zarith
+PKG pprint cmdliner zarith ounit
