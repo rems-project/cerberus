@@ -142,7 +142,9 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
         let n = List.length xs in
         print_string (String.init n (List.nth xs));
         M.return2 (M.integer_ival (Nat_big_num.of_int n))
-      | Either.Right (Undefined.Undef (_, xs) ) -> raise (Error (String.concat "," (List.map Undefined.stringFromUndefined_behaviour xs)))
+      | Either.Right (Undefined.Undef (_, xs) ) ->
+        raise (Error (String.concat "," 
+                        (List.map Undefined.stringFromUndefined_behaviour xs)))
       | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
       | Either.Left z -> raise (Error (Pp_errors.to_string z))
     end
@@ -167,6 +169,12 @@ let value x = M.return2 x (*reset (return x)*)
 
 exception Exit of (M.integer_value loaded)
 
+let print_exit_value n =
+  try
+    ignore (Sys.getenv "CERBOUTPUT");
+    Nat_big_num.to_string n |> print_string; n
+  with Not_found -> n
+
 let quit f =
   try
     let _ = M.runMem (f (fun x -> raise (Exit x)) ()) M.initial_mem_state in
@@ -174,8 +182,10 @@ let quit f =
   with
   | Exit x ->
     (match x with
-     | Specified x -> M.eval_integer_value x |> O.get
-                      |> Nat_big_num.to_string
-                      |> print_string
-     | Unspecified _ -> print_string "Unspecified"
+     | Specified x -> M.eval_integer_value x
+                      |> O.get
+                      |> print_exit_value
+                      |> Nat_big_num.to_int
+                      |> exit
+     | Unspecified _ -> print_string "Unspecified"; exit(-1)
     )
