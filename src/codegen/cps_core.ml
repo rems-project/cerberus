@@ -22,6 +22,7 @@ type control_expr =
   | CpsCont of Symbol.sym
   | CpsIf of typed_pexpr * control_expr * control_expr
   | CpsCase of typed_pexpr * (typed_pattern * control_expr) list
+  | CpsNd of control_expr list
 
 (* basic blocks *)
 type block_head = Symbol.sym * Symbol.sym list * typed_pattern option
@@ -53,6 +54,7 @@ let rec fv_ce ce fvs =
   | CpsProc (_, (_, fvs'), pes) ->
     List.fold_left (flip fv_pe) (fvs@fvs') pes
   | CpsCont _ -> fvs
+  | CpsNd xs -> List.fold_left (flip fv_ce) fvs xs
 
 let fv_pat_be (pat_opt, be) fvs =
   fv_be fvs be |> fvs_rm (fv_pat_opt pat_opt)
@@ -152,7 +154,15 @@ let cps_transform_expr sym_supply globs bvs e =
     | Erun (_, sym, pes) ->
       (bbs, ([], (pat1, CpsGoto (sym, List.rev pes, None))))
       (* TODO: random *)
-    | End (e::_) -> tr_right bbs pat1 es pat2 ce e
+    | End []   -> raise (Unsupported "empty nd")
+    | End nds ->
+      let (bbs, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
+      let (bbs, ces) = List.fold_left (fun (acc, ces) e ->
+          let (bbs, _, ce) = block_goto globs (tr_right acc pat1 [] pat' ce' e)
+          in (bbs, ce::ces)
+        ) (bbs, []) nds
+      in
+      (bbs, ([], (pat1, CpsNd ces)))
     | Eskip ->
       if es != [] then
         raise (CpsError "no skip elim")
@@ -160,7 +170,6 @@ let cps_transform_expr sym_supply globs bvs e =
         (bbs, ([], (None, ce)))
     | Ewseq _  -> raise (CpsError "no only_sseq")
     | Eunseq _ -> raise (Unsupported "unseq")
-    | End []   -> raise (Unsupported "empty end")
     | Easeq  _ -> raise (Unsupported "elim aseq")
     | Eindet _ -> raise (Unsupported "elim indet")
     | Ebound _ -> raise (Unsupported "elim bound")
