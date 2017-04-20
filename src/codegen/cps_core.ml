@@ -151,6 +151,7 @@ let cps_transform_expr sym_supply globs bvs e =
       tr_left bbs2 pat1 es2 pat' ce' e1
     | Erun (_, sym, pes) ->
       (bbs, ([], (pat1, CpsGoto (sym, List.rev pes, None))))
+      (* TODO: random *)
     | End (e::_) -> tr_right bbs pat1 es pat2 ce e
     | Eskip ->
       if es != [] then
@@ -158,14 +159,15 @@ let cps_transform_expr sym_supply globs bvs e =
       else
         (bbs, ([], (None, ce)))
     | Ewseq _  -> raise (CpsError "no only_sseq")
-    | End []   -> raise (Unsupported "empty end")
     | Eunseq _ -> raise (Unsupported "unseq")
-    | Easeq  _ -> raise (Unsupported "aseq")
-    | Eindet _ -> raise (Unsupported "indet")
-    | Ebound _ -> raise (Unsupported "bound")
+    | End []   -> raise (Unsupported "empty end")
+    | Easeq  _ -> raise (Unsupported "elim aseq")
+    | Eindet _ -> raise (Unsupported "elim indet")
+    | Ebound _ -> raise (Unsupported "elim bound")
     | Elet   _ -> raise (Unsupported "let")
-    | Epar   _ -> raise (Unsupported "par")
-    | Ewait  _ -> raise (Unsupported "wait")
+    | Epar   _ -> raise (Unsupported "concurrency: par")
+    | Ewait  _ -> raise (Unsupported "concurrency: wait")
+    (* TODO: just loc *)
     | Eloc   _ -> raise (Unsupported "loc")
     | _ -> (bbs, ([], (None, ce)))
   in
@@ -195,7 +197,6 @@ type cps_file = {
   globs  : (Symbol.sym * core_base_type * block list * block_body) list;
   funs   : (Symbol.sym, cps_fun) Pmap.map;
 }
-
 
 let cps_transform sym_supply (core : unit typed_file) globs_sym =
   let globs = List.map (fun (s, bty, e) ->

@@ -11,7 +11,21 @@ exception Undefined of string
 exception Error of string
 exception No_value
 
-let cons x l = x :: l
+let (>>=) = M.bind2
+let (>>) x y = x >>= fun _ -> y
+let return = M.return2
+
+(* init/set globals before calling main *)
+
+let set_global (f, x) =
+  f return () >>= fun y -> x := y; return ()
+
+let init_globals glbs =
+  List.fold_left (fun acc (f, x) -> acc >> set_global (f, x)) (return ()) glbs
+
+(* Non deterministic choice *)
+
+let nd n xs = List.nth xs n
 
 (* IV min/max wraps *)
 
@@ -52,12 +66,7 @@ let mv_to_pointer mv =
 
 (* Cast to memory values *)
 
-let mv_from_integer at iv =
-  match iv with
-    | I.IV (_, _) -> I.MVinteger (at, iv)
-
-
-let mk_int s = I.IV (I.Prov_none, I.IVconcrete (Nat_big_num.of_string s))
+let mk_int s = M.integer_ival (Nat_big_num.of_string s)
 
 (* Binary operations wrap *)
 
@@ -189,3 +198,10 @@ let quit f =
                       |> exit
      | Unspecified _ -> print_string "Unspecified"; exit(-1)
     )
+
+let run globals main =
+  begin fun cont args ->
+    globals
+    |> init_globals
+    >> main cont args
+  end |> quit
