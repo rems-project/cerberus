@@ -44,6 +44,19 @@ let rec elim_skip e =
   | Ewseq _ -> raise (PassError "elim_skip: Ewseq found.")
   | e -> e
 
+(* Eliminates loc expressions.
+   Dependencies: elim_wseq, assoc_seq *)
+let rec elim_loc e =
+  match e with
+  | Eloc (_, e) -> e
+  | Esseq (pat, e1, e2) -> Esseq (pat, elim_loc e1, elim_loc e2)
+  | Esave (x, y, e) -> Esave (x, y, elim_loc e)
+  | Eif (pe1, e2, e3) -> Eif (pe1, elim_loc e2, elim_loc e3)
+  | Ecase (pe, cases) -> Ecase (pe, List.map (fun (p, e) -> (p, elim_loc e)) cases)
+  | End es -> End (List.map elim_loc es)
+  | Ewseq _ -> raise (PassError "elim_loc: Ewseq found.")
+  | e -> e
+
 let runf opt = function
   | Fun (bty, param, pe) -> Fun (bty, param, pe)
   | Proc (bty, param, e) -> Proc (bty, param, opt e)

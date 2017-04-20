@@ -153,7 +153,6 @@ let cps_transform_expr sym_supply globs bvs e =
       tr_left bbs2 pat1 es2 pat' ce' e1
     | Erun (_, sym, pes) ->
       (bbs, ([], (pat1, CpsGoto (sym, List.rev pes, None))))
-      (* TODO: random *)
     | End []   -> raise (Unsupported "empty nd")
     | End nds ->
       let (bbs, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
@@ -176,8 +175,7 @@ let cps_transform_expr sym_supply globs bvs e =
     | Elet   _ -> raise (Unsupported "let")
     | Epar   _ -> raise (Unsupported "concurrency: par")
     | Ewait  _ -> raise (Unsupported "concurrency: wait")
-    (* TODO: just loc *)
-    | Eloc   _ -> raise (Unsupported "loc")
+    | Eloc   _ -> raise (CpsError "no loc elim")
     | _ -> (bbs, ([], (None, ce)))
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
