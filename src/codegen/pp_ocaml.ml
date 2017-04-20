@@ -649,6 +649,8 @@ let rec print_control globs = function
       else (P.separate_map P.space (fun x -> P.parens (print_pure_expr globs x)) es)
     )
   | CpsCont sym -> !^"cont_0" ^^^ print_symbol sym
+  | CpsNd ces -> !^"A.nd" ^^^ print_int (List.length ces)
+                 ^^^ print_list (print_control globs) ces
 
 let print_pato p =
   !^">>= fun" ^^^

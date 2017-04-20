@@ -25,7 +25,9 @@ let init_globals glbs =
 
 (* Non deterministic choice *)
 
-let nd n xs = List.nth xs n
+let nd n xs =
+  Random.self_init ();
+  Random.int n |> List.nth xs
 
 (* IV min/max wraps *)
 
