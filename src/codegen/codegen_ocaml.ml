@@ -35,6 +35,7 @@ let opt_passes core =
   |> assoc_seq
   |> elim_skip
   |> elim_loc
+  |> elim_let
 
 (* Generate Ocaml *)
 let generate_ocaml filename sym_supply core =
