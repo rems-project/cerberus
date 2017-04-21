@@ -14,10 +14,11 @@ let print_head filename =
   !^"module I = Mem.Impl" ^/^
   !^"module T = AilTypes" ^/^
   !^"module C = Core_ctype" ^/^
-  !^"module O = Util.Option" ^//^
-  !^"let (>>=) = M.bind2" ^//^
+  !^"module B = Nat_big_num" ^//^
+  !^"let (>>=) = M.bind2" ^/^
+  !^"let (>>) x y = x >>= fun _ -> y" ^//^
   !^"let rec _std_function_printf cont xs args =\
-     A.printf conv_int_2 xs args >>= fun x -> cont x"
+     \n  A.printf conv_int_2 xs args >>= fun x -> cont x"
 
 let print_globals globs =
   let print_global_pair g =
@@ -35,32 +36,33 @@ let opt_passes core =
   |> assoc_seq
   |> elim_skip
   |> elim_loc
+  |> elim_let
 
 (* Generate Ocaml *)
-let generate_ocaml sym_supply core =
+let generate_ocaml filename sym_supply core =
   let globs_syms = List.map (fun (s,_,_) -> s) core.Core.globs in
   let cps_core = cps_transform sym_supply (run opt_passes core) globs_syms in
-  let globals acc (sym, coreTy, bbs, bbody) =
+  let print_globals_init acc (sym, coreTy, bbs, bbody) =
     acc
-    ^^ !^"and" ^^^ print_eff_function (!^"glob_" ^^ print_symbol sym
-                                       ^^^ print_symbol default) []
+    ^//^ tand ^^^ print_eff_function
+      (!^"glob_" ^^ print_symbol sym ^^^ print_symbol default) []
       (print_base_type coreTy) (print_transformed globs_syms bbs bbody)
-    ^/^ !^"and" ^^^ print_symbol sym ^^^ !^"= ref (M.null_ptrval Core_ctype.Void0)"
+    ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.null_ptr"
   in
+    print_head filename ^^
     print_impls globs_syms cps_core.impl ^^
-    print_funs globs_syms cps_core.stdlib ^//^
-    List.fold_left globals P.empty cps_core.globs ^^
+    print_funs globs_syms cps_core.stdlib ^^
+    List.fold_left print_globals_init P.empty cps_core.globs ^^
     print_funs globs_syms cps_core.funs ^//^
     print_foot globs_syms core.main
-    (*print_start globs_syms core.main*)
 
 let compile filename sym_supply core =
   let fl = Filename.chop_extension filename in
   let fl_ml = fl ^ ".ml" in
   let oc = open_out fl_ml in
   begin
-    P.ToChannel.pretty 1. 80 oc
-      (print_head filename ^^ generate_ocaml sym_supply core);
+    generate_ocaml filename sym_supply core
+    |> P.ToChannel.pretty 1. 80 oc;
     close_out oc;
     Exception.return0 0
   end

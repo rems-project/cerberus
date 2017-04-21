@@ -18,9 +18,13 @@ let uncurry f = (fun (x, y) -> f x y)
 module Option = struct
 exception No_value
 
-let get = function
-  | Some a -> a
-  | None -> raise No_value
+let case f g = function
+  | Some x -> f x
+  | None -> g ()
+
+let get x = case id (fun _ -> raise No_value) x
+
 end
 
 exception Unsupported of string
+exception Unexpected of string
