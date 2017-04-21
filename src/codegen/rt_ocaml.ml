@@ -4,8 +4,8 @@ open Util
 module M = Mem
 module I = Mem.Impl
 module T = AilTypes
-module C = Core_ctype
 module O = Util.Option
+module C = Core_ctype
 
 exception Undefined of string
 exception Error of string
@@ -23,6 +23,8 @@ let set_global (f, x) =
 let init_globals glbs =
   List.fold_left (fun acc (f, x) -> acc >> set_global (f, x)) (return ()) glbs
 
+let null_ptr = M.null_ptrval C.Void0
+
 (* Non deterministic choice *)
 
 let nd n xs =
@@ -38,6 +40,27 @@ let ivctor memf errmsg = function
 let ivmin = ivctor M.min_ival "ivmin"
 
 let ivmax = ivctor M.max_ival "ivmax"
+
+(* Ail types *)
+
+let ail_qualifier (c, r, v, a) =
+  { AilTypes.const = c;
+    AilTypes.restrict = r;
+    AilTypes.volatile = v;
+    AilTypes.atomic = a;
+  }
+
+let is_scalar ty =
+  AilTypesAux.is_scalar (Core_aux.unproj_ctype ty)
+
+let is_integer ty =
+  AilTypesAux.is_integer (Core_aux.unproj_ctype ty)
+
+let is_signed ty =
+  AilTypesAux.is_signed_integer_type (Core_aux.unproj_ctype ty)
+
+let is_unsigned ty =
+  AilTypesAux.is_unsigned_integer_type (Core_aux.unproj_ctype ty)
 
 (* Loaded - Specified and unspecified values *)
 
@@ -72,6 +95,14 @@ let mk_int s = M.integer_ival (Nat_big_num.of_string s)
 
 (* Binary operations wrap *)
 
+let add = M.op_ival M.IntAdd
+let sub = M.op_ival M.IntSub
+let mul = M.op_ival M.IntMul
+let div = M.op_ival M.IntDiv
+let remt = M.op_ival M.IntRem_t
+let remf = M.op_ival M.IntRem_f
+let exp = M.op_ival M.IntExp
+
 let eq n m = O.get (M.eq_ival (Some M.initial_mem_state) n m)
 let lt n m = O.get (M.lt_ival (Some M.initial_mem_state) n m)
 let gt n m = O.get (M.lt_ival (Some M.initial_mem_state) m n)
@@ -79,11 +110,11 @@ let le n m = O.get (M.le_ival (Some M.initial_mem_state) n m)
 let ge n m = O.get (M.le_ival (Some M.initial_mem_state) m n)
 
 let eq_ptrval p q = M.eq_ptrval p q
-let ne_ptrval p q = M.eq_ptrval p q
-let ge_ptrval p q = M.eq_ptrval p q
-let lt_ptrval p q = M.eq_ptrval p q
-let gt_ptrval p q = M.eq_ptrval p q
-let le_ptrval p q = M.eq_ptrval p q
+let ne_ptrval p q = M.ne_ptrval p q
+let ge_ptrval p q = M.ge_ptrval p q
+let lt_ptrval p q = M.lt_ptrval p q
+let gt_ptrval p q = M.gt_ptrval p q
+let le_ptrval p q = M.le_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
 
 (* Memory actions wrap *)
@@ -92,10 +123,15 @@ let create pre al ty = M.allocate_static 0 pre al ty
 
 let alloc pre al n = M.allocate_dynamic 0 pre al n
 
-let load_integer ity e = M.bind2 (M.load (C.Basic0 (T.Integer ity)) e)
-                           (M.return2 % mv_to_integer_loaded % snd)
+let load_integer ity e =
+  (M.load (C.Basic0 (T.Integer ity)) e)
+  >>=
+  (M.return2 % mv_to_integer_loaded % snd)
 
-let load_pointer q cty e = M.bind2 (M.load (C.Pointer0 (q, cty)) e) (M.return2 % specified % mv_to_pointer % snd)
+let load_pointer q cty e =
+  (M.load (C.Pointer0 (q, cty)) e)
+  >>=
+  (M.return2 % specified % mv_to_pointer % snd)
 
 let store ty e1 e2 = M.store ty e1 e2
 
@@ -147,18 +183,18 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
         (fun _ _ -> throw_error ())
     in Either.Right (Undefined.Defined0 (Core.Vspecified (Core.OVinteger n)))
   in
-  M.bind2 (Output.printf eval_conv (List.rev (List.map encode xs)) args)
-    begin function
-      | Either.Right (Undefined.Defined0 xs) ->
-        let n = List.length xs in
-        print_string (String.init n (List.nth xs));
-        M.return2 (M.integer_ival (Nat_big_num.of_int n))
-      | Either.Right (Undefined.Undef (_, xs) ) ->
-        raise (Error (String.concat "," 
-                        (List.map Undefined.stringFromUndefined_behaviour xs)))
-      | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
-      | Either.Left z -> raise (Error (Pp_errors.to_string z))
-    end
+  Output.printf eval_conv (List.rev (List.map encode xs)) args
+  >>= begin function
+    | Either.Right (Undefined.Defined0 xs) ->
+      let n = List.length xs in
+      print_string (String.init n (List.nth xs));
+      M.return2 (M.integer_ival (Nat_big_num.of_int n))
+    | Either.Right (Undefined.Undef (_, xs) ) ->
+      raise (Error (String.concat "," 
+                      (List.map Undefined.stringFromUndefined_behaviour xs)))
+    | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
+    | Either.Left z -> raise (Error (Pp_errors.to_string z))
+  end
 
 
 (* Cast types functions *)
@@ -176,7 +212,7 @@ let get_first_value mv =
 
 (* Exit continuation *)
 
-let value x = M.return2 x (*reset (return x)*)
+let value x = return x (*reset (return x)*)
 
 exception Exit of (M.integer_value loaded)
 
