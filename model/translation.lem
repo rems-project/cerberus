@@ -2119,7 +2119,6 @@ TODO: #9
           E.return $
             mk_core (C.Epure (C.PEctor C.Carray pes))
 *)
-(*
       
       | A.AilEstruct tag_sym ident_e_opts ->
           let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym (Cty.tagDefs ()) in
@@ -2127,35 +2126,40 @@ TODO: #9
             match e_opt with
               | Just e ->
                   let memb_ty = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
-                    E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-                  (if AilTypesAux.is_pointer (Caux.unproj_ctype memb_ty) && Aaux.is_null_pointer_constant e then
-                    match memb_ty with
-                      | Cty.Pointer _ ref_ty ->
-                          E.return (C.Epure (Caux.nullptr_pexpr ref_ty))
-                    end
-                  else
-                    E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-                    translate_rvalue e >>= fun core_e ->
-                    E.return (
-                      C.Esseq [Just sym_ty_e] core_e
-                        (C.Epure (conv [Caux.mk_ail_ctype_pe (ctype_of e); C.PEval (C.Vctype memb_ty); C.PEsym sym_ty_e]))
-                    )
-                  ) >>= fun core_e ->
-                  E.return (
-                    (ident, C.PEsym sym_ty_e) :: acc,
-                    fun z -> C.Esseq [Just sym_ty_e] core_e (mk_core z)
-                  )
+                  let oTy = force_core_object_type_of_ctype memb_ty in
+                  begin
+                    if AilTypesAux.is_pointer (Caux.unproj_ctype memb_ty) && Aaux.is_null_pointer_constant e then
+                      (* the member is a null pointer constant *)
+                      match memb_ty with
+                        | Cty.Pointer _ ref_ty ->
+                            E.return (
+                              (ident, Caux.mk_nullptr_pe ref_ty) :: acc,
+                              mk_core
+                            )
+                        | _ ->
+                            illTypedAil loc "AilEstruct, Just null_pointer_constant"
+                      end
+                    else
+                      E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
+                      translate_rvalue e >>= fun core_e ->
+                      E.return (
+                        (ident, stdlib.mkcall_conv_loaded_int ((*TODO: ahem*)Caux.unproj_ctype memb_ty) e_sym_pe) :: acc ,
+                        fun z -> C.Esseq e_sym_pat core_e (mk_core z)
+                      )
+                  end
               | Nothing ->
                   let ty = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
                   E.return (
-                    (ident, C.PEval (C.Vunspecified ty)) :: acc,
+                    (ident, Caux.mk_unspecified_pe ty) :: acc,
                     mk_core
                   )
             end
           ) ([], fun z -> z) ident_e_opts >>= fun (core_xs_rev, mk_core) ->
           E.return $
-            mk_core (C.Epure (C.PEstruct tag_sym (List.reverse core_xs_rev)))
+            mk_core (C.Epure (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev)))
       
+(*
+
       | A.AilEcompound _ _ ->
           error "WIP: Translation.translate_expression, AilEcompound"
 *)

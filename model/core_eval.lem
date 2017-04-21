@@ -409,14 +409,22 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
           | _ ->
               EU.return (PEnot pe')
         end
-
-
     | PEop binop pe1 pe2 ->
        step_eval_peop loc mem_st_opt self pexpr
-
-
     | PEstruct tag_sym ident_pes ->
-        error "WIP: Core_Eval.step_eval_pexpr, PEstruct"
+        let (idents, pes) = List.unzip ident_pes in
+        EU.mapM self pes >>= fun pes' ->
+        match Caux.valueFromPexprs pes' with
+          | Just cvals ->
+              let xs = List.map (fun (ident, cval) ->
+                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup ident (Core_ctype_aux.get_membersDefs tag_sym)) in
+                let mval    = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval)                        in
+                (ident, mval)
+              ) (List.zip idents cvals) in
+              EU.return (PEval (Vspecified (OVstruct tag_sym xs)))
+          | Nothing ->
+              EU.return (PEstruct tag_sym (List.zip idents pes'))
+        end
     | PEunion tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with

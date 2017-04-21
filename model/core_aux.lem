@@ -333,7 +333,9 @@ val mk_neg_pe: pexpr -> pexpr
 let mk_neg_pe pe =
   Pexpr () (PEop OpSub (mk_integer_pe 0) pe)
 
-
+val mk_struct_pe: Symbol.sym -> list (Cabs.cabs_identifier * pexpr) -> pexpr
+let mk_struct_pe tag_ident xs =
+  Pexpr () (PEstruct tag_ident xs)
 
 
 
