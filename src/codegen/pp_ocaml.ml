@@ -9,8 +9,6 @@ open AilTypes
 module D = Defacto_memory_types
 open Core_ctype
 
-exception Unexpected of string
-
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 
@@ -36,7 +34,7 @@ let tand   = !^"and"
 let tfun   = !^"fun"
 let tarrow = !^"->"
 let tbind  = !^">>="
-let tbind2 = !^">>"
+let tseq   = !^">>"
 let tunit  = !^"()"
 let tbool  = !^"bool"
 let ttrue  = !^"true"
@@ -614,8 +612,10 @@ let rec print_control globs = function
     ^^^ print_list (print_control globs) ces
 
 let print_seq = function
-  | None -> tbind2
-  | Some p -> tbind ^^^ print_anon (print_pattern p)
+  | Some (CaseBase (None, _))
+  | Some (CaseCtor (_, []))
+  | None -> tseq ^^ P.space
+  | Some p -> tbind ^^^ print_anon (print_pattern p) ^^ P.break 1
 
 let print_bb globs (es, (pato, ct)) =
   match es with
@@ -623,9 +623,9 @@ let print_bb globs (es, (pato, ct)) =
   | ((_, e)::es) ->
     print_basic_expr globs e
     ^^ List.fold_left
-      (fun acc (p, e) -> acc ^/^ print_seq p ^/^ print_basic_expr globs e)
+      (fun acc (p, e) -> acc ^/^ print_seq p ^^ print_basic_expr globs e)
       P.space es
-    ^^^ !> (print_seq pato) ^/^ print_control globs ct
+    ^/^ print_seq pato ^^ print_control globs ct
 
 let print_decl globs (BB ((sym, pes, pato), bb)) =
   print_symbol sym

@@ -76,7 +76,7 @@ let fresh_label () =
 (* TODO: correctly type this *)
 let pexpr_of_sym sym = Pexpr (BTy_unit, PEsym sym)
 
-(* helper functions *)
+(* Helper functions *)
 
 let block_goto globs (bbs, (es, (pat2, ce))) =
   match es with
@@ -109,7 +109,7 @@ let default = Symbol.Symbol (0, Some "cont")
 let cps_transform_expr sym_supply globs bvs e =
   let rec tr_left bbs pat1 es pat2 ce e =
     match e with
-    | Esseq _ -> raise (CpsError "no assoc")
+    | Esseq _ -> raise (Unexpected "Sequencing must be associate to the right!")
     | e -> tr_right bbs pat1 es pat2 ce e
   and tr_right bbs pat1 es pat2 ce e =
     let to_basic e = (bbs, ((pat1, e)::es, (pat2, ce))) in
@@ -143,8 +143,9 @@ let cps_transform_expr sym_supply globs bvs e =
     | Ecase (pe, cases) ->
       let (bbs, pat', ce') = block_goto globs (bbs, (es, (pat2, ce))) in
       let (bbs, cases) = List.fold_left (fun (acc, cases) (p, e) ->
-          let (bbs, _, ce) = block_goto globs (tr_right acc (Some p) [] pat' ce' e) in
-          (bbs, (p, ce)::cases)
+          let (bbs, _, ce) =
+            block_goto globs (tr_right acc (Some p) [] pat' ce' e)
+          in (bbs, (p, ce)::cases)
         ) (bbs, []) cases
       in
       (bbs, ([], (pat1, CpsCase (pe, cases))))
@@ -164,19 +165,18 @@ let cps_transform_expr sym_supply globs bvs e =
       (bbs, ([], (pat1, CpsNd ces)))
     | Eskip ->
       if es != [] then
-        raise (CpsError "no skip elim")
+        raise (Unexpected "Skip expression not allowed.")
       else
         (bbs, ([], (None, ce)))
-    | Ewseq _  -> raise (CpsError "no only_sseq")
-    | Eunseq _ -> raise (Unsupported "unseq")
-    | Easeq  _ -> raise (Unsupported "elim aseq")
+    | Ewseq _  -> raise (Unexpected "Weak sequencing expression not allowed.")
+    | Eunseq _ -> raise (Unsupported "Unsequencing operations not supported.")
+    | Easeq  _ -> raise (Unexpected "Atomic sequencing must be eliminated.")
     | Eindet _ -> raise (Unsupported "elim indet")
     | Ebound _ -> raise (Unsupported "elim bound")
-    | Elet   _ -> raise (Unsupported "let")
-    | Epar   _ -> raise (Unsupported "concurrency: par")
-    | Ewait  _ -> raise (Unsupported "concurrency: wait")
-    | Eloc   _ -> raise (CpsError "no loc elim")
-    | _ -> (bbs, ([], (None, ce)))
+    | Elet   _ -> raise (Unsupported "Let expressions must be eliminated.")
+    | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
+    | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
+    | Eloc   _ -> raise (Unsupported "Location operations should be eliminated")
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)

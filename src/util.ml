@@ -27,3 +27,4 @@ let get x = case_option id (fun _ -> raise No_value) x
 end
 
 exception Unsupported of string
+exception Unexpected of string
