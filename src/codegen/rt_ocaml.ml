@@ -212,8 +212,6 @@ let get_first_value mv =
 
 (* Exit continuation *)
 
-let value x = return x (*reset (return x)*)
-
 exception Exit of (M.integer_value loaded)
 
 let print_exit_value n =
