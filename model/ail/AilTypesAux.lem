@@ -299,6 +299,9 @@ val is_complete: forall 'a. sigma 'a -> ctype -> bool
 let is_complete S ty =
   (* TODO: check atomic *)
   match unatomic ty with
+  | Void ->
+      (* STD §6.2.5#19 *)
+      false
   | Basic _ ->
       true
   | Pointer _ _ ->
@@ -901,6 +904,7 @@ let rec ~{coq} compatible ty1 ty2 =
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
     | (Array ty1 n1, Array ty2 n2) ->
+        (* STD §6.7.6.1#2 *)
         compatible ty1 ty2 && n1 = n2
     | (Function _ ty1 p1 b1, Function _ ty2 p2 b2) ->
         compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2

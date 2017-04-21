@@ -59,19 +59,6 @@ let force_core_object_type_of_ctype ty =
 
 
 
-(* TODO: I need functors ... *)
-type core_stdlib = <|
-  ailnames:                           map string Symbol.sym;
-  mkcall_bitwise_AND:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_bitwise_XOR:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_bitwise_OR:                  Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_conv_int:                    Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_conv_loaded_int:             Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
-  mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
-  mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
-|>
 
 
 
@@ -192,7 +179,7 @@ let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
 
 
 
-val translate_function_designator: core_stdlib -> A.expression GenTypes.genTypeCategory -> E.t (C.expr unit)
+val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.t (C.expr unit)
 let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
   match (ctype_of a_expr, expr) with
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
@@ -1621,9 +1608,19 @@ else (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
       
 *)
 
+(*
+      | A.AilEcompoundAssign e1 aop e2 ->
+          translate_rvalue e1 >>= fun core_e1 ->
+          translate_rvalue e2 >>= fun core_e2 ->
+          E.return $
+            C.Ewseq (Caux.mk_tuple_pat [e1_sym_pat; e2_sym_pat]) (C.Eunseq [core_e1; core_e2]) (
+              C.Easeq (Just (atom_sym, bTy) (Caux.pstore loc TODO_ty_pe e1_sym_pe))
+            )
+*)
 
-
-
+(*
+ | Easeq of maybe ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
+*)
       
 
 
@@ -2097,28 +2094,6 @@ TODO: #9
           ) ([], id) e_opts >>= fun (rev_pes, mk_expr) ->
           E.return $
              mk_expr (C.Epure (C.Pexpr () (C.PEctor C.Carray (List.reverse rev_pes))))
-
-(*
-          E.foldlM (fun (acc, mk_core) e_opt ->
-            match e_opt with
-              | Just e ->
-                  E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
-                  (if AilTypesAux.is_pointer elem_ty && Aaux.is_null_pointer_constant e then
-                    match elem_ty with
-                      | Aty.Pointer _ ref_ty ->
-                          E.return (C.Epure (Caux.nullptr_pexpr (Caux.proj_ctype ref_ty)))
-                    end
-                  else
-                    translate_rvalue e)
-                  >>= fun core_e ->
-                  E.return (C.PEsym sym_ty_e :: acc, fun z -> C.Esseq [Just sym_ty_e] core_e (mk_core z))
-              | Nothing ->
-                  E.return (C.PEval (C.Vunspecified $ Caux.proj_ctype elem_ty) :: acc, mk_core)
-            end
-          ) ([], fun z -> z) (List.reverse e_opts) >>= fun (pes, mk_core) ->
-          E.return $
-            mk_core (C.Epure (C.PEctor C.Carray pes))
-*)
       
       | A.AilEstruct tag_sym ident_e_opts ->
           let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym (Cty.tagDefs ()) in
@@ -2816,7 +2791,7 @@ type translate_stmt_env = <|
 
 
 val translate_stmt:
-  core_stdlib ->
+  translation_stdlib ->
   A.program GenTypes.genTypeCategory -> A.identifier ->
   translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
@@ -3602,7 +3577,7 @@ let mk_run_e sym visibles_before visibles_after pes =
 
 
 val translate_program:
-  core_stdlib ->
+  translation_stdlib ->
   bool -> A.program GenTypes.genTypeCategory ->
   E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 
@@ -3850,23 +3825,10 @@ val translate:
     (UniqueId.supply Symbol.sym * C.file unit)
 
 let translate (ailnames, stdlib_fun_map) sequentialise impl (symbol_counter, prog) =
-  let stdlib =
-    let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
-    let mk_call str pes = Core.Pexpr () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
-    <| ailnames=                           ailnames
-     ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-     ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-     ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-     ; mkcall_conv_int=                    fun ty pe      -> mk_call "conv_int"                   [Caux.mk_ail_ctype_pe ty; pe]
-     ; mkcall_conv_loaded_int=             fun ty pe      -> mk_call "conv_loaded_int"            [Caux.mk_ail_ctype_pe ty; pe]
-     ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
-     ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
-     ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]
-     ; mkcall_catch_exceptional_condition= fun ty pe     -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |> in
-  
+  let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
   let () = Cty.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   (* TODO2: not sure what that comment is refering too ... *)
-  let ((cglobs, cfuns), st) = (translate_program stdlib sequentialise prog) (E.init symbol_counter) in
+  let ((cglobs, cfuns), st) = (translate_program translation_stdlib sequentialise prog) (E.init symbol_counter) in
   (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib_fun_map; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>)

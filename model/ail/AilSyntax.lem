@@ -64,6 +64,7 @@ type constant [name = "c*"] =
  | ConstantCharacter     of characterConstant
  | ConstantArray         of list constant
  | ConstantStruct        of identifier * list (Cabs.cabs_identifier * constant)
+ | ConstantUnion         of identifier * Cabs.cabs_identifier * constant
 
 (* 
  (* TODO: this is a kind of integer constant, may need to update some predicates *)
@@ -407,6 +408,8 @@ let rec constantEqual c1 c2 =
         eq_list constantEqual cs1 cs2
     | (ConstantStruct tag_sym1 xs1, ConstantStruct tag_sym2 xs2) ->
         tag_sym1 = tag_sym2 && eq_list (eq_pair (=) constantEqual) xs1 xs2
+    | (ConstantUnion tag_sym1 memb_ident1 cst1, ConstantUnion tag_sym2 memb_ident2 cst2) ->
+        tag_sym1 = tag_sym2 && memb_ident1 = memb_ident1 && constantEqual cst1 cst2
     | _ ->
         false
   end
