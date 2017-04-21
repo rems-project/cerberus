@@ -18,11 +18,11 @@ let uncurry f = (fun (x, y) -> f x y)
 module Option = struct
 exception No_value
 
-let case_option f g = function
+let case f g = function
   | Some x -> f x
   | None -> g ()
 
-let get x = case_option id (fun _ -> raise No_value) x
+let get x = case id (fun _ -> raise No_value) x
 
 end
 

@@ -47,7 +47,7 @@ let generate_ocaml filename sym_supply core =
     ^//^ tand ^^^ print_eff_function
       (!^"glob_" ^^ print_symbol sym ^^^ print_symbol default) []
       (print_base_type coreTy) (print_transformed globs_syms bbs bbody)
-    ^/^ !^"and" ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.null_ptr"
+    ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.null_ptr"
   in
     print_head filename ^^
     print_impls globs_syms cps_core.impl ^^

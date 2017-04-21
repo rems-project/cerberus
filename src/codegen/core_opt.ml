@@ -1,8 +1,5 @@
 (* Created by Victor Gomes 2017-03-10 *)
-(* Few passes to *)
-
 open Core
-exception PassError of string
 
 let core_expr_map f = function
  | Ecase (pe, cs) -> Ecase (pe, List.map (fun (p, e) -> (p, f e)) cs)

@@ -79,9 +79,9 @@ let print_bool b = if b then ttrue else tfalse
 
 let print_int n = !^(string_of_int n)
 
-let print_option pp = function
-  | Some e  -> tsome ^^^ P.parens (pp e)
-  | None    -> tnone
+let print_option pp = Option.case
+    (fun e -> tsome ^^^ P.parens (pp e))
+    (fun _ -> tnone)
 
 let print_pair pp (x, y) = P.parens (pp x ^^ P.comma ^^^ pp y)
 
@@ -396,7 +396,7 @@ let lt_precedence p1 p2 =
 
 let rec print_object_value = function
   | OVstruct _
-  | OVunion  _     -> todo "print_obj_value"
+  | OVunion  _     -> raise (Unsupported "struct or union")
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
@@ -412,7 +412,7 @@ let rec print_value = function
   | Vctype ty        -> print_ctype ty
   | Vunspecified ty  -> !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
   | Vobject obv      -> print_object_value obv
-  | Vconstrained _   -> todo "vconstrained"
+  | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.")
   | Vspecified v     -> !^"A.Specified" ^^^ P.parens (print_object_value v)
 
 let print_is_expr str pp pe =
@@ -580,7 +580,7 @@ let rec print_basic_expr globs = function
 let print_call globs (sym, pes, pato) =
   P.parens (print_symbol sym (*^^  !^"[@tailcall]"*))
   ^^^ P.parens (P.separate_map comma_space (print_pure_expr globs) pes)
-  ^^^ P.parens (Option.case_option print_call_pattern (fun _ -> P.empty) pato)
+  ^^^ P.parens (Option.case print_call_pattern (fun _ -> P.empty) pato)
 
 let rec print_control globs = function
   | CpsGoto goto -> print_call globs goto
@@ -630,7 +630,7 @@ let print_bb globs (es, (pato, ct)) =
 let print_decl globs (BB ((sym, pes, pato), bb)) =
   print_symbol sym
   ^^^ P.parens (P.separate_map comma_space print_symbol pes)
-  ^^^ Option.case_option print_fun_pattern (fun _ -> P.underscore) pato
+  ^^^ Option.case print_fun_pattern (fun _ -> P.underscore) pato
   ^^^ P.equals ^^ !> (print_bb globs bb)
 
 let print_transformed globs bbs bb =
