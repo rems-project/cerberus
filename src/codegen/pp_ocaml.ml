@@ -9,8 +9,6 @@ open AilTypes
 module D = Defacto_memory_types
 open Core_ctype
 
-exception Unexpected of string
-
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 
@@ -32,9 +30,11 @@ let twith  = !^"with"
 let tlet   = !^"let"
 let tletrec = !^"let rec"
 let tin    = !^"in"
+let tand   = !^"and"
 let tfun   = !^"fun"
 let tarrow = !^"->"
 let tbind  = !^">>="
+let tseq   = !^">>"
 let tunit  = !^"()"
 let tbool  = !^"bool"
 let ttrue  = !^"true"
@@ -42,6 +42,9 @@ let tfalse = !^"false"
 let tsome  = !^"Some"
 let tnone  = !^"None"
 let traise = !^"raise"
+let tref   = !^"ref"
+
+let comma_space = P.comma ^^ P.space
 
 (* Ocaml expressions *)
 
@@ -76,23 +79,25 @@ let print_bool b = if b then ttrue else tfalse
 
 let print_int n = !^(string_of_int n)
 
-let print_option pp = function
-  | Some e  -> tsome ^^^ P.parens (pp e)
-  | None    -> tnone
+let print_option pp = Option.case
+    (fun e -> tsome ^^^ P.parens (pp e))
+    (fun _ -> tnone)
 
-let print_pair pp (x, y) =
-  P.parens (pp x ^^ P.comma ^^^ pp y)
+let print_pair pp (x, y) = P.parens (pp x ^^ P.comma ^^^ pp y)
 
-let print_list pp xs =
-  let rec print_elem xs =
-    match xs with
-    | [] -> P.empty
-    | [x] -> pp x
-    | x :: xs -> pp x ^^ P.semi ^^^ (print_elem xs)
-  in P.brackets (print_elem xs)
+let print_list pp xs = P.brackets (P.separate_map (P.semi ^^ P.space) pp xs)
 
-let print_nat_big_num n =
-  !^"Nat_big_num.of_string" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
+let print_tuple xs = P.parens (P.separate_map comma_space id xs)
+
+let max_int_big_num = Nat_big_num.of_int max_int
+
+let print_num n =
+  if Nat_big_num.less n max_int_big_num then
+    !^"B.of_int" ^^^ print_int (Nat_big_num.to_int n)
+  else
+    !^"B.of_string" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
+
+let print_ref x = tref ^^^ P.parens x
 
 (* Symbol *)
 
@@ -150,15 +155,7 @@ let print_ail_qualifier {
   AilTypes.restrict = r;
   AilTypes.volatile = v;
   AilTypes.atomic = a;
-} =
-  let row str v = !^str ^^^ P.equals ^^^ print_bool v ^^ P.semi in
-  P.braces (P.nest 2 (
-      P.break 1 ^^
-      row "T.const" c ^/^
-      row "T.restrict" r ^/^
-      row "T.volatile" v ^/^
-      row "T.atomic" a)
-            ^^ P.break 1)
+  } = !^"A.ail_qualifier" ^^^ print_tuple (List.map print_bool [c;r;v;a])
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
@@ -224,7 +221,7 @@ let rec print_ctype = function
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
   | Array0 (cty, num) ->
     !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
-                               ^^^ print_option print_nat_big_num num)
+                               ^^^ print_option print_num num)
   | Function0 (cty, params, variad) ->
     !^"C.Function0" ^^^ P.parens
       (print_ctype cty ^^ P.comma
@@ -243,7 +240,7 @@ let rec print_ctype = function
 
 let print_integer_value_base = function
   | D.IVconcrete bignum             ->
-    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
+    !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
   | D.IVaddress (D.Address0 (sym, n))  ->
     !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
                                    ^^ P.comma ^^^ !^(string_of_int n)))
@@ -301,7 +298,7 @@ let print_floating_value = function
 
 (* Core Types *)
 
-(* TODO: !!! *)
+(* THIS IS ONLY USED WHEN ANNOTATING *)
 let rec print_core_object = function
   | OTy_integer    -> !^"M.integer_value"
   | OTy_floating   -> !^"M.floating_value"
@@ -334,7 +331,7 @@ let print_params params =
     P.parens P.empty
   else
     let args (sym, ty) =
-      P.parens (print_symbol sym ^^ P.colon ^^ print_base_type ty)
+      P.parens (print_symbol sym (*^^ P.colon ^^ print_base_type ty*))
     in P.separate_map P.space args params
 
 let print_function name pmrs ty body =
@@ -345,86 +342,33 @@ let print_eff_function name pmrs ty body =
 
 (* Binary operations and precedences *)
 
-(* TODO: !! *)
-(* FIXME: test if t1 and t2 are the same up to loaded *)
-(* TODO: all the binops case *)
-let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
-  match binop with
-  | OpAdd -> !^"(M.op_ival M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpSub -> !^"(M.op_ival M.IntSub (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpMul -> !^"(M.op_ival M.IntMul (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpDiv -> !^"(M.op_ival M.IntDiv (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_t -> !^"(M.op_ival M.IntRem_t (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_f -> !^"(M.op_ival M.IntRem_f (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpExp -> !^"(M.op_ival M.IntExp (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpEq  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.eq" ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2)
-        (*!^"(O.get (M.eq_ival M.initial_mem_state0 Symbolic.Constraints_TODO  ("
-          ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(M.eq_ptrval Symbolic.Constraints_TODO  (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^"))"
-      | BTy_ctype ->
-        !^"(C.ctypeEqual0 (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-      | _ -> todo "binop eq"
-    )
-  | OpLt  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.lt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*
-        !^"(O.get (M.lt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.lt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop lt"
-    )
-  | OpLe  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.le" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-       (* !^"(O.get (M.le_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.le_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop lt"
-    )
-  | OpGt  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.gt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.gt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.gt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop gt"
-    )
-  | OpGe  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.ge" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.ge_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.ge_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop ge"
-    )
+let print_binop bop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
+  let app bop = !^bop ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2) in
+  let case_by_type f g h =
+    match t1 with
+    | BTy_object (OTy_integer)
+    | BTy_loaded (OTy_integer) -> app f
+    | BTy_object (OTy_pointer)
+    | BTy_loaded (OTy_pointer) -> app g
+    | BTy_ctype -> begin match h with
+        | Some h -> app h
+        | None -> raise (Unexpected "Unexcpected binary operator for ctypes")
+      end
+    | _ -> raise (Unexpected "Unknown binary operator")
+  in
+  match bop with
+  | OpAdd -> app "A.add"
+  | OpSub -> app "A.sub"
+  | OpMul -> app "A.mul"
+  | OpDiv -> app "A.div"
+  | OpRem_t -> app "A.remt"
+  | OpRem_f -> app "A.remf"
+  | OpExp -> app "A.exp"
+  | OpEq  -> case_by_type "A.eq" "A.eq_ptrval" (Some "C.ctypeEqual0")
+  | OpLt  -> case_by_type "A.lt" "A.lt_ptrval" None
+  | OpLe  -> case_by_type "A.le" "A.le_ptrval" None
+  | OpGt  -> case_by_type "A.gt" "A.gt_ptrval" None
+  | OpGe  -> case_by_type "A.ge" "A.ge_ptrval" None
   | OpAnd -> pp pe1 ^^^ !^" && " ^^^ pp pe2
   | OpOr  -> pp pe1 ^^^ !^ "||" ^^^ pp pe2
 
@@ -452,7 +396,7 @@ let lt_precedence p1 p2 =
 
 let rec print_object_value = function
   | OVstruct _
-  | OVunion  _     -> todo "print_obj_value"
+  | OVunion  _     -> raise (Unsupported "struct or union")
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
@@ -468,15 +412,16 @@ let rec print_value = function
   | Vctype ty        -> print_ctype ty
   | Vunspecified ty  -> !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
   | Vobject obv      -> print_object_value obv
-  | Vconstrained _   -> todo "vconstrained"
+  | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.")
   | Vspecified v     -> !^"A.Specified" ^^^ P.parens (print_object_value v)
 
 let print_is_expr str pp pe =
   match pe with
   | Pexpr (_, PEval (Vctype _))
-  | Pexpr (_, PEsym _) ->
+  | Pexpr (_, PEsym _) -> !^"A." ^^ !^str ^^^ P.parens (pp pe)
+    (*
     P.parens (!^"AilTypesAux." ^^ !^str
-              ^^ P.parens (!^"Core_aux.unproj_ctype" ^^^ pp pe))
+              ^^ P.parens (!^"Core_aux.unproj_ctype" ^^^ pp pe)) *)
   | _ -> !^str ^^^ pp pe
 
 let print_pure_expr globs pe =
@@ -492,9 +437,9 @@ let print_pure_expr globs pe =
       | PEimpl iCst -> print_impl_name iCst ^^^ P.parens P.space
       | PEval cval -> print_value cval
       | PEconstrained _ -> raise (Unexpected "Unexpected contrained expression.")
-      | PEundef ub -> traise ^^^ P.parens
-                        (!^"A.Undefined" ^^^ P.dquotes
-                           (!^(Undefined.stringFromUndefined_behaviour ub)))
+      | PEundef ub ->
+        traise ^^^ P.parens (!^"A.Undefined" ^^^ P.dquotes
+                               (!^(Undefined.stringFromUndefined_behaviour ub)))
       | PEerror (str, pe) ->
         traise ^^^ P.parens (!^"A.Error" ^^^ P.dquotes (!^str ^^^ pp pe))
       | PEctor (ctor, pes) ->
@@ -505,7 +450,7 @@ let print_pure_expr globs pe =
           | Ccons ->
             (match pes with
              | []       -> raise (Unexpected "Ccons: empty list")
-             | [pe]     -> !^"[" ^^ pp pe ^^ !^"]"
+             | [pe]     -> P.brackets (pp pe)
              | [pe;pes] -> pp pe ^^^ !^"::" ^^^ pp pes
              | _        -> raise (Unexpected "Ccons: more than 2 args")
             )
@@ -543,8 +488,8 @@ let print_pure_expr globs pe =
       | PEif (pe1, pe2, pe3) -> print_if (pp pe1) (pp pe2) (pp pe3)
       | PEis_scalar pe -> print_is_expr "is_scalar" pp pe
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
-      | PEis_signed pe -> print_is_expr "is_signed_integer_type" pp pe
-      | PEis_unsigned pe -> print_is_expr "is_unsigned_integer_type" pp pe
+      | PEis_signed pe -> print_is_expr "is_signed" pp pe
+      | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
     end
   in pp None pe
 
@@ -580,120 +525,140 @@ let choose_store_type (Pexpr (_, PEval cty)) =
       ^^^ P.parens (print_ctype cty)
   | Vctype (Array0 (cty, n)) ->
     !^"A.store_array" ^^^ P.parens (print_ctype cty)
-      ^^^ P.parens (print_option print_nat_big_num n)
+      ^^^ P.parens (print_option print_num n)
   | _ -> todo "store not implemented"
 
 let print_action globs act =
   match act with
   | Create (al, ty, pre) ->
-    !^"A.create" ^^^ P.parens (print_symbol_prefix pre) ^^^
-      P.parens (print_pure_expr globs al) ^^^ P.parens (print_pure_expr globs ty)
+    !^"A.create"
+    ^^^ P.parens (print_symbol_prefix pre)
+    ^^^ P.parens (print_pure_expr globs al)
+    ^^^ P.parens (print_pure_expr globs ty)
   | Alloc0 (al, n, pre) ->
-    !^"A.alloc" ^^^ P.parens (print_symbol_prefix pre) ^^^
-      P.parens (print_pure_expr globs al) ^^^ P.parens (print_pure_expr globs n)
+    !^"A.alloc"
+    ^^^ P.parens (print_symbol_prefix pre)
+    ^^^ P.parens (print_pure_expr globs al)
+    ^^^ P.parens (print_pure_expr globs n)
   | Kill e ->
     !^"M.kill" ^^ P.parens (print_pure_expr globs e)
   | Store0 (ty, pe1, pe2, _) ->
-    choose_store_type ty ^^^ P.parens (print_pure_expr globs pe1) ^^^
-      P.parens (print_pure_expr globs pe2)
+    choose_store_type ty
+    ^^^ P.parens (print_pure_expr globs pe1)
+    ^^^ P.parens (print_pure_expr globs pe2)
   | Load0 (ty, e, _) ->
     choose_load_type ty ^^^ P.parens (print_pure_expr globs e)
-  | RMW0 _ -> raise (Unsupported "rmw0")
-  | Fence0 _ -> raise (Unsupported "fence")
+  | RMW0 _ -> raise (Unsupported "Operation RMW is currently not supported.")
+  | Fence0 _ -> raise (Unsupported "Operation Fence is currenly not supported.")
 
 (* Implementation constants *)
 
 let print_impls globs impl =
   Pmap.fold (fun iCst iDecl acc ->
-      acc ^//^
-      !^"and" ^^^
-    (*(if acc = P.empty then !^"let rec" else !^"and") ^^^ *)
+      acc ^//^ tand ^^^
     match iDecl with
     | Def (bTy, pe) ->
-      print_function (print_impl_name iCst) [] (print_base_type bTy)
+      print_function (print_impl_name iCst)
+        []
+        (print_base_type bTy)
         (print_pure_expr globs pe)
     | IFun (bTy, params, pe) ->
-      print_function (print_impl_name iCst) params (print_base_type bTy)
+      print_function
+        (print_impl_name iCst)
+        params
+        (print_base_type bTy)
         (print_pure_expr globs pe)
   ) impl P.empty
 
 (* CPS core *)
 
 let rec print_basic_expr globs = function
-  | CpsPure pe            -> !^"A.value" ^^^ P.parens (print_pure_expr globs pe)
+  | CpsPure pe            -> !^"A.return" ^^^ P.parens (print_pure_expr globs pe)
   | CpsMemop (memop, pes) -> print_memop globs memop pes
   | CpsAction (Core.Paction (p, (Action (_, bs, act)))) -> print_action globs act
 
 let print_call globs (sym, pes, pato) =
-  P.parens (print_symbol sym (*^^  !^"[@tailcall]"*)) ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) (print_pure_expr globs) pes) ^^^
-  P.parens (match pato with
-      | None -> P.empty
-      | Some pat -> print_call_pattern pat
-    )
+  P.parens (print_symbol sym (*^^  !^"[@tailcall]"*))
+  ^^^ P.parens (P.separate_map comma_space (print_pure_expr globs) pes)
+  ^^^ P.parens (Option.case print_call_pattern (fun _ -> P.empty) pato)
 
 let rec print_control globs = function
   | CpsGoto goto -> print_call globs goto
-  | CpsIf (pe1, goto2, goto3) -> print_if (print_pure_expr globs pe1) (print_control globs goto2) (print_control globs goto3)
-  | CpsCase (pe, cases) -> P.parens (print_case (print_pure_expr globs pe) (print_control globs) cases)
+  | CpsIf (pe1, goto2, goto3) ->
+    print_if (print_pure_expr globs pe1)
+      (print_control globs goto2)
+      (print_control globs goto3)
+  | CpsCase (pe, cases) ->
+    P.parens (print_case (print_pure_expr globs pe) (print_control globs) cases)
   | CpsProc (nm, (l, fvs), pes) ->
-    print_name nm ^^^ P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs)) ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr globs z))) pes
+    print_name nm
+    ^^^ P.parens (print_symbol l
+                  ^^^ P.parens (P.separate_map comma_space print_symbol fvs))
+    ^^^ P.separate_map P.space (fun x -> P.parens (print_pure_expr globs x)) pes
 
   | CpsCcall (nm, (l, fvs), es) ->
     print_pure_expr globs nm ^^^
     P.parens (print_symbol l
-              ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs))
+              ^^^ P.parens (P.separate_map comma_space print_symbol fvs))
     ^^^ (
-      if List.length es = 0
-      then P.parens P.space
-      else (P.separate_map P.space (fun x -> P.parens (print_pure_expr globs x)) es)
+      if List.length es = 0 then tunit
+      else P.separate_map P.space (fun x -> P.parens (print_pure_expr globs x)) es
     )
-  | CpsCont sym -> !^"cont_0" ^^^ print_symbol sym
-  | CpsNd ces -> !^"A.nd" ^^^ print_int (List.length ces)
-                 ^^^ print_list (print_control globs) ces
+  | CpsCont sym ->
+    !^"cont_0" ^^^ print_symbol sym
+  | CpsNd ces ->
+    !^"A.nd"
+    ^^^ print_int (List.length ces)
+    ^^^ print_list (print_control globs) ces
 
-let print_pato p =
-  !^">>= fun" ^^^
-  (match p with
-   | None -> !^"_"
-   | Some pat -> print_pattern pat
-  ) ^^ !^" ->"
+let print_seq = function
+  | Some (CaseBase (None, _))
+  | Some (CaseCtor (_, []))
+  | None -> tseq ^^ P.space
+  | Some p -> tbind ^^^ print_anon (print_pattern p) ^^ P.break 1
 
 let print_bb globs (es, (pato, ct)) =
   match es with
   | [] -> print_control globs ct
-  | ((_, e)::es) -> print_basic_expr globs e ^^
-                         (List.fold_left (fun acc (p, e) ->
-                           acc ^/^ print_pato p ^/^ print_basic_expr globs e
-                            ) P.space es) ^^^ !> (print_pato pato) ^/^ print_control globs ct
+  | ((_, e)::es) ->
+    print_basic_expr globs e
+    ^^ List.fold_left
+      (fun acc (p, e) -> acc ^/^ print_seq p ^^ print_basic_expr globs e)
+      P.space es
+    ^/^ print_seq pato ^^ print_control globs ct
 
 let print_decl globs (BB ((sym, pes, pato), bb)) =
-  print_symbol sym ^^^
-  P.parens (P.separate_map (P.comma ^^ P.space) print_symbol pes) ^^^
-  P.parens (match pato with
-      | None -> P.underscore
-      | Some pat -> print_fun_pattern pat
-    ) ^^^
-  !^"=" ^^ !> (print_bb globs bb)
+  print_symbol sym
+  ^^^ P.parens (P.separate_map comma_space print_symbol pes)
+  ^^^ Option.case print_fun_pattern (fun _ -> P.underscore) pato
+  ^^^ P.equals ^^ !> (print_bb globs bb)
 
 let print_transformed globs bbs bb =
   let bbs = List.sort_uniq block_compare bbs in
   if List.length bbs = 0 then
     print_bb globs bb
   else
-    !^"let rec" ^^^ print_decl globs (List.hd bbs) ^^^
-    List.fold_left (fun acc decl -> acc ^/^ !^"and" ^^^ print_decl globs decl) P.space (List.tl bbs)
-    ^/^ !^"in" ^/^ print_bb globs bb
+    tletrec
+    ^^^ print_decl globs (List.hd bbs)
+    ^^^ List.fold_left
+      (fun acc decl -> acc ^/^ tand ^^^ print_decl globs decl)
+      P.space (List.tl bbs)
+    ^/^ tin ^/^ print_bb globs bb
 
 let print_funs globs funs =
   Pmap.fold (fun sym decl acc ->
-    acc ^//^ !^"and" ^^^
+    acc ^//^ tand ^^^
     match decl with
     | CpsFun  (bTy, params, pe) ->
-      print_function (print_symbol sym) params (print_base_type bTy)
+      print_function
+        (print_symbol sym)
+        params
+        (print_base_type bTy)
         (print_pure_expr globs pe)
     | CpsProc (bTy, params, bbs, bbody) ->
-      print_eff_function (print_symbol sym ^^^ print_symbol default) params
+      print_eff_function
+        (print_symbol sym ^^^ print_symbol default)
+        params
         (P.parens (print_base_type bTy) ^^^ !^"M.memM")
         (print_transformed globs bbs bbody)
   ) funs P.empty
