@@ -9,7 +9,7 @@ type desugar_cause =
   | Desugar_OtherViolation of string
 
 (* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_ExternalObjectRedefinition of identifier
+  | Desugar_ExternalObjectRedefinition of identifier (* STD §6.9#3, first sentence *)
   | Desugar_FunctionRedefinition of identifier
   | Desugar_BlockScoped_Thread_local_alone
 (*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)

@@ -94,7 +94,6 @@ end
 
 (* STD §6.2.1#2 *)
 type block_id = nat
-
 type scope =
   | Scope_function
   | Scope_file
@@ -467,6 +466,45 @@ let resolve_identifier ident namespace =
 val     determinate_linkage: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t linkage
 let rec determinate_linkage ident namespace kind storage_classes =
   get_scope >>= fun scope ->
+  let scs = List.delete SC_Thread_local storage_classes in
+  if    scope = Scope_file
+     && (kind = Kind_object false || kind = Kind_function)
+     && List.elem SC_static scs then
+STD_ "§6.2.2#3" $
+      return Linkage_internal
+  
+  else if List.elem SC_extern scs then
+STD_ "§6.2.2#4" $
+    resolve_identifier ident namespace >>= function
+      | Just (_, (_, _, link)) ->
+          if link = Linkage_internal || link = Linkage_external then
+            return link
+          else
+            return Linkage_external
+      | Nothing ->
+          return Linkage_external
+    end
+  
+  else if kind = Kind_function && List.null scs then
+STD_ "§6.2.2#5, sentence 1" $
+        determinate_linkage ident namespace kind [SC_extern]
+  
+  else if    scope = Scope_file
+          && kind = Kind_object false
+          && List.null scs then
+STD_ "§6.2.2#5, sentence 2" $
+    return Linkage_external
+    
+    else
+STD_ "§6.2.2#6" $
+    if    not (is_object_kind kind || kind = Kind_function)
+       || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
+       || is_block_scope scope && is_object_kind kind && scs <> [SC_extern] then
+      return Linkage_none
+    else
+      error "[Cabs_to_ail_effect.determinate_linkage] unknown case"
+(* TODO: we need when-patterns in Lem *)
+(*
   match (scope, kind, List.delete SC_Thread_local storage_classes) with
     | (Scope_file, Kind_object false, [SC_static]) ->
 STD_ "§6.2.2#3" $
@@ -505,6 +543,7 @@ STD_ "§6.2.2#6" $
         else
           error "[Cabs_to_ail_effect.determinate_linkage] unknown case"
   end
+*)
 
 
 val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)

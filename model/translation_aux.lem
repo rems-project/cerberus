@@ -262,3 +262,32 @@ let rec combine_params_args params es =
   end
 
 
+
+(* TODO: I need functors ... *)
+type translation_stdlib = <|
+  ailnames:                           map string Symbol.sym;
+  mkcall_bitwise_AND:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_bitwise_XOR:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_bitwise_OR:                  Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_conv_int:                    Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_conv_loaded_int:             Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
+  mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
+  mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
+|>
+
+val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
+let mk_translation_stdlib (ailnames, stdlib_fun_map) =
+  let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
+  let mk_call str pes = Core.Pexpr () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
+  <| ailnames=                           ailnames
+   ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
+   ; mkcall_conv_int=                    fun ty pe      -> mk_call "conv_int"                   [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_conv_loaded_int=             fun ty pe      -> mk_call "conv_loaded_int"            [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
+   ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]
+   ; mkcall_catch_exceptional_condition= fun ty pe     -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |>
