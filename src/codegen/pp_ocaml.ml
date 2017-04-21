@@ -32,6 +32,7 @@ let twith  = !^"with"
 let tlet   = !^"let"
 let tletrec = !^"let rec"
 let tin    = !^"in"
+let tand   = !^"and"
 let tfun   = !^"fun"
 let tarrow = !^"->"
 let tbind  = !^">>="
@@ -42,6 +43,7 @@ let tfalse = !^"false"
 let tsome  = !^"Some"
 let tnone  = !^"None"
 let traise = !^"raise"
+let tref   = !^"ref"
 
 (* Ocaml expressions *)
 
@@ -83,16 +85,27 @@ let print_option pp = function
 let print_pair pp (x, y) =
   P.parens (pp x ^^ P.comma ^^^ pp y)
 
-let print_list pp xs =
-  let rec print_elem xs =
-    match xs with
-    | [] -> P.empty
-    | [x] -> pp x
-    | x :: xs -> pp x ^^ P.semi ^^^ (print_elem xs)
-  in P.brackets (print_elem xs)
+let rec print_elems sep = function
+  | [] -> P.empty
+  | [x] -> x
+  | x :: xs -> x ^^ sep ^^^ print_elems sep xs
 
-let print_nat_big_num n =
-  !^"Nat_big_num.of_string" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
+let print_list pp xs =
+  List.map pp xs
+  |> print_elems P.semi
+  |> P.brackets
+
+let print_tuple xs = P.parens (print_elems P.comma xs)
+
+let max_int_big_num = Nat_big_num.of_int max_int
+
+let print_num n =
+  if Nat_big_num.less n max_int_big_num then
+    !^"B.of_int" ^^^ print_int (Nat_big_num.to_int n)
+  else
+    !^"B.of_string" ^^^ P.dquotes (!^(Nat_big_num.to_string n))
+
+let print_ref x = tref ^^^ P.parens x
 
 (* Symbol *)
 
@@ -150,15 +163,7 @@ let print_ail_qualifier {
   AilTypes.restrict = r;
   AilTypes.volatile = v;
   AilTypes.atomic = a;
-} =
-  let row str v = !^str ^^^ P.equals ^^^ print_bool v ^^ P.semi in
-  P.braces (P.nest 2 (
-      P.break 1 ^^
-      row "T.const" c ^/^
-      row "T.restrict" r ^/^
-      row "T.volatile" v ^/^
-      row "T.atomic" a)
-            ^^ P.break 1)
+  } = !^"A.ail_qualifier" ^^^ print_tuple (List.map print_bool [c;r;v;a])
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
@@ -224,7 +229,7 @@ let rec print_ctype = function
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
   | Array0 (cty, num) ->
     !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
-                               ^^^ print_option print_nat_big_num num)
+                               ^^^ print_option print_num num)
   | Function0 (cty, params, variad) ->
     !^"C.Function0" ^^^ P.parens
       (print_ctype cty ^^ P.comma
@@ -243,7 +248,7 @@ let rec print_ctype = function
 
 let print_integer_value_base = function
   | D.IVconcrete bignum             ->
-    !^"I.IVconcrete" ^^^ P.parens (print_nat_big_num bignum)
+    !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
   | D.IVaddress (D.Address0 (sym, n))  ->
     !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
                                    ^^ P.comma ^^^ !^(string_of_int n)))
@@ -301,7 +306,7 @@ let print_floating_value = function
 
 (* Core Types *)
 
-(* TODO: !!! *)
+(* THIS IS ONLY USED WHEN ANNOTATING *)
 let rec print_core_object = function
   | OTy_integer    -> !^"M.integer_value"
   | OTy_floating   -> !^"M.floating_value"
@@ -334,7 +339,7 @@ let print_params params =
     P.parens P.empty
   else
     let args (sym, ty) =
-      P.parens (print_symbol sym ^^ P.colon ^^ print_base_type ty)
+      P.parens (print_symbol sym (*^^ P.colon ^^ print_base_type ty*))
     in P.separate_map P.space args params
 
 let print_function name pmrs ty body =
@@ -345,86 +350,33 @@ let print_eff_function name pmrs ty body =
 
 (* Binary operations and precedences *)
 
-(* TODO: !! *)
-(* FIXME: test if t1 and t2 are the same up to loaded *)
-(* TODO: all the binops case *)
 let print_binop binop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
+  let app binop = !^binop ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2) in
+  let case_by_type f g h =
+    match t1 with
+    | BTy_object (OTy_integer)
+    | BTy_loaded (OTy_integer) -> app f
+    | BTy_object (OTy_pointer)
+    | BTy_loaded (OTy_pointer) -> app g
+    | BTy_ctype -> begin match h with
+        | Some h -> app h
+        | None -> raise (Unexpected "Unexcpected binary operator for ctypes")
+      end
+    | _ -> raise (Unexpected "Unknown binary operator")
+  in
   match binop with
-  | OpAdd -> !^"(M.op_ival M.IntAdd (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpSub -> !^"(M.op_ival M.IntSub (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpMul -> !^"(M.op_ival M.IntMul (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpDiv -> !^"(M.op_ival M.IntDiv (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_t -> !^"(M.op_ival M.IntRem_t (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpRem_f -> !^"(M.op_ival M.IntRem_f (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpExp -> !^"(M.op_ival M.IntExp (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-  | OpEq  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.eq" ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2)
-        (*!^"(O.get (M.eq_ival M.initial_mem_state0 Symbolic.Constraints_TODO  ("
-          ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(M.eq_ptrval Symbolic.Constraints_TODO  (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^"))"
-      | BTy_ctype ->
-        !^"(C.ctypeEqual0 (" ^^ pp pe1 ^^ !^") (" ^^ pp pe2 ^^ !^"))"
-      | _ -> todo "binop eq"
-    )
-  | OpLt  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.lt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*
-        !^"(O.get (M.lt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.lt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop lt"
-    )
-  | OpLe  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.le" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-       (* !^"(O.get (M.le_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.le_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop lt"
-    )
-  | OpGt  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.gt" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.gt_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.gt_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop gt"
-    )
-  | OpGe  -> (
-      match t1 with
-      | BTy_object (OTy_integer)
-      | BTy_loaded (OTy_integer) ->
-        !^"A.ge" ^^^ P.parens (pp pe1) ^^^  P.parens (pp pe2)
-        (*!^"(O.get (M.ge_ival Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"*)
-      | BTy_object (OTy_pointer)
-      | BTy_loaded (OTy_pointer) ->
-        !^"(O.get (M.ge_ptrval Symbolic.Constraints_TODO (" ^^ pp pe1 ^^ !^") ("
-          ^^ pp pe2 ^^ !^")))"
-      | _ -> todo "binop ge"
-    )
+  | OpAdd -> app "A.add"
+  | OpSub -> app "A.sub"
+  | OpMul -> app "A.mul"
+  | OpDiv -> app "A.div"
+  | OpRem_t -> app "A.remt"
+  | OpRem_f -> app "A.remf"
+  | OpExp -> app "A.exp"
+  | OpEq  -> case_by_type "A.eq" "A.eq_ptrval" (Some "C.ctypeEqual0")
+  | OpLt  -> case_by_type "A.lt" "A.lt_ptrval" None
+  | OpLe  -> case_by_type "A.le" "A.le_ptrval" None
+  | OpGt  -> case_by_type "A.gt" "A.gt_ptrval" None
+  | OpGe  -> case_by_type "A.ge" "A.ge_ptrval" None
   | OpAnd -> pp pe1 ^^^ !^" && " ^^^ pp pe2
   | OpOr  -> pp pe1 ^^^ !^ "||" ^^^ pp pe2
 
@@ -474,9 +426,10 @@ let rec print_value = function
 let print_is_expr str pp pe =
   match pe with
   | Pexpr (_, PEval (Vctype _))
-  | Pexpr (_, PEsym _) ->
+  | Pexpr (_, PEsym _) -> !^"A." ^^ !^str ^^^ P.parens (pp pe)
+    (*
     P.parens (!^"AilTypesAux." ^^ !^str
-              ^^ P.parens (!^"Core_aux.unproj_ctype" ^^^ pp pe))
+              ^^ P.parens (!^"Core_aux.unproj_ctype" ^^^ pp pe)) *)
   | _ -> !^str ^^^ pp pe
 
 let print_pure_expr globs pe =
@@ -543,8 +496,8 @@ let print_pure_expr globs pe =
       | PEif (pe1, pe2, pe3) -> print_if (pp pe1) (pp pe2) (pp pe3)
       | PEis_scalar pe -> print_is_expr "is_scalar" pp pe
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
-      | PEis_signed pe -> print_is_expr "is_signed_integer_type" pp pe
-      | PEis_unsigned pe -> print_is_expr "is_unsigned_integer_type" pp pe
+      | PEis_signed pe -> print_is_expr "is_signed" pp pe
+      | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
     end
   in pp None pe
 
@@ -580,7 +533,7 @@ let choose_store_type (Pexpr (_, PEval cty)) =
       ^^^ P.parens (print_ctype cty)
   | Vctype (Array0 (cty, n)) ->
     !^"A.store_array" ^^^ P.parens (print_ctype cty)
-      ^^^ P.parens (print_option print_nat_big_num n)
+      ^^^ P.parens (print_option print_num n)
   | _ -> todo "store not implemented"
 
 let print_action globs act =
@@ -634,10 +587,17 @@ let print_call globs (sym, pes, pato) =
 
 let rec print_control globs = function
   | CpsGoto goto -> print_call globs goto
-  | CpsIf (pe1, goto2, goto3) -> print_if (print_pure_expr globs pe1) (print_control globs goto2) (print_control globs goto3)
-  | CpsCase (pe, cases) -> P.parens (print_case (print_pure_expr globs pe) (print_control globs) cases)
+  | CpsIf (pe1, goto2, goto3) ->
+    print_if (print_pure_expr globs pe1)
+      (print_control globs goto2)
+      (print_control globs goto3)
+  | CpsCase (pe, cases) ->
+    P.parens (print_case (print_pure_expr globs pe) (print_control globs) cases)
   | CpsProc (nm, (l, fvs), pes) ->
-    print_name nm ^^^ P.parens (print_symbol l ^^^ P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs)) ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr globs z))) pes
+    print_name nm ^^^
+    P.parens (print_symbol l ^^^
+              P.parens (P.separate_map (P.comma ^^ P.space) print_symbol fvs))
+    ^^^ (P.separate_map P.space (fun z -> P.parens (print_pure_expr globs z))) pes
 
   | CpsCcall (nm, (l, fvs), es) ->
     print_pure_expr globs nm ^^^
