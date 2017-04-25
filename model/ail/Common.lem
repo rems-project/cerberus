@@ -11,13 +11,6 @@ let option_bool =
     | Nothing -> false
     end
 
-let rec eq_list (eq_A : 'a -> 'a -> bool) l1 l2 : bool =
-    match (l1, l2) with
-    | ([]      , []      ) -> true
-    | (a1 :: l1, a2 :: l2) -> eq_A a1 a2 && eq_list eq_A l1 l2
-    | (_       , _       ) -> false
-    end
-
 let equiv_pair (equiv_A : 'a1 -> 'a2 -> bool) (equiv_B : 'b1 -> 'b2 -> bool) : 'a1 * 'b1 -> 'a2 * 'b2 -> bool =
   fun p1 p2 -> 
     let (a1, b1) = p1 in
@@ -30,13 +23,6 @@ let equiv_triple (equiv_A : 'a1 -> 'a2 -> bool) (equiv_B : 'b1 -> 'b2 -> bool) (
     let (a1, b1, c1) = p1 in
     let (a2, b2, c2) = p2 in
     equiv_A a1 a2 && equiv_B b1 b2 && equiv_C c1 c2
-
-let eq_pair (eq_A : 'a -> 'a -> bool) (eq_B : 'b -> 'b -> bool) : 'a * 'b -> 'a * 'b -> bool =
-  fun p1 p2 -> 
-    let (a1, b1) = p1 in
-    let (a2, b2) = p2 in
-    eq_A a1 a2 && eq_B b1 b2
-
 
 let eq_triple (eq_A : 'a -> 'a -> bool) (eq_B : 'b -> 'b -> bool) (eq_C : 'c -> 'c -> bool) :
     'a * 'b * 'c -> 'a * 'b * 'c -> bool =

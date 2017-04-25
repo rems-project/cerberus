@@ -64,5 +64,5 @@ let compile filename sym_supply core =
     generate_ocaml filename sym_supply core
     |> P.ToChannel.pretty 1. 80 oc;
     close_out oc;
-    Exception.return0 0
+    Exception.except_return 0
   end

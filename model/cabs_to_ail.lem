@@ -128,7 +128,7 @@ let inject_qualifiers qs ty =
 (*
 
 (* STD: sort of defined at §6.6#3 *)
-val is_constant_expression: expression unit -> E.t bool
+val is_constant_expression: expression unit -> E.desugM bool
 let rec is_constant_expression (AnnotatedExpression () loc expr) =
   match expr with
     | AilEassign _ _ ->
@@ -228,7 +228,7 @@ except as part of an operand to the sizeof or _Alignof operator.
 (* BEGIN predicates on Ail syntax *)
 (* see §6.6#6 *)
 (* TODO: make the function pure, when complete *)
-val     is_integer_constant_expression: expression unit -> E.t bool
+val     is_integer_constant_expression: expression unit -> E.desugM bool
 let rec is_integer_constant_expression (AnnotatedExpression () loc expr) =
   match expr with
     | AilEunary uop e ->
@@ -296,7 +296,7 @@ end
 
 
 (*
-val     eval_integer_constant_expression: expression unit -> E.t integer
+val     eval_integer_constant_expression: expression unit -> E.desugM integer
 let rec eval_integer_constant_expression (AnnotatedExpression () loc expr) =
   match expr with
     | AilEunary uop e ->
@@ -399,7 +399,7 @@ end
 (* STD §6.6#8 *)
 (* TODO: this is super partial and hackish *)
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
-val     is_arithmetic_constant_expression: bool -> expression unit -> E.t bool
+val     is_arithmetic_constant_expression: bool -> expression unit -> E.desugM bool
 let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () loc expr) as a_expr) =
   (* TODO: enumeration constant *)
   match expr with
@@ -464,7 +464,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () loc
 
 
 (* WIP
-val     is_arithmetic_constant_expression: expression unit -> E.t bool
+val     is_arithmetic_constant_expression: expression unit -> E.desugM bool
 let rec is_arithmetic_constant_expression expr =
   match expr with
 
@@ -472,7 +472,7 @@ let rec is_arithmetic_constant_expression expr =
 *)
 
 
-val     is_lvalue_to_static_object: expression unit -> E.t bool
+val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
   match expr with
     | AilEident sym ->
@@ -505,7 +505,7 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
 
 
 (* STD §6.6#9 *)
-val is_address_constant: expression unit -> E.t bool
+val is_address_constant: expression unit -> E.desugM bool
 let is_address_constant a_expr =
   (* TODO: not sure is_null_pointer_constant is the right predicate *)
   (* An address constant (...) *)
@@ -554,7 +554,7 @@ The array-subscript [] and member-access . and -> operators, the address & and i
 (* As defined in STD §6.6#7, in the context of initializers, "constant expressions" 
    can have more things in them *)
 (* TODO: "or evaluate to" *)
-val is_initializer_constant_expression: expression unit -> E.t bool
+val is_initializer_constant_expression: expression unit -> E.desugM bool
 let is_initializer_constant_expression (AnnotatedExpression () loc expr as a_expr) =
   is_arithmetic_constant_expression false (* TODO check *) a_expr >>= fun b1 ->
   is_address_constant a_expr               >>= fun b2 ->
@@ -615,48 +615,48 @@ let is_initializer_constant_expression (AnnotatedExpression () loc expr as a_exp
 
 
 
-val desugar_generic_association:        cabs_generic_association -> E.t (generic_association unit)
-(* val desugar_declaration:                declaration -> E.t (list (sigma_declaration Loc.t unit)) *)
-val check_storage_class_specifiers:                 declaration_context -> list storage_class_specifier -> E.t unit (* TODO *)
+val desugar_generic_association:        cabs_generic_association -> E.desugM (generic_association unit)
+(* val desugar_declaration:                declaration -> E.desugM (list (sigma_declaration Loc.t unit)) *)
+val check_storage_class_specifiers:                 declaration_context -> list storage_class_specifier -> E.desugM unit (* TODO *)
 val desugar_init_declarator:            ATypes.ctype -> list storage_class_specifier -> init_declarator ->
-                                        E.t (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit))
-val desugar_struct_declaration:         struct_declaration -> E.t (list (cabs_identifier * ATypes.ctype))
+                                        E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit))
+val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype))
 
-val desugar_struct_declarator:          struct_declarator -> E.t (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) (* TODO *)
-val desugar_enumerator:                 enumerator -> E.t unit (* TODO *)
-val desugar_alignment_specifier:        alignment_specifier -> E.t unit (* TODO *)
+val desugar_struct_declarator:          struct_declarator -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) (* TODO *)
+val desugar_enumerator:                 enumerator -> E.desugM unit (* TODO *)
+val desugar_alignment_specifier:        alignment_specifier -> E.desugM unit (* TODO *)
 
 (* NOTE: these twos functions do NOT register identifier being declared, this is
          left to the called (who can know the kind' of the identifier from its
          type *)
-val desugar_declarator:                 declarator        -> E.t (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
-val desugar_direct_declarator:          direct_declarator -> E.t (cabs_identifier (* * ATypes.qualifiers *) * (ATypes.ctype -> ATypes.ctype))
+val desugar_declarator:                 declarator        -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
+val desugar_direct_declarator:          direct_declarator -> E.desugM (cabs_identifier (* * ATypes.qualifiers *) * (ATypes.ctype -> ATypes.ctype))
 
 
-val desugar_array_declarator:           bool -> array_declarator -> E.t (AilTypes.ctype -> AilTypes.ctype)
-val desugar_parameter_array_declarator: array_declarator -> E.t unit (* TODO *)
-val desugar_array_declarator_size:      array_declarator_size -> E.t unit (* TODO *)
-val desugar_pointer_declarator:         pointer_declarator -> E.t (ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
-val desugar_parameter_type_list:        parameter_type_list -> E.t (list (maybe (cabs_identifier * list storage_class_specifier) *
+val desugar_array_declarator:           bool -> array_declarator -> E.desugM (AilTypes.ctype -> AilTypes.ctype)
+val desugar_parameter_array_declarator: array_declarator -> E.desugM unit (* TODO *)
+val desugar_array_declarator_size:      array_declarator_size -> E.desugM unit (* TODO *)
+val desugar_pointer_declarator:         pointer_declarator -> E.desugM (ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
+val desugar_parameter_type_list:        parameter_type_list -> E.desugM (list (maybe (cabs_identifier * list storage_class_specifier) *
                                                                           (ATypes.qualifiers * ATypes.ctype)) * bool)
-val desugar_parameter_declaration:      parameter_declaration -> E.t (maybe (cabs_identifier * list storage_class_specifier) *
+val desugar_parameter_declaration:      parameter_declaration -> E.desugM (maybe (cabs_identifier * list storage_class_specifier) *
                                                                       (ATypes.qualifiers * ATypes.ctype))
 
 
-val desugar_type_name:                  type_name -> E.t (ATypes.qualifiers * AilTypes.ctype)
-val desugar_abstract_declarator:        bool -> abstract_declarator -> E.t (AilTypes.ctype -> (ATypes.qualifiers * AilTypes.ctype))
-val desugar_direct_abstract_declarator: bool -> direct_abstract_declarator -> E.t (AilTypes.ctype -> (ATypes.qualifiers * AilTypes.ctype))
+val desugar_type_name:                  type_name -> E.desugM (ATypes.qualifiers * AilTypes.ctype)
+val desugar_abstract_declarator:        bool -> abstract_declarator -> E.desugM (AilTypes.ctype -> (ATypes.qualifiers * AilTypes.ctype))
+val desugar_direct_abstract_declarator: bool -> direct_abstract_declarator -> E.desugM (AilTypes.ctype -> (ATypes.qualifiers * AilTypes.ctype))
 
 
-val desugar_initializer_:               initializer_ -> E.t (expression unit) (* TODO *)
-val desugar_designator:                 designator -> E.t unit (* TODO *)
+val desugar_initializer_:               initializer_ -> E.desugM (expression unit) (* TODO *)
+val desugar_designator:                 designator -> E.desugM unit (* TODO *)
 
-val desugar_and_register_static_assert_declaration:  static_assert_declaration -> E.t unit
+val desugar_and_register_static_assert_declaration:  static_assert_declaration -> E.desugM unit
 
-val desugar_for_clause:                 for_clause -> E.t unit (* TODO *)
+val desugar_for_clause:                 for_clause -> E.desugM unit (* TODO *)
 
 (* TODO: WIP *)
-val wip_desugar_initializer_: Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.t (expression unit)
+val wip_desugar_initializer_: Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.desugM (expression unit)
 val static_thread_implicit_initializer: map identifier E.tag_definition -> ATypes.ctype -> constant
 
 
@@ -720,7 +720,7 @@ let translate_character_constant = function
 end
 
 
-val desugar_character_constant: cabs_character_constant -> E.t characterConstant
+val desugar_character_constant: cabs_character_constant -> E.desugM characterConstant
 let desugar_character_constant (pref_opt, str) =
   E.return (maybe Nothing (Just -| translate_character_constant) pref_opt, str)
 
@@ -734,7 +734,7 @@ let desugar_character_constant (pref_opt, str) =
 
 
 (* TODO: this is very partial for now *)
-val     evaluate_integer_constant_expression: Loc.t -> expression unit -> E.t integerConstant
+val     evaluate_integer_constant_expression: Loc.t -> expression unit -> E.desugM integerConstant
 let rec evaluate_integer_constant_expression loc (AnnotatedExpression () _(*TODO: get rid of the other loc? *) expr) =
   match expr with
     | AilEunary uop e ->
@@ -868,7 +868,7 @@ end
 
 
 
-val desugar_cabs_constant: Loc.t -> cabs_constant -> E.t constant
+val desugar_cabs_constant: Loc.t -> cabs_constant -> E.desugM constant
 let desugar_cabs_constant loc = function
   | CabsInteger_const iCst ->
       E.return (ConstantInteger (translate_integer_constant iCst))
@@ -909,7 +909,7 @@ let is_simple_enumerator = function
       false
 end
 
-val register_simple_enumerators: ATypes.ctype -> list enumerator -> E.t unit
+val register_simple_enumerators: ATypes.ctype -> list enumerator -> E.desugM unit
 let register_simple_enumerators ty enums =
   if List.all is_simple_enumerator enums then
     let register_simple_enumerator (n, (ident, _ (* Nothing *) (* TODO: wtf ?? *))) =
@@ -933,7 +933,7 @@ let register_simple_enumerators ty enums =
 
 
 
-val register_enumerators: Symbol.sym -> list enumerator -> E.t unit
+val register_enumerators: Symbol.sym -> list enumerator -> E.desugM unit
 let register_enumerators enum_tag enums =
   let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum enum_tag)) in
   (* STD §6.7.2.2#3, 3rd sentence *)
@@ -1052,7 +1052,7 @@ List.all (function
 
 
 
-val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.t (maybe ATypes.basicType)
+val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.desugM (maybe ATypes.basicType)
 let desugar_basic_type_specifiers specs =
 STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
   if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
@@ -1147,7 +1147,7 @@ STD_ "§6.7.3#5" $ (* TODO: except for "or via one or more typedefs" *)
     (List.elem Q_volatile qs) (List.elem Q_Atomic qs)
 
 
-val     desugar_type_specifiers : list cabs_type_specifier -> E.t (ATypes.qualifiers * ATypes.ctype)
+val     desugar_type_specifiers : list cabs_type_specifier -> E.desugM (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
   match project_base_type_specifiers specs with
     | Just z ->
@@ -1220,7 +1220,7 @@ let rec desugar_type_specifiers specs =
               E.return (ATypes.no_qualifiers, ty)
           (* *)
           | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
-              E.print_debug 2 ("Cabs_to_ail, TSpec_name ==> " ^ str) >>
+              E.print_debugM 2 ("Cabs_to_ail, TSpec_name ==> " ^ str) >>
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
                     E.return (ATypes.no_qualifiers, ty)
@@ -1311,7 +1311,7 @@ int ( * const [])(unsigned int, ...)    array of an unspecified number of consta
 
 
 
-(* val     desugar_expression: cabs_expression -> E.t (expression unit) *)
+(* val     desugar_expression: cabs_expression -> E.desugM (expression unit) *)
 and desugar_expression (CabsExpression loc expr) =
   AnnotatedExpression () loc <$>
   match expr with
@@ -1517,7 +1517,7 @@ STD_ "§6.7.1#8" $
 *)
 
 (* TODO: check *)
-(* E.t (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit)) *)
+(* E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit)) *)
 and desugar_init_declarator _ty scs idecltor =
   match idecltor with
     | InitDecl loc decltor Nothing ->
@@ -1537,7 +1537,7 @@ and desugar_init_declarator _ty scs idecltor =
 
 
 
-(* val desugar_struct_declaration:         struct_declaration -> E.t (list (cabs_identifier * ATypes.ctype)) *)
+(* val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype)) *)
 and desugar_struct_declaration struct_decl =
   match struct_decl with
     | Struct_declaration specs qs sdecltors ->
@@ -1574,7 +1574,7 @@ and desugar_alignment_specifier align_spec =
   end
 
 
-(* val desugar_declarator: declarator -> E.t (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) *)
+(* val desugar_declarator: declarator -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) *)
 and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
   maybe (E.return (ATypes.no_qualifiers, id))
     (fun ptr -> desugar_pointer_declarator ptr) ptr_decltor_opt >>= fun (ptr_qs, mk_ptr_type) ->
@@ -1582,7 +1582,7 @@ and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
   E.return (ident, ptr_qs, fun ty -> mk_type $ mk_ptr_type ty)
 
 
-and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype -> ATypes.ctype)) =
+and desugar_direct_declarator ddecltor : E.desugM (cabs_identifier * (ATypes.ctype -> ATypes.ctype)) =
   match ddecltor with
     | DDecl_identifier ident ->
         E.return (ident, fun ty -> ty)
@@ -1594,11 +1594,10 @@ and desugar_direct_declarator ddecltor : E.t (cabs_identifier * (ATypes.ctype ->
             E.return (id, mk_type)
     
       (* TODO: STD check + annot *)
-    | DDecl_array ddecltor a_decltor -> do E
-        (ident, mk_type) <- desugar_direct_declarator ddecltor;
-        mk_array_type    <- desugar_array_declarator (* TODO: is_under_array *) false a_decltor; in
-          E.return (ident, fun ty -> mk_type (mk_array_type ty))
-        end
+    | DDecl_array ddecltor a_decltor ->
+        desugar_direct_declarator ddecltor                                  >>= fun  (ident, mk_type) ->
+        desugar_array_declarator (* TODO: is_under_array *) false a_decltor >>= fun mk_array_type     ->
+        E.return (ident, fun ty -> mk_type (mk_array_type ty))
     
     | DDecl_function ddecltor param_tys ->
         (* TODO: check + annotate with STD *)
@@ -1698,7 +1697,7 @@ and desugar_array_declarator_size a_decltor_size =
         error "WIP 48"
   end
 
-(* val desugar_pointer_declarator: pointer_declarator -> E.t (qualifiers * ctype -> ctype) *)
+(* val desugar_pointer_declarator: pointer_declarator -> E.desugM (qualifiers * ctype -> ctype) *)
 and desugar_pointer_declarator ptr_decltor =
   match ptr_decltor with
     | PDecl tquals ptr_decltor_opt ->
@@ -1713,10 +1712,9 @@ and desugar_pointer_declarator ptr_decltor =
 
 and desugar_parameter_type_list params =
   match params with
-    | Params param_decls is_variadic -> do E
-        xs <- E.mapM desugar_parameter_declaration param_decls; in
-          E.return (xs, is_variadic)
-        end
+    | Params param_decls is_variadic ->
+        E.mapM desugar_parameter_declaration param_decls >>= fun xs ->
+        E.return (xs, is_variadic)
   end
 
 and desugar_parameter_declaration param_decl =
@@ -1747,7 +1745,7 @@ and desugar_parameter_declaration param_decl =
 
 
 (* STATUS: maybe ok *)
-(* val     desugar_type_name: type_name -> E.t (ATypes.qualifiers * ATypes.ctype) *)
+(* val     desugar_type_name: type_name -> E.desugM (ATypes.qualifiers * ATypes.ctype) *)
 and desugar_type_name (Type_name specs tquals abs_decltor_opt) =
   desugar_type_specifiers specs >>= fun (_ (* TODO: qs *), ty) ->
   maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty)) (fun ab -> desugar_abstract_declarator false ab) abs_decltor_opt >>= fun mk_qs_ty ->
@@ -1777,17 +1775,17 @@ and desugar_direct_abstract_declarator is_under_array dabs_decltor =
   match dabs_decltor with
     | DAbs_abs_declarator abs_decltor ->
         desugar_abstract_declarator is_under_array abs_decltor
-    | DAbs_array dabs_decltor_opt a_decltor -> do E
-        mk_ty         <- maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty)) (fun dabs_decltor -> desugar_direct_abstract_declarator true dabs_decltor) dabs_decltor_opt;
-        mk_array_type <- desugar_array_declarator is_under_array a_decltor; in
-          E.return (fun ty -> mk_ty (mk_array_type ty))
-        end
-    | DAbs_function dabs_decltor_opt param_tys -> do E
-        mk_ty             <- maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty)) (fun dabs_decltor -> desugar_direct_abstract_declarator is_under_array dabs_decltor) dabs_decltor_opt;
-        (_, (tys, is_variadic)) <- E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys); in
-          (* TODO: check *)
-          E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd tys) is_variadic))
-        end
+    | DAbs_array dabs_decltor_opt a_decltor ->
+        maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
+          (desugar_direct_abstract_declarator true) dabs_decltor_opt >>= fun mk_ty         ->
+        desugar_array_declarator is_under_array a_decltor            >>= fun mk_array_type ->
+        E.return (fun ty -> mk_ty (mk_array_type ty))
+    | DAbs_function dabs_decltor_opt param_tys ->
+        maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
+          (desugar_direct_abstract_declarator is_under_array) dabs_decltor_opt >>= fun mk_ty                   ->
+        E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (tys, is_variadic)) ->
+        (* TODO: check *)
+        E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd tys) is_variadic))
   end
 
 
@@ -1884,7 +1882,7 @@ and static_thread_implicit_initializer tagDefs ty =
   end
 
 
-(*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.t ? *)
+(*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.desugM ? *)
 and wip_desugar_initializer_ loc dur current_ty init =
   match init with
     | Init_expr e ->
@@ -2205,7 +2203,7 @@ and desugar_and_register_static_assert_declaration sa_decl =
   end
 
 
-val desugar_declaration_base: specifiers -> list init_declarator -> E.t (list (identifier * expression unit))
+val desugar_declaration_base: specifiers -> list init_declarator -> E.desugM (list (identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs (* TODO: use qualifiers *), _ty) ->
           (* for each [init_declarator] *)
@@ -2449,7 +2447,7 @@ WIP KKK
   end
 
 
-val do_while_hack: cabs_expression -> cabs_statement -> E.t cabs_statement
+val do_while_hack: cabs_expression -> cabs_statement -> E.desugM cabs_statement
 let do_while_hack e (CabsStatement loc smt) =
   error "WIP, Cabs_to_ail.do_while_hack"
 (*
@@ -2471,7 +2469,7 @@ WIP KKK
   end
 *)
 
-val     desugar_statement: cabs_statement -> E.t (statement unit)
+val     desugar_statement: cabs_statement -> E.desugM (statement unit)
 let rec desugar_statement (CabsStatement loc stmt_) =
   AnnotatedStatement loc <$>
     match stmt_ with
@@ -2734,7 +2732,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
     end
 
 
-val     register_labels: cabs_statement -> E.t unit
+val     register_labels: cabs_statement -> E.desugM unit
 let rec register_labels (CabsStatement _ stmt_) =
   match stmt_ with
     | CabsSlabel ident s ->
@@ -2782,7 +2780,7 @@ let rec register_labels (CabsStatement _ stmt_) =
 
 
 (* TODO: check + annotate with STD *)
-val desugar_and_register_function_definition: function_definition -> E.t unit
+val desugar_and_register_function_definition: function_definition -> E.desugM unit
 let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_decltor_opt ddecltor) s) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#4")
@@ -2867,7 +2865,7 @@ let rec extract_typedef_name specs acc =
   end
 *)
 
-val desugar_and_register_external_declaration: external_declaration -> E.t unit
+val desugar_and_register_external_declaration: external_declaration -> E.desugM unit
 let desugar_and_register_external_declaration edecl =
   let storage_classes =
     maybe [] (fun z -> z.storage_classes) (specifiers_of_external_declaration edecl) in

@@ -16,7 +16,7 @@ let new_supply_from n =
   toEnum n
 
 
-val fresh_id: forall 'a. Enum 'a => supply 'a -> t 'a * supply 'a
+val fresh_id: forall 'a. NumSucc 'a => supply 'a -> t 'a * supply 'a
 let fresh_id supl =
   (supl, succ supl)
 

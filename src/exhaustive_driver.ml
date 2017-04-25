@@ -6,7 +6,7 @@ open Pp_run
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
-let (>>=) = SEU.bind8
+let (>>=) = SEU.stExceptUndef_bind
 
 let isActive = function
   | (ND.Active _, _) ->
@@ -58,7 +58,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
   ) (List.map fst values);
   
   List.iter (fun (_, nd_st) ->
-    print_endline ("CONSTRS ==> " ^ (Pp_constraints.pp_constraints nd_st.ND.eqs))
+    print_endline ("CONSTRS ==> " ^ (Pp_constraints.pp_old_constraints nd_st.ND.eqs))
   ) values;
   
   List.iteri (fun i (_, nd_st) ->
@@ -104,11 +104,11 @@ begin
       if reason_str = "reached unsatisfiable constraints" then
       print_endline Colour.(ansi_format [Red] 
         (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason_str (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
+              n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
       )
 else
         Debug_ocaml.print_debug 2 (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason_str (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
+              n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
 
 end
     ) values
@@ -135,7 +135,7 @@ end
               (print_string stdout; flush_all());
             
             Debug_ocaml.print_debug 1 (
-              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_constraints st.ND.eqs) ^
+              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
               Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps ^ 
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG" (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
@@ -146,7 +146,7 @@ end
           );
           if not (List.mem str_v_ !ky) && not is_blocked then (
             if cerb_conf.concurrency then
-              Debug_ocaml.print_debug 2 (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_constraints st.ND.eqs));
+              Debug_ocaml.print_debug 2 (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs));
 (*            print_string stdout; *)
             
             ky := str_v_ :: !ky;
@@ -154,7 +154,7 @@ end
         ) else
           Debug_ocaml.print_debug 4 (
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^
-            "eqs= " ^ Pp_cmm.pp_constraints st.ND.eqs
+            "eqs= " ^ Pp_cmm.pp_old_constraints st.ND.eqs
           );
 
       | (ND.Killed (ND.Undef0 (loc, ubs)), _) ->
@@ -177,10 +177,10 @@ end
       | (ND.Killed (ND.Other reason), st) ->
           Debug_ocaml.print_debug 5 (
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason (Pp_cmm.pp_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
+              n reason (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
           )
   ) values;
-  Exception.return0 !ret
+  Exception.except_return !ret
 
 
 
@@ -208,7 +208,7 @@ end
               (print_string stdout; flush_all());
             
             Debug_ocaml.print_debug 1 (
-              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_constraints constraints) ^
+              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints constraints) ^
               Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps
             );
           );

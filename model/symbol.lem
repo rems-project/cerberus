@@ -53,14 +53,17 @@ instance (Ord sym)
     n1 >= n2
 end
 
+instance (NumSucc sym)
+  let succ sym =
+    let (Symbol n str_opt) = sym in 
+    Symbol (n+1) str_opt
+end
+
 instance (Enum sym)
   let toEnum n =
     Symbol n Nothing
   let fromEnum sym =
     let (Symbol n _) = sym in n
-  let succ sym =
-    let (Symbol n str_opt) = sym in 
-    Symbol (n+1) str_opt
 end
 
 instance (SetType sym)

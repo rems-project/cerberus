@@ -217,22 +217,22 @@ type state = <|
   is_inside_switch: bool;
 |>
 
-type t 'a = State_exception.t 'a state Errors.error
+type desugM 'a = State_exception.stExceptM 'a state Errors.error
 
-val return: forall 'a. 'a -> t 'a
+val return: forall 'a. 'a -> desugM 'a
 let return = State_exception.return
 
-val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+val bind: forall 'a 'b. desugM 'a -> ('a -> desugM 'b) -> desugM 'b
 let bind = State_exception.bind
 
 
-val fail: forall 'a. Loc.t -> Errors.desugar_cause -> t 'a
+val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
 let fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
 
 
 
-val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
+val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
+val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
 let mapM = State_exception.mapM
 let mapM_ = State_exception.mapM_
 
@@ -241,14 +241,14 @@ let foldrM = State_exception.foldrM
 
 let iter = State_exception.iter
 
-val tryWith: forall 'a. Errors.error -> t 'a -> t 'a
+val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
 let tryWith = State_exception.tryWith
 
 
-val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+val fmap: forall 'a 'b. ('a -> 'b) -> desugM 'a -> desugM 'b
 let fmap = State_exception.fmap
 
-val app: forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
+val app: forall 'a 'b. desugM ('a -> 'b) -> desugM 'a -> desugM 'b
 let app  = State_exception.app
 
 
@@ -258,12 +258,12 @@ let inline (<$>)    = fmap
 let inline (<*>)    = app
 
 
-val void: forall 'a. t 'a -> t unit
+val void: forall 'a. desugM 'a -> desugM unit
 let void m =
   fmap (const ()) m
 
 
-val guard: forall 'a. t bool -> string -> t 'a -> t 'a
+val guard: forall 'a. desugM bool -> string -> desugM 'a -> desugM 'a
 let guard m_pred err_msg m =
   m_pred >>= function
     | true  -> m
@@ -272,20 +272,20 @@ let guard m_pred err_msg m =
 
 
 (* ========================================================================== *)
-val current_scope_is: scope -> t bool
+val current_scope_is: scope -> desugM bool
 let current_scope_is scope =
   (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers = scope)
 
 
-val get_scope: t scope
+val get_scope: desugM scope
 let get_scope =
   (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
 
 (* TODO: revert this to simply return a a, and add a collect_bindings function *)
-val with_scope: forall 'a. scope -> t 'a -> t (A.bindings * 'a)
+val with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 ("ENTERING Scope: " ^ string_of_scope scope) in
@@ -355,7 +355,7 @@ let initial_state n = <|
   is_inside_switch= false;
 |>
 
-val eval: forall 'a. nat -> t 'a -> Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
+val eval: forall 'a. nat -> desugM 'a -> Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
 let eval n m =
   State_exception.eval (
     m                                                 >>= fun res    ->
@@ -366,14 +366,14 @@ let eval n m =
 
 
 
-val freshify: cabs_identifier -> t cabs_identifier
+val freshify: cabs_identifier -> desugM cabs_identifier
 let freshify (CabsIdentifier loc str) =
   State_exception.modify (fun st ->
     let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
     (CabsIdentifier loc (str ^ show n), <| st with aux_supply= aux_supply' |>)
   )
 
-val fresh_block_scope: t scope
+val fresh_block_scope: desugM scope
 let fresh_block_scope =
   State_exception.modify (fun st ->
     let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
@@ -383,14 +383,14 @@ let fresh_block_scope =
 
 
 (* ========================================================================== *)
-val ident_is_in_scope: cabs_identifier -> namespace -> t bool
+val ident_is_in_scope: cabs_identifier -> namespace -> desugM bool
 let ident_is_in_scope ident namespace =
   State_exception.read (fun st ->
     Scope_table.is_in_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
   )
 
 
-val ident_is_in_current_scope: cabs_identifier -> namespace -> t bool
+val ident_is_in_current_scope: cabs_identifier -> namespace -> desugM bool
 let ident_is_in_current_scope ident namespace =
   State_exception.read (fun st ->
     Scope_table.is_in_current_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
@@ -399,7 +399,7 @@ let ident_is_in_current_scope ident namespace =
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
-val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> t A.identifier
+val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> desugM A.identifier
 let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
@@ -456,14 +456,14 @@ let register_identifier_ ident namespace kind link =
   
 
 
-val resolve_identifier: cabs_identifier -> namespace -> t (maybe (scope * (A.identifier * identifier_kind * linkage)))
+val resolve_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind * linkage)))
 let resolve_identifier ident namespace =
   State_exception.read (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   )
 
 
-val     determinate_linkage: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t linkage
+val     determinate_linkage: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM linkage
 let rec determinate_linkage ident namespace kind storage_classes =
   get_scope >>= fun scope ->
   let scs = List.delete SC_Thread_local storage_classes in
@@ -546,7 +546,7 @@ STD_ "§6.2.2#6" $
 *)
 
 
-val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
+val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM (linkage * A.identifier)
 let register_identifier ident namespace kind storage_classes =
   determinate_linkage ident namespace kind storage_classes >>= fun link ->
   register_identifier_ ident namespace kind link           >>= fun sym  ->
@@ -554,7 +554,7 @@ let register_identifier ident namespace kind storage_classes =
 
 
 (*
-val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> t A.identifier
+val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> desugM A.identifier
 let register_function_parameter ident kind storage_classes =
 STD_ "§6.2.2#6" $
   register_identifier_ ident Namespace_ordinary kind Linkage_none
@@ -566,7 +566,7 @@ STD_ "§6.2.2#6" $
 
 
 
-val register_tag: Loc.t -> maybe cabs_identifier -> t A.identifier
+val register_tag: Loc.t -> maybe cabs_identifier -> desugM A.identifier
 let register_tag loc tag_ident_opt =
   (* generate a fresh tag identifier if none provided *)
   maybe (freshify (CabsIdentifier loc "anonymous_tag_")) return tag_ident_opt  >>= fun tag_ident    ->
@@ -575,7 +575,7 @@ let register_tag loc tag_ident_opt =
   
 
 
-val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> t unit
+val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> desugM unit
 let register_tag_definition loc tag_sym tag_decl =
   let () = Debug.print_debug 5 ("REGISTERING TAG: " ^ show tag_sym) in
   State_exception.read (fun st ->
@@ -593,7 +593,7 @@ let register_tag_definition loc tag_sym tag_decl =
   )
 
 
-val resolve_tag_definition: A.identifier -> t tag_definition
+val resolve_tag_definition: A.identifier -> desugM tag_definition
 let resolve_tag_definition tag_sym =
   State_exception.read (fun st ->
     Map.lookup tag_sym st.tag_definitions
@@ -605,7 +605,7 @@ let resolve_tag_definition tag_sym =
   end
 
 
-val get_tag_definitions: t (map A.identifier tag_definition)
+val get_tag_definitions: desugM (map A.identifier tag_definition)
 let get_tag_definitions =
   State_exception.read (fun st ->
     st.tag_definitions
@@ -733,7 +733,7 @@ let resolve_declarations =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_external_object_definition: A.identifier -> A.expression unit -> t unit
+val register_external_object_definition: A.identifier -> A.expression unit -> desugM unit
 let register_external_object_definition sym e =
   (* this guard makes sure we are indeed registering the definition of an
      external object (§6.9.2#1) *)
@@ -744,7 +744,7 @@ let register_external_object_definition sym e =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.identifier -> (list A.identifier * A.statement unit) -> t unit
+val register_function_definition: A.identifier -> (list A.identifier * A.statement unit) -> desugM unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
@@ -754,21 +754,21 @@ let register_function_definition sym fdef =
   )
 
 
-val external_object_is_defined: A.identifier -> t bool
+val external_object_is_defined: A.identifier -> desugM bool
 let external_object_is_defined sym =
   State_exception.read (fun st ->
     Map.member sym st.external_object_definitions
   )
 
 
-val function_is_defined: A.identifier -> t bool
+val function_is_defined: A.identifier -> desugM bool
 let function_is_defined sym =
   State_exception.read (fun st ->
     Map.member sym st.function_definitions
   )
 
 
-val register_function_declaration: Loc.t -> A.identifier -> bool -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> t unit
+val register_function_declaration: Loc.t -> A.identifier -> bool -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype)) * bool * bool * bool) -> desugM unit
 let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
   let string_of_decl (ty, xs, _, _, _) =
@@ -793,7 +793,7 @@ let register_function_declaration loc sym is_proto decl =
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
+val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_external_object_declaration sym decl =
   return (
     Debug.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
@@ -816,7 +816,7 @@ let register_external_object_declaration sym decl =
   end
 
 (* TODO: factorize *)
-val register_internal_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> t unit
+val register_internal_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_internal_object_declaration sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.internal_object_declarations
@@ -834,7 +834,7 @@ let register_internal_object_declaration sym decl =
   end
 
 
-val register_static_assertion: A.expression unit -> A.stringLiteral -> t unit
+val register_static_assertion: A.expression unit -> A.stringLiteral -> desugM unit
 let register_static_assertion e strCst =
   State_exception.update (fun st ->
     <| st with static_assertions= (e, strCst) :: st.static_assertions |>
@@ -845,11 +845,11 @@ let register_static_assertion e strCst =
 
 
 
-val register_label: cabs_identifier -> t unit
+val register_label: cabs_identifier -> desugM unit
 let register_label ident =
   void (register_identifier_ ident Namespace_label Kind_label Linkage_none)
 
-val resolve_label: cabs_identifier -> t A.identifier
+val resolve_label: cabs_identifier -> desugM A.identifier
 let resolve_label ident =
   (* TODO: §6.8.6.1#1 *)
   resolve_identifier ident Namespace_label >>= function
@@ -861,32 +861,32 @@ let resolve_label ident =
 
 
 (* Returns the return type of the function currently being desugared *)
-(* val get_current_return_type: t ATypes.ctype *)
-let get_current_return_type: t ATypes.ctype =
+(* val get_current_return_type: desugM ATypes.ctype *)
+let get_current_return_type: desugM ATypes.ctype =
   State_exception.read (fun st ->
     st.current_return_type
   )
 
-let set_current_return_type (ty: ATypes.ctype) : t unit =
+let set_current_return_type (ty: ATypes.ctype) : desugM unit =
   State_exception.update (fun st ->
     <| st with current_return_type= ty |>
   )
 
 
-(* val is_switch_body: t bool *)
-let is_inside_switch: t bool =
+(* val is_switch_body: desugM bool *)
+let is_inside_switch: desugM bool =
   State_exception.read (fun st ->
     st.is_inside_switch
   )
 
-(* val is_loop_body: t bool *)
-let is_inside_loop: t bool =
+(* val is_loop_body: desugM bool *)
+let is_inside_loop: desugM bool =
   State_exception.read (fun st ->
     st.is_inside_loop
   )
 
 
-val perform_inside_switch: forall 'a. t 'a ->  t 'a
+val perform_inside_switch: forall 'a. desugM 'a ->  desugM 'a
 let perform_inside_switch m =
   is_inside_loop >>= function
     | true ->
@@ -899,7 +899,7 @@ let perform_inside_switch m =
   end
 
 
-val perform_inside_loop: forall 'a. t 'a -> t 'a
+val perform_inside_loop: forall 'a. desugM 'a -> desugM 'a
 let perform_inside_loop m =
   is_inside_loop >>= function
     | true ->
@@ -915,14 +915,14 @@ let perform_inside_loop m =
 
 
 (* TODO: would be more efficient to store in the state the list of unused functions *)
-val add_used_identifier: A.identifier -> t unit
+val add_used_identifier: A.identifier -> desugM unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 "USED IDENTIFIER" in
     <| st with used_identifier= Global.list_insert sym st.used_identifier |>
   )
 
-val get_used_identifier: t (list A.identifier)
+val get_used_identifier: desugM (list A.identifier)
 let get_used_identifier =
   State_exception.read (fun st ->
     st.used_identifier
@@ -930,14 +930,14 @@ let get_used_identifier =
 
 
 
-val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> t unit
+val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
 let register_typedef sym qs_ty =
   State_exception.update (fun st ->
     <| st with typedef_definitions= Map.insert sym qs_ty st.typedef_definitions |>
   )
 
 
-val resolve_typedef: A.identifier -> t (ATypes.qualifiers * ATypes.ctype)
+val resolve_typedef: A.identifier -> desugM (ATypes.qualifiers * ATypes.ctype)
 let resolve_typedef sym =
   State_exception.read (fun st ->
     match Map.lookup sym st.typedef_definitions with
@@ -947,13 +947,13 @@ let resolve_typedef sym =
   )
 
 
-val register_enum_constant: A.identifier -> A.expression_ unit -> t unit
+val register_enum_constant: A.identifier -> A.expression_ unit -> desugM unit
 let register_enum_constant sym expr =
   State_exception.update (fun st ->
     <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
   )
 
-val resolve_enum_constant: A.identifier -> t (A.expression_ unit)
+val resolve_enum_constant: A.identifier -> desugM (A.expression_ unit)
 let resolve_enum_constant sym =
   State_exception.read (fun st ->
     st.enumeration_constants
@@ -994,7 +994,7 @@ let remove_block_scoped_identifiers st xs =
 *)
 
 
-val fetch_object_declaration: A.identifier -> t (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype)
+val fetch_object_declaration: A.identifier -> desugM (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
@@ -1016,7 +1016,7 @@ let fetch_object_declaration sym =
 (* TODO: ... *)
 let map_union = Map.(union)
 
-val extract_program: string -> t (A.program unit)
+val extract_program: string -> desugM (A.program unit)
 let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) ->
@@ -1052,7 +1052,7 @@ let extract_program startup_str =
 
 
 
-val print_debug: nat -> string -> t unit
-let print_debug n msg =
-  let () = Debug.print_debug n msg in
-  return ()
+val print_debugM: nat -> string -> desugM unit
+let inline print_debugM n msg =
+  return (Debug.print_debug n msg)
+

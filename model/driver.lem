@@ -21,7 +21,7 @@ module Mem = struct
 end
 
 import Pp
-import Driver_effect
+(* import Driver_effect *)
 
 module Cmm = Cmm_csem
 

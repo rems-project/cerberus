@@ -3590,7 +3590,7 @@ let translate_program stdlib sequentialise ((startup_sym, sigm) as program) =
           let core_create = Caux.pcreate Loc.unknown (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
           E.fresh_symbol >>= fun sym_global ->
           
-          E.print_debug 2 ("(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
+          E.print_debugM 2 ("(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Just expr ->
                 (* if the global has an initialisation *)

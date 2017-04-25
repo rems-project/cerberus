@@ -14,7 +14,7 @@ let bind m f =
 let join m = bind m (fun x -> x)
 
 val map : forall 'a 'b 's. ('a -> 'b) -> t 'a 's -> t 'b 's
-let map f m = bind m (return -| f)
+let inline map f m = bind m (return -| f)
 
 val app : forall 'a 'b 's. t ('a -> 'b) 's -> t 'a 's -> t 'b 's
 let app mf m = bind mf (fun f -> map f m)

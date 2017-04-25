@@ -1,27 +1,33 @@
 open import Pervasives Global
 
+(* HACK: most of the inlines are only added to prevent Lem's renaming *)
+
+
 type exceptM 'a 'msg =
   | Result of 'a
   | Exception of 'msg
 
-let bind m k =
+let except_return a = Result a
+let except_bind m k =
   match m with
     | Result a    -> k a
     | Exception s -> Exception s
   end
+(* HACK: the indirection is for the hand-written OCaml code *)
+let inline return = except_return
+let inline bind = except_bind
 
 let rbind k m = bind m k
 
-let return a = Result a
 let throw m = Exception m
 let fail = throw
-let join m = bind m (fun x -> x)
+let inline join m = bind m (fun x -> x)
 
 val fmap: forall 'a 'b 'msg. ('a -> 'b) -> exceptM 'a 'msg -> exceptM 'b 'msg
 let fmap f m = bind m (return -| f)
 
 val app: forall 'a 'b 'msg. exceptM ('a -> 'b) 'msg -> exceptM 'a 'msg -> exceptM 'b 'msg
-let app mf m = bind mf (fun f -> fmap f m)
+let inline app mf m = bind mf (fun f -> fmap f m)
 
 let of_maybe m = function
   | Just a  -> return a
@@ -41,11 +47,13 @@ end
 
 open Operators
 
-let map2 f mx my    = app (fmap f mx) my
+(*
+let inline map2 f mx my    = app (fmap f mx) my
 let map3 f mx my mz = app (map2 f mx my) mz
+*)
 
 val sequence: forall 'a 'msg. list (exceptM 'a 'msg) -> exceptM (list 'a) 'msg
-let sequence ms =
+let inline sequence ms =
   foldr
     (fun m ms' ->
       m   >>= fun x  ->
@@ -54,10 +62,10 @@ let sequence ms =
     ) (return []) ms
 
 val listM: forall 'a 'b 'msg. ('a -> list (exceptM 'b 'msg)) -> 'a -> exceptM (list 'b) 'msg
-let listM t xs = sequence (t xs)
+let inline listM t xs = sequence (t xs)
 
 val mapM: forall 'a 'b 'msg. ('a -> exceptM 'b 'msg) -> list 'a -> exceptM (list 'b) 'msg
-let mapM f = listM (List.map f)
+let inline mapM f = listM (List.map f)
 
 
 val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg

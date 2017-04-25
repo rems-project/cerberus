@@ -2,16 +2,16 @@ open import Pervasives
 import State State_exception Exception_undefined Undefined
 
 
-type t 'a 'bs 'msg = State_exception.t (Undefined.t 'a) 'bs 'msg
+type stExceptUndefM 'a 'bs 'msg = State_exception.stExceptM (Undefined.t 'a) 'bs 'msg
 
-val return: forall 'a 'b 's 'msg. 'a -> t 'a 's 'msg
+val return: forall 'a 'b 's 'msg. 'a -> stExceptUndefM 'a 's 'msg
 let return z =
   State_exception.return (Undefined.return z)
 
-val bind: forall 'a 'b 's 'msg. t 'a 's 'msg         ->
-                                ('a -> t 'b 's 'msg) ->
-                                t 'b 's 'msg
-let bind m f = fun st ->
+val bind: forall 'a 'b 's 'msg. stExceptUndefM 'a 's 'msg         ->
+                                ('a -> stExceptUndefM 'b 's 'msg) ->
+                                stExceptUndefM 'b 's 'msg
+let stExceptUndef_bind m f = fun st ->
   match m st with
     | Exception.Result (Undefined.Defined z, st') ->
         f z st'
@@ -22,17 +22,17 @@ let bind m f = fun st ->
     | Exception.Exception err ->
         State_exception.fail err st
   end
+let inline bind = stExceptUndef_bind
 
-
-val     mapM: forall 'a 'b 's 'msg. ('a -> t 'b 's 'msg) ->
+val     mapM: forall 'a 'b 's 'msg. ('a -> stExceptUndefM 'b 's 'msg) ->
                                     list 'a              ->
-                                    t (list 'b) 's 'msg
+                                    stExceptUndefM (list 'b) 's 'msg
 let rec mapM f xs =
   State_exception.bind (State_exception.mapM f xs)
     (fun us -> State_exception.return $ Undefined.mapM id us)
 
 
-val runEU: forall 'a 's 'msg. Exception_undefined.t 'a 'msg -> t 'a 's 'msg
+val runEU: forall 'a 's 'msg. Exception_undefined.t 'a 'msg -> stExceptUndefM 'a 's 'msg
 let runEU m = fun st ->
   match m with
     | Exception.Result (Undefined.Defined z) ->
@@ -46,29 +46,29 @@ let runEU m = fun st ->
   end
 
 
-val runE: forall 'a 's 'msg. Exception.exceptM 'a 'msg -> t 'a 's 'msg
+val runE: forall 'a 's 'msg. Exception.exceptM 'a 'msg -> stExceptUndefM 'a 's 'msg
 let runE m =
   runEU (Exception.bind m Exception_undefined.return)
 
 
 
-val runS: forall 'a 's 'msg. State.t 'a 's -> t 'a 's 'msg
+val runS: forall 'a 's 'msg. State.t 'a 's -> stExceptUndefM 'a 's 'msg
 let runS m = fun st ->
   let (a, st') = m st in
   Exception.return (Undefined.return a, st')
 
-val runSE: forall 'a 's 'msg. State_exception.t 'a 's 'msg -> t 'a 's 'msg
+val runSE: forall 'a 's 'msg. State_exception.stExceptM 'a 's 'msg -> stExceptUndefM 'a 's 'msg
 let runSE m =
   State_exception.bind m
     (fun z -> State_exception.return (Undefined.return z))
 
 
-val run: forall 'a 's 'msg. t 'a 's 'msg -> 's -> Exception.exceptM (Undefined.t 'a * 's) 'msg
+val run: forall 'a 's 'msg. stExceptUndefM 'a 's 'msg -> 's -> Exception.exceptM (Undefined.t 'a * 's) 'msg
 let run m st = m st
 
 
 (* NOTE: this is foldl *)
-val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> t 'a 's 'msg) -> 'a -> list 'b -> t 'a 's 'msg
+val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptUndefM 'a 's 'msg) -> 'a -> list 'b -> stExceptUndefM 'a 's 'msg
 let rec foldM f a = function
   | [] ->
       return a
@@ -76,7 +76,7 @@ let rec foldM f a = function
       bind (f a x) (fun z -> foldM f z xs)
 end
 
-val     filterM: forall 'a 's 'msg. ('a -> t bool 's 'msg) -> list 'a -> t (list 'a) 's 'msg
+val     filterM: forall 'a 's 'msg. ('a -> stExceptUndefM bool 's 'msg) -> list 'a -> stExceptUndefM (list 'a) 's 'msg
 let rec filterM pred = function
   | [] ->
       return []
@@ -88,7 +88,7 @@ let rec filterM pred = function
 end
 
 
-val        sequence: forall 'a 's 'msg. list (t 'a 's 'msg) -> t (list 'a) 's 'msg
+val        sequence: forall 'a 's 'msg. list (stExceptUndefM  'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
 let inline sequence ms =
   let k m m' =
     bind m (fun x ->
@@ -98,18 +98,18 @@ let inline sequence ms =
     ) in
   List.foldr k (return []) ms
 
-val     replicateM: forall 'a 's 'msg. nat -> (t 'a 's 'msg) -> t (list 'a) 's 'msg
+val     replicateM: forall 'a 's 'msg. nat -> (stExceptUndefM 'a 's 'msg) -> stExceptUndefM (list 'a) 's 'msg
 let rec replicateM n x =
   sequence (List.replicate n x)
 
 
-val fail: forall 'a 's 'msg. 'msg -> t 'a 's 'msg
+val fail: forall 'a 's 'msg. 'msg -> stExceptUndefM 'a 's 'msg
 let fail err =
   runE (Exception.fail err)
 
 
 
-val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> t 'a 's 'msg -> t 'b 's 'msg
+val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> stExceptUndefM 'a 's 'msg -> stExceptUndefM 'b 's 'msg
 let fmap f m =
   bind m (fun z -> return (f z))
 
@@ -124,10 +124,10 @@ open Operators
 
 
 
-val        update: forall 's 'msg. ('s -> 's) -> t unit 's 'msg
+val        update: forall 's 'msg. ('s -> 's) -> stExceptUndefM unit 's 'msg
 let inline update f =
   runSE (State_exception.update f)
 
-val        read: forall 'a 's 'msg. ('s -> 'a) -> t 'a 's 'msg
+val        read: forall 'a 's 'msg. ('s -> 'a) -> stExceptUndefM 'a 's 'msg
 let inline read f =
   runSE (State_exception.read f)

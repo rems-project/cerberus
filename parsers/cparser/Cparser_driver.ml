@@ -138,7 +138,7 @@ let parse input =
       ) !saved_tokens;
       Debug_ocaml.print_debug 8 "===========================";
 (* *)
-      Exception.return0 (Parser.translation_unit_file hack (Lexing.from_string ""))
+      Exception.except_return (Parser.translation_unit_file hack (Lexing.from_string ""))
     with
       | Failure msg ->
           prerr_endline "DEBUG: CPARSER_DRIVER, Failure";

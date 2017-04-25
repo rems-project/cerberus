@@ -83,7 +83,7 @@ let c_frontend f =
         error "the C preprocessor failed";
       Input.file temp_name in
     
-       Exception.return0 (c_preprocessing f)
+       Exception.except_return (c_preprocessing f)
     |> Exception.rbind Cparser_driver.parse
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
@@ -95,9 +95,9 @@ let c_frontend f =
 (*    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd) *)
     
     |> Exception.rbind (fun (counter, z) ->
-          Exception.bind0 (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
+          Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
-          (fun z -> Exception.return0 (counter, z)))
+          (fun z -> Exception.except_return (counter, z)))
     |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
@@ -115,13 +115,13 @@ let c_frontend f =
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *)
 *)
 
-let (>>=) = Exception.bind0
+let (>>=) = Exception.except_bind
 
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
         Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
-        Exception.return0 (Symbol.Symbol (!core_sym_counter, None), {
+        Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   sym_main;
            Core.stdlib= snd !!cerb_conf.core_stdlib;
            Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
@@ -218,9 +218,9 @@ let pipeline filename args =
     if !!cerb_conf.typecheck_core then
       Core_typing.typecheck_program core_file |>
         pass_message "5. Core typechecking completed!" >>= fun _ ->
-      Exception.return0 ()
+      Exception.except_return ()
     else
-      Exception.return0 ()
+      Exception.except_return ()
   end >>= fun _ ->
 
   (* TODO: for now assuming a single order comes from indet expressions *)
@@ -250,10 +250,10 @@ let pipeline filename args =
    );
   
   if !!cerb_conf.compile then
-    Exception.bind0 (Core_typing.typecheck_program rewritten_core_file)
+    Exception.except_bind (Core_typing.typecheck_program rewritten_core_file)
     (Codegen_ocaml.compile filename sym_supply -| Core_sequentialise.sequentialise_file)
   else
-    Exception.return0 (backend sym_supply rewritten_core_file args)
+    Exception.except_return (backend sym_supply rewritten_core_file args)
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
@@ -406,7 +406,7 @@ let () =
                          sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
 
 
-  let info       = Term.info "cerberus" ~version:"5bcd808ad31b+ tip -- 21/04/2017@17:07" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let info       = Term.info "cerberus" ~version:"d45203929d0e+ tip -- 25/04/2017@17:54" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1
