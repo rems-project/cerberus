@@ -7,7 +7,7 @@ let empty = []
 
 val eq_context : forall 'A 'B. ('A -> 'A -> bool) -> ('B -> 'B -> bool) -> context 'A 'B -> context 'A 'B -> bool
 let eq_context eq_A eq_B =
-  eq_list (eq_pair eq_A eq_B)
+  List.listEqualBy (pairEqualBy eq_A eq_B)
 
 val add : forall 'A 'B. 'A -> 'B -> context 'A 'B -> context 'A 'B
 let add a b C = (a, b) :: C

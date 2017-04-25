@@ -377,7 +377,7 @@ let characterPrefixEqual pref1 pref2 =
   end
 
 let characterConstantEqual =
-  eq_pair (eq_option characterPrefixEqual) (=)
+  pairEqualBy (eq_option characterPrefixEqual) (=)
 
 let encodingPrefixEqual pref1 pref2 =
   match (pref1, pref2) with
@@ -389,7 +389,7 @@ let encodingPrefixEqual pref1 pref2 =
   end
 
 let stringLiteralEqual =
-  eq_pair (eq_option encodingPrefixEqual) (=)
+  pairEqualBy (eq_option encodingPrefixEqual) (=)
 
 
 let rec constantEqual c1 c2 =
@@ -405,9 +405,9 @@ let rec constantEqual c1 c2 =
     | (ConstantCharacter cc1, ConstantCharacter cc2) ->
         characterConstantEqual cc1 cc2
     | (ConstantArray cs1, ConstantArray cs2) ->
-        eq_list constantEqual cs1 cs2
+        List.listEqualBy constantEqual cs1 cs2
     | (ConstantStruct tag_sym1 xs1, ConstantStruct tag_sym2 xs2) ->
-        tag_sym1 = tag_sym2 && eq_list (eq_pair (=) constantEqual) xs1 xs2
+        tag_sym1 = tag_sym2 && List.listEqualBy (pairEqualBy (=) constantEqual) xs1 xs2
     | (ConstantUnion tag_sym1 memb_ident1 cst1, ConstantUnion tag_sym2 memb_ident2 cst2) ->
         tag_sym1 = tag_sym2 && memb_ident1 = memb_ident1 && constantEqual cst1 cst2
     | _ ->
@@ -505,10 +505,10 @@ let argumentsEqual eq_A a1 a2 =
   argumentsEqual_aux eq_A expressionEqual a1 a2
 
 let bindingsEqual bs1 bs2 =
-  eq_list (eq_pair identifierEqual (eq_triple (=) qualifiersEqual ctypeEqual)) bs1 bs2
+  List.listEqualBy (pairEqualBy identifierEqual (eq_triple (=) qualifiersEqual ctypeEqual)) bs1 bs2
 
 let definitionEqual eq_A d1 d2 =
-  eq_pair identifierEqual (expressionEqual eq_A) d1 d2
+  pairEqualBy identifierEqual (expressionEqual eq_A) d1 d2
 
 let eq_declaration ds1 ds2 =
   match (ds1, ds2) with
@@ -573,7 +573,7 @@ let rec statementEqual' eq_A s1 s2 =
     | (AilSgoto v1, AilSgoto v2) ->
         identifierEqual v1 v2
     | (AilSdeclaration d1, AilSdeclaration d2) ->
-        eq_list (eq_pair identifierEqual (expressionEqual eq_A)) d1 d2
+        List.listEqualBy (pairEqualBy identifierEqual (expressionEqual eq_A)) d1 d2
     | (_, _) -> false
   end
 and statementEqual eq_A s1 s2 =
@@ -618,32 +618,32 @@ let eq_sigma_declaration eq_A eq_B sdecl1 sdecl2 =
 let eq_sigma eq_A sig1 sig2 =
   eq_context identifierEqual eq_declaration sig1.declarations sig1.declarations &&
   eq_context identifierEqual (expressionEqual eq_A) sig1.object_definitions sig2.object_definitions &&
-  eq_context identifierEqual (eq_pair (eq_list identifierEqual) (statementEqual eq_A)) sig1.function_definitions sig2.function_definitions &&
-  eq_list (eq_pair (expressionEqual eq_A) stringLiteralEqual) sig1.static_assertions sig2.static_assertions
+  eq_context identifierEqual (pairEqualBy (List.listEqualBy identifierEqual) (statementEqual eq_A)) sig1.function_definitions sig2.function_definitions &&
+  List.listEqualBy (pairEqualBy (expressionEqual eq_A) stringLiteralEqual) sig1.static_assertions sig2.static_assertions
 
 (*
 let eq_sigma eq_A eq_B =
-  eq_list (eq_sigma_declaration eq_A eq_B)
-(* (OLD)  eq_context identifierEqual (eq_pair (eq_pair eq_ctype eq_bindings) (statementEqual eq_A eq_B)) *)
+  List.listEqualBy (eq_sigma_declaration eq_A eq_B)
+(* (OLD)  eq_context identifierEqual (pairEqualBy (pairEqualBy eq_ctype eq_bindings) (statementEqual eq_A eq_B)) *)
 (*  eq_context identifierEqual (eq_sigma_declaration eq_A eq_B) *)
 (*
     (eq_either
-      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+      (pairEqualBy (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
       (eq_triple eq_qualifiers eq_ctype (eq_option (expressionEqual eq_B)))
     )
 *)
 *)
 
 let eq_gamma g1 g2 =
-  eq_context identifierEqual (eq_pair qualifiersEqual ctypeEqual) g1 g2
+  eq_context identifierEqual (pairEqualBy qualifiersEqual ctypeEqual) g1 g2
 
 let eq_program eq_A p1 p2 =
-  eq_pair identifierEqual (eq_sigma eq_A) p1 p2
+  pairEqualBy identifierEqual (eq_sigma eq_A) p1 p2
 (* (NEW OLD)
      identifierEqual p1.startup p2.startup
-  && eq_context identifierEqual (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+  && eq_context identifierEqual (pairEqualBy (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
        p1.functions p2.functions
-  && eq_context identifierEqual (eq_pair eq_ctype (eq_option (expressionEqual eq_B)))
+  && eq_context identifierEqual (pairEqualBy eq_ctype (eq_option (expressionEqual eq_B)))
        p1.globals p2.globals
   && eq_context identifierEqual (=) p1.strings p2.strings
  *)
@@ -862,7 +862,7 @@ let equiv_sigma S1 S2 =
   sigma_equiv identifierEqual (fun _ ->
     equiv_sigma_declaration
   ) S1 S2
-(* (OLD)  equiv identifierEqual (fun _ -> equiv_pair (eq_pair eq_ctype eq_bindings) equiv_statement) S1 S2 *)
+(* (OLD)  equiv identifierEqual (fun _ -> equiv_pair (pairEqualBy eq_ctype eq_bindings) equiv_statement) S1 S2 *)
 (*
     equiv_either
       (equiv_pair (eq_triple eq_ctype eq_bindings (=)) (equiv_option equiv_statement))
@@ -870,18 +870,18 @@ let equiv_sigma S1 S2 =
 *)
 
 let equiv_eq_sigma eq_A eq_B S1 S2 =
-(* (OLD)  equiv identifierEqual (fun _ -> eq_pair (eq_pair eq_ctype eq_bindings) (statementEqual eq_A eq_B)) S1 S2 *)
+(* (OLD)  equiv identifierEqual (fun _ -> pairEqualBy (pairEqualBy eq_ctype eq_bindings) (statementEqual eq_A eq_B)) S1 S2 *)
   sigma_equiv identifierEqual (fun _ ->
     eq_sigma_declaration eq_A eq_B
 (*
     eq_either
-      (eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+      (pairEqualBy (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
       (eq_triple eq_qualifiers eq_ctype (eq_option (expressionEqual eq_B)))
 *)
   ) S1 S2
 
 let equiv_gamma g1 g2 =
-  sigma_equiv identifierEqual (fun _ -> eq_pair eq_qualifiers eq_ctype) g1 g2
+  sigma_equiv identifierEqual (fun _ -> pairEqualBy eq_qualifiers eq_ctype) g1 g2
 
 let equiv_program p1 p2 =
   equiv_pair identifierEqual equiv_sigma p1 p2
@@ -895,12 +895,12 @@ let equiv_program p1 p2 =
 *)
 
 let equiv_eq_program eq_A eq_B p1 p2 =
-  eq_pair identifierEqual (equiv_eq_sigma eq_A eq_B) p1 p2
+  pairEqualBy identifierEqual (equiv_eq_sigma eq_A eq_B) p1 p2
 (* (NEW OLD)
      identifierEqual p1.startup p2.startup
-  && equiv identifierEqual (fun _ -> eq_pair (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
+  && equiv identifierEqual (fun _ -> pairEqualBy (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
        p1.functions p2.functions
-  && equiv identifierEqual (fun _ -> eq_pair eq_ctype (eq_option (expressionEqual eq_B)))
+  && equiv identifierEqual (fun _ -> pairEqualBy eq_ctype (eq_option (expressionEqual eq_B)))
        p1.globals p2.globals
   && eq_context identifierEqual (=) p1.strings p2.strings
 *)

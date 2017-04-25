@@ -151,6 +151,9 @@ let tmp_implementation =
 
 
 open AilTypes
+(*
+TODO: (clean) NOT USED
+
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
   | Basic (Integer ity) ->
@@ -158,6 +161,7 @@ let is_unsigned_integer_type = function
   | _ ->
       false
 end
+*)
 
 let function_return_type = function
   | Function _ ty _ _ -> ty

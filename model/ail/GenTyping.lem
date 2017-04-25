@@ -23,7 +23,7 @@ let lookup_tag_definition s sym =
 
 
 
-(* val annotate_statement: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement unit -> E.t (statement genTypeCategory) *)
+(* val annotate_statement: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement unit -> E.errorM (statement genTypeCategory) *)
 
 
 
@@ -85,7 +85,7 @@ let type_of_constant iCst =
 
 
 (* TODO: is only used once, could be inlined *)
-val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.t bool
+val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.errorM bool
 let well_typed_assignment s ty1 gty2 null2 =
   (* §6.5.16.1#1, bullet 1 *)
   if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && GenTypesAux.is_arithmetic gty2 then
@@ -208,7 +208,7 @@ let combine_qualifiers_right gty1 gty2 =
   end
 
 
-val well_typed_conditional: genType -> genType -> genType -> bool -> bool -> E.t genTypeCategory
+val well_typed_conditional: genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
 let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
   if is_scalar gty1 then
     if is_arithmetic gty2 && is_arithmetic gty3 then
@@ -239,7 +239,7 @@ let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
     E.fail Loc.unknown (TError_TODO 10)
 
 
-val annotate_assignee_aux: forall 's 'A1 'A2. sigma 's -> (expression 'A1 -> E.t (expression 'A2 * genType)) -> ctype -> expression 'A1 -> E.t (expression 'A2)
+val annotate_assignee_aux: forall 's 'A1 'A2. sigma 's -> (expression 'A1 -> E.errorM (expression 'A2 * genType)) -> ctype -> expression 'A1 -> E.errorM (expression 'A2)
 let annotate_assignee_aux s annotate_rvalue ty1 e2 =
   annotate_rvalue e2                                             >>= fun (e2, gty2) ->
   well_typed_assignment s ty1 gty2 (is_null_pointer_constant e2) >>= function
@@ -251,17 +251,17 @@ let annotate_assignee_aux s annotate_rvalue ty1 e2 =
 
 val annotate_arguments_aux: forall 'A1 'A2.
                             annotation 'A1 'A2                                ->
-                            (expression 'A1 -> E.t (expression 'A2))          ->
-                            (ctype -> expression 'A1 -> E.t (expression 'A2)) ->
+                            (expression 'A1 -> E.errorM (expression 'A2))          ->
+                            (ctype -> expression 'A1 -> E.errorM (expression 'A2)) ->
                             bool                                              ->
                             bool                                              ->
                             list (expression 'A1)                             ->
                             list (qualifiers * ctype)                         ->
-                            E.t (list (expression 'A2))
+                            E.errorM (list (expression 'A2))
 
 
 
-(* let rec annotate_arguments_aux (a : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.t (expression 'A2)) es (p : list (qualifiers * _)) : E.t (list (expression 'A2)) = *)
+(* let rec annotate_arguments_aux (a : annotation 'A1 'A2) (annotate_assignee : ctype -> expression 'A1 -> E.errorM (expression 'A2)) es (p : list (qualifiers * _)) : E.errorM (list (expression 'A2)) = *)
 let rec annotate_arguments_aux annot annotate_expression annotate_assignee has_proto is_variadic args params =
   match (args, params) with
     | ([], []) ->
@@ -1479,7 +1479,7 @@ end
 
 
 
-val     annotate_statement_: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement_ unit -> E.t (statement_ genTypeCategory)
+val     annotate_statement_: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
 let rec annotate_statement_ annot sigm gamm ty stmt =
   let annotate_expression = annotate_expression annot sigm gamm   in
   let annotate_rvalue     = annotate_rvalue annot sigm gamm       in
@@ -1571,7 +1571,7 @@ and annotate_statement annot sigm gamm ty (AnnotatedStatement loc stmt) =
 
 
 val annotate_block:
-      annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> list (statement unit) -> E.t (list (statement genTypeCategory))
+      annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> list (statement unit) -> E.errorM (list (statement genTypeCategory))
 let annotate_block annot sigm gamm ty stmts =
   E.mapM (annotate_statement annot sigm gamm ty) stmts
 (*  annotate_block_aux annot (annotate_statement annot sigm gamm return_ty) bs *)
@@ -1658,7 +1658,7 @@ TODO
 
 
 
-val annotate_sigma: annotation unit genTypeCategory -> sigma unit -> E.t (sigma genTypeCategory)
+val annotate_sigma: annotation unit genTypeCategory -> sigma unit -> E.errorM (sigma genTypeCategory)
 let annotate_sigma annot sigm =
   (* TODO: morally we want a "mapP_" here *)
   Context.mapP identifierEqual (fun _ -> function
@@ -1713,7 +1713,7 @@ TODO: static asserts
 
 
 
-val annotate_program: annotation unit genTypeCategory -> program unit -> E.t (program genTypeCategory)
+val annotate_program: annotation unit genTypeCategory -> program unit -> E.errorM (program genTypeCategory)
 let annotate_program annot (startup, sigm) =
   match Context.lookup identifierEqual sigm.declarations startup with
     | Just (Decl_function has_proto ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->

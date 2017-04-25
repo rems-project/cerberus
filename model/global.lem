@@ -149,12 +149,14 @@ end
 
 
 
-(* TODO: user List.update instead *)
+(*
+(* TODO remove *)
 let rec list_update a v xs =
   match xs with
     | []         -> []
     | (x,xv)::xs' -> (if x = a then (a,v) :: xs' else (x,xv) :: list_update a v xs' )
   end
+*)
 
 
 (* 'optimised' implementation of [\f -> unzip . map f] *)
@@ -235,9 +237,12 @@ val replicate_list: forall 'a. 'a -> nat -> list 'a
 let replicate_list x n =
   replicate_list_ x n []
 
+(*
+(*TODO: remove (now in Lem's library *)
 val uncurry: forall 'a 'b 'c. ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
 let uncurry f =
   fun (x, y) -> f x y
+*)
 
 
 val eq_pair: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('a * 'b -> 'a * 'b -> bool)
@@ -296,6 +301,8 @@ let list_insert x xs =
     x :: xs
 
 
+(*
+TODO: remove (now in Lem's library)
 val     mapi_aux: forall 'a 'b. (nat -> 'a -> 'b) -> nat -> list 'b -> list 'a -> list 'b
 let rec mapi_aux f n acc = function
   | [] ->
@@ -308,7 +315,6 @@ val mapi: forall 'a 'b. (nat -> 'a -> 'b) -> list 'a -> list 'b
 let mapi f xs =
   mapi_aux f 0 [] xs
 
-
 val     takeWhile: forall 'a. ('a -> bool) -> list 'a -> list 'a
 let rec takeWhile pred = function
   | [] ->
@@ -316,6 +322,7 @@ let rec takeWhile pred = function
   | x::xs ->
       if pred x then x :: takeWhile pred xs else []
 end
+*)
 
 
 

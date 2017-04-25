@@ -22,25 +22,29 @@ type t 'a = state -> 'a * state
 
 (* monadic operations *)
 val return: forall 'a. 'a -> t 'a
-let return x = fun st ->
-  (x, st)
-
 val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-let bind m f = fun st ->
+
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline return x = fun st ->
+  (x, st)
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline bind m f = fun st ->
   let (a, st') = m st in
   f a st'
 
 
 
 (* BEGIN: reinventing the wheel (lots of things shamelessly taken from GHC) *)
-val     foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
-let rec foldlM f z0 xs =
+(* HACK: name prefix only added to prevent Lem's renaming *)
+val     transEff_foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
+let rec transEff_foldlM f z0 xs =
   match xs with
     | []     -> return z0
-    | x::xs' -> bind (f z0 x) (fun z -> foldlM f z xs')
+    | x::xs' -> bind (f z0 x) (fun z -> transEff_foldlM f z xs')
   end
 
-let sequence ms =
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline sequence ms =
   foldr (fun m acc ->
     bind m (fun x  ->
       bind acc (fun xs ->
@@ -49,19 +53,24 @@ let sequence ms =
     )
   ) (return []) ms
 val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-let mapM f xs = sequence (List.map f xs)
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline mapM f xs = sequence (List.map f xs)
 
-let sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
 val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
-let mapM_ f _as = sequence_ (List.map f _as)
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline mapM_ f _as = sequence_ (List.map f _as)
 
 val replicateM: forall 'a. nat -> t 'a -> t (list 'a)
-let replicateM n x = sequence (replicate n x)
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline replicateM n x = sequence (replicate n x)
 (* END: reinventing the wheel *)
 
 
 val init: UniqueId.supply Symbol.sym -> state
-let init suppl = <|
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline init suppl = <|
   symbol_supply=   suppl;
   visible_objects_types= Map.empty;
   visible_objects= [[]];
@@ -70,7 +79,8 @@ let init suppl = <|
 
 (* returns a fresh Core symbolic name. *)
 val fresh_symbol: t Symbol.sym
-let fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
   let (sym, suppl') = State.run Symbol.fresh suppl in
   (sym, <| st with symbol_supply= suppl' |>)
 
@@ -195,12 +205,12 @@ let resolve_object_type sym = fun st ->
   end
 
 
-
-val print_debug: nat -> string -> t unit
-let print_debug n str =
+val        print_debugM: nat -> string -> t unit
+let inline print_debugM n str =
   fun st ->
     let () = Debug.print_debug n str in
     ((), st)
+
 
 
 val with_symbol_supply: forall 'a. (UniqueId.supply Symbol.sym -> UniqueId.supply Symbol.sym * 'a) -> t 'a
@@ -208,3 +218,8 @@ let with_symbol_supply f =
   fun st ->
     let (suppl', z) = f st.symbol_supply in
     (z, <| st with symbol_supply= suppl' |>)
+
+
+
+(* HACK: this is a hack to prevent Lem from generating OCaml code with random renamings *)
+let inline foldlM = transEff_foldlM

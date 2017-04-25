@@ -1,19 +1,19 @@
 open import Pervasives TypingError
 import Loc Exception
 
+(* HACK: most of the inlines are only added to prevent Lem's renaming *)
+
+
 type errorM 'a = either (Loc.t * typing_error) 'a
 
-(* for the do notation *)
-type t 'a = errorM 'a
-
 val return: forall 'a. 'a -> errorM 'a
-let return z         = Right z
+let inline return z         = Right z
 
 val fail: forall 'a. Loc.t -> typing_error -> errorM 'a
-let fail loc err = Left (loc, err)
+let inline fail loc err = Left (loc, err)
 
 val bind: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
-let bind m f =
+let inline bind m f =
   match m with
     | Left l  -> Left l
     | Right r -> f r
@@ -52,34 +52,38 @@ let to_exception f = function
 end
 
 
-val     mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
-let rec mapM f ys =
+val     ailErr_mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
+let rec ailErr_mapM f ys =
   match ys with
   | []      -> return []
   | (x::xs) -> f x       >>= fun z  ->
-               mapM f xs >>= fun zs ->
+               ailErr_mapM f xs >>= fun zs ->
                return (z::zs)
 end
 
-let sequence_ ms = List.foldr (>>) (return ()) ms
+let inline sequence_ ms = List.foldr (>>) (return ()) ms
 val mapM_: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM unit
-let mapM_ f _as =
+let inline mapM_ f _as =
   sequence_ (List.map f _as)
 
 
 
-val     foldM: forall 'a 'b. ('a -> 'b -> errorM 'a) -> 'a -> list 'b -> errorM 'a (* GENERIC Monad *)
-let rec foldM f a = function                                                       (* GENERIC Monad *)
-  | [] ->                                                                          (* GENERIC Monad *)
-      return a                                                                     (* GENERIC Monad *)
-  | x::xs ->                                                                       (* GENERIC Monad *)
-      f a x >>= fun fax -> foldM f fax xs                                          (* GENERIC Monad *)
+val     ailErr_foldM: forall 'a 'b. ('a -> 'b -> errorM 'a) -> 'a -> list 'b -> errorM 'a (* GENERIC Monad *)
+let rec ailErr_foldM f a = function                                                       (* GENERIC Monad *)
+  | [] ->                                                                                 (* GENERIC Monad *)
+      return a                                                                            (* GENERIC Monad *)
+  | x::xs ->                                                                              (* GENERIC Monad *)
+      f a x >>= fun fax -> ailErr_foldM f fax xs                                          (* GENERIC Monad *)
 end
 
 val guard: typing_error -> bool -> errorM unit
-let guard err = function
+let inline guard err = function
   | true ->
       return ()
   | false ->
       fail Loc.unknown err
 end
+
+(* HACK: this is to prevent Lem's from renaming *)
+let inline mapM  = ailErr_mapM
+let inline foldM = ailErr_foldM

@@ -79,7 +79,6 @@ SOURCE_core_dynamics=\
   core_run_aux.lem \
   core_eval.lem \
   core_run.lem \
-  driver_effect.lem \
   driver.lem
 
 SOURCE_elaboration=\

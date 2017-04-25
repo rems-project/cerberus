@@ -5,8 +5,8 @@ import Debug Dlist Constraints Symbolic Undefined Loc
 
 open import {hol} `utilTheory`
 
-val stringFromConstraints: Constraints.t -> string
-declare ocaml target_rep function stringFromConstraints = `Pp_constraints.pp_constraints`
+val stringFromConstraints: Constraints.old_constraints -> string
+declare ocaml target_rep function stringFromConstraints = `Pp_constraints.pp_old_constraints`
 declare hol   target_rep function stringFromConstraints = `util$emptyString`
 
 
@@ -62,7 +62,7 @@ type nd_status 'a =
   | Killed of kill_reason 
 
 type nd_state = <|
-  eqs: Constraints.t;
+  eqs: Constraints.old_constraints;
   log: Dlist.dlist string
 |>
 
@@ -81,9 +81,9 @@ type ndM 'a =
 val return: forall 'a.    'a -> ndM 'a
 val bind:   forall 'a 'b. ndM 'a -> ('a -> ndM 'b) -> ndM 'b
 
-let return a =
+let nd_return a =
   ND (fun st -> [(Active a, st)])
-
+let inline return = nd_return
 
 
 val bindExhaustive: forall 'a 'b. ndM 'a -> ('a -> ndM 'b) -> ndM 'b
@@ -260,7 +260,7 @@ let guard b reason =
 
 
 (* Add a constraint to the current execution *)
-val add_constraint: (Constraints.t -> Constraints.t) -> ndM unit
+val add_constraint: (Constraints.old_constraints -> Constraints.old_constraints) -> ndM unit
 let add_constraint mk_assert =
   ND (fun st ->
     let eqs' = Constraints.simplify (mk_assert st.eqs) in
