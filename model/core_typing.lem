@@ -437,8 +437,14 @@ let rec infer_pexpr loc env (Pexpr () pexpr_) =
         typecheck_pexpr loc env (BTy_object OTy_pointer) pe1 >>= fun pe1' ->
         typecheck_pexpr loc env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (Pexpr (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
-    | PEmember_shift _ _ _ ->
-        error "WIP: Core_typing.infer_pexpr, PEmember_shift"
+    | PEmember_shift pe tag_sym memb_ident ->
+        typecheck_pexpr loc env (BTy_object OTy_pointer) pe >>= fun pe' ->
+          match List.lookup memb_ident (Core_ctype_aux.get_membersDefs tag_sym) with
+            | Nothing ->
+                E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
+            | _ ->
+                E.return (Pexpr (InferredType_object OTy_pointer) (PEmember_shift pe' tag_sym memb_ident))
+          end
     | PEnot pe ->
         Pexpr InferredType_boolean <$> (PEnot <$> typecheck_pexpr loc env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
@@ -655,8 +661,16 @@ and typecheck_pexpr loc (env: typing_env) (bTy: core_base_type) (Pexpr () pexpr_
         (PEarray_shift <$> typecheck_pexpr loc env (BTy_object OTy_pointer) pe1
                        <*> E.return cTy
                        <*> typecheck_pexpr loc env (BTy_object OTy_integer) pe2)
-    | PEmember_shift pe1 sym id ->
-        error "WIP: Core_typing.typecheck_pexpr, PEmember_shift"
+    | PEmember_shift pe tag_sym memb_ident ->
+          match List.lookup memb_ident (Core_ctype_aux.get_membersDefs tag_sym) with
+            | Nothing ->
+                E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
+            | _ ->
+                guard_match loc "member_shift()" bTy (BTy_object OTy_pointer) >>
+                (PEmember_shift <$> typecheck_pexpr loc env (BTy_object OTy_pointer) pe
+                                <*> E.return tag_sym
+                                <*> E.return memb_ident)
+          end
     | PEnot pe ->
         guard_match loc "not()" bTy BTy_boolean >>
         (PEnot <$> typecheck_pexpr loc env BTy_boolean pe)

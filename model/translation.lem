@@ -2168,7 +2168,7 @@ TODO: #9
                 illTypedAil loc "AilEmemberof"
           end in
           
-          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol (*(C.BTy_object oTy)*) (C.BTy_object C.OTy_pointer) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           (* TODO: note that translate_lvalue doesn't really match the "lvalue" from the
              std, so should change the name *)
           translate_lvalue e >>= fun core_e ->
