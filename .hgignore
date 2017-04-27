@@ -13,6 +13,8 @@ core-ott/*.log
 
 src/main_.ml
 
+tests/result
+
 testsuite/gcc.c-torture
 ci/c-tests/Juliet_Test_Suite_v1.2_for_C_Cpp/**
 generated_doc/
