@@ -1075,7 +1075,7 @@ else
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
                 C.Ecase e_sym_pe
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer)),
-                     C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object oTy))
+                     C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
                        (C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe ty; obj_sym_pe])
                        (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object oTy) let_sym)))
                     )
