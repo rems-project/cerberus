@@ -15,7 +15,7 @@ let print_head filename =
   !^"module T = AilTypes" ^/^
   !^"module C = Core_ctype" ^/^
   !^"module B = Nat_big_num" ^//^
-  !^"let (>>=) = M.bind2" ^/^
+  !^"let (>>=) = M.bind0" ^/^
   !^"let (>>) x y = x >>= fun _ -> y" ^//^
   !^"let rec _std_function_printf cont xs args =\
      \n  A.printf conv_int_2 xs args >>= fun x -> cont x"

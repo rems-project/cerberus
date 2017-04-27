@@ -23,9 +23,11 @@ let cons x (Dlist ys) =
 
 
 
-val fromList: forall 'a. list 'a -> dlist 'a
-let fromList xs =
+val dlist_fromList: forall 'a. list 'a -> dlist 'a
+let dlist_fromList xs =
   List.foldl (fun acc x -> cons x acc) nil xs
+
+let inline fromList = dlist_fromList
 
 val toList: forall 'a. dlist 'a -> list 'a
 let toList (Dlist xs) =

@@ -9,9 +9,9 @@ exception Undefined of string
 exception Error of string
 exception No_value
 
-let (>>=) = M.bind2
+let (>>=) = M.bind0
 let (>>) x y = x >>= fun _ -> y
-let return = M.return2
+let return = M.return0
 
 (* init/set globals before calling main *)
 

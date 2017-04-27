@@ -158,16 +158,16 @@ let is_unsat (Assertions (_, _, strs)) =
       false
 
 let add_mem_constraint constr (Assertions (n, addrs, asserts)) =
-  Assertions (n+1, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) (assertion_of_memory_constraint constr))) asserts)
+  Assertions (n+1, addrs, Dlist.append (Dlist.dlist_fromList (List.map (fun z -> Printf.sprintf "(assert %s)" z) (assertion_of_memory_constraint constr))) asserts)
 
 
 let check constr (Assertions (n, addrs, strs)) =
   Debug_ocaml.print_debug 3 ("CHECKING [" ^ string_of_int n ^ "]" ^ (Pp_utils.to_plain_string (Pp_defacto_memory.pp_mem_constraint constr)) ^ "\n");
   let assert_strs = assertion_of_memory_constraint constr in
-  if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
+  if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.dlist_fromList (List.map (fun z -> Printf.sprintf "(assert %s)" z) assert_strs)) strs)) then
     (Debug_ocaml.print_debug 3 "check returned FALSE";
     Some false)
-  else if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.fromList0 (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
+  else if is_unsat (Assertions (n, addrs, Dlist.append (Dlist.dlist_fromList (List.map (fun z -> Printf.sprintf "(assert (not %s))" z) assert_strs)) strs)) then
     (Debug_ocaml.print_debug 3 "check returned TRUE";
     Some true)
   else
