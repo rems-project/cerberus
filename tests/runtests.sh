@@ -87,6 +87,8 @@ citests=(
   62-cond_call_e2.c
   63-cond_e.c
   64-cond_e2.c
+# 65-const1.error.c
+# 66-const2.error.c
 )
 
 # Running ci tests
