@@ -203,10 +203,16 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
 
 exception Exit of (M.integer_value loaded)
 
+
+
 let print_exit_value n =
+  let pp n = Printf.printf
+      "Defined {value: \"Specified(%s)\", stdout: \"\", blocked: \"false\"}\nCONSTRS ==> []\nLog[0]\n\nEnd[0]\n" n in
   try
     ignore (Sys.getenv "CERBOUTPUT");
-    Nat_big_num.to_string n |> print_string; n
+    pp (Nat_big_num.to_string n); n
+    (*
+    Nat_big_num.to_string n |> print_string; n*)
   with Not_found -> n
 
 let quit f =

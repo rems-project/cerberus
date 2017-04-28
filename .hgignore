@@ -12,11 +12,8 @@ core-ott/*.aux
 core-ott/*.log
 
 src/main_.ml
+tests/tmp/**
 
-tests/result
-
-testsuite/gcc.c-torture
-ci/c-tests/Juliet_Test_Suite_v1.2_for_C_Cpp/**
 generated_doc/
 
 parsers/coreparser/core_parser.ml
@@ -42,7 +39,7 @@ depend
 .DS_Store
 
 cerberus
-
+main_.native
 
 build_model
 build
