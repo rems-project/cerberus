@@ -614,7 +614,7 @@ let rec print_control globs = function
 let print_seq = function
   | Some (CaseBase (None, _))
   | Some (CaseCtor (_, []))
-  | None -> tseq ^^ P.space
+  | None -> tbind ^^^ tfun ^^^ P.underscore ^^^ tarrow ^^ P.break 1
   | Some p -> tbind ^^^ print_anon (print_pattern p) ^^ P.break 1
 
 let print_bb globs (es, (pato, ct)) =
