@@ -1,0 +1,27 @@
+Performance comparison using test 17-for_simple.c
+
+OF = Stack Overflow
+Iteration --- Clang --- Ocaml ----Cerberus --- Ocaml BE --- Ocaml BE (Basic Mem)
+10                3         3          206         7    --- 8
+50                4         4          731         9    --- 8
+100               4         4         1462        10    --- 8
+500               4         4         6995        20    --- 9
+1000              4         4        14562        40    --- 9
+5000              3         4      1m43022       280    --- 15
+10000             4         3      3m50s(OF)     761    --- 19
+15000             4         4                   1230    --- 25
+20000             4         6                1242(OF)   --- 29
+50000             4         4                           --- 63
+100000            4         4                           --- 111
+1000000           6         7                           --- 1s
+10000000         25        38                           --- 10s
+100000000       239       328                           --- 1m43s
+1000000000     2314      3205                           --- probaby ~ 17.1min
+2000000000     4569      6594                           --- probably ~ 2.86h
+
+
+c 440M it/s
+ocaml 300 M it/s
+ocaml be 13k it/s
+ocaml basic mem 970 kit/s
+cerberus 50 it/s
