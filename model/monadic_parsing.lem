@@ -1,0 +1,94 @@
+open import Pervasives
+(* Monadic parsing (see "Monadic Parsing in Haskell" from Hutton & Meijer) *)
+
+type parserM 'a =
+ | ParserM of (list char -> list ('a * list char))
+
+val parse: forall 'a. parserM 'a -> list char -> list ('a * list char)
+let parse (ParserM p) = p
+
+
+val return: forall 'a. 'a -> parserM 'a
+let return a = ParserM (fun cs -> [(a, cs)])
+
+val bind: forall 'a 'b. parserM 'a -> ('a -> parserM 'b) -> parserM 'b
+let bind p f = ParserM (fun cs ->
+  List.concatMap (fun (a, cs') -> parse (f a) cs') (parse p cs)
+)
+
+val mzero: forall 'a. parserM 'a
+let mzero = ParserM (fun _ -> [])
+
+val mplus: forall 'a. parserM 'a -> parserM 'a -> parserM 'a
+let mplus p1 p2 = ParserM (fun cs -> parse p1 cs ++ parse p2 cs)
+
+val liftM: forall 'a 'b. ('a -> 'b) -> parserM 'a -> parserM 'b
+let liftM f p = ParserM (fun cs ->
+  map (fun (a, cs') -> (f a, cs')) $ parse p cs
+)
+
+
+let inline (>>=)    = bind
+let inline (>>) m f = bind m (fun _ -> f)
+
+
+val item: parserM char
+let item =
+  ParserM (fun cs -> match cs with
+    | []      -> []
+    | (c::cs) -> [(c, cs)]
+  end)
+
+
+(* NOTE: the inline is just because ocaml doesn't like <|> as an operator (that's a lem bug I guess) *)
+val        (<|>): forall 'a. parserM 'a -> parserM 'a -> parserM 'a
+let inline (<|>) p1 p2 =
+  ParserM (fun cs -> match parse (mplus p1 p2) cs with
+    | []     -> []
+    | (x::_) -> [x]
+  end)
+
+
+val option: forall 'a. 'a -> parserM 'a -> parserM 'a
+let option x p = p <|> return x
+
+
+val optionMaybe: forall 'a. parserM 'a -> parserM (maybe 'a)
+let optionMaybe p =
+  option Nothing (liftM (fun z -> Just z) p) 
+
+
+val sat: (char -> bool) -> parserM char
+let sat pred =
+  item >>= fun c ->
+  if pred c then return c else mzero
+
+
+val char: char -> parserM char
+let char c =
+  sat (fun z -> c = z)
+
+
+val anyChar: parserM char
+let anyChar =
+  sat (fun _ -> true)
+
+
+val string: list char -> parserM (list char)
+let rec string cs =
+  match cs with
+    | [] ->
+        return []
+    | (c::cs') ->
+        char c     >>
+        string cs' >>
+        return (c::cs')
+  end
+
+val     many:  forall 'a. parserM 'a -> parserM (list 'a)
+val     many1: forall 'a. parserM 'a -> parserM (list 'a)
+let rec many p = many1 p <|> return []
+and     many1 p =
+  p      >>= fun a   ->
+  many p >>= fun _as ->
+  return (a::_as)

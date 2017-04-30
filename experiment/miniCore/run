@@ -1,0 +1,3 @@
+#!/bin/sh
+# runghc sb > sb.dot && dot -Tpdf sb.dot > ~/mnt/fimbria/Sandbox/sb.pdf
+dot -Tpdf sb.dot > sb.pdf

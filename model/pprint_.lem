@@ -1,0 +1,127 @@
+type t = Ocaml.Pprint_.t
+
+
+
+(*
+module Unicode = struct
+  val null : t
+  declare ocaml target_rep function null = `Pprint.null`
+  let inline {ocaml} null = Ocaml.Pprint_.Unicode.null
+  val le : t
+  let inline {ocaml} le = Ocaml.Pprint_.Unicode.le
+  val ge : t
+  let inline {ocaml} ge = Ocaml.Pprint_.Unicode.ge
+  val disj : t
+  let inline {ocaml} disj = Ocaml.Pprint_.Unicode.disj
+  val conj : t
+  let inline {ocaml} conj = Ocaml.Pprint_.Unicode.conj
+  val compl : t
+  let inline {ocaml} compl = Ocaml.Pprint_.Unicode.compl
+  val implies : t
+  let inline {ocaml} implies = Ocaml.Pprint_.Unicode.implies
+  val mapsto : t
+  let inline {ocaml} mapsto = Ocaml.Pprint_.Unicode.mapsto
+end
+
+module Operators = struct
+  val (^^) : t -> t -> t
+  let inline {ocaml} (^^) = Ocaml.Pprint_.Operators.(^^)
+  val (^^^) : t -> t -> t
+  let inline {ocaml} (^^^) = Ocaml.Pprint_.Operators.(^^^)
+  val (^/^) : t -> t -> t
+  let inline {ocaml} (^/^) = Ocaml.Pprint_.Operators.(^/^)
+  val !^ : string -> t
+  let inline {ocaml} !^ = Ocaml.Pprint_.text
+end
+
+val lbrace : t
+let inline {ocaml} lbrace = Ocaml.Pprint_.lbrace
+val rbrace : t
+let inline {ocaml} rbrace = Ocaml.Pprint_.rbrace
+val comma : t
+let inline {ocaml} comma = Ocaml.Pprint_.comma
+val star : t
+let inline {ocaml} star = Ocaml.Pprint_.star
+val plus : t
+let inline {ocaml} plus = Ocaml.Pprint_.plus
+val minus : t
+let inline {ocaml} minus = Ocaml.Pprint_.minus
+val percent : t
+let inline {ocaml} percent = Ocaml.Pprint_.percent
+val slash : t
+let inline {ocaml} slash = Ocaml.Pprint_.slash
+val caret : t
+let inline {ocaml} caret = Ocaml.Pprint_.caret
+val equals : t
+let inline {ocaml} equals = Ocaml.Pprint_.equals
+val langle : t
+let inline {ocaml} langle = Ocaml.Pprint_.langle
+val rangle : t
+let inline {ocaml} rangle = Ocaml.Pprint_.rangle
+val ampersand : t
+let inline {ocaml} ampersand = Ocaml.Pprint_.ampersand
+val tilde : t
+let inline {ocaml} tilde = Ocaml.Pprint_.tilde
+val bar : t
+let inline {ocaml} bar = Ocaml.Pprint_.bar
+val bang : t
+let inline {ocaml} bang = Ocaml.Pprint_.bang
+val space : t
+let inline {ocaml} space = Ocaml.Pprint_.space
+val qmark : t
+let inline {ocaml} qmark = Ocaml.Pprint_.qmark
+val colon : t
+let inline {ocaml} colon = Ocaml.Pprint_.colon
+val semi : t
+let inline {ocaml} semi = Ocaml.Pprint_.semi
+val underscore : t
+let inline {ocaml} underscore = Ocaml.Pprint_.underscore
+
+val empty : t
+let inline {ocaml} empty = Ocaml.Pprint_.empty
+
+val text : string -> t
+let inline {ocaml} text = Ocaml.Pprint_.text
+
+val nest : num -> t -> t
+let inline {ocaml} nest = Ocaml.Pprint_.nest
+val group : t -> t
+let inline {ocaml} group = Ocaml.Pprint_.group
+
+val parens : t -> t
+let inline {ocaml} parens = Ocaml.Pprint_.parens
+val brackets : t -> t
+let inline {ocaml} brackets = Ocaml.Pprint_.brackets
+val braces : t -> t
+let inline {ocaml} braces = Ocaml.Pprint_.braces
+val squotes : t -> t
+let inline {ocaml} squotes = Ocaml.Pprint_.squotes
+val dquotes : t -> t
+let inline {ocaml} dquotes = Ocaml.Pprint_.dquotes
+
+(*
+val optional : forall 'a. ('a -> t) -> 'a option -> t
+let inline {ocaml} optional = Ocaml.Pprint_.optional
+*)
+val comma_list : forall 'a. ('a -> t) -> list 'a -> t
+let inline {ocaml} comma_list = Ocaml.Pprint_.comma_list
+val sepmap : forall 'a. t -> ('a -> t) -> list 'a -> t
+let inline {ocaml} sepmap = Ocaml.Pprint_.sepmap
+val sep0map: forall 'a. t -> ('a -> t) -> list 'a -> t
+let inline {ocaml} sep0map = Ocaml.Pprint_.sepmap
+val fold : forall 'a. (t -> t -> t) -> list t -> t
+let inline {ocaml} fold = Ocaml.Pprint_.fold
+
+val break0 : t
+let inline {ocaml} break0 = Ocaml.Pprint_.break0
+val break1 : t
+let inline {ocaml} break1 = Ocaml.Pprint_.break1
+val group2 : t -> t
+let inline {ocaml} group2 = Ocaml.Pprint_.group2
+
+val align: t -> t
+let inline {ocaml} align = Ocaml.Pprint_.align
+
+val dot: t
+let inline {ocaml} dot = Ocaml.Pprint_.dot
+*)
