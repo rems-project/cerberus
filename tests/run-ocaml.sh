@@ -25,11 +25,18 @@ cp $CERB_PATH/src/input.{ml,mli} tmp/src/
 
 cp $CERB_PATH/parsers/coreparser/core_parser_util.ml tmp/src/
 
-echo "Creating _tag file..."
+echo "Creating _tag .merlin files..."
 echo $'true: -traverse\n\n\"src\":include\n\"ci\":include' > tmp/_tags
+echo $'S src\nS ci\nS .\nB _build\nB _build/src\nB _build/ci' > tmp/.merlin
 
 echo "Copying tests..."
 cp ci/*.c tmp/ci
+
+if [ -n "$BASIC_MEM" ]; then
+  echo "Changing files to use basic memory model..."
+  sed -i '' 's/Defacto\_memory\_types/Basic\_mem\_types/g' tmp/src/*.{ml,mli}
+  sed -i '' 's/Defacto\_memory/Basic\_mem/g' tmp/src/*.{ml,mli}
+fi
 
 cd tmp
 
