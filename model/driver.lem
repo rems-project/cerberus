@@ -1103,8 +1103,16 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
      from the rest of the program *)
   driver_globals with_concurrency sym_supply file >>= fun (tid0, post_globals_dr_st) ->
   
+  (* we need a startup function to have been defined to execute anything *)
+  match post_globals_dr_st.core_file.Core.main with
+    | Just sym ->
+        ND.return sym
+    | Nothing ->
+        ND.kill (ND.Other "no startup function was defined")
+  end >>= fun main_sym ->
+  
   (* setting the arena of thread 0 to the body of the main function *)
-  match Map.lookup post_globals_dr_st.core_file.Core.main post_globals_dr_st.core_file.Core.funs with
+  match Map.lookup main_sym post_globals_dr_st.core_file.Core.funs with
     | Nothing ->
         ND.kill (ND.Other "couldn't find the startup function")
     
@@ -1139,7 +1147,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [post_globals_dr_st.core_file.Core.main; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
                   Mem.bind (Mem.store Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
@@ -1161,7 +1169,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [post_args_dr_st.core_file.Core.main; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
                   Mem.bind (Mem.store argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun _ ->
                     Mem.return ptr_val
                   )
@@ -1185,7 +1193,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
                         labels= Map.empty;
                         labels2= Map.empty;
                         current_loc= Loc.unknown;
-                        exec_loc= ELoc_normal [post_argv_dr_st.core_file.Core.main];
+                        exec_loc= ELoc_normal [main_sym];
                       |> post_argv_dr_st.core_state
         |> >>= fun dr_st' ->
         

@@ -3581,7 +3581,7 @@ val translate_program:
   bool -> A.program GenTypes.genTypeCategory ->
   E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 
-let translate_program stdlib sequentialise ((startup_sym, sigm) as program) =
+let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) =
   E.foldlM (fun (gacc, facc) (sym, decl) ->
     match decl with
       | A.Decl_object _ qs ty ->
@@ -3690,7 +3690,7 @@ let translate_program stdlib sequentialise ((startup_sym, sigm) as program) =
                     C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype return_ty)) in
                 let core_return =
                   let ret_pe =
-                    if startup_sym = sym then
+                    if startup_sym_opt = Just sym then
                       (* STD §5.1.2.2.3#1 first sentence *)
                       (* TODO: "If the return type is not compatible with int" *)
                       Caux.mk_specified_pe (Caux.mk_integer_pe 0)
