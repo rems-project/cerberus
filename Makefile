@@ -1,5 +1,3 @@
-all: lem ocaml_native
-
 # We need ocamlfind
 ifeq (, $(shell which ocamlfind))
 $(warning "ocamlfind is required to build the executable part of Cerberus")
@@ -12,10 +10,8 @@ YELLOW="\033[33m"
 RESET="\033[0m"
 
 # Looking for Lem
-ifdef LEM_PATH
-  LEMDIR=$(LEM_PATH)
-else
-  LEMDIR=~/bitbucket/lem
+ifndef LEM_PATH
+LEM_PATH=~/bitbucket/lem
 endif
 
 LEM0=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
@@ -36,10 +32,7 @@ CMM_EXEC_LEM =\
 
 include Makefile-source
 
-
-
-
-
+all: lem ocaml_native
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
@@ -49,7 +42,7 @@ $(BUILD_DIR):
 	@echo $(BOLD)CREATING the OCaml build directory$(RESET)
 	@mkdir $(BUILD_DIR)
 	@echo $(BOLD)COPYING the Lem ocaml libraries$(RESET)
-	@cp $(LEMDIR)/ocaml-lib/*.ml $(LEMDIR)/ocaml-lib/*.mli $(BUILD_DIR)
+	@cp $(LEM_PATH)/ocaml-lib/*.ml $(LEM_PATH)/ocaml-lib/*.mli $(BUILD_DIR)
 
 # Copy the cmm model files to the build dir
 copy_cmm: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM)) | $(BUILD_DIR)
@@ -174,3 +167,4 @@ clean:
 
 clear: clean
 	rm -rf $(BUILD_DIR)
+

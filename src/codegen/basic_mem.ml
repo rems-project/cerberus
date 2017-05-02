@@ -6,26 +6,14 @@ open AilTypes
 open Nat_big_num
 open Mem_common
 
-exception Error of string
-
-type impl_mem_value =
-  | Integer of (integerType * num option)
-  | Pointer of (ctype0 * num option)
-  | Array of impl_mem_value list
-  | Struct of Symbol.sym * (Cabs.cabs_identifier * impl_mem_value) list
-  | Union of Symbol.sym * Cabs.cabs_identifier * impl_mem_value
-
-type impl_integer_value = (integerType * num option)
-type impl_pointer_value = (ctype0 * num option)
-type impl_floating_value = unit (* not supported *)
-type impl_footprint = unit (* not supported *)
-
-(* footprint -> footprint -> bool *)
-let impl_do_overlap = (=)
+open Basic_mem_types
 
 type impl_mem_state = (num, impl_mem_value) Pmap.map
 
 type 'a impl_memM = MemM of (impl_mem_state -> 'a * impl_mem_state)
+
+(* footprint -> footprint -> bool *)
+let impl_do_overlap = (=)
 
 (* value -> string *)
 let rec impl_prettyStringFromMem_value = function
