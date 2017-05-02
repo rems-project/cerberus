@@ -1299,11 +1299,12 @@ let convert_file file =
   end in
 
  <|
-  main=   file.main;
-  stdlib= Map.map convert_fun_map_decl file.stdlib;
-  impl=   file.impl;
-  globs=  List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
-  funs=   Map.map convert_fun_map_decl file.funs;
+  main=    file.main;
+  tagDefs= file.tagDefs;
+  stdlib=  Map.map convert_fun_map_decl file.stdlib;
+  impl=    file.impl;
+  globs=   List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
+  funs=    Map.map convert_fun_map_decl file.funs;
  |>
 (* END silly *)
 

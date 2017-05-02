@@ -1099,6 +1099,9 @@ end
 val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file core_run_annotation -> list string ->
            ND.ndM (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
 let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
+  (* Setting the read-only tag definitions (used by the memory model) *)
+  let () = Core_ctype_aux.set_tagDefs file.Core.tagDefs in
+  
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
   driver_globals with_concurrency sym_supply file >>= fun (tid0, post_globals_dr_st) ->

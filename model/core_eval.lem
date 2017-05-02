@@ -416,10 +416,12 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
         EU.mapM self pes >>= fun pes' ->
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
-              let xs = List.map (fun (ident, cval) ->
-                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup ident (Core_ctype_aux.get_membersDefs tag_sym)) in
-                let mval    = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval)                        in
-                (ident, mval)
+              let xs = List.map (fun (memb_ident, cval) ->
+                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident (
+                  fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs
+                )) in
+                let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
+                (memb_ident, mval)
               ) (List.zip idents cvals) in
               EU.return (PEval (Vspecified (OVstruct tag_sym xs)))
           | Nothing ->
@@ -429,7 +431,9 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-              let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident (Core_ctype_aux.get_membersDefs tag_sym)) in
+                let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident (
+                  fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs
+                )) in
               let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
               EU.return (PEval (Vspecified (OVunion tag_sym memb_ident mval)))
           | Nothing ->

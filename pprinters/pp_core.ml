@@ -643,7 +643,7 @@ let pp_file file =
   
   begin
   
-  mk_comment (pp_tagDefinitions (Tags.tagDefs ())) ^^
+  mk_comment (pp_tagDefinitions (file.tagDefs)) ^^
   P.break 1 ^^ P.break 1 ^^
   
   !^ "-- Globals" ^^ P.break 1 ^^

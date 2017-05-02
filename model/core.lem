@@ -236,13 +236,17 @@ type generic_fun_map_decl 'bty 'a =
 type generic_fun_map 'bty 'a = map Symbol.sym (generic_fun_map_decl 'bty 'a)
 
 
+type core_tag_definitions =
+  map Symbol.sym (list (Cabs.cabs_identifier * ctype))
+
 (* a Core file is just a set of named functions *)
 type generic_file 'bty 'a = <|
-  main   : maybe Symbol.sym;
-  stdlib : generic_fun_map 'bty 'a;
-  impl   : generic_impl 'bty;
-  globs  : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);
-  funs   : generic_fun_map 'bty 'a;
+  main    : maybe Symbol.sym;
+  tagDefs : core_tag_definitions;
+  stdlib  : generic_fun_map 'bty 'a;
+  impl    : generic_impl 'bty;
+  globs   : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);
+  funs    : generic_fun_map 'bty 'a;
 |>
 
 
