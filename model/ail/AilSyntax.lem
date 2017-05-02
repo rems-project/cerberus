@@ -205,7 +205,7 @@ type sigma 'a = <|
 
 type gamma = Context.context identifier (maybe storageDuration * qualifiers * ctype)
 
-type program 'a = identifier * sigma 'a
+type program 'a = maybe identifier * sigma 'a
 
 
 

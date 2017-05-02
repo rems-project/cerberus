@@ -1019,36 +1019,36 @@ let map_union = Map.(union)
 val extract_program: string -> desugM (A.program unit)
 let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
-    | Just (_, (startup_sym, _, _)) ->
-        State_exception.read (fun st ->
-          let () = Debug.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
-          let decls = Map_extra.toList (
-            map_union
-              (Map.map (fun (has_proto, (ty, params, b1, b2, b3)) -> A.Decl_function has_proto ty params b1 b2 b3) st.function_declarations)
-              (Map.map (fun (dur, qs, ty) -> A.Decl_object dur qs ty) st.external_object_declarations)
-          ) in
-          
-          (startup_sym, <|
-             A.declarations=         remove_unused_identifiers st startup_sym decls;
-             A.object_definitions=   remove_unused_identifiers st startup_sym $ Map_extra.toList st.external_object_definitions;
-             A.function_definitions= remove_unused_identifiers st startup_sym $ Map_extra.toList st.function_definitions;
-             A.static_assertions=    st.static_assertions;
-             
-             A.tag_definitions= List.foldr (fun (sym, def) acc ->
-                                  match def with
-                                    | Struct_definition ident_tys ->
-                                        (sym, A.StructDef ident_tys) :: acc
-                                    | Union_definition ident_tys ->
-                                        (sym, A.UnionDef ident_tys) :: acc
-                                    | Enum_definition ->
-                                        acc
-                                   end
-                                ) [] $ Map_extra.toList st.tag_definitions
-           |>)
-        )
-    | Nothing ->
-        fail Loc.unknown (Errors.Desugar_NoStartup startup_str)
-  end
+    | Just (_, (startup_sym, _, _)) -> return (Just startup_sym)
+    | Nothing                       -> return Nothing (* fail Loc.unknown (Errors.Desugar_NoStartup startup_str) *)
+  end >>= fun startup_sym_opt ->
+  
+  State_exception.read (fun st ->
+    let () = Debug.print_debug 5 ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
+    let decls = Map_extra.toList (
+      map_union
+        (Map.map (fun (has_proto, (ty, params, b1, b2, b3)) -> A.Decl_function has_proto ty params b1 b2 b3) st.function_declarations)
+        (Map.map (fun (dur, qs, ty) -> A.Decl_object dur qs ty) st.external_object_declarations)
+    ) in
+    
+    (startup_sym_opt, <|
+       A.declarations=         (* remove_unused_identifiers st startup_sym *) decls;
+       A.object_definitions=   (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.external_object_definitions;
+       A.function_definitions= (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.function_definitions;
+       A.static_assertions=    st.static_assertions;
+       
+       A.tag_definitions= List.foldr (fun (sym, def) acc ->
+                            match def with
+                             | Struct_definition ident_tys ->
+                                 (sym, A.StructDef ident_tys) :: acc
+                             | Union_definition ident_tys ->
+                                 (sym, A.UnionDef ident_tys) :: acc
+                             | Enum_definition ->
+                                 acc
+                             end
+                          ) [] $ Map_extra.toList st.tag_definitions
+     |>)
+  )
 
 
 

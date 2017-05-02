@@ -198,7 +198,7 @@ let cps_transform_fun sym_supply globs = function
     CpsProc (bty, params, bbs, bbody)
 
 type cps_file = {
-  main   : Symbol.sym;
+  main   : Symbol.sym option;
   stdlib : (Symbol.sym, cps_fun) Pmap.map;
   impl   : typed_impl;
   globs  : (Symbol.sym * core_base_type * block list * block_body) list;

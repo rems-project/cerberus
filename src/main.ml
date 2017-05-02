@@ -122,7 +122,7 @@ let core_frontend f =
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
         Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
         Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
-           Core.main=   sym_main;
+           Core.main=   Some sym_main;
            Core.stdlib= snd !!cerb_conf.core_stdlib;
            Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
            Core.globs=  globs;

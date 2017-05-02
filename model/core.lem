@@ -238,7 +238,7 @@ type generic_fun_map 'bty 'a = map Symbol.sym (generic_fun_map_decl 'bty 'a)
 
 (* a Core file is just a set of named functions *)
 type generic_file 'bty 'a = <|
-  main   : Symbol.sym;
+  main   : maybe Symbol.sym;
   stdlib : generic_fun_map 'bty 'a;
   impl   : generic_impl 'bty;
   globs  : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);

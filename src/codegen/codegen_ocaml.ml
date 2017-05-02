@@ -54,7 +54,7 @@ let generate_ocaml filename sym_supply core =
     print_funs globs_syms cps_core.stdlib ^^
     List.fold_left print_globals_init P.empty cps_core.globs ^^
     print_funs globs_syms cps_core.funs ^//^
-    print_foot globs_syms core.main
+    P.optional (print_foot globs_syms) core.main
 
 let compile filename sym_supply core =
   let fl = Filename.chop_extension filename in
