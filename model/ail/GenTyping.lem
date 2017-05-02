@@ -1713,35 +1713,42 @@ TODO: static asserts
 
 
 
+(* NOTE: this is the only thing this module exports *)
 val annotate_program: annotation unit genTypeCategory -> program unit -> E.errorM (program genTypeCategory)
-let annotate_program annot (startup, sigm) =
-  match Context.lookup identifierEqual sigm.declarations startup with
-    | Just (Decl_function has_proto ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
-        
-        (* §5.1.2.2.1 *)
-        (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
-        match qs_tys with
-          | [] ->
-              (* TODO: not sure if really allowed by the std, clearly used a lot *)
-              E.return ()
-          | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Void)] ->
-              E.return ()
-          | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Basic (Integer (Signed Int_)));
-             (<| const= false; restrict= false; volatile= false; atomic= false |>,
-              Pointer <| const= false; restrict= false; volatile= false; atomic= false |>
-                (Pointer <| const= false; restrict= false; volatile= false; atomic= false |> (Basic (Integer Char))))] ->
-              E.return ()
+let annotate_program annot (startup_opt, sigm) =
+  match startup_opt with
+    | Nothing ->
+        annotate_sigma annot sigm >>= fun sigm' ->
+        E.return (startup_opt, sigm')
+    | Just startup ->
+        match Context.lookup identifierEqual sigm.declarations startup with
+          | Just (Decl_function has_proto ret_ty qs_tys (* bs *) _ (* is_variadic *) _ (* is_inline *) _ (* is_Noreturn *)) ->
+              
+              (* §5.1.2.2.1 *)
+              (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
+              match qs_tys with
+                | [] ->
+                    (* TODO: not sure if really allowed by the std, clearly used a lot *)
+                    E.return ()
+                | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Void)] ->
+                    E.return ()
+                | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Basic (Integer (Signed Int_)));
+                   (<| const= false; restrict= false; volatile= false; atomic= false |>,
+                    Pointer <| const= false; restrict= false; volatile= false; atomic= false |>
+                      (Pointer <| const= false; restrict= false; volatile= false; atomic= false |> (Basic (Integer Char))))] ->
+                    E.return ()
+                | _ ->
+                    E.fail Loc.unknown (TError_main_params qs_tys)
+              end >>
+              
+              
+              (* TODO: check arguments *)
+              if ret_ty = Basic (Integer (Signed Int_)) then
+                annotate_sigma annot sigm >>= fun sigm' ->
+                E.return (startup_opt, sigm')
+              else
+                E.fail Loc.unknown TError_main_return_type
           | _ ->
-              E.fail Loc.unknown (TError_main_params qs_tys)
-        end >>
-        
-        
-        (* TODO: check arguments *)
-        if ret_ty = Basic (Integer (Signed Int_)) then
-          annotate_sigma annot sigm >>= fun sigm' ->
-          E.return (startup, sigm')
-        else
-          E.fail Loc.unknown TError_main_return_type
-    | _ ->
-        E.fail Loc.unknown (TError_TODO 67) (* TODO: this is not realy a type error, but more an csem internal one. *)
+              E.fail Loc.unknown (TError_TODO 67) (* TODO: this is not realy a type error, but more an csem internal one. *)
+        end
   end

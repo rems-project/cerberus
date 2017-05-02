@@ -1360,8 +1360,13 @@ val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit
 let typecheck_program file =
   let aux =
     (* The startup function/procedure must be defined *)
-    E.guard (Map.member file.main file.funs)
-      Loc.unknown (Undefined_startup file.main) >>
+    match file.main with
+      | Just sym ->
+          E.guard (Map.member sym file.funs)
+            Loc.unknown (Undefined_startup sym)
+      | Nothing ->
+          E.return ()
+    end >>
     
     (* Register the functions/procedures from the stdlib and the impl constants *)
     let env = Map_extra.fold (fun sym decl acc ->
