@@ -120,9 +120,11 @@ let (>>=) = Exception.except_bind
 let core_frontend f =
   !!cerb_conf.core_parser f >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
-        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
+(* TODO: probably can remove the commmented line, now this is done by the driver *)
+(*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
         Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   Some sym_main;
+           Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
            Core.stdlib= snd !!cerb_conf.core_stdlib;
            Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
            Core.globs=  globs;
@@ -262,10 +264,11 @@ let gen_corestd stdlib impl =
   in
   Core_typing.typecheck_program {
     Core.main=   None;
+    Core.tagDefs= Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
     Core.stdlib= stdlib;
     Core.impl=   impl;
     Core.globs=  [];
-    Core.funs=   Pmap.empty (fun _ _ -> 0);
+    Core.funs=   Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
   }
   >>= fun typed_core ->
     let opt_core = Core_opt.run Codegen_ocaml.opt_passes typed_core in

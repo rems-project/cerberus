@@ -3826,9 +3826,15 @@ val translate:
 
 let translate (ailnames, stdlib_fun_map) sequentialise impl (symbol_counter, prog) =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
-  let () = Cty.set_tagDefs (translate_tag_definitions (snd prog).A.tag_definitions) in
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   (* TODO2: not sure what that comment is refering too ... *)
   let ((cglobs, cfuns), st) = (translate_program translation_stdlib sequentialise prog) (E.init symbol_counter) in
-  (st.E.symbol_supply, <| C.main= fst prog; C.stdlib= stdlib_fun_map; C.impl= impl; C.globs= cglobs; C.funs= cfuns |>)
+  (st.E.symbol_supply, <|
+    C.main= fst prog;
+    C.tagDefs= translate_tag_definitions (snd prog).A.tag_definitions;
+    C.stdlib= stdlib_fun_map;
+    C.impl= impl;
+    C.globs= cglobs;
+    C.funs= cfuns
+  |>)

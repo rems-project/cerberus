@@ -51,6 +51,7 @@ let runf opt = function
 let run opt core =
   {
     main = core.main;
+    tagDefs = core.tagDefs;
     stdlib = Pmap.map (runf opt) core.stdlib;
     impl = core.impl;
     globs = List.map (fun (s, bty, e) -> (s, bty, opt e)) core.globs;
