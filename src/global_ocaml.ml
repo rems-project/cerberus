@@ -48,7 +48,7 @@ type cerberus_conf = {
   core_impl_opt:     Core.impl option;
   core_parser:       Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:     execution_mode option;
-  compile:           bool;
+  ocaml:             bool;
   progress:          bool;
   rewrite:           bool;
   sequentialise:     bool;
@@ -76,7 +76,7 @@ let current_execution_mode () =
 
 
 let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
-                  sequentialise concurrency preEx compile error_verbosity batch experimental_unseq
+                  sequentialise concurrency preEx ocaml error_verbosity batch experimental_unseq
                   typecheck_core =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
@@ -86,10 +86,10 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     core_impl_opt= core_impl_opt;
     core_parser=   core_parser;
     exec_mode_opt= if exec then Some exec_mode else None;
-    compile=       compile;
+    ocaml=         ocaml;
     progress=      progress;
     rewrite=       rewrite;
-    sequentialise= sequentialise || compile;
+    sequentialise= sequentialise || ocaml;
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;

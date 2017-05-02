@@ -249,15 +249,15 @@ let pipeline filename args =
       print_endline "====================";
    );
   
-  if !!cerb_conf.compile then
+  if !!cerb_conf.ocaml then
     Exception.except_bind (Core_typing.typecheck_program rewritten_core_file)
-    (Codegen_ocaml.compile filename sym_supply -| Core_sequentialise.sequentialise_file)
+    (Codegen_ocaml.gen filename sym_supply -| Core_sequentialise.sequentialise_file)
   else
     Exception.except_return (backend sym_supply rewritten_core_file args)
 
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
-             sequentialise concurrency preEx args compile batch experimental_unseq typecheck_core =
+             sequentialise concurrency preEx args ocaml batch experimental_unseq typecheck_core =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -281,14 +281,14 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx compile (* TODO *) RefStd batch experimental_unseq typecheck_core;
+    sequentialise concurrency preEx ocaml (* TODO *) RefStd batch experimental_unseq typecheck_core;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
   set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
-    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx compile
+    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml
     (* TODO *) RefStd batch experimental_unseq typecheck_core;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
@@ -327,9 +327,9 @@ let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
-let compile =
-  let doc = "Compile core code (passing through Ocaml)." in
-  Arg.(value & flag & info ["compile"] ~doc)
+let ocaml =
+  let doc = "Ocaml backend." in
+  Arg.(value & flag & info ["ocaml"] ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls and excluding the .impl suffix)." in
@@ -403,7 +403,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args $ compile $ batch $ experimental_unseq $ typecheck_core) in
+                         sequentialise $ concurrency $ preEx $ args $ ocaml $ batch $ experimental_unseq $ typecheck_core) in
 
 
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)

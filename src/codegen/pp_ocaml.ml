@@ -645,20 +645,20 @@ let print_transformed globs bbs bb =
       P.space (List.tl bbs)
     ^/^ tin ^/^ print_bb globs bb
 
-let print_funs globs funs =
+let print_funs globs ?init:(flag=true) funs =
   Pmap.fold (fun sym decl acc ->
-    acc ^//^ tand ^^^
-    match decl with
-    | CpsFun  (bTy, params, pe) ->
-      print_function
-        (print_symbol sym)
-        params
-        (print_base_type bTy)
-        (print_pure_expr globs pe)
-    | CpsProc (bTy, params, bbs, bbody) ->
-      print_eff_function
-        (print_symbol sym ^^^ print_symbol default)
-        params
-        (P.parens (print_base_type bTy) ^^^ !^"M.memM")
-        (print_transformed globs bbs bbody)
-  ) funs P.empty
+      (if acc = P.empty && flag then tletrec else acc ^//^ tand) ^^^
+      match decl with
+      | CpsFun  (bTy, params, pe) ->
+        print_function
+          (print_symbol sym)
+          params
+          (print_base_type bTy)
+          (print_pure_expr globs pe)
+      | CpsProc (bTy, params, bbs, bbody) ->
+        print_eff_function
+          (print_symbol sym ^^^ print_symbol default)
+          params
+          (P.parens (print_base_type bTy) ^^^ !^"M.memM")
+          (print_transformed globs bbs bbody)
+    ) funs P.empty

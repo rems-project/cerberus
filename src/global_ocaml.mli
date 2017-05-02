@@ -37,7 +37,7 @@ type cerberus_conf = {
   core_impl_opt:   Core.impl option;
   core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:   execution_mode option;
-  compile:         bool;
+  ocaml:           bool;
   progress:        bool;
   rewrite:         bool;
   sequentialise:   bool;
