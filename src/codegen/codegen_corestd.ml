@@ -18,7 +18,7 @@ let print_head filename =
   !^"let rec _std_function_printf cont xs args =\
      \n  A.printf conv_int_2 xs args >>= fun x -> cont x"
 
-let gen sym_supply globs impl stdlib =
+let gen globs impl stdlib =
   let contents =
     print_head std_filename ^^
     print_impls globs impl ^^

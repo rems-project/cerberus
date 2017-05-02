@@ -212,7 +212,7 @@ let pipeline filename args =
        core_frontend f
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
-  end >>= fun (sym_supply, core_file) ->
+  end >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
   
   begin
     if !!cerb_conf.typecheck_core then
@@ -250,14 +250,31 @@ let pipeline filename args =
    );
   
   if !!cerb_conf.ocaml then
-    Exception.except_bind (Core_typing.typecheck_program rewritten_core_file)
-    (Codegen_ocaml.gen filename sym_supply -| Core_sequentialise.sequentialise_file)
+    Core_typing.typecheck_program rewritten_core_file
+    >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
+    -| Core_sequentialise.sequentialise_file
   else
     Exception.except_return (backend sym_supply rewritten_core_file args)
 
+let gen_corestd stdlib impl =
+  let sym_supply = UniqueId.new_supply_from
+      Symbol.instance_Enum_Enum_Symbol_sym_dict !core_sym_counter
+  in
+  Core_typing.typecheck_program {
+    Core.main=   None;
+    Core.stdlib= stdlib;
+    Core.impl=   impl;
+    Core.globs=  [];
+    Core.funs=   Pmap.empty (fun _ _ -> 0);
+  }
+  >>= fun typed_core ->
+    let opt_core = Core_opt.run Codegen_ocaml.opt_passes typed_core in
+    let cps_core = Cps_core.cps_transform sym_supply opt_core [] in
+    Codegen_corestd.gen [] cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
+    Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
-             sequentialise concurrency preEx args ocaml batch experimental_unseq typecheck_core =
+             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -281,14 +298,14 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml (* TODO *) RefStd batch experimental_unseq typecheck_core;
+    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
   set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
-    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml
+    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
     (* TODO *) RefStd batch experimental_unseq typecheck_core;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
@@ -301,9 +318,18 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
 *)
   match file_opt with
     | None ->
+      if !!cerb_conf.ocaml_corestd then
+        match gen_corestd (snd core_stdlib) core_impl with
+          | Exception.Exception err ->
+              prerr_endline (Pp_errors.to_string err);
+                exit 1
+          | Exception.Result n -> n
+
+      else (
         (* TODO: make this print the help *)
         prerr_endline "No filename given";
         exit 1
+      )
     | Some file ->
         match pipeline file args with
           | Exception.Exception err ->
@@ -318,7 +344,35 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
               else
                 n
 
+let gen_ocaml_corestd debug_level impl_name =
+  Debug_ocaml.debug_level := debug_level;
+  (* TODO: move this to the random driver *)
+  Random.self_init ();
+  
+  (* Looking for and parsing the core standard library *)
+  let core_stdlib = snd (load_stdlib ()) in
+  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
+  
+  (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
+  let module Core_parser_base = struct
+    include Core_parser.Make (struct
+        let sym_counter = core_sym_counter
+        let mode = Core_parser_util.ImplORFileMode
+        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
+          let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
+          Pmap.add (str, (std_pos, std_pos)) fsym acc
+        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list (core_stdlib)
+      end)
+    type result = Core_parser_util.result
+  end in
+  let module Core_parser =
+    Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
+  
+  (* Looking for and parsing the implementation file *)
+  let core_impl = load_impl Core_parser.parse impl_name in
+  Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
+  ()
 
 (* CLI stuff *)
 open Cmdliner
@@ -330,6 +384,10 @@ let debug_level =
 let ocaml =
   let doc = "Ocaml backend." in
   Arg.(value & flag & info ["ocaml"] ~doc)
+
+let ocaml_corestd =
+  let doc = "Generate coreStd.ml" in
+  Arg.(value & flag & info ["ocaml-corestd"] ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls and excluding the .impl suffix)." in
@@ -403,7 +461,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args $ ocaml $ batch $ experimental_unseq $ typecheck_core) in
+                         sequentialise $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd $ batch $ experimental_unseq $ typecheck_core) in
 
 
   let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)

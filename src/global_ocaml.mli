@@ -38,6 +38,7 @@ type cerberus_conf = {
   core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:   execution_mode option;
   ocaml:           bool;
+  ocaml_corestd:   bool;
   progress:        bool;
   rewrite:         bool;
   sequentialise:   bool;
@@ -67,6 +68,7 @@ val set_cerb_conf:
     bool ->
     execution_mode ->
     (Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM) ->
+    bool ->
     bool ->
     bool ->
     bool ->
