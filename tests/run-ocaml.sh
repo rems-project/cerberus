@@ -26,7 +26,7 @@ cp $CERB_PATH/src/input.{ml,mli} tmp/src/
 cp $CERB_PATH/parsers/coreparser/core_parser_util.ml tmp/src/
 
 echo "Creating _tag file..."
-echo $'true: -traverse\n\n\"src\" : include' > tmp/_tags
+echo $'true: -traverse\n\n\"src\":include\n\"ci\":include' > tmp/_tags
 
 echo "Copying tests..."
 cp ci/*.c tmp/ci
@@ -37,8 +37,8 @@ pass=0
 fail=0
 
 function test {
-  cerberus --compile $2/$1 2> /dev/null
-  ocamlbuild -pkgs pprint,zarith -libs nums,unix,str $2/${1%.c}.native > /dev/null
+  cerberus --ocaml $2/$1 2> /dev/null
+  ocamlbuild -pkgs pprint,zarith -libs nums,unix,str ${1%.c}.native > /dev/null
   CERBOUTPUT=1 ./${1%.c}.native > result
   cmp --silent result ../$2/expected/$1.expected
   if [[ "$?" -eq "0" ]]; then
