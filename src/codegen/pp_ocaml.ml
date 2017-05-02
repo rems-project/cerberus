@@ -120,7 +120,7 @@ let print_impl_name i =
   !^("_" ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
 
 let print_cabs_id (Cabs.CabsIdentifier (_, str)) =
-  !^("Cabs.CabsIdentifier (Location_ocaml.unknown, " ^ str ^ ")")
+  !^("Cabs.CabsIdentifier (Location_ocaml.unknown, \"" ^ str ^ "\")")
 
 let print_name = function
   | Sym a  -> print_symbol a
@@ -469,7 +469,7 @@ let print_pure_expr globs pe =
         ^^^ P.parens (print_ctype ty) ^^^ P.parens (pp pe2)
       | PEmember_shift (pe, sym, id) ->
         !^"M.member_shift_ptrval" ^^^ P.parens (pp pe)
-        ^^^ P.parens (print_symbol sym) ^^^ P.parens (print_cabs_id id)
+        ^^^ P.parens (print_raw_symbol sym) ^^^ P.parens (print_cabs_id id)
       | PEnot pe -> !^"not" ^^^ P.parens (pp pe)
       | PEop (bop, pe1, pe2) -> print_binop bop pp pe1 pe2
       | PEstruct _ -> todo "struct"

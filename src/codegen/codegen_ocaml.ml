@@ -18,11 +18,22 @@ let print_globals globs =
   List.map print_global_pair globs
   |> print_list id
 
-let print_foot globs main = 
+let print_tags tags =
+  let print_id_pair (cid, cty) =
+    P.parens (print_cabs_id cid ^^ P.comma ^^^ print_ctype cty)
+  in
+  let print_tag_pairs (s, xs) =
+    P.parens (print_raw_symbol s ^^ P.comma
+              ^^^ print_list id (List.map print_id_pair xs))
+  in
+  print_list id (List.map print_tag_pairs tags)
+
+let print_foot tags globs main =
   match main with
   | Some main ->
+    print_let !^"tags" (print_tags tags) ^//^
     print_let !^"globals" (print_globals globs) ^//^
-    print_let tunit (!^"A.run globals" ^^^ print_symbol main)
+    print_let tunit (!^"A.run tags globals" ^^^ print_symbol main)
 (* TODO: generate globals for empty main *)
   | None -> P.empty
 
@@ -48,7 +59,7 @@ let gen filename corestd sym_supply core =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^^
     print_funs globs_syms cps_core.funs ^//^
-    print_foot globs_syms core.main
+    print_foot (Pmap.bindings_list core.tagDefs) globs_syms core.main
   in
   let fl = Filename.chop_extension filename in
   let fl_ml = fl ^ ".ml" in
