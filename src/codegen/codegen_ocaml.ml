@@ -18,9 +18,13 @@ let print_globals globs =
   List.map print_global_pair globs
   |> print_list id
 
-let print_foot globs main =
-  print_let !^"globals" (print_globals globs) ^//^
-  print_let tunit (!^"A.run globals" ^^^ print_symbol main)
+let print_foot globs main = 
+  match main with
+  | Some main ->
+    print_let !^"globals" (print_globals globs) ^//^
+    print_let tunit (!^"A.run globals" ^^^ print_symbol main)
+(* TODO: generate globals for empty main *)
+  | None -> P.empty
 
 let opt_passes core =
   elim_wseq core
