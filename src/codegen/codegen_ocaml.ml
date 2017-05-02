@@ -33,7 +33,7 @@ let opt_passes core =
   |> elim_loc
   |> elim_let
 
-let gen filename sym_supply core =
+let gen filename corestd sym_supply core =
   let globs_syms = List.map (fun (s,_,_) -> s) core.Core.globs in
   let cps_core = cps_transform sym_supply (run opt_passes core) globs_syms in
   let print_globals_init acc (sym, coreTy, bbs, bbody) =
@@ -42,7 +42,8 @@ let gen filename sym_supply core =
       (print_base_type coreTy) (print_transformed globs_syms bbs bbody)
     ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.null_ptr"
   in
-  Codegen_corestd.gen sym_supply globs_syms cps_core.impl cps_core.stdlib;
+  if corestd then
+    Codegen_corestd.gen globs_syms cps_core.impl cps_core.stdlib;
   let contents =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^^
