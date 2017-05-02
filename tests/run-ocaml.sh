@@ -40,6 +40,9 @@ fi
 
 cd tmp
 
+echo "Generate CoreStd.ml..."
+cerberus --ocaml-corestd
+
 pass=0
 fail=0
 

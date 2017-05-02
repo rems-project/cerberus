@@ -230,9 +230,15 @@ let quit f =
      | Unspecified _ -> print_string "Unspecified"; exit(-1)
     )
 
-let run globals main =
+
+let create_tag_defs_map defs =
+  List.fold_left
+    (fun m (s, xs) -> Pmap.add s xs m)
+    (Pmap.empty Core_fvs.sym_compare) defs
+
+let run tags gls main =
   begin fun cont args ->
-    globals
-    |> init_globals
+    Tags.set_tagDefs (create_tag_defs_map tags);
+    init_globals gls
     >> main cont args
   end |> quit
