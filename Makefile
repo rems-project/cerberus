@@ -116,8 +116,11 @@ ocaml_byte:
 	  cp -L main_.d.byte cerberus; \
 	fi
 
-
-
+.PHONY: cbuild
+cbuild:
+	ocamlbuild -lib unix tools/cbuild.native
+	cp -L cbuild.native cbuild
+	rm cbuild.native
 
 # LOS-count the spec
 
