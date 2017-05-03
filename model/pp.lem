@@ -1,5 +1,5 @@
 import Symbol
-import AilSyntax AilTypes
+import AilSyntax AilTypes GenTypes
 import Core Core_ctype
 import Cmm_op Symbolic (* DEBUG *)
 
@@ -18,11 +18,18 @@ declare ocaml target_rep function stringFromCabs_type_specifier = `String_cabs.s
 
 
 
+val stringFromAil_qualifiers: AilTypes.qualifiers -> string
 val stringFromAil_ctype:      AilTypes.ctype -> string
+val stringFromAil_genType:    GenTypes.genType -> string
 val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
 
+
+declare ocaml target_rep function stringFromAil_qualifiers = `String_ail.string_of_qualifiers_human`
 declare ocaml target_rep function stringFromAil_ctype = `String_ail.string_of_ctype_raw`
+declare ocaml target_rep function stringFromAil_genType = `String_ail.string_of_genType`
 declare ocaml target_rep function stringFromAil_expression = `String_ail.string_of_expression`
+declare hol   target_rep function stringFromAil_qualifiers =
+                                  `pp_ail$pp_qualifiers`
 declare hol   target_rep function stringFromAil_ctype = `pp_ail$pp_ail_ctype`
 declare hol   target_rep function stringFromAil_expression =
                                   `pp_ail$pp_expression`

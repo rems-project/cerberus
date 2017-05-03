@@ -67,7 +67,7 @@ let load_impl core_parse impl_name =
 (* use this when calling a pretty printer *)
 let run_pp =
   (* TODO(someday): dynamically get the width of the terminal *)
-  PPrint.ToChannel.pretty 1.0 100 Pervasives.stdout
+  PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout
 
 
 let set_progress n =
@@ -168,7 +168,7 @@ let backend sym_supply core_file args =
         
         (* TODO: temporary hack for the command name *)
         Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
-          | Exception.Result (Pexpr (_, PEval (Vspecified (OVinteger ival))) :: _) ->
+          | Exception.Result (Pexpr (_, PEval (Vloaded (LVspecified (OVinteger ival)))) :: _) ->
             begin
               (* TODO: yuck *)
               try

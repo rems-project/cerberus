@@ -10,7 +10,6 @@ val pp_qualifiers: qualifiers -> PPrint.document -> PPrint.document
 val string_of_integerBaseType: integerBaseType -> string
 
 
-val pp_integerType_raw: integerType -> PPrint.document
 val pp_integerType: integerType -> PPrint.document
 
 val pp_basicType: basicType -> PPrint.document
@@ -27,7 +26,6 @@ let rec pp_ctype_raw
 *)
 
 val pp_ctype: ctype -> PPrint.document
-val pp_ctype_raw: ctype -> PPrint.document
 
 (*
 let rec pp_ctype_declaration id
@@ -65,4 +63,5 @@ val pp_program: ('a -> (PPrint.document -> PPrint.document)) -> 'a program -> PP
 val pp_program_with_annot: GenTypes.genTypeCategory program -> PPrint.document
 
 (* DEBUG *)
+val pp_genType: GenTypes.genType -> PPrint.document
 val pp_genTypeCategory: GenTypes.genTypeCategory -> PPrint.document

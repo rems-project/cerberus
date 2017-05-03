@@ -8,6 +8,8 @@ open GenTypes
 
 open Colour
 
+open Pp_ail_raw
+
 let isatty = ref false
 
 
@@ -187,82 +189,6 @@ let pp_integer i = P.string (Nat_big_num.to_string i)
 
 
 
-let pp_integerBaseType_raw = function
-  | Ichar ->
-      !^ "Ichar"
-  | Short ->
-      !^ "Short"
-  | Int_ ->
-      !^ "Int_"
-  | Long ->
-      !^ "Long"
-  | LongLong ->
-      !^ "LongLong"
-  | IntN_t n ->
-      !^ "IntN_t" ^^ P.brackets (!^ (string_of_int n))
-  | Int_leastN_t n ->
-      !^ "Int_leastN_t" ^^ P.brackets (!^ (string_of_int n))
-  | Int_fastN_t n ->
-      !^ "Int_fastN_t" ^^ P.brackets (!^ (string_of_int n))
-  | Intmax_t ->
-      !^ "Intmax_t"
-  | Intptr_t ->
-      !^ "Intptr_t"
-
-(*
-  | Int8_t ->
-      !^ "Int8_t"
-  | Int16_t ->
-      !^ "Int16_t"
-  | Int32_t ->
-      !^ "Int32_t"
-  | Int64_t ->
-      !^ "Int64_t"
-*)
-
-let pp_integerType_raw = function
- | Char ->
-     !^ "Char"
- | Bool ->
-     !^ "Bool"
- | Signed ibty ->
-     !^ "Signed" ^^ P.brackets (pp_integerBaseType_raw ibty)
- | Unsigned ibty ->
-     !^ "Unsigned" ^^ P.brackets (pp_integerBaseType_raw ibty)
- | IBuiltin str ->
-     !^ str
- | Enum sym ->
-     !^ "enum" ^^^ pp_id sym
- | Size_t ->
-     !^ "Size_t"
- | Ptrdiff_t ->
-     !^ "Ptrdiff_t"
-
-
-
-let pp_realFloatingType_raw = function
-  | Float ->
-      !^ "Float"
-  | Double ->
-      !^ "Double"
-  | LongDouble ->
-      !^ "LongDouble"
-
-let pp_floatingType_raw = function
-  | RealFloating rfty ->
-      !^ "RealFloating" ^^ P.brackets(pp_realFloatingType_raw rfty)
-
-let pp_basicType_raw = function
-  | Integer ity ->
-      !^ "Integer" ^^ P.brackets (pp_integerType_raw ity)
-  | Floating fty ->
-      !^ "Floating" ^^ P.brackets (pp_floatingType_raw fty)
-
-let pp_qualifiers_raw qs =
-  let f (str, b) =
-    !^ str ^^ P.equals ^^^ !^ (if b then "true" else "false") in
-  P.braces (comma_list f [("const", qs.const); ("restrict", qs.restrict); ("volatile", qs.volatile); ("atomic", qs.atomic)])
-
 
 (* pprint C types in human readable format *)
 let pp_qualifiers_human qs =
@@ -281,54 +207,18 @@ let pp_qualifiers_human qs =
 
 
 
-let rec pp_ctype_raw = function
-  | Void ->
-      !^ "Void"
-  | Basic bty ->
-      !^ "Basic" ^^ P.brackets (pp_basicType_raw bty)
-  | Array (ty, None) ->
-      !^ "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
-  | Array (ty, Some n) ->
-      !^ "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
-  | Function (has_proto, ty, params, is_variadic) ->
-      !^ "Function" ^^ P.brackets (!^ (if has_proto then "true" else "false") ^^ P.comma ^^^
-                                        comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
-                                   !^ (if is_variadic then "true" else "false"))
-  | Pointer (ref_qs, ref_ty) ->
-      !^ "Pointer" ^^ P.brackets (pp_qualifiers_human ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
-  | Atomic ty ->
-      !^ "Atomic" ^^ P.brackets (pp_ctype_raw ty)
-  | Struct sym ->
-      !^ "Struct" ^^^ pp_id sym
-(*
-      !^ "Struct" ^^ P.brackets (
-        pp_id sym ^^ P.comma ^^^
-        comma_list (fun (ident, ty) -> P.parens (Pp_cabs.pp_cabs_identifier ident ^^ P.comma ^^^ pp_ctype_raw ty)) xs
-      )
-*)
-  | Union sym ->
-      !^ "Union" ^^^ pp_id sym
-(*
-      !^ "Union" ^^ P.brackets (
-        pp_id sym ^^ P.comma ^^^
-        comma_list (fun (ident, ty) -> P.parens (Pp_cabs.pp_cabs_identifier ident ^^ P.comma ^^^ pp_ctype_raw ty)) xs
-      )
-*)
-  | Builtin str ->
-      !^ "Builtin" ^^ P.brackets (!^ str)
 
 
 
 
 
 let rec pp_ctype = function
-(*  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
   | Void ->
       pp_type_keyword "void"
   | Basic  b ->
       pp_basicType b
-  | Array (ty, n_opt) ->
-      pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
+  | Array (qs, ty, n_opt) ->
+      pp_qualifiers qs (pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt))
   | Function (has_proto, ty, ps, is_variadic) ->
       pp_ctype ty ^^ P.parens (
         let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
@@ -345,26 +235,17 @@ let rec pp_ctype = function
       pp_keyword "struct" ^^^ pp_id_type sym
   | Union sym ->
       pp_keyword "union" ^^^ pp_id_type sym
-(*
-  | Struct (tag, ident_tys) ->
-      pp_keyword "struct" ^^^ pp_id_type tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
-  | Union (tag, ident_tys) ->
-      pp_keyword "union" ^^^ pp_id_type tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
-*)
   | Builtin str ->
       !^ str
 
-
+(*
 let rec pp_ctype_declaration id = function
-(*  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
   | Void ->
       pp_type_keyword "void" ^^^ id
   | Basic  b ->
       pp_basicType b ^^^ id
-  | Array (ty, n_opt) ->
-      pp_ctype ty ^^^ id ^^ P.brackets (P.optional pp_integer n_opt)
+  | Array (qs, ty, n_opt) ->
+      pp_qualifiers qs (pp_ctype ty ^^^ id ^^ P.brackets (P.optional pp_integer n_opt))
   | Function (has_proto, ty, ps, is_variadic) ->
       pp_ctype_declaration id ty ^^ P.parens (
         let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
@@ -381,17 +262,38 @@ let rec pp_ctype_declaration id = function
       pp_keyword "struct" ^^^ pp_id_type sym
   | Union sym ->
       pp_keyword "union" ^^^ pp_id_type sym
-(*
-  | Struct (tag, ident_tys) ->
-      pp_keyword "struct" ^^^ pp_id_type tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys) ^^^ id
-  | Union (tag, ident_tys) ->
-      pp_keyword "union" ^^^ pp_id_type tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys) ^^^ id
+  | Builtin str ->
+      !^ str
 *)
+
+let pp_ctype_declaration pp_ident ty =
+  let rec aux k = function
+  | Void ->
+      pp_type_keyword "void" ^^^ pp_ident
+  | Basic  b ->
+      pp_basicType b ^^^ pp_ident
+  | Array (qs, ty, n_opt) ->
+      pp_qualifiers qs (aux k ty ^^^ pp_ident ^^ P.brackets (P.optional pp_integer n_opt))
+  | Function (has_proto, ty, ps, is_variadic) ->
+      (*pp_ctype_declaration*) aux id ty ^^ P.parens (
+        let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
+        if is_variadic then
+          p ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+        else
+          p
+      )
+  | Pointer (ref_qs, ref_ty) ->
+      pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
+  | Atomic ty ->
+      pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
+  | Struct sym ->
+      pp_keyword "struct" ^^^ pp_id_type sym
+  | Union sym ->
+      pp_keyword "union" ^^^ pp_id_type sym
   | Builtin str ->
       !^ str
 
+  in aux id ty
 
 
 let rec pp_ctype_human qs ty =
@@ -400,44 +302,35 @@ let rec pp_ctype_human qs ty =
       P.empty
     else
       pp_qualifiers_human qs ^^ P.space in
-
+  
   match ty with
-(*  let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
-  | Void ->
-      prefix_pp_qs ^^ !^ "void"
-  | Basic  b ->
-      prefix_pp_qs ^^ pp_basicType b
-  | Array (ty, n_opt) ->
-      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs ty
-  | Function (has_proto, ret_ty, params, is_variadic) ->
-      if not (AilTypesAux.is_unqualified qs) then
-        print_endline "TODO: warning, found qualifiers in a function type (this is an UB)";
-      
-      !^ (if is_variadic then "variadic function" else "function") ^^^
-      P.parens (
-        comma_list (fun (qs', ty') ->
-          pp_ctype_human qs' ty' (* NOTE: qs should be no_qualifiers, here *)
-        ) params
-      ) ^^^
-      !^ "returning" ^^^ pp_ctype_human qs ret_ty
-  | Pointer (ref_qs, ref_ty) ->
-      pp_qualifiers_human qs ^^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
-  | Atomic ty ->
-      !^ "atomic" ^^^ pp_ctype_human qs ty
-  | Struct sym ->
-      !^ "struct" ^^^ pp_id sym
-  | Union sym ->
-      !^ "union" ^^^ pp_id sym
-(*
-  | Struct (tag, ident_tys) ->
-      !^ "struct" ^^^ pp_id tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype_human qs ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
-  | Union (tag, ident_tys) ->
-      !^ "union" ^^^ pp_id tag ^^^
-      P.braces (comma_list (fun (ident, ty) -> pp_ctype_human qs ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys)
-*)
-  | Builtin str ->
-      prefix_pp_qs ^^ !^ str
+    | Void ->
+        prefix_pp_qs ^^ !^ "void"
+    | Basic bty ->
+        prefix_pp_qs ^^ pp_basicType bty
+    | Array (elem_qs, elem_ty, n_opt) ->
+        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human elem_qs elem_ty
+    | Function (has_proto, ret_ty, params, is_variadic) ->
+        if not (AilTypesAux.is_unqualified qs) then
+          print_endline "TODO: warning, found qualifiers in a function type (this is an UB)";
+        
+        !^ (if is_variadic then "variadic function" else "function") ^^^
+        P.parens (
+          comma_list (fun (qs', ty') ->
+            pp_ctype_human qs' ty' (* NOTE: qs should be no_qualifiers, here *)
+          ) params
+        ) ^^^
+        !^ "returning" ^^^ pp_ctype_human qs ret_ty
+    | Pointer (ref_qs, ref_ty) ->
+        pp_qualifiers_human qs ^^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
+    | Atomic ty ->
+        !^ "atomic" ^^^ pp_ctype_human qs ty
+    | Struct tag_sym ->
+        pp_qualifiers_human qs ^^^ !^ "struct" ^^^ pp_id tag_sym
+    | Union tag_sym ->
+        pp_qualifiers_human qs ^^^ !^ "union" ^^^ pp_id tag_sym
+    | Builtin str ->
+        prefix_pp_qs ^^ !^ str
 
 
 
@@ -558,31 +451,13 @@ let rec pp_constant = function
  | ConstantArray csts ->
      P.braces (comma_list pp_constant csts)
  | ConstantStruct (tag_sym, xs) ->
-     !^ "TODO[ConstantStruct]"
-(*
-  | CONST_FLOAT fc -> !^ fc
-  | CONST_CHAR cc  -> pp_character_constant cc
-  | CONST_ENUM ec  -> !^ ec
-*)
-
-
-(*
-let pp_encoding_prefix =
-  let to_string = function
-    | ENCODING_u8 -> "u8"
-    | ENCODING_u  -> "u"
-    | ENCODING_U  -> "U"
-    | ENCODING_L  -> "L"
-  in
-  P.string -| to_string
-
-let pp_string_literal (pref_opt, str) =
-  (P.optional pp_encoding_prefix pref_opt) ^^ P.dquotes (!^ str)
-*)
-
-
-
-
+     P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
+       comma_list (fun (memb_ident, cst) ->
+         P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
+       ) xs
+     )
+ | ConstantUnion (tag_sym, memb_ident, cst) ->
+     P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
 
 
 let rec pp_expression_aux mk_pp_annot a_expr =
@@ -591,10 +466,6 @@ let rec pp_expression_aux mk_pp_annot a_expr =
     let pp z = P.group (pp p' z) in
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
-(*
-        | STRING_LITERAL lit ->
-            pp_string_literal lit
-*)
         | AilEunary (PostfixIncr as o, e)
         | AilEunary (PostfixDecr as o, e) ->
             pp e ^^ pp_unaryOperator o
@@ -840,7 +711,6 @@ let pp_program pp_annot (startup, sigm) =
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           (if !isatty then !^ "\x1b[31m" else P.empty) ^^
-(*          !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_qualifiers qs (pp_ctype_human ty)) ^^ *)
           !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
           (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
           
@@ -939,10 +809,10 @@ let pp_genType = function
      !^ "GenVoid"
  | GenBasic gbty ->
      pp_genBasicType gbty
-  | GenArray (ty, None) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
-  | GenArray (ty, Some n) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
+  | GenArray (qs, ty, None) ->
+      !^ "GenArray" ^^ P.brackets (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
+  | GenArray (qs, ty, Some n) ->
+      !^ "GenArray" ^^ P.brackets (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
 
      
  | GenFunction (has_proto, ty, params, is_variadic) ->

@@ -24,7 +24,7 @@ let rec core_object_type_of_ctype ty =
        Just OTy_integer
    | Basic (AilTypes.Floating _) ->
        Just OTy_floating
-   | Array ty _ ->
+   | Array _ ty _ ->
        match core_object_type_of_ctype ty with
          | Just oTy ->
              Just (OTy_array oTy)
@@ -76,6 +76,7 @@ val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_valu
 let rec objectValueFromMemValue mem_val =
   Mem.case_mem_value mem_val
     (fun ty                -> error"[Core_aux.objectValueFromMemValue] FOUND AN UNSPECIFIED MVAL")
+    (fun _ _               -> error "[Core_aux.objectValueFromMemValue] concurrency read")
     (fun _ ival            -> (OTy_integer, OVinteger ival))
     (fun _ fval            -> (OTy_floating, OVfloating fval))
     (fun _ ptr_val         -> (OTy_pointer, OVpointer ptr_val))
@@ -83,16 +84,37 @@ let rec objectValueFromMemValue mem_val =
     (fun sym xs            -> (OTy_struct sym, OVstruct sym xs))
     (fun sym ident mem_val -> (OTy_union sym, OVunion sym ident mem_val))
 
+and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
+  Mem.case_mem_value mem_val
+    (fun ty                -> (fromJust "loadedValueFromMemValue" (core_object_type_of_ctype ty), LVunspecified ty))
+    (fun _ _               -> error "[Core_aux.loadedValueFromMemValue] concurrency read")
+    (fun _ ival            -> (OTy_integer, LVspecified (OVinteger ival)))
+    (fun _ fval            -> (OTy_floating, LVspecified (OVfloating fval)))
+    (fun _ ptr_val         -> (OTy_pointer, LVspecified (OVpointer ptr_val)))
+    (fun mem_vals          -> error "[Core_aux.loadedValueFromMemValue] array")
+    (fun sym xs            -> (OTy_struct sym, LVspecified (OVstruct sym xs)))
+    (fun sym ident mem_val -> (OTy_union sym, LVspecified (OVunion sym ident mem_val)))
+
+
 val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
   Mem.case_mem_value mem_val
-    (fun ty                -> (fromJust "Core_aux.valueFromMemValue" (core_object_type_of_ctype ty), Vunspecified ty))
-    (fun _ ival            -> (OTy_integer, Vspecified (OVinteger ival)))
-    (fun _ fval            -> (OTy_floating, Vspecified (OVfloating fval)))
-    (fun _ ptr_val         -> (OTy_pointer, Vspecified (OVpointer ptr_val)))
-    (fun mem_vals          -> error "[Core_aux.objectValueFromMemValue] Vspecified (OVarray (List.map objectValueFromMemValue mem_vals))")
-    (fun sym xs            -> (OTy_struct sym, Vspecified (OVstruct sym xs)))
-    (fun sym ident mem_val -> (OTy_union sym, Vspecified (OVunion sym ident mem_val)))
+    (fun ty                -> (fromJust "Core_aux.valueFromMemValue" (core_object_type_of_ctype ty), Vloaded (LVunspecified ty)))
+    (fun _ _               -> error "[Core_aux.valueFromMemValue] concurrency read")
+    (fun _ ival            -> (OTy_integer, Vloaded (LVspecified (OVinteger ival))))
+    (fun _ fval            -> (OTy_floating, Vloaded (LVspecified (OVfloating fval))))
+    (fun _ ptr_val         -> (OTy_pointer, Vloaded (LVspecified (OVpointer ptr_val))))
+    (fun mem_vals          -> let (oTys, lvals) = List.unzip (List.map loadedValueFromMemValue mem_vals) in
+                              let oTy = match oTys with
+                                | [] ->
+                                    (* Something went wrong in the MLM *)
+                                    error "Core_aux.valueFromMemValue ==> empty array"
+                                | oTy :: _ ->
+                                    oTy
+                              end in
+                              (OTy_array oTy, Vloaded (LVspecified (OVarray lvals))))
+    (fun sym xs            -> (OTy_struct sym, Vloaded (LVspecified (OVstruct sym xs))))
+    (fun sym ident mem_val -> (OTy_union sym, Vloaded (LVspecified (OVunion sym ident mem_val))))
 
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
@@ -110,31 +132,31 @@ let rec memValueFromValue ty cval =
         Nothing
     | (_, Vctype _) ->
         Nothing
-    | (_, Vunspecified ty') ->
+    | (_, Vloaded (LVunspecified ty')) ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
-    | (Basic (AilTypes.Integer ity), Vspecified (OVinteger ival)) ->
+    | (Basic (AilTypes.Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
         Just (Mem.integer_value_mval ity ival)
-    | (Basic (AilTypes.Floating fty), Vspecified (OVfloating fval)) ->
+    | (Basic (AilTypes.Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
         Just (Mem.floating_value_mval fty fval)
-    | (Pointer _ ref_ty, Vspecified (OVpointer ptr_val)) ->
+    | (Pointer _ ref_ty, Vloaded (LVspecified (OVpointer ptr_val))) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
-    | (Array elem_ty _, Vspecified (OVarray ovals)) ->
+    | (Array _ elem_ty _, Vloaded (LVspecified (OVarray lvals))) ->
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
-          List.foldr (fun oval acc_opt ->
-            match (memValueFromValue elem_ty (Vspecified oval), acc_opt) with
+          List.foldr (fun lval acc_opt ->
+            match (memValueFromValue elem_ty (Vloaded lval), acc_opt) with
               | (Just mem_val, Just acc) ->
                   Just (mem_val :: acc)
               | _ ->
                   Nothing
             end
-          ) (Just []) ovals
-    | (Struct tag_sym1, Vspecified (OVstruct tag_sym2 xs)) ->
+          ) (Just []) lvals
+    | (Struct tag_sym1, Vloaded (LVspecified (OVstruct tag_sym2 xs))) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.struct_mval tag_sym1 xs)
         else
           Nothing
-    | (Union tag_sym1, Vspecified (OVunion tag_sym2 ident mem_val)) ->
+    | (Union tag_sym1, Vloaded (LVspecified (OVunion tag_sym2 ident mem_val))) ->
         if tag_sym1 = tag_sym2 then
           Just (Mem.union_mval tag_sym1 ident mem_val)
         else
@@ -155,8 +177,8 @@ let rec proj_ctype ty =
         Core_ctype.Void
     | AilTypes.Basic bty ->
         Core_ctype.Basic bty
-    | AilTypes.Array ty n_opt ->
-        Core_ctype.Array (proj_ctype ty) n_opt
+    | AilTypes.Array qs ty n_opt ->
+        Core_ctype.Array qs (proj_ctype ty) n_opt
     | AilTypes.Function _ ty qs_tys is_variadic ->
         Core_ctype.Function (proj_ctype ty) (List.map (fun (qs,ty) -> (qs, proj_ctype ty)) qs_tys) is_variadic
     | AilTypes.Pointer qs ty ->
@@ -242,7 +264,11 @@ let mk_specified_pe pe =
 
 val mk_unspecified_pe: Core_ctype.ctype -> pexpr
 let mk_unspecified_pe ty =
-  Pexpr () (PEval (Vunspecified ty))
+  Pexpr () (PEval (Vloaded (LVunspecified ty)))
+
+val mk_array_pe: list pexpr -> pexpr
+let mk_array_pe pes =
+  Pexpr () (PEctor Carray pes)
 
 val mk_unit_pe: pexpr
 let mk_unit_pe =
@@ -334,8 +360,12 @@ let mk_neg_pe pe =
   Pexpr () (PEop OpSub (mk_integer_pe 0) pe)
 
 val mk_struct_pe: Symbol.sym -> list (Cabs.cabs_identifier * pexpr) -> pexpr
-let mk_struct_pe tag_ident xs =
-  Pexpr () (PEstruct tag_ident xs)
+let mk_struct_pe tag_sym xs =
+  Pexpr () (PEstruct tag_sym xs)
+
+val mk_union_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
+let mk_union_pe tag_sym memb_ident pe =
+  Pexpr () (PEunion tag_sym memb_ident pe)
 
 
 
@@ -394,7 +424,7 @@ let rec zeros_aux ty =
         Mem.integer_value_mval ity zero_ival
     | Core_ctype.Basic (AilTypes.Floating fty) ->
         Mem.floating_value_mval fty Mem.zero_fval
-    | Core_ctype.Array elem_ty (Just n) ->
+    | Core_ctype.Array _ elem_ty (Just n) ->
         Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux elem_ty))
 (*
   Mem.array_mval (List.replicate (natFromInteger n) (Mem.integer_value_mval zero_ival))
@@ -476,8 +506,8 @@ let rec unproj_ctype ty =
         AilTypes.Void
     | Core_ctype.Basic bty ->
         AilTypes.Basic bty
-    | Core_ctype.Array ty n_opt ->
-        AilTypes.Array (unproj_ctype ty) n_opt
+    | Core_ctype.Array qs ty n_opt ->
+        AilTypes.Array qs (unproj_ctype ty) n_opt
     | Core_ctype.Function ty qs_tys is_variadic ->
         AilTypes.Function (* TODO!!!! proto *) false (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
     | Core_ctype.Pointer qs ty ->
@@ -885,11 +915,11 @@ let rec subst_pattern pat pe' expr =
         ) expr (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cloaded [pat'], Pexpr () (PEval (Vspecified oval))) ->
+    | (CaseCtor Cloaded [pat'], Pexpr () (PEval (Vloaded (LVspecified oval)))) ->
         subst_pattern pat' (Pexpr () (PEval (Vobject oval))) expr
     | (CaseCtor Cspecified [pat'], Pexpr () (PEctor Cspecified [pe''])) ->
         subst_pattern pat' pe'' expr
-    | (CaseCtor Cunspecified [pat'], Pexpr () (PEval (Vunspecified ty))) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr () (PEval (Vloaded (LVunspecified ty)))) ->
         subst_pattern pat' (Pexpr () (PEval (Vctype ty))) expr
     | (CaseCtor Cunspecified [pat'], Pexpr () (PEctor Cunspecified [pe''])) ->
         subst_pattern pat' pe'' expr
@@ -1037,11 +1067,12 @@ let rec subst_wait tid v = function
        Epar (List.map (subst_wait tid v) es)
    | Ewait tid' ->
        if tid = tid' then
-         if v <> Vunit then
-(*           error "TODO CONCUR: Core_aux.subst_wait ==> v <> Vunit" *)
-           Epure (Pexpr () (PEval v))
-         else
-           Epure (Pexpr () (PEval Vunit))
+         match v with
+           | Vunit ->
+               Epure (Pexpr () (PEval Vunit))
+           | _ ->
+               Epure (Pexpr () (PEval v))
+         end
        else
          Ewait tid'
    | Eloc loc e ->
@@ -1446,9 +1477,9 @@ let rec match_pattern pat ((Pexpr () pe_) as pexpr) =
     | (CaseBase (Just sym, _), _) ->
         Just [(sym, pexpr)]
 (*      | Vobject of (generic_object_value 'sym) *)
-    | (CaseCtor Cspecified [pat'], PEval (Vspecified oval)) ->
+    | (CaseCtor Cspecified [pat'], PEval (Vloaded (LVspecified oval))) ->
         match_pattern pat' (Pexpr () (PEval (Vobject oval)))
-    | (CaseCtor Cunspecified [pat'], PEval (Vunspecified ty)) ->
+    | (CaseCtor Cunspecified [pat'], PEval (Vloaded (LVunspecified ty))) ->
         match_pattern pat' (mk_ctype_pe ty)
 (*      | Vlist of core_base_type * list (generic_value 'sym) *)
     | (CaseCtor Ctuple pats', PEval (Vtuple cvals')) -> 

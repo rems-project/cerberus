@@ -207,6 +207,28 @@ let step_eval_peop loc mem_st_opt self pexpr =
               | _ ->
                   EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] the two operands of \\/ should be booleans")
             end
+        
+        | (_, Just (Vconstrained xs1), Just (Vconstrained xs2)) ->
+            EU.return (
+              PEconstrained $ List.map (fun ((consts1, v1), (consts2, v2)) ->
+                  (consts1 ++ consts2, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) (Global.product_list xs1 xs2)
+            )
+        
+        | (_, Just (Vconstrained xs1), Just v2) ->
+            EU.return (
+              PEconstrained $ List.map (fun (consts1, v1) ->
+                  (consts1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) xs1
+            )
+        
+        | (_, Just v1, Just (Vconstrained xs2)) ->
+            EU.return (
+              PEconstrained $ List.map (fun (consts1, v2) ->
+                  (consts1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) xs2
+            )
+        
         | (_, Just _, Just _) ->
             EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop ==> " ^ Pp.stringFromCore_pexpr pexpr)
         | _ ->
@@ -314,6 +336,22 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
           | (Ctuple, Just cvals) ->
               EU.return $ PEval (Vtuple cvals)
           | (Carray, Just cvals) ->
+              (* By typing all the [cvals] must be loaded_values *)
+              match List.foldr (fun cval acc ->
+                match (cval, acc) with
+                  | (_, Nothing) ->
+                      Nothing
+                  | (Vloaded lval, Just lvals) ->
+                      Just (lval :: lvals)
+                end
+              ) (Just []) cvals with
+                | Nothing ->
+                    EU.fail $ Illformed_program ("PEctor, Carray: one of the operands didn't evaluate to a loaded value ==> " ^
+                                                 stringFromList Pp.stringFromCore_value cvals)
+                | Just lvals ->
+                    EU.return (PEval (Vobject (OVarray lvals)))
+              end
+(*
               match List.foldr (fun cval acc ->
                 match (cval, acc) with
                   | (_, Left _) ->
@@ -332,6 +370,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                     EU.return $ PEval (Vobject (OVarray ovals))
                     
               end
+*)
           | (Civmax, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
@@ -353,9 +392,9 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
           | (Civalignof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
           | (Cspecified, Just [Vobject oval]) ->
-              EU.return $ PEval (Vspecified oval)
+              EU.return $ PEval (Vloaded (LVspecified oval))
           | (Cunspecified, Just [Vctype ty]) ->
-              EU.return $ PEval (Vunspecified ty)
+              EU.return $ PEval (Vloaded (LVunspecified ty))
           
           | (_, Just cvals) ->
               EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^ Pp.stringFromCore_pexpr pexpr ^ " <====> " ^
@@ -423,7 +462,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                 let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
                 (memb_ident, mval)
               ) (List.zip idents cvals) in
-              EU.return (PEval (Vspecified (OVstruct tag_sym xs)))
+              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs))))
           | Nothing ->
               EU.return (PEstruct tag_sym (List.zip idents pes'))
         end
@@ -435,7 +474,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                   fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs
                 )) in
               let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
-              EU.return (PEval (Vspecified (OVunion tag_sym memb_ident mval)))
+              EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
         end

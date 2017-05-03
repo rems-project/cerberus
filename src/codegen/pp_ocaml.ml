@@ -219,8 +219,9 @@ let rec print_ctype = function
   | Void0 -> !^"C.Void0"
   | Basic0 abt ->
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
-  | Array0 (cty, num) ->
-    !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
+  | Array0 (q, cty, num) ->
+    !^"C.Array0" ^^^ P.parens (print_ail_qualifier q ^^ P.comma
+                               ^^^ print_ctype cty ^^ P.comma
                                ^^^ print_option print_num num)
   | Function0 (cty, params, variad) ->
     !^"C.Function0" ^^^ P.parens
@@ -401,7 +402,14 @@ let rec print_object_value = function
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
   | OVpointer pv   -> print_pointer_value pv
-  | OVarray obvs   -> print_list print_object_value obvs
+  | OVarray lvs   -> print_list print_loaded_value lvs
+
+and print_loaded_value = function
+  | LVspecified v ->
+      !^"A.Specified" ^^^ P.parens (print_object_value v)
+  | LVunspecified ty ->
+      !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
+
 
 let rec print_value = function
   | Vunit            -> tunit
@@ -410,10 +418,9 @@ let rec print_value = function
   | Vlist (_, cvals) -> print_list print_value cvals
   | Vtuple cvals     -> P.parens (comma_list print_value cvals)
   | Vctype ty        -> print_ctype ty
-  | Vunspecified ty  -> !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
   | Vobject obv      -> print_object_value obv
+  | Vloaded lv       -> print_loaded_value lv
   | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.")
-  | Vspecified v     -> !^"A.Specified" ^^^ P.parens (print_object_value v)
 
 let print_is_expr str pp pe =
   match pe with
@@ -523,8 +530,9 @@ let choose_store_type (Pexpr (_, PEval cty)) =
   | Vctype (Pointer0 (q, cty)) ->
     !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
-  | Vctype (Array0 (cty, n)) ->
-    !^"A.store_array" ^^^ P.parens (print_ctype cty)
+  | Vctype (Array0 (q, cty, n)) ->
+    !^"A.store_array" ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
       ^^^ P.parens (print_option print_num n)
   | _ -> todo "store not implemented"
 

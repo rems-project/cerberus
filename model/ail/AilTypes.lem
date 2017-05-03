@@ -68,7 +68,9 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
 type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
  | Void
  | Basic of basicType
- | Array of ctype * (maybe integer)
+   (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
+   (* the qualifiers are that of the element type (§6.7.3#9) *)
+ | Array of qualifiers * ctype * (maybe integer)
    (* NOTE: the qualifiers associated to a ctype in the
             list of parameters is that of the parameter lvalue. For example if
             we have a parameter with type "restrict pointer to a const char",
@@ -240,7 +242,7 @@ let rec ctypeEqual ty1 ty2 =
         (0 : nat)
     | Basic _ ->
         1
-    | Array _ _ ->
+    | Array _ _ _ ->
         2
     | Function _ _ _ _ ->
         3
@@ -260,8 +262,8 @@ let rec ctypeEqual ty1 ty2 =
   match (ty1, ty2) with
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
-    | (Array ty1 n1_opt, Array ty2 n2_opt) ->
-        ctypeEqual ty1 ty2 && n1_opt = n2_opt
+    | (Array qs1 ty1 n1_opt, Array qs2 ty2 n2_opt) ->
+        qs1 = qs2 && ctypeEqual ty1 ty2 && n1_opt = n2_opt
     | (Function has_proto1 ty1 params1 b1, Function has_proto2 ty2 params2 b2) ->
         has_proto1 = has_proto2 &&
         ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2

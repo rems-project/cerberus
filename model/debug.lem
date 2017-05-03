@@ -1,10 +1,12 @@
 import Loc
 
-type category =
+type domain =
   | DB_ail_typing
   | DB_driver_step
+  | DB_clexer
+  | DB_cparser
 
-declare ocaml target_rep type category = `Debug_ocaml.category`
+declare ocaml target_rep type domain = `Debug_ocaml.domain`
 
 val get_level: unit -> nat
 declare ocaml target_rep function get_level   = `Debug_ocaml.get_debug_level`

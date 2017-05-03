@@ -259,6 +259,8 @@ and translate_div_mod_operator translate_rvalue usual_arithmetic_conversion stdl
          Caux.mk_if_pe (Caux.mk_op_pe C.OpLt conv1_sym_pe (Caux.mk_integer_pe 0))
            (Caux.mk_op_pe C.OpRem_t conv1_sym_pe conv2_sym_pe)
            (Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpAdd conv1_sym_pe conv2_sym_pe) conv2_sym_pe))
+    | _ ->
+        error "[Translation.translate_div_mod_operator], 'aop' must be multiplicative"
   end in
   (* TODO[check]: When integers are divided, the result of the / operator is the algebraic
                   quotient with any fractional part discarded.105) If the quotient a/b is
@@ -316,6 +318,7 @@ and translate_relational_operator translate_rvalue usual_arithmetic_conversion r
     | A.Gt -> C.OpGt
     | A.Le -> C.OpLe
     | A.Ge -> C.OpGe
+    | _    -> error "[Translation.translate_relational_operator], 'bop' must be relational"
   end in
   
   let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
@@ -341,6 +344,7 @@ else
                  | A.Gt -> Mem.PtrGt
                  | A.Le -> Mem.PtrLe
                  | A.Ge -> Mem.PtrGe
+                 | _    -> error "[Translation.translate_relational_operator], 'bop' must be relational"
                end in
                C.Ewseq memop_sym_pat (C.Ememop memop [obj1_sym_pe; obj2_sym_pe]) (
                  C.Epure (
@@ -371,6 +375,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   let memop = match bop with
     | A.Eq -> Mem.PtrEq
     | A.Ne -> Mem.PtrNe
+    | _    -> error "[Translation.translate_equality_operator], 'bop' must be an equality operator"
   end in
   
   E.return (
@@ -417,6 +422,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
   let mk_op_pe = match bop with
     | A.Eq -> Caux.mk_op_pe C.OpEq
     | A.Ne -> fun x y -> Caux.mk_not_pe (Caux.mk_op_pe C.OpEq x y)
+    | _    -> error "[Translation.translate_equality_operator], 'bop' must be relational"
   end in
       C.Epure (
         C.Pexpr () (
@@ -440,6 +446,7 @@ else (* both operand have pointer type *)
   let memop = match bop with
     | A.Eq -> Mem.PtrEq
     | A.Ne -> Mem.PtrNe
+    | _    -> error "[Translation.translate_equality_operator], 'bop' must be relational"
   end in
                C.Ewseq (Caux.mk_sym_pat memop_sym C.BTy_boolean) (C.Ememop memop [obj1_sym_pe; obj2_sym_pe]) (
                  C.Epure (
@@ -486,6 +493,7 @@ and translate_bitwise_operator translate_rvalue usual_arithmetic_conversion stdl
                            | A.Band -> stdlib.mkcall_bitwise_AND
                            | A.Bxor -> stdlib.mkcall_bitwise_XOR
                            | A.Bor  -> stdlib.mkcall_bitwise_OR
+                           | _    -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
                          end in
                          func result_ty promoted1_pe promoted2_pe)
                        )
@@ -508,7 +516,6 @@ and translate_expression stdlib program is_lvalue a_expr =
   let sigm = snd program in
   let translate_lvalue = translate_expression stdlib program true      in
   let translate_rvalue = translate_expression stdlib program false     in
-  let translate_expr   = translate_expression stdlib program is_lvalue in
   
   (* TODO !!!! *)
   let integer_promotion (ty: Aty.ctype) (e: C.pexpr) : C.pexpr =
@@ -711,7 +718,7 @@ and translate_expression stdlib program is_lvalue a_expr =
           if AilTypesAux.is_object result_ty then
              E.fresh_symbol     >>= fun sym    ->
              translate_lvalue e >>= fun core_e ->
-             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+(*             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in *)
              E.return $
                C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) core_e
                  (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)))
@@ -991,6 +998,7 @@ else
               else if is_lvalue then
                 C.Epure ((*Caux.mk_specified_pe*)id_sym_pe)
               else
+                let () = Debug.print_debug 0 ("HELLO pload ==> " ^ Pp.stringFromAil_ctype result_ty) in
                 Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) id_sym_pe Cmm.NA
 
 
@@ -1037,8 +1045,10 @@ else
           E.fresh_symbol >>= fun let_sym ->
           E.return $
 if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
-            match ty with
-              | Aty.Pointer _ ref_ty ->
+            match AilTypesAux.referenced_type ty with
+              | Nothing ->
+                  illTypedAil loc "AilEcast, pointer vs null_pointer_constant"
+              | Just ref_ty ->
                   C.Epure (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ref_ty)))
             end
 else
@@ -1205,11 +1215,12 @@ else
               else
                 (ctype_of e1, core_e1, core_e2) in
             
-            let ref_ty = match AilTypesAux.unatomic ptr_ty with
-              | Aty.Pointer _ ty ->
-                  ty
+            let ref_ty = match AilTypesAux.referenced_type ptr_ty with
+              | Nothing ->
+                  illTypedAil loc "A.AilEbinary (A.Arithmetic A.Add), one is pointer"
+              | Just ref_ty ->
+                  ref_ty
             end in
-
             
             E.fresh_symbol >>= fun ptr_sym         ->
             E.fresh_symbol >>= fun integer_sym     ->
@@ -1312,11 +1323,12 @@ else
               else
                 (ctype_of e1, core_e1, core_e2) in
             
-            let ref_ty = match AilTypesAux.unatomic ptr_ty with
-              | Aty.Pointer _ ty ->
-                  ty
+            let ref_ty = match AilTypesAux.referenced_type ptr_ty with
+              | Nothing ->
+                  illTypedAil loc "A.AilEbinary (A.Arithmetic A.Sub), one is pointer"
+              | Just ref_ty ->
+                  ref_ty
             end in
-
             
             E.fresh_symbol >>= fun ptr_sym         ->
             E.fresh_symbol >>= fun integer_sym     ->
@@ -1540,9 +1552,10 @@ else if AilTypesAux.is_struct_or_union (ctype_of e1) then
               fun z -> z
             )
 
-else if AilTypesAux.is_pointer (ctype_of e1) then
-  match ctype_of e1 with
-    | Aty.Pointer _ ref_ty ->
+else match AilTypesAux.referenced_type (ctype_of e1) with
+(* if AilTypesAux.is_pointer (ctype_of e1) then
+  match ctype_of e1 with *)
+    | Just ref_ty ->
         if Aaux.is_null_pointer_constant e2 then
             E.return (
               C.OTy_pointer,
@@ -1556,10 +1569,10 @@ else if AilTypesAux.is_pointer (ctype_of e1) then
               core_e,
               fun z -> z
            )
+    | Nothing ->
+        (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
+        error "TODO: AilEassign, _Bool vs pointer assign"
   end
-
-else (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
-            error "_Bool vs pointer assign"
           end >>= fun (oTy2, core_e2, mk_stored_pe) ->
           let stored_pe = mk_stored_pe (Caux.mk_sym_pe (C.BTy_loaded oTy2) e2_sym) in
           
@@ -1588,6 +1601,8 @@ else (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
 
 
 
+      | A.AilEcompoundAssign e1 aop e2 ->
+          error "TODO TEMPORARY ==> compound assign are not supported by the elaboration and should be desugared by Cabs_to_ail"
 
 (*
 (*      
@@ -1601,8 +1616,6 @@ else (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
           translate_rvalue $
             A.AnnotatedExpression annot loc (A.AilEassign e1 (A.AnnotatedExpression annot2 loc' (A.AilEbinary e1 (A.Arithmetic aop) e2)))
 *)
-      | A.AilEcompoundAssign e1 aop e2 ->
-          error "TEMPORARY ==> compound assign are not supported by the elaboration and should desugared in Cabs_to_ail"
       
       (* TODO: conv_int on e2 and e2 !!!!!!! *)
       
@@ -2065,15 +2078,12 @@ TODO: #9
           E.return $
             C.Epure (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident)))))
       
-(*
-
       | A.AilEgeneric _ _ ->
           error "WIP: Translation.translate_expression, AilEgeneric"
       
-*)
       | A.AilEarray _ e_opts ->
           let elem_ty = match result_ty with
-            | Aty.Array ty _ ->
+            | Aty.Array _ ty _ ->
                 ty
             | _ ->
                 illTypedAil loc "AilEarray"
@@ -2093,7 +2103,7 @@ TODO: #9
              end
           ) ([], id) e_opts >>= fun (rev_pes, mk_expr) ->
           E.return $
-             mk_expr (C.Epure (C.Pexpr () (C.PEctor C.Carray (List.reverse rev_pes))))
+             mk_expr (C.Epure (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
       
       | A.AilEstruct tag_sym ident_e_opts ->
           let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym (Cty.tagDefs ()) in
@@ -2133,28 +2143,35 @@ TODO: #9
           E.return $
             mk_core (C.Epure (Caux.mk_struct_pe tag_sym (List.reverse core_xs_rev)))
       
-(*
-
       | A.AilEcompound _ _ ->
           error "WIP: Translation.translate_expression, AilEcompound"
-*)
+      
       | A.AilEunion tag_sym memb_ident e_opt ->
-          let A.UnionDef ident_tys = fromJust "Translation.trans_expression, AilEunion Nothing 1" (List.lookup tag_sym sigm.A.tag_definitions) in
-          let memb_ty = Caux.proj_ctype (fromJust "Translation.trans_expression, AilEunion Nothing 2" (List.lookup memb_ident ident_tys)) in
-          let oTy = force_core_object_type_of_ctype memb_ty in
-          match e_opt with
-            | Nothing ->
-                E.return (
-                  C.Epure (C.Pexpr () (C.PEunion tag_sym memb_ident (Caux.mk_unspecified_pe memb_ty)))
-                )
-            | Just e ->
-                E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
-                translate_rvalue e                        >>= fun core_e                   ->
-                E.return (
-                  C.Ewseq e_sym_pat core_e (
-                    C.Epure (C.Pexpr () (C.PEunion tag_sym memb_ident e_sym_pe))
-                  )
-                )
+          let fail = illTypedAil loc "AilEunion" in
+          match List.lookup tag_sym sigm.A.tag_definitions with
+            | Just (A.UnionDef ident_tys) ->
+                match Maybe.map Caux.proj_ctype (List.lookup memb_ident ident_tys) with
+                  | Just memb_ty ->
+                      let oTy = force_core_object_type_of_ctype memb_ty in
+                      match e_opt with
+                        | Nothing ->
+                            E.return (
+                              C.Epure (Caux.mk_union_pe tag_sym memb_ident (Caux.mk_unspecified_pe memb_ty))
+                            )
+                        | Just e ->
+                            E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
+                            translate_rvalue e                        >>= fun core_e                   ->
+                            E.return (
+                              C.Ewseq e_sym_pat core_e (
+                                C.Epure (Caux.mk_union_pe tag_sym memb_ident e_sym_pe)
+                              )
+                            )
+                      end
+                  | Nothing ->
+                      fail
+                end
+            | _ ->
+                fail
           end
       
 (* TODO: atomic undef *)
@@ -2206,8 +2223,9 @@ TODO: #9
              )
 *)
 
-(*
       | A.AilEmemberofptr e ident ->
+          error "WIP: Translation.translate_expr, AilEmemberofptr"
+(*
           let tag_sym = match ctype_of e with
             | Aty.Pointer _ (Aty.Struct tag_sym) ->
                 tag_sym
@@ -2250,64 +2268,67 @@ TODO: #9
             C.Pexpr () match cst with
               | A.ConstantIndeterminate ty ->
                   (* NOTE: we assume the lack of trap representation *)
-                  C.PEval (C.Vunspecified (Caux.proj_ctype ty))
+                  C.PEval (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
               | A.ConstantNull ->
                   (* TODO: should make the Ail ctor take a ctype? *)
                   Caux.strip $ Caux.mk_nullptr_pe Cty.Void
               | A.ConstantInteger (A.IConstant n _ _) ->
                   (* TODO: suffix/basis? + check *)
-                  C.PEval (C.Vspecified (C.OVinteger (Mem.integer_ival n)))
+                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival n))))
               | A.ConstantInteger (A.IConstantMax ity) ->
-                  C.PEval (C.Vspecified (C.OVinteger (Mem.max_ival ity)))
+                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.max_ival ity))))
               | A.ConstantInteger (A.IConstantMin ity) ->
-                  C.PEval (C.Vspecified (C.OVinteger (Mem.min_ival ity)))
+                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.min_ival ity))))
               | A.ConstantFloating str ->
-                  C.PEval (C.Vspecified (C.OVfloating (Mem.str_fval str)))
+                  C.PEval (C.Vloaded (C.LVspecified (C.OVfloating (Mem.str_fval str))))
               | A.ConstantCharacter (_, str) ->
                   (* TODO: prefix? *)
                   (* TODO: making an implementation fix here (ASCII) *)
-                  C.PEval (C.Vspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str))))
+                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str)))))
               | A.ConstantArray (* TODO: csts *) _ ->
                   error "WIP: Translation AilEconst, ConstantArray"
               | A.ConstantStruct (* TODO: tag_sym xs *) _ _ ->
                   error "WIP: Translation AilEconst, ConstantStruct"
+              | A.ConstantUnion (* TODO: tag_sym xs *) _ _ _ ->
+                  error "WIP: Translation AilEconst, ConstantUnion"
             end
           )
-(*
+      
       | A.AilEbuiltin str ->
           (* TODO: the redundance with Builtins.lem is wrong *)
           E.return $ C.Epure match str with
+(*
             | "INT8_MIN" ->
-                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8)))))
             | "INT16_MIN" ->
-                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16)))))
             | "INT32_MIN" ->
-                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32)))))
             | "INT64_MIN" ->
-                Caux.ivmin_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64)))))
             | "INT8_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8)))))
             | "INT16_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16)))))
             | "INT32_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32)))))
             | "INT64_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64)))))
             | "UINT8_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8)))))
             | "UINT16_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16)))))
             | "UINT32_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32)))))
             | "UINT64_MAX" ->
-                Caux.mk_ivmax_pe (C.PEval (C.Vctype (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64))))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64)))))
             | "CHAR_BIT" ->
                 C.PEimpl Implementation_.Characters__bits_in_byte
+*)
             | _ ->
-                error ( "Translation AilEbuiltin> " ^ str)
+                error ( "WIP: Translation.translate_expr, AilEbuiltin: " ^ str)
           end
       
-*)
       (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->
           let elem_ty = match pref_opt with
@@ -2330,11 +2351,11 @@ TODO: #9
           
           E.fresh_symbol >>= fun sym ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
-          let elems = List.map (fun c_str ->
-            C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str))
-          ) strs ++ [C.OVinteger (Mem.integer_ival 0)] in
-          E.register_string_literal loc sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elems)))
-             (Caux.mk_specified_pe (C.Pexpr () (C.PEval (C.Vobject (C.OVarray elems))))) >>
+          let elem_lvals = List.map (fun c_str ->
+            C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str)))
+          ) strs ++ [C.LVspecified (C.OVinteger (Mem.integer_ival 0))] in
+          E.register_string_literal loc sym (Cty.Array Aty.no_qualifiers elem_ty (Just (integerFromNat $ List.length elem_lvals)))
+            (C.Pexpr () (C.PEval (C.Vloaded (C.LVspecified (C.OVarray elem_lvals))))) >>
           E.return (
             C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) sym))
           )
@@ -2355,9 +2376,12 @@ a
       
       
 *)
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer Aty.Char))                 -> E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))   -> E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
-      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) -> E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer Aty.Char)) ->
+          E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar))) ->
+          E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
+      | A.AilEsizeof _ (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar))) ->
+          E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
       | A.AilEsizeof _ ty ->
           E.return $
             C.Epure (Caux.mk_specified_pe (Caux.mk_sizeof_pe (Caux.mk_ail_ctype_pe ty)))
@@ -2369,147 +2393,13 @@ a
       | A.AilEalignof _ ty ->
           E.return $
             C.Epure (Caux.mk_specified_pe (Caux.mk_alignof_pe $ Caux.mk_ail_ctype_pe ty))
-
-(*
-
-(*
-  TODO: need to bring them back to the new Ail
-      | A.MEMBEROF e x ->
-      | A.MEMBEROFPTR e x ->
-
-      | A.EXPR_SIZEOF e ->
-          E.return (C.sizeof $ Caux.mk_ail_ctype_pe (Annotate.ctype_of e))
-
-    | A.StringLiteral lit ->
-
-    | A.Malloc e -> do E
-        a_e    <- E.fresh_symbol;
-        core_e <- translate_expression e; in
-          E.return $ C.Ewseq [Just a_e] core_e (Caux.palloc (C.PEsym a_e) [])
-        end
-    
-    | A.Free e -> do E
-        a_e    <- E.fresh_symbol;
-        core_e <- translate_expression e; in
-          E.return $ C.Ewseq [Just a_e] core_e (Caux.pkill (C.PEsym a_e))
-        end
-    
-    | A.Memcmp e1 e2 e3 ->
-    | A.Memcpy e1 e2 e3 ->
-    
-    | A.Assert e -> do E
-        a_e    <- E.fresh_symbol;
-        core_e <- translate_expression e; in
-          E.return $
-            C.Ewseq [Just a_e] core_e
-              (C.Eif (Caux.mk_op_pe C.OpEq (C.PEsym a_e) (Caux.mk_integer_pe 0)) C.Eerror C.Eskip)
-        end
-    
-    | A.ConstArray es ->
-    | A.ConstStructUnion field_es ->
-    | A.Offsetof ty x ->
-*)
+      
       | A.AilEannot _ e ->
-          translate_expr e
-      | A.AilEva_start e sym ->
+          translate_expression stdlib program is_lvalue e
+      | AilSyntax.AilEva_start e sym ->
           error "WIP: Translation.translate_expr, AilEva_start"
-      | A.AilEva_arg e ty ->
+      | AilSyntax.AilEva_arg e ty ->
           error "WIP: Translation.translate_expr, AilEva_arg"
-*)
-
-      | e ->
-          match e with
-            | A.AilEunary _ _ ->
-                error "AilEunary"
-            | A.AilEbinary _ bop _ ->
-                let str = match bop with
-                  | A.Arithmetic A.Mul ->
-                      "Mul"
-                  | A.Arithmetic A.Div ->
-                      "Div"
-                  | A.Arithmetic A.Mod ->
-                      "Mod"
-                  | A.Arithmetic A.Add ->
-                      "Add"
-                  | A.Arithmetic A.Sub ->
-                      "Sub"
-                  | A.Arithmetic A.Shl ->
-                      "Shl"
-                  | A.Arithmetic A.Shr ->
-                      "Shr"
-                  | A.Arithmetic A.Band ->
-                      "Band"
-                  | A.Arithmetic A.Bxor ->
-                      "Bxor"
-                  | A.Arithmetic A.Bor ->
-                      "Bor"
-                  | A.Comma ->
-                      "Comma"
-                  | A.And ->
-                      "And"
-                  | A.Or ->
-                      "Or"
-                  | A.Lt ->
-                      "Lt"
-                  | A.Gt ->
-                      "Gt"
-                  | A.Le ->
-                      "Le"
-                  | A.Ge ->
-                      "Ge"
-                  | A.Eq ->
-                      "Eq"
-                  | A.Ne ->
-                      "Ne"
-                end in
-                error ("AilEbinary " ^ str)
-            | A.AilEassign _ _ ->
-                error "AilEassign"
-            | A.AilEcompoundAssign _ _ _ ->
-                error "AilEcompoundAssign"
-            | A.AilEcond _ _ _ ->
-                error "AilEcond"
-            | A.AilEcast _ _ _ ->
-                error "AilEcast"
-            | A.AilEcall _ _ ->
-                error "AilEcall"
-            | A.AilEassert _ ->
-                error "AilEassert"
-            | A.AilEoffsetof _ _ ->
-                error "AilEoffsetof"
-            | A.AilEgeneric _ _ ->
-                error "AilEgeneric"
-            | A.AilEarray _ _ ->
-                error "AilEarray"
-            | A.AilEstruct _ _ ->
-                error "AilEstruct"
-            | A.AilEcompound _ _ ->
-                error "AilEcompound"
-            | A.AilEmemberof _ _ ->
-                error "AilEmemberof"
-            | A.AilEmemberofptr _ _ ->
-                error "AilEmemberofptr"
-            | A.AilEbuiltin _ ->
-                error "AilEbuiltin"
-            | A.AilEstr _ ->
-                error "AilEstr"
-            | A.AilEconst _ ->
-                error "AilEconst"
-            | A.AilEident _ ->
-                error "AilEident"
-            | A.AilEsizeof _ _ ->
-                error "AilEsizeof"
-            | A.AilEsizeof_expr _ ->
-                error "AilEsizeof_expr"
-            | A.AilEalignof _ _ ->
-                error "AilEalignof"
-            | A.AilEannot _ _ ->
-                error "AilEannot"
-            | A.AilEva_start _ _ ->
-                error "AilEva_start"
-            | A.AilEva_arg _ _ ->
-                error "AilEva_arg"
-          end
     end
 
 
@@ -2634,11 +2524,15 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         St.get >>= function
           | <| elc_break= Just break_sym |> ->
              St.return (A.AilSgoto break_sym)
+          | _ ->
+              illTypedAil loc "AilSbreak"
         end
     | A.AilScontinue ->
         St.get >>= function
           | <| elc_continue= Just continue_sym |> ->
              St.return (A.AilSgoto continue_sym)
+          | _ ->
+              illTypedAil loc "AilScontinue"
         end
     | A.AilSreturnVoid ->
         St.return stmt_

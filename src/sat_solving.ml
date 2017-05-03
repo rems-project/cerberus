@@ -96,7 +96,7 @@ let rec expression_from_integer_value_base = function
       "(TODO IVmax)"
   | IVsizeof ty ->
       (match ty with
-         | Core_ctype.Array0 (ty, Some n) ->
+         | Core_ctype.Array0 (qs, ty, Some n) ->
              Printf.sprintf "(* (sizeof int_ty) %s)" (Nat_big_num.to_string n)(* TODO *)
          | _ ->
             "(sizeof int_ty)") (* TODO *)

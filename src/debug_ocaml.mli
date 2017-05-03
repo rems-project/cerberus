@@ -1,6 +1,8 @@
-type category =
+type domain =
   | DB_ail_typing
   | DB_driver_step
+  | DB_clexer
+  | DB_cparser
 
 
 (* val assert_false: unit -> 'a *)
