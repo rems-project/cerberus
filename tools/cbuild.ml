@@ -1,9 +1,24 @@
 (* ocamlbuild wrapper for Cerberus *)
 
+let () =
+  if not Sys.unix then (
+    Printf.fprintf stderr "Cbuild wrapper only works on unix-like systems.";
+    exit 1;
+  )
+
 let perm = 0o755
 let cur_path = Sys.getenv "PWD"
 let cbuild_path = cur_path ^ "/_cbuild"
 let src_path = cbuild_path ^ "/src"
+
+let run x = Sys.command x |> ignore
+
+(* Flags *)
+let set_force () =
+  Printf.sprintf "rm -rf %s" cbuild_path |> run
+
+let rm_stdcore () =
+  try Sys.remove (cbuild_path ^ "/stdCore.ml") with _ -> ()
 
 (* Copied from Filename 4.04 *)
 let extension_len name =
@@ -28,8 +43,6 @@ let chop_extension name =
   let l = extension_len name in
   if l = 0 then invalid_arg "Filename.chop_extension"
   else String.sub name 0 (String.length name - l)
-
-let run x = Sys.command x |> ignore
 
 let copy ?path:(path="$CERB_PATH") src dest =
   Printf.sprintf "cp -f %s/%s %s" path src dest |> run
@@ -73,31 +86,55 @@ let build filename mode =
 let cerberus filename =
   Printf.sprintf "cerberus --ocaml %s" filename |> Sys.command
 
-let () =
-  (* Check if UNIX system *)
-  if not Sys.unix then (
-    Printf.fprintf stderr "Cbuild wrapper only works on unix-like systems.";
-    exit 1;
-  );
-  (* Check and create _cbuild directory *)
+let check_and_build () =
   if not (Sys.file_exists cbuild_path) || not (Sys.is_directory cbuild_path) then (
     Unix.mkdir cbuild_path perm;
     Unix.mkdir src_path perm;
     create_cbuild ()
-  );
-  (* Check and compile file *)
-  if Array.length Sys.argv > 1 then (
-    let filename = cur_path ^ "/" ^ Sys.argv.(1) in
-    (match extension filename with
-     | ".c" ->
-       if cerberus filename = 0 then (
-         build filename ".native"
-       ) else (
-         Printf.fprintf stderr "Cerberus failed!"; exit 1
-       )
-     | ".ml"
-     | ".native" -> build filename ".native"
-     | ".byte" -> build filename ".byte"
-     | _ -> Printf.fprintf stderr "Unknown action for file: %s" filename; exit 1
-    )
   )
+
+(* TODO: that should go away! *)
+let hacks () =
+  Printf.sprintf
+    "sed -i '' 's/MVpointer( \\_, ptrval)/Pointer(ptrval)/g' %s/output.ml"
+    src_path |> run;
+  Printf.sprintf "sed -i '' '227,230d' %s/pp_core.ml" src_path |> run
+
+let set_basic_mem () =
+  check_and_build ();
+  Printf.sprintf
+    "sed -i '' 's/Defacto\\_memory\\_types/Basic\\_mem\\_types/g' %s/*.{ml,mli}"
+    src_path |> run;
+  Printf.sprintf
+    "sed -i '' 's/Defacto\\_memory/Basic\\_mem/g' %s/*.{ml,mli}"
+    src_path |> run;
+  Printf.sprintf
+    "sed -i '' 's/defacto\\_memory/basic\\_mem/g' %s/pp_mem.ml"
+    src_path |> run;
+  hacks()
+
+let main arg =
+  check_and_build();
+  let filename = cur_path ^ "/" ^ arg in
+  (match extension filename with
+   | ".c" ->
+     if cerberus filename = 0 then (
+       build filename ".native"
+     ) else (
+       Printf.fprintf stderr "Cerberus failed!"; exit 1
+     )
+   | ".ml"
+   | ".native" -> build filename ".native"
+   | ".byte" -> build filename ".byte"
+   | _ -> Printf.fprintf stderr "Unknown action for file: %s" filename; exit 1
+  )
+
+let () =
+  let spec = [
+    ("--corestd", Arg.Unit rm_stdcore, "Rebuild StdCore.ml");
+    ("--basic", Arg.Unit set_basic_mem, "Use basic memory model");
+    ("-f", Arg.Unit set_force, "Force the creation of _cbuild");
+    ("--clean", Arg.Unit set_force, "Clean cbuild files")
+  ] in
+  let usage = "Ocaml wrapper for Cerberus: cbuild [file.{c,ml,native,byte}]" in
+  Arg.parse spec main usage

@@ -16,3 +16,5 @@ type impl_integer_value = (integerType * num option)
 type impl_pointer_value = (ctype0 * num option)
 type impl_floating_value = unit (* not supported *)
 type impl_footprint = unit (* not supported *)
+type mem_constraint = unit
+type shift_path = unit
