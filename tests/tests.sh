@@ -19,7 +19,7 @@ citests=(
   11-if_pointer.c
   12-incr_integer.c
   13-incr_pointer.c
-  14-labels_scopes_bug.c
+#  14-labels_scopes_bug.c
   15-while_break.c
   16-do_break.c
   17-for_simple.c
