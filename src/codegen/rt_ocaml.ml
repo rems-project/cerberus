@@ -165,7 +165,11 @@ let store_array q cty size e1 le2 =
     match le2 with
     | Specified e2 ->
       begin match cty with
-        | C.Basic0 (T.Integer ity) -> M.array_mval (List.map (M.integer_value_mval ity) e2)
+        | C.Basic0 (T.Integer ity) ->
+          M.array_mval (List.map (function
+              | Specified i -> M.integer_value_mval ity i
+              | Unspecified ty -> M.unspecified_mval ty
+          ) e2)
         | _ -> raise (Error "excepting an array of integers")
       end
     | Unspecified ty -> M.unspecified_mval ty
@@ -213,9 +217,17 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
 
 exception Exit of (M.integer_value loaded)
 
-let print_batch n = Printf.printf
-    "Defined {value: \"Specified(%s)\", stdout: \"%s\", blocked: \"false\"}\nCONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
-    (Nat_big_num.to_string n) !stdout
+let print_batch res =
+  Printf.printf
+    "Defined {value: \"%s\", stdout: \"%s\", blocked: \"false\"}\n%s"
+    res !stdout
+    "CONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
+
+let string_of_specified n =
+  Printf.sprintf "Specified(%s)" (Nat_big_num.to_string n)
+
+let string_of_unspec cty =
+  Printf.sprintf "Unspecified(\"%s\")" (String_core_ctype.string_of_ctype cty)
 
 let quit f =
   try
@@ -226,9 +238,11 @@ let quit f =
     (match x with
      | Specified x ->
        let n = M.eval_integer_value x |> Option.get in
-       if batch then print_batch n;
+       if batch then print_batch (string_of_specified n);
        exit (Nat_big_num.to_int n)
-     | Unspecified _ -> print_string "Unspecified"; exit(-1)
+     | Unspecified cty ->
+       if batch then print_batch (string_of_unspec cty);
+       exit(-1)
     )
 
 let create_tag_defs_map defs =
