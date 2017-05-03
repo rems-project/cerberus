@@ -2,6 +2,7 @@ syntax: glob
 
 ocaml_generated/**
 _build/**
+_cbuild/**
 _lem/**
 _coq/**
 _coq-orig/**
@@ -40,6 +41,7 @@ depend
 
 .DS_Store
 
+cbuild
 cerberus
 main_.native
 
