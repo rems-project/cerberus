@@ -93,13 +93,6 @@ let check_and_build () =
     create_cbuild ()
   )
 
-(* TODO: that should go away! *)
-let hacks () =
-  Printf.sprintf
-    "sed -i '' 's/MVpointer( \\_, ptrval)/Pointer(ptrval)/g' %s/output.ml"
-    src_path |> run;
-  Printf.sprintf "sed -i '' '227,230d' %s/pp_core.ml" src_path |> run
-
 let set_basic_mem () =
   check_and_build ();
   Printf.sprintf
@@ -110,8 +103,7 @@ let set_basic_mem () =
     src_path |> run;
   Printf.sprintf
     "sed -i '' 's/defacto\\_memory/basic\\_mem/g' %s/pp_mem.ml"
-    src_path |> run;
-  hacks()
+    src_path |> run
 
 let main arg =
   check_and_build();

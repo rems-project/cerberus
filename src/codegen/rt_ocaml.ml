@@ -13,6 +13,13 @@ let (>>=) = M.bind0
 let (>>) x y = x >>= fun _ -> y
 let return = M.return0
 
+(* Runtime flags *)
+let batch =
+  try ignore (Sys.getenv "CERB_BATCH"); true
+  with _ -> false
+
+let stdout = ref ""
+
 (* init/set globals before calling main *)
 
 let set_global (f, x) =
@@ -75,11 +82,11 @@ exception Label of string * (M.integer_value) loaded
 
 let get_integer m =
   let terr _ _ = raise (Error "Type mismatch, expecting integer values.") in
-  M.case_mem_value m unspecified (fun _ -> specified) terr terr (terr()) terr terr
+  M.case_mem_value m unspecified terr (fun _ -> specified) terr terr (terr()) terr terr
 
 let get_pointer m =
   let terr _ _ = raise (Error "Type mismatch, expecting pointer values.") in
-  M.case_mem_value m unspecified terr terr (fun _ p -> specified p)
+  M.case_mem_value m unspecified terr terr terr (fun _ p -> specified p)
     (terr()) terr terr
 
 (* Cast to memory values *)
@@ -178,6 +185,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     let throw_error _ = raise (Error "Rt_ocaml.printf: expecting an integer") in
     let n = M.case_mem_value x
         throw_error
+        (fun _ -> throw_error)
         (fun _ v -> conv cty v)
         (fun _ -> throw_error)
         (fun _ -> throw_error)
@@ -190,7 +198,9 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
   >>= begin function
     | Either.Right (Undefined.Defined0 xs) ->
       let n = List.length xs in
-      print_string (String.init n (List.nth xs));
+      let output = String.init n (List.nth xs) in
+      if batch then stdout := !stdout ^ String.escaped output
+      else print_string output;
       return (M.integer_ival (Nat_big_num.of_int n))
     | Either.Right (Undefined.Undef (_, xs) ) ->
       raise (Error (String.concat "," 
@@ -203,17 +213,9 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
 
 exception Exit of (M.integer_value loaded)
 
-
-
-let print_exit_value n =
-  let pp n = Printf.printf
-      "Defined {value: \"Specified(%s)\", stdout: \"\", blocked: \"false\"}\nCONSTRS ==> []\nLog[0]\n\nEnd[0]\n" n in
-  try
-    ignore (Sys.getenv "CERBOUTPUT");
-    pp (Nat_big_num.to_string n); n
-    (*
-    Nat_big_num.to_string n |> print_string; n*)
-  with Not_found -> n
+let print_batch n = Printf.printf
+    "Defined {value: \"Specified(%s)\", stdout: \"%s\", blocked: \"false\"}\nCONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
+    (Nat_big_num.to_string n) !stdout
 
 let quit f =
   try
@@ -222,14 +224,12 @@ let quit f =
   with
   | Exit x ->
     (match x with
-     | Specified x -> M.eval_integer_value x
-                      |> Option.get
-                      |> print_exit_value
-                      |> Nat_big_num.to_int
-                      |> exit
+     | Specified x ->
+       let n = M.eval_integer_value x |> Option.get in
+       if batch then print_batch n;
+       exit (Nat_big_num.to_int n)
      | Unspecified _ -> print_string "Unspecified"; exit(-1)
     )
-
 
 let create_tag_defs_map defs =
   List.fold_left

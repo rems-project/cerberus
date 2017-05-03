@@ -176,8 +176,7 @@ let impl_union_mval s c mv =
    (mem_value list -> 'a) ->
    (sym -> (cid * mem_value) list -> 'a)
    (sym -> cid -> mem_value -> 'a) -> 'a *)
-let impl_case_mem_value m caseUnspec caseInt caseFloat casePointer caseArray
-    caseStruct caseUnion =
+let impl_case_mem_value m caseUnspec caseConcur caseInt caseFloat casePointer caseArray caseStruct caseUnion =
   match m with
   | Integer (_, None)
   | Pointer (_, None) -> caseUnspec Void0
