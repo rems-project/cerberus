@@ -13,7 +13,7 @@ let mk_loc lexbuf =
 
 let offset_location lexbuf new_file new_lnum char_offset =
   Lexing.(
-    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with
+    lexbuf.lex_curr_p <- {
       pos_fname = new_file;
       pos_lnum = new_lnum;
       pos_bol = lexbuf.lex_curr_p.pos_bol + char_offset;

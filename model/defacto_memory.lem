@@ -901,7 +901,7 @@ let rec mkUnspec ty =
         MVinteger ity (IV Prov_none IVunspecified) 
     | Basic (AilTypes.Floating fty) ->
         MVfloating fty FVunspecified
-    | Array ty (Just n) ->
+    | Array _ ty (Just n) ->
         MVarray $ replicate (natFromInteger n) (mkUnspec ty)
     | (Pointer _ ty') ->
         MVpointer ty' (PV Prov_none (PVunspecified ty') [])
@@ -1438,7 +1438,7 @@ let impl_union_mval tag_sym memb_ident mval =
 
 
 (* Memory value destructor *)
-let impl_case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruct funion =
+let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval farr fstruct funion =
   match mval with
     | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
         funspec (Pointer AilTypes.no_qualifiers ref_ty)
@@ -1446,10 +1446,11 @@ let impl_case_mem_value mval funspec (* fsymb *) fival ffval fptrval farr fstruc
         funspec (Basic (AilTypes.Integer ity))
     | MVfloating fty (FVunspecified) ->
         funspec (Basic (AilTypes.Floating fty))
-(*
-    | MVsymbolic symb ->
-        fsymb symb
-*)
+
+    | MVinteger ity1 (IV _ (IVconcurRead ity2 sym)) ->
+        (* TODO: check ity1 vs ity2 ? *)
+        fconcur ity2 sym
+    
     | MVinteger ity ival ->
         fival ity ival
     | MVfloating fty fval ->

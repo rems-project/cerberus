@@ -919,7 +919,7 @@ ctype:
 | bty= basic_type
     { Core_ctype.Basic0 bty }
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
-    { Core_ctype.Array0 (ty, n_opt) }
+    { Core_ctype.Array0 (AilTypes.no_qualifiers, ty, n_opt) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
     { Core_ctype.Function0 (ty, List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
 (* TODO *)

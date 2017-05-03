@@ -72,9 +72,12 @@ let rec wf_type S ty =
       return ()
   | Basic _ ->
       return ()
-  | Array elem_ty _ ->
+  | Array qs elem_ty _ ->
       guard (TError "§6.7.6.2#1, sentence 4") (
         is_complete S elem_ty && not (is_function elem_ty)
+      ) >>
+      guard (TError "Ail invariant broken: array of array must have empty qualifiers") (
+        is_array elem_ty --> is_unqualified qs
       ) >>
       wf_type elem_ty
   | Function _ ret_ty params _ ->

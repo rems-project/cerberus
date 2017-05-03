@@ -69,8 +69,8 @@ let rec pp_ctype = function
       !^ "void"
   | Basic0 bty ->
       pp_basic_ctype bty
-  | Array0 (elem_ty, n_opt) ->
-      pp_ctype elem_ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
+  | Array0 (qs, elem_ty, n_opt) ->
+      Pp_ail.pp_qualifiers qs (pp_ctype elem_ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt))
   | Function0 (return_ty, args_tys, is_variadic) ->
         pp_ctype return_ty ^^^ P.parens (
           comma_list (fun (qs, ty) -> Pp_ail.pp_qualifiers qs (pp_ctype ty)) args_tys ^^

@@ -46,7 +46,7 @@ let keywords =
       
       (* for Core values *)
       ("Unit",        T.UNIT_VALUE     );
-      ("              True",  T.TRUE   );
+      ("True",        T.TRUE   );
       ("False",       T.FALSE          );
       ("Ivmax",       T.IVMAX          );
       ("Ivmin",       T.IVMIN          );
@@ -56,7 +56,7 @@ let keywords =
       ("Cfunction",   T.CFUNCTION_VALUE);
       ("Nil",         T.NIL            );
       ("Cons",        T.CONS           );
-      ("              Tuple",  T.TUPLE );
+      ("Tuple",  T.TUPLE );
       ("Array",       T.ARRAY          );
       ("Specified",   T.SPECIFIED      );
       

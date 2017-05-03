@@ -193,58 +193,58 @@ let rec typeof_object_value loc env oval =
    | OVpointer _ ->
        E.return OTy_pointer
    | OVcfunction nm ->
-(*       E.return OTy_cfunction *)
-        match Map.lookup nm env.decls with
-          | Just (TDproc ret_bTy bTys) ->
-              match ret_bTy with
-                | BTy_unit ->
-                    E.return Nothing
-                | _ ->
-                    match oTy_of_bTy ret_bTy with
-                      | Just ret_oTy ->
-                          E.return (Just ret_oTy)
-                      | Nothing ->
-                          E.fail loc (CoreTyping_TODO "Core procedures used as C functions must return unit or an object value")
-                    end
-              end >>= fun ret_oTy_opt ->
-              
-              match List.dest_init bTys with
-                | Just (bTys', last_bTy) ->
-                    E.guard (List.all (fun z -> z = BTy_object OTy_pointer) bTys')
-                      loc (CoreTyping_TODO "Core procedures used as C functions must only have pointer \
-                                            parameters (expect for the last one that may be a list of \
-                                            (ctype, pointer), for variadic C functions) (1)") >>
-                    match last_bTy with
-                      | BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ->
-                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys') true)
-                      | BTy_object OTy_pointer ->
-                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys' + 1) false)
-                      | bTy ->
-                          E.fail loc (CoreTyping_TODO ("Core procedures used as C functions must only have pointer \
+       match Map.lookup nm env.decls with
+         | Just (TDproc ret_bTy bTys) ->
+             match ret_bTy with
+               | BTy_unit ->
+                   E.return Nothing
+               | _ ->
+                   match oTy_of_bTy ret_bTy with
+                     | Just ret_oTy ->
+                         E.return (Just ret_oTy)
+                     | Nothing ->
+                         E.fail loc (CoreTyping_TODO "Core procedures used as C functions must return unit or an object value")
+                   end
+             end >>= fun ret_oTy_opt ->
+             
+             match List.dest_init bTys with
+               | Just (bTys', last_bTy) ->
+                   E.guard (List.all (fun z -> z = BTy_object OTy_pointer) bTys')
+                     loc (CoreTyping_TODO "Core procedures used as C functions must only have pointer \
+                                           parameters (expect for the last one that may be a list of \
+                                           (ctype, pointer), for variadic C functions) (1)") >>
+                   match last_bTy with
+                     | BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ->
+                           E.return (OTy_cfunction ret_oTy_opt (List.length bTys') true)
+                     | BTy_object OTy_pointer ->
+                           E.return (OTy_cfunction ret_oTy_opt (List.length bTys' + 1) false)
+                     | bTy ->
+                         E.fail loc (CoreTyping_TODO ("Core procedures used as C functions must only have pointer \
                                                        parameters (expect for the last one that may be a list of \
                                                        (ctype, pointer), for variadic C functions) (2)" ^ Pp.stringFromCore_core_base_type bTy))
-                    end
-                | Nothing ->
-                    E.return (OTy_cfunction ret_oTy_opt 0 false)
-              end
-          | Just _ ->
-              E.fail loc (CoreTyping_TODO ("found a def in a cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
-          | Nothing ->
-              E.fail loc (CoreTyping_TODO ("unresolved sym in cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
-        end
+                   end
+               | Nothing ->
+                   E.return (OTy_cfunction ret_oTy_opt 0 false)
+             end
+         | Just _ ->
+             E.fail loc (CoreTyping_TODO ("found a def in a cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+         | Nothing ->
+             E.fail loc (CoreTyping_TODO ("unresolved sym in cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+       end
    | OVarray [] ->
        E.fail loc EmptyArray
-   | OVarray (oval'::ovals') ->
-       typeof_object_value loc env oval' >>= fun oTy ->
-       E.mapM (fun oval ->
-         typeof_object_value loc env oval >>= fun oTy' ->
+   | OVarray (lval'::lvals') ->
+       typeof_loaded_value loc env lval' >>= fun oTy ->
+       E.mapM (fun lval ->
+         typeof_loaded_value loc env lval >>= fun oTy' ->
          if oTy <> oTy' then
            E.fail loc (HeterogenousArray oTy oTy')
          else
            E.return ()
-       ) ovals' >>
+       ) lvals' >>
        E.return (OTy_array oTy)
    | OVstruct tag_sym _ ->
+       let () = Debug.warn "Core typing, OVstruct doesn't check the validity of the member" in
        E.return (OTy_struct tag_sym)
 (*
        E.foldlM (fun ((found_ident, mval), (expected_ident, expected_ty)) () ->
@@ -259,15 +259,25 @@ let rec typeof_object_value loc env oval =
        E.return (OTy_union tag_sym)
   end
 
+(* val     typeof_loaded_value: Loc.t -> typing_env -> loaded_value -> E.eff core_object_type *)
+and typeof_loaded_value loc env (lval: loaded_value) : E.eff core_object_type =
+  match lval with
+    | LVspecified oval ->
+        typeof_object_value loc env oval
+    | LVunspecified ty ->
+        error "typeof_loaded_value, LVunspecified"
+  end
+
+
 
 val     typeof_value: Loc.t -> typing_env -> Core.value -> E.eff core_base_type
 let rec typeof_value loc env cval =
   match cval with
     | Vobject oval ->
         BTy_object <$> typeof_object_value loc env oval
-    | Vspecified oval ->
+    | Vloaded (LVspecified oval) ->
         BTy_loaded <$> typeof_object_value loc env oval
-    | Vunspecified ty ->
+    | Vloaded (LVunspecified ty) ->
         match core_object_type_of_ctype ty with
           | Just oTy ->
               E.return (BTy_loaded oTy)

@@ -624,6 +624,8 @@ let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
         PEis_signed (remove_conv_int_pexpr pe)
     | PEis_unsigned pe ->
         PEis_unsigned (remove_conv_int_pexpr pe)
+    | _pe ->
+        _pe
   end
 
 let rec remove_conv_int expr =
@@ -680,6 +682,8 @@ let rec remove_conv_int expr =
         expr
     | Eloc loc e ->
         Eloc loc (remove_conv_int e)
+    | _ ->
+        expr
   end
 
 and remove_conv_int_action_ act_ =
@@ -696,12 +700,8 @@ and remove_conv_int_action_ act_ =
         Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
         RMW (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
-(*
-    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeStrong (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
-    | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-        CompareExchangeWeak (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
-*)
+    | Fence mo ->
+        Fence mo
   end
 
 and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)
@@ -942,6 +942,12 @@ let rec pure_propagation2 expr =
           | (Nothing, Nothing) ->
               Eif pe1 e2' e3'
         end
+    | Ecase pe pat_es ->
+        (* TODO: do more *)
+        let pat_es' = List.map (fun (pat, e) ->
+          (pat, pure_propagation2 e)
+        ) pat_es in
+        Ecase pe pat_es'
     | Eunseq es ->
         (* TODO: do better *)
         let es' = List.map pure_propagation2 es in

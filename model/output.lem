@@ -52,6 +52,11 @@ type conversion_specifier =
   | CS_n
   | CS_percent
 
+instance (Eq conversion_specifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
 type conversion_specification = <|
   cp_flags:                flags;
   cp_field_width:          maybe field_width;
@@ -330,7 +335,7 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         Mem.bind (Mem.load elem_ty ptrval) (fun (_, mval) ->
         Mem.case_mem_value mval
           (fun _ -> error "Output.load_character_array, unspecified")
-(*          (fun _ -> error "Output.load_character_array, Symbolic") *)
+          (fun _ _ -> error "Output.load_character_array, concurrency read")
           (fun ity ival ->
             Mem.case_integer_value ival
               (fun n -> if n = 0 then
@@ -613,7 +618,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 match eval_conv (*arg_ty*) conv_ty mval with
                   | Left err ->
                       Mem.return (Left err)
-                  | Right (U.Defined (Core.Vspecified (Core.OVinteger ival))) ->
+                  | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
                       match Mem_aux.integerFromIntegerValue ival with
                         | Just n ->
                             Mem.return $ Right (U.return (
@@ -624,9 +629,10 @@ let convert eval_conv prec_opt lm_opt cspec args =
                             ))
                         | Nothing ->
                             error ("WIP: convert --> not a concrete integer: " ^
-                                   stringFromMemValue (fromJust "Output, not a concrete integer" $ Core_aux.memValueFromValue conv_ty (Core.Vspecified (Core.OVinteger ival))))
+                                   stringFromMemValue (fromJust "Output, not a concrete integer" $
+                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))))
                       end
-                  | Right (U.Defined (Core.Vunspecified _)) ->
+                  | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
                   | Right (U.Defined _) ->
                       error "WIP: convert --> not an integer"
@@ -638,9 +644,9 @@ let convert eval_conv prec_opt lm_opt cspec args =
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
                 match snd (Core_aux.valueFromMemValue mval) with
-                  | Core.Vunspecified _ ->
+                  | Core.Vloaded (Core.LVunspecified _) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Core.Vspecified (Core.OVinteger ival) ->
+                  | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->
                       match Mem_aux.integerFromIntegerValue ival with
                         | Just n ->
                             Mem.return $ Right (U.return (
@@ -650,7 +656,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                                 (cont n, args')
                             ))
                       end
-                  | Core.Vspecified (Core.OVfloating fval) ->
+                  | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
                       Mem.return $ Right (U.return (
                         Mem.case_fval fval
                           (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
@@ -782,11 +788,14 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
-              Mem.load arg_ty arg_ptr >>= function
-                | (_, Defacto_memory_types.MVpointer _ ptrval) ->
+              Mem.load arg_ty arg_ptr >>= fun (_, mval) ->
+              match Mem_aux.pointerValueFromMemValue mval with
+                | Just (_, ptrval) ->
                     Mem.return (
                       Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
                     )
+                | Nothing ->
+                    error "WIP[error message], Output => CS_p, didn't load a pointer"
               end
           | _ ->
               Mem.return (

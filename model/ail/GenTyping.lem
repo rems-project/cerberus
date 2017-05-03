@@ -329,7 +329,7 @@ let annotate_stringLiteral (pref_opt, strs) =
 
 (* TODO: check the type *)
   E.return (AilEstr (pref_opt, strs),
-          GenRValueType (GenArray elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))
+          GenRValueType (GenArray no_qualifiers elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))
          )
 
 
@@ -368,7 +368,7 @@ let rec annotate_constant cst =
           | (_, genTy)::a_csts' ->
               if List.all (fun (_, genTy') -> genTy = genTy') a_csts' then
                 E.return (ConstantArray (List.map fst a_csts),
-                          GenRValueType (GenArray (* TODO *) Void (Just $ integerFromNat (List.length a_csts))))
+                          GenRValueType (GenArray no_qualifiers (* TODO *) Void (Just $ integerFromNat (List.length a_csts))))
               else
                 E.fail Loc.unknown (TError "array constant elements don't all have the same type")
         end
@@ -509,7 +509,7 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
         E.mapM (maybe (E.return Nothing) (fun z -> Just <$> annotate_rvalue z)) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
         E.return (AilEarray elem_ty $ List.map (maybe Nothing (fun z -> Just (fst z))) xs,
-                  GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))))
+                  GenRValueType (GenArray no_qualifiers elem_ty (Just (integerFromNat $ List.length xs))))
 
 (*
         (* TODO: I have pretty much no idea what I'm doing *)
@@ -992,7 +992,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 1"
           end
         else
           E.fail loc (TError_TODO 29)
@@ -1004,7 +1004,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 2"
           end
         else
           E.fail Loc.unknown (TError_TODO 30)
@@ -1016,7 +1016,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 3"
           end
         else
           E.fail Loc.unknown (TError_TODO 31)
@@ -1028,7 +1028,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 4"
           end
         else
           E.fail Loc.unknown (TError_TODO 32)
@@ -1040,7 +1040,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 5"
           end
         else
           E.fail Loc.unknown (TError_TODO 33)
@@ -1052,7 +1052,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 6"
           end
         else
           E.fail Loc.unknown (TError_TODO 34)
@@ -1064,7 +1064,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "promotion failed on well typed binary arithmetic."
+                error "promotion failed on well typed binary arithmetic. 1"
           end
         else E.fail Loc.unknown (TError_TODO 35)
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
@@ -1075,7 +1075,7 @@ TODO
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "promotion failed on well typed binary arithmetic."
+                error "promotion failed on well typed binary arithmetic. 2"
           end
         else E.fail Loc.unknown (TError_TODO 36)
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
@@ -1091,7 +1091,8 @@ STD_ "§6.5.2.1#1" $
           | Just gty ->
               E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error ("usual_arithmetic failed on two valid genTypes. 7 ==> " ^
+                       Pp.stringFromAil_genType gty1 ^ "<->" ^ Pp.stringFromAil_genType gty2)
           end
         else
           E.fail Loc.unknown (TError_TODO 37)
@@ -1107,7 +1108,7 @@ STD_ "§6.5.2.1#1" $
             | Just gty ->
                 E.return (AilEbinary e1' bop e2', GenRValueType gty)
             | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes."
+                error "usual_arithmetic failed on two valid genTypes. 8"
           end
         else
           E.fail Loc.unknown (TError_TODO 38)
@@ -1310,7 +1311,7 @@ and annotate_assignee a s g =
 
 
 
-
+(*
 (* returns both the annotated intializer and the infered type (used for arrays) *)
 and annotate_initialization annot sigm gamm ty e =
   (* §6.7.9#3 *)
@@ -1339,20 +1340,22 @@ and annotate_initialization annot sigm gamm ty e =
   else if AilTypesAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
     error "WIP: annotate_initialization, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
   
-          (* STD §6.7.9#16 *)
+  (* STD §6.7.9#16 *)
 (*          else if  then *) (* KKK *)
   (* TODO: at this point we should now have a non character array *)
   else if AilTypesAux.is_array ty then
     (* TODO: check the std. (not that it says anything useful here ...) *)
     annotate_expression annot sigm gamm e >>= fun a_e ->
     match (ty, Annotation.type_of annot a_e) with
-      | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n2))) ->
+      | (Array elem_qs1 elem_ty1 Nothing, GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
+          (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
           if AilTypesAux.compatible elem_ty1 elem_ty2 then
             E.return (a_e, Array elem_ty1 (Just n2))
           else
             error ("TODO(annotate_initialisation, 1): error message: array object definition, types didn't match ==> " ^
                    Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
-     | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+     | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
+          (* TODO: check, but I don't think we need to do anything regarding qualifiers here *)
          if AilTypesAux.compatible elem_ty1 elem_ty2 && n1 = n2 then
            E.return (a_e, Array elem_ty1 (Just n1))
          else
@@ -1364,7 +1367,7 @@ and annotate_initialization annot sigm gamm ty e =
   else
     error "WIP: annotate_initialization, final case"
 
-
+*)
 
 
 
@@ -1408,14 +1411,14 @@ and annotate_definition_aux a s g (ty, e) =
         (* TODO: check the std. (not that it says anything useful here ...) *)
         annotate_expression a s g e >>= fun a_e ->
         match (ty, Annotation.type_of a a_e) with
-          | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
+          | (Array _ elem_ty1 Nothing, GenRValueType (GenArray _ elem_ty2 (Just n))) ->
              (* TODO: check that is correct to unqualify *)
               if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
-         | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+         | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
              (* TODO: check that is correct to unqualify *)
               if AilTypesAux.compatible (AilTypesAux.unqualify elem_ty1) (AilTypesAux.unqualify elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)

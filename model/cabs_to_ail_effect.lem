@@ -794,9 +794,10 @@ let register_function_declaration loc sym is_proto decl =
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_external_object_declaration sym decl =
+let register_external_object_declaration sym ((_,qs,ty) as decl) =
   return (
-    Debug.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^ "'")
+    Debug.print_debug 7 ("DESUGARING attempting to register external object declaration of `" ^ show sym ^
+                         "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
   ) >>
   
   State_exception.read (fun st ->

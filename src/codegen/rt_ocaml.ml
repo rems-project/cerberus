@@ -153,8 +153,8 @@ let store_array cty size =
   in
   store (fun e -> M.array_mval (mk_array e)) (C.Array0 (cty, size))
 *)
-let store_array cty size e1 le2 =
-  M.store (C.Array0 (cty, size)) e1 (
+let store_array q cty size e1 le2 =
+  M.store (C.Array0 (q, cty, size)) e1 (
     match le2 with
     | Specified e2 ->
       begin match cty with
@@ -184,7 +184,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
         throw_error
         (fun _ -> throw_error)
         (fun _ -> throw_error)
-    in Either.Right (Undefined.Defined0 (Core.Vspecified (Core.OVinteger n)))
+    in Either.Right (Undefined.Defined0 (Core.Vloaded (Core.LVspecified (Core.OVinteger n))))
   in
   Output.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function

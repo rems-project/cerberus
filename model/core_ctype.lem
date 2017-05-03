@@ -52,7 +52,7 @@ end
 type ctype =
  | Void
  | Basic of AilTypes.basicType
- | Array of ctype * maybe integer
+ | Array of AilTypes.qualifiers * ctype * maybe integer
  | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
  | Pointer of AilTypes.qualifiers * ctype
  | Atomic of ctype
@@ -228,8 +228,8 @@ let rec ctypeEqual ty1 ty2 =
         true
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
-    | (Array ty1 n1_opt, Array ty2 n2_opt) ->
-        ctypeEqual ty1 ty2 && n1_opt = n2_opt
+    | (Array qs1 ty1 n1_opt, Array qs2 ty2 n2_opt) ->
+        qs1 = qs2 && ctypeEqual ty1 ty2 && n1_opt = n2_opt
     | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
         ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip tys1 tys2) && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
@@ -347,7 +347,7 @@ and setElemCompare_ctype ty1 ty2 =
         (0: nat)
     | Basic _ ->
         1
-    | Array _ _ ->
+    | Array _ _ _ ->
         2
     | Function _ _ _ ->
         3
@@ -365,10 +365,15 @@ and setElemCompare_ctype ty1 ty2 =
   match (ty1, ty2) with
     | (Basic bty1, Basic bty2) ->
         setElemCompare bty1 bty2
-    | (Array elem_ty1 n_opt1, Array elem_ty2 n_opt2) ->
-        match setElemCompare_ctype elem_ty1 elem_ty2 with
+    | (Array qs1 elem_ty1 n_opt1, Array qs2 elem_ty2 n_opt2) ->
+        match setElemCompare qs1 qs2 with
           | EQ ->
-              setElemCompare n_opt1 n_opt2
+              match setElemCompare_ctype elem_ty1 elem_ty2 with
+                | EQ ->
+                    setElemCompare n_opt1 n_opt2
+                | x ->
+                    x
+              end
           | x ->
               x
         end

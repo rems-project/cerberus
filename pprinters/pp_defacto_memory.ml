@@ -112,7 +112,7 @@ and pp_mem_value = function
       !^ "MVunspecified" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
 *)
   | MVinteger (ity, ival) ->
-      !^ "MVinteger" ^^ P.parens (Pp_ail.pp_integerType_raw ity ^^ P.comma ^^^ pp_integer_value ival)
+      !^ "MVinteger" ^^ P.parens (Pp_ail_raw.pp_integerType_raw ity ^^ P.comma ^^^ pp_integer_value ival)
   | MVfloating (fty, FVconcrete str) ->
       !^ ("MVfloating(" ^ str ^ ")")
   | MVfloating (fty, FVunspecified) ->

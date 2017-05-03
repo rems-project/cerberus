@@ -99,7 +99,7 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
@@ -111,8 +111,8 @@ ocaml_byte:
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.d.ml > src/main_.d.ml; \
-	  ./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.d.byte; \
+	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 

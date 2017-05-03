@@ -20,6 +20,41 @@ type core_object_type =  (* types for C objects *)
  | OTy_struct of Symbol.sym
  | OTy_union of Symbol.sym
 
+let rec eq_core_object_type oTy1 oTy2 =
+  let ord = function
+    | OTy_integer ->
+        (0: nat)
+    | OTy_floating ->
+        1
+    | OTy_pointer ->
+        2
+    | OTy_cfunction _ _ _ ->
+        3
+    | OTy_array _ ->
+        4
+    | OTy_struct _ ->
+        5
+    | OTy_union _ ->
+        6
+  end in
+  match (oTy1, oTy2) with
+    | (OTy_cfunction ret_oTy_opt1 n1 b1, OTy_cfunction ret_oTy_opt2 n2 b2) ->
+           maybeEqualBy eq_core_object_type ret_oTy_opt1 ret_oTy_opt2
+        && n1 = n2 && b1 = b2
+    | (OTy_array oTy1, OTy_array oTy2) ->
+        eq_core_object_type oTy1 oTy2
+    | (OTy_struct sym1, OTy_struct sym2) ->
+        sym1 = sym2
+    | (OTy_union sym1, OTy_union sym2) ->
+        sym1 = sym2
+    | _ ->
+        ord oTy1 = ord oTy2
+  end
+instance (Eq core_object_type)
+  let (=) = eq_core_object_type
+  let (<>) = fun x y -> not (eq_core_object_type x y)
+end
+
 
 type core_base_type =  (* Core base types *)
  | BTy_unit (* unit *)
@@ -30,6 +65,39 @@ type core_base_type =  (* Core base types *)
  | BTy_object of core_object_type (* C object value *)
  | BTy_loaded of core_object_type (* core_object_type or unspecified value *)
 
+let rec eq_core_base_type bTy1 bTy2 =
+  let ord = function
+    | BTy_unit ->
+        (0: nat)
+    | BTy_boolean ->
+        1
+    | BTy_ctype ->
+        2
+    | BTy_list _ ->
+        3
+    | BTy_tuple _ ->
+        4
+    | BTy_object _ ->
+        5
+    | BTy_loaded _ ->
+        6
+  end in
+  match (bTy1, bTy2) with
+    | (BTy_list bTy1', BTy_list bTy2') ->
+        eq_core_base_type bTy1' bTy2'
+    | (BTy_tuple bTys1, BTy_tuple bTys2) ->
+        listEqualBy eq_core_base_type bTys1 bTys2
+    | (BTy_object oTy1, BTy_object oTy2) ->
+        oTy1 = oTy2
+    | (BTy_loaded oTy1, BTy_loaded oTy2) ->
+        oTy1 = oTy2
+    | _ ->
+        ord bTy1 = ord bTy2
+  end
+instance (Eq core_base_type)
+  let (=) = eq_core_base_type
+  let (<>) = fun x y -> not (eq_core_base_type x y)
+end
 
 type core_type =  (* Core types *)
  | TyBase of core_base_type (* pure base type *)
@@ -107,16 +175,23 @@ type generic_object_value 'sym =  (* C object values *)
  | OVfloating of Mem.floating_value (* floating-point value *)
  | OVpointer of Mem.pointer_value (* pointer value *)
  | OVcfunction of (generic_name 'sym) (* C function pointer *)
- | OVarray of list (generic_object_value 'sym) (* C array value *)
+ | OVarray of list (generic_loaded_value 'sym) (* C array value *)
  | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.sym * Cabs.cabs_identifier * Mem.mem_value (* C union value *)
 
+and generic_loaded_value 'sym =
+ | LVspecified of generic_object_value 'sym (* non-unspecified loaded value *)
+ | LVunspecified of ctype (* unspecified loaded value *)
 
 type generic_value 'sym =  (* Core values *)
  | Vconstrained of list (list Mem.mem_constraint2 * (generic_value 'sym))
+(*
  | Vobject of (generic_object_value 'sym) (* C object value *)
  | Vspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
  | Vunspecified of ctype (* unspecified loaded value *)
+*)
+ | Vobject of generic_object_value 'sym
+ | Vloaded of generic_loaded_value 'sym
  | Vunit (* unit *)
  | Vtrue (* true *)
  | Vfalse (* false *)
@@ -252,6 +327,7 @@ type generic_file 'bty 'a = <|
 
 type name            = generic_name Symbol.sym
 type object_value    = generic_object_value Symbol.sym
+type loaded_value    = generic_loaded_value Symbol.sym
 type value           = generic_value Symbol.sym
 type ctor            = generic_ctor unit
 type pattern         = generic_pattern unit Symbol.sym
