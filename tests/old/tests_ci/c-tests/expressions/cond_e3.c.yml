@@ -1,2 +1,0 @@
-expected:
-  - { value: "Specified(20)", stdout: "" }
