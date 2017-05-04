@@ -1,24 +1,42 @@
 (* ocamlbuild wrapper for Cerberus *)
+open Printf
 
+(* Verify UNIX-like system *)
 let () =
   if not Sys.unix then (
-    Printf.fprintf stderr "Cbuild wrapper only works on unix-like systems.";
+    fprintf stderr "Cbuild wrapper only works on unix-like systems.";
     exit 1;
   )
 
 let perm = 0o755
+
+(* Get paths *)
+let cerb_path =
+  let path = Sys.getenv "CERB_PATH" in
+  if path = "" then (
+    fprintf stderr "CERB_PATH not defined!";
+    exit 1;
+  ); path
+
 let cur_path = Sys.getenv "PWD"
 let cbuild_path = cur_path ^ "/_cbuild"
 let src_path = cbuild_path ^ "/src"
 
-let run x = Sys.command x |> ignore
+let csmith_runtime = cerb_path ^ "/tests/csmith/runtime"
+let clib_path = cerb_path ^ "/include/c/libc"
+let posix_path = cerb_path ^ "/include/c/posix"
 
-(* Flags *)
-let set_force () =
-  Printf.sprintf "rm -rf %s" cbuild_path |> run
+let cpp_cmd args =
+  sprintf "--cpp=\"cc -E -nostdinc -undef -I %s -I %s %s\""
+    clib_path posix_path args
 
-let rm_stdcore () =
-  try Sys.remove (cbuild_path ^ "/stdCore.ml") with _ -> ()
+let csmith_args =
+  sprintf "-I %s -DCSMITH_MINIMAL" csmith_runtime
+
+let cerberus args filename =
+  let cmd = sprintf "cerberus --ocaml %s %s" args filename in
+  print_endline cmd;
+  Sys.command cmd
 
 (* Copied from Filename 4.04 *)
 let extension_len name =
@@ -44,12 +62,14 @@ let chop_extension name =
   if l = 0 then invalid_arg "Filename.chop_extension"
   else String.sub name 0 (String.length name - l)
 
+let run x = Sys.command x |> ignore
+
 let copy ?path:(path="$CERB_PATH") src dest =
-  Printf.sprintf "cp -f %s/%s %s" path src dest |> run
+  sprintf "cp -f %s/%s %s" path src dest |> run
 
 let create_file name contents =
-  let lines = List.fold_left (Printf.sprintf "%s\n%s") "" contents in
-  Printf.sprintf "echo '%s' > %s/%s" lines cbuild_path name |> run
+  let lines = List.fold_left (sprintf "%s\n%s") "" contents in
+  sprintf "echo '%s' > %s/%s" lines cbuild_path name |> run
 
 let create_tags () = create_file "_tags"
     ["true: -traverse";
@@ -62,37 +82,29 @@ let create_merlin () = create_file ".merlin"
      "B _build/src"]
 
 let create_cbuild () =
-  let cerb_path = Sys.getenv "CERB_PATH" in
-  if cerb_path = "" then (
-    Printf.fprintf stderr "CERB_PATH not defined!";
-    exit 1;
-  ) else (
-    copy "ocaml_generated/*.{ml,mli}" src_path;
-    copy "pprinters/*.{ml,mli}" src_path;
-    copy "src/codegen/*.ml" src_path;
-    copy "src/*.{ml,mli}" src_path;
-    copy "parsers/coreparser/core_parser_util.ml" src_path;
-    create_tags ();
-    create_merlin ();
-  )
+  copy "ocaml_generated/*.{ml,mli}" src_path;
+  copy "pprinters/*.{ml,mli}" src_path;
+  copy "src/codegen/*.ml" src_path;
+  copy "src/*.{ml,mli}" src_path;
+  copy "parsers/coreparser/core_parser_util.ml" src_path;
+  create_tags ();
+  create_merlin ()
 
-let ocamlbuild filename =
+let run_ocamlbuild filename =
   Sys.chdir cbuild_path;
   (* Check stdCore.ml exists, otherwise create *)
   if not (Sys.file_exists "stdCore.ml") then
-    Printf.sprintf "cerberus --ocaml-corestd" |> run;
-  Printf.sprintf
+    sprintf "cerberus --ocaml-corestd" |> run;
+  sprintf
     "ocamlbuild -pkgs pprint,zarith -libs nums,unix,str %s" filename |> run;
-  Printf.sprintf
-    "ln -sf %s/%s %s/%s" cbuild_path filename cur_path filename |> run
+  sprintf
+    "cp -L %s/%s %s/%s" cbuild_path filename cur_path filename |> run
 
 let build filename mode =
   let basename = Filename.basename (chop_extension filename) in
   copy ~path:cur_path (basename ^ ".ml") cbuild_path;
-  ocamlbuild (basename ^ mode)
+  run_ocamlbuild (basename ^ mode)
 
-let cerberus filename =
-  Printf.sprintf "cerberus --ocaml %s" filename |> Sys.command
 
 let check_and_build () =
   if not (Sys.file_exists cbuild_path) || not (Sys.is_directory cbuild_path) then (
@@ -101,15 +113,24 @@ let check_and_build () =
     create_cbuild ()
   )
 
+(* Flags *)
+let csmith = ref false
+
+let set_force () =
+  sprintf "rm -rf %s" cbuild_path |> run
+
+let rm_stdcore () =
+  try Sys.remove (cbuild_path ^ "/stdCore.ml") with _ -> ()
+
 let set_basic_mem () =
   check_and_build ();
-  Printf.sprintf
+  sprintf
     "sed -i '' 's/Defacto\\_memory\\_types/Basic\\_mem\\_types/g' %s/*.{ml,mli}"
     src_path |> run;
-  Printf.sprintf
+  sprintf
     "sed -i '' 's/Defacto\\_memory/Basic\\_mem/g' %s/*.{ml,mli}"
     src_path |> run;
-  Printf.sprintf
+  sprintf
     "sed -i '' 's/defacto\\_memory/basic\\_mem/g' %s/pp_mem.ml"
     src_path |> run
 
@@ -118,15 +139,16 @@ let main arg =
   let filename = cur_path ^ "/" ^ arg in
   (match extension filename with
    | ".c" ->
-     if cerberus filename = 0 then (
+     let args = if !csmith then cpp_cmd csmith_args else "" in
+     if cerberus args filename = 0 then (
        build filename ".native"
      ) else (
-       Printf.fprintf stderr "Cerberus failed!"; exit 1
+       fprintf stderr "Cerberus failed!"; exit 1
      )
    | ".ml"
    | ".native" -> build filename ".native"
    | ".byte" -> build filename ".byte"
-   | _ -> Printf.fprintf stderr "Unknown action for file: %s" filename; exit 1
+   | _ -> fprintf stderr "Unknown action for file: %s" filename; exit 1
   )
 
 let () =
@@ -134,6 +156,7 @@ let () =
     ("--corestd", Arg.Unit rm_stdcore, "Rebuild StdCore.ml");
     ("--basic", Arg.Unit set_basic_mem, "Use basic memory model");
     ("-f", Arg.Unit set_force, "Force the creation of _cbuild");
+    ("--csmith", Arg.Set csmith, "Add necesary flags to run csmith files");
     ("--clean", Arg.Unit set_force, "Clean cbuild files")
   ] in
   let usage = "Ocaml wrapper for Cerberus: cbuild [file.{c,ml,native,byte}]" in
