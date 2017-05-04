@@ -47,12 +47,19 @@ let chop_extension name =
 let copy ?path:(path="$CERB_PATH") src dest =
   Printf.sprintf "cp -f %s/%s %s" path src dest |> run
 
-let create_tags () =
-  let tags =
+let create_file name contents =
+  let lines = List.fold_left (Printf.sprintf "%s\n%s") "" contents in
+  Printf.sprintf "echo '%s' > %s/%s" lines cbuild_path name |> run
+
+let create_tags () = create_file "_tags"
     ["true: -traverse";
      "\"src\":include"]
-    |> List.fold_left (Printf.sprintf "%s\n%s") ""
-  in Printf.sprintf "echo '%s' > %s/_tags" tags cbuild_path |> run
+
+let create_merlin () = create_file ".merlin"
+    ["S .";
+     "S src";
+     "B _build";
+     "B _build/src"]
 
 let create_cbuild () =
   let cerb_path = Sys.getenv "CERB_PATH" in
@@ -65,7 +72,8 @@ let create_cbuild () =
     copy "src/codegen/*.ml" src_path;
     copy "src/*.{ml,mli}" src_path;
     copy "parsers/coreparser/core_parser_util.ml" src_path;
-    create_tags ()
+    create_tags ();
+    create_merlin ();
   )
 
 let ocamlbuild filename =

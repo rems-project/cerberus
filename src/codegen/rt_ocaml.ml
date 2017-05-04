@@ -5,12 +5,22 @@ module M = Mem
 module T = AilTypes
 module C = Core_ctype
 
+(* Undefined Behaviour *)
 exception Undefined of string
 exception Error of string
-exception No_value
+
+(* Keep track of the last memory operation, for error display *)
+type memop = Store | Load | Create | Alloc | None
+let last_memop = ref None
+
+let show_memop = function
+  | Store -> "store"
+  | Load -> "load"
+  | Create -> "create"
+  | Alloc -> "alloc"
+  | None -> raise (Error "unknown last memop")
 
 let (>>=) = M.bind0
-let (>>) x y = x >>= fun _ -> y
 let return = M.return0
 
 (* Runtime flags *)
@@ -26,7 +36,9 @@ let set_global (f, x) =
   f return () >>= fun y -> x := y; return ()
 
 let init_globals glbs =
-  List.fold_left (fun acc (f, x) -> acc >> set_global (f, x)) (return ()) glbs
+  List.fold_left
+    (fun acc (f, x) -> acc >>= fun _ -> set_global (f, x))
+    (return ()) glbs
 
 let null_ptr = M.null_ptrval C.Void0
 
@@ -116,20 +128,28 @@ let lt_ptrval p q = M.lt_ptrval p q
 let gt_ptrval p q = M.gt_ptrval p q
 let le_ptrval p q = M.le_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
+let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 
 (* Memory actions wrap *)
 
-let create pre al ty = M.allocate_static 0 pre al ty
+let create pre al ty =
+  last_memop := Create;
+  M.allocate_static 0 pre al ty
 
-let alloc pre al n = M.allocate_dynamic 0 pre al n
+let alloc pre al n =
+  last_memop := Alloc;
+  M.allocate_dynamic 0 pre al n
 
-let load_integer ity e = M.load (C.Basic0 (T.Integer ity)) e
-  >>= return % get_integer % snd
+let load_integer ity e =
+  last_memop := Load;
+  M.load (C.Basic0 (T.Integer ity)) e >>= return % get_integer % snd
 
-let load_pointer q cty e = M.load (C.Pointer0 (q, cty)) e
-  >>= return % get_pointer % snd
+let load_pointer q cty e =
+  last_memop := Load;
+  M.load (C.Pointer0 (q, cty)) e >>= return % get_pointer % snd
 
 let store f ty e1 e2 =
+  last_memop := Store;
   let e = match e2 with
     | Specified e -> f e
     | Unspecified ty -> M.unspecified_mval ty
@@ -161,6 +181,7 @@ let store_array cty size =
   store (fun e -> M.array_mval (mk_array e)) (C.Array0 (cty, size))
 *)
 let store_array q cty size e1 le2 =
+  last_memop := Store;
   M.store (C.Array0 (q, cty, size)) e1 (
     match le2 with
     | Specified e2 ->
@@ -217,11 +238,28 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
 
 exception Exit of (M.integer_value loaded)
 
+let constraints = "CONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
+
 let print_batch res =
   Printf.printf
     "Defined {value: \"%s\", stdout: \"%s\", blocked: \"false\"}\n%s"
-    res !stdout
-    "CONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
+    res !stdout constraints
+
+let print_err_batch e =
+  let err = match e with
+    | Mem_common.MerrUnitialised str ->
+        "MerrUnitialised \"" ^  (str ^ "\"")
+    | Mem_common.MerrInternal str ->
+        "MerrInternal \"" ^  (str ^ "\"")
+    | Mem_common.MerrOther str ->
+        "MerrOther \"" ^  (str ^ "\"")
+    | Mem_common.MerrReadFromDead ->
+        "MerrReadFromDead"
+    | Mem_common.MerrWIP str ->
+        "Memory WIP: " ^ str
+  in Printf.printf
+    "Killed {msg: memory layout error (%s seq) ==> %s}\n%s"
+    (show_memop !last_memop) err constraints
 
 let string_of_specified n =
   Printf.sprintf "Specified(%s)" (Nat_big_num.to_string n)
@@ -231,8 +269,12 @@ let string_of_unspec cty =
 
 let quit f =
   try
-    let _ = M.runMem (f (fun x -> raise (Exit x)) ()) M.initial_mem_state in
-    raise (Error "continuation not raised")
+    match M.runMem (f (fun x -> raise (Exit x)) ()) M.initial_mem_state with
+    | [] -> raise (Error "continuation not raised: no result from runMem")
+    | [Either.Left e] -> if batch then print_err_batch e
+    | [Either.Right _] ->
+      raise (Error "continuation not raised: one result from runMem")
+    | _ -> raise (Error "continuation not raised: multiple results from runMem")
   with
   | Exit x ->
     (match x with
@@ -254,5 +296,5 @@ let run tags gls main =
   begin fun cont args ->
     Tags.set_tagDefs (create_tag_defs_map tags);
     init_globals gls
-    >> main cont args
+    >>= fun _ -> main cont args
   end |> quit

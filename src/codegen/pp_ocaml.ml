@@ -502,16 +502,16 @@ let print_pure_expr globs pe =
 
 let print_memop globs memop pes =
   (match memop with
-  | Mem.PtrEq -> !^"A.eq_ptrval"
-  | Mem.PtrNe -> !^"A.ne_ptrval"
-  | Mem.PtrGe -> !^"A.ge_ptrval"
-  | Mem.PtrLt -> !^"A.lt_ptrval"
-  | Mem.PtrGt -> !^"A.gt_ptrval"
-  | Mem.PtrLe -> !^"A.le_ptrval"
-  | Mem.Ptrdiff -> !^"A.diff_ptrval"
-  | Mem.IntFromPtr -> !^"A.intcast_ptrval"
-  | Mem.PtrFromInt -> !^"A.ptrvast_ival"
-  | Mem.PtrValidForDeref -> !^"A.validForDeref_ptrval"
+   | Mem.PtrEq -> !^"A.eq_ptrval"
+   | Mem.PtrNe -> !^"A.ne_ptrval"
+   | Mem.PtrGe -> !^"A.ge_ptrval"
+   | Mem.PtrLt -> !^"A.lt_ptrval"
+   | Mem.PtrGt -> !^"A.gt_ptrval"
+   | Mem.PtrLe -> !^"A.le_ptrval"
+   | Mem.Ptrdiff -> !^"A.diff_ptrval"
+   | Mem.IntFromPtr -> !^"A.intcast_ptrval"
+   | Mem.PtrFromInt -> !^"A.ptrvast_ival"
+   | Mem.PtrValidForDeref -> !^"A.valid_for_deref_ptrval"
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
 let choose_load_type (Pexpr (_, PEval cty)) =

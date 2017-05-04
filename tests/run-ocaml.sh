@@ -15,7 +15,7 @@ function test {
   rm -rf ${1%.c}.native
   cbuild $1 > /dev/null 2> /dev/null
   if [ "$?" -ne "0" ]; then
-    echo -e "Test $1: Build fail..."
+    echo -e "Test $1: Cerberus failed..."
     return
   fi
 
