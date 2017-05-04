@@ -2,7 +2,6 @@
 #include "csmith.h"
 
 
-/*
 static long __undefined;
 
 
@@ -31,20 +30,17 @@ static int32_t  func_1(void)
     return g_19;
 }
 
-*/
 
 
 
 int main (void)
 {
-  /*
     int print_hash_value = 0;
     platform_main_begin();
     crc32_gentab();
-    //func_1();
+    func_1();
     transparent_crc(g_3, "g_3", print_hash_value);
     transparent_crc(g_19, "g_19", print_hash_value);
     platform_main_end(crc32_context ^ 0xFFFFFFFFUL, print_hash_value);
-    */
     return 0;
 }

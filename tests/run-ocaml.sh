@@ -2,10 +2,7 @@
 
 source tests.sh
 
-echo "Copying tests..."
 mkdir -p tmp
-mkdir -p tmp/ci
-cp ci/*.c tmp/
 cd tmp
 
 pass=0
@@ -36,13 +33,44 @@ function test {
 
 }
 
-# Running ci tests
+function run_ci {
+  # Running ci tests
+  for file in "${citests[@]}"
+  do
+    test $file ci
+  done
 
-for file in "${citests[@]}"
-do
-  test $file ci
-done
+  echo "PASSED: $pass"
+  echo "FAILED: $fail"
+}
 
-echo "PASSED: $pass"
-echo "FAILED: $fail"
-
+if [ $# -eq 0 ]; then
+  cp ../ci/*.c .
+  run_ci
+else
+  if [ "$1" == "csmith" ]; then
+    cp ../csmith/small_int_arith/*.c .
+    for f in csmith_*.c
+    do
+      echo "File: $f"
+      cbuild --csmith $f > /dev/null 2> /dev/null
+      if [ $? -eq 0 ]; then
+        ./${f%.c}.native
+      else
+        echo "FAIL"
+      fi
+    done
+  else
+    cp ../suite/$1/*.c .
+    for f in *.c
+    do
+      echo "File: $f"
+      cbuild $f > /dev/null 2> /dev/null
+      if [ $? -eq 0 ]; then
+        ./${f%.c}.native
+      else
+        echo "FAIL"
+      fi
+    done
+  fi
+fi
