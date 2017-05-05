@@ -9,6 +9,9 @@ module C = Core_ctype
 exception Undefined of string
 exception Error of string
 
+let (>>=) = M.bind0
+let return = M.return0
+
 (* Keep track of the last memory operation, for error display *)
 type memop = Store | Load | Create | Alloc | None
 let last_memop = ref None
@@ -20,25 +23,13 @@ let show_memop = function
   | Alloc -> "alloc"
   | None -> raise (Error "unknown last memop")
 
-let (>>=) = M.bind0
-let return = M.return0
-
 (* Runtime flags *)
 let batch =
   try ignore (Sys.getenv "CERB_BATCH"); true
   with _ -> false
 
+(* stdout if in batch mode *)
 let stdout = ref ""
-
-(* init/set globals before calling main *)
-
-let set_global (f, x) =
-  f return () >>= fun y -> x := y; return ()
-
-let init_globals glbs =
-  List.fold_left
-    (fun acc (f, x) -> acc >>= fun _ -> set_global (f, x))
-    (return ()) glbs
 
 let null_ptr = M.null_ptrval C.Void0
 
@@ -88,6 +79,10 @@ type 'a loaded =
 let specified x = Specified x
 let unspecified x = Unspecified x
 
+let case_loaded f g = function
+  | Specified x -> f x
+  | Unspecified cty -> g cty
+
 exception Label of string * (M.integer_value) loaded
 
 (* Cast from memory values *)
@@ -132,6 +127,8 @@ let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 
 (* Memory actions wrap *)
 
+let case_loaded_mval f = case_loaded f M.unspecified_mval
+
 let create pre al ty =
   last_memop := Create;
   M.allocate_static 0 pre al ty
@@ -140,20 +137,19 @@ let alloc pre al n =
   last_memop := Alloc;
   M.allocate_dynamic 0 pre al n
 
-let load_integer ity e =
+let load cty ret e =
   last_memop := Load;
-  M.load (C.Basic0 (T.Integer ity)) e >>= return % get_integer % snd
+  M.load cty e >>= return % ret % snd
 
-let load_pointer q cty e =
-  last_memop := Load;
-  M.load (C.Pointer0 (q, cty)) e >>= return % get_pointer % snd
+let load_integer ity =
+  load (C.Basic0 (T.Integer ity)) get_integer
+
+let load_pointer q cty =
+  load (C.Pointer0 (q, cty)) get_pointer
 
 let store f ty e1 e2 =
   last_memop := Store;
-  let e = match e2 with
-    | Specified e -> f e
-    | Unspecified ty -> M.unspecified_mval ty
-  in M.store ty e1 e
+  M.store ty e1 $ case_loaded_mval f e2
 
 let store_integer ity =
   store (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
@@ -161,40 +157,15 @@ let store_integer ity =
 let store_pointer q cty =
   store (M.pointer_mval cty) (C.Pointer0 (q, cty))
 
-(* TODO: it only support array of int *)
+let store_array_of conv cty size q =
+  let array_mval e = M.array_mval (List.map (case_loaded_mval conv) e)
+  in store array_mval (C.Array0 (q, cty, size))
 
-(*
-let store_array cty size =
-  let mk_array = match cty with
-    | C.Void0 -> raise (Error "store array: not expecting void type")
-    | C.Basic0 (T.Integer ity) -> List.map (M.integer_value_mval ity)
-    | C.Basic0 (T.Floating fty) -> List.map (M.floating_value_mval fty)
-                                    (*
-    | C.Array0 of C.ctype0 * Nat_big_num.num option
-    | C.Function0 of C.ctype0 * (AilTypes.qualifiers * C.ctype0) list * bool
-    | C.Pointer0 of AilTypes.qualifiers * C.ctype0
-    | C.Atomic0 of C.ctype0
-    | C.Struct0 of C.struct_tag
-    | C.Union0 of C.union_tag
-    | C.Builtin0 of string *)
-  in
-  store (fun e -> M.array_mval (mk_array e)) (C.Array0 (cty, size))
-*)
-let store_array q cty size e1 le2 =
-  last_memop := Store;
-  M.store (C.Array0 (q, cty, size)) e1 (
-    match le2 with
-    | Specified e2 ->
-      begin match cty with
-        | C.Basic0 (T.Integer ity) ->
-          M.array_mval (List.map (function
-              | Specified i -> M.integer_value_mval ity i
-              | Unspecified ty -> M.unspecified_mval ty
-          ) e2)
-        | _ -> raise (Error "excepting an array of integers")
-      end
-    | Unspecified ty -> M.unspecified_mval ty
-  )
+let store_array_of_int ity =
+  store_array_of (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
+
+let store_array_of_ptr q cty =
+  store_array_of (M.pointer_mval cty) (C.Pointer0 (q, cty))
 
 (* Printf wrap *)
 
@@ -207,17 +178,11 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
                 "Printf: one of the element of the format array was invalid"
   in
   let eval_conv cty x =
-    let throw_error _ = raise (Error "Rt_ocaml.printf: expecting an integer") in
-    let n = M.case_mem_value x
-        throw_error
-        (fun _ -> throw_error)
-        (fun _ v -> conv cty v)
-        (fun _ -> throw_error)
-        (fun _ -> throw_error)
-        throw_error
-        (fun _ -> throw_error)
-        (fun _ -> throw_error)
-    in Either.Right (Undefined.Defined0 (Core.Vloaded (Core.LVspecified (Core.OVinteger n))))
+    let terr _ _ = raise (Error "Rt_ocaml.printf: expecting an integer") in
+    let n = M.case_mem_value x (terr()) terr (fun _ -> conv cty)
+        terr terr (terr()) terr terr
+    in Either.Right (Undefined.Defined0
+                       (Core.Vloaded (Core.LVspecified (Core.OVinteger n))))
   in
   Output.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function
@@ -234,7 +199,7 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     | Either.Left z -> raise (Error (Pp_errors.to_string z))
   end
 
-(* Exit continuation *)
+(* Exit *)
 
 exception Exit of (M.integer_value loaded)
 
@@ -247,16 +212,11 @@ let print_batch res =
 
 let print_err_batch e =
   let err = match e with
-    | Mem_common.MerrUnitialised str ->
-        "MerrUnitialised \"" ^  (str ^ "\"")
-    | Mem_common.MerrInternal str ->
-        "MerrInternal \"" ^  (str ^ "\"")
-    | Mem_common.MerrOther str ->
-        "MerrOther \"" ^  (str ^ "\"")
-    | Mem_common.MerrReadFromDead ->
-        "MerrReadFromDead"
-    | Mem_common.MerrWIP str ->
-        "Memory WIP: " ^ str
+    | Mem_common.MerrUnitialised str -> "MerrUnitialised \"" ^  (str ^ "\"")
+    | Mem_common.MerrInternal str -> "MerrInternal \"" ^  (str ^ "\"")
+    | Mem_common.MerrOther str -> "MerrOther \"" ^  (str ^ "\"")
+    | Mem_common.MerrReadFromDead -> "MerrReadFromDead"
+    | Mem_common.MerrWIP str -> "Memory WIP: " ^ str
   in Printf.printf
     "Killed {msg: memory layout error (%s seq) ==> %s}\n%s"
     (show_memop !last_memop) err constraints
@@ -286,6 +246,16 @@ let quit f =
        if batch then print_batch (string_of_unspec cty);
        exit(-1)
     )
+
+(* Start *)
+
+let set_global (f, x) =
+  f return () >>= fun y -> x := y; return ()
+
+let init_globals glbs =
+  List.fold_left
+    (fun acc (f, x) -> acc >>= fun _ -> set_global (f, x))
+    (return ()) glbs
 
 let create_tag_defs_map defs =
   List.fold_left

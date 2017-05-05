@@ -523,6 +523,15 @@ let choose_load_type (Pexpr (_, PEval cty)) =
       ^^^ P.parens (print_ctype cty)
   | _ -> todo "load not implemented"
 
+let print_store_array_type = function
+  | Basic0 (Integer ity) ->
+    !^"A.store_array_of_int" ^^^ P.parens (print_ail_integer_type ity)
+  | Pointer0 (q, cty) ->
+    !^"A.store_array_of_ptr" ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
+  | Array0 (q, cty, n) ->
+  | _ -> todo "store array not implemented"
+
 let choose_store_type (Pexpr (_, PEval cty)) =
   match cty with
   | Vctype (Basic0 (Integer ity)) ->
@@ -531,9 +540,9 @@ let choose_store_type (Pexpr (_, PEval cty)) =
     !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
   | Vctype (Array0 (q, cty, n)) ->
-    !^"A.store_array" ^^^ P.parens (print_ail_qualifier q)
-      ^^^ P.parens (print_ctype cty)
+    print_store_array_type cty
       ^^^ P.parens (print_option print_num n)
+      ^^^ P.parens (print_ail_qualifier q)
   | _ -> todo "store not implemented"
 
 let print_action globs act =
