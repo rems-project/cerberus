@@ -33,6 +33,13 @@ let stdout = ref ""
 
 let null_ptr = M.null_ptrval C.Void0
 
+let position fname lnum bol cnum = {
+  Lexing.pos_fname = fname;
+  Lexing.pos_lnum = lnum;
+  Lexing.pos_bol = bol;
+  Lexing.pos_cnum = cnum;
+}
+
 (* Non deterministic choice *)
 
 let nd n xs =
@@ -89,12 +96,28 @@ exception Label of string * (M.integer_value) loaded
 
 let get_integer m =
   let terr _ _ = raise (Error "Type mismatch, expecting integer values.") in
-  M.case_mem_value m unspecified terr (fun _ -> specified) terr terr (terr()) terr terr
+  M.case_mem_value m unspecified terr (fun _ -> specified)
+    terr terr (terr()) terr terr
 
 let get_pointer m =
   let terr _ _ = raise (Error "Type mismatch, expecting pointer values.") in
   M.case_mem_value m unspecified terr terr terr (fun _ p -> specified p)
     (terr()) terr terr
+
+let get_array m =
+  let terr _ _ = raise (Error "Type mismatch, expecting array.") in
+  M.case_mem_value m unspecified terr terr terr terr
+    specified terr terr
+
+let get_struct m =
+  let terr _ _ = raise (Error "Type mismatch, expecting struct.") in
+  M.case_mem_value m unspecified terr terr terr terr (terr())
+    (fun _ -> specified) terr
+
+let get_union m =
+  let terr _ _ = raise (Error "Type mismatch, expecting union.") in
+  M.case_mem_value m unspecified terr terr terr terr (terr())
+    terr (fun _ cid m -> Specified (cid, m))
 
 (* Cast to memory values *)
 
@@ -147,6 +170,15 @@ let load_integer ity =
 let load_pointer q cty =
   load (C.Pointer0 (q, cty)) get_pointer
 
+let load_array q cty size =
+  load (C.Array0 (q, cty, size)) get_array
+
+let load_struct s =
+  load (C.Struct0 s) get_struct
+
+let load_union s =
+  load (C.Union0 s) get_union
+
 let store f ty e1 e2 =
   last_memop := Store;
   M.store ty e1 $ case_loaded_mval f e2
@@ -156,6 +188,12 @@ let store_integer ity =
 
 let store_pointer q cty =
   store (M.pointer_mval cty) (C.Pointer0 (q, cty))
+
+let store_struct s =
+  store (M.struct_mval s) (C.Struct0 s)
+
+let store_union s cid =
+  store (M.union_mval s cid) (C.Union0 s)
 
 let store_array_of conv cty size q =
   let array_mval e = M.array_mval (List.map (case_loaded_mval conv) e)

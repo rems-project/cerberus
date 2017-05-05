@@ -17,9 +17,6 @@ let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 let string_tr target replace str =
   String.map (fun c -> if c = target then replace else c) str
 
-(* Print TODO *)
-let todo str = !^"raise (A.Error \"" ^^ !^str ^^ !^"\")"
-
 (* Ocaml tokens *)
 
 let tif    = !^"if"
@@ -118,9 +115,26 @@ let print_symbol_prefix = function
 (* Take out all '.' and add '_' as prefix *)
 let print_impl_name i =
   !^("_" ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
+let print_loc loc =
+  let print_lex pos =
+    !^"A.position" ^^^ P.dquotes !^(pos.Lexing.pos_fname)
+    ^^^ !^(string_of_int pos.Lexing.pos_lnum)
+    ^^^ !^(string_of_int pos.Lexing.pos_bol)
+    ^^^ !^(string_of_int pos.Lexing.pos_cnum)
+  in
+  match loc with
+  | Location_ocaml.Loc_unknown ->
+    !^"Location_ocaml.unknown"
+  | Location_ocaml.Loc_point pos ->
+    !^"Location_ocaml.point" ^^^ P.parens (print_lex pos)
+  | Location_ocaml.Loc_region (pos1, pos2, opos3) ->
+    !^"Location_ocaml.Loc_region"
+      ^^^ P.parens (print_lex pos1)
+      ^^^ P.parens (print_lex pos2)
+      ^^^ P.parens (print_option print_lex opos3)
 
-let print_cabs_id (Cabs.CabsIdentifier (_, str)) =
-  !^("Cabs.CabsIdentifier (Location_ocaml.unknown, \"" ^ str ^ "\")")
+let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
+  !^"Cabs.CabsIdentifier" ^^^ P.parens(print_loc loc ^^ P.comma ^^^ P.dquotes !^str)
 
 let print_name = function
   | Sym a  -> print_symbol a
@@ -159,7 +173,12 @@ let print_ail_qualifier {
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)
-  | Floating ft -> todo "floating type"
+  | Floating (RealFloating ft) ->
+    let print_floating_type = function
+      | Float -> !^"Float"
+      | Double -> !^"Double"
+      | LongDouble -> !^"LongDouble"
+    in !^"Floating" ^^^ P.parens (!^"RealFloating" ^^^ print_floating_type ft)
 
 (* Patterns *)
 
@@ -264,7 +283,7 @@ let print_provenance = function
   | D.Prov_wildcard -> !^"I.Prov_wildcard"
   | D.Prov_none     -> !^"I.Prov_none"
   | D.Prov_device   -> !^"I.Prov_device"
-  | D.Prov_some ids -> todo "prov_some"
+  | D.Prov_some ids -> raise (Unsupported "prov_some")
 
 let print_iv_value iv =
   Mem.case_integer_value iv
@@ -283,7 +302,7 @@ and print_shift_path_element = function
   | D.SPE_array (cty, ivb)  ->
     !^"I.SPE_array" ^^^ P.parens (print_ctype cty ^^ P.comma
                                   ^^^ print_integer_value_base ivb)
-  | D.SPE_member (_, _)     -> todo "spe member"
+  | D.SPE_member (_, _)     -> raise (Unsupported "spe member")
 
 and print_shift_path sp = print_list print_shift_path_element sp
 
@@ -353,7 +372,7 @@ let print_binop bop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
     | BTy_loaded (OTy_pointer) -> app g
     | BTy_ctype -> begin match h with
         | Some h -> app h
-        | None -> raise (Unexpected "Unexcpected binary operator for ctypes")
+        | None -> raise (Unexpected "Unexpected binary operator for ctypes")
       end
     | _ -> raise (Unexpected "Unknown binary operator")
   in
@@ -410,7 +429,6 @@ and print_loaded_value = function
   | LVunspecified ty ->
       !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
 
-
 let rec print_value = function
   | Vunit            -> tunit
   | Vtrue            -> ttrue
@@ -426,10 +444,10 @@ let print_is_expr str pp pe =
   match pe with
   | Pexpr (_, PEval (Vctype _))
   | Pexpr (_, PEsym _) -> !^"A." ^^ !^str ^^^ P.parens (pp pe)
-    (*
-    P.parens (!^"AilTypesAux." ^^ !^str
-              ^^ P.parens (!^"Core_aux.unproj_ctype" ^^^ pp pe)) *)
   | _ -> !^str ^^^ pp pe
+
+let print_tag pp (cid, pe) =
+  P.parens (print_cabs_id cid ^^ P.comma ^^^ pp pe)
 
 let print_pure_expr globs pe =
   let rec pp prec pe =
@@ -479,8 +497,11 @@ let print_pure_expr globs pe =
         ^^^ P.parens (print_raw_symbol sym) ^^^ P.parens (print_cabs_id id)
       | PEnot pe -> !^"not" ^^^ P.parens (pp pe)
       | PEop (bop, pe1, pe2) -> print_binop bop pp pe1 pe2
-      | PEstruct _ -> todo "struct"
-      | PEunion _ -> todo "union"
+        (* struct/union are serialised as tuples *)
+      | PEstruct (s, tags) ->
+        P.parens (print_raw_symbol s ^^^ print_list (print_tag pp) tags)
+      | PEunion (s, cid, pe) ->
+        P.parens (print_raw_symbol s ^^^ print_tag pp (cid, pe))
       | PEcall (nm, pes) ->
         print_name nm ^^^ (
           if List.length pes = 0
@@ -521,7 +542,16 @@ let choose_load_type (Pexpr (_, PEval cty)) =
   | Vctype (Pointer0 (q, cty)) ->
     !^"A.load_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
-  | _ -> todo "load not implemented"
+  | Vctype (Array0 (q, cty, n)) -> 
+    !^"A.load_array"
+      ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
+      ^^^ P.parens (print_option print_num n)
+  | Vctype (Struct0 s) ->
+    !^"A.load_struct" ^^^ P.parens (print_raw_symbol s)
+  | Vctype (Union0 s) ->
+    !^"A.load_union" ^^^ P.parens (print_raw_symbol s)
+  | _ -> raise (Unsupported "load not implemented")
 
 let print_store_array_type = function
   | Basic0 (Integer ity) ->
@@ -529,8 +559,7 @@ let print_store_array_type = function
   | Pointer0 (q, cty) ->
     !^"A.store_array_of_ptr" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
-  | Array0 (q, cty, n) ->
-  | _ -> todo "store array not implemented"
+  | _ -> raise (Unsupported "store array not implemented")
 
 let choose_store_type (Pexpr (_, PEval cty)) =
   match cty with
@@ -539,11 +568,15 @@ let choose_store_type (Pexpr (_, PEval cty)) =
   | Vctype (Pointer0 (q, cty)) ->
     !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
+  | Vctype (Struct0 s) ->
+    !^"A.store_struct" ^^^ P.parens (print_raw_symbol s)
+  | Vctype (Union0 s) ->
+    !^"A.store_union" ^^^ P.parens (print_raw_symbol s)
   | Vctype (Array0 (q, cty, n)) ->
     print_store_array_type cty
       ^^^ P.parens (print_option print_num n)
       ^^^ P.parens (print_ail_qualifier q)
-  | _ -> todo "store not implemented"
+  | _ -> raise (Unsupported "store not implemented")
 
 let print_action globs act =
   match act with
