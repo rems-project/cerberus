@@ -1383,6 +1383,8 @@ let typecheck_program file =
       match decl with
         | Fun bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
+        | ProcDecl bTy bTys ->
+            insert_tdecl (Sym sym) (TDproc bTy bTys) acc
         | Proc bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.stdlib $
@@ -1404,6 +1406,8 @@ let typecheck_program file =
         | Fun bTy sym_bTys pe ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown file.tagDefs env' bTy pe
+        | ProcDecl bTy bTys ->
+            E.return (ProcDecl bTy bTys)
         | Proc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
@@ -1432,6 +1436,8 @@ let typecheck_program file =
       match decl with
         | Fun bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
+        | ProcDecl bTy bTys ->
+            insert_tdecl (Sym sym) (TDproc bTy bTys) acc
         | Proc bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
@@ -1441,6 +1447,8 @@ let typecheck_program file =
         | Fun bTy sym_bTys pe ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown file.tagDefs env' bTy pe
+        | ProcDecl bTy bTys ->
+            E.return (ProcDecl bTy bTys)
         | Proc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->

@@ -292,7 +292,7 @@ let rec drive_core_thread tid dr_st =
     | Step_spawn_threads mk_th_st th_sts ->
         ND.print_debug 6 "Step_spawn_threads" >>
         let ((th_tids, core_st'), run_st') = State.run (
-          State.foldM (fun (th_tids_, core_st_) th_st ->
+          State.foldlM (fun (th_tids_, core_st_) th_st ->
             State.bind (spawn_thread (Just tid) th_st core_st_)
               (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
           ) ([], dr_st.core_state) th_sts
@@ -1121,12 +1121,12 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
      from the rest of the program *)
   driver_globals with_concurrency sym_supply file >>= fun (tid0, post_globals_dr_st) ->
   
-  (* we need a startup function to have been defined to execute anything *)
+  (* we need a startup function to have been declared *)
   match post_globals_dr_st.core_file.Core.main with
     | Just sym ->
         ND.return sym
     | Nothing ->
-        ND.kill (ND.Other "no startup function was defined")
+        ND.kill (ND.Other "no startup function was declared")
   end >>= fun main_sym ->
   
   (* setting the arena of thread 0 to the body of the main function *)
@@ -1135,12 +1135,14 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
         ND.kill (ND.Other "couldn't find the startup function")
     
     | Just decl ->
-        let (params, expr) = match decl with
+        match decl with
           | Core.Fun  _ params pe ->
-              (params, Core.Epure pe)
+              ND.return (params, Core.Epure pe)
+          | Core.ProcDecl _ _ ->
+              ND.kill (ND.Other "the startup function has no definition")
           | Core.Proc _ params e ->
-              (params, e)
-        end in
+              ND.return (params, e)
+        end >>= fun (params, expr) ->
         
         match params with
           | [(argc_sym, _); (argv_sym, _)] ->

@@ -591,8 +591,8 @@ let pp_tagDefinitions tagDefs =
 
 
 
-let pp_argument (sym, ty) =
-  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type ty
+let pp_argument (sym, bTy) =
+  pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 
 let pp_params params =
   P.parens (comma_list pp_argument params)
@@ -605,6 +605,8 @@ let pp_fun_map funs =
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+      | ProcDecl (bTy, bTys) ->
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
       | Proc (bTy, params, e) ->
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
@@ -654,15 +656,14 @@ let pp_file file =
   end
   
   begin
-  
-  mk_comment (pp_tagDefinitions (file.tagDefs)) ^^
-  P.break 1 ^^ P.break 1 ^^
-  
-  !^ "-- Globals" ^^ P.break 1 ^^
-  List.fold_left pp_glob P.empty file.globs ^^
-  
-  !^ "-- Fun map" ^^ P.break 1 ^^
-  pp_fun_map file.funs
+    mk_comment (pp_tagDefinitions (file.tagDefs)) ^^
+    P.break 1 ^^ P.break 1 ^^
+    
+    !^ "-- Globals" ^^ P.break 1 ^^
+    List.fold_left pp_glob P.empty file.globs ^^
+    
+    !^ "-- Fun map" ^^ P.break 1 ^^
+    pp_fun_map file.funs
   end
 
 

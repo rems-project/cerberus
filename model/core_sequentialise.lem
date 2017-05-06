@@ -90,6 +90,8 @@ let sequentialise_file file =
   <| file with funs= Map.map (function
        | Proc bTy params e ->
            Proc bTy params (sequentialise_expr e)
+       | ProcDecl bTy params ->
+           ProcDecl bTy params
        | Fun bTy params pe ->
            Fun bTy params pe
      end) file.funs |>

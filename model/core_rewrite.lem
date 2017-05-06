@@ -1079,6 +1079,8 @@ let rewrite_fun_map fun_map =
   Map.map (function
     | Fun ty params pe ->
         Fun ty params (rewrite_pexpr pe)
+    | ProcDecl ty params ->
+        ProcDecl ty params
     | Proc ty params e ->
         Proc ty params (rewrite_expr e)
   end) fun_map

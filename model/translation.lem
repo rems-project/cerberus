@@ -3,7 +3,7 @@
 
 open import Pervasives Global Implementation_ Loc String_extra
 
-import State State_operators Translation_effect Loc
+import State Translation_effect Loc
 open import Translation_aux
 import Cmm_csem Mem
 
@@ -95,7 +95,7 @@ let mkTestExpression (A.AnnotatedExpression gty _ _ as a_expr) =
 
 
 
-(* val translate_equal_to_zero: A.expression GenTypes.genTypeCategory -> E.t (C.expr unit) *)
+(* val translate_equal_to_zero: A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit) *)
 
 let translate_equal_to_zero translate_rvalue a_expr =
   E.return $
@@ -179,7 +179,7 @@ let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
 
 
 
-val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.t (C.expr unit)
+val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
 let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
   match (ctype_of a_expr, expr) with
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
@@ -2418,14 +2418,17 @@ RAAAAAAAAHHH: this doesn't work when the label is in a block the goto doesn't be
 *)
 
 module St = State
-open State_operators
+let inline (>>=) = St.bind
+let inline (>>) m1 m2 = St.bind m1 (fun _ -> m2)
+let inline (<$>) = State.fmap
+let inline (<*>) = State.app
 
 type collect_cases_state = <|
   found_default: bool;
   case_csts: list A.integerConstant;
 |>
 
-val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.t unit collect_cases_state
+val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_cases_state
 let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
   let register_case n =
     St.update (fun s -> <| s with case_csts= n :: s.case_csts |>) in
@@ -2486,7 +2489,7 @@ type erase_loop_control_state = <|
   elc_break: maybe Symbol.sym;
 |>
 
-val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.t (A.statement GenTypes.genTypeCategory) erase_loop_control_state
+val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.stateM (A.statement GenTypes.genTypeCategory) erase_loop_control_state
 let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
   let with_fresh_labels mf =
     fun (<| elc_supply= suppl |> as st) ->
@@ -2565,7 +2568,7 @@ let erase_loop_control stmt suppl =
 
 
 
-val     collect_visibles_: A.statement GenTypes.genTypeCategory -> St.t unit collect_visibles_state
+val     collect_visibles_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_visibles_state
 let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
   match stmt with
     | A.AilSskip ->
@@ -2689,10 +2692,10 @@ val translate_stmt:
   A.program GenTypes.genTypeCategory -> A.identifier ->
   translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
-  E.t (C.core_base_type * C.expr unit)
+  E.elabM (C.core_base_type * C.expr unit)
 
 
-let rec translate_stmt2 stdlib program f env (A.AnnotatedStatement loc stmt) : E.t (C.expr unit) =
+let rec translate_stmt2 stdlib program f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
   let translate_lvalue e = translate_expression stdlib program true e  in
   let translate_rvalue e = translate_expression stdlib program false e in
   
@@ -3473,21 +3476,39 @@ let mk_run_e sym visibles_before visibles_after pes =
 val translate_program:
   translation_stdlib ->
   bool -> A.program GenTypes.genTypeCategory ->
-  E.t (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
+  E.elabM (list (C.sym * C.core_base_type * C.expr unit) * (* unit(*SOMETHING*) * *) C.fun_map unit)
 
 let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) =
   E.foldlM (fun (gacc, facc) (sym, decl) ->
+    (* for each Ail declaration *)
     match decl with
       | A.Decl_object _ qs ty ->
-          (* generate the initialisation code for global variables *)
+          (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
           let core_create = Caux.pcreate Loc.unknown (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
           E.fresh_symbol >>= fun sym_global ->
           
           E.print_debugM 2 ("(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
           match Context.lookup (=) sigm.A.object_definitions sym with
+            | Nothing ->
+                (* if the global has no initialisation expression, we set it to (sort of) zero *)
+                (* TODO: find the std quote *)
+                E.return begin
+                  (
+                    ( sym
+                    , C.BTy_object C.OTy_pointer
+                    , C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
+                        C.Esseq (Caux.mk_empty_pat C.BTy_unit)
+                          (* TODO: proper memory order *)
+                          (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global)
+                             (Caux.zeros (Caux.proj_ctype ty)) Cmm.NA)
+                          (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
+                      ) ) :: gacc
+                  , facc )
+                end
+            
             | Just expr ->
-                (* if the global has an initialisation *)
+                (* otherwise we evaluate that expression and store it's value to the global (duh) *)
                 E.fresh_symbol >>= fun e_sym ->
                 begin
                   if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant expr then
@@ -3508,33 +3529,40 @@ let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) 
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
                     Caux.mk_sym_pe e_bTy e_sym in
-                E.return
-                  ((sym,
-                    C.BTy_object C.OTy_pointer,
-                    C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create
-                      (C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e
-                         (* TODO: proper memory order *)
-                         (C.Esseq (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global) core_init_e Cmm.NA)
-                            (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
-  )
-                      )
-                   ) :: gacc, facc)
-            | Nothing ->
-                (* otherwise *)
-                E.return
-                  ((sym,
-                    C.BTy_object C.OTy_pointer,
-                    C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create
-                      (* TODO: proper memory order *)
-                      (C.Esseq (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global) (Caux.zeros (Caux.proj_ctype ty)) Cmm.NA)
-                         (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
-                      )
-                    ) :: gacc, facc)
+                E.return begin
+                  (
+                    ( sym
+                    , C.BTy_object C.OTy_pointer
+                    , C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
+                        C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e (
+                         C.Esseq (Caux.mk_empty_pat C.BTy_unit)
+                           (* TODO: proper memory order *)
+                           (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global)
+                              core_init_e Cmm.NA)
+                           (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
+                        )
+                      ) ) :: gacc
+                  , facc )
+                end
           end
       
       | A.Decl_function has_proto return_ty params is_variadic is_inline is_Noreturn ->
-          (* generate the code for the defined Ail functions *)
+          (* elaboration of an Ail function *)
+          let ret_bTy =
+            if return_ty = Aty.Void then
+              C.BTy_unit
+            else
+              C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype return_ty)) in
           match Context.lookup (=) sigm.A.function_definitions sym with
+            | Nothing ->
+                (* if the function has no definition,
+                   we create Core procedure declaration *)
+                E.return
+                  ( gacc
+                  , Map.insert sym
+                      (C.ProcDecl ret_bTy (List.map (fun _ -> C.BTy_object C.OTy_pointer) params))
+                      facc )
+            
             | Just (param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
@@ -3577,11 +3605,6 @@ let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) 
                     (* §6.9.1#12 *)
                     C.Epure (Caux.mk_undef_pe Undefined.UB088_reached_end_of_function) in *)
                 
-                let ret_bTy =
-                  if return_ty = Aty.Void then
-                    C.BTy_unit
-                  else
-                    C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype return_ty)) in
                 let core_return =
                   let ret_pe =
                     if startup_sym_opt = Just sym then
@@ -3623,8 +3646,6 @@ let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) 
                              (List.map (fun sym -> (sym, C.BTy_object C.OTy_pointer)) param_syms)
                              (C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_body core_return)
                      ) facc)
-            | Nothing ->
-                E.return (gacc, facc)
           end
     end
   ) ([], Map.empty) (List.reverse sigm.A.declarations) >>= fun (globs, cfuns) ->
@@ -3723,7 +3744,10 @@ let translate (ailnames, stdlib_fun_map) sequentialise impl (symbol_counter, pro
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   (* TODO2: not sure what that comment is refering too ... *)
-  let ((cglobs, cfuns), st) = (translate_program translation_stdlib sequentialise prog) (E.init symbol_counter) in
+  let ((cglobs, (*cdecls, *) cfuns), st) =
+    E.runStateM (translate_program translation_stdlib sequentialise prog)
+      (E.init symbol_counter) in
+  
   (st.E.symbol_supply, <|
     C.main= fst prog;
     C.tagDefs= translate_tag_definitions (snd prog).A.tag_definitions;

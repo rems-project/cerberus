@@ -102,25 +102,25 @@ end
 *)
 
 
-val fresh: State.t (UniqueId.t sym) (UniqueId.supply sym)
+val fresh: State.stateM (UniqueId.t sym) (UniqueId.supply sym)
 let fresh =
   UniqueId.fresh_id
 
-val fresh_pretty : string -> State.t (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_pretty : string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
 let fresh_pretty str =
   State.bind UniqueId.fresh_id (fun (Symbol id _) ->
     State.return $ Symbol id (Just str)
   )
 
 
-val fresh_pretty_with_id : (nat -> string) -> State.t (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_pretty_with_id : (nat -> string) -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
 let fresh_pretty_with_id mkStr =
   State.bind UniqueId.fresh_id (fun (Symbol id _) ->
     State.return $ Symbol id (Just (mkStr id))
   )
 
 
-val fresh_fancy : maybe string -> State.t (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_fancy : maybe string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
 let fresh_fancy = function
   | Just str -> fresh_pretty str
   | Nothing  -> fresh
