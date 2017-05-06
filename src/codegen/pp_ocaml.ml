@@ -12,6 +12,19 @@ open Core_ctype
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 
+(* Global information of the translation unit *)
+type globals = {
+  interface: string;
+  statics: Symbol.sym list;
+  externs: Symbol.sym list;
+}
+
+let empty_globs fname = {
+  interface = String.capitalize_ascii fname ^ "I.";
+  statics = [];
+  externs = []
+}
+
 (* String helper function *)
 
 let string_tr target replace str =
@@ -104,13 +117,19 @@ let print_raw_symbol = function
   | Symbol.Symbol (i, None)     ->
     !^"Symbol.Symbol" ^^^ P.parens (print_int i ^^ P.comma ^^^ tnone)
   | Symbol.Symbol (i, Some str) ->
-    !^"Symbol.Symbol" ^^^ P.parens (print_int i ^^ P.comma ^^^ tsome ^^^ P.dquotes !^str)
+    !^"Symbol.Symbol" ^^^ P.parens
+      (print_int i ^^ P.comma ^^^ tsome ^^^ P.dquotes !^str)
 
 let print_symbol_prefix = function
   | Symbol.PrefSource syms ->
     !^"Symbol.PrefSource" ^^^ print_list print_raw_symbol syms
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
+
+let print_globs_prefix globs sym =
+  if List.mem sym globs.statics then !^"!"
+  else if List.mem sym globs.externs then !^(globs.interface)
+  else P.empty
 
 (* Take out all '.' and add '_' as prefix *)
 let print_impl_name i =
@@ -414,30 +433,31 @@ let lt_precedence p1 p2 =
     | (Some n1, Some n2) -> n1 <= n2
     | _                  -> true
 
-let rec print_object_value = function
+let rec print_object_value globs = function
   | OVstruct _
   | OVunion  _     -> raise (Unsupported "struct or union")
+  | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_symbol s
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
   | OVpointer pv   -> print_pointer_value pv
-  | OVarray lvs   -> print_list print_loaded_value lvs
+  | OVarray lvs   -> print_list (print_loaded_value globs) lvs
 
-and print_loaded_value = function
+and print_loaded_value globs = function
   | LVspecified v ->
-      !^"A.Specified" ^^^ P.parens (print_object_value v)
+      !^"A.Specified" ^^^ P.parens (print_object_value globs v)
   | LVunspecified ty ->
       !^"A.Unspecified" ^^^ P.parens (print_ctype ty)
 
-let rec print_value = function
+let rec print_value globs = function
   | Vunit            -> tunit
   | Vtrue            -> ttrue
   | Vfalse           -> tfalse
-  | Vlist (_, cvals) -> print_list print_value cvals
-  | Vtuple cvals     -> P.parens (comma_list print_value cvals)
+  | Vlist (_, cvals) -> print_list (print_value globs) cvals
+  | Vtuple cvals     -> P.parens (comma_list (print_value globs) cvals)
   | Vctype ty        -> print_ctype ty
-  | Vobject obv      -> print_object_value obv
-  | Vloaded lv       -> print_loaded_value lv
+  | Vobject obv      -> print_object_value globs obv
+  | Vloaded lv       -> print_loaded_value globs lv
   | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.")
 
 let print_is_expr str pp pe =
@@ -458,9 +478,9 @@ let print_pure_expr globs pe =
       match pe with Pexpr (t, pe') ->
       match pe' with
       | PEsym sym ->
-        (if List.mem sym globs then !^"!" else P.empty) ^^ print_symbol sym
+        print_globs_prefix globs sym ^^ print_symbol sym
       | PEimpl iCst -> print_impl_name iCst ^^^ P.parens P.space
-      | PEval cval -> print_value cval
+      | PEval cval -> print_value globs cval
       | PEconstrained _ -> raise (Unexpected "Unexpected contrained expression.")
       | PEundef ub ->
         traise ^^^ P.parens (!^"A.Undefined" ^^^ P.dquotes
