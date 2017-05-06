@@ -45,8 +45,8 @@ let rec elim_let = function
   | e -> core_expr_map elim_let e
 
 let runf opt = function
-  | Fun (bty, param, pe) -> Fun (bty, param, pe)
   | Proc (bty, param, e) -> Proc (bty, param, opt e)
+  | f -> f
 
 let run opt core =
   {
@@ -57,3 +57,21 @@ let run opt core =
     globs = List.map (fun (s, bty, e) -> (s, bty, opt e)) core.globs;
     funs = Pmap.map (runf opt) core.funs;
   }
+
+(* Eliminate procedures declarations *)
+let elim_proc_decls core =
+  let elim_decls funs =
+    Pmap.fold begin fun s f m ->
+      match f with
+      | ProcDecl _ -> m
+      | _ -> Pmap.add s f m
+    end funs (Pmap.empty Core_fvs.sym_compare)
+  in {
+    main = core.main;
+    tagDefs = core.tagDefs;
+    stdlib = core.stdlib;
+    impl = core.impl;
+    globs = core.globs;
+    funs = elim_decls core.funs;
+  }
+
