@@ -46,7 +46,11 @@ let opt_passes core =
 
 let gen filename corestd sym_supply core =
   let globs_syms = List.map (fun (s,_,_) -> s) core.Core.globs in
-  let cps_core = cps_transform sym_supply (run opt_passes core) globs_syms in
+  let cps_core =
+    elim_proc_decls core
+    |> run opt_passes
+    |> cps_transform sym_supply globs_syms
+  in
   let print_globals_init acc (sym, coreTy, bbs, bbody) =
     (if acc = P.empty then tletrec else acc ^//^ tand) ^^^
     print_eff_function (!^"glob_" ^^ print_symbol sym ^^^ print_symbol default) []

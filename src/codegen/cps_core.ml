@@ -194,8 +194,8 @@ let cps_transform_fun sym_supply globs = function
   | Proc (bty, params, e) ->
     let (bbs, bbody) =
       cps_transform_expr sym_supply globs (List.map fst params) e
-    in
-    CpsProc (bty, params, bbs, bbody)
+    in CpsProc (bty, params, bbs, bbody)
+  | ProcDecl _ -> raise (Unsupported "Procedures declaration should be eliminated.")
 
 type cps_file = {
   main   : Symbol.sym option;
@@ -205,7 +205,7 @@ type cps_file = {
   funs   : (Symbol.sym, cps_fun) Pmap.map;
 }
 
-let cps_transform sym_supply (core : unit typed_file) globs_sym =
+let cps_transform sym_supply globs_sym (core : unit typed_file) =
   let globs = List.map (fun (s, bty, e) ->
       let (bbs, bbody) = cps_transform_expr sym_supply globs_sym [] e in
       (s, bty, bbs, bbody)

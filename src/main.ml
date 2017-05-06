@@ -271,8 +271,10 @@ let gen_corestd stdlib impl =
     Core.funs=   Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
   }
   >>= fun typed_core ->
-    let opt_core = Core_opt.run Codegen_ocaml.opt_passes typed_core in
-    let cps_core = Cps_core.cps_transform sym_supply opt_core [] in
+    let cps_core =
+      Core_opt.run Codegen_ocaml.opt_passes typed_core
+      |> Cps_core.cps_transform sym_supply []
+    in
     Codegen_corestd.gen [] cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
