@@ -61,17 +61,19 @@ let run opt core =
 (* Eliminate procedures declarations *)
 let elim_proc_decls core =
   let elim_decls funs =
-    Pmap.fold begin fun s f m ->
+    Pmap.fold begin fun s f (decls, m) ->
       match f with
-      | ProcDecl _ -> m
-      | _ -> Pmap.add s f m
-    end funs (Pmap.empty Core_fvs.sym_compare)
-  in {
+      | ProcDecl _ -> (s::decls, m)
+      | _ -> (decls, Pmap.add s f m)
+    end funs ([], Pmap.empty Core_fvs.sym_compare)
+  in
+  let (decls, funs) = elim_decls core.funs in
+  (decls, {
     main = core.main;
     tagDefs = core.tagDefs;
     stdlib = core.stdlib;
     impl = core.impl;
     globs = core.globs;
-    funs = elim_decls core.funs;
-  }
+    funs = funs;
+  })
 
