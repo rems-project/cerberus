@@ -1348,6 +1348,8 @@ let subst_sym_fun_map sym pe' funs =
   Map.map (function
     | Fun ty params pe ->
         Fun ty params (subst_sym_pexpr sym pe' pe)
+    | ProcDecl ty params ->
+        ProcDecl ty params
     | Proc ty params e ->
         Proc ty params (subst_sym_expr sym pe' e)
   end) funs

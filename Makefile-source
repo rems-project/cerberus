@@ -49,7 +49,6 @@ SOURCE_utils=\
   multiset.lem \
   state_exception.lem \
   state_exception_undefined.lem \
-  state_operators.lem \
   std.lem \
   monadic_parsing.lem
 

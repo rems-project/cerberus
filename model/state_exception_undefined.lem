@@ -52,7 +52,7 @@ let runE m =
 
 
 
-val runS: forall 'a 's 'msg. State.t 'a 's -> stExceptUndefM 'a 's 'msg
+val runS: forall 'a 's 'msg. State.stateM 'a 's -> stExceptUndefM 'a 's 'msg
 let runS m = fun st ->
   let (a, st') = m st in
   Exception.return (Undefined.return a, st')

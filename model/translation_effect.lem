@@ -6,136 +6,75 @@ import Core Core_aux
 module C    = Core
 module Caux = Core_aux
 
+include State
 
-type state = <|
+
+type elab_state = <|
   symbol_supply:   UniqueId.supply Symbol.sym; (* counter for Core's symbolic names (all of them) *)
   
   visible_objects_types: map Symbol.sym AilTypes.ctype;
-  visible_objects: list (list Symbol.sym);     (* visible C objects with scoping (used to properly
-                                                  annotate Esave/Erun ctors) *)
+  visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
+                                              annotate Esave/Erun ctors) *)
   
   string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr);
 |>
 
 
-type t 'a = state -> 'a * state
+type elabM 'a = stateM 'a elab_state
 
-(* monadic operations *)
-val return: forall 'a. 'a -> t 'a
-val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
-
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline return x = fun st ->
-  (x, st)
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline bind m f = fun st ->
-  let (a, st') = m st in
-  f a st'
-
-
-
-(* BEGIN: reinventing the wheel (lots of things shamelessly taken from GHC) *)
-(* HACK: name prefix only added to prevent Lem's renaming *)
-val     transEff_foldlM: forall 'a 'b. ('a -> 'b -> t 'a) -> 'a -> list 'b -> t 'a
-let rec transEff_foldlM f z0 xs =
-  match xs with
-    | []     -> return z0
-    | x::xs' -> bind (f z0 x) (fun z -> transEff_foldlM f z xs')
-  end
-
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline sequence ms =
-  foldr (fun m acc ->
-    bind m (fun x  ->
-      bind acc (fun xs ->
-        return (x::xs)
-      )
-    )
-  ) (return []) ms
-val mapM: forall 'a 'b. ('a -> t 'b) -> list 'a -> t (list 'b)
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline mapM f xs = sequence (List.map f xs)
-
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline sequence_ ms = foldr (fun m f -> bind m (fun _ -> f)) (return ()) ms
-val mapM_: forall 'a 'b. ('a -> t 'b) -> list 'a -> t unit
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline mapM_ f _as = sequence_ (List.map f _as)
-
-val replicateM: forall 'a. nat -> t 'a -> t (list 'a)
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline replicateM n x = sequence (replicate n x)
-(* END: reinventing the wheel *)
-
-
-val init: UniqueId.supply Symbol.sym -> state
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline init suppl = <|
+val elab_init: UniqueId.supply Symbol.sym -> elab_state
+let elab_init suppl = <|
   symbol_supply=   suppl;
   visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];
 |>
 
+
 (* returns a fresh Core symbolic name. *)
-val fresh_symbol: t Symbol.sym
-(* HACK: inline only added to prevent Lem's renaming *)
-let inline fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
+val elab_fresh_symbol: elabM Symbol.sym
+let elab_fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
   let (sym, suppl') = State.run Symbol.fresh suppl in
   (sym, <| st with symbol_supply= suppl' |>)
 
 
-val wrapped_fresh_symbol: C.core_base_type -> t (Symbol.sym * C.pattern * C.pexpr)
+val wrapped_fresh_symbol: C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
 let wrapped_fresh_symbol bTy =
-  bind fresh_symbol
-    (fun sym -> return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym))
+  elab_fresh_symbol >>= fun sym ->
+  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym)
 
 
-(*
-val     core_object_type_of_ctype: AilTypes.ctype -> maybe Core.core_object_type
-let rec core_object_type_of_ctype ty =
-  match AilTypesAux.unatomic ty with
-    | AilTypes.Basic (AilTypes.Integer _) ->
-        Just Core.OTy_integer
-    | AilTypes.Basic (AilTypes.Floating _) ->
-        Just Core.OTy_floating
-    | AilTypes.Array elem_ty _ ->
-        maybe Nothing (fun objTy -> Just (Core.OTy_array objTy)) $
-          core_object_type_of_ctype elem_ty
-    | AilTypes.Pointer _ _ ->
-        Just Core.OTy_pointer
-    | _ ->
-        Nothing
-  end
-*)
-
-val fresh_typed_symbol: bool -> AilTypes.ctype -> t (Symbol.sym * Core.core_base_type)
+(* TODO: remove this function and use wrapped_fresh_symbol instead *)
+val fresh_typed_symbol: bool -> AilTypes.ctype -> elabM (Symbol.sym * Core.core_base_type)
 let fresh_typed_symbol is_loaded ty =
   let ctor x = if is_loaded then Core.BTy_loaded x else Core.BTy_object x in
-  bind fresh_symbol (fun sym ->
-    match Core_aux.core_object_type_of_ctype (Core_aux.proj_ctype ty) with
-      | Just objTy ->
-          return (sym, ctor objTy)
-      | Nothing ->
-          error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype ty)
-    end)
+  elab_fresh_symbol >>= fun sym ->
+  match Core_aux.core_object_type_of_ctype (Core_aux.proj_ctype ty) with
+    | Just objTy ->
+        return (sym, ctor objTy)
+    | Nothing ->
+        error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype ty)
+  end
+
 
 (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
-val fresh_named_symbol: string -> t Symbol.sym
+val fresh_named_symbol: string -> elabM Symbol.sym
 let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
   let (sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> name ^ "_" ^ show x)) suppl in
   (sym, <| st with symbol_supply= suppl' |>)
 
+
 (* register C objects from block scope. *)
-val push_block_objects: list (Symbol.sym * AilTypes.ctype) -> t unit
+val push_block_objects: list (Symbol.sym * AilTypes.ctype) -> elabM unit
 let push_block_objects binds = fun st ->
   ((), <| st with
     visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
     visible_objects= (List.map fst binds) :: st.visible_objects
   |>)
 
+
 (* forget C objects from the most recent block. *)
-val pop_block_objects: t unit
+val pop_block_objects: elabM unit
 let pop_block_objects = fun st ->
   ((), <| st with visible_objects=
       match st.visible_objects with
@@ -144,7 +83,7 @@ let pop_block_objects = fun st ->
       end |>)
 
 
-val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> t 'a -> t 'a
+val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> elabM 'a -> elabM 'a
 let with_block_objects binds ma = fun st ->
   let st' = <| st with
     visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
@@ -158,9 +97,6 @@ let with_block_objects binds ma = fun st ->
       end |>)
 
 
-let inline (>>=)    = bind
-let inline (>>) m f = bind m (fun _ -> f)
-
 (* TODO: UNUSED
 val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> t 'a -> t 'a
 let with_block_objects binds m =
@@ -170,26 +106,24 @@ let with_block_objects binds m =
   return ret
 *)
 
+
 (* returns the list of all the C objects in scope. *)
-val get_visible_objects: t (list Symbol.sym)
+val get_visible_objects: elabM (list Symbol.sym)
 let get_visible_objects = fun st ->
   (foldl (++) [] st.visible_objects, st)
 
 
-
-
-
-val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> C.pexpr -> t unit
+val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> C.pexpr -> elabM unit
 let register_string_literal loc sym ty pe = fun st ->
   ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
 
-val get_string_literals: t (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr))
+
+val get_string_literals: elabM (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr))
 let get_string_literals = fun st ->
   (st.string_literals, st)
 
 
-
-val resolve_object_type: Symbol.sym -> t AilTypes.ctype
+val resolve_object_type: Symbol.sym -> elabM AilTypes.ctype
 let resolve_object_type sym = fun st ->
   match Map.lookup sym st.visible_objects_types with
     | Just ty ->
@@ -205,21 +139,21 @@ let resolve_object_type sym = fun st ->
   end
 
 
-val        print_debugM: nat -> string -> t unit
-let inline print_debugM n str =
+val elab_print_debugM: nat -> string -> elabM unit
+let elab_print_debugM n str =
   fun st ->
     let () = Debug.print_debug n str in
     ((), st)
 
 
-
-val with_symbol_supply: forall 'a. (UniqueId.supply Symbol.sym -> UniqueId.supply Symbol.sym * 'a) -> t 'a
+val with_symbol_supply: forall 'a. (UniqueId.supply Symbol.sym -> UniqueId.supply Symbol.sym * 'a) -> elabM 'a
 let with_symbol_supply f =
   fun st ->
     let (suppl', z) = f st.symbol_supply in
     (z, <| st with symbol_supply= suppl' |>)
 
 
-
 (* HACK: this is a hack to prevent Lem from generating OCaml code with random renamings *)
-let inline foldlM = transEff_foldlM
+let inline init = elab_init
+let inline fresh_symbol = elab_fresh_symbol
+let inline print_debugM = elab_print_debugM

@@ -1,7 +1,7 @@
 
 open import Pervasives String_extra Global Core Core_ctype Core_ctype_aux Core_aux Show Show_extra
 import Set_extra (* Set_helpers *)
-import State State_operators Loc
+import State Loc
 import Nondeterminism Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
 import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax AilTypes AilTypesAux
@@ -148,7 +148,7 @@ let update_thread_state tid th_st st =
   <| st with thread_states= assoc_adjust f tid st.thread_states |>
 
 
-val spawn_thread: maybe thread_id -> thread_state -> core_state -> State.t (thread_id * core_state) core_run_state
+val spawn_thread: maybe thread_id -> thread_state -> core_state -> State.stateM (thread_id * core_state) core_run_state
 let spawn_thread parent_tid_opt th_st st =
   State.modify (fun run_st ->
     let (tid, tid_suppl') = UniqueId.fresh_id run_st.tid_supply in
@@ -175,7 +175,7 @@ let kill_thread tid parent_tid aswBefores v st =
   |>
 
 
-val fresh_symbol': State.t Symbol.sym core_run_state
+val fresh_symbol': State.stateM Symbol.sym core_run_state
 let fresh_symbol' =
   State.modify (fun run_st ->
     let (sym, symbol_suppl') = UniqueId.fresh_id run_st.symbol_supply in
@@ -183,7 +183,7 @@ let fresh_symbol' =
   )
 
 
-val fresh_action_id': State.t Cmm.aid core_run_state
+val fresh_action_id': State.stateM Cmm.aid core_run_state
 let fresh_action_id' =
   State.modify (fun run_st ->
     let (aid, aid_suppl') = UniqueId.fresh_id run_st.aid_supply in
@@ -193,9 +193,11 @@ let fresh_action_id' =
 
 
 
-open State.Operators
+(* Now using the State monad infix operators *)
+let inline (>>=) = State.bind
+let inline (>>) m f = State.bind m (fun _ -> f)
 
-val     hoist_negatives: forall 'a. expr 'a -> State.t (expr 'a) (list (expr 'a) * core_run_state)
+val     hoist_negatives: forall 'a. expr 'a -> State.stateM (expr 'a) (list (expr 'a) * core_run_state)
 let rec hoist_negatives expr =
   let add_neg neg_e =
     State.modify (fun (negs, run_st) ->
@@ -1294,6 +1296,8 @@ let convert_file file =
   let convert_fun_map_decl = function
     | Fun bTy params pe ->
         Fun bTy params pe
+    | ProcDecl bTy params ->
+        ProcDecl bTy params
     | Proc bTy params e ->
         Proc bTy params (convert_expr e)
   end in

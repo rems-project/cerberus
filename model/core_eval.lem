@@ -57,6 +57,8 @@ let call_function file f_nm arg_cvals =
           )
         else
           Exception.return $ Global.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
+    | ProcDecl _ _ ->
+        error "Core_run.call_function, called on a ProcDecl"
     | Proc _ _ _ ->
         error "Core_run.call_function, called on a Proc"
   end

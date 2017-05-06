@@ -44,7 +44,7 @@ let mk_stdcall stdlib fname =
     | Just (f, Core.Fun bTy params _) ->
         fun pes ->
           Core.Pexpr () (Core.PEcall (Core.Sym f) pes)
-    | Nothing ->
+    | _ ->
         error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
 
