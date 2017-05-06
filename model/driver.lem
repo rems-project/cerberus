@@ -99,7 +99,8 @@ let liftMem m dr_st =
 let add_to_concur_sym_map sym oval concur_sym_map =
   match oval with
     | _ ->
-        let () = Debug.print_debug 2 ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ Pp.stringFromCore_value (Core.Vobject oval)) in
+        let () = Debug.print_debug 2 [Debug.DB_driver; Debug.DB_concurrency]
+            ("ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ Pp.stringFromCore_value (Core.Vobject oval)) in
         Map.insert sym oval concur_sym_map
   end
 
@@ -109,7 +110,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driver_state -> ND.ndM driver_state
 let rec stepConcurrency n dr_st =
-  let () = Debug.print_debug 10 "Driver.stepConcurrency" in (* DEBUG *)
+  let () = Debug.print_debug 10 [Debug.DB_driver] "Driver.stepConcurrency" in (* DEBUG *)
   if n = 0 then
     ND.return dr_st
   else begin
@@ -117,7 +118,8 @@ let rec stepConcurrency n dr_st =
     conc_result >>= function
       | Cmm_op.ConcurrencyTau performed_act concur_st' ->
           ND.log ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act))                  >> (* DEBUG *)
-          ND.print_debug 4 ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act) ^ "\n") >> (* DEBUG *)
+          ND.print_debug 4 [Debug.DB_driver; Debug.DB_concurrency]
+            ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act) ^ "\n") >> (* DEBUG *)
           ND.return  <| dr_st with concurrency_state= concur_st' |>
       
       (* TODO: the variables names seems completely messed up here *)
@@ -125,9 +127,10 @@ let rec stepConcurrency n dr_st =
           ND.log ("ReadsFrom with aid: " ^ show (Cmm.aid_of performed_act) ^ " with concrete: " ^ (* DEBUG *)
                   Pp.pretty_stringFromMem_mem_value new_concrete_mval ^ " and previous: " ^       (* DEBUG *)
                   Pp.pretty_stringFromMem_mem_value previous_symbolic_mval) >>                    (* DEBUG *)
-          ND.print_debug 2 ("ReadsFrom with aid: " ^ aid_to_string performed_act ^ "\n") >>       (* DEBUG *)
-          
-          ND.print_debug 2 ("CONCRETE MVAL = " ^ Pp.stringFromCore_value                          (* DEBUG *)
+          ND.print_debug 2 [Debug.DB_driver; Debug.DB_concurrency]
+            ("ReadsFrom with aid: " ^ aid_to_string performed_act ^ "\n") >>       (* DEBUG *)
+          ND.print_debug 2 [Debug.DB_driver; Debug.DB_concurrency]
+            ("CONCRETE MVAL = " ^ Pp.stringFromCore_value        (* DEBUG *)
             (Core.Vobject (snd $ Core_aux.objectValueFromMemValue new_concrete_mval))) >>         (* DEBUG *)
           
           let new_concrete_cst =
@@ -158,7 +161,8 @@ let rec stepConcurrency n dr_st =
           ND.log ("ADDING READ CONSTRAINT: EQ " ^ Pp.pretty_stringFromMem_mem_value previous_symbolic_mval ^ " <--> " ^ (* DEBUG *)
                   Pp.pretty_stringFromMem_mem_value new_concrete_mval) >>                                               (* DEBUG *)
           ND.add_constraint (Constraints.assert_eq previous_symb new_concrete_cst) >>
-          ND.print_debug 2 ("ReadsFrom: " ^ show previous_sym ^ " = " ^ Pp.pretty_stringFromMem_mem_value new_concrete_mval) >> (* DEBUG *)
+          ND.print_debug 2 [Debug.DB_driver; Debug.DB_concurrency]
+            ("ReadsFrom: " ^ show previous_sym ^ " = " ^ Pp.pretty_stringFromMem_mem_value new_concrete_mval) >> (* DEBUG *)
           ND.return <| dr_st with
             concurrency_state= concur_st';
             core_state= (* resolve_read previous_sym new_concrete_cst *) dr_st.core_state;
@@ -211,7 +215,7 @@ let rec drive_core_thread tid dr_st =
   end in
   ND.msum "drive_core_thread" $ List.map (function
     | Step_constrained debug_str xs ->
-        (* DEBUG *) ND.print_debug 6 (">> STEP_CONSTRAINED") >>
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (">> STEP_CONSTRAINED") >>
         ND.msum "step_constrained" (
           List.map (fun (constrs, step_m) ->
             (* TODO HACK *)
@@ -239,7 +243,7 @@ let rec drive_core_thread tid dr_st =
         )
     
     | Step_action_request _ ->
-        (* DEBUG *) ND.print_debug 6 (">> ACTION_REQUEST") >>
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (">> ACTION_REQUEST") >>
         ND.return dr_st
     | Step_memop_request _ _ _ _ ->
         ND.return dr_st
@@ -247,7 +251,7 @@ let rec drive_core_thread tid dr_st =
         let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
         let pre_th_st = (* DEBUG *)
           snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.thread_states) in
-        (* DEBUG *) ND.print_debug 6 ("tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] ("tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
         (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.arena ^ ";\nstack= " ^
         (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.stack) >>
         (* case where the Core program does a non pure but non memory-related
@@ -260,7 +264,7 @@ let rec drive_core_thread tid dr_st =
         |>
     | Step_eval debug_str step_m ->
         let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
-        (* DEBUG *) ND.print_debug 6 ("eval(tid_" ^ show tid ^ "): " ^ debug_str) >>
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] ("eval(tid_" ^ show tid ^ "): " ^ debug_str) >>
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
         let () = Boot.end_timing () in (* DEBUG, PROFILING *)
@@ -270,7 +274,7 @@ let rec drive_core_thread tid dr_st =
         |>
     
     | Step_thread_done parent_tid cval ->
-        (* DEBUG *) ND.print_debug 6 ("thread " ^ show tid ^ " is done") >>
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] ("thread " ^ show tid ^ " is done") >>
         let actions_of_current_thread: set Cmm.action =
           Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
         let last_actions_of_current_thread: set Cmm.action =
@@ -290,7 +294,7 @@ let rec drive_core_thread tid dr_st =
     | Step_done cval ->
         ND.return dr_st
     | Step_spawn_threads mk_th_st th_sts ->
-        ND.print_debug 6 "Step_spawn_threads" >>
+        ND.print_debug 6 [Debug.DB_driver_step] "Step_spawn_threads" >>
         let ((th_tids, core_st'), run_st') = State.run (
           State.foldlM (fun (th_tids_, core_st_) th_st ->
             State.bind (spawn_thread (Just tid) th_st core_st_)
@@ -312,7 +316,7 @@ let rec drive_core_thread tid dr_st =
         drive_core_thread tid dr_st''
     
     | Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
-        ND.print_debug 6 "Step_printf2" >>
+        ND.print_debug 6 [Debug.DB_driver_step] "Step_printf2" >>
         let eval_conv (*ty1*) ty2 mval =
           eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
             (* Core.PEcall (Core.Sym conv_sym) *)
@@ -365,7 +369,7 @@ let rec drive_core_threads dr_st =
       ND.return
       (fun () -> ND.return acc)
 *)
-    ND.print_debug 9 "BEFORE drive_core_thread, in drive_core_threads" >>
+    ND.print_debug 9 [Debug.DB_driver] "BEFORE drive_core_thread, in drive_core_threads" >>
     drive_core_thread tid acc
   ) dr_st dr_st.core_state.thread_states
 
@@ -411,7 +415,7 @@ let update_core_run_state run_st dr_st =
 val action_request_concurrency: driver_state -> action_request -> ND.ndM driver_state
 let action_request_concurrency dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST ALLOC" in (* DEBUG *)
       (* TODO: hack, hack, hack *)
       ND.log ("ALLOC REQUEST (aid: " ^ show aid ^ ")") >> (* DEBUG *)
       begin
@@ -428,7 +432,7 @@ let action_request_concurrency dr_st = function
       end
   
   | CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST CREATE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST CREATE" in (* DEBUG *)
       (* TODO: hack, hack, hack *)
       ND.log ("CREATE REQUEST (aid: " ^ show aid ^ ")") >> (* DEBUG *)
       begin
@@ -445,7 +449,7 @@ let action_request_concurrency dr_st = function
       end
   
   | StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
-      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST STORE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "CONCUR REQUEST STORE" in (* DEBUG *)
       let preEx_step = <|
           Cmm_op.newAction=    Cmm.Store aid tid mo ptr_val mem_val;
           Cmm_op.sbBefore=     sb_edges;
@@ -462,7 +466,7 @@ let action_request_concurrency dr_st = function
       |>
   
   | LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val sym mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST LOAD" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "CONCUR REQUEST LOAD" in (* DEBUG *)
 (*      let mval = Mem.symbolic_mval (Symbolic.SYMBsym Symbolic.SYMBint sym) in *)
       let ity = match lvalue_ty with
         | Core_ctype.Basic (AilTypes.Integer ity) ->
@@ -487,7 +491,7 @@ let action_request_concurrency dr_st = function
       |>
   
   | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
-      let () = Debug.print_debug_located 3 loc "CONCUR REQUEST FENCE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "CONCUR REQUEST FENCE" in (* DEBUG *)
       let preEx_step = <|
           Cmm_op.newAction=    Cmm.Fence aid tid mo;
           Cmm_op.sbBefore=     sb_edges;
@@ -522,7 +526,7 @@ let action_request_concurrency dr_st = function
       error "WIP: Driver ==> RMWRequest"
 
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST KILL" in (* DEBUG *)
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
         (* TODO: the kill ... *)
@@ -600,7 +604,7 @@ end
 val action_request_sequential: driver_state -> action_request -> ND.ndM driver_state
 let action_request_sequential dr_st = function
   | AllocRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival size_ival mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST ALLOC" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST ALLOC" in (* DEBUG *)
       ND.msum "action_request_sequential, Alloc" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -613,7 +617,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_dynamic tid pref align_ival size_ival) dr_st.layout_state)
   
   | CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST CREATE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST CREATE" in (* DEBUG *)
       ND.msum "action_request_sequential, Create" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -626,7 +630,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.allocate_static tid pref align_ival lvalue_ty) dr_st.layout_state)
   
   | LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST LOAD" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST LOAD" in (* DEBUG *)
       ND.msum "action_request_sequential, Load" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -639,7 +643,7 @@ let action_request_sequential dr_st = function
       end) (Mem.runMem (Mem.load lvalue_ty ptr_val) dr_st.layout_state)
   
   | StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST STORE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST STORE" in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       ND.msum "action_request_sequential, Store" $ map (function
@@ -658,13 +662,13 @@ let action_request_sequential dr_st = function
       error "WIP: Driver.seq ==> RMWRequest"
   
   | FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST FENCE" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST FENCE" in (* DEBUG *)
       ND.return <| dr_st with
         core_state= update_thread_state tid th_st' dr_st.core_state;
       |>
   
   | KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
-      let () = Debug.print_debug_located 3 loc "REQUEST KILL" in (* DEBUG *)
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc "REQUEST KILL" in (* DEBUG *)
       ND.msum "action_request_sequential, Kill" $ map (function
         | Left mem_err ->
             (* TODO: map memory error to something sensible ... *)
@@ -688,7 +692,7 @@ val     driver: bool -> driver_state -> ND.ndM driver_state
 let rec driver with_concurrency dr_st =
   let process_core_step2 dr_st = function
   | Step_action_request request_m ->
-      (* DEBUG *) ND.print_debug 9 "Step_action_request" >>
+      (* DEBUG *) ND.print_debug 9 [Debug.DB_driver] "Step_action_request" >>
       runCore request_m dr_st >>= fun (request, dr_st') ->
       
       let execution_mode_is_random = match ND.current_execution_mode () with
@@ -804,7 +808,7 @@ let rec driver with_concurrency dr_st =
   | Step_branch of (* DEBUG *) string * (Constraints.t -> Constraints.t) * (Constraints.t -> Constraints.t) * core_runM thread_state * core_runM thread_state
 *)
   | Step_done cval ->
-      ND.print_debug 3 ("driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval) >> (* DEBUG *)
+      ND.print_debug 3 [Debug.DB_driver] ("driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval) >> (* DEBUG *)
       ND.return dr_st
 (*
   | Step_spawn_threads of list thread_state (* initial states for the children *)
@@ -830,7 +834,7 @@ let rec driver with_concurrency dr_st =
        switch to exhaustive mode and also compute the steps of the
        other threads. *)
     
-    ND.print_debug 6 ("FIRST: " ^ show (List.length post_core_dr_st.core_state.thread_states) ^ " vs " ^ show (List.length non_blocked_th_sts)) >>
+    ND.print_debug 6 [Debug.DB_driver] ("FIRST: " ^ show (List.length post_core_dr_st.core_state.thread_states) ^ " vs " ^ show (List.length non_blocked_th_sts)) >>
     ND.bindExhaustive (ND.pick "driver 2" (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts)
                       (fun (tid, th_info) ->
 (* OLD                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state) *)
@@ -838,7 +842,7 @@ let rec driver with_concurrency dr_st =
     
 
    else
-    ND.print_debug 6 "SECOND" >>
+    ND.print_debug 6 [Debug.DB_driver] "SECOND" >>
 (*
      ND.pick (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts >>= fun th_info ->
      ND.return (core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)
@@ -929,7 +933,7 @@ let finalize debug_str dr_st =
         (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.io.stdout), (dr_st.blocked, dr_st.concurrency_state, cval),
          (dr_st.dr_step_counter, dr_st.core_run_state.step_counter))
     | xs ->
-        let () = Debug.print_debug 3 ("ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
+        let () = Debug.print_debug 3 [Debug.DB_driver] ("ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
         error ("BOOM finalize [" ^ debug_str ^ "]")
   end
 
@@ -1013,7 +1017,7 @@ let driver_globals with_concurrency sym_supply file =
   |> in
   
   ND.foldM (fun (to_subst, dr_st) (sym, cTy, e) ->
-    let () = Debug.print_debug 6 ("eval GLOB: " ^ show sym) in (* DEBUG *)
+    let () = Debug.print_debug 6 [Debug.DB_driver] ("eval GLOB: " ^ show sym) in (* DEBUG *)
     (* setting up the initialisation of the current global in thread 0 *)
     let dr_st = <| dr_st with
       core_state=
@@ -1229,14 +1233,14 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
             match dr_st'.concurrency_state.Cmm_op.symUndefinedness with
               | [] ->
                   let (str, (is_blocked, conc_st, cval), steps) = finalize "drive (with concur)" dr_st' in
-                  ND.print_debug 2 ("FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
-                  ND.print_debug 2 "BEGIN SYMBOLIC ASSOC" >>
+                  ND.print_debug 2 [Debug.DB_driver] ("FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
+                  ND.print_debug 2 [Debug.DB_driver] "BEGIN SYMBOLIC ASSOC" >>
                   let _ = Map.mapi (fun sym oval ->
-                    Debug.print_debug 0 (show sym ^ " == " ^ Pp.stringFromCore_value (Core.Vobject oval))
+                    Debug.print_debug 1 [Debug.DB_driver] (show sym ^ " == " ^ Pp.stringFromCore_value (Core.Vobject oval))
                   ) dr_st'.symbolic_assoc in
                   
                   let cval = process_objet_value dr_st'.symbolic_assoc cval in
-                  ND.print_debug 2 ("CLEANED FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
+                  ND.print_debug 2 [Debug.DB_driver] ("CLEANED FINAL VALUE IS " ^ Pp.stringFromCore_value cval) >>
                   
                   
                   ND.return (str, (is_blocked, conc_st, Core.Pexpr () (Core.PEval cval)), steps)

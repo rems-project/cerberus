@@ -1,10 +1,17 @@
 import Loc
 
 type domain =
-  | DB_ail_typing
-  | DB_driver_step
   | DB_clexer
   | DB_cparser
+  | DB_desugaring
+  | DB_ail_typing
+  | DB_elaboration
+  | DB_core_typing
+  | DB_core_dynamics
+  | DB_driver
+  | DB_concurrency
+  | DB_driver_step
+  | DB_memory
 
 declare ocaml target_rep type domain = `Debug_ocaml.domain`
 
@@ -17,16 +24,16 @@ val output_string: string -> unit
 declare ocaml target_rep function output_string = `Debug_ocaml.output_string2`
 declare hol   target_rep function output_string = `util$output_string`
 
-val print_debug: nat -> string -> unit
+val print_debug: nat -> list domain -> string -> unit
 declare ocaml target_rep function print_debug = `Debug_ocaml.print_debug`
 declare hol   target_rep function print_debug = `util$print_debug`
 
-val print_debug_located: nat -> Loc.t -> string -> unit
+val print_debug_located: nat -> list domain -> Loc.t -> string -> unit
 declare ocaml target_rep function print_debug_located = `Debug_ocaml.print_debug_located`
 declare hol   target_rep function print_debug_located =
                                   `util$print_debug_located`
 
-val warn: string -> unit
+val warn: list domain -> string -> unit
 declare ocaml target_rep function warn = `Debug_ocaml.warn`
 declare hol   target_rep function warn = `util$output_string`
 
