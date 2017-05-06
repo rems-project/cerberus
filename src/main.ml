@@ -275,7 +275,8 @@ let gen_corestd stdlib impl =
       Core_opt.run Codegen_ocaml.opt_passes typed_core
       |> Cps_core.cps_transform sym_supply []
     in
-    Codegen_corestd.gen [] cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
+    Codegen_corestd.gen (Pp_ocaml.empty_globs "coreStd")
+      cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
