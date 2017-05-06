@@ -23,7 +23,7 @@ let rec sequentialise_expr expr =
     | Eproc _ _ _ ->
         expr
     | Eunseq es ->
-        let () = Debug.warn "Core_sequentialise ==> missed an unseq" in
+        let () = Debug.warn [Debug.DB_core_dynamics] "Core_sequentialise ==> missed an unseq" in
         expr
 (*
         E.replicateM (List.length es) E.fresh_symbol >>= fun syms ->

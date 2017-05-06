@@ -20,10 +20,14 @@ let lookup_tag_definition s sym =
 
 
 
+type parent_ctor =
+  | Psizeof
+  | Paddr  (* unary & operator *)
+(*  | Pincr
+  | Pdecr *)
+  | Pother
 
 
-
-(* val annotate_statement: annotation unit genTypeCategory -> sigma unit -> gamma -> ctype -> statement unit -> E.errorM (statement genTypeCategory) *)
 
 
 
@@ -89,7 +93,7 @@ val well_typed_assignment: forall 'a. sigma 'a -> ctype -> genType -> bool -> E.
 let well_typed_assignment s ty1 gty2 null2 =
   (* §6.5.16.1#1, bullet 1 *)
   if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && GenTypesAux.is_arithmetic gty2 then
-    let () = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 1" in
+    let () = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] OK: bullet 1" in
     E.return true
   
   (* §6.5.16.1#1, bullet 2 *)
@@ -115,46 +119,40 @@ let well_typed_assignment s ty1 gty2 null2 =
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
           if AilTypesAux.compatible ref_ty1 ref_ty2 && AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
           else if (AilTypesAux.is_void ref_ty1 || AilTypesAux.is_void ref_ty2) &&
                   AilTypesAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 4" in                     (* DEBUG *)
-            let _ = Debug.print_debug 2 $ "qs1: " ^ (if ref_qs1.const    then "const "    else "") ^  (* DEBUG *)
-                                              (if ref_qs1.restrict then "restrict " else "") ^  (* DEBUG *)
-                                              (if ref_qs1.volatile then "volatile " else "") ^  (* DEBUG *)
-                                              (if ref_qs1.atomic   then "atomic "   else "") in (* DEBUG *)
-            let _ = Debug.print_debug 2 $ "qs2: " ^ (if ref_qs2.const    then "const "    else "") ^  (* DEBUG *)
-                                              (if ref_qs2.restrict then "restrict " else "") ^  (* DEBUG *)
-                                              (if ref_qs2.volatile then "volatile " else "") ^  (* DEBUG *)
-                                              (if ref_qs2.atomic   then "atomic "   else "") in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] OK: bullet 4"          in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] $ "qs1: " ^ Pp.stringFromAil_qualifiers ref_qs1 in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] $ "qs2: " ^ Pp.stringFromAil_qualifiers ref_qs2 in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 5 *)
           else if null2 then
-            let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] OK: bullet 5" in (* DEBUG *)
             E.return true
           
           else
-            let _ = Debug.print_debug 2 "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] KO: is_pointer ty1 && gty2" in (* DEBUG *)
             E.return false
       | (Pointer ref_qs1 ref_ty1, _) ->
           (* §6.5.16.1#1, bullet 5 *)
           E.return null2
       | _ ->
-          let _ = Debug.print_debug 2 "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
+          let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] KO: is_pointer ty1" in (* DEBUG *)
           E.return false
     end
   
   (* §6.5.16.1#1, bullet 6 *)
   else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_Bool ty1 && GenTypesAux.is_pointer gty2 then
-    let _ = Debug.print_debug 2 "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
+    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] OK: bullet 6" in (* DEBUG *)
     E.return true
   
   else
-    let _ = Debug.print_debug 2 "[well_typed_assignment] KO: the end" in (* DEBUG *)
+    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] KO: the end" in (* DEBUG *)
     E.return false
 
 
@@ -440,7 +438,8 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
           | GenLValueType qs ty ->
               (* e is an 'lvalue' *)
               (* TODO: e must designates an object that is not a bit-field and is not declared with the register storage-class specifier *)
-              let () = Debug.warn "GenTyping, AilEunary Address - must check operand is not lvalue to bit-field and not declared with register" in
+              let () = Debug.warn [Debug.DB_ail_typing]
+                  "GenTyping, AilEunary Address - must check operand is not lvalue to bit-field and not declared with register" in
               E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
           | _ ->
               E.fail (locOf e) (TError_TODO 14)
@@ -536,12 +535,12 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
           E.return (ident, Maybe.map fst a_e_opt)
         ) xs >>= fun xs' ->
         (* TODO: the actual type checking of the members ... *)
-        let () = Debug.warn "typing of struct constant doesn't check the members are valid for the tag" in
+        let () = Debug.warn [Debug.DB_ail_typing] "typing of struct constant doesn't check the members are valid for the tag" in
         E.return (AilEstruct tag_sym xs', GenRValueType (GenStruct tag_sym))
     
     | AilEunion tag_sym memb_ident e_opt ->
         maybe (E.return Nothing) (fun e -> (Just -| fst) <$> annotate_rvalue e) e_opt >>= fun a_e_opt ->
-        let () = Debug.warn "typing of union constant doesn't check the member is valid for the tag" in
+        let () = Debug.warn [Debug.DB_ail_typing] "typing of union constant doesn't check the member is valid for the tag" in
         E.return (AilEunion tag_sym memb_ident a_e_opt, GenRValueType (GenUnion tag_sym))
     
     | AilEcompound ty e ->
@@ -1387,7 +1386,7 @@ and annotate_definition_aux a s g (ty, e) =
      || (AilTypesAux.is_complete_object s ty --> not (AilTypesAux.is_vla ty)) then
     if AilTypesAux.is_scalar ty then
       (* STD §6.7.9#11, sentence 3 *)
-      let _ = Debug.print_debug 2 $ "HELLLOO: " ^ Pp.stringFromAil_expression e in
+      let _ = Debug.print_debug 2 [Debug.DB_ail_typing] $ "HELLLOO: " ^ Pp.stringFromAil_expression e in
       annotate_assignee a s g (AilTypesAux.unqualify ty) e >>= fun a_e ->
       E.return a_e
       

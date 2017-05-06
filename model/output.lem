@@ -604,8 +604,9 @@ let convert eval_conv prec_opt lm_opt cspec args =
           let conv_ty_opt = match expected_ty_opt with
             | Just expected_ty ->
                 if arg_ty <> expected_ty then
-                  let () = Debug.warn $ "printf() was expecting a(n) " ^ stringFromCtype expected_ty ^
-                                        " but got a(n) " ^ stringFromCtype arg_ty ^ " instead." in
+                  let () = Debug.warn [Debug.DB_core_dynamics] $
+                    "printf() was expecting a(n) " ^ stringFromCtype expected_ty ^
+                    " but got a(n) " ^ stringFromCtype arg_ty ^ " instead." in
                   Just expected_ty
                 else
                   _conv_ty_opt
@@ -779,6 +780,9 @@ let convert eval_conv prec_opt lm_opt cspec args =
                         | Nothing ->
                             error "WIP[error message], Output => CS_s, didn't load a pointer"
                       end
+                | (ty, pe) :: _ ->
+                    error ("WIP, Output => CS_s, ty <> Pointer ==> " ^
+                           stringFromPair Pp.stringFromCore_ctype Pp.stringFromMem_mem_value (ty, Mem.pointer_mval ty pe) )
               end
         end
     | CS_p ->

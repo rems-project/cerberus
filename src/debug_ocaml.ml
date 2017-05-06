@@ -1,10 +1,17 @@
 open Lexing
 
 type domain =
-  | DB_ail_typing
-  | DB_driver_step
   | DB_clexer
   | DB_cparser
+  | DB_desugaring
+  | DB_ail_typing
+  | DB_elaboration
+  | DB_core_typing
+  | DB_core_dynamics
+  | DB_driver
+  | DB_concurrency
+  | DB_driver_step
+  | DB_memory
 
 type debug_state = {
   level:   int;
@@ -28,7 +35,7 @@ let print_success msg =
   if !debug_level > 0 then
     prerr_endline Colour.(ansi_format [Green] msg)
 
-let print_debug level msg =
+let print_debug level doms msg =
   if !debug_level >= level then
     prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg))
 
@@ -47,10 +54,11 @@ let location_to_string loc =
                            pos2.pos_lnum (1+pos2.pos_cnum-pos2.pos_bol)
   )
 
-let print_debug_located level loc msg =
-  print_debug level ("(" ^ location_to_string loc ^ ") - " ^ msg)
 
-let warn msg =
+let print_debug_located level doms loc msg =
+  print_debug level doms ("(" ^ location_to_string loc ^ ") - " ^ msg)
+
+let warn doms msg =
   if !debug_level > 0 then
     prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg))
 
