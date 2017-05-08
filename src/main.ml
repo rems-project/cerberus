@@ -294,9 +294,13 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
     include Core_parser.Make (struct
         let sym_counter = core_sym_counter
         let mode = Core_parser_util.ImplORFileMode
-        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
-          let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
-          Pmap.add (str, (std_pos, std_pos)) fsym acc
+        let std = List.fold_left (fun acc (fsym, _) ->
+          match fsym with
+            | Symbol.Symbol (_, Some str) ->
+                let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
+                Pmap.add (str, (std_pos, std_pos)) fsym acc
+            | Symbol.Symbol (_, None) ->
+                 acc
         ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list (snd core_stdlib)
       end)
     type result = Core_parser_util.result
@@ -350,6 +354,8 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
               else
                 n
 
+(* TODO: this function wasn't used *)
+(*
 let gen_ocaml_corestd debug_level impl_name =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
@@ -379,6 +385,7 @@ let gen_ocaml_corestd debug_level impl_name =
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
   ()
+*)
 
 (* CLI stuff *)
 open Cmdliner
