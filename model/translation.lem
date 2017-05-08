@@ -3476,7 +3476,7 @@ let mk_run_e sym visibles_before visibles_after pes =
 val translate_program:
   translation_stdlib ->
   bool -> A.program GenTypes.genTypeCategory ->
-  E.elabM (list (C.sym * C.core_base_type * C.expr unit) * (* unit(*SOMETHING*) * *) C.fun_map unit)
+  E.elabM (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 
 let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) =
   E.foldlM (fun (gacc, facc) (sym, decl) ->
