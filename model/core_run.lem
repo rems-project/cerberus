@@ -300,7 +300,6 @@ let rec hoist_negatives expr =
 
 
 
-open SEU.Operators
 
 
 (*
@@ -360,6 +359,12 @@ module E = struct
   let fresh_symbol =
     SEU.runS fresh_symbol'
 end
+open SEU.Operators
+(*
+let inline (>>=) = SEU.bind
+let inline (>>) m1 m2 = SEU.bind m1 (fun _ -> m2)
+let inline (<$>) = SEU.fmap
+*)
 
 
 type action_request =
