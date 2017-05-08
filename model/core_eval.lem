@@ -395,6 +395,28 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               EU.return $ PEval (Vloaded (LVunspecified ty))
           
           | (_, Just cvals) ->
+              if List.any Caux.isConstrainedValue cvals then
+                (* if some operands of the ctor are constrained, the following pulls the PEconstrained operator
+                   outside of the PEctor *)
+                (* TODO: check this code *)
+                let (xs : list (list Mem.mem_constraint2 * list pexpr)) =
+                  List.foldl (fun acc cval ->
+                    match cval with
+                      | Vconstrained xs ->
+                          List.map (fun ((xsConsts, xsCval), (accConsts, accPes)) ->
+                            (xsConsts ++ accConsts, Pexpr () (PEval xsCval) :: accPes)
+                          ) (Global.product_list xs acc)
+                      | _ ->
+                          List.map (fun (consts, pes) -> (consts, Pexpr () (PEval cval) :: pes)) acc
+                    end
+                  ) [([], [])] cvals in
+                EU.return (
+                  PEconstrained (
+                    List.map (fun (consts, pes') -> (consts, Pexpr () (PEctor ctor pes'))) xs
+                  )
+                )
+              else
+              
               EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^ Pp.stringFromCore_pexpr pexpr ^ " <====> " ^
                                            stringFromList Pp.stringFromCore_value cvals)
           | (_, Nothing) ->

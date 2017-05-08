@@ -220,13 +220,13 @@ let rec drive_core_thread tid dr_st =
           List.map (fun (constrs, step_m) ->
             (* TODO HACK *)
             let (debug_str, mk_constr) = match constrs with
-              | [Defacto_memory.MC_eq_ival ival1 ival2] ->
+              | [Defacto_memory_types.MC_eq_ival ival1 ival2] ->
                   ("EQ " ^ (Pp.stringFromCore_value (Core.Vobject (Core.OVinteger ival1))) ^ " <---> " ^ (Pp.stringFromCore_value (Core.Vobject (Core.OVinteger ival2))),
                    Constraints.assert_eq
                      (symbolicFromIntegerValue ival1) (symbolicFromIntegerValue ival2)
                   )
 (*                    (Symbolic.SYMBconst (Core.OVinteger ival1)) (Symbolic.SYMBconst (Core.OVinteger ival2)) *)
-              | [Defacto_memory.MC_ne_ival ival1 ival2] ->
+              | [Defacto_memory_types.MC_ne_ival ival1 ival2] ->
                   ("NE " ^ (Pp.stringFromCore_value (Core.Vobject (Core.OVinteger ival1))) ^ " <---> " ^ (Pp.stringFromCore_value (Core.Vobject (Core.OVinteger ival2))),
                    Constraints.assert_neq
                      (symbolicFromIntegerValue ival1) (symbolicFromIntegerValue ival2)

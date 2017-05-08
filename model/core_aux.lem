@@ -161,8 +161,10 @@ let rec memValueFromValue ty cval =
           Just (Mem.union_mval tag_sym1 ident mem_val)
         else
           Nothing
+(*
     | _ ->
         Nothing
+*)
   end
 
 
@@ -1440,3 +1442,13 @@ let rec select_case subst_sym pexpr = function
             ) pe sym_pes
       end
 end
+
+
+val isConstrainedValue: value -> bool
+let isConstrainedValue cval =
+  match flatten_constrained_value cval with
+    | Vconstrained _ ->
+        true
+    | _ ->
+        false
+  end
