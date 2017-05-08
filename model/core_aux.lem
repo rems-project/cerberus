@@ -1105,79 +1105,7 @@ let rec subst_wait_stack tid v = function
 end
 
 
-
-let rec find_labeled_continuation ksym expr =
-let () = Debug.print_debug 3 [] ("Core_aux.find_labeled_continuation: " ^ show ksym ^ " ==> " ^ Pp.stringFromCore_expr expr) in
-match expr with
-  | Epure _ ->
-      Nothing
-  | Ememop _ _ ->
-      Nothing
-  | Eskip ->
-      Nothing
-  | Elet _ _ e2 ->
-      find_labeled_continuation ksym e2
-  | Eif _ e2 e3 ->
-      match find_labeled_continuation ksym e2 with
-        | Just cont ->
-            Just cont
-        | Nothing ->
-            find_labeled_continuation ksym e3
-      end
-  | Eccall _ _ _ ->
-      Nothing
-  | Eproc _ _ _ ->
-      Nothing
-  | Eaction _ ->
-      Nothing
-  | Eunseq _ ->
-      Nothing
-  | Ewseq _as e1 e2 ->
-      match find_labeled_continuation ksym e1 with
-        | Just (sym_tys, cont_e) ->
-            Just (sym_tys, Ewseq _as cont_e e2)
-        | Nothing ->
-            find_labeled_continuation ksym e2
-      end
-  | Esseq _as e1 e2 ->
-      match find_labeled_continuation ksym e1 with
-        | Just (sym_tys, cont_e) ->
-            Just (sym_tys, Esseq _as cont_e e2)
-        | Nothing ->
-            find_labeled_continuation ksym e2
-      end
-  | Easeq _ _ _ ->
-      error "Core_aux.find_labeled_continuation: Easeq shouldn't exists at this point"
-  | Eindet _ _ ->
-      error "Core_aux.find_labeled_continuation: Eindet shouldn't exists at this point"
-  | Ebound _ _ ->
-      error "Core_aux.find_labeled_continuation: Ebound shouldn't exists at this point"
-(*
-  | Esave ksym' sym_tys e ->
-      if ksym = ksym' then
-        Just (sym_tys, e)
-      else
-        find_labeled_continuation ksym e
-  | Erun _ _ _ ->
-      Nothing
-*)
-  | Esave sym' sym_bTys e ->
-      error "find_labeled_continuation: Esave sym sym_bTys (subst_sym_expr sym pe' e)"
-  | Erun annot sym pes ->
-      Nothing
-  | End _ ->
-      Nothing
-  | Epar _ ->
-      error "Core_aux.find_labeled_continuation:  think about this Ctor (Epar)"
-  | Ewait _ ->
-      Nothing
-  | Eloc _ e ->
-      find_labeled_continuation ksym e
-  end
-
-
-
-let rec find_labeled_continuation2 sym = function
+let rec find_labeled_continuation sym = function
   | Epure _ ->
       Nothing
   | Ememop _ _ ->
@@ -1185,13 +1113,13 @@ let rec find_labeled_continuation2 sym = function
   | Eaction _ ->
       Nothing
   | Ecase _ pat_es ->
-      let () = Debug.warn [] "find_labeled_continuation2 assumes there is atmost single match inside a Ecase" in
+      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes there is atmost single match inside a Ecase" in
       List.foldl (fun acc (_, e) ->
         match acc with
           | Just _ ->
               acc
           | Nothing ->
-              match find_labeled_continuation2 sym e with
+              match find_labeled_continuation sym e with
                 | Nothing ->
                     Nothing
                 | Just ret ->
@@ -1200,14 +1128,14 @@ let rec find_labeled_continuation2 sym = function
         end
       ) Nothing pat_es
   | Elet _ _ e2 ->
-      find_labeled_continuation2 sym e2
+      find_labeled_continuation sym e2
   | Eif _ e2 e3 ->
       (* NOTE: in a well formed Core expr, [sym] cannot be bound in both e2 and e3. *)
-      match find_labeled_continuation2 sym e2 with
+      match find_labeled_continuation sym e2 with
         | Just z ->
             Just z
         | Nothing ->
-            find_labeled_continuation2 sym e3
+            find_labeled_continuation sym e3
       end
   | Eskip ->
       Nothing
@@ -1219,20 +1147,20 @@ let rec find_labeled_continuation2 sym = function
       (* NOTE: Typing forbids labeled continuation bindings inside unseq() *)
       Nothing
   | Ewseq pat e1 e2 ->
-      let () = Debug.warn [] "find_labeled_continuation2 assumes the bindings of an Esave inside a Ewseq don't clash" in
-      match find_labeled_continuation2 sym e1 with
+      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Ewseq don't clash" in
+      match find_labeled_continuation sym e1 with
         | Just (syms, cont_expr) ->
             Just (syms, Ewseq pat cont_expr e2)
         | Nothing ->
-            find_labeled_continuation2 sym e2
+            find_labeled_continuation sym e2
       end
   | Esseq pat e1 e2 ->
-      let () = Debug.warn [] "find_labeled_continuation2 assumes the bindings of an Esave inside a Esseq don't clash" in
-      match find_labeled_continuation2 sym e1 with
+      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Esseq don't clash" in
+      match find_labeled_continuation sym e1 with
         | Just (syms, cont_expr) ->
             Just (syms, Ewseq pat cont_expr e2)
         | Nothing ->
-            find_labeled_continuation2 sym e2
+            find_labeled_continuation sym e2
       end
   | Easeq _ _ _ ->
       Nothing
@@ -1249,16 +1177,16 @@ let rec find_labeled_continuation2 sym = function
       if sym = sym' then
         Just (List.map fst sym_bTys, e)
       else
-        find_labeled_continuation2 sym e
+        find_labeled_continuation sym e
   | Erun annot sym pes ->
       Nothing
   | Epar es ->
-      let () = Debug.warn [] "find_labeled_continuation2 assumes there are no Esave inside par()" in
+      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes there are no Esave inside par()" in
       Nothing
   | Ewait _ ->
       Nothing
   | Eloc _ e ->
-      find_labeled_continuation2 sym e
+      find_labeled_continuation sym e
 end
 
 
@@ -1418,6 +1346,7 @@ let is_unseq_with_negative expr =
   end
 
 
+(*
 val     has_sseqs: forall 'a. expr 'a -> bool
 let rec has_sseqs expr =
   match expr with
@@ -1425,19 +1354,21 @@ let rec has_sseqs expr =
         false
     | Ememop _ _ ->
         false
-    | Eskip ->
+    | Eaction p ->
         false
+    | Ecase _ pat_es ->
+        List.any (fun (_, e) -> has_sseqs e) pat_es
     | Elet _ _ e2 ->
         has_sseqs e2
     | Eif _ e2 e3 ->
         has_sseqs e2 || has_sseqs e3
+    | Eskip ->
+        false
     | Eccall _ _ _ ->
-        (* TODO *)
+        (* TODO: look into the called body *)
         false
     | Eproc _ _ _ ->
-        (* TODO *)
-        false
-    | Eaction p ->
+        (* TODO: look into the called body *)
         false
     | Eunseq es ->
         List.any has_sseqs es
@@ -1451,12 +1382,10 @@ let rec has_sseqs expr =
         has_sseqs e
     | Ebound _ e ->
         has_sseqs e
-(*
     | Esave _ _ e ->
         has_sseqs e
     | Erun _ _ _ ->
         false
-*)
     | End es ->
         List.any has_sseqs es
     | Epar _ ->
@@ -1467,7 +1396,7 @@ let rec has_sseqs expr =
     | Eloc _ e ->
         has_sseqs e
   end
-
+*)
 
 
 
