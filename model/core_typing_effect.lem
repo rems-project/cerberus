@@ -1,0 +1,43 @@
+open import Pervasives
+import Map_extra
+
+open import Global Exception Core Errors
+
+type eff 'a = Exception.exceptM 'a Errors.error
+include Exception
+
+val mapMapM: forall 'k 'a 'b. MapKeyType 'k, SetType 'k, SetType 'a =>
+             ('k -> 'a -> eff 'b) -> map 'k 'a -> eff (map 'k 'b)
+let mapMapM f xs =
+  Map_extra.fold (fun k a acc ->
+    bind (f k a) (fun b ->
+      bind acc (fun bs ->
+        return (Map.insert k b bs)
+      )
+    )
+  ) xs (return Map.empty)
+
+val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
+let runM m = m
+
+val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
+let fail loc cause =
+  Exception (loc, Errors.Core_typing_cause cause)
+
+val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
+let guard pred loc cause =
+  if pred then
+    return ()
+  else
+    Exception (loc, Errors.Core_typing_cause cause)
+(* BUG in Lem (see issue #197)
+      fail loc cause
+ *)
+
+val foldlM: forall 'a 'b. ('a -> 'b -> eff 'a) -> 'a -> list 'b -> eff 'a
+let rec foldlM f b = function
+  | [] ->
+      return b
+  | x :: xs ->
+      bind (f b x) (fun z -> foldlM f z xs)
+end
