@@ -41,3 +41,5 @@ let pp_mem_value = Impl.pp_mem_value
 let pp_pretty_pointer_value = Impl.pp_pretty_pointer_value
 let pp_pretty_integer_value = Impl.pp_pretty_integer_value
 let pp_pretty_mem_value = Impl.pp_pretty_mem_value
+
+let pp_mem_constraint2 = Impl.pp_mem_constraint2
