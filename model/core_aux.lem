@@ -161,10 +161,8 @@ let rec memValueFromValue ty cval =
           Just (Mem.union_mval tag_sym1 ident mem_val)
         else
           Nothing
-(*
     | _ ->
         Nothing
-*)
   end
 
 
