@@ -114,14 +114,14 @@ let fmap f m =
   bind m (fun z -> return (f z))
 
 
-
 module Operators = struct
   let inline (>>=)      = bind
   let inline (>>) m1 m2 = bind m1 (fun () -> m2)
   let inline (<$>) = fmap
 end
+(*
 open Operators
-
+*)
 
 
 val        update: forall 's 'msg. ('s -> 's) -> stExceptUndefM unit 's 'msg

@@ -256,7 +256,7 @@ let rec pp_value = function
   | Vconstrained xs ->
       pp_keyword "constrained" ^^ P.parens (
         comma_list (fun (cs, cval) ->
-          P.brackets (!^ "TODO"(* comma_list Pp_mem.mem_constraint cs*)) ^^^
+          P.brackets (comma_list Pp_mem.pp_mem_constraint2 cs) ^^^
           P.equals ^^ P.rangle ^^ pp_value cval
         ) xs
       )
@@ -329,7 +329,7 @@ let pp_pexpr pe =
         | PEconstrained xs ->
             pp_keyword "constrained" ^^ P.parens (
               comma_list (fun (cs, pe) ->
-                P.brackets (!^ "TODO(constr)" (*comma_list Pp_mem.mem_constraint cs*)) ^^^
+                P.brackets (comma_list Pp_mem.pp_mem_constraint2 cs) ^^^
                 P.equals ^^ P.rangle ^^ pp pe
               ) xs
             )

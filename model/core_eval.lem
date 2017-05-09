@@ -68,17 +68,15 @@ let inline (>>=)    = EU.bind
 let inline (>>) m f = m >>= fun _ -> f
 let inline (<$>) = EU.fmap
 
-val     step_eval_peop: Loc.t -> maybe Mem.mem_state ->
-                        (Core.pexpr -> EU.t Core.pexpr core_run_error) -> Core.pexpr  ->
-                        EU.t (Core.pexpr_ unit Symbol.sym) core_run_error
+val step_eval_peop:
+  Loc.t -> maybe Mem.mem_state -> (Core.pexpr -> EU.t Core.pexpr core_run_error) ->
+  Core.binop -> Core.pexpr -> Core.pexpr  ->
+  EU.t (Core.pexpr_ unit Symbol.sym) core_run_error
 
-let step_eval_peop loc mem_st_opt self pexpr =
-  match pexpr with Pexpr () pexpr_  ->
-  match pexpr_ with
-    | PEop binop pe1 pe2 ->
-      self pe1 >>= fun pe1' ->
-      self pe2 >>= fun pe2' ->
-      match (binop, Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
+  self pe1 >>= fun pe1' ->
+  self pe2 >>= fun pe2' ->
+  match (binop, Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
         (* Ctype equality *)
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
@@ -232,12 +230,11 @@ let step_eval_peop loc mem_st_opt self pexpr =
             )
         
         | (_, Just _, Just _) ->
-            EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop ==> " ^ Pp.stringFromCore_pexpr pexpr)
+            EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop ==> " ^
+                                         Pp.stringFromCore_pexpr (Caux.mk_op_pe binop pe1 pe2))
         | _ ->
             EU.return $ PEop binop pe1' pe2'
       end
-    end
-  end
 
 
 
@@ -340,10 +337,10 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               (* By typing all the [cvals] must be loaded_values *)
               match List.foldr (fun cval acc ->
                 match (cval, acc) with
-                  | (_, Nothing) ->
-                      Nothing
                   | (Vloaded lval, Just lvals) ->
                       Just (lval :: lvals)
+                  | _ ->
+                      Nothing
                 end
               ) (Just []) cvals with
                 | Nothing ->
@@ -398,6 +395,28 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               EU.return $ PEval (Vloaded (LVunspecified ty))
           
           | (_, Just cvals) ->
+              if List.any Caux.isConstrainedValue cvals then
+                (* if some operands of the ctor are constrained, the following pulls the PEconstrained operator
+                   outside of the PEctor *)
+                (* TODO: check this code *)
+                let (xs : list (list Mem.mem_constraint2 * list pexpr)) =
+                  List.foldl (fun acc cval ->
+                    match cval with
+                      | Vconstrained xs ->
+                          List.map (fun ((xsConsts, xsCval), (accConsts, accPes)) ->
+                            (xsConsts ++ accConsts, Pexpr () (PEval xsCval) :: accPes)
+                          ) (Global.product_list xs acc)
+                      | _ ->
+                          List.map (fun (consts, pes) -> (consts, Pexpr () (PEval cval) :: pes)) acc
+                    end
+                  ) [([], [])] cvals in
+                EU.return (
+                  PEconstrained (
+                    List.map (fun (consts, pes') -> (consts, Pexpr () (PEctor ctor pes'))) xs
+                  )
+                )
+              else
+              
               EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^ Pp.stringFromCore_pexpr pexpr ^ " <====> " ^
                                            stringFromList Pp.stringFromCore_value cvals)
           | (_, Nothing) ->
@@ -450,7 +469,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               EU.return (PEnot pe')
         end
     | PEop binop pe1 pe2 ->
-       step_eval_peop loc mem_st_opt self pexpr
+       step_eval_peop loc mem_st_opt self binop pe1 pe2
     | PEstruct tag_sym ident_pes ->
         let (idents, pes) = List.unzip ident_pes in
         EU.mapM self pes >>= fun pes' ->
