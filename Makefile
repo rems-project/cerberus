@@ -70,6 +70,7 @@ dependencies:
 lem: copy_cmm copy_cmm_exec copy_cerberus
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
+#	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 	@sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
@@ -102,6 +103,9 @@ ocaml_native:
 	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
+##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
+
+#cmdliner,
 
 ocaml_byte:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -113,28 +117,17 @@ ocaml_byte:
 	  cp -L main_.d.byte cerberus; \
 	fi
 
-
-
-ocaml_profiling:
-	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
-	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
-	else \
-	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs landmarks.ppx,landmarks -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
-	  cp -L main_.native cerberus; \
-	fi
-
-
-
-
-
-
-.PHONY: cbuild
+.PHONY: cbuild clink
 cbuild:
-	ocamlbuild -lib unix tools/cbuild.native
+	ocamlbuild -pkg cmdliner -lib unix tools/cbuild.native
 	cp -L cbuild.native cbuild
 	rm cbuild.native
+
+clink:
+	ocamlbuild -lib str tools/clink.native
+	cp -L clink.native clink
+	rm clink.native
+
 
 # LOS-count the spec
 

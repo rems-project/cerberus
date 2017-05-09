@@ -32,8 +32,11 @@ let print_foot tags globs main =
   match main with
   | Some main ->
     print_let !^"tags" (print_tags tags) ^//^
-    print_let !^"globals" (print_globals globs) ^//^
-    print_let tunit (!^"A.run tags globals" ^^^ print_symbol main)
+    print_let !^"globals" (print_globals globs.statics) ^//^
+    print_let tunit (!^"A.run tags (List.rev_append"
+                     ^^^ !^(globs.interface)
+                     ^^ !^"ext_globals globals)"
+                     ^^^ print_global_symbol main)
 (* TODO: generate globals for empty main *)
   | None -> P.empty
 
@@ -70,12 +73,12 @@ let gen filename corestd sym_supply core =
   in
   if corestd then
     Codegen_corestd.gen globs cps_core.impl cps_core.stdlib;
-  Codegen_dep.gen fl globs.externs cps_core.funs;
+  Codegen_dep.gen fl globs.externs cps_core.funs globs.statics;
   let contents =
     print_head filename ^//^
-    List.fold_left print_globals_init P.empty cps_core.globs ^^
+    List.fold_left print_globals_init P.empty cps_core.globs ^//^
     print_funs globs cps_core.funs ^//^
-    print_foot (Pmap.bindings_list core.tagDefs) globs.statics core.main
+    print_foot (Pmap.bindings_list core.tagDefs) globs core.main
   in
   let fl_ml = fl ^ ".ml" in
   let oc = open_out fl_ml in

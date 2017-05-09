@@ -151,29 +151,3 @@ type mem_constraint =
   | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
   | MC_leIV of integer_value_base * integer_value_base
   | MC_addr_distinct of address * set address  (* the first address is distinct for the addresses in the set *)
-
-
-
-
-(* TODO: move this up *)
-type impl_mem_constraint2 =
-  | MC_eq_ival of impl_integer_value * impl_integer_value
-  | MC_ne_ival of impl_integer_value * impl_integer_value
-  | MC_lt_ival of impl_integer_value * impl_integer_value
-  | MC_le_ival of impl_integer_value * impl_integer_value
-
-val impl_constraint_eqIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_eqIV ival1 ival2 =
-  MC_eq_ival ival1 ival2
-
-val impl_constraint_neIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_neIV ival1 ival2 =
-  MC_ne_ival ival1 ival2
-
-val impl_constraint_ltIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_ltIV ival1 ival2 =
-  MC_lt_ival ival1 ival2
-
-val impl_constraint_leIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_leIV ival1 ival2 =
-  MC_le_ival ival1 ival2

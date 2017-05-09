@@ -620,8 +620,7 @@ and translate_expression stdlib program is_lvalue a_expr =
   let result_ty = ctype_of a_expr in
   
   if AilTypesAux.is_pointer result_ty && Aaux.is_null_pointer_constant a_expr then
-    (* TODO: this is a bit tasteless as it makes the case AilEconst, ConstantNull unreachable *)
-    E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype result_ty)))
+    E.return $ C.Epure (Caux.mk_nullptr_pe (Caux.proj_ctype result_ty))
   else
     let A.AnnotatedExpression annot loc expr = a_expr in
     C.Eloc loc <$> match expr with
@@ -2271,9 +2270,8 @@ TODO: #9
                   (* NOTE: we assume the lack of trap representation *)
                   C.PEval (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
               | A.ConstantNull ->
-                  let () = Debug.print_debug 0 [] "HELLO ConstantNull" in
                   (* TODO: should make the Ail ctor take a ctype? *)
-                  Caux.strip $ Caux.mk_specified_pe (Caux.mk_nullptr_pe Cty.Void)
+                  Caux.strip $ Caux.mk_nullptr_pe Cty.Void
               | A.ConstantInteger (A.IConstant n _ _) ->
                   (* TODO: suffix/basis? + check *)
                   C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival n))))
@@ -3478,7 +3476,7 @@ let mk_run_e sym visibles_before visibles_after pes =
 val translate_program:
   translation_stdlib ->
   bool -> A.program GenTypes.genTypeCategory ->
-  E.elabM (list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
+  E.elabM (list (C.sym * C.core_base_type * C.expr unit) * (* unit(*SOMETHING*) * *) C.fun_map unit)
 
 let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) =
   E.foldlM (fun (gacc, facc) (sym, decl) ->

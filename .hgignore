@@ -42,6 +42,7 @@ depend
 .DS_Store
 
 cbuild
+clink
 cerberus
 main_.native
 

@@ -113,6 +113,8 @@ let print_ref x = tref ^^^ P.parens x
 
 let print_symbol a = !^(Pp_symbol.to_string a)
 
+let print_global_symbol a = !^(Pp_symbol.to_string_pretty a)
+
 let print_raw_symbol = function
   | Symbol.Symbol (i, None)     ->
     !^"Symbol.Symbol" ^^^ P.parens (print_int i ^^ P.comma ^^^ tnone)
@@ -156,7 +158,7 @@ let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
   !^"Cabs.CabsIdentifier" ^^^ P.parens(print_loc loc ^^ P.comma ^^^ P.dquotes !^str)
 
 let print_name = function
-  | Sym a  -> print_symbol a
+  | Sym a  -> print_global_symbol a
   | Impl i -> print_impl_name i
 
 (* Ail Types *)
@@ -337,7 +339,7 @@ let print_floating_value = function
 
 (* Core Types *)
 
-(* THIS IS ONLY USED WHEN ANNOTATING *)
+(* THIS IS ONLY USED WHEN TYPE ANNOTATING *)
 let rec print_core_object = function
   | OTy_integer    -> !^"M.integer_value"
   | OTy_floating   -> !^"M.floating_value"
@@ -436,7 +438,7 @@ let lt_precedence p1 p2 =
 let rec print_object_value globs = function
   | OVstruct _
   | OVunion  _     -> raise (Unsupported "struct or union")
-  | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_symbol s
+  | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
   | OVfloating fv  -> print_floating_value fv
@@ -469,6 +471,27 @@ let print_is_expr str pp pe =
 let print_tag pp (cid, pe) =
   P.parens (print_cabs_id cid ^^ P.comma ^^^ pp pe)
 
+let print_ctor pp ctor pes =
+  let pp_args sep = P.parens (P.separate_map sep (fun x -> P.parens (pp x)) pes)
+  in match ctor with
+  | Cnil _ -> !^"[]"
+  | Ccons ->
+    (match pes with
+     | []       -> raise (Unexpected "Ccons: empty list")
+     | [pe]     -> P.brackets (pp pe)
+     | [pe;pes] -> pp pe ^^^ !^"::" ^^^ pp pes
+     | _        -> raise (Unexpected "Ccons: more than 2 args")
+    )
+  | Ctuple       -> pp_args P.comma
+  | Carray       -> !^"array"
+  | Civmax       -> !^"A.ivmax" ^^^ pp_args P.space
+  | Civmin       -> !^"A.ivmin" ^^^ pp_args P.space
+  | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
+  | Civalignof   -> !^"M.alignof_ival" ^^^ pp_args P.space
+  | Cspecified   -> !^"A.Specified" ^^^ pp_args P.space
+  | Cunspecified -> !^"A.Unspecified"  ^^^ pp_args P.space
+
+
 let print_pure_expr globs pe =
   let rec pp prec pe =
     let prec' = binop_precedence pe in
@@ -487,27 +510,7 @@ let print_pure_expr globs pe =
                                (!^(Undefined.stringFromUndefined_behaviour ub)))
       | PEerror (str, pe) ->
         traise ^^^ P.parens (!^"A.Error" ^^^ P.dquotes (!^str ^^^ pp pe))
-      | PEctor (ctor, pes) ->
-        let pp_args sep = P.parens (P.separate_map sep
-                                      (fun x -> P.parens (pp x)) pes)
-        in begin match ctor with
-          | Cnil _ -> !^"[]"
-          | Ccons ->
-            (match pes with
-             | []       -> raise (Unexpected "Ccons: empty list")
-             | [pe]     -> P.brackets (pp pe)
-             | [pe;pes] -> pp pe ^^^ !^"::" ^^^ pp pes
-             | _        -> raise (Unexpected "Ccons: more than 2 args")
-            )
-          | Ctuple       -> pp_args P.comma
-          | Carray       -> !^"array"
-          | Civmax       -> !^"A.ivmax" ^^^ pp_args P.space
-          | Civmin       -> !^"A.ivmin" ^^^ pp_args P.space
-          | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
-          | Civalignof   -> !^"M.alignof_ival" ^^^ pp_args P.space
-          | Cspecified   -> !^"A.Specified" ^^^ pp_args P.space
-          | Cunspecified -> !^"A.Unspecified"  ^^^ pp_args P.space
-          end
+      | PEctor (ctor, pes) -> print_ctor pp ctor pes
       | PEcase (pe, pas) -> P.parens (print_case (pp pe) pp pas)
       | PEarray_shift (pe1, ty, pe2) ->
         !^"M.array_shift_ptrval" ^^^ P.parens (pp pe1)
@@ -721,13 +724,13 @@ let print_funs globs ?init:(flag=true) funs =
       match decl with
       | CpsFun  (bTy, params, pe) ->
         print_function
-          (print_symbol sym)
+          (print_global_symbol sym)
           params
           (print_base_type bTy)
           (print_pure_expr globs pe)
       | CpsProc (bTy, params, bbs, bbody) ->
         print_eff_function
-          (print_symbol sym ^^^ print_symbol default)
+          (print_global_symbol sym ^^^ print_symbol default)
           params
           (P.parens (print_base_type bTy) ^^^ !^"M.memM")
           (print_transformed globs bbs bbody)

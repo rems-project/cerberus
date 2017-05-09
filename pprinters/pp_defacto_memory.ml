@@ -218,15 +218,3 @@ let pp_integer_value_for_core (IV (_, ival_)) =
         !^ "Ivalignof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
     | _ ->
         !^ "TODO[IV] " ^^ P.parens (pp_integer_value_base ival_)
-
-
-let pp_mem_constraint2 = function
-  | MC_eq_ival (ival1, ival2) ->
-      !^ "MC_eq_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_ne_ival (ival1, ival2) ->
-      !^ "MC_ne_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_lt_ival (ival1, ival2) ->
-      !^ "MC_lt_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_le_ival (ival1, ival2) ->
-      !^ "MC_le_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-

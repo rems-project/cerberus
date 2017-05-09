@@ -616,11 +616,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
           
           match conv_ty_opt with
             | Just conv_ty ->
-                let () = Debug.print_debug 0 [] ("conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
-                let () = Debug.print_debug 0 [] ("mval= " ^ Pp.stringFromMem_mem_value mval) in
                 match eval_conv (*arg_ty*) conv_ty mval with
                   | Left err ->
-                      let () = Debug.print_debug 0 [] "PRINTF ERR 1" in
                       Mem.return (Left err)
                   | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
                       match Mem_aux.integerFromIntegerValue ival with
@@ -659,9 +656,6 @@ let convert eval_conv prec_opt lm_opt cspec args =
                               else
                                 (cont n, args')
                             ))
-                        | Nothing ->
-                            let () = Debug.warn [Debug.DB_core_dynamics] "printf() found an abstract integer value" in
-                            Mem.return $ Right (U.return ([#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
                       end
                   | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
                       Mem.return $ Right (U.return (
@@ -669,8 +663,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                           (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
                           (fun str -> String.toCharList str)
                       , args'))
-                  | _ ->
-                      error "Output.aux should only be called on a loaded(arimetic value)"
+(*                  | Vpointer of Mem.pointer_value *)
                 end
           end
     end in
@@ -855,7 +848,6 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
           | Right (U.Undef loc ubs) ->
               Mem.return $ Right (U.Undef loc ubs)
           | Left err ->
-              let () = Debug.print_debug 0 [] "PRINTF ERR 2" in
               Mem.return $ Left err
         end
     | _ ->

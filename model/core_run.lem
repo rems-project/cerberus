@@ -300,6 +300,7 @@ let rec hoist_negatives expr =
 
 
 
+open SEU.Operators
 
 
 (*
@@ -359,12 +360,6 @@ module E = struct
   let fresh_symbol =
     SEU.runS fresh_symbol'
 end
-open SEU.Operators
-(*
-let inline (>>=) = SEU.bind
-let inline (>>) m1 m2 = SEU.bind m1 (fun _ -> m2)
-let inline (<$>) = SEU.fmap
-*)
 
 
 type action_request =
@@ -529,28 +524,23 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
     | Store pe1 pe2 pe3 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval) ->
-              match cval with
-                | Vconstrained xs ->
-                    error ("TODO: Core_run, trying to store a constrained value ==> " ^ Pp.stringFromCore_value cval)
-                | _ ->
-                  match memValueFromValue (Core_ctype.unatomic ty) cval with
-                    | Just mem_val ->
-                        Step_action_request (
-                          E.fresh_action_id >>= fun store_aid ->
-                          E.fresh_symbol    >>= fun val_sym   ->
-                          E.return (
-                            StoreRequest loc sb_before dd_before asw_before
-                              store_aid current_tid mo ty ptr_val mem_val
-                              <| th_st with
-                                arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
-                                stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
-                              |>
-                          )
-                        )
-                    | Nothing ->
-                        Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
-                                    ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
-                  end
+              match memValueFromValue (Core_ctype.unatomic ty) cval with
+                | Just mem_val ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun store_aid ->
+                      E.fresh_symbol    >>= fun val_sym   ->
+                      E.return (
+                        StoreRequest loc sb_before dd_before asw_before
+                          store_aid current_tid mo ty ptr_val mem_val
+                          <| th_st with
+                            arena= Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
+                            stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>
+                      )
+                    )
+                | Nothing ->
+                    Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                                ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
               end
           | (Just cval1, Just cval2, Just cval3) ->
               Step_error ("found a store() with ill-typed operands: " ^
@@ -1023,7 +1013,7 @@ end
                 SEU.return z
             | Nothing ->
                 (* or we need to find it in the current continuation. *)
-                match find_labeled_continuation sym (apply_continuation cont th_st.arena) with
+                match find_labeled_continuation2 sym (apply_continuation cont th_st.arena) with
                   | Nothing ->
                       SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show sym))
                   | Just cont ->

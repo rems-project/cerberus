@@ -9,15 +9,20 @@ pass=0
 fail=0
 
 function test {
-  rm -rf ${1%.c}.native
-  cbuild $1 > /dev/null 2> /dev/null
+  rm -rf a.out
+  re='^[0-9]+(-)(.*)'
+  if [[ $1 =~ $re ]]; then
+    f=${BASH_REMATCH[2]}
+  fi
+  mv $1 $f
+  cbuild $f > /dev/null 2> /dev/null
   if [ "$?" -ne "0" ]; then
     echo -e "Test $1: Cerberus failed..."
     return
   fi
 
   if [ -e ../$2/expected/$1.expected ]; then
-    CERB_BATCH=1 ./${1%.c}.native > result
+    CERB_BATCH=1 ./a.out > result
     cmp --silent result ../$2/expected/$1.expected
     if [[ "$?" -eq "0" ]]; then
       res="\033[1m\033[32mPASSED!\033[0m"
@@ -53,9 +58,9 @@ else
     for f in csmith_*.c
     do
       echo "File: $f"
-      cbuild --csmith $f > /dev/null 2> /dev/null
+      cbuild --fcsmith $f > /dev/null 2> /dev/null
       if [ $? -eq 0 ]; then
-        ./${f%.c}.native
+        ./a.out
       else
         echo "FAIL"
       fi
