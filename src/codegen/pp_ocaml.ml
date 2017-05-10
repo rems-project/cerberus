@@ -189,8 +189,8 @@ let print_ail_qualifier {
   AilTypes.const = c;
   AilTypes.restrict = r;
   AilTypes.volatile = v;
-  AilTypes.atomic = a;
-  } = !^"A.ail_qualifier" ^^^ print_tuple (List.map print_bool [c;r;v;a])
+(*  AilTypes.atomic = a; *)
+  } = !^"A.ail_qualifier" ^^^ print_tuple (List.map print_bool [c;r;v(*;a*)])
 
 let print_ail_basic_type = function
   | Integer it  -> !^"T.Integer" ^^^ P.parens (print_ail_integer_type it)

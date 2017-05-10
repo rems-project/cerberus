@@ -1732,12 +1732,12 @@ let annotate_program annot (startup_opt, sigm) =
                 | [] ->
                     (* TODO: not sure if really allowed by the std, clearly used a lot *)
                     E.return ()
-                | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Void)] ->
+                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Void)] ->
                     E.return ()
-                | [(<| const= false; restrict= false; volatile= false; atomic= false |>, Basic (Integer (Signed Int_)));
-                   (<| const= false; restrict= false; volatile= false; atomic= false |>,
-                    Pointer <| const= false; restrict= false; volatile= false; atomic= false |>
-                      (Pointer <| const= false; restrict= false; volatile= false; atomic= false |> (Basic (Integer Char))))] ->
+                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Basic (Integer (Signed Int_)));
+                   (<| const= false; restrict= false; volatile= false(*; atomic= false*) |>,
+                    Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |>
+                      (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |> (Basic (Integer Char))))] ->
                     E.return ()
                 | _ ->
                     E.fail Loc.unknown (TError_main_params qs_tys)
