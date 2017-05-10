@@ -4,7 +4,7 @@ import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
 
-import AilSyntax AilTypes
+import AilSyntax AilTypes AilTypesAux
 
 import Map_extra
 
@@ -398,13 +398,47 @@ let ident_is_in_current_scope ident namespace =
 
 
 
+
+
+
+val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
+let register_typedef sym (qs, ty) =
+  State_exception.get >>= fun st ->
+  match Map.lookup sym st.typedef_definitions with
+    | Just (qs', ty') ->
+        (* STD §6.7#3, first bullet *)
+        if AilTypesAux.variably_modified ty then
+          fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet, variably modified")
+        else if qs <> qs' || ty <> ty' then
+(*        let () = Debug.print_debug 0 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
+          let () = Debug.print_debug 0 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
+          fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet")
+        else
+          return ()
+    | Nothing ->
+        State_exception.put (<| st with typedef_definitions= Map.insert sym (qs, ty) st.typedef_definitions |>)
+  end
+
+val resolve_typedef: A.identifier -> desugM (ATypes.qualifiers * ATypes.ctype)
+let resolve_typedef sym =
+  State_exception.read (fun st ->
+    match Map.lookup sym st.typedef_definitions with
+      | Just qs_ty -> qs_ty
+      | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
+    end
+  )
+
+
+
+
+
 (* NOTE: this function shouldn't be called outside of the current module *)
 val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> desugM A.identifier
 let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Debug.print_debug 7 [Debug.DB_desugaring]
-      ("DESUGARING, attempting to register identifier `" ^ show ident ^
+    Debug.print_debug 0 [Debug.DB_desugaring]
+      ("attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
        ", kind= " ^ show kind ^
@@ -432,7 +466,8 @@ let register_identifier_ ident namespace kind link =
         if link = Linkage_none then
           (* §6.7#3 "except that ..." *)
           if kind = Kind_typedef then
-            error "WIP Kind_typedef"
+            (* NOTE: the "except that ..." is deal with by the call to [register_typedef] that should be done just after *)
+            return sym
           else if kind = Kind_tag then
             (* TODO: multiple definition are not allowed *)
             return sym
@@ -750,7 +785,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Debug.print_debug 8 [Debug.DB_desugaring] ("DESUGAR: registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 0 [Debug.DB_desugaring] ("registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -786,8 +821,9 @@ let register_function_declaration loc sym is_proto decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          let () = Debug.print_debug 8 [Debug.DB_desugaring] ("DESUGAR: registering function declaration of '" ^ show sym ^
-                                        (if is_proto then "' with PROTOTYPE" else "'")) in
+          let () = Debug.print_debug 0 [Debug.DB_desugaring] (
+            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
+           string_of_decl decl) in
           <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
         )
   end
@@ -797,8 +833,9 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_external_object_declaration sym ((_,qs,ty) as decl) =
   return (
-    Debug.print_debug 7 [Debug.DB_desugaring] ("DESUGARING attempting to register external object declaration of `" ^ show sym ^
-                         "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
+    Debug.print_debug 0 [Debug.DB_desugaring] (
+      "attempting to register external object declaration of `" ^ show sym ^
+      "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
   ) >>
   
   State_exception.read (fun st ->
@@ -809,7 +846,7 @@ let register_external_object_declaration sym ((_,qs,ty) as decl) =
           (* TODO: msg and location *)
           fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
         else
-          let () = Debug.print_debug 7 [Debug.DB_desugaring] ("DESUGARING found a valid redeclaration of `" ^ show sym ^ "'") in
+          let () = Debug.print_debug 7 [Debug.DB_desugaring] ("found a valid redeclaration of `" ^ show sym ^ "'") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
@@ -932,21 +969,7 @@ let get_used_identifier =
 
 
 
-val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
-let register_typedef sym qs_ty =
-  State_exception.update (fun st ->
-    <| st with typedef_definitions= Map.insert sym qs_ty st.typedef_definitions |>
-  )
 
-
-val resolve_typedef: A.identifier -> desugM (ATypes.qualifiers * ATypes.ctype)
-let resolve_typedef sym =
-  State_exception.read (fun st ->
-    match Map.lookup sym st.typedef_definitions with
-      | Just qs_ty -> qs_ty
-      | _ -> error "TODO msg"
-    end
-  )
 
 
 val register_enum_constant: A.identifier -> A.expression_ unit -> desugM unit

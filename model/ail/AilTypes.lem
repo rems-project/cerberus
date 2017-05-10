@@ -59,7 +59,7 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   const    : bool;
   restrict : bool;
   volatile : bool;
-  atomic   : bool;
+(*  atomic   : bool; *) (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
 |>
 
 
@@ -228,7 +228,7 @@ let qualifiersEqual qs1 qs2 =
      qs1.const    = qs2.const
   && qs1.restrict = qs2.restrict
   && qs1.volatile = qs2.volatile
-  && qs1.atomic   = qs2.atomic
+(*  && qs1.atomic   = qs2.atomic *)
 
 instance (Eq qualifiers)
   let (=)  = qualifiersEqual
@@ -398,19 +398,19 @@ end
 
 instance (SetType qualifiers)
   let setElemCompare qs1 qs2 =
-    setElemCompare (qs1.const, qs1.restrict, qs1.volatile, qs1.atomic) (qs2.const, qs2.restrict, qs2.volatile, qs2.atomic)
+    setElemCompare (qs1.const, qs1.restrict, qs1.volatile(*, qs1.atomic*)) (qs2.const, qs2.restrict, qs2.volatile(*, qs2.atomic*))
 end
 
 
 
 
 (** Some useful functions *********************************************************************** *)
-val make_qualifiers: bool -> bool -> bool -> bool -> qualifiers
-let make_qualifiers c r v a = <|
+val make_qualifiers: bool -> bool -> bool (*-> bool*) -> qualifiers
+let make_qualifiers c r v (*a*) = <|
   const    = c;
   restrict = r;
   volatile = v;
-  atomic   = a;
+(*  atomic   = a;*)
 |>
 
 
@@ -419,7 +419,7 @@ let no_qualifiers = <|
   const    = false;
   restrict = false;
   volatile = false;
-  atomic   = false;
+(*  atomic   = false;*)
 |>
 
 

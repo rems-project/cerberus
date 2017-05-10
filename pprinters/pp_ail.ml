@@ -196,7 +196,7 @@ let pp_qualifiers_human qs =
     (if qs.const then fun z -> "const" :: z else (fun z -> z)) (
       (if qs.restrict then fun z -> "restrict" :: z else (fun z -> z)) (
         (if qs.volatile then fun z -> "volatile" :: z else (fun z -> z)) (
-          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z))
+(*          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z)) *)
             []
         )
       )

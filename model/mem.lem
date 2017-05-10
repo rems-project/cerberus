@@ -218,11 +218,8 @@ let zero_fval = Impl.impl_zero_fval
 val str_fval: string -> floating_value
 let str_fval = Impl.impl_str_fval
 
-let allocate_static                     = Impl.impl_allocate_static
-let allocate_dynamic                    = Impl.impl_allocate_dynamic
-let kill                                = Impl.impl_kill
-let load                                = Impl.impl_load
-let store                               = Impl.impl_store
+
+
 
 val eval_integer_value: integer_value -> maybe integer
 let eval_integer_value = Impl.impl_eval_integer_value
@@ -240,3 +237,53 @@ let constraint_eqIV = Impl.impl_constraint_eqIV
 let constraint_neIV = Impl.impl_constraint_neIV
 let constraint_ltIV = Impl.impl_constraint_ltIV
 let constraint_leIV = Impl.impl_constraint_leIV
+
+
+
+
+
+
+
+val stringFromctype:  Core_ctype.ctype -> string
+declare ocaml target_rep function stringFromctype  = `String_core_ctype.string_of_ctype`
+val stringFromMem_value: mem_value -> string
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+val stringFromPointer_value: pointer_value -> string
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+
+
+
+
+let stringFromPrefix = function
+  | Symbol.PrefSource syms ->
+      "{" ^ String.concat "." (List.map show syms) ^ "}"
+  | Symbol.PrefOther str ->
+      "{" ^ str ^ "}"
+end
+
+let allocate_static tid pref align_ival ty =
+  let () = Debug.print_debug 0 [Debug.DB_memory] (
+    "CREATE(" ^ stringFromPrefix pref ^ ")"
+  ) in
+  Impl.impl_allocate_static tid pref align_ival ty
+
+let allocate_dynamic tid pref align_ival size_ival =
+  let () = Debug.print_debug 0 [Debug.DB_memory] (
+    "ALLOC(" ^ stringFromPrefix pref ^ ")"
+  ) in
+  Impl.impl_allocate_dynamic tid pref align_ival size_ival
+
+let kill ptrval =
+  Impl.impl_kill ptrval
+
+let load ty ptrval =
+  let () = Debug.print_debug 0 [Debug.DB_memory] (
+    "Load(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
+  ) in
+  Impl.impl_load ty ptrval
+
+let store ty ptrval mval =
+  let () = Debug.print_debug 0 [Debug.DB_memory] (
+    "Store(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
+  ) in
+  Impl.impl_store ty ptrval mval

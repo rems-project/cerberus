@@ -80,7 +80,7 @@ let pp_qualifiers_raw qs =
   P.braces (
     List.fold_left (fun acc (str, b) ->
       if b then pp_ctor str ^^ P.comma ^^^ acc else acc
-    ) P.empty [("const", qs.const); ("restrict", qs.restrict); ("volatile", qs.volatile); ("atomic", qs.atomic)]
+    ) P.empty [("const", qs.const); ("restrict", qs.restrict); ("volatile", qs.volatile) (*; ("atomic", qs.atomic)*)]
  )
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
