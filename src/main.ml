@@ -112,7 +112,7 @@ let c_frontend f =
     end
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
-                             (GenTyping.annotate_program Annotation.concrete_annotation z))
+                             (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
     |> begin
       if !Debug_ocaml.debug_level >= 5 then

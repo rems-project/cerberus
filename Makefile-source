@@ -59,7 +59,6 @@ SOURCE_ail_typing=\
   AilSyntaxAux.lem \
   AilWf.lem \
   AilTyping.lem \
-  Annotation.lem \
   GenTypesAux.lem \
   GenTyping.lem
 
