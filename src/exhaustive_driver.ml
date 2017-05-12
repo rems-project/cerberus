@@ -26,7 +26,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: unit Core.file) 
   let file = Core_run.convert_file file in
   
   (* computing the value (or values if exhaustive) *)
-  let values = ND.runM0 (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
+  let values = ND.runM (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
   
   List.iter (function
     | ND.Active (stdout, (isBlocked, _, pe), _) ->
@@ -75,7 +75,7 @@ let drive sym_supply file args cerb_conf : execution_result =
   let file = Core_run.convert_file file in
   
   (* computing the value (or values if exhaustive) *)
-  let values = ND.runM0 (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
+  let values = ND.runM (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) in
   
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
