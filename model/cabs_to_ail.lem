@@ -1777,14 +1777,12 @@ and desugar_direct_declarator ddecltor : E.desugM (cabs_identifier * (ATypes.cty
           | _ ->
               (* NOTE: the current function is NEVER called for a function definition,
                  hence §6.7.6.3#3 applies here *)
-              E.mapM (fun (opt, (qs, ty, isRegister)) ->
-                match opt with
-                  | Just _ ->
-                      E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#3")
-                  | Nothing ->
-                      E.return (qs, ty, isRegister)
-                end
-              ) xs
+              (* NOTE2: but our current parser doesn't support identifier-list (this is an old syntax) *)
+              E.return (
+                List.map (fun (opt, (qs, ty, isRegister)) ->
+                  (qs, ty, isRegister)
+                ) xs
+              )
         end >>= fun params ->
         
         (* TODO: this is morally wrong: it should check that we are not building
