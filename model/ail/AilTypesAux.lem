@@ -298,7 +298,7 @@ let is_aggregate ty =
 
 (* TODO *)
 val is_complete: forall 'a. sigma 'a -> ctype -> bool
-let is_complete S ty =
+let is_complete sigm ty =
   (* TODO: check atomic *)
   match unatomic ty with
   | Void ->
@@ -308,8 +308,8 @@ let is_complete S ty =
       true
   | Pointer _ _ ->
       true
-  | Array _ _ _ ->
-      true
+  | Array _ _ n_opt ->
+      isJust n_opt
   | Builtin "cnd_t" ->
       true
   | Builtin "fpos_t" ->
@@ -325,16 +325,16 @@ let is_complete S ty =
   | Builtin "va_list" ->
       true
   | Struct sym ->
-      match Context.lookup (=) S.tag_definitions sym with
+      match Context.lookup (=) sigm.tag_definitions sym with
         | Just (StructDef _) ->
             true
         | _ ->
             let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show S.tag_definitions) in
+                ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
             false
       end
   | Union sym ->
-      match Context.lookup (=) S.tag_definitions sym with
+      match Context.lookup (=) sigm.tag_definitions sym with
         | Just (UnionDef _) ->
             true
         | _ ->
@@ -346,8 +346,8 @@ end
 
 (* TODO *)
 val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
-let is_incomplete S ty =
-  not (is_complete S ty)
+let is_incomplete sigm ty =
+  not (is_complete sigm ty)
 
 
 
@@ -886,56 +886,88 @@ let is_real ty =
         false
   end
 
-val            compatible_params_aux: (ctype -> ctype -> bool) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
-let rec ~{coq} compatible_params_aux is_compatible p1 p2 =
-  match (p1, p2) with
-    | ([], []) ->
-        true
-    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
-        is_compatible ty1 ty2 && compatible_params_aux is_compatible p1 p2
-    | _ ->
-        false
-  end
+
+
+
 
 (* (§6.2.7) Compatible type *)
-val            compatible: ctype -> ctype -> bool
-let rec ~{coq} compatible ty1 ty2 =
-  let compatible_params = compatible_params_aux compatible in
-  match (ty1, ty2) with
+val            are_compatible: (qualifiers * ctype) -> (qualifiers * ctype) -> bool
+let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
+  (* qualifiers need to be equal (see §6.7.3#10) *)
+  qs1 = qs2 && match (ty1, ty2) with
     | (Void, Void) ->
         true
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
-    | (Array qs1 ty1 n1, Array qs2 ty2 n2) ->
+    | (Array elem_qs1 elem_ty1 n1_opt, Array elem_qs2 elem_ty2 n2_opt) ->
+        (* STD §6.7.6.2#6 *)
+           are_compatible (elem_qs1, elem_ty1) (elem_qs2, elem_ty2)
+        && match (n1_opt, n1_opt) with
+             | (Just n1, Just n2) -> n1 = n2
+             | (Just _ , Nothing) -> true
+             | (Nothing, Just _ ) -> true
+             | (Nothing, Nothing) -> true
+           end
+    | (Function _ ret_ty1 params1 isVariadic1, Function _ ret_ty2 params2 isVariadic2) ->
+        (* STD §6.7.6.3#15 *)
+        (* TODO: when the two types do not both have a param list *)
+           are_compatible (no_qualifiers, ret_ty1) (no_qualifiers, ret_ty2)
+        && are_compatible_params params1 params2
+        && isVariadic1 = isVariadic2
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* STD §6.7.6.1#2 *)
-        qs1 = qs2 && compatible ty1 ty2 && n1 = n2
-    | (Function _ ty1 p1 b1, Function _ ty2 p2 b2) ->
-        compatible ty1 ty2 && compatible_params p1 p2 && b1 = b2
-    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
-        compatible ty1 ty2 && qs1 = qs2
+        are_compatible (qs1, ty1) (qs2, ty2)
     | (Struct tag1, Struct tag2) ->
+        (* STD §6.2.7#1 *)
         (* TODO: being conservative here (aka STD compliant) *)
         tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
     | (Union tag1, Union tag2) ->
+        (* STD §6.2.7#1 *)
         (* TODO: being conservative here (aka STD compliant) *)
         tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
     | (Builtin str1, Builtin str2) ->
+        (* TODO: this is too strict *)
         str1 = str2
     | _ ->
+        (* TODO: we can't see Enum types here and there is some impl-def stuff *)
         false
   end
 
-val        compatible_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
-let ~{coq} compatible_params p1 p2 =
-  compatible_params_aux compatible p1 p2
+(* TYP: bool -> (list (qualifiers * ctype * bool) * list (qualifiers * ctype * bool)) -> bool *)
+and are_compatible_params_aux acc = function
+  | ([], []) ->
+      acc
+  | (((qs1, ty1, _) :: params1), ((qs2, ty2, _) :: params2)) ->
+      are_compatible_params_aux (
+        (* NOTE(unsure): but as far as I can tell the twos parameters can differ
+           on whether they have the register storage-class *)
+        acc && are_compatible (qs1, ty1) (qs2, ty2)
+      ) (params1, params2)
+  | _ ->
+      (* the list of params must have the same length to be compatible *)
+      false
+end
+
+and are_compatible_params params1 params2 =
+  are_compatible_params_aux true (params1, params2)
+
+
+
+
+
+
+
+
+
+
 
 val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
-                                        list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
+                                        list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
 let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
   match (p1, p2, p3) with
     | ([], [], []) ->
         true
-    | ((_, ty1) :: p1, (_, ty2) :: p2, (qs3, ty3) :: p3) ->
+    | ((_, ty1, _) :: p1, (_, ty2, _) :: p2, (qs3, ty3, _) :: p3) ->
         is_unqualified qs3 && is_composite ty1 ty2 ty3 &&
         is_composite_params_aux is_composite p1 p2 p3
     | _ ->
@@ -951,8 +983,9 @@ let rec ~{coq} is_composite ty1 ty2 ty3 =
         true
     | (Basic bty1, Basic bty2, Basic bty3) ->
         bty1 = bty2 && bty1 = bty3
-    | (Array _ ty1 n1, Array _ ty2 n2, Array _ ty3 n3) ->
-        is_composite ty1 ty2 ty3 && n1 = n2 && n1 = n3
+    | (Array _ ty1 n1_opt, Array _ ty2 n2_opt, Array _ ty3 n3_opt) ->
+        (* TODO: this is probably wrong regarding the sizes *)
+        is_composite ty1 ty2 ty3 && n1_opt = n2_opt && n1_opt = n3_opt
     | (Function _ ty1 p1 _, Function _ ty2 p2 _, Function _ ty3 p3 _) ->
         is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
     | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
@@ -961,74 +994,91 @@ let rec ~{coq} is_composite ty1 ty2 ty3 =
         false
   end
 
-val        is_composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> list (qualifiers * ctype) -> bool
-let ~{coq} is_composite_params p1 p2 p3 =
-  is_composite_params_aux is_composite p1 p2 p3
+val        is_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
+let ~{coq} is_composite_params params1 params2 params3 =
+  is_composite_params_aux is_composite params1 params2 params3
 
-val            composite_params_aux: (ctype -> ctype -> maybe ctype) ->
-                                     list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
-let rec ~{coq} composite_params_aux composite p1 p2 =
-  match (p1, p2) with
-    | ([], []) ->
-        Just []
-    | ((_, ty1) :: p1, (_, ty2) :: p2) ->
-        match (composite ty1 ty2, composite_params_aux composite p1 p2) with
-          | (Just ty, Just p) ->
-              Just ((no_qualifiers, ty) :: p)
-          | _ ->
-              Nothing
-        end
-    | _ ->
-        Nothing
-    end
+val make_composite_params_aux:
+  (ctype -> ctype -> maybe ctype) ->
+  (list (qualifiers * ctype * bool) * list (qualifiers * ctype * bool)) ->
+  maybe (list (qualifiers * ctype * bool))
+let rec ~{coq} make_composite_params_aux make_composite = function
+  | ([], []) ->
+      Just []
+  | ((_, ty1, _) :: params1, (_, ty2, _) :: params2) ->
+      match (make_composite ty1 ty2, make_composite_params_aux make_composite (params1, params2)) with
+        | (Just ty, Just p) ->
+            Just ((no_qualifiers, ty, false) :: p)
+        | _ ->
+            Nothing
+      end
+  | _ ->
+      Nothing
+end
 
 (* (§6.2.7#3) composite type *)
-val            composite: ctype -> ctype -> maybe ctype
-let rec ~{coq} composite ty1 ty2 =
-  let composite_params = composite_params_aux composite in
-  match (ty1, ty2) with
+(* TODO: this function is defined over Ail types, so function types
+   are simpler than what the desugaring can see (functions have parameters). So
+   this function SHOULD NOT be used by the desugaring *)
+val            make_composite: ctype -> ctype -> maybe ctype
+let rec ~{coq} make_composite ty1 ty2 =
+  let make_composite_params params1 params2 = make_composite_params_aux make_composite (params1, params2) in
+  
+  (* a composite type can only be made from two compatible types *)
+  if not (are_compatible (no_qualifiers, ty1) (no_qualifiers, ty2)) then
+    Nothing
+  else match (ty1, ty2) with
     | (Void, Void) ->
         Just Void
     | (Basic bty1, Basic bty2) ->
-        if bty1 = bty2 then
-          Just (Basic bty1)
-        else
+        (* thanks to the compatibility test we know bty1 = bty2  *)
+        Just (Basic bty1)
+    | (Array elem_qs1 elem_ty1 n1_opt, Array elem_qs2 elem_ty2 n2_opt) ->
+        (* STD §6.2.7#3, first bullet *)
+        (* TODO(vla): more would be needed if we want to support VLAs *)
+        let n_opt = match (n1_opt, n2_opt) with
+          | (Just n1, Just n2) ->
+              (* thanks to the compatibility test we know that n1 = n2  *)
+              Just n1
+          | (Just n1, Nothing) ->
+              Just n1
+          | (Nothing, Just n2) ->
+              Just n2
+          | (Nothing, Nothing) ->
+              Nothing
+        end in
+        (* thanks to the compatibility test we know elem_qs1 = elem_qs2 *)
+          Maybe.map (fun ty -> Array elem_qs1 ty n_opt) (make_composite elem_ty1 elem_ty2)
+    | (Function hasProto1 ret_ty1 params1 isVariadic1, Function hasProto2 ret_ty2 params2 isVariadic2) ->
+        (* TODO: like the preceding comment said, there is quite a bit of
+           simplication here *)
+        if isVariadic1 <> isVariadic2 then
           Nothing
-    | (Array qs1 ty1 n1, Array _ ty2 n2) ->
-        (* TODO: check for the qualifiers *)
-        if n1 = n2 then
-          Maybe.map (fun ty -> Array qs1 ty n1) (composite ty1 ty2)
-        else
-          Nothing
-    | (Function has_proto1 ty1 p1 b1, Function has_proto2 ty2 p2 b2) ->
-        match (composite ty1 ty2, composite_params p1 p2) with
-          | (Just ty, Just p) ->
-              if b1 = b2 then
-                (* TODO: check the prototype thing *)
-                Just (Function (has_proto1 || has_proto2) ty p b1)
-              else
-                Nothing
+        else match (make_composite ret_ty1 ret_ty2, make_composite_params params1 params2) with
+          | (Just ret_ty, Just params) ->
+              (* TODO: check the prototype thing *)
+              Just (Function (hasProto1 || hasProto2) ret_ty params isVariadic1)
           | _ ->
               Nothing
         end
-    | (Pointer qs1 ty1, Pointer qs2 ty2) ->
-        if qs1 = qs2 then
-          Maybe.map (Pointer qs1) (composite ty1 ty2)
-        else
-          Nothing
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+        (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
+        Maybe.map (Pointer ref_qs1) (make_composite ref_ty1 ref_ty2)
     | _ ->
+        (* TODO: this might be problematic for Builtins *)
         Nothing
   end
 
-val        composite_params: list (qualifiers * ctype) -> list (qualifiers * ctype) -> maybe (list (qualifiers * ctype))
-let ~{coq} composite_params p1 p2 = composite_params_aux composite p1 p2
+val        make_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> maybe (list (qualifiers * ctype * bool))
+let ~{coq} make_composite_params params1 params2 =
+  make_composite_params_aux make_composite (params1, params2)
 
 
 (* following (§6.3.2.1)#3 *)
 val array_coercion: ctype -> ctype
 let array_coercion = function
-  | Array qs ty _ ->
-      Pointer qs ty
+  | Array elem_qs elem_ty _ ->
+      Pointer elem_qs elem_ty
   | ty ->
       ty
 end
@@ -1036,8 +1086,8 @@ end
 (* following (§6.3.2.1)#4 *)
 val function_coercion: ctype -> ctype
 let function_coercion = function
-  | Function has_proto ty' params is_variadic ->
-      Pointer no_qualifiers (Function has_proto ty' params is_variadic)
+  | Function hasProto ty' params isVariadic ->
+      Pointer no_qualifiers (Function hasProto ty' params isVariadic)
   | ty ->
       ty
 end
@@ -1075,34 +1125,36 @@ let is_pointer_to_complete_object S = function
       false
   end
 
-val        pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> ctype -> ctype -> bool
-let ~{coq} pointers_to_compatible_complete_objects S ty1 ty2 =
+val        are_pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> ctype -> ctype -> bool
+let ~{coq} are_pointers_to_compatible_complete_objects sigm ty1 ty2 =
   match (ty1, ty2) with
-    | (Pointer _ ty1, Pointer _ ty2) ->
-        is_complete S ty1 && is_complete S ty2 && compatible ty1 ty2
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+           is_complete sigm ref_ty1 && is_complete sigm ref_ty2
+        && are_compatible (ref_qs1, ref_ty1) (ref_qs1, ref_ty2)
     | _ ->
         false
   end  
 
-val        pointers_to_compatible_objects: ctype -> ctype -> bool
-let ~{coq} pointers_to_compatible_objects ty1 ty2 =
+val        are_pointers_to_compatible_objects: ctype -> ctype -> bool
+let ~{coq} are_pointers_to_compatible_objects ty1 ty2 =
   match (ty1, ty2) with
-    | (Pointer _ ty1, Pointer _ ty2) ->
-        is_object ty1 && is_object ty2 && compatible ty1 ty2
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+           is_object ref_ty1 && is_object ref_ty2
+        && are_compatible (ref_qs1, ref_ty1) (ref_qs1, ref_ty2)
     | _ ->
         false
   end  
 
-val pointer_to_object: ctype -> bool
-let pointer_to_object = function
-  | Pointer _ ty ->
-      is_object ty
+val is_pointer_to_object: ctype -> bool
+let is_pointer_to_object = function
+  | Pointer _ ref_ty ->
+      is_object ref_ty
   | _ ->
       false
 end
 
-val pointer_to_void: ctype -> bool
-let pointer_to_void = function
+val is_pointer_to_void: ctype -> bool
+let is_pointer_to_void = function
   | Pointer _ Void ->
       true
   | _ ->
@@ -1121,8 +1173,8 @@ end
 val        pointers_to_compatible_types: ctype -> ctype -> bool
 let ~{coq} pointers_to_compatible_types ty1 ty2 =
   match (ty1, ty2) with
-  | (Pointer _ ty1, Pointer _ ty2) ->
-      compatible ty1 ty2
+  | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+      are_compatible (ref_qs1, ref_ty1) (ref_qs1, ref_ty2)
   | _ ->
       false
   end  
@@ -1225,11 +1277,11 @@ let is_complete_object S ty =
 val unqualify: ctype -> ctype
 let rec unqualify ty =
   match ty with
-  | Array _ elem_ty n ->
-      Array no_qualifiers (unqualify elem_ty) n
+  | Array _ elem_ty n_opt ->
+      Array no_qualifiers (unqualify elem_ty) n_opt
 (*
- | Function ty qs_tys is_variadic ->
-     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
+ | Function ty qs_tys isVariadic ->
+     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) isVariadic
 *)
   | Pointer _ Void ->
       Pointer no_qualifiers Void
@@ -1242,34 +1294,16 @@ let rec unqualify ty =
   | _ ->
       ty
 end
-(*
-function
- | Void ->
-     Void
- | Basic bty ->
-     Basic bty
- | Array ty n ->
-     Array (unqualify ty) n
- | Function ty qs_tys is_variadic ->
-     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) is_variadic
- | Atomic ty ->
-     Atomic (unqualify ty)
- | Struct sym ids_ty ->
-     Struct sym 
- | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
- | Builtin of string
-end
-*)
 
 
 val adjust: ctype -> ctype
 let adjust = function
-  | Array qs elem_ty _ ->
+  | Array elem_qs elem_ty _ ->
       (* STD §6.7.6.3#7 *)
-      Pointer qs elem_ty
- | Function has_proto ret_ty params is_variadic ->
+      Pointer elem_qs elem_ty
+ | Function hasProto ret_ty params isVariadic ->
       (* STD §6.7.6.3#8 *)
-     Pointer no_qualifiers (Function has_proto ret_ty params is_variadic)
+     Pointer no_qualifiers (Function hasProto ret_ty params isVariadic)
  | ty ->
      ty
 end
@@ -1295,8 +1329,10 @@ let lvalue_conversion S ty =
 
 val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
 let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
-  (* TODO: the qualified unqualified part *)
-  List.any (compatible ty) tys
+  (* NOte: the "qualified unqualified" part is done by unqualifying *)
+  List.any (fun ty' ->
+    are_compatible (no_qualifiers, unqualify ty) (no_qualifiers, unqualify ty')
+  ) tys
 
 
 val referenced_type: ctype -> maybe ctype
@@ -1337,8 +1373,8 @@ let rec has_pointer_at_leafs ty =
         false
     | Basic _ ->
         false
-    | Array _ ref_ty _ ->
-        has_pointer_at_leafs ref_ty
+    | Array _ elem_ty _ ->
+        has_pointer_at_leafs elem_ty
     | Function _ _ _ _ ->
         false
     | Pointer _ _ ->

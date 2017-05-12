@@ -636,10 +636,11 @@ val desugar_array_declarator:           bool -> array_declarator -> E.desugM (Ai
 val desugar_parameter_array_declarator: array_declarator -> E.desugM unit (* TODO *)
 val desugar_array_declarator_size:      array_declarator_size -> E.desugM unit (* TODO *)
 val desugar_pointer_declarator:         pointer_declarator -> E.desugM (ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
-val desugar_parameter_type_list:        parameter_type_list -> E.desugM (list (maybe (cabs_identifier * list storage_class_specifier) *
-                                                                          (ATypes.qualifiers * ATypes.ctype)) * bool)
-val desugar_parameter_declaration:      parameter_declaration -> E.desugM (maybe (cabs_identifier * list storage_class_specifier) *
-                                                                      (ATypes.qualifiers * ATypes.ctype))
+
+val desugar_parameter_type_list:
+  parameter_type_list -> E.desugM (list (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype)) * bool)
+val desugar_parameter_declaration:
+  parameter_declaration -> E.desugM (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype))
 
 
 val desugar_type_name:                  type_name -> E.desugM (ATypes.qualifiers * AilTypes.ctype)
@@ -1147,6 +1148,144 @@ STD_ "§6.7.3#5" $ (* TODO: except for "or via one or more typedefs" *)
       (List.elem Q_volatile qs)  )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val desugar_array_declarator2:
+  bool -> array_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))
+val desugar_pointer_declarator2:
+  pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))
+val desugar_abstract_declarator2:
+  bool -> abstract_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))
+val desugar_direct_abstract_declarator2:
+  bool -> direct_abstract_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))
+
+
+
+let rec desugar_array_declarator2 is_under_array a_decltor =
+  error "WIP: desugar_array_declarator2"
+
+
+
+
+
+(* TYPE: pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)) *)
+and desugar_pointer_declarator2 (PDecl tquals ptr_decltor_opt)  =
+  (* if ptr_decltor_opt = Nothing, these qualifiers are of the current pointer
+     type we are building; otherwise, they are of the referenced type of the
+     inner [ptr_decltor] *)
+  let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
+  let mk_pointer_ctype ref_qs ref_ty =
+    (if isAtomic then ATypes.Atomic else id) (ATypes.Pointer ref_qs ref_ty) in
+  (* STD  §6.7.6.1#1 *)
+  match ptr_decltor_opt with
+    (* in this case [tquals_qs] are the qualifiers of the referenced type of
+       the inner [ptr_decltor] *)
+    | Just ptr_decltor ->
+        (* the INNER [ptr_decltor] gets desugared to an OUTER pointer type,
+           and [tquals_qs] are the qualifiers of the referenced type that OUTER
+           pointer type *)
+        desugar_pointer_declarator2 ptr_decltor >>= fun mk_outer_pointer_ctype ->
+        E.return (
+          fun base_qs base_ty ->
+            mk_outer_pointer_ctype tquals_qs (mk_pointer_ctype base_qs base_ty)
+        )
+    | Nothing ->
+        (* in this case [tquals_qs] are the qualifiers of the pointer type we
+           are currently building *)
+        E.return (
+          fun base_qs base_ty -> (tquals_qs, mk_pointer_ctype base_qs base_ty)
+        )
+  end
+
+
+and desugar_abstract_declarator2 is_under_array = function
+  | AbsDecl_pointer ptr_decltor ->
+      desugar_pointer_declarator2 ptr_decltor
+  | AbsDecl_direct ptr_decltor_opt dabs_decltor ->
+      maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator2
+        ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
+      desugar_direct_abstract_declarator2 is_under_array dabs_decltor >>= fun mk_qs_ctype ->
+      E.return (
+        fun base_qs base_ty ->
+          let (ptr_qs, ptr_ty) = mk_pointer_qs_ctype base_qs base_ty in
+          mk_qs_ctype ptr_qs ptr_ty
+      )
+end
+
+and desugar_direct_abstract_declarator2 is_under_array = function
+  | DAbs_abs_declarator abs_decltor ->
+      desugar_abstract_declarator2 is_under_array abs_decltor
+  | DAbs_array dabs_decltor_opt a_decltor ->
+      maybe (E.return (fun qs ty -> (qs, ty)))
+        (desugar_direct_abstract_declarator2 true) dabs_decltor_opt >>= fun mk_qs_ctype       ->
+      desugar_array_declarator2 is_under_array a_decltor            >>= fun mk_array_qs_ctype ->
+      E.return (
+        fun base_qs base_ty ->
+          let (array_qs, array_ty) = mk_array_qs_ctype base_qs base_ty in
+          mk_qs_ctype array_qs array_ty
+      )
+  | DAbs_function dabs_decltor_opt param_tys ->
+      maybe (E.return (fun qs ty -> (qs, ty)))
+        (desugar_direct_abstract_declarator2 is_under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
+(*
+        E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (tys, is_variadic)) ->
+*)
+        error "WIP: DAbs_function"
+
+(*
+list (maybe (cabs_identifier * list storage_class_specifier) * (ATypes.qualifiers * ATypes.ctype)) * bool
+*)
+
+
+(*
+        maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
+          (desugar_direct_abstract_declarator is_under_array) dabs_decltor_opt >>= fun mk_ty                   ->
+        E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (tys, is_variadic)) ->
+        (* TODO: check *)
+        E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd tys) is_variadic))
+*)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 val     desugar_type_specifiers : list cabs_type_specifier -> E.desugM (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
   match project_base_type_specifiers specs with
@@ -1613,12 +1752,12 @@ and desugar_direct_declarator ddecltor : E.desugM (cabs_identifier * (ATypes.cty
         desugar_parameter_type_list param_tys >>= fun (xs, is_variadic) ->
         E.with_scope E.Scope_prototype (
           E.mapM_ (function
-            | (Just (ident, storage_classes), (qs, ty)) ->
+            | (Just (ident, isRegister), (qs, ty)) ->
                 E.print_debugM 1 ("(DDecl_function) qs = " ^ Pp.stringFromAil_qualifiers qs) >>
                 (* TODO: register the declaration (qs, ty) *)
                 E.void (
                   E.register_identifier ident
-                    E.Namespace_ordinary (E.Kind_object true) storage_classes
+                    E.Namespace_ordinary (E.Kind_object true) (if isRegister then [SC_register] else [])
                 )
             | (Nothing, _) ->
                 E.return ()
@@ -1709,34 +1848,21 @@ and desugar_array_declarator_size a_decltor_size =
         error "WIP 48"
   end
 
-(* TYPE: pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)) *)
-and desugar_pointer_declarator2 (PDecl tquals ptr_decltor_opt)  =
-  (* if ptr_decltor_opt = Nothing, these qualifiers are of the current pointer
-     type we are building; otherwise, they are of the referenced type of the
-     inner [ptr_decltor] *)
-  let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
-  let mk_pointer_type ref_qs ref_ty =
-    (if isAtomic then ATypes.Atomic else id) (ATypes.Pointer ref_qs ref_ty) in
-  (* STD  §6.7.6.1#1 *)
-  match ptr_decltor_opt with
-    (* in this case [tquals_qs] are the qualifiers of the referenced type of
-       the inner [ptr_decltor] *)
-    | Just ptr_decltor ->
-        (* the INNER [ptr_decltor] gets desugared to an OUTER pointer type,
-           and [tquals_qs] are the qualifiers of the referenced type that OUTER
-           pointer type *)
-        desugar_pointer_declarator2 ptr_decltor >>= fun mk_outer_pointer_type ->
-        E.return (
-          fun base_qs base_ty ->
-            mk_outer_pointer_type tquals_qs (mk_pointer_type base_qs base_ty)
-        )
-    | Nothing ->
-        (* in this case [tquals_qs] are the qualifiers of the pointer type we
-           are currently building *)
-        E.return (
-          fun base_qs base_ty -> (tquals_qs, mk_pointer_type base_qs base_ty)
-        )
-  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 (* val desugar_pointer_declarator: pointer_declarator -> E.desugM (qualifiers * (qualifiers -> ctype -> ctype)) *)
@@ -1755,52 +1881,54 @@ and desugar_pointer_declarator ptr_decltor =
         E.return (ptr_qs, fun ty -> mk_ty (ATypes.Pointer ref_qs (mk_atomic ty)))
   end
 
-and desugar_parameter_type_list params =
-  match params with
-    | Params param_decls is_variadic ->
-        E.mapM desugar_parameter_declaration param_decls >>= fun xs ->
-        E.return (xs, is_variadic)
-  end
 
+and desugar_parameter_type_list (Params param_decls is_variadic) =
+  E.mapM desugar_parameter_declaration param_decls >>= fun xs ->
+  E.return (xs, is_variadic)
+
+
+(* NOTE: we forget about any 'register' storage-class we might find since
+   Cerberus doesn't care about them *)
 and desugar_parameter_declaration param_decl =
   match param_decl with
     | PDeclaration_decl specifs decltor ->
-        desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, _ty) ->
-        let () = begin                                                                            (* DEBUG *)
-          if not (AilTypesAux.is_unqualified specs_qs) then                                       (* DEBUG *)
-            Debug.warn [Debug.DB_desugaring] "[desugar] combining specs_qs (not sure about this)" (* DEBUG *)
-          else                                                                                    (* DEBUG *)
-            ()                                                                                    (* DEBUG *)
-        end in                                                                                    (* DEBUG *)
-        desugar_declarator decltor                      >>= fun (ident, param_qs, mk_ty) ->
-        
-        let (isAtomic, qs) = translate_type_qualifiers specifs.type_qualifiers in
-
-        E.print_debugM 1 ("specs_qs = " ^ Pp.stringFromAil_qualifiers specs_qs) >>
-        E.print_debugM 1 ("param_qs = " ^ Pp.stringFromAil_qualifiers param_qs) >>
-        E.print_debugM 1 ("qs       = " ^ (if isAtomic then "atomic " else "") ^ Pp.stringFromAil_qualifiers qs)       >>
-        (* TODO: do something with param_qs *)
-        (* STD §6.9.1#7, sentence 4 *)
-        let ty = AilTypesAux.adjust (mk_ty _ty) in
-        E.return (Just (ident, specifs.storage_classes), (qs, if isAtomic then ATypes.Atomic ty else ty))
+        if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
+          E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#2")
+        else
+          desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, _ty) ->
+          let () = begin                                                                            (* DEBUG *)
+            if not (AilTypesAux.is_unqualified specs_qs) then                                       (* DEBUG *)
+              Debug.warn [Debug.DB_desugaring] "[desugar] combining specs_qs (not sure about this)" (* DEBUG *)
+            else                                                                                    (* DEBUG *)
+              ()                                                                                    (* DEBUG *)
+          end in                                                                                    (* DEBUG *)
+          desugar_declarator decltor                      >>= fun (ident, param_qs, mk_ty) ->
+          let (isAtomic, qs) = translate_type_qualifiers specifs.type_qualifiers in
+          E.print_debugM 1 ("specs_qs = " ^ Pp.stringFromAil_qualifiers specs_qs) >>
+          E.print_debugM 1 ("param_qs = " ^ Pp.stringFromAil_qualifiers param_qs) >>
+          E.print_debugM 1 ("qs       = " ^ (if isAtomic then "atomic " else "") ^ Pp.stringFromAil_qualifiers qs)       >>
+          (* TODO: do something with param_qs *)
+          (* STD §6.9.1#7, sentence 4 *)
+          let ty = AilTypesAux.adjust (mk_ty _ty) in
+          E.return (Just ident, (qs, if isAtomic then ATypes.Atomic ty else ty))
     
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
-        (* TODO: qualifiers !!!!! *)
-        desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, _ty) ->
-        maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
-            (fun ab -> desugar_abstract_declarator false ab) abs_decltor_opt >>= fun mk_qs_ty ->
-        (* STD §6.9.1#7, sentence 4 *)
-        let (tmp_qs, _ty') = mk_qs_ty _ty in
-        let ty = AilTypesAux.adjust _ty' in
-
-        let (isAtomic, qs) = translate_type_qualifiers specifs.type_qualifiers in
-        
-        E.print_debugM 1 ("(abs) specs_qs = " ^ Pp.stringFromAil_qualifiers specs_qs) >>
-        E.print_debugM 1 ("(abs) _qs'     = " ^ Pp.stringFromAil_qualifiers tmp_qs)   >>
-        E.print_debugM 1 ("(abs) qs       = " ^ (if isAtomic then "atomic " else "") ^ Pp.stringFromAil_qualifiers qs)       >>
-        
-        (* TODO: check the atomic *)
-        E.return (Nothing, (qs, if isAtomic then ATypes.Atomic ty else ty))
+        if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
+          E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#2")
+        else
+          (* TODO: qualifiers !!!!! *)
+          desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, _ty) ->
+          maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
+              (fun ab -> desugar_abstract_declarator false ab) abs_decltor_opt >>= fun mk_qs_ty ->
+          (* STD §6.9.1#7, sentence 4 *)
+          let (tmp_qs, _ty') = mk_qs_ty _ty in
+          let ty = AilTypesAux.adjust _ty' in
+          let (isAtomic, qs) = translate_type_qualifiers specifs.type_qualifiers in
+          E.print_debugM 1 ("(abs) specs_qs = " ^ Pp.stringFromAil_qualifiers specs_qs) >>
+          E.print_debugM 1 ("(abs) _qs'     = " ^ Pp.stringFromAil_qualifiers tmp_qs)   >>
+          E.print_debugM 1 ("(abs) qs       = " ^ (if isAtomic then "atomic " else "") ^ Pp.stringFromAil_qualifiers qs)       >>
+          (* TODO: check the atomic *)
+          E.return (Nothing, (qs, if isAtomic then ATypes.Atomic ty else ty))
   end
 
 
@@ -1820,7 +1948,6 @@ and desugar_type_name (Type_name specs tquals abs_decltor_opt) =
   
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
   E.return (tquals_qs, if isAtomic then ATypes.Atomic ty' else ty')
-
 
 (* TODO: yuck *)
 (* the bool argument is_under_array' is true iff we went through array type derivation
@@ -1852,9 +1979,9 @@ and desugar_direct_abstract_declarator is_under_array dabs_decltor =
     | DAbs_function dabs_decltor_opt param_tys ->
         maybe (E.return $ fun ty -> (ATypes.no_qualifiers(*PLDI*),ty))
           (desugar_direct_abstract_declarator is_under_array) dabs_decltor_opt >>= fun mk_ty                   ->
-        E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (tys, is_variadic)) ->
+        E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (xs, is_variadic)) ->
         (* TODO: check *)
-        E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd tys) is_variadic))
+        E.return (fun ty -> mk_ty (ATypes.Function (* TODO!!! proto*) false ty (List.map snd xs) is_variadic))
   end
 
 
@@ -2863,7 +2990,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
                       else match x_opt with
                         | Nothing ->
                             E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1, sub-sentence 2")
-                        | Just (ident, storage_classes) ->
+                        | Just ident ->
                             E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) storage_classes >>= fun (_, sym) ->
                             E.return (sym, (qs, ty))
                       end
@@ -3022,7 +3149,7 @@ let desugar_and_register_external_declaration edecl =
 
 val desugar: nat -> string -> translation_unit -> Exception.exceptM (UniqueId.supply Symbol.sym * program unit) Errors.error
 let desugar sym_counter startup_str (TUnit edecls) =
-
+(*
   E.eval sym_counter (
     E.with_scope E.Scope_file (
       let (base_qs1, base_ty1, ptr_decltor1) =
@@ -3058,8 +3185,7 @@ let desugar sym_counter startup_str (TUnit edecls) =
     ) >>= fun (_, ret) ->
     E.return ret
   ) 
-
-(*
+*)
   E.eval sym_counter (
     E.with_scope E.Scope_file (
       E.mapM_ desugar_and_register_external_declaration edecls >>
@@ -3067,4 +3193,3 @@ let desugar sym_counter startup_str (TUnit edecls) =
     ) >>= fun (_, ret) ->
     E.return ret
   )
-*)
