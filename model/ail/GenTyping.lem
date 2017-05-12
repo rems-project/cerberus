@@ -614,9 +614,17 @@ let rec annotate_expression' loc annot sigm (gamm: gamma) expr =
     | AilEident sym ->
         match (Context.lookup identifierEqual gamm sym, Context.lookup identifierEqual sigm.declarations sym) with
           | (Just (dur_opt, qs, ty), Nothing) ->
-              E.return (AilEident sym, GenLValueType qs ty (if isJust dur_opt then false else true))
+              let isRegister = match dur_opt with
+                | Just (_, b) -> b
+                | Nothing     -> false
+              end in
+              E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (Decl_object dur_opt qs ty)) ->
-              E.return (AilEident sym, GenLValueType qs ty (if isJust dur_opt then false else true))
+              let isRegister = match dur_opt with
+                | Just (_, b) -> b
+                | Nothing     -> false
+              end in
+              E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (Decl_function has_proto ret_ty params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
               (* NOTE: here sym is a 'function designator', hence it has function type. BUT
@@ -1673,9 +1681,7 @@ let annotate_sigma annot sigm =
       | Just (Decl_function hasProto ret_ty params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
           let bindings = List.map (fun (ident, (qs, ty, isRegister)) ->
             (* STD §6.9.1#9, first sentence *)
-            (* NOTE: (a bit of a hack) for parameters with the register storage-class with erase
-               the storage duration *)
-            (ident, (if isRegister then Nothing else Just Automatic, qs, ty))
+            (ident, (Just (Automatic, isRegister), qs, ty))
           ) (List.zip param_idents params) in
           if sigma_fresh_bindings bindings sigm then
             annotate_statement annot sigm (Context.add_bindings bindings Context.empty) ret_ty s >>= fun s' ->

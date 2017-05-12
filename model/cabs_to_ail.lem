@@ -475,7 +475,7 @@ val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
   match expr with
     | AilEident sym ->
-        E.fetch_object_declaration sym >>= fun (dur, _, _) ->
+        E.fetch_object_declaration sym >>= fun (dur, _, _, _) ->
         match dur with
           | ATypes.Static ->
               E.return true
@@ -621,7 +621,8 @@ val desugar_init_declarator:            ATypes.ctype -> list storage_class_speci
                                         E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit))
 val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype))
 
-val desugar_struct_declarator:          struct_declarator -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype)) (* TODO *)
+val desugar_struct_declarator:
+  struct_declarator -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
 val desugar_enumerator:                 enumerator -> E.desugM unit (* TODO *)
 val desugar_alignment_specifier:        alignment_specifier -> E.desugM unit (* TODO *)
 
@@ -638,7 +639,7 @@ val desugar_array_declarator_size:      array_declarator_size -> E.desugM unit (
 val desugar_pointer_declarator:         pointer_declarator -> E.desugM (ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
 
 val desugar_parameter_type_list:
-  parameter_type_list -> E.desugM (list (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype)) * bool)
+  parameter_type_list -> E.desugM (list (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype * bool)) * bool)
 val desugar_parameter_declaration:
   parameter_declaration -> E.desugM (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype))
 
@@ -1683,8 +1684,8 @@ and desugar_struct_declaration struct_decl =
         (* TODO: qualifiers *)
         desugar_type_specifiers specs >>= fun (_ (* TODO: qs *), ty) ->
         E.mapM (fun sdecltor ->
-          desugar_struct_declarator sdecltor >>= fun (ident, qs, mk_type) ->
-          E.return (ident, mk_type ty)
+          desugar_struct_declarator sdecltor >>= fun (ident, qs, mk_qs_ctype) ->
+          E.return (ident, mk_qs_ctype ty)
         ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -1695,7 +1696,7 @@ and desugar_struct_declaration struct_decl =
 and desugar_struct_declarator struct_decltor =
   match struct_decltor with
     | SDecl_simple decltor ->
-        desugar_declarator decltor
+        desugar_declarator2 decltor
     | SDecl_bitfield declor_opt e ->
         E.fail Loc.unknown (Errors.Desugar_NotyetSupported "SDecl_bitfield")
   end
@@ -1728,6 +1729,14 @@ and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
   E.return (ident, ptr_qs, fun ty -> mk_type $ mk_ptr_type ty)
 
 
+
+and desugar_declarator2 (Declarator ptr_decltor_opt ddecltor) =
+  error "WIP: desugar_declarator2"
+
+
+
+
+
 and desugar_direct_declarator ddecltor : E.desugM (cabs_identifier * (ATypes.ctype -> ATypes.ctype)) =
   match ddecltor with
     | DDecl_identifier ident ->
@@ -1741,52 +1750,51 @@ and desugar_direct_declarator ddecltor : E.desugM (cabs_identifier * (ATypes.cty
     
       (* TODO: STD check + annot *)
     | DDecl_array ddecltor a_decltor ->
-        desugar_direct_declarator ddecltor                                  >>= fun  (ident, mk_type) ->
+        desugar_direct_declarator ddecltor                            >>= fun  (ident, mk_type) ->
         desugar_array_declarator (* TODO: is_under_array *) false a_decltor >>= fun mk_array_type     ->
         E.return (ident, fun ty -> mk_type (mk_array_type ty))
     
+    (* STD §6.7.6.3 *)
     | DDecl_function ddecltor param_tys ->
         (* TODO: the qualifiers are messed up for the return and param types (at least for pointer types) *)
-        (* TODO: check + annotate with STD *)
-        desugar_direct_declarator ddecltor    >>= fun (ident, mk_ty)    ->
-        desugar_parameter_type_list param_tys >>= fun (xs, is_variadic) ->
-        E.with_scope E.Scope_prototype (
-          E.mapM_ (function
-            | (Just (ident, isRegister), (qs, ty)) ->
-                E.print_debugM 1 ("(DDecl_function) qs = " ^ Pp.stringFromAil_qualifiers qs) >>
-                (* TODO: register the declaration (qs, ty) *)
-                E.void (
-                  E.register_identifier ident
-                    E.Namespace_ordinary (E.Kind_object true) (if isRegister then [SC_register] else [])
-                )
-            | (Nothing, _) ->
-                E.return ()
-          end
-          ) xs
-        ) >>
         (* TODO: check *)
-        let params = match List.map snd xs with
-          | [(_, ATypes.Void)] ->
-              []
-          | qs_tys ->
-              qs_tys
-        end in
-        E.return (ident, fun ty -> mk_ty (ATypes.Function false (* TODO!!! proto *) ty params is_variadic))
-
-(*
-        E.register_identifier ident
-          E.Namespace_ordinary E.Kind_object specifs.storage_classes >>= fun sym            ->
-*)
-
-
-
-
-(* WIP
-STD_ "§6.7.6.3#5" $
-          E.return (sym, fun ty -> mk_ty (ATypes.Function ty bs is_variadic))
-        end
-*)
+        desugar_direct_declarator ddecltor    >>= fun (ident, mk_ty)    ->
+        desugar_parameter_type_list param_tys >>= fun (xs, isVariadic) ->
+        
+        match xs with
+          | [(Nothing, (qs, ATypes.Void, _))] ->
+              if not (AilTypesAux.is_unqualified qs) then
+                let () = Debug.warn [Debug.DB_desugaring]
+                    "(UNSURE) forbidding the 'void' parameter to have qualifiers" in
+                (* NOTE: I can't find if the STD actually requires this, but
+                   allowing qualifiers would be meaningless and compilers (at
+                   least clang and gcc) do the same *)
+                E.fail Loc.unknown (Errors.Desugar_OtherViolation "'void' as parameter must not be qualified")
+              else
+                (* STD §6.7.6.3#10 *)
+                E.return []
+          | _ ->
+              (* NOTE: the current function is NEVER called for a function definition,
+                 hence §6.7.6.3#3 applies here *)
+              E.mapM (fun (opt, (qs, ty, isRegister)) ->
+                match opt with
+                  | Just _ ->
+                      E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#3")
+                  | Nothing ->
+                      E.return (qs, ty, isRegister)
+                end
+              ) xs
+        end >>= fun params ->
+        
+        (* TODO: this is morally wrong: it should check that we are not building
+           a function type returning a function or an array. Technically, the
+           Ail typing does catch that error afterwards, but it's still tasteless *)
+        (* NOTE: this function is NEVER called for a function definition, so
+           hasProto = false *)
+        E.return (ident, fun ty -> mk_ty (ATypes.Function false ty params isVariadic))
   end
+
+
 
 and desugar_array_declarator is_under_array a_decltor =
   match a_decltor with
@@ -1887,8 +1895,6 @@ and desugar_parameter_type_list (Params param_decls is_variadic) =
   E.return (xs, is_variadic)
 
 
-(* NOTE: we forget about any 'register' storage-class we might find since
-   Cerberus doesn't care about them *)
 and desugar_parameter_declaration param_decl =
   match param_decl with
     | PDeclaration_decl specifs decltor ->
@@ -1910,7 +1916,9 @@ and desugar_parameter_declaration param_decl =
           (* TODO: do something with param_qs *)
           (* STD §6.9.1#7, sentence 4 *)
           let ty = AilTypesAux.adjust (mk_ty _ty) in
-          E.return (Just ident, (qs, if isAtomic then ATypes.Atomic ty else ty))
+          E.return (Just ident, ( qs
+                                , if isAtomic then ATypes.Atomic ty else ty
+                                , List.elem SC_register specifs.storage_classes ))
     
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
@@ -1928,7 +1936,9 @@ and desugar_parameter_declaration param_decl =
           E.print_debugM 1 ("(abs) _qs'     = " ^ Pp.stringFromAil_qualifiers tmp_qs)   >>
           E.print_debugM 1 ("(abs) qs       = " ^ (if isAtomic then "atomic " else "") ^ Pp.stringFromAil_qualifiers qs)       >>
           (* TODO: check the atomic *)
-          E.return (Nothing, (qs, if isAtomic then ATypes.Atomic ty else ty))
+          E.return (Nothing, ( qs
+                              , if isAtomic then ATypes.Atomic ty else ty
+                              , List.elem SC_register specifs.storage_classes ))
   end
 
 
@@ -2941,18 +2951,12 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
   else
     match ddecltor with
       | DDecl_function ddecltor param_tys ->
-(*
-          match ptr_decltor_opt with
-            | Just ptr_decltor ->
-                desugar_pointer_declarator ptr_decltor
-            | Nothing ->
-                ATypes.no_qualifiers, (fun z -> z)
-          end >>= fun (ptr_qs, mk_ptr_type ->
-*)
+
           maybe (E.return (ATypes.no_qualifiers, id))
             (fun ptr -> desugar_pointer_declarator ptr) ptr_decltor_opt    >>= fun (ptr_qs, mk_ptr_type)  ->
           
-          let () = Debug.print_debug 0 [Debug.DB_desugaring] ("desugar_and_register_function_definition, ptr_qs= " ^ Pp.stringFromAil_qualifiers ptr_qs) in
+          let () = Debug.print_debug 0 [Debug.DB_desugaring] ("desugar_and_register_function_definition, ptr_qs= " ^
+                                                              Pp.stringFromAil_qualifiers ptr_qs) in
           
           desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), ty) ->
           desugar_direct_declarator ddecltor              >>= fun (fun_ident, mk_ty)     ->
@@ -3012,7 +3016,8 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
             ))
           ))
     | _ ->
-        E.fail Loc.unknown Errors.Desugar_impossible
+        (* here the parser would allow DDecl_array or DDecl_function (maybe more?) *)
+        E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#1")
   end
 
 
