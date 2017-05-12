@@ -17,8 +17,9 @@ type desugar_cause =
   | Desugar_NotConstantExpression
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultipleDeclaration of cabs_identifier
-
-
+  
+  | Desugar_InvalidMember of cabs_identifier * AilTypes.ctype
+  
   | Desugar_NonvoidReturn (* §6.8.6.4#1, 2nd sentence *)
 
 

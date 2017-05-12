@@ -619,10 +619,10 @@ val desugar_generic_association:        cabs_generic_association -> E.desugM (ge
 val check_storage_class_specifiers:                 declaration_context -> list storage_class_specifier -> E.desugM unit (* TODO *)
 val desugar_init_declarator:            ATypes.ctype -> list storage_class_specifier -> init_declarator ->
                                         E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * maybe (expression unit))
-val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype))
+val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
 
 val desugar_struct_declarator:
-  struct_declarator -> E.desugM (cabs_identifier * ATypes.qualifiers * (ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
+  struct_declarator -> E.desugM (cabs_identifier * (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
 val desugar_enumerator:                 enumerator -> E.desugM unit (* TODO *)
 val desugar_alignment_specifier:        alignment_specifier -> E.desugM unit (* TODO *)
 
@@ -639,9 +639,9 @@ val desugar_array_declarator_size:      array_declarator_size -> E.desugM unit (
 val desugar_pointer_declarator:         pointer_declarator -> E.desugM (ATypes.qualifiers * (ATypes.ctype -> ATypes.ctype))
 
 val desugar_parameter_type_list:
-  parameter_type_list -> E.desugM (list (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype * bool)) * bool)
+  parameter_type_list -> E.desugM (list (maybe cabs_identifier * (ATypes.qualifiers * ATypes.ctype * bool)) * bool)
 val desugar_parameter_declaration:
-  parameter_declaration -> E.desugM (maybe (cabs_identifier * bool) * (ATypes.qualifiers * ATypes.ctype))
+  parameter_declaration -> E.desugM (maybe cabs_identifier * (ATypes.qualifiers * ATypes.ctype * bool))
 
 
 val desugar_type_name:                  type_name -> E.desugM (ATypes.qualifiers * AilTypes.ctype)
@@ -1681,11 +1681,11 @@ and desugar_init_declarator _ty scs idecltor =
 and desugar_struct_declaration struct_decl =
   match struct_decl with
     | Struct_declaration specs qs sdecltors ->
-        (* TODO: qualifiers *)
-        desugar_type_specifiers specs >>= fun (_ (* TODO: qs *), ty) ->
+        desugar_type_specifiers specs >>= fun (qs, ty) ->
         E.mapM (fun sdecltor ->
-          desugar_struct_declarator sdecltor >>= fun (ident, qs, mk_qs_ctype) ->
-          E.return (ident, mk_qs_ctype ty)
+          desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
+          (* TODO: check !!! *)
+          E.return (ident, mk_qs_ctype qs ty)
         ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -1730,7 +1730,8 @@ and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
 
 
 
-and desugar_declarator2 (Declarator ptr_decltor_opt ddecltor) =
+and desugar_declarator2 (Declarator ptr_decltor_opt ddecltor) :
+  E.desugM (cabs_identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) =
   error "WIP: desugar_declarator2"
 
 
@@ -2054,7 +2055,8 @@ and static_thread_implicit_initializer tagDefs ty =
         match Map.lookup tag_sym tagDefs with
           | Just (E.Struct_definition xs) ->
               ConstantStruct tag_sym $
-                List.map (fun (ident, ty) ->
+                List.map (fun (ident, (_, ty)) ->
+                  (* we ignore the qualifiers, initialisers don't care about them *)
                   (ident, static_thread_implicit_initializer tagDefs ty)
                 ) xs
           | _ ->
@@ -2064,12 +2066,14 @@ and static_thread_implicit_initializer tagDefs ty =
     | ATypes.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
           | Just (E.Union_definition xs) ->
-              let (ident, ty) = match xs with
+              let (ident, (_, ty)) = match xs with
                 | [] ->
+                    (* NOTE: I don't the parser can produce an empty Union_definition *)
                     error "Cabs_to_ail.static_thread_implicit, Union, empty definition"
                 | z :: _ ->
                     z
               end in
+              (* we ignore the qualifiers, initialisers don't care about them *)
               ConstantUnion tag_sym ident (static_thread_implicit_initializer tagDefs ty)
           | _ ->
               error "Cabs_to_ail.static_thread_implicit, Union, not Union_definition"
@@ -2211,10 +2215,11 @@ and wip_desugar_initializer_ loc dur current_ty = function
                   else if is_fully_non_designated desigs_opt_inits then
                     E.foldlM (fun desigs_opt_init acc ->
                       match desigs_opt_init with
-                        | ((ident, _), (Nothing, Init_expr e)) ->
+                        | ((ident, (_, _)), (Nothing, Init_expr e)) ->
                             desugar_expression e >>= fun d_e ->
                             E.return $ (ident, Just d_e) :: acc
-                        | ((ident, membr_ty), (Nothing, init)) ->
+                        | ((ident, (_, membr_ty)), (Nothing, init)) ->
+                            (* we ignore the qualifiers, initialisers don't care about them *)
                             wip_desugar_initializer_ loc dur membr_ty init >>= fun d_e ->
                             E.return $ (ident, Just d_e) :: acc
 (*                      | ((ident, membr_ty), (Nothing, Init_list non_designated_inits)) ->
@@ -2284,12 +2289,14 @@ and designator =
               | E.Union_definition ident_tys ->
                   match desigs_opt_inits with
                     | [(Nothing, init')] ->
-                        let (first_ident, first_ty) = match ident_tys with
-                          | (ident, ty) :: _ ->
-                              (ident, ty)
+                        let (first_ident, (_, first_ty)) = match ident_tys with
                           | [] ->
+                              (* NOTE: I don't the parser can produce an empty Union_definition *)
                               error "Cabs_to_ail.wip_desugar_initializer_ ==> empty Union_definition"
+                          | z :: _ ->
+                              z
                         end in
+                        (* we ignore the qualifiers, initialisers don't care about them *)
                         wip_desugar_initializer_ loc dur first_ty init' >>= fun d_e ->
                         E.return (
                           AnnotatedExpression () loc (
@@ -2297,12 +2304,13 @@ and designator =
                           )
                         )
                     | [(Just [Desig_member memb_ident], init')] ->
-                        let memb_ty = match List.lookup memb_ident ident_tys with
-                          | Just ty ->
-                              ty
+                        match List.lookup memb_ident ident_tys with
+                          | Just (_, ty) ->
+                              (* we ignore the qualifiers, initialisers don't care about them *)
+                              E.return ty
                           | Nothing ->
-                              error "Cabs_to_ail.wip_desugar_initializer_ ==> Desig_member didn't match a Union_definition"
-                        end in
+                              E.fail loc (Errors.Desugar_InvalidMember memb_ident current_ty)
+                        end >>= fun memb_ty ->
                         wip_desugar_initializer_ loc dur memb_ty init' >>= fun d_e ->
                         E.return (
                           AnnotatedExpression () loc (
@@ -2441,7 +2449,8 @@ let desugar_declaration_base specifs idecltors =
                       E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7")
                     else
                       let dur = determinate_storage_duration link specifs.storage_classes in
-                      E.register_internal_object_declaration sym (dur, AilTypesAux.combine_qualifiers qs qs', ty') >>
+                      E.register_internal_object_declaration sym
+                        (dur, List.elem SC_register specifs.storage_classes, AilTypesAux.combine_qualifiers qs qs', ty') >>
                       match d_e_opt with
                         | Just d_e ->
                             E.return ((sym, d_e) :: acc)
@@ -2763,12 +2772,13 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                     match d_e_opt with
                       | Just d_e ->
                           let dur = determinate_storage_duration link specifs.storage_classes in
-                          E.return ((sym, d_e) :: acc1, (sym, (Just dur, qs, ty)) :: acc2)
+                          E.return ( (sym, d_e) :: acc1
+                                   , (sym, (Just (dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                       | Nothing ->
                           E.return (acc1, acc2)
                     end
               end
-            ) ([], []) (List.reverse xs) >>= fun (sym_d_es, bs) ->
+            ) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
             
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
@@ -2779,8 +2789,8 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                     desugar_expression e3 >>= fun d_e3 ->
                     let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
                     E.return match d_s with
-                      | AnnotatedStatement loc (AilSblock bs d_ss) ->
-                          AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
+                      | AnnotatedStatement loc (AilSblock bindings d_ss) ->
+                          AnnotatedStatement loc (AilSblock bindings (d_ss ++ [d_s_e3]))
                       | _ ->
                           AnnotatedStatement loc (AilSblock [] [d_s; d_s_e3])
                     end
@@ -2788,7 +2798,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                     E.return (AnnotatedStatement loc (AilSblock [] [d_s]))
               end >>= fun d_s_body ->
               E.return $
-                AilSblock bs [
+                AilSblock bindings [
                   AnnotatedStatement Loc.unknown (AilSdeclaration sym_d_es);
                   AnnotatedStatement Loc.unknown (AilSwhile d_e2 d_s_body)
                 ]
@@ -2980,23 +2990,24 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
             E.fresh_block_scope >>= fun scope ->
             E.void (E.with_scope scope (
               match params with
-                | [(x_opt, (qs, ATypes.Void))] ->
-                    if isJust x_opt then
+                | [(ident_opt, (qs, ATypes.Void, _))] ->
+                    if isJust ident_opt then
                       E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1, sub-sentence 4")
                     else if qs <> ATypes.no_qualifiers then
                       E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "TODO: find where the Std forbids this")
                     else
                       E.return []
                 | _ ->
-                    E.mapM (fun (x_opt, (qs, ty)) ->
+                    E.mapM (fun (ident_opt, (qs, ty, isRegister)) ->
                       if ty = ATypes.Void then
                         E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, void not alone")
-                      else match x_opt with
+                      else match ident_opt with
                         | Nothing ->
                             E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1, sub-sentence 2")
                         | Just ident ->
-                            E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) storage_classes >>= fun (_, sym) ->
-                            E.return (sym, (qs, ty))
+                            let scs = if isRegister then [SC_register] else [] in
+                            E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) scs >>= fun (_, sym) ->
+                            E.return (sym, (qs, ty, isRegister))
                       end
                     ) params
               end >>= fun bindings ->
@@ -3131,7 +3142,8 @@ let desugar_and_register_external_declaration edecl =
                   E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.2#3")
                 else
                   let dur = determinate_storage_duration link specifs.storage_classes in
-                  E.register_external_object_declaration sym (dur, AilTypesAux.combine_qualifiers qs qs', ty') >>
+                  E.register_external_object_declaration sym
+                    (dur, List.elem SC_register specifs.storage_classes, AilTypesAux.combine_qualifiers qs qs', ty') >>
                   match d_e_opt with
                     | Just d_e ->
                         (* STD §6.9#3, first sentence *)

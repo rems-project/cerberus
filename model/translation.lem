@@ -1063,7 +1063,7 @@ if AilTypesAux.is_arithmetic ty && AilTypesAux.is_arithmetic (ctype_of e) then
               error "WIP elaboration of casts involving a non-integer arithmetic type"
 else
   (* TODO: check *)
-  if AilTypesAux.pointer_to_void (AilTypesAux.unqualify ty) then
+  if AilTypesAux.is_pointer_to_void (AilTypesAux.unqualify ty) then
               core_e
   else
               let e_ty = ctype_of e in
@@ -2151,7 +2151,8 @@ TODO: #9
           let fail = illTypedAil loc "AilEunion" in
           match List.lookup tag_sym sigm.A.tag_definitions with
             | Just (A.UnionDef ident_tys) ->
-                match Maybe.map Caux.proj_ctype (List.lookup memb_ident ident_tys) with
+                (* TODO: qualifiers ? (removed by snd) *)
+                match Maybe.map (snd |- Caux.proj_ctype) (List.lookup memb_ident ident_tys) with
                   | Just memb_ty ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
@@ -3716,9 +3717,9 @@ val translate_tag_definitions: Context.context A.identifier A.tag_definition -> 
 let translate_tag_definitions ctx =
   Map.fromList $ List.map (function
     | (sym, A.StructDef ident_tys) ->
-        (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
+        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) ident_tys)
     | (sym, A.UnionDef ident_tys) ->
-        (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
+        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) ident_tys)
   end) ctx
 (*
   let ctxWithoutUnions = List.filter (function

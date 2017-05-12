@@ -447,7 +447,7 @@ let rewrite =
   Arg.(value & flag & info["rewrite"] ~doc)
 
 let sequentialise =
-  let doc = "Replace all unseq() with left to righ wseq(s)" in
+  let doc = "Replace all unseq() with left to right wseq(s)" in
   Arg.(value & flag & info["sequentialise"] ~doc)
 
 let concurrency =

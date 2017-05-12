@@ -201,8 +201,12 @@ let desugar_cause_to_string = function
 *)
   | Desugar_NotConstantExpression ->
       "found a non-contant expression in place of a constant one.\n"
-  | Desugar_MultipleDeclaration (CabsIdentifier (_, str)) ->
+  | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
       "violation of constraint (§6.7#3): multiple declaration of `" ^ str ^ "'."
+
+  | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
+      "member '" ^ str ^ "' is not defined for type '" ^ String_ail.string_of_ctype ty ^ "'"
+
 (*
   | CABS_TO_AIL_DUPLICATED_LABEL ->
     "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
@@ -251,6 +255,8 @@ let std_ref = function
       "§5.1.2.2.1#1, 2nd sentence"
   | AIL_TYPING (TError_TODO n) ->
       "Ail typing error (TODO " ^ string_of_int n ^ ")"
+  | AIL_TYPING (TError std) ->
+      std
   | Desugar_cause (Desugar_ConstraintViolation str) ->
       str
   | Core_run_cause _  ->
@@ -276,12 +282,14 @@ let std_ref = function
             Pp_utils.to_plain_string (Pp_core.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.pp_core_base_type bTys1))
         | EmptyArray ->
             "found an empty array"
-(*
-        | CtorWrongNumber of nat (* expected *) * nat (* found *)
-        | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
-        | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
-        | InvalidMember of Symbol.sym * Cabs.cabs_identifier
-*)
+        | CtorWrongNumber _ (*of nat (* expected *) * nat (* found *)*) ->
+            "TODO(msg) CtorWrongNumber"
+        | HeterogenousArray _ (* of core_object_type (* expected *) * core_object_type (* found *) *) ->
+            "TODO(msg) HeterogenousArray"
+        | HeterogenousList _ (* of core_base_type (* expected *) * core_base_type (* found *) *) ->
+            "TODO(msg) HeterogenousList"
+        | InvalidMember _ (* of Symbol.sym * Cabs.cabs_identifier *) ->
+            "TODO(msg) InvalidMember"
         | CoreTyping_TODO str ->
             "TODO(msg) " ^ str
         | TooGeneral ->
@@ -316,7 +324,7 @@ let short_message = function
       "return type of 'main' should be 'int'"
 
   | AIL_TYPING (TError_main_params qs_tys) ->
-      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty) -> String_ail.string_of_ctype ty) qs_tys) ^ ")"
+      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype ty) qs_tys) ^ ")"
 
       
       | CSEM_NOT_SUPPORTED msg ->
