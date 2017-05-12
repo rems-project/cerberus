@@ -1060,7 +1060,7 @@ val extract_program: string -> desugM (A.program unit)
 let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) -> return (Just startup_sym)
-    | Nothing                       -> return Nothing (* fail Loc.unknown (Errors.Desugar_NoStartup startup_str) *)
+    | Nothing                       -> return Nothing
   end >>= fun startup_sym_opt ->
   
   State_exception.read (fun st ->
