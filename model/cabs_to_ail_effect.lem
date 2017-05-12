@@ -216,6 +216,10 @@ type state = <|
   
   is_inside_loop:   bool;
   is_inside_switch: bool;
+  
+  
+  (* TODO TODO TODO *)
+  core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
 |>
 
 type desugM 'a = State_exception.stExceptM 'a state Errors.error
@@ -271,6 +275,9 @@ let guard m_pred err_msg m =
     | false -> error ("[Cabs_to_ail_effect] failed guard: " ^ err_msg ^ ".")
   end
 
+
+val liftException: forall 'a. Exception.exceptM 'a Errors.error -> desugM 'a
+let liftException = State_exception.liftException
 
 (* ========================================================================== *)
 val current_scope_is: scope -> desugM bool
@@ -330,8 +337,8 @@ let with_scope scope m =
 
 
 (* ========================================================================== *)
-val initial_state: nat -> state
-let initial_state n = <|
+val initial_state: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
+let initial_state n core_eval_stuff = <|
   aux_supply=                  UniqueId.new_supply;
   symbol_supply=               UniqueId.new_supply_from n;
   registered_identifiers=      Scope_table.empty;
@@ -354,15 +361,18 @@ let initial_state n = <|
   
   is_inside_loop=   false;
   is_inside_switch= false;
+  
+  core_eval_stuff= core_eval_stuff;
 |>
 
-val eval: forall 'a. nat -> desugM 'a -> Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
-let eval n m =
+val eval: forall 'a. nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a ->
+  Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
+let eval n core_eval_stuff m =
   State_exception.eval (
     m                                                 >>= fun res    ->
     State_exception.read (fun st -> st.symbol_supply) >>= fun supply ->
     return (supply, res)
-    ) (initial_state n)
+    ) (initial_state n core_eval_stuff)
 
 
 
@@ -1094,3 +1104,11 @@ val print_debugM: nat -> string -> desugM unit
 let inline print_debugM n msg =
   return (Debug.print_debug n [Debug.DB_desugaring] msg)
 
+
+(* TODO *)
+import Core
+val get_core_eval_stuff: desugM (((map string Symbol.sym) * Core.fun_map unit * Core.impl) * UniqueId.supply Symbol.sym)
+let get_core_eval_stuff =
+  State_exception.read (fun st ->
+    (st.core_eval_stuff, st.symbol_supply)
+  )

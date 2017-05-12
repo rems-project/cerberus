@@ -89,7 +89,19 @@ let c_frontend f =
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
     
-    |> Exception.rbind (Cabs_to_ail.desugar !core_sym_counter "main")
+(* TODO TODO TODO *)
+    |> Exception.rbind (fun z ->
+         (* TODO: yuck *)
+(*        let saved_exec_mode_opt = current_execution_mode () in
+          cerb_conf := (fun () -> { !!cerb_conf with exec_mode_opt= Some Random }) ; *)
+          let ret = Cabs_to_ail.desugar !core_sym_counter
+            begin
+              let (ailnames, stdlib_fun_map) = !!cerb_conf.core_stdlib in
+              (ailnames, stdlib_fun_map, match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false)
+            end "main" z in
+(*        cerb_conf := (fun () -> { (!cerb_conf()) with exec_mode_opt= saved_exec_mode_opt }) ; *)
+          ret)
+    
     |> set_progress 11
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin

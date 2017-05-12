@@ -35,6 +35,10 @@ type desugar_cause =
   
   | Desugar_impossible
 
+  | Desugar_constantExpression_notInteger of string (* the std location for this particular instance *)
+  | Desugar_constantExpression_UB of list Undefined.undefined_behaviour
+
+
 
 (*  | Desugar_DUPLICATED_LABEL *)                    
 (*  | Desugar_UNDECLARED_IDENTIFIER of string *)     
