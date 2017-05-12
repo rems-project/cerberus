@@ -1346,7 +1346,8 @@ int ( * const [])(unsigned int, ...)    array of an unspecified number of consta
 and desugar_array_declarator2 is_under_array a_decltor =
   match a_decltor with
     | ADecl loc [] false (Just (ADeclSize_expression e)) ->
-        (* the array declarator: has no qualifiers, is not static, has a size expression *)
+        (* here the array declarator: has no qualifiers, is not static, and has
+           a size expression *)
         desugar_expression e >>= fun d_e ->
         is_integer_constant_expression d_e >>= function
           | false ->
@@ -1359,9 +1360,7 @@ and desugar_array_declarator2 is_under_array a_decltor =
                 (* TODO: not sure about the qualifiers *)
                 E.return (fun qs ty -> (qs, ATypes.Array ATypes.no_qualifiers ty (Just n)))
         end
-
-
-
+    
     | ADecl loc [] _ Nothing ->
         E.return (fun qs ty -> (qs, ATypes.Array ATypes.no_qualifiers ty Nothing))
 
@@ -1376,11 +1375,25 @@ and desugar_array_declarator2 is_under_array a_decltor =
               E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#4, 2nd sentence")
         end
 
-    | _ ->
-        error "WIP: desugar_array_declarator2"
+    | ADecl loc qs is_static a_decltor_size_opt ->
+        E.get_scope >>= function
+          | E.Scope_prototype ->
+              if is_under_array && (qs <> [] || is_static) then
+STD_ "§6.7.6.2#1, sentence 5, not outermost" $
+                E.fail Loc.unknown
+                  (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence, not outermost")
+              else
+                E.return ()
+          | _ ->
+              if qs <> [] || is_static then
+STD_ "§6.7.6.2#1, sentence 5" $
+                E.fail Loc.unknown
+                  (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence")
+              else
+                E.return ()
+        end >>
+        E.fail loc (Errors.Desugar_NotyetSupported "array parameters with qualifiers")
   end
-
-
 
 
 (* TYPE: pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)) *)
@@ -1427,6 +1440,7 @@ and desugar_abstract_declarator2 is_under_array = function
       )
 end
 
+
 and desugar_direct_abstract_declarator2 is_under_array = function
   | DAbs_abs_declarator abs_decltor ->
       desugar_abstract_declarator2 is_under_array abs_decltor
@@ -1445,7 +1459,7 @@ and desugar_direct_abstract_declarator2 is_under_array = function
 (*
         E.with_scope E.Scope_prototype (desugar_parameter_type_list param_tys) >>= fun (_, (tys, is_variadic)) ->
 *)
-        error "WIP: DAbs_function"
+        error "WIP: desugar_direct_abstract_declarator2, DAbs_function"
 
 (*
 list (maybe (cabs_identifier * list storage_class_specifier) * (ATypes.qualifiers * ATypes.ctype)) * bool
@@ -1462,9 +1476,39 @@ list (maybe (cabs_identifier * list storage_class_specifier) * (ATypes.qualifier
 end
 
 
+(* TYPE: E.desugM (cabs_identifier * (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) *)
+and desugar_direct_declarator2 ddecltor =
+  match ddecltor with
+    | DDecl_identifier ident ->
+        E.return (ident, fun base_qs base_ty -> (base_qs, base_ty))
+    
+    | DDecl_declarator decltor ->
+        desugar_declarator2 decltor
+    
+    | DDecl_array ddecltor a_decltor ->
+        (* TODO: check the maker + the is_under_array *)
+        desugar_direct_declarator2 ddecltor >>= fun (ident, mk_outer_qs_ctype) ->
+        desugar_array_declarator2 true a_decltor >>= fun mk_array_qs_ctype          ->
+        E.return ( ident
+                 , fun base_qs base_ty ->
+                     let (array_qs, array_ty) = mk_array_qs_ctype base_qs base_ty in
+                     mk_outer_qs_ctype array_qs array_ty )
+    
+    | DDecl_function ddecltor param_tys ->
+      error "WIP: desugar_direct_declarator2, DDecl_function"
+  end
 
 
-
+(* TYPE: E.desugM (cabs_identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) *)
+and desugar_declarator2 (Declarator ptr_decltor_opt ddecltor) =
+  maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator2
+    ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
+  desugar_direct_declarator2 ddecltor >>= fun (ident, mk_qs_ctype) ->
+  (* TODO: check, but seems correct *)
+  E.return ( ident
+           , fun base_qs base_ty ->
+               let (ptr_qs, ptr_ty) = mk_pointer_qs_ctype base_qs base_ty in
+               mk_qs_ctype ptr_qs ptr_ty )
 
 
 
@@ -1768,12 +1812,6 @@ and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
   E.print_debugM 1 ("[desugar_declarator] mk_ptr_type Void = " ^ Pp.stringFromAil_ctype (mk_ptr_type ATypes.Void)) >>
   E.print_debugM 1 ("[desugar_declarator] mk_type Void     = " ^ Pp.stringFromAil_ctype (mk_type ATypes.Void))     >>
   E.return (ident, ptr_qs, fun ty -> mk_type $ mk_ptr_type ty)
-
-
-
-and desugar_declarator2 (Declarator ptr_decltor_opt ddecltor) :
-  E.desugM (cabs_identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) =
-  error "WIP: desugar_declarator2"
 
 
 
