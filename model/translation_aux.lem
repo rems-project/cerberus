@@ -1,6 +1,6 @@
 open import Pervasives Global Translation_effect Symbol Show Show_extra
 import Core Core_aux Core_ctype
-import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
+import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
@@ -194,7 +194,7 @@ let exp_type_of a_expr =
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
-      (Annotation.type_of Annotation.concrete_annotation a_expr) with
+      (GenTypes.genTypeCategoryOf a_expr) with
     | Right (AilTypes.LValueType _ ty _) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
@@ -209,7 +209,7 @@ let ctype_of a_expr =
 
 val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
 let is_lvalue a_expr =
-  match Annotation.type_of Annotation.concrete_annotation a_expr with
+  match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
         true
     | GenTypes.GenRValueType _ ->
