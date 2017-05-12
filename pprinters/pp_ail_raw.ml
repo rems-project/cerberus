@@ -95,8 +95,12 @@ let rec pp_ctype_raw = function
   | Array (qs, ty, Some n) ->
       pp_ctor "Array" ^^ P.brackets (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "Some" ^^ P.brackets (pp_integer n))
   | Function (has_proto, ty, params, is_variadic) ->
-      pp_ctor "Function" ^^ P.brackets (!^ (if has_proto then "true" else "false") ^^ P.comma ^^^
-                                        comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
+      pp_ctor "Function" ^^ P.brackets (
+        !^ (if has_proto then "true" else "false") ^^ P.comma ^^^
+        comma_list (fun (qs, ty, isRegister) -> 
+          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^
+                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
+        ) params ^^ P.comma ^^
                                    !^ (if is_variadic then "true" else "false"))
   | Pointer (ref_qs, ref_ty) ->
       pp_ctor "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)

@@ -219,13 +219,16 @@ let rec pp_ctype = function
       pp_basicType b
   | Array (qs, ty, n_opt) ->
       pp_qualifiers qs (pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt))
-  | Function (has_proto, ty, ps, is_variadic) ->
+  | Function (has_proto, ty, params, isVariadic) ->
       pp_ctype ty ^^ P.parens (
-        let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
-        if is_variadic then
-          p ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+        let params_doc = comma_list (fun (qs, ty, isRegister) ->
+          (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+            (pp_qualifiers qs (pp_ctype ty))
+        ) params in
+        if isVariadic then
+          params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
         else
-          p
+          params_doc
       )
   | Pointer (ref_qs, ref_ty) ->
       pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
@@ -274,13 +277,16 @@ let pp_ctype_declaration pp_ident ty =
       pp_basicType b ^^^ pp_ident
   | Array (qs, ty, n_opt) ->
       pp_qualifiers qs (aux k ty ^^^ pp_ident ^^ P.brackets (P.optional pp_integer n_opt))
-  | Function (has_proto, ty, ps, is_variadic) ->
+  | Function (has_proto, ty, params, isVariadic) ->
       (*pp_ctype_declaration*) aux id ty ^^ P.parens (
-        let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
-        if is_variadic then
-          p ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+        let params_doc = comma_list (fun (qs, ty, isRegister) ->
+          (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+            (pp_qualifiers qs (pp_ctype ty))
+        ) params in
+        if isVariadic then
+          params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
         else
-          p
+          params_doc
       )
   | Pointer (ref_qs, ref_ty) ->
       pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
@@ -316,8 +322,9 @@ let rec pp_ctype_human qs ty =
         
         !^ (if is_variadic then "variadic function" else "function") ^^^
         P.parens (
-          comma_list (fun (qs', ty') ->
-            pp_ctype_human qs' ty' (* NOTE: qs should be no_qualifiers, here *)
+          comma_list (fun (qs', ty', isRegister) ->
+            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+              (pp_ctype_human qs' ty') (* NOTE: qs should be no_qualifiers, here *) (* <-- why? *)
           ) params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human qs ret_ty
@@ -606,17 +613,22 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ (P.separate_map (P.break 1) pp_statement ss)
         ) ^^ P.rbrace
-    | AilSblock (ids, ss) ->
+    | AilSblock (bindings, ss) ->
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
-            (fun (id, (dur_opt, qs, ty)) ->
+            (fun (id, (dur_reg_opt, qs, ty)) ->
               if !Debug_ocaml.debug_level > 5 then
                 (* printing the types in a human readable format *)
-                P.parens (P.optional pp_storageDuration dur_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp_id_obj id
+                P.parens (
+                  P.optional (fun (dur, isRegister) ->
+                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+                      (pp_storageDuration dur)
+                  ) dur_reg_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty
+                ) ^^^ pp_id_obj id
               else
                 pp_qualifiers qs (pp_ctype ty) ^^^ pp_id_obj id
-               ) ids ^^ P.semi ^^ P.break 1 ^^
+               ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
     | AilSif (e, s1, s2) ->
@@ -685,16 +697,20 @@ let pp_static_assertion pp_annot (e, lit) =
 
 let pp_tag_definition (tag, def) =
   match def with
-    | StructDef ident_tys ->
+    | StructDef ident_qs_tys ->
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
+              pp_qualifiers qs (pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident)
+            ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
-    | UnionDef ident_tys ->
+    | UnionDef ident_qs_tys ->
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
+              pp_qualifiers qs (pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident)
+            ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
 
@@ -746,10 +762,14 @@ let pp_program_aux pp_annot (startup, sigm) =
               (match Context.lookup identifierEqual sigm.function_definitions sym with
                 | Some (param_syms, stmt) ->
                     P.parens (
-                      comma_list (fun (sym, (qs, ty)) ->
+                      comma_list (fun (sym, (qs, ty, isRegister)) ->
                         if !Debug_ocaml.debug_level > 5 then
                           (* printing the types in a human readable format *)
-                          pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                          pp_id_obj sym ^^ P.colon ^^^
+                          P.parens (
+                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                              (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                          )
                         else
                           (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id_obj sym
                       ) (List.combine param_syms params) ^^
@@ -761,10 +781,13 @@ let pp_program_aux pp_annot (startup, sigm) =
                     pp_statement_aux pp_annot stmt
                 | None ->
                     P.parens (
-                      comma_list (fun (qs, ty) ->
+                      comma_list (fun (qs, ty, isRegister) ->
                         if !Debug_ocaml.debug_level > 5 then
                           (* printing the types in a human readable format *)
-                          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                          P.parens (
+                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                              (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                          )
                         else
                           pp_qualifiers qs (pp_ctype ty)
                       ) params ^^
@@ -816,8 +839,12 @@ let pp_genType = function
 
      
  | GenFunction (has_proto, ty, params, is_variadic) ->
-      !^ "GenFunction" ^^ P.brackets (comma_list (fun (qs, ty) -> P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)) params ^^ P.comma ^^
-                                   !^ (if is_variadic then "true" else "false"))
+      !^ "GenFunction" ^^ P.brackets (
+        comma_list (fun (qs, ty, isRegister) ->
+          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^
+                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
+        ) params ^^ P.comma ^^ !^ (if is_variadic then "true" else "false")
+       )
 
  | GenPointer (ref_qs, ref_ty) ->
       !^ "GenPointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
@@ -832,8 +859,10 @@ let pp_genType = function
 
 
 let pp_genTypeCategory = function
- | GenLValueType (qs, ty) ->
-     !^ "GenLValueType" ^^ P.brackets (pp_qualifiers qs P.comma ^^^ pp_ctype_raw ty)
+ | GenLValueType (qs, ty, isRegister) ->
+     !^ "GenLValueType" ^^ P.brackets (
+       pp_qualifiers qs P.empty ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
+     )
  | GenRValueType gty ->
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
 
