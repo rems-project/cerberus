@@ -170,8 +170,6 @@ let location_to_string loc =
 
 
 let desugar_cause_to_string = function
-  | Desugar_NoStartup str ->
-      "could not find the startup function (" ^ str ^ ")"
   | Desugar_ConstraintViolation msg ->
       "violation of contraint " ^ msg
   | Desugar_OtherViolation msg ->
@@ -309,8 +307,6 @@ let short_message = function
 
   | Desugar_cause (Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str))) ->
       "redeclaration of '" ^ str ^ "'"
-  | Desugar_cause (Desugar_NoStartup str) ->
-      "expecting declaration of a startup function '" ^ str ^ "'"
   
   | Desugar_cause Desugar_NonvoidReturn ->
 (*      "non-void function 'main' should return a value" *)

@@ -4,7 +4,6 @@ import Loc TypingError Undefined
 
 
 type desugar_cause =
-  | Desugar_NoStartup of string
   | Desugar_ConstraintViolation of string
   | Desugar_OtherViolation of string
 
@@ -37,14 +36,6 @@ type desugar_cause =
 
   | Desugar_constantExpression_notInteger of string (* the std location for this particular instance *)
   | Desugar_constantExpression_UB of list Undefined.undefined_behaviour
-
-
-
-(*  | Desugar_DUPLICATED_LABEL *)                    
-(*  | Desugar_UNDECLARED_IDENTIFIER of string *)     
-(*  | Desugar_UNDECLARED_TYPENAME of string *)       
-(*  | Desugar_MULTIPLE_STORAGE_CLASS *)              
-(*  | Desugar_ITERATION_DECLARATON_WRONG_STORAGE *)  
 
 
 
