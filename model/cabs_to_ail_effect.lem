@@ -1052,7 +1052,7 @@ let extract_program startup_str =
     let () = Debug.print_debug 5 [Debug.DB_desugaring] ("Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
     let decls = Map_extra.toList (
       map_union
-        (Map.map (fun (has_proto, (ty, params, b1, b2, b3)) -> A.Decl_function has_proto ty params b1 b2 b3) st.function_declarations)
+        (Map.map (fun (hasProto, (ty, params, b1, b2, b3)) -> A.Decl_function hasProto ty params b1 b2 b3) st.function_declarations)
         (Map.map (fun (dur, qs, ty) -> A.Decl_object dur qs ty) st.external_object_declarations)
     ) in
     

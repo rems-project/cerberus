@@ -41,24 +41,24 @@ let wf_lvalue_aux qs ty =
         )
   end
 
-val     wf_parameters_aux: forall 'a. sigma 'a -> (ctype -> errorM unit) -> list (qualifiers * ctype) -> errorM unit
-let rec wf_parameters_aux S wf_type params =
+val     wf_parameters_aux: forall 'a. sigma 'a -> (ctype -> errorM unit) -> list (qualifiers * ctype * bool) -> errorM unit
+let rec wf_parameters_aux sigm wf_type params =
   match params with
     | [] ->
         return ()
-      (* TODO: check if qualifiers are allowed here *)
-    | [(_, Void)] ->
+    | [(_, Void, _)] ->
+        (* TODO: check if qualifiers are allowed here *)
         return ()
-    | (qs, ty) :: params' ->
+    | (qs, ty, _) :: params' ->
         guard (TError "a parameter type was not adjusted") (
           is_adjusted ty
         ) >>
         guard (TError "a parameter type was incomplete") (
-          not (is_incomplete S ty)
+          not (is_incomplete sigm ty)
         ) >>
         wf_type ty >>
         wf_lvalue_aux qs ty >>
-        wf_parameters_aux S wf_type params'
+        wf_parameters_aux sigm wf_type params'
   end
 
 
@@ -122,5 +122,5 @@ let wf_lvalue S qs ty =
   wf_lvalue_aux qs ty
 
 
-let wf_parameters S =
-  wf_parameters_aux S (wf_type S)
+let wf_parameters sigm =
+  wf_parameters_aux sigm (wf_type sigm)

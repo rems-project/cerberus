@@ -19,7 +19,7 @@ type genType (* [name="gt*"] *) =
  | GenVoid
  | GenBasic of genBasicType
  | GenArray of qualifiers * ctype * (maybe integer)
- | GenFunction of (* has_proto *) bool * ctype * list (qualifiers * ctype) * bool
+ | GenFunction of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool
  | GenPointer of qualifiers * ctype
 (*
  | GenStruct of identifier * list (Cabs.cabs_identifier * ctype)
@@ -43,7 +43,7 @@ let genChar32_t =
 
 
 type genTypeCategory = 
- | GenLValueType of qualifiers * ctype
+ | GenLValueType of qualifiers * ctype * (* isRegister *) bool
  | GenRValueType of genType
 
 
@@ -150,14 +150,14 @@ end
 
 let eq_genTypeCategory gentyCat1 gentyCat2 =
   let ord = function
-    | GenLValueType _  _ ->
+    | GenLValueType _  _ _ ->
         (0 : nat)
     | GenRValueType _ ->
         1
   end in
   match (gentyCat1, gentyCat2) with
-    | (GenLValueType qs1 ty1, GenLValueType qs2 ty2 ) ->
-        qs1 = qs2 && ty1 = ty2
+    | (GenLValueType qs1 ty1 isRegister1, GenLValueType qs2 ty2 isRegister2) ->
+        qs1 = qs2 && ty1 = ty2 && isRegister1 = isRegister2
     | (GenRValueType gty1, GenRValueType gty2) ->
         gty1 = gty2
     | _ ->
@@ -211,8 +211,8 @@ end
 
 val inject_typeCategory: typeCategory -> genTypeCategory
 let inject_typeCategory = function
-  | LValueType qs ty ->
-      GenLValueType qs ty
+  | LValueType qs ty isRegister ->
+      GenLValueType qs ty isRegister
   | RValueType ty ->
       GenRValueType (inject_type ty)
 end

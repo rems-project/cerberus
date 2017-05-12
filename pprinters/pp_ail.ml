@@ -698,7 +698,7 @@ let pp_tag_definition (tag, def) =
           ) ^^ P.break 1
         ) ^^ P.semi
 
-let pp_program pp_annot (startup, sigm) =
+let pp_program_aux pp_annot (startup, sigm) =
   isatty := Unix.isatty Unix.stdout;
   P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
   
@@ -845,11 +845,11 @@ let pp_expression e = pp_expression_aux (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
 let pp_statement s = pp_statement_aux (fun _ d -> d) s
 
-let pp_program_with_annot prog =
-  let pp_annot =
-    if !Debug_ocaml.debug_level > 5 then
-      (* printing the annotation *)
-      (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z)
-    else
-      (fun _ z -> z) in
-  pp_program pp_annot prog
+
+
+let pp_program =
+  pp_program_aux (fun _ z -> z)
+
+(* For debugging: prints all the type annotations *)
+let pp_program_with_annot =
+  pp_program_aux (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z)

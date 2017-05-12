@@ -92,13 +92,22 @@ let c_frontend f =
     |> Exception.rbind (Cabs_to_ail.desugar !core_sym_counter "main")
     |> set_progress 11
     |> pass_message "2. Cabs -> Ail completed!"
-(*    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd) *)
-    
+    |> begin
+      if !Debug_ocaml.debug_level >= 5 then
+        Exception.fmap (fun z -> z)
+      else
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
+    end
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program Annotation.concrete_annotation z))
           (fun z -> Exception.except_return (counter, z)))
-    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
+    |> begin
+      if !Debug_ocaml.debug_level >= 5 then
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
+      else
+        Exception.fmap (fun z -> z)
+    end
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
