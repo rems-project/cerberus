@@ -22,31 +22,6 @@ let lookup_tag_definition s sym =
   Context.lookup (=) s.tag_definitions sym
 
 
-
-(* context given to [annotate_expression] to inform it on the what the current
-   expression is: *)
-type annotation_context =
-    (* operand of AilEsizeof_expr *)
-  | CTXsizeof
-    (* operand of AilEunary Address *)
-  | CTXaddr
-    (* operand of AilEunary PostfixIncr *)
-  | CTXincr
-    (* operand of AilEunary PostfixDecr *)
-  | CTXdecr
-    (* left operand of AilEmemberof *)
-  | CTXmemberof
-    (* left operand of AilEassign or AilEcompoundAssign *)
-  | CTXassign
-    (* otherwise *)
-  | CTXother
-(* TODO !! a AilEstr used to initialize an array *)
-
-
-
-
-
-
 (* TODO: check if something needs to done regarding the basis *)
 val type_of_constant: integerConstant -> genIntegerType
 let type_of_constant iCst =
@@ -322,6 +297,25 @@ val annotate_arguments:
   sigma unit -> gamma -> bool -> bool -> list (expression unit) -> list (qualifiers * ctype * bool) ->
   E.errorM (list (expression genTypeCategory))
 
+(* context given to [annotate_expression] to inform it on the what the current
+   expression is: *)
+type annotation_context =
+    (* operand of AilEsizeof_expr *)
+  | CTXsizeof
+    (* operand of AilEunary Address *)
+  | CTXaddr
+    (* operand of AilEunary PostfixIncr *)
+  | CTXincr
+    (* operand of AilEunary PostfixDecr *)
+  | CTXdecr
+    (* left operand of AilEmemberof *)
+  | CTXmemberof
+    (* left operand of AilEassign or AilEcompoundAssign *)
+  | CTXassign
+    (* otherwise *)
+  | CTXother
+(* TODO !! a AilEstr used to initialize an array *)
+
 val     annotate_expression: sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
 let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
   let annotate_expression = annotate_expression sigm gamm in
@@ -361,13 +355,12 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
         (* STD §6.5.3.2#1 *)
         annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
-          | GenRValueType gty ->
-              if GAux.is_function gty then
-                (* e is a 'function designator' *)
-                function_decay sigm a_e >>= fun a_e' ->
-                E.return (AilEunary Address a_e', genTypeCategoryOf a_e')
-              else
-                E.fail (locOf e) (TError "§6.5.3.2#1, non function rvalue")
+          | GenRValueType (GenFunction hasProto ty params isVariadic) ->
+              (* e is a 'function designator' *)
+              let gty' = GenPointer no_qualifiers (Function hasProto ty params isVariadic) in
+              E.return (AilEunary Address a_e, GenRValueType gty') 
+          | GenRValueType _ ->
+              E.fail (locOf e) (TError "§6.5.3.2#1, non function rvalue")
           | GenLValueType qs ty isRegister ->
               (* e is an 'lvalue' *)
               let () = Debug.warn [Debug.DB_ail_typing]
@@ -1211,6 +1204,10 @@ STD_ "§6.5.2.1#1" $
           | _ ->
               E.fail Loc.unknown (TError "va_arg")
         end
+    
+    | AilEprint_type e ->
+        annotate_expression ctx e >>= fun (AnnotatedExpression gtc _ _ as a_e) ->
+        E.return (AilEprint_type a_e, gtc)
   end
   >>= fun (expr_', gtc) ->
     perform_decays sigm ctx (AnnotatedExpression gtc loc expr_')
@@ -1336,10 +1333,17 @@ and perform_decays sigm ctx a_expr =
         else
           E.return a_expr
     | GenRValueType gty ->
-        if AAux.is_function ty && not (List.elem ctx [CTXsizeof; CTXaddr]) then
+        if not (List.elem ctx [CTXsizeof; CTXaddr]) then
           (* STD §6.3.2.1#4 *)
           (* performing the function decay *)
-          error "function decay"
+          E.return match gty with
+            | GenFunction hasProto ty params isVariadic ->
+                AnnotatedExpression
+                  (GenRValueType (GenPointer no_qualifiers (Function hasProto ty params isVariadic)))
+                  (Loc.locOf a_expr) (AilEfunction_decay a_expr)
+            | _ ->
+                a_expr
+          end
         else
           (* TODO: array decay? *)
           E.return a_expr
@@ -1357,23 +1361,28 @@ and perform_decays sigm ctx a_expr =
 
 
 
+and annotate_rvalue sigm gamm expr =
+  annotate_expression sigm gamm CTXother expr >>= fun (AnnotatedExpression gtc loc expr_) ->
+   E.return match gtc with
+     | GenRValueType gty ->
+         (AnnotatedExpression (GenRValueType gty) loc expr_, gty)
+     | GenLValueType qs ty isRegister ->
+         (AnnotatedExpression (GenLValueType qs ty isRegister) loc expr_, inject_type ty)
+   end
 
 
-
+(*
 and annotate_rvalue sigm gamm expr =
   annotate_expression sigm gamm CTXother(*TODO*) expr >>= fun (AnnotatedExpression gtc loc e_ as expr') ->
    match gtc with
      | GenRValueType gty ->
-         let gty' = (*GAux.rvalue_coercion*) gty in
+         let gty' = GAux.rvalue_coercion gty in
          E.return (AnnotatedExpression (GenRValueType gty') loc e_, gty')
      | GenLValueType qs ty isRegister ->
-(*
         AAux.lvalue_coercion sigm ty >>= fun ty' ->
         E.return (AnnotatedExpression (GenLValueType qs ty' isRegister) loc e_, inject_type ty')
-*)
-        E.return (AnnotatedExpression (GenLValueType qs ty isRegister) loc e_, inject_type ty)
    end
-
+*)
 
 
 

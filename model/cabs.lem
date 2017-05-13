@@ -119,6 +119,7 @@ type cabs_expression_ =
   | CabsEoffsetof of type_name * cabs_identifier
   | CabsEva_start of cabs_expression * cabs_identifier
   | CabsEva_arg of cabs_expression * type_name
+  | CabsEprint_type of cabs_expression (* CERBERUS EXTENSION *)
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
 

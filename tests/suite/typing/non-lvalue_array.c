@@ -1,3 +1,7 @@
+#ifndef __cerb__
+#define __cerb_printtype(Z) Z
+#endif
+
 /* this is testing that non-lvalue array (like members of structs
    returned by a function) to not decay */
 struct T {
@@ -11,7 +15,7 @@ struct T f(void)
 
 int main(void)
 {
-  __CERB_PRINT_TYPE(s.a);   // should be int*
-  __CERB_PRINT_TYPE(f().a); // should be int[2]
+  __cerb_printtype(s.a);   // should be int*
+  __cerb_printtype(f().a); // should be int[2]
 }
 

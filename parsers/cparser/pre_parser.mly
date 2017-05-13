@@ -48,7 +48,7 @@
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_ARG
+%token VA_START VA_ARG PRINT_TYPE
 
 %token EOF
 
@@ -176,6 +176,8 @@ postfix_expression:
     { }
 | OFFSETOF LPAREN type_name COMMA id= general_identifier RPAREN
     { set_id_type id (OtherId "offsetof") }
+| PRINT_TYPE LPAREN expression RPAREN
+   { }
 
 argument_expression_list:
 | assignment_expression

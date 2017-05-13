@@ -75,6 +75,8 @@ let keywords: (string * Tokens.token) list = [
     "offsetof", OFFSETOF;
     "__cerbvar_va_start", VA_START;
     "__cerbvar_va_arg", VA_ARG;
+    
+    "__cerb_printtype", PRINT_TYPE;
   ]
 
 
