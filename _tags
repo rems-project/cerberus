@@ -1,4 +1,4 @@
-true: -traverse, use_menhir, annot, debug, linkpkg
+true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
 
 "src": include
 "src/codegen": include
@@ -8,6 +8,12 @@ true: -traverse, use_menhir, annot, debug, linkpkg
 "parsers/cparser": include
 "parsers/coreparser": include
 "dependencies/cmdliner-0.9.7/src": include
+
+
+# <ocaml_generated/genTyping.ml>: warn(A), warn(@8)
+
+
+
 
 
 <parsers/cparser/*.mly>: external_tokens(Tokens), explain

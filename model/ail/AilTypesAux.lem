@@ -1,7 +1,7 @@
 open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
 import Loc Debug
 
-
+(* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
 let unatomic = function
   | Atomic ty ->
       ty
@@ -1116,34 +1116,6 @@ let rvalue_coercion ty =
     function_coercion ty
   else
     ty
-
-
-
-
-
-(*
-val lvalue_conversion: forall 's 'A1 'A2. sigma 's -> expression 'A1 -> E.errorM (expression 'A2, genType)
-let lvalue_conversion sigm expr =
-  annotate_expression expr >>= fun (AnnotatedExpression annot loc e_ as expr') ->
-
-ZZZ
-
-*)
-
-
-(*
-
-Except when it is the operand of
-  the sizeof operator, or
-  the unary & oeprator, or
-  is a string literal used to initialize an array,
-
-an expression that has type "array of type" is converted to an expression with type "pointer to type" that points to the initial element of the array object and is not an lvalue.
-
-If the array object has register storage class, the behavior is undefined.
-
-*)
-(* ZZZ *)
 
 
 
