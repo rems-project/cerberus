@@ -222,4 +222,3 @@ end
 val genTypeCategoryOf: expression genTypeCategory -> genTypeCategory
 let genTypeCategoryOf (AnnotatedExpression gtc _ _) =
   gtc
-

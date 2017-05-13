@@ -576,6 +576,11 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_keyword "rvalue" ^^ P.parens (pp e)
         | AilEarray_decay e ->
             pp_keyword "array_decay" ^^ P.parens (pp e)
+        | AilEfunction_decay e ->
+            pp_keyword "function_decay" ^^ P.parens (pp e)
+        
+        | AilEprint_type e ->
+            pp e
       )) in
   pp None a_expr
 
