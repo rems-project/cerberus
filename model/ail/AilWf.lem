@@ -1,0 +1,126 @@
+open import Pervasives Common AilSyntax AilTypes AilTypesAux
+
+open import TypingError ErrorMonad
+
+open import {hol} `utilTheory` `pp_coreTheory` `pp_ailTheory`
+
+(* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
+   NOTE: this function obviously doesn't whether the adjusting was properly
+         done. *)
+val is_adjusted: ctype -> bool
+let is_adjusted ty =
+  not (is_array ty) && not (is_function ty)
+
+
+val stringFromCtype: ctype -> string
+declare ocaml target_rep function stringFromCtype = `String_ail.string_of_ctype_raw`
+declare hol   target_rep function stringFromCtype = `pp_core$pp_core_ctype`
+
+val stringFromQualifiers: qualifiers -> string
+declare ocaml target_rep function stringFromQualifiers = `String_ail.string_of_qualifiers_human`
+declare hol   target_rep function stringFromQualifiers = `pp_ail$pp_qualifiers`
+
+
+val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
+let wf_lvalue_aux qs ty =
+  match ty with
+    | Pointer _ ref_ty ->
+        guard (TError "§6.7.3#2, pointer case") (
+          not (is_object ref_ty) --> not (qs.restrict)
+        )
+    | _ ->
+(*
+        guard (TError "§6.7.3#2, non pointer case") (
+*)
+        guard (TError $"§6.7.3#2, non pointer case" ^ stringFromQualifiers qs ^ " <|> " ^ stringFromCtype ty) (
+
+          not (qs.restrict)
+        ) >>
+        guard (TError_undef "§6.7.3#9, sentence 2") (
+          is_function ty --> is_unqualified qs
+        )
+  end
+
+val     wf_parameters_aux: forall 'a. sigma 'a -> (ctype -> errorM unit) -> list (qualifiers * ctype * bool) -> errorM unit
+let rec wf_parameters_aux sigm wf_type params =
+  match params with
+    | [] ->
+        return ()
+    | [(_, Void, _)] ->
+        (* TODO: check if qualifiers are allowed here *)
+        return ()
+    | (qs, ty, _) :: params' ->
+        guard (TError "a parameter type was not adjusted") (
+          is_adjusted ty
+        ) >>
+        guard (TError "a parameter type was incomplete") (
+          not (is_incomplete sigm ty)
+        ) >>
+        wf_type ty >>
+        wf_lvalue_aux qs ty >>
+        wf_parameters_aux sigm wf_type params'
+  end
+
+
+(* TODO: check *)
+val     wf_type: forall 'a. sigma 'a -> ctype -> errorM unit
+let rec wf_type S ty =
+  let wf_type ty = wf_type S ty in
+  let wf_parameters = wf_parameters_aux S wf_type in
+  match ty with
+  | Void ->
+      return ()
+  | Basic _ ->
+      return ()
+  | Array qs elem_ty _ ->
+      guard (TError "§6.7.6.2#1, sentence 4") (
+        is_complete S elem_ty && not (is_function elem_ty)
+      ) >>
+      guard (TError "Ail invariant broken: array of array must have empty qualifiers") (
+        is_array elem_ty --> is_unqualified qs
+      ) >>
+      wf_type elem_ty
+  | Function _ ret_ty params _ ->
+      guard (TError "§6.7.6.3#1") (
+        not (is_array ret_ty || is_function ret_ty)
+      ) >>
+      wf_type ret_ty >>
+      wf_parameters params
+  | Pointer ref_qs ref_ty ->
+      wf_type ref_ty >>
+      wf_lvalue_aux ref_qs ref_ty
+  | Atomic ty' ->
+      guard (TError "§6.7.2.4#3") (
+        (* NOTE: the check that ty' is not qualified has to be done during the
+           desugaring (see Cabs_to_ail.desugar_type_specifiers). *)
+        not (is_array ty' || is_function ty' || is_atomic ty')
+      ) >>
+      wf_type ty'
+      
+(*
+  | Struct _ xs ->
+      (* TODO: check *)
+      mapM_ (comb wf_type snd) xs
+  | Union _ xs ->
+      (* TODO: check *)
+      mapM_ (comb wf_type snd) xs
+*)
+  (* TODO: maybe check that the tags are in Sigma *)
+  | Struct _ ->
+      return ()
+  | Union _ ->
+      return ()
+
+  | Builtin _ ->
+      return ()
+  end
+
+
+val wf_lvalue: forall 'a. sigma 'a -> qualifiers -> ctype -> errorM unit
+let wf_lvalue S qs ty =
+  wf_type S ty >>
+  wf_lvalue_aux qs ty
+
+
+let wf_parameters sigm =
+  wf_parameters_aux sigm (wf_type sigm)
