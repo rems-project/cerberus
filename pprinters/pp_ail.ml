@@ -572,6 +572,10 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
         | AilEva_arg (e, ty) ->
             pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype_raw ty)
+        | AilErvalue e ->
+            pp_keyword "rvalue" ^^ P.parens (pp e)
+        | AilEarray_decay e ->
+            pp_keyword "array_decay" ^^ P.parens (pp e)
       )) in
   pp None a_expr
 
