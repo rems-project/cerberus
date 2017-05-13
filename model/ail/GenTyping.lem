@@ -23,12 +23,26 @@ let lookup_tag_definition s sym =
 
 
 
-type parent_ctor =
-  | Psizeof
-  | Paddr  (* unary & operator *)
-(*  | Pincr
-  | Pdecr *)
-  | Pother
+(* context given to [annotate_expression] to inform it on the what the current
+   expression is: *)
+type annotation_context =
+    (* operand of AilEsizeof_expr *)
+  | CTXsizeof
+    (* operand of AilEunary Address *)
+  | CTXaddr
+    (* operand of AilEunary PostfixIncr *)
+  | CTXincr
+    (* operand of AilEunary PostfixDecr *)
+  | CTXdecr
+    (* left operand of AilEmemberof *)
+  | CTXmemberof
+    (* left operand of AilEassign or AilEcompoundAssign *)
+  | CTXassign
+    (* otherwise *)
+  | CTXother
+(* TODO !! a AilEstr used to initialize an array *)
+
+
 
 
 
@@ -308,8 +322,8 @@ val annotate_arguments:
   sigma unit -> gamma -> bool -> bool -> list (expression unit) -> list (qualifiers * ctype * bool) ->
   E.errorM (list (expression genTypeCategory))
 
-val     annotate_expression: sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory)
-let rec annotate_expression sigm gamm (AnnotatedExpression () loc expr_) =
+val     annotate_expression: sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
+let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
   let annotate_expression = annotate_expression sigm gamm in
   let annotate_rvalue     = annotate_rvalue sigm gamm     in
   let annotate_assignee   = annotate_assignee sigm gamm   in
@@ -345,22 +359,24 @@ let rec annotate_expression sigm gamm (AnnotatedExpression () loc expr_) =
     
     | AilEunary (Address as uop) e ->
         (* STD §6.5.3.2#1 *)
-        annotate_expression e >>= fun a_e ->
+        annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
-          | GenRValueType (GenFunction has_proto ty p b) ->
-              (* e is a 'function designator' *)
-              E.return (AilEunary Address a_e, GenRValueType (GenPointer no_qualifiers (Function has_proto ty p b)))
+          | GenRValueType gty ->
+              if GAux.is_function gty then
+                (* e is a 'function designator' *)
+                function_decay sigm a_e >>= fun a_e' ->
+                E.return (AilEunary Address a_e', genTypeCategoryOf a_e')
+              else
+                E.fail (locOf e) (TError "§6.5.3.2#1, non function rvalue")
           | GenLValueType qs ty isRegister ->
               (* e is an 'lvalue' *)
-              (* TODO: e must designates an object that is not a bit-field *)
               let () = Debug.warn [Debug.DB_ail_typing]
-                  "GenTyping, AilEunary Address - is not checking that the operand is not an lvalue to bit-field" in
+                 "(TODO) GenTyping.annotate_expression AilEunary Address, not checking for bit-field member" in
               if isRegister then
                 E.fail (locOf e) (TError "§6.5.3.2#1, register")
               else
+                (* STD §6.5.3.2#3, 2nd sentence *)
                 E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
-          | _ ->
-              E.fail (locOf e) (TError_TODO 14)
         end
     
     | AilEunary Indirection e ->
@@ -379,7 +395,7 @@ let rec annotate_expression sigm gamm (AnnotatedExpression () loc expr_) =
         end
     
     | AilEunary (PostfixIncr as uop) e ->
-        annotate_expression e >>= fun e' ->
+        annotate_expression CTXincr e >>= fun e' ->
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
@@ -391,7 +407,7 @@ let rec annotate_expression sigm gamm (AnnotatedExpression () loc expr_) =
         end
     
     | AilEunary (PostfixDecr as uop) e ->
-        annotate_expression e >>= fun e' ->
+        annotate_expression CTXdecr e >>= fun e' ->
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
@@ -732,7 +748,7 @@ TODO
     | AilEmemberof e memb_ident ->
         (* TODO: factorise *)
         (* TODO: Atomic types *)
-        annotate_expression e >>= fun a_e ->
+        annotate_expression CTXmemberof e >>= fun a_e ->
         (* the value of the AilEmemberof operator is an lvalue if [e] is an lvalue *)
         match GenTypes.genTypeCategoryOf a_e with
           | GenLValueType qs ty _ ->
@@ -843,7 +859,7 @@ TODO
     | AilEassign e1 e2 ->
         let fail =
           E.fail (Loc.with_cursor_from (Loc.locOf e1) loc) (TError "§6.5.16#2") in
-        annotate_expression e1 >>= fun e1' ->
+        annotate_expression CTXassign e1 >>= fun e1' ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs1 ty1 _ ->
               if AAux.modifiable sigm qs1 ty1 then
@@ -1068,26 +1084,40 @@ STD_ "§6.5.2.1#1" $
     
     | AilEsizeof qs ty ->
         wf_lvalue sigm qs ty >>
-        if not (AAux.is_function ty) && not (AAux.is_incomplete sigm ty) then
-          E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
-        else
+        (* STD §6.5.3.4#1 *)
+        if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 1")
+        else
+          (* STD §6.5.3.4#6 *)
+          E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEsizeof_expr e ->
-        (* TODO: [e] should not designates a bit-field member *)
-        (* TODO: check the rvalue thing *)
-        annotate_rvalue e >>= fun (e', gty) ->
-        if not (is_function gty) && not (is_incomplete sigm gty) then
-          E.return (AilEsizeof_expr e', GenRValueType (GenBasic (GenInteger SizeT)))
-        else
+        (* STD §6.5.3.4#1 *)
+        let () = Debug.warn [Debug.DB_ail_typing]
+          "(TODO) GenTyping.annotate_expression AilEsizeof_expr, not checking for bit-field member" in
+        (* because we are dealing with the operand of sizeof(), we do not call
+           any of the conversion/decay functions (see §6.3.2.1#2-4) *)
+        annotate_expression CTXsizeof e >>= fun a_e ->
+        let gty = match GenTypes.genTypeCategoryOf a_e with
+          | GenRValueType gty ->
+              gty
+          | GenLValueType _ ty _ ->
+              inject_type ty
+        end in
+        if GAux.is_function gty || GAux.is_incomplete sigm gty then
           E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 1")
+        else
+          (* STD §6.5.3.4#6 *)
+          E.return (AilEsizeof_expr a_e, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEalignof qs ty ->
         wf_lvalue sigm qs ty >>
-        if not (AAux.is_function ty) && not (AAux.is_incomplete sigm ty) then
-          E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
-        else
+        (* STD §6.5.3.4#1 *)
+        if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 2")
+        else
+          (* STD §6.5.3.4#6 *)
+          E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEcast qs Void e ->
         wf_lvalue sigm qs Void >>
@@ -1110,7 +1140,7 @@ STD_ "§6.5.2.1#1" $
         E.return (AilEcond e1' e2' e3', genCat)
     
     | AilEcompoundAssign e1 (Add as aop) e2 ->
-        annotate_expression e1 >>= fun e1'         ->
+        annotate_expression CTXassign e1 >>= fun e1'         ->
         annotate_rvalue e2     >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ -> 
@@ -1125,7 +1155,7 @@ STD_ "§6.5.2.1#1" $
         end
     
     | AilEcompoundAssign e1 (Sub as aop) e2 ->
-        annotate_expression e1 >>= fun e1'         ->
+        annotate_expression CTXassign e1 >>= fun e1'         ->
         annotate_rvalue e2     >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ -> 
@@ -1140,7 +1170,7 @@ STD_ "§6.5.2.1#1" $
         end
     
     | AilEcompoundAssign e1 aop e2 ->
-        annotate_expression e1 >>= fun e1'         ->
+        annotate_expression CTXassign e1 >>= fun e1'         ->
         annotate_rvalue e2     >>= fun (e2', gty2) ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs ty _ ->
@@ -1163,7 +1193,7 @@ STD_ "§6.5.2.1#1" $
     
     (* TODO: maybe look at the type of inside? *)
     | AilEannot ty e ->
-        annotate_expression e >>= fun (AnnotatedExpression _ _ e') ->
+        annotate_expression ctx e >>= fun (AnnotatedExpression _ _ e') ->
         E.return (e', GenRValueType (inject_type ty))
     
     | AilEva_start e sym ->
@@ -1183,18 +1213,18 @@ STD_ "§6.5.2.1#1" $
         end
   end
   >>= fun (expr_', gtc) ->
-    E.return (AnnotatedExpression gtc loc expr_')
+    perform_decays sigm ctx (AnnotatedExpression gtc loc expr_')
 
 
 and annotate_generic_association sigm gamm = function
   | AilGAtype ty e ->
       wf_type sigm ty >>
       if AAux.is_complete sigm ty && AAux.is_object ty && not (AAux.variably_modified ty) then
-        AilGAtype ty <$> annotate_expression sigm gamm e
+        AilGAtype ty <$> annotate_expression sigm gamm CTXother e
       else
         E.fail Loc.unknown (TError "§6.5.1.1#2, sentence 2")
   | AilGAdefault e ->
-      AilGAdefault <$> annotate_expression sigm gamm e
+      AilGAdefault <$> annotate_expression sigm gamm CTXother e
 end
 
 
@@ -1232,7 +1262,6 @@ and nonarray_lvalue_conversion sigm a_expr =
         error "WIP: nonarray_lvalue_conversion, GenRValueType"
   end
 
-
 (* Must NOT BE CALLED for:
      - the operand of AilEsizeof_expr
      - the operand of AilEunary Address
@@ -1263,9 +1292,58 @@ and array_decay sigm a_expr =
         error "WIP: array_decay, GenRValueType"
   end
 
+(* Must NOT BE CALLED for:
+     - the operand of AilEsizeof_expr
+     - the operand of AilEunary Address *)
+(* STD §6.3.2.1#4 *)
+(* TYPE: sigma unit -> expression genTypeCategory -> E.errorM (expression genTypeCategory) *)
+and function_decay sigm a_expr =
+  error "WIP: function_decay"
 
 
-
+and perform_decays sigm ctx a_expr =
+  match genTypeCategoryOf a_expr with
+    | GenLValueType qs ty isRegister ->
+        if    not (AAux.is_array ty)
+           && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
+          (* STD §6.3.2.1#2 *)
+          (* performing the lvalue conversion *)
+          let rvalue_ty = AAux.unatomic (AAux.unqualify ty) in
+          if AAux.is_incomplete sigm ty then
+            error "TODO: perform_decays ==> undefined behaviour"
+          else
+            E.return (
+              AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
+                (Loc.locOf a_expr) (AilErvalue a_expr)
+            )
+        else if AAux.is_array ty && not (List.elem ctx [CTXsizeof; CTXaddr (*TODO: ; CTXstr *)]) then
+          (* STD §6.3.2.1#3 *)
+          (* performing the array decay *)
+          if isRegister then
+            error "TODO: perform_decays ==> undefined behaviour"
+          else
+            (* TODO: qualifiers?? *)
+            let () = begin
+              if not (AAux.is_unqualified qs) then
+                Debug.warn [Debug.DB_ail_typing] "(UNSURE) GenTyping.array_decay, qs <> {}"
+              else
+              ()
+            end in
+            E.return (
+              AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
+                (Loc.locOf a_expr) (AilEarray_decay a_expr)
+            )
+        else
+          E.return a_expr
+    | GenRValueType gty ->
+        if AAux.is_function ty && not (List.elem ctx [CTXsizeof; CTXaddr]) then
+          (* STD §6.3.2.1#4 *)
+          (* performing the function decay *)
+          error "function decay"
+        else
+          (* TODO: array decay? *)
+          E.return a_expr
+  end
 
 
 
@@ -1283,24 +1361,20 @@ and array_decay sigm a_expr =
 
 
 and annotate_rvalue sigm gamm expr =
-  annotate_expression sigm gamm expr >>= fun (AnnotatedExpression gtc loc e_ as expr') ->
+  annotate_expression sigm gamm CTXother(*TODO*) expr >>= fun (AnnotatedExpression gtc loc e_ as expr') ->
    match gtc with
      | GenRValueType gty ->
-         let gty' = GAux.rvalue_coercion gty in
+         let gty' = (*GAux.rvalue_coercion*) gty in
          E.return (AnnotatedExpression (GenRValueType gty') loc e_, gty')
      | GenLValueType qs ty isRegister ->
+(*
         AAux.lvalue_coercion sigm ty >>= fun ty' ->
         E.return (AnnotatedExpression (GenLValueType qs ty' isRegister) loc e_, inject_type ty')
-   end
-(*
-  match type_of A e with
-    | GenRValueType gty ->
-        E.return (e, rvalue_coercion gty)
-    | GenLValueType _ ty ->
-        AAux.lvalue_coercion s ty >>= fun ty' ->
-        E.return (e, inject_type ty')
-  end
 *)
+        E.return (AnnotatedExpression (GenLValueType qs ty isRegister) loc e_, inject_type ty)
+   end
+
+
 
 
 and annotate_assignee sigm gamm ty1 e2 =
@@ -1314,7 +1388,7 @@ and annotate_assignee sigm gamm ty1 e2 =
 
 
 and annotate_arguments sigm gamm has_proto is_variadic args params =
-  let annotate_expression = annotate_expression sigm gamm in
+  let annotate_expression = annotate_expression sigm gamm CTXother in
   let annotate_assignee   = annotate_assignee sigm gamm   in
   match (args, params) with
     | ([], []) ->
@@ -1465,7 +1539,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* TODO: at this point we should now have a non character array *)
       else if AAux.is_array ty then
         (* TODO: check the std. (not that it says anything useful here ...) *)
-        annotate_expression sigm gamm e >>= fun a_e ->
+        annotate_expression sigm gamm CTXother e >>= fun a_e ->
           let () = Debug.warn [Debug.DB_ail_typing]
               "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs" in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
@@ -1521,7 +1595,7 @@ end
 
 val     annotate_statement_: sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
 let rec annotate_statement_ sigm gamm ty stmt =
-  let annotate_expression = annotate_expression sigm gamm   in
+  let annotate_expression = annotate_expression sigm gamm CTXother   in
   let annotate_rvalue     = annotate_rvalue sigm gamm       in
   let annotate_block bindings =
     (* WIP *)
