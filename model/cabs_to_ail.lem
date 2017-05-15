@@ -3050,7 +3050,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
           maybe (E.return (ATypes.no_qualifiers, id))
             (fun ptr -> desugar_pointer_declarator ptr) ptr_decltor_opt    >>= fun (ptr_qs, mk_ptr_type)  ->
           
-          let () = Debug.print_debug 0 [Debug.DB_desugaring] ("desugar_and_register_function_definition, ptr_qs= " ^
+          let () = Debug.print_debug 1 [Debug.DB_desugaring] ("desugar_and_register_function_definition, ptr_qs= " ^
                                                               Pp.stringFromAil_qualifiers ptr_qs) in
           
           desugar_type_specifiers specifs.type_specifiers >>= fun (_ (* TODO: qs *), ty) ->
