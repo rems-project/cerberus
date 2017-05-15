@@ -2,6 +2,7 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
 
 "src": include
 "src/codegen": include
+"src/web": include
 "ocaml_generated": include
 "pprinters": include
 "parsers": include
