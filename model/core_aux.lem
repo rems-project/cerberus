@@ -91,7 +91,16 @@ and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
     (fun _ ival            -> (OTy_integer, LVspecified (OVinteger ival)))
     (fun _ fval            -> (OTy_floating, LVspecified (OVfloating fval)))
     (fun _ ptr_val         -> (OTy_pointer, LVspecified (OVpointer ptr_val)))
-    (fun mem_vals          -> error "[Core_aux.loadedValueFromMemValue] array")
+    (fun mem_vals          ->
+      match List.map loadedValueFromMemValue mem_vals with
+        | [] ->
+            error "[Core_aux.loadedValueFromMemValue] empty array"
+        | (oTy, lval) :: oTy_lvals ->
+            if List.any (fun (oTy', _) -> oTy <> oTy') oTy_lvals then
+              error "[Core_aux.loadedValueFromMemValue] heterogenous array"
+            else
+              (OTy_array oTy, LVspecified (OVarray (lval :: List.map snd oTy_lvals)))
+      end)
     (fun sym xs            -> (OTy_struct sym, LVspecified (OVstruct sym xs)))
     (fun sym ident mem_val -> (OTy_union sym, LVspecified (OVunion sym ident mem_val)))
 
@@ -421,7 +430,7 @@ let prmw loc ty x n1 n2 mo1 mo2 = Eaction (Paction Pos (Action loc default (RMW 
 (* for a given Ctype returns the corresponding "zero" value *)
 (*val     zeros: AilSyntax.tag_definition -> Core_ctype.ctype -> pexpr *)
 (* see §6.7.9#10 *)
-let rec zeros_aux ty =
+let rec zeros_aux tagDefs ty =
   let zero_ival = Mem.integer_ival 0 in
   match ty with
     | Core_ctype.Basic (AilTypes.Integer ity) ->
@@ -429,25 +438,25 @@ let rec zeros_aux ty =
     | Core_ctype.Basic (AilTypes.Floating fty) ->
         Mem.floating_value_mval fty Mem.zero_fval
     | Core_ctype.Array _ elem_ty (Just n) ->
-        Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux elem_ty))
+        Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux tagDefs elem_ty))
 (*
   Mem.array_mval (List.replicate (natFromInteger n) (Mem.integer_value_mval zero_ival))
 *)
     | Core_ctype.Pointer _ ref_ty ->
         Mem.pointer_mval ref_ty (Mem.null_ptrval ref_ty)
     | Core_ctype.Atomic ty' ->
-        zeros_aux ty'
+        zeros_aux tagDefs ty'
     | Core_ctype.Struct tag ->
-        match Map.lookup tag (Core_ctype_aux.tagDefs ()) with
+        match Map.lookup tag tagDefs with
           | Just ident_tys ->
-              Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux ty)) ident_tys)
+              Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs ty)) ident_tys)
           | _ ->
               error "Core_aux.zeros_aux, not StructDef"
         end
     | Core_ctype.Union tag ->
-        match Map.lookup tag (Core_ctype_aux.tagDefs ()) with
+        match Map.lookup tag tagDefs with
           | Just ((ident, ty')::_) ->
-              Mem.union_mval tag ident (zeros_aux ty')
+              Mem.union_mval tag ident (zeros_aux tagDefs ty')
           | _ ->
               error "Core_aux.zeros_aux, not UnionDef"
         end
@@ -459,14 +468,14 @@ let rec zeros_aux ty =
        error "Core_aux.zeros should only be called on complete types"
   end
 
-val zeros: ctype -> pexpr
-let zeros ty =
+val zeros: core_tag_definitions -> ctype -> pexpr
+let zeros tagDefs ty =
   (* TODO: yucky *)
   Pexpr ()
 (*
     (PEval (Vobject (snd $ objectValueFromMemValue (zeros_aux ty))))
 *)
-    (PEval (snd $ valueFromMemValue (zeros_aux ty)))
+    (PEval (snd $ valueFromMemValue (zeros_aux tagDefs ty)))
 
 
 (*
@@ -834,7 +843,7 @@ let rec subst_sym_expr sym pe' = function
       Eindet i (subst_sym_expr sym pe' e)
   | Ebound i e ->
       Ebound i (subst_sym_expr sym pe' e)
-  | (Esave lab_sym sym_bTy_pes e as expr) ->
+  | Esave lab_sym sym_bTy_pes e ->
       let sym_bTy_pes' = List.map (fun (z, (bTy, pe)) ->
         (z, (bTy, subst_sym_pexpr sym pe' pe))
       ) sym_bTy_pes in
@@ -934,8 +943,31 @@ let rec subst_pattern pat pe' expr =
         subst_pattern pat' (Pexpr () (PEval (Vctype ty))) expr
     | (CaseCtor Cunspecified [pat'], Pexpr () (PEctor Cunspecified [pe''])) ->
         subst_pattern pat' pe'' expr
-    | _ ->
-        error "WIP: Core_aux.subst_pattern"
+    | (CaseCtor ctor pats, _) ->
+        let str_ctor = match ctor with
+          | Cnil _ ->
+              "nil"
+          | Ccons ->
+              "cons"
+          | Ctuple ->
+              "tuple"
+          | Carray ->
+              "array"
+          | Civmax ->
+              "ivmax"
+          | Civmin ->
+              "ivmin"
+          | Civsizeof ->
+              "ivsizeof"
+          | Civalignof ->
+              "ivalignof"
+          | Cspecified ->
+              "specified"
+          | Cunspecified ->
+              "unspecified"
+        end in
+        error ("WIP: Core_aux.subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
+               ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')
   end
 
 

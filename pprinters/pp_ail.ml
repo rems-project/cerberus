@@ -814,7 +814,7 @@ let pp_program_aux pp_annot (startup, sigm) =
 
 
 
-let rec pp_genIntegerType = function
+let rec pp_genIntegerType_raw = function
  | Concrete ity ->
      !^ "Concrete" ^^ P.brackets (pp_integerType_raw ity)
  | SizeT ->
@@ -824,15 +824,15 @@ let rec pp_genIntegerType = function
  | Unknown iCst ->
      !^ "Unknown" ^^ P.brackets (pp_integerConstant iCst)
  | Promote gity ->
-     !^ "Promote" ^^ P.brackets (pp_genIntegerType gity)
+     !^ "Promote" ^^ P.brackets (pp_genIntegerType_raw gity)
  | Usual (gity1, gity2) ->
-     !^ "Usual" ^^ P.brackets (pp_genIntegerType gity1 ^^ P.comma ^^^ pp_genIntegerType gity2)
+     !^ "Usual" ^^ P.brackets (pp_genIntegerType_raw gity1 ^^ P.comma ^^^ pp_genIntegerType_raw gity2)
 
 
 
-let pp_genBasicType = function
+let pp_genBasicType_raw = function
  | GenInteger gity ->
-     pp_genIntegerType gity
+     pp_genIntegerType_raw gity
  | GenFloating fty ->
      pp_floatingType fty
 
@@ -840,7 +840,7 @@ let pp_genType = function
  | GenVoid ->
      !^ "GenVoid"
  | GenBasic gbty ->
-     pp_genBasicType gbty
+     pp_genBasicType_raw gbty
   | GenArray (qs, ty, None) ->
       !^ "GenArray" ^^ P.brackets (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
   | GenArray (qs, ty, Some n) ->
@@ -867,6 +867,58 @@ let pp_genType = function
       !^ "GenBuiltin" ^^ P.brackets (!^ str)
 
 
+(*
+let rec pp_genIntegerType = function
+ | Concrete ity ->
+     pp_type_keyword "concrete" ^^ P.parens (pp_integerType ity)
+ | SizeT ->
+     pp_type_keyword "size_t"
+ | PtrdiffT ->
+     pp_type_keyword "ptrdiff_t"
+ | Unknown iCst ->
+     pp_type_keyword "unknown" ^^ P.parens (pp_integerConstant iCst)
+ | Promote gity ->
+     pp_type_keyword "promote" ^^ P.parens (pp_genIntegerType gity)
+ | Usual (gity1, gity2) ->
+     pp_type_keyword "usual" ^^ P.brackets (pp_genIntegerType gity1 ^^ P.comma ^^^ pp_genIntegerType gity2)
+
+let pp_genBasicType = function
+ | GenInteger gity ->
+     pp_genIntegerType gity
+ | GenFloating fty ->
+     pp_floatingType fty
+
+let pp_genType qs doc_opt = function
+ | GenVoid ->
+     pp_qualifiers qs (
+       pp_type_keyword "void" ^^
+       P.optional (fun doc -> P.space ^^ doc) doc_opt
+     )
+ | GenBasic gbty ->
+     pp_qualifiers qs (
+       pp_genBasicType gbty ^^
+       P.optional (fun doc -> P.space ^^ doc) doc_opt
+     )
+ | GenArray (elem_qs, elem_ty, n_opt) ->
+     (* just some debugging (GenArray should not have any qualifiers) *)
+     if not (AilTypesAux.is_unqualified qs) then
+       Debug_ocaml.warn [] "Pp_ail.pp_genType, a GenArray is qualified";
+     failwith "pp_ctype qs doc_opt ty"
+ | GenFunction (hasProto, ret_ty, params, isVariadic) ->
+     failwith "PP GenFunction"
+ | GenPointer (ref_qs, ref_ty) ->
+     failwith "PP GenPointer"
+ | GenStruct ident ->
+     failwith "PP GenStruct"
+ | GenUnion ident ->
+     failwith "PP GenUnion"
+ | GenAtomic ty ->
+     failwith "PP GenAtomic"
+ | GenBuiltin str ->
+     failwith "PP GenBuiltin"
+*)
+
+
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
      !^ "GenLValueType" ^^ P.brackets (
@@ -875,19 +927,24 @@ let pp_genTypeCategory = function
  | GenRValueType gty ->
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)
 
-
-
-
-
 let pp_expression e = pp_expression_aux (fun _ d -> d) e
 let pp_generic_association ga = pp_generic_association_aux (fun _ d -> d) ga
 let pp_statement s = pp_statement_aux (fun _ d -> d) s
 
 
 
+let pp_annot gtc doc =
+  match gtc with
+    | GenLValueType (qs, ty, isRegister) ->
+        failwith "WIP"
+    | GenRValueType gty ->
+        P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
+
+
+
 let pp_program =
-  pp_program_aux (fun _ z -> z)
+  pp_program_aux (fun _ doc -> doc)
 
 (* For debugging: prints all the type annotations *)
 let pp_program_with_annot =
-  pp_program_aux (fun annot z -> P.braces (pp_genTypeCategory annot) ^^ P.brackets z)
+  pp_program_aux (fun gtc doc -> P.braces (pp_genTypeCategory gtc) ^^ P.brackets doc)

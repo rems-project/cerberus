@@ -448,7 +448,7 @@ val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> lin
 let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Debug.print_debug 0 [Debug.DB_desugaring]
+    Debug.print_debug 1 [Debug.DB_desugaring]
       ("attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
@@ -796,7 +796,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Debug.print_debug 0 [Debug.DB_desugaring] ("registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 1 [Debug.DB_desugaring] ("registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -836,7 +836,7 @@ let register_function_declaration loc sym is_proto decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          let () = Debug.print_debug 0 [Debug.DB_desugaring] (
+          let () = Debug.print_debug 1 [Debug.DB_desugaring] (
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
            string_of_decl decl) in
           <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
@@ -848,7 +848,7 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
   return (
-    Debug.print_debug 0 [Debug.DB_desugaring] (
+    Debug.print_debug 1 [Debug.DB_desugaring] (
       "attempting to register external object declaration of `" ^ show sym ^
       "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
   ) >>

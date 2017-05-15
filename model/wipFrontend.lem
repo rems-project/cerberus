@@ -57,7 +57,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
   
   let toCore: A.expression GenTypes.genTypeCategory -> TranslateEff.elabM (Core.expr unit) =
     translate_expression (Translation_aux.mk_translation_stdlib (ailnames, stdlib_fun_map))
-      (empty_sigma: A.sigma GenTypes.genTypeCategory) in
+      (Map.empty: C.core_tag_definitions) in
   
   (* typechecks the expression *)
   match ErrorMonad.runErrorMonad (toAilTau expr) with
