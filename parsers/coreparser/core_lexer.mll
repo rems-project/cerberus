@@ -152,7 +152,9 @@ let scan_impl lexbuf =
   try
     T.IMPL (Pmap.find id Implementation_.impl_map)
   with Not_found ->
-    if Str.string_match (Str.regexp "^<std_function_") id 0 then
+    (* NOTE: elimate Str.string_match, since js_of_ocaml does not support
+    if Str.string_match (Str.regexp "^<std_function_") id 0 then *)
+    if String.compare (String.sub id 0 14) "<std_function_" = 0 then
       T.IMPL (Implementation_.StdFunction (String.sub id 14 (String.length id - 15)))
     else
       failwith ("Found an invalid impl_name: " ^ id)
