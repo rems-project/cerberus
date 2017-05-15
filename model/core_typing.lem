@@ -621,7 +621,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               E.fail loc (CoreTyping_TODO ("illtyped tuple ==> " ^ Pp.stringFromCore_core_base_type bTy))
           | (Carray, BTy_object (OTy_array oTy), pes) ->
               PEctor Carray <$> E.mapM (fun pe ->
-                typecheck_pexpr loc tagDefs env (BTy_object oTy) pe
+                typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe
               ) pes
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr loc tagDefs env (BTy_ctype) pe
