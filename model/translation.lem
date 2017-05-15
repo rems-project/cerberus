@@ -175,7 +175,10 @@ let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
 val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
 let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
   match (ctype_of a_expr, expr) with
+(*
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
+*)
+    | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ (Just str) ->
               match Map.lookup str stdlib.ailnames with
@@ -793,7 +796,8 @@ else
                          begin
                            let obj_sym_pe = 
                              Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) obj_sym in
-                             Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) obj_sym_pe Cmm.NA
+(*                             Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) obj_sym_pe Cmm.NA *)
+                           C.Epure (obj_sym_pe)
                          end
                          (C.Epure (Caux.mk_undef_pe Undefined.UB043_indirection_invalid_value)))
                      )
@@ -937,6 +941,7 @@ else
 
       | A.AilEident id ->
           if AilTypesAux.is_pointer_to_function result_ty then
+            (* TODO: remove, this is not never possible  (see function_decay) *)
             translate_function_designator stdlib a_expr
           else
             let id_sym_pe =
@@ -2336,27 +2341,35 @@ a
           self e
       
       | A.AilErvalue e ->
-          (* TODO: check + I don't like have a sseq here *)
+          (* TODO: check + I don't like have a wseq here *)
           self e >>= fun core_e ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
             >>= fun (_, e_sym_pat, e_sym_pe ) ->
           E.return (
-            C.Esseq ( (* Caux.mk_specified_pat *) e_sym_pat) core_e (
+            C.Ewseq ( (* Caux.mk_specified_pat *) e_sym_pat) core_e (
               Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe Cmm.NA
             )
           )
       | A.AilEarray_decay e ->
-          (* TODO: check *)
-          self e (* >>= fun core_e ->
+          (* by Ail typing, [e] is a lvalue. Hence the corresponding Core has a non-loaded type *)
+          self e >>= fun core_e ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
             >>= fun (_, e_sym_pat, e_sym_pe ) ->
           E.return (
-            C.Esseq (Caux.mk_specified_pat e_sym_pat) core_e (
-              
+            C.Ewseq (e_sym_pat) core_e (
+              match AilTypesAux.referenced_type result_ty with
+                | Nothing ->
+                    illTypedAil loc "AilEarray_decay, result_ty not a pointer"
+                | Just ref_ty ->
+                    C.Epure (
+                      (* STD §6.3.2.1#3 *)
+                      Caux.mk_specified_pe (Caux.mk_array_shift e_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe 0))
+                    )
+              end
             )
-          ) *)
+          )
       | A.AilEfunction_decay e ->
-          self e
+          translate_function_designator stdlib e 
     end
 
 

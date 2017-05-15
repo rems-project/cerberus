@@ -942,8 +942,8 @@ let pp_annot gtc doc =
 
 
 
-let pp_program =
-  pp_program_aux (fun _ doc -> doc)
+let pp_program p =
+  pp_program_aux (fun _ doc -> doc) p
 
 (* For debugging: prints all the type annotations *)
 let pp_program_with_annot =

@@ -105,7 +105,7 @@ let c_frontend f =
     |> set_progress 11
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
-      if !Debug_ocaml.debug_level >= 5 then
+      if !Debug_ocaml.debug_level >= 4 then
         Exception.fmap (fun z -> z)
       else
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
@@ -115,8 +115,9 @@ let c_frontend f =
                              (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
     |> begin
-      if !Debug_ocaml.debug_level >= 5 then
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
+      if !Debug_ocaml.debug_level >= 4 then
+        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail.pp_program else Pp_ail.pp_program_with_annot in
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| pp_ail -| snd)
       else
         Exception.fmap (fun z -> z)
     end
