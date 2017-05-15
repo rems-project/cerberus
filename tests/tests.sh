@@ -33,8 +33,8 @@ citests=(
 #  25-jump3.c
   26-jump4.c
   27-jump5.c
-  28-division_by_zero-undef.c
-  29-modulo_by_zero-undef.c
+  28-division_by_zero.undef.c
+  29-modulo_by_zero.undef.c
   30-call_arith.c
   31-global.c
   32-empty_struct_decl.c
