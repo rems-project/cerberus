@@ -12,7 +12,11 @@ declare hol   target_rep function stringFromSymbol_prefix = `pp_core$pp_prefix`
 val stringFromCabs_type_specifier: Cabs.cabs_type_specifier -> string
 declare ocaml target_rep function stringFromCabs_type_specifier = `String_cabs.string_of_cabs_type_specifier`
 
+val stringFromCabs_pointer_declarator: Cabs.pointer_declarator -> string
+declare ocaml target_rep function stringFromCabs_pointer_declarator = `String_cabs.string_of_pointer_declarator`
 
+val stringFromCabs_declarator: Cabs.declarator -> string
+declare ocaml target_rep function stringFromCabs_declarator = `String_cabs.string_of_declarator`
 
 
 

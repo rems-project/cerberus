@@ -37,11 +37,9 @@ let tryM m f errCase =
     | Right z  -> f z
   end
 
-val runM: forall 'a. errorM 'a -> maybe 'a
-let runM = function
-  | Left _  -> Nothing
-  | Right z -> Just z
-end
+val runErrorMonad: forall 'a. errorM 'a -> either (Loc.t * typing_error) 'a
+let runErrorMonad m =
+  m
 
 val to_exception: forall 'a 'msg. (Loc.t * typing_error -> 'msg) -> errorM 'a -> Exception.exceptM 'a 'msg
 let to_exception f = function

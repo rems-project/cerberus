@@ -1,6 +1,6 @@
 open import Pervasives Global Translation_effect Symbol Show Show_extra
 import Core Core_aux Core_ctype
-import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux Annotation
+import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
@@ -173,7 +173,7 @@ end
 
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
-  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty) _ _) -> (qs, ty)
+  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _) -> (qs, ty)
   | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
 
@@ -194,8 +194,8 @@ let exp_type_of a_expr =
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
-      (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Right (AilTypes.LValueType _ ty) -> ty
+      (GenTypes.genTypeCategoryOf a_expr) with
+    | Right (AilTypes.LValueType _ ty _) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
         error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
@@ -209,8 +209,8 @@ let ctype_of a_expr =
 
 val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
 let is_lvalue a_expr =
-  match Annotation.type_of Annotation.concrete_annotation a_expr with
-    | GenTypes.GenLValueType _ _ ->
+  match GenTypes.genTypeCategoryOf a_expr with
+    | GenTypes.GenLValueType _ _ _ ->
         true
     | GenTypes.GenRValueType _ ->
         false
@@ -250,11 +250,11 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
 
 
 
-val     combine_params_args: list (AilTypes.qualifiers * AilTypes.ctype) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
+val     combine_params_args: list (AilTypes.qualifiers * AilTypes.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
                              list (AilTypes.ctype * AilSyntax.expression GenTypes.genTypeCategory)
 let rec combine_params_args params es =
   match (params, es) with
-    | ((_, ty) :: params', e :: es') ->
+    | ((_, ty, _) :: params', e :: es') ->
         (ty, e) :: combine_params_args params' es'
     | ([], e :: es') ->
         (* argument promotion for variadic functions *)

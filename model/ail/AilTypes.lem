@@ -59,7 +59,7 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   const    : bool;
   restrict : bool;
   volatile : bool;
-  atomic   : bool;
+(*  atomic   : bool; *) (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
 |>
 
 
@@ -76,7 +76,7 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
             we have a parameter with type "restrict pointer to a const char",
             the qualifiers in the tuple will be:
               {no_qualifiers with restrict=true} *)
- | Function of (* has_proto *) bool * ctype * list (qualifiers * ctype) * bool
+ | Function of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool
    (* NOTE: the qualifiers are that of the referenced type *)
  | Pointer of qualifiers * ctype
  | Atomic of ctype
@@ -97,7 +97,7 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =  (*r storage d
 
 
 type typeCategory [name = "tc*"] = 
- | LValueType of qualifiers * ctype
+ | LValueType of qualifiers * ctype * (* isRegister *) bool
  | RValueType of ctype
 
 
@@ -228,7 +228,7 @@ let qualifiersEqual qs1 qs2 =
      qs1.const    = qs2.const
   && qs1.restrict = qs2.restrict
   && qs1.volatile = qs2.volatile
-  && qs1.atomic   = qs2.atomic
+(*  && qs1.atomic   = qs2.atomic *)
 
 instance (Eq qualifiers)
   let (=)  = qualifiersEqual
@@ -257,8 +257,8 @@ let rec ctypeEqual ty1 ty2 =
     | Builtin _ ->
         8
   end in
-  let paramsEqual (qs1, ty1) (qs2, ty2) =
-    qs1 = qs2 && ctypeEqual ty1 ty2 in
+  let paramsEqual (qs1, ty1, b1) (qs2, ty2, b2) =
+    qs1 = qs2 && ctypeEqual ty1 ty2 && b1 = b2 in
   match (ty1, ty2) with
     | (Basic bty1, Basic bty2) ->
         bty1 = bty2
@@ -398,19 +398,19 @@ end
 
 instance (SetType qualifiers)
   let setElemCompare qs1 qs2 =
-    setElemCompare (qs1.const, qs1.restrict, qs1.volatile, qs1.atomic) (qs2.const, qs2.restrict, qs2.volatile, qs2.atomic)
+    setElemCompare (qs1.const, qs1.restrict, qs1.volatile(*, qs1.atomic*)) (qs2.const, qs2.restrict, qs2.volatile(*, qs2.atomic*))
 end
 
 
 
 
 (** Some useful functions *********************************************************************** *)
-val make_qualifiers: bool -> bool -> bool -> bool -> qualifiers
-let make_qualifiers c r v a = <|
+val make_qualifiers: bool -> bool -> bool (*-> bool*) -> qualifiers
+let make_qualifiers c r v (*a*) = <|
   const    = c;
   restrict = r;
   volatile = v;
-  atomic   = a;
+(*  atomic   = a;*)
 |>
 
 
@@ -419,7 +419,7 @@ let no_qualifiers = <|
   const    = false;
   restrict = false;
   volatile = false;
-  atomic   = false;
+(*  atomic   = false;*)
 |>
 
 

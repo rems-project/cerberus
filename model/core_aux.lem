@@ -179,8 +179,12 @@ let rec proj_ctype ty =
         Core_ctype.Basic bty
     | AilTypes.Array qs ty n_opt ->
         Core_ctype.Array qs (proj_ctype ty) n_opt
-    | AilTypes.Function _ ty qs_tys is_variadic ->
-        Core_ctype.Function (proj_ctype ty) (List.map (fun (qs,ty) -> (qs, proj_ctype ty)) qs_tys) is_variadic
+    | AilTypes.Function _ ty params isVariadic ->
+        Core_ctype.Function (proj_ctype ty) (
+          List.map (fun (qs, ty, _) ->
+            (qs, proj_ctype ty)
+          ) params
+        ) isVariadic
     | AilTypes.Pointer qs ty ->
         Core_ctype.Pointer qs (proj_ctype ty)
     | AilTypes.Atomic ty ->
@@ -509,7 +513,14 @@ let rec unproj_ctype ty =
     | Core_ctype.Array qs ty n_opt ->
         AilTypes.Array qs (unproj_ctype ty) n_opt
     | Core_ctype.Function ty qs_tys is_variadic ->
-        AilTypes.Function (* TODO!!!! proto *) false (unproj_ctype ty) (List.map (fun (qs,ty) -> (qs, unproj_ctype ty)) qs_tys) is_variadic
+        (* NOTE: there is a potential loss of information here for hasProto and
+           inside the parameters with isRegister. But this shouldn't matter to
+           the dynamics *)
+        AilTypes.Function false (unproj_ctype ty) (
+          List.map (fun (qs,ty) ->
+            (qs, unproj_ctype ty, false)
+          ) qs_tys
+        ) is_variadic
     | Core_ctype.Pointer qs ty ->
         AilTypes.Pointer qs (unproj_ctype ty)
     | Core_ctype.Atomic ty ->

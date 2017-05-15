@@ -8,4 +8,4 @@ type typing_error =
   | TError_undef of string (* TODO: replace string by Undefined.undefined_behaviour *)
 
   | TError_main_return_type
-  | TError_main_params of list (qualifiers * ctype)
+  | TError_main_params of list (qualifiers * ctype * bool)

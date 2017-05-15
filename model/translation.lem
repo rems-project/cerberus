@@ -512,10 +512,9 @@ and translate_bitwise_operator translate_rvalue usual_arithmetic_conversion stdl
 
 
 
-and translate_expression stdlib program is_lvalue a_expr =
-  let sigm = snd program in
-  let translate_lvalue = translate_expression stdlib program true      in
-  let translate_rvalue = translate_expression stdlib program false     in
+and translate_expression stdlib ail_sigma is_lvalue a_expr =
+  let translate_lvalue = translate_expression stdlib ail_sigma true  in
+  let translate_rvalue = translate_expression stdlib ail_sigma false in
   
   (* TODO !!!! *)
   let integer_promotion (ty: Aty.ctype) (e: C.pexpr) : C.pexpr =
@@ -1063,7 +1062,7 @@ if AilTypesAux.is_arithmetic ty && AilTypesAux.is_arithmetic (ctype_of e) then
               error "WIP elaboration of casts involving a non-integer arithmetic type"
 else
   (* TODO: check *)
-  if AilTypesAux.pointer_to_void (AilTypesAux.unqualify ty) then
+  if AilTypesAux.is_pointer_to_void (AilTypesAux.unqualify ty) then
               core_e
   else
               let e_ty = ctype_of e in
@@ -2149,9 +2148,10 @@ TODO: #9
       
       | A.AilEunion tag_sym memb_ident e_opt ->
           let fail = illTypedAil loc "AilEunion" in
-          match List.lookup tag_sym sigm.A.tag_definitions with
+          match List.lookup tag_sym ail_sigma.A.tag_definitions with
             | Just (A.UnionDef ident_tys) ->
-                match Maybe.map Caux.proj_ctype (List.lookup memb_ident ident_tys) with
+                (* TODO: qualifiers ? (removed by snd) *)
+                match Maybe.map (snd |- Caux.proj_ctype) (List.lookup memb_ident ident_tys) with
                   | Just memb_ty ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
@@ -2249,17 +2249,17 @@ TODO: #9
                   Caux.pload loc (C.PEval (C.Vctype memb_ty)) z Cmm.NA (* TODO: check MO *)
               ) (C.PEmember_shift (C.PEsym sym_ty_e) tag_sym ident))
 (*
-              (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember program tag_sym ident)))
+              (C.Epure (C.PEshift (C.PEsym sym_e) (shiftPathFromMember ail_sigma tag_sym ident)))
 *)
 
 (*
       | A.AilEmemberof e ident ->
           let (Aty.Struct tag_sym) = ctype_of e in
           E.fresh_symbol                    >>= fun a_e    ->
-          translate_lvalue stdlib program e >>= fun core_e ->
+          translate_lvalue stdlib ail_sigma e >>= fun core_e ->
           E.return $
             C.Esseq [Just a_e] core_e
-              (C.Eshift (C.PEsym a_e) (shiftPathFromMember program tag_sym ident))
+              (C.Eshift (C.PEsym a_e) (shiftPathFromMember ail_sigma tag_sym ident))
 *)
 
 *)
@@ -2397,7 +2397,7 @@ a
             C.Epure (Caux.mk_specified_pe (Caux.mk_alignof_pe $ Caux.mk_ail_ctype_pe ty))
       
       | A.AilEannot _ e ->
-          translate_expression stdlib program is_lvalue e
+          translate_expression stdlib ail_sigma is_lvalue e
       | AilSyntax.AilEva_start e sym ->
           error "WIP: Translation.translate_expr, AilEva_start"
       | AilSyntax.AilEva_arg e ty ->
@@ -2410,7 +2410,7 @@ a
 
 
 
-(* translate_stmt Pmap.empty program program.A.main C.Constants.return s *)
+(* translate_stmt Pmap.empty ail_sigma program.A.main C.Constants.return s *)
 
 (* TODO[über HACK] `lasts' is the last of symbolic names saving the last statement for each block we are in
                    we need to remember them to annotate Erun/Esave coming from a C label/goto because these symbols
@@ -2691,17 +2691,17 @@ type translate_stmt_env = <|
 
 val translate_stmt:
   translation_stdlib ->
-  A.program GenTypes.genTypeCategory -> A.identifier ->
+  A.sigma GenTypes.genTypeCategory -> A.identifier ->
   translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
   E.elabM (C.core_base_type * C.expr unit)
 
 
-let rec translate_stmt2 stdlib program f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
-  let translate_lvalue e = translate_expression stdlib program true e  in
-  let translate_rvalue e = translate_expression stdlib program false e in
+let rec translate_stmt2 stdlib ail_sigma f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
+  let translate_lvalue e = translate_expression stdlib ail_sigma true e  in
+  let translate_rvalue e = translate_expression stdlib ail_sigma false e in
   
-  let self s = translate_stmt2 stdlib program f env s in
+  let self s = translate_stmt2 stdlib ail_sigma f env s in
   
   C.Eloc loc <$> match stmt with
     | A.AilSskip ->
@@ -3519,7 +3519,7 @@ let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) 
                       C.Epure (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ty)))
                     )
                   else
-                    translate_expression stdlib program false expr >>= fun core ->
+                    translate_expression stdlib sigm false expr >>= fun core ->
                     E.return (
                       C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of expr))),
                       core
@@ -3585,7 +3585,7 @@ let translate_program stdlib sequentialise ((startup_sym_opt, sigm) as program) 
                            label_visibles= visibles.label_visibles_;
                          |> stmt
 *)
-                (translate_stmt2 stdlib program sym <|
+                (translate_stmt2 stdlib sigm sym <|
                    return_ty= return_ty;
                    return_lab= ret_label;
                    default_lab= Nothing;
@@ -3716,9 +3716,9 @@ val translate_tag_definitions: Context.context A.identifier A.tag_definition -> 
 let translate_tag_definitions ctx =
   Map.fromList $ List.map (function
     | (sym, A.StructDef ident_tys) ->
-        (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
+        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) ident_tys)
     | (sym, A.UnionDef ident_tys) ->
-        (sym, List.map (fun (ident, ty) -> (ident, Caux.proj_ctype ty)) ident_tys)
+        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) ident_tys)
   end) ctx
 (*
   let ctxWithoutUnions = List.filter (function
