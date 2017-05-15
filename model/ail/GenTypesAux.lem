@@ -124,10 +124,8 @@ let array_coercion = function
 
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
-  | GenFunction hasProto ty params isVariadic ->
-      GenPointer no_qualifiers (Function hasProto ty params isVariadic)
-  | gty ->
-      gty
+  | GenFunction has_proto ty qs is_variadic -> GenPointer no_qualifiers (Function has_proto ty qs is_variadic)
+  | gty                           -> gty
   end
 
 (* following (§6.3.2.1)#3 and #4 *)
@@ -144,20 +142,18 @@ let rvalue_coercion gty : genType =
 
 
 val is_pointer_to_complete_object: forall 'a. sigma 'a -> genType -> bool
-let is_pointer_to_complete_object sigm = function
+let is_pointer_to_complete_object S = function
   | GenPointer _ ty ->
-      AilTypesAux.is_complete sigm ty
+      AilTypesAux.is_complete S ty
   | _ ->
       false
 end
 
 val are_pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> genType -> genType -> bool
-let are_pointers_to_compatible_complete_objects sigm gty1 gty2 =
+let are_pointers_to_compatible_complete_objects S gty1 gty2 =
   match (gty1, gty2) with
-    | (GenPointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
-           AilTypesAux.is_complete sigm ref_ty1
-        && AilTypesAux.is_complete sigm ref_ty2
-        && AilTypesAux.are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+    | (GenPointer _ ty1, GenPointer _ ty2) ->
+        AilTypesAux.is_complete S ty1 && AilTypesAux.is_complete S ty2 && AilTypesAux.compatible ty1 ty2
     | _ ->
         false
   end
@@ -165,18 +161,16 @@ let are_pointers_to_compatible_complete_objects sigm gty1 gty2 =
 val are_pointers_to_compatible_objects: genType -> genType -> bool
 let are_pointers_to_compatible_objects gty1 gty2 =
   match (gty1, gty2) with
-    | (GenPointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
-           AilTypesAux.is_object ref_ty1
-        && AilTypesAux.is_object ref_ty2
-        && AilTypesAux.are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+  | (GenPointer _ ty1, GenPointer _ ty2) ->
+      AilTypesAux.is_object ty1 && AilTypesAux.is_object ty2 && AilTypesAux.compatible ty1 ty2
     | _ ->
         false
   end  
 
 val is_pointer_to_object: genType -> bool
 let is_pointer_to_object = function
-  | GenPointer _ ref_ty ->
-      AilTypesAux.is_object ref_ty
+  | GenPointer _ ty ->
+      AilTypesAux.is_object ty
   | _ ->
       false
 end
@@ -192,8 +186,8 @@ end
 val are_pointers_to_compatible_types: genType -> genType -> bool
 let are_pointers_to_compatible_types gty1 gty2 =
   match (gty1, gty2) with
-    | (GenPointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
-        AilTypesAux.are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+    | (GenPointer _ ty1, GenPointer _ ty2) ->
+        AilTypesAux.compatible ty1 ty2
     | _ ->
         false
   end
@@ -201,10 +195,9 @@ let are_pointers_to_compatible_types gty1 gty2 =
 val composite_pointer: genType -> genType -> maybe genType
 let composite_pointer gty1 gty2 =
   match (gty1, gty2) with
-  | (GenPointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
-      if AilTypesAux.are_compatible (ref_qs1, ref_ty1) (ref_qs1, ref_ty2) then
-        (* thanks to the compatibility test we know ref_qs1 = ref_qs2 *)
-        Maybe.map (GenPointer ref_qs1) (AilTypesAux.make_composite ref_ty1 ref_ty2)
+  | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
+      if AilTypesAux.compatible ty1 ty2 then
+        Maybe.map (GenPointer (AilTypesAux.combine_qualifiers qs1 qs2)) (AilTypesAux.composite ty1 ty2)
       else
         Nothing
   | _ ->
@@ -302,8 +295,8 @@ val interpret_genTypeCategory: implementation -> genTypeCategory -> errorM typeC
 let interpret_genTypeCategory impl = function
   | GenRValueType gty ->
       RValueType <$> interpret_genType impl gty
-  | GenLValueType qs ty isRegister ->
-      return (LValueType qs ty isRegister)
+  | GenLValueType qs ty ->
+      return (LValueType qs ty)
 end
 
 val signed_integerSuffix: integerSuffix -> bool
@@ -375,8 +368,8 @@ let is_complete sigm gty =
        false
    | GenBasic _ ->
        true
-   | GenArray _ _ n_opt ->
-       isJust n_opt
+   | GenArray _ _ _ ->
+       true
    | GenFunction _ _ _ _ ->
        false (* TODO: check *)
    | GenPointer _ _ ->

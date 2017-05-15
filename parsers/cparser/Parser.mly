@@ -53,7 +53,7 @@ let empty_specs = {
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_ARG PRINT_TYPE
+%token VA_START VA_ARG
 
 %token EOF
 
@@ -308,9 +308,6 @@ postfix_expression:
     { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)), CabsEva_arg(expr, ty)) }
 | OFFSETOF LPAREN ty= type_name COMMA str= OTHER_NAME RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEoffsetof (ty, CabsIdentifier (Loc_point $startpos(str), str))) }
-(* the following is a cerb extension allowing the user to the query the type of an expression  *)
-| PRINT_TYPE LPAREN expr= expression RPAREN
-   { CabsExpression (Loc_region ($startpos, $endpos, None), CabsEprint_type expr) }
 
 
 argument_expression_list: (* NOTE: the list is in reverse *)

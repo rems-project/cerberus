@@ -31,7 +31,6 @@ let eq_triple (eq_A : 'a -> 'a -> bool) (eq_B : 'b -> 'b -> bool) (eq_C : 'c -> 
     let (a2, b2, c2) = p2 in
     eq_A a1 a2 && eq_B b1 b2 && eq_C c1 c2
 
-
 let eq_option (eq_A : 'a -> 'a -> bool) : maybe 'a -> maybe 'a -> bool =
   fun o1 o2 -> 
     match (o1, o2) with

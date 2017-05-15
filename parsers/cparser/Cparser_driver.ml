@@ -53,6 +53,7 @@ let parse input =
     (* This wrapper is feed to the pre_parser and incrementaly save the list of tokens *)
     let lexer_wrapper lexbuf =
       let tok = Lexer.initial lexbuf in
+(*      print_endline ("TOKEN => " ^ Tokens.string_of_token tok); *)
       saved_tokens := (tok, (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)) :: !saved_tokens;
       tok in
     
@@ -120,7 +121,6 @@ let parse input =
       
 (*      print_endline "BEFORE PRE PARSER"; *)
       Pre_parser.translation_unit_file lexer_wrapper lexbuf;
-      
 (*      print_endline "AFTER PRE PARSER"; *)
 (*
       print_endline "==== BEFORE LEXER HACK ====";
@@ -129,6 +129,7 @@ let parse input =
       ) (List.rev !saved_tokens);
       print_endline "===========================";
 *)
+
       modify_tokens ();
 (* *)
       Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser] "==== AFTER LEXER HACK ====";

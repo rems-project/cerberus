@@ -9,10 +9,8 @@ let quote = function
       "one operand is a pointer to an object type and the other is a pointer to a qualified or unqualified version of **void**; or"
   | "§6.5.9#2, item 4" ->
       "one operand is a pointer and the other is a null pointer constant."
-  
-  | "§6.5.3.2#1, register" ->
-      "The operand of the unary & operator shall be (...) an lvalue that designates an object that (...) is not declared with the register storage-class specifier."
-  
+
+
   | "§6.5.3.3#1" ->
       "The operand of the unary **+** or **-** operator shall have arithmetic type; of the **~** operator, integer type; of the **!** operator, scalar type."
   | "§6.5.3.3#1, sentence 1" ->

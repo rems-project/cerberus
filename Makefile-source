@@ -59,6 +59,7 @@ SOURCE_ail_typing=\
   AilSyntaxAux.lem \
   AilWf.lem \
   AilTyping.lem \
+  Annotation.lem \
   GenTypesAux.lem \
   GenTyping.lem
 
@@ -66,8 +67,7 @@ SOURCE_cabs_to_ail=\
   cabs_to_ail_aux.lem \
   scope_table.lem \
   cabs_to_ail_effect.lem \
-  cabs_to_ail.lem \
-  wipFrontend.lem
+  cabs_to_ail.lem
 
 SOURCE_core_to_core=\
   core_sequentialise.lem \

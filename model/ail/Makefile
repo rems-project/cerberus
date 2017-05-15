@@ -6,6 +6,7 @@ FILES=\
   ctype.lem \
   AilSyntax.lem \
   AilTypesAux.lem \
+  Annotation.lem \
   ErrorMonad.lem \
   GenTypesAux.lem \
   OptionMonad.lem \

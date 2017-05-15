@@ -8,6 +8,11 @@ _coq/**
 _coq-orig/**
 _coq-patched/**
 
+web.byte
+public/include
+public/node_modules
+public/js/cerberus.js
+
 tmp
 
 core-ott/*.tex
@@ -45,6 +50,9 @@ cbuild
 clink
 cerberus
 main_.native
+main_.byte
+main_.d.byte
+
 
 build_model
 build

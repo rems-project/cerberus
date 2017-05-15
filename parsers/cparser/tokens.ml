@@ -115,8 +115,6 @@ type token =
   | VA_START
   | VA_ARG
   
-  | PRINT_TYPE
-  
   | EOF
 
 
@@ -236,5 +234,4 @@ let string_of_token = function
   | IDENTIFIER str -> "IDENTIFIER(" ^ str ^ ")"
   | VA_START -> "__cerbvar_va_start"
   | VA_ARG -> "__cerbvar_va_arg"
-  | PRINT_TYPE -> "__cerb_printtype"
   | EOF -> "EOF"
