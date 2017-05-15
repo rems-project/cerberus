@@ -70,6 +70,8 @@ let well_typed_assignment s ty1 gty2 null2 =
     match (ty1, gty2) with
       | (Struct tag_sym1, GenStruct tag_sym2) ->
           (* TODO: this is maybe too conservative *)
+          let () = Debug.print_debug 2 [Debug.DB_ail_typing]
+            ("[well_typed_assignment] exiting with bullet 2 ==> " ^ Pp.stringFromAil_ctype ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           E.return (tag_sym1 = tag_sym2)
           
 (* KKKKK WIP
@@ -84,6 +86,9 @@ let well_typed_assignment s ty1 gty2 null2 =
   
   else if AAux.atomic_qualified_unqualified AAux.is_pointer ty1 then
     AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
+    let () = Debug.print_debug 2 [Debug.DB_ail_typing]
+      ("[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype conv_ty1  ^
+       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
     match (conv_ty1, gty2) with
       | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
@@ -91,7 +96,7 @@ let well_typed_assignment s ty1 gty2 null2 =
              the unqualified referenced type with no qualifiers *)
           if    AAux.are_compatible (no_qualifiers, AAux.unqualify ref_ty1) (no_qualifiers, AAux.unqualify ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "y[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
+            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] "[well_typed_assignment] OK: bullet 3" in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
@@ -219,10 +224,10 @@ let annotate_stringLiteral (pref_opt, strs) =
                   | Just Enc_L  -> Basic (Integer (IBuiltin "wchar_t")) (* STD §6.4.5#6 sentence 5 *)
                 end in
 
-(* TODO: check the type *)
-  E.return (AilEstr (pref_opt, strs),
-          GenRValueType (GenArray no_qualifiers elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))
-         )
+  (* TODO: check the type *)
+  E.return
+    ( AilEstr (pref_opt, strs)
+    , GenLValueType no_qualifiers (Array no_qualifiers elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1)))) false )
 
 
 val     annotate_constant: constant -> E.errorM (constant * genTypeCategory)
@@ -1392,6 +1397,8 @@ and annotate_assignee sigm gamm ty1 e2 =
     | true ->
         E.return e2
     | false ->
+        let () = Debug.print_debug 1 [Debug.DB_ail_typing]
+          ("[well_typed_assignment] false ==> " ^ Pp.stringFromAil_ctype ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
         E.fail (locOf e2) (TError "§6.5.16.1#1")
   end
 

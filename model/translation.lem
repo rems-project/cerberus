@@ -2284,15 +2284,15 @@ TODO: #9
                 Cty.Builtin "whcar_t"
           end in
           
-          E.fresh_symbol >>= fun sym ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lit_sym, _, lit_sym_pe) ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
           let elem_lvals = List.map (fun c_str ->
             C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str)))
           ) strs ++ [C.LVspecified (C.OVinteger (Mem.integer_ival 0))] in
-          E.register_string_literal loc sym (Cty.Array Aty.no_qualifiers elem_ty (Just (integerFromNat $ List.length elem_lvals)))
+          E.register_string_literal loc lit_sym (Cty.Array Aty.no_qualifiers elem_ty (Just (integerFromNat $ List.length elem_lvals)))
             (C.Pexpr () (C.PEval (C.Vloaded (C.LVspecified (C.OVarray elem_lvals))))) >>
           E.return (
-            C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) sym))
+            C.Epure lit_sym_pe
           )
 
 (*
