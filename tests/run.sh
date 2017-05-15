@@ -8,7 +8,7 @@ pass=0
 fail=0
 
 function test {
-  cerberus --exec --batch $2/$1 > tmp/result 2> /dev/null
+  ../cerberus --exec --batch $2/$1 > tmp/result 2> /dev/null
   cmp --silent tmp/result $2/expected/$1.expected
   if [[ "$?" -eq "0" ]]; then
     res="\033[1m\033[32mPASSED!\033[0m"

@@ -89,16 +89,37 @@ let c_frontend f =
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
     
-    |> Exception.rbind (Cabs_to_ail.desugar !core_sym_counter "main")
+(* TODO TODO TODO *)
+    |> Exception.rbind (fun z ->
+         (* TODO: yuck *)
+(*        let saved_exec_mode_opt = current_execution_mode () in
+          cerb_conf := (fun () -> { !!cerb_conf with exec_mode_opt= Some Random }) ; *)
+          let ret = Cabs_to_ail.desugar !core_sym_counter
+            begin
+              let (ailnames, stdlib_fun_map) = !!cerb_conf.core_stdlib in
+              (ailnames, stdlib_fun_map, match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false)
+            end "main" z in
+(*        cerb_conf := (fun () -> { (!cerb_conf()) with exec_mode_opt= saved_exec_mode_opt }) ; *)
+          ret)
+    
     |> set_progress 11
     |> pass_message "2. Cabs -> Ail completed!"
-(*    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd) *)
-    
+    |> begin
+      if !Debug_ocaml.debug_level >= 5 then
+        Exception.fmap (fun z -> z)
+      else
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
+    end
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
-                             (GenTyping.annotate_program Annotation.concrete_annotation z))
+                             (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
-    |> pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
+    |> begin
+      if !Debug_ocaml.debug_level >= 5 then
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
+      else
+        Exception.fmap (fun z -> z)
+    end
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
@@ -438,7 +459,7 @@ let rewrite =
   Arg.(value & flag & info["rewrite"] ~doc)
 
 let sequentialise =
-  let doc = "Replace all unseq() with left to righ wseq(s)" in
+  let doc = "Replace all unseq() with left to right wseq(s)" in
   Arg.(value & flag & info["sequentialise"] ~doc)
 
 let concurrency =

@@ -116,8 +116,18 @@ let update f = fun s -> Exception.return ((), f s)
 let modify f = fun s -> Exception.return (f s)
 let eval   m = fun s -> Exception.fmap fst (m s)
 
+val get: forall 'st 'msg. stExceptM 'st 'st 'msg
+val put: forall 'st 'msg. 'st -> stExceptM unit 'st 'msg
+let get = fun st -> Exception.return (st, st)
+let put st = fun _ -> Exception.return ((), st)
+
 val run: forall 'a 's 'msg. stExceptM 'a 's 'msg -> 's -> Exception.exceptM ('a * 's) 'msg
 let run m = fun st -> m st
+
+
+val liftException: forall 'a 'state 'msg. Exception.exceptM 'a 'msg -> stExceptM 'a 'state 'msg
+let liftException m =
+  fun st -> Exception.fmap (fun z -> (z, st)) m 
 
 
 (* HACK: this is a hack to prevent Lem from generating OCaml code with random renamings *)

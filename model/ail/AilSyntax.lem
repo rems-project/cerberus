@@ -152,8 +152,9 @@ instance forall 'a. (Located (expression 'a))
 end
 
 
-(* the storage duration must be Nothing iff the identifier is that of a function *)
-type bindings (*[name="b*"]*) = list (identifier * (maybe storageDuration * qualifiers * ctype))
+(* the storage duration must be Nothing iff the identifier is that of a function,
+   the boolean tells whether the object was declared with the register storage-class *)
+type bindings (*[name="b*"]*) = list (identifier * (maybe (storageDuration * bool) * qualifiers * ctype))
 
 type statement_ 'a [name="s*"] = 
   | AilSskip
@@ -178,14 +179,15 @@ and statement 'a [name="s*"] =
 
 
 type declaration =
-  | Decl_object   of storageDuration * qualifiers * ctype
+    (* the storage duration is Nothin iff the object was declared with the register storage-class *)
+  | Decl_object   of maybe (storageDuration * bool) * qualifiers * ctype
     (* has_prototype; return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-  | Decl_function of bool * ctype * (list (qualifiers * ctype)) * bool * bool * bool
+  | Decl_function of bool * ctype * (list (qualifiers * ctype * (* isRegister *)bool)) * bool * bool * bool
 
 
 type tag_definition =
-  | StructDef of list (Cabs.cabs_identifier * ctype)
-  | UnionDef of list (Cabs.cabs_identifier * ctype)
+  | StructDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
+  | UnionDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
 
 instance (Show tag_definition)
   let show def = match def with
@@ -208,7 +210,7 @@ type sigma 'a = <|
 |>
 
 
-type gamma = Context.context identifier (maybe storageDuration * qualifiers * ctype)
+type gamma = Context.context identifier (maybe (storageDuration * bool) * qualifiers * ctype)
 
 type program 'a = maybe identifier * sigma 'a
 
@@ -972,7 +974,7 @@ let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
 let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
-val parameters_of_bindings: bindings -> list (maybe storageDuration * qualifiers * ctype)
+val parameters_of_bindings: bindings -> list (maybe (storageDuration * bool) * qualifiers * ctype)
 
 val type_from_sigma: forall 'a. (ctype * bindings * bool) * maybe (statement 'a) -> ctype
 
