@@ -1,3 +1,4 @@
+[@@@landmark "auto"]
 open Lem_pervasives
 open Global
 open Core
@@ -642,6 +643,7 @@ let pp_file file =
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
+  
   begin
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 

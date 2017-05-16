@@ -848,7 +848,7 @@ let rec subst_sym_expr sym pe' = function
         (z, (bTy, subst_sym_pexpr sym pe' pe))
       ) sym_bTy_pes in
       if List.any (fun (z, _) -> sym = z) sym_bTy_pes then
-        let () = Debug.warn [] "subst, Esave ==> shadowing" in
+        let () = Debug.warn [] (fun () -> "subst, Esave ==> shadowing") in
         (* TODO: check *)
         Esave lab_sym sym_bTy_pes' e 
       else
@@ -1156,7 +1156,7 @@ let rec find_labeled_continuation sym = function
   | Eaction _ ->
       Nothing
   | Ecase _ pat_es ->
-      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes there is atmost single match inside a Ecase" in
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes there is atmost single match inside a Ecase") in
       List.foldl (fun acc (_, e) ->
         match acc with
           | Just _ ->
@@ -1190,7 +1190,7 @@ let rec find_labeled_continuation sym = function
       (* NOTE: Typing forbids labeled continuation bindings inside unseq() *)
       Nothing
   | Ewseq pat e1 e2 ->
-      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Ewseq don't clash" in
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Ewseq don't clash") in
       match find_labeled_continuation sym e1 with
         | Just (syms, cont_expr) ->
             Just (syms, Ewseq pat cont_expr e2)
@@ -1198,7 +1198,7 @@ let rec find_labeled_continuation sym = function
             find_labeled_continuation sym e2
       end
   | Esseq pat e1 e2 ->
-      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Esseq don't clash" in
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Esseq don't clash") in
       match find_labeled_continuation sym e1 with
         | Just (syms, cont_expr) ->
             Just (syms, Ewseq pat cont_expr e2)
@@ -1224,7 +1224,7 @@ let rec find_labeled_continuation sym = function
   | Erun annot sym pes ->
       Nothing
   | Epar es ->
-      let () = Debug.warn [] "Core_aux.find_labeled_continuation assumes there are no Esave inside par()" in
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes there are no Esave inside par()") in
       Nothing
   | Ewait _ ->
       Nothing

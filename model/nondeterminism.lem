@@ -123,7 +123,7 @@ let bindRandom (ND m) f =
       | xs ->
           let () =
             if List.length xs > 1 then
-              Debug.print_debug 1 [] "ND.bindRandom: |xs| > 1"
+              Debug.print_debug 1 [] (fun () -> "ND.bindRandom: |xs| > 1")
             else () in
 
           let (Active a, st') = random_select actives in
@@ -201,7 +201,7 @@ let mapM_ f _as = sequence_ (List.map f _as)               (* GENERIC Monad *)
 
 val msum: forall 'a. string -> list (ndM 'a) -> ndM 'a (* GENERIC MonadPlus *)
 let msum debug_str ms =
-  let () = Debug.print_debug 10 [] ("ND.msum[" ^ debug_str ^ "], |ms| = " ^ show (List.length ms)) in (* DEBUG *)
+  let () = Debug.print_debug 10 [] (fun () -> "ND.msum[" ^ debug_str ^ "], |ms| = " ^ show (List.length ms)) in (* DEBUG *)
   if List.null ms then
     error ("ND.msum(" ^ debug_str ^ "), empty list")
   else
@@ -214,7 +214,7 @@ let msum debug_str ms =
 val pick: forall 'a. string -> list 'a -> ndM 'a
 let pick debug_str xs =
   let () = if List.null xs then
-    Debug.print_debug 5 [] ("ND.pick(" ^ debug_str ^ "), empty list")
+    Debug.print_debug 5 [] (fun () -> "ND.pick(" ^ debug_str ^ "), empty list")
   else
     () in
   ND (fun st -> List.map (fun x -> (Active x, st)) xs)
@@ -225,7 +225,7 @@ let pick debug_str xs =
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> ndM (list 'a * 'a * list 'a)
 let rec pickWith_ pred acc debug_n = function
   | [] ->
-      let _ = Debug.print_debug 3 [] "WARNING: pickWith returns []" in
+      let _ = Debug.print_debug 3 [] (fun () -> "WARNING: pickWith returns []") in
       []
   | x::xs ->
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
@@ -267,7 +267,7 @@ let add_constraint mk_assert =
     if Constraints.isUnsat eqs' then
       [(Killed (Other "reached unsatisfiable constraints"), <| st with eqs= eqs' |>)]
     else
-      let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 [] ("STILL SAT ==> " ^ stringFromConstraints eqs') in
+      let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 [] (fun () -> "STILL SAT ==> " ^ stringFromConstraints eqs') in
       [(Active (), <| st with eqs= eqs' |>)])
 
 val log: string -> ndM unit
@@ -288,7 +288,7 @@ let apply_to_constraints f (ND xs) =
           if Constraints.isUnsat eqs' then
             (Killed (Other "reached unsatisfiable constraints"), <| st' with eqs= eqs' |>)
           else
-            let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 [] ("STILL SAT (apply) ==> " ^ stringFromConstraints eqs') in
+            let () = if let (Constraints.Constraints xs) = eqs' in List.null xs then () else Debug.print_debug 2 [] (fun () -> "STILL SAT (apply) ==> " ^ stringFromConstraints eqs') in
             (Active x, <| st' with eqs= eqs' |>)
       | (Killed r, st') ->
           (Killed r, st')
@@ -298,9 +298,9 @@ let apply_to_constraints f (ND xs) =
 
 
 
-val print_debug: nat -> list Debug.domain -> string -> ndM unit
-let print_debug n doms str =
-  return (Debug.print_debug n doms ("[DRIVER] " ^ str))
+val print_debug: nat -> list Debug.domain -> (unit -> string) -> ndM unit
+let print_debug n doms msg =
+  return (Debug.print_debug n doms msg)
 
 
 

@@ -262,13 +262,13 @@ let stringFromPrefix = function
 end
 
 let allocate_static tid pref align_ival ty =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
     "CREATE(" ^ stringFromPrefix pref ^ ")"
   ) in
   Impl.impl_allocate_static tid pref align_ival ty
 
 let allocate_dynamic tid pref align_ival size_ival =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
     "ALLOC(" ^ stringFromPrefix pref ^ ")"
   ) in
   Impl.impl_allocate_dynamic tid pref align_ival size_ival
@@ -277,13 +277,13 @@ let kill ptrval =
   Impl.impl_kill ptrval
 
 let load ty ptrval =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
     "Load(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
   ) in
   Impl.impl_load ty ptrval
 
 let store ty ptrval mval =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
     "Store(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
   ) in
   Impl.impl_store ty ptrval mval

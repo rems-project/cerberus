@@ -80,7 +80,7 @@ let drive sym_supply file args cerb_conf : execution_result =
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
   
-  Debug_ocaml.print_debug 1 [] (Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
+  Debug_ocaml.print_debug 1 [] (fun () -> Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
   
   if n_actives = 0 then begin
     print_endline Colour.(ansi_format [Red]
@@ -107,7 +107,7 @@ begin
               n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
       )
 else
-        Debug_ocaml.print_debug 2 [] (Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
+        Debug_ocaml.print_debug 2 [] (fun () -> Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
 
 end
@@ -134,7 +134,7 @@ end
             if Debug_ocaml.get_debug_level () = 0 then
               (print_string stdout; flush_all());
             
-            Debug_ocaml.print_debug 1 [] (
+            Debug_ocaml.print_debug 1 [] (fun () ->
               Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
               Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps ^ 
@@ -146,13 +146,13 @@ end
           );
           if not (List.mem str_v_ !ky) && not is_blocked then (
             if cerb_conf.concurrency then
-              Debug_ocaml.print_debug 2 [] (Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs));
+              Debug_ocaml.print_debug 2 [] (fun () -> Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs));
 (*            print_string stdout; *)
             
             ky := str_v_ :: !ky;
             ret := pe :: !ret;
         ) else
-          Debug_ocaml.print_debug 4 [] (
+          Debug_ocaml.print_debug 4 [] (fun () ->
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^
             "eqs= " ^ Pp_cmm.pp_old_constraints st.ND.eqs
           );
@@ -175,7 +175,7 @@ end
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Pp_errors.location_to_string loc ^ "]: " ^ str)))
       
       | (ND.Killed (ND.Other reason), st) ->
-          Debug_ocaml.print_debug 5 [] (
+          Debug_ocaml.print_debug 5 [] (fun () ->
             Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
           )
