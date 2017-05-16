@@ -685,12 +685,12 @@ and translate_expression stdlib tagDefs a_expr =
       (* TODO: promotion? + atomicity *)
       | A.AilEunary A.PostfixIncr e ->
           let () = if AilTypesAux.is_atomic (ctype_of e) then
-            Debug.warn [Debug.DB_elaboration] "TODO: elaboration is wrong for atomic types"
+            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
           else
             () in
           
           self e >>= fun core_e ->
-          let () = Debug.print_debug 0 [] "TODO: needs to fix this" in
+          E.print_debugM 0 (fun () -> "TODO: needs to fix this") >>
           let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype ty)    in
           let core_ty_e = Caux.mk_ail_ctype_pe ty in
@@ -730,7 +730,7 @@ end
       (* TODO: factorise with PostfixIncr !!! *)
       | A.AilEunary A.PostfixDecr e ->
           let () = if AilTypesAux.is_atomic (ctype_of e) then
-            Debug.warn [Debug.DB_elaboration] "TODO: elaboration is wrong for atomic types"
+            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
           else
             () in
           (* TODO: qualifiers temporarily not dealt with *)
@@ -1028,7 +1028,7 @@ else
                   ]
             )
               else
-                let () = Debug.print_debug 1 [Debug.DB_elaboration] "HELLO cast ptr vs ptr?" in
+                let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "HELLO cast ptr vs ptr?") in
                 (* TODO: check *) (* error "WIP cast" *)
                 core_e
 
@@ -1344,7 +1344,7 @@ else
             result_ty aop e1 e2
       
       | A.AilEbinary e1 A.And e2 ->
-          let () = Debug.warn [Debug.DB_elaboration] "TODO: make the elab of A.And use mkTestExpression" in
+          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.And use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
           E.fresh_symbol >>= fun e1_sym   ->
@@ -1385,7 +1385,7 @@ else
             )
       
       | A.AilEbinary e1 A.Or e2 ->
-          let () = Debug.warn [Debug.DB_elaboration] "TODO: make the elab of A.Or use mkTestExpression" in
+          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.Or use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
           E.fresh_symbol >>= fun e1_sym   ->
@@ -1426,7 +1426,7 @@ else
             )
       
       | A.AilEcond e1 e2 e3 ->
-          let () = Debug.warn [Debug.DB_elaboration] "TODO: make the elab of AilEcond use mkTestExpression" in
+          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilEcond use mkTestExpression") in
           E.fresh_symbol >>= fun e1_sym   ->
           E.fresh_symbol >>= fun obj1_sym ->
           self e1        >>= fun core_e1  ->
@@ -1444,7 +1444,7 @@ else
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
             C.Esseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded e1_oTy)) core_e1
             begin
-              let () = Debug.warn [Debug.DB_elaboration] "Translation, AilEcond ==> TODO: the conversions for e2 and e3" in
+              let () = Debug.warn [Debug.DB_elaboration] (fun () -> "Translation, AilEcond ==> TODO: the conversions for e2 and e3") in
               C.Ecase e1_sym_pe
                 [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object e1_oTy)),
                    let core_test =
@@ -1463,7 +1463,7 @@ else
             end
       
       | A.AilEassign e1 e2 ->
-          let () = Debug.warn [Debug.DB_elaboration] "TODO: AilEassign overlap UB (see §6.5.16.1#3)" in
+          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: AilEassign overlap UB (see §6.5.16.1#3)") in
           self e1                                             >>= fun core_e1                          ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (e1_sym, e1_sym_pat, e1_sym_pe)  ->
           let core_ty_pe1 = Caux.mk_ail_ctype_pe $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
@@ -2204,7 +2204,7 @@ TODO: #9
                   (* NOTE: we assume the lack of trap representation *)
                   C.PEval (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
               | A.ConstantNull ->
-                  let () = Debug.print_debug 0 [] "HELLO ConstantNull" in
+                  let () = Debug.print_debug 0 [] (fun () -> "HELLO ConstantNull") in
                   (* TODO: should make the Ail ctor take a ctype? *)
                   Caux.strip $ Caux.mk_specified_pe (Caux.mk_nullptr_pe Cty.Void)
               | A.ConstantInteger (A.IConstant n _ _) ->
@@ -2337,7 +2337,7 @@ a
           error "WIP: Translation.translate_expr, AilEva_arg"
       
       | A.AilEprint_type e ->
-          let () = Debug.print_debug 0 [] ("PRINTING TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype (ctype_of e)) in
+          let () = Debug.print_debug 0 [] (fun () -> "PRINTING TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype (ctype_of e)) in
           self e
       
       | A.AilErvalue e ->
@@ -2717,7 +2717,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
-          let () = Debug.warn [Debug.DB_elaboration] "Translation, AilSblock: sequencing the creates and kills" in
+          let () = Debug.warn [Debug.DB_elaboration] (fun () -> "Translation, AilSblock: sequencing the creates and kills") in
 (*        C.Esseq (Caux.mk_tuple_pat pats) (Caux.mk_unseq core_creates)
             (foldr (fun core_s acc -> C.Esseq (C.CaseBase Nothing) core_s acc) (Caux.mk_unseq core_kills) core_ss)
         ) *)
@@ -2754,7 +2754,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           )
     
     | A.AilSwhile e s ->
-        let () = Debug.warn [Debug.DB_elaboration] "TODO: make the elab of AilSwhile use mkTestExpression" in
+        let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSwhile use mkTestExpression") in
         E.fresh_named_symbol "while" >>= fun sym_loop     ->
         E.fresh_symbol               >>= fun sym_case     ->
         E.fresh_symbol               >>= fun sym_e        ->
@@ -2780,7 +2780,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
             )
     
     | A.AilSdo s e ->
-        let () = Debug.warn [Debug.DB_elaboration] "TODO: make the elab of AilSdo use mkTestExpression" in
+        let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in
         E.fresh_named_symbol "do" >>= fun sym_loop     ->
         E.fresh_symbol            >>= fun sym_case     ->
         E.fresh_symbol            >>= fun sym_e        ->
@@ -2936,10 +2936,10 @@ val translate_tag_definitions: Context.context A.identifier A.tag_definition -> 
 let translate_tag_definitions ctx =
   Map.fromList $ List.map (function
     | (sym, A.StructDef tagDef) ->
-        let () = Debug.warn [] "Translate_tag_definitions is removing the qualifiers!" in
+        let () = Debug.warn [] (fun () -> "Translate_tag_definitions is removing the qualifiers!") in
         (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef)
     | (sym, A.UnionDef tagDef) ->
-        let () = Debug.warn [] "Translate_tag_definitions is removing the qualifiers!" in
+        let () = Debug.warn [] (fun () -> "Translate_tag_definitions is removing the qualifiers!") in
         (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef)
   end) ctx
 
@@ -2958,7 +2958,7 @@ let translate_program stdlib sequentialise (startup_sym_opt, sigm) =
           let core_create = Caux.pcreate Loc.unknown (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
           E.fresh_symbol >>= fun sym_global ->
           
-          E.print_debugM 2 ("(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
+          E.print_debugM 2 (fun () -> "(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Nothing ->
                 (* if the global has no initialisation expression, we set it to (sort of) zero *)

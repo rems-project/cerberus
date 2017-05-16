@@ -17,7 +17,7 @@ let inline symbolEqual sym1 sym2 =
     | (Symbol n1 str_opt1, Symbol n2 str_opt2) ->
         if n1 = n2 then
           if Debug.get_level () >= 5 && str_opt1 <> str_opt2 then
-            let () = Debug.print_debug 5 [] ("[Symbol.symbolEqual] suspicious equality ==> " ^ show str_opt1 ^ " <-> " ^ show str_opt2) in
+            let () = Debug.print_debug 5 [] (fun () -> "[Symbol.symbolEqual] suspicious equality ==> " ^ show str_opt1 ^ " <-> " ^ show str_opt2) in
             true
           else
             true

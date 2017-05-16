@@ -327,7 +327,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
         EU.mapM self pes >>= fun pes' ->
         match (ctor, Caux.valueFromPexprs pes') with
           | (Cnil (), Just []) ->
-              let () = Debug.warn [Debug.DB_core_dynamics] "TODO(hack): Core_Eval, PEctor Cnil ==> producing a [unit]" in
+              let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "TODO(hack): Core_Eval, PEctor Cnil ==> producing a [unit]") in
               EU.return $ PEval (Vlist BTy_unit(*TODO this is wrong*) [])
           | (Ccons, Just [cval1; Vlist bTy' cvals]) ->
                 EU.return $ PEval (Vlist bTy' (cval1 :: cvals))
