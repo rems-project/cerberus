@@ -22,39 +22,100 @@ let lookup_tag_definition s sym =
   Context.lookup (=) s.tag_definitions sym
 
 
-(* TODO: check if something needs to done regarding the basis *)
 val type_of_constant: integerConstant -> genIntegerType
 let type_of_constant iCst =
   match iCst with
-    | IConstant n _ Nothing ->
+    | IConstant n Decimal Nothing ->
         if AAux.in_min_integer_range n (Signed Int_) then
           Concrete (Signed Int_)
+        else if AAux.in_min_integer_range n (Signed Long) then
+          Concrete (Signed Long)
+        else if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
         else
           Unknown iCst
+    | IConstant n _ Nothing ->
+        (* Octal or Hexadecimal *)
+        if AAux.in_min_integer_range n (Signed Int_) then
+          Concrete (Signed Int_)
+        else if AAux.in_min_integer_range n (Unsigned Int_) then
+          Concrete (Unsigned Int_)
+        else if AAux.in_min_integer_range n (Unsigned Long) then
+          Concrete (Unsigned Long)
+        else if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
+        else if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
+        else
+          Unknown iCst
+    
     | IConstant n _ (Just U) ->
+        (* Decimal, Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Unsigned Int_) then
           Concrete (Unsigned Int_)
+        else if AAux.in_min_integer_range n (Unsigned Long) then
+          Concrete (Unsigned Long)
+        else if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
+        else
+          Unknown iCst
+    
+    | IConstant n Decimal (Just L) ->
+        if AAux.in_min_integer_range n (Signed Long) then
+          Concrete (Signed Long)
+        else if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
         else
           Unknown iCst
     | IConstant n _ (Just L) ->
+        (* Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Signed Long) then
           Concrete (Signed Long)
+        else if AAux.in_min_integer_range n (Unsigned Long) then
+          Concrete (Unsigned Long)
+        else if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
+        else if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
         else
           Unknown iCst
+    
     | IConstant n _ (Just UL) ->
+        (* Decimal, Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Unsigned Long) then
           Concrete (Unsigned Long)
+        else if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
         else
           Unknown iCst
-    | IConstant _ _ (Just LL) ->
-        Concrete (Signed LongLong)
-    | IConstant _ _ (Just ULL) ->
-        Concrete (Unsigned LongLong)
+    
+    | IConstant n Decimal (Just LL) ->
+        if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
+        else
+          Unknown iCst
+    | IConstant n _ (Just LL) ->
+        (* Octal or Hexadecimal *)
+        if AAux.in_min_integer_range n (Signed LongLong) then
+          Concrete (Signed LongLong)
+        else if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
+        else
+          Unknown iCst
+    
+    | IConstant n _ (Just ULL) ->
+        (* Decimal, Octal or Hexadecimal *)
+        if AAux.in_min_integer_range n (Unsigned LongLong) then
+          Concrete (Unsigned LongLong)
+        else
+          Unknown iCst
+    
     | IConstantMax ity ->
         Concrete ity
+    
     | IConstantMin ity ->
         Concrete ity
-  end
+end
 
 
 (* TODO: is only used once, could be inlined *)
