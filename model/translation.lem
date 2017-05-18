@@ -1447,40 +1447,44 @@ else
             )
       
       | A.AilEcond e1 e2 e3 ->
+          (* STD §6.5.15#4 *)
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilEcond use mkTestExpression") in
-          E.fresh_symbol >>= fun e1_sym   ->
-          E.fresh_symbol >>= fun obj1_sym ->
-          self e1        >>= fun core_e1  ->
-          self e2        >>= fun core_e2  ->
-          self e3        >>= fun core_e3  ->
+          
           let e1_oTy =
             (* NOTE: [e1] must be a scalar *)
             force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          
-          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded e1_oTy) e1_sym   in
-          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object e1_oTy) obj1_sym in
+          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object e1_oTy) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy) >>= fun (_, res_sym_pat , res_sym_pe ) ->
+          self e1 >>= fun core_e1 ->
+          self e2 >>= fun core_e2 ->
+          self e3 >>= fun core_e3 ->
           
           E.return $
             (* STD (§6.5.15#4, second sentence) says there is a sequenced point between the
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
-            C.Esseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded e1_oTy)) core_e1
+            C.Esseq e1_sym_pat core_e1
             begin
-              let () = Debug.warn [Debug.DB_elaboration] (fun () -> "Translation, AilEcond ==> TODO: the conversions for e2 and e3") in
-              C.Ecase e1_sym_pe
-                [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object e1_oTy)),
-                   let core_test =
-                     if AilTypesAux.is_integer (ctype_of e1) then
-                       Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
-                     else
-                       error "WIP: AilEcond, pointer e1" in
-                   C.Eif core_test
-                     (* TODO: conversions *)
-                     core_e2
-                     core_e3)
-                  (* non-deterministic branching if the test expression had unspecified value *)
-                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                   (* TODO: conversions *)
-                   C.End [core_e2; core_e3]) ]
+              C.Ewseq res_sym_pat begin
+                C.Ecase e1_sym_pe
+                  [ (Caux.mk_specified_pat obj1_sym_pat,
+                     let core_test =
+                       if AilTypesAux.is_integer (ctype_of e1) then
+                         Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
+                       else
+                         error "WIP: AilEcond, pointer e1" in
+                     C.Eif core_test core_e2 core_e3 )
+                    (* non-deterministic branching if the test expression had unspecified value *)
+                  ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                     C.End [core_e2; core_e3] ) ]
+              end (
+              if AilTypesAux.is_integer result_ty then
+                C.Epure (stdlib.mkcall_conv_loaded_int result_ty res_sym_pe)
+              else
+                let () = Debug.warn [Debug.DB_elaboration] (fun () -> "Translation, AilEcond ==> TODO: the conversions for e2 and e3") in
+                (* TODO: conversions *)
+                C.Epure res_sym_pe
+             )
             end
       
       | A.AilEassign e1 e2 ->
