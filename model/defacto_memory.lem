@@ -364,6 +364,63 @@ let integer_range = function
 end
 
 
+let rec  tmp_sizeof ty =
+  match ty with
+    | Core_ctype.Void ->
+        error "Defacto_memory.tmp_sizeof, Void"
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    (* TODO !!!!, fixing impl for testing purpose *)
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
+        Just 2
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
+        Just 2
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
+        Just 4
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
+        Just 4
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
+        Just 8
+    | Core_ctype.Array _ _ Nothing ->
+        error "Defacto_memory.tmp_sizeof, Array Nothing"
+    | Core_ctype.Array _ ty (Just n) ->
+        match tmp_sizeof ty with
+          | Just sz ->
+              Just (sz * n)
+          | Nothing ->
+              Nothing
+        end
+    | Core_ctype.Function _ _ _ ->
+        error "Defacto_memory.tmp_sizeof, Function"
+    | Core_ctype.Pointer _ _ ->
+        Just 8
+    | Core_ctype.Atomic ty ->
+        tmp_sizeof ty
+    | Core_ctype.Struct _ ->
+        Nothing
+    | Core_ctype.Union  _ ->
+        Nothing
+    | Core_ctype.Builtin _ ->
+        Nothing
+  end
+
+
 val     simplify_integer_value_base: bool -> integer_value_base -> either integer integer_value_base
 let rec simplify_integer_value_base do_unfolding ival_ =
   match ival_ with
@@ -420,41 +477,10 @@ let rec simplify_integer_value_base do_unfolding ival_ =
     
     | IVsizeof ty ->
         if do_unfolding then
-          match ty with
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
-                Left 1
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
-                Left 1
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
-                Left 1
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
-                let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
-                Left (integerFromNat (n / 8))
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
-                let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
-                Left (integerFromNat (n / 8))
-            (* TODO !!!!, fixing impl for testing purpose *)
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
-                Left 2
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
-                Left 2
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
-                Left 4
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
-                Left 4
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
-                Left 8
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
-                Left 8
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
-                Left 8
-            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
-                Left 8
-
-            | Core_ctype.Pointer _ _ ->
-                Left 8
-
-            | _ ->
+          match tmp_sizeof ty with
+            | Just n ->
+                Left n
+            | Nothing ->
                 Right ival_
           end
         else
@@ -786,7 +812,7 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
 
 (* Making an indirection here, so that future crazy optimisations won't be duplicated all over. *)
 let mk_op_ival_ iop ival_1 ival_2 =
-  either (fun z -> IVconcrete z) id (simplify_integer_value_base false $ IVop iop [ival_1; ival_2])
+  either (fun z -> IVconcrete z) id (simplify_integer_value_base true (* TODO: false *) $ IVop iop [ival_1; ival_2])
 
 
 
@@ -2219,18 +2245,21 @@ let impl_ptrcast_ival int_ty ref_ty (IV prov ival) =
 
 (* Decide whether a given pointer value can be use to perform a store *)
 val can_store: impl_pointer_value -> impl_memM (maybe allocation_id)
-let can_store (PV prov ptr_val_ sh) =
+let can_store (PV prov ptr_val_ sh as ptr_val) =
   match ptr_val_ with
     (* null and function pointers obviously can't be used for stores. *)
     | PVnull _     -> return Nothing
     | PVfunction _ -> return Nothing
     
     (* by WF-invariants, we have a pointer to an object *)
-    | ptr_val ->
+    | _ ->
         explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
           | Just alloc_id ->
               is_dead alloc_id >>= function
                 | true ->
+                    let () = Debug.print_debug 5 [Debug.DB_memory] (fun () ->
+                      "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptr_val
+                    ) in
                     (* can't store with a pointer to an object whose lifetime ended. *)
                     return Nothing
                 | false ->

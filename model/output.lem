@@ -616,8 +616,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
           
           match conv_ty_opt with
             | Just conv_ty ->
-                let () = Debug.print_debug 0 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
-                let () = Debug.print_debug 0 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
+                let () = Debug.print_debug 1 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
+                let () = Debug.print_debug 1 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
                 match eval_conv (*arg_ty*) conv_ty mval with
                   | Left err ->
                       let () = Debug.print_debug 0 [] (fun () -> "PRINTF ERR 1") in

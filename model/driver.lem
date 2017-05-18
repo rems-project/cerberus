@@ -215,7 +215,7 @@ let rec drive_core_thread tid dr_st =
   end in
   ND.msum "drive_core_thread" $ List.map (function
     | Step_constrained debug_str xs ->
-        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED") >>
+        (* DEBUG *) ND.print_debug 0 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED") >>
         ND.msum "step_constrained" (
           List.map (fun (constrs, step_m) ->
             (* TODO HACK *)
@@ -264,7 +264,11 @@ let rec drive_core_thread tid dr_st =
         |>
     | Step_eval debug_str step_m ->
         let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
-        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "eval(tid_" ^ show tid ^ "): " ^ debug_str) >>
+        let pre_th_st = (* DEBUG *)
+          snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.thread_states) in
+        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "eval(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+        (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.arena ^ ";\nstack= " ^
+        (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.stack) >>
         (* case where the Core program does a pure step *)
         runCore step_m dr_st >>= fun (th_st', dr_st') ->
         let () = Boot.end_timing () in (* DEBUG, PROFILING *)

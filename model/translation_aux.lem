@@ -278,6 +278,7 @@ type translation_stdlib = <|
   mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
   mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
+  mkcall_all_values_representable_in: Aty.ctype -> Aty.ctype -> C.pexpr;
   mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
 |>
 
@@ -294,4 +295,5 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
    ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
    ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]
-   ; mkcall_catch_exceptional_condition= fun ty pe     -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |>
+   ; mkcall_all_values_representable_in= fun ty1 ty2    -> mk_call "all_values_representable_in" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2]
+   ; mkcall_catch_exceptional_condition= fun ty pe      -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |>

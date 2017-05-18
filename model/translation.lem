@@ -252,9 +252,9 @@ and translate_div_mod_operator translate usual_arithmetic_conversion stdlib resu
          Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe)
     | A.Mod ->
         (Undefined.UB045b_modulo_by_zero,
-         Caux.mk_if_pe (Caux.mk_op_pe C.OpLt conv1_sym_pe (Caux.mk_integer_pe 0))
+(*         Caux.mk_if_pe (Caux.mk_op_pe C.OpLt conv1_sym_pe (Caux.mk_integer_pe 0)) *)
            (Caux.mk_op_pe C.OpRem_t conv1_sym_pe conv2_sym_pe)
-           (Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpAdd conv1_sym_pe conv2_sym_pe) conv2_sym_pe))
+(*           (Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpAdd conv1_sym_pe conv2_sym_pe) conv2_sym_pe) *))
     | _ ->
         error "[Translation.translate_div_mod_operator], 'aop' must be multiplicative"
   end in
@@ -534,8 +534,8 @@ and translate_expression stdlib tagDefs a_expr =
                 if ty1' = ty2' then
                   (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty2' e2)
                 
-                else if   AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2'
-                       || AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2' then
+                else if   (AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2')
+                       || (AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2') then
                   if AilTypesAux.lt_integer_rank ity1' ity2' then
                     (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
                   else
@@ -548,6 +548,7 @@ and translate_expression stdlib tagDefs a_expr =
                   (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
                 
                 else if AilTypesAux.is_signed_integer_type ty1' then
+(*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty1')
                      (stdlib.mkcall_conv_int ty1' e1)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e1)
@@ -556,8 +557,18 @@ and translate_expression stdlib tagDefs a_expr =
                      (stdlib.mkcall_conv_int ty1' e2)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
                   )
+*)
+                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
+                     (stdlib.mkcall_conv_int ty1' e1)
+                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e1)
+                  ,
+                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
+                     (stdlib.mkcall_conv_int ty1' e2)
+                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
+                  )
                 
                 else (* if AilTypesAux.is_signed_integer_type ty2' then *)
+(*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty2')
                      (stdlib.mkcall_conv_int ty2' e1)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e1)
@@ -566,6 +577,16 @@ and translate_expression stdlib tagDefs a_expr =
                      (stdlib.mkcall_conv_int ty2' e2)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e2)
                   )
+*)
+                  (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
+                     (stdlib.mkcall_conv_int ty2' e1)
+                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e1)
+                  ,
+                  Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
+                     (stdlib.mkcall_conv_int ty2' e2)
+                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e2)
+                  )
+
             | _ ->
                 error ("Translation.usual_arithmetic_conversion ==> ty1= " ^
                        Pp.stringFromAil_ctype ty1 ^ ", ty2= " ^ Pp.stringFromAil_ctype ty2 ^
@@ -690,7 +711,7 @@ and translate_expression stdlib tagDefs a_expr =
             () in
           
           self e >>= fun core_e ->
-          E.print_debugM 0 (fun () -> "TODO: needs to fix this") >>
+          E.print_debugM 1 (fun () -> "TODO: needs to fix this") >>
           let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype ty)    in
           let core_ty_e = Caux.mk_ail_ctype_pe ty in
@@ -2466,7 +2487,7 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
       let (continue_sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x)) suppl in
       let (break_sym, suppl'')   = State.run (Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x)) suppl' in
       let (ret, st') = mf <| elc_supply= suppl''; elc_continue= Just continue_sym; elc_break= Just break_sym |> in
-      ((continue_sym, break_sym, ret), st') in
+      ((continue_sym, break_sym, ret), <| st with elc_supply= st'.elc_supply |>) in 
   A.AnnotatedStatement loc <$> match stmt_ with
     | A.AilSskip ->
         St.return stmt_
