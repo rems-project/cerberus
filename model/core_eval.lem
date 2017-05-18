@@ -322,6 +322,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
     | PEundef ub ->
         Exception.return (Undefined.undef loc [ub])
     | PEerror str debug_pe ->
+        let () = Debug.print_debug 0 [] (fun () -> Pp.stringFromCore_pexpr debug_pe) in
         Exception.return (Undefined.error loc str)
     | PEctor ctor pes ->
         EU.mapM self pes >>= fun pes' ->
