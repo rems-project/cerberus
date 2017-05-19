@@ -67,38 +67,50 @@ let call_csmith filename =
   let _ = Sys.command ("./tools/gen.sh " ^ filename) in
   ()
 
-let rec loop n =
-  let filename = "csmith_" ^ string_of_int n ^ ".c" in
+let rec generate_test filename =
   call_csmith filename;
-  begin match run_cc filename with
+  match run_cc filename with
     | Timeout ->
-        output_string log_oc ("XX " ^ filename ^ "\n")
+        generate_test filename
     | Error str ->
         Pervasives.(output_string stderr (str ^ "\n"));
         exit 1
-    | Done (n_cc, stdout_cc) ->
-        begin match run_cerb filename with
-          | Timeout ->
-              output_string log_oc ("TO " ^ filename ^ "\n")
-          | Error str ->
-              Pervasives.(output_string stderr (str ^ "\n"));
-              exit 1
-          | Done (n_cerb, stdout_cerb) ->
-              if n_cc = n_cerb && stdout_cc = stdout_cerb then
-                output_string log_oc ("OK " ^ filename ^ "\n")
-              else (
-                output_string log_oc ("KO " ^ filename ^ "\n");
-                print_endline ("KO " ^ filename)
-               )
-        end
+    | Done (n, stdout) ->
+        (n, stdout)
+
+
+let generate_and_run_test n =
+  let filename = "csmith_" ^ string_of_int n ^ ".c" in
+  print_string (filename ^ " --> ");
+  let (n_cc, stdout_cc) = generate_test filename in
+  begin match run_cerb filename with
+    | Timeout ->
+        print_endline "\x1b[33mTO\x1b[0m";
+        output_string log_oc ("TO " ^ filename ^ "\n")
+    | Error str ->
+        Pervasives.(output_string stderr (str ^ "\n"));
+        exit 1
+    | Done (n_cerb, stdout_cerb) ->
+        if n_cc = n_cerb && stdout_cc = stdout_cerb then (
+          print_endline "\x1b[32mOK\x1b[0m";
+          output_string log_oc ("OK " ^ filename ^ "\n")
+         ) else (
+          print_endline "\x1b[31mKO\x1b[0m";
+          output_string log_oc ("KO " ^ filename ^ "\n");
+         )
   end;
-  flush_all ();
-  if not !should_stop then
-    loop (n+1)
-  else (
+  flush_all ()
+
+let rec loop body n =
+  if !should_stop then (
     close_out log_oc;
     print_endline ("Terminating, next index will be: " ^ string_of_int (n+1))
+   ) else (
+    body n;
+    loop body (n+1)
    )
+
+
 
 let sigint_handler _ =
   should_stop := true
@@ -124,4 +136,4 @@ let () =
   in
   print_endline ("Resuming with index: " ^ string_of_int (last_index + 1));
   
-  loop (last_index + 1)
+ loop generate_and_run_test (last_index + 1)
