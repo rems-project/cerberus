@@ -160,9 +160,8 @@ function run(evt) {
   source.c = panes[0].pane.values[panes[0].pane.tab];
   source.l = source.c.length;
   $('body').addClass('wait');
-  cerberus.update(source);
+  var result = cerberus.run(source);
   $('body').removeClass('wait');
-  var result = cerberus.run();
   panes[1].pane.values[panes[1].pane.tab] = result.toString();
   panes[1].pane.refresh();
 }

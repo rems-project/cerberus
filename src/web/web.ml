@@ -251,16 +251,13 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   match file_opt with
     | None ->
       prerr_endline "No filename given";
-      exit 1
+      None
     | Some file ->
       match pipeline file args with
       | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
-        if progress then
-          exit !progress_sofar
-        else
-          exit 1
-      | Exception.Result n -> n
+        None
+      | Exception.Result file -> Some file
         (*
         if progress then 14 else n *)
 
@@ -290,51 +287,13 @@ let libc = List.map (fun s -> "include/c/libc/" ^ s) [
   "complex.h"
 ]
 
-let location_to_string loc =
-  let string_of_pos pos =
-    Printf.sprintf "%s:%d:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
-  match loc with
-    | Location_ocaml.Loc_unknown ->
-        "unknown location"
-    | Location_ocaml.Loc_point pos ->
-        string_of_pos pos ^ ":"
-    | Location_ocaml.Loc_region (pos1, pos2, _) ->
-        (* TODO *)
-        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
-
-let run () = cerberus 0
+let exec () = cerberus 0
     "cc -E -nostdinc -undef -I /include/c/libc -I /include/c/posix"
     "gcc_4.9.0_x86_64-apple-darwin10.8.0"
     true Random [Core] (Some buffile) false false
     false false false [] false false true false false
 
 open Core
-
-let rec print_expr e =
-  match e with
-  | Esave (_, _, e) -> print_expr e
-  | Eif (pe1, e2, e3) -> print_expr e2; print_expr e3
-  | Ecase (pe, cases) -> List.map snd cases
-                         |> List.fold_left (fun _ -> print_expr) ()
-  | Esseq (_, e1, e2) -> print_expr e1; print_expr e2
-  | End es -> List.fold_left (fun _ -> print_expr) () es
-  | Ewseq (_, e1, e2)  -> print_expr e1; print_expr e2
-  | Eunseq es -> List.fold_left (fun _ -> print_expr) () es
-  | Eaction (Paction (_, Action (loc, _, _))) ->
-      prerr_endline "Action:";
-      prerr_endline (location_to_string loc)
-  | Eloc (loc, e) ->
-    prerr_endline (location_to_string loc); print_expr e
-  | _ -> ()
-
-let print_core core =
-  prerr_endline "Printing Core";
-  Pmap.fold begin fun s decl () ->
-    match decl with
-    | Core.Fun (bty, args, pe) -> ()
-    | Core.Proc (bty, args, e) -> print_expr e
-    | _ -> ()
-  end core.Core.funs ()
 
 let _ =
   List.rev_append libc [libcore; impl; buffile]
@@ -345,11 +304,17 @@ let string_of_core core=
   PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file core);
   Buffer.contents buf
 
+let run source =
+  let js_stderr = ref "" in
+  Sys_js.set_channel_flusher stderr (fun s -> js_stderr := !js_stderr ^ s);
+  Sys_js.update_file ~name:buffile ~content:source;
+  match exec () with
+  | Some file -> string_of_core file
+  | None -> !js_stderr
+
 let _ =
   Js.export "cerberus"
   (object%js
-    method run = run () |> string_of_core
-    method log cb = Sys_js.set_channel_flusher stderr cb
-    method update c = Sys_js.update_file ~name:buffile ~content:c
+    method run source = run source
     method buffer = Sys_js.file_content buffile
   end)
