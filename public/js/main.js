@@ -1,18 +1,11 @@
 'use_strict';
 
 // Globals
-var source_number = 1;
-var pane_number = 1
+var source_counter = 1;
 
-function Pane () {
-  this.editor = null;
-  this.tab = null;
-  this.values = {};
-}
-
-function create_editor (elem) {
-  var div = $(elem).find('.editor')[0];
-  elem.pane.editor = CodeMirror (div, {
+// Types
+function Pane (div) {
+  this.editor = CodeMirror ($(div).find('.editor')[0], {
     mode: 'text/x-csrc',
     styleActiveLine: true,
     lineNumbers: true,
@@ -20,148 +13,178 @@ function create_editor (elem) {
     tabSize: 2,
     smartIndent: true
   });
-  elem.pane.editor.on('change', () => {
-    elem.pane.values[elem.pane.tab] = elem.pane.editor.getValue();
-  });
-}
 
-function clear_tab_selection (pane) {
-  $(pane).find('.tablinks').removeClass('active');
-}
+  this.tab = null;    // Current tab
+  this.values = {};   // Values/Buffer being edited
+  this.div = div;     // Pointer to UI
 
-function change_tab (e, $tab, tabname) {
-  e.pane.tab = tabname;
-  refresh_pane(e.pane);
-  clear_tab_selection (e);
-  $tab.addClass('active');
-}
+  // Add event listeners
+  $(this.div).find('.tabadder').on('click', () => this.create_tab ());
 
-function create_tab (e, name, value) {
-  if (!name) {
-    name = 'Source #' + source_number;
-    source_number++;
+  this.number_of_tabs = function () {
+    return Object.keys(this.values).length;
   }
 
-  if (Object.keys(e.pane.values).length === 0) {
-    $(e).find('.editor').show();
+  this.set_value = function (value) {
+    this.values[this.tab] = value;
+    this.refresh();
   }
-  clear_tab_selection(e);
 
-  e.pane.tab = name;
-  e.pane.values[name] = value ? value : '';
+  this.save_editor_value = function () {
+    this.values[this.tab] = this.editor.getValue();
+  }
 
-
-  var $new_tab = $('#tablink-template').clone().contents();
-  $new_tab.find('.title').text(name);
-  $new_tab.find('.title').on('click', () => {
-    change_tab (e, $new_tab, name);
-  });
-  $new_tab.find('.close').on('click', () => {
-    if (e.pane.tab === name) {
-      if (Object.keys(e.pane.values).length === 1) {
-        $(e).find('.editor').hide();
-      } else {
-        var prev_tab = $new_tab.prev()[0];
-        var prev_tab_name = $(prev_tab).find('.title')[0].textContent;
-        change_tab(e, $(prev_tab), prev_tab_name);
-      }
+  this.create_tab = function (name, value) {
+    if (!name) {
+      name = 'Source #' + source_counter;
+      source_counter++;
     }
-    delete e.pane.values[name];
-    $new_tab.remove();
-  });
-  $(e).find('.tabadder').before($new_tab);
-  refresh_pane(e.pane);
-}
+    this.tab = name;
+    this.values[name] = value ? value : '';
 
+    if (this.number_of_tabs() === 1) {
+      $(this.div).find('.editor').show();
+    }
+    this.clear_tab_selection();
 
-function refresh_pane(pane) {
-  pane.editor.setValue(pane.values[pane.tab]);
-  pane.editor.refresh();
-}
-
-function create_panes_from_template(e) {
-  $('#pane-template').clone().contents().appendTo(e);
-  e.pane = new Pane();
-  create_editor(e);
-  create_tab(e, null, 'int main() {return 0;}');
-}
-
-function init_panes() {
-  var ps = $('.pane').toArray();
-  var w = window.innerWidth/ps.length + 'px';
-  for (i = 0; i < ps.length - 1; i++) {
-    ps[i].style.width = w;
+    var $tab = $('#tablink-template').clone().contents();
+    $tab.find('.title').text(name);
+    $tab.find('.title').on('click', () => {
+      this.change_tab($tab);
+    });
+    $tab.find('.close').on('click', () => {
+      if (this.tab === name) {
+        if (this.number_of_tabs() === 1)
+          $(this.div).find('.editor').hide();
+        else
+          this.change_tab($tab.prev())
+      }
+      delete this.values[name];
+      $tab.remove();
+    });
+    $(this.div).find('.tabadder').before($tab);
+    this.refresh();
   }
-  ps[ps.length-1].style.flex = '1 1 auto';
+
+  this.clear_tab_selection = function () {
+    $(this.div).find('.tablinks').removeClass('active');
+  }
+
+  this.change_tab = function ($tab) {
+    this.save_editor_value();
+    this.tab = $tab.find('.title')[0].textContent;
+    this.clear_tab_selection();
+    $tab.addClass('active');
+    this.refresh();
+  }
+
+  this.refresh = function () {
+    this.editor.setValue(this.values[this.tab]);
+    this.editor.refresh();
+  }
 }
 
-function resize_panes() {
-  var ps = $('.pane').toArray();
-  var n = ps.length;
-  var factor = window.innerWidth / window.prevWidth;
-  for (i = 0; i < n - 1; i++) {
-    var w = parseFloat(ps[i].style.width.slice(0, -2));
-    ps[i].style.width = (w * factor)+'px';
-  }
-  ps[n-1].style.flex = '1 1 auto';
+function UI() {
+  this.panes = []
   window.prevWidth = window.innerWidth;
+
+  this.setup = function () {
+    var w = window.innerWidth/this.panes.length + 'px';
+    for (i = 0; i < this.panes.length; i++) {
+      this.panes[i].div.style.width = w;
+    }
+    $('.pane-separator').each((i, e) => {
+      e.addEventListener('mousedown', this.init_resize, false);
+    });
+  }
+
+  this.refresh = function () {
+    var factor = window.innerWidth / window.prevWidth;
+    for (i = 0; i < this.panes.length; i++) {
+      var w = parseFloat(this.panes[i].div.style.width.slice(0, -2));
+      this.pannes[i].div.style.width = (w * factor)+'px';
+    }
+    window.prevWidth = window.innerWidth;
+  }
+
+  // Resizing panes
+  this.resize = {
+    x: 0,
+    sep: null,
+    pane: null,
+    paneWidth: null,
+    lastPane: null,
+    lastPaneWidth: null
+  }
+
+  this.init_resize = (evt) => {
+    this.resize.x = evt.clientX;
+    this.resize.sep = evt.srcElement;
+    this.resize.pane = $(this.resize.sep).prev()[0];
+    this.resize.paneWidth = parseFloat(this.resize.pane.style.width.slice(0, -2));
+    this.resize.lastPane = $(this.resize.sep).siblings().last()[0];
+    this.resize.lastPaneWidth =
+      parseFloat(this.resize.lastPane.style.width.slice(0, -2));
+    $(this.resize.sep).addClass('resize');
+    $('div').each((i, e) => {
+      e.style.pointerEvents = 'none';
+    });
+    document.documentElement.addEventListener('mousemove',this.do_resize,false);
+    document.documentElement.addEventListener('mouseup',this.stop_resize,false);
+  }
+
+  this.do_resize = (evt) => {
+    var delta = evt.clientX - this.resize.x;
+    this.resize.pane.style.width = (this.resize.paneWidth+delta)+'px';
+    this.resize.lastPane.style.width = (this.resize.lastPaneWidth-delta)+'px';
+  }
+
+  this.stop_resize = (evt) => {
+    $(this.resize.sep).removeClass('resize');
+    $('div').each((i, e) => {
+      e.style.pointerEvents = '';
+    });
+    document.documentElement.removeEventListener('mousemove',this.do_resize,false);
+    document.documentElement.removeEventListener('mouseup',this.stop_resize,false);
+  }
+
+
 }
 
-// HTML Event handlers
-
-function new_tab (evt) {
-  create_tab(evt.srcElement.parentNode);
+// TODO: at the moment I run any file on the left side and put in the right side
+// buffer
+function run(evt) {
+  var panes = $('.pane');
+  var source = cerberus.buffer();
+  panes[0].pane.save_editor_value();
+  source.c = panes[0].pane.values[panes[0].pane.tab];
+  source.l = source.c.length;
+  $('body').addClass('wait');
+  cerberus.update(source);
+  $('body').removeClass('wait');
+  var result = cerberus.run();
+  panes[1].pane.values[panes[1].pane.tab] = result.toString();
+  panes[1].pane.refresh();
 }
 
-// Resize events
-
-var startX, paneWidth, paneSep;
-window.prevWidth = window.innerWidth;
-
-function init_resize(evt) {
-  paneSep = evt.srcElement;
-  paneSep.className += ' resize';
-  startX = evt.clientX;
-  $('div').each((i, e) => {
-    e.style.pointerEvents = 'none';
-  });
-  var pane = $(paneSep).prev()[0];
-  paneWidth = parseFloat(pane.style.width.slice(0, -2));
-  document.documentElement.addEventListener('mousemove', do_resize, false);
-  document.documentElement.addEventListener('mouseup', stop_resize, false);
+function create_pane_from_template(div) {
+  $('#pane-template').clone().contents().appendTo(div);
+  var pane = new Pane(div);
+  pane.create_tab();
+  div.pane = pane; // TODO: ugly: for run
+  return pane;
 }
-
-function do_resize(evt) {
-  var delta = evt.clientX - startX;
-  var pane = $(paneSep).prev()[0];
-  pane.style.width = (paneWidth+delta)+'px';
-  console.log (evt.clientX - startX);
-}
-
-function stop_resize(evt) {
-  paneSep.className = paneSep.className.replace(' resize', '');
-  $('div').each((i, e) => {
-    e.style.pointerEvents = '';
-  });
-  document.documentElement.removeEventListener('mousemove', do_resize, false);
-  document.documentElement.removeEventListener('mouseup', stop_resize, false);
-}
-
-window.onresize = ((evt) => {
-  resize_panes();
-});
-
-// Initializations
 
 function setup() {
+  var ui = new UI();
   $('.pane').each((i,e) => {
-    create_panes_from_template (e);
+    ui.panes.push(create_pane_from_template (e));
   });
+  ui.setup();
 
-  init_panes();
-
-  $('.pane-separator').each((i, e) => {
-    e.addEventListener('mousedown', init_resize, false);
+  // Wait buffile to be downloaded
+  $(document).ready(() => {
+    ui.panes[0].set_value (cerberus.buffer().toString());
   });
 }
 

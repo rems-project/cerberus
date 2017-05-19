@@ -19,7 +19,7 @@ let load_stdlib () =
     error ("couldn't find the Core standard library file\n (looked at: `"
            ^ filepath ^ "').")
   else
-    Debug_ocaml.print_debug 5 [] ("reading Core standard library from `"
+    Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `"
                                   ^ filepath ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
@@ -138,17 +138,17 @@ let backend sym_supply core_file args =
               try
                 int_of_string (String_mem.string_pretty_of_integer_value ival)
               with | _ ->
-                Debug_ocaml.warn [] "Return value was not a (simple) \
-                                     specified integer";
+                Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) \
+                                     specified integer");
                 0
              end
           | Exception.Result (pe :: _) ->
-              Debug_ocaml.warn [] ("HELLO> " ^ String_core.string_of_pexpr pe); 0
+              Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_pexpr pe); 0
           | Exception.Result [] ->
-              Debug_ocaml.warn [] "BACKEND FOUND EMPTY RESULT";
+              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
               0
           | Exception.Exception _ ->
-              Debug_ocaml.warn [] "BACKEND FOUND EXCEPTION";
+              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
               0
            )
 
@@ -157,7 +157,7 @@ let pipeline filename args =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   let f = Input.file filename in
-  Debug_ocaml.print_debug 2 [] "Using the C frontend";
+  Debug_ocaml.print_debug 2 [] (fun () -> "Using the C frontend");
   c_frontend f
   >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
   begin
@@ -185,8 +185,8 @@ let pipeline filename args =
   (* TODO: do the sequentialised properly *)
   if List.mem Core !!cerb_conf.pps then (
     if !!cerb_conf.sequentialise then begin
-      Debug_ocaml.warn [] "The normal backend is not actually \
-                           using the sequentialised Core";
+      Debug_ocaml.warn [] (fun () -> "The normal backend is not actually \
+                           using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
       | Exception.Result z ->
         run_pp $ Pp_core.pp_file (Core_sequentialise.sequentialise_file z);
@@ -309,135 +309,7 @@ let run () = cerberus 0
     false false false [] false false true false false
 
 open Core
-(*
-open Pp_prelude
-open Pp_core
 
-let count_lines str =
-  let n = ref 0 in String.iter (fun c -> if c = '\n' then n := !n+1) str; !n
-
-let rec str_of_expr (rs, ss) sl expr =
-  let basic s =
-    let s = Pp_utils.to_plain_string d in
-    let n = count_lines s in
-    ((sl, sl+n)::rs, ss^s)
-  in
-  (*let rec pp is_semi prec e = *)
-    (*
-    let prec' = precedence_expr e in
-    let parens s = "(" ^ s ^ ")" in
-    let pp_ z = pp true prec' z in (* TODO: this is sad *)
-    let pp  z = pp false prec' z in
-    begin
-      (* Here we check whether parentheses are needed *)
-      if compare_precedence prec' prec then
-        (* right associativity of ; *)
-        match (is_semi, e) with
-          | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
-              parens
-          | _ ->
-              fun z -> z
-      else
-        parens
-    end
-       *)
-    begin match expr with
-      | Epure pe ->
-        pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
-        |> basic
-      | Ememop (memop, pes) ->
-        pp_keyword "memop" ^^ P.parens
-          (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
-        |> basic
-      | Eaction (Paction (p, (Action (_, bs, act)))) ->
-        pp_polarity p (pp_action act)
-        |> basic
-        (*
-      | Ecase (pe, pat_es) ->
-          pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
-          P.nest 2 (
-            P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
-              P.prefix 4 1
-                (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                (pp e)
-            ) pat_es 
-          ) ^^ P.break 1 ^^ pp_keyword "end"
-      | Elet (pat, pe1, e2) ->
-          P.group (
-            P.prefix 0 1
-              (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ pp_pexpr pe1 ^^^ pp_control "in")
-              (pp e2)
-         )
-           *)
-      | Eif (pe1, e2, e3) ->
-        let (rs1, pe1_str) = basic (pp_pexpr pe1) in
-        let (rs2, e2_str) = str_of_expr e2 in
-        let (rs3, e3_str) = str_of_expr e3 in
-        let if_str = Pp_util.to_plain_string (
-          pp_control "if" ^^^ !^pe1_str ^^^ pp_control "then" ^^
-          P.nest 2 (P.break 1 ^^ !^e2_str) ^^ P.break 1 ^^
-          pp_control "else" ^^ P.nest 2 (P.break 1 ^^ !^e3_str)
-          )
-        in (rs1@rs2@rs3, if_str)
-            (*
-      | Eskip ->
-          pp_keyword "skip"
-      | Eproc (_, nm, pes) ->
-          pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
-      | Eccall (_, pe, pes) ->
-          pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
-      | Eunseq [] ->
-          !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
-      | Eunseq [e] ->
-          !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
-      | Eunseq es ->
-          pp_control "unseq" ^^ P.parens (comma_list pp es)
-      | Ewseq (pat, e1, e2) ->
-          P.group (
-            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^
-            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
-          ) ^^
-          P.break 1 ^^ (pp e2)
-      | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
-          (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
-      | Esseq (pat, e1, e2) ->
-          P.group (
-            pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^
-            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
-          ) ^^
-          P.break 1 ^^ (pp e2)
-      | Easeq (None, act1, pact2) ->
-          pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
-          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
-      | Easeq (Some (sym, _), act1, pact2) ->
-          pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
-          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
-      | Eindet (i, e) ->
-          pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
-      | Esave ((sym, bTy), sym_bTy_pes, e) ->
-          pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
-          P.parens (comma_list (fun (sym, (bTy, pe)) ->
-            pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
-          ) sym_bTy_pes) ^^^
-          pp_control "in" ^^^
-          P.nest 2 (P.break 1 ^^ pp e)
-      | Erun (_, sym, pes) ->
-          pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
-      | Epar es ->
-          pp_keyword "par" ^^ P.parens (comma_list pp es)
-      | Ewait tid ->
-          pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-      | Eloc _ ->
-          assert false
-      | End es ->
-          pp_keyword "nd" ^^ P.parens (comma_list pp es)
-      | Ebound (i, e) ->
-          pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
-          P.parens (pp e)
-*)
-    end
-    (*in pp false None expr*)
-*)
 let rec print_expr e =
   match e with
   | Esave (_, _, e) -> print_expr e
@@ -464,18 +336,9 @@ let print_core core =
     | _ -> ()
   end core.Core.funs ()
 
-
 let _ =
   List.rev_append libc [libcore; impl; buffile]
   |> mapM download
-
-(*
-let _ =
-  Dom_html.addEventListener
-    (Dom_html.getElementById "run_button")
-    Dom_html.Event.click (Dom.handler (fun _ -> run () |> print_core ; Js._true))
-    Js._true
-  *)
 
 let string_of_core core=
   let buf = Buffer.create 4096 in
