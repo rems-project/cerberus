@@ -98,6 +98,10 @@ fun is_representable (n: integer, ty: ctype): boolean :=
   Ivmin(ty) <= n /\ n <= Ivmax(ty)
 
 
+fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
+  Ivmin(ty2) <= Ivmin(ty1) /\ Ivmax(ty1) <= Ivmax(ty2)
+
+
 -- STD §6.5#5
 fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
   if is_representable(n, ty) then

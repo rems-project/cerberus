@@ -37,7 +37,7 @@ let print_success msg =
 
 let print_debug level doms msg =
   if !debug_level >= level then
-    prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg))
+    prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg ()))
 
 
 
@@ -56,11 +56,11 @@ let location_to_string loc =
 
 
 let print_debug_located level doms loc msg =
-  print_debug level doms ("(" ^ location_to_string loc ^ ") - " ^ msg)
+  print_debug level doms (fun () -> "(" ^ location_to_string loc ^ ") - " ^ msg ())
 
 let warn doms msg =
   if !debug_level > 0 then
-    prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg))
+    prerr_endline Colour.(ansi_format [Yellow] ("WARNING: " ^ msg ()))
 
 let print_debug2 msg k =
   if !debug_level > 0 then

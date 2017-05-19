@@ -1,0 +1,5 @@
+Defined {value: "Specified(0)", stdout: "*p++ ==> 10\n*p   ==> 20\n", blocked: "false"}
+CONSTRS ==> []
+Log[0]
+
+End[0]

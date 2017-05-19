@@ -60,3 +60,5 @@ parsers/cparser/Parser.ml
 parsers/cparser/Parser.mli
 parsers/cparser/pre_parser.ml
 parsers/cparser/pre_parser.mli
+
+tests/csmith/small_int_arith/*.c
