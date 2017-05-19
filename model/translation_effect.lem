@@ -139,10 +139,10 @@ let resolve_object_type sym = fun st ->
   end
 
 
-val elab_print_debugM: nat -> string -> elabM unit
-let elab_print_debugM n str =
+val elab_print_debugM: nat -> (unit -> string) -> elabM unit
+let elab_print_debugM n msg =
   fun st ->
-    let () = Debug.print_debug n [Debug.DB_elaboration] str in
+    let () = Debug.print_debug n [Debug.DB_elaboration] msg in
     ((), st)
 
 
