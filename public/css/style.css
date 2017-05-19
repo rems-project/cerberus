@@ -1,0 +1,138 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial,Helvetica,sans-serif;
+  font-size: 10pt;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+#container {
+  margin: 0;
+  padding: 0;
+  background-color: #FFFFFF;
+  height: 100%;
+  display: flex;
+  flex-direction:column;
+}
+
+#header {
+  font-size: 17px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+  line-height: 1.5;
+  padding: 4px 16px;
+  display: inline-block;
+}
+
+#title {
+  display: inline-block;
+  padding: 0px 4px;
+}
+
+.vertical-line {
+  border-left: 1px solid #f1f1f1;
+  padding: 0px 8px;
+}
+
+#toolbar {
+  display: inline-block;
+}
+
+#toolbar a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*********** Panes ************/
+
+#panes {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+.pane {
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  font-size: 0;
+}
+
+.tabadder {
+  font-size:11px !important;
+
+}
+
+.tablinks {
+  margin: 0;
+  background-color: #ccc;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablinks button  {
+  font-size:11px;
+  margin: 0;
+  background-color: #ccc;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablinks:hover, .tablinks:hover button {
+  background-color: #ddd;
+}
+
+.tablinks.active, .tablinks.active button {
+  background-color: #f1f1f1;
+}
+
+.tablinks .close {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg==);
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  cursor: pointer;
+  width: 8px;
+  height: 8px;
+  margin-left: 5px;
+}
+
+.tablinks .close:hover {
+  background-color: #ccc;
+}
+
+.tablinks button:focus {
+  outline: 0;
+}
+
+.pane-separator {
+  width: 3px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+
+.pane-separator:hover {
+  background-color: #ccc;
+}
+
+.pane-separator.resize {
+  background-color: #ccc;
+}
+
+.editor {
+  font-size:13px !important;
+}
+
+.pane .CodeMirror {
+  /* HACK: I don't know how to make codemirror fill the entire screen */
+  height: calc(100vh - 60px);
+  border: 1px solid #eee;
+}

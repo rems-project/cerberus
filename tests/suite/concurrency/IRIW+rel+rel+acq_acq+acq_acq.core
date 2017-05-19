@@ -1,0 +1,56 @@
+{- The reading threads do not have to see the writes to x and y in the
+same order. The first reading thread could for example read ax <- 1,
+ay <- 0 while the second reading thread reads by <- 1, bx <- 0. An
+exhaustive execution will therefore produce the values 0-15. -}
+
+{-
+fun main () : [integer] :=
+  x <- create(_Atomic(signed int));
+  y <- create(_Atomic(signed int));
+  store(_Atomic(signed int), x, 0);
+  store(_Atomic(signed int), y, 0);
+  (foo1, foo2, a, b) <- {{{
+      store(_Atomic(signed int), x, 1, release)
+  |||
+      store(_Atomic(signed int), y, 1, release)
+  |||
+      ax <- load(_Atomic(signed int), x, acquire);
+      ay <- load(_Atomic(signed int), y, acquire);
+      ax + (2 * ay)
+  |||
+      by <- load(_Atomic(signed int), y, acquire);
+      bx <- load(_Atomic(signed int), x, acquire);
+      by + (2 * bx)
+  }}};
+  kill(x);
+  kill(y);
+  ret a + (4 * b)
+-}
+proc main () : eff integer :=
+  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong _ = store("_Atomic(signed int)", x, 0) in
+  let strong _ = store("_Atomic(signed int)", y, 0) in
+  let strong (_, _, a, b) = par(
+      let strong _ = store("_Atomic(signed int)", x, 1, release) in
+      return(unit)
+      end
+  ,
+      let strong _ = store("_Atomic(signed int)", y, 1, release) in
+      return(unit)
+      end
+  ,
+      let strong ax = load("_Atomic(signed int)", x, acquire) in
+      let strong ay = load("_Atomic(signed int)", y, acquire) in
+      return(ax + (2 * ay))
+      end end
+  ,
+      let strong by = load("_Atomic(signed int)", y, acquire) in
+      let strong bx = load("_Atomic(signed int)", x, acquire) in
+      return(by + (2 * bx))
+      end end
+  ) in
+  let strong _ = kill(x) in
+  let strong _ = kill(y) in
+  return(a + (4 * b))
+  end end end end end end end
