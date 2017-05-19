@@ -1,4 +1,4 @@
-// Options:   --no-arrays --no-pointers --no-structs --no-unions --argc --no-bitfields --checksum --comma-operators --compound-assignment --concise --consts --divs --embedded-assigns --pre-incr-operator --pre-decr-operator --post-incr-operator --post-decr-operator --unary-plus-operator --jumps --longlong --int8 --uint8 --no-float --main --math64 --muls --safe-math --no-packed-struct --no-paranoid --no-volatiles --no-volatile-pointers --const-pointers --no-builtins --max-array-dim 1 --max-array-len-per-dim 4 --max-block-depth 1 --max-block-size 10 --max-expr-complexity 4 --max-funcs 10 --max-pointer-depth 2 --max-struct-fields 2 --max-union-fields 2 -o csmith_029.c
+// Options:   --no-argc --no-arrays --no-bitfields --checksum --concise --no-consts --no-float --no-inline-function --max-array-dim 3 --max-array-len-per-dim 10 --max-block-depth 5 --max-block-size 4 --max-expr-complexity 2 --max-funcs 1 --max-pointer-depth 2 --no-pointers --no-structs --no-unions --no-volatiles --no-builtins -o small_int_arith/csmith_029.c
 #include "csmith.h"
 
 
@@ -6,8 +6,8 @@ static long __undefined;
 
 
 
-static int32_t g_2 = 0L;
-static uint32_t g_5 = 0x6CCB0362L;
+static int32_t g_2 = 9L;
+static uint32_t g_5 = 0xB905D09EL;
 
 
 
@@ -18,9 +18,10 @@ static int32_t  func_1(void);
 
 static int32_t  func_1(void)
 { 
-    uint32_t l_3 = 0UL;
-    int32_t l_4 = 0x7B1891F7L;
-    g_5 |= (l_4 = (g_2 <= l_3));
+    for (g_2 = 4; (g_2 != (-4)); g_2 = safe_sub_func_uint8_t_u_u(g_2, 5))
+    { 
+        g_5 = (g_2 , g_2);
+    }
     return g_2;
 }
 
@@ -28,10 +29,9 @@ static int32_t  func_1(void)
 
 
 
-int main (int argc, char* argv[])
+int main (void)
 {
     int print_hash_value = 0;
-    if (argc == 2 && strcmp(argv[1], "1") == 0) print_hash_value = 1;
     platform_main_begin();
     crc32_gentab();
     func_1();

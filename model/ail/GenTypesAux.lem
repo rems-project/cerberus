@@ -387,7 +387,7 @@ let is_complete sigm gty =
              true
          | _ ->
              let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                 (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+                 ("GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
              false
        end
    | GenUnion sym ->

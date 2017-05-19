@@ -107,17 +107,6 @@ ocaml_native:
 
 #cmdliner,
 
-ocaml_profiling:
-	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
-	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
-	else \
-	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs landmarks.ppx,landmarks -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
-	  cp -L main_.native cerberus; \
-	fi
-
-
 ocaml_byte:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \

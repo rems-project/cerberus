@@ -1,8 +1,5 @@
-CC=clang
-CERB_CPP="cc -E -nostdinc -undef -D__cerb__ -I $CERB_PATH/include/c/libc -I $CERB_PATH/include/c/posix -DCSMITH_MINIMAL -I ../runtime"
-
 for file in csmith_???.c; do
-    rm -f a.out; $CC -DCSMITH_MINIMAL -I ../runtime $file 2> /dev/null; gtimeout 30s ./a.out > gcc.out;
+    rm -f a.out; gcc-5 -DCSMITH_MINIMAL -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime $file 2> /dev/null; gtimeout 30s ./a.out > gcc.out;
     ret=$?;
     echo $ret >> gcc.out;
     if [ $ret == 124 ]; then
@@ -11,7 +8,7 @@ for file in csmith_???.c; do
         continue
     fi;
     
-    gtimeout 30s cerberus --cpp="$CERB_CPP" --sequentialise --exec $file 2>&1 > cerb.out;
+    gtimeout 30s cerberus --sequentialise --exec $file 2>&1 > cerb.out;
     ret=$?
     echo $ret >> cerb.out
     if [ $ret == 124 ]; then

@@ -1,5 +1,0 @@
-Defined {value: "Specified(0)", stdout: "a >= b\na >= b\n", blocked: "false"}
-CONSTRS ==> []
-Log[0]
-
-End[0]

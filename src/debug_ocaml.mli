@@ -19,9 +19,9 @@ val debug_level: int ref
 val get_debug_level: unit -> int
 
 val print_success: string -> unit
-val print_debug: int -> domain list -> (unit -> string) -> unit
-val print_debug_located: int -> domain list -> Location_ocaml.t -> (unit -> string) -> unit
-val warn: domain list -> (unit -> string) -> unit
+val print_debug: int -> domain list -> string -> unit
+val print_debug_located: int -> domain list -> Location_ocaml.t -> string -> unit
+val warn: domain list -> string -> unit
 
 (* val print_deubg2: string -> 'a -> 'a *)
 

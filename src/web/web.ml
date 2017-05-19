@@ -84,14 +84,24 @@ let c_frontend f =
   |> pass_message "1. C Parsing completed!"
   |> pass_through_test
     (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit)
-  |> Exception.rbind (Cabs_to_ail.desugar !core_sym_counter "main")
+  |> Exception.rbind (fun z ->
+      let ret = Cabs_to_ail.desugar !core_sym_counter
+          begin
+            let (ailnames, std_lib_fun_map) = !!cerb_conf.core_stdlib in
+            (ailnames, std_lib_fun_map,
+             match !!cerb_conf.core_impl_opt with
+             | Some x -> x
+             | None -> assert false
+            )
+          end "main" z
+      in ret)
   |> set_progress 11
   |> pass_message "2. Cabs -> Ail completed!"
   |> Exception.rbind (fun (counter, z) ->
       Exception.except_bind
         (ErrorMonad.to_exception
            (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
-           (GenTyping.annotate_program Annotation.concrete_annotation z))
+           (GenTyping.annotate_program z))
         (fun z -> Exception.except_return (counter, z)))
   |> pass_through_test
     (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program_with_annot -| snd)
@@ -280,25 +290,202 @@ let libc = List.map (fun s -> "include/c/libc/" ^ s) [
   "complex.h"
 ]
 
+let location_to_string loc =
+  let string_of_pos pos =
+    Printf.sprintf "%s:%d:%d" pos.Lexing.pos_fname pos.Lexing.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+  match loc with
+    | Location_ocaml.Loc_unknown ->
+        "unknown location"
+    | Location_ocaml.Loc_point pos ->
+        string_of_pos pos ^ ":"
+    | Location_ocaml.Loc_region (pos1, pos2, _) ->
+        (* TODO *)
+        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
+
 let run () = cerberus 0
     "cc -E -nostdinc -undef -I /include/c/libc -I /include/c/posix"
     "gcc_4.9.0_x86_64-apple-darwin10.8.0"
     true Random [Core] (Some buffile) false false
     false false false [] false false true false false
 
+open Core
+(*
+open Pp_prelude
+open Pp_core
+
+let count_lines str =
+  let n = ref 0 in String.iter (fun c -> if c = '\n' then n := !n+1) str; !n
+
+let rec str_of_expr (rs, ss) sl expr =
+  let basic s =
+    let s = Pp_utils.to_plain_string d in
+    let n = count_lines s in
+    ((sl, sl+n)::rs, ss^s)
+  in
+  (*let rec pp is_semi prec e = *)
+    (*
+    let prec' = precedence_expr e in
+    let parens s = "(" ^ s ^ ")" in
+    let pp_ z = pp true prec' z in (* TODO: this is sad *)
+    let pp  z = pp false prec' z in
+    begin
+      (* Here we check whether parentheses are needed *)
+      if compare_precedence prec' prec then
+        (* right associativity of ; *)
+        match (is_semi, e) with
+          | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
+              parens
+          | _ ->
+              fun z -> z
+      else
+        parens
+    end
+       *)
+    begin match expr with
+      | Epure pe ->
+        pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
+        |> basic
+      | Ememop (memop, pes) ->
+        pp_keyword "memop" ^^ P.parens
+          (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
+        |> basic
+      | Eaction (Paction (p, (Action (_, bs, act)))) ->
+        pp_polarity p (pp_action act)
+        |> basic
+        (*
+      | Ecase (pe, pat_es) ->
+          pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
+          P.nest 2 (
+            P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
+              P.prefix 4 1
+                (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
+                (pp e)
+            ) pat_es 
+          ) ^^ P.break 1 ^^ pp_keyword "end"
+      | Elet (pat, pe1, e2) ->
+          P.group (
+            P.prefix 0 1
+              (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ pp_pexpr pe1 ^^^ pp_control "in")
+              (pp e2)
+         )
+           *)
+      | Eif (pe1, e2, e3) ->
+        let (rs1, pe1_str) = basic (pp_pexpr pe1) in
+        let (rs2, e2_str) = str_of_expr e2 in
+        let (rs3, e3_str) = str_of_expr e3 in
+        let if_str = Pp_util.to_plain_string (
+          pp_control "if" ^^^ !^pe1_str ^^^ pp_control "then" ^^
+          P.nest 2 (P.break 1 ^^ !^e2_str) ^^ P.break 1 ^^
+          pp_control "else" ^^ P.nest 2 (P.break 1 ^^ !^e3_str)
+          )
+        in (rs1@rs2@rs3, if_str)
+            (*
+      | Eskip ->
+          pp_keyword "skip"
+      | Eproc (_, nm, pes) ->
+          pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
+      | Eccall (_, pe, pes) ->
+          pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
+      | Eunseq [] ->
+          !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
+      | Eunseq [e] ->
+          !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
+      | Eunseq es ->
+          pp_control "unseq" ^^ P.parens (comma_list pp es)
+      | Ewseq (pat, e1, e2) ->
+          P.group (
+            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^
+            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
+          ) ^^
+          P.break 1 ^^ (pp e2)
+      | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
+          (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
+      | Esseq (pat, e1, e2) ->
+          P.group (
+            pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^
+            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
+          ) ^^
+          P.break 1 ^^ (pp e2)
+      | Easeq (None, act1, pact2) ->
+          pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
+          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
+      | Easeq (Some (sym, _), act1, pact2) ->
+          pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
+          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
+      | Eindet (i, e) ->
+          pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
+      | Esave ((sym, bTy), sym_bTy_pes, e) ->
+          pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+          P.parens (comma_list (fun (sym, (bTy, pe)) ->
+            pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
+          ) sym_bTy_pes) ^^^
+          pp_control "in" ^^^
+          P.nest 2 (P.break 1 ^^ pp e)
+      | Erun (_, sym, pes) ->
+          pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
+      | Epar es ->
+          pp_keyword "par" ^^ P.parens (comma_list pp es)
+      | Ewait tid ->
+          pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+      | Eloc _ ->
+          assert false
+      | End es ->
+          pp_keyword "nd" ^^ P.parens (comma_list pp es)
+      | Ebound (i, e) ->
+          pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
+          P.parens (pp e)
+*)
+    end
+    (*in pp false None expr*)
+*)
+let rec print_expr e =
+  match e with
+  | Esave (_, _, e) -> print_expr e
+  | Eif (pe1, e2, e3) -> print_expr e2; print_expr e3
+  | Ecase (pe, cases) -> List.map snd cases
+                         |> List.fold_left (fun _ -> print_expr) ()
+  | Esseq (_, e1, e2) -> print_expr e1; print_expr e2
+  | End es -> List.fold_left (fun _ -> print_expr) () es
+  | Ewseq (_, e1, e2)  -> print_expr e1; print_expr e2
+  | Eunseq es -> List.fold_left (fun _ -> print_expr) () es
+  | Eaction (Paction (_, Action (loc, _, _))) ->
+      prerr_endline "Action:";
+      prerr_endline (location_to_string loc)
+  | Eloc (loc, e) ->
+    prerr_endline (location_to_string loc); print_expr e
+  | _ -> ()
+
+let print_core core =
+  prerr_endline "Printing Core";
+  Pmap.fold begin fun s decl () ->
+    match decl with
+    | Core.Fun (bty, args, pe) -> ()
+    | Core.Proc (bty, args, e) -> print_expr e
+    | _ -> ()
+  end core.Core.funs ()
+
+
 let _ =
   List.rev_append libc [libcore; impl; buffile]
   |> mapM download
 
+(*
 let _ =
   Dom_html.addEventListener
     (Dom_html.getElementById "run_button")
-    Dom_html.Event.click (Dom.handler (fun _ -> run () |> ignore; Js._true))
+    Dom_html.Event.click (Dom.handler (fun _ -> run () |> print_core ; Js._true))
     Js._true
+  *)
+
+let string_of_core core=
+  let buf = Buffer.create 4096 in
+  PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file core);
+  Buffer.contents buf
 
 let _ =
   Js.export "cerberus"
   (object%js
+    method run = run () |> string_of_core
     method log cb = Sys_js.set_channel_flusher stderr cb
     method update c = Sys_js.update_file ~name:buffile ~content:c
     method buffer = Sys_js.file_content buffile

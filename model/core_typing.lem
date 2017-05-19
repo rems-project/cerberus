@@ -244,7 +244,7 @@ let rec typeof_object_value loc env oval =
        ) lvals' >>
        E.return (OTy_array oTy)
    | OVstruct tag_sym _ ->
-       let () = Debug.warn [Debug.DB_core_typing] (fun () -> "Core typing, OVstruct doesn't check the validity of the member") in
+       let () = Debug.warn [Debug.DB_core_typing] "Core typing, OVstruct doesn't check the validity of the member" in
        E.return (OTy_struct tag_sym)
 (*
        E.foldlM (fun ((found_ident, mval), (expected_ident, expected_ty)) () ->

@@ -364,63 +364,6 @@ let integer_range = function
 end
 
 
-let rec  tmp_sizeof ty =
-  match ty with
-    | Core_ctype.Void ->
-        error "Defacto_memory.tmp_sizeof, Void"
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
-        Just 1
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
-        Just 1
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
-        Just 1
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
-        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
-        Just (integerFromNat (n / 8))
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
-        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
-        Just (integerFromNat (n / 8))
-    (* TODO !!!!, fixing impl for testing purpose *)
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
-        Just 2
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
-        Just 2
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
-        Just 4
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
-        Just 4
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
-        Just 8
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
-        Just 8
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
-        Just 8
-    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
-        Just 8
-    | Core_ctype.Array _ _ Nothing ->
-        error "Defacto_memory.tmp_sizeof, Array Nothing"
-    | Core_ctype.Array _ ty (Just n) ->
-        match tmp_sizeof ty with
-          | Just sz ->
-              Just (sz * n)
-          | Nothing ->
-              Nothing
-        end
-    | Core_ctype.Function _ _ _ ->
-        error "Defacto_memory.tmp_sizeof, Function"
-    | Core_ctype.Pointer _ _ ->
-        Just 8
-    | Core_ctype.Atomic ty ->
-        tmp_sizeof ty
-    | Core_ctype.Struct _ ->
-        Nothing
-    | Core_ctype.Union  _ ->
-        Nothing
-    | Core_ctype.Builtin _ ->
-        Nothing
-  end
-
-
 val     simplify_integer_value_base: bool -> integer_value_base -> either integer integer_value_base
 let rec simplify_integer_value_base do_unfolding ival_ =
   match ival_ with
@@ -477,10 +420,41 @@ let rec simplify_integer_value_base do_unfolding ival_ =
     
     | IVsizeof ty ->
         if do_unfolding then
-          match tmp_sizeof ty with
-            | Just n ->
-                Left n
-            | Nothing ->
+          match ty with
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
+                Left 1
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
+                let () = Debug.warn [Debug.DB_memory] "assuming one byte = 8 bits" in
+                Left (integerFromNat (n / 8))
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
+                let () = Debug.warn [Debug.DB_memory] "assuming one byte = 8 bits" in
+                Left (integerFromNat (n / 8))
+            (* TODO !!!!, fixing impl for testing purpose *)
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
+                Left 2
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
+                Left 2
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
+                Left 4
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
+                Left 4
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
+                Left 8
+            | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
+                Left 8
+
+            | Core_ctype.Pointer _ _ ->
+                Left 8
+
+            | _ ->
                 Right ival_
           end
         else
@@ -608,8 +582,7 @@ let ifM constr (MemM m_then) (MemM m_else) =
                       (* TODO: check, but it doesn't seem useful to add the constraint *)
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                   | Nothing ->
-                      (* DEBUG *) let () = Debug.print_debug 1 [Debug.DB_memory]
-                        (fun () -> "Defacto_memory.ifM ==> DID A ND SPLIT") in
+                      (* DEBUG *) let () = Debug.print_debug 1 [Debug.DB_memory] "Defacto_memory.ifM ==> DID A ND SPLIT" in
                       (m_then <| mem_st with constraints= add_constraint (MC_eqIV ("ifM(then)[" ^ debug_str ^ "]") ival_1' ival_2') mem_st.constraints |>) ++
                       (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
                 end
@@ -664,10 +637,10 @@ let condM constr =
 
 (* ============================================================================================== *)
 
-val print_debugM: nat -> (unit -> string) -> impl_memM unit
-let print_debugM n msg =
+val print_debugM: nat -> string -> impl_memM unit
+let print_debugM n str =
   MemM (fun st ->
-    let _ = Debug.print_debug n [Debug.DB_memory] msg in
+    let _ = Debug.print_debug n [Debug.DB_memory] str in
     [Right ((), st)]
   )
 
@@ -812,7 +785,7 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
 
 (* Making an indirection here, so that future crazy optimisations won't be duplicated all over. *)
 let mk_op_ival_ iop ival_1 ival_2 =
-  either (fun z -> IVconcrete z) id (simplify_integer_value_base true (* TODO: false *) $ IVop iop [ival_1; ival_2])
+  either (fun z -> IVconcrete z) id (simplify_integer_value_base false $ IVop iop [ival_1; ival_2])
 
 
 
@@ -1038,7 +1011,7 @@ let impl_allocate_static tid pref align_ival ty =
   register_allocation alloc_id (Alloc_static ty addr, Nothing (* mkUnspec ty *)) >>
   
   let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
-  print_debugM 4 (fun () -> "Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  print_debugM 4 ("Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   
   return ptr_val
 
@@ -1058,7 +1031,7 @@ let impl_allocate_dynamic tid pref align_ival (IV _ size_ival) =
 
 
 let impl_kill (PV _ ptr_val_ sh as ptr_val) =
-  print_debugM 5 (fun () -> "KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  print_debugM 5 ("KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
         (* TODO: turn the live pointers to this alloc_id into unspec values *)
@@ -1255,7 +1228,7 @@ let apply_shift_path ty sh mval =
 
 val addToLog: allocation_id -> impl_memM unit
 let addToLog alloc_id =
-  print_debugM 1 (fun () -> "addToLog: " ^ show alloc_id) >>
+  print_debugM 1 ("addToLog: " ^ show alloc_id) >>
   get >>= fun mem_st ->
   if List.elem alloc_id mem_st.access_log then
     fail (MerrOther ("unsequenced race: " ^ show alloc_id))
@@ -1278,7 +1251,7 @@ let impl_sequencePoint =
 
 
 let impl_load ty (PV _ ptr_val_ sh as ptr_val) : impl_memM (impl_footprint * impl_mem_value) =
-  print_debugM 5 (fun () -> "LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  print_debugM 5 ("LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just alloc_id ->
 (*        addToLog alloc_id >> *)
@@ -1288,7 +1261,7 @@ let impl_load ty (PV _ ptr_val_ sh as ptr_val) : impl_memM (impl_footprint * imp
         else match Map.lookup alloc_id mem_st.allocations with
           | Just (_, Just mval) ->
               let mval' = apply_shift_path ty sh mval in
-              print_debugM 5 (fun () -> "==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
+              print_debugM 5 ("==> found value: " ^ stringFromMem_value mval') >> (* DEBUG *)
               return (alloc_id, mval')
           | Just (_, Nothing) ->
 (*              fail (MerrUnitialised (stringFromPointer_value ptr_val)) *)
@@ -1368,7 +1341,7 @@ let internal_shift_ptrval ptr_val spe : impl_pointer_value =
 
 
 let impl_array_shift_ptrval ptr_val ty (IV _ ival_) =
-  let () = Debug.print_debug 5 [Debug.DB_memory] (fun () -> "Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
+  let () = Debug.print_debug 5 [Debug.DB_memory] ("Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
   internal_shift_ptrval ptr_val (SPE_array ty ival_)
 
 let impl_member_shift_ptrval ptr_val tag_sym memb_ident =
@@ -1628,7 +1601,7 @@ let rec integerTypes_of_ival ival =
 
 (* WIP *)
 let impl_eq_ptrval ptr_val1 ptr_val2 =
-  print_debugM 6 (fun () -> "Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
+  print_debugM 6 ("Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
                   stringFromPointer_value ptr_val2) >>
   match (ptr_val1, ptr_val2) with
     | (PV prov1 ptr_val1_ sh1, PV prov2 ptr_val2_ sh2) ->
@@ -1952,10 +1925,10 @@ let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
           Nothing
     
     | (IVmin _, IVsizeof _) ->
-        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+        let () = Debug.warn [Debug.DB_memory] "assuming that no integer type has a strictly positive minimal value" in
         Just true
     | (IVmin _, IValignof _) ->
-        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+        let () = Debug.warn [Debug.DB_memory] "assuming that no integer type has a strictly positive minimal value" in
         Just true
     
     | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
@@ -2087,10 +2060,10 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               else
                 Nothing
           | (IVmin _, IVsizeof _) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+              let () = Debug.warn [Debug.DB_memory] "assuming that no integer type has a strictly positive minimal value" in
               Just true
           | (IVmin _, IValignof _) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+              let () = Debug.warn [Debug.DB_memory] "assuming that no integer type has a strictly positive minimal value" in
               Just true
 
           
@@ -2105,13 +2078,13 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                   Nothing
           
           | (IVmin (AilTypes.Size_t), IVoffsetof tag_sym membr_ident) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
+              let () = Debug.warn [Debug.DB_memory] ("we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
               (* TODO: check that *)
               Just true
           | (IVoffsetof tag_sym membr_ident, IVmax (AilTypes.Size_t)) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
+              let () = Debug.warn [Debug.DB_memory] ("we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
               Just true
@@ -2139,10 +2112,10 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               Just true
 
           | (IVmin (AilTypes.Signed AilTypes.Int_), IVbyteof _ _) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
+              let () = Debug.warn [Debug.DB_memory] "TODO: check + document" in
               Just true
           | (IVbyteof _ _, IVmax (AilTypes.Signed AilTypes.Int_)) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
+              let () = Debug.warn [Debug.DB_memory] "TODO: check + document" in
               Just true
           
           (* sizeof and alignof are always in range of size_t *)
@@ -2161,7 +2134,7 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
           
           | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax AilTypes.Size_t) ->
               if tag_sym1 = tag_sym2 then
-                let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that the delta between members '" ^ show membr_ident1 ^
+                let () = Debug.warn [Debug.DB_memory] ("we are assuming that the delta between members '" ^ show membr_ident1 ^
                                "' and '" ^ show membr_ident2 ^ "' of struct/union type '" ^ show tag_sym1 ^
                                "' is representable in size_t") in
                 Just true
@@ -2174,7 +2147,7 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                 Nothing
           
           | (IVsizeof (Core_ctype.Pointer _ _), IVmax _) ->
-              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: document") in
+              let () = Debug.warn [Debug.DB_memory] "TODO: document" in
               Just true
 
 
@@ -2245,21 +2218,18 @@ let impl_ptrcast_ival int_ty ref_ty (IV prov ival) =
 
 (* Decide whether a given pointer value can be use to perform a store *)
 val can_store: impl_pointer_value -> impl_memM (maybe allocation_id)
-let can_store (PV prov ptr_val_ sh as ptr_val) =
+let can_store (PV prov ptr_val_ sh) =
   match ptr_val_ with
     (* null and function pointers obviously can't be used for stores. *)
     | PVnull _     -> return Nothing
     | PVfunction _ -> return Nothing
     
     (* by WF-invariants, we have a pointer to an object *)
-    | _ ->
+    | ptr_val ->
         explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
           | Just alloc_id ->
               is_dead alloc_id >>= function
                 | true ->
-                    let () = Debug.print_debug 5 [Debug.DB_memory] (fun () ->
-                      "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptr_val
-                    ) in
                     (* can't store with a pointer to an object whose lifetime ended. *)
                     return Nothing
                 | false ->
@@ -2319,7 +2289,7 @@ let can_store (PV prov ptr_val_ sh as ptr_val) =
 (* TODO: with temporary simplification *)
 val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
 let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () -> "ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
+  let () = Debug.print_debug 1 [Debug.DB_memory] ("ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
   let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
   match (current_mval, sh) with
     | (_, []) ->
@@ -2329,7 +2299,6 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
         match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
               if 0 < n || n < List.length mvals then
-                let () = Debug.print_debug 1 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVarray") in
                 MVarray (List.update mvals n (easy_update_mem_value_aux write_ty sh' write_mval (fromJust "Defacto_memory.easy_update_mem_value_aux" $ List.index mvals n)))
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
@@ -2342,7 +2311,6 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
         if tag_sym <> tag_sym_ then
           error "WIP[easy_update_mem_value_aux]: TODO error message ===> struct value accessed with incompatible SPE"
         else
-          let () = Debug.print_debug 1 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVstruct") in
           MVstruct tag_sym (assoc_adjust (easy_update_mem_value_aux write_ty sh' write_mval) memb_ident xs)
     | _ ->
         if is_strong then
@@ -2374,18 +2342,15 @@ declare hol target_rep function easy_update_mem_value_aux =
 
 val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_mem_value
 let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
-  (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
-  let ret = easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval in
-  (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "DONE WITH easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
-  ret
-
+  (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] ("easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval) in
+  easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval
 
 
 
 (* update the memory state with a write event for a given allocation id *)
 val register_write_event: allocation_id -> write_event -> impl_memM unit
 let register_write_event alloc_id (WriteEvent _ _ mval as w) =
-  (*DEBUG*)print_debugM 5 (fun () -> "REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
+  (*DEBUG*)print_debugM 5 ("REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
   get >>= fun st ->
   put <| st with allocations=
     match Map.lookup alloc_id st.allocations with
@@ -2408,21 +2373,20 @@ let register_write_event alloc_id (WriteEvent _ _ mval as w) =
       | Nothing ->
           error "Mem.register_write_event, Nothing"
     end
-  |> >>
- print_debugM 5 (fun () -> "EXITING register_write_event")
+  |>
 
 
 
 
 (* val store: ctype -> impl_pointer_value -> mem_value -> memM unit *)
 let impl_store lvalue_ty ptr_val mval =
-  (*DEBUG*)print_debugM 5 (fun () -> "STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
+  (*DEBUG*)print_debugM 5 ("STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
   (*DEBUG*)                stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval) >>
   can_store ptr_val >>= function
     | Just alloc_id ->
 (*        addToLog alloc_id >> *)
         register_write_event alloc_id (WriteEvent lvalue_ty ptr_val mval) >>
-        (*DEBUG*)print_debugM 5 (fun () -> "STORE DONE") >>
+        (*DEBUG*)print_debugM 5 "STORE DONE" >>
         return alloc_id
     | Nothing ->
         fail (MerrWIP $ "attempted to store with pointer: " ^ stringFromPointer_value ptr_val)

@@ -330,7 +330,7 @@ let is_complete sigm ty =
             true
         | _ ->
             let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
-                (fun () -> "is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
+                ("is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
             false
       end
   | Union sym ->
@@ -1257,7 +1257,7 @@ end
 
 val variably_modified: ctype -> bool
 let variably_modified _ =
-  let () = Debug.warn [] (fun () -> "AilTypesAux.variably_modified is BOGUS") in
+  let () = Debug.warn [] "AilTypesAux.variably_modified is BOGUS" in
   (* TODO *)
   false
 

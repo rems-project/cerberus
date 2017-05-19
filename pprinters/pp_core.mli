@@ -9,4 +9,5 @@ val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
 val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
 val pp_file: ('a, 'b) generic_file -> PPrint.document
 
+val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
 val pp_stack: 'a stack -> PPrint.document

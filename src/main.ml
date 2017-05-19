@@ -21,7 +21,7 @@ let load_stdlib () =
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
-    Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `" ^ filepath ^ "'.");
+    Debug_ocaml.print_debug 5 [] ("reading Core standard library from `" ^ filepath ^ "'.");
     (* An preliminary instance of the Core parser *)
     let module Core_std_parser_base = struct
       include Core_parser.Make (struct
@@ -78,7 +78,7 @@ let set_progress n =
 let c_frontend f =
     let c_preprocessing (f: Input.t) =
       let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
-      Debug_ocaml.print_debug 5 [] (fun () -> "C prepocessor outputed in: `" ^ temp_name ^ "`");
+      Debug_ocaml.print_debug 5 [] ("C prepocessor outputed in: `" ^ temp_name ^ "`");
       if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " 1> " ^ temp_name (*^ " 2> /dev/null"*)) <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
@@ -196,16 +196,16 @@ let backend sym_supply core_file args =
               try
                 int_of_string (String_mem.string_pretty_of_integer_value ival)
               with | _ ->
-                Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                Debug_ocaml.warn [] "Return value was not a (simple) specified integer";
                 0
             end
           | Exception.Result (pe :: _) ->
-              Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_pexpr pe); 0
+              Debug_ocaml.warn [] ("HELLO> " ^ String_core.string_of_pexpr pe); 0
           | Exception.Result [] ->
-              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
+              Debug_ocaml.warn [] "BACKEND FOUND EMPTY RESULT";
               0
           | Exception.Exception _ ->
-              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
+              Debug_ocaml.warn [] "BACKEND FOUND EXCEPTION";
               0
 (*
           | _ ->
@@ -229,10 +229,10 @@ let pipeline filename args =
   let f = Input.file filename in
   begin
     if Filename.check_suffix filename ".c" then (
-      Debug_ocaml.print_debug 2 [] (fun () -> "Using the C frontend");
+      Debug_ocaml.print_debug 2 [] "Using the C frontend";
       c_frontend f
      ) else if Filename.check_suffix filename ".core" then (
-       Debug_ocaml.print_debug 2 [] (fun () -> "Using the Core frontend");
+       Debug_ocaml.print_debug 2 [] "Using the Core frontend";
        core_frontend f
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
@@ -261,7 +261,7 @@ let pipeline filename args =
   (* TODO: do the sequentialised properly *)
   if List.mem Core !!cerb_conf.pps then (
     if !!cerb_conf.sequentialise then begin
-      Debug_ocaml.warn [] (fun () -> "The normal backend is not actually using the sequentialised Core");
+      Debug_ocaml.warn [] "The normal backend is not actually using the sequentialised Core";
       match (Core_typing.typecheck_program rewritten_core_file) with
         | Exception.Result z ->
             run_pp $ Pp_core.pp_file (Core_sequentialise.sequentialise_file z);

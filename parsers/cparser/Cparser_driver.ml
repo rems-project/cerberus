@@ -131,12 +131,12 @@ let parse input =
 *)
       modify_tokens ();
 (* *)
-      Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser] (fun () -> "==== AFTER LEXER HACK ====");
+      Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser] "==== AFTER LEXER HACK ====";
       List.iter (fun (tok, loc) ->
         Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser]
-          (fun () -> Printf.sprintf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc))
+          (Printf.sprintf "%s\t\tLoc=%s\n" (string_of_token tok) (string_of_loc loc))
       ) !saved_tokens;
-      Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser] (fun () -> "===========================");
+      Debug_ocaml.print_debug 8 [Debug_ocaml.DB_cparser] "===========================";
 (* *)
       Exception.except_return (Parser.translation_unit_file hack (Lexing.from_string ""))
     with
