@@ -53,7 +53,7 @@ let precedence = function
   | PEis_signed _
   | PEis_unsigned _ -> None
 
-let rec precedence_expr = function
+let precedence_expr = function
  | Epure _
  | Ememop _
  | Eaction _
@@ -417,24 +417,23 @@ let pp_pexpr pe =
   in pp None pe
 
 
-
 let rec pp_expr expr =
   let rec pp is_semi prec e =
-    let e =
+    let stripped_e =
       let rec strip_locs = function
-        | Eloc (_, e) ->
-            strip_locs e
-        | e ->
-            e in
+        | Eloc (_, e') ->
+            strip_locs e'
+        | z ->
+            z in
       strip_locs e in
-    let prec' = precedence_expr e in
+    let prec' = precedence_expr stripped_e in
     let pp_ z = pp true prec' z in (* TODO: this is sad *)
     let pp  z = pp false prec' z in
     begin
       (* Here we check whether parentheses are needed *)
       if compare_precedence prec' prec then
         (* right associativity of ; *)
-        match (is_semi, e) with
+        match (is_semi, stripped_e) with
           | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
               P.parens
           | _ ->
@@ -442,7 +441,7 @@ let rec pp_expr expr =
       else
         P.parens
     end
-    begin match e with
+    begin match stripped_e with
       | Epure pe ->
           pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
       | Ememop (memop, pes) ->
@@ -483,7 +482,8 @@ let rec pp_expr expr =
       | Ewseq (pat, e1, e2) ->
           P.group (
             pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^
-            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
+            let doc_e1 = pp e1 in
+            P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
           ) ^^
           P.break 1 ^^ (pp e2)
       | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
@@ -491,7 +491,8 @@ let rec pp_expr expr =
       | Esseq (pat, e1, e2) ->
           P.group (
             pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^
-            P.ifflat (pp e1) (P.nest 2 (P.break 1 ^^ pp e1)) ^^^ pp_control "in"
+            let doc_e1 = pp e1 in
+            P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
           ) ^^
           P.break 1 ^^ (pp e2)
       | Easeq (None, act1, pact2) ->
