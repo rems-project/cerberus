@@ -163,6 +163,7 @@ function run(evt) {
   var result = cerberus.run(source);
   $('body').removeClass('wait');
   panes[1].pane.values[panes[1].pane.tab] = result.toString();
+  panes[1].pane.editor.setOption('mode', 'text/x-core');
   panes[1].pane.refresh();
 }
 
