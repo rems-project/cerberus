@@ -69,7 +69,7 @@ let load_impl core_parse impl_name =
 (* use this when calling a pretty printer *)
 let run_pp =
   (* TODO(someday): dynamically get the width of the terminal *)
-  PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout
+  PPrint.ToChannel.pretty 1.0 80 Pervasives.stdout
 
 let set_progress n =
   Exception.fmap (fun v -> progress_sofar := n; v)
