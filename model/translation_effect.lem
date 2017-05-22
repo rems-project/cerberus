@@ -1,0 +1,159 @@
+(* Effects for Translation: state *)
+open import Pervasives Global Show Show_extra
+import Boot UniqueId Symbol Undefined Core_ctype AilTypes AilTypesAux
+
+import Core Core_aux
+module C    = Core
+module Caux = Core_aux
+
+include State
+
+
+type elab_state = <|
+  symbol_supply:   UniqueId.supply Symbol.sym; (* counter for Core's symbolic names (all of them) *)
+  
+  visible_objects_types: map Symbol.sym AilTypes.ctype;
+  visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
+                                              annotate Esave/Erun ctors) *)
+  
+  string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr);
+|>
+
+
+type elabM 'a = stateM 'a elab_state
+
+val elab_init: UniqueId.supply Symbol.sym -> elab_state
+let elab_init suppl = <|
+  symbol_supply=   suppl;
+  visible_objects_types= Map.empty;
+  visible_objects= [[]];
+  string_literals= [];
+|>
+
+
+(* returns a fresh Core symbolic name. *)
+val elab_fresh_symbol: elabM Symbol.sym
+let elab_fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
+  let (sym, suppl') = State.run Symbol.fresh suppl in
+  (sym, <| st with symbol_supply= suppl' |>)
+
+
+val wrapped_fresh_symbol: C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
+let wrapped_fresh_symbol bTy =
+  elab_fresh_symbol >>= fun sym ->
+  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym)
+
+
+(* TODO: remove this function and use wrapped_fresh_symbol instead *)
+val fresh_typed_symbol: bool -> AilTypes.ctype -> elabM (Symbol.sym * Core.core_base_type)
+let fresh_typed_symbol is_loaded ty =
+  let ctor x = if is_loaded then Core.BTy_loaded x else Core.BTy_object x in
+  elab_fresh_symbol >>= fun sym ->
+  match Core_aux.core_object_type_of_ctype (Core_aux.proj_ctype ty) with
+    | Just objTy ->
+        return (sym, ctor objTy)
+    | Nothing ->
+        error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype ty)
+  end
+
+
+(* returns a fresh Core symbolic name with a specified name for pretty printing. *)
+val fresh_named_symbol: string -> elabM Symbol.sym
+let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
+  let (sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> name ^ "_" ^ show x)) suppl in
+  (sym, <| st with symbol_supply= suppl' |>)
+
+
+(* register C objects from block scope. *)
+val push_block_objects: list (Symbol.sym * AilTypes.ctype) -> elabM unit
+let push_block_objects binds = fun st ->
+  ((), <| st with
+    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |>)
+
+
+(* forget C objects from the most recent block. *)
+val pop_block_objects: elabM unit
+let pop_block_objects = fun st ->
+  ((), <| st with visible_objects=
+      match st.visible_objects with
+        | _ :: xs -> xs
+        | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
+      end |>)
+
+
+val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> elabM 'a -> elabM 'a
+let with_block_objects binds ma = fun st ->
+  let st' = <| st with
+    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |> in
+  let (a, st'') = ma st' in
+  (a, <| st'' with visible_objects=
+      match st''.visible_objects with
+        | _ :: xs -> xs
+        | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
+      end |>)
+
+
+(* TODO: UNUSED
+val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> t 'a -> t 'a
+let with_block_objects binds m =
+  push_block_objects binds >>
+  m                        >>= fun ret ->
+  pop_block_objects        >>
+  return ret
+*)
+
+
+(* returns the list of all the C objects in scope. *)
+val get_visible_objects: elabM (list Symbol.sym)
+let get_visible_objects = fun st ->
+  (foldl (++) [] st.visible_objects, st)
+
+
+val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> C.pexpr -> elabM unit
+let register_string_literal loc sym ty pe = fun st ->
+  ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
+
+
+val get_string_literals: elabM (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr))
+let get_string_literals = fun st ->
+  (st.string_literals, st)
+
+
+val resolve_object_type: Symbol.sym -> elabM AilTypes.ctype
+let resolve_object_type sym = fun st ->
+  match Map.lookup sym st.visible_objects_types with
+    | Just ty ->
+        (ty, st)
+    | Nothing ->
+        let sym_str = match sym with
+          | Symbol.Symbol n Nothing ->
+              "sym_" ^ show n
+          | Symbol.Symbol n (Just str) ->
+              str ^ "{" ^ show n ^ "}"
+        end in
+        error ("Translation_effect.resolve_object_type ===> " ^ sym_str)
+  end
+
+
+val elab_print_debugM: nat -> (unit -> string) -> elabM unit
+let elab_print_debugM n msg =
+  fun st ->
+    let () = Debug.print_debug n [Debug.DB_elaboration] msg in
+    ((), st)
+
+
+val with_symbol_supply: forall 'a. (UniqueId.supply Symbol.sym -> UniqueId.supply Symbol.sym * 'a) -> elabM 'a
+let with_symbol_supply f =
+  fun st ->
+    let (suppl', z) = f st.symbol_supply in
+    (z, <| st with symbol_supply= suppl' |>)
+
+
+(* HACK: this is a hack to prevent Lem from generating OCaml code with random renamings *)
+let inline init = elab_init
+let inline fresh_symbol = elab_fresh_symbol
+let inline print_debugM = elab_print_debugM

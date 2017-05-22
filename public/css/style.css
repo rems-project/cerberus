@@ -1,0 +1,175 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial,Helvetica,sans-serif;
+  font-size: 10pt;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.wait, .wait * { cursor: wait !important; }
+
+#container {
+  margin: 0;
+  padding: 0;
+  background-color: #FFFFFF;
+  height: 100%;
+  display: flex;
+  flex-direction:column;
+}
+
+#header {
+  font-size: 17px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+  line-height: 1.5;
+  /*padding: 4px 16px;*/
+  display: inline-block;
+}
+
+#title {
+  display: inline-block;
+  margin: 4px 16px;
+}
+
+.vertical-line {
+  border-left: 1px solid #f1f1f1;
+  padding: 0px 8px;
+}
+
+#toolbar {
+  font-size: 0;
+  display: inline-block;
+  border-left: 1px solid #f1f1f1;
+  padding-left: 10px;
+  height: 100%;
+}
+
+#toolbar div {
+  font-size: 15px;
+  display: inline-block;
+  margin-left: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+#toolbar div:hover {
+  background-color: #7f7f7f;
+}
+
+#toolbar a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*********** Panes ************/
+
+#panes {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+.pane {
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  font-size: 0;
+  min-width: 260px;
+}
+
+.tabadder {
+  font-size:11px !important;
+
+}
+
+.tablinks {
+  margin: 0;
+  background-color: #ccc;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablinks button  {
+  font-size:11px;
+  margin: 0;
+  background-color: #ccc;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablinks:hover, .tablinks:hover button {
+  background-color: #ddd;
+}
+
+.tablinks.active {
+  box-shadow: 2px -1px 2px #888888;
+  z-index=2;
+}
+
+.tablinks.active, .tablinks.active button {
+  background-color: #f1f1f1;
+}
+
+.tablinks .close {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg==);
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  cursor: pointer;
+  width: 8px;
+  height: 8px;
+  margin-left: 5px;
+}
+
+.tablinks .close:hover {
+  background-color: #ccc;
+}
+
+.tablinks.run {
+  background:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAACXBIWXMAAAsTAAALEwEAmpwYAAABWWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgpMwidZAAACXklEQVQ4Ea2UP2/TQBjG785urEBgi0S3BFIvAbGHVsqElI/AhsQEnyJ8AjYmJD4DUwaWSAjvRc2QpJAyZ2xCGte+l+dxbNcmKQgppzg++573d++9f6z7/b4ZjUZa7WG0221xCZvP53sBgqXMvxyrVqsONC6vdP5XEwq3Rr1el8Vi4a5Wq3gwGKyLgm63m4BrtVq062RbwAyWgrTf9E+sjp4QqsU5Gw6HXzCNer2eB+0WtAQswnzff2rD8L2V645WmxCLRKrVaASmUnmDDU93QUsx5DHpWQJbh1+NcTpKVIRLWWtjeBbyXbwOA2qopQ29z0YJyJhhQdMzbcxdQBTS9gm8vgFJa12xsV04jnOHGmpTm4x3k2VmEPGJjppHJ9B1RGQNCOKmL88vfrxVSp6Ltd+NY2qARtRQS5ti9nMPsVMSKNHxY3iCUwp+wGg54PbT2ezz+c+LlrXyDiF1E42O21zLbDnPgXzYOUTyokcnPMAevG4dORBuJzqWBo4LJ+DmBnVF61az+Wq9/DV2jH6hkahEI86Ia5kt5zmQwWXRTmdT1JkEOJKXJEWZw0eNhx+NNh+gv493l4gjMisBtbQpJiYHkp4GV1hnSMASELyVntHqJUAhHq6RqHs2jpeO573mYjEheL7xkA9sJxbrZDI5NV7lmZU44HsOlgxuByjHgGvj8fgbtbRJBOlfqSjZm2wnCtkJ0Byj9Y7z1lPu2SYkcDuF/dnPJSA3KUIZm7R32b/J+O+PA63SXdk1ip5kdcZscpP0ysuJumxseZgtZHcaF+bZ9Na7y882v7T7GGT9BmanVjI9KgT5AAAAAElFTkSuQmCC');
+    background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  margin-top: 3px;
+  float: right;
+}
+
+.tablinks button:focus {
+  outline: 0;
+}
+
+.pane-separator {
+  width: 3px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+
+.pane-separator:hover {
+  background-color: #ccc;
+}
+
+.pane-separator.resize {
+  background-color: #ccc;
+}
+
+.editor {
+  font-size:13px !important;
+}
+
+.pane .CodeMirror {
+  /* HACK: I don't know how to make codemirror fill the entire screen */
+  height: calc(100vh - 60px);
+  border: 1px solid #eee;
+}

@@ -1,0 +1,93 @@
+import Symbol
+import AilSyntax AilTypes GenTypes
+import Core Core_ctype
+import Cmm_op Symbolic (* DEBUG *)
+
+val stringFromSymbol_prefix: Symbol.prefix -> string
+
+declare ocaml target_rep function stringFromSymbol_prefix = `String_symbol.string_of_prefix`
+declare hol   target_rep function stringFromSymbol_prefix = `pp_core$pp_prefix`
+
+
+val stringFromCabs_type_specifier: Cabs.cabs_type_specifier -> string
+declare ocaml target_rep function stringFromCabs_type_specifier = `String_cabs.string_of_cabs_type_specifier`
+
+val stringFromCabs_pointer_declarator: Cabs.pointer_declarator -> string
+declare ocaml target_rep function stringFromCabs_pointer_declarator = `String_cabs.string_of_pointer_declarator`
+
+val stringFromCabs_declarator: Cabs.declarator -> string
+declare ocaml target_rep function stringFromCabs_declarator = `String_cabs.string_of_declarator`
+
+
+
+
+
+val stringFromAil_qualifiers: AilTypes.qualifiers -> string
+val stringFromAil_ctype:      AilTypes.ctype -> string
+val stringFromAil_genType:    GenTypes.genType -> string
+val stringFromAil_expression: forall 'a. AilSyntax.expression 'a -> string
+
+
+declare ocaml target_rep function stringFromAil_qualifiers = `String_ail.string_of_qualifiers_human`
+declare ocaml target_rep function stringFromAil_ctype = `String_ail.string_of_ctype_raw`
+declare ocaml target_rep function stringFromAil_genType = `String_ail.string_of_genType`
+declare ocaml target_rep function stringFromAil_expression = `String_ail.string_of_expression`
+declare hol   target_rep function stringFromAil_qualifiers =
+                                  `pp_ail$pp_qualifiers`
+declare hol   target_rep function stringFromAil_ctype = `pp_ail$pp_ail_ctype`
+declare hol   target_rep function stringFromAil_expression =
+                                  `pp_ail$pp_expression`
+
+
+val stringFromCore_ctype:  Core_ctype.ctype -> string
+val stringFromCore_core_base_type:  Core.core_base_type -> string
+val stringFromCore_value:  Core.value -> string
+val stringFromCore_pexpr:  forall 'ty. Core.generic_pexpr 'ty Symbol.sym -> string
+val stringFromCore_expr:   forall 'a. Core.expr 'a -> string
+val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) -> string
+val stringFromCore_file:   forall 'a. Core.file 'a -> string
+val stringFromCore_stack:  forall 'a. Core.stack 'a -> string
+
+declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
+declare ocaml target_rep function stringFromCore_core_base_type  = `String_core.string_of_core_base_type`
+declare ocaml target_rep function stringFromCore_value  = `String_core.string_of_value`
+declare ocaml target_rep function stringFromCore_pexpr  = `String_core.string_of_pexpr`
+declare ocaml target_rep function stringFromCore_expr   = `String_core.string_of_expr`
+declare ocaml target_rep function stringFromCore_params = `String_core.string_of_params`
+declare ocaml target_rep function stringFromCore_file   = `String_core.string_of_file`
+declare ocaml target_rep function stringFromCore_stack  = `String_core.string_of_stack`
+
+declare hol target_rep function stringFromCore_ctype  = `pp_core$pp_core_ctype`
+declare hol target_rep function stringFromCore_core_base_type  = `pp_core.pp_core_base_type`
+declare hol target_rep function stringFromCore_value  = `pp_core$pp_core_value`
+declare hol target_rep function stringFromCore_pexpr  = `pp_core$pp_core_pexpr`
+declare hol target_rep function stringFromCore_expr   = `pp_core$pp_core_expr`
+declare hol target_rep function stringFromCore_params = `pp_core$pp_core_params`
+declare hol target_rep function stringFromCore_file   = `pp_core$pp_core_file`
+declare hol target_rep function stringFromCore_stack  = `pp_core$pp_core_stack`
+
+
+val stringFromMem_mem_value: Mem.mem_value -> string
+val pretty_stringFromMem_mem_value: Mem.mem_value -> string
+
+declare ocaml target_rep function stringFromMem_mem_value = `String_mem.string_of_mem_value`
+declare ocaml target_rep function pretty_stringFromMem_mem_value = `String_mem.string_pretty_of_mem_value_decimal`
+
+declare hol target_rep function stringFromMem_mem_value = `pp_mem$pp_mem_value`
+declare hol target_rep function pretty_stringFromMem_mem_value = `pp_mem$pp_mem_value`
+
+
+(* DEBUG *)
+val stringFromCmm_op_symState: Cmm_op.symState -> string
+val stringFromSymbolic: Symbolic.symbolic Core.object_value Mem.pointer_value -> string
+
+declare ocaml target_rep function stringFromCmm_op_symState = `Pp_cmm.string_of_exeState`
+declare ocaml target_rep function stringFromSymbolic = `Pp_cmm.pp_constraints_symbolic`
+
+declare hol target_rep function stringFromCmm_op_symState = `util$emptyString`
+
+
+(*
+val stringFromSequenceGraph: list (nat * nat) -> string
+declare ocaml target_rep function stringFromSequenceGraph = `Pp_cmm.stringFromSequenceGraph`
+*)
