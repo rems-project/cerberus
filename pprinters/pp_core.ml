@@ -236,7 +236,7 @@ let rec pp_object_value = function
   | OVpointer ptr_val ->
       Pp_mem.pp_pointer_value ptr_val
   | OVarray lvals ->
-      pp_const "Array" ^^ P.parens (comma_list pp_loaded_value lvals)
+      pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
   | OVstruct (sym, xs) ->
       !^ "TODO(Vstruct)" 
       (* pp_const "struct" ^^ P.parens *)
@@ -481,7 +481,7 @@ let rec pp_expr expr =
           pp_control "unseq" ^^ P.parens (comma_list pp es)
       | Ewseq (pat, e1, e2) ->
           P.group (
-            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^
+            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
             let doc_e1 = pp e1 in
             P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
           ) ^^
@@ -490,7 +490,7 @@ let rec pp_expr expr =
           (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
       | Esseq (pat, e1, e2) ->
           P.group (
-            pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^
+            pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
             let doc_e1 = pp e1 in
             P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
           ) ^^
