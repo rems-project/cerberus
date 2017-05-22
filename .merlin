@@ -1,6 +1,5 @@
 S ocaml_generated
 S src
-S src/web
 S src/codegen
 S pprinters
 S parsers/cparser
@@ -8,7 +7,6 @@ S parsers/coreparser
 
 B _build/ocaml_generated
 B _build/src
-B _build/src/web
 B _build/src/codegen
 B _build/pprinters
 B _build/parsers/cparser

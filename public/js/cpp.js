@@ -1,9 +1,10 @@
 // NB> use TextEncoder here, on web
-function encodeText(str) {
+/*
+function f(str) {
   var encoder = new TextEncoder();
   return encoder.encode(str);
 }
-/*
+*/
 function f(str) {
   var out = [], p = 0;
   for (var i = 0; i < str.length; i++) {
@@ -30,7 +31,6 @@ function f(str) {
   }
   return out;
 };
-*/
 
 // Wrapper function for main - input = name of input source file - output = name of output source file (in virtual directory)
 function callMain(args) {
@@ -52,7 +52,6 @@ function callMain(args) {
   Module["_mcpp_lib_main"](argc, argv);
 }
 
-
 function invoke_cpp_standard_args(input, output) {
   callMain(["-N", "-I-", "-I", "/include/c/libc", "-I", "/include/c/posix", input, output])
 }
@@ -62,30 +61,24 @@ function printFile(name) {
   console.log(read);
 }
 
-var data = encodeText("int main() {return 0;}\n");
+var data = f("int main() {return 0;}\n");
 var stream = FS.open('test1.c', 'w+');
 FS.write(stream, data, 0, data.length, 0);
 FS.close(stream);
 invoke_cpp_standard_args("test1.c", "test1-cpp.c");
 printFile("test1-cpp.c")
 
-function saveFile (name, str) {
-  var data = encodeText(str);
-  var stream = FS.open(name, 'w+');
-  FS.write(stream, data, 0, data.length, 0);
-  FS.close(stream);
-}
-
+/*
 // define a dummy stdio
 FS.mkdir('/include');
 FS.mkdir('/include/c');
 FS.mkdir('/include/c/libc');
-var data = encodeText("\n");
+var data = f("\n");
 var stream = FS.open('/include/c/libc/stdio.h', 'w+');
 FS.write(stream, data, 0, data.length, 0);
 FS.close(stream);
 
-var data = encodeText("#include <stdio.h>\nint main() {return 0;}\n");
+var data = f("#include <stdio.h>\nint main() {return 0;}\n");
 var stream = FS.open('test2.c', 'w+');
 FS.write(stream, data, 0, data.length, 0);
 FS.close(stream);
@@ -93,3 +86,4 @@ FS.close(stream);
 invoke_cpp_standard_args("test2.c", "test2-cpp.c");
 printFile("test2-cpp.c")
 
+*/

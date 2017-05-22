@@ -58,10 +58,11 @@ let ivmax = ivctor M.max_ival "ivmax"
 
 (* Ail types *)
 
-let ail_qualifier (c, r, v) =
+let ail_qualifier (c, r, v, a) =
   { AilTypes.const = c;
     AilTypes.restrict = r;
-    AilTypes.volatile = v
+    AilTypes.volatile = v;
+    AilTypes.atomic = a;
   }
 
 let is_scalar ty =
