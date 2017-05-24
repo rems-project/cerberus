@@ -53,7 +53,7 @@ let precedence = function
   | PEis_signed _
   | PEis_unsigned _ -> None
 
-let precedence_expr = function
+let rec precedence_expr = function
  | Epure _
  | Ememop _
  | Eaction _
@@ -83,7 +83,7 @@ let precedence_expr = function
  | Esave _ ->
      Some 5
  | Eloc (_, e) ->
-     None
+    precedence_expr e
 
 
 let compare_precedence p1 p2 =
@@ -417,23 +417,32 @@ let pp_pexpr pe =
   in pp None pe
 
 
-let rec pp_expr expr =
+(* NOTE: here to avoid circular dependencies to Pp_errors
+  TODO: move to somewhere else *)
+open Lexing
+open Location_ocaml
+let location_to_string loc =
+  let string_of_pos pos =
+    Printf.sprintf "%d:%d" pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+  match loc with
+    | Loc_unknown ->
+        "unknown location"
+    | Loc_point pos ->
+        string_of_pos pos ^ ":"
+    | Loc_region (pos1, pos2, _) ->
+        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
+
+
+let rec pp_expr ?print_loc:(print_loc=false) expr =
   let rec pp is_semi prec e =
-    let stripped_e =
-      let rec strip_locs = function
-        | Eloc (_, e') ->
-            strip_locs e'
-        | z ->
-            z in
-      strip_locs e in
-    let prec' = precedence_expr stripped_e in
+    let prec' = precedence_expr e in
     let pp_ z = pp true prec' z in (* TODO: this is sad *)
     let pp  z = pp false prec' z in
     begin
       (* Here we check whether parentheses are needed *)
       if compare_precedence prec' prec then
         (* right associativity of ; *)
-        match (is_semi, stripped_e) with
+        match (is_semi, e) with
           | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
               P.parens
           | _ ->
@@ -441,7 +450,7 @@ let rec pp_expr expr =
       else
         P.parens
     end
-    begin match stripped_e with
+    begin match e with
       | Epure pe ->
           pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
       | Ememop (memop, pes) ->
@@ -516,8 +525,11 @@ let rec pp_expr expr =
           pp_keyword "par" ^^ P.parens (comma_list pp es)
       | Ewait tid ->
           pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-      | Eloc _ ->
-          assert false
+      | Eloc (l , e) ->
+        print_endline (if print_loc then  "LOC" else "NOTLOC");
+        !^"{-#" ^^ !^(location_to_string l) ^^ !^"#-}"
+          ^^
+         pp_expr ~print_loc:print_loc e
       | End es ->
           pp_keyword "nd" ^^ P.parens (comma_list pp es)
       | Ebound (i, e) ->
@@ -599,7 +611,7 @@ let pp_argument (sym, bTy) =
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
-let pp_fun_map funs =
+let pp_fun_map ?print_loc:(print_loc=false)  funs =
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with
@@ -612,7 +624,7 @@ let pp_fun_map funs =
       | Proc (bTy, params, e) ->
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_expr ~print_loc:print_loc e) ^^ P.break 1 ^^ P.break 1
   ) funs P.empty
 
 
@@ -638,18 +650,18 @@ let mk_comment doc =
   )
 
 
-let pp_file file =
+let pp_file ?print_loc:(print_loc=false) file =
   let pp_glob acc (sym, bTy, e) =
     acc ^^
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
     P.colon ^^ P.equals ^^
-    P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
+    P.nest 2 (P.break 1 ^^ pp_expr ~print_loc:print_loc e) ^^ P.break 1 ^^ P.break 1 in
   
   begin
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-        pp_fun_map file.stdlib ^^ P.break 1 ^^
+        pp_fun_map ~print_loc:print_loc file.stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
   (*  pp_impl file.impl ^^ P.break 1 ^^ *)
@@ -695,7 +707,7 @@ let rec pp_continuation = function
 let rec pp_stack = function
   | Stack_empty ->
       !^ "empty"
-  | Stack_cons (_, cont, sk') ->
+  | Stack_cons (cont, sk') ->
       P.nest 2 (
         pp_continuation cont
       ) ^^ P.break 1 ^^ P.dot ^^ P.break 1 ^^

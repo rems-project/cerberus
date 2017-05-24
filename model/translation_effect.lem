@@ -157,3 +157,5 @@ let with_symbol_supply f =
 let inline init = elab_init
 let inline fresh_symbol = elab_fresh_symbol
 let inline print_debugM = elab_print_debugM
+
+let _STD str m = m >>= fun e -> return (C.Estd str e)

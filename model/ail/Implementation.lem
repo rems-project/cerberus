@@ -77,7 +77,7 @@ let min_range_unsigned ibty =
 
 val min_range_signed: integerBaseType -> range
 let min_range_signed ibty =
-  let prec = (min_precision ibty) (* - 1 *) in
+  let prec = (min_precision ibty) - 1 in
   make_range ((~(2 ** (prec - 1))) + 1)
              ((2 ** (prec - 1)) - 1)
 

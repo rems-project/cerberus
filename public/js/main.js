@@ -3,9 +3,47 @@
 // Globals
 var source_counter = 1;
 
-// Types
-function Pane (div) {
-  this.editor = CodeMirror ($(div).find('.editor')[0], {
+function Tab (title, value) {
+  this.select = () => {
+    this.tablink.addClass('active');
+    this.content.show();
+  }
+
+  this.clearSelection = () => {
+    this.tablink.removeClass('active');
+    this.content.hide();
+  }
+
+  this.isSelected = () => {
+    this.tablink.hasClass('active');
+  }
+
+  this.refresh = () => {
+    this.editor.refresh();
+  }
+
+  this.parent = null;
+
+  this.title = title;
+
+  if (!this.title) {
+    this.title = 'Source #' + source_counter;
+    source_counter++;
+  }
+
+  this.editor = null;
+
+  this.tablink = $('#tablink-template').clone().contents();
+
+  this.tabtitle = this.tablink.find('.title');
+  this.tabtitle.text(this.title);
+
+  this.tabclose = this.tablink.find('.close');
+
+  this.content = $(document.createElement('div'));
+  this.content.addClass('editor');
+
+  this.editor = CodeMirror (this.content[0], {
     mode: 'text/x-csrc',
     styleActiveLine: true,
     lineNumbers: true,
@@ -14,97 +52,145 @@ function Pane (div) {
     smartIndent: true
   });
 
-  this.tab = null;    // Current tab
-  this.values = {};   // Values/Buffer being edited
-  this.div = div;     // Pointer to UI
+  this.tabtitle.on('click', () => {
+    if (this.parent)
+      this.parent.setActiveTab(this);
+  });
 
-  // Add event listeners
-  $(this.div).find('.tabadder').on('click', () => this.create_tab ());
+  this.tabclose.on('click', () => {
+    if (this.parent)
+      this.parent.removeTab(this);
+  });
 
-  this.number_of_tabs = function () {
-    return Object.keys(this.values).length;
+}
+
+// Types
+function Pane (div) {
+  this.firstTab = () => {
+    return this.tabs[0];
   }
 
-  this.set_value = function (value) {
-    this.values[this.tab] = value;
-    this.refresh();
+  this.prevTab = (tab) => {
+    for (var i = 1; i < this.tabs.length; i++)
+      if (this.tabs[i] === tab)
+        return this.tabs[i-1];
+    return null;
   }
 
-  this.save_editor_value = function () {
-    this.values[this.tab] = this.editor.getValue();
+  this.addTab = (tab) => {
+    this.tabs.push(tab);
+    this.tabadder.before(tab.tablink);
+    this.content.append(tab.content);
+    tab.parent = this;
+    tab.refresh();
   }
 
-  this.create_tab = function (name, value) {
-    if (!name) {
-      name = 'Source #' + source_counter;
-      source_counter++;
+  this.removeTab = (tab) => {
+    if (tab === this.activeTab) {
+      var prev = this.prevTab(tab);
+      if (prev)
+        this.setActiveTab(prev);
+      else if (this.tabs.length > 0)
+        this.setActiveTab(this.firstTab());
     }
-    this.tab = name;
-    this.values[name] = value ? value : '';
 
-    if (this.number_of_tabs() === 1) {
-      $(this.div).find('.editor').show();
-    }
-    this.clear_tab_selection();
+    tab.tablink.remove();
+    tab.content.remove();
 
-    var $tab = $('#tablink-template').clone().contents();
-    $tab.find('.title').text(name);
-    $tab.find('.title').on('click', () => {
-      this.change_tab($tab);
-    });
-    $tab.find('.close').on('click', () => {
-      if (this.tab === name) {
-        if (this.number_of_tabs() === 1)
-          $(this.div).find('.editor').hide();
-        else
-          this.change_tab($tab.prev())
+    for(var i = 0; i < this.tabs.length; i++) {
+      if (this.tabs[i] === tab) {
+        this.tabs.splice(i, 1);
       }
-      delete this.values[name];
-      $tab.remove();
-    });
-    $(this.div).find('.tabadder').before($tab);
-    this.refresh();
+    }
+
+    if (this.tabs.length == 0)
+      this.parent.removePane(this);
   }
 
-  this.clear_tab_selection = function () {
-    $(this.div).find('.tablinks').removeClass('active');
+  this.setActiveTab = (tab) => {
+    if (this.activeTab)
+      this.activeTab.clearSelection();
+    tab.select();
+    this.activeTab = tab;
   }
 
-  this.change_tab = function ($tab) {
-    this.save_editor_value();
-    this.tab = $tab.find('.title')[0].textContent;
-    this.clear_tab_selection();
-    $tab.addClass('active');
-    this.refresh();
+  this.refresh = () => {
+    this.activeTab.refresh();
   }
 
-  this.refresh = function () {
-    this.editor.setValue(this.values[this.tab]);
-    this.editor.refresh();
+  this.tabs = [];
+
+  // UI
+  this.parent = null;
+  if (div) {
+    this.div = $(div);
+  } else {
+    this.div = $('#pane-template').clone().contents();
   }
+  this.tabadder = this.div.find('.tabadder');
+  this.content = this.div.find('.content');
+
+  this.activeTab = new Tab();
+  this.addTab(this.activeTab);
+
+  // Event listeners
+  this.tabadder.on('click', () => {
+    var tab = new Tab();
+    this.addTab(tab);
+    this.setActiveTab(tab);
+  });
+
+
 }
 
 function UI() {
-  this.panes = []
-  window.prevWidth = window.innerWidth;
-
-  this.setup = function () {
+  this.setup = () => {
     var w = window.innerWidth/this.panes.length + 'px';
     for (i = 0; i < this.panes.length; i++) {
-      this.panes[i].div.style.width = w;
+      this.panes[i].div.width(w);
     }
     $('.pane-separator').each((i, e) => {
       e.addEventListener('mousedown', this.init_resize, false);
     });
   }
 
-  this.refresh = function () {
-    var factor = window.innerWidth / window.prevWidth;
-    for (i = 0; i < this.panes.length; i++) {
-      var w = parseFloat(this.panes[i].div.style.width.slice(0, -2));
-      this.pannes[i].div.style.width = (w * factor)+'px';
+  this.wait = () => {
+    $('body').addClass('wait');
+  }
+
+  this.done = () => {
+    $('body').removeClass('wait');
+  }
+
+  this.addPane = (pane) => {
+    if (this.panes.length > 0) {
+      $('<div class="pane-separator"></div>').appendTo(this.div);
     }
-    window.prevWidth = window.innerWidth;
+    this.panes.push(pane);
+    this.div.append(pane.div);
+    pane.parent = this;
+    pane.refresh();
+  }
+
+  this.removePane = (pane) => {
+    if (this.panes.length == 1) {
+      pane.div.remove();
+      return;
+    }
+    var sep = null;
+    if (this.panes[0] === pane)
+      sep = pane.div.next('.pane-separator');
+    else
+      sep = pane.div.prev('.pane-separator');
+    sep.remove();
+    pane.div.remove();
+
+    for (var i = 0; i < this.panes.length; i++) {
+      if (this.panes[i] === pane) {
+        this.panes.splice(i, 1);
+      }
+    }
+    this.setup();
   }
 
   // Resizing panes
@@ -115,6 +201,15 @@ function UI() {
     paneWidth: null,
     lastPane: null,
     lastPaneWidth: null
+  }
+
+  this.refresh = () => {
+    var factor = window.innerWidth / window.prevWidth;
+    for (i = 0; i < this.panes.length; i++) {
+      var w = parseFloat(this.panes[i].div[0].style.width.slice(0, -2));
+      this.panes[i].div[0].style.width = (w * factor)+'px';
+    }
+    window.prevWidth = window.innerWidth;
   }
 
   this.init_resize = (evt) => {
@@ -148,44 +243,34 @@ function UI() {
     document.documentElement.removeEventListener('mouseup',this.stop_resize,false);
   }
 
+  this.panes = []
+  window.prevWidth = window.innerWidth;
 
-}
+  this.div = $('#panes');
+  this.activePane = new Pane();
+  this.addPane(this.activePane);
+  this.run = $('#run');
 
-// TODO: at the moment I run any file on the left side and put in the right side
-// buffer
-function run(evt) {
-  var panes = $('.pane');
-  //var source = cerberus.buffer();
-  panes[0].pane.save_editor_value();
-  var source = panes[0].pane.values[panes[0].pane.tab];
-  //source.l = source.c.length;
-  $('body').addClass('wait');
-  var result = cerberus.run(source);
-  $('body').removeClass('wait');
-  panes[1].pane.values[panes[1].pane.tab] = result.toString();
-  panes[1].pane.editor.setOption('mode', 'text/x-core');
-  panes[1].pane.refresh();
-}
+  this.setup();
 
-function create_pane_from_template(div) {
-  $('#pane-template').clone().contents().appendTo(div);
-  var pane = new Pane(div);
-  pane.create_tab();
-  div.pane = pane; // TODO: ugly: for run
-  return pane;
-}
-
-function setup() {
-  var ui = new UI();
-  $('.pane').each((i,e) => {
-    ui.panes.push(create_pane_from_template (e));
+  this.run.on('click', () => {
+    this.wait();
+    var source = this.activePane.activeTab.editor.getValue();
+    var result = cerberus.run(source);
+    this.activePane.activeTab.editor.setValue(result.toString());
+    this.activePane.activeTab.editor.setOption('mode', 'text/x-core');
+    this.done();
   });
+
+}
+
+
+
+var ui = new UI();
+ui.addPane(new Pane());
+
+// Wait buffer.c to be downloaded
+$(window).ready(() => {
   ui.setup();
-
-  // Wait buffile to be downloaded
-  $(document).ready(() => {
-    ui.panes[0].set_value (cerberus.buffer().toString());
-  });
-}
-
-setup();
+  ui.activePane.activeTab.editor.setValue(cerberus.buffer().toString());
+});

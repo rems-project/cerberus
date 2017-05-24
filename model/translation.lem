@@ -230,6 +230,7 @@ and prepare_cproc_call program fid es =
 
 (* STD §6.5.5 Multiplicative operators *)
 and translate_div_mod_operator translate usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
+  E._STD "§6.5.5" $
   translate e1   >>= fun core_e1   ->
   translate e2   >>= fun core_e2   ->
   E.fresh_symbol >>= fun e1_sym    ->
@@ -1460,10 +1461,11 @@ else
           self e2 >>= fun core_e2 ->
           self e3 >>= fun core_e3 ->
           
-          E.return $
+          E.return $ C.Estd "§6.5.15#4, second sentence"
+
             (* STD (§6.5.15#4, second sentence) says there is a sequenced point between the
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
-            C.Esseq e1_sym_pat core_e1
+            (C.Esseq e1_sym_pat core_e1
             begin
               C.Ewseq res_sym_pat begin
                 C.Ecase e1_sym_pe
@@ -1485,7 +1487,7 @@ else
                 (* TODO: conversions *)
                 C.Epure res_sym_pe
              )
-            end
+            end)
       
       | A.AilEassign e1 e2 ->
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: AilEassign overlap UB (see §6.5.16.1#3)") in
@@ -2056,15 +2058,8 @@ TODO: #9
                    self e         >>= fun core_e ->
                    let bTy =
                      C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
-                   let elem_pe =
-                     (* TODO: check + std quote *)
-                     if AilTypesAux.is_integer elem_ty then
-                       stdlib.mkcall_conv_loaded_int elem_ty (Caux.mk_sym_pe bTy e_sym)
-                     else
-                       (* TODO: other conversions? *)
-                       Caux.mk_sym_pe bTy e_sym in 
                    E.return
-                     (elem_pe :: acc, (C.Ewseq (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
+                     (Caux.mk_sym_pe bTy e_sym :: acc, (C.Ewseq (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
                | Nothing ->
                    E.return
                      (Caux.mk_unspecified_pe (Caux.proj_ctype elem_ty) :: acc, mk_expr)

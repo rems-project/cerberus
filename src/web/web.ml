@@ -37,23 +37,44 @@ let buffile = "buffer.c"
 let libcore = "include/core/std.core"
 let impl = "include/core/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl"
 
-(* TODO: add libc files *)
 let libc = List.map (fun s -> "include/c/libc/" ^ s) [
-  "assert.h";
-  "complex.h";
-  "stdlib.h";
-  "stdio.h"
+    "complex.h";
+    "inttypes.h";
+    "setjump.h";
+    "stdbool.h";
+    "stdnoreturn.h";
+    "uchar.h";
+    "ctype.h";
+    "iso646.h";
+    "signal.h";
+    "stddef.h";
+    "string.h";
+    "wchar.h";
+    "errno.h";
+    "limits.h";
+    "stdalign.h";
+    "stdint.h";
+    "tgmath.h";
+    "wctype.h";
+    "fenv.h";
+    "locale.h";
+    "stdarg.h";
+    "stdio.h";
+    "threads.h"
 ]
 
-let exec () = cerberus 0
-    "cc -E -nostdinc -undef -I /include/c/libc -I /include/c/posix"
+let posix = List.map (fun s -> "include/c/posix/" ^ s) [
+    "stdio.h";
+  ]
+
+let exec () = cerberus 0 ""
     "gcc_4.9.0_x86_64-apple-darwin10.8.0"
     true Random [Core] (Some buffile) false false
     false false false [] false false true false false
 
 let string_of_core core=
   let buf = Buffer.create 4096 in
-  PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file core);
+  PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file ~print_loc:true core);
   Buffer.contents buf
 
 let run source =
@@ -72,6 +93,8 @@ let _ =
   >>= fun _ ->
   (* Download files to mcpp.js FS *)
   mapM (download saveFile) libc
+  >>= fun _ ->
+  mapM (download saveFile) posix
 
 let _ =
   Js.export "cerberus"

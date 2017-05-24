@@ -25,6 +25,7 @@ function setupFS() {
   FS.mkdir('/include');
   FS.mkdir('/include/c');
   FS.mkdir('/include/c/libc');
+  FS.mkdir('/include/c/posix');
 }
 
 function invokeCpp(content) {
@@ -53,7 +54,7 @@ function invokeCpp(content) {
   var stream = FS.open("buffer.c", "w");
   FS.write(stream, data, 0, data.length, 0);
   FS.close(stream);
-  call(['-P', '-N', '-I-', '-I', '/include/c/libc', '-I', '/include/c/posix',
+  call(['-N', '-I-', '-I', '/include/c/libc', '-I', '/include/c/posix',
     input, output])
   return caml_new_string(readFile(output));
 }

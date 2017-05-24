@@ -34,7 +34,6 @@ parsers/cparser/*.conflicts
 dependencies/**
 *.cmx
 *.cmi
-*.cmo
 *.o
 *.orig
 *.lem_
@@ -63,6 +62,3 @@ parsers/cparser/pre_parser.ml
 parsers/cparser/pre_parser.mli
 
 tests/csmith/small_int_arith/*.c
-
-
-*~

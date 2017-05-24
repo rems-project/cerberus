@@ -73,7 +73,5 @@ citests=(
 # 0108-shifts.c
   0109-promotion_lt.c
   0110-loop_in_loop.c
-  0111-skipped_label.c
-  0112-call_in_label.c
 )
 

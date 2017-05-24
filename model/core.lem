@@ -297,6 +297,7 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem thread creation *)
  | Ewait of Cthread.thread_id (* wait for thread termination *)
  | Eloc of Loc.t * (generic_expr 'a 'bty 'sym)
+ | Estd of string * (generic_expr 'a 'bty 'sym)
 
 (* TODO: don't we need any impl proc? *)
 type generic_impl_decl 'bty =
@@ -376,13 +377,11 @@ type continuation_element 'a =
  (*  | Ktry   list (string * expr 'a) *)
 
 type continuation 'a = list (continuation_element 'a)
-(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
-type labeled_continuations 'a = map sym (list sym * expr 'a)
-
+type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a
 
 type stack 'a =
   | Stack_empty
-  | Stack_cons of labeled_continuations 'a * continuation 'a * stack 'a
+  | Stack_cons of continuation 'a * stack 'a
  
  
  
