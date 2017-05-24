@@ -155,10 +155,10 @@ function UI() {
 // buffer
 function run(evt) {
   var panes = $('.pane');
-  var source = cerberus.buffer();
+  //var source = cerberus.buffer();
   panes[0].pane.save_editor_value();
-  source.c = panes[0].pane.values[panes[0].pane.tab];
-  source.l = source.c.length;
+  var source = panes[0].pane.values[panes[0].pane.tab];
+  //source.l = source.c.length;
   $('body').addClass('wait');
   var result = cerberus.run(source);
   $('body').removeClass('wait');
