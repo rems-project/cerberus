@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Cerberus</title>
+  <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
+  <script type="text/javascript" src="lib/codemirror.js"></script>
+  <script type="text/javascript" src="lib/clike.js"></script>
+  <script type="text/javascript" src="lib/mcpp.js"></script>
+  <script type="text/javascript" src="js/core.js"></script>
+  <link rel="stylesheet" type="text/css" href="css/style.css" />
+</head>
+<body>
+  <div id="container">
+    <div id="header">
+      <div id="title">Cerberus</div>
+      <div id="toolbar">
+        <div id="run">Run</div>
+        <div>Editor</div>
+        <div>View</div>
+        <div>Help</div>
+      </div>
+    </div>
+    <div id="panes">
+      <!--
+      <div class="pane"></div>
+      <div class="pane-separator"></div>
+      <div class="pane"></div> -->
+    </div>
+  </div> <!-- container -->
+
+  <template id="pane-template">
+    <div class="pane">
+      <div class="tablinks">
+        <button class="tablink tabadder">+</button>
+      </div>
+      <div class="content"></div>
+    </div>
+  </template>
+  <template id="tablink-template">
+    <div class="tablink active">
+      <button class="title"></button>
+      <button class="close"></button>
+    </div>
+  </template>
+  <script type="text/javascript" src="js/cerberus.js"></script>
+  <script type="text/javascript" src="js/main.js"></script>
+
+</body>
+</html>

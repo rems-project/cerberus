@@ -1,0 +1,37 @@
+{-
+// MP+na_rel+acq_na
+// Message Passing, of data held in non-atomic x,
+//   with release/acquire synchronisation on y.
+// Question: is the read of x required to see the new data value 1
+//   rather than the initial state value 0?
+int main() {
+  int x=0; atomic_int y=0;
+  {{{ { x=1;
+        y.store(1,memory_order_release); }
+  ||| { r1=y.load(memory_order_acquire).readsvalue(1);
+        r2=x; }  }}}
+  return 0;
+}
+-}
+
+fun main() : [integer] :=
+  let strong x = create(<alignof>("signed int"), "signed int") in
+  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  
+  let strong () = store("signed int", x, 0) in
+  let strong () = store("_Atomic(signed int)", y, 0) in
+  
+  let strong (_, ret) = par(
+    let strong () = store("signed int", x, 1) in
+    let strong () = store("_Atomic(signed int)", y, 1, release) in
+      return(())
+    end end
+  ,
+    let strong r1 = load("_Atomic(signed int)", y, acquire) in
+    let strong r2 = load("signed int", x) in
+      return((r1, r2))
+    end end
+  ) in
+  return(ret)
+  
+  end end end end end

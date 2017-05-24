@@ -1,0 +1,15 @@
+embed {{ coq
+
+Inductive binaryMode :=
+  | TwosComplement : binaryMode
+  | OnesComplement : binaryMode
+  | SignPlusMagnitude : binaryMode.
+
+Record impl := mkImpl {
+  binMode : binaryMode;
+  isCharSigned : bool;
+  precision : integerType -> Z;
+  size_t : type;
+  ptrdiff_t : type
+}.
+}}

@@ -1,0 +1,127 @@
+open import Pervasives
+
+open import Global Show Show_extra Enum
+import UniqueId
+
+import Debug
+
+open import {hol} `utilTheory`
+
+(* Symbolic identifiers *)
+type sym =
+  Symbol of nat * maybe string
+
+val        symbolEqual: sym -> sym -> bool
+let inline symbolEqual sym1 sym2 =
+  match (sym1, sym2) with
+    | (Symbol n1 str_opt1, Symbol n2 str_opt2) ->
+        if n1 = n2 then
+          if Debug.get_level () >= 5 && str_opt1 <> str_opt2 then
+            let () = Debug.print_debug 5 [] (fun () -> "[Symbol.symbolEqual] suspicious equality ==> " ^ show str_opt1 ^ " <-> " ^ show str_opt2) in
+            true
+          else
+            true
+        else
+          false
+  end
+
+instance (Eq sym)
+  let (=)            = symbolEqual
+  let (<>) sym1 sym2 = not (symbolEqual sym1 sym2)
+end
+
+instance (Ord sym)
+  let compare sym1 sym2 =
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+      compare n1 n2
+  let (<) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 < n2
+  let (<=) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 <= n2
+  let (>) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 > n2
+  let (>=) sym1 sym2 = 
+    let (Symbol n1 _) = sym1 in
+    let (Symbol n2 _) = sym2 in
+    n1 >= n2
+end
+
+instance (NumSucc sym)
+  let succ sym =
+    let (Symbol n str_opt) = sym in 
+    Symbol (n+1) str_opt
+end
+
+instance (Enum sym)
+  let toEnum n =
+    Symbol n Nothing
+  let fromEnum sym =
+    let (Symbol n _) = sym in n
+end
+
+instance (SetType sym)
+  let setElemCompare sym1 sym2 = ordCompare sym1 sym2
+end
+
+instance (Show sym)
+  let show sym =
+    let Symbol n str_opt = sym in
+    "Symbol" ^ show (n, str_opt)
+end
+
+
+(* Location prefix *)
+type prefix =
+  | PrefSource of list sym
+  | PrefOther of string
+
+
+(*
+val     stringFromPrefix: prefix -> string
+let rec stringFromPrefix_ syms =
+  match syms with
+    | [] ->
+        ""
+    | sym :: syms' ->
+        show sym ^ "." ^ stringFromPrefix_ syms'
+end
+
+let stringFromPrefix = function
+  | PrefSource syms ->
+      "{" ^ stringFromPrefix_ syms ^ "}"
+  | PrefOther str ->
+      "{" ^ str ^ "}"
+end
+*)
+
+
+val fresh: State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+let fresh =
+  UniqueId.fresh_id
+
+val fresh_pretty : string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+let fresh_pretty str =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just str)
+  )
+
+
+val fresh_pretty_with_id : (nat -> string) -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+let fresh_pretty_with_id mkStr =
+  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
+    State.return $ Symbol id (Just (mkStr id))
+  )
+
+
+val fresh_fancy : maybe string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+let fresh_fancy = function
+  | Just str -> fresh_pretty str
+  | Nothing  -> fresh
+end
