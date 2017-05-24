@@ -695,7 +695,7 @@ let rec pp_continuation = function
 let rec pp_stack = function
   | Stack_empty ->
       !^ "empty"
-  | Stack_cons (cont, sk') ->
+  | Stack_cons (_, cont, sk') ->
       P.nest 2 (
         pp_continuation cont
       ) ^^ P.break 1 ^^ P.dot ^^ P.break 1 ^^

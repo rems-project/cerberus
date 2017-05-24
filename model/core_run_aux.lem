@@ -154,8 +154,9 @@ let rec add_to_sb_stack p_aids sk =
     match sk with
       | Stack_empty ->
           Stack_empty
-      | Stack_cons cont sk ->
-          Stack_cons (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+      | Stack_cons lconts cont sk ->
+          let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts") in
+          Stack_cons lconts (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
    end
   else
     sk
@@ -247,8 +248,9 @@ let rec add_to_asw_stack aids sk =
     match sk with
       | Stack_empty ->
           Stack_empty
-      | Stack_cons cont sk ->
-          Stack_cons (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+      | Stack_cons lconts cont sk ->
+          let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_asw_stack ==> is not touching lconts") in
+          Stack_cons lconts (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
     end
   else
     sk
