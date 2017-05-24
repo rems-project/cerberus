@@ -1143,8 +1143,10 @@ let subst_wait_continuation tid v cont =
 let rec subst_wait_stack tid v = function
   | Stack_empty ->
       Stack_empty
-  | Stack_cons cont sk ->
-      Stack_cons (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
+  | Stack_cons lconts cont sk ->
+      Stack_cons
+        (Map.map (fun (sym, e) -> (sym, subst_wait tid v e)) lconts)
+        (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
 end
 
 
@@ -1201,7 +1203,7 @@ let rec find_labeled_continuation sym = function
       let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes the bindings of an Esave inside a Esseq don't clash") in
       match find_labeled_continuation sym e1 with
         | Just (syms, cont_expr) ->
-            Just (syms, Ewseq pat cont_expr e2)
+            Just (syms, Esseq pat cont_expr e2)
         | Nothing ->
             find_labeled_continuation sym e2
       end
@@ -1231,6 +1233,83 @@ let rec find_labeled_continuation sym = function
   | Eloc _ e ->
       find_labeled_continuation sym e
 end
+
+
+val find_labeled_continuation2_aux: forall 'a.
+  map Symbol.sym (list Symbol.sym * expr 'a) -> Symbol.sym -> expr 'a ->
+(*  maybe ((list Symbol.sym * expr 'a) * map Symbol.sym (list Symbol.sym * expr 'a)) *)
+  map Symbol.sym (list Symbol.sym * expr 'a)
+let rec find_labeled_continuation2_aux acc sym = function
+  | Epure _ ->
+      acc
+  | Ememop _ _ ->
+      acc
+  | Eaction _ ->
+      acc
+  | Ecase _ pat_es ->
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there is atmost single match inside a Ecase") in
+      List.foldl (fun acc' (_, e) ->
+        find_labeled_continuation2_aux acc' sym e
+      ) acc pat_es
+  | Elet _ _ e2 ->
+      find_labeled_continuation2_aux acc sym e2
+  | Eif _ e2 e3 ->
+      let acc' = find_labeled_continuation2_aux acc sym e2 in
+      find_labeled_continuation2_aux acc' sym e3
+  | Eskip ->
+      acc
+  | Eccall _ _ _ ->
+      acc
+  | Eproc _ _ _ ->
+      acc
+  | Eunseq _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside unseq() *)
+      acc
+  | Ewseq pat e1 e2 ->
+      let () = Debug.warn [] (fun () ->
+        "Core_aux.find_labeled_continuation2_aux assumes the bindings of an Esave inside a Ewseq don't clash") in
+      let acc' = Map.map (fun (syms, z) -> (syms, Ewseq pat z e2)) (find_labeled_continuation2_aux Map.empty sym e1) in
+      find_labeled_continuation2_aux (Map.(union) acc acc') sym e2
+  | Esseq pat e1 e2 ->
+      let () = Debug.warn [] (fun () ->
+        "Core_aux.find_labeled_continuation2_aux assumes the bindings of an Esave inside a Esseq don't clash") in
+      let acc' = Map.map (fun (syms, z) -> (syms, Esseq pat z e2)) (find_labeled_continuation2_aux Map.empty sym e1) in
+      find_labeled_continuation2_aux (Map.(union) acc acc') sym e2
+  | Easeq _ _ _ ->
+      acc
+  | Eindet  _ _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside indet() *)
+      acc
+  | Ebound _ _ ->
+      (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
+      acc
+  | End _ ->
+      (* NOTE: Typing forbids labeled continuation bindings in inside nd() *)
+      acc
+  | Esave (sym', _) sym_bTys e ->
+      if sym = sym' then
+        Map.insert sym (List.map fst sym_bTys, e) acc
+      else
+        find_labeled_continuation2_aux (Map.insert sym' (List.map fst sym_bTys, e) acc) sym e
+  | Erun annot sym pes ->
+      acc
+  | Epar es ->
+      let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation2_aux assumes there are no Esave inside par()") in
+      acc
+  | Ewait _ ->
+      acc
+  | Eloc _ e ->
+      find_labeled_continuation2_aux acc sym e
+end
+
+let find_labeled_continuation2 sym e =
+  let lconts = find_labeled_continuation2_aux Map.empty sym e in
+  match Map.lookup sym lconts  with
+    | Just cont ->
+        Just (cont, lconts)
+    | Nothing ->
+        Nothing
+  end
 
 
 
@@ -1273,24 +1352,33 @@ end
 
 val push_empty_continuation: forall 'a. stack 'a -> stack 'a
 let push_empty_continuation sk =
-  Stack_cons [] sk
+  Stack_cons Map.empty [] sk
 
-val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_error
+val reset_continuation: forall 'a. stack 'a -> stack 'a
+let reset_continuation = function
+  | Stack_empty ->
+      (* TODO: are should this fail, just to catch ill-uses? *)
+      Stack_empty
+  | Stack_cons lconts cont sk ->
+      Stack_cons lconts [] sk
+end
+
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM ((labeled_continuations 'a * continuation 'a) * stack 'a) core_run_error
 let pop_stack = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_stack")
-  | Stack_cons cont sk ->
-      Exception.return (cont, sk)
+  | Stack_cons lconts cont sk ->
+      Exception.return ((lconts, cont), sk)
 end
 
 val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_error
 let pop_continuation_element = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_continuation_element")
-  | Stack_cons [] _ ->
+  | Stack_cons _ [] _ ->
       Exception.fail Reached_end_of_proc
-  | Stack_cons (cont_elem :: cont) sk ->
-      Exception.return (cont_elem, Stack_cons cont sk)
+  | Stack_cons lconts (cont_elem :: cont) sk ->
+      Exception.return (cont_elem, Stack_cons lconts cont sk)
 end
 
 
@@ -1298,19 +1386,37 @@ val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a ->
 let push_continuation_element cont_elem = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "push_continuation_element")
-  | Stack_cons cont sk ->
-      Exception.return (Stack_cons (cont_elem :: cont) sk)
+  | Stack_cons lconts cont sk ->
+      Exception.return (Stack_cons lconts (cont_elem :: cont) sk)
 end
 
 
 
 val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
-let append_to_current_continuation cont = function
+let append_to_current_continuation cont_elem = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)
       Exception.fail (Found_empty_stack "append_to_current_continuation")
-  | Stack_cons ccont sk ->
-      Exception.return $ Stack_cons (cont :: ccont) sk
+  | Stack_cons lconts cont sk ->
+      Exception.return $ Stack_cons lconts (cont_elem :: cont) sk
+end
+
+val set_labeled_continuations: forall 'a. labeled_continuations 'a -> stack 'a -> stack 'a
+let set_labeled_continuations lconts = function
+  | Stack_empty ->
+      (* TODO: are should this fail, just to catch ill-uses? *)
+      Stack_empty
+  | Stack_cons _ cont sk ->
+      Stack_cons lconts cont sk
+end
+
+val update_labeled_continuations: forall 'a. (labeled_continuations 'a -> labeled_continuations 'a) -> stack 'a -> stack 'a
+let update_labeled_continuations f = function
+  | Stack_empty ->
+      (* TODO: are should this fail, just to catch ill-uses? *)
+      Stack_empty
+  | Stack_cons lconts cont sk ->
+      Stack_cons (f lconts) cont sk
 end
 
 

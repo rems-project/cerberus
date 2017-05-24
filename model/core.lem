@@ -376,11 +376,13 @@ type continuation_element 'a =
  (*  | Ktry   list (string * expr 'a) *)
 
 type continuation 'a = list (continuation_element 'a)
-type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a
+(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
+type labeled_continuations 'a = map sym (list sym * expr 'a)
+
 
 type stack 'a =
   | Stack_empty
-  | Stack_cons of continuation 'a * stack 'a
+  | Stack_cons of labeled_continuations 'a * continuation 'a * stack 'a
  
  
  
