@@ -44,18 +44,23 @@ let string_of_pos pos =
 
 
 let string_at_line fname lnum =
-  if Sys.file_exists fname then
-    let ic = open_in fname in
-    let l =
-      let l_ = get_line lnum ic in
-      if String.length l_ > 100 then
-        String.sub l_ 0 100 ^ " ... "
-      else
-        l_ in
-    close_in ic;
-    Some l
-  else
-    None
+  try
+    if Sys.file_exists fname then
+      let ic = open_in fname in
+      let l =
+        let l_ = get_line lnum ic in
+        if String.length l_ > 100 then
+          String.sub l_ 0 100 ^ " ... "
+        else
+          l_ in
+      close_in ic;
+      Some l
+    else
+      None
+  with
+    End_of_file ->
+      (* TODO *)
+      None
 (*
  ^ "\n" ^
     ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))

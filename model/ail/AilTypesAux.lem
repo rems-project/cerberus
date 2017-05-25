@@ -253,6 +253,29 @@ let is_struct_or_union ty =
   is_struct ty || is_union ty
 
 
+val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
+let has_flexible_array_member sigm ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+    | Struct tag_sym ->
+        match List.lookup tag_sym sigm.tag_definitions with
+          | Just (StructDef membersDefs) ->
+              match List.dest_init membersDefs with
+                | Just (_, (_, (_, last_ty))) ->
+                    (* NOTE: this assumes membersDefs is wf (i.e. it has more than one element) *)
+                    is_array_unknown_size last_ty
+                | Nothing ->
+                    false
+              end
+          | _ ->
+              error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
+        end
+    | _ ->
+        false
+end
+
+
+
 (* == generic predicates on ctypes ============================================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool

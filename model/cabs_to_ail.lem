@@ -1241,10 +1241,11 @@ let rec desugar_type_specifiers specs =
               E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
               match sdecls_opt with
                 | Just sdecls ->
-                    E.mapM desugar_struct_declaration sdecls >>= fun xs ->
-                    (* TODO: hum, a bit silly here *)
-                    (* TODO: not silly ==> catch redefinitions *)
-                    E.register_tag_definition Loc.unknown tag_sym (E.Struct_definition $ List.concat xs) >>
+                    (* NOTE: the checking of typing constraints on memberDefs is done by GenTyping *)
+                    List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
+                    let isAnonymous = isNothing tag_ident_opt in
+                    E.register_tag_definition Loc.unknown tag_sym
+                      (E.Struct_definition isAnonymous memberDefs) >>
                     E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
                 | Nothing ->
                     (* TODO: bogus? *)
@@ -1256,10 +1257,12 @@ let rec desugar_type_specifiers specs =
               E.register_tag Loc.unknown tag_ident_opt >>= fun tag_sym ->
               match sdecls_opt with
                 | Just sdecls ->
-                    E.mapM desugar_struct_declaration sdecls >>= fun xs ->
-                    (* TODO: hum, a bit silly here *)
-                    (* TODO: not silly ==> catch redefinitions *)
-                    E.register_tag_definition Loc.unknown tag_sym (E.Union_definition $ List.concat xs) >>
+                    (* NOTE: the checking of typing constraints on memberDefs is
+                       done by the Ail typing *)
+                    List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
+                    let isAnonymous = isNothing tag_ident_opt in
+                    E.register_tag_definition Loc.unknown tag_sym
+                      (E.Union_definition isAnonymous memberDefs) >>
                     E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
                 | Nothing ->
                     (* TODO: bogus? *)
@@ -1269,6 +1272,7 @@ let rec desugar_type_specifiers specs =
           | [TSpec_Atomic tyname] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
               (* STD §6.7.2.4#3 *)
+              (* TODO: shouldn't this be done by the Ail typing? *)
               if    AilTypesAux.is_array ty
                  || AilTypesAux.is_function ty
                  || AilTypesAux.is_atomic ty
@@ -1770,6 +1774,16 @@ and desugar_struct_declaration struct_decl =
   match struct_decl with
     | Struct_declaration specs qs sdecltors ->
         desugar_type_specifiers specs >>= fun (qs, ty) ->
+        (* STD §6.7.6.1#2 *)
+        E.is_anonymous_struct_or_union ty >>= function
+          | false ->
+              if List.null sdecltors then
+                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.1#2")
+              else
+                E.return ()
+          | true ->
+              E.return ()
+        end >>
         E.mapM (fun sdecltor ->
           desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
           (* TODO: check !!! *)
@@ -1899,8 +1913,10 @@ and desugar_array_declarator is_under_array a_decltor =
         E.return (fun ty -> ATypes.Array ATypes.no_qualifiers ty (Just $ snd (Decode.decode_integer_constant str)))
     
     | ADecl loc [] false (Just (ADeclSize_expression e)) ->
-        (* TODO: if e can evaluated at runtime, this is not a VLA *)
-        E.fail loc (Errors.Desugar_NotyetSupported "variable length array type")
+        (* TODO: if we can't evaluate, then this is VLA? and need proper error message *)
+        desugar_expression e                                  >>= fun d_e ->
+        evaluate_integer_constant_expression2 Loc.unknown d_e >>= fun n   ->
+        E.return (fun ty -> ATypes.Array ATypes.no_qualifiers ty (Just n))
     
     | ADecl loc qs is_static a_decltor_size_opt ->
         E.get_scope >>= function
@@ -2140,7 +2156,7 @@ and static_thread_implicit_initializer tagDefs ty =
     
     | ATypes.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition xs) ->
+          | Just (E.Struct_definition _ xs) ->
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
@@ -2152,7 +2168,7 @@ and static_thread_implicit_initializer tagDefs ty =
     
     | ATypes.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Union_definition xs) ->
+          | Just (E.Union_definition _ xs) ->
               let (ident, (_, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
@@ -2258,7 +2274,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)
             E.resolve_tag_definition tag >>= function
-              | E.Struct_definition ident_tys ->
+              | E.Struct_definition isAnonymous ident_tys ->
                   (* TODO: (for now) only allowing explicit and complete initializer *)
                   if List.all (function
                        | (Just [Desig_member _], Init_expr _) -> true
@@ -2373,7 +2389,7 @@ and designator =
         | ATypes.Union tag ->
             (* TODO: check the STD, the following is mostly improvised... *)
             E.resolve_tag_definition tag >>= function
-              | E.Union_definition ident_tys ->
+              | E.Union_definition isAnonymous ident_tys ->
                   match desigs_opt_inits with
                     | [(Nothing, init')] ->
                         let (first_ident, (_, first_ty)) = match ident_tys with
@@ -2523,9 +2539,9 @@ let desugar_declaration_base specifs idecltors =
                       tag_definitions=
                         List.foldl (fun acc (ident, tagDef) ->
                           match tagDef with
-                            | E.Struct_definition xs ->
+                            | E.Struct_definition _ xs ->
                                 (ident, StructDef xs) :: acc
-                            | E.Union_definition xs ->
+                            | E.Union_definition _ xs ->
                                 (ident, UnionDef xs) :: acc
                             | E.Enum_definition ->
                                 acc
@@ -3213,9 +3229,9 @@ let desugar_and_register_external_declaration edecl =
                   tag_definitions=
                     List.foldl (fun acc (ident, tagDef) ->
                       match tagDef with
-                        | E.Struct_definition xs ->
+                        | E.Struct_definition _ xs ->
                             (ident, StructDef xs) :: acc
-                        | E.Union_definition xs ->
+                        | E.Union_definition _ xs ->
                             (ident, UnionDef xs) :: acc
                         | E.Enum_definition ->
                             acc
