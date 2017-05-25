@@ -872,7 +872,7 @@ and pp_cabs_type_specifier = function
 
 and pp_struct_declaration = function
   | Struct_declaration (specs, qs, s_decls) ->
-      pp_ctor "Struct_declarator" ^^ P.brackets (
+      pp_ctor "Struct_declaration" ^^ P.brackets (
         P.brackets (comma_list pp_cabs_type_specifier specs) ^^ P.comma ^^^
         P.brackets (comma_list pp_cabs_type_qualifier qs) ^^ P.comma ^^^
         P.brackets (comma_list pp_struct_declarator s_decls)
