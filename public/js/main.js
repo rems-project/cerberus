@@ -19,7 +19,6 @@ function Tab (title, value) {
   }
 
   this.refresh = () => {
-    this.editor.refresh();
   }
 
   this.parent = null;
@@ -31,8 +30,6 @@ function Tab (title, value) {
     source_counter++;
   }
 
-  this.editor = null;
-
   this.tablink = $('#tablink-template').clone().contents();
 
   this.tabtitle = this.tablink.find('.title');
@@ -41,7 +38,22 @@ function Tab (title, value) {
   this.tabclose = this.tablink.find('.close');
 
   this.content = $(document.createElement('div'));
-  this.content.addClass('editor');
+
+  this.tabtitle.on('click', () => {
+    if (this.parent)
+      this.parent.setActiveTab(this);
+  });
+
+  this.tabclose.on('click', function () {
+    if (this.parent)
+      this.parent.removeTab(this);
+  });
+
+}
+
+function TabEditor (title, value) {
+  // This is un ugly way to do inheritance
+  $.extend(this, new Tab(title, value));
 
   this.editor = CodeMirror (this.content[0], {
     mode: 'text/x-csrc',
@@ -52,16 +64,11 @@ function Tab (title, value) {
     smartIndent: true
   });
 
-  this.tabtitle.on('click', () => {
-    if (this.parent)
-      this.parent.setActiveTab(this);
-  });
+  this.content.addClass('editor');
 
-  this.tabclose.on('click', () => {
-    if (this.parent)
-      this.parent.removeTab(this);
-  });
-
+  this.refresh = () => {
+    this.editor.refresh();
+  }
 }
 
 // Types
@@ -130,12 +137,12 @@ function Pane (div) {
   this.tabadder = this.div.find('.tabadder');
   this.content = this.div.find('.content');
 
-  this.activeTab = new Tab();
+  this.activeTab = new TabEditor();
   this.addTab(this.activeTab);
 
   // Event listeners
   this.tabadder.on('click', () => {
-    var tab = new Tab();
+    var tab = new TabEditor();
     this.addTab(tab);
     this.setActiveTab(tab);
   });
@@ -249,11 +256,10 @@ function UI() {
   this.div = $('#panes');
   this.activePane = new Pane();
   this.addPane(this.activePane);
-  this.run = $('#run');
 
   this.setup();
 
-  this.run.on('click', () => {
+  $('#run').on('click', () => {
     this.wait();
     var source = this.activePane.activeTab.editor.getValue();
     var result = cerberus.run(source);
@@ -262,12 +268,17 @@ function UI() {
     this.done();
   });
 
+  $('#new_pane').on('click', () => {
+    this.addPane(new Pane());
+    this.setup();
+  });
+
+  $('#new_tab').on('click', () => {
+    this.activePane.addTab(new TabEditor());
+  });
 }
 
-
-
 var ui = new UI();
-ui.addPane(new Pane());
 
 // Wait buffer.c to be downloaded
 $(window).ready(() => {

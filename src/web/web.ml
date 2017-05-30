@@ -5,6 +5,34 @@ open Lwt
 open XmlHttpRequest
 open Sys_js
 
+let re_loc = Regexp.regexp "{-=(\d*:\d*-\d*:\d*:|)=-}"
+let re_loc2 = Regexp.regexp "\d*:\d*-\d*:\d*:"
+
+let getLocStr str =
+  let ls = Regexp.split re_loc str in
+  let rec loop locs str = function
+    | x::xs ->
+      if String.compare x "{-==-}" = 0 then
+        loop (x::locs) str xs
+      else
+      (match Regexp.string_match re_loc2 x 0 with
+      | Some _ -> loop (x::locs) str xs
+      | None -> loop locs (str^x) xs
+      )
+    | [] -> (locs, str)
+  in loop [] "" ls
+
+let f s = Scanf.sscanf s "%d:%d-%d:%d:"
+
+let rec getLocations str =
+  let re = Regexp.regexp "LOCOPEN(\d*:\d*-\d*:\d*):LOC" in
+  let rec loop acc p =
+    match Regexp.search re str p with
+    | Some (np, r) ->
+      loop (Regexp.matched_string r ::acc) np
+    | None -> acc
+  in loop [] 0
+
 (* folding Lwt monad *)
 let foldM xs = List.fold_left (fun m1 m2 -> m1 >>= fun _ -> m2) return_unit xs
 let mapM f xs = foldM (List.map f xs)
@@ -83,8 +111,11 @@ let run source =
   let cpp_source = invokeCpp source in
   update_file ~name:buffile ~content:cpp_source;
   match exec () with
-  | Some file -> string_of_core file
-  | None -> !js_stderr
+  | Some file ->
+    string_of_core file
+    |> getLocStr
+    |> fun (s,_) -> s
+  | None -> [] (*!js_stderr*)
 
 let _ =
   setupFS();

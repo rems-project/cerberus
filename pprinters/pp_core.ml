@@ -82,7 +82,8 @@ let rec precedence_expr = function
      Some 4
  | Esave _ ->
      Some 5
- | Eloc (_, e) ->
+ | Eloc (_, e)
+ | Estd (_, e) ->
     precedence_expr e
 
 
@@ -433,7 +434,7 @@ let location_to_string loc =
         string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
 
 
-let rec pp_expr ?print_loc:(print_loc=false) expr =
+let rec pp_expr expr =
   let rec pp is_semi prec e =
     let prec' = precedence_expr e in
     let pp_ z = pp true prec' z in (* TODO: this is sad *)
@@ -526,10 +527,17 @@ let rec pp_expr ?print_loc:(print_loc=false) expr =
       | Ewait tid ->
           pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
       | Eloc (l , e) ->
-        print_endline (if print_loc then  "LOC" else "NOTLOC");
-        !^"{-#" ^^ !^(location_to_string l) ^^ !^"#-}"
+        !^"{-=" ^^ !^(location_to_string l) ^^ !^"=-}"
           ^^
-         pp_expr ~print_loc:print_loc e
+         pp_expr e
+          ^^
+        !^"{-==-}"
+      | Estd (s , e) ->
+        !^"{-#" ^^ !^s ^^ !^"#-}"
+          ^^
+         pp_expr e
+          ^^
+        !^"{-==-}"
       | End es ->
           pp_keyword "nd" ^^ P.parens (comma_list pp es)
       | Ebound (i, e) ->
@@ -611,7 +619,7 @@ let pp_argument (sym, bTy) =
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
-let pp_fun_map ?print_loc:(print_loc=false)  funs =
+let pp_fun_map funs =
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with
@@ -624,7 +632,7 @@ let pp_fun_map ?print_loc:(print_loc=false)  funs =
       | Proc (bTy, params, e) ->
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr ~print_loc:print_loc e) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
   ) funs P.empty
 
 
@@ -650,18 +658,18 @@ let mk_comment doc =
   )
 
 
-let pp_file ?print_loc:(print_loc=false) file =
+let pp_file file =
   let pp_glob acc (sym, bTy, e) =
     acc ^^
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
     P.colon ^^ P.equals ^^
-    P.nest 2 (P.break 1 ^^ pp_expr ~print_loc:print_loc e) ^^ P.break 1 ^^ P.break 1 in
+    P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
   
   begin
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-        pp_fun_map ~print_loc:print_loc file.stdlib ^^ P.break 1 ^^
+        pp_fun_map file.stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
   (*  pp_impl file.impl ^^ P.break 1 ^^ *)

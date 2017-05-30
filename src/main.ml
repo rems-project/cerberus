@@ -254,7 +254,7 @@ let pipeline filename args =
   if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
-      run_pp $ Pp_core.pp_file ~print_loc:true core_file;
+      run_pp $ Pp_core.pp_file core_file;
       print_endline "===================="
     end;
   
@@ -264,11 +264,11 @@ let pipeline filename args =
       Debug_ocaml.warn [] (fun () -> "The normal backend is not actually using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
         | Exception.Result z ->
-            run_pp $ Pp_core.pp_file ~print_loc:true (Core_sequentialise.sequentialise_file z);
+            run_pp $ Pp_core.pp_file (Core_sequentialise.sequentialise_file z);
         | Exception.Exception _ ->
             ();
     end else
-      run_pp $ Pp_core.pp_file ~print_loc:true rewritten_core_file;
+      run_pp $ Pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );

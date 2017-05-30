@@ -122,3 +122,4 @@ let rec fv_core e fvs =
   | Epar   _ -> raise (Unsupported "fv par")
   | Ewait  _ -> raise (Unsupported "fv wait")
   | Eloc   _ -> raise (Unsupported "fv loc")
+  | Estd   _ -> raise (Unsupported "fv std")

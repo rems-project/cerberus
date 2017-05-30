@@ -14,6 +14,7 @@ let core_expr_map f = function
  | Esave (x, y, e) -> Esave (x, y, f e)
  | Epar es -> Epar (List.map f es)
  | Eloc (l, e) -> Eloc (l, f e)
+ | Estd (s, e) -> Estd (s, f e)
  | e -> e
 
 (* Eliminates weak sequential operation, since strong and weak have
@@ -36,12 +37,17 @@ let rec elim_skip = function
 
 (* Eliminates loc expressions. *)
 let rec elim_loc = function
-  | Eloc (_, e) -> e
+  | Eloc (_, e) -> elim_loc e
   | e -> core_expr_map elim_loc e
 
 (* Eliminates let expressions. *)
 let rec elim_let = function
   | Elet (p, pe, e) -> Esseq (p, Epure pe, e)
+  | e -> core_expr_map elim_let e
+
+(* Eliminates std expressions. *)
+let rec elim_let = function
+  | Estd (s, e) -> elim_loc e
   | e -> core_expr_map elim_let e
 
 let runf opt = function
