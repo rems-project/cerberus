@@ -527,17 +527,15 @@ let rec pp_expr expr =
       | Ewait tid ->
           pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
       | Eloc (l , e) ->
-        !^"{-=" ^^ !^(location_to_string l) ^^ !^"=-}"
+        !^"{-#" ^^ !^(location_to_string l) ^^ !^"#-}"
           ^^
          pp_expr e
           ^^
-        !^"{-==-}"
+        !^"{-#ELOC#-}"
       | Estd (s , e) ->
-        !^"{-#" ^^ !^s ^^ !^"#-}"
+        !^"{-#" ^^ !^s ^^ !^"#-}" ^^ P.hardline
           ^^
          pp_expr e
-          ^^
-        !^"{-==-}"
       | End es ->
           pp_keyword "nd" ^^ P.parens (comma_list pp es)
       | Ebound (i, e) ->
