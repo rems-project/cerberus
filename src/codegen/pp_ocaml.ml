@@ -20,7 +20,7 @@ type globals = {
 }
 
 let empty_globs fname = {
-  interface = String.capitalize_ascii fname ^ "I.";
+  interface = String.capitalize fname ^ "I.";
   statics = [];
   externs = []
 }

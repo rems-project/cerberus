@@ -44,7 +44,7 @@ function Tab (title, value) {
       this.parent.setActiveTab(this);
   });
 
-  this.tabclose.on('click', function () {
+  this.tabclose.on('click', () => {
     if (this.parent)
       this.parent.removeTab(this);
   });
@@ -52,8 +52,7 @@ function Tab (title, value) {
 }
 
 function TabEditor (title, value) {
-  // This is un ugly way to do inheritance
-  $.extend(this, new Tab(title, value));
+  Tab.call(this, title, value);
 
   this.editor = CodeMirror (this.content[0], {
     mode: 'text/x-csrc',
@@ -179,6 +178,9 @@ function UI() {
     pane.refresh();
   }
 
+  this.secondaryPane = () => {
+  }
+
   this.removePane = (pane) => {
     if (this.panes.length == 1) {
       pane.div.remove();
@@ -274,7 +276,9 @@ function UI() {
   });
 
   $('#new_tab').on('click', () => {
-    this.activePane.addTab(new TabEditor());
+    let tab = new TabEditor();
+    this.activePane.addTab(tab);
+    this.activePane.setActiveTab(tab);
   });
 }
 

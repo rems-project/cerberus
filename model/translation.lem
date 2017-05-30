@@ -2077,8 +2077,15 @@ TODO: #9
                    self e         >>= fun core_e ->
                    let bTy =
                      C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
+                   let elem_pe =
+                     (* TODO: check + std quote *)
+                     if AilTypesAux.is_integer elem_ty then
+                       stdlib.mkcall_conv_loaded_int elem_ty (Caux.mk_sym_pe bTy e_sym)
+                     else
+                       (* TODO: other conversions? *)
+                       Caux.mk_sym_pe bTy e_sym in 
                    E.return
-                     (Caux.mk_sym_pe bTy e_sym :: acc, (C.Ewseq (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
+                     (elem_pe :: acc, (C.Ewseq (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
                | Nothing ->
                    E.return
                      (Caux.mk_unspecified_pe (Caux.proj_ctype elem_ty) :: acc, mk_expr)
