@@ -41,16 +41,6 @@ html, body {
   height: 100%;
 }
 
-/*
-#toolbar div {
-  font-size: 15px;
-  display: inline-block;
-  margin-left: 4px;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-*/
-
 #toolbar button {
   font-size: 15px;
   display: inline-block;
@@ -59,13 +49,12 @@ html, body {
   background-color: #5f5f5f;
   color: #f1f1f1;
   border: none;
-
+  cursor: pointer;
 }
 
 #toolbar button:hover {
   background-color: #7f7f7f;
 }
-
 
 .dropbtn {
   border: none;
@@ -183,12 +172,40 @@ html, body {
   background-color: #ccc;
 }
 
+.tab-content {
+  font-size: 13px;
+}
+
 .editor {
-  font-size:13px !important;
+  font-size: 13px !important;
 }
 
 .pane .CodeMirror {
   /* HACK: I don't know how to make codemirror fill the entire screen */
   height: calc(100vh - 60px);
   border: 1px solid #eee;
+}
+
+.color0 {
+  background-color: #f98f48
+}
+
+.color1 {
+  background-color: #dba987
+}
+
+.color2 {
+  background-color: #bdc1a1
+}
+
+.color3 {
+  background-color: #94ceb8
+}
+
+.color4 {
+  background-color: #D3E0EA
+}
+
+.color5 {
+  background-color: #08d0c1
 }

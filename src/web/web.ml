@@ -5,33 +5,34 @@ open Lwt
 open XmlHttpRequest
 open Sys_js
 
-let re_loc = Regexp.regexp "{-=(\d*:\d*-\d*:\d*:|)=-}"
-let re_loc2 = Regexp.regexp "\d*:\d*-\d*:\d*:"
+let countLines str =
+  let n = ref 0 in
+  String.iter (fun c -> if c == '\n' then n := !n + 1) str; !n
 
 let getLocStr str =
-  let ls = Regexp.split re_loc str in
-  let rec loop locs str = function
+  let xs = Regexp.split (Regexp.regexp "{-#(\d*:\d*-\d*:\d*:|E...)#-}") str in
+  let rec loop (locs, str) curs l0 l = function
     | x::xs ->
-      if String.compare x "{-==-}" = 0 then
-        loop (x::locs) str xs
+      if String.compare x "ELOC" = 0 then
+        (* finish last location *)
+        match curs with
+        | (x', l0')::curs' ->
+          prerr_endline ("LOC: " ^ x');
+          loop ((x', (l0, l))::locs, str) curs' l0' l xs
+        | _ -> raise (Failure "getLocStr")
       else
-      (match Regexp.string_match re_loc2 x 0 with
-      | Some _ -> loop (x::locs) str xs
-      | None -> loop locs (str^x) xs
+      (match Regexp.string_match (Regexp.regexp "\d*:\d*-\d*:\d*:") x 0 with
+        (* It's a location *)
+        | Some _ ->
+          loop (locs, str) ((x,l0)::curs) l l xs
+        (* Just source *)
+        | None ->
+          loop (locs, str^x) curs l0 (l+(countLines x)) xs
       )
     | [] -> (locs, str)
-  in loop [] "" ls
+  in loop ([], "") [] 0 0 xs
 
 let f s = Scanf.sscanf s "%d:%d-%d:%d:"
-
-let rec getLocations str =
-  let re = Regexp.regexp "LOCOPEN(\d*:\d*-\d*:\d*):LOC" in
-  let rec loop acc p =
-    match Regexp.search re str p with
-    | Some (np, r) ->
-      loop (Regexp.matched_string r ::acc) np
-    | None -> acc
-  in loop [] 0
 
 (* folding Lwt monad *)
 let foldM xs = List.fold_left (fun m1 m2 -> m1 >>= fun _ -> m2) return_unit xs
@@ -54,6 +55,9 @@ let readFile name =
 let invokeCpp input =
   [| Js.Unsafe.inject $ Js.string input |]
   |> Js.Unsafe.fun_call (Js.Unsafe.variable "invokeCpp")
+
+let onLoadCerberus () =
+  Js.Unsafe.fun_call (Js.Unsafe.variable "onLoadCerberus") [||]
 
 let download fs_save filename =
   get filename
@@ -97,25 +101,24 @@ let posix = List.map (fun s -> "include/c/posix/" ^ s) [
 
 let exec () = cerberus 0 ""
     "gcc_4.9.0_x86_64-apple-darwin10.8.0"
-    true Random [Core] (Some buffile) false false
+    true Random [] (Some buffile) false false
     false false false [] false false true false false
 
 let string_of_core core=
   let buf = Buffer.create 4096 in
-  PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file ~print_loc:true core);
+  PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file core);
   Buffer.contents buf
 
 let run source =
-  let js_stderr = ref "" in
-  set_channel_flusher stderr (fun s -> js_stderr := !js_stderr ^ s);
+  (*let js_stderr = ref "" in
+  set_channel_flusher stderr (fun s -> js_stderr := !js_stderr ^ s);*)
   let cpp_source = invokeCpp source in
   update_file ~name:buffile ~content:cpp_source;
   match exec () with
   | Some file ->
     string_of_core file
     |> getLocStr
-    |> fun (s,_) -> s
-  | None -> [] (*!js_stderr*)
+  | None -> ([], "") (*!js_stderr*)
 
 let _ =
   setupFS();
@@ -126,6 +129,8 @@ let _ =
   mapM (download saveFile) libc
   >>= fun _ ->
   mapM (download saveFile) posix
+  >>= fun _ ->
+  return $ onLoadCerberus ()
 
 let _ =
   Js.export "cerberus"
@@ -133,3 +138,5 @@ let _ =
     method run source = run source
     method buffer = file_content buffile
   end)
+
+let _ = run (file_content buffile)
