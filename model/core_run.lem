@@ -287,6 +287,9 @@ let rec hoist_negatives expr =
     | Eloc loc e ->
         hoist_negatives e >>= fun e' ->
         State.return (Eloc loc e')
+    | Estd s e ->
+        hoist_negatives e >>= fun e' ->
+        State.return (Estd s e')
   end
 
 
@@ -1112,6 +1115,10 @@ add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: 
           E.return <| th_st with current_loc= loc; arena= e |>
         )
     
+    | (Estd str e, _) ->
+        one $ Step_tau "Estd" (
+          E.return <| th_st with arena= e |>
+        )
 (*
     | (Eraise handl, sk) ->
         error "WIP: Eraise"
@@ -1286,6 +1293,8 @@ let rec convert_expr expr =
         Ewait tid
     | Eloc loc e ->
         Eloc loc (convert_expr e)
+    | Estd s e ->
+        Estd s (convert_expr e)
   end
 
 and convert_paction pact =

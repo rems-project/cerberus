@@ -1111,6 +1111,8 @@ let rec collect_labels env = function
       E.return env
   | Eloc _ e ->
       collect_labels env e
+  | Estd _ e ->
+      collect_labels env e
 end
 
 
@@ -1353,6 +1355,8 @@ and typecheck_expr loc tagDefs (env: typing_env) expected_bTy = function
       error "typecheck_expr, Ewait"
   | Eloc loc' e ->
       typecheck_expr loc' tagDefs env expected_bTy e
+  | Estd s e ->
+      typecheck_expr loc tagDefs env expected_bTy e
 end
 
 
