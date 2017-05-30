@@ -447,6 +447,8 @@ let rec indet_hack expr =
         Core.Ewait tid
     | Core.Eloc loc e ->
         Core.Eloc loc (indet_hack e)
+    | Core.Estd s e ->
+        Core.Estd s (indet_hack e)
     | _ ->
         error ("Core_indet ==> " ^ Pp.stringFromCore_expr expr)
 end

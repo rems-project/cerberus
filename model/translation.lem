@@ -298,6 +298,7 @@ else
 
 (* STD §6.5.8 Relational operators *)
 and translate_relational_operator translate usual_arithmetic_conversion result_ty bop e1 e2 =
+  E._STD "§6.5.8" $
   translate e1   >>= fun core_e1       ->
   translate e2   >>= fun core_e2       ->
   E.fresh_symbol >>= fun e1_sym        ->
@@ -461,6 +462,13 @@ else (* both operand have pointer type *)
 (* STD §6.5.11  Bitwise exclusive OR operator *)
 (* STD §6.5.12  Bitwise inclusive OR operator *)
 and translate_bitwise_operator translate usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
+  let std_id = match aop with
+    | A.Band -> ""
+    | A.Bxor -> ""
+    | A.Bor -> ""
+    | _ -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
+  end in
+  E._STD std_id (
   E.fresh_symbol >>= fun e1_sym    ->
   E.fresh_symbol >>= fun e2_sym    ->
   E.fresh_symbol >>= fun obj1_sym  ->
@@ -498,6 +506,7 @@ and translate_bitwise_operator translate usual_arithmetic_conversion stdlib resu
         )
       )
     )
+  )
 
 
 
@@ -606,6 +615,7 @@ and translate_expression stdlib tagDefs a_expr =
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Plus e ->
           (* STD §6.5.3.3#2 *)
+          E._STD "§6.5.3.3#2" (
           let (oTy, mk_conversion) =
             if AilTypesAux.is_integer result_ty then
               (C.OTy_integer, integer_promotion (ctype_of e))
@@ -627,10 +637,12 @@ and translate_expression stdlib tagDefs a_expr =
                 )
               )
             )
+          )
       
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Minus e ->
           (* STD §6.5.3.3#3 *)
+          E._STD "§6.5.3.3#3" (
           let (oTy, zero_pe, mk_conversion) =
             if AilTypesAux.is_integer result_ty then
               (C.OTy_integer, Caux.mk_integer_pe 0, integer_promotion (ctype_of e))
@@ -657,10 +669,12 @@ and translate_expression stdlib tagDefs a_expr =
                 )
               )
             )
+          )
       
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
+          E._STD "§6.5.3.3#4" (
           E.fresh_symbol >>= fun obj_sym ->
           E.fresh_symbol >>= fun e_sym   ->
           self e         >>= fun core_e  ->
@@ -684,16 +698,18 @@ and translate_expression stdlib tagDefs a_expr =
                 )
               )
             )
+          )
       
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address (A.AnnotatedExpression _ _ (A.AilEunary A.Indirection e)) ->
           (* STD §6.5.3.2#3, sentence 3 *)
           (* NOTE: footnote 102 makes it clear that this is valid even if 'e' evaluates to a null pointer *)
-          self e
+          E._STD "§6.5.3.2#3" (self e)
       
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
+          E._STD "§6.5.3.2#3, sentence 5" $
           if AilTypesAux.is_object result_ty then
              E.fresh_symbol >>= fun sym    ->
              self e         >>= fun core_e ->
@@ -988,6 +1004,7 @@ else
           E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym,   e_sym_pat,   e_sym_pe  ) ->
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
           (* STD §6.3.2.1#2 "lvalue conversion" *)
+          E._STD "§6.3.2.1#2" $
           self e >>= fun core_e ->
 (*
           E.return $
@@ -1449,6 +1466,7 @@ else
       
       | A.AilEcond e1 e2 e3 ->
           (* STD §6.5.15#4 *)
+          E._STD "§6.5.15#4" $
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilEcond use mkTestExpression") in
           
           let e1_oTy =
@@ -1462,7 +1480,6 @@ else
           self e3 >>= fun core_e3 ->
           
           E.return $ C.Estd "§6.5.15#4, second sentence"
-
             (* STD (§6.5.15#4, second sentence) says there is a sequenced point between the
                evaluation of e1 and the e2/e3. Hence the strong sequencing *)
             (C.Esseq e1_sym_pat core_e1
@@ -1557,8 +1574,10 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
           (* STD (§6.5.17, second sentence) says there is a sequence point between the
              evaluation of the two operand. Hence the strong sequencing *)
+          E._STD "§6.5.17, second sentence" (
           E.return $
             C.Esseq (Caux.mk_empty_pat (C.BTy_loaded oTy)) core_e1 core_e2
+          )
 
 
 

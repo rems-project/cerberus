@@ -128,6 +128,8 @@ let rec add_to_sb p_aids expr =
           expr
       | Eloc loc e ->
           Eloc loc (add_to_sb p_aids e)
+      | Estd s e ->
+          Estd s (add_to_sb p_aids e)
     end
   else
     expr
@@ -225,6 +227,8 @@ let rec add_to_asw aids expr =
           expr
       | Eloc loc e ->
           Eloc loc (add_to_asw aids e)
+      | Estd s e ->
+          Estd s (add_to_asw aids e)
     end
   else
     expr

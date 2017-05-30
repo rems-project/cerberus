@@ -82,6 +82,8 @@ let rec sequentialise_expr expr =
         expr
     | Eloc loc e ->
         Eloc loc (sequentialise_expr e)
+    | Estd s e ->
+        Estd s (sequentialise_expr e)
   end
 
 

@@ -863,6 +863,8 @@ let rec subst_sym_expr sym pe' = function
       expr
   | Eloc loc e ->
       Eloc loc (subst_sym_expr sym pe' e)
+  | Estd s e ->
+      Estd s (subst_sym_expr sym pe' e)
 end
 
 
@@ -1040,6 +1042,8 @@ let rec to_pure (expr : expr 'a) =
         Nothing
     | Eloc _ e ->
         to_pure e
+    | Estd _ e ->
+        to_pure e
     | Ecase pe pat_es ->
        let (pats, es) = List.unzip pat_es in
         match to_pures es with
@@ -1120,6 +1124,8 @@ let rec subst_wait tid v = function
          Ewait tid'
    | Eloc loc e ->
        Eloc loc (subst_wait tid v e)
+   | Estd s e ->
+       Estd s (subst_wait tid v e)
 end
 
 
@@ -1229,6 +1235,8 @@ let rec find_labeled_continuation sym = function
   | Ewait _ ->
       Nothing
   | Eloc _ e ->
+      find_labeled_continuation sym e
+  | Estd _ e ->
       find_labeled_continuation sym e
 end
 
@@ -1374,6 +1382,8 @@ let rec collect_labeled_continuations expr =
     | Ewait _ ->
         Map.empty
     | Eloc loc e ->
+        collect_labeled_continuations e
+    | Estd _ e ->
         collect_labeled_continuations e
   end
 
