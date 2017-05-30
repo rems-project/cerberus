@@ -177,6 +177,7 @@ let cps_transform_expr sym_supply globs bvs e =
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
     | Eloc   _ -> raise (Unsupported "Location operations should be eliminated")
+    | Estd   _ -> raise (Unsupported "STD annotations should be eliminated")
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)
