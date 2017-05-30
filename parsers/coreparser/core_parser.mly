@@ -512,6 +512,8 @@ let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
  | Eloc (loc, _e) ->
      symbolify_expr _e >>= fun e ->
      Eff.return (Eloc (loc, e))
+ | Estd _ ->
+     assert false
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
