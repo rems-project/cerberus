@@ -177,7 +177,7 @@ let pipeline filename args =
   if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
-      run_pp $ Pp_core.pp_file core_file;
+      run_pp $ Pp_core.pp_file false core_file;
       print_endline "===================="
     end;
 
@@ -188,24 +188,18 @@ let pipeline filename args =
                            using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
       | Exception.Result z ->
-        run_pp $ Pp_core.pp_file (Core_sequentialise.sequentialise_file z);
+        run_pp $ Pp_core.pp_file false (Core_sequentialise.sequentialise_file z);
       | Exception.Exception _ ->
         ();
     end else
-      run_pp $ Pp_core.pp_file rewritten_core_file;
+      run_pp $ Pp_core.pp_file false rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
+  Exception.except_return (backend sym_supply rewritten_core_file args)
+  >>= fun _ ->
   Exception.except_return rewritten_core_file
-  (*
 
-  if !!cerb_conf.ocaml then
-    Core_typing.typecheck_program rewritten_core_file
-    >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
-    -| Core_sequentialise.sequentialise_file
-  else
-    Exception.except_return (backend sym_supply rewritten_core_file args)
-*)
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core =
   Debug_ocaml.debug_level := debug_level;
@@ -256,7 +250,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
       | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
         None
-      | Exception.Result file -> Some file
+      | Exception.Result (file) -> Some (file)
         (*
         if progress then 14 else n *)
 

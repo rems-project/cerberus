@@ -24,9 +24,10 @@ class Tab {
     this.content = $(document.createElement('div'))
     this.content.addClass('tab-content')
 
-    this.tabtitle.on('click', () => {
+    this.tablink.on('click', () => {
       if (this.parent)
         this.parent.setActiveTab(this)
+      this.refresh()
     })
 
     this.tabclose.on('click', () => {
@@ -62,6 +63,11 @@ class Tab {
 class TabEditor extends Tab {
   constructor(title, value) {
     super(title, value)
+
+    this._coreTab = null
+    this._execTab = null
+    this._consoleTab = null
+
     this.editor = CodeMirror (this.content[0], {
       mode: 'text/x-csrc',
       styleActiveLine: true,
@@ -108,8 +114,39 @@ class TabEditor extends Tab {
     this.content.addClass('editor')
   }
 
+  get coreTab() {
+    if (!this._coreTab) {
+      let corePane = this.parent.parent.secondaryPane
+      this._coreTab = new TabEditor(this.title + ' [core]')
+      corePane.addTab(this._coreTab)
+      corePane.setActiveTab(this._coreTab)
+    }
+    return this._coreTab;
+  }
+
+  get execTab() {
+    if (!this._execTab) {
+      let corePane = this.parent.parent.secondaryPane
+      this._execTab = new TabEditor(this.title + ' [exec]')
+      corePane.addTab(this._execTab)
+      corePane.setActiveTab(this._execTab)
+    }
+    return this._execTab;
+  }
+
+  get consoleTab() {
+    if (!this._consoleTab) {
+      let corePane = this.parent.parent.secondaryPane
+      this._consoleTab = new TabEditor(this.title + ' [console]')
+      corePane.addTab(this._consoleTab)
+      corePane.setActiveTab(this._consoleTab)
+    }
+    return this._consoleTab;
+  }
+
   colorLines(i, e, color) {
-    for (let k = i; k < e; k++) {
+    //if (e - i == 0) e++ //HACK
+    for (let k = i; k <= e; k++) {
       this.editor.removeLineClass(k, 'background')
       this.editor.addLineClass(k, 'background', color)
     }
@@ -226,31 +263,15 @@ class UI {
     }
 
     $('#run').on('click', () => {
-      this.wait()
-      let source = this.activePane.activeTab.editor.getValue()
-      let result = cerberus.run(source)
-      let corePane = this.secondaryPane
-      let tab = new TabEditor(this.activePane.activeTab.title + ' [core]')
-      tab.editor.setValue(snd(result).toString())
-      tab.editor.setOption('mode', 'text/x-core')
+      this.run (false)
+    })
 
-      let posArray = createPosArray([], fst(result))
-      posArray.sort((a, b) => {
-        return (a.corepos[2] - a.corepos[1]) < (b.corepos[2] - b.corepos[1]) ? 1:-1
-      })
-      for (let i = 0; i < posArray.length; i++) {
-        let color = generateColor()
-        this.activePane.activeTab.editor.markText(
-          {line: posArray[i].cpos[0]-1, ch: posArray[i].cpos[1]-1},
-          {line: posArray[i].cpos[2]-1, ch: posArray[i].cpos[3]-1},
-          {className: color}
-        )
-        tab.colorLines (posArray[i].corepos[1], posArray[i].corepos[2]+1, color)
-      }
+    $('#random').on('click', () => {
+      this.run (false)
+    })
 
-      corePane.addTab(tab)
-      corePane.setActiveTab(tab)
-      this.done()
+    $('#exhaustive').on('click', () => {
+      this.run (true)
     })
 
     $('#new_pane').on('click', () => {
@@ -272,6 +293,55 @@ class UI {
       this.activePane.addTab(tab)
       this.activePane.setActiveTab(tab)
     })
+  }
+
+  run (exhaustive) {
+    this.wait()
+
+    let sourceTab = this.activePane.activeTab
+    let coreTab = sourceTab.coreTab
+    let execTab = sourceTab.execTab
+
+    let source = sourceTab.editor.getValue()
+    let result = cerberus.run(source, exhaustive)
+    let parsedResult = null
+
+    if (result[0] === 0) {
+      parsedResult = parseCerberusResult(result[1][1].toString())
+      parsedResult.batch = result[1][2][1].toString()
+    } else {
+      parsedResult = {
+        success: false,
+        locations: [],
+        core: "",
+        console: result[1].toString(),
+        batch: ""
+      }
+    }
+
+    coreTab.editor.setValue(parsedResult.core)
+    coreTab.editor.setOption('mode', 'text/x-core')
+
+    for (let i = 0; i < parsedResult.locations.length; i++) {
+      let loc = parsedResult.locations[i]
+      let color = generateColor()
+      sourceTab.editor.markText (
+        loc.c.begin, loc.c.end,
+        {className: color}
+      )
+      coreTab.colorLines (loc.core.begin.line, loc.core.end.line, color)
+    }
+
+    execTab.editor.setValue(parsedResult.batch)
+
+    if (!parsedResult.success) {
+      let consoleTab = sourceTab.consoleTab
+      consoleTab.editor.setValue (
+        consoleTab.editor.getValue()+parsedResult.console
+      )
+    }
+
+    this.done()
   }
 
   setup () {
@@ -374,36 +444,6 @@ class UI {
 
 }
 
-// ML pair -- list is also just a pair of head and tail
-function fst(array) {
-  if (array.length != 3 || array[0] != 0) {
-    alert ("Not a pair: " + array);
-    return;
-  }
-  return array[1];
-}
-
-function snd(array) {
-  if (array.length != 3 || array[0] != 0) {
-    alert ("Not a pair: " + array);
-    return;
-  }
-  return array[2];
-}
-
-function createPosArray (acc, pos) {
-  let head = fst (pos)
-  let tail = snd (pos)
-  let cpos = (fst(head)).toString().match(/\d+/g)
-  let corepos = snd(head)
-  acc.push({
-    cpos: cpos,
-    corepos: corepos
-  })
-  if (tail == 0) return acc
-  return createPosArray(acc, tail)
-}
-
 function generateColor() {
   function basicColor (mix) {
     return Math.floor((Math.floor(Math.random()*256)+mix)/2)
@@ -415,6 +455,55 @@ function generateColor() {
   style.innerHTML +=
     '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
   return className
+}
+
+function parseCerberusResult(res) {
+  function countLines(str) {
+    return str.split(/\r\n|\r|\n/).length - 1
+  }
+
+  let bits = res.split(/{-#(\d*:\d*-\d*:\d*:|E...)#-}/g)
+  let core = ""
+  let locs = [], stkLoc = [], stkLine0 = []
+  let l0 = 0, l = 0
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] == 'ELOC') {
+      // finish last location
+      let cloc = stkLoc.pop().toString().match(/\d+/g)
+      locs.push({
+        c: {
+          begin: {line: cloc[0]-1, ch: cloc[1]-1},
+          end: {line: cloc[2]-1, ch: cloc[3]-1}
+        },
+        core: {
+          begin: {line: l0, ch: 0},
+          end: {line: l, ch: 0}
+        }
+      })
+      l0 = stkLine0.pop()
+      continue;
+    }
+    if (/\d*:\d*-\d*:\d*:/g.test(bits[i])) {
+      stkLine0.push(l0)
+      stkLoc.push(bits[i])
+      l0 = l
+      continue;
+    }
+    // a bit of core source
+    core += bits[i]
+    l += countLines(bits[i])
+  }
+
+  locs.sort((a, b) => {
+    return (a.core.end.line - a.core.begin.line)
+      < (b.core.end.line - b.core.begin.line) ? 1:-1
+  })
+
+  return {
+    success: true,
+    locations: locs,
+    core: core
+  }
 }
 
 let style = document.createElement('style')

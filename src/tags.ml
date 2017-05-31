@@ -1,6 +1,9 @@
 let _tagDefs =
   ref (false, None)
 
+let reset_tagDefs () =
+  _tagDefs := (false, None)
+
 let set_tagDefs v =
   if fst !_tagDefs then
     failwith "Tags definitions can be set only once"
