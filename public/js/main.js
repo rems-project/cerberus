@@ -71,13 +71,47 @@ class TabEditor extends Tab {
       smartIndent: true
     })
 
+    this.editor.addOverlay({
+      token: (stream) => {
+        const rx_word = "\" "
+        let ch = stream.peek()
+        let word = ""
+
+        if (rx_word.includes(ch) || ch === '\uE000' || ch === '\uE001') {
+          stream.next()
+          return null
+        }
+
+        while ((ch = stream.peek()) && !rx_word.includes(ch)){
+          word += ch
+          stream.next()
+        }
+
+        let re = /{-#.+#-}/
+        if (re.test(word))
+          return "std"
+      }
+    }, { opaque: true }
+    )
+
+    this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
+      if ($(e.target).hasClass('cm-std')) {
+        if (this.parent) {
+          let tab = new TabEditor()
+          this.parent.addTab(tab)
+          this.parent.setActiveTab(tab)
+          tab.editor.setValue(e.target.textContent)
+        }
+      }
+    })
+
     this.content.addClass('editor')
   }
 
   colorLines(i, e, color) {
     for (let k = i; k < e; k++) {
-      this.editor.removeLineClass(k, 'gutter')
-      this.editor.addLineClass(k, 'gutter', color)
+      this.editor.removeLineClass(k, 'background')
+      this.editor.addLineClass(k, 'background', color)
     }
   }
 
@@ -175,43 +209,6 @@ class Pane {
 
 class UI {
 
-  pickColor(i) {
-    switch (i % 6) {
-      case 0:
-        return 'color0'
-      case 1:
-        return 'color1'
-      case 2:
-        return 'color2'
-      case 3:
-        return 'color3'
-      case 4:
-        return 'color4'
-      case 5:
-        return 'color5'
-    }
-  }
-
-  decorateLines (ctab, coretab, locs, i) {
-    let head = fst (locs)
-    let tail = snd (locs)
-
-    let color = this.pickColor(i);
-
-    let cpos = (fst(head)).toString().match(/\d+/g)
-    ctab.editor.markText(
-      {line: parseInt(cpos[0])-1, ch: parseInt(cpos[1])-1},
-      {line: parseInt(cpos[2])-1, ch: parseInt(cpos[3])-1},
-      {className: color}
-    )
-
-    let corepos = snd(head)
-    coretab.colorLines (fst(corepos), snd(corepos), color)
-
-    if (tail == 0) return;
-    this.decorateLines(ctab, coretab, tail, i+1)
-  }
-
   constructor () {
     this.panes = []
     window.prevWidth = window.innerWidth
@@ -237,8 +234,19 @@ class UI {
       tab.editor.setValue(snd(result).toString())
       tab.editor.setOption('mode', 'text/x-core')
 
-      let locs = fst(result)
-      this.decorateLines(this.activePane.activeTab, tab, locs, 0);
+      let posArray = createPosArray([], fst(result))
+      posArray.sort((a, b) => {
+        return (a.corepos[2] - a.corepos[1]) < (b.corepos[2] - b.corepos[1]) ? 1:-1
+      })
+      for (let i = 0; i < posArray.length; i++) {
+        let color = generateColor()
+        this.activePane.activeTab.editor.markText(
+          {line: posArray[i].cpos[0]-1, ch: posArray[i].cpos[1]-1},
+          {line: posArray[i].cpos[2]-1, ch: posArray[i].cpos[3]-1},
+          {className: color}
+        )
+        tab.colorLines (posArray[i].corepos[1], posArray[i].corepos[2]+1, color)
+      }
 
       corePane.addTab(tab)
       corePane.setActiveTab(tab)
@@ -366,7 +374,7 @@ class UI {
 
 }
 
-// ML pair
+// ML pair -- list is also just a pair of head and tail
 function fst(array) {
   if (array.length != 3 || array[0] != 0) {
     alert ("Not a pair: " + array);
@@ -383,6 +391,35 @@ function snd(array) {
   return array[2];
 }
 
+function createPosArray (acc, pos) {
+  let head = fst (pos)
+  let tail = snd (pos)
+  let cpos = (fst(head)).toString().match(/\d+/g)
+  let corepos = snd(head)
+  acc.push({
+    cpos: cpos,
+    corepos: corepos
+  })
+  if (tail == 0) return acc
+  return createPosArray(acc, tail)
+}
+
+function generateColor() {
+  function basicColor (mix) {
+    return Math.floor((Math.floor(Math.random()*256)+mix)/2)
+  }
+  let r = basicColor(255)
+  let g = basicColor(255)
+  let b = basicColor(255)
+  let className = 'color'+r+g+b
+  style.innerHTML +=
+    '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
+  return className
+}
+
+let style = document.createElement('style')
+style.type = 'text/css'
+document.head.appendChild(style)
 const ui = new UI()
 
 // Wait buffer.c to be downloaded
