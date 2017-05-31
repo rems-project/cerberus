@@ -186,26 +186,6 @@ html, body {
   border: 1px solid #eee;
 }
 
-.color0 {
-  background-color: #f98f48
-}
-
-.color1 {
-  background-color: #dba987
-}
-
-.color2 {
-  background-color: #bdc1a1
-}
-
-.color3 {
-  background-color: #94ceb8
-}
-
-.color4 {
-  background-color: #D3E0EA
-}
-
-.color5 {
-  background-color: #08d0c1
+.cm-std {
+  cursor: pointer;
 }

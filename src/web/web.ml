@@ -17,7 +17,6 @@ let getLocStr str =
         (* finish last location *)
         match curs with
         | (x', l0')::curs' ->
-          prerr_endline ("LOC: " ^ x');
           loop ((x', (l0, l))::locs, str) curs' l0' l xs
         | _ -> raise (Failure "getLocStr")
       else
