@@ -617,7 +617,7 @@ let pp_argument (sym, bTy) =
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
-let pp_fun_map funs =
+let pp_fun_map pp_decl_flag funs =
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with
@@ -626,12 +626,14 @@ let pp_fun_map funs =
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
       | ProcDecl (bTy, bTys) ->
+        if pp_decl_flag then
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
+        else P.empty
       | Proc (bTy, params, e) ->
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
-  ) funs P.empty
+    ) funs P.empty
 
 
 let pp_impl impl =
@@ -656,7 +658,7 @@ let mk_comment doc =
   )
 
 
-let pp_file file =
+let pp_file pp_decl_flag file =
   let pp_glob acc (sym, bTy, e) =
     acc ^^
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
@@ -667,7 +669,7 @@ let pp_file file =
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-        pp_fun_map file.stdlib ^^ P.break 1 ^^
+        pp_fun_map pp_decl_flag file.stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
   (*  pp_impl file.impl ^^ P.break 1 ^^ *)
@@ -684,7 +686,7 @@ let pp_file file =
     List.fold_left pp_glob P.empty file.globs ^^
     
     !^ "-- Fun map" ^^ P.break 1 ^^
-    pp_fun_map file.funs
+    pp_fun_map pp_decl_flag file.funs
   end
 
 

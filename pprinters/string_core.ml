@@ -12,7 +12,7 @@ let string_of_pexpr pe =
 let string_of_expr e =
   Pp_utils.to_plain_string (pp_expr e)
 let string_of_file f =
-  Pp_utils.to_plain_string (pp_file f)
+  Pp_utils.to_plain_string (pp_file true f)
 
 
 let string_of_params z =
