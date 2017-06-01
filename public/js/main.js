@@ -1,7 +1,8 @@
 'use_strict'
 
 // Globals
-let source_counter = 1
+let sourceCounter = 1
+let draggedTab = null // this is sad
 
 class Tab {
   constructor(title, value) {
@@ -10,8 +11,8 @@ class Tab {
     this.title = title
 
     if (!this.title) {
-      this.title = 'Source #' + source_counter
-      source_counter++
+      this.title = 'Source #' + sourceCounter
+      sourceCounter++
     }
 
     this.tablink = $('#tablink-template').clone().contents()
@@ -24,15 +25,24 @@ class Tab {
     this.content = $(document.createElement('div'))
     this.content.addClass('tab-content')
 
+    this.dragDiv = null
+
+    this.addEventListener()
+  }
+
+  addEventListener() {
     this.tablink.on('click', () => {
-      if (this.parent)
-        this.parent.setActiveTab(this)
-      this.refresh()
+      this.setActive()
     })
 
     this.tabclose.on('click', () => {
       if (this.parent)
         this.parent.removeTab(this)
+    })
+
+    this.tablink.on('dragstart', (evt) => {
+      draggedTab = this
+      // TODO: build a hover div
     })
   }
 
@@ -44,6 +54,11 @@ class Tab {
   select () {
     this.tablink.addClass('active')
     this.content.show()
+  }
+
+  setActive() {
+    if (this.parent)
+      this.parent.setActiveTab(this)
   }
 
   clearSelection () {
@@ -145,7 +160,6 @@ class TabEditor extends Tab {
   }
 
   colorLines(i, e, color) {
-    //if (e - i == 0) e++ //HACK
     for (let k = i; k <= e; k++) {
       this.editor.removeLineClass(k, 'background')
       this.editor.addLineClass(k, 'background', color)
@@ -164,12 +178,10 @@ class Pane {
 
     // UI
     this.parent = null
-    if (div) {
-      this.div = $(div)
-    } else {
-      this.div = $('#pane-template').clone().contents()
-    }
+    this.div = $('#pane-template').clone().contents()
+
     this.tabadder = this.div.find('.tabadder')
+    this.tablinks = this.div.find('.tablinks')
     this.content = this.div.find('.content')
     this.activeTab = null
 
@@ -186,6 +198,31 @@ class Pane {
       if (this.parent)
         this.parent.activePane = this
     })
+
+    this.div.on('drop', (evt) => {
+      if (draggedTab) {
+        let tab = draggedTab
+        draggedTab = null
+        if (tab.parent === this) return;
+        tab.parent.removeTab(tab)
+        // TODO: this is not working
+        let elem = $(document.elementFromPoint(evt.clientX, evt.clientY))
+        if (!elem.hasClass('tablink')) elem = null
+        this.addTab(tab, elem)
+        this.setActiveTab(tab)
+        tab.addEventListener()
+        tab.refresh()
+      }
+    })
+
+    this.tablinks.on('dragover', (evt) => {
+      // Allows dropping over tablinks
+      evt.preventDefault()
+    })
+
+    this.tablinks.on('drop', (evt) => {
+
+    })
   }
 
   get firstTab () {
@@ -199,9 +236,12 @@ class Pane {
     return null
   }
 
-  addTab (tab) {
+  addTab (tab, beforeThisTab) {
     this.tabs.push(tab)
-    this.tabadder.before(tab.tablink)
+    if (beforeThisTab)
+      beforeThisTab.before(tab.tablink)
+    else
+      this.tabadder.before(tab.tablink)
     this.content.append(tab.content)
     tab.parent = this
     if (!this.activeTab)
@@ -209,7 +249,7 @@ class Pane {
     tab.refresh()
   }
 
-  removeTab (tab) {
+  removeTab (tab, doNotRemovePane) {
     if (tab === this.activeTab) {
       let prev = this.prevTab(tab)
       if (prev)
@@ -227,7 +267,7 @@ class Pane {
       }
     }
 
-    if (this.tabs.length == 0)
+    if (this.tabs.length == 0 && !doNotRemovePane)
       this.parent.removePane(this)
   }
 
@@ -251,16 +291,6 @@ class UI {
     window.prevWidth = window.innerWidth
     this.div = $('#panes')
     this.activePane = null
-
-    // Resizing panes event
-    this.resize = {
-      x: 0,
-      sep: null,
-      pane: null,
-      paneWidth: null,
-      lastPane: null,
-      lastPaneWidth: null
-    }
 
     $('#run').on('click', () => {
       this.run (false)
@@ -293,6 +323,8 @@ class UI {
       this.activePane.addTab(tab)
       this.activePane.setActiveTab(tab)
     })
+
+    window.onresize = () => this.refresh()
   }
 
   run (exhaustive) {
@@ -339,6 +371,11 @@ class UI {
       consoleTab.editor.setValue (
         consoleTab.editor.getValue()+parsedResult.console
       )
+      consoleTab.setActive()
+      consoleTab.refresh()
+    } else {
+      execTab.setActive()
+      execTab.refresh()
     }
 
     this.done()
@@ -349,7 +386,7 @@ class UI {
     for (let i = 0; i < this.panes.length; i++) {
       this.panes[i].div.width(w)
     }
-    $('.pane-separator').on('mousedown', e => this.init_resize(e))
+    $('.pane-separator').on('mousedown', e => this.onresize(e))
   }
 
   wait () {
@@ -398,7 +435,7 @@ class UI {
     sep.remove()
     pane.div.remove()
 
-    for (let i = 0; i < this.panes.lengtha; i++) {
+    for (let i = 0; i < this.panes.length; i++) {
       if (this.panes[i] === pane) {
         this.panes.splice(i, 1)
       }
@@ -408,38 +445,38 @@ class UI {
 
   refresh () {
     let factor = window.innerWidth / window.prevWidth
-    for (i = 0; i < this.panes.length; i++) {
-      let w = parseFloat(this.panes[i].div[0].style.width.slice(0, -2))
-      this.panes[i].div[0].style.width = (w * factor)+'px'
+    for (let i = 0; i < this.panes.length; i++) {
+      let w = parseFloat(this.panes[i].div.siblings()[0].style.width.slice(0, -2))
+      this.panes[i].div.siblings()[0].style.width = (w * factor)+'px'
     }
     window.prevWidth = window.innerWidth
   }
 
-  init_resize (evt) {
-    this.resize.x = evt.clientX
-    this.resize.sep = evt.currentTarget
-    this.resize.pane = $(this.resize.sep).prev()[0]
-    this.resize.paneWidth = parseFloat(this.resize.pane.style.width.slice(0, -2))
-    this.resize.lastPane = $(this.resize.sep).siblings().last()[0]
-    this.resize.lastPaneWidth =
-      parseFloat(this.resize.lastPane.style.width.slice(0, -2))
-    $(this.resize.sep).addClass('resize')
+  onresize (evt) {
+    let x = evt.clientX
+    let sep = $(evt.currentTarget)
+    let pane = sep.prev()[0]
+    let paneWidth = parseFloat(pane.style.width.slice(0, -2))
+    let lastPane = sep.siblings().last()[0]
+    let lastPaneWidth = parseFloat(lastPane.style.width.slice(0, -2))
+
+    function resize (evt) {
+      let delta = evt.clientX - x
+      pane.style.width = (paneWidth+delta)+'px'
+      lastPane.style.width = (lastPaneWidth-delta)+'px'
+    }
+
+    function stop (evt) {
+      sep.removeClass('resize')
+      $('div').each((i, e) => e.style.pointerEvents = '')
+      $(document).off('mousemove');
+      $(document).off('mouseup');
+    }
+
+    $(sep).addClass('resize')
     $('div').each((i, e) => e.style.pointerEvents = 'none')
-    $(document.documentElement).on('mousemove', e => this.do_resize(e));
-    $(document.documentElement).on('mouseup', e => this.stop_resize(e));
-  }
-
-  do_resize (evt) {
-    let delta = evt.clientX - this.resize.x
-    this.resize.pane.style.width = (this.resize.paneWidth+delta)+'px'
-    this.resize.lastPane.style.width = (this.resize.lastPaneWidth-delta)+'px'
-  }
-
-  stop_resize (evt) {
-    $(this.resize.sep).removeClass('resize')
-    $('div').each((i, e) => e.style.pointerEvents = '')
-    $(document.documentElement).off('mousemove');
-    $(document.documentElement).off('mouseup');
+    $(document).on('mousemove', e => resize(e));
+    $(document).on('mouseup', e => stop(e));
   }
 
 }

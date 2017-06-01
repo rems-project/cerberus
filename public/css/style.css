@@ -157,6 +157,10 @@ html, body {
   outline: 0;
 }
 
+.tablink.drag{
+  background-color: #ccc
+}
+
 .pane-separator {
   width: 3px;
   cursor: col-resize;
@@ -188,4 +192,8 @@ html, body {
 
 .cm-std {
   cursor: pointer;
+}
+
+.grabbing {
+  cursor: crosshair;
 }
