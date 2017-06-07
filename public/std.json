@@ -1,0 +1,10 @@
+{
+  "6": {
+    "5": {
+      "15": {
+        "title": "Conditional operator",
+        "4": "The first operand is evaluated; there is a sequence point between its evaluation and the evaluation of the second or third operand (whichever is evaluated). The second operand is evaluated only if the first compares unequal to 0; the third operand is evaluated only if the first compares equal to 0; the result is the value of the second or third operand (whichever is evaluated), converted to the type described below. (A conditional expression does not yield an lvalue.)"
+      }
+    }
+  }
+}

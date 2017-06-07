@@ -7,11 +7,12 @@
   <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
   <script type="text/javascript" src="lib/codemirror.js"></script>
   <script type="text/javascript" src="lib/clike.js"></script>
-  <script type="text/javascript" src="lib/mcpp.js"></script>
+  <!--<script type="text/javascript" src="lib/mcpp.js"></script>-->
   <script type="text/javascript" src="js/core.js"></script>
   <link rel="stylesheet" type="text/css" href="css/style.css" />
 </head>
 <body>
+  <input id="file-input" type="file" style="display:none;"/>
   <div id="container">
     <div id="header">
       <div id="title">Cerberus</div>
@@ -24,12 +25,14 @@
             <button id="exhaustive">Exhaustive</button>
           </div>
         </div>
+        <button id="load">Load</button>
         <div class="dropdown">
           <button class="dropbtn">View</button>
           <div class="dropdown-content">
-            <button id="new_pane">New Pane</button>
-            <button>Collapse Pane</button>
             <button id="new_tab">New Tab</button>
+            <button id="new_pane">Split Vertically</button>
+            <button id="new_pane">Split Horizontally</button>
+            <button>Unsplit All</button>
           </div>
         </div>
         <button id="help">Help</button>
@@ -56,8 +59,10 @@
     <h1>Help</h1>
     <p>TODO</p>
   </template>
+  <script type="text/javascript" src="js/tabs.js"></script>
+  <script type="text/javascript" src="js/panes.js"></script>
   <script type="text/javascript" src="js/main.js"></script>
-  <script type="text/javascript" src="js/cerberus.js"></script>
+  <!-- <script type="text/javascript" src="js/cerberus.js"></script> -->
 
 </body>
 </html>

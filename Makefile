@@ -146,7 +146,6 @@ $(WEB_INCLUDE):
 	cp -r include public/include
 
 # NOTE: It overrides Big_int_Z to Big_int, since js_of_ocaml does not support zarith
-# TODO: it should install node and monaco-editor (npm install monaco-editor)
 web: $(WEB_INCLUDE)
 	cp src/web/web_big_int_impl.ml ocaml_generated/big_int_impl.ml
 	ocamlbuild -use-ocamlfind -j 4 -pkgs pprint,js_of_ocaml,js_of_ocaml.ppx\
