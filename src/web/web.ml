@@ -30,17 +30,21 @@ let invokeCpp input =
 let onLoadCerberus () =
   Js.Unsafe.fun_call (Js.Unsafe.variable "onLoadCerberus") [||]
 
+let timeout cb n =
+  Js.Unsafe.fun_call (Js.Unsafe.variable "setTimeout")
+    [|cb; n|]
+
 let download fs_save filename =
   get filename
   >>= fun res ->
   fs_save ~name:filename ~content:res.content;
   return_unit
 
-let buffile = "buffer.c"
-let libcore = "include/core/std.core"
-let impl = "include/core/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl"
+let buffile = "../buffer.c"
+let libcore = "../include/core/std.core"
+let impl = "../include/core/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl"
 
-let libc = List.map (fun s -> "include/c/libc/" ^ s) [
+let libc = List.map (fun s -> "../include/c/libc/" ^ s) [
     "complex.h";
     "inttypes.h";
     "setjump.h";
@@ -66,7 +70,7 @@ let libc = List.map (fun s -> "include/c/libc/" ^ s) [
     "threads.h"
 ]
 
-let posix = List.map (fun s -> "include/c/posix/" ^ s) [
+let posix = List.map (fun s -> "../include/c/posix/" ^ s) [
     "stdio.h";
   ]
 
@@ -111,5 +115,6 @@ let _ =
   Js.export "cerberus"
   (object%js
     method run source exhaustive = run source exhaustive
+    method runCancel source exhaustive = run source exhaustive
     method buffer = file_content buffile
   end)
