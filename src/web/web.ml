@@ -30,10 +30,6 @@ let invokeCpp input =
 let onLoadCerberus () =
   Js.Unsafe.fun_call (Js.Unsafe.variable "onLoadCerberus") [||]
 
-let timeout cb n =
-  Js.Unsafe.fun_call (Js.Unsafe.variable "setTimeout")
-    [|cb; n|]
-
 let download fs_save filename =
   get filename
   >>= fun res ->
@@ -115,6 +111,5 @@ let _ =
   Js.export "cerberus"
   (object%js
     method run source exhaustive = run source exhaustive
-    method runCancel source exhaustive = run source exhaustive
     method buffer = file_content buffile
   end)
