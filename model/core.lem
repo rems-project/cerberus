@@ -243,6 +243,7 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEis_integer of (generic_pexpr 'bty 'sym)
  | PEis_signed of (generic_pexpr 'bty 'sym)
  | PEis_unsigned of (generic_pexpr 'bty 'sym)
+ | PEstd of string * (generic_pexpr 'bty 'sym)
 
 and generic_pexpr 'bty 'sym = 
  | Pexpr of 'bty * (pexpr_ 'bty 'sym)

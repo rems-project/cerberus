@@ -216,3 +216,12 @@ html, body {
 .tooltip-visible {
   visibility: visible !important;
 }
+
+.std {
+  margin: auto;
+  width: 90%;
+}
+
+.std hr {
+  margin-top:20px;
+}

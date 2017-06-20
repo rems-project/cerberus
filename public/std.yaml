@@ -10,7 +10,7 @@
     It specifies
     <ul>
     <li>the representation of C programs;</li>
-    <li>the syntax and constraints of the C language;</li>
+    <li>the Syntax and Constraints of the C language;</li>
     <li>the semantic rules for interpreting C programs;</li>
     <li>the representation of input data to be processed by C programs;</li>
     <li>the representation of output data produced by C programs;</li>
@@ -63,7 +63,7 @@
   P1: >
     For the purposes of this document, the following terms and definitions apply.
     Other terms are defined where they appear in italic type or on the left side
-    of a syntax rule.
+    of a Syntax rule.
     Terms explicitly defined in this International Standard are not to be presumed
     to refer implicitly to similar terms defined elsewhere. Terms not defined in
     this International Standard are to be interpreted according to ISO/IEC 2382−1.
@@ -390,7 +390,7 @@
   1:
     title: Notation
     P1: >
-      In the syntax notation used in this clause, syntactic categories
+      In the Syntax notation used in this clause, syntactic categories
       (nonterminals) are indicated by italic type, and literal words and
       character set members (terminals) by bold type. A colon (:) following a
       nonterminal introduces its definition. Alternative definitions are listed
@@ -405,7 +405,7 @@
       four kinds of scopes: function, file, block, and function prototype. (A
       function prototype is a declaration of a function that declares the types
       of its parameters.)
-    P3: A summary of the language syntax is given in annex A.
+    P3: A summary of the language Syntax is given in annex A.
   2:
     title: Concepts
     1:
@@ -527,7 +527,7 @@
         uses that refer to different entities.
         Thus, there are separate name spaces for various categories of
         identifiers, as follows:
-        — label names (disambiguated by the syntax of the label declaration and
+        — label names (disambiguated by the Syntax of the label declaration and
         use);
         — the tags of structures, unions, and enumerations (disambiguated by
         following any<foot>There is only one name space for tags even though
@@ -918,7 +918,7 @@
           shall not be generated.
         P9: >
           Loads and stores of objects with atomic types are done with
-          memory_order_seq_cst semantics.
+          memory_order_seq_cst Semantics.
       2:
         title: Integer types
         P1: >
@@ -1339,7 +1339,7 @@
           A function designator is an expression that has function type. Except
           when it is the operand of the sizeof operator,<foot>Because this
           conversion does not occur, the operand of the sizeof operator remains
-          a function designator and violates the constraints in 6.5.3.4.</foot>
+          a function designator and violates the Constraints in 6.5.3.4.</foot>
           or the unary & operator, a function designator with type ‘‘function
           returning type’’ is converted to an expression that has type
           ‘‘pointer to function returning type’’.
@@ -1411,7 +1411,7 @@
   4:
     title: Lexical elements
     P1: |
-      Syntax
+      <h3>Syntax</h3>
       token:
         keyword
         identifier
@@ -1427,12 +1427,12 @@
         punctuator
         each non-white-space character that cannot be one of the above
     P2: |
-      Constraints
+      <h3>Constraints</h3>
       Each preprocessing token that is converted to a token shall have the
       lexical form of a keyword, an identifier, a constant, a string literal,
       or a punctuator.
     P3: |
-      Semantics
+      <h3>Semantics</h3>
       A token is the minimal lexical element of the language in translation
       phases 7 and 8. The categories of tokens are: keywords, identifiers,
       constants, string literals, and punctuators.  A preprocessing token is the
@@ -1475,7 +1475,7 @@
     1:
       title: Keywords
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         keyword: one of
         auto
         break
@@ -1522,7 +1522,7 @@
         _Static_assert
         _Thread_local
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         The above tokens (case sensitive) are reserved (in translation phases 7
         and 8) for use as keywords, and shall not be used otherwise. The
         keyword _Imaginary is reserved for specifying imaginary types.
@@ -1533,7 +1533,7 @@
       1:
         title: General
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           identifier:
             identifier-nondigit
             identifier identifier-nondigit
@@ -1550,7 +1550,7 @@
           digit: one of
             0 1 2 3 4 5 6 7 8 9
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           An identifier is a sequence of nondigit characters (including the
           underscore _, the lowercase and uppercase Latin letters, and other
           characters) and digits, which designates one or more entities as
@@ -1590,7 +1590,7 @@
       2:
         title: Predefined identifiers
         P1: |
-          Semantics
+          <h3>Semantics</h3>
           The identifier _ _func_ _ shall be implicitly declared by the
           translator as if, immediately following the opening brace of each
           function definition, the declaration
@@ -1621,7 +1621,7 @@
     3:
       title: Universal character names
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         universal-character-name:
           \u hex-quad
           \U hex-quad hex-quad
@@ -1629,7 +1629,7 @@
           hexadecimal-digit hexadecimal-digit
           hexadecimal-digit hexadecimal-digit
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         A universal character name shall not specify a character whose short
         identifier is less than 00A0 other than 0024 ($), 0040 (@), or 0060
         (‘), nor one in the range D800 through DFFF inclusive.<foot>The
@@ -1643,7 +1643,7 @@
         constants, and string literals to designate characters that are not in
         the basic character set.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         The universal character name \Unnnnnnnn designates the character whose
         eight-digit short identifier (as specified by ISO/IEC 10646) is
         nnnnnnnn.<foot>Short identifiers for characters were first specified in
@@ -1654,24 +1654,24 @@
     4:
       title: Constants
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         constant:
           integer-constant
           floating-constant
           enumeration-constant
           character-constant
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each constant shall have a type and the value of a constant shall be in
         the range of representable values for its type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         Each constant has a type, determined by its form and value, as detailed
         later.
       1:
         title: Integer constants
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           integer-constant:
             decimal-constant integer-suffixopt
             octal-constant integer-suffixopt
@@ -1719,7 +1719,7 @@
           sequence of the decimal digits and the letters a (or A) through f (or
           F) with values 10 through 15 respectively.
         P4: |
-          Semantics
+          <h3>Semantics</h3>
           The value of a decimal constant is computed base 10; that of an octal
           constant, base 8; that of a hexadecimal constant, base 16. The
           lexically first digit is the most significant.
@@ -1823,7 +1823,7 @@
       2:
         title: Floating constants
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           floating-constant:
             decimal-floating-constant
             hexadecimal-floating-constant
@@ -1870,7 +1870,7 @@
           or the fraction part has to be present; for decimal floating
           constants, either the period or the exponent part has to be present.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           The significand part is interpreted as a (decimal or hexadecimal)
           rational number; the digit sequence in the exponent part is
           interpreted as a decimal integer. For decimal floating constants, the
@@ -1914,16 +1914,16 @@
       3:
         title: Enumeration constants
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           enumeration-constant:
             identifier
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           An identifier declared as an enumeration constant has type int.
       4:
         title: Character constants
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           character-constant:
             ' c-char-sequence '
             L' c-char-sequence '
@@ -1997,12 +1997,12 @@
           representable by universal character names and certain nongraphic
           characters are representable by escape sequences consisting of the
           backslash \ followed by a lowercase letter: \a, \b, \f, \n, \r, \t, and
-          \v.<foot>The semantics of these characters were discussed in 5.2.2.
+          \v.<foot>The Semantics of these characters were discussed in 5.2.2.
           If any other character follows a backslash, the result is not a token
           and a diagnostic is required. See ‘‘future language directions’’
           (6.11.4).</foot>
         P9: |
-          Constraints
+          <h3>Constraints</h3>
           The value of an octal or hexadecimal escape sequence shall be in the
           range of representable values for the corresponding type:
           <table>
@@ -2026,7 +2026,7 @@
           </tr>
           </table>
         P10: |
-          Semantics
+          <h3>Semantics</h3>
           An integer character constant has type int. The value of an integer
           character constant containing a single character that maps to a
           single-byte execution character is the numerical value of the
@@ -2082,7 +2082,7 @@
     5:
       title: String literals
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         string-literal:
           encoding-prefixopt " s-char-sequenceopt "
         encoding-prefix:
@@ -2098,7 +2098,7 @@
             the double-quote \", backslash \, or new-line character
           escape-sequence
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         A sequence of adjacent string literal tokens shall not include both a
         wide string literal and a UTF−8 string literal.
       P3: |
@@ -2115,7 +2115,7 @@
         either by itself or by the escape sequence \', but the double-quote \"
         shall be represented by the escape sequence \".
       P5: |
-        Semantics
+        <h3>Semantics</h3>
         In translation phase 6, the multibyte character sequences specified by
         any sequence of adjacent character and identically-prefixed string
         literal tokens are concatenated into a single multibyte character
@@ -2179,7 +2179,7 @@
     6:
       title: Punctuators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         punctuator: one of
           [ ] ( ) { } . ->
           ++ -- & * + - ~ !
@@ -2189,7 +2189,7 @@
           , \# \#\#
           <: :> <% %> %: %:%:
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         A punctuator is a symbol that has independent syntactic and semantic
         significance.  Depending on context, it may specify an operation to be
         performed (which in turn may yield a value or a function designator,
@@ -2208,7 +2208,7 @@
     7:
       title: Header names
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         header-name:
           < h-char-sequence >
           " q-char-sequence "
@@ -2225,7 +2225,7 @@
           any member of the source character set except
           the new-line character and \"
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         The sequences in both forms of header names are mapped in an
         implementation-defined manner to headers or external source file names
         as specified in 6.10.2.
@@ -2259,7 +2259,7 @@
     8:
       title: Preprocessing numbers
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         pp-number:
           digit
           . digit
@@ -2279,7 +2279,7 @@
         Preprocessing number tokens lexically include all floating and integer
         constant tokens.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         A preprocessing number does not have type or a value; it acquires both
         after a successful conversion (as part of translation phase 7) to a
         floating constant token or an integer constant token.
@@ -2302,14 +2302,14 @@
         <code>
         "a//b"                      // four-character string literal
         \#include "//e"             // undefined behavior
-        // */                       // comment, not syntax error
+        // */                       // comment, not Syntax error
         f = g/**//h;                // equivalent to f = g / h;
         //\
         i();                        // part of a two-line comment
         /\
         / j();                      // part of a two-line comment
         \#define glue(x,y) x##y
-        glue(/,/) k();              // syntax error, not comment
+        glue(/,/) k();              // Syntax error, not comment
         /*//*/ l();                 // equivalent to l();
         m = n//**/o
         + p;                        // equivalent to m = n + p;
@@ -2341,8 +2341,8 @@
       </code>
       </foot>
     P3: >
-      The grouping of operators and operands is indicated by the syntax.
-      <foot>The syntax specifies the precedence of operators in the evaluation
+      The grouping of operators and operands is indicated by the Syntax.
+      <foot>The Syntax specifies the precedence of operators in the evaluation
       of an expression, which is the same as the order of the major subclauses
       of this subclause, highest precedence first. Thus, for example, the
       expressions allowed as the operands of the binary + operator (6.5.6) are
@@ -2352,7 +2352,7 @@
       parentheses () (6.5.1), subscripting brackets [] (6.5.2.1), function-call
       parentheses () (6.5.2.2), and the conditional operator ? : (6.5.15).
       Within each major subclause, the operators have the same precedence. Left-
-      or right-associativity is indicated in each subclause by the syntax for the
+      or right-associativity is indicated in each subclause by the Syntax for the
       expressions discussed therein.</foot> Except as specified later, side
       effects and value computations of subexpressions are unsequenced.<foot>In
       an expression that is evaluated more than once during the execution of a
@@ -2418,19 +2418,19 @@
     1:
       title: Primary expressions
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         primary-expression:
           identifier
           constant
           string-literal
           ( expression )
           generic-selection
-          Semantics
-      P2: >
+      P2: |
+        <h3>Semantics</h3>
         An identifier is a primary expression, provided it has been declared as
         designating an object (in which case it is an lvalue) or a function (in
         which case it is a function designator).<foot>Thus, an undeclared
-        identifier is a violation of the syntax.</foot>
+        identifier is a violation of the Syntax.</foot>
       P3: >
         A constant is a primary expression. Its type depends on its form and
         value, as detailed in 6.4.4.
@@ -2450,7 +2450,7 @@
       1:
         title: Generic selection
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           generic-selection:
             _Generic ( assignment-expression , generic-assoc-list )
           generic-assoc-list:
@@ -2460,7 +2460,7 @@
             type-name : assignment-expression
             default : assignment-expression
         P2: |
-          Constraints
+          <h3>Constraints</h3>
           A generic selection shall have no more than one default generic
           association. The type name in a generic association shall specify a
           complete object type other than a variably modified type. No two
@@ -2472,7 +2472,7 @@
           compatible with exactly one of the types named in its generic
           association list.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           The controlling expression of a generic selection is not evaluated.
           If a generic selection has a generic association with a type name
           that is compatible with the type of the controlling expression, then
@@ -2499,7 +2499,7 @@
     2:
       title: Postfix operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         postfix-expression:
           primary-expression
           postfix-expression [ expression ]
@@ -2515,12 +2515,12 @@
       1:
         title: Array subscripting
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           One of the expressions shall have type ‘‘pointer to complete object
           type’’, the other expression shall have integer type, and the result
           has type ‘‘type’’.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           A postfix expression followed by an expression in square brackets []
           is a subscripted designation of an element of an array object. The
           definition of the subscript operator [] is that E1[E2] is identical
@@ -2558,7 +2558,7 @@
       2:
         title: Function calls
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The expression that denotes the called function<foot>Most often, this
           is the result of converting an identifier that is a function
           designator.</foot> shall have type pointer to function returning void
@@ -2570,7 +2570,7 @@
           value may be assigned to an object with the unqualified version of
           the type of its corresponding parameter.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           A postfix expression followed by parentheses () containing a possibly
           empty, commaseparated list of expressions is a function call. The
           postfix expression denotes the called function. The list of
@@ -2651,7 +2651,7 @@
       3:
         title: Structure and union members
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The first operand of the . operator shall have an atomic, qualified,
           or unqualified structure or union type, and the second operand shall
           name a member of that type.
@@ -2661,7 +2661,7 @@
           qualified, or unqualified union’’, and the second operand shall name
           a member of the type pointed to.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           A postfix expression followed by the . operator and an identifier
           designates a member of a structure or union object. The value is that
           of the named member,<foot>If the member used to read the contents of
@@ -2774,23 +2774,23 @@
       4:
         title: Postfix increment and decrement operators
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The operand of the postfix increment or decrement operator shall have
           atomic, qualified, or unqualified real or pointer type, and shall be
           a modifiable lvalue.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           The result of the postfix ++ operator is the value of the operand. As
           a side effect, the value of the operand object is incremented (that
           is, the value 1 of the appropriate type is added to it). See the
           discussions of additive operators and compound assignment for
-          information on constraints, types, and conversions and the effects of
+          information on Constraints, types, and conversions and the effects of
           operations on pointers. The value computation of the result is
           sequenced before the side effect of updating the stored value of the
           operand. With respect to an indeterminately-sequenced function call,
           the operation of postfix ++ is a single evaluation. Postfix ++ on an
           object with atomic type is a read-modify-write operation with
-          memory_order_seq_cst memory order semantics.
+          memory_order_seq_cst memory order Semantics.
           <foot> Where a pointer to an atomic object can be formed and E has
           integer type, E++ is equivalent to the following code sequence where T
           is the type of E:
@@ -2811,14 +2811,14 @@
       5:
         title: Compound literals
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The type name shall specify a complete object type or an array of
           unknown size, but not a variable length array type.
         P2: >
-          All the constraints for initializer lists in 6.7.9 also apply to
+          All the Constraints for initializer lists in 6.7.9 also apply to
           compound literals.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           A postfix expression that consists of a parenthesized type name
           followed by a braceenclosed list of initializers is a compound
           literal. It provides an unnamed object whose value is given by the
@@ -2949,7 +2949,7 @@
     3:
       title: Unary operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         unary-expression:
           postfix-expression
           ++ unary-expression
@@ -2963,17 +2963,17 @@
       1:
         title: Prefix increment and decrement operators
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The operand of the prefix increment or decrement operator shall have
           atomic, qualified, or unqualified real or pointer type, and shall be
           a modifiable lvalue.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           The value of the operand of the prefix ++ operator is incremented.
           The result is the new value of the operand after incrementation. The
           expression ++E is equivalent to (E+=1).  See the discussions of
           additive operators and compound assignment for information on
-          constraints, types, side effects, and conversions and the effects of
+          Constraints, types, side effects, and conversions and the effects of
           operations on pointers.
         P3: >
           The prefix -- operator is analogous to the prefix ++ operator, except
@@ -2981,13 +2981,14 @@
       2:
         title: Address and indirection operators
         P1: |
-          Constraints The operand of the unary & operator shall be either a
+          <h3>Constraints</h3>
+          The operand of the unary & operator shall be either a
           function designator, the result of a [] or unary * operator, or an
           lvalue that designates an object that is not a bit-field and is not
           declared with the register storage-class specifier.
         P2: The operand of the unary * operator shall have pointer type.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           The unary & operator yields the address of its operand. If the
           operand has type ‘‘type’’, the result has type ‘‘pointer to type’’.
           If the operand is the result of a unary * operator, neither that
@@ -3018,11 +3019,11 @@
       3:
         title: Unary arithmetic operators
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The operand of the unary + or - operator shall have arithmetic type;
           of the ~ operator, integer type; of the ! operator, scalar type.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           The result of the unary + operator is the value of its (promoted)
           operand. The integer promotions are performed on the operand, and the
           result has the promoted type.
@@ -3046,14 +3047,14 @@
       4:
         title: The sizeof and _Alignof operators
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The sizeof operator shall not be applied to an expression that has
           function type or an incomplete type, to the parenthesized name of
           such a type, or to an expression that designates a bit-field member.
           The _Alignof operator shall not be applied to a function type or an
           incomplete type.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           The sizeof operator yields the size (in bytes) of its operand, which
           may be an expression or the parenthesized name of a type. The size is
           determined from the type of the operand. The result is an integer. If
@@ -3119,12 +3120,12 @@
     4:
       title: Cast operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         cast-expression:
           unary-expression
           ( type-name ) cast-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Unless the type name specifies a void type, the type name shall specify
         atomic, qualified, or unqualified scalar type, and the operand shall
         have scalar type.
@@ -3136,7 +3137,7 @@
         A pointer type shall not be converted to any floating type. A floating
         type shall not be converted to any pointer type.
       P5: |
-        Semantics
+        <h3>Semantics</h3>
         Preceding an expression by a parenthesized type name converts the value
         of the expression to the named type. This construction is called a
         cast.<foot> A cast does not yield an lvalue. Thus, a cast to a
@@ -3151,18 +3152,18 @@
     5:
       title: Multiplicative operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         multiplicative-expression:
           cast-expression
           multiplicative-expression * cast-expression
           multiplicative-expression / cast-expression
           multiplicative-expression % cast-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have arithmetic type. The operands of the %
         operator shall have integer type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The usual arithmetic conversions are performed on the operands.
       P4: >
         The result of the binary * operator is the product of the operands.
@@ -3180,13 +3181,13 @@
     6:
       titlle: Additive operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         additive-expression:
           multiplicative-expression
           additive-expression + multiplicative-expression
           additive-expression - multiplicative-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         For addition, either both operands shall have arithmetic type, or one
         operand shall be a pointer to a complete object type and the other
         shall have integer type. (Incrementing is equivalent to adding 1.)
@@ -3199,7 +3200,7 @@
         operand has integer type.
         (Decrementing is equivalent to subtracting 1.)
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         If both operands have arithmetic type, the usual arithmetic conversions
         are performed on them.
       P5: >
@@ -3283,16 +3284,16 @@
     7:
       title: Bitwise shift operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         shift-expression:
           additive-expression
           shift-expression << additive-expression
           shift-expression >> additive-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have integer type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The integer promotions are performed on each of the operands. The type
         of the result is that of the promoted left operand. If the value of the
         right operand is negative or is greater than or equal to the width of
@@ -3313,7 +3314,7 @@
     8:
       title: Relational operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         relational-expression:
           shift-expression
           relational-expression < shift-expression
@@ -3321,13 +3322,13 @@
           relational-expression <= shift-expression
           relational-expression >= shift-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         One of the following shall hold:
         — both operands have real type; or
         — both operands are pointers to qualified or unqualified versions of
         compatible object types.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         If both of the operands have arithmetic type, the usual arithmetic
         conversions are performed.
       P4: >
@@ -3361,13 +3362,13 @@
     9:
       title: Equality operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         equality-expression:
           relational-expression
           equality-expression == relational-expression
           equality-expression != relational-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         One of the following shall hold:
         — both operands have arithmetic type;
         — both operands are pointers to qualified or unqualified versions of
@@ -3376,7 +3377,7 @@
         to a qualified or unqualified version of void; or
         — one operand is a pointer and the other is a null pointer constant.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The == (equal to) and != (not equal to) operators are analogous to the
         relational operators except for their lower precedence.<foot>Because of
         the precedences, a<b == c<d is 1 whenever a<b and c<d have the same
@@ -3420,15 +3421,15 @@
     10:
       title: Bitwise AND operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         AND-expression:
           equality-expression
           AND-expression & equality-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have integer type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The usual arithmetic conversions are performed on the operands.
       P4: >
         The result of the binary & operator is the bitwise AND of the operands
@@ -3437,15 +3438,15 @@
     11:
       title: exclusive OR operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         exclusive-OR-expression:
           AND-expression
           exclusive-OR-expression ^ AND-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have integer type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The usual arithmetic conversions are performed on the operands.
       P4: >
         The result of the ^ operator is the bitwise exclusive OR of the
@@ -3454,15 +3455,15 @@
     12:
       title: Bitwise inclusive OR operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         inclusive-OR-expression:
           exclusive-OR-expression
           inclusive-OR-expression | exclusive-OR-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have integer type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The usual arithmetic conversions are performed on the operands.
       P4: >
         The result of the | operator is the bitwise inclusive OR of the
@@ -3471,15 +3472,15 @@
     13:
       title: Logical AND operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         logical-AND-expression:
           inclusive-OR-expression
           logical-AND-expression && inclusive-OR-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have scalar type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The && operator shall yield 1 if both of its operands compare unequal
         to 0; otherwise, it yields 0. The result has type int.
       P4: >
@@ -3491,15 +3492,15 @@
     14:
       title: Logical OR operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         logical-OR-expression:
           logical-AND-expression
           logical-OR-expression || logical-AND-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Each of the operands shall have scalar type.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The || operator shall yield 1 if either of its operands compare unequal
         to 0; otherwise, it yields 0. The result has type int.
       P4: >
@@ -3511,12 +3512,12 @@
     15:
       title: Conditional operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         conditional-expression:
           logical-OR-expression
           logical-OR-expression ? expression : conditional-expression
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         The first operand shall have scalar type.
       P3: |
         One of the following shall hold for the second and third operands:
@@ -3529,14 +3530,14 @@
         — one operand is a pointer to an object type and the other is a pointer
         to a qualified or unqualified version of void.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         The first operand is evaluated; there is a sequence point between its
         evaluation and the evaluation of the second or third operand (whichever
         is evaluated). The second operand is evaluated only if the first
         compares unequal to 0; the third operand is evaluated only if the first
         compares equal to 0; the result is the value of the second or third
         operand (whichever is evaluated), converted to the type described
-        below.<foot>A conditional expression does not yield an lvalue.</foot>
+        below. <foot>A conditional expression does not yield an lvalue.</foot>
       P5: >
         If both the second and third operands have arithmetic type, the result
         type that would be determined by the usual arithmetic conversions, were
@@ -3584,17 +3585,17 @@
     16:
       title: Assignment operators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         assignment-expression:
           conditional-expression
           unary-expression assignment-operator assignment-expression
         assignment-operator: one of
           = *= /= %= += -= <<= >>= &= ^= |=
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         An assignment operator shall have a modifiable lvalue as its left operand.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         An assignment operator stores a value in the object designated by the
         left operand. An assignment expression has the value of the left
         operand after the assignment,<foot>The implementation is permitted to
@@ -3608,7 +3609,7 @@
       1:
         title: Simple assignment
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           One of the following shall hold:<foot>The asymmetric appearance of
           these constraints with respect to type qualifiers is due to the
           conversion (specified in 6.3.2.1) that changes lvalues to ‘‘the value
@@ -3636,7 +3637,7 @@
           — the left operand has type atomic, qualified, or unqualified _Bool,
           and the right is a pointer.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           In simple assignment (=), the value of the right operand is converted
           to the type of the assignment expression and replaces the value
           stored in the object designated by the left operand.
@@ -3692,7 +3693,7 @@
       2:
         title: Compound assignment
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           For the operators += and -= only, either the left operand shall be an
           atomic, qualified, or unqualified pointer to a complete object type,
           and the right shall have integer type; or the left operand shall have
@@ -3705,7 +3706,7 @@
           shall have arithmetic type consistent with those allowed by the
           corresponding binary operator.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           A compound assignment of the form E1 op = E2 is equivalent to the
           simple assignment expression E1 = E1 op (E2), except that the lvalue
           E1 is evaluated only once, and with respect to an
@@ -3756,12 +3757,12 @@
     17:
       title: Comma operator
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         expression:
           assignment-expression
           expression , assignment-expression
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         The left operand of a comma operator is evaluated as a void expression;
         there is a sequence point between its evaluation and that of the right
         operand. Then the right operand is evaluated; the result has its type
@@ -3778,7 +3779,7 @@
   6:
     title: Constant expressions
     P1: |
-      Syntax
+      <h3>Syntax</h3>
       constant-expression:
         conditional-expression
     P2: |
@@ -3786,7 +3787,7 @@
       A constant expression can be evaluated during translation rather than
       runtime, and accordingly may be used in any place that a constant may be.
     P3: |
-      Constraints
+      <h3>Constraints</h3>
       Constant expressions shall not contain assignment, increment, decrement,
       function-call, or comma operators, except when they are contained within
       a subexpression that is not evaluated. <foot>The operand of a sizeof or
@@ -3795,7 +3796,7 @@
       Each constant expression shall evaluate to a constant that is in the
       range of representable values for its type.
     P5: |
-      Semantics
+      <h3>Semantics</h3>
       An expression that evaluates to a constant is required in several
       contexts. If a floating expression is evaluated in the translation
       environment, the arithmetic range and precision shall be at least as
@@ -3851,7 +3852,7 @@
   7:
     title: Declarations
     P1: |
-      Syntax
+      <h3>Syntax</h3>
       declaration:
         declaration-specifiers init-declarator-listopt ;
         static_assert-declaration
@@ -3868,7 +3869,7 @@
         declarator
         declarator = initializer
     P2: |
-      Constraints
+      <h3>Constraints</h3>
       A declaration other than a static_assert declaration shall declare at
       least a declarator (other than the parameters of a function or the
       members of a structure or union), a tag, or the members of an
@@ -3884,13 +3885,13 @@
       All declarations in the same scope that refer to the same object or
       function shall specify compatible types.
     P5: |
-      Semantics
+      <h3>Semantics</h3>
       A declaration specifies the interpretation and attributes of a set of
       identifiers. A definition of an identifier is a declaration for that
       identifier that:
       — for an object, causes storage to be reserved for that object;
       — for a function, includes the function body;<foot>Function definitions
-      have a different syntax, described in 6.9.1.</foot>
+      have a different <h3>Syntax</h3>, described in 6.9.1.</foot>
       — for an enumeration constant, is the (only) declaration of the identifier;
       — for a typedef name, is the first (or only) declaration of the identifier.
     P6: >
@@ -3909,7 +3910,7 @@
     1:
       title: Storage-class specifiers
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         storage-class-specifier:
           typedef
           extern
@@ -3918,7 +3919,7 @@
           auto
           register
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         At most, one storage-class specifier may be given in the declaration
         specifiers in a declaration, except that _Thread_local may appear with
         static or extern.<foot>See ‘‘future language directions’’ (6.11.5).</foot>
@@ -3931,7 +3932,7 @@
         _Thread_local shall not appear in the declaration specifiers of a
         function declaration.
       P5: |
-        Semantics
+        <h3>Semantics</h3>
         The typedef specifier is called a ‘‘storage-class specifier’’ for
         syntactic convenience only; it is discussed in 6.7.8. The meanings of
         the various linkages and storage durations were discussed in 6.2.2 and
@@ -3961,7 +3962,7 @@
     2:
       title: Type specifiers
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         type-specifier:
           void
           char
@@ -3979,7 +3980,7 @@
           enum-specifier
           typedef-name
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         At least one type specifier shall be given in the declaration
         specifiers in each declaration, and in the specifier-qualifier list in
         each struct declaration and type name. Each list of type specifiers
@@ -4014,7 +4015,7 @@
         The type specifier _Complex shall not be used if the implementation
         does not support complex types (see 6.10.8.3).
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         Specifiers for structures, unions, enumerations, and atomic types are
         discussed in 6.7.2.1 through 6.7.2.4. Declarations of typedef names are
         discussed in 6.7.8. The characteristics of the other types are
@@ -4028,7 +4029,7 @@
       1:
         title: Structure and union specifiers
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           struct-or-union-specifier:
             struct-or-union identifieropt { struct-declaration-list }
             struct-or-union identifier
@@ -4051,7 +4052,7 @@
             declarator
           declaratoropt : constant-expression
         P2: |
-          Constraints
+          <h3>Constraints</h3>
           A struct-declaration that does not declare an anonymous structure or
           anonymous union shall contain a struct-declarator-list.
         P3: >
@@ -4076,7 +4077,7 @@
           object is at least CHAR_BIT, the width (number of sign and value
           bits) of a _Bool may be just 1 bit.
         P6: |
-          Semantics
+          <h3>Semantics</h3>
           As discussed in 6.2.5, a structure is a type consisting of a sequence
           of members, whose storage is allocated in an ordered sequence, and a
           union is a type consisting of a sequence of members whose storage
@@ -4294,7 +4295,7 @@
       2:
         title: Enumeration specifiers
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           enum-specifier:
             enum identifieropt { enumerator-list }
             enum identifieropt { enumerator-list , }
@@ -4306,12 +4307,12 @@
             enumeration-constant
             enumeration-constant = constant-expression
         P2: |
-          Constraints
+          <h3>Constraints</h3>
           The expression that defines the value of an enumeration constant
           shall be an integer constant expression that has a value
           representable as an int.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           The identifiers in an enumerator list are declared as constants that
           have type int and may appear wherever such are permitted.<foot>Thus,
           the identifiers of enumeration constants declared in the same scope
@@ -4351,7 +4352,7 @@
       3:
         title: Tags
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           A specific type shall have its content defined at most once.
         P2: >
           Where two declarations that use the same tag declare the same type,
@@ -4360,7 +4361,7 @@
           A type specifier of the form enum identifier without an enumerator
           list shall only appear after the type it specifies is complete.
         P4: |
-          Semantics
+          <h3>Semantics</h3>
           All declarations of structure, union, or enumerated types that have
           the same scope and use the same tag declare the same type.
           Irrespective of whether there is a tag or what other declarations of
@@ -4464,18 +4465,18 @@
       4:
         title: Atomic type specifiers
         P1: |
-          Syntax
+          <h3>Syntax</h3>
           atomic-type-specifier:
             _Atomic ( type-name )
         P2: |
-          Constraints
+          <h3>Constraints</h3>
           Atomic type specifiers shall not be used if the implementation does
           not support atomic types (see 6.10.8.3).
         P3: >
           The type name in an atomic type specifier shall not refer to an array
           type, a function type, an atomic type, or a qualified type.
         P4: |
-          Semantics
+          <h3>Semantics</h3>
           The properties associated with atomic types are meaningful only for
           expressions that are lvalues. If the _Atomic keyword is immediately
           followed by a left parenthesis, it is interpreted as a type specifier
@@ -4483,21 +4484,21 @@
     3:
       title: Type qualifiers
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         type-qualifier:
           const
           restrict
           volatile
           _Atomic
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Types other than pointer types whose referenced type is an object type
         shall not be restrict-qualified.
       P3: >
         The type modified by the _Atomic qualifier shall not be an array type
         or a function type.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         The properties associated with qualified types are meaningful only for
         expressions that are lvalues.<foot>The implementation may place a const
         object that is not volatile in a read-only region of storage. Moreover,
@@ -4573,7 +4574,7 @@
           ncs = cs;       // valid
           cs = ncs;       // violates modifiable lvalue constraint for =
           pi = &ncs.mem;  // valid
-          pi = &cs.mem;   // violates type constraints for =
+          pi = &cs.mem;   // violates type <h3>Constraints</h3> for =
           pci = &cs.mem;  // valid
           pi = a[0];      // invalid: a[0] has type ‘‘const int *’’
         </code>
@@ -4721,12 +4722,12 @@
     4:
       title: Function specifiers
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         function-specifier:
           inline
           _Noreturn
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         Function specifiers shall be used only in the declaration of an
         identifier for a function.
       P3: >
@@ -4738,7 +4739,7 @@
         In a hosted environment, no function specifier(s) shall appear in a
         declaration of main.
       P5: |
-        Semantics
+        <h3>Semantics</h3>
         A function specifier may appear more than once; the behavior is the
         same as if it appeared only once.
       P6: >
@@ -4825,12 +4826,12 @@
     5:
       title: Alignment specifier
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         alignment-specifier:
           _Alignas ( type-name )
           _Alignas ( constant-expression )
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         An alignment attribute shall not be specified in a declaration of a
         typedef, or a bit-field, or a function, or a parameter, or an object
         declared with the register storage-class specifier.
@@ -4845,7 +4846,7 @@
         would otherwise be required for the type of the object or member being
         declared.
       P5: |
-        Semantics
+        <h3>Semantics</h3>
         The first form is equivalent to _Alignas (_Alignof (type-name)).
       P6: >
         The alignment requirement of the declared object or member is taken to
@@ -4865,7 +4866,7 @@
     6:
       title: Declarators
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         declarator:
           pointeropt direct-declarator
         direct-declarator:
@@ -4896,7 +4897,7 @@
           identifier
           identifier-list , identifier
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         Each declarator declares one identifier, and asserts that when an
         operand of the same form as the declarator appears in an expression, it
         designates a function or object with the scope, storage duration, and
@@ -4939,7 +4940,7 @@
       1:
         title: Pointer declarators
         P1: |
-          Semantics
+          <h3>Semantics</h3>
           If, in the declaration ‘‘T D1’’, D1 has the form
             * type-qualifier-listopt D
           and the type specified for ident in the declaration ‘‘T D’’ is
@@ -4975,7 +4976,7 @@
       2:
         title: Array declarators
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           In addition to optional type qualifiers and the keyword static, the [
           and ] may delimit an expression or *. If they delimit an expression
           (which specifies the size of an array), the expression shall have
@@ -4992,7 +4993,7 @@
           an identifier is declared to be an object with static or thread
           storage duration, it shall not have a variable length array type.
         P3: |
-          Semantics
+          <h3>Semantics</h3>
           If, in the declaration ‘‘T D1’’, D1 has one of the forms:
             D[ type-qualifier-listopt assignment-expressionopt ]
             D[ static type-qualifier-listopt assignment-expression ]
@@ -5104,7 +5105,7 @@
       3:
         title: Function declarators (including prototypes)
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           A function declarator shall not specify a return type that is a
           function type or an array type.
         P2: >
@@ -5118,7 +5119,7 @@
           function declarator that is part of a definition of that function
           shall not have incomplete type.
         P5: |
-          Semantics
+          <h3>Semantics</h3>
           If, in the declaration ‘‘T D1’’, D1 has the form
             D( parameter-type-list )
           or
@@ -5283,7 +5284,7 @@
     7:
       title: Type names
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         type-name:
           specifier-qualifier-list abstract-declaratoropt
         abstract-declarator:
@@ -5300,7 +5301,7 @@
           direct-abstract-declaratoropt [ * ]
           direct-abstract-declaratoropt ( parameter-type-listopt )
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         In several contexts, it is necessary to specify a type. This is
         accomplished using a type name, which is syntactically a declaration
         for a function or an object of that type that omits the identifier.
@@ -5329,15 +5330,15 @@
     8:
       title: Type definitions
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         typedef-name:
           identifier
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         If a typedef name specifies a variably modified type then it shall have
         block scope.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         In a declaration whose storage-class specifier is typedef, each
         declarator defines an identifier to be a typedef name that denotes the
         type specified for the identifier in the way described in 6.7.6. Any
@@ -5445,7 +5446,7 @@
     9:
       title: Initialization
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         initializer:
           assignment-expression
           { initializer-list }
@@ -5462,7 +5463,7 @@
           [ constant-expression ]
           . identifier
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         No initializer shall attempt to provide a value for an object not
         contained within the entity being initialized.
       P3: >
@@ -5489,7 +5490,7 @@
         then the current object (defined below) shall have structure or union
         type and the identifier shall be the name of a member of that type.
       P8: |
-        Semantics
+        <h3>Semantics</h3>
         An initializer specifies the initial value stored in an object.
       P9: >
         Except where explicitly stated otherwise, for the purposes of this
@@ -5798,14 +5799,14 @@
     10:
       title: Static assertions
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         static_assert-declaration:
           _Static_assert ( constant-expression , string-literal ) ;
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         The constant expression shall compare unequal to 0.
       P3: |
-        Semantics
+        <h3>Semantics</h3>
         The constant expression shall be an integer constant expression. If the
         value of the constant expression compares unequal to 0, the declaration
         has no effect. Otherwise, the constraint is violated and the
@@ -5815,7 +5816,7 @@
   8:
     title: Statements and blocks
     P1: |
-      Syntax
+      <h3>Syntax</h3>
       statement:
         labeled-statement
         compound-statement
@@ -5824,7 +5825,7 @@
         iteration-statement
         jump-statement
     P2: |
-      Semantics
+      <h3>Semantics</h3>
       A statement specifies an action to be performed. Except as indicated,
       statements are executed in sequence.
     P3: >
@@ -5849,27 +5850,27 @@
     1:
       title: Labeled statements
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         labeled-statement:
           identifier : statement
           case constant-expression : statement
           default : statement
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         A case or default label shall appear only in a switch statement.
         Further constraints on such labels are discussed under the switch
         statement.
       P3: >
         Label names shall be unique within a function.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         Any statement may be preceded by a prefix that declares an identifier
         as a label name.  Labels in themselves do not alter the flow of
         control, which continues unimpeded across them.
     2:
       title: Compound statement
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         compound-statement:
           { block-item-listopt }
         block-item-list:
@@ -5879,16 +5880,16 @@
           declaration
           statement
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         A compound statement is a block.
     3:
       title: Expression and null statements
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         expression-statement:
           expressionopt ;
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         The expression in an expression statement is evaluated as a void
         expression for its side effects.<foot>Such as assignments, and function
         calls which have side effects.</foot>
@@ -5936,13 +5937,13 @@
     4:
       title: Selection statements
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         selection-statement:
           if ( expression ) statement
           if ( expression ) statement else statement
           switch ( expression ) statement
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         A selection statement selects among a set of statements depending on
         the value of a controlling expression.
       P3: >
@@ -5953,10 +5954,10 @@
       1:
         title: The if statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The controlling expression of an if statement shall have scalar type.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           In both forms, the first substatement is executed if the expression
           compares unequal to 0.  In the else form, the second substatement is
           executed if the expression compares equal to 0. If the first
@@ -5968,7 +5969,7 @@
       2:
         title: The switch statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The controlling expression of a switch statement shall have integer type.
         P2: >
           If a switch statement has an associated case or default label within
@@ -5986,7 +5987,7 @@
           expressions with values that duplicate case constant expressions in
           the enclosing switch statement.)
         P4: |
-          Semantics
+          <h3>Semantics</h3>
           A switch statement causes control to jump to, into, or past the
           statement that is the switch body, depending on the value of a
           controlling expression, and on the presence of a default label and
@@ -6029,20 +6030,20 @@
     5:
       title: Iteration statements
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         iteration-statement:
           while ( expression ) statement
           do statement while ( expression ) ;
           for ( expressionopt ; expressionopt ; expressionopt ) statement
           for ( declaration expressionopt ; expressionopt ) statement
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         The controlling expression of an iteration statement shall have scalar type.
       P3: >
         The declaration part of a for statement shall only declare identifiers
         for objects having storage class auto or register.
       P4: |
-        Semantics
+        <h3>Semantics</h3>
         An iteration statement causes a statement called the loop body to be
         executed repeatedly until the controlling expression compares equal to
         0. The repetition occurs regardless of whether the loop body is entered
@@ -6101,25 +6102,25 @@
     6:
       title: Jump statements
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         jump-statement:
           goto identifier ;
           continue ;
           break ;
           return expressionopt ;
       P2: |
-        Semantics
+        <h3>Semantics</h3>
         A jump statement causes an unconditional jump to another place.
       1:
         title: The goto statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           The identifier in a goto statement shall name a label located somewhere
           in the enclosing function. A goto statement shall not jump from outside
           the scope of an identifier having a variably modified type to inside
           the scope of that identifier.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           A goto statement causes an unconditional jump to the statement
           prefixed by the named label in the enclosing function.
         P3: |
@@ -6172,10 +6173,10 @@
       2:
         title: The continue statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           A continue statement shall appear only in or as a loop body.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           A continue statement causes a jump to the loop-continuation portion
           of the smallest enclosing iteration statement; that is, to the end of
           the loop body. More precisely, in each of the statements
@@ -6212,21 +6213,21 @@
       3:
         title: The break statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           A break statement shall appear only in or as a switch body or loop body.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           A break statement terminates execution of the smallest enclosing
           switch or iteration statement.
       4:
         title: The return statement
         P1: |
-          Constraints
+          <h3>Constraints</h3>
           A return statement with an expression shall not appear in a function
           whose return type is void. A return statement without an expression
           shall only appear in a function whose return type is void.
         P2: |
-          Semantics
+          <h3>Semantics</h3>
           A return statement terminates execution of the current function and
           returns control to its caller. A function may have any number of
           return statements.
@@ -6268,7 +6269,7 @@
   9:
     title: External definitions
     P1: |
-      Syntax
+      <h3>Syntax</h3>
       translation-unit:
         external-declaration
         translation-unit external-declaration
@@ -6276,7 +6277,7 @@
         function-definition
         declaration
     P2: |
-      Constraints
+      <h3>Constraints</h3>
       The storage-class specifiers auto and register shall not appear in the
       declaration specifiers in an external declaration.
     P3: >
@@ -6287,7 +6288,7 @@
       result is an integer constant), there shall be exactly one external
       definition for the identifier in the translation unit.
     P4: |
-      Semantics
+      <h3>Semantics</h3>
       As discussed in 5.1.1.1, the unit of program text after preprocessing is
       a translation unit, which consists of a sequence of external
       declarations. These are described as ‘‘external’’ because they appear
@@ -6307,14 +6308,14 @@
     1:
       title: Function definitions
       P1: |
-        Syntax
+        <h3>Syntax</h3>
         function-definition:
           declaration-specifiers declarator declaration-listopt compound-statement
         declaration-list:
           declaration
           declaration-list declaration
       P2: |
-        Constraints
+        <h3>Constraints</h3>
         The identifier declared in a function definition (which is the name of
         the function) shall have a function type, as specified by the
         declarator portion of the function definition.
@@ -6356,7 +6357,7 @@
         declarations in the declaration list shall contain no storage-class
         specifier other than register and no initializations.
       P7: |
-        Semantics
+        <h3>Semantics</h3>
         The declarator in a function definition specifies the name of the
         function being defined and the identifiers of its parameters. If the
         declarator includes a parameter type list, the list also specifies the
@@ -6443,7 +6444,7 @@
     2:
       title: External object definitions
       P1: |
-        Semantics
+        <h3>Semantics</h3>
         If the declaration of an identifier for an object has file scope and an
         initializer, the declaration is an external definition for the
         identifier.

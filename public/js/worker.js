@@ -10,7 +10,7 @@ function handleMessage(msg) {
     console.log('Waiting for cerberus...')
     if (nbAttempts > 10) {
       // Cannot finish downloading Ceberus
-      self.postMessage({type: 'close'})
+      sendMessage({type: 'close'})
       self.close()
       return // shouldn't be able to reach here
     }
@@ -22,16 +22,29 @@ function handleMessage(msg) {
   switch (msg.type) {
     // Return current buffer
     case 'read':
-      self.postMessage({
+      sendMessage({
         type: 'load',
         data: cerberus.buffer().toString()
       })
       break
     // Run Cerberus and return result
     case 'run':
-      self.postMessage({
+      let exec = false, exhaustive = false
+      switch (msg.mode) {
+        case 'exhaustive':
+          exhaustive = true
+          exec = true
+          break
+        case 'random':
+          exec = true
+          break
+        case 'core':
+        default:
+          break
+      }
+      sendMessage({
         type: 'result',
-        data: parseCerberusResult(cerberus.run(msg.source, msg.exhaustive))
+        data: parseCerberusResult(cerberus.run(msg.source, exec, exhaustive))
       })
       break
   }
@@ -106,4 +119,8 @@ function onLoadCerberus() {
   console.log('Cerberus loaded')
 }
 
-onmessage = (e) => handleMessage(e.data)
+function sendMessage (msg) {
+  self.postMessage(JSON.stringify(msg))
+}
+
+onmessage = (e) => handleMessage(JSON.parse(e.data))

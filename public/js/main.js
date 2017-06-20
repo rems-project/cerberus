@@ -23,8 +23,23 @@ function createStyle() {
 
 function getSTDSection(section) {
   let ns = section.match(/\d+/g)
-  let p = std[ns[0]][ns[1]][ns[2]]
-  return section + '\n' + p['title'] + '\n' + p[ns[3]]
+  let p = std
+  let content = ""
+  for (let i = 0; i < ns.length - 1; i++) {
+    p = p[ns[i]]
+    if (p['title'])
+      content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
+  }
+  content += p['P'+ns[ns.length-1]]
+  let div = $('<div class="std">'+content+'</div>')
+  // Create footnotes
+  div.append('<hr/>')
+  div.children('foot').each(function(i) {
+    let n = '['+(i+1)+']'
+    $(this).replaceWith(n)
+    div.append('<div>'+n+'. '+ $(this).text()+'</div>')
+  })
+  return div
 }
 
 
@@ -43,6 +58,6 @@ $(window).ready(() => {
   ui.activePane.addTab(new TabSource())
   ui.activePane.activeTab.setTitle('hello.c')
   // Wait buffer.c to be downloaded by worker
-  ui.worker.postMessage({type: 'read'})
+  ui.worker.postMessage(JSON.stringify({type: 'read'}))
   ui.setup()
 })

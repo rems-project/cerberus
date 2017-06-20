@@ -141,6 +141,11 @@ let well_typed_assignment s ty1 gty2 null2 =
           let _ = output_string "[well_typed_assignment] ??: bullet 2" in (* DEBUG *)
           E.return (AAux.compatible ty1 (Struct id2 membrs2))
 *)
+      | (Union tag_sym1, GenUnion tag_sym2) ->
+          (* TODO: this is maybe too conservative *)
+          let () = Debug.print_debug 2 [Debug.DB_ail_typing]
+            (fun () -> "[well_typed_assignment] exiting with bullet 2 ==> " ^ Pp.stringFromAil_ctype ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+          E.return (tag_sym1 = tag_sym2)
       | _ ->
           error "not possible"
     end

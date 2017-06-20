@@ -380,8 +380,13 @@ val mk_union_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
 let mk_union_pe tag_sym memb_ident pe =
   Pexpr () (PEunion tag_sym memb_ident pe)
 
+val mk_std_pe: string -> pexpr -> pexpr
+let mk_std_pe std pe =
+  Pexpr () (PEstd std pe)
 
-
+val mk_undef_exceptional_condition: unit -> pexpr
+let mk_undef_exceptional_condition () =
+  mk_std_pe "§6.5#5" $ mk_undef_pe Undefined.UB036_exceptional_condition
 
 
 
@@ -787,6 +792,8 @@ let rec subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
         PEis_signed (subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym pe' pe)
+    | PEstd s pe ->
+        PEstd s (subst_sym_pexpr sym pe' pe)
 end
 
 
@@ -1307,6 +1314,8 @@ let rec find_labeled_continuation2_aux acc sym = function
   | Ewait _ ->
       acc
   | Eloc _ e ->
+      find_labeled_continuation2_aux acc sym e
+  | Estd _ e ->
       find_labeled_continuation2_aux acc sym e
 end
 
