@@ -150,7 +150,7 @@ web: $(WEB_INCLUDE)
 	cp src/web/web_big_int_impl.ml ocaml_generated/big_int_impl.ml
 	ocamlbuild -use-ocamlfind -j 4 -pkgs pprint,js_of_ocaml,js_of_ocaml.ppx\
 		-libs nums,unix,str web.byte
-	js_of_ocaml --pretty --disable genprim src/web/unix.js src/web/cpp.js\
+	js_of_ocaml --opt 3 --disable genprim src/web/unix.js src/web/cpp.js\
 		+nat.js web.byte
 	mv web.js public/js/cerberus.js
 

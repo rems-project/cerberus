@@ -611,6 +611,8 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
           | Nothing ->
               EU.return $ PEis_scalar pe'
         end
+    | PEstd _ pe ->
+        strip <$> self pe
   end
   end
 

@@ -236,6 +236,8 @@ let rec export_pexpr loc (Pexpr infer pexpr_) =
         PEis_signed <$> export_pexpr loc pe
     | PEis_unsigned pe ->
         PEis_unsigned <$> export_pexpr loc pe
+    | PEstd s pe ->
+        PEstd s <$> export_pexpr loc pe
   end
 
 

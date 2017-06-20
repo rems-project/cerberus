@@ -70,13 +70,6 @@ let posix = List.map (fun s -> "../include/c/posix/" ^ s) [
     "stdio.h";
   ]
 
-let exec exhaustive =
-  let mode = if exhaustive then Exhaustive else Random in
-  Tags.reset_tagDefs();
-  cerberus 0 "" "gcc_4.9.0_x86_64-apple-darwin10.8.0"
-    true mode [] (Some buffile) false false
-    false false false [] false false true false false
-
 let string_of_core core=
   let buf = Buffer.create 4096 in
   PPrint.ToBuffer.pretty 1.0 80 buf (Pp_core.pp_file false core);
@@ -84,14 +77,19 @@ let string_of_core core=
 
 type ('a, 'b) result = Success of 'a | Fail of 'b
 
-let run source exhaustive =
+let run source exec exhaustive =
+  Tags.reset_tagDefs();
   let js_stderr = ref "" in
   let js_stdout = ref "" in
   set_channel_flusher stderr (fun s -> js_stderr := !js_stderr ^ s);
   set_channel_flusher stdout (fun s -> js_stdout := !js_stdout ^ s);
   let cpp_source = invokeCpp source in
   update_file ~name:buffile ~content:cpp_source;
-  match exec exhaustive with
+  let mode = if exhaustive then Exhaustive else Random in
+  let result = cerberus 0 "" "gcc_4.9.0_x86_64-apple-darwin10.8.0"
+    exec mode [] (Some buffile) false false
+    false false false [] false false true false false
+  in match result with
   | Some file -> Success (string_of_core file, js_stdout)
   | None -> Fail (!js_stderr)
 
@@ -110,6 +108,6 @@ let _ =
 let _ =
   Js.export "cerberus"
   (object%js
-    method run source exhaustive = run source exhaustive
+    method run source exec exhaustive = run source exec exhaustive
     method buffer = file_content buffile
   end)

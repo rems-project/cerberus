@@ -897,6 +897,8 @@ let rec isAlwaysDefined (Pexpr _ pexpr_) =
         isAlwaysDefined pe
     | PEis_unsigned pe ->
         isAlwaysDefined pe
+    | PEstd _ pe ->
+        isAlwaysDefined pe
 end
 
 let rec pure_propagation2 expr =

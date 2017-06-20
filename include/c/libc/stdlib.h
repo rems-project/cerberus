@@ -1,6 +1,9 @@
 #ifndef	_STDLIB_H_
 #define	_STDLIB_H_
 
+// TODO: restrict is empty
+#define restrict
+
 #if !defined(_STDIO_H_) && !defined(_STRING_H_) // TODO: fix the f!cking parser
 typedef __cerbty_size_t size_t;
 #endif

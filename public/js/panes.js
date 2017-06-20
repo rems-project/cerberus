@@ -121,15 +121,14 @@ class UI {
     // Run
 
     $('#run').on('click', () => {
-      setTimeout (() => this.run (false), 3000)
     })
 
     $('#random').on('click', () => {
-      this.run (false)
+      this.run ('random')
     })
 
     $('#exhaustive').on('click', () => {
-      this.run (true)
+      this.run ('exhaustive')
     })
 
     // Load
@@ -150,6 +149,10 @@ class UI {
         tab.setActive()
       }
       reader.readAsText(file)
+    })
+
+    $('#core').on('click', () => {
+      this.run ('core')
     })
 
     // View
@@ -179,26 +182,24 @@ class UI {
     window.onresize = () => this.refresh()
   }
 
-  run (exhaustive) {
+  run (mode) {
     this.wait()
     this.waitingResult = true
 
     let tab = this.activePane.activeTab
     let source = tab.editor.getValue()
-    this.worker.postMessage({
+    this.worker.postMessage(JSON.stringify({
       type: 'run',
       source: source,
-      exhaustive: exhaustive
-    })
+      mode: mode
+    }))
     setTimeout(() => {
       if (this.waitingResult) {
         this.worker.stop()
         this.done()
         alert('looping')
       }
-    }, 5000)
-
-    //let result = parseCerberusResult(cerberus.run(source, exhaustive))
+    }, 60000)
   }
 
   cerberusResult(result) {
@@ -211,9 +212,17 @@ class UI {
       result.locations[i].color = generateColor()
 
     tab.data = result
+    tab.dirty = false
     tab.coreTab.editor.setValue(result.core)
+    tab.coreTab.setActive()
+    tab.coreTab.refresh()
     tab.highlight()
-    tab.execTab.editor.setValue(result.batch)
+
+    if (result.success && result.batch) {
+      tab.execTab.editor.setValue(result.batch)
+      tab.execTab.setActive()
+      tab.execTab.refresh()
+    }
 
     if (!result.success) {
       tab.consoleTab.editor.setValue (
@@ -221,12 +230,10 @@ class UI {
       )
       tab.consoleTab.setActive()
       tab.consoleTab.refresh()
-    } else {
-      tab.execTab.setActive()
-      tab.execTab.refresh()
     }
 
-    this.done()  }
+    this.done()
+  }
 
   setup () {
     let w = window.innerWidth/this.panes.length + 'px'
@@ -298,7 +305,7 @@ class UI {
     this._worker = new Worker('js/worker.js')
     this._worker.isAlive = true
     this._worker.onmessage = (e) => {
-      let msg = e.data
+      let msg = JSON.parse(e.data)
       switch (msg.type) {
         // Load buffer to active tab
         case 'load':

@@ -91,6 +91,8 @@ class TabEditor extends Tab {
       smartIndent: true
     })
     this.content.addClass('editor')
+    this.dirty = false
+    this.editor.on('change', () => this.dirty = true)
   }
 
   colorLines(i, e, color) {
@@ -102,6 +104,13 @@ class TabEditor extends Tab {
 
   refresh () {
     this.editor.refresh()
+  }
+}
+
+class TabReadOnly extends TabEditor {
+  constructor (title) {
+    super(title)
+    this.editor.setOption ('readOnly', true)
   }
 }
 
@@ -122,9 +131,9 @@ class TabSource extends TabEditor {
     let to = doc.getCursor('to')
 
     if (from === to) {
-      if (!this._selection) return // nothig to do
+      if (!this._selection) return // nothing to do
       this.clear()
-      this.highlight()
+      if (!this.dirty) this.highlight()
       this._selection = false
       return
     }
@@ -133,10 +142,12 @@ class TabSource extends TabEditor {
       this.clear()
     }
 
-    let loc = this.getLocationFromSelection(from, to)
-    if (loc) {
-      this.editor.markText (loc.c.begin, loc.c.end, {className: loc.color})
-      this.coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+    if (!this.dirty) {
+      let loc = this.getLocationFromSelection(from, to)
+      if (loc) {
+        this.editor.markText (loc.c.begin, loc.c.end, {className: loc.color})
+        this.coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+      }
     }
     this._selection = true
     console.log('selection')
@@ -188,7 +199,8 @@ class TabSource extends TabEditor {
     let marks = this.editor.getAllMarks()
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
-    this.coreTab.clear()
+    if (this._coreTab)
+      this.coreTab.clear()
   }
 
   highlight() {
@@ -205,7 +217,8 @@ class TabSource extends TabEditor {
   }
 }
 
-class TabCore extends TabEditor {
+
+class TabCore extends TabReadOnly {
   constructor (title) {
     super(title)
 
@@ -242,11 +255,11 @@ class TabCore extends TabEditor {
     this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
       if ($(e.target).hasClass('cm-std')) {
         if (this.parent) {
-          let tab = new TabEditor()
+          let tab = new Tab(e.target.textContent)
           this.parent.addTab(tab)
+          let content =getSTDSection(e.target.textContent)
+          tab.content.append(content)
           tab.setActive()
-          tab.editor.setOption('lineWrapping', true)
-          tab.editor.setValue(getSTDSection(e.target.textContent))
         }
       }
     })
@@ -286,11 +299,4 @@ class TabCore extends TabEditor {
     })
   }
 
-}
-
-class TabReadOnly extends TabEditor {
-  constructor (title) {
-    super(title)
-    this.editor.setOption ('readOnly', true)
-  }
 }
