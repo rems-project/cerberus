@@ -916,7 +916,7 @@ let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
         && isVariadic1 = isVariadic2
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* STD §6.7.6.1#2 *)
-        are_compatible (qs1, ty1) (qs2, ty2)
+        are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
     | (Struct tag1, Struct tag2) ->
         (* STD §6.2.7#1 *)
         (* TODO: being conservative here (aka STD compliant) *)
