@@ -66,5 +66,3 @@ tests/csmith/small_int_arith/*.c
 
 
 *~
-
-gcc-torture/**

@@ -56,7 +56,7 @@ void* memcpy(void * restrict s1, const void * restrict s2, size_t n)
     c1 = ((unsigned char*)s1)[i];
     c2 = ((unsigned char*)s2)[i];
     if ( c1 != c2 )
-      return c1 - c2;
+      return (void*)(c1 - c2);
   }
   return 0;
 }
@@ -69,7 +69,7 @@ int memcmp(const void *s1, const void *s2, size_t n)
     c1 = ((unsigned char*)s1)[i];
     c2 = ((unsigned char*)s2)[i];
     if ( c1 != c2 )
-      return c1 - c2;
+      return (int)(c1 - c2);
   }
   return 0;
 }
