@@ -2185,7 +2185,7 @@ TODO: #9
              C.Esseq e_sym_pat core_e (
                (fun z ->
                    if is_lvalue then
-                     C.Estd "§6.5.2.3#3, second sentence" $ C.Epure z
+                     C.Epure z
                    else
                      Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) z Cmm.NA) (* TODO: check MO *)
                (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
@@ -2216,7 +2216,24 @@ TODO: #9
 *)
 
       | A.AilEmemberofptr e ident ->
-          error "WIP: Translation.translate_expr, AilEmemberofptr"
+          let tag_sym = match ctype_of e with
+            | Aty.Pointer _ (Aty.Struct tag_sym) -> tag_sym
+            | Aty.Pointer _ (Aty.Union tag_sym)  -> tag_sym
+            | _ -> illTypedAil loc "AilEmemberofptr"
+          end in
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (me_sym, me_sym_pat, me_sym_pe) ->
+          self e >>= fun core_e ->
+          E.return $
+            C.Esseq e_sym_pat core_e (
+               C.Epure (C.Pexpr () $ C.PEcase e_sym_pe
+                 [ (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_undef_pe (Undefined.DUMMY "Elab, AilEmemberofptr"))
+                 ; (Caux.mk_specified_pat me_sym_pat,
+                    Caux.mk_member_shift_pe me_sym_pe tag_sym ident)
+                 ]
+              ))
+
 (*
           let tag_sym = match ctype_of e with
             | Aty.Pointer _ (Aty.Struct tag_sym) ->

@@ -9,7 +9,7 @@ open Colour
 
 open Pp_prelude
 
-let precedence = function
+let rec precedence = function
   | PEop (OpExp, _, _) -> Some 1
 
   | PEop (OpMul, _, _)
@@ -52,6 +52,7 @@ let precedence = function
   | PEis_integer _
   | PEis_signed _
   | PEis_unsigned _ -> None
+  | PEstd (_, Pexpr (_, pe)) -> precedence pe
 
 let rec precedence_expr = function
  | Epure _
@@ -414,6 +415,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
+        | PEstd (_, pe) ->
+            pp pe
     end
   in pp None pe
 
