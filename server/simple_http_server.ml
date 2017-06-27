@@ -1,78 +1,64 @@
 (* Based on cohttp_server_async example *)
 
 open Lwt
-open Cohttp
 open Cohttp_lwt_unix
-open Printf
-open Unix
 
-let html_of_not_found path =
-  sprintf "<html><body>\
-           <h2>Not Found</h2><p><b>%s</b> was not found on this server</p>\
-           <hr />\
-           </body></html>" path
+let forbidden path =
+  let body = Printf.sprintf
+      "<html><body>\
+       <h2>Forbidden</h2>\
+       <p><b>%s</b> is forbidden</p>\
+       <hr/>\
+       </body></html>"
+      path
+  in Server.respond_string ~status:`Forbidden ~body ()
 
-let html_of_forbidden path =
-  sprintf "<html><body>\
-         <h2>Forbidden</h2>\
-         <p><b>%s</b> is not a normal file</p>\
-         <hr/>\
-         </body></html>"
-  path
+let not_allowed meth path =
+  let body = Printf.sprintf
+      "<html><body>\
+       <h2>Method Not Allowed</h2>\
+       <p><b>%s</b> is not an allowed method on <b>%s</b>\
+       <hr />\
+       </body></html>"
+      (Cohttp.Code.string_of_method meth) path
+  in Server.respond_string ~status:`Method_not_allowed ~body ()
 
-let html_of_method_not_allowed meth allowed path =
-  sprintf
-    "<html><body>\
-     <h2>Method Not Allowed</h2>\
-     <p><b>%s</b> is not an allowed method on <b>%s</b>\
-     </p><p>Allowed methods on <b>%s</b> are <b>%s</b></p>\
-     <hr />\
-     </body></html>"
-    meth path path allowed
+let valid_file fname =
+  match Unix.((stat fname).st_kind) with
+  | Unix.S_REG -> true
+  | _ -> false
 
 let serve ~docroot uri path =
-  catch (fun () ->
-      let file_name = Server.resolve_local_file ~docroot ~uri in
-      match (stat file_name).st_kind with
-      | S_REG -> Server.respond_file file_name ()
-      | _ ->
-        if file_name = "../public/" then
-          Server.respond_file "../public/index.html" ()
-        else
-          Server.respond_string
-               ~status:`Forbidden
-               ~body:(html_of_forbidden path) ()
-    )(function
-      | Unix_error (ENOENT,_,_) ->
-        Server.respond_string
-           ~status:`Forbidden
-           ~body:(html_of_not_found path) ()
-      | e -> fail e
-    )
+  let try_with () =
+    match path with
+    | "/" -> Server.respond_file "../public/index.html" ()
+    (*| "/run" -> run cerberus *)
+    | _ ->
+      let fname = Server.resolve_local_file ~docroot ~uri in
+      if valid_file fname then Server.respond_file fname ()
+      else forbidden path
+  in catch try_with (fun _ -> forbidden path)
 
 let handler docroot _ req _ =
   let uri = Request.uri req in
   let meth = Request.meth req in
-  let str_meth = Code.string_of_method meth in
   let path = Uri.path uri in
-  printf "%s %s!" str_meth path;
+  let respond (res, body) =
+    match meth with
+    | `HEAD -> return (res, `Empty)
+    | _ -> return (res, body)
+  in
   match meth with
-  | (`GET | `HEAD) ->
-    serve ~docroot uri path
-    >>= fun (res, body) ->
-    begin match meth with
-      | `HEAD -> return (res, `Empty)
-      | _ -> return (res, body)
-    end
-  | _ ->
-    let allowed = "GET, HEAD" in
-    Server.respond_string
-      ~headers:(Header.of_list ["allow", allowed])
-      ~status:`Method_not_allowed
-      ~body:(html_of_method_not_allowed str_meth allowed path) ()
+  | (`GET | `HEAD) -> serve ~docroot uri path >>= respond
+  | _ -> not_allowed meth path
 
-(* TODO: port and docroot should be set as arguments *)
+let usage () =
+  Printf.printf "usage: %s [public] [port]" Sys.argv.(0)
+
 let _ =
-  Server.make ~callback:(handler "../public") ()
-  |> Server.create ~mode:(`TCP (`Port 8000))
-  |> Lwt_main.run
+  if Array.length Sys.argv != 3 then usage ()
+  else
+    let port = int_of_string Sys.argv.(2) in
+    Server.make ~callback:(handler Sys.argv.(1)) ()
+    |> Server.create ~mode:(`TCP (`Port port))
+    |> Lwt_main.run
