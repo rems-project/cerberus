@@ -11,6 +11,7 @@ function testWithCerberus {
 
 # Go to gcc-torture/execute folder
 cd execute
+rm -rf ../sorted
 
 ## Delete folders that we don't support
 rm -rf ieee
@@ -124,8 +125,8 @@ grep -R switch . | awk -F ":" '{print $1;}' | uniq | xargs -I '{}' mv '{}' ../is
 mkdir ../issues/compound
 testWithCerberus AilEcompound ../issues/compound
 
-mkdir ../issues/memberofptr
-testWithCerberus AilEmemberofptr ../issues/memberofptr
+#mkdir ../issues/memberofptr
+#testWithCerberus AilEmemberofptr ../issues/memberofptr
 
 mkdir ../issues/builtin
 testWithCerberus AilEbuiltin ../issues/builtin
@@ -147,17 +148,17 @@ do
   fi
 done
 
-for f in *.c
-do
-  cerberus $f 2>&1 > /dev/null | grep Nondeterminism
-  if [ $? -eq 0 ]; then
-    cerberus $f --exec 2>&1 > /dev/null | grep AilEmemberofptr
-    if [ $? -eq 0 ]; then
-      echo Move test $f
-      mv $f ../issues/memberofptr
-    fi
-  fi
-done
+#for f in *.c
+#do
+#  cerberus $f 2>&1 > /dev/null | grep Nondeterminism
+#  if [ $? -eq 0 ]; then
+#    cerberus $f --exec 2>&1 > /dev/null | grep AilEmemberofptr
+#    if [ $? -eq 0 ]; then
+#      echo Move test $f
+#      mv $f ../issues/memberofptr
+#    fi
+#  fi
+#done
 
 echo 6. Using CIL to transform files
 

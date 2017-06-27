@@ -42,6 +42,3 @@
 // I need to set this explicitly, some tests verify this at preprocessor level
 #define __LONG_LONG_MAX__ 9223372036854775807LL
 #define __SIZEOF_INT__    4
-
-#define exit(n) return n
-#define abort() return 1
