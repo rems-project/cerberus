@@ -1,5 +1,4 @@
-extern void abort ();
-extern void exit (int);
+#include "cerberus.h"
 
 int f (int a) {
 	if (a < 12) {

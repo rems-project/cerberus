@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR middle-end/26561 */
 
-extern void abort(void);
 
 int always_one_1 (int a)
 {

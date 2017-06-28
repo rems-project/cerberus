@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* Origin: PR c/8467 */
 
-extern void abort (void);
-extern void exit (int);
 
 int aim_callhandler(int sess, int conn, unsigned short family, unsigned short type);
 

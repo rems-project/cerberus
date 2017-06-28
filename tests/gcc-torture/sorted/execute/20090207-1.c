@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int foo(int i)
 {
   int a[32];
@@ -6,7 +7,6 @@ int foo(int i)
   a[i] = 2;
   return a[0];
 }
-extern void abort (void);
 int main()
 {
   if (foo (0) != 2

@@ -10,8 +10,6 @@ f (int **ipp, int *i1p, int *i2p, int **i3, int **i4)
   return 3;
 }
 
-extern void exit (int);
-extern void abort (void);
 
 int main (void)
 {

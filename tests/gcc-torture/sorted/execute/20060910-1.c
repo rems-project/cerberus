@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR rtl-optimization/28636 */
 /* Origin: Andreas Schwab <schwab@suse.de> */
 
-extern void abort(void);
 
 struct input_ty
 {

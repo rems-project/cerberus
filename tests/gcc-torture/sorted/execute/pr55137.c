@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR c++/55137 */
 
-extern void abort (void);
 
 int
 foo (unsigned int x)

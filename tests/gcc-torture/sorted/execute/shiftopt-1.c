@@ -1,10 +1,10 @@
+#include "cerberus.h"
 /* Copyright (C) 2002  Free Software Foundation
 
    Check that constant folding of shift operations is working.
 
    Roger Sayle, 10th October 2002.  */
 
-extern void abort (void);
 extern void link_error (void);
 
 void

@@ -1,6 +1,5 @@
+#include "cerberus.h"
 /* PR c++/14755 */
-extern void abort (void);
-extern void exit (int);
 
 int
 main (void)

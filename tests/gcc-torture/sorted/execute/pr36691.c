@@ -1,3 +1,4 @@
+#include "cerberus.h"
 unsigned char g_5;
 
 void func_1 (void)
@@ -6,7 +7,6 @@ void func_1 (void)
     ;
 }
 
-extern void abort (void);
 int main (void)
 {
   func_1 ();

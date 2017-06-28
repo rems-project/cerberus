@@ -1,8 +1,6 @@
+#include "cerberus.h"
 /* { dg-require-effective-target int32plus } */
-#include <limits.h>
 
-extern void exit (int);
-extern void abort ();
 
 void test01(unsigned int a, unsigned int b)
 {

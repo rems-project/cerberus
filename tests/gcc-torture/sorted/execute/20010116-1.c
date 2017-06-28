@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* Distilled from optimization/863.  */
 
-extern void abort (void);
-extern void exit (int);
 extern void ok (int);
 
 typedef struct

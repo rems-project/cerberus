@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR rtl-optimization/45912 */
 
-extern void abort (void);
 
 static void* __attribute__((noinline,noclone))
 get_addr_base_and_unit_offset (void *base, long long *i)

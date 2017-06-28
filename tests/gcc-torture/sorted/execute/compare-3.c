@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* Copyright (C) 2002 Free Software Foundation.
 
    Test for composite comparison always true/false optimization.

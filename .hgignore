@@ -54,6 +54,10 @@ main_.native
 main_.byte
 main_.d.byte
 
+*.native
+*.byte
+*.d.byte
+
 
 build_model
 build

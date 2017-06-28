@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
 int foo (int i)
 {
   return -2 * __builtin_abs(i - 2);

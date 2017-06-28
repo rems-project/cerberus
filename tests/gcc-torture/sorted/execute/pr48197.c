@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR c/48197 */
 
-extern void abort (void);
 static int y = 0x8000;
 
 int

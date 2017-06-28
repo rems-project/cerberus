@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR middle-end/14470 */
 /* Origin: Lodewijk Voge <lvoge@cs.vu.nl> */
 
-extern void abort(void);
 
 int main()
 {

@@ -1,9 +1,8 @@
+#include "cerberus.h"
 /* PR c/5430 */
 /* Verify that the multiplicative folding code is not fooled
    by the mix between signed variables and unsigned constants. */
 
-extern void abort (void);
-extern void exit (int);
 
 int main (void)
 {

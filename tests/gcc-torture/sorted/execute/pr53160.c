@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR rtl-optimization/53160 */
 
-extern void abort (void);
 
 int a, c = 1, d, e, g;
 volatile int b;

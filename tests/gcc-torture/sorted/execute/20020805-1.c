@@ -1,8 +1,7 @@
+#include "cerberus.h"
 /* This testcase was miscompiled on IA-32, because fold-const
    assumed associate_trees is always done on PLUS_EXPR.  */
 
-extern void abort (void);
-extern void exit (int);
 
 void check (unsigned int m)
 {

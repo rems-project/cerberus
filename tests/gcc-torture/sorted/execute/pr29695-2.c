@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR middle-end/29695 */
 
-extern void abort (void);
 
 int a = 128;
 unsigned char b = 128;

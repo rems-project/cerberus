@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR rtl-optimization/44858 */
 
-extern void abort (void);
 int a = 3;
 int b = 1;
 

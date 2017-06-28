@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int f(int k, int i1, int j1)
 {
   int *f1;
@@ -9,7 +10,6 @@ int f(int k, int i1, int j1)
   return *f1;
 }
 
-extern void abort (void);
 
 int main()
 {

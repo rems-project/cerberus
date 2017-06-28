@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* This tests an insn length of sign extension on h8300 port.  */
 
-extern void exit (int);
 
 volatile signed char *q;
 volatile signed int n;

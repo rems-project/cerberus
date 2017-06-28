@@ -1,4 +1,4 @@
-extern void exit (int);
+#include "cerberus.h"
 
 static inline int
 foo (void)

@@ -1,6 +1,5 @@
 #include "cerberus.h"
 
-extern void exit (int);
 
 int a = 3, b, c, f, g, h;
 unsigned d;

@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* PR rtl-optimization/20290  */
    
 /* We used to mis-optimize the second loop in main on at least ppc and
@@ -19,7 +20,6 @@
   We used to consider the increment of i as executed in every
   iteration, so we'd miscompute the final value.  */
 
-extern void abort (void);
 
 void
 check (unsigned int *l)

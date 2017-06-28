@@ -1,4 +1,4 @@
-#include <stdlib.h>
+#include "cerberus.h"
 
 static int a[40] = {7, 5, 3, 3, 0, 0, 3};
 short b;

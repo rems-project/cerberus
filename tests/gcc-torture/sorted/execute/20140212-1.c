@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR rtl-optimization/60116 */
 /* Reported by Zhendong Su <su@cs.ucdavis.edu> */
 
-extern void abort (void);
 
 int a, b, c, d = 1, e, f = 1, h, i, k;
 char g, j;

@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR rtl-optimization/47299 */
 
-extern void abort (void);
 
 __attribute__ ((noinline, noclone)) unsigned short
 foo (unsigned char x)

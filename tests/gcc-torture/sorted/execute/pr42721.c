@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR c/42721 */
 
-extern void abort (void);
 
 static unsigned long long
 foo (unsigned long long x, unsigned long long y)

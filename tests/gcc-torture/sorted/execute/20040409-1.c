@@ -1,6 +1,5 @@
-#include <limits.h>
+#include "cerberus.h"
 
-extern void abort ();
 
 int test1(int x)
 {

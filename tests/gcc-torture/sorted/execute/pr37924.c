@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR c/37924 */
 
-extern void abort (void);
 
 signed char a;
 unsigned char b;

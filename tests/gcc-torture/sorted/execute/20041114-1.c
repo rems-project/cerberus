@@ -1,10 +1,10 @@
+#include "cerberus.h"
 /* Verify that
    
    var <= 0 || ((long unsigned) (unsigned) (var - 1) < MAX_UNSIGNED_INT)
 
    gets folded to 1.  */
 
-#include <limits.h>
 
 void abort (void);
 void link_failure (void);

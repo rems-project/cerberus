@@ -7,7 +7,6 @@ int foo (int y)
   return *x;
 }
 
-extern void abort (void);
 
 int main()
 {

@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR rtl-optimization/57131 */
 
-extern void abort (void);
 
 int
 main ()

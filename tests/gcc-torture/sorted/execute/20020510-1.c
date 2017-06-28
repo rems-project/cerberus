@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* Copyright (C) 2002  Free Software Foundation.
 
    Test that optimizing ((c>=1) && (c<=127)) into (signed char)c < 0
@@ -5,9 +6,7 @@
 
    Written by Roger Sayle, 8th May 2002.  */
 
-#include <limits.h>
 
-extern void abort (void);
 
 void
 testc (unsigned char c, int ok)

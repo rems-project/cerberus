@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR middle-end/21850 */
 
-extern void abort (void);
 
 typedef int V2SI __attribute__ ((vector_size (8)));
 

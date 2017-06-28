@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 static int inv_J(int a[][2])
 {

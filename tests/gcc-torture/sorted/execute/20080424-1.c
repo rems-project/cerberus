@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR tree-optimization/36008 */
 
-extern void abort (void);
 
 int g[48][3][3];
 

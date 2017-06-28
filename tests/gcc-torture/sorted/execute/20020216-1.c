@@ -1,9 +1,8 @@
+#include "cerberus.h"
 /* PR c/3444
    This used to fail because bitwise xor was improperly computed in char type
    and sign extended to int type.  */
 
-extern void abort ();
-extern void exit (int);
 
 signed char c = (signed char) 0xffffffff;
 

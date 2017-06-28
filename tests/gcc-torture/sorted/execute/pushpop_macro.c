@@ -1,4 +1,4 @@
-extern void abort ();
+#include "cerberus.h"
 
 #define _ 2
 #pragma push_macro("_")

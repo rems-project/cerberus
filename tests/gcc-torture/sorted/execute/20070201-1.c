@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR middle-end/30473 */
 
 extern int sprintf (char *, const char *, ...);
-extern void abort (void);
 
 char *
 foo (char *buf, char *p)

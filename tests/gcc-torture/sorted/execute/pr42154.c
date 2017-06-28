@@ -1,6 +1,5 @@
 #include "cerberus.h"
 struct A { char x[1]; };
-extern void abort (void);
 void __attribute__((noinline,noclone))
 foo (struct A a)
 {

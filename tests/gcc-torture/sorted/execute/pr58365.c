@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR rtl-optimization/58365 */
 
-extern void abort (void);
 
 struct S
 {

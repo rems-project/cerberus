@@ -10,6 +10,11 @@ touch failed
 cp cerberus.h sorted/execute/
 cd sorted/execute
 
+gsed -i '/include/d' *.c
+gsed -i '/extern void abort/d' *.c
+gsed -i '/extern void exit/d' *.c
+gsed -i '1i\#include "cerberus.h"' *.c
+
 for f in *.c
 do
   echo Test $f

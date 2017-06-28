@@ -2,7 +2,6 @@
 /* PR target/60941 */
 /* Reported by Martin Husemann <martin@netbsd.org> */
 
-extern void abort (void);
 
 static void __attribute__((noinline))
 set (unsigned long *l)

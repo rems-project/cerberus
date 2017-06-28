@@ -3,7 +3,6 @@
    vs. zero extension.  __attribute__ ((noinline)) added to try to make it
    fail at higher optimization levels too.  */
 
-extern void abort (void);
 
 long long __attribute__ ((noinline))
 div (long long val)

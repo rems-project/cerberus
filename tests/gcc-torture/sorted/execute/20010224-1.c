@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 typedef signed short int16_t;
 typedef unsigned short uint16_t;

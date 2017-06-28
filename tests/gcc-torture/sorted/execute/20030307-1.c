@@ -1,9 +1,9 @@
+#include "cerberus.h"
 /* PR optimization/8726 */
 /* Originator: Paul Eggert <eggert@twinsun.com> */
 
 /* Verify that GCC doesn't miscompile tail calls on Sparc. */
 
-extern void abort(void);
 
 int fcntl_lock(int fd, int op, long long offset, long long count, int type);
 

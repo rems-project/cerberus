@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 static unsigned int
 my_add(unsigned int si1, unsigned int si2)

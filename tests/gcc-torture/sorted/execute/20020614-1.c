@@ -1,11 +1,9 @@
+#include "cerberus.h"
 /* PR c/6677 */
 /* Verify that GCC doesn't perform illegal simplifications
    when folding constants.  */
 
-#include <limits.h>
 
-extern void abort (void);
-extern void exit (int);
 
 int main (void)
 {

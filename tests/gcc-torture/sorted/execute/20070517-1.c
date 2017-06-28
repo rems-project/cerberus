@@ -2,7 +2,6 @@
 /* PR rtl-optimization/31691 */
 /* Origin: Chi-Hua Chen <stephaniechc-gccbug@yahoo.com> */
 
-extern void abort (void);
 
 static int get_kind(int) __attribute__ ((noinline));
 

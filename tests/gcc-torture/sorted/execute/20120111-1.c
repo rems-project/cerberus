@@ -1,6 +1,4 @@
 #include "cerberus.h"
-#include <stdlib.h>
-#include <stdint.h>
 
 uint32_t f0a (uint64_t arg2) __attribute__((noinline));
 

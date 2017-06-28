@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 struct delay_block {
   struct delay_block *succ;

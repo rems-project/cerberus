@@ -1,9 +1,9 @@
+#include "cerberus.h"
 /* Copyright (C) 1999 Free Software Foundation, Inc.
   Contributed by Nathan Sidwell 20 Jan 1999 <nathan@acm.org> */
 
 /* check range combining boolean operations work */
 
-extern void abort();
 
 #define N 77
 

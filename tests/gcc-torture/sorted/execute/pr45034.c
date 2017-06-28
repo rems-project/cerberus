@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
 static void fixnum_neg(signed char x, signed char *py, int *pv)
 {
   unsigned char ux, uy;

@@ -1,7 +1,5 @@
+#include "cerberus.h"
 /* { dg-options "-fwrapv" } */
-#include <limits.h>
-extern void abort ();
-extern void exit (int);
 void f(int i)
 {
   i = i > 0 ? i : -i;

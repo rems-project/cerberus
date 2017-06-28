@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
-extern void exit (int);
 
 int a[6], c = 1, d;
 short e;

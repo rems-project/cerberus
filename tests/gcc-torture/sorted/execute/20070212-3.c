@@ -1,3 +1,4 @@
+#include "cerberus.h"
 struct foo { int i; int j; };
 
 int bar (struct foo *k, int k2, int f, int f2)
@@ -17,7 +18,6 @@ int bar (struct foo *k, int k2, int f, int f2)
   return res + *q;
 }
 
-extern void abort (void);
 
 int main()
 {

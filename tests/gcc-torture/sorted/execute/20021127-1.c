@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* { dg-options "-std=c99" } */
 
 long long a = -1;

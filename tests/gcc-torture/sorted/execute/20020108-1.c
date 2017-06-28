@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* This file tests shifts in various integral modes.  */
 
-#include <limits.h>
 
 #define CAT(A, B) A ## B
 
@@ -120,8 +120,6 @@ REPEAT_32
 #undef REPEAT_FN
 #endif /* CHAR_BIT == 8 || CHAR_BIT == 16 || CHAR_BIT == 32 */
 
-extern void abort (void);
-extern void exit (int);
 
 int
 main ()

@@ -1,8 +1,6 @@
 #include "cerberus.h"
 /* Ensure that we create VUSE operands also for noreturn functions.  */
 
-#include <stdlib.h>
-#include <string.h>
 
 int *pwarn;
 

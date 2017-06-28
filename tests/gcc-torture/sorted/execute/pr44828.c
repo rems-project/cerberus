@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 static signed char
 foo (signed char si1, signed char si2)

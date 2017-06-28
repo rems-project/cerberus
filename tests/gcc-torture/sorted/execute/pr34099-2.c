@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int test1 (int b, int c)
 {
   char x;
@@ -31,7 +32,6 @@ int test4 (int b, int c)
     return 1;
 }
 
-extern void abort (void);
 int main()
 {
   if (test1(1, 1000) != 0)

@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR target/39240 */
 
-extern void abort (void);
 
 __attribute__ ((noinline))
 static int foo1 (int x)

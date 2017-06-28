@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* derived from PR c/2100 */
 
-extern void abort ();
-extern void exit (int);
 
 #define SMALL_N  2
 #define NUM_ELEM 4

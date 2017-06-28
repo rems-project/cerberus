@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR rtl-optimization/34490 */
 
-extern void abort (void);
 
 static int x;
 

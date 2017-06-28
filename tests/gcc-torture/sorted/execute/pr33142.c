@@ -1,6 +1,5 @@
 #include "cerberus.h"
 int abs(int j);
-extern void abort(void);
 
 __attribute__((noinline)) int lisp_atan2(long dy, long dx) {
     if (dx <= 0)

@@ -1,3 +1,4 @@
+#include "cerberus.h"
 struct f
 {
   int i;
@@ -14,7 +15,6 @@ int g(int i, int c, struct f *ff, int *p)
   return *t;
 }
 
-extern void abort(void);
 
 int main()
 {
