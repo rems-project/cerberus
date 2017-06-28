@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR tree-optimization/19060 */
 
-void abort (void);
 
 static
 long long min ()

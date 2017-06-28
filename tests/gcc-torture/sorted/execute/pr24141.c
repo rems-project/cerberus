@@ -2,7 +2,6 @@
 // reduced testcase, compile with -O2. Also, with --disable-checking
 // gcc produces wrong code.
 
-void abort (void);
 int i;
 
 void g (void)

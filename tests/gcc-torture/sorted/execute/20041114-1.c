@@ -6,7 +6,6 @@
    gets folded to 1.  */
 
 
-void abort (void);
 void link_failure (void);
 
 volatile int v;

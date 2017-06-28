@@ -44,4 +44,4 @@
 #define __SIZEOF_INT__    4
 
 void abort() {}
-int exit(int n) {return n;}
+void exit(int n) {}

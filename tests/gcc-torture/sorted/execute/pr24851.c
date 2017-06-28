@@ -5,7 +5,6 @@
      p + -4B
    where -4B is represented as unsigned.  */
 
-void abort(void);
 int main()
 {
   int a[10], *p, *q;

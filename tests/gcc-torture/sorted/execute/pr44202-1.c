@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern __attribute__ ((__noreturn__)) void exit(int);
-extern __attribute__ ((__noreturn__)) void abort(void);
 __attribute__ ((__noinline__))
 int
 add512(int a, int *b)
