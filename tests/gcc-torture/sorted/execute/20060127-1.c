@@ -1,5 +1,4 @@
 #include "cerberus.h"
-void abort ();
 
 void
 f (long long a)

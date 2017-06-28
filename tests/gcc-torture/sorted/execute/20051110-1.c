@@ -1,6 +1,5 @@
 #include "cerberus.h"
 void add_unwind_adjustsp (long);
-void abort (void);
 
 unsigned char bytes[5];
 

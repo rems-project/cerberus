@@ -1,6 +1,4 @@
 #include "cerberus.h"
-void abort ();
-void exit (int);
 
 void test(int x, int y)
 {

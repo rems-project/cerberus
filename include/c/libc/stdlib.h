@@ -44,7 +44,7 @@ void *realloc(void *ptr, size_t size);
 _Noreturn void abort(void);
 int atexit(void (*func)(void));
 int at_quick_exit(void (*func)(void));
-//_Noreturn void exit(int status);
+_Noreturn void exit(int status);
 _Noreturn void _Exit(int status);
 char *getenv(const char *name);
 _Noreturn void quick_exit(int status);

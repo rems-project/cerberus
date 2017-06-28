@@ -1,5 +1,4 @@
 #include "cerberus.h"
-void abort (void);
 void f(int i)
 {
   if (i>4 + 3 * 16)

@@ -64,8 +64,6 @@ get_n (void)
   return n;
 }
 
-void abort (void);
-void exit (int);
 int main (void)
 {
   e = 3;
