@@ -2831,16 +2831,31 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     
     | A.AilSwhile e s ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSwhile use mkTestExpression") in
-        E.fresh_named_symbol "while" >>= fun sym_loop     ->
-        E.fresh_symbol               >>= fun sym_case     ->
-        E.fresh_symbol               >>= fun sym_e        ->
-        translate_expression e       >>= fun core_e       ->
-        self s                       >>= fun core_s       ->
-        E.get_visible_objects        >>= fun visible_syms ->
+        E.fresh_named_symbol "while"              >>= fun sym_loop     ->
+        E.fresh_symbol                            >>= fun sym_case     ->
+        E.fresh_symbol                            >>= fun sym_e        ->
+        translate_expression (mkTestExpression e) >>= fun core_test    ->
+        self s                                    >>= fun core_s       ->
+        E.get_visible_objects                     >>= fun visible_syms ->
+          let oTy = C.OTy_integer in (* this is the type of core_test, not "core_e" *)
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_s
             (C.Erun default sym_loop [ Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym | forall (sym MEM visible_syms) | true ]) in
+        E.return $
+          C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
+                                                                      Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
+            C.Esseq (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
+              C.Ecase (Caux.mk_sym_pe (C.BTy_loaded oTy) sym_e)
+                [ (Caux.mk_specified_pat (Caux.mk_sym_pat sym_case (C.BTy_object oTy)),
+                   C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object oTy) sym_case) (Caux.mk_integer_pe 1)))
+                     core_s_loop C.Eskip)
+                  (* non-deterministic branching if the test expression had unspecified value *)
+                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                   C.End [core_s_loop; C.Eskip]) ]
+               )
+            )
+(*
         E.return $
           C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
                                                                       Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
@@ -2854,6 +2869,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                    C.End [core_s_loop; C.Eskip]) ]
                )
             )
+*)
     
     | A.AilSdo s e ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in
