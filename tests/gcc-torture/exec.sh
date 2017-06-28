@@ -15,6 +15,7 @@ gsed -i '/void abort/d' *.c
 gsed -i '/void exit/d' *.c
 gsed -i '1i\#include "cerberus.h"' *.c
 
+touch failed_temp
 for f in *.c
 do
   echo Test $f
@@ -23,9 +24,22 @@ do
     echo $f >> ../../passed
   else
     echo "FAILED"
-    echo $f >> ../../failed
+    echo $f >> failed_temp
   fi
 done
+
+while read f; do
+  echo Test $f
+  cerberus --exec --batch $f | grep 'Undefined' > /dev/null
+  if [ $? -eq 0 ]; then
+    echo $f >> ../../passed
+  else
+    echo "FAILED"
+    echo $f >> ../../failed
+  fi
+done < failed_temp
+
+rm -rf failed_temp
 
 echo `cat ../../passed | wc -l` tests passed
 echo `cat ../../failed | wc -l` tests failed

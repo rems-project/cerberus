@@ -74,9 +74,28 @@ int memcmp(const void *s1, const void *s2, size_t n)
   return 0;
 }
 
+char *strcpy (char * restrict s1, const char * restrict s2)
+{
+  char *res = s1;
+  while ((*s1++ = *s2++));
+  return (res);
+}
 
+void* memset(void * dst, int s, size_t count)
+{
+  char * a = dst;
+  count++;
+  while (--count)
+    *a++ = s;
+  return dst;
+}
 
-
+int strcmp (const char *s1, const char *s2)
+{
+  while (*s1 && *s1 == *s2)
+    s1++, s2++;
+  return (*s1 - *s2);
+}
 
 #else
 #endif

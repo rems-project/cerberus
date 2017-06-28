@@ -100,5 +100,10 @@ void *bsearch_s(const void *key, const void *base,
           const wchar_t * restrict src, rsize_t len);
 */
 
+int abs(int i) 
+{
+  return i>=0 ? i : -i; 
+}
+
 #else
 #endif

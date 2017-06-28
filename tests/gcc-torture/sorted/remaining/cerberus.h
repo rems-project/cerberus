@@ -1,9 +1,12 @@
 #define _Noreturn
+#define const
 
 #include <limits.h>
 #include <stdalign.h>
+#include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#define size_t unsigned long
 #include <stdlib.h>
 #include <string.h>
 
@@ -20,7 +23,7 @@
 
 #define __inline__        inline
 #define __alignof__       alignof
-#define __SIZE_TYPE__     __cerbty_size_t
+#define __SIZE_TYPE__     size_t
 
 #define __CHAR_BIT__      CHAR_BIT
 #define __INT_MAX__       INT_MAX
@@ -43,5 +46,5 @@
 #define __LONG_LONG_MAX__ 9223372036854775807LL
 #define __SIZEOF_INT__    4
 
-#define exit(n) return n
-#define abort() return 1
+void abort() {}
+void exit(int n) {}
