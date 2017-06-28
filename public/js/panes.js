@@ -124,11 +124,11 @@ class UI {
     })
 
     $('#random').on('click', () => {
-      this.run ('random')
+      this.exec ('random')
     })
 
     $('#exhaustive').on('click', () => {
-      this.run ('exhaustive')
+      this.exec ('exhaustive')
     })
 
     // Load
@@ -180,6 +180,29 @@ class UI {
     })
 
     window.onresize = () => this.refresh()
+  }
+
+  exec (mode) {
+    this.wait()
+    this.waitingResult = true
+    let tab = this.activePane.activeTab
+    $.ajax({
+      url: '/'+mode,
+      type: 'POST',
+      data: tab.editor.getValue(),
+      success: (data, status, query) => {
+        if (query.getResponseHeader('cerberus') == 0) {
+          tab.execTab.editor.setValue(data)
+          tab.execTab.setActive()
+          tab.execTab.refresh()
+        } else {
+          tab.consoleTab.editor.setValue(tab.consoleTab.editor.getValue()+data)
+          tab.consoleTab.setActive()
+          tab.consoleTab.refresh()
+        }
+        this.done()
+      }
+    })
   }
 
   run (mode) {
