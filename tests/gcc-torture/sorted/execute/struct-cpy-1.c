@@ -32,7 +32,6 @@ void ini (void)
 
 int main (void)
 {
-  extern void abort (void);
 
   ini ();
   if (pty.t.a != 1

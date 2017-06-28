@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
 
 void __attribute__((noinline,noclone))
      test1(int i)

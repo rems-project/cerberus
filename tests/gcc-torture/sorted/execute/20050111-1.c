@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* PR middle-end/19084, rtl-optimization/19348 */
 
 unsigned int
@@ -17,7 +18,6 @@ bar (unsigned short x)
   return (unsigned long long) x << 32;
 }
 
-extern void abort (void);
 
 int
 main (void)

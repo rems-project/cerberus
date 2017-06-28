@@ -1,4 +1,4 @@
-extern void abort ();
+#include "cerberus.h"
 
 int foo(unsigned short x)
 {

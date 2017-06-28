@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* Copyright (C) 2002 Free Software Foundation.
 
    Ensure that the composite comparison optimization doesn't misfire
@@ -5,7 +6,6 @@
 
    Written by Roger Sayle, 3rd June 2002.  */
 
-extern void abort (void);
 
 int
 foo (int x, int y)

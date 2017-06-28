@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern void exit (int);
-extern void abort (void);
 
 struct { int a; int b[5]; } x;
 int *y;

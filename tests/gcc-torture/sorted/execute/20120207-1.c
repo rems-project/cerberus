@@ -3,7 +3,6 @@
 /* Testcase by Uros Bizjak <ubizjak@gmail.com> */
 
 extern char *strcpy (char *, const char *);
-extern void abort (void);
 
 char __attribute__((noinline))
 test (int a)

@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* Source: Neil Booth, from PR # 115.  */
 
 int false()
@@ -5,7 +6,6 @@ int false()
   return 0;
 }
 
-extern void abort (void);
 
 int main (int argc,char *argv[])
 {

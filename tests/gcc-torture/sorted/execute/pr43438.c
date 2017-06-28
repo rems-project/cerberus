@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 static unsigned char g_2 = 1;
 static int g_9;

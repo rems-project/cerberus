@@ -7,7 +7,6 @@
   typedef int int32_t;
 #endif
 
-extern void abort (void);
 
 __attribute__ ((noinline, noclone)) unsigned long long f1 (int32_t x)
 {

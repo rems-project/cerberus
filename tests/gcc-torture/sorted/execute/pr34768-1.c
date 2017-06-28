@@ -17,7 +17,6 @@ test (int c)
   return tmp + x;
 }
 
-extern void abort (void);
 int main()
 {
   x = 1;

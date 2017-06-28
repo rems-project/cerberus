@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR rtl-optimization/24899 */
 
-extern void abort (void);
 
 __attribute__ ((noinline)) int
 foo (int x, int y, int *z)

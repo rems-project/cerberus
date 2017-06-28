@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR optimization/13313 */
 /* Origin: Mike Lerwill <mike@ml-solutions.co.uk> */
 
-extern void abort(void);
 
 void DisplayNumber (unsigned long v)
 {

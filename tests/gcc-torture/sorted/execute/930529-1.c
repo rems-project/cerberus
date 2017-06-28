@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* { dg-options { "-fwrapv" } } */
 
-extern void abort (void);
-extern void exit (int);
 
 int dd (int x, int d) { return x / d; }
 

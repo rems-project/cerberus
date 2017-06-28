@@ -1,6 +1,6 @@
+#include "cerberus.h"
 char buf[10];
 
-extern void abort (void);
 extern int sprintf (char*, const char*, ...);
 
 int main()

@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern void exit (int);
-extern void abort (void);
 extern unsigned short f (short a) __attribute__((__noinline__));
 
 unsigned short

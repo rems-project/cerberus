@@ -1,10 +1,10 @@
+#include "cerberus.h"
 /* Copyright (C) 2002 Free Software Foundation.
 
    Test for correctness of composite comparisons.
 
    Written by Roger Sayle, 3rd June 2002.  */
 
-extern void abort (void);
 
 int ieq (int x, int y, int ok)
 {

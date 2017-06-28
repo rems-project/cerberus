@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR opt/8165.  */
 
-extern void abort (void);
 
 char buf[64];
 

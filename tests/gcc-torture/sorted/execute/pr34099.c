@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int foo (int b, int c)
 {
   int x;
@@ -6,7 +7,6 @@ int foo (int b, int c)
   else
     return 1;
 }
-extern void abort (void);
 int main()
 {
   if (foo(1, 0) != 0)

@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* This used to fail on h8300.  */
 
-extern void abort (void);
-extern void exit (int);
 
 unsigned long
 foo (unsigned long n)

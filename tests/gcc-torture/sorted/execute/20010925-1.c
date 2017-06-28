@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern void exit(int);
-extern void abort (void);
 
 extern void * memcpy (void *, const void *, __SIZE_TYPE__);
 int foo (void *, void *, unsigned int c);

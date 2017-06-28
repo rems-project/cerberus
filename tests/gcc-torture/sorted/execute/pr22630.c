@@ -1,3 +1,4 @@
+#include "cerberus.h"
 void abort (void);
 
 int j;

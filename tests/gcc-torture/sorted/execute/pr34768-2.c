@@ -19,7 +19,6 @@ test (int c)
   return tmp + x + res;
 }
 
-extern void abort (void);
 int main()
 {
   x = 1;

@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR rtl-optimization/28970 */
 /* Origin: Peter Bergner <bergner@vnet.ibm.com> */
 
-extern void abort (void);
 
 int tar (long i)
 {

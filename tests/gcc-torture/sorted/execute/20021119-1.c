@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR 8639.  */
 
-extern void abort(void);
 
 int foo (int i)
 {

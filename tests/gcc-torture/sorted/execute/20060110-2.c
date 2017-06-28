@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 
 long long 
 f (long long a, long long b) 

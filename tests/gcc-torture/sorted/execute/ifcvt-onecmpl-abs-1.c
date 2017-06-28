@@ -1,6 +1,5 @@
 #include "cerberus.h"
 
-extern void abort(void);
 
 __attribute__ ((noinline))
 int foo(int n)

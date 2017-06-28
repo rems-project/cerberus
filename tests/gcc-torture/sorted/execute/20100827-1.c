@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
 int __attribute__((noinline,noclone))
 foo (char *p)
 {

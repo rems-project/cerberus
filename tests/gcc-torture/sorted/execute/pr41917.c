@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR rtl-optimization/41917 */
 
-extern void abort (void);
 unsigned int a = 1;
 
 int

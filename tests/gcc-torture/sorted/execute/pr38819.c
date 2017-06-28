@@ -1,6 +1,4 @@
 #include "cerberus.h"
-extern void exit (int);
-extern void abort (void);
 
 volatile int a = 1;
 volatile int b = 0;

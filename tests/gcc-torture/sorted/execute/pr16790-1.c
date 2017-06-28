@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR middle-end/16790.  */
 
-extern void abort ();
 
 static void test1(unsigned int u1)
 {

@@ -1,5 +1,4 @@
-extern void abort(void);
-extern void exit(int);
+#include "cerberus.h"
 
 unsigned int foo(unsigned int a)
 {

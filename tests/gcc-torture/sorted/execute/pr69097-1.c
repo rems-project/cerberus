@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* PR tree-optimization/69097 */
 
 int a, b;

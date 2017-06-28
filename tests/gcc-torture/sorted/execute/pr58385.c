@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR tree-optimization/58385 */
 
-extern void abort (void);
 
 int a, b = 1;
 

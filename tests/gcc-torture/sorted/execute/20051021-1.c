@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* Verify that TRUTH_AND_EXPR is not wrongly changed to TRUTH_ANDIF_EXPR.  */
 
-extern void abort (void);
 
 int count = 0;
 

@@ -1,5 +1,4 @@
 #include "cerberus.h"
-#include <assert.h>
 
 int a, *b, c, d, f, **i, p, q, *r;
 short o, j;

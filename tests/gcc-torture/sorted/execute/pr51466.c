@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR tree-optimization/51466 */
 
-extern void abort (void);
 
 __attribute__((noinline, noclone)) int
 foo (int i)

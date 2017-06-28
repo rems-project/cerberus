@@ -1,3 +1,4 @@
+#include "cerberus.h"
 void add_unwind_adjustsp (long);
 void abort (void);
 

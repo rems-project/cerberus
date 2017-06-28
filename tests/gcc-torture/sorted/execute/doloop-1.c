@@ -1,7 +1,5 @@
-#include <limits.h>
+#include "cerberus.h"
 
-extern void exit (int);
-extern void abort (void);
 
 volatile unsigned int i;
 

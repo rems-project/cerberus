@@ -1,5 +1,5 @@
+#include "cerberus.h"
 /* PR target/19005 */
-extern void abort (void);
 
 int v, s;
 

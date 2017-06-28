@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* Origin: Mikael Pettersson <mikpe@csd.uu.se> and the Linux kernel.  */
 
-extern void abort (void);
 unsigned long a = 0xc0000000, b = 0xd0000000;
 unsigned long c = 0xc01bb958, d = 0xc0264000;
 unsigned long e = 0xc0288000, f = 0xc02d4378;

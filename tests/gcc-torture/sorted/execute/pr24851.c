@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* We used to handle pointer addition wrongly
    at the time of recombining to an ARRAY_REF
    in the case of

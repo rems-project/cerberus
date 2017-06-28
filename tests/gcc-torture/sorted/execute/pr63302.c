@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* PR tree-optimization/63302 */
 
 #ifdef __SIZEOF_INT128__

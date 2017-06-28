@@ -1,4 +1,4 @@
-#include <stdlib.h>
+#include "cerberus.h"
 int a, b, d, f;
 char c;
 static int *e = &d;

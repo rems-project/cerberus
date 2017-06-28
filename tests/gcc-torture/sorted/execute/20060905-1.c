@@ -1,7 +1,7 @@
+#include "cerberus.h"
 /* PR rtl-optimization/28386 */
 /* Origin: Volker Reichelt <reichelt@gcc.gnu.org> */
 
-extern void abort(void);
 
 volatile char s[256][3];
 

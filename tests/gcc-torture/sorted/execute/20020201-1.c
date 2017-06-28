@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* Test whether division by constant works properly.  */
 
-extern void abort (void);
-extern void exit (int);
 
 unsigned char cx = 7;
 unsigned short sx = 14;

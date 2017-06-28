@@ -1,5 +1,5 @@
+#include "cerberus.h"
 int flag;
-extern void abort (void);
 int main()
 {
   int x;

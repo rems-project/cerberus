@@ -11,7 +11,6 @@ foo (int (*a)[2])
   return bar (&(*a)[i]);
 }
 
-extern void abort (void);
 int a[2];
 int main()
 {

@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* { dg-options "-fno-builtin-abort" } */
 
 int a, b, m, n, o, p, s, u, i;
@@ -8,7 +9,6 @@ static int f, h;
 static short g, r, v;
 unsigned t;
 
-extern void abort ();
 
 int
 fn1 (int p1)

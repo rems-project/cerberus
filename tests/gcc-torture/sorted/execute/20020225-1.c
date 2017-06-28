@@ -1,8 +1,7 @@
+#include "cerberus.h"
 /* This testcase failed at -O2 on powerpc64 due to andsi3 writing
    nonzero bits to the high 32 bits of a 64 bit register.  */
 
-extern void abort (void);
-extern void exit (int);
 
 unsigned long foo (unsigned long base, unsigned int val)
 {

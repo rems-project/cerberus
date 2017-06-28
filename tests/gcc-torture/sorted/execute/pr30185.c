@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR target/30185 */
 
-extern void abort (void);
 
 typedef struct S { char a; long long b; } S;
 

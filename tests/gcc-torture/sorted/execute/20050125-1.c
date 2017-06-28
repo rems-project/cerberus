@@ -2,8 +2,6 @@
 /* Verify that the CALL sideeffect isn't optimized away.  */
 /* Contributed by Greg Parker  25 Jan 2005  <gparker@apple.com> */
 
-#include <stdlib.h>
-#include <stdio.h>
 
 struct parse {
   char *next;

@@ -7,7 +7,6 @@
 #define T long long
 #endif
 
-extern void abort (void);
 
 __attribute__ ((noinline))
 unsigned T

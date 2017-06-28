@@ -21,7 +21,6 @@ lbl_370:
   }
 }
 
-extern void abort (void);
 
 int main(void)
 {

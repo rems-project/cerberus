@@ -1,7 +1,6 @@
+#include "cerberus.h"
 /* { dg-options "-mtune=i686" { target { { i?86-*-* x86_64-*-* } && ia32 } } } */
 
-extern void abort (void);
-extern void exit (int);
 
 long baz1 (void *a)
 {

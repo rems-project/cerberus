@@ -1,6 +1,5 @@
+#include "cerberus.h"
 
-extern void abort ();
-extern void exit (int);
 
 int f (int a) {
 	if (a != 2) {

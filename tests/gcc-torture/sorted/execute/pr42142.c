@@ -17,7 +17,6 @@ sort(int L)
     }
   return i;
 }
-extern void abort (void);
 int main()
 {
   if (sort (5) != 1)

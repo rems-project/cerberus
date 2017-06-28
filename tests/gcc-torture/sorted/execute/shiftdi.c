@@ -1,3 +1,4 @@
+#include "cerberus.h"
 /* { dg-require-effective-target int32plus } */
 
 /* Failed on sparc with -mv8plus because sparc.c:set_extends() thought

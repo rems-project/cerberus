@@ -2,8 +2,6 @@
 /* { dg-require-effective-target int32plus } */
 /* { dg-options "-fno-strict-overflow" } */
 
-extern void abort (void);
-extern void exit (int);
 
 __attribute__ ((noinline)) void
 foo(short unsigned int *p1, short unsigned int *p2)

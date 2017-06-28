@@ -2,7 +2,6 @@
 /* PR rtl-optimization/28096 */
 /* Origin: Jan Stein <jan@gatespacetelematics.com> */
 
-extern void abort (void);
 
 int bar (int, int) __attribute__((noinline));
 int bar (int a, int b)

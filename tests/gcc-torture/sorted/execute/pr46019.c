@@ -1,6 +1,6 @@
+#include "cerberus.h"
 /* PR middle-end/46019 */
 
-extern void abort (void);
 
 int
 main (void)

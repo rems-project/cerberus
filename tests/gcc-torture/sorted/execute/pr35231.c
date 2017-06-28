@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort(void);
 
 int __attribute__((noinline))
 foo(int bits_per_pixel, int depth)

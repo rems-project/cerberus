@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int a, c, d;
 short b;
 

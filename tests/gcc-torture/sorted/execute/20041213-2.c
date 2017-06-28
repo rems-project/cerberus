@@ -4,8 +4,6 @@
    The dominator optimization didn't take the PHI evaluation order
    into account when threading an edge.  */
 
-extern void abort (void) __attribute__((noreturn));
-extern void exit (int) __attribute__((noreturn));
 
 void __attribute__((noinline))
 foo (int i)

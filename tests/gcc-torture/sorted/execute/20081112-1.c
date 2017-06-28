@@ -1,7 +1,5 @@
 #include "cerberus.h"
-#include <limits.h>
 
-extern void abort (void);
 
 static __attribute__((noinline)) void foo (int a)
 {

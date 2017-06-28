@@ -1,4 +1,4 @@
-extern void abort (void);
+#include "cerberus.h"
 int main ()
 {
   short ssi = 126;

@@ -1,5 +1,4 @@
 #include "cerberus.h"
-extern void abort (void);
 
 typedef unsigned long my_uintptr_t;
 

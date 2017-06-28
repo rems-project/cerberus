@@ -6,7 +6,6 @@ struct {
 
 UINT192 bid_Kx192[32];
 
-extern void abort (void);
 
 int main()
 {

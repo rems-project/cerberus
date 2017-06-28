@@ -1,5 +1,4 @@
-extern void exit (int);
-extern void abort ();
+#include "cerberus.h"
 
 void test(int x, int y)
 {

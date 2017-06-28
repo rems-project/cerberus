@@ -1,5 +1,5 @@
+#include "cerberus.h"
 extern int abs (int);
-extern void abort (void);
 
 void
 check (int *p)

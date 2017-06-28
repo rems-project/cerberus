@@ -1,7 +1,6 @@
 #include "cerberus.h"
 /* PR middle-end/40057 */
 
-extern void abort (void);
 
 __attribute__((noinline)) int
 foo (unsigned long long x)

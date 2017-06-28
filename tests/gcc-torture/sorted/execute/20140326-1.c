@@ -1,3 +1,4 @@
+#include "cerberus.h"
 int a;
 
 int
