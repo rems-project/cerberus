@@ -42,6 +42,68 @@ function getSTDSection(section) {
   return div
 }
 
+function parseCerberusResult(res) {
+  function countLines(str) {
+    return str.split(/\r\n|\r|\n/).length - 1
+  }
+
+  // Fail
+  if (res[0] != 0) {
+    return {
+      success: false,
+      locations: [],
+      core: "",
+      console: res[1].toString(),
+      batch: ""
+    }
+  }
+
+  // Success
+  let bits = res[1][1].toString().split(/{-#(\d*:\d*-\d*:\d*:|E...)#-}/g)
+  let core = ""
+  let locs = [], stkLoc = [], stkLine0 = []
+  let l0 = 0, l = 0
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] == 'ELOC') {
+      // finish last location
+      let cloc = stkLoc.pop().toString().match(/\d+/g)
+      locs.push({
+        c: {
+          begin: {line: cloc[0]-1, ch: cloc[1]-1},
+          end: {line: cloc[2]-1, ch: cloc[3]-1}
+        },
+        core: {
+          begin: {line: l0, ch: 0},
+          end: {line: l, ch: 0}
+        }
+      })
+      l0 = stkLine0.pop()
+      continue;
+    }
+    if (/\d*:\d*-\d*:\d*:/g.test(bits[i])) {
+      stkLine0.push(l0)
+      stkLoc.push(bits[i])
+      l0 = l
+      continue;
+    }
+    // a bit of core source
+    core += bits[i]
+    l += countLines(bits[i])
+  }
+
+  locs.sort((a, b) => {
+    return (a.core.end.line - a.core.begin.line)
+      < (b.core.end.line - b.core.begin.line) ? 1:-1
+  })
+
+  return {
+    success: true,
+    locations: locs,
+    core: core,
+    console: '',
+    batch: res[1][2][1].toString()
+  }
+}
 
 const ui = new UI()
 const style = createStyle()
@@ -56,8 +118,13 @@ $(window).ready(() => {
   ui.activePane = new Pane()
   ui.addPane(ui.activePane)
   ui.activePane.addTab(new TabSource())
-  ui.activePane.activeTab.setTitle('hello.c')
-  // Wait buffer.c to be downloaded by worker
-  ui.worker.postMessage(JSON.stringify({type: 'read'}))
   ui.setup()
 })
+
+function onLoadCerberus() {
+  let tab = ui.activePane.activeTab;
+  tab.setTitle('hello.c')
+  tab.editor.setValue(cerberus.buffer().toString())
+  tab.setActive()
+  tab.refresh()
+}

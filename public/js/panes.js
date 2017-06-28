@@ -152,7 +152,7 @@ class UI {
     })
 
     $('#core').on('click', () => {
-      this.run ('core')
+      this.run ()
     })
 
     // View
@@ -184,7 +184,6 @@ class UI {
 
   exec (mode) {
     this.wait()
-    this.waitingResult = true
     let tab = this.activePane.activeTab
     $.ajax({
       url: '/'+mode,
@@ -205,24 +204,23 @@ class UI {
     })
   }
 
-  run (mode) {
+  run () {
     this.wait()
-    this.waitingResult = true
-
     let tab = this.activePane.activeTab
     let source = tab.editor.getValue()
-    this.worker.postMessage(JSON.stringify({
-      type: 'run',
-      source: source,
-      mode: mode
-    }))
-    setTimeout(() => {
-      if (this.waitingResult) {
-        this.worker.stop()
-        this.done()
-        alert('looping')
-      }
-    }, 60000)
+    let result = parseCerberusResult(cerberus.run(source, false, false))
+
+    // Set colors for every location
+    for (let i = 0; i < result.locations.length; i++)
+      result.locations[i].color = generateColor()
+
+    tab.data = result
+    tab.dirty = false
+    tab.coreTab.editor.setValue(result.core)
+    tab.coreTab.setActive()
+    tab.coreTab.refresh()
+    tab.highlight()
+    this.done()
   }
 
   cerberusResult(result) {
@@ -318,37 +316,6 @@ class UI {
       }
     }
     this.setup()
-  }
-
-  get worker() {
-    // Worker exists and is alive
-    if (this._worker && this._worker.isAlive)
-      return this._worker
-    // Worker does not exists or is dead, create new one
-    this._worker = new Worker('js/worker.js')
-    this._worker.isAlive = true
-    this._worker.onmessage = (e) => {
-      let msg = JSON.parse(e.data)
-      switch (msg.type) {
-        // Load buffer to active tab
-        case 'load':
-          ui.activePane.activeTab.editor.setValue(msg.data)
-          break
-        // Result from Cerberus
-        case 'result':
-          ui.cerberusResult(msg.data)
-          break
-        // Worker has been closed for some reason
-        case 'close':
-          this.isAlive = false
-          break
-      }
-    }
-    this._worker.stop = () => {
-      this._worker.terminate()
-      this._worker.isAlive = false
-    }
-    return this._worker
   }
 
   refresh () {
