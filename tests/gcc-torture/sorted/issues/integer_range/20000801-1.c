@@ -1,13 +1,11 @@
 #include "cerberus.h"
-extern void abort(void);
-extern void exit(int);
 
 void
 foo (char *bp, unsigned n)
 {
-  register char c;
-  register char *ep = bp + n;
-  register char *sp;
+  char c;
+  char *ep = bp + n;
+  char *sp;
 
   while (bp < ep)
     {

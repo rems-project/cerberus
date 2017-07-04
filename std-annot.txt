@@ -1,0 +1,203 @@
+6:
+  5: Expressions
+    #1 - Syntax
+    #2 - OK
+    #3 - ??
+    #4 - OK
+    #5 - OK
+    #6 - ??
+    #7 - ??
+    #8 - Floats
+  ==================
+    1: Primary
+      #1 - Syntax
+      #2 - Syntax
+      #3 - Syntax
+      #4 - Syntax
+      #5 - Syntax
+      #6 - Syntax
+      1: Generics
+  ==================
+    2: Postfix
+      1: Array subscripting
+        #1 - Syntax
+        #2 - ??
+        #3 - Syntax
+        #4 - Examples
+      ----------------
+      2: Function calls
+        #1 - Type ?
+        #2 - OK
+        #3 - Syntax
+        #4 - OK
+        #5 - Type
+        #6 - ??
+        #7 - ??
+        #8 - ??
+        #9 - types??
+        #10 - OK
+        #11 - [ Not sure how to annotate this ]
+        #12 - Example
+      ----------------
+      3: Structure and union members
+        #1 - Type
+        #2 - Type
+        #3 - OK
+        #4 - OK
+        #5 - Runtime?
+        #6 - ??
+        #7 - Example
+        #8 - Example
+        #9 - Example
+      ----------------
+      4: Incr and Dec opers
+        #1 - [ Type ]
+        #2 - OK
+        #3 - OK
+      ----------------
+      5: Compound literals
+        #1 - 
+        #2 -
+        #3 -
+        #4 -
+        #5 -
+        #6 -
+        #7 -
+        #8 - Example
+        #9 - Example
+        #10 - Example
+        #11 - Example
+        #12 - Example
+        #13 - Example
+        #14 - Example
+        #15 - Example
+        #16 - Example
+  =====================
+    3: Unary
+      #1: Syntax
+      ------------------
+      1: Inc and Dec opers
+        #1 - [Type]
+        #2 - OK (Missing sentence 5)
+        #3 - OK
+      ------------------
+      2: Address and indirection
+        #1 - [Type]
+        #2 - [Type]
+        #3 - OK [ Except sentence 2 -> Type ]
+        #4 - forth sentence
+      ------------------
+      3: Unary ariths
+        #1 - [Type]
+        #2 - OK
+        #3 - OK
+        #4 - OK
+        #5 - [Probably some rewriting ? ]
+      ------------------
+      4: sizeof and _Alignof
+        #1 - [Types]
+        #2 - [Types and runtime? ]
+        #3 - [ Runtime? - It just create a alignof element ]
+        #4 - first sentence, similar to #3
+        #5 - LIB
+        #6 - EXAMPLE
+        #7 - EXAMPLE
+        #8 - EXAMPLE
+  =====================
+      4: Cast
+        #1 - Syntax
+        #2 - Is this checked by the parser?
+        #3 - 
+        #4 - Parser?
+        #5 - Syntax
+        #6 - 
+  =====================
+      5: Multiplicative
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - OK
+        #4 - OK
+        #5 - OK
+        #6 -
+  =====================
+      6: Additive
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - [ Type ]
+        #4 - OK
+        #5 - OK
+        #6 - OK
+        #7 - [ Note sure how to check this! ]
+        #8 - second, third [ last sentence is in the evaluator? ]
+        #9 - third
+        #10 - Example
+        #11 - Example
+  =====================
+      7: Bitwise shift
+        #1 - Syntax
+        #2 - [Type]
+        #3 - [Type] + first, third sentence
+        #4 - OK
+        #5 - OK
+  =====================
+      8: Relational
+        #1 - Syntax
+        #2
+        #3 - OK
+        #4
+        #5
+        #6 - OK
+  =====================
+      9: Equality
+        #1 - Syntax
+        #2 - 
+        #3 - OK
+        #4 - OK
+        #5 - First, second sentnces
+        #6 - Maybe in the memory model ?
+        #7 - [ Note sure how to check this! ]
+  =====================
+      10, 11, 12: Binary And/Or/Xor
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - OK
+        #4 - OK
+  =====================
+      13, 14: Logical And/Or
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - OK
+        #4 - OK
+  =====================
+      15: Conditional Operator
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - [ Type/Parser? ]
+        #4 - OK
+        #5 - [ Type ]
+        #6 - [ Type ]
+        #7 - Example
+        #8 - Example
+  =====================
+      16: Assignment
+        #1 - Syntax
+        #2 - [ Type ]
+        #3 - forth + fifth + [ Type ]
+      ---------------------------
+        1: Simple
+          #1 - Syntax
+          #2 - OK
+          #3 - ??
+          #4 - Example
+          #5 - Example
+          #6 - Example
+        2: Compound
+          #1 - [ Type ]
+          #2 - [ Type/Syntax ]
+          #3 - Is this done when generating Ail?
+  =====================
+      17: Comma
+        #1 - Syntax
+        #2 - OK
+        #3 - Example
+
