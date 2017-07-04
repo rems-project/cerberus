@@ -245,7 +245,7 @@ class TabCore extends TabReadOnly {
           stream.next()
         }
 
-        let re = /{-#.+#-}/
+        let re = /{-#.+[#,]/
         if (re.test(word))
           return "std"
       }
@@ -255,10 +255,10 @@ class TabCore extends TabReadOnly {
     this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
       if ($(e.target).hasClass('cm-std')) {
         if (this.parent) {
-          let tab = new Tab(e.target.textContent)
+          let content = getSTDSection(e.target.textContent)
+          let tab = new Tab(content.title)
           this.parent.addTab(tab)
-          let content =getSTDSection(e.target.textContent)
-          tab.content.append(content)
+          tab.content.append(content.data)
           tab.setActive()
         }
       }

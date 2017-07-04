@@ -23,13 +23,16 @@ function createStyle() {
 
 function getSTDSection(section) {
   let ns = section.match(/\d+/g)
+  let title = '§'
   let p = std
   let content = ""
   for (let i = 0; i < ns.length - 1; i++) {
     p = p[ns[i]]
+    title += ns[i] + '.'
     if (p['title'])
       content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
   }
+  title = title.slice(0,-1) + '#' + ns[ns.length-1]
   content += p['P'+ns[ns.length-1]]
   let div = $('<div class="std">'+content+'</div>')
   // Create footnotes
@@ -39,7 +42,7 @@ function getSTDSection(section) {
     $(this).replaceWith(n)
     div.append('<div>'+n+'. '+ $(this).text()+'</div>')
   })
-  return div
+  return {title: title, data: div}
 }
 
 function parseCerberusResult(res) {

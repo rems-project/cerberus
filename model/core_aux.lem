@@ -384,9 +384,19 @@ val mk_std_pe: string -> pexpr -> pexpr
 let mk_std_pe std pe =
   Pexpr () (PEstd std pe)
 
+val mk_std_undef_pe: string -> Undefined.undefined_behaviour -> pexpr
+let mk_std_undef_pe std ub =
+  mk_std_pe std $ mk_undef_pe ub
+
+val mk_std_pair_pe: string -> pexpr * pexpr -> pexpr * pexpr
+let mk_std_pair_pe std (pe1, pe2) =
+  (mk_std_pe std pe1, mk_std_pe std pe2)
+
+(* Some common undef *)
+
 val mk_undef_exceptional_condition: unit -> pexpr
 let mk_undef_exceptional_condition () =
-  mk_std_pe "§6.5#5" $ mk_undef_pe Undefined.UB036_exceptional_condition
+  mk_std_undef_pe "§6.5#5" Undefined.UB036_exceptional_condition
 
 
 
