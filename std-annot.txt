@@ -1,4 +1,69 @@
 6:
+  1: Notation
+    #1 - Notations
+    #2 - Notations
+    #3 - Notations
+  ==================
+  2: Concepts
+    1: Scopes of identifiers
+    ------------------------
+    2: Linkages of identifiers
+    ------------------------
+    3: Name spaces of identifiers
+    ------------------------
+    4: Storage durations of objects
+    ------------------------
+    5: Types
+    ------------------------
+    6: Representation of Types
+    ------------------------
+    7: Compatible type and composite type
+    ------------------------
+    8: Alignement of objects
+    ------------------------
+  ==================
+  3: Conversions
+    #1 - Notations
+    #2 -
+    1: Arith operands
+    ------------------
+      1: Bool, char, and int
+        ***** I don't know how to annotate this in the code *****
+        #1 - Definition of rank:
+          - AilTypesAux.eq_integer_rank
+          - AilTypesAux.lt_integer_rank
+          - AilTypesAux.lt_integer_rank
+          - AilTypesAux.eq_integer_rank
+          - *** ASK: What is an extended integer type?
+          - AilTypesAux.eq_integer_rank
+          - AilTypesAux.lt_integer_rank
+          - *** ASK: What is the compatible integer type of an enumerated type?
+          - *** ASK: What is an extended integer type?
+          - *** PROOF: associativity of lt_integer_rank
+        #2 -
+        #3 -
+      2: Boolean type
+        #1 - Runtime: conv_int in std.core
+      3: Signed/Unsigned integers
+        #1 - Runtime: conv_int in std.core
+        #2 - Runtime: conv_int in std.core
+        #3 - Runtime: conv_int in std.core
+      4: Real floating and integer
+        ** NOT SUPPORTED **
+      5: Real floating
+        ** NOT SUPPORTED **
+      6: Complex types
+        ** NOT SUPPORTED **
+      7: Real and complex
+        ** NOT SUPPORTED **
+      8: Usual arithmetic conversions
+        #1 - translation.translate_expression.usual_arithmetic_conversion
+        #2 - ** NOT SUPPORTED **
+
+
+  ==================
+  4: Lexical elements
+  ==================
   5: Expressions
     #1 - Syntax
     #2 - OK
@@ -200,4 +265,17 @@
         #1 - Syntax
         #2 - OK
         #3 - Example
-
+  =====================
+  6: Constant expressions
+  =====================
+  7: Declarations
+  =====================
+  8: Statements and blocks
+  =====================
+  9: External definitions
+  =====================
+  10: Preprocessing directives
+    ** NOTHING TO DO **
+  =====================
+  11: Future language directions:
+    ** NOTHING TO DO **

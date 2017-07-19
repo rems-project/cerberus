@@ -139,21 +139,6 @@ clink:
 	cp -L clink.native clink
 	rm clink.native
 
-WEB_INCLUDE="public/include"
-
-# It makes include directory public (available to the web frontend)
-$(WEB_INCLUDE):
-	cp -r include public/include
-
-# NOTE: It overrides Big_int_Z to Big_int, since js_of_ocaml does not support zarith
-web: $(WEB_INCLUDE)
-	cp src/web/web_big_int_impl.ml ocaml_generated/big_int_impl.ml
-	ocamlbuild -use-ocamlfind -j 4 -pkgs pprint,js_of_ocaml,js_of_ocaml.ppx\
-		-libs nums,unix,str web.byte
-	js_of_ocaml --opt 3 --disable genprim src/web/unix.js src/web/cpp.js\
-		+nat.js web.byte
-	mv web.js public/js/cerberus.js
-
 # LOS-count the spec
 los:
 	./mysloc   $(addprefix model/,$(SOURCE_ail) )
