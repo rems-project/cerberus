@@ -43,32 +43,38 @@
     undated references, the latest edition of the referenced document
     (including any amendments) applies.
   P2: >
+    ISO 31−11:1992, Quantities and units — Part 11: Mathematical signs and
+    symbols for use in the physical sciences and technology.
+  P3: >
+    ISO/IEC 646, Information technology — ISO 7-bit coded character set for
+    information interchange.
+  P4:  >
     ISO/IEC 2382−1:1993, Information technology — Vocabulary — Part 1:
     Fundamental terms.
-  P3: ISO 4217, Codes for the representation of currencies and funds.
-  P4: >
+  P5: ISO 4217, Codes for the representation of currencies and funds.
+  P6: >
     ISO 8601, Data elements and interchange formats — Information interchange —
     Representation of dates and times.
-  P5: ISO/IEC 10646, Information technology — Universal Coded Character Set (UCS).
-  P6: >
+  P7: >
+    ISO/IEC 10646 (all parts), Information technology — Universal Coded
+    Character Set (UCS).
+  P8: >
     IEC 60559:1989, Binary floating-point arithmetic for microprocessor systems
     (previously designated IEC 559:1989).
-  P7: >
-    ISO 80000−2, Quantities and units — Part 2: Mathematical signs and symbols
-    to be used in the natural sciences and technology.
+
 
 # Section 3:
 3:
   title: Terms, definitions, and symbols
   P1: >
-    For the purposes of this document, the following terms and definitions apply.
-    Other terms are defined where they appear in italic type or on the left side
-    of a Syntax rule.
+    For the purposes of this International Standard, the following terms and
+    definitions apply.  Other terms are defined where they appear in italic
+    type or on the left side of a Syntax rule.
     Terms explicitly defined in this International Standard are not to be presumed
     to refer implicitly to similar terms defined elsewhere. Terms not defined in
     this International Standard are to be interpreted according to ISO/IEC 2382−1.
     Mathematical symbols not defined in this International Standard are to be
-    interpreted according to ISO 80000−2.
+    interpreted according to ISO 31-11.
   1:
     P1: |
       <b>access</b>
@@ -664,7 +670,7 @@
         applies to the extended unsigned integer types.</foot>
       P7: >
         The standard signed integer types and standard unsigned integer types
-        are collectively called the standard integer types; the extended signed
+        are collectively called the standard integer types, the extended signed
         integer types and extended unsigned integer types are collectively
         called the extended integer types.
       P8: >
@@ -1114,8 +1120,8 @@
       performed by most ordinary operators; it is supplemented as required by
       the discussion of each operator in 6.5.
     P2: >
-      Unless explicitly stated otherwise, conversion of an operand value to a
-      compatible type causes no change to the value or the representation.
+      Conversion of an operand value to a compatible type causes no change to
+      the value or the representation.
     1:
       title: Arithmetic operands
       1:
@@ -1313,36 +1319,37 @@
           any member or element of all contained aggregates or unions) with a
           constqualified type.
         P2: >
-          Except when it is the operand of the sizeof operator, the unary &
-          operator, the ++ operator, the -- operator, or the left operand of
-          the . operator or an assignment operator, an lvalue that does not
-          have array type is converted to the value stored in the designated
-          object (and is no longer an lvalue); this is called lvalue
-          conversion. If the lvalue has qualified type, the value has the
-          unqualified version of the type of the lvalue; additionally, if the
-          lvalue has atomic type, the value has the non-atomic version of the
-          type of the lvalue; otherwise, the value has the type of the lvalue.
-          If the lvalue has an incomplete type and does not have array type,
-          the behavior is undefined. If the lvalue designates an object of
-          automatic storage duration that could have been declared with the
+          Except when it is the operand of the sizeof operator, the _Alignof
+          operator, the unary & operator, the ++ operator, the -- operator, or
+          the left operand of the . operator or an assignment operator, an
+          lvalue that does not have array type is converted to the value stored
+          in the designated object (and is no longer an lvalue); this is called
+          lvalue conversion. If the lvalue has qualified type, the value has
+          the unqualified version of the type of the lvalue; additionally, if
+          the lvalue has atomic type, the value has the non-atomic version of
+          the type of the lvalue; otherwise, the value has the type of the
+          lvalue. If the lvalue has an incomplete type and does not have array
+          type, the behavior is undefined. If the lvalue designates an object
+          of automatic storage duration that could have been declared with the
           register storage class (never had its address taken), and that object
           is uninitialized (not declared with an initializer and no assignment
           to it has been performed prior to use), the behavior is undefined.
         P3: >
-          Except when it is the operand of the sizeof operator, or the unary &
-          operator, or is a string literal used to initialize an array, an
-          expression that has type ‘‘array of type’’ is converted to an
-          expression with type ‘‘pointer to type’’ that points to the initial
-          element of the array object and is not an lvalue. If the array object
-          has register storage class, the behavior is undefined.
+          Except when it is the operand of the sizeof operator, the _Alignof
+          operator, or the unary & operator, or is a string literal used to
+          initialize an array, an expression that has type ‘‘array of type’’ is
+          converted to an expression with type ‘‘pointer to type’’ that points
+          to the initial element of the array object and is not an lvalue. If
+          the array object has register storage class, the behavior is
+          undefined.
         P4: >
           A function designator is an expression that has function type. Except
-          when it is the operand of the sizeof operator,<foot>Because this
-          conversion does not occur, the operand of the sizeof operator remains
-          a function designator and violates the Constraints in 6.5.3.4.</foot>
-          or the unary & operator, a function designator with type ‘‘function
-          returning type’’ is converted to an expression that has type
-          ‘‘pointer to function returning type’’.
+          when it is the operand of the sizeof operator, the _Alignof
+          operator,<foot>Because this conversion does not occur, the operand of
+          the sizeof or _Alignof operator remains a function designator and
+          violates the Constraints in 6.5.3.4.</foot> or the function
+          designator with with type ‘‘function returning type’’ is converted to
+          an expression that has type ‘‘pointer to function returning type’’.
       2:
         title: void
         P1: >
@@ -3947,9 +3954,9 @@
         object declared with storage-class specifier register cannot be
         computed, either explicitly (by use of the unary & operator as
         discussed in 6.5.3.2) or implicitly (by converting an array name to a
-        pointer as discussed in 6.3.2.1). Thus, the only operator that can be
-        applied to an array declared with storage-class specifier register is
-        sizeof.</foot>
+        pointer as discussed in 6.3.2.1). Thus, the only operators that can be
+        applied to an array declared with storage-class specifier register are
+        sizeof and _Alignof.</foot>
       P7: >
         The declaration of an identifier for a function that has block scope
         shall have no explicit storage-class specifier other than extern.
