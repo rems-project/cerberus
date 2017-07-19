@@ -3,15 +3,11 @@
 open Lwt
 open Cohttp_lwt_unix
 
-(* TODO: add a timeout *)
-let exec_cerberus ?args:(args="") content =
+let run_cerberus args content =
   let source = Filename.temp_file "source" ".c" in
   let output = Filename.temp_file "output" ".core" in
-  let cmd = Printf.sprintf
-      "cerberus --exec --batch %s %s &> %s"
-      source args output
-  in
   let sfile = open_out source in
+  let cmd = Printf.sprintf "cerberus %s %s &> %s" args source output in
   output_string sfile content; close_out sfile;
   let res = Sys.command cmd in
   let headers = Cohttp.Header.of_list ["cerberus", string_of_int res] in
@@ -55,8 +51,9 @@ let get ~docroot uri path =
 let post ~docroot uri path content =
   let try_with () =
     match path with
-    | "/exhaustive" -> exec_cerberus ~args:"--mode=exhaustive" content
-    | "/random" -> exec_cerberus content
+    | "/exhaustive" -> run_cerberus "--exec --batch --mode=exhaustive" content
+    | "/random" -> run_cerberus "--exec --batch" content
+    | "/core" -> run_cerberus "--pp=core" content
     | _ -> forbidden path
   in catch try_with (fun _ -> forbidden path)
 

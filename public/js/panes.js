@@ -152,7 +152,8 @@ class UI {
     })
 
     $('#core').on('click', () => {
-      this.run ()
+      //this.run ()
+      this.exec ('core')
     })
 
     // View
