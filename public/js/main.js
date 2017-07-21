@@ -50,19 +50,7 @@ function parseCerberusResult(res) {
     return str.split(/\r\n|\r|\n/).length - 1
   }
 
-  // Fail
-  if (res[0] != 0) {
-    return {
-      success: false,
-      locations: [],
-      core: "",
-      console: res[1].toString(),
-      batch: ""
-    }
-  }
-
-  // Success
-  let bits = res[1][1].toString().split(/{-#(\d*:\d*-\d*:\d*:|E...)#-}/g)
+  let bits = res.split(/{-#(\d*:\d*-\d*:\d*:|E...)#-}/g)
   let core = ""
   let locs = [], stkLoc = [], stkLine0 = []
   let l0 = 0, l = 0
@@ -104,7 +92,7 @@ function parseCerberusResult(res) {
     locations: locs,
     core: core,
     console: '',
-    batch: res[1][2][1].toString()
+    batch: ''
   }
 }
 
@@ -112,22 +100,22 @@ const ui = new UI()
 const style = createStyle()
 let std = null
 
-// Get STD file
 $.getJSON('std.json').done((res) => std = res).fail(() => {
   console.log('Failing when trying to download "std.json"')
 })
 
-$(window).ready(() => {
-  ui.activePane = new Pane()
-  ui.addPane(ui.activePane)
-  ui.activePane.addTab(new TabSource())
-  ui.setup()
+$.get('buffer.c').done((data) => {
+  $(window).ready(() => {
+    ui.activePane = new Pane()
+    ui.addPane(ui.activePane)
+    ui.activePane.addTab(new TabSource())
+    ui.setup()
+    let tab = ui.activePane.activeTab;
+    tab.setTitle('hello.c')
+    tab.editor.setValue(data)
+    tab.setActive()
+    tab.refresh()
+  })
+}).fail(() => {
+  console.log('Failing when trying to download "buffer.c"')
 })
-
-function onLoadCerberus() {
-  let tab = ui.activePane.activeTab;
-  tab.setTitle('hello.c')
-  tab.editor.setValue(cerberus.buffer().toString())
-  tab.setActive()
-  tab.refresh()
-}

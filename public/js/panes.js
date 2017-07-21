@@ -153,7 +153,7 @@ class UI {
 
     $('#core').on('click', () => {
       //this.run ()
-      this.exec ('core')
+      this.exec_core ('core')
     })
 
     // View
@@ -195,6 +195,53 @@ class UI {
           tab.execTab.editor.setValue(data)
           tab.execTab.setActive()
           tab.execTab.refresh()
+        } else {
+          tab.consoleTab.editor.setValue(tab.consoleTab.editor.getValue()+data)
+          tab.consoleTab.setActive()
+          tab.consoleTab.refresh()
+        }
+        this.done()
+      }
+    })
+  }
+
+  exec_core (mode) {
+    this.wait()
+    let tab = this.activePane.activeTab
+    $.ajax({
+      url: '/'+mode,
+      type: 'POST',
+      data: tab.editor.getValue(),
+      success: (data, status, query) => {
+        if (query.getResponseHeader('cerberus') == 0) {
+
+          let result = parseCerberusResult(data)
+
+          // Set colors for every location
+          for (let i = 0; i < result.locations.length; i++)
+            result.locations[i].color = generateColor()
+
+          tab.data = result
+          tab.dirty = false
+          tab.coreTab.editor.setValue(result.core)
+          tab.coreTab.setActive()
+          tab.coreTab.refresh()
+          tab.highlight()
+
+          if (result.success && result.batch) {
+            tab.execTab.editor.setValue(result.batch)
+            tab.execTab.setActive()
+            tab.execTab.refresh()
+          }
+
+          if (!result.success) {
+            tab.consoleTab.editor.setValue (
+              tab.consoleTab.editor.getValue()+result.console
+            )
+            tab.consoleTab.setActive()
+            tab.consoleTab.refresh()
+          }
+
         } else {
           tab.consoleTab.editor.setValue(tab.consoleTab.editor.getValue()+data)
           tab.consoleTab.setActive()

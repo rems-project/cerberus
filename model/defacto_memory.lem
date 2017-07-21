@@ -242,7 +242,7 @@ val fresh_address: Symbol.prefix -> impl_memM address
 let fresh_address pref =
   get >>= fun mem_st ->
   let (n, suppl') = UniqueId.fresh_id mem_st.suppl in
-  let addr = Address pref n in
+  let addr = MemAddress pref n in
   put <| mem_st with
     suppl= suppl';
     constraints= declare_address addr mem_st.constraints;
