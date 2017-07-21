@@ -74,7 +74,7 @@ and pp_integer_value_base = function
       !^ "IVunspecified"
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
-  | IVaddress (Address0 (pref, n)) ->
+  | IVaddress (MemAddress (pref, n)) ->
       !^ "IVaddress" ^^ P.parens (Pp_symbol.pp_prefix pref ^^ P.comma ^^^ !^ (string_of_int n))
   | IVfromptr (ty, ptr_val_) ->
       !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)

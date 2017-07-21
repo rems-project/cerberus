@@ -282,7 +282,7 @@ let rec print_ctype = function
 let print_integer_value_base = function
   | D.IVconcrete bignum             ->
     !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
-  | D.IVaddress (D.Address0 (sym, n))  ->
+  | D.IVaddress (D.MemAddress (sym, n))  ->
     !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
                                    ^^ P.comma ^^^ !^(string_of_int n)))
   | D.IVmax ait                     -> !^"I.IVmax" ^^^ P.parens

@@ -38,8 +38,9 @@ type provenance =
 
 
 (* a symbolic identifier representing the concrete address of a fresh allocation (the nat) together with the source location *)
+(* WARNING: Lem is stupid *)
 type address =
-  | Address of Symbol.prefix * nat
+  | MemAddress of Symbol.prefix * nat
 
 
 (*** Pointer value ****************************************************************************** *)
