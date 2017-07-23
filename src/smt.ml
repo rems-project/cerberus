@@ -440,7 +440,7 @@ let runND_exhaustive (ND m) st0 =
   let slvSt = init_solver () in
   let rec aux acc = function
       | NDactive (a, st') ->
-          print_endline "NDactive";
+(*          print_endline "NDactive"; *)
 (*          print_endline (Solver.to_string slvSt.slv); *)
           Params.update_param_value slvSt.ctx "timeout" "";
           begin match check_sat slvSt.slv [] with
@@ -453,15 +453,15 @@ let runND_exhaustive (ND m) st0 =
           (Active a, Wip.to_strings (), st') :: acc
       
       | NDkilled r ->
-          print_endline "NDkilled";
+(*          print_endline "NDkilled"; *)
           (Killed r, Wip.to_strings (), st0) :: acc
       
       | NDnd (debug_str, acts) ->
-          print_endline ("NDnd(" ^ debug_str ^ ")");
+(*          print_endline ("NDnd(" ^ debug_str ^ ")"); *)
           List.fold_left aux acc acts
       
       | NDguard (debug_str, cs, act) ->
-          print_endline ("NDguard(" ^ debug_str ^ ")");
+(*          print_endline ("NDguard(" ^ debug_str ^ ")"); *)
           add_constraint slvSt cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
@@ -475,12 +475,12 @@ let runND_exhaustive (ND m) st0 =
           end
       
       | NDbranch (debug_str, cs, act1, act2) ->
-          print_endline ("NDbranch(" ^ debug_str ^ ")");
+(*          print_endline ("NDbranch(" ^ debug_str ^ ")"); *)
           Solver.push slvSt.slv;
           add_constraint slvSt cs;
           let acc' = begin match check_sat slvSt.slv [] with
             | Solver.SATISFIABLE | Solver.UNKNOWN ->
-               print_endline ("SAT ==> " ^ debug_str ^ " :- " ^ String_mem.string_of_iv_memory_constraint cs);
+(*               print_endline ("SAT ==> " ^ debug_str ^ " :- " ^ String_mem.string_of_iv_memory_constraint cs); *)
                begin try
                  aux acc act1
                with
