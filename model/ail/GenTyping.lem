@@ -1,8 +1,10 @@
-open import Pervasives Common Global AilSyntax AilTypes AilSyntaxAux AilWf TypingError
+open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf TypingError
 open import GenTypes GenTypesAux
 open import Std Loc
 
 import Builtins Debug Pp
+
+import Global
 
 open import {hol} `utilTheory`
 
@@ -204,6 +206,7 @@ val well_typed_equality: genType -> genType -> bool -> bool -> bool
 let well_typed_equality gty1 gty2 is_null1 is_null2 =
      is_arithmetic gty1 && is_arithmetic gty2               (* STD §6.5.9#2, item 1 *)
   || are_pointers_to_compatible_types gty1 gty2             (* STD §6.5.9#2, item 2 *)
+  || (Global.isDefacto () && is_pointer_to_object gty1 && is_pointer_to_object gty2)
   || is_pointer_to_void gty1   && is_pointer_to_object gty2 (* STD §6.5.9#2, item 3 *)
   || is_pointer_to_object gty1 && is_pointer_to_void gty2   (* STD §6.5.9#2, item 3 *)
   || is_pointer gty1 && is_null2                            (* STD §6.5.9#2, item 4 *)
@@ -1463,7 +1466,7 @@ and annotate_assignee sigm gamm ty1 e2 =
     | true ->
         E.return e2
     | false ->
-        let () = Debug.print_debug 1 [Debug.DB_ail_typing]
+        let () = Debug.print_debug 2 [Debug.DB_ail_typing]
           (fun () -> "[well_typed_assignment] false ==> " ^ Pp.stringFromAil_ctype ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
         E.fail (locOf e2) (TError "§6.5.16.1#1")
   end
@@ -1479,6 +1482,7 @@ and annotate_arguments sigm gamm has_proto is_variadic args params =
         (* TODO: document this case *)
         E.return []
     | (arg_e :: args', (_, param_ty1, isRegister) :: params') ->
+
 (*
         if has_proto then
 *)
@@ -1893,13 +1897,67 @@ TODO: static asserts
   E.mapM (fun (e, strConst) ->
   ) 
 *)
+  E.mapM (function
+    | (_, StructDef xs) ->
+        (* STD §6.7.2.1#3 *)
+        match List.dest_init xs with
+          | Nothing ->
+              (* NOTE: this should be dead code because of the C syntax *)
+              error "GenTyping.annotate_sigma, StructDef, empty sdecls_opt"
+          | Just ([], (_, (_, ty))) ->
+              if AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty then
+                E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
+              else if AilTypesAux.has_flexible_array_member sigm ty then
+                E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
+              else
+                E.return ()
+          | Just (xs', (_, (_, last_ty))) ->
+              E.mapM_ (fun (_, (_, ty)) ->
+                if AilTypesAux.has_flexible_array_member sigm ty then
+                  E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
+                else if AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty then
+                  E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
+                else
+                  E.return ()
+              ) xs' >>
+              if AilTypesAux.has_flexible_array_member sigm last_ty then
+                E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
+              (* This allows flexible array members *)
+              else if    (AilTypesAux.is_incomplete sigm last_ty && not (AilTypesAux.is_array_unknown_size last_ty))
+                      || AilTypesAux.is_function last_ty then
+                E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
+              else
+                E.return ()
+        end >>
+        E.mapM_ (fun (_, (qs, ty)) ->
+          (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
+          wf_lvalue sigm qs ty
+        ) xs
+    | (_, UnionDef xs) ->
+        (* STD §6.7.2.1#3 *)
+        let pred (_, (_, ty)) =
+          AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty in
+        if List.any pred xs then
+          E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
+        
+        else if List.any (fun (_, (_, ty)) -> AilTypesAux.has_flexible_array_member sigm ty) xs then
+          E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
+        else
+          E.return ()
+        >>
+        E.mapM_ (fun (_, (qs, ty)) ->
+          (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
+          wf_lvalue sigm qs ty
+        ) xs
+  end) sigm.tag_definitions >>
+  
   E.return <|
     declarations=         sigm.declarations;
     object_definitions=   object_defs';
     function_definitions= function_defs';
     (* TODO: hack *)
     static_assertions= [];
-    tag_definitions=   sigm.tag_definitions
+    tag_definitions= sigm.tag_definitions
   |>
 
 

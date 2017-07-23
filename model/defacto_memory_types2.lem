@@ -38,9 +38,8 @@ type provenance =
 
 
 (* a symbolic identifier representing the concrete address of a fresh allocation (the nat) together with the source location *)
-(* WARNING: Lem is stupid *)
 type address =
-  | MemAddress of Symbol.prefix * nat
+  | Address of Symbol.prefix * allocation_id
 
 
 (*** Pointer value ****************************************************************************** *)
@@ -81,7 +80,7 @@ and integer_value_base =
   | IVconcurRead of AilTypes.integerType * Symbol.sym (* a fresh symbol from a concurrency-model read *)
       (* the concurrency model is at present limited to reads of integer types, so not pointer types *)
   | IVconcrete of integer 
-  | IVaddress of address (* NOTE: this should never get out of this module *)
+  | IVaddress of allocation_id (* address *) (* NOTE: this should never get out of this module *)
   | IVfromptr of ctype * AilTypes.integerType * pointer_value_base 
     (* the result of a cast from pointer to integer. The first
        parameter is the referenced type of the pointer value, the
@@ -130,8 +129,8 @@ type shift_path = list shift_path_element
 
 
 type allocation =
-  | Alloc_static  of ctype * address
-  | Alloc_dynamic of integer_value_base * address
+  | Alloc_static  of ctype (* * address *)
+  | Alloc_dynamic of integer_value_base (* * address *)
 
 
 (*
@@ -151,11 +150,18 @@ type address_expression =
   | Addr_sub of address_expression * address_expression
 *)
 
-
+(*
 type impl_mem_constraint =
   | MC_eqIV of string (* TMP debug *) * integer_value_base * integer_value_base (* equality between integer values *)
   | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
   | MC_leIV of integer_value_base * integer_value_base
+  
+  | MC_or of impl_mem_constraint * impl_mem_constraint
+  
+  | NC_not of list impl_mem_constraint
+
+  
+  (* TODO: remove this *)
   | MC_addr_distinct of address * set address  (* the first address is distinct for the addresses in the set *)
 
 
@@ -183,3 +189,4 @@ let impl_constraint_ltIV ival1 ival2 =
 val impl_constraint_leIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
 let impl_constraint_leIV ival1 ival2 =
   MC_le_ival ival1 ival2
+*)

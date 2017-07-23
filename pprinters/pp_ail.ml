@@ -1,7 +1,6 @@
 open Lem_pervasives
 open Either
 
-open Global
 open AilSyntax
 open AilTypes
 open GenTypes

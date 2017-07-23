@@ -184,7 +184,7 @@ and generic_loaded_value 'sym =
  | LVunspecified of ctype (* unspecified loaded value *)
 
 type generic_value 'sym =  (* Core values *)
- | Vconstrained of list (list Mem.mem_constraint2 * (generic_value 'sym))
+ | Vconstrained of list (Mem.mem_iv_constraint * (generic_value 'sym))
 (*
  | Vobject of (generic_object_value 'sym) (* C object value *)
  | Vspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
@@ -209,6 +209,10 @@ type generic_ctor 'bty =
  | Civmin (* min integer value *)
  | Civsizeof (* sizeof value *)
  | Civalignof (* alignof value *)
+ | CivCOMPL (* bitwise complement *)
+ | CivAND (* bitwise AND *)
+ | CivOR (* bitwise OR *)
+ | CivXOR (* bitwise XOR *)
  | Cspecified (* non-unspecified loaded value *)
  | Cunspecified (* unspecified value *)
 
@@ -225,7 +229,7 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym (* Core identifier *)
  | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
  | PEval of (generic_value 'sym) (* value *)
- | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'bty 'sym)) (* constrained value *)
+ | PEconstrained of list (Mem.mem_iv_constraint  * (generic_pexpr 'bty 'sym)) (* constrained value *)
  | PEundef of Undefined.undefined_behaviour (* undefined behaviour *)
  | PEerror of string * (generic_pexpr 'bty 'sym) (* impl-defined static error *)
  | PEctor of (generic_ctor 'bty) * list (generic_pexpr 'bty 'sym) (* constructor application *)

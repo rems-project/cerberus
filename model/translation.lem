@@ -1,7 +1,7 @@
 (* TODO: for now everything is mapped to nonatomics. The translation to atomics
          still needs to be defined *)
 
-open import Pervasives Global Implementation_ Loc String_extra
+open import Pervasives Utils Implementation_ Loc String_extra
 
 import State Translation_effect Loc
 open import Translation_aux
@@ -185,7 +185,7 @@ let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: l
                 | Just sym ->
                     Caux.mk_cfunction_pe sym
                 | Nothing ->
-              Caux.mk_cfunction_pe fid
+                    Caux.mk_cfunction_pe fid
               end
           | _ ->
               Caux.mk_cfunction_pe fid
@@ -470,11 +470,11 @@ else (* both operand have pointer type *)
 (* STD §6.5.10  Bitwise AND operator          *)
 (* STD §6.5.11  Bitwise exclusive OR operator *)
 (* STD §6.5.12  Bitwise inclusive OR operator *)
-and translate_bitwise_operator translate usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
+and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
   let (std_id, stdlib_call) = match aop with
-    | A.Band -> ("§6.5.10", stdlib.mkcall_bitwise_AND)
-    | A.Bxor -> ("§6.5.11", stdlib.mkcall_bitwise_XOR)
-    | A.Bor  -> ("§6.5.12", stdlib.mkcall_bitwise_OR)
+    | A.Band -> ("§6.5.10", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivAND [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Bxor -> ("§6.5.11", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivXOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
     | _ -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
   end in
   E._STD std_id (
@@ -1025,100 +1025,72 @@ else
                 Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) id_sym_pe Cmm.NA
 *)
       
-      | A.AilEcast _ ty e ->
+      | A.AilEcast _ cast_ty e ->
           E._STD "§6.5.4" $
-          let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+          let e_ty = ctype_of e in
+          let oTy = force_core_object_type_of_ctype (Caux.proj_ctype e_ty) in
           E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym,   e_sym_pat,   e_sym_pe  ) ->
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
           (* STD §6.3.2.1#2 "lvalue conversion" *)
           E._STD "§6.3.2.1#2" $
           self e >>= fun core_e ->
-(*
-          E.return $
-if AilTypesAux.is_pointer ty && AilTypesAux.is_pointer (ctype_of e) then
-            C.Ecase e_sym_pe
-              [ (Caux.mk_specified_pat obj_sym_pat,
-                 error "WIP")
-               ]
-else
-            error "WIP: cast NOT ptr vs ptr"
-*)
-
           E.fresh_symbol >>= fun let_sym ->
           E.return $
-if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant e then
-            match AilTypesAux.referenced_type ty with
+if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
+            match AilTypesAux.referenced_type cast_ty with
               | Nothing ->
                   illTypedAil loc "AilEcast, pointer vs null_pointer_constant"
               | Just ref_ty ->
                   C.Epure (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ref_ty)))
             end
-else
-if AilTypesAux.is_arithmetic ty && AilTypesAux.is_arithmetic (ctype_of e) then
-  if AilTypesAux.is_integer ty && AilTypesAux.is_integer (ctype_of e) then
+
+else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
+  if AilTypesAux.is_integer cast_ty && AilTypesAux.is_integer e_ty then
               (* TODO: check *)
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
-              C.Epure (stdlib.mkcall_conv_loaded_int ty e_sym_pe)
+              C.Epure (stdlib.mkcall_conv_loaded_int cast_ty e_sym_pe)
             )
   else
-              error "WIP elaboration of casts involving a non-integer arithmetic type"
-else
-  (* TODO: check *)
-  if AilTypesAux.is_pointer_to_void (AilTypesAux.unqualify ty) then
-              core_e
-  else
-              let e_ty = ctype_of e in
-              if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
-                (* making a pointer from an integer *)
-                let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type ty in
+            error "WIP elaboration of casts involving a non-integer arithmetic type"
+
+else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
+            (* making a pointer from an integer *)
+            let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type cast_ty in
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
                 C.Ecase e_sym_pe
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
                      C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_pointer))
                        (C.Ememop Mem.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe])
                        (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) let_sym)))
-                    )
+                    );
+                    (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                     (* Casting an unspecified integer to a pointer type gives an unspecified pointer *)
+                     C.Epure (Caux.mk_unspecified_pe (Caux.proj_ctype cast_ty)))
                   ]
             )
-                
-              else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
-                  (* making an integer from a pointer *)
-                  let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" $ AilTypesAux.referenced_type e_ty in
+
+else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
+            (* making an integer from a pointer *)
+            let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" $ AilTypesAux.referenced_type e_ty in
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
                 C.Ecase e_sym_pe
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer)),
                      C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
-                       (C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe ty; obj_sym_pe])
+                       (C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe])
                        (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object oTy) let_sym)))
-                    )
+                    );
+                    (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                     (* Casting an unspecified pointer to an integer type gives an unspecified integer *)
+                     C.Epure (Caux.mk_unspecified_pe (Caux.proj_ctype cast_ty)))
+
                   ]
             )
-              else
-                let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "HELLO cast ptr vs ptr?") in
-                (* TODO: check *) (* error "WIP cast" *)
+
+else (* pointer <-> pointer cast *)
+                let () = Debug.warn [Debug.DB_elaboration] (fun () ->
+                  "NOTE: the elaboration does the identity for casts between pointer types (this is different from ISO)"
+                ) in
                 core_e
-
-(*
-              begin
-                let e_ty = ctype_of e in
-                if AilTypesAux.is_pointer ty && AilTypesAux.is_arithmetic e_ty then
-                  (* making a pointer from an integer *)
-                  let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type ty in
-                  C.Ememop Mem.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; C.PEsym sym_ty_e]
-                  
-                else if AilTypesAux.is_arithmetic ty && AilTypesAux.is_pointer e_ty then
-                  (* making an integer from a pointer *)
-                  let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" $ AilTypesAux.referenced_type e_ty in
-                  C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe ty; C.PEsym sym_ty_e]
-                else
-                  (* TODO: check *)
-                  C.Epure (conv [Caux.mk_ail_ctype_pe (ctype_of e); Caux.mk_ail_ctype_pe ty; C.PEsym sym_ty_e])
-              end
-*)
-
-
-
-
       
       | A.AilEbinary e1 (A.Arithmetic A.Mul) e2 ->
           E._STD "§6.5.5" $
@@ -1401,15 +1373,15 @@ else
       
       | A.AilEbinary e1 (A.Arithmetic (A.Band as aop)) e2 ->
           translate_bitwise_operator
-            self usual_arithmetic_conversion stdlib
+            loc self usual_arithmetic_conversion stdlib
             result_ty aop e1 e2
       | A.AilEbinary e1 (A.Arithmetic (A.Bxor as aop)) e2 ->
           translate_bitwise_operator
-            self usual_arithmetic_conversion stdlib
+            loc self usual_arithmetic_conversion stdlib
             result_ty aop e1 e2
       | A.AilEbinary e1 (A.Arithmetic (A.Bor as aop)) e2 ->
           translate_bitwise_operator
-            self usual_arithmetic_conversion stdlib
+            loc self usual_arithmetic_conversion stdlib
             result_ty aop e1 e2
       
       | A.AilEbinary e1 A.And e2 ->
@@ -1505,9 +1477,13 @@ else
           let e1_oTy =
             (* NOTE: [e1] must be a scalar *)
             force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy) >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_object e1_oTy) >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy) >>= fun (_, res_sym_pat , res_sym_pe ) ->
+          
+          let res_oTy =
+            force_core_object_type_of_ctype (Caux.proj_ctype result_ty) in
+          
+          E.wrapped_fresh_symbol (C.BTy_loaded e1_oTy)  >>= fun (_, e1_sym_pat  , e1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object e1_oTy)  >>= fun (_, obj1_sym_pat, obj1_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded res_oTy) >>= fun (_, res_sym_pat , res_sym_pe ) ->
           self e1 >>= fun core_e1 ->
           self e2 >>= fun core_e2 ->
           self e3 >>= fun core_e3 ->
@@ -2138,7 +2114,7 @@ TODO: #9
 
         (* TODO (Victor): Is this in 6.6? *)
       | A.AilEstruct tag_sym ident_e_opts ->
-          let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym (Cty.tagDefs ()) in
+          let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym tagDefs in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -2160,7 +2136,12 @@ TODO: #9
                       E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
                       self e                                    >>= fun core_e                   ->
                       E.return (
-                        (ident, stdlib.mkcall_conv_loaded_int ((*TODO: ahem*)Caux.unproj_ctype memb_ty) e_sym_pe) :: acc ,
+                        ( ident
+                        , let memb_ty = (*TODO: ahem*)Caux.unproj_ctype memb_ty in
+                          if AilTypesAux.is_integer memb_ty then
+                            stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
+                          else
+                            e_sym_pe ) :: acc ,
                         fun z -> C.Esseq e_sym_pat core_e (mk_core z)
                       )
                   end
@@ -2223,13 +2204,16 @@ TODO: #9
           E.return (
              C.Estd "§6.5.2.3#3, sentence 2" $
              C.Esseq e_sym_pat core_e (
+(*
                (fun z ->
                    if is_lvalue then
                      C.Epure z
                    else
                      Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) z Cmm.NA) (* TODO: check MO *)
                (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
-             ))
+*)
+               C.Epure (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+             )
 
 (*
           translate_lvalue e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)
@@ -2285,7 +2269,12 @@ TODO: #9
             | _ ->
                 illTypedAil loc "AilEmemberofptr"
           end in
-
+          
+          E.wrapped_fresh_symbol (*(C.BTy_object oTy)*) (C.BTy_object C.OTy_pointer) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          
+          error "WIP: Translation.translate_expr, AilEmemberofptr"
+*)
+(*
           (* TODO: check *)
           E.fresh_typed_symbol true (ctype_of e) >>= fun sym_ty_e ->
           self e >>= fun core_e ->
@@ -2321,7 +2310,7 @@ TODO: #9
                   (* NOTE: we assume the lack of trap representation *)
                   C.PEval (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
               | A.ConstantNull ->
-                  let () = Debug.print_debug 0 [] (fun () -> "HELLO ConstantNull") in
+                  let () = Debug.print_debug 1 [] (fun () -> "HELLO ConstantNull") in
                   (* TODO: should make the Ail ctor take a ctype? *)
                   Caux.strip $ Caux.mk_specified_pe (Caux.mk_nullptr_pe Cty.Void)
               | A.ConstantInteger (A.IConstant n _ _) ->
@@ -2874,14 +2863,13 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           )
     
     | A.AilSwhile e s ->
-        let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSwhile use mkTestExpression") in
-        E.fresh_named_symbol "while"              >>= fun sym_loop     ->
-        E.fresh_symbol                            >>= fun sym_case     ->
-        E.fresh_symbol                            >>= fun sym_e        ->
-        translate_expression (mkTestExpression e) >>= fun core_test    ->
-        self s                                    >>= fun core_s       ->
-        E.get_visible_objects                     >>= fun visible_syms ->
-          let oTy = C.OTy_integer in (* this is the type of core_test, not "core_e" *)
+        (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
+        E.fresh_named_symbol "while" >>= fun sym_loop     ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (test_sym, test_sym_pat, test_sym_pe) ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (case_sym, case_sym_pat, case_sym_pe) ->
+        translate_expression (mkTestExpression e) >>= fun core_test ->
+        self s                                    >>= fun core_s                                ->
+        E.get_visible_objects                     >>= fun visible_syms                          ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_s
@@ -2889,31 +2877,16 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.return $
           C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
                                                                       Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
-            C.Esseq (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
-              C.Ecase (Caux.mk_sym_pe (C.BTy_loaded oTy) sym_e)
-                [ (Caux.mk_specified_pat (Caux.mk_sym_pat sym_case (C.BTy_object oTy)),
-                   C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object oTy) sym_case) (Caux.mk_integer_pe 1)))
+            C.Esseq test_sym_pat core_test (
+              C.Ecase test_sym_pe
+                [ (Caux.mk_specified_pat case_sym_pat,
+                   C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
                      core_s_loop C.Eskip)
                   (* non-deterministic branching if the test expression had unspecified value *)
                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
                    C.End [core_s_loop; C.Eskip]) ]
                )
             )
-(*
-        E.return $
-          C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
-                                                                      Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
-            C.Esseq (Caux.mk_sym_pat sym_e (C.BTy_loaded C.OTy_integer)) core_e (
-              C.Ecase (Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) sym_e)
-                [ (Caux.mk_specified_pat (Caux.mk_sym_pat sym_case (C.BTy_object C.OTy_integer)),
-                   C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_case) (Caux.mk_integer_pe 0)))
-                     core_s_loop C.Eskip)
-                  (* non-deterministic branching if the test expression had unspecified value *)
-                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                   C.End [core_s_loop; C.Eskip]) ]
-               )
-            )
-*)
     
     | A.AilSdo s e ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in
@@ -3038,7 +3011,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           end
 (*
           if AilTypesAux.is_pointer ty then
-            let () = Debug.print_debug 0 "IS A PTR" in
+            let () = Debug.print_debug 1 "IS A PTR" in
 (*            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>=  *)
             E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
             begin
@@ -3080,9 +3053,9 @@ let translate_tag_definitions ctx =
   end) ctx
 
 val translate_program:
-  translation_stdlib -> bool -> A.program GenTypes.genTypeCategory ->
+  translation_stdlib -> A.program GenTypes.genTypeCategory ->
   E.elabM (C.core_tag_definitions * list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
-let translate_program stdlib sequentialise (startup_sym_opt, sigm) =
+let translate_program stdlib (startup_sym_opt, sigm) =
   let core_tagDefs = translate_tag_definitions sigm.A.tag_definitions in
   E.foldlM (fun (gacc, facc) (sym, decl) ->
     (* for each Ail declaration *)
@@ -3315,16 +3288,16 @@ let translate_program stdlib sequentialise (startup_sym_opt, sigm) =
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
-    bool -> C.impl -> (UniqueId.supply Symbol.sym) * A.program GenTypes.genTypeCategory ->
+    C.impl -> (UniqueId.supply Symbol.sym) * A.program GenTypes.genTypeCategory ->
     (UniqueId.supply Symbol.sym * C.file unit)
 
-let translate (ailnames, stdlib_fun_map) sequentialise impl (symbol_counter, prog) =
+let translate (ailnames, stdlib_fun_map) impl (symbol_counter, prog) =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   (* TODO2: not sure what that comment is refering too ... *)
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns), st) =
-    E.runStateM (translate_program translation_stdlib sequentialise prog)
+    E.runStateM (translate_program translation_stdlib prog)
       (E.init symbol_counter) in
   
   (st.E.symbol_supply, <|

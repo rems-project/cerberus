@@ -44,18 +44,23 @@ let string_of_pos pos =
 
 
 let string_at_line fname lnum =
-  if Sys.file_exists fname then
-    let ic = open_in fname in
-    let l =
-      let l_ = get_line lnum ic in
-      if String.length l_ > 100 then
-        String.sub l_ 0 100 ^ " ... "
-      else
-        l_ in
-    close_in ic;
-    Some l
-  else
-    None
+  try
+    if Sys.file_exists fname then
+      let ic = open_in fname in
+      let l =
+        let l_ = get_line lnum ic in
+        if String.length l_ > 100 then
+          String.sub l_ 0 100 ^ " ... "
+        else
+          l_ in
+      close_in ic;
+      Some l
+    else
+      None
+  with
+    End_of_file ->
+      (* TODO *)
+      None
 (*
  ^ "\n" ^
     ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
@@ -154,18 +159,6 @@ let location_to_string  = function
 *)
 
 
-let location_to_string loc =
-  let string_of_pos pos =
-    Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
-  
-  match loc with
-    | Loc_unknown ->
-        "unknown location"
-    | Loc_point pos ->
-        string_of_pos pos ^ ":"
-    | Loc_region (pos1, pos2, _) ->
-        (* TODO *)
-        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
 
 
 

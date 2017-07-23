@@ -6,7 +6,7 @@ open Pp_prelude
 open Core
 open Cps_core
 open AilTypes
-module D = Defacto_memory_types
+module D = Defacto_memory_types2
 open Core_ctype
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
@@ -282,9 +282,8 @@ let rec print_ctype = function
 let print_integer_value_base = function
   | D.IVconcrete bignum             ->
     !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
-  | D.IVaddress (D.MemAddress (sym, n))  ->
-    !^"I.IVAddress" ^^^ P.parens (!^"I" ^^^ P.parens (print_symbol_prefix sym
-                                   ^^ P.comma ^^^ !^(string_of_int n)))
+  | D.IVaddress alloc_id  ->
+    !^"I.IVAddress" ^^^ !^(string_of_int alloc_id)
   | D.IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
                                        (print_ail_integer_type ait)
   | D.IVmin ait                     -> !^"I.IVmin" ^^^ P.parens
@@ -296,7 +295,7 @@ let print_integer_value_base = function
   | D.IVoffsetof (sym, cabs_id)     -> raise (Unsupported "ivoffsetof")
   | D.IVbyteof (ivb, mv)            -> raise (Unsupported "ifbyteof")
   | D.IVcomposite ivs               -> raise (Unsupported "ivcomposite")
-  | D.IVfromptr (ivb, mv)           -> raise (Unsupported "ivfromptr")
+  | D.IVfromptr (ivb, ity, mv)      -> raise (Unsupported "ivfromptr")
   | D.IVptrdiff (ivb, mv)           -> raise (Unsupported "ivptrdiff")
   | D.IVconcurRead (_, _)           -> raise (Unsupported "ivconcured")
 

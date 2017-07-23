@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives Utils
 open import UniqueId Symbol
 
 
@@ -20,9 +20,9 @@ import Translation_effect
 module TranslateEff = Translation_effect
 
 (* Core evaluation *)
-import Core_run Driver
-import Nondeterminism
-module ND = Nondeterminism
+import Core_run Core_run_aux Driver
+import Nondeterminism2
+module ND = Nondeterminism2
 
 (* Memory model *)
 import Mem_aux
@@ -72,7 +72,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
         
         let dr_st =
           (* this just builds the shell of the driver state *)
-          let dummy_core_file = Core_run.convert_file
+          let dummy_core_file = Core_run_aux.convert_file
             <| C.main= Nothing
              ; C.stdlib= stdlib_fun_map
              ; C.impl= impl
@@ -83,7 +83,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
           (* spawning a thread with the Core expression we just generated as it's arena *)
           let ((tid, core_st), run_st) = State.run (
             Core_run.spawn_thread Nothing <|
-              Core_run.arena=  Core_run.convert_expr core_expr;
+              Core_run.arena=  Core_run_aux.convert_expr core_expr;
               Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
               Core_run.labels= Map.empty;
               Core_run.labels2= Map.empty;
@@ -97,7 +97,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
            Driver.core_run_state= run_st |> in
         
         (* run the evaluator *)
-        match ND.runM (Driver.driver false dr_st) with
+        match (error "ND.runND (Driver.driver false dr_st)" : list (ND.nd_status Driver.driver_state Driver.driver_error * Driver.driver_state)) with
           | [(ND.Active dr_st', _)] ->
               match dr_st'.Driver.core_state.Core_run.thread_states with
                 | [(_, (_, th_st))] ->

@@ -167,6 +167,7 @@ typedef struct {
 #define SCNxMAX "jx"
 #define SCNxPTR "lx"
 
+/*
 intmax_t imaxabs(intmax_t j) {
   return a>0 ? a : -a;
 }
@@ -174,6 +175,7 @@ intmax_t imaxabs(intmax_t j) {
 imaxdiv_t imaxdiv(intmax_t numer, intmax_t denom) {
   return (imaxdiv_t){ num/den, num%den };
 }
+*/
 
 intmax_t strtoimax(const char * restrict nptr, char ** restrict endptr, int base);
 uintmax_t strtoumax(const char * restrict nptr, char ** restrict endptr, int base);

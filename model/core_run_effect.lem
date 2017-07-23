@@ -1,5 +1,5 @@
 (* Effects for Core_run *)
-open import Pervasives Global Core Core_aux Core_ctype
+open import Pervasives Utils Core Core_aux Core_ctype
 import Undefined Boot State_exception Memory_order Cmm_aux_old
 
 module Cmm = Memory_order

@@ -39,7 +39,7 @@ declare hol   target_rep function warn = `util$output_string`
 
 
 (*
-open import Pervasives Global
+open import Pervasives 
 import Boot
 
 let _DEBUG level f k =

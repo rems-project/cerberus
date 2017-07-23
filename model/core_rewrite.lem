@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Global Core Core_aux Core_ctype
+open import Utils Core Core_aux Core_ctype
 import Symbol Symbolic AilTypes Mem
 
 import Pp
@@ -973,7 +973,7 @@ let rec pure_propagation2 expr =
             let e = (pure_propagation2 e) in
             match to_pure' e with
               | Just pe ->
-                  (fun z -> subst_pattern pat pe (cont z), pats_acc, es_acc)
+                  (fun z -> unsafe_subst_pattern pat pe (cont z), pats_acc, es_acc)
               | Nothing ->
                   (cont, pat :: pats_acc, e :: es_acc)
             end) (id, [], []) (List.zip pats es) in
@@ -991,7 +991,7 @@ let rec pure_propagation2 expr =
             let e = (pure_propagation2 e) in
             match to_pure' e with
               | Just pe ->
-                  (fun z -> subst_pattern pat pe (cont z), pats_acc, es_acc)
+                  (fun z -> unsafe_subst_pattern pat pe (cont z), pats_acc, es_acc)
               | Nothing ->
                   (cont, pat :: pats_acc, e :: es_acc)
             end) (id, [], []) (List.zip pats es) in
@@ -1007,7 +1007,7 @@ let rec pure_propagation2 expr =
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (subst_pattern pat pe1 e2)
+              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
           | Nothing ->
               Ewseq pat e1' (pure_propagation2 e2)
        end
@@ -1015,7 +1015,7 @@ let rec pure_propagation2 expr =
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (subst_pattern pat pe1 e2)
+              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
           | Nothing ->
               Esseq pat e1' (pure_propagation2 e2)
        end

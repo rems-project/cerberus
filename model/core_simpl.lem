@@ -1,4 +1,4 @@
-open import Pervasives Global Core Core_aux
+open import Pervasives Utils Core Core_aux
 
 (*
 module Effect = struct

@@ -1,4 +1,4 @@
-open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
+open import Pervasives Common Utils AilSyntax AilTypes Implementation ErrorMonad TypingError
 import Loc Debug
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
@@ -253,6 +253,29 @@ let is_struct_or_union ty =
   is_struct ty || is_union ty
 
 
+val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
+let has_flexible_array_member sigm ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+    | Struct tag_sym ->
+        match List.lookup tag_sym sigm.tag_definitions with
+          | Just (StructDef membersDefs) ->
+              match List.dest_init membersDefs with
+                | Just (_, (_, (_, last_ty))) ->
+                    (* NOTE: this assumes membersDefs is wf (i.e. it has more than one element) *)
+                    is_array_unknown_size last_ty
+                | Nothing ->
+                    false
+              end
+          | _ ->
+              error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
+        end
+    | _ ->
+        false
+end
+
+
+
 (* == generic predicates on ctypes ============================================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool
@@ -364,7 +387,11 @@ let in_min_integer_range n ity =
 
 val le_integer_range: implementation -> integerType -> integerType -> bool
 let le_integer_range impl ity1 ity2 =
-  match (ity1, ity2) with
+  if ity1 = ity2 then
+    (* reflexive cases *)
+    true
+  else match (ity1, ity2) with
+(*
     (* reflexive cases *)
     | (Char, Char) ->
         true
@@ -386,6 +413,7 @@ let le_integer_range impl ity1 ity2 =
         true
     | (Unsigned LongLong, Unsigned LongLong) ->
         true
+*)
     
     | (Char, Signed Ichar) ->
         impl.signed Char
@@ -521,7 +549,7 @@ let le_integer_range impl ity1 ity2 =
 
   | (IBuiltin str, _) -> error ("WIP le_integer_range (left): " ^ str)
   | (_, IBuiltin str) -> error ("WIP le_integer_range (right): " ^ str)
-  | _ -> error "WIP: le_integer_range"
+(*  | _ -> error ("WIP: le_integer_range: ") *)
 
 
 (*
@@ -1235,19 +1263,36 @@ let is_standard_unsigned_integer_type = function
 end
 
 (* STD §6.2.5#6, fourth sentence *)
+val is_unsigned_ity: integerType -> bool
+let is_unsigned_ity = function
+  | Char ->
+      error "TODO: AilTypesAux.is_unsigned_ity, Char"
+  | Bool ->
+      true
+  | Signed _ ->
+      false
+  | Unsigned _ ->
+      true
+  | IBuiltin str ->
+      error "TODO: AilTypesAux.is_unsigned_integer_type, IBuiltin"
+  | Enum ident ->
+      (* TODO: see §6.7.2.2#4 *)
+      error "TODO: AilTypesAux.is_unsigned_integer_type, Enum"
+  | Size_t ->
+      (* STD §7.19#2 *)
+      true
+  | Ptrdiff_t ->
+      (* STD §7.19#2 *)
+      false
+end
+
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
-  | Basic (Integer Bool) ->
-      true
-  | Basic (Integer (Unsigned _)) ->
-      true
+  | Basic (Integer ity) ->
+      is_unsigned_ity ity
   | _ ->
       false
 end
-  (* TODO: later, extended types *)
-(*
-  is_standard_unsigned_integer_type ty ||
-*)
 
 
 

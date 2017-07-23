@@ -1,4 +1,4 @@
-open import Pervasives Global Translation_effect Symbol Show Show_extra
+open import Pervasives Utils Translation_effect Symbol Show Show_extra
 import Core Core_aux Core_ctype
 import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
@@ -151,17 +151,7 @@ let tmp_implementation =
 
 
 open AilTypes
-(*
-TODO: (clean) NOT USED
 
-val is_unsigned_integer_type: ctype -> bool
-let is_unsigned_integer_type = function
-  | Basic (Integer ity) ->
-      AilTypesAux.unsigned_type ity
-  | _ ->
-      false
-end
-*)
 
 let function_return_type = function
   | Function _ ty _ _ -> ty
@@ -290,8 +280,16 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
    ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
    ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
    ; mkcall_bitwise_OR=                  fun ty pe1 pe2 -> mk_call "bitwise_OR"                 [Caux.mk_ail_ctype_pe ty; pe1; pe2]
-   ; mkcall_conv_int=                    fun ty pe      -> mk_call "conv_int"                   [Caux.mk_ail_ctype_pe ty; pe]
-   ; mkcall_conv_loaded_int=             fun ty pe      -> mk_call "conv_loaded_int"            [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_conv_int= fun ty pe ->
+       if not (AilTypesAux.is_integer ty) then
+         error "mkcall_conv_int called on non integer type"
+       else
+         mk_call "conv_int" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_conv_loaded_int= fun ty pe ->
+       if not (AilTypesAux.is_integer ty) then
+         error "mkcall_conv_loaded_int called on non integer type"
+       else
+         mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
    ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]

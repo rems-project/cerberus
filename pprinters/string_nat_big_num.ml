@@ -16,7 +16,10 @@ let chars_of_num_with_basis b use_upper n =
       c :: acc
     else
       f n' (c :: acc) in
-  f n []
+  if less n zero then
+    '-' :: f (negate n) []
+  else
+    f n []
 
 
 let string_of_octal n =

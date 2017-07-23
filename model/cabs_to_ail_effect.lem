@@ -1,5 +1,5 @@
 open import Pervasives Cabs Std Show Show_extra
-open import Global
+open import Utils
 import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
@@ -15,8 +15,8 @@ open import {hol} `pp_ailTheory`
 
 
 type tag_definition =
-  | Struct_definition of list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
-  | Union_definition of list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
   | Enum_definition (* TODO *)
 
 
@@ -421,8 +421,8 @@ let register_typedef sym (qs, ty) =
         if AilTypesAux.variably_modified ty then
           fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet, variably modified")
         else if qs <> qs' || ty <> ty' then
-(*        let () = Debug.print_debug 0 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
-          let () = Debug.print_debug 0 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
+(*        let () = Debug.print_debug 1 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
+          let () = Debug.print_debug 1 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
           fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet")
         else
           return ()
@@ -448,7 +448,7 @@ val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> lin
 let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
@@ -648,7 +648,11 @@ let resolve_tag_definition tag_sym =
     | Just tag_decl ->
         return tag_decl
     | Nothing ->
-        error "TODO: resolve_tag_definition: Nothing" (* TODO: is probably a possible/valid situation *)
+        (* TODO: I think this can only happen when seeing a tentative struct/union
+           with a member (or recursive...) whose type is the struct/union itself.
+           If this is indeed the case, we should give a better error message *)
+        fail Loc.unknown (Errors.Desugar_OtherViolation ("unregistered tag: " ^ show tag_sym ^
+          " (this may be from a violation of (§6.7.2.1#3, 1st sentence)"))
   end
 
 
@@ -658,6 +662,28 @@ let get_tag_definitions =
     st.tag_definitions
   )
 
+
+
+val is_anonymous_struct_or_union: ATypes.ctype -> desugM bool
+let is_anonymous_struct_or_union ty =
+  match AilTypesAux.unatomic ty with
+    | ATypes.Struct tag_sym ->
+        resolve_tag_definition tag_sym >>= function
+          | Struct_definition isAnonymous _ ->
+              return isAnonymous
+          | _ ->
+              error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Struct -- Union_definition"
+        end
+    | ATypes.Union tag_sym ->
+        resolve_tag_definition tag_sym >>= function
+          | Union_definition isAnonymous _ ->
+              return isAnonymous
+          | _ ->
+              error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Union -- Struct_definition"
+        end
+    | _ ->
+        return false
+  end
 
 
 
@@ -796,7 +822,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Debug.print_debug 1 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -836,7 +862,7 @@ let register_function_declaration loc sym is_proto decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          let () = Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+          let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
            string_of_decl decl) in
           <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
@@ -848,7 +874,7 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
   return (
-    Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
       "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
   ) >>
@@ -973,7 +999,7 @@ val add_used_identifier: A.identifier -> desugM unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
-    <| st with used_identifier= Global.list_insert sym st.used_identifier |>
+    <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
   )
 
 val get_used_identifier: desugM (list A.identifier)
@@ -1088,9 +1114,9 @@ let extract_program startup_str =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | Struct_definition membersDefs ->
+                             | Struct_definition _ membersDefs ->
                                  (sym, A.StructDef membersDefs) :: acc
-                             | Union_definition membersDefs ->
+                             | Union_definition _ membersDefs ->
                                  (sym, A.UnionDef membersDefs) :: acc
                              | Enum_definition ->
                                  acc
@@ -1112,4 +1138,44 @@ val get_core_eval_stuff: desugM (((map string Symbol.sym) * Core.fun_map unit * 
 let get_core_eval_stuff =
   State_exception.read (fun st ->
     (st.core_eval_stuff, st.symbol_supply)
+  )
+
+
+
+(* Returns what would the Ail sigma be so far *)
+(* TODO: factorise with extract_program *)
+val get_sigma_sofar: desugM (A.sigma unit)
+let get_sigma_sofar =
+  State_exception.read (fun st ->
+    let decls = Map_extra.toList (
+      map_union
+        begin
+          Map.map (fun (hasProto, (ty, params, isVariadic, isInline, isNoreturn)) ->
+            A.Decl_function hasProto ty params isVariadic isInline isNoreturn
+          ) st.function_declarations
+        end
+        begin
+          Map.map (fun (dur, isRegister, qs, ty) ->
+            A.Decl_object (Just (dur, isRegister)) qs ty
+          ) st.external_object_declarations
+        end
+    ) in
+    
+    <|
+       A.declarations=         (* remove_unused_identifiers st startup_sym *) decls;
+       A.object_definitions=   (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.external_object_definitions;
+       A.function_definitions= (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.function_definitions;
+       A.static_assertions=    st.static_assertions;
+       
+       A.tag_definitions= List.foldr (fun (sym, def) acc ->
+                            match def with
+                             | Struct_definition _ membersDefs ->
+                                 (sym, A.StructDef membersDefs) :: acc
+                             | Union_definition _ membersDefs ->
+                                 (sym, A.UnionDef membersDefs) :: acc
+                             | Enum_definition ->
+                                 acc
+                             end
+                          ) [] $ Map_extra.toList st.tag_definitions
+     |>
   )
