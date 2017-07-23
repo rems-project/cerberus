@@ -811,6 +811,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
+    | PEstd str pe ->
+        PEstd str (subst_sym_pexpr sym cval pe)
 end
 
 
@@ -880,6 +882,8 @@ let rec subst_sym_expr sym cval = function
       expr
   | Eloc loc e ->
       Eloc loc (subst_sym_expr sym cval e)
+  | Estd str e ->
+      Estd str (subst_sym_expr sym cval e)
 end
 
 and subst_sym_action_ sym cval = function

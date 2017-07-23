@@ -472,9 +472,9 @@ else (* both operand have pointer type *)
 (* STD §6.5.12  Bitwise inclusive OR operator *)
 and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
   let (std_id, stdlib_call) = match aop with
-    | A.Band -> ("§6.5.10", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivAND [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
-    | A.Bxor -> ("§6.5.11", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivXOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
-    | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> Pexpr () (C.PEctor C.CivOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Band -> ("§6.5.10", (fun ty pe1 pe2 -> C.Pexpr () (C.PEctor C.CivAND [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Bxor -> ("§6.5.11", (fun ty pe1 pe2 -> C.Pexpr () (C.PEctor C.CivXOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
+    | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> C.Pexpr () (C.PEctor C.CivOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
     | _ -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
   end in
   E._STD std_id (
@@ -2214,6 +2214,7 @@ TODO: #9
 *)
                C.Epure (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
              )
+  )
 
 (*
           translate_lvalue e >>= fun core_e -> (* TODO: not sure about always using _lvalue here *)

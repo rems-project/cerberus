@@ -73,9 +73,12 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
       | [] ->
           ()
       | _ ->
+(*
           print_endline "BEGIN CONSTRAINTS";
           print_endline (Colour.(ansi_format [Blue] (String.concat "\n" z3_strs)));
           print_endline "END CONSTRAINTS";
+ *)
+          ()
     end;
 
 (*
