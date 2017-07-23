@@ -1,5 +1,5 @@
 (* Effects for Translation: state *)
-open import Pervasives Global Show Show_extra
+open import Pervasives Utils Show Show_extra
 import Boot UniqueId Symbol Undefined Core_ctype AilTypes AilTypesAux
 
 import Core Core_aux

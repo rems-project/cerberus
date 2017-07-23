@@ -1,4 +1,4 @@
-open import Pervasives Global String_extra
+open import Pervasives Utils String_extra
 import Symbol Implementation_ Core_ctype Cabs
 
 type constraints =

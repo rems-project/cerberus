@@ -2,7 +2,7 @@ open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
 open import GenTypes Implementation
 import AilTypesAux AilTyping
 
-open import Global
+open import Utils
 
 open import {hol} `utilTheory`
 

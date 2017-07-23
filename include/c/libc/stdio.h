@@ -31,7 +31,7 @@ typedef __cerbty_fpos_t fpos_t;
 
 
 // TEMPORARY HACK
-#define restrict
+// #define restrict
 
 int remove(const char *filename); // FILE
 int rename(const char *old, const char *new); // FILE

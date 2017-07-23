@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives Utils
 
 type stateM 'a 's = 's -> ('a * 's)
 

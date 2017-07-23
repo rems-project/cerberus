@@ -1,7 +1,7 @@
 open import Pervasives
 import Map_extra
 
-open import Global Errors
+open import Utils Errors
 import Exception Loc Pp
 
 open import Core Core_aux
@@ -67,6 +67,25 @@ let rec infer_pattern loc = function
         | (Civalignof, [pat']) ->
             typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, CaseCtor Civalignof [tpat'])
+        | (CivCOMPL, [pat1; pat2]) ->
+            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor CivCOMPL [tpat1; tpat2])
+        | (CivAND, [pat1; pat2; pat3]) ->
+            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor CivAND [tpat1; tpat2; tpat3])
+        | (CivOR, [pat1; pat2; pat3]) ->
+            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor CivOR [tpat1; tpat2; tpat3])
+        | (CivXOR, [pat1; pat2; pat3]) ->
+            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor CivXOR [tpat1; tpat2; tpat3])
         
         | (Cnil ()      , _) -> fail_ctorArity 0
         | (Ccons        , _) -> fail_ctorArity 2
@@ -74,6 +93,10 @@ let rec infer_pattern loc = function
         | (Civmin       , _) -> fail_ctorArity 1
         | (Civsizeof    , _) -> fail_ctorArity 1
         | (Civalignof   , _) -> fail_ctorArity 1
+        | (CivCOMPL     , _) -> fail_ctorArity 2
+        | (CivAND       , _) -> fail_ctorArity 3
+        | (CivOR        , _) -> fail_ctorArity 3
+        | (CivXOR       , _) -> fail_ctorArity 3
         | (Cspecified   , _) -> fail_ctorArity 1
         | (Cunspecified , _) -> fail_ctorArity 1
 
@@ -162,7 +185,42 @@ let rec typecheck_pattern loc expected_bTy = function
             E.fail loc (CoreTyping_TODO "typecheck Civalignof, illtyped 1")
         | (Civalignof, _, _) ->
             E.fail loc (CoreTyping_TODO "typecheck Civalignof, illtyped 2")
-
+        | (CivCOMPL, BTy_object OTy_integer, [pat1; pat2]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            E.return (env, CaseCtor CivCOMPL [tpat1; tpat2])
+        | (CivCOMPL, _, [_]) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivCOMPL, illtyped 1")
+        | (CivCOMPL, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivCOMPL, illtyped 2")
+        | (CivAND, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, CaseCtor CivAND [tpat1; tpat2; tpat3])
+        | (CivAND, _, [_]) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivAND, illtyped 1")
+        | (CivAND, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivAND, illtyped 2")
+        | (CivOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, CaseCtor CivOR [tpat1; tpat2; tpat3])
+        | (CivOR, _, [_]) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivOR, illtyped 1")
+        | (CivOR, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivOR, illtyped 2")
+        | (CivXOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
+            E.return (env, CaseCtor CivXOR [tpat1; tpat2; tpat3])
+        | (CivXOR, _, [_]) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivXOR, illtyped 1")
+        | (CivXOR, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck CivXOR, illtyped 2")
+        
         | (Cspecified, BTy_loaded oTy, [pat']) ->
             typecheck_pattern loc (BTy_object oTy) pat' >>= fun (env, tpat') ->
             E.return (env, CaseCtor Cspecified [tpat'])
@@ -333,7 +391,7 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
         infer_pexpr loc tagDefs env pe >>= fun tpe ->
         E.return (Pexpr InferredUnknown (PEerror str tpe))
     | PEctor ctor pes ->
-        let ret_ctor bTy ctor pe = E.return (Pexpr bTy (PEctor ctor [pe])) in
+        let ret_ctor bTy ctor pes = E.return (Pexpr bTy (PEctor ctor pes)) in
         match (ctor, pes) with
           | (Cnil (), []) ->
               E.return (Pexpr InferredUnknown (PEctor (Cnil InferredUnknown) []))
@@ -354,29 +412,57 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
             ) in E.return (Pexpr (InferredType_tuple infers) (PEctor Ctuple pes'))
           | (Civmax, [pe]) ->
               typecheck_pexpr loc tagDefs env BTy_ctype pe >>= fun pe' ->
-              ret_ctor (InferredType_object OTy_integer) Civmax pe'
+              ret_ctor (InferredType_object OTy_integer) Civmax [pe']
           | (Civmax, _) ->
               E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civmin, [pe]) ->
               typecheck_pexpr loc tagDefs env BTy_ctype pe >>= fun pe' ->
-              ret_ctor (InferredType_object OTy_integer) Civmax pe'
+              ret_ctor (InferredType_object OTy_integer) Civmin [pe']
           | (Civmin, _) ->
               E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civsizeof, [pe]) ->
               typecheck_pexpr loc tagDefs env BTy_ctype pe >>= fun pe' ->
-              ret_ctor (InferredType_object OTy_integer) Civmax pe'
+              ret_ctor (InferredType_object OTy_integer) Civsizeof [pe']
           | (Civsizeof, _) ->
               E.fail loc (CtorWrongNumber 1 (List.length pes))
           | (Civalignof, [pe]) ->
               typecheck_pexpr loc tagDefs env BTy_ctype pe >>= fun pe' ->
-              ret_ctor (InferredType_object OTy_integer) Civmax pe'
+              ret_ctor (InferredType_object OTy_integer) Civalignof [pe']
           | (Civalignof, _) ->
               E.fail loc (CtorWrongNumber 1 (List.length pes))
+          | (CivCOMPL, [pe1; pe2]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype pe1                >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              ret_ctor (InferredType_object OTy_integer) CivCOMPL [pe1'; pe2']
+          | (CivCOMPL, _) ->
+              E.fail loc (CtorWrongNumber 2 (List.length pes))
+          | (CivAND, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype pe1                >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              ret_ctor (InferredType_object OTy_integer) CivAND [pe1'; pe2']
+          | (CivAND, _) ->
+              E.fail loc (CtorWrongNumber 3 (List.length pes))
+          | (CivOR, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype pe1                >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              ret_ctor (InferredType_object OTy_integer) CivOR [pe1'; pe2']
+          | (CivOR, _) ->
+              E.fail loc (CtorWrongNumber 3 (List.length pes))
+          | (CivXOR, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype pe1                >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              ret_ctor (InferredType_object OTy_integer) CivXOR [pe1'; pe2']
+          | (CivXOR, _) ->
+              E.fail loc (CtorWrongNumber 3 (List.length pes))
+          
           | (Cspecified, [pe]) ->
               infer_pexpr loc tagDefs env pe >>= fun (Pexpr infer _ as pe') ->
               match infer with
                 | InferredType_object oTy ->
-                    ret_ctor (InferredType_loaded oTy) Cspecified pe'
+                    ret_ctor (InferredType_loaded oTy) Cspecified [pe']
                 | _ ->
                     E.fail loc TooGeneral
               end
@@ -386,7 +472,7 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
               let pe' = Pexpr InferredType_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just oTy ->
-                    ret_ctor (InferredType_loaded oTy) Cunspecified pe'
+                    ret_ctor (InferredType_loaded oTy) Cunspecified [pe']
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO "Cunspecified, not oTy")
               end
@@ -641,6 +727,33 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               ret_ctor Civalignof <$> typecheck_pexpr loc tagDefs env (BTy_ctype) pe
           | (Civalignof, _, _) ->
               E.fail loc (CoreTyping_TODO "illtyped Civalignof")
+          | (CivCOMPL, BTy_object OTy_integer, [pe1; pe2]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              E.return (PEctor CivCOMPL [pe1'; pe2'])
+          | (CivCOMPL, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped CivCOMPL")
+          | (CivAND, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              E.return (PEctor CivAND [pe1'; pe2'; pe3'])
+          | (CivAND, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped CivAND")
+          | (CivOR, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              E.return (PEctor CivOR [pe1'; pe2'; pe3'])
+          | (CivOR, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped CivOR")
+          | (CivXOR, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
+              E.return (PEctor CivXOR [pe1'; pe2'; pe3'])
+          | (CivXOR, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped CivXOR")
           | (Cspecified, BTy_loaded oTy, [pe]) ->
               ret_ctor Cspecified <$> typecheck_pexpr loc tagDefs env (BTy_object oTy) pe
           | (Cspecified, _, _) ->
@@ -917,6 +1030,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_ctype; BTy_ctype; BTy_object OTy_integer])
   | Mem_common.PtrValidForDeref ->
       (BTy_boolean, [BTy_object OTy_pointer])
+  | Mem_common.Memcmp ->
+      (BTy_object OTy_integer, [BTy_object OTy_pointer; BTy_object OTy_pointer; BTy_object OTy_integer])
 end
 
 (*
@@ -1145,7 +1260,7 @@ let rec fetch_cfunction_signature loc env (Pexpr _ pexpr_ as pexpr) : E.eff (Cor
  | PEerror _ _ ->
      E.fail loc TooGeneral
  | PEcase _ cases ->
-     let () = Debug.print_debug 0 "fetch_cfunction_signature" in
+     let () = Debug.print_debug 1 "fetch_cfunction_signature" in
      E.mapM (fun (_, pe) -> fetch_cfunction_signature loc env pe) cases >>= fun signas ->
      match signas with
        | [signa] ->

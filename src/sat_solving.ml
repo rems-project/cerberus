@@ -1,4 +1,4 @@
-open Defacto_memory_types
+open Defacto_memory_types2
 open Mem_common
 
 
@@ -38,47 +38,88 @@ let declare_address (MemAddress (pref, _) as addr) (Assertions (n, addrs, xs) as
                                         (Pp_utils.to_plain_string (Pp_symbol.pp_prefix pref))) xs)
 
 
+open AilTypes
 let smt2_from_integerBaseType = function
-  | AilTypes.Ichar ->
-      "ichar_ity"
-  | AilTypes.Short ->
-      "short_ity"
-  | AilTypes.Int_ ->
-     "int_ity"
-  | AilTypes.Long ->
-     "long_ity"
-  | AilTypes.LongLong ->
-     "long_long_ity"
-
+  | Ichar ->
+      "ichar_ibty"
+  | Short ->
+      "short_ibty"
+  | Int_ ->
+     "int_ibty"
+  | Long ->
+     "long_ibty"
+  | LongLong ->
+     "long_long_ibty"
+  | Intmax_t ->
+      "intmax_t_ibty"
+  | Intptr_t ->
+      "intptr_t_ibty"
+  | IntN_t n ->
+      "int" ^ string_of_int n ^ "_t_ibty"
+  | Int_leastN_t n ->
+      "int_least" ^ string_of_int n ^ "_t_ibty"
+  | Int_fastN_t n ->
+      "int_fast" ^ string_of_int n ^ "_t_ibty"
 
 let smt2_from_integerType = function
-  | AilTypes.Char ->
-      "char_ty"
-  | AilTypes.Bool ->
-      "bool_ty"
-  | AilTypes.Signed ibty ->
-      "(signed " ^ smt2_from_integerBaseType ibty ^ ")"
-  | AilTypes.Unsigned ibty ->
-      "(unsigned " ^ smt2_from_integerBaseType ibty ^ ")"
-  | AilTypes.Enum _ ->
+  | Char ->
+      "char_ity"
+  | Bool ->
+      "bool_ity"
+  | Signed ibty ->
+      "(Signed_ity " ^ smt2_from_integerBaseType ibty ^ ")"
+  | Unsigned ibty ->
+      "(Unsigned_ity " ^ smt2_from_integerBaseType ibty ^ ")"
+  | Size_t ->
+      "size_t_ity"
+  | Ptrdiff_t ->
+      "ptrdiff_t_ity"
+  | IBuiltin _ ->
+      failwith "Sat_folving.smt2_from_integerType: TODO IBuiltin"
+  | Enum _ ->
       failwith "Sat_folving.smt2_from_integerType: TODO Enum"
 
 
 let smt2_from_basicType = function
-  | AilTypes.Integer ity ->
-      smt2_from_integerType ity
-  | AilTypes.Floating _ ->
+  | Integer ity ->
+      "(Integer_bty " ^ smt2_from_integerType ity ^ ")"
+  | Floating _ ->
       failwith "Sat_folving.smt2_from_basicType: TODO Floating"
 
+open Core_ctype
+let rec smt2_from_ctype = function
+  | Void0 ->
+      "void_ty"
+  | Basic0 bty ->
+      "(Basic_ty " ^ smt2_from_basicType bty ^ ")"
+  | Array0 (_, elem_ty, None) ->
+      failwith "Sat_folving.smt2_from_ctype: TODO Array, None"
+  | Array0 (_, elem_ty, Some n) ->
+      "(Array_ty " ^ smt2_from_ctype elem_ty ^ " " ^ Nat_big_num.to_string n ^ ")"
+  | Function0 _ ->
+      failwith "Sat_folving.smt2_from_ctype: TODO Function"
+  | Pointer0 (_, ref_ty) ->
+      "(Pointer_ty " ^ smt2_from_ctype ref_ty ^ ")"
+  | Struct0 _ 
+  | Union0 _ ->
+      failwith "Sat_folving.smt2_from_ctype: TODO Struct/Union"
+  | Atomic0 _ ->
+      failwith "Sat_folving.smt2_from_ctype: TODO Atomic"
+  | Builtin0 _ ->
+      failwith "Sat_folving.smt2_from_ctype: TODO Builtin"
 
 
 let rec expression_from_integer_value_base = function
+  | IVunspecified ->
+      "ivunspecified"
+  | IVconcurRead (ity, sym) ->
+      failwith "Sat_folving.smt2_from_integer_value_base: TODO IVconcurRead"
   | IVconcrete bign ->
       (Nat_big_num.to_string bign)
-  | IVaddress addr ->
-      string_of_address addr
-  | IVfromptr (_, ptr_val_) ->
-      assert false
+  | IVaddress alloc_id ->
+      string_of_int alloc_id
+  | IVfromptr (ty, ity, ptr_val_) ->
+      "(ivfromptr " ^ smt2_from_ctype ty ^ " " ^ smt2_from_integerType ity ^ ")"
   | IVop (iop, [ival1_; ival2_]) ->
       let iop_str = match iop with
       | IntAdd -> "+"
@@ -86,10 +127,12 @@ let rec expression_from_integer_value_base = function
       | IntMul -> "*"
       | IntDiv -> "/" (* TODO: div by zero? *)
       | IntRem_t -> failwith "IntRem_t"
-      | IntRem_f -> failwith "IntRem_f"
-      | IntExp -> failwith "IntExp" in
+      | IntRem_f -> "mod"
+      | IntExp -> "^" in
       Printf.sprintf "(%s %s %s)" iop_str
         (expression_from_integer_value_base ival1_) (expression_from_integer_value_base ival2_)
+  | IVop (_, _) ->
+      failwith "Sat_solving.expression_from_integer_value_base, IVop arity error"
   | IVmin ity ->
       "(TODO IVmin)"
   | IVmax ity ->
@@ -108,6 +151,16 @@ let rec expression_from_integer_value_base = function
       "(TODO IVptrdiff)"
   | IVbyteof (ival_, mval) ->
       "(TODO IVbyteof)"
+  | IVcomposite ival_s ->
+      "(TODO IVcomposite)"
+  | IVbitwise (ity, BW_complement ival_) ->
+      "(TODO BW_complement)"
+  | IVbitwise (ity, BW_AND (ival_1, ival_2)) ->
+      "(TODO BW_AND)"
+  | IVbitwise (ity, BW_OR (ival_1, ival_2)) ->
+      "(TODO BW_OR)"
+  | IVbitwise (ity, BW_XOR (ival_1, ival_2)) ->
+      "(TODO BW_XOR)"
 
 
 let assertion_of_memory_constraint = function

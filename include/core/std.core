@@ -446,3 +446,13 @@ proc ub_if_overlaps(store_ptr: pointer, ptrs: [pointer]) : eff unit :=
   end
 
 -}
+
+proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr: pointer) : eff loaded integer :=
+  let strong _p: loaded pointer = load(!(void *), p_ptr) in
+  let strong _q: loaded pointer = load(!(void *), q_ptr) in
+  let strong _size: loaded integer = load(!(size_t), size_ptr) in
+  case (_p, _q, _size) of
+    | (Specified(p: pointer), Specified(q: pointer), Specified(size: integer)) =>
+        let strong res: integer = memop(Memcmp, p, q, size) in
+        pure(Specified(res))
+  end

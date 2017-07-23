@@ -1,4 +1,4 @@
-open import Pervasives Global Show
+open import Pervasives Utils Show
 import Symbol (* Symbolic *) AilTypes
 
 

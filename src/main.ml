@@ -1,5 +1,8 @@
 open Global_ocaml
 
+(* TODO: rewrite this file from scratch... *)
+
+
 (* == Environment variables ===================================================================== *)
 let cerb_path =
     try
@@ -42,7 +45,7 @@ let load_stdlib () =
       | Exception.Exception (loc, err) ->
           begin match err with
             | Errors.PARSER msg ->
-                error ("Core parsing error @ " ^ Pp_errors.location_to_string loc  ^ ": " ^ msg)
+                error ("Core parsing error @ " ^ Location_ocaml.location_to_string loc  ^ ": " ^ msg)
             | _ ->
                 assert false
           end
@@ -124,7 +127,7 @@ let c_frontend f =
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib !!cerb_conf.sequentialise
+    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib
                          (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
     |> set_progress 13
     |> pass_message "4. Translation to Core completed!"
@@ -277,8 +280,16 @@ let pipeline filename args =
     Core_typing.typecheck_program rewritten_core_file
     >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
     -| Core_sequentialise.sequentialise_file
+  
   else
-    Exception.except_return (backend sym_supply rewritten_core_file args)
+    if !!cerb_conf.sequentialise then begin
+      Core_typing.typecheck_program rewritten_core_file >>= fun z ->
+      Exception.except_return (
+        backend sym_supply  (Core_run_aux.convert_file (Core_sequentialise.sequentialise_file z)) args
+      )
+    end
+    else
+      Exception.except_return (backend sym_supply rewritten_core_file args)
 
 let gen_corestd stdlib impl =
   let sym_supply = UniqueId.new_supply_from
@@ -302,7 +313,7 @@ let gen_corestd stdlib impl =
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
-             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core =
+             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -330,7 +341,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core;
+    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
@@ -338,7 +349,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
 
   set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) RefStd batch experimental_unseq typecheck_core;
+    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
@@ -483,6 +494,9 @@ let typecheck_core =
   let doc = "typecheck the elaborated Core program" in
   Arg.(value & flag & info["typecheck-core"] ~doc)
 
+let defacto =
+  let doc = "relax some of the ISO constraints (outside of the memory)" in
+  Arg.(value & flag & info["defacto"] ~doc)
 (*
 let concurrency_tests =
   let doc = "Runs the concurrency regression tests" in
@@ -495,11 +509,14 @@ let args =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ pprints $ file $ progress $ rewrite $
-                         sequentialise $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd $ batch $ experimental_unseq $ typecheck_core) in
-
-
-  let info       = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in (* the version is "sed-out" by the Makefile *)
+  let cerberus_t = Term.(pure cerberus
+    $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
+    $ pprints $ file $ progress $ rewrite $ sequentialise
+    $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
+    $ batch $ experimental_unseq $ typecheck_core $ defacto ) in
+  
+  (* the version is "sed-out" by the Makefile *)
+  let info = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         exit 1

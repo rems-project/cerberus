@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives Utils
 import AilSyntax GenTypes AilTypesAux Core Core_aux
 import Translation_effect
 open import Translation_aux

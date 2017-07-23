@@ -2,7 +2,7 @@
 (* include import Naive_memory *)
 open import Pervasives
 
-import Symbol Cabs
+import Symbol Loc Cabs
 open import AilTypes Core_ctype Cthread
 
 include import Mem_common
@@ -13,11 +13,11 @@ import Naive_memory
 module Impl = Naive_memory
 *)
 
-import Defacto_memory
-import Defacto_memory_types
+import Defacto_memory2
+import Defacto_memory_types2
 module Impl = struct
-  include import Defacto_memory
-  include import Defacto_memory_types
+  include import Defacto_memory2
+  include import Defacto_memory_types2
 end
 
 (*
@@ -31,12 +31,28 @@ end
 
 
 
+
+
+
 (* The API *)
 
 type pointer_value  = Impl.impl_pointer_value
 type mem_value      = Impl.impl_mem_value
 type integer_value  = Impl.impl_integer_value
 type floating_value = Impl.impl_floating_value
+
+
+
+val stringFromCtype:  Core_ctype.ctype -> string
+declare ocaml target_rep function stringFromCtype  = `String_core_ctype.string_of_ctype`
+val stringFromMem_value: mem_value -> string
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+val stringFromPointer_value: pointer_value -> string
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+val stringFromInteger_value: integer_value -> string
+declare ocaml target_rep function stringFromInteger_value = `String_defacto_memory.string_of_integer_value`
+
+
 
 
 (* This abstract in returns by memory actions and two footprints can be checked for overlapping.
@@ -74,7 +90,7 @@ val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
 val kill: pointer_value -> memM unit
 
 val load: ctype -> pointer_value -> memM (footprint * mem_value)
-val store: ctype -> pointer_value -> mem_value -> memM footprint
+val store: Loc.t -> ctype -> pointer_value -> mem_value -> memM footprint
 
 (* TODO: put somewhere *)
 val prettyStringFromMem_value: mem_value -> string
@@ -93,6 +109,8 @@ val ge_ptrval: pointer_value -> pointer_value -> memM bool
 val diff_ptrval: pointer_value -> pointer_value -> integer_value
 
 val validForDeref_ptrval: pointer_value -> bool
+
+val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
 
 (* Cast operations *)
 val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> memM pointer_value
@@ -116,6 +134,10 @@ val offsetof_ival: Symbol.sym -> Cabs.cabs_identifier -> integer_value
 val sizeof_ival: Core_ctype.ctype -> integer_value
 val alignof_ival: Core_ctype.ctype -> integer_value
 
+val bitwise_complement_ival: AilTypes.integerType -> integer_value -> integer_value
+val bitwise_and_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_or_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_xor_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
 
 val case_integer_value: forall 'a. (* TODO: expose more ctors *)
     integer_value ->
@@ -173,15 +195,65 @@ let runMem                              = Impl.impl_runMem
 let initial_mem_state                   = Impl.impl_initial_mem_state
 let null_ptrval                         = Impl.impl_null_ptrval
 let fun_ptrval                          = Impl.impl_fun_ptrval
-let eq_ptrval                           = Impl.impl_eq_ptrval
-let ne_ptrval                           = Impl.impl_ne_ptrval
-let lt_ptrval                           = Impl.impl_lt_ptrval
-let gt_ptrval                           = Impl.impl_gt_ptrval
-let le_ptrval                           = Impl.impl_le_ptrval
-let ge_ptrval                           = Impl.impl_ge_ptrval
-let diff_ptrval                         = Impl.impl_diff_ptrval
-let intcast_ptrval                      = Impl.impl_intcast_ptrval
+
+
+
+let intcast_ptrval ty ity ptrval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.intcast_ptrval(" ^ stringFromCtype ty ^ ", " ^ stringFromCtype (Basic (AilTypes.Integer ity)) ^ ", " ^ stringFromPointer_value ptrval ^ ")"
+  ) in
+  Impl.impl_intcast_ptrval ty ity ptrval
+
+let ptrcast_ival ty1 ty2 ival =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.intcast_ptrval(" ^ stringFromCtype ty1 ^ ", " ^ stringFromCtype ty2 ^ ", " ^ stringFromInteger_value ival ^ ")"
+  ) in
+  Impl.impl_ptrcast_ival ty1 ty2 ival
+
+let eq_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.eq_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_eq_ptrval ptrval1 ptrval2
+
+let ne_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.ne_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_ne_ptrval ptrval1 ptrval2
+
+let lt_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.lt_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_lt_ptrval ptrval1 ptrval2
+
+let gt_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.gt_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_gt_ptrval ptrval1 ptrval2
+
+let le_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.le_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+ Impl.impl_le_ptrval ptrval1 ptrval2
+
+let ge_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.ge_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_ge_ptrval ptrval1 ptrval2
+
+let memcmp                              = Impl.impl_memcmp
+
 let validForDeref_ptrval                = Impl.impl_validForDeref_ptrval
+
+
+
+
+let diff_ptrval                         = Impl.impl_diff_ptrval
 (* let shift_ptrval                        = Impl.impl_shift_ptrval *)
 let array_shift_ptrval                  = Impl.impl_array_shift_ptrval
 let member_shift_ptrval                 = Impl.impl_member_shift_ptrval
@@ -193,14 +265,15 @@ let op_ival                             = Impl.impl_op_ival
 let offsetof_ival                       = Impl.impl_offsetof_ival
 let sizeof_ival                         = Impl.impl_sizeof_ival
 let alignof_ival                        = Impl.impl_alignof_ival
+let bitwise_complement_ival             = Impl.impl_bitwise_complement_ival
+let bitwise_and_ival                    = Impl.impl_bitwise_and_ival
+let bitwise_or_ival                     = Impl.impl_bitwise_or_ival
+let bitwise_xor_ival                    = Impl.impl_bitwise_xor_ival
 let case_integer_value                  = Impl.impl_case_integer_value
 let is_specified_ival                   = Impl.impl_is_specified_ival
 let eq_ival                             = Impl.impl_eq_ival
 let lt_ival                             = Impl.impl_lt_ival
 let le_ival                             = Impl.impl_le_ival
-let ptrcast_ival                        = Impl.impl_ptrcast_ival
-(* let is_concrete_ival                    = Impl.impl_is_concrete_ival *)
-(*let symbolic_mval                       = Impl.impl_symbolic_mval*)
 let unspecified_mval                    = Impl.impl_unspecified_mval
 let integer_value_mval                  = Impl.impl_integer_value_mval
 let floating_value_mval                 = Impl.impl_floating_value_mval
@@ -225,6 +298,13 @@ val eval_integer_value: integer_value -> maybe integer
 let eval_integer_value = Impl.impl_eval_integer_value
 
 
+type mem_iv_constraint = mem_constraint integer_value
+
+
+
+(*
+type mem_constraint = Impl.impl_mem_constraint
+
 (* TODO: move this up *)
 type mem_constraint2 = Impl.impl_mem_constraint2
 
@@ -237,19 +317,13 @@ let constraint_eqIV = Impl.impl_constraint_eqIV
 let constraint_neIV = Impl.impl_constraint_neIV
 let constraint_ltIV = Impl.impl_constraint_ltIV
 let constraint_leIV = Impl.impl_constraint_leIV
+*)
 
 
 
 
 
 
-
-val stringFromctype:  Core_ctype.ctype -> string
-declare ocaml target_rep function stringFromctype  = `String_core_ctype.string_of_ctype`
-val stringFromMem_value: mem_value -> string
-declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
-val stringFromPointer_value: pointer_value -> string
-declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
 
 
 
@@ -263,27 +337,30 @@ end
 
 let allocate_static tid pref align_ival ty =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
-    "CREATE(" ^ stringFromPrefix pref ^ ")"
+    "Mem.allocate_static(" ^ stringFromPrefix pref ^ ")"
   ) in
   Impl.impl_allocate_static tid pref align_ival ty
 
 let allocate_dynamic tid pref align_ival size_ival =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
-    "ALLOC(" ^ stringFromPrefix pref ^ ")"
+    "Mem.allocate_dynamic(" ^ stringFromPrefix pref ^ ")"
   ) in
   Impl.impl_allocate_dynamic tid pref align_ival size_ival
 
 let kill ptrval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.kill(" ^ stringFromPointer_value ptrval ^ ")"
+  ) in
   Impl.impl_kill ptrval
 
 let load ty ptrval =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
-    "Load(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
+    "Mem.load(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
   ) in
   Impl.impl_load ty ptrval
 
-let store ty ptrval mval =
+let store loc ty ptrval mval =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
-    "Store(" ^ stringFromctype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
+    "Mem.store(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
   ) in
-  Impl.impl_store ty ptrval mval
+  Impl.impl_store loc ty ptrval mval

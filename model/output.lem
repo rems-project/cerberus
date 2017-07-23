@@ -1,5 +1,5 @@
 (* TODO: A negative precision argument is taken as if the precision were omitted. *)
-open import Pervasives Global
+open import Pervasives Utils
 import String_extra Boot
 
 open import {hol} `pp_coreTheory` `pp_memTheory`
@@ -616,11 +616,11 @@ let convert eval_conv prec_opt lm_opt cspec args =
           
           match conv_ty_opt with
             | Just conv_ty ->
-                let () = Debug.print_debug 1 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
-                let () = Debug.print_debug 1 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
+                let () = Debug.print_debug 2 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
+                let () = Debug.print_debug 2 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
                 match eval_conv (*arg_ty*) conv_ty mval with
                   | Left err ->
-                      let () = Debug.print_debug 0 [] (fun () -> "PRINTF ERR 1") in
+                      let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
                       Mem.return (Left err)
                   | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
                       match Mem_aux.integerFromIntegerValue ival with
@@ -638,8 +638,8 @@ let convert eval_conv prec_opt lm_opt cspec args =
                       end
                   | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Right (U.Defined _) ->
-                      error "WIP: convert --> not an integer"
+                  | Right (U.Defined cval) ->
+                      error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
                   | Right (U.Error loc str) ->
                       Mem.return (Right (U.Error loc str))
                   | Right (U.Undef loc ubs) ->
@@ -855,7 +855,7 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
           | Right (U.Undef loc ubs) ->
               Mem.return $ Right (U.Undef loc ubs)
           | Left err ->
-              let () = Debug.print_debug 0 [] (fun () -> "PRINTF ERR 2") in
+              let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 2") in
               Mem.return $ Left err
         end
     | _ ->

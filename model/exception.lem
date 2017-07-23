@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives Utils
 
 (* HACK: most of the inlines are only added to prevent Lem's renaming *)
 

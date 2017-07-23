@@ -8,7 +8,7 @@
 
 *)
 
-open import Pervasives Global
+open import Pervasives Utils
 import New_memory_effect Symbolic State_exception AilTypes
 
 

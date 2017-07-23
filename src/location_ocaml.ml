@@ -1,3 +1,5 @@
+open Lexing
+
 type t =
   | Loc_unknown
   | Loc_point of Lexing.position
@@ -27,3 +29,17 @@ let with_cursor_from loc1 loc2 =
         Loc_region (z, z, cursor_opt)
     | Loc_region (begin_loc, end_loc, _) ->
         Loc_region (begin_loc, end_loc, cursor_opt)
+
+
+let location_to_string loc =
+  let string_of_pos pos =
+    Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+  
+  match loc with
+    | Loc_unknown ->
+        "unknown location"
+    | Loc_point pos ->
+        string_of_pos pos ^ ":"
+    | Loc_region (pos1, pos2, _) ->
+        (* TODO *)
+        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"

@@ -1,5 +1,3 @@
-open Global
-
 type _sym =
   string * (Lexing.position * Lexing.position)
 

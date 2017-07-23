@@ -1,1 +1,14 @@
-(* Effect for  *)
+open import Pervasives
+import Nondeterminism2
+
+module ND = Nondeterminism2
+
+type impl_memM 'st 'err 'a =
+  | MemM of ('st -> ND.ndM (either 'err ('a * 'st)))
+
+
+(*
+val impl_return: forall 'st 'err 'a. 'a -> impl_memM 'st 'err 'a
+let impl_return x =
+  MemM (fun st -> [Right (x, st)])
+*)
