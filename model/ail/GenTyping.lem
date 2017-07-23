@@ -1,8 +1,10 @@
-open import Pervasives Common Global AilSyntax AilTypes AilSyntaxAux AilWf TypingError
+open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf TypingError
 open import GenTypes GenTypesAux
 open import Std Loc
 
 import Builtins Debug Pp
+
+import Global
 
 open import {hol} `utilTheory`
 
@@ -199,6 +201,7 @@ val well_typed_equality: genType -> genType -> bool -> bool -> bool
 let well_typed_equality gty1 gty2 is_null1 is_null2 =
      is_arithmetic gty1 && is_arithmetic gty2               (* STD §6.5.9#2, item 1 *)
   || are_pointers_to_compatible_types gty1 gty2             (* STD §6.5.9#2, item 2 *)
+  || (Global.isDefacto () && is_pointer_to_object gty1 && is_pointer_to_object gty2)
   || is_pointer_to_void gty1   && is_pointer_to_object gty2 (* STD §6.5.9#2, item 3 *)
   || is_pointer_to_object gty1 && is_pointer_to_void gty2   (* STD §6.5.9#2, item 3 *)
   || is_pointer gty1 && is_null2                            (* STD §6.5.9#2, item 4 *)
@@ -1458,7 +1461,7 @@ and annotate_assignee sigm gamm ty1 e2 =
     | true ->
         E.return e2
     | false ->
-        let () = Debug.print_debug 1 [Debug.DB_ail_typing]
+        let () = Debug.print_debug 2 [Debug.DB_ail_typing]
           (fun () -> "[well_typed_assignment] false ==> " ^ Pp.stringFromAil_ctype ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
         E.fail (locOf e2) (TError "§6.5.16.1#1")
   end
@@ -1474,6 +1477,7 @@ and annotate_arguments sigm gamm has_proto is_variadic args params =
         (* TODO: document this case *)
         E.return []
     | (arg_e :: args', (_, param_ty1, isRegister) :: params') ->
+
 (*
         if has_proto then
 *)
@@ -1916,7 +1920,6 @@ TODO: static asserts
               (* This allows flexible array members *)
               else if    (AilTypesAux.is_incomplete sigm last_ty && not (AilTypesAux.is_array_unknown_size last_ty))
                       || AilTypesAux.is_function last_ty then
-                let () = Debug.print_debug 0 [] (fun () -> Pp.stringFromAil_ctype last_ty) in
                 E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
               else
                 E.return ()

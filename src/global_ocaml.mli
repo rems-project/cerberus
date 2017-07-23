@@ -16,7 +16,7 @@ type execution_mode =
   | Exhaustive
   | Random
 
-(* val string_of_execution_mode: execution_mode -> string *)
+val string_of_execution_mode: execution_mode -> string
 
 type language =
   | Cabs
@@ -48,6 +48,7 @@ type cerberus_conf = {
   batch:           bool;
   experimental_unseq: bool;
   typecheck_core: bool;
+  defacto: bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -79,6 +80,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     bool ->
+    bool ->
     unit
 
 val progress_sofar: int ref
@@ -97,3 +99,5 @@ val user_request_driver: string list -> int
 
 
 val concurrency_mode: unit -> bool
+
+val isDefacto: unit -> bool

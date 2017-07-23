@@ -42,23 +42,24 @@ type error_verbosity =
   | QuoteStd (* print a full quote of the std text *)
 
 type cerberus_conf = {
-  cpp_cmd:           string;
-  pps:               language list;
-  core_stdlib:       (string, Symbol.sym) Pmap.map * unit Core.fun_map;
-  core_impl_opt:     Core.impl option;
-  core_parser:       Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
-  exec_mode_opt:     execution_mode option;
-  ocaml:             bool;
-  ocaml_corestd:     bool;
-  progress:          bool;
-  rewrite:           bool;
-  sequentialise:     bool;
-  concurrency:       bool;
-  preEx:             bool;
-  error_verbosity:   error_verbosity;
-  batch:             bool;
+  cpp_cmd:            string;
+  pps:                language list;
+  core_stdlib:        (string, Symbol.sym) Pmap.map * unit Core.fun_map;
+  core_impl_opt:      Core.impl option;
+  core_parser:        Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
+  exec_mode_opt:      execution_mode option;
+  ocaml:              bool;
+  ocaml_corestd:      bool;
+  progress:           bool;
+  rewrite:            bool;
+  sequentialise:      bool;
+  concurrency:        bool;
+  preEx:              bool;
+  error_verbosity:    error_verbosity;
+  batch:              bool;
   experimental_unseq: bool;
-  typecheck_core: bool;
+  typecheck_core:     bool;
+  defacto:            bool;
 }
 
 let (!!) z = !z()
@@ -75,10 +76,12 @@ let current_execution_mode () =
 (*  !!cerb_conf.exec_mode_opt *)
   !cerb_exec_mode_opt
 
+let isDefacto () =
+  !!cerb_conf.defacto
 
 let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
-                  typecheck_core =
+                  typecheck_core defacto =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -98,6 +101,7 @@ let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_pars
     batch= batch;
     experimental_unseq= experimental_unseq;
     typecheck_core= typecheck_core;
+    defacto= defacto;
   }
 
 

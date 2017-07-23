@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Global Show Show_extra Enum
+open import Utils Show Show_extra Enum
 import UniqueId
 
 import Debug

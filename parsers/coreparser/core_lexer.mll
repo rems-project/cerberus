@@ -134,6 +134,8 @@ let keywords =
       ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
       ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
       
+      ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
+      
       (* for source attributes *)
       ("ailname", T.AILNAME);
     ]

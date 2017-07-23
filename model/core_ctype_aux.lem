@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Symbol Cabs
-open import Global Core_ctype
+open import Utils Core_ctype
 
 open import {hol} `tagsTheory`
 

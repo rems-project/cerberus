@@ -17,3 +17,8 @@ let string_pretty_of_mem_value_decimal mval =
 
 let string_of_pointer_value ptr_val =
   Pp_utils.to_plain_string (pp_pointer_value ptr_val)
+
+
+let string_of_iv_memory_constraint cs =
+  let format = { Boot_printf.basis= Some AilSyntax.Decimal; Boot_printf.use_upper= false } in
+  Pp_utils.to_plain_string (pp_mem_constraint (pp_pretty_integer_value format) cs)

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/Applications/usr/lib
+
 source tests.sh
 
 mkdir -p tmp
@@ -16,6 +18,7 @@ function test {
   else
     res="\033[1m\033[31mFAILED!\033[0m"
     fail=$((fail+1))
+    cat tmp/result
   fi
 
   echo -e "Test $1: $res"

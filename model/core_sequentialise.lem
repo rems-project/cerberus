@@ -34,7 +34,7 @@ let rec sequentialise_expr expr =
         E.mapM sequentialise_expr es >>= fun es' ->
         E.return (
           Caux.mk_wseq (Epure (C.PEtuple (List.map (fun sym -> C.PEsym sym) syms)))
-            (Global.map2 (fun sym e -> ([Just sym], e)) syms es')
+            (Utils.map2 (fun sym e -> ([Just sym], e)) syms es')
         )
 *)
     | Ewseq (CaseBase Nothing) (Eunseq es) e2 ->

@@ -3,8 +3,8 @@ open import Pervasives Common AilTypes AilTypesAux AilSyntax Loc
 
 (* STD §6.3.2.3#3, sentence 1 *)
 val is_null_pointer_constant: forall 'a. expression 'a -> bool
-let rec is_null_pointer_constant' e =
-  match e with
+let rec is_null_pointer_constant (AnnotatedExpression _ _ expr_) =
+  match expr_ with
     | AilEconst ConstantNull ->
         true
     | AilEconst (ConstantInteger (IConstant n _ _)) ->
@@ -14,12 +14,6 @@ let rec is_null_pointer_constant' e =
     | _ ->
         false
   end
-and is_null_pointer_constant e =
-  match e with
-    | AnnotatedExpression _ _ e ->
-        is_null_pointer_constant' e
-  end
-
 
 
 

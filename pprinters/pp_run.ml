@@ -1,4 +1,3 @@
-open Global
 open Core_run
 
 (*

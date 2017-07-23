@@ -1,4 +1,4 @@
-open import Pervasives Common Global AilSyntax AilTypes Implementation ErrorMonad TypingError
+open import Pervasives Common Utils AilSyntax AilTypes Implementation ErrorMonad TypingError
 import Loc Debug
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
@@ -387,7 +387,11 @@ let in_min_integer_range n ity =
 
 val le_integer_range: implementation -> integerType -> integerType -> bool
 let le_integer_range impl ity1 ity2 =
-  match (ity1, ity2) with
+  if ity1 = ity2 then
+    (* reflexive cases *)
+    true
+  else match (ity1, ity2) with
+(*
     (* reflexive cases *)
     | (Char, Char) ->
         true
@@ -409,6 +413,7 @@ let le_integer_range impl ity1 ity2 =
         true
     | (Unsigned LongLong, Unsigned LongLong) ->
         true
+*)
     
     | (Char, Signed Ichar) ->
         impl.signed Char
@@ -544,7 +549,7 @@ let le_integer_range impl ity1 ity2 =
 
   | (IBuiltin str, _) -> error ("WIP le_integer_range (left): " ^ str)
   | (_, IBuiltin str) -> error ("WIP le_integer_range (right): " ^ str)
-  | _ -> error "WIP: le_integer_range"
+(*  | _ -> error ("WIP: le_integer_range: ") *)
 
 
 (*
@@ -939,7 +944,7 @@ let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
         && isVariadic1 = isVariadic2
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* STD §6.7.6.1#2 *)
-        are_compatible (qs1, ty1) (qs2, ty2)
+        are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
     | (Struct tag1, Struct tag2) ->
         (* STD §6.2.7#1 *)
         (* TODO: being conservative here (aka STD compliant) *)
@@ -1258,19 +1263,36 @@ let is_standard_unsigned_integer_type = function
 end
 
 (* STD §6.2.5#6, fourth sentence *)
+val is_unsigned_ity: integerType -> bool
+let is_unsigned_ity = function
+  | Char ->
+      error "TODO: AilTypesAux.is_unsigned_ity, Char"
+  | Bool ->
+      true
+  | Signed _ ->
+      false
+  | Unsigned _ ->
+      true
+  | IBuiltin str ->
+      error "TODO: AilTypesAux.is_unsigned_integer_type, IBuiltin"
+  | Enum ident ->
+      (* TODO: see §6.7.2.2#4 *)
+      error "TODO: AilTypesAux.is_unsigned_integer_type, Enum"
+  | Size_t ->
+      (* STD §7.19#2 *)
+      true
+  | Ptrdiff_t ->
+      (* STD §7.19#2 *)
+      false
+end
+
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function
-  | Basic (Integer Bool) ->
-      true
-  | Basic (Integer (Unsigned _)) ->
-      true
+  | Basic (Integer ity) ->
+      is_unsigned_ity ity
   | _ ->
       false
 end
-  (* TODO: later, extended types *)
-(*
-  is_standard_unsigned_integer_type ty ||
-*)
 
 
 

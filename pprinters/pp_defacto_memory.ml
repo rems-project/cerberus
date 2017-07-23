@@ -1,4 +1,4 @@
-open Defacto_memory_types
+open Defacto_memory_types2
 open Pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
@@ -74,10 +74,10 @@ and pp_integer_value_base = function
       !^ "IVunspecified"
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
-  | IVaddress (Address0 (pref, n)) ->
-      !^ "IVaddress" ^^ P.parens (Pp_symbol.pp_prefix pref ^^ P.comma ^^^ !^ (string_of_int n))
-  | IVfromptr (ty, ptr_val_) ->
-      !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
+  | IVaddress alloc_id ->
+      !^ "IVaddress" ^^ P.parens (!^ (string_of_int alloc_id))
+  | IVfromptr (ty, ity, ptr_val_) ->
+      !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
   | IVop (iop, ival_s) ->
       !^ "IVop" ^^ P.parens (!^ (string_of_integer_operator iop) ^^ P.comma ^^^ comma_list pp_integer_value_base ival_s)
   | IVmax ity ->
@@ -96,7 +96,22 @@ and pp_integer_value_base = function
       !^ "IVbyteof" ^^ P.parens (pp_integer_value_base ival_ ^^ P.comma ^^^ pp_mem_value mval)
   | IVcomposite _ ->
       !^ "IVcomposite(TODO)"
-
+  | IVbitwise (ity, BW_complement ival_) ->
+      !^ "IVbitwise" ^^ P.parens (
+        !^ "BW_complement" ^^ P.parens (Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_integer_value_base ival_)
+      )
+  | IVbitwise (ity, BW_AND (ival_1, ival_2)) ->
+      !^ "IVbitwise" ^^ P.parens (
+        !^ "BW_AND" ^^ P.parens (Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_integer_value_base ival_1 ^^ P.comma ^^^ pp_integer_value_base ival_2)
+      )
+  | IVbitwise (ity, BW_OR (ival_1, ival_2)) ->
+      !^ "IVbitwise" ^^ P.parens (
+        !^ "BW_OR" ^^ P.parens (Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_integer_value_base ival_1 ^^ P.comma ^^^ pp_integer_value_base ival_2)
+      )
+  | IVbitwise (ity, BW_XOR (ival_1, ival_2)) ->
+      !^ "IVbitwise" ^^ P.parens (
+        !^ "BW_XOR" ^^ P.parens (Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_integer_value_base ival_1 ^^ P.comma ^^^ pp_integer_value_base ival_2)
+      )
 
 
 and pp_integer_value (IV (prov, ival_)) =
@@ -139,22 +154,6 @@ and pp_mem_value = function
       )
 
 
-let pp_mem_constraint = function
-  | MC_eqIV (debug_str, ival_1, ival_2) ->
-      !^ "MC_eqIV" ^^ P.parens (P.dquotes (!^ debug_str) ^^ P.comma ^^^
-                                pp_integer_value_base ival_1 ^^ P.comma ^^^
-                                pp_integer_value_base ival_2)
-  | MC_neIV (ival_1, ival_2) ->
-      !^ "MC_neIV" ^^ P.parens (pp_integer_value_base ival_1 ^^ P.comma ^^^
-                                pp_integer_value_base ival_2)
-  | MC_leIV (ival_1, ival_2) ->
-      !^ "MC_leIV" ^^ P.parens (pp_integer_value_base ival_1 ^^ P.comma ^^^
-                                pp_integer_value_base ival_2)
-  | MC_addr_distinct (addr_id, addr_ids) ->
-      !^ "MC_addr_distinct(TODO)"
-
-
-
 let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
   match ptr_val_ with
     | PVnull ty ->
@@ -186,8 +185,9 @@ let pp_pretty_integer_value format = function
            List.iteri (Bytes.set bts) chars;
            Bytes.to_string bts
       end
-  | _ ->
-      !^ "(symbolic ival)"
+  | IV (_, ival_) ->
+(*      !^ "(symbolic ival)" *)
+      P.parens (pp_integer_value_base ival_)
 
 let pp_pretty_mem_value format = function
   | MVinteger (_, ival) ->
@@ -218,15 +218,3 @@ let pp_integer_value_for_core (IV (_, ival_)) =
         !^ "Ivalignof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
     | _ ->
         !^ "TODO[IV] " ^^ P.parens (pp_integer_value_base ival_)
-
-
-let pp_mem_constraint2 = function
-  | MC_eq_ival (ival1, ival2) ->
-      !^ "MC_eq_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_ne_ival (ival1, ival2) ->
-      !^ "MC_ne_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_lt_ival (ival1, ival2) ->
-      !^ "MC_lt_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-  | MC_le_ival (ival1, ival2) ->
-      !^ "MC_le_ival" ^^ P.parens (pp_integer_value ival1 ^^ P.comma ^^^ pp_integer_value ival2)
-

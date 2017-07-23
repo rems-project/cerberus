@@ -1,6 +1,5 @@
 [@@@landmark "auto"]
 open Lem_pervasives
-open Global
 open Core
 
 open Either
@@ -146,7 +145,7 @@ let pp_binop = function
   | OpRem_t -> pp_keyword "rem_t"
   | OpRem_f -> pp_keyword "rem_f"
   | OpExp -> P.caret
-  | OpEq  -> P.equals
+  | OpEq  -> P.equals ^^ P.equals
   | OpLt  -> P.langle
   | OpLe  -> P.langle ^^ P.equals
   | OpGt  -> P.rangle
@@ -255,9 +254,9 @@ and pp_loaded_value = function
 
 let rec pp_value = function
   | Vconstrained xs ->
-      pp_keyword "constrained" ^^ P.parens (
+      !^ "{-val-}" ^^^ pp_keyword "constrained" ^^ P.parens (
         comma_list (fun (cs, cval) ->
-          P.brackets (comma_list Pp_mem.pp_mem_constraint2 cs) ^^^
+          P.brackets (Pp_mem.pp_mem_constraint Pp_mem.pp_integer_value cs) ^^^
           P.equals ^^ P.rangle ^^ pp_value cval
         ) xs
       )
@@ -295,6 +294,14 @@ let pp_ctor = function
       !^ "Ivsizeof"
   | Civalignof ->
       !^ "Ivalignof"
+  | CivCOMPL ->
+      !^ "IvCOMPL"
+  | CivAND ->
+      !^ "IvAND"
+  | CivOR ->
+      !^ "IvOR"
+  | CivXOR ->
+      !^ "IvXOR"
   | Cspecified ->
       !^ "Specified"
   | Cunspecified ->
@@ -330,7 +337,7 @@ let pp_pexpr pe =
         | PEconstrained xs ->
             pp_keyword "constrained" ^^ P.parens (
               comma_list (fun (cs, pe) ->
-                P.brackets (comma_list Pp_mem.pp_mem_constraint2 cs) ^^^
+                P.brackets (Pp_mem.pp_mem_constraint Pp_mem.pp_integer_value cs) ^^^
                 P.equals ^^ P.rangle ^^ pp pe
               ) xs
             )
