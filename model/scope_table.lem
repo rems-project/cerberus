@@ -1,5 +1,5 @@
 (* Symbols table with stacked scopes *)
-open import Pervasives Global Symbol
+open import Pervasives Utils Symbol
 import Set_extra
 
 type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)

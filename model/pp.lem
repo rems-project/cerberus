@@ -91,3 +91,6 @@ declare hol target_rep function stringFromCmm_op_symState = `util$emptyString`
 val stringFromSequenceGraph: list (nat * nat) -> string
 declare ocaml target_rep function stringFromSequenceGraph = `Pp_cmm.stringFromSequenceGraph`
 *)
+
+val stringFromMem_iv_mem_constraint: Mem.mem_iv_constraint -> string
+declare ocaml target_rep function stringFromMem_iv_mem_constraint = `String_mem.string_of_iv_memory_constraint`

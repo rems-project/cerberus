@@ -1,4 +1,5 @@
 SOURCE_prelude=\
+  utils.lem \
   global.lem \
   loc.lem \
   bimap.lem \
@@ -87,8 +88,9 @@ SOURCE_elaboration=\
 
 SOURCE_defacto=\
   mem_common.lem \
-  defacto_memory_types.lem \
-  defacto_memory.lem \
+  defacto_memory_types2.lem \
+  defacto_memory_aux2.lem \
+  defacto_memory2.lem \
   mem.lem \
   mem_aux.lem
 
@@ -135,6 +137,7 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_utils) \
   constraints.lem \
   nondeterminism.lem \
+  nondeterminism2.lem \
   $(SOURCE_concurrency_interface) \
   $(SOURCE_core) \
   $(SOURCE_core_typing) \

@@ -1,5 +1,5 @@
 open import Pervasives
-open import Global Show Show_extra
+open import Utils Show Show_extra
 
 import State_exception_undefined
 import Symbol Symbolic Core_ctype Thread

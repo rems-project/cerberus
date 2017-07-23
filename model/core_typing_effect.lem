@@ -1,7 +1,7 @@
 open import Pervasives
 import Map_extra
 
-open import Global Exception Core Errors
+open import Utils Exception Core Errors
 
 type eff 'a = Exception.exceptM 'a Errors.error
 include Exception

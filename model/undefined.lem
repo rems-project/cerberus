@@ -1,5 +1,5 @@
 open import Pervasives String_extra Loc
-open import Global
+open import Utils
 import Bimap
 
 (* C undefined behaviours *)

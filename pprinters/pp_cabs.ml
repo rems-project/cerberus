@@ -1,4 +1,3 @@
-open Global
 open Cabs
 
 open Colour
@@ -39,7 +38,8 @@ let precedence = function
   | CabsEoffsetof _
   | CabsEva_start _
   | CabsEva_arg _
-  | CabsEcompound _ -> Some 1
+  | CabsEcompound _
+  | CabsEprint_type _ -> Some 1
   | CabsEunary _
   | CabsEsizeof_expr _
   | CabsEsizeof_type _
@@ -678,6 +678,8 @@ let rec pp_cabs_expression p (CabsExpression (loc, expr)) =
           pp_ctor "CabsEva_start"  ^^ P.brackets (f e ^^ P.comma ^^^ pp_cabs_identifier ident)
       | CabsEva_arg (e, tyname) ->
           pp_ctor "CabsEva_arg"  ^^ P.brackets (f e ^^ P.comma ^^^ pp_type_name tyname)
+      | CabsEprint_type e ->
+          f e
 
 and pp_cabs_generic_association = function
   | GA_type (tyname, e) ->

@@ -2,6 +2,8 @@
 open import Pervasives
 import Symbolic
 
+open import Nondeterminism2
+
 type mem_error =
   | MerrUnitialised of string (* mem_read_request *)
   | MerrInternal of string
@@ -53,6 +55,8 @@ type memop =
   | IntFromPtr  (* (ctype, ctype, address) -> integer *) (* first type is that of the referenced type, second on is type of integer *)
   | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
   | PtrValidForDeref (* address -> boolean *)
+  
+  | Memcmp
 
 
 instance (Show memop)
@@ -77,6 +81,8 @@ instance (Show memop)
         "ptrfromint"
     | PtrValidForDeref ->
         "ptrvalidforderef"
+    | Memcmp ->
+        "memcmp"
   end
 end
 
@@ -98,6 +104,26 @@ let stringFromInteger_operator = function
   | IntExp ->
       "IntExp"
 end
+
+
+
+
+type mem_constraint 'a =
+  | MC_empty
+  | MC_eq of 'a * 'a
+  | MC_le of 'a * 'a
+  | MC_lt of 'a * 'a
+  
+  | MC_or of mem_constraint 'a * mem_constraint 'a
+  | MC_conj of list (mem_constraint 'a)
+  | MC_not of mem_constraint 'a
+
+instance forall 'a. (Constraints mem_constraint 'a)
+  let empty = MC_empty
+  let negate cs = MC_not cs
+  let concat cs1 cs2 = MC_conj [cs1; cs2]
+end
+
 
 
 

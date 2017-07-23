@@ -1,7 +1,7 @@
 open import Pervasives
 import Map_extra
 
-open import Global Exception Core Errors
+open import Utils Exception Core Errors
 
 import Core_typing_effect
 module E = Core_typing_effect
@@ -153,6 +153,14 @@ let export_ctor loc = function
      E.return Civsizeof
  | Civalignof ->
      E.return Civalignof
+ | CivCOMPL ->
+     E.return CivCOMPL
+ | CivAND ->
+     E.return CivAND
+ | CivOR ->
+     E.return CivOR
+ | CivXOR ->
+     E.return CivXOR
  | Cspecified ->
      E.return Cspecified
  | Cunspecified ->

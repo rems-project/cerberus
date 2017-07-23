@@ -14,4 +14,4 @@ B _build/pprinters
 B _build/parsers/cparser
 B _build/parsers/coreparser
 
-PKG pprint cmdliner zarith ounit js_of_ocaml js_of_ocaml.ppx
+PKG pprint cmdliner zarith ounit js_of_ocaml js_of_ocaml.ppx Z3

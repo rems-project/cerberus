@@ -1,5 +1,5 @@
 open import Pervasives Cabs Std Show Show_extra
-open import Global
+open import Utils
 import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
 
 open import Cabs_to_ail_aux
@@ -421,8 +421,8 @@ let register_typedef sym (qs, ty) =
         if AilTypesAux.variably_modified ty then
           fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet, variably modified")
         else if qs <> qs' || ty <> ty' then
-(*        let () = Debug.print_debug 0 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
-          let () = Debug.print_debug 0 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
+(*        let () = Debug.print_debug 1 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
+          let () = Debug.print_debug 1 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
           fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet")
         else
           return ()
@@ -448,7 +448,7 @@ val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> lin
 let register_identifier_ ident namespace kind link =
   get_scope >>= fun sc ->
   return (
-    Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
@@ -822,7 +822,7 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Debug.print_debug 1 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -862,7 +862,7 @@ let register_function_declaration loc sym is_proto decl =
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          let () = Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+          let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
            string_of_decl decl) in
           <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
@@ -874,7 +874,7 @@ let register_function_declaration loc sym is_proto decl =
 val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
   return (
-    Debug.print_debug 1 [Debug.DB_desugaring] (fun () ->
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
       "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
   ) >>
@@ -999,7 +999,7 @@ val add_used_identifier: A.identifier -> desugM unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
-    <| st with used_identifier= Global.list_insert sym st.used_identifier |>
+    <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
   )
 
 val get_used_identifier: desugM (list A.identifier)

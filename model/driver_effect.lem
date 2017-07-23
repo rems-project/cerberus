@@ -1,9 +1,9 @@
 open import Pervasives
 
-import UniqueId Symbol Nondeterminism
+import UniqueId Symbol Nondeterminism2
 import Core Core_ctype
 
-module ND = Nondeterminism
+module ND = Nondeterminism2
 
 
 import Cmm_op

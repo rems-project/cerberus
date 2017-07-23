@@ -765,6 +765,34 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
         let ity = ATypes.Unsigned (ATypes.IntN_t 64) in
         Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
     
+    (* stdint.h *)
+    | "__cerbvar_INTPTR_MIN" ->
+        let ity = ATypes.Signed (ATypes.Intptr_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INTPTR_MAX" ->
+        let ity = ATypes.Signed (ATypes.Intptr_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINTPTR_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Intptr_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INTMAX_MIN" ->
+        let ity = ATypes.Signed (ATypes.Intmax_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_INTMAX_MAX" ->
+        let ity = ATypes.Signed (ATypes.Intmax_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_UINTMAX_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Intmax_t) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_PTRDIFF_MIN" ->
+        let ity = ATypes.Ptrdiff_t in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    | "__cerbvar_PTRDIFF_MAX" ->
+        let ity = ATypes.Ptrdiff_t in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (ATypes.Basic (ATypes.Integer ity)))
+    
+    
+    
     | "__cerbvar_atomic_init" -> Just (A.AilEbuiltin "atomic_init", Nothing)
     | "__cerbvar_atomic_thread_fence" -> Just (A.AilEbuiltin "atomic_thread_fence", Nothing)
     | "__cerbvar_atomic_signal_fence" -> Just (A.AilEbuiltin "atomic_signal_fence", Nothing)

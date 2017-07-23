@@ -1,7 +1,7 @@
 open import Pervasives
-open import Global Symbolic
+open import Utils Symbolic
 
-import Defacto_memory_types Core Mem
+import Defacto_memory_types2 Core Mem
 
   (*
 type t
@@ -116,14 +116,14 @@ let isUnsat xs =
     | SYMBop Lt (SYMBconst n1) (SYMBconst n2) ->
         n1 >= n2
 *)
-    | SYMBop Eq (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Eq (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
         n1 <> n2
-    | SYMBop Neq (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                 (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Neq (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                 (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
         n1 = n2
-    | SYMBop Lt (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n1))))
-                (SYMBconst (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcrete n2)))) ->
+    | SYMBop Lt (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
         n1 >= n2
     | _ ->
         false

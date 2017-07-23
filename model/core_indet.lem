@@ -1,4 +1,4 @@
-open import Pervasives Global
+open import Pervasives Utils
 import Core (* Memory *) Exception Errors Pp (* Memory_order *)
 
 open import {hol} `pp_coreTheory`

@@ -51,14 +51,10 @@ size_t strnlen_s(const char *s, size_t maxsize);
 // TMP
 void* memcpy(void * restrict s1, const void * restrict s2, size_t n)
 {
-  unsigned char c1, c2;
   for (int i=0; i < n; i++) {
-    c1 = ((unsigned char*)s1)[i];
-    c2 = ((unsigned char*)s2)[i];
-    if ( c1 != c2 )
-      return c1 - c2;
+    ((unsigned char*)s1)[i] = ((unsigned char*)s2)[i];
   }
-  return 0;
+  return s1;
 }
 
 

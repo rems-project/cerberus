@@ -94,13 +94,20 @@ alldoc.pdf: alldoc.tex
 
 
 
+
+smt:
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str smt.native
+
+test:
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str test.native
+
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native

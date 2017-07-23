@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Global
+open import Utils
 open import Core
 open import Core_run_aux Errors
 import Mem
@@ -13,11 +13,9 @@ module Caux = Core_aux
 module EU  = Exception_undefined
 
 
-(*
-val valueFromPExpr: typed_pexpr -> maybe value
-let to_pure expr =
-  match eval Loc.unknown 
-*)
+import Nondeterminism2
+module ND = Nondeterminism2
+
 
 
 (* takes the symbolic names of a function, some pure expressions and produce
@@ -56,11 +54,11 @@ let call_function file f_nm arg_cvals =
             ") |params|= " ^ show (List.length params) ^ " <> |args|= " ^ show (List.length arg_cvals)
           )
         else
-          Exception.return $ Global.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a (Pexpr annot (PEval cval)) acc) body_pe params arg_cvals
+          Exception.return $ Utils.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a cval acc) body_pe params arg_cvals
     | ProcDecl _ _ ->
-        error "Core_run.call_function, called on a ProcDecl"
+        error "Core_eval.call_function, called on a ProcDecl"
     | Proc _ _ _ ->
-        error "Core_run.call_function, called on a Proc"
+        error "Core_eval.call_function, called on a Proc"
   end
 
 
@@ -77,6 +75,27 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
   self pe1 >>= fun pe1' ->
   self pe2 >>= fun pe2' ->
   match (binop, Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+        | (_, Just (Vconstrained xs1), Just (Vconstrained xs2)) ->
+            EU.return (
+              PEconstrained $ List.map (fun ((cs1, v1), (cs2, v2)) ->
+                  (ND.concat cs1 cs2, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) (Utils.product_list xs1 xs2)
+            )
+        
+        | (_, Just (Vconstrained xs1), Just v2) ->
+            EU.return (
+              PEconstrained $ List.map (fun (cs1, v1) ->
+                  (cs1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) xs1
+            )
+        
+        | (_, Just v1, Just (Vconstrained xs2)) ->
+            EU.return (
+              PEconstrained $ List.map (fun (cs1, v2) ->
+                  (cs1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
+              ) xs2
+            )
+        
         (* Ctype equality *)
         | (OpEq, Just (Vctype ty1), Just (Vctype ty2)) ->
             EU.return $ PEval (if ty1 = ty2 then Vtrue else Vfalse)
@@ -88,8 +107,15 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  EU.return (PEconstrained [ ([Mem.constraint_eqIV ival1 ival2], Pexpr () (PEval Vtrue))
-                                           ; ([Mem.constraint_neIV ival1 ival2], Pexpr () (PEval Vfalse)) ])
+                  let eq_constr = Mem.MC_eq ival1 ival2 in
+(*
+                  let () = Debug.print_debug 1 [] (fun () ->
+                    "SYMBOLIC INT EQ ==> " ^
+                    Pp.stringFromMem_iv_mem_constraint eq_constr
+                  ) in
+*)
+                  EU.return (PEconstrained [ (eq_constr, Pexpr () (PEval Vtrue))
+                                           ; (ND.negate eq_constr, Pexpr () (PEval Vfalse)) ])
             end
         
         | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -98,8 +124,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  EU.return (PEconstrained [ ([Mem.constraint_ltIV ival1 ival2], Pexpr () (PEval Vtrue))
-                                           ; ([Mem.constraint_leIV ival2 ival1], Pexpr () (PEval Vfalse)) ])
+                  let lt_constr = Mem.MC_lt ival1 ival2 in
+                  EU.return (PEconstrained [ (lt_constr, Pexpr () (PEval Vtrue))
+                                           ; (ND.negate lt_constr, Pexpr () (PEval Vfalse)) ])
             end
         
         | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -108,8 +135,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  EU.return (PEconstrained [ ([Mem.constraint_leIV ival1 ival2], Pexpr () (PEval Vtrue))
-                                           ; ([Mem.constraint_ltIV ival2 ival1], Pexpr () (PEval Vfalse)) ])
+                  let le_constr = Mem.MC_le ival1 ival2 in
+                  EU.return (PEconstrained [ (le_constr, Pexpr () (PEval Vtrue))
+                                           ; (ND.negate le_constr, Pexpr () (PEval Vfalse)) ])
             end
         
         | (OpGe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -119,8 +147,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  EU.return (PEconstrained [ ([Mem.constraint_leIV ival2 ival1], Pexpr () (PEval Vtrue))
-                                           ; ([Mem.constraint_ltIV ival1 ival2], Pexpr () (PEval Vfalse)) ])
+                  let ge_constr = Mem.MC_le ival2 ival1 in
+                  EU.return (PEconstrained [ (ge_constr, Pexpr () (PEval Vtrue))
+                                           ; (ND.negate ge_constr, Pexpr () (PEval Vfalse)) ])
             end
         
         | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -130,8 +159,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  EU.return (PEconstrained [ ([Mem.constraint_ltIV ival2 ival1], Pexpr () (PEval Vtrue))
-                                           ; ([Mem.constraint_leIV ival1 ival2], Pexpr () (PEval Vfalse)) ])
+                  let gt_constr = Mem.MC_lt ival2 ival1 in
+                  EU.return (PEconstrained [ (gt_constr, Pexpr () (PEval Vtrue))
+                                           ; (ND.negate gt_constr, Pexpr () (PEval Vfalse)) ])
             end
         
         | (_, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
@@ -144,7 +174,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
               | OpRem_f -> Mem_common.IntRem_f
               | OpExp   -> Mem_common.IntExp
               | _ ->
-                  error ("Core_run.eval_pexpr, PEop Vinteger Vinteger: " ^ show binop)
+                  error ("Core_eval.eval_pexpr, PEop Vinteger Vinteger: " ^ show binop)
             end in
             EU.return (PEval (Vobject (OVinteger (Mem.op_ival iop ival1 ival2))))
         
@@ -176,8 +206,8 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
               | (Vconstrained xs1, Vconstrained xs2) ->
                   EU.return (
                     PEval (
-                      Vconstrained $ List.map (fun ((consts1, v1'), (consts2, v2')) ->
-                        (consts1 ++ consts2, match (v1', v2') with
+                      Vconstrained $ List.map (fun ((cs1, v1'), (cs2, v2')) ->
+                        (ND.concat cs1 cs1, match (v1', v2') with
                           | (Vtrue,  Vtrue)  -> Vtrue
                           | (Vtrue,  Vfalse) -> Vfalse
                           | (Vfalse, Vtrue)  -> Vfalse
@@ -186,7 +216,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                               (* this case is not possible thanks to the calls to [flatten_constrained_value] *)
                               error "Core_eval.step_eval_peop, OpAnd"
                          end)
-                      ) (Global.product_list xs1 xs2)
+                      ) (Utils.product_list xs1 xs2)
                     )
                   )
 
@@ -208,31 +238,15 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] the two operands of \\/ should be booleans")
             end
         
-        | (_, Just (Vconstrained xs1), Just (Vconstrained xs2)) ->
-            EU.return (
-              PEconstrained $ List.map (fun ((consts1, v1), (consts2, v2)) ->
-                  (consts1 ++ consts2, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
-              ) (Global.product_list xs1 xs2)
-            )
-        
-        | (_, Just (Vconstrained xs1), Just v2) ->
-            EU.return (
-              PEconstrained $ List.map (fun (consts1, v1) ->
-                  (consts1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
-              ) xs1
-            )
-        
-        | (_, Just v1, Just (Vconstrained xs2)) ->
-            EU.return (
-              PEconstrained $ List.map (fun (consts1, v2) ->
-                  (consts1, Pexpr () (PEop binop (Pexpr () (PEval v1)) (Pexpr () (PEval v2))))
-              ) xs2
-            )
-        
         | (_, Just _, Just _) ->
             EU.fail $ Illformed_program ("[" ^ Loc.stringFromLocation loc ^ "] ill-typed PEop ==> " ^
                                          Pp.stringFromCore_pexpr (Caux.mk_op_pe binop pe1 pe2))
         | _ ->
+(*
+            let () = Debug.print_debug 1 [] (fun () ->
+              Pp.stringFromCore_pexpr (Pexpr () (PEop binop pe1' pe2'))
+            ) in
+*)
             EU.return $ PEop binop pe1' pe2'
       end
 
@@ -255,16 +269,16 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
   Pexpr () <$> match pexpr_ with
     (* pulling the constrained up *)
     | PEconstrained xs ->
-        EU.mapM (fun (constrs, pe) ->
+        EU.mapM (fun (cs, pe) ->
           self pe >>= fun pe' ->
-          EU.return (constrs, pe')
+          EU.return (cs, pe')
         ) xs >>= fun xs' ->
-        let (constrs, pe') = List.unzip xs' in
+        let (cs, pe') = List.unzip xs' in
         match Caux.valueFromPexprs pe' with
           | Just cvals ->
-              EU.return $ PEval (Vconstrained (List.zip constrs cvals))
+              EU.return $ PEval (Vconstrained (List.zip cs cvals))
           | Nothing ->
-              EU.return $ PEconstrained (List.zip constrs pe')
+              EU.return $ PEconstrained (List.zip cs pe')
         end
 (*
  | PEctor of (generic_ctor 'ty) * list (generic_pexpr 'ty 'sym) (* constructor application *)
@@ -274,17 +288,49 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
 *)
     | PEnot (Pexpr _ (PEconstrained xs)) ->
         EU.return $ PEconstrained (
-          List.map (fun (constrs, pe) ->
-            (constrs, Caux.mk_not_pe pe)
+          List.map (fun (cs, pe) ->
+            (cs, Caux.mk_not_pe pe)
           ) xs
         )
+    
+    | PEop binop (Pexpr _ (PEconstrained xs1)) (Pexpr _ (PEconstrained xs2)) ->
+        EU.return $
+          PEconstrained (
+            List.map (fun ((cs1, pe1), (cs2, pe2)) ->
+              (ND.concat cs1 cs2, Caux.mk_op_pe binop pe1 pe2)
+            ) (Utils.product_list xs1 xs2)
+          )
     | PEop binop (Pexpr _ (PEconstrained xs)) pe2 ->
         EU.return $
           PEconstrained (
-            List.map (fun (constrs, pe) ->
-              (constrs, Caux.mk_op_pe binop pe pe2)
+            List.map (fun (cs, pe) ->
+              (cs, Caux.mk_op_pe binop pe pe2)
             ) xs
           )
+    | PEop binop  pe1 (Pexpr _ (PEconstrained xs)) ->
+        EU.return $
+          PEconstrained (
+            List.map (fun (cs, pe) ->
+              (cs, Caux.mk_op_pe binop pe1 pe)
+            ) xs
+          )
+    
+    | PEif (Pexpr _ (PEconstrained xs)) pe2 pe3 ->
+        EU.return $
+          PEconstrained (
+            List.map (fun (cs, pe) ->
+              (cs, Caux.mk_if_pe pe pe2 pe3)
+            ) xs
+          )
+    
+    | PEcase (Pexpr _ (PEconstrained xs)) pat_pes ->
+              EU.return $
+                PEconstrained (
+                  List.map (fun (cs, pe) ->
+                    (cs, Caux.mk_case_pe pe pat_pes)
+                  ) xs
+                )
+
 (*
  | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'ty 'sym)) (* C struct expression *)
  | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'ty 'sym) (* C union expression *)
@@ -322,7 +368,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
     | PEundef ub ->
         Exception.return (Undefined.undef loc [ub])
     | PEerror str debug_pe ->
-        let () = Debug.print_debug 0 [] (fun () -> Pp.stringFromCore_pexpr debug_pe) in
+        let () = Debug.print_debug 2 [] (fun () -> "PEerror ==> " ^ Pp.stringFromCore_pexpr debug_pe) in
         Exception.return (Undefined.error loc str)
     | PEctor ctor pes ->
         EU.mapM self pes >>= fun pes' ->
@@ -375,7 +421,7 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
-                    error ("Core_run ivmax" ^ (* DEBUG *)
+                    error ("Core_eval ivmax" ^ (* DEBUG *)
                                Pp.stringFromCore_expr (Core.Epure (Core.Pexpr () (Core.PEval (Vctype ty))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civmin, Just [Vctype ty]) ->
@@ -383,13 +429,41 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
-                    error ("Core_run ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
+                    error ("Core_eval ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
                                Pp.stringFromCore_expr (Core.Epure (Core.Pexpr () (Core.PEval (Vctype ty))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civsizeof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.sizeof_ival ty)))
           | (Civalignof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
+          | (CivCOMPL, Just [Vctype ty; Vobject (OVinteger ival)]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_complement_ival ity ival)))
+                | _ ->
+                    error "Core_Eval ivCOMPL, not (is_integer ty)"
+              end
+          | (CivAND, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_and_ival ity ival1 ival2)))
+                | _ ->
+                    error "Core_Eval ivAND, not (is_integer ty)"
+              end
+          | (CivOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_or_ival ity ival1 ival2)))
+                | _ ->
+                    error "Core_Eval ivOR, not (is_integer ty)"
+              end
+          | (CivXOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
+              match Core_ctype.unatomic ty with
+                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                    EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_xor_ival ity ival1 ival2)))
+                | _ ->
+                    error "Core_Eval ivXOR, not (is_integer ty)"
+              end
           | (Cspecified, Just [Vobject oval]) ->
               EU.return $ PEval (Vloaded (LVspecified oval))
           | (Cunspecified, Just [Vctype ty]) ->
@@ -400,20 +474,20 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
                 (* if some operands of the ctor are constrained, the following pulls the PEconstrained operator
                    outside of the PEctor *)
                 (* TODO: check this code *)
-                let (xs : list (list Mem.mem_constraint2 * list pexpr)) =
+                let (xs : list (Mem.mem_iv_constraint * list pexpr)) =
                   List.foldl (fun acc cval ->
                     match cval with
                       | Vconstrained xs ->
-                          List.map (fun ((xsConsts, xsCval), (accConsts, accPes)) ->
-                            (xsConsts ++ accConsts, Pexpr () (PEval xsCval) :: accPes)
-                          ) (Global.product_list xs acc)
+                          List.map (fun ((xs_cs, xsCval), (acc_cs, accPes)) ->
+                            (ND.concat xs_cs acc_cs, Pexpr () (PEval xsCval) :: accPes)
+                          ) (Utils.product_list xs acc)
                       | _ ->
-                          List.map (fun (consts, pes) -> (consts, Pexpr () (PEval cval) :: pes)) acc
+                          List.map (fun (cs, pes) -> (cs, Pexpr () (PEval cval) :: pes)) acc
                     end
-                  ) [([], [])] cvals in
+                  ) [(ND.empty, [])] cvals in
                 EU.return (
                   PEconstrained (
-                    List.map (fun (consts, pes') -> (consts, Pexpr () (PEctor ctor pes'))) xs
+                    List.map (fun (cs, pes') -> (cs, Pexpr () (PEctor ctor pes'))) xs
                   )
                 )
               else
@@ -425,12 +499,20 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
         end
     | PEcase pe pat_pes ->
         self pe >>= function
-          | (Pexpr _ (PEval _) as pe') ->
-              match Caux.select_case Caux.subst_sym_pexpr pe' pat_pes with
+          | Pexpr _ (PEval (Vconstrained xs)) ->
+              EU.return (
+                PEconstrained (
+                  List.map (fun (cs, cval) ->
+                    (cs, Caux.mk_case_pe (Caux.mk_value_pe cval) pat_pes)
+                  ) xs
+                )
+              )
+          | Pexpr _ (PEval cval) ->
+              match Caux.select_case Caux.subst_sym_pexpr cval pat_pes with
                 | Just pe'' ->
                     EU.return (strip pe'')
                 | Nothing ->
-                    error ("PEcase, mismatched ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromCore_pexpr pe')
+                    error ("PEcase, mismatched ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromCore_value cval)
               end
           | pe' ->
               EU.return (PEcase pe' pat_pes)
@@ -460,6 +542,17 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
     | PEnot (Pexpr pe_bTy _ as pe) ->
         self pe >>= fun (Pexpr pe_bTy pe_' as pe') ->
         match pe_' with
+(*
+          | PEval (Vconstrained xs) ->
+              (PEval -| Vconstrained) <$> EU.mapM function
+                | (cs, Vtrue) ->
+                    EU.return (cs, Vfalse)
+                | (cs, Vfalse) ->
+                    EU.return (cs, Vtrue)
+                | _ ->
+                    EU.fail (Illformed_program "PEnot: operand should be a boolean")
+              end xs
+*)
           | PEval Vtrue ->
               EU.return (PEval Vfalse)
           | PEval Vfalse ->
@@ -526,8 +619,8 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
         end
     | PElet pat pe1 pe2 ->
         self pe1 >>= function
-          | (Pexpr _ (PEval _) as pe1') ->
-              match Caux.select_case Caux.subst_sym_pexpr pe1' [(pat, pe2)] with
+          | Pexpr _ (PEval cval) ->
+              match Caux.select_case Caux.subst_sym_pexpr cval [(pat, pe2)] with
                 | Nothing ->
                     EU.fail $ Illformed_program "PElet: the pattern didn't match pe1"
                 | Just pe' ->
@@ -545,8 +638,8 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               strip <$> self pe3
           | (Just (Vconstrained xs)) ->
               EU.return $ PEconstrained (
-                List.map (fun (constrs, v) ->
-                  (constrs, match v with
+                List.map (fun (cs, v) ->
+                  (cs, match v with
                     | Vtrue  -> pe2
                     | Vfalse -> pe3
                     | _ ->
@@ -560,8 +653,8 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
 (*
     | PEif (Pexpr _ (PEconstrained xs)) pe2 pe3 ->
         EU.return $ PEconstrained (
-          List.map (fun (constrs, pe) ->
-            (constrs, Caux.mk_if_pe pe pe2 pe3)
+          List.map (fun (cs, pe) ->
+            (cs, Caux.mk_if_pe pe pe2 pe3)
           ) xs
         )
 *)
@@ -635,3 +728,71 @@ let eval_pexpr loc mem_st_opt file pe =
     | Exception.Exception err ->
         Left (loc, Errors.Core_run_cause err)
   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val step_hoist_constrained: Core.pexpr -> maybe Core.pexpr
+let step_hoist_constrained (Pexpr () pexpr_) =
+  Maybe.map (Pexpr ()) match pexpr_ with
+    | PEsym _ ->
+        Nothing
+    | PEimpl _ ->
+        Nothing
+    | PEval cval ->
+        (* TODO *)
+        Nothing
+(*
+ | PEconstrained of list (list Mem.mem_iv_constraint * (generic_pexpr 'bty 'sym)) (* constrained value *)
+ | PEundef of Undefined.undefined_behaviour (* undefined behaviour *)
+ | PEerror of string * (generic_pexpr 'bty 'sym) (* impl-defined static error *)
+ | PEctor of (generic_ctor 'bty) * list (generic_pexpr 'bty 'sym) (* constructor application *)
+ | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
+ | PEarray_shift of (generic_pexpr 'bty 'sym) * ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
+ | PEmember_shift of (generic_pexpr 'bty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
+ | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
+ | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* binary operators *)
+ | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
+ | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'bty 'sym) (* C union expression *)
+ | PEcall of (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* pure Core function call *)
+ | PElet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure Core let *)
+*)
+(*     | PEif of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure Core if *) *)
+    | PEis_scalar (Pexpr () (PEconstrained xs)) ->
+        Just $ PEconstrained (
+       List.map (fun (cs, pe) ->
+         (cs, Pexpr () (PEis_scalar pe))
+       ) xs
+     )
+    | PEis_integer (Pexpr () (PEconstrained xs)) ->
+        Just $ PEconstrained (
+       List.map (fun (cs, pe) ->
+         (cs, Pexpr () (PEis_integer pe))
+       ) xs
+     )
+    | PEis_signed (Pexpr () (PEconstrained xs)) ->
+        Just $ PEconstrained (
+       List.map (fun (cs, pe) ->
+         (cs, Pexpr () (PEis_signed pe))
+       ) xs
+     )
+    | PEis_unsigned (Pexpr () (PEconstrained xs)) ->
+        Just $ PEconstrained (
+       List.map (fun (cs, pe) ->
+         (cs, Pexpr () (PEis_unsigned pe))
+       ) xs
+     )
+end
