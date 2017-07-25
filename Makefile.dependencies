@@ -74,7 +74,7 @@ z3:
 	  cd $(Z3_PATH); \
 	  python scripts/mk_make.py --ml; \
 	  cd build; \
-	  make && make install; \
+	  make && sudo make install; \
 	fi
 
 clean:
