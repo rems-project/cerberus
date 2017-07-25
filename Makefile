@@ -64,7 +64,7 @@ dependencies:
 #	@if [ "2" == "$(shell ocamlfind query pprint > /dev/null 2>&1; echo $$?)" ]; then \
 # #	  $(error "Please install pprint"); \
 # #	fi
-	mkdir dependencies
+	mkdir -p dependencies
 	cd dependencies; make -f ../Makefile.dependencies
 
 
