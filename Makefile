@@ -59,6 +59,7 @@ copy_cerberus: $(addprefix model/, $(CERBERUS_LEM_SOURCES)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING cerberus .lem files$(RESET)
 	@cp $(addprefix model/, $(CERBERUS_LEM_SOURCES)) $(BUILD_DIR)
 
+.PHONY: dependencies
 dependencies:
 #	@if [ "2" == "$(shell ocamlfind query pprint > /dev/null 2>&1; echo $$?)" ]; then \
 # #	  $(error "Please install pprint"); \
