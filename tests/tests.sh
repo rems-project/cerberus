@@ -7,7 +7,7 @@ citests=(
   0004-return_var.c
   0005-return_var_arith.c
   0006-return_var_unspec.c
-  0007-inits.c
+#  0007-inits.c
   0008-cond_integer.c
   0009-cond-pointer.c
   0010-if_int.c
@@ -21,7 +21,7 @@ citests=(
   0018-lt_promotion.c
   0019-arith_promotion.c
   0020-end_of_lifetime.c
-  0021-fact.c
+#  0021-fact.c
   0022-while_continue.c
 #  0023-jump1.c
   0024-jump2.c
@@ -53,7 +53,7 @@ citests=(
   0050-void_return_arith.c
   0051-global_non_startup.c
 #  0052-global_not_constant.error.c
-  0053-recursive_factorial5.c
+#  0053-recursive_factorial5.c
   0054-while_factorial5.c
   0055-while_acc.c
   0056-unary_plus.c
@@ -68,7 +68,7 @@ citests=(
 # 0065-const1.error.c
 # 0066-const2.error.c
 # 0101-sym_cfunction.c
-  0105-incr.c
+# 0105-incr.c
   0106-typedef_parsing_bug.c
 # 0108-shifts.c
   0109-promotion_lt.c
