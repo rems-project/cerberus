@@ -71,7 +71,7 @@ z3:
 	  echo "INSTALLING z3"; \
 	  if [ ! -d $(Z3_SOURCE_PATH) ] ; then \
 	    echo DOWNLOADING $(Z3_SOURCE) ; \
-	    git clone $(Z3_SOURCE) ; \
+	    git clone $(Z3_SOURCE) $(Z3_SOURCE_PATH); \
 	  fi; \
 	  mkdir -p ${Z3_PATH}; \
 	  cd $(Z3_SOURCE_PATH); \
