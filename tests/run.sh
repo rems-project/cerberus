@@ -25,8 +25,8 @@ function test {
     fail=$((fail+1))
     cat tmp/result
     JOUTPUT+="\t<testcase name=\"$1\">\n"
-    JOUTPUT+="\t\t<error message=\"fail\">`cat tmp/result`</error>"
-    JOUTPUT+="\t</testcase>"
+    JOUTPUT+="\t\t<error message=\"fail\">`cat tmp/result`</error>\n"
+    JOUTPUT+="\t</testcase>\n"
   fi
 
   echo -e "Test $1: $res"
@@ -44,9 +44,9 @@ echo "PASSED: $pass"
 echo "FAILED: $fail"
 
 # JUnit XML output (for Jenkins report)
-echo "<testsuites>" > $JOUPUT_FILE
-echo "<testsuite name=\"ci\" tests=\"$((pass + failt))\" failures=\"${fail}\" timestamp=\"$(date)\">\n" >> $JOUTPUT_FILE
-echo $JOUTPUT >> $JOUTPUT_FILE
+echo "<testsuites>" > $JOUTPUT_FILE
+echo "<testsuite name=\"ci\" tests=\"$((pass + failt))\" failures=\"${fail}\" timestamp=\"$(date)\">" >> $JOUTPUT_FILE
+echo -e ${JOUTPUT} >> $JOUTPUT_FILE
 echo "</testsuite>" >> $JOUTPUT_FILE
 echo "</testsuites>" >> $JOUTPUT_FILE
 

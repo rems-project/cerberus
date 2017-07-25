@@ -68,5 +68,5 @@ parsers/cparser/pre_parser.mli
 
 tests/csmith/small_int_arith/*.c
 
-
+tests/ci_results.xml
 *~

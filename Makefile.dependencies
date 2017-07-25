@@ -6,7 +6,9 @@ Z3_SOURCE=https://github.com/Z3Prover/z3.git
 CMDLINER_PATH=$(shell basename $(CMDLINER_SOURCE) .tbz)
 PPRINT_PATH=$(shell basename $(PPRINT_SOURCE) .tar.gz)/src
 ZARITH_PATH=$(shell basename $(ZARITH_SOURCE) .tgz)
-Z3_PATH=z3
+
+Z3_SOURCE_PATH=z3-source
+Z3_PATH=$(shell pwd)/z3
 
 ifeq ($(shell uname -s),Darwin)
   CMD=curl -O
@@ -67,19 +69,16 @@ zarith:
 z3:
 	@if ! (ocamlfind query z3 >/dev/null 2>&1); then \
 	  echo "INSTALLING z3"; \
-	  if [ ! -d $(Z3_PATH) ] ; then \
+	  if [ ! -d $(Z3_SOURCE_PATH) ] ; then \
 	    echo DOWNLOADING $(Z3_SOURCE) ; \
 	    git clone $(Z3_SOURCE) ; \
 	  fi; \
-	  cd $(Z3_PATH); \
-	  python scripts/mk_make.py --ml; \
+	  mkdir -p ${Z3_PATH}; \
+	  cd $(Z3_SOURCE_PATH); \
+	  python scripts/mk_make.py --ml --prefix=${Z3_PATH}; \
 	  cd build; \
-	  make && sudo make install; \
+	  make && make install; \
 	fi
 
 clean:
-	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) $(shell basename $(PPRINT_SOURCE) .tar.gz) $(shell basename $(ZARITH_SOURCE) .tgz)
-
-
-foo:
-	echo FOO
+	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) $(shell basename $(PPRINT_SOURCE) .tar.gz) $(shell basename $(ZARITH_SOURCE) .tgz) ${Z3_SOURCE_PATH}
