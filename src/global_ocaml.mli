@@ -33,6 +33,7 @@ type error_verbosity =
 type cerberus_conf = {
   cpp_cmd:         string;
   pps:             language list;
+  pp_annotated:    bool;
   core_stdlib:     (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:   Core.impl option;
   core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
@@ -64,6 +65,7 @@ val current_execution_mode: unit -> execution_mode option
 val set_cerb_conf:
     string ->
     language list ->
+    bool ->
     (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
     Core.impl option ->
     bool ->

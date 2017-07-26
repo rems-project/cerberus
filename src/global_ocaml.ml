@@ -44,6 +44,7 @@ type error_verbosity =
 type cerberus_conf = {
   cpp_cmd:            string;
   pps:                language list;
+  pp_annotated:       bool;
   core_stdlib:        (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:      Core.impl option;
   core_parser:        Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
@@ -79,13 +80,14 @@ let current_execution_mode () =
 let isDefacto () =
   !!cerb_conf.defacto
 
-let set_cerb_conf cpp_cmd pps core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
+let set_cerb_conf cpp_cmd pps pp_annotated core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
                   typecheck_core defacto =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
     pps=           pps;
+    pp_annotated=  pp_annotated;
     core_stdlib=   core_stdlib;
     core_impl_opt= core_impl_opt;
     core_parser=   core_parser;

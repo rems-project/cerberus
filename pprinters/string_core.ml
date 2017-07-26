@@ -1,5 +1,5 @@
 open Core
-open Pp_core
+open Pp_core.Basic
 
 let string_of_core_object_type oTy =
   Pp_utils.to_plain_string (pp_core_object_type oTy)
@@ -12,7 +12,7 @@ let string_of_pexpr pe =
 let string_of_expr e =
   Pp_utils.to_plain_string (pp_expr e)
 let string_of_file f =
-  Pp_utils.to_plain_string (pp_file true f)
+  Pp_utils.to_plain_string (pp_file f)
 
 
 let string_of_params z =
