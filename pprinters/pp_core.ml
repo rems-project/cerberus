@@ -8,6 +8,33 @@ open Colour
 
 open Pp_prelude
 
+module type CONFIG =
+sig
+  val show_std: bool
+  val show_location: bool
+  val show_proc_decl: bool
+end
+
+module type PP_CORE =
+sig
+  val pp_core_object_type: core_object_type -> PPrint.document
+  val pp_core_base_type: core_base_type -> PPrint.document
+  val pp_object_value: object_value -> PPrint.document
+  val pp_value: value -> PPrint.document
+  val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
+  val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
+  val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
+  val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
+  val pp_file: ('a, 'b) generic_file -> PPrint.document
+
+  val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
+  val pp_stack: 'a stack -> PPrint.document
+end
+
+module Make (Config: CONFIG) =
+struct
+open Config
+
 let rec precedence = function
   | PEop (OpExp, _, _) -> Some 1
 
@@ -537,15 +564,13 @@ let rec pp_expr expr =
       | Ewait tid ->
           pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
       | Eloc (l , e) ->
-        !^"{-#" ^^ !^(location_to_string l) ^^ !^"#-}"
-          ^^
-         pp_expr e
-          ^^
-        !^"{-#ELOC#-}"
+        if show_location then
+          !^"{-#"^^ !^(location_to_string l)^^ !^"#-}" ^^pp_expr e ^^ !^"{-#ELOC#-}"
+        else pp_expr e
       | Estd (s , e) ->
-        !^"{-#" ^^ !^s ^^ !^"#-}" ^^ P.hardline
-          ^^
-         pp_expr e
+        if show_std then
+          !^"{-#" ^^ !^s ^^ !^"#-}" ^^ P.hardline ^^ pp_expr e
+        else pp_expr e
       | End es ->
           pp_keyword "nd" ^^ P.parens (comma_list pp es)
       | Ebound (i, e) ->
@@ -627,7 +652,7 @@ let pp_argument (sym, bTy) =
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
-let pp_fun_map pp_decl_flag funs =
+let pp_fun_map funs =
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with
@@ -636,7 +661,7 @@ let pp_fun_map pp_decl_flag funs =
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
       | ProcDecl (bTy, bTys) ->
-        if pp_decl_flag then
+        if show_proc_decl then
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
         else P.empty
       | Proc (bTy, params, e) ->
@@ -668,7 +693,7 @@ let mk_comment doc =
   )
 
 
-let pp_file pp_decl_flag file =
+let pp_file file =
   let pp_glob acc (sym, bTy, e) =
     acc ^^
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
@@ -679,7 +704,7 @@ let pp_file pp_decl_flag file =
     if Debug_ocaml.get_debug_level () > 1 then
       fun z -> 
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-        pp_fun_map pp_decl_flag file.stdlib ^^ P.break 1 ^^
+        pp_fun_map file.stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
   (*  pp_impl file.impl ^^ P.break 1 ^^ *)
@@ -696,7 +721,7 @@ let pp_file pp_decl_flag file =
     List.fold_left pp_glob P.empty file.globs ^^
     
     !^ "-- Fun map" ^^ P.break 1 ^^
-    pp_fun_map pp_decl_flag file.funs
+    pp_fun_map file.funs
   end
 
 
@@ -730,3 +755,11 @@ let rec pp_stack = function
         pp_continuation cont
       ) ^^ P.break 1 ^^ P.dot ^^ P.break 1 ^^
       pp_stack sk'
+
+end
+
+module Basic = Make (struct
+  let show_std = false
+  let show_location = false
+  let show_proc_decl = false
+end)

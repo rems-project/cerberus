@@ -257,7 +257,7 @@ let pipeline filename args =
   if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
-      run_pp $ Pp_core.pp_file true core_file;
+      run_pp $ Pp_core.Basic.pp_file core_file;
       print_endline "===================="
     end;
   
@@ -267,11 +267,16 @@ let pipeline filename args =
       Debug_ocaml.warn [] (fun () -> "The normal backend is not actually using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
         | Exception.Result z ->
-            run_pp $ Pp_core.pp_file true (Core_sequentialise.sequentialise_file z);
+            run_pp $ Pp_core.Basic.pp_file (Core_sequentialise.sequentialise_file z);
         | Exception.Exception _ ->
             ();
     end else
-      run_pp $ Pp_core.pp_file true rewritten_core_file;
+      let module Param_pp_core = Pp_core.Make(struct
+        let show_std = !!cerb_conf.pp_annotated
+        let show_location = !!cerb_conf.pp_annotated
+        let show_proc_decl = false
+      end) in
+      run_pp $ Param_pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
@@ -312,7 +317,7 @@ let gen_corestd stdlib impl =
       cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress rewrite
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
@@ -340,14 +345,14 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps file_opt progress 
   end in
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-  set_cerb_conf cpp_cmd pps core_stdlib None exec exec_mode Core_parser.parse progress rewrite
+  set_cerb_conf cpp_cmd pps pp_annotated core_stdlib None exec exec_mode Core_parser.parse progress rewrite
     sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
+  set_cerb_conf cpp_cmd pps pp_annotated ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
     (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
@@ -457,6 +462,10 @@ let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] & info ["pp"] ~docv:"LANG1,..." ~doc)
 
+let pp_annotated =
+  let doc = "Add location and ISO annotations to the Core pretty printer." in
+  Arg.(value & flag & info ["pp_annotated"] ~doc)
+
 let file =
   let doc = "source C or Core file" in
   Arg.(value & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
@@ -511,7 +520,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
-    $ pprints $ file $ progress $ rewrite $ sequentialise
+    $ pprints $ pp_annotated $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto ) in
   

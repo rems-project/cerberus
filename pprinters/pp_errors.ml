@@ -268,9 +268,9 @@ let std_ref = function
             " -- else branch: " ^ String_core.string_of_core_base_type bTy2
         | MismatchIfCfunction ((ret_bTy1, bTys1), (ret_bTy2, bTys2)) ->
             "mismatching signatures in a Cfunction if-expression, then branch: " ^
-            Pp_utils.to_plain_string (Pp_core.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.pp_core_base_type bTys1)) ^
+            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1)) ^
             " -- else branch: " ^
-            Pp_utils.to_plain_string (Pp_core.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.pp_core_base_type bTys1))
+            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1))
         | EmptyArray ->
             "found an empty array"
         | CtorWrongNumber _ (*of nat (* expected *) * nat (* found *)*) ->
