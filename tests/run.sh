@@ -2,6 +2,10 @@
 
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/Applications/usr/lib
 
+#Jenkins variables
+export CERB_PATH=/local/jenkins/home/workspace/rems/bitbucket/cerberus
+export LD_LIBRARY_PATH=/local/jenkins/home/workspace/rems/bitbucket/cerberus/dependencies/z3/lib
+
 source tests.sh
 
 mkdir -p tmp
