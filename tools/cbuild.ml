@@ -72,6 +72,9 @@ let run x = Sys.command x |> ignore
 let copy path src dest =
   sprintf "cp -f %s/%s %s" path src dest |> run
 
+let move src dest =
+  sprintf "mv -f %s %s" src dest |> run
+
 let create_file name contents =
   let lines = List.fold_left (sprintf "%s\n%s") "" contents in
   sprintf "echo '%s' > %s/%s" lines cbuild_path name |> run
@@ -137,15 +140,32 @@ let set_basic_mem () =
 
 let cmdmap (f : 'a -> unit) xs = List.map f xs |> ignore
 
-let cbuild c b f basic corestd csmith cargs o files =
+let is_uppercase c = 'A' <= c && c <= 'Z'
+
+let is_lowercase c = 'a' <= c && c <= 'z'
+
+let is_letter c =
+  is_uppercase c || is_lowercase c
+
+let rename_ocaml_mod_name rfile =
+  (* Add 'n' if name starts with any symbol *)
+  (if is_letter (String.get rfile 0) then rfile else "n" ^ rfile)
+  (* - is not supported by Ocaml *)
+  |> Str.global_replace (Str.regexp "-") "_"
+  (* Rename files if needed *)
+  |> fun mfile -> if not (mfile = rfile) then move rfile mfile; mfile
+
+let cbuild c b f basic corestd csmith cargs o rfiles =
   (* check _cbuild *)
   check_and_build f;
   (* set memory model *)
   if basic then set_basic_mem ();
   (* copy source to _cbuild *)
-  cmdmap (fun file -> copy cur_path file cbuild_path) files;
+  cmdmap (fun file -> copy cur_path file cbuild_path) rfiles;
   (* change directory *)
   Sys.chdir cbuild_path;
+  (* rename unsupported names *)
+  let files = List.map rename_ocaml_mod_name rfiles in
   (* get main file *)
   let main = last files |> Filename.basename in
   (* check byte extension *)

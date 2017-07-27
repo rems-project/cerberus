@@ -9,8 +9,8 @@ module C = Core_ctype
 exception Undefined of string
 exception Error of string
 
-let (>>=) = M.bind0
-let return = M.return0
+let (>>=) = M.bind2
+let return = M.return1
 
 (* Keep track of the last memory operation, for error display *)
 type memop = Store | Load | Create | Alloc | None
@@ -146,6 +146,7 @@ let gt_ptrval p q = M.gt_ptrval p q
 let le_ptrval p q = M.le_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
 let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
+let memcmp p q r = return $ M.memcmp p q r
 
 (* Memory actions wrap *)
 
@@ -180,7 +181,7 @@ let load_union s =
 
 let store f ty e1 e2 =
   last_memop := Store;
-  M.store ty e1 $ case_loaded_mval f e2
+  M.store Location_ocaml.Loc_unknown ty e1 $ case_loaded_mval f e2
 
 let store_integer ity =
   store (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
@@ -218,12 +219,12 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     let terr _ _ = raise (Error "Rt_ocaml.printf: expecting an integer") in
     let n = M.case_mem_value x (terr()) terr (fun _ -> conv cty)
         terr terr (terr()) terr terr
-    in Either.Right (Undefined.Defined0
+    in Either.Right (Undefined.Defined
                        (Core.Vloaded (Core.LVspecified (Core.OVinteger n))))
   in
   Output.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function
-    | Either.Right (Undefined.Defined0 xs) ->
+    | Either.Right (Undefined.Defined xs) ->
       let n = List.length xs in
       let output = String.init n (List.nth xs) in
       if batch then stdout := !stdout ^ String.escaped output

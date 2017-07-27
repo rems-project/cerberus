@@ -555,6 +555,7 @@ let print_memop globs memop pes =
    | Mem.IntFromPtr -> !^"A.intcast_ptrval"
    | Mem.PtrFromInt -> !^"A.ptrvast_ival"
    | Mem.PtrValidForDeref -> !^"A.valid_for_deref_ptrval"
+   | Mem.Memcmp -> !^"A.memcmp"
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
 let choose_load_type (Pexpr (_, PEval cty)) =

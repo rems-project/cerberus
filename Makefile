@@ -138,7 +138,7 @@ ocaml_byte:
 
 .PHONY: cbuild clink
 cbuild:
-	ocamlbuild -pkg cmdliner -lib unix tools/cbuild.native
+	ocamlbuild -pkg cmdliner -libs str,unix tools/cbuild.native
 	cp -L cbuild.native cbuild
 	rm cbuild.native
 
