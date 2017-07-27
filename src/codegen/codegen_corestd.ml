@@ -13,7 +13,7 @@ let print_head filename =
   !^"module T = AilTypes" ^/^
   !^"module C = Core_ctype" ^/^
   !^"module B = Nat_big_num" ^//^
-  !^"let (>>=) = M.bind0" ^/^
+  !^"let (>>=) = M.bind2" ^/^
   !^"let rec _std_function_printf cont xs args =\
      \n  A.printf conv_int xs args >>= fun x -> cont x"
 
