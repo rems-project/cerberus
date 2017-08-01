@@ -46,15 +46,18 @@ let nd n xs =
   Random.self_init ();
   Random.int n |> List.nth xs
 
-(* IV min/max wraps *)
+(* IV wraps *)
 
 let ivctor memf errmsg = function
   | C.Basic0 (T.Integer it) -> memf it
   | _ -> raise (Error errmsg)
 
-let ivmin = ivctor M.min_ival "ivmin"
-
-let ivmax = ivctor M.max_ival "ivmax"
+let ivmin   = ivctor M.min_ival "ivmin"
+let ivmax   = ivctor M.max_ival "ivmax"
+let ivcompl = ivctor M.bitwise_complement_ival "ivcompl"
+let ivand   = ivctor M.bitwise_and_ival "ivand"
+let ivor    = ivctor M.bitwise_or_ival "ivor"
+let ivxor   = ivctor M.bitwise_xor_ival "ivxor"
 
 (* Ail types *)
 
@@ -241,12 +244,12 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
 
 exception Exit of (M.integer_value loaded)
 
-let constraints = "CONSTRS ==> []\nLog[0]\n\nEnd[0]\n"
+let print_exec i s =
+  Printf.printf "BEGIN EXEC[%d]\n%s\nEND EXEC[%d]\n" i s i
 
-let print_batch res =
-  Printf.printf
-    "Defined {value: \"%s\", stdout: \"%s\", blocked: \"false\"}\n%s"
-    res !stdout constraints
+let print_batch i res =
+  Printf.sprintf "Defined {value: \"%s\", stdout: \"%s\", blocked: \"false\"}" res !stdout
+  |> print_exec i
 
 let print_err_batch e =
   let err = match e with
@@ -255,9 +258,9 @@ let print_err_batch e =
     | Mem_common.MerrOther str -> "MerrOther \"" ^  (str ^ "\"")
     | Mem_common.MerrReadFromDead -> "MerrReadFromDead"
     | Mem_common.MerrWIP str -> "Memory WIP: " ^ str
-  in Printf.printf
-    "Killed {msg: memory layout error (%s seq) ==> %s}\n%s"
-    (show_memop !last_memop) err constraints
+  in
+  Printf.sprintf "Killed {msg: memory layout error (%s seq) ==> %s}" (show_memop !last_memop) err
+  |> print_exec 0 
 
 let string_of_specified n =
   Printf.sprintf "Specified(%s)" (Nat_big_num.to_string n)
@@ -265,23 +268,31 @@ let string_of_specified n =
 let string_of_unspec cty =
   Printf.sprintf "Unspecified(\"%s\")" (String_core_ctype.string_of_ctype cty)
 
+let dummy_file = 
+  let cmp = Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_basic_classes.compare_method in
+  let impl_cmp = Implementation_.instance_Basic_classes_SetType_Implementation__implementation_constant_dict.Lem_pervasives.setElemCompare_method in
+  Core.{
+    main    = None;
+    tagDefs = Pmap.empty cmp;
+    stdlib  = Pmap.empty cmp;
+    globs   = [];
+    funs    = Pmap.empty cmp;
+    impl    = Pmap.empty impl_cmp;
+  }
 let quit f =
   try
-    match M.runMem (f (fun x -> raise (Exit x)) ()) M.initial_mem_state with
-    | [] -> raise (Error "continuation not raised: no result from runMem")
-    | [Either.Left e] -> if batch then print_err_batch e
-    | [Either.Right _] ->
-      raise (Error "continuation not raised: one result from runMem")
-    | _ -> raise (Error "continuation not raised: multiple results from runMem")
+    let initial_state = Driver.initial_driver_state (UniqueId.new_supply Symbol.instance_Enum_Enum_Symbol_sym_dict) dummy_file in
+    match Smt.runND_exhaustive (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
+    | _ -> raise (Error "continuation not raised")
   with
   | Exit x ->
     (match x with
      | Specified x ->
        let n = M.eval_integer_value x |> Option.get in
-       if batch then print_batch (string_of_specified n);
+       if batch then print_batch 0 (string_of_specified n);
        exit (Nat_big_num.to_int n)
      | Unspecified cty ->
-       if batch then print_batch (string_of_unspec cty);
+       if batch then print_batch 0 (string_of_unspec cty);
        exit(-1)
     )
 

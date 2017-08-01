@@ -179,10 +179,7 @@ let backend sym_supply core_file args =
   match !!cerb_conf.exec_mode_opt with
     | None ->
         0
-    | Some Interactive ->
-        print_endline "Interactive mode not yet supported";
-        exit 1
-    | Some (Exhaustive | Random) ->
+    | Some (Interactive | Exhaustive | Random) ->
         if !!cerb_conf.batch then
           begin
             Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) !!cerb_conf;

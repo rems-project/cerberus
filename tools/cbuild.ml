@@ -99,7 +99,7 @@ let create_cbuild () =
   create_merlin ()
 
 let run_ocamlbuild file =
-  sprintf "ocamlbuild -pkgs pprint,zarith -libs nums,unix,str %s" file |> run
+  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,zarith,Z3 -libs unix,str %s" file |> run
 
 let run_clink files =
   List.fold_left (fun acc f -> acc ^ chop_extension f ^ ".sym ") "" files

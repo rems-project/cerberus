@@ -221,6 +221,10 @@ and print_match_ctor arg = function
   | Civalignof   -> !^"M.alignof_ival"
   | Cspecified   -> !^"A.Specified" ^^ P.parens arg
   | Cunspecified -> !^"A.Unspecified" ^^ P.parens arg
+  | CivCOMPL     -> !^"A.ivcompl"
+  | CivAND       -> !^"A.ivand"
+  | CivOR        -> !^"A.ivor"
+  | CivXOR       -> !^"A.ivxor"
 
 let rec print_call_pattern = function
   | CaseBase (None, _) -> P.parens P.empty (* WARNING: should this ever match? *)
@@ -280,24 +284,11 @@ let rec print_ctype = function
 (* Memory types *)
 
 let print_integer_value_base = function
-  | D.IVconcrete bignum             ->
-    !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
-  | D.IVaddress alloc_id  ->
-    !^"I.IVAddress" ^^^ !^(string_of_int alloc_id)
-  | D.IVmax ait                     -> !^"I.IVmax" ^^^ P.parens
-                                       (print_ail_integer_type ait)
-  | D.IVmin ait                     -> !^"I.IVmin" ^^^ P.parens
-                                       (print_ail_integer_type ait)
-  | D.IVunspecified                 -> !^"I.IVunspecified"
-  | D.IVop (op, ivs)                -> raise (Unsupported "memoty")
-  | D.IVsizeof cty                  -> raise (Unsupported "ivssizeof")
-  | D.IValignof cty                 -> raise (Unsupported "ivalignod")
-  | D.IVoffsetof (sym, cabs_id)     -> raise (Unsupported "ivoffsetof")
-  | D.IVbyteof (ivb, mv)            -> raise (Unsupported "ifbyteof")
-  | D.IVcomposite ivs               -> raise (Unsupported "ivcomposite")
-  | D.IVfromptr (ivb, ity, mv)      -> raise (Unsupported "ivfromptr")
-  | D.IVptrdiff (ivb, mv)           -> raise (Unsupported "ivptrdiff")
-  | D.IVconcurRead (_, _)           -> raise (Unsupported "ivconcured")
+  | D.IVconcrete bignum -> !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
+  | D.IVaddress alloc_id -> !^"I.IVAddress" ^^^ !^(string_of_int alloc_id)
+  | D.IVmax ait -> !^"I.IVmax" ^^^ P.parens (print_ail_integer_type ait)
+  | D.IVmin ait -> !^"I.IVmin" ^^^ P.parens (print_ail_integer_type ait)
+  | _  -> !^"I.IVunspecified"
 
 let print_provenance = function
   | D.Prov_wildcard -> !^"I.Prov_wildcard"
@@ -488,8 +479,11 @@ let print_ctor pp ctor pes =
   | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
   | Civalignof   -> !^"M.alignof_ival" ^^^ pp_args P.space
   | Cspecified   -> !^"A.Specified" ^^^ pp_args P.space
-  | Cunspecified -> !^"A.Unspecified"  ^^^ pp_args P.space
-
+  | Cunspecified -> !^"A.Unspecified" ^^^ pp_args P.space
+  | CivCOMPL     -> !^"A.ivcompl" ^^^ pp_args P.space
+  | CivAND       -> !^"A.ivand" ^^^ pp_args P.space
+  | CivOR        -> !^"A.ivor" ^^^ pp_args P.space
+  | CivXOR       -> !^"A.ivxor" ^^^ pp_args P.space
 
 let print_pure_expr globs pe =
   let rec pp prec pe =
@@ -540,6 +534,7 @@ let print_pure_expr globs pe =
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
       | PEis_signed pe -> print_is_expr "is_signed" pp pe
       | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
+      | PEstd (_, pe) -> pp pe
     end
   in pp None pe
 
@@ -614,7 +609,7 @@ let print_action globs act =
     ^^^ P.parens (print_pure_expr globs al)
     ^^^ P.parens (print_pure_expr globs n)
   | Kill e ->
-    !^"M.kill" ^^ P.parens (print_pure_expr globs e)
+    !^"M.kill0" ^^ P.parens (print_pure_expr globs e)
   | Store0 (ty, pe1, pe2, _) ->
     choose_store_type ty
     ^^^ P.parens (print_pure_expr globs pe1)
