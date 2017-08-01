@@ -2,6 +2,8 @@
 
 source tests.sh
 
+rm -rf _cbuild
+
 mkdir -p tmp
 cd tmp
 
@@ -10,12 +12,7 @@ fail=0
 
 function test {
   rm -rf a.out
-  re='^[0-9]+(-)(.*)'
-  if [[ $1 =~ $re ]]; then
-    f=${BASH_REMATCH[2]}
-  fi
-  mv $1 $f
-  cbuild $f > /dev/null 2> /dev/null
+  cbuild $1 > /dev/null 2> /dev/null
   if [ "$?" -ne "0" ]; then
     echo -e "Test $1: Cerberus failed..."
     return
