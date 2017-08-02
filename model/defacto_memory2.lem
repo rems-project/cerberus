@@ -686,27 +686,47 @@ let share_common prov1 prov2 =
 
 
 
-
-(* TODO: (not sure at all) currently Prov_some has priority *)
-val prov_union: provenance -> provenance -> provenance
-let prov_union prov1 prov2 =
+(*         |  empty    ID       ID'      wildcard
+  ---------+-------------------------------------
+  empty    |  empty    ID       ID'      wildcard
+  ID       |  ID       ID       empty    wildcard
+  ID'      |  ID'      empty    ID'      wildcard
+  wildcard |  wildcard wildcard wildcard wildcard *)
+val combine_prov: provenance -> provenance -> provenance
+let combine_prov prov1 prov2 =
   match (prov1, prov2) with
-    | (Prov_some ids1, Prov_some ids2) ->
-        Prov_some (ids1 union ids2)
-    | (Prov_some ids, _) ->
-        Prov_some ids
-    | (_, Prov_some ids) ->
-        Prov_some ids
     | (Prov_none, Prov_none) ->
         Prov_none
-(*
-    | (Prov_none, Prov_some ids) ->
-        Prov_some ids
-    | (Prov_some ids, Prov_some ids) ->
-        Prov_some ids
-*)
-    | _ ->
-        error "WIP: prov_union"
+    | (Prov_none, Prov_some id) ->
+        Prov_some id
+    | (Prov_none, Prov_wildcard) ->
+        Prov_wildcard
+    | (Prov_none, Prov_device) ->
+        Prov_device
+    
+    | (Prov_some id, Prov_none) ->
+        Prov_some id
+    | (Prov_some id1, Prov_some id2) ->
+        if id1 = id2 then
+          Prov_some id1
+        else
+          Prov_none
+    | (Prov_some _, Prov_wildcard) ->
+        Prov_wildcard
+    | (Prov_some _, Prov_device) ->
+        Prov_device
+    
+    | (Prov_device, Prov_none) ->
+        Prov_device
+    | (Prov_device, Prov_some _) ->
+        Prov_device
+    | (Prov_device, Prov_device) ->
+        Prov_device
+    | (Prov_device, Prov_wildcard) ->
+        Prov_wildcard
+    
+    | (Prov_wildcard, _) ->
+        Prov_wildcard
   end
 
 
@@ -1034,7 +1054,7 @@ let impl_allocate_static tid pref (IV _ align_ival_) ty =
   fresh_allocation_id >>= fun alloc_id ->
   register_address_constraints alloc_id (IVsizeof ty) (align_ival_) >>
   register_allocation alloc_id (Alloc_static ty, Nothing) >>
-  let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
   print_debugM 4 (fun () ->
     "Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val
   ) >> (* DEBUG *)
@@ -1049,7 +1069,7 @@ let impl_allocate_static tid pref (IV _ align_ival_) ty =
   fresh_allocation_id >>= fun alloc_id ->
   register_allocation alloc_id (Alloc_static ty addr, Nothing (* mkUnspec ty *)) >>
   
-  let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
   print_debugM 4 (fun () -> "Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   
   return ptr_val
@@ -1060,7 +1080,7 @@ let impl_allocate_dynamic tid pref (IV _ align_ival_) ((IV _ size_ival_) as size
   fresh_allocation_id >>= fun alloc_id ->
   register_address_constraints alloc_id size_ival_ (align_ival_) >>
   register_allocation alloc_id (Alloc_dynamic size_ival_, Nothing) >>
-  let ptr_val = PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) [] in
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
   print_debugM 4 (fun () ->
     "Allocating (dynamic) with size [" ^ stringFromInteger_value size_ival ^ "]: " ^ stringFromPointer_value ptr_val
   ) >> (* DEBUG *)
@@ -1076,7 +1096,7 @@ let impl_allocate_dynamic tid pref (IV _ align_ival_) ((IV _ size_ival_) as size
   register_allocation alloc_id (Alloc_dynamic size_ival_, Nothing (* mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *))) *)) >>
   
   return (
-    PV (Prov_some (Set.singleton alloc_id)) (PVbase alloc_id pref) []
+    PV (Prov_some alloc_id) (PVbase alloc_id pref) []
   )
 *)
 
@@ -1101,8 +1121,8 @@ let structural_equality_provenance prov1 prov2 =
         true
     | (Prov_device, Prov_device) ->
         true
-    | (Prov_some ids1, Prov_some ids2) ->
-        ids1 = ids2
+    | (Prov_some id1, Prov_some id2) ->
+        id1 = id2
     | _ ->
         false
   end
@@ -1427,7 +1447,7 @@ let impl_min_ival ity =
 
 
 let impl_op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
-  IV (prov_union prov1 prov2) (mk_op_ival_ iop ival_1 ival_2)
+  IV (combine_prov prov1 prov2) (mk_op_ival_ iop ival_1 ival_2)
 
 
 let impl_offsetof_ival tag_sym membr_ident =
@@ -1444,13 +1464,13 @@ let impl_bitwise_complement_ival ity (IV prov ival_) =
   IV prov (IVbitwise ity (BW_complement ival_))
 
 let impl_bitwise_and_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
-  IV (prov_union prov1 prov2) (IVbitwise ity (BW_AND ival_1 ival_2))
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_AND ival_1 ival_2))
 
 let impl_bitwise_or_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
-  IV (prov_union prov1 prov2) (IVbitwise ity (BW_OR ival_1 ival_2))
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_OR ival_1 ival_2))
 
 let impl_bitwise_xor_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
-  IV (prov_union prov1 prov2) (IVbitwise ity (BW_XOR ival_1 ival_2))
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_XOR ival_1 ival_2))
 
 
 
@@ -1842,6 +1862,10 @@ let impl_ge_ptrval ptrval1 ptrval2 =
 
 
 let impl_diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : impl_integer_value =
+  (* The result of subtraction of two pointer values is an integer value with
+     empty provenance, irrespective of the operand provenances *)
+  IV Prov_none (IVptrdiff (ptr_val_1, sh1) (ptr_val_2, sh2))
+(*
   (* STD says "When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object" *)
   (* TODO: too permissive for now *)
   let prov = match (prov1, prov2) with
@@ -1859,21 +1883,7 @@ let impl_diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : impl_in
     | _ ->
         error "WIP: diff_ptrval, wildcard/device provenance"
   end in
-  IV prov (IVptrdiff ptr_val_1 ptr_val_2)
-
-(*
-  match (ptr_val1, ptr_val2) with
-    | (PV prov1 ptr_val1_, PV prov2 ptr_val2_) ->
-        (* TODO: we probably want to preserve the other kind of provenance
-           (other then None) in some cases? *)
-        let prov' = match (prov1, prov2) with
-          | (Prov_some ids1, Prov_some ids2) ->
-              
-          end
-          if share_common prov1 prov2 then 
-          
-        else
-  end
+  IV prov (IVptrdiff (ptr_val_1, sh1) (ptr_val_2, sh2))
 *)
 
 

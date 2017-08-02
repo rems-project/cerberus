@@ -38,8 +38,8 @@ let pp_provenance = function
       !^ "Prov_none"
   | Prov_device ->
       !^ "Prov_device"
-  | Prov_some ids ->
-      !^ "Prov_some" ^^ P.braces (comma_list pp_provenance_id (Pset.elements ids))
+  | Prov_some id ->
+      !^ "Prov_some" ^^ pp_provenance_id id
 
 
 let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
@@ -90,8 +90,11 @@ and pp_integer_value_base = function
       !^ "IValignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
-  | IVptrdiff (ptr_val_1, ptr_val_2) ->
-      !^ "IVptrdiff" ^^ P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_pointer_value_base ptr_val_2)
+  | IVptrdiff ((ptr_val_1, sh1), (ptr_val_2, sh2)) ->
+      !^ "IVptrdiff" ^^ P.parens (
+        P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_shift_path sh1) ^^ P.comma ^^^
+        P.parens (pp_pointer_value_base ptr_val_2 ^^ P.comma ^^^ pp_shift_path sh2)
+      )
   | IVbyteof (ival_, mval) ->
       !^ "IVbyteof" ^^ P.parens (pp_integer_value_base ival_ ^^ P.comma ^^^ pp_mem_value mval)
   | IVcomposite _ ->

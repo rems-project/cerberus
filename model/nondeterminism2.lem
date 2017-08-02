@@ -36,32 +36,32 @@ instance (Constraints unit)
 end
 
 
-type nd_action 'a 'err 'cs =
+type nd_action 'a 'st 'err 'cs =
   | NDactive of 'a
   | NDkilled of kill_reason 'err
-  | NDnd of string * list (nd_action 'a 'err 'cs)
-  | NDguard of string * 'cs * nd_action 'a 'err 'cs
-  | NDbranch of string * 'cs * nd_action 'a 'err 'cs * nd_action 'a 'err 'cs
+  | NDnd of string * 'st * list (nd_action 'a 'st 'err 'cs)
+  | NDguard of string * 'cs * nd_action 'a 'st 'err 'cs
+  | NDbranch of string * 'st * 'cs * nd_action 'a 'st 'err 'cs * nd_action 'a 'st 'err 'cs
 
 
-val     nd_action_bind: forall 'a 'b 'err 'cs. nd_action 'a 'err 'cs -> ('a -> nd_action 'b 'err 'cs) -> nd_action 'b 'err 'cs
+val     nd_action_bind: forall 'a 'b 'st 'err 'cs. nd_action 'a 'st 'err 'cs -> ('a -> nd_action 'b 'st 'err 'cs) -> nd_action 'b 'st 'err 'cs
 let rec nd_action_bind act f =
   match act with
     | NDactive z ->
         f z
     | NDkilled r ->
         NDkilled r
-    | NDnd debug_str acts ->
-        NDnd debug_str (List.map (fun z -> nd_action_bind z f) acts)
+    | NDnd debug_str st acts ->
+        NDnd debug_str st (List.map (fun z -> nd_action_bind z f) acts)
     | NDguard debug_str cs act' ->
         NDguard debug_str cs (nd_action_bind act' f)
-    | NDbranch debug_str cs act1 act2 ->
-        NDbranch debug_str cs (nd_action_bind act1 f) (nd_action_bind act2 f)
+    | NDbranch debug_str st cs act1 act2 ->
+        NDbranch debug_str st cs (nd_action_bind act1 f) (nd_action_bind act2 f)
   end
 
 
 type ndM 'a 'err 'cs 'st =
-  ND of ('st -> nd_action ('a * 'st) 'err 'cs)
+  ND of ('st -> nd_action ('a * 'st) 'st 'err 'cs)
 
 
 (* Monadic operations *)
@@ -155,7 +155,7 @@ let msum debug_str = function
       "ND2.msum (|ms| = " ^ show (List.length ms) ^ ")"
     ) in
     ND (fun st ->
-      NDnd debug_str (List.map (fun (ND m) -> m st) ms)
+      NDnd debug_str st (List.map (fun (ND m) -> m st) ms)
     )
 end
 (*
@@ -205,7 +205,7 @@ let pick debug_str = function
       ) in
       ND (fun st ->
         let f z = NDactive (z, st) in
-        NDnd debug_str (f x :: List.map f xs)
+        NDnd debug_str st (f x :: List.map f xs)
 (*
         List.foldl (fun acc x' -> NDbranch empty acc (NDactive (x', st))) (NDactive (x, st)) xs
 *)
@@ -216,7 +216,7 @@ end
 val ifM: forall 'a 'err 'cs 'st. string -> 'cs -> ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st
 let ifM debug_str cs (ND mThen) (ND mElse) =
   ND (fun st ->
-    NDbranch debug_str cs (mThen st) (mElse st)
+    NDbranch debug_str st cs (mThen st) (mElse st)
   )
 
 
@@ -260,12 +260,12 @@ let rec liftAction liftErr mk_st' = function
         | Other err ->
             Other (liftErr err)
       end
-  | NDnd debug_str acts ->
-      NDnd debug_str (List.map (liftAction liftErr mk_st') acts)
+  | NDnd debug_str st acts ->
+      NDnd debug_str (mk_st' st) (List.map (liftAction liftErr mk_st') acts)
   | NDguard debug_str cs act ->
       NDguard debug_str cs (liftAction liftErr mk_st' act)
-  | NDbranch debug_str cs act1 act2 ->
-      NDbranch debug_str cs (liftAction liftErr mk_st' act1) (liftAction liftErr mk_st' act2)
+  | NDbranch debug_str st cs act1 act2 ->
+      NDbranch debug_str (mk_st' st) cs (liftAction liftErr mk_st' act1) (liftAction liftErr mk_st' act2)
 end
 
 val liftND: forall 'a 'err1 'err2 'cs 'st1 'st2.
