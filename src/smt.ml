@@ -321,8 +321,12 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
   | IVoffsetof (tag_sym, memb_ident) ->
       failwith "IVoffsetof"
-  | IVptrdiff (ptrval_1, ptrval_2) ->
-      failwith "IVptrdiff"
+  | IVptrdiff ((ptrval_1, sh1), (ptrval_2, sh2)) ->
+      let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
+                                                   ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
+      let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
+                                                   ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
+      Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2]
   | IVbyteof (ival_, mval) ->
       failwith "IVbyteof"
   | IVcomposite ival_s ->
@@ -401,7 +405,7 @@ let rec string_of_nd_action = function
       "NDactive(" ^ String_core.string_of_pexpr pe ^ ")"
   | NDkilled _ ->
       "NDkilled"
-  | NDnd (debug_str, acts) ->
+  | NDnd (debug_str, _, acts) ->
       "NDnd(" ^ debug_str ^ ", " ^
       String.concat ", " (List.map string_of_nd_action acts) ^
       ")"
@@ -411,7 +415,7 @@ let rec string_of_nd_action = function
       ", " ^
       string_of_nd_action act ^
       ")"
-  | NDbranch (debug_str, cs, act1, act2) ->
+  | NDbranch (debug_str, _, cs, act1, act2) ->
       "NDbranch(" ^ debug_str ^ ", " ^
         String_mem.string_of_iv_memory_constraint cs ^
         ", " ^ 
@@ -456,7 +460,7 @@ let runND_exhaustive (ND m) st0 =
 (*          print_endline "NDkilled"; *)
           (Killed r, Wip.to_strings (), st0) :: acc
       
-      | NDnd (debug_str, acts) ->
+      | NDnd (debug_str, _, acts) ->
 (*          print_endline ("NDnd(" ^ debug_str ^ ")"); *)
           List.fold_left aux acc acts
       
@@ -474,7 +478,7 @@ let runND_exhaustive (ND m) st0 =
                aux acc act
           end
       
-      | NDbranch (debug_str, cs, act1, act2) ->
+      | NDbranch (debug_str, _, cs, act1, act2) ->
 (*          print_endline ("NDbranch(" ^ debug_str ^ ")"); *)
           Solver.push slvSt.slv;
           add_constraint slvSt cs;
