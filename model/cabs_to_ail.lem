@@ -1304,7 +1304,7 @@ and desugar_array_declarator2 is_under_array a_decltor =
               if n < 0 then
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, sentence 3")
               else
-                E.return (fun qs ty -> (qs, ATypes.Array ATypes.no_qualifiers ty (Just n)))
+                E.return (fun qs ty -> (qs, ATypes.Array ty (Just n)))
         end
     
     | ADecl loc _ _ (Just ADeclSize_asterisk) ->
@@ -1319,7 +1319,7 @@ and desugar_array_declarator2 is_under_array a_decltor =
     | ADecl loc [] false Nothing ->
         (* here the array declarator: has no qualifiers, is not static, and has
            no size expression *)
-        E.return (fun qs ty -> (qs, ATypes.Array ATypes.no_qualifiers ty Nothing))
+        E.return (fun qs ty -> (qs, ATypes.Array ty Nothing))
     
     | ADecl loc qs is_static a_decltor_size_opt ->
 (*
@@ -1987,7 +1987,7 @@ and static_thread_implicit_initializer tagDefs ty =
           ConstantInteger (IConstant 0 Octal Nothing)
         else
           error ("type error 1: " ^ Pp.stringFromAil_ctype ty)
-    | ATypes.Array _ elem_ty n_opt ->
+    | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
               ConstantArray (Utils.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
@@ -2063,7 +2063,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
   | Init_list desigs_opt_inits ->
       E.get_tag_definitions >>= fun tagDefs ->
       match current_ty with
-        | ATypes.Array _ elem_ty (Just n) ->
+        | ATypes.Array elem_ty (Just n) ->
             let implicit = AnnotatedExpression () Loc.unknown (* TODO *) $ AilEconst match dur with
               | ATypes.Automatic ->
                   (* STD §6.7.9#10, first sentence *)
@@ -2270,7 +2270,7 @@ and designator =
                   E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Union init thing")
             end
 
-        | ATypes.Array elem_qs elem_ty Nothing ->
+        | ATypes.Array elem_ty Nothing ->
             let _ = desigs_opt_inits in
             E.fail loc (Errors.Desugar_NotyetSupported "not allowing array with no size for now")
 

@@ -57,7 +57,7 @@ let rec core_type_of_expr_ctype ty =
         Right C.OTy_integer
     | Aty.Basic (Aty.Floating _) ->
         Right C.OTy_floating
-    | Aty.Array _ _ _ ->
+    | Aty.Array _ _ ->
         Right C.OTy_pointer
 (*
   | Aty.Function has_proto ret_ty params is_variadic -> (*of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool *)
@@ -2129,7 +2129,7 @@ TODO: #9
           (* TODO (Victor): array expressions are not in 6.5? *)
       | A.AilEarray _ e_opts ->
           let elem_ty = match result_ty with
-            | Aty.Array _ ty _ ->
+            | Aty.Array ty _ ->
                 ty
             | _ ->
                 illTypedAil loc "AilEarray"
@@ -2442,7 +2442,7 @@ TODO: #9
           let elem_lvals = List.map (fun c_str ->
             C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str)))
           ) strs ++ [C.LVspecified (C.OVinteger (Mem.integer_ival 0))] in
-          E.register_string_literal loc lit_sym (Cty.Array Aty.no_qualifiers elem_ty (Just (integerFromNat $ List.length elem_lvals)))
+          E.register_string_literal loc lit_sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elem_lvals)))
             (C.Pexpr () (C.PEval (C.Vloaded (C.LVspecified (C.OVarray elem_lvals))))) >>
           E.return (
             C.Epure lit_sym_pe

@@ -236,9 +236,9 @@ let rec ctype_to_expr slvSt ty =
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
       | Basic0 bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
-      | Array0 (_, _, None) ->
+      | Array0 (_, None) ->
           failwith "Smt.ctype_to_expr, Array None"
-      | Array0 (_, elem_ty, Some n) ->
+      | Array0 (elem_ty, Some n) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 2)
             [ctype_to_expr slvSt elem_ty; Arithmetic.Integer.mk_numeral_i slvSt.ctx (Nat_big_num.to_int n)]
       | Pointer0 (_, ref_ty) ->
@@ -309,9 +309,9 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivminDecl [integerType_to_expr slvSt ity]
     | IVmax ity ->
         Expr.mk_app slvSt.ctx slvSt.ivmaxDecl [integerType_to_expr slvSt ity]
-    | IVsizeof (Core_ctype.Array0 (_, _, None)) ->
+    | IVsizeof (Core_ctype.Array0 (_, None)) ->
         failwith "Smt, sizeof array None"
-    | IVsizeof (Core_ctype.Array0 (_, elem_ty, Some n)) ->
+    | IVsizeof (Core_ctype.Array0 (elem_ty, Some n)) ->
         Arithmetic.mk_mul slvSt.ctx
           [ Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
           ; Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt elem_ty] ]

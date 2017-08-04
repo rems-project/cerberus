@@ -263,9 +263,8 @@ let rec print_ctype = function
   | Void0 -> !^"C.Void0"
   | Basic0 abt ->
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
-  | Array0 (q, cty, num) ->
-    !^"C.Array0" ^^^ P.parens (print_ail_qualifier q ^^ P.comma
-                               ^^^ print_ctype cty ^^ P.comma
+  | Array0 (cty, num) ->
+    !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
                                ^^^ print_option print_num num)
   | Function0 (cty, params, variad) ->
     !^"C.Function0" ^^^ P.parens
@@ -560,9 +559,8 @@ let choose_load_type (Pexpr (_, PEval cty)) =
   | Vctype (Pointer0 (q, cty)) ->
     !^"A.load_pointer" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
-  | Vctype (Array0 (q, cty, n)) -> 
+  | Vctype (Array0 (cty, n)) -> 
     !^"A.load_array"
-      ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
       ^^^ P.parens (print_option print_num n)
   | Vctype (Struct0 s) ->
@@ -590,10 +588,9 @@ let choose_store_type (Pexpr (_, PEval cty)) =
     !^"A.store_struct" ^^^ P.parens (print_raw_symbol s)
   | Vctype (Union0 s) ->
     !^"A.store_union" ^^^ P.parens (print_raw_symbol s)
-  | Vctype (Array0 (q, cty, n)) ->
+  | Vctype (Array0 (cty, n)) ->
     print_store_array_type cty
       ^^^ P.parens (print_option print_num n)
-      ^^^ P.parens (print_ail_qualifier q)
   | _ -> raise (Unsupported "store not implemented")
 
 let print_action globs act =

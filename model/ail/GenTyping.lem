@@ -296,7 +296,7 @@ let annotate_stringLiteral (pref_opt, strs) =
   (* TODO: check the type *)
   E.return
     ( AilEstr (pref_opt, strs)
-    , GenLValueType no_qualifiers (Array no_qualifiers elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1)))) false )
+    , GenLValueType no_qualifiers (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1)))) false )
 
 
 val     annotate_constant: constant -> E.errorM (constant * genTypeCategory)
@@ -333,7 +333,7 @@ let rec annotate_constant cst =
           | (_, genTy)::a_csts' ->
               if List.all (fun (_, genTy') -> genTy = genTy') a_csts' then
                 E.return (ConstantArray (List.map fst a_csts),
-                          GenRValueType (GenArray no_qualifiers (* TODO *) Void (Just $ integerFromNat (List.length a_csts))))
+                          GenRValueType (GenArray (* TODO *)Void (Just $ integerFromNat (List.length a_csts))))
               else
                 E.fail Loc.unknown (TError "array constant elements don't all have the same type")
         end
@@ -490,7 +490,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
         E.mapM (maybe (E.return Nothing) (fun z -> Just <$> annotate_rvalue z)) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
         E.return (AilEarray elem_ty $ List.map (maybe Nothing (fun z -> Just (fst z))) xs,
-                  GenRValueType (GenArray no_qualifiers elem_ty (Just (integerFromNat $ List.length xs))))
+                  GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))))
 
 (*
         (* TODO: I have pretty much no idea what I'm doing *)
@@ -1629,13 +1629,13 @@ and annotate_definition_aux sigm gamm (ty, e) =
           let () = Debug.warn [Debug.DB_ail_typing]
             (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
-          | (Array _ elem_ty1 Nothing, GenRValueType (GenArray _ elem_ty2 (Just n))) ->
+          | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
               if AAux.are_compatible (no_qualifiers, AAux.unqualify elem_ty1) (no_qualifiers, AAux.unqualify elem_ty2) then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype elem_ty2)
-         | (Array _ elem_ty1 (Just n1), GenRValueType (GenArray _ elem_ty2 (Just n2))) ->
+         | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
               if AAux.are_compatible (no_qualifiers, AAux.unqualify elem_ty1) (no_qualifiers, AAux.unqualify elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else

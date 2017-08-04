@@ -18,7 +18,7 @@ type genBasicType [name="gbt"] =
 type genType (* [name="gt*"] *) =
  | GenVoid
  | GenBasic of genBasicType
- | GenArray of qualifiers * ctype * (maybe integer)
+ | GenArray of ctype * (maybe integer)
  | GenFunction of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool
  | GenPointer of qualifiers * ctype
 (*
@@ -106,7 +106,7 @@ let rec eq_genType gty1 gty2 =
         (0 : nat)
     | GenBasic _ ->
         1
-    | GenArray _ _ _ ->
+    | GenArray _ _ ->
         2
     | GenFunction _ _ _ _ ->
         3
@@ -124,8 +124,8 @@ let rec eq_genType gty1 gty2 =
   match (gty1, gty2) with
     | (GenBasic gbty1, GenBasic gbty2 ) ->
         gbty1 = gbty2
-    | (GenArray qs1 ty1 n1_opt, GenArray qs2 ty2 n2_opt) ->
-        qs1 = qs2 && ty1 = ty2 && n1_opt = n2_opt
+    | (GenArray ty1 n1_opt, GenArray ty2 n2_opt) ->
+        ty1 = ty2 && n1_opt = n2_opt
     | (GenFunction has_proto1 ty1 params1 b1 , GenFunction has_proto2 ty2 params2 b2 ) ->
         has_proto1 = has_proto2 && ty1 = ty2 && params1 = params2 && b1 = b2
     | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
@@ -194,8 +194,8 @@ let inject_type = function
       GenBasic (inject_basicType bty)
   | Pointer qs ty ->
       GenPointer qs ty
-  | Array qs ty n_opt ->
-      GenArray qs ty n_opt
+  | Array ty n_opt ->
+      GenArray ty n_opt
   | Function has_proto ty params b ->
       GenFunction has_proto ty params b
   | Atomic ty ->
