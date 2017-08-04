@@ -377,9 +377,9 @@ let rec  tmp_sizeof ty =
     | Core_ctype.Basic (AilTypes.Floating (AilTypes.RealFloating (AilTypes.LongDouble))) ->
         Just 16
 
-    | Core_ctype.Array _ _ Nothing ->
+    | Core_ctype.Array _ Nothing ->
         error "Defacto_memory.tmp_sizeof, Array Nothing"
-    | Core_ctype.Array _ ty (Just n) ->
+    | Core_ctype.Array ty (Just n) ->
         match tmp_sizeof ty with
           | Just sz ->
               Just (sz * n)
@@ -937,7 +937,7 @@ let rec mkUnspec ty =
         MVinteger ity (IV Prov_none IVunspecified) 
     | Basic (AilTypes.Floating fty) ->
         MVfloating fty FVunspecified
-    | Array _ ty (Just n) ->
+    | Array ty (Just n) ->
         MVarray $ replicate (natFromInteger n) (mkUnspec ty)
     | (Pointer _ ty') ->
         MVpointer ty' (PV Prov_none (PVunspecified ty') [])

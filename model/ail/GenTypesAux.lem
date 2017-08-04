@@ -12,7 +12,7 @@ import Debug
 (* == constructor predicates on ctypes =========================================================== *)
 val is_array: genType -> bool
 let is_array = function
-  | GenArray _ _ _ ->
+  | GenArray _ _ ->
       true
   | GenBuiltin "jmp_buf" ->
       true
@@ -118,8 +118,8 @@ let is_real gt : bool = is_integer gt
 
 (* following (§6.3.2.1)#3 *)
 let array_coercion = function
-  | GenArray qs ty _ -> GenPointer qs ty
-  | gty              -> gty
+  | GenArray ty _ -> GenPointer no_qualifiers ty
+  | gty           -> gty
   end
 
 (* following (§6.3.2.1)#4 *)
@@ -282,8 +282,8 @@ let interpret_genType impl = function
   | GenBasic gbty ->
       interpret_genBasicType impl gbty >>= fun bty ->
       return (Basic bty)
-  | GenArray qs ty n ->
-      return (Array qs ty n)
+  | GenArray ty n ->
+      return (Array ty n)
   | GenFunction has_proto ty params is_variadic ->
       return (Function has_proto ty params is_variadic)
   | GenPointer qs ty ->
@@ -367,15 +367,17 @@ let unatomic = function
       gty
 end
 
-(* TODO: check *)
+(* TODO: check (and sync with the AilTypesAux version *)
 val is_complete: forall 'a. sigma 'a -> genType -> bool
 let is_complete sigm gty =
   match unatomic gty with
    | GenVoid ->
+      (* STD §6.2.5#19 *)
        false
    | GenBasic _ ->
        true
-   | GenArray _ _ n_opt ->
+   | GenArray _ n_opt ->
+       (* STD §6.7.6.2#4, sentence 1 *)
        isJust n_opt
    | GenFunction _ _ _ _ ->
        false (* TODO: check *)

@@ -1089,7 +1089,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
                   (* NOTE: adding a null termination to the char array *)
                   (
                     Mem.array_mval $ mem_vals ++ [Mem.integer_mval AilTypes.Char 0],
-                    Core_ctype.Array AilTypes.no_qualifiers Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
+                    Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
                   )
                 ) arg_strs in
               
@@ -1118,7 +1118,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
               
               (* allocating and initialising an object for main.argv *)
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
-              let argv_ty = Core_ctype.Array AilTypes.no_qualifiers argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
+              let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
                   Mem.bind (Mem.store Loc.unknown argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun _ ->

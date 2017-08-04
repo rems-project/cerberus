@@ -27,7 +27,7 @@ let rec core_object_type_of_ctype ty =
        Just OTy_integer
    | Basic (AilTypes.Floating _) ->
        Just OTy_floating
-   | Array _ ty _ ->
+   | Array ty _ ->
        match core_object_type_of_ctype ty with
          | Just oTy ->
              Just (OTy_array oTy)
@@ -152,7 +152,7 @@ let rec memValueFromValue ty cval =
         Just (Mem.floating_value_mval fty fval)
     | (Pointer _ ref_ty, Vloaded (LVspecified (OVpointer ptr_val))) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
-    | (Array _ elem_ty _, Vloaded (LVspecified (OVarray lvals))) ->
+    | (Array elem_ty _, Vloaded (LVspecified (OVarray lvals))) ->
         (* TODO: check that the sizes match? *)
         maybe Nothing (fun z -> Just (Mem.array_mval z)) $
           List.foldr (fun lval acc_opt ->
@@ -189,8 +189,8 @@ let rec proj_ctype ty =
         Core_ctype.Void
     | AilTypes.Basic bty ->
         Core_ctype.Basic bty
-    | AilTypes.Array qs ty n_opt ->
-        Core_ctype.Array qs (proj_ctype ty) n_opt
+    | AilTypes.Array ty n_opt ->
+        Core_ctype.Array (proj_ctype ty) n_opt
     | AilTypes.Function _ ty params isVariadic ->
         Core_ctype.Function (proj_ctype ty) (
           List.map (fun (qs, ty, _) ->
@@ -458,7 +458,7 @@ let rec zeros_aux tagDefs ty =
         Mem.integer_value_mval ity zero_ival
     | Core_ctype.Basic (AilTypes.Floating fty) ->
         Mem.floating_value_mval fty Mem.zero_fval
-    | Core_ctype.Array _ elem_ty (Just n) ->
+    | Core_ctype.Array elem_ty (Just n) ->
         Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux tagDefs elem_ty))
 (*
   Mem.array_mval (List.replicate (natFromInteger n) (Mem.integer_value_mval zero_ival))
@@ -540,8 +540,8 @@ let rec unproj_ctype ty =
         AilTypes.Void
     | Core_ctype.Basic bty ->
         AilTypes.Basic bty
-    | Core_ctype.Array qs ty n_opt ->
-        AilTypes.Array qs (unproj_ctype ty) n_opt
+    | Core_ctype.Array ty n_opt ->
+        AilTypes.Array (unproj_ctype ty) n_opt
     | Core_ctype.Function ty qs_tys is_variadic ->
         (* NOTE: there is a potential loss of information here for hasProto and
            inside the parameters with isRegister. But this shouldn't matter to

@@ -216,8 +216,8 @@ let rec pp_ctype = function
       pp_type_keyword "void"
   | Basic  b ->
       pp_basicType b
-  | Array (qs, ty, n_opt) ->
-      pp_qualifiers qs (pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt))
+  | Array (ty, n_opt) ->
+      pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
   | Function (has_proto, ty, params, isVariadic) ->
       pp_ctype ty ^^ P.parens (
         let params_doc = comma_list (fun (qs, ty, isRegister) ->
@@ -274,8 +274,8 @@ let pp_ctype_declaration pp_ident ty =
       pp_type_keyword "void" ^^^ pp_ident
   | Basic  b ->
       pp_basicType b ^^^ pp_ident
-  | Array (qs, ty, n_opt) ->
-      pp_qualifiers qs (aux k ty ^^^ pp_ident ^^ P.brackets (P.optional pp_integer n_opt))
+  | Array (ty, n_opt) ->
+      aux k ty ^^^ pp_ident ^^ P.brackets (P.optional pp_integer n_opt)
   | Function (has_proto, ty, params, isVariadic) ->
       (*pp_ctype_declaration*) aux id ty ^^ P.parens (
         let params_doc = comma_list (fun (qs, ty, isRegister) ->
@@ -313,8 +313,8 @@ let rec pp_ctype_human qs ty =
         prefix_pp_qs ^^ !^ "void"
     | Basic bty ->
         prefix_pp_qs ^^ pp_basicType bty
-    | Array (elem_qs, elem_ty, n_opt) ->
-        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human elem_qs elem_ty
+    | Array (elem_ty, n_opt) ->
+        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human no_qualifiers elem_ty
     | Function (has_proto, ret_ty, params, is_variadic) ->
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)";
@@ -840,10 +840,10 @@ let pp_genType = function
      !^ "GenVoid"
  | GenBasic gbty ->
      pp_genBasicType_raw gbty
-  | GenArray (qs, ty, None) ->
-      !^ "GenArray" ^^ P.brackets (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
-  | GenArray (qs, ty, Some n) ->
-      !^ "GenArray" ^^ P.brackets (pp_qualifiers_human qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
+  | GenArray (ty, None) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
+  | GenArray (ty, Some n) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
 
      
  | GenFunction (has_proto, ty, params, is_variadic) ->

@@ -90,10 +90,10 @@ let rec pp_ctype_raw = function
       pp_ctor "Void"
   | Basic bty ->
       pp_ctor "Basic" ^^ P.brackets (pp_basicType_raw bty)
-  | Array (qs, ty, None) ->
-      pp_ctor "Array" ^^ P.brackets (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "None")
-  | Array (qs, ty, Some n) ->
-      pp_ctor "Array" ^^ P.brackets (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "Some" ^^ P.brackets (pp_integer n))
+  | Array (ty, None) ->
+      pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "None")
+  | Array (ty, Some n) ->
+      pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "Some" ^^ P.brackets (pp_integer n))
   | Function (has_proto, ty, params, is_variadic) ->
       pp_ctor "Function" ^^ P.brackets (
         !^ (if has_proto then "true" else "false") ^^ P.comma ^^^
