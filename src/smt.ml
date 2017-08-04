@@ -405,8 +405,9 @@ let rec string_of_nd_action = function
       "NDactive(" ^ String_core.string_of_pexpr pe ^ ")"
   | NDkilled _ ->
       "NDkilled"
-  | NDnd (debug_str, _, acts) ->
+  | NDnd (debug_str, st, acts) ->
       "NDnd(" ^ debug_str ^ ", " ^
+      "STATE[ " ^ String_core_run.string_of_core_state st.Driver.core_state ^ " ] " ^
       String.concat ", " (List.map string_of_nd_action acts) ^
       ")"
   | NDguard (debug_str, cs, act) ->
@@ -415,14 +416,50 @@ let rec string_of_nd_action = function
       ", " ^
       string_of_nd_action act ^
       ")"
-  | NDbranch (debug_str, _, cs, act1, act2) ->
+  | NDbranch (debug_str, st, cs, act1, act2) ->
       "NDbranch(" ^ debug_str ^ ", " ^
+        "STATE[ " ^ String_core_run.string_of_core_state st.Driver.core_state ^ " ] " ^
         String_mem.string_of_iv_memory_constraint cs ^
         ", " ^ 
         string_of_nd_action act1 ^
         ", " ^ 
         string_of_nd_action act2 ^
       ")"
+
+
+let dot_from_nd_action act =
+  let rec aux n = function
+    | NDactive (_, st) ->
+        (n+1, [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^ String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"], [])
+    | NDkilled _ ->
+        (n+1, [string_of_int n ^"[label= \"killed(" ^ string_of_int n ^ ")\"]"], [])
+    | NDnd (_, st, acts) ->
+        let (n', ns, nodes, edges) =
+          List.fold_left (fun (n', accNs, accNodes, accEdges) act ->
+            let (n'', nodes, edges) = aux n' act in
+            (n'', n' :: accNs, nodes @ accNodes, edges @ accEdges)
+          ) (n+1, [], [], []) acts in
+        ( n'
+        , (string_of_int n ^"[label= \"nd(" ^ string_of_int n ^ ")\n" ^ String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]") :: nodes
+        , (List.map (fun z -> string_of_int n ^ " -> " ^ string_of_int z) ns) @ edges )
+    | NDguard (_, _, act) ->
+        let (n', nodes, edges) = aux (n+1) act in
+        ( n'
+        , (string_of_int n ^"[label= \"guard(" ^ string_of_int n ^ ")\"]") :: nodes
+        , (string_of_int n ^ " -> " ^ string_of_int (n+1)) :: edges )
+    | NDbranch (_, _, _, act1, act2) ->
+        let (n' , nodes1, edges1) = aux (n+1) act1 in
+        let (n'', nodes2, edges2) = aux (n'+1) act2 in
+        ( n''
+        , (string_of_int n ^"[label= \"branch(" ^ string_of_int n ^ ")\"]") :: (nodes1 @ nodes2)
+        , (string_of_int n ^ " -> " ^ string_of_int (n+1)) ::
+          (string_of_int n ^ " -> " ^ string_of_int (n'+1)) :: (edges1 @ edges2) )
+  in
+  let (_, nodes, edges) = aux 1 act in
+  "digraph G {" ^ String.concat ";" (nodes @ edges) ^ ";}"
+
+
+
 
 exception Backtrack of
   ((string * (bool * Cmm_op.symState * (unit, Sym.sym) Core.generic_pexpr) * (int * int), Driver.driver_error) nd_status *
@@ -682,7 +719,10 @@ let runND_interactive (ND m) st0 =
       
   in
   try
-    aux (m st0)
+    let act = m st0 in
+    print_endline (dot_from_nd_action act);
+    aux act
+(*    aux (m st0) *)
   with
     | Backtrack acc ->
         acc

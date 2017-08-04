@@ -46,6 +46,52 @@ let illTypedAil loc debug_str =
   error ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
 
 
+(* Return the core_object_type that the elaboration of an ail expression of a
+   given ctype will have *)
+val     core_type_of_expr_ctype: Aty.ctype -> either C.core_base_type C.core_object_type
+let rec core_type_of_expr_ctype ty =
+  match ty with
+    | Aty.Void ->
+        Left C.BTy_unit
+    | Aty.Basic (Aty.Integer _) ->
+        Right C.OTy_integer
+    | Aty.Basic (Aty.Floating _) ->
+        Right C.OTy_floating
+    | Aty.Array _ _ _ ->
+        Right C.OTy_pointer
+(*
+  | Aty.Function has_proto ret_ty params is_variadic -> (*of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool *)
+        let ret_oTy_opt = match core_type_of_expr_ctype ret_ty with
+          | Rigth oTy ->
+              Just oTy
+          | Left C.BTy_unit ->
+              Nothing
+          | Left _ ->
+              
+        end in
+        Left (C.BTy_tuple [ C.BTy_object (C.OTy_function )
+                          ; C.BTy_object C.OTy_integer
+                          ; C.BTy_boolean])
+*)
+(*
+ | OTy_cfunction of maybe core_object_type (* return type *) * nat (* number of params *) * bool (* isVariadic *)
+*)
+
+
+
+    | Aty.Pointer _ _ ->
+        Right C.OTy_pointer
+    | Aty.Atomic atom_ty ->
+        core_type_of_expr_ctype atom_ty
+    | Aty.Struct tag_ident ->
+        Right (C.OTy_struct tag_ident)
+    | Aty.Union tag_ident ->
+        Right (C.OTy_union tag_ident)
+    | Aty.Builtin str ->
+        error "TODO: Translation.core_object_type_of_expr_ctype"
+  end
+
+
 
 let force_core_object_type_of_ctype ty =
   match Caux.core_object_type_of_ctype ty with

@@ -37,5 +37,9 @@ let quote = function
   | "§6.5.3.3#1, 2nd sentence" ->
       "such a structure [one with a flexible array member] (and any union containing, possibly recursively, a member that is such a structure) shall not be a member of a structure or an element of an array."
 
+  | "§6.7.6.3#1" ->
+      "A function declarator shall not specify a return type that is a function type or an array type."
+
+
   | std ->
       "QUOTE NOT FOUND: " ^ std

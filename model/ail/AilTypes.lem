@@ -70,7 +70,7 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
  | Basic of basicType
    (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
    (* the qualifiers are that of the element type (§6.7.3#9) *)
- | Array of qualifiers * ctype * (maybe integer)
+ | Array of (* qualifiers * *) ctype * (maybe integer)
    (* NOTE: the qualifiers associated to a ctype in the
             list of parameters is that of the parameter lvalue. For example if
             we have a parameter with type "restrict pointer to a const char",

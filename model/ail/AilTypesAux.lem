@@ -332,6 +332,7 @@ let is_complete sigm ty =
   | Pointer _ _ ->
       true
   | Array _ _ n_opt ->
+      (* STD §6.7.6.2#4, sentence 1 *)
       isJust n_opt
   | Builtin "cnd_t" ->
       true
@@ -1348,6 +1349,7 @@ let rec unqualify ty =
 end
 
 
+(* Adjustment for function parameter types *)
 val adjust: ctype -> ctype
 let adjust = function
   | Array elem_qs elem_ty _ ->

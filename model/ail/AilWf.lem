@@ -5,7 +5,7 @@ open import TypingError ErrorMonad
 open import {hol} `utilTheory` `pp_coreTheory` `pp_ailTheory`
 
 (* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
-   NOTE: this function obviously doesn't whether the adjusting was properly
+   NOTE: this function obviously doesn't see whether the adjusting was PROPERLY
          done. *)
 val is_adjusted: ctype -> bool
 let is_adjusted ty =
@@ -46,13 +46,16 @@ let rec wf_parameters_aux sigm wf_type params =
   match params with
     | [] ->
         return ()
-    | [(_, Void, _)] ->
-        (* TODO: check if qualifiers are allowed here *)
+    | [(qs, Void, _)] ->
+        (* TODO: not sure if the STD actually requires this. *)
+        (* see comment in Cabs_to_ail.desugar_direct_declarator, DDecl_function *)
+        guard (TError "a lone 'void' parameter must be unqualified") (is_unqualified qs) >>
         return ()
     | (qs, ty, _) :: params' ->
         guard (TError "a parameter type was not adjusted") (
           is_adjusted ty
         ) >>
+        (* STD §6.7.6.3#4 *)
         guard (TError "a parameter type was incomplete") (
           not (is_incomplete sigm ty)
         ) >>
