@@ -1,0 +1,81 @@
+diff --git a/library/int.lem b/library/int.lem
+index 0482602..ca4a8fa 100644
+--- a/library/int.lem
++++ b/library/int.lem
+@@ -24,10 +24,13 @@ let inline {coq} ( * ) = Coq.int_mult
+ 
+ (* Integer Exponentiation *)
+ val ( ** ) : int -> num -> int
+-let inline {ocaml} ( ** ) = Ocaml.Nat_num.int_exp
++let inline {ocaml} ( ** ) = Ocaml.Nat_num.exp
+ let inline {isabelle} ( ** ) = Isabelle.int_exp
+ let inline {coq} ( ** ) = Coq.int_exp
+ 
++val (^^) : int -> int -> int
++let inline {ocaml} (^^) = Ocaml.Nat_num.int_exp
++
+ (* Integer division *)
+ val (/) : int -> int -> int
+ let inline {hol} (/) = Hol.int_div
+diff --git a/library/ocaml/nat_num.lem b/library/ocaml/nat_num.lem
+index c6edf70..e226567 100644
+--- a/library/ocaml/nat_num.lem
++++ b/library/ocaml/nat_num.lem
+@@ -65,5 +65,6 @@ val string_of_num : num -> string
+ val int : num -> int
+ val neg : int -> int
+ 
+-val int_exp : int -> num -> int
+-val exp : num -> num -> num
++val exp : int -> num -> int
++val int_exp : int -> int -> int
++val num_exp : num -> num -> num
+diff --git a/library/pervasives.lem b/library/pervasives.lem
+index 654f888..233b9c3 100644
+--- a/library/pervasives.lem
++++ b/library/pervasives.lem
+@@ -124,7 +124,7 @@ let inline {coq} ( * ) = Coq.( * )
+ 
+ val ( ** ) : num -> num -> num
+ let inline {hol} ( ** ) = Hol.( ** )
+-let inline {ocaml} ( ** ) = Ocaml.Nat_num.exp
++let inline {ocaml} ( ** ) = Ocaml.Nat_num.num_exp
+ let inline {isabelle} ( ** ) = Isabelle.nat_exp
+ 
+ val (/) : num -> num -> num
+diff --git a/ocaml-lib/nat_num.ml b/ocaml-lib/nat_num.ml
+index 92cace2..4636685 100644
+--- a/ocaml-lib/nat_num.ml
++++ b/ocaml-lib/nat_num.ml
+@@ -25,14 +25,16 @@ let string_of_num n = string_of_int n
+ let int i = i
+ let neg i = -i
+ 
+-let exp b e = 
++let exp' exp'_neg b e = 
+   let rec aux a b e =
+      if e = 1 then (a * b) else
+       let e' = e / 2 in
+       let a' = (if (e mod 2) = 0 then a else (a * b)) in
+       aux a' (b * b) e'
+   in     
+-  if e < 0 then raise (Failure "negative exponent") else 
++  if e < 0 then exp'_neg e else 
+   if (e = 0) then 1 else aux 1 b e
+ 
+-let int_exp = exp
++let int_exp = exp' (fun _ -> raise (Failure "negative exponent"))
++let exp = exp' (fun _ -> 0)
++let num_exp = exp
+diff --git a/ocaml-lib/nat_num.mli b/ocaml-lib/nat_num.mli
+index 266f302..8c25b9e 100644
+--- a/ocaml-lib/nat_num.mli
++++ b/ocaml-lib/nat_num.mli
+@@ -19,5 +19,6 @@ val num_of_string : string -> num
+ val string_of_num : num -> string
+ val int : int -> int
+ val neg : int -> int
+-val exp : num -> num -> num
++val exp : int -> int -> int
+ val int_exp : int -> num -> int
++val num_exp : num -> num -> num

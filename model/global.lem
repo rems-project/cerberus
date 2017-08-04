@@ -1,0 +1,46 @@
+open import Pervasives
+
+type execution_mode =
+  | Interactive
+  | Exhaustive
+  | Random
+
+instance (Eq execution_mode)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
+declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
+declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
+declare ocaml target_rep function Random         = `Global_ocaml.Random`
+
+declare hol target_rep type     execution_mode = `util$execution_mode`
+declare hol target_rep function Interactive    = `util$Interactive`
+declare hol target_rep function Exhaustive     = `util$Exhaustive`
+declare hol target_rep function Random         = `util$Random`
+
+val current_execution_mode: unit -> maybe execution_mode
+declare ocaml target_rep function current_execution_mode = `Global_ocaml.current_execution_mode`
+declare hol   target_rep function current_execution_mode = `util$current_execution_mode`
+
+
+val using_concurrency: unit -> bool
+declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
+declare hol  target_rep function using_concurrency u = false
+
+
+val isDefacto: unit -> bool
+declare ocaml target_rep function isDefacto = `Global_ocaml.isDefacto`
+
+
+
+
+
+
+
+
+
+
+
+

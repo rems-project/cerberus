@@ -1,0 +1,127 @@
+open import Pervasives
+open import ExecutableOpsem
+
+
+type threadwiseState
+
+type threadwiseStep =
+
+  (* RequestName  of sbBefore * ddBefore * aswBefore
+                     parameters of request *
+                     the new state or a callback *)
+
+  | LoadRequest   of set aid * set aid * set aid * 
+                     aid * tid * memory_order * location * location_kind *
+                     (cvalue -> threadwiseState)
+
+  | StoreRequest  of set aid * set aid * set aid *
+                     aid * tid * memory_order * location * location_kind * cvalue *
+                     threadwiseState
+
+  | LockRequest   of set aid * set aid * set aid *
+                     aid * tid * location * location_kind *
+                     (lock_outcome -> threadwiseState)
+
+  | UnlockRequest of set aid * set aid * set aid * 
+                     aid * tid * location * location_kind *
+                     threadwiseState
+
+  | RmwRequest    of set aid * set aid * set aid *
+                     aid * tid * memory_order * location * location_kind * cvalue *
+                     (cvalue -> threadwiseState)
+
+  | FenceRequest  of set aid * set aid * set aid *
+                     aid * tid * memory_order *
+                     threadwiseState
+
+  | ThreadwiseTau of threadwiseState
+
+
+type driverState = 
+  <| threadwiseState : threadwiseState;
+     concurrentState : ExecutableOpsem.exeState;
+  |>
+
+
+val initialDriverState: driverState
+let initialDriverState = 
+  <| threadwiseState = (* initial threadwise state *);
+     concurrentState = ExecutableOpsem.initialExeState ExecutableOpsem.emptyPreEx;
+  |>
+
+
+val threadwiseNext: driverState -> set driverState
+let threadwiseNext s = 
+  let step :: threadwiseStep = (* call the threadwise semantics *) in
+  let (new_threadwiseState, preExStep) = 
+    match step with
+    | LoadRequest sbBf ddBf aswBf aid tid mo loc loc_kind callback -> 
+        let new_symbol = (* get new symbol *) in
+        let cmmAction = Load aid tid mo loc new_symbol in
+        let new_state = callback new_symbol in
+        let preExStep = <| action = cmmAction;
+                           sbBefore = sbBf;
+                           ddBefore = ddBf;
+                           aswBefore = aswBf;
+                           locationKind = Just loc_kind |> in
+        (new_state, preExStep)
+
+    (* Something similar for RmeRequest and LockRequest *)
+
+    | StoreRequest sbBf ddBf aswBf aid tid mo loc loc_kind val new_state ->
+        let cmmAction = Store aid tid mo loc val in
+        let preExStep = <| action = cmmAction;
+                           sbBefore = sbBf;
+                           ddBefore = ddBf;
+                           aswBefore = aswBf;
+                           locationKind = Just loc_kind |> in
+        (new_state, cmmAction)
+
+    (* Something similar for all other actions *)
+
+    end in
+  
+  let new_concurrentState = ExecutableOpsem.updatePreEx s.concurrentState preExStep in
+  let new_driverState = <| threadwiseState = new_threadwiseState;
+                           concurrentState = new_concurrentState; |> in
+  {new_driverState}
+
+
+val concurrentNext: driverState -> set driverState
+let concurrentNext s = 
+  (* TODO: get an equality function from the constraint solver *)
+  let equalityCvalue = ExecutableOpsem.initialEqualityCvalue in 
+  let steps = ExecutableOpsem.exeOpsemStep s.concurrentState equalityCvalue in
+  Set.map (fun conc_state -> <| s with concurrenState = conc_state |>) steps
+
+
+
+(* Constraint solver ---------------------------------------------- *)
+
+type cvalue (* TODO: remove this definition and use Cmm_aux.cvalue *)
+type symbol (* = Symbol.t *)
+
+(* Should be a cvalue that evaluates to a boolean *)
+type constraint = cvalue
+
+(* Returns true if the symbolicValue doesn't contain symbols *)
+val isConcrete : cvalue -> bool
+
+(* Partial mapping from symbols to cvalues. If a symbol does not have
+   a valuation yet, it maps to itself (symbols are a subset of
+   cvalues) *) 
+type valuation = symbol -> cvalue
+
+val extendValuation: valuation -> cvalue -> cvalue
+
+val getSymbolicEquality: valuation -> ExecutableOpsem.equalityCvalue
+let getSymbolicEquality v left right = 
+  let leftV = (extendValuation v left) in
+  let rightV = (extendValuation v right) in
+  if (leftV = rightV) then
+    TTrue
+  else if (isConcrete leftV) && (isConcrete rightV) then
+    TFalse
+  else 
+    TUnknown
+
