@@ -196,6 +196,23 @@ let ctype_of a_expr =
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
+val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
+let qualified_ctype_of a_expr =
+  match GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (GenTypes.genTypeCategoryOf a_expr) with
+    | Right (AilTypes.LValueType qs ty _) -> (qs, ty)
+    | Right (AilTypes.RValueType   ty) -> (AilTypes.no_qualifiers, ty)
+    | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
+        error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
+                            (Pp.stringFromAil_expression a_expr)
+    | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
+        error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
+                            show n
+    | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
+  end
+
+
+
 
 val is_lvalue: AilSyntax.expression GenTypes.genTypeCategory -> bool
 let is_lvalue a_expr =

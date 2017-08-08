@@ -647,7 +647,7 @@ and translate_expression stdlib tagDefs a_expr =
 
             | _ ->
                 error ("Translation.usual_arithmetic_conversion ==> ty1= " ^
-                       Pp.stringFromAil_ctype ty1 ^ ", ty2= " ^ Pp.stringFromAil_ctype ty2 ^
+                       Pp.stringFromAil_ctype AilTypes.no_qualifiers ty1 ^ ", ty2= " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty2 ^
                        ", e1= " ^ Pp.stringFromCore_pexpr e1 ^ ", e2= " ^ Pp.stringFromCore_pexpr e2)
           end
       end in
@@ -1051,7 +1051,7 @@ else
       (* ASK: What is the AilEident ? Any variable? *)
       | A.AilEident id ->
           if AilTypesAux.is_pointer_to_function result_ty then
-            (* TODO: remove, this is not never possible  (see function_decay) *)
+            (* TODO: remove, this is now never possible  (see function_decay) *)
             translate_function_designator stdlib a_expr
           else
             let id_sym_pe =
@@ -1818,7 +1818,7 @@ TODO: #9
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           E._STD "§6.5.2.2" $
           let (ret_oTy_opt, nparams, isVariadic) = match Caux.proj_ctype (ctype_of e) with
-            | Cty.Pointer _ (Cty.Function ret_ty qs_tys isVariadic) ->
+            | Cty.Pointer _ (Cty.Function (_, ret_ty) qs_tys isVariadic) ->
                 (Caux.core_object_type_of_ctype ret_ty,
                  List.length qs_tys,
                  isVariadic)
@@ -1848,7 +1848,7 @@ TODO: #9
       | A.AilEcall e es ->
           E._STD "§6.5.2.2" $
           let (ret_oTy_opt, params, nparams, isVariadic) = match ctype_of e with
-            | Aty.Pointer _ (Aty.Function _ ret_ty qs_tys isVariadic) ->
+            | Aty.Pointer _ (Aty.Function _ (_, ret_ty) qs_tys isVariadic) ->
                 (Caux.core_object_type_of_ctype (Caux.proj_ctype ret_ty),
                  qs_tys,
                  List.length qs_tys,
@@ -2491,7 +2491,10 @@ a
       
       (* ASK: What is this constructor? *)
       | A.AilEprint_type e ->
-          let () = Debug.print_debug 0 [] (fun () -> "PRINTING TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype (ctype_of e)) in
+          let (qs, ty) = qualified_ctype_of e in
+          let () = Debug.print_debug 0 [] (fun () ->
+            "PRINT_TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype qs ty
+          ) in
           self e
       
       | A.AilErvalue e ->
@@ -3172,7 +3175,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 end
           end
       
-      | A.Decl_function has_proto return_ty params is_variadic is_inline is_Noreturn ->
+      | A.Decl_function has_proto (_, return_ty) params is_variadic is_inline is_Noreturn ->
           (* elaboration of an Ail function *)
           let ret_bTy =
             if return_ty = Aty.Void then

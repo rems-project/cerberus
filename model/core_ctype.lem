@@ -53,7 +53,7 @@ type ctype =
  | Void
  | Basic of AilTypes.basicType
  | Array of ctype * maybe integer
- | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Function of (AilTypes.qualifiers * ctype) * list (AilTypes.qualifiers * ctype) * bool (*isVariadic*)
  | Pointer of AilTypes.qualifiers * ctype
  | Atomic of ctype
 (*
@@ -230,47 +230,18 @@ let rec ctypeEqual ty1 ty2 =
         bty1 = bty2
     | (Array ty1 n1_opt, Array ty2 n2_opt) ->
         ctypeEqual ty1 ty2 && n1_opt = n2_opt
-    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
-        ctypeEqual ty1 ty2 && List.all (uncurry paramsEqual) (List.zip tys1 tys2) && b1 = b2
+    | (Function (ret_qs1, ret_ty1) tys1 b1, Function (ret_qs2, ret_ty2) tys2 b2) ->
+        ret_qs1 = ret_qs2 && ctypeEqual ret_ty1 ret_ty2 &&
+        List.all (uncurry paramsEqual) (List.zip tys1 tys2) && b1 = b2
     | (Pointer qs1 ty1, Pointer qs2 ty2) ->
         qs1 = qs2 &&
         ctypeEqual ty1 ty2
     | (Atomic ty1, Atomic ty2) ->
         ctypeEqual ty1 ty2
-(*
-    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
-        tag1 = tag2 &&
-        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
-          mem1 = mem2 &&
-          m1 = m2 &&
-          ctypeEqual ty1 ty2
-        ) (zip membrs1 membrs2)
-    | (Union tag1 membrs1, Union tag2 membrs2) ->
-        tag1 = tag2 &&
-        List.all (fun ((mem1, m1, ty1), (mem2, m2, ty2)) ->
-          mem1 = mem2 &&
-          m1 = m2 &&
-          ctypeEqual ty1 ty2
-        ) (zip membrs1 membrs2)
-*)
     | (Struct tag1, Struct tag2) ->
         tag1 = tag2
     | (Union tag1, Union tag2) ->
         tag1 = tag2
-(*
-    | (Struct tag1 membrs1, Struct tag2 membrs2) ->
-        tag1 = tag2 &&
-        List.all (fun ((ident1, ty1), (ident2, ty2)) ->
-          ident1 = ident2 &&
-          ctypeEqual ty1 ty2
-        ) (zip membrs1 membrs2)
-    | (Union tag1 membrs1, Union tag2 membrs2) ->
-        tag1 = tag2 &&
-        List.all (fun ((ident1, ty1), (ident2, ty2)) ->
-          ident1 = ident2 &&
-          ctypeEqual ty1 ty2
-        ) (zip membrs1 membrs2)
-*)
     | (Builtin str1, Builtin str2) ->
         str1 = str2
     | _ -> false
@@ -280,44 +251,6 @@ instance (Eq ctype)
   let (=) = ctypeEqual
   let (<>) x y = not (ctypeEqual x y)
 end
-
-(*
-instance (Ord ctype)
-  let compare ty1 ty2 = LT (* TODO !!! *)
-end
-*)
-
-
-(*
-val ctype_to_nat : ctype -> nat
-let ctype_to_nat = function
- | Void           -> 0
- | Basic _        -> 1
- | Array _ _      -> 2
- | Function _ _ _ -> 3
- | Pointer _      -> 4
- | Atomic _       -> 5
-end
-
-let rec setElemCompare_ctype ty1 ty2 =
-  match (ty1, ty2) with
-    | (Void, Void) ->
-        EQ
-    | (Basic bty1, Basic bty2) ->
-        setElemCompare bty1 bty2
-    | (Array ty1 n1, Array ty2 n2) ->
-        pairCompare setElemCompare_ctype setElemCompare (ty1, n1) (ty2, n2)
-    | (Function ty1 tys1 b1, Function ty2 tys2 b2) ->
-        pairCompare setElemCompare_ctype (pairCompare (lexicographicCompareBy setElemCompare_ctype) setElemCompare)
-          (ty1, (tys1, b1)) (ty2, (tys2, b2))
-    | (Pointer ty1, Pointer ty2) ->
-        setElemCompare_ctype ty1 ty2
-    | (Atomic ty1, Atomic ty2) ->
-         setElemCompare_ctype ty1 ty2
-    | (_, _) ->
-        setElemCompare (ctype_to_nat ty1) (ctype_to_nat ty2)
-  end
-*)
 
 let rec ~{hol} setElemCompare_ctype_aux qs_tys1 qs_tys2 =
   match (qs_tys1, qs_tys2) with
@@ -372,12 +305,17 @@ and setElemCompare_ctype ty1 ty2 =
           | x ->
               x
         end
-    | (Function ret_ty1' qs_tys1 b1, Function ret_ty2' qs_tys2 b2) ->
-        match setElemCompare_ctype ret_ty1' ret_ty2' with
+    | (Function (ret_qs1, ret_ty1) qs_tys1 b1, Function (ret_qs2, ret_ty2) qs_tys2 b2) ->
+        match setElemCompare ret_qs1 ret_qs2 with
           | EQ ->
-              match setElemCompare_ctype_aux qs_tys1 qs_tys2 with
+              match setElemCompare_ctype ret_ty1 ret_ty2 with
                 | EQ ->
-                    setElemCompare b1 b2
+                    match setElemCompare_ctype_aux qs_tys1 qs_tys2 with
+                      | EQ ->
+                          setElemCompare b1 b2
+                      | x ->
+                          x
+                    end
                 | x ->
                     x
               end

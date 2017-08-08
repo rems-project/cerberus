@@ -898,11 +898,11 @@ let usual_arithmetic impl ty1 ty2 =
 A modifiable lvalue is an lvalue that does not have array type, does not have an incomplete type, does not have a const- qualified type, and if it is a structure or union, does not have any member (including, recursively, any member or element of all contained aggregates or unions) with a const- qualified type.
 *)
 val modifiable: forall 'a. sigma 'a -> qualifiers -> ctype -> bool
-let modifiable S qs ty =
+let modifiable sigm qs ty =
   not (is_array ty) &&
   not (qs.const) &&
   is_object ty &&
-  not (is_incomplete S ty)
+  not (is_incomplete sigm ty)
 
 val is_real: ctype -> bool
 let is_real ty =
@@ -937,10 +937,10 @@ let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
              | (Nothing, Just _ ) -> true
              | (Nothing, Nothing) -> true
            end
-    | (Function _ ret_ty1 params1 isVariadic1, Function _ ret_ty2 params2 isVariadic2) ->
+    | (Function _ (ret_qs1, ret_ty1) params1 isVariadic1, Function _ (ret_qs2, ret_ty2) params2 isVariadic2) ->
         (* STD §6.7.6.3#15 *)
         (* TODO: when the two types do not both have a param list *)
-           are_compatible (no_qualifiers, ret_ty1) (no_qualifiers, ret_ty2)
+           are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
         && are_compatible_params params1 params2
         && isVariadic1 = isVariadic2
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
@@ -1015,7 +1015,8 @@ let rec ~{coq} is_composite ty1 ty2 ty3 =
     | (Array ty1 n1_opt, Array ty2 n2_opt, Array ty3 n3_opt) ->
         (* TODO: this is probably wrong regarding the sizes *)
         is_composite ty1 ty2 ty3 && n1_opt = n2_opt && n1_opt = n3_opt
-    | (Function _ ty1 p1 _, Function _ ty2 p2 _, Function _ ty3 p3 _) ->
+    | (Function _ (qs1, ty1) p1 _, Function _ (qs2, ty2) p2 _, Function _ (qs3, ty3) p3 _) ->
+        (* TODO: return qualifiers? *)
         is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
     | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
         is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
@@ -1077,7 +1078,8 @@ let rec ~{coq} make_composite ty1 ty2 =
               Nothing
         end in
           Maybe.map (fun ty -> Array ty n_opt) (make_composite elem_ty1 elem_ty2)
-    | (Function hasProto1 ret_ty1 params1 isVariadic1, Function hasProto2 ret_ty2 params2 isVariadic2) ->
+    | (Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1, Function hasProto2 (ret_qs2, ret_ty2) params2 isVariadic2) ->
+        (* TODO: return qualifiers? *)
         (* TODO: like the preceding comment said, there is quite a bit of
            simplication here *)
         if isVariadic1 <> isVariadic2 then
@@ -1085,7 +1087,7 @@ let rec ~{coq} make_composite ty1 ty2 =
         else match (make_composite ret_ty1 ret_ty2, make_composite_params params1 params2) with
           | (Just ret_ty, Just params) ->
               (* TODO: check the prototype thing *)
-              Just (Function (hasProto1 || hasProto2) ret_ty params isVariadic1)
+              Just (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params isVariadic1)
           | _ ->
               Nothing
         end
@@ -1114,8 +1116,8 @@ end
 (* following (§6.3.2.1)#4 *)
 val function_coercion: ctype -> ctype
 let function_coercion = function
-  | Function hasProto ty' params isVariadic ->
-      Pointer no_qualifiers (Function hasProto ty' params isVariadic)
+  | Function hasProto ret_qs_ty params isVariadic ->
+      Pointer no_qualifiers (Function hasProto ret_qs_ty params isVariadic)
   | ty ->
       ty
 end
@@ -1360,9 +1362,9 @@ let adjust = function
         "AilTypesAux.adjust is wrong for Array (doesn't have access to the potential qualifier)"
       ) in
       Pointer no_qualifiers elem_ty
- | Function hasProto ret_ty params isVariadic ->
+ | Function hasProto ret_qs_ty params isVariadic ->
       (* STD §6.7.6.3#8 *)
-     Pointer no_qualifiers (Function hasProto ret_ty params isVariadic)
+     Pointer no_qualifiers (Function hasProto ret_qs_ty params isVariadic)
  | ty ->
      ty
 end

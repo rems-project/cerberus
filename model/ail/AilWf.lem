@@ -80,11 +80,16 @@ let rec wf_type sigm ty =
         is_complete sigm elem_ty && not (is_function elem_ty)
       ) >>
       wf_type elem_ty
-  | Function _ ret_ty params _ ->
+  | Function _ (ret_qs, ret_ty) params _ ->
       guard (TError "§6.7.6.3#1") (
         not (is_array ret_ty || is_function ret_ty)
       ) >>
       wf_type ret_ty >>
+      (* TODO *)
+      let () = Debug.warn [] (fun () ->
+        "(unsure) wf_type, Function calls ==> wf_lvalue_aux"
+      ) in
+      wf_lvalue_aux ret_qs ret_ty >>
       wf_parameters params
   | Pointer ref_qs ref_ty ->
       wf_type ref_ty >>

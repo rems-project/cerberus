@@ -14,7 +14,7 @@ let isActive = function
   | _ ->
       false
 
-type execution_result = (Core.pexpr list, Errors.error) Exception.exceptM
+type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 
 let string_of_driver_error = function
@@ -42,16 +42,8 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
   List.iteri (fun i (res, z3_strs, nd_st) ->
     print_endline ("BEGIN EXEC[" ^ string_of_int i ^ "]");
     begin match res with
-      | ND.Active (stdout, (isBlocked, _, pe), _) ->
-          let str_v = String_core.string_of_pexpr
-              begin
-                match pe with
-                | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
-                        Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                        | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival n))) ))
-                    | _ ->
-                        pe
-                end in
+      | ND.Active (stdout, (isBlocked, _, cval), _) ->
+          let str_v = String_core.string_of_value cval in
           print_endline begin
             "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped stdout ^
             "\", blocked: \"" ^ if isBlocked then "true\"}" else "false\"}"
@@ -137,16 +129,8 @@ end
   
   List.iteri (fun n exec ->
     match exec with
-      | (ND.Active (stdout, (is_blocked, conc_st, pe), (dr_steps, coreRun_steps)), z3_strs, st) ->
-          let str_v = String_core.string_of_pexpr
-              begin
-                match pe with
-                  | Pexpr (ty, Core.PEval (Core.Vobject (Core.OVinteger ival))) ->
-                      Pexpr (ty, Core.PEval ((match (Mem_aux.integerFromIntegerValue ival) with
-                      | None -> Core.Vobject (Core.OVinteger ival) | Some n -> Core.Vobject (Core.OVinteger (Mem.integer_ival n))) ))
-                  | _ ->
-                      pe
-              end in
+      | (ND.Active (stdout, (is_blocked, conc_st, cval), (dr_steps, coreRun_steps)), z3_strs, st) ->
+          let str_v = String_core.string_of_value cval in
           let str_v_ = str_v ^ stdout in
           if true (* not (List.mem str_v_ !ky) *) then (
             if Debug_ocaml.get_debug_level () = 0 then
@@ -168,7 +152,7 @@ end
               Debug_ocaml.print_debug 2 [] (fun () -> Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs)); *)
             
             ky := str_v_ :: !ky;
-            ret := pe :: !ret;
+            ret := cval :: !ret;
         ) else
           Debug_ocaml.print_debug 4 [] (fun () ->
             "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^

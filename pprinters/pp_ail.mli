@@ -5,7 +5,7 @@ val pp_id: identifier -> PPrint.document
 
 val pp_storageDuration: storageDuration -> PPrint.document
 
-val pp_qualifiers: qualifiers -> PPrint.document -> PPrint.document
+val pp_qualifiers: qualifiers -> PPrint.document
 
 val string_of_integerBaseType: integerBaseType -> string
 
@@ -25,7 +25,7 @@ let pp_qualifiers_raw
 let rec pp_ctype_raw
 *)
 
-val pp_ctype: ctype -> PPrint.document
+val pp_ctype: qualifiers -> ctype -> PPrint.document
 
 (*
 let rec pp_ctype_declaration id
@@ -34,6 +34,9 @@ val pp_qualifiers_human: qualifiers -> PPrint.document
 (*
 let rec pp_ctype_human qs ty
 *)
+val pp_ctype_human: qualifiers -> ctype -> PPrint.document
+
+
 
 val pp_arithmeticOperator: arithmeticOperator -> PPrint.document
 val pp_binaryOperator: binaryOperator -> PPrint.document
