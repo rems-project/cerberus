@@ -923,7 +923,7 @@ ctype:
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
     { Core_ctype.Array0 (ty, n_opt) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Core_ctype.Function0 (ty, List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
+    { Core_ctype.Function0 ((AilTypes.no_qualifiers, ty), List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
 (*     { Core_ctype.Function0 (ty, tys, true) } *)

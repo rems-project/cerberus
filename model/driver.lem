@@ -1042,7 +1042,7 @@ end
 
 
 val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file Core_run.core_run_annotation -> list string ->
-           driverM (string * (bool * Cmm_op.symState * Core.pexpr) * (nat * nat))
+           driverM (string * (bool * Cmm_op.symState * Core.value) * (nat * nat))
 let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
   (* Setting the read-only tag definitions (used by the memory model) *)
   let () = Core_ctype_aux.set_tagDefs file.Core.tagDefs in
@@ -1196,6 +1196,5 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
 *)
         else
           ND.get >>= fun dr_st' ->
-          ND.return $
-            (fun (str, (is_blocked, conc_st, cval), steps) -> (str, (is_blocked, conc_st, Core.Pexpr () (Core.PEval cval)), steps)) (finalize "drive (without concur)" dr_st')
+          ND.return (finalize "drive (without concur)" dr_st')
 end

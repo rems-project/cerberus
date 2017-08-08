@@ -109,9 +109,9 @@ let c_frontend f =
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
       if !Debug_ocaml.debug_level >= 4 then
-        Exception.fmap (fun z -> z)
-      else
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
+      else
+        Exception.fmap (fun z -> z)
     end
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
@@ -119,10 +119,10 @@ let c_frontend f =
           (fun z -> Exception.except_return (counter, z)))
     |> begin
       if !Debug_ocaml.debug_level >= 4 then
-        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail.pp_program else Pp_ail.pp_program_with_annot in
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| pp_ail -| snd)
-      else
         Exception.fmap (fun z -> z)
+      else
+        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail.pp_program_with_annot else Pp_ail.pp_program in
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| pp_ail -| snd)
     end
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
@@ -190,7 +190,7 @@ let backend sym_supply core_file args =
         
         (* TODO: temporary hack for the command name *)
         Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
-          | Exception.Result (Pexpr (_, PEval (Vloaded (LVspecified (OVinteger ival)))) :: _) ->
+          | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
             begin
               (* TODO: yuck *)
               try
@@ -199,8 +199,8 @@ let backend sym_supply core_file args =
                 Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
                 0
             end
-          | Exception.Result (pe :: _) ->
-              Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_pexpr pe); 0
+          | Exception.Result (cval :: _) ->
+              Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_value cval); 0
           | Exception.Result [] ->
               Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
               0

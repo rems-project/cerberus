@@ -196,7 +196,7 @@ let desugar_cause_to_string = function
       "violation of constraint (§6.7#3): multiple declaration of `" ^ str ^ "'."
 
   | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
-      "member '" ^ str ^ "' is not defined for type '" ^ String_ail.string_of_ctype ty ^ "'"
+      "member '" ^ str ^ "' is not defined for type '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
 
 (*
   | CABS_TO_AIL_DUPLICATED_LABEL ->
@@ -313,7 +313,7 @@ let short_message = function
       "return type of 'main' should be 'int'"
 
   | AIL_TYPING (TError_main_params qs_tys) ->
-      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype ty) qs_tys) ^ ")"
+      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype AilTypes.no_qualifiers ty) qs_tys) ^ ")"
 
       
       | CSEM_NOT_SUPPORTED msg ->
@@ -333,7 +333,7 @@ let short_message = function
         "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
 
     | AIL_TYPING (TError_lvalue_coercion ty) ->
-        "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype ty) ^ "\""
+        "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
 
     | _ ->
         "TODO ERROR MESSAGE"

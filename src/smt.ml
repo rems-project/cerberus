@@ -401,8 +401,8 @@ let add_constraint slvSt cs =
 open Nondeterminism2
 
 let rec string_of_nd_action = function
-  | NDactive ((_, (_, _, pe), (_, _)), _) ->
-      "NDactive(" ^ String_core.string_of_pexpr pe ^ ")"
+  | NDactive ((_, (_, _, cval), (_, _)), _) ->
+      "NDactive(" ^ String_core.string_of_value cval ^ ")"
   | NDkilled _ ->
       "NDkilled"
   | NDnd (debug_str, st, acts) ->
@@ -462,7 +462,7 @@ let dot_from_nd_action act =
 
 
 exception Backtrack of
-  ((string * (bool * Cmm_op.symState * (unit, Sym.sym) Core.generic_pexpr) * (int * int), Driver.driver_error) nd_status *
+  ((string * (bool * Cmm_op.symState * Core.value) * (int * int), Driver.driver_error) nd_status *
      string list *
      Driver.driver_state) list
 
@@ -557,7 +557,7 @@ let runND_exhaustive (ND m) st0 =
 
 
 exception Done of
-  (((string * (bool * Cmm_op.symState * (unit, Sym.sym) Core.generic_pexpr) * (int * int)) * string, Driver.driver_error) nd_status *
+  (((string * (bool * Cmm_op.symState * Core.value) * (int * int)) * string, Driver.driver_error) nd_status *
      Driver.driver_state)
 
 let runND_random (ND m) st0 =

@@ -266,9 +266,9 @@ let rec print_ctype = function
   | Array0 (cty, num) ->
     !^"C.Array0" ^^^ P.parens (print_ctype cty ^^ P.comma
                                ^^^ print_option print_num num)
-  | Function0 (cty, params, variad) ->
+  | Function0 ((q, cty), params, variad) ->
     !^"C.Function0" ^^^ P.parens
-      (print_ctype cty ^^ P.comma
+      (P.parens (print_ail_qualifier q ^^ P.comma ^^^ print_ctype cty) ^^ P.comma
        ^^^ print_list (fun (q, cty) -> print_ail_qualifier q ^^ P.comma
                                        ^^^ print_ctype cty) params
        ^^ P.comma ^^^ print_bool variad)

@@ -187,7 +187,7 @@ type state = <|
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations:        map A.identifier (bool * (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
+  function_declarations:        map A.identifier (bool * ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
   external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
@@ -842,14 +842,14 @@ let function_is_defined sym =
 
 
 val register_function_declaration:
-  Loc.t -> A.identifier -> bool -> (ATypes.ctype * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
+  Loc.t -> A.identifier -> bool -> ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
 let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
-  let string_of_decl (ty, xs, _, _, _) =
-    Pp.stringFromAil_ctype ty ^ "(" ^ stringFromList (
+  let string_of_decl ((ret_qs, ret_ty), params, _, _, _) =
+    Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
       fun (qs, ty, isRegister) ->
-        (if isRegister then "register " else "") ^ Pp.stringFromAil_qualifiers qs ^ " " ^ Pp.stringFromAil_ctype ty
-    ) xs ^ ")" in
+        (if isRegister then "register " else "") ^ Pp.stringFromAil_ctype qs ty
+    ) params ^ ")" in
   
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
@@ -876,7 +876,7 @@ let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
-      "' with qs= " ^ Pp.stringFromAil_qualifiers qs ^ ", and ty= " ^ Pp.stringFromAil_ctype ty)
+      "' with qs, ty= " ^ Pp.stringFromAil_ctype qs ty)
   ) >>
   
   State_exception.read (fun st ->
@@ -1095,8 +1095,8 @@ let extract_program startup_str =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, (ty, params, isVariadic, isInline, isNoreturn)) ->
-            A.Decl_function hasProto ty params isVariadic isInline isNoreturn
+          Map.map (fun (hasProto, (ret_qs_ty, params, isVariadic, isInline, isNoreturn)) ->
+            A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn
           ) st.function_declarations
         end
         begin

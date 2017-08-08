@@ -34,8 +34,8 @@ let rec core_object_type_of_ctype ty =
          | Nothing ->
              error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
        end
-   | Function ty xs isVariadic ->
-       Just (OTy_cfunction (core_object_type_of_ctype ty) (List.length xs) isVariadic)
+   | Function (_, ret_ty) xs isVariadic ->
+       Just (OTy_cfunction (core_object_type_of_ctype ret_ty) (List.length xs) isVariadic)
 (*
        match maybe_mapM (core_object_type_of_ctype -| snd) xs with
          | Just oTys ->
@@ -191,8 +191,8 @@ let rec proj_ctype ty =
         Core_ctype.Basic bty
     | AilTypes.Array ty n_opt ->
         Core_ctype.Array (proj_ctype ty) n_opt
-    | AilTypes.Function _ ty params isVariadic ->
-        Core_ctype.Function (proj_ctype ty) (
+    | AilTypes.Function _ (ret_qs, ret_ty) params isVariadic ->
+        Core_ctype.Function (ret_qs, proj_ctype ret_ty) (
           List.map (fun (qs, ty, _) ->
             (qs, proj_ctype ty)
           ) params
@@ -542,11 +542,11 @@ let rec unproj_ctype ty =
         AilTypes.Basic bty
     | Core_ctype.Array ty n_opt ->
         AilTypes.Array (unproj_ctype ty) n_opt
-    | Core_ctype.Function ty qs_tys is_variadic ->
+    | Core_ctype.Function (qs, ty) qs_tys is_variadic ->
         (* NOTE: there is a potential loss of information here for hasProto and
            inside the parameters with isRegister. But this shouldn't matter to
            the dynamics *)
-        AilTypes.Function false (unproj_ctype ty) (
+        AilTypes.Function false (qs, unproj_ctype ty) (
           List.map (fun (qs,ty) ->
             (qs, unproj_ctype ty, false)
           ) qs_tys

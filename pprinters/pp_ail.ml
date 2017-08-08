@@ -93,16 +93,10 @@ let pp_id_type id = if !isatty then pp_ansi_format [Green] !^ (Pp_symbol.to_stri
 let pp_id_func id = if !isatty then pp_ansi_format [Bold; Blue] !^ (Pp_symbol.to_string_pretty id) else !^ (Pp_symbol.to_string_pretty id)
 
 
-(*
-let pp_symbol  a = !^ (if !isatty then ansi_format [Blue] (Pp_symbol.to_string_pretty a) else (Pp_symbol.to_string_pretty a))
-let pp_number  n = !^ (if !isatty then ansi_format [Yellow] n else n)
-let pp_impl    i = P.angles (!^ (if !isatty then ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)
-                                            else Implementation_.string_of_implementation_constant i))
-*)
+let pp_integer i = P.string (Nat_big_num.to_string i)
 
 
-
-
+(* -- TYPES -- *)
 let pp_storageDuration = function
   | Static    -> pp_keyword "static"
   | Thread    -> pp_keyword "thread"
@@ -116,15 +110,27 @@ let pp_cond switch str =
   else
     (^^) P.empty
 
-let pp_qualifiers q =
-  fun z ->
-    pp_cond q.const    "const"
-      (pp_cond q.restrict "restrict"
-         (pp_cond q.volatile "volatile" z)
+let pp_qualifiers qs =
+  pp_cond qs.const "const" (
+    pp_cond qs.restrict "restrict" (
+      pp_cond qs.volatile "volatile" P.empty
+    )
+  )
+
+(* pprint C types in human readable format *)
+let pp_qualifiers_human qs =
+  let strs =
+    (if qs.const then fun z -> "const" :: z else (fun z -> z)) (
+      (if qs.restrict then fun z -> "restrict" :: z else (fun z -> z)) (
+        (if qs.volatile then fun z -> "volatile" :: z else (fun z -> z)) (
+(*          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z)) *)
+            []
+        )
       )
-(*
-  pp_cond q.atomic_q "atomic"
-*)
+    ) in
+  P.braces (
+    comma_list (!^) strs
+  )
 
 
 let string_of_integerBaseType = function
@@ -139,6 +145,17 @@ let string_of_integerBaseType = function
  | Intmax_t       -> "intmax_t"
  | Intptr_t       -> "intptr_t"
 
+let macro_string_of_integerBaseType = function
+ | Ichar          -> "CHAR"
+ | Short          -> "SHRT"
+ | Int_           -> "INT"
+ | Long           -> "LONG"
+ | LongLong       -> "LLONG"
+ | IntN_t n       -> "INT" ^ string_of_int n
+ | Int_leastN_t n -> "INT_LEAST" ^ string_of_int n
+ | Int_fastN_t n  -> "INT_FAST" ^ string_of_int n
+ | Intmax_t       -> "INTMAX"
+ | Intptr_t       -> "INTPTR"
 
 
 let pp_integerType = function
@@ -163,6 +180,27 @@ let pp_integerType = function
  | Enum sym ->
      pp_type_keyword "enum" ^^^ pp_id sym
 
+let macro_string_of_integerType = function
+ | Char ->
+     "CHAR"
+ | Bool ->
+     (* NOTE: this doesn't exists in STD, since the min/max values are know *)
+     "BOOL"
+ | Signed ibty ->
+     (macro_string_of_integerBaseType ibty)
+ | Unsigned ibty ->
+     "U" ^ macro_string_of_integerBaseType ibty
+ | Size_t ->
+     "SIZE"
+ | Ptrdiff_t ->
+     "PTRDIFF"
+ | IBuiltin str ->
+     (* NOTE: this is hackish, these don't exists in C11 *)
+     String.capitalize str
+ | Enum sym ->
+     (* NOTE: this is hackish, these don't exists in C11 *)
+     "ENUM_" ^ Pp_symbol.to_string_pretty sym
+
 
 let pp_realFloatingType = function
   | Float ->
@@ -177,6 +215,7 @@ let pp_floatingType = function
   | RealFloating ft ->
       pp_realFloatingType ft
 
+
 let pp_basicType = function
   | Integer it ->
       pp_integerType it
@@ -184,121 +223,65 @@ let pp_basicType = function
       pp_floatingType rft
 
 
-let pp_integer i = P.string (Nat_big_num.to_string i)
-
-
-
-
-(* pprint C types in human readable format *)
-let pp_qualifiers_human qs =
-  let strs =
-    (if qs.const then fun z -> "const" :: z else (fun z -> z)) (
-      (if qs.restrict then fun z -> "restrict" :: z else (fun z -> z)) (
-        (if qs.volatile then fun z -> "volatile" :: z else (fun z -> z)) (
-(*          (if qs.atomic then fun z -> "atomic" :: z else (fun z -> z)) *)
-            []
+let rec pp_ctype_aux pp_ident_opt qs ty =
+  let pp_ident =
+    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in
+  let pp_spaced_ident =
+    match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
+  match ty with
+    | Void ->
+        pp_qualifiers qs ^^ pp_type_keyword "void" ^^ pp_spaced_ident
+    | Basic bty ->
+        pp_qualifiers qs ^^ pp_basicType bty ^^ pp_spaced_ident
+    | Array (elem_ty, n_opt) ->
+        pp_ctype_aux None qs elem_ty ^^ pp_spaced_ident ^^ P.brackets (P.optional pp_integer n_opt)
+    | Function (has_proto, (ret_qs, ret_ty), params, isVariadic) ->
+        (* TODO: warn if [qs] is not empty, this is an invariant violation *)
+        pp_ctype_aux (
+          Some (
+            pp_spaced_ident ^^ P.parens (
+            let params_doc = comma_list (fun (qs, ty, isRegister) ->
+              (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+                (pp_ctype_aux None qs ty)
+            ) params in
+            if isVariadic then
+              params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+            else
+              params_doc
+            )
+          )
+        ) ret_qs ret_ty
+        
+        ^^ P.hardline ^^ P.hardline ^^
+        
+        pp_ctype_aux None ret_qs ret_ty ^^ pp_spaced_ident ^^ P.parens (
+          let params_doc = comma_list (fun (qs, ty, isRegister) ->
+            (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
+              (pp_ctype_aux None qs ty)
+          ) params in
+          if isVariadic then
+            params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
+          else
+            params_doc
         )
-      )
-    ) in
-  P.braces (
-    comma_list (!^) strs
-  )
 
+    | Pointer (ref_qs, ref_ty) ->
+        pp_ctype_aux None ref_qs ref_ty ^^^ P.star ^^^ pp_qualifiers qs ^^ pp_ident
+    | Atomic ty ->
+        pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
+        P.parens (pp_ctype_aux None no_qualifiers ty) ^^ pp_spaced_ident
+    | Struct sym ->
+        pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type sym ^^ pp_spaced_ident
+    | Union sym ->
+        pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ pp_spaced_ident
+    | Builtin str ->
+        pp_qualifiers qs ^^ !^ str ^^ pp_spaced_ident
 
+let pp_ctype qs ty =
+  pp_ctype_aux None qs ty
 
-
-
-
-
-
-let rec pp_ctype = function
-  | Void ->
-      pp_type_keyword "void"
-  | Basic  b ->
-      pp_basicType b
-  | Array (ty, n_opt) ->
-      pp_ctype ty ^^ P.brackets (P.optional pp_integer n_opt)
-  | Function (has_proto, ty, params, isVariadic) ->
-      pp_ctype ty ^^ P.parens (
-        let params_doc = comma_list (fun (qs, ty, isRegister) ->
-          (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-            (pp_qualifiers qs (pp_ctype ty))
-        ) params in
-        if isVariadic then
-          params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-        else
-          params_doc
-      )
-  | Pointer (ref_qs, ref_ty) ->
-      pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
-  | Atomic ty ->
-      pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
-  | Struct sym ->
-      pp_keyword "struct" ^^^ pp_id_type sym
-  | Union sym ->
-      pp_keyword "union" ^^^ pp_id_type sym
-  | Builtin str ->
-      !^ str
-
-(*
-let rec pp_ctype_declaration id = function
-  | Void ->
-      pp_type_keyword "void" ^^^ id
-  | Basic  b ->
-      pp_basicType b ^^^ id
-  | Array (qs, ty, n_opt) ->
-      pp_qualifiers qs (pp_ctype ty ^^^ id ^^ P.brackets (P.optional pp_integer n_opt))
-  | Function (has_proto, ty, ps, is_variadic) ->
-      pp_ctype_declaration id ty ^^ P.parens (
-        let p = comma_list (fun (q,t) -> pp_qualifiers q (pp_ctype t)) ps in
-        if is_variadic then
-          p ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-        else
-          p
-      )
-  | Pointer (ref_qs, ref_ty) ->
-      pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
-  | Atomic ty ->
-      pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
-  | Struct sym ->
-      pp_keyword "struct" ^^^ pp_id_type sym
-  | Union sym ->
-      pp_keyword "union" ^^^ pp_id_type sym
-  | Builtin str ->
-      !^ str
-*)
-
-let pp_ctype_declaration pp_ident ty =
-  let rec aux k = function
-  | Void ->
-      pp_type_keyword "void" ^^^ pp_ident
-  | Basic  b ->
-      pp_basicType b ^^^ pp_ident
-  | Array (ty, n_opt) ->
-      aux k ty ^^^ pp_ident ^^ P.brackets (P.optional pp_integer n_opt)
-  | Function (has_proto, ty, params, isVariadic) ->
-      (*pp_ctype_declaration*) aux id ty ^^ P.parens (
-        let params_doc = comma_list (fun (qs, ty, isRegister) ->
-          (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-            (pp_qualifiers qs (pp_ctype ty))
-        ) params in
-        if isVariadic then
-          params_doc ^^ P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
-        else
-          params_doc
-      )
-  | Pointer (ref_qs, ref_ty) ->
-      pp_qualifiers ref_qs (pp_ctype ref_ty) ^^ P.star
-  | Atomic ty ->
-      pp_keyword "_Atomic" ^^ P.parens (pp_ctype ty)
-  | Struct sym ->
-      pp_keyword "struct" ^^^ pp_id_type sym
-  | Union sym ->
-      pp_keyword "union" ^^^ pp_id_type sym
-  | Builtin str ->
-      !^ str
-
-  in aux id ty
+let pp_ctype_declaration pp_ident qs ty =
+  pp_ctype_aux (Some pp_ident) qs ty
 
 
 let rec pp_ctype_human qs ty =
@@ -307,44 +290,39 @@ let rec pp_ctype_human qs ty =
       P.empty
     else
       pp_qualifiers_human qs ^^ P.space in
-  
   match ty with
     | Void ->
         prefix_pp_qs ^^ !^ "void"
     | Basic bty ->
         prefix_pp_qs ^^ pp_basicType bty
     | Array (elem_ty, n_opt) ->
-        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human no_qualifiers elem_ty
-    | Function (has_proto, ret_ty, params, is_variadic) ->
+        (* NOTE: here [qs] is that of the element type *)
+        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
+    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+        (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
-          print_endline "TODO: warning, found qualifiers in a function type (this is an UB)";
+          print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
         !^ (if is_variadic then "variadic function" else "function") ^^^
         P.parens (
-          comma_list (fun (qs', ty', isRegister) ->
+          comma_list (fun (param_qs, param_ty, isRegister) ->
             (fun z -> if isRegister then !^ "register" ^^^ z else z)
-              (pp_ctype_human qs' ty') (* NOTE: qs should be no_qualifiers, here *) (* <-- why? *)
+              (pp_ctype_human param_qs param_ty)
           ) params
         ) ^^^
-        !^ "returning" ^^^ pp_ctype_human qs ret_ty
+        !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
     | Pointer (ref_qs, ref_ty) ->
-        pp_qualifiers_human qs ^^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
+        prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
     | Atomic ty ->
-        !^ "atomic" ^^^ pp_ctype_human qs ty
+        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers ty
     | Struct tag_sym ->
-        pp_qualifiers_human qs ^^^ !^ "struct" ^^^ pp_id tag_sym
+        prefix_pp_qs ^^ !^ "struct" ^^^ pp_id tag_sym
     | Union tag_sym ->
-        pp_qualifiers_human qs ^^^ !^ "union" ^^^ pp_id tag_sym
+        prefix_pp_qs ^^ !^ "union" ^^^ pp_id tag_sym
     | Builtin str ->
         prefix_pp_qs ^^ !^ str
 
-
-
-
-
-
-
-
+(* -- EXPRESSIONS -- *)
 let pp_arithmeticOperator = function
   | Mul  -> P.star
   | Div  -> P.slash
@@ -359,16 +337,16 @@ let pp_arithmeticOperator = function
 
 
 let pp_binaryOperator = function
-  | Arithmetic o -> pp_arithmeticOperator o
-  | Comma        -> P.comma
-  | And          -> P.ampersand ^^ P.ampersand
-  | Or           -> P.bar ^^ P.bar
-  | Lt           -> P.langle
-  | Gt           -> P.rangle
-  | Le           -> P.langle ^^ P.equals
-  | Ge           -> P.rangle ^^ P.equals
-  | Eq           -> P.equals ^^ P.equals
-  | Ne           -> P.bang   ^^ P.equals
+  | Arithmetic aop -> pp_arithmeticOperator aop
+  | Comma          -> P.comma
+  | And            -> P.ampersand ^^ P.ampersand
+  | Or             -> P.bar ^^ P.bar
+  | Lt             -> P.langle
+  | Gt             -> P.rangle
+  | Le             -> P.langle ^^ P.equals
+  | Ge             -> P.rangle ^^ P.equals
+  | Eq             -> P.equals ^^ P.equals
+  | Ne             -> P.bang   ^^ P.equals
 
 
 let pp_unaryOperator = function
@@ -387,18 +365,8 @@ let pp_integerSuffix =
     | UL  -> "UL"
     | ULL -> "ULL"
     | L   -> "L"
-    | LL  -> "LL"
-  in
+    | LL  -> "LL" in
   fun z -> P.string (to_string z)
-
-(*
-let rec string_of_octal_big_int n =
-  let (n', r) = Nat_big_int.quomod n in
-  match r with
-    | 
- *)
-
-
 
 
 (* TODO: should reverse the decoding of n *)
@@ -410,9 +378,9 @@ let pp_integerConstant = function
             | Hexadecimal -> String_nat_big_num.string_of_hexadecimal n
          )  ^^ (P.optional pp_integerSuffix suff_opt)
   | IConstantMax ity ->
-      !^ "TODO[IConstantMax]"
+      pp_const (macro_string_of_integerType ity ^ "_MAX")
   | IConstantMin ity ->
-      !^ "TODO[IConstantMin]"
+      pp_const (macro_string_of_integerType ity ^ "_MIN")
 
 
 let pp_floatingConstant str =
@@ -445,7 +413,8 @@ let pp_stringLiteral (pref_opt, strs) =
 
 let rec pp_constant = function
   | ConstantIndeterminate ty ->
-      pp_keyword "indet" ^^ P.parens (pp_ctype_raw ty)
+      (* NOTE: this is not in C11 *)
+      pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
   | ConstantNull ->
       pp_const "NULL"
   | ConstantInteger ic ->
@@ -490,15 +459,15 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEcast (qs, ty, e) ->
             if !Debug_ocaml.debug_level > 5 then
               (* printing the types in a human readable format *)
-              P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty) ^^^ pp e
+              P.parens (pp_ctype_human qs ty) ^^^ pp e
             else
-              pp_qualifiers qs (P.parens (pp_ctype ty)) ^^^ pp e
+              P.parens (pp_ctype qs ty) ^^^ pp e
         | AilEcall (e, es) ->
             pp e ^^ P.parens (comma_list pp es)
         | AilEassert e ->
             !^ "assert" ^^ P.parens (pp e)
         | AilEoffsetof (ty, ident) ->
-            !^ "offsetof" ^^ P.parens (pp_ctype_raw ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
+            !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (ty, e_opts) ->
@@ -510,7 +479,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
               P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
             )
         | AilEcompound (ty, e) ->
-            P.parens (pp_ctype ty) ^^ P.braces (pp e)
+            P.parens (pp_ctype no_qualifiers ty) ^^ P.braces (pp e)
         | AilEbuiltin str ->
             !^ str
         | AilEstr lit ->
@@ -522,55 +491,27 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEsizeof (qs, ty) ->
             if !Debug_ocaml.debug_level > 5 then
               (* printing the types in a human readable format *)
-              pp_keyword "sizeof" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+              pp_keyword "sizeof" ^^ P.parens (pp_ctype_human qs ty)
             else
-              pp_keyword "sizeof" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
+              pp_keyword "sizeof" ^^ P.parens (pp_ctype qs ty)
         | AilEsizeof_expr e ->
             pp_keyword "sizeof" ^^^ pp e
         | AilEalignof (qs, ty) ->
             if !Debug_ocaml.debug_level > 5 then
               (* printing the types in a human readable format *)
-              pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+              pp_keyword "Alignof_" ^^ P.parens (pp_ctype_human qs ty)
             else
-              pp_keyword "Alignof_" ^^ P.parens (pp_qualifiers qs (pp_ctype ty))
-
+              pp_keyword "Alignof_" ^^ P.parens (pp_ctype qs ty)
         | AilEmemberof (e, ident) ->
             pp e ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier ident
         | AilEmemberofptr (e, ident) ->
             pp e ^^ (!^ "->") ^^ Pp_cabs.pp_cabs_identifier ident
-
         | AilEannot (_, e) ->
             !^ "/* annot */" ^^^ pp e
-(*
-        | MEMBEROF (e, (tag, mem)) ->
-            pp e ^^ P.dot ^^ pp_id mem
-        | MEMBEROFPTR (e, (tag, mem)) ->
-            pp e ^^ (!^ "->") ^^ pp_id mem
-        | EXPR_SIZEOF e ->
-            !^ "sizeof" ^^^ pp e
-        | MALLOC e ->
-            !^ "malloc" ^^ P.parens (pp e)
-        | FREE e ->
-            !^ "free" ^^ P.parens (pp e)
-        | MEMCMP (e1, e2, e3) ->
-            !^ "memcmp" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2 ^^ P.comma ^^^ pp e3)
-        | MEMCPY (e1, e2, e3) ->
-            !^ "memcpy" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2 ^^ P.comma ^^^ pp e3)
-        | ASSERT e ->
-            !^ "assert" ^^ P.parens (pp e)
-        | CONST_ARRAY es ->
-            P.braces (comma_list pp es)
-        | CONST_STRUCT_UNION mems ->
-            P.braces (comma_list (fun (mem, e) -> pp_id mem ^^ P.equals ^^^ pp e) mems)
-        | OFFSETOF (ty, mem) ->
-            !^ "offsetof" ^^ P.parens (pp_ctype ty ^^ P.comma ^^^ pp_id mem)
-        | PRINTF (e1, es) ->
-            !^ "printf" ^^ P.parens (pp e1 ^^ P.comma ^^^ comma_list pp es)
-*)
         | AilEva_start (e, sym) ->
             pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
         | AilEva_arg (e, ty) ->
-            pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype_raw ty)
+            pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
         | AilErvalue e ->
             pp_keyword "rvalue" ^^ P.parens (pp e)
         | AilEarray_decay e ->
@@ -585,31 +526,13 @@ let rec pp_expression_aux mk_pp_annot a_expr =
 
 and pp_generic_association_aux pp_annot = function
   | AilGAtype (ty, e) ->
-      pp_ctype_raw ty ^^ P.colon ^^^ pp_expression_aux pp_annot e
+      pp_ctype no_qualifiers ty ^^ P.colon ^^^ pp_expression_aux pp_annot e
   | AilGAdefault e ->
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-
-(*
-let pp_definition file (name, e) = 
-  let (ty, _) = Pmap.find name file.id_map in
-  pp_ctype_raw ty ^^^ pp_id name ^^^ P.equals ^^^ pp_expression_t e
-*)
-
-(*
-let pp_typed_id file name =
-  let (q, t, _) = Pmap.find name file.id_map in
-  pp_id name ^^ P.colon ^^^ (pp_qualifiers q $ pp_ctype t)
-*)
-
 let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
   let pp_statement = pp_statement_aux pp_annot in
-(*
-  let nest' (_, stmt) =
-    match stmt with
-      | BLOCK _ -> 
-*)
   match stmt with
     | AilSskip ->
         P.semi
@@ -632,10 +555,10 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
                   P.optional (fun (dur, isRegister) ->
                     (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
                       (pp_storageDuration dur)
-                  ) dur_reg_opt ^^^ pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty
+                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
                 ) ^^^ pp_id_obj id
               else
-                pp_qualifiers qs (pp_ctype ty) ^^^ pp_id_obj id
+                pp_ctype qs ty ^^^ pp_id_obj id
                ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
@@ -678,27 +601,6 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
 
 
-
-(*
-let pp_sigma_declaration = function
-  | SDecl_fun (id, fdecl) ->
-      !^ "define" ^^^ pp_id id ^^^ !^ "as" ^^^
-      (if fdecl.fun_is_variadic then !^ "variadic function" else !^ "function") ^^^
-      P.parens (comma_list (fun (id, (qs, ty)) -> (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id id) fdecl.fun_bindings) ^^^
-      !^ "returning" ^^^ pp_ctype fdecl.fun_return_ty ^^^ !^ "with body:" ^^^ P.hardline ^^
-      P.optional pp_statement fdecl.fun_body
-
-  | SDecl_global (id, (qs, ty, _)) ->
-      !^ "declare" ^^^ pp_id id ^^^ !^ "as" ^^^
-      pp_qualifiers qs (pp_ctype ty)
-  | SDecl_static_assert (e, strCst) ->
-      !^ "SDecl_static_assert"
-*)
-
-
-
-
-
 let pp_static_assertion pp_annot (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression_aux pp_annot e ^^ P.comma ^^^ pp_stringLiteral lit)
 
@@ -709,7 +611,7 @@ let pp_tag_definition (tag, def) =
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
-              pp_qualifiers qs (pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident)
+              pp_ctype qs ty ^^^ Pp_cabs.pp_cabs_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
@@ -717,19 +619,30 @@ let pp_tag_definition (tag, def) =
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
-              pp_qualifiers qs (pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident)
+              pp_ctype qs ty ^^^ Pp_cabs.pp_cabs_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
 
 let pp_program_aux pp_annot (startup, sigm) =
   isatty := Unix.isatty Unix.stdout;
-  P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) sigm.static_assertions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  (* Static assersions *)
+  begin match sigm.static_assertions with
+    | [] ->
+        P.empty
+    | xs ->
+        P.separate_map (P.break 1 ^^ P.break 1) (pp_static_assertion pp_annot) xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 
+  end ^^
   
   (* Tag declarations *)
-  P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition sigm.tag_definitions ^^ P.break 1 ^^ P.break 1 ^^ P.break 1 ^^
+  begin match sigm.tag_definitions with
+    | [] ->
+        P.empty
+    | xs ->
+        P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
+  end ^^
   
-  List.fold_left (fun acc (sym, decl) ->
+  P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, decl) ->
     match decl with
       | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
@@ -740,22 +653,21 @@ let pp_program_aux pp_annot (startup, sigm) =
           
           (if !Debug_ocaml.debug_level > 5 then
             (* printing the types in a human readable format *)
-            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+            pp_id_obj sym ^^ P.colon ^^^ P.parens (pp_ctype_human qs ty)
           else
-            pp_qualifiers qs (pp_ctype_declaration (pp_id_obj sym) ty)) ^^^
+            pp_ctype_declaration (pp_id_obj sym) qs ty) ^^
           
           P.optional (fun e ->
-            P.equals ^^^ pp_expression_aux pp_annot e
-          ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi ^^
-          P.break 1 ^^ P.hardline ^^ acc
+            P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e
+          ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi
       
-      | Decl_function (has_proto, return_ty, params, is_variadic, is_inline, is_Noreturn) ->
+      | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
           (if !isatty then !^ "\x1b[31m" else P.empty) ^^
           !^ "// declare" ^^^ pp_id sym ^^^
           (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-          !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, return_ty, params, is_variadic)) ^^
+          !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, (ret_qs, ret_ty), params, is_variadic)) ^^
           (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
@@ -763,9 +675,9 @@ let pp_program_aux pp_annot (startup, sigm) =
               begin
                 if !Debug_ocaml.debug_level > 5 then
                   (* printing the types in a human readable format *)
-                  pp_ctype_raw return_ty ^^^ pp_id_func sym
+                  pp_ctype_human ret_qs ret_ty ^^^ pp_id_func sym
                 else
-                  pp_ctype_declaration (pp_id_func sym) return_ty
+                  pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
               end ^^
               (match Context.lookup identifierEqual sigm.function_definitions sym with
                 | Some (param_syms, stmt) ->
@@ -776,10 +688,10 @@ let pp_program_aux pp_annot (startup, sigm) =
                           pp_id_obj sym ^^ P.colon ^^^
                           P.parens (
                             (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                              (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                              (pp_ctype_human qs ty)
                           )
                         else
-                          (pp_qualifiers qs (pp_ctype ty)) ^^^ pp_id_obj sym
+                          pp_ctype qs ty ^^^ pp_id_obj sym
                       ) (List.combine param_syms params) ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -794,10 +706,10 @@ let pp_program_aux pp_annot (startup, sigm) =
                           (* printing the types in a human readable format *)
                           P.parens (
                             (fun z -> if isRegister then !^ "register" ^^^ z else z)
-                              (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty)
+                              (pp_ctype_human qs ty)
                           )
                         else
-                          pp_qualifiers qs (pp_ctype ty)
+                          pp_ctype qs ty
                       ) params ^^
                       if is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
@@ -806,9 +718,8 @@ let pp_program_aux pp_annot (startup, sigm) =
                     ) ^^ P.semi
               )
             )
-          )  ^^
-          P.break 1 ^^ P.hardline ^^ acc
-    ) P.empty (List.rev sigm.declarations) ^^ P.break 1
+          )
+    ) sigm.declarations ^^ P.hardline
 
 
 
@@ -866,62 +777,12 @@ let pp_genType = function
       !^ "GenBuiltin" ^^ P.brackets (!^ str)
 
 
-(*
-let rec pp_genIntegerType = function
- | Concrete ity ->
-     pp_type_keyword "concrete" ^^ P.parens (pp_integerType ity)
- | SizeT ->
-     pp_type_keyword "size_t"
- | PtrdiffT ->
-     pp_type_keyword "ptrdiff_t"
- | Unknown iCst ->
-     pp_type_keyword "unknown" ^^ P.parens (pp_integerConstant iCst)
- | Promote gity ->
-     pp_type_keyword "promote" ^^ P.parens (pp_genIntegerType gity)
- | Usual (gity1, gity2) ->
-     pp_type_keyword "usual" ^^ P.brackets (pp_genIntegerType gity1 ^^ P.comma ^^^ pp_genIntegerType gity2)
-
-let pp_genBasicType = function
- | GenInteger gity ->
-     pp_genIntegerType gity
- | GenFloating fty ->
-     pp_floatingType fty
-
-let pp_genType qs doc_opt = function
- | GenVoid ->
-     pp_qualifiers qs (
-       pp_type_keyword "void" ^^
-       P.optional (fun doc -> P.space ^^ doc) doc_opt
-     )
- | GenBasic gbty ->
-     pp_qualifiers qs (
-       pp_genBasicType gbty ^^
-       P.optional (fun doc -> P.space ^^ doc) doc_opt
-     )
- | GenArray (elem_qs, elem_ty, n_opt) ->
-     (* just some debugging (GenArray should not have any qualifiers) *)
-     if not (AilTypesAux.is_unqualified qs) then
-       Debug_ocaml.warn [] "Pp_ail.pp_genType, a GenArray is qualified";
-     failwith "pp_ctype qs doc_opt ty"
- | GenFunction (hasProto, ret_ty, params, isVariadic) ->
-     failwith "PP GenFunction"
- | GenPointer (ref_qs, ref_ty) ->
-     failwith "PP GenPointer"
- | GenStruct ident ->
-     failwith "PP GenStruct"
- | GenUnion ident ->
-     failwith "PP GenUnion"
- | GenAtomic ty ->
-     failwith "PP GenAtomic"
- | GenBuiltin str ->
-     failwith "PP GenBuiltin"
-*)
 
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
      !^ "GenLValueType" ^^ P.brackets (
-       pp_qualifiers qs P.empty ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
+       pp_qualifiers qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
      )
  | GenRValueType gty ->
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)

@@ -186,8 +186,8 @@ and statement 'a [name="s*"] =
 type declaration =
     (* the storage duration is Nothin iff the object was declared with the register storage-class *)
   | Decl_object   of maybe (storageDuration * bool) * qualifiers * ctype
-    (* has_prototype; return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-  | Decl_function of bool * ctype * (list (qualifiers * ctype * (* isRegister *)bool)) * bool * bool * bool
+    (* has_prototype; return qualifiers and type; parameters types; is_variadic; is_inline; is_Noreturn *)
+  | Decl_function of bool * (qualifiers * ctype) * (list (qualifiers * ctype * (* isRegister *)bool)) * bool * bool * bool
 
 
 type tag_definition =

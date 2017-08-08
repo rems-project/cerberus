@@ -53,7 +53,7 @@ let fresh_typed_symbol is_loaded ty =
     | Just objTy ->
         return (sym, ctor objTy)
     | Nothing ->
-        error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype ty)
+        error ("Translation_effect.fresh_typed_symbol ==> " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty)
   end
 
 

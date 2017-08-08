@@ -3,8 +3,8 @@ open Pp_ail
 let string_of_integerType_raw ity =
   Pp_utils.to_plain_string (Pp_ail_raw.pp_integerType_raw ity)
 
-let string_of_ctype ty =
-  Pp_utils.to_plain_string (pp_ctype ty)
+let string_of_ctype qs ty =
+  Pp_utils.to_plain_string (pp_ctype qs ty)
 
 let string_of_expression e =
   Pp_utils.to_plain_string (pp_expression e)
@@ -22,3 +22,6 @@ let string_of_genTypeCategory gtc =
 
 let string_of_ctype_raw ty =
   Pp_utils.to_plain_string (Pp_ail_raw.pp_ctype_raw ty)
+
+let string_of_ctype_human qs ty =
+  Pp_utils.to_plain_string (Pp_ail.pp_ctype_human qs ty)
