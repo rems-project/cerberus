@@ -269,17 +269,14 @@ and translate_div_mod_operator translate usual_arithmetic_conversion stdlib resu
         C.Epure (
           C.Pexpr () (
             C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-            (* ASK Kayvan: Where in the standard, it talks abot unspecified values ? *)
               [ (Caux.mk_tuple_pat [ Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                                    ; Caux.mk_empty_pat (C.BTy_loaded oTy) ],
 if AilTypesAux.is_signed_integer_type result_ty then
-            (* ASK: why is this an exceptional condition ? *)
                  Caux.mk_undef_exceptional_condition ()
 else
                  Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
               ; (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded oTy)
                                    ; Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype) ],
-            (* ASK: shouldnt this be also an exceptional condition ? §6.5.5#6, sentence 2 *)
                  Caux.mk_std_undef_pe "§6.5.5#5, sentence 2" ub)
               ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
                                    ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
@@ -290,7 +287,6 @@ else
                    (Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_sym_pe (Caux.mk_integer_pe 0))
                       (Caux.mk_std_undef_pe "§6.5.5#5, sentence 2" ub)
                       (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" $
-            (* ASK: I don't understand the stdlin calls *)
 if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty core_pe
 else
@@ -302,8 +298,6 @@ else
 
 (* STD §6.5.8 Relational operators *)
 and translate_relational_operator translate usual_arithmetic_conversion result_ty bop e1 e2 =
-  (* ASK: Should I add the granularity of this? *)
-  (* ASK: I could not find 6.5.8#4/5 here! Should they be in the memory model? *)
   E._STD "§6.5.8" $
   translate e1   >>= fun core_e1       ->
   translate e2   >>= fun core_e2       ->
@@ -444,7 +438,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
               )
 
 else (* both operand have pointer type *)
-  (* ASK: should have a case for 6.5.9#5 sentence 3 ? *)
+  (* TODO: should have a case for 6.5.9#5 sentence 3 ? *)
       C.Ecase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
             [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
                                  ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
@@ -462,7 +456,6 @@ else (* both operand have pointer type *)
                  ) )
             ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                (* TODO: check with Peter *)
-               (* ASK: where in the standard talks about this undef? *)
                C.Epure (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator"))) ]
             )
 
@@ -674,7 +667,6 @@ and translate_expression stdlib tagDefs a_expr =
           )
       
       (* CHECKED IN APR2016 *)
-      (* ASK: This is ~, right? What about ! ? *)
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
           E._STD "§6.5.3.3#4" (
@@ -724,10 +716,8 @@ and translate_expression stdlib tagDefs a_expr =
             translate_function_designator stdlib e
       
       (* TODO: promotion? + atomicity *)
-      (* ASK: Where is prefixIncr? *) 
       | A.AilEunary A.PostfixIncr e ->
           E._STD "§6.5.2.4" $
-          (* ASK: What's the best way to show that we checked this (6.5.2.4#1)? *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
             Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
           else
@@ -742,7 +732,6 @@ and translate_expression stdlib tagDefs a_expr =
           E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (load_sym,   load_sym_pat,   load_sym_pe)   ->
           E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (obj_sym,    obj_sym_pat,    obj_sym_pe)    ->
           
-          (* ASK: What about the last sentence of 6.5.2.4#2 ? *)
           E._STD "§6.5.2.4#2, sentence 1" $
           E.return (
             C.Estd "§6.5.2.4#2, sentence 3" $
@@ -1002,7 +991,6 @@ else
 
 
 
-      (* ASK: What is the AilEident ? Any variable? *)
       | A.AilEident id ->
           if AilTypesAux.is_pointer_to_function result_ty then
             (* TODO: remove, this is not never possible  (see function_decay) *)
@@ -1648,7 +1636,6 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
                   C.
           end
 *)
-      (* ASK: What are these annotated expressions? *)
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
@@ -1813,7 +1800,7 @@ TODO: #9
           
           let numberOfArguments = List.length es in
           self e >>= fun core_e ->
-          (* ASK: Shouldn't we check if the expression e has a prototype? As in 6.5.2#7? *)
+          (* TODO: Shouldn't we check if the expression e has a prototype? As in 6.5.2#7? *)
           E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (nparams_sym,    nparams_sym_pat,    nparams_sym_pe)    ->
@@ -2044,7 +2031,6 @@ TODO: #9
 *)
       
       | A.AilEassert e ->
-          (* ASK: What is this assert? A hack to run assert() ? *)
           (* TODO: this is temporary *)
           (* TODO: should do something more sensible when the expression is unspecified *)
           E.fresh_symbol >>= fun e_sym   ->
@@ -2064,7 +2050,6 @@ TODO: #9
                      Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe) ]
               )
             )
-          (* ASK: Is this used when the standard says that the objects are treated as arrays? *)
       | A.AilEoffsetof ty membr_ident ->
           let tag_sym = match ty with
             | Aty.Struct x ->
@@ -2080,7 +2065,6 @@ TODO: #9
       | A.AilEgeneric _ _ ->
           error "WIP: Translation.translate_expression, AilEgeneric"
       
-          (* TODO (Victor): array expressions are not in 6.5? *)
       | A.AilEarray _ e_opts ->
           let elem_ty = match result_ty with
             | Aty.Array _ ty _ ->
@@ -2112,7 +2096,6 @@ TODO: #9
           E.return $
              mk_expr (C.Epure (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
 
-        (* TODO (Victor): Is this in 6.6? *)
       | A.AilEstruct tag_sym ident_e_opts ->
           let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym tagDefs in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
@@ -2427,7 +2410,6 @@ a
       | A.AilEsizeof _ ty ->
           E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_sizeof_pe (Caux.mk_ail_ctype_pe ty)))
       
-      (* ASK: What's the difference between AilEsizeof and AilEsizeof_expr ? *)
       | A.AilEsizeof_expr e ->
           (* TODO: check qualifiers *)
           self (A.AnnotatedExpression annot loc (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
@@ -2443,7 +2425,6 @@ a
       | AilSyntax.AilEva_arg e ty ->
           error "WIP: Translation.translate_expr, AilEva_arg"
       
-      (* ASK: What is this constructor? *)
       | A.AilEprint_type e ->
           let () = Debug.print_debug 0 [] (fun () -> "PRINTING TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype (ctype_of e)) in
           self e
@@ -2458,7 +2439,6 @@ a
               Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe Cmm.NA
             )
           )
-      (* ASK: What is this constructor? *)
       | A.AilEarray_decay e ->
           (* by Ail typing, [e] is a lvalue. Hence the corresponding Core has a non-loaded type *)
           self e >>= fun core_e ->
