@@ -124,6 +124,7 @@ end
 
 val is_pointer: ctype -> bool
 let is_pointer ty =
+     (* STD §6.2.5#22, sentence 3-4 *)
   (* TODO: check atomic *)
   match unatomic ty with
   | Pointer _ _ ->
@@ -139,7 +140,6 @@ let is_atomic = function
       true
 (*
   | Pointer qs _ ->
-      (* STD §6.2.5#27 *)
       qs.atomic
 *)
   | _ ->
@@ -320,6 +320,7 @@ let is_aggregate ty =
 
 
 (* TODO *)
+(* STD §6.2.5#1, sentence 4 *)
 val is_complete: forall 'a. sigma 'a -> ctype -> bool
 let is_complete sigm ty =
   (* TODO: check atomic *)
@@ -328,10 +329,12 @@ let is_complete sigm ty =
       (* STD §6.2.5#19 *)
       false
   | Basic _ ->
+      (* STD §6.2.5#14, sentece 2 *)
       true
   | Pointer _ _ ->
       true
   | Array _ n_opt ->
+      (* STD §6.2.5#22, sentence 1-2 *)
       (* STD §6.7.6.2#4, sentence 1 *)
       isJust n_opt
   | Builtin "cnd_t" ->
@@ -348,6 +351,7 @@ let is_complete sigm ty =
       true
   | Builtin "va_list" ->
       true
+    (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match Context.lookup (=) sigm.tag_definitions sym with
         | Just (StructDef _) ->
@@ -357,6 +361,7 @@ let is_complete sigm ty =
                 (fun () -> "is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
             false
       end
+    (* STD §6.2.5#22, sentence 3-4 *)
   | Union sym ->
       match Context.lookup (=) sigm.tag_definitions sym with
         | Just (UnionDef _) ->
@@ -369,6 +374,7 @@ let is_complete sigm ty =
 end
 
 (* TODO *)
+(* STD §6.2.5#1, sentence 4 *)
 val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
 let is_incomplete sigm ty =
   not (is_complete sigm ty)
@@ -1217,7 +1223,7 @@ let ~{coq} pointers_to_compatible_types ty1 ty2 =
   end  
 
 
-(* STD §6.2.5#4, first sentence *)
+(* STD §6.2.5#4, sentence 1 *)
 val is_standard_signed_integer_type: ctype -> bool
 let is_standard_signed_integer_type = function
   | Basic (Integer (Signed Ichar)) ->
@@ -1235,17 +1241,18 @@ let is_standard_signed_integer_type = function
 end
 
 (* TODO: no extended types for now *)
+(* STD §6.2.5#4, sentence 3 *)
 val is_extended_signed_integer_type: ctype -> bool
 let is_extended_signed_integer_type _ =
   false
 
-(* STD §6.2.5#4, fourth sentence *)
+(* STD §6.2.5#4, sentence 4 *)
 val is_signed_integer_type: ctype -> bool
 let is_signed_integer_type ty =
   is_standard_signed_integer_type ty || is_extended_signed_integer_type ty
 
 
-(* STD §6.2.5#6, first and second sentence *)
+(* STD §6.2.5#6, sentences 1-2 *)
 val is_standard_unsigned_integer_type: ctype -> bool
 let is_standard_unsigned_integer_type = function
   | Basic (Integer Bool) ->
@@ -1264,7 +1271,13 @@ let is_standard_unsigned_integer_type = function
        false
 end
 
-(* STD §6.2.5#6, fourth sentence *)
+(* TODO: no extended types for now *)
+(* STD §6.2.5#6, sentence 3 *)
+val is_extended_unsigned_integer_type: ctype -> bool
+let is_extended_unsigned_integer_type _ =
+  false
+
+(* STD §6.2.5#6, sentence 4 *)
 val is_unsigned_ity: integerType -> bool
 let is_unsigned_ity = function
   | Char ->
@@ -1295,6 +1308,7 @@ let is_unsigned_integer_type = function
   | _ ->
       false
 end
+
 
 
 

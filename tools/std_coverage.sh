@@ -4,6 +4,12 @@ else
   MODEL_PATH=$CERB_PATH/model
 fi
 
+if [ -z $CERB_PATH ]; then
+  PARSER_PATH=.
+else
+  PARSER_PATH=$CERB_PATH/parsers
+fi
+
 FILTER='
   BEGIN {
     FS=":"
@@ -17,4 +23,4 @@ FILTER='
   }
 '
 
-grep -HnER "STD|std" $MODEL_PATH | awk ''"$FILTER"'' | sort
+grep -HnER "STD|std" $MODEL_PATH $PARSER_PATH | awk ''"$FILTER"'' | sort

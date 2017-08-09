@@ -2767,6 +2767,7 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
             | false -> E.return ()
           end >>
           
+          (* STD §6.2.1#3, sentence 1 *)
           E.void (E.with_scope E.Scope_function (
             register_labels s >>
             E.fresh_block_scope >>= fun scope ->
