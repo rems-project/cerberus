@@ -377,12 +377,14 @@ let is_complete sigm gty =
    | GenBasic _ ->
        true
    | GenArray _ n_opt ->
+       (* STD §6.2.5#22, sentence 1-2 *)
        (* STD §6.7.6.2#4, sentence 1 *)
        isJust n_opt
    | GenFunction _ _ _ _ ->
        false (* TODO: check *)
    | GenPointer _ _ ->
        true
+     (* STD §6.2.5#22, sentence 3-4 *)
    | GenStruct sym ->
        match Context.lookup (=) sigm.tag_definitions sym with
          | Just (StructDef _) ->
@@ -392,6 +394,7 @@ let is_complete sigm gty =
                  (fun () -> "GenTypesAux.is_complete failed on struct tag: " ^ show sym ^ " with env: " ^ show sigm.tag_definitions) in
              false
        end
+     (* STD §6.2.5#22, sentence 3-4 *)
    | GenUnion sym ->
        match Context.lookup (=) sigm.tag_definitions sym with
          | Just (UnionDef _) ->

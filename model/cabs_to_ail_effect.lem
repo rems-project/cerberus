@@ -206,6 +206,7 @@ type state = <|
 (*
   enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
 *)
+  (* STD §6.2.1#1, sentence 2 *)
   enumeration_constants: map A.identifier (A.expression_ unit);
   
   (* TODO: this is idiotically inefficient, should store here the converse *)

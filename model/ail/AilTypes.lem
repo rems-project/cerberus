@@ -60,6 +60,7 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   restrict : bool;
   volatile : bool;
 (*  atomic   : bool; *) (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
+(* ASK: How do you deal with atomic qualifier now? *)
 |>
 
 
@@ -89,7 +90,8 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
  | Builtin of string
 
 
-type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =  (*r storage duration (\S6.2.4\#1) *)
+(* STD §6.2.4#1 *)
+type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Static
  | Thread
  | Automatic
@@ -202,6 +204,7 @@ instance (Eq floatingType)
 end
 
 
+(* STD §6.2.5#14, sentence 3 *)
 let basicTypeEqual bty1 bty2 =
   let ord = function
     | Integer _ ->
