@@ -55,6 +55,7 @@ type basicType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)bty[0-9]*'?$"] =
  | Floating of floatingType
 
 
+(* STD §6.2.5#26, sentence 1-2 *)
 type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   const    : bool;
   restrict : bool;

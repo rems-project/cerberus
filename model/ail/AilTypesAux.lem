@@ -154,8 +154,9 @@ let atomic_qualified_unqualified pred = function
   | ty ->
       pred ty
 end
-  
 
+
+(* STD §6.2.5#15, sentence 1 *)
 val is_character: ctype -> bool
 let is_character ty =
   (* TODO: check atomic *)
