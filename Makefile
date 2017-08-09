@@ -132,7 +132,7 @@ ocaml_byte:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.d.byte; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,nums,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 
