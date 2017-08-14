@@ -511,6 +511,8 @@ let rec flatten_seqs expr =
         Epar (List.map flatten_seqs es)
     | Eloc _ e ->
         flatten_seqs e
+    | Estd _ e ->
+        flatten_seqs e
     | Ecase pe pat_es ->
         Ecase pe (List.map (fun (pat, e) -> (pat, flatten_seqs e)) pat_es)
     | _ ->
@@ -682,6 +684,8 @@ let rec remove_conv_int expr =
         expr
     | Eloc loc e ->
         Eloc loc (remove_conv_int e)
+    | Estd s e ->
+        Estd s (remove_conv_int e)
     | _ ->
         expr
   end
