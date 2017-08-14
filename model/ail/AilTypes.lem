@@ -61,7 +61,6 @@ type qualifiers [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"] = <|
   restrict : bool;
   volatile : bool;
 (*  atomic   : bool; *) (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
-(* ASK: How do you deal with atomic qualifier now? *)
 |>
 
 
@@ -72,15 +71,19 @@ type ctype [name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"] =
  | Basic of basicType
    (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
    (* the qualifiers are that of the element type (§6.7.3#9) *)
+   (* STD §6.2.5#20, bullet 1 *)
  | Array of ctype * (maybe integer)
    (* NOTE: the qualifiers associated to a ctype in the
             list of parameters is that of the parameter lvalue. For example if
             we have a parameter with type "restrict pointer to a const char",
             the qualifiers in the tuple will be:
               {no_qualifiers with restrict=true} *)
+   (* STD §6.2.5#20, bullet 4 *)
  | Function of (* has_proto *)bool * (qualifiers * ctype) * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool
+   (* STD §6.2.5#20, bullet 5 *)
    (* NOTE: the qualifiers are that of the referenced type *)
  | Pointer of qualifiers * ctype
+   (* STD §6.2.5#20, bullet 6 *)
  | Atomic of ctype
 (*
  | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
@@ -99,6 +102,7 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Allocated
 
 
+(* ASK: This is not the same as type category defined in the standard, right? (6.2.5#25) *)
 type typeCategory [name = "tc*"] = 
  | LValueType of qualifiers * ctype * (* isRegister *) bool
  | RValueType of ctype

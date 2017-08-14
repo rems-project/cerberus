@@ -26,5 +26,6 @@ end
 module Make (C : CONFIG) : PP_CORE
 
 module Basic : PP_CORE
+module All : PP_CORE
 
 

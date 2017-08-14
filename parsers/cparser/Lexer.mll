@@ -145,7 +145,7 @@ let lex_comment remainder lexbuf =
 }
 
 
-(* STD §6.4.1#1 *)
+(* STD §6.4.4.1#1 *)
 let nondigit = ['_' 'a'-'z' 'A'-'Z']
 let digit    = ['0'-'9']
 
@@ -169,8 +169,6 @@ let universal_character_name =
     "\\u" hex_quad
   | "\\U" hex_quad hex_quad
 
-
-(* STD §6.4.4.1#1 *)
 let long_long_suffix = "ll" | "LL"
 
 let long_suffix = ['l' 'L']
@@ -322,6 +320,7 @@ rule s_char_sequence = parse
 
 
 (* Consume a comment: /* ... */ *)
+(* STD §6.4.9#1 *)
 and comment = parse
   (* End of the comment *)
   | "*/" {[]}
@@ -329,6 +328,7 @@ and comment = parse
 
 
 (* Consume a singleline comment: // ... *)
+(* STD §6.4.9#2 *)
 and onelinecomment = parse
   | '\n' | eof {[]}
   | _          {lex_comment onelinecomment lexbuf}

@@ -763,3 +763,9 @@ module Basic = Make (struct
   let show_location = false
   let show_proc_decl = false
 end)
+
+module All = Make (struct
+  let show_std = true
+  let show_location = true
+  let show_proc_decl = true
+end)
