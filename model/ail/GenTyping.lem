@@ -155,7 +155,7 @@ let well_typed_assignment s ty1 gty2 null2 =
     end
   
   else if AAux.atomic_qualified_unqualified AAux.is_pointer ty1 then
-    let () = Debug.print_debug 0 [] (fun () ->
+    let () = Debug.print_debug 2 [] (fun () ->
       "TODO: check the use of AAux.lvalue_conversion"
     ) in
     AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
@@ -167,7 +167,7 @@ let well_typed_assignment s ty1 gty2 null2 =
           (* §6.5.16.1#1, bullet 3 *)
           (* doing the "qualified or unqualified versions of" by checking the compatibility of
              the unqualified referenced type with no qualifiers *)
-          let () = Debug.print_debug 0 [] (fun () ->
+          let () = Debug.print_debug 2 [] (fun () ->
             "TODO: I commented the AAux.unqualify, check if correct and remove for good"
           ) in
           if    AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) ref_ty1) (no_qualifiers, (*AAux.unqualify*) ref_ty2)
@@ -592,7 +592,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
     | AilEident sym ->
         match (Context.lookup identifierEqual gamm sym, Context.lookup identifierEqual sigm.declarations sym) with
           | (Just (dur_opt, qs, ty), Nothing) ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               
@@ -602,7 +602,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
               end in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (Decl_object dur_opt qs ty)) ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               
@@ -949,7 +949,7 @@ TODO
         annotate_expression CTXassign e1 >>= fun e1' ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs1 ty1 _ ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
                 "[AilEassign] " ^ Pp.stringFromAil_ctype qs1 ty1
               ) in
               if AAux.modifiable sigm qs1 ty1 then
@@ -1400,14 +1400,14 @@ and function_decay sigm a_expr =
 and perform_decays sigm ctx a_expr =
   match genTypeCategoryOf a_expr with
     | GenLValueType qs ty isRegister ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 2 [] (fun () ->
           "GenLValueType ==>" ^ Pp.stringFromAil_ctype qs ty
         ) in
         if    not (AAux.is_array ty)
            && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
           (* STD §6.3.2.1#2 *)
           (* performing the lvalue conversion *)
-          let () = Debug.print_debug 0 [] (fun () ->
+          let () = Debug.print_debug 2 [] (fun () ->
             "TODO(perform_decays): I commented the AAux.unqualify, check if correct and remove for good"
           ) in
           let rvalue_ty = AAux.unatomic ((*AAux.unqualify*) ty) in
@@ -1662,7 +1662,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
             (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
           | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "TODO(annotate_definition_aux 1): I commented the AAux.unqualify, check if correct and remove for good"
               ) in
               if AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) elem_ty1) (no_qualifiers, (*AAux.unqualify*) elem_ty2) then
@@ -1671,7 +1671,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.print_debug 2 [] (fun () ->
                 "TODO(annotate_definition_aux 1): I commented the AAux.unqualify, check if correct and remove for good"
               ) in
               if AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) elem_ty1) (no_qualifiers, (*AAux.unqualify*) elem_ty2) && n1 = n2 then
