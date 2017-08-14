@@ -1,0 +1,104 @@
+open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Implementation
+
+open import ErrorMonad TypingError
+
+
+(* following the table from (§6.4.4.1#5) *)
+val type_of_constant: implementation -> integerConstant -> errorM integerType
+let type_of_constant impl = function
+  | IConstant n Decimal Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  
+  (* Octal or Hexadecimal *)
+  | IConstant n _ Nothing ->
+      if in_integer_range impl n (Signed Int_) then
+        return (Signed Int_)
+      else if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+    (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just U) ->
+      if in_integer_range impl n (Unsigned Int_) then
+        return (Unsigned Int_)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstant n Decimal (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just L) ->
+      if in_integer_range impl n (Signed Long) then
+        return (Signed Long)
+      else if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just UL) ->
+      if in_integer_range impl n (Unsigned Long) then
+        return (Unsigned Long)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstant n Decimal (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal or Hexadecimal *)
+  | IConstant n _ (Just LL) ->
+      if in_integer_range impl n (Signed LongLong) then
+        return (Signed LongLong)
+      else if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  (* Octal, Decimal or Hexadecimal *)
+  | IConstant n _ (Just ULL) ->
+      if in_integer_range impl n (Unsigned LongLong) then
+        return (Unsigned LongLong)
+      else
+        fail Loc.unknown (TError_integerConstant_too_large n)
+  | IConstantMax ity ->
+      return ity
+  | IConstantMin ity ->
+      return ity
+end
+
+
+val well_formed_bindings: forall 'a. sigma 'a -> bindings -> errorM unit
+let well_formed_bindings sigm bindings =
+  (* TODO: this is unreadable *)
+  mapM_ (comb (uncurry (wf_lvalue sigm)) (fun (_, (_, qs, ty)) -> (qs, ty))) bindings >>
+  guard (TError "found non disjoint bindings") (
+    disjoint_bindings identifierEqual bindings
+  )

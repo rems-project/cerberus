@@ -1,0 +1,492 @@
+open import Pervasives Utils
+import Core (* Memory *) Exception Errors Pp (* Memory_order *)
+
+open import {hol} `pp_coreTheory`
+
+(* TODO: lem non termination bug *)
+(*
+
+module Cmm = Memory_order
+
+type ordering = Before | After | NoOrdering
+
+module L = struct
+  (* monadic operations *)
+  val return: forall 'a. 'a -> list 'a
+  let return x = [x]
+  
+  val bind: forall 'a 'b. list 'a -> ('a -> list 'b) -> list 'b
+  let bind m f = foldr (fun x y -> (f x) ++ y) [] m
+  
+  
+  (* MonadPlus operations *)
+  val mzero: forall 'a. list 'a
+  let mzero = []
+  
+  val mplus: forall 'a. list 'a -> list 'a -> list 'a
+  let mplus = (++)
+  
+  
+  (* generic functions (that should be moved out once we have type-classes) *)
+  val msum: forall 'a. list (list 'a) -> list 'a
+  let msum = concat
+  
+  let sequence ms =
+    foldr (fun m acc ->
+      bind m   (fun x  ->
+        bind acc (fun xs ->
+          return (x::xs)
+        )
+      )
+    ) (return []) ms
+  let mapM f xs = sequence (map f xs)
+
+end
+
+(* -------------------------------------------------------------------------- *)
+let inline (>>=) = L.bind
+let inline (>>) m f = L.bind m (fun _ -> f)
+
+(* TODO: rename *)
+type expr =
+  | Eunit
+  | Enull of AilTypes.ctype
+  | Eimpl of Implementation_.implementation_constant
+
+  | Etuple of list expr
+  | Eproc of Core.name * list expr
+
+  | Eret of expr
+  | End of list expr
+  | Epar of list expr
+  | Eis_scalar of expr
+  | Eis_integer of expr
+  | Eis_signed of expr
+  | Eis_unsigned of expr
+
+  | Eskip
+  | Econst of Cmm_aux.constant
+  | Eaddr of Memory.mem_addr
+  | Esym of Core.sym
+  | Eop of Core.binop * expr * expr
+  | Etrue
+  | Efalse
+  | Enot of expr
+  | Ectype of Core_ctype.ctype
+  | Elet of Core.sym * expr * expr
+  | Eif of expr * expr * expr
+  | Ecall of Core.name * list expr
+  | Esame of expr * expr
+  | Eundef of Undefined.undefined_behaviour
+  | Eerror
+  | Eaction of paction
+  | Eunseq of list (expr)
+  | Ewseq of list (maybe Core.sym) * expr * expr
+  | Esseq of list (maybe Core.sym) * expr * expr
+  | Easeq of maybe Core.sym * action * paction
+  | Eindet of expr
+  | Ebound of nat * expr
+  | Esave of Core.ksym * list (Core.sym * Core_ctype.ctype) * expr
+  | Erun of Core.ksym * list (Core.sym * expr)
+  | Eshift of expr * expr
+  
+  | Ebefore of expr
+  | Eafter of expr
+  
+  (* A [Eindet e] becomes a [End es] *)
+
+
+and action =
+  | Create of expr * list Symbol.t
+  | Alloc of expr * list Symbol.t
+  | Kill of expr
+  | Store of expr * expr * expr * Cmm.memory_order
+  | Load of expr * expr * Cmm.memory_order
+  | CompareExchangeStrong of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+  | CompareExchangeWeak of expr * expr * expr * expr * Cmm.memory_order * Cmm.memory_order
+
+and paction = Core.polarity * action
+
+
+
+
+
+
+
+val     import_expr: Core.expr zero -> expr
+let rec import_expr e =
+  match e with
+  | Core.Eunit            -> Eunit
+  | Core.Enull ty         -> Enull ty
+  | Core.Eimpl i          -> Eimpl i
+  | Core.Etuple es        -> Etuple (List.map import_expr es)
+  | Core.Eproc _ p es     -> Eproc p (map import_expr es)
+  | Core.Eret e           -> Eret (import_expr e)
+  | Core.End es           -> End (List.map import_expr es)
+  | Core.Epar es          -> Epar (List.map import_expr es)
+  | Core.Eis_scalar e     -> Eis_scalar (import_expr e)
+  | Core.Eis_integer e    -> Eis_integer (import_expr e)
+  | Core.Eis_signed e     -> Eis_signed (import_expr e)
+  | Core.Eis_unsigned e   -> Eis_unsigned (import_expr e)
+  | Core.Eskip            -> Eskip
+  | Core.Econst c         -> Econst c
+  | Core.Eaddr o          -> Eaddr o
+  | Core.Esym a           -> Esym a
+  | Core.Eop binop e1 e2  -> Eop binop (import_expr e1) (import_expr e2)
+  | Core.Etrue            -> Etrue
+  | Core.Efalse           -> Efalse
+  | Core.Enot e           -> Enot (import_expr e)
+  | Core.Ectype ty        -> Ectype ty
+  | Core.Elet a e1 e2     -> Elet a (import_expr e1) (import_expr e2)
+  | Core.Eif e1 e2 e3     -> Eif (import_expr e1) (import_expr e2) (import_expr e3)
+  | Core.Ecall f args     -> Ecall f (map import_expr args)
+  | Core.Esame e1 e2      -> Esame (import_expr e1) (import_expr e2)
+  | Core.Eundef u         -> Eundef u
+  | Core.Eerror           -> Eerror
+  | Core.Eaction pact     -> Eaction (import_paction pact)
+  | Core.Eunseq es        -> Eunseq (map import_expr es)
+  | Core.Ewseq _as e1 e2  -> Ewseq _as (import_expr e1) (import_expr e2)
+  | Core.Esseq _as e1 e2  -> Esseq _as (import_expr e1) (import_expr e2)
+  | Core.Easeq a act pact -> Easeq a (import_action act) (import_paction pact)
+  | Core.Eindet e         -> Eindet (import_expr e)
+  | Core.Ebound i e       -> Ebound i (import_expr e)
+  | Core.Esave k a_tys e  -> Esave k a_tys (import_expr e)
+  | Core.Erun _ k a_vs    -> Erun k (map (fun (a, v) -> (a, import_expr v)) a_vs)
+  | Core.Eshift e1 e2     -> Eshift (import_expr e1) (import_expr e2)
+  end
+
+and import_action (Core.Action _ act) =
+  match act with
+    | Core.Create e_ty pref      -> Create (import_expr e_ty) pref
+    | Core.Alloc e_n pref        -> Alloc (import_expr e_n) pref
+    | Core.Kill e_o              -> Kill (import_expr e_o)
+    | Core.Store e_ty e_o e_n mo -> Store (import_expr e_ty) (import_expr e_o) (import_expr e_n) mo
+    | Core.Load e_ty e_o mo      -> Load (import_expr e_ty) (import_expr e_o) mo
+    | Core.CompareExchangeStrong e1 e2 e3 e4 mo1 mo2 ->
+        CompareExchangeStrong (import_expr e1) (import_expr e2) (import_expr e3) (import_expr e4) mo1 mo2
+    | Core.CompareExchangeWeak e1 e2 e3 e4 mo1 mo2 ->
+        CompareExchangeWeak (import_expr e1) (import_expr e2) (import_expr e3) (import_expr e4) mo1 mo2
+  end
+and import_paction (Core.Paction p act) = (p, import_action act)
+
+
+val     export_expr: expr -> Core.expr zero
+let rec export_expr e =
+  match e with
+  | Eunit -> Core.Eunit
+  | Enull ty -> Core.Enull ty
+  | Eimpl i -> Core.Eimpl i
+  | Etuple es -> Core.Etuple (List.map export_expr es)
+  | Eproc p es -> Core.Eproc {} p (List.map export_expr es)
+  | Eret e -> Core.Eret (export_expr e)
+  | End es -> Core.End (List.map export_expr es)
+  | Epar es -> Core.Epar (List.map export_expr es)
+  | Eis_scalar e -> Core.Eis_scalar (export_expr e)
+  | Eis_integer e -> Core.Eis_integer (export_expr e)
+  | Eis_signed e -> Core.Eis_signed (export_expr e)
+  | Eis_unsigned e -> Core.Eis_unsigned (export_expr e)
+  | Ebefore _ -> Boot.assert_false "[Core_indet.export_expr] imposible case: Ebefore, TODO: move to Exception.t"
+  | Eafter _ -> Boot.assert_false "[Core_indet.export_expr] imposible case: Eafter, TODO: move to Exception.t"
+
+  | Eskip               -> Core.Eskip
+  | Econst n            -> Core.Econst n
+  | Eaddr o             -> Core.Eaddr o
+  | Esym a              -> Core.Esym a
+  | Eop binop e1 e2     -> Core.Eop binop (export_expr e1) (export_expr e)
+  | Etrue               -> Core.Etrue
+  | Efalse              -> Core.Efalse
+  | Enot e              -> Core.Enot (export_expr e)
+  | Ectype ty           -> Core.Ectype ty
+  | Elet a e1 e2        -> Core.Elet a (export_expr e1) (export_expr e2)
+  | Eif e1 e2 e3        -> Core.Eif (export_expr e1) (export_expr e2) (export_expr e3)
+  | Ecall f args        -> Core.Ecall f (map export_expr args)
+  | Esame e1 e2         -> Core.Esame (export_expr e1) (export_expr e2)
+  | Eundef u            -> Core.Eundef u
+  | Eerror              -> Core.Eerror
+  | Eaction pact        -> Core.Eaction (export_paction pact)
+  | Eunseq es           -> Core.Eunseq (map export_expr es)
+  | Ewseq _as e1 e2     -> Core.Ewseq _as (export_expr e1) (export_expr e2)
+  | Esseq _as e1 e2     -> Core.Esseq _as (export_expr e1) (export_expr e2)
+  | Easeq a act pact    -> Core.Easeq a (export_action act) (export_paction pact)
+  | Eindet e            -> Core.Eindet (export_expr e)
+  | Ebound i e          -> Core.Ebound i (export_expr e)
+  | Esave k a_tys e     -> Core.Esave k a_tys (export_expr e)
+  | Erun k a_vs         -> Core.Erun {} k (map (fun (a,v) -> (a, export_expr v)) a_vs)
+  | Eshift e1 e2        -> Core.Eshift (export_expr e1) (export_expr e2)
+  end
+
+and export_action act =
+  Core.Action {} (
+  match act with
+    | Create e_ty pref   -> Core.Create (export_expr e_ty) pref
+    | Alloc e_n pref     -> Core.Alloc (export_expr e_n) pref
+    | Kill e_o           -> Core.Kill (export_expr e_o)
+    | Store e_ty e_o e_n mo -> Core.Store (export_expr e_ty) (export_expr e_o) (export_expr e_n) mo
+    | Load e_ty e_o mo      -> Core.Load (export_expr e_ty) (export_expr e_o) mo
+    | CompareExchangeStrong x1 x2 x3 x4 mo1 mo2 ->
+        Core.CompareExchangeStrong (export_expr x1) (export_expr x2) (export_expr x3) (export_expr x4) mo1 mo2
+    | CompareExchangeWeak x1 x2 x3 x4 mo1 mo2 ->
+        Core.CompareExchangeWeak (export_expr x1) (export_expr x2) (export_expr x3) (export_expr x4) mo1 mo2
+  end)
+and export_paction (p, act) = Core.Paction p (export_action act)
+
+
+
+
+(* TODO: duplicate from Core_run *)
+val pick_one: forall 'a. list 'a -> list (list 'a * 'a * list 'a)
+let rec _pick_one acc = function
+  | []    -> []
+  | x::xs -> (reverse acc, x, xs) :: _pick_one (x::acc) xs
+end
+let pick_one l = L.msum $ map L.return (_pick_one [] l)
+
+
+val     one: expr -> list (ordering * expr)
+let rec one e =
+  match e with
+    | Eaction pact -> L.mplus (L.return (Before, Ebefore $ Eaction pact))
+                              (L.return (After, Eafter   $ Eaction pact))
+    
+    | Ewseq _as (Eindet e1) e2 -> L.return (After, Ewseq _as (Eindet e1)  (Eafter e2))
+    | Ewseq _as e1 (Eindet e2) -> L.return (After, Ewseq _as (Ebefore e1) (Eindet e2))
+    
+    | Ewseq _as e1 e2 -> one e1 >>= fun (d, e1') ->
+                     match d with
+                       | Before -> one e2 >>= fun (d', e2') -> L.return (d', Ewseq _as e1' e2')
+		       | After  -> L.return (d, Ewseq _as e1' (Eafter e2))
+                       | NoOrdering -> Boot.assert_false "[Core_indet.one Ewseq, NoOrdering] impossible case"
+                     end
+    
+    | Eunseq es -> (L.mapM one es >>= L.return -| unzip) >>= fun (ds, es') ->
+                   L.return ((if all (fun x -> x = Before) ds then Before else After), Eunseq es')
+
+
+
+(* Nothing to do | No direction *)
+  | Eskip        -> L.return (NoOrdering, e)
+  | Econst n     -> L.return (NoOrdering, e)
+  | Eaddr x      -> L.return (NoOrdering, e)
+  | Esym a       -> L.return (NoOrdering, e)
+  | Eop op e1 e2 -> L.return (NoOrdering, e)
+  | Etrue        -> L.return (NoOrdering, e)
+  | Efalse       -> L.return (NoOrdering, e)
+  | Enot e       -> L.return (NoOrdering, e)
+  | Ectype ty    -> L.return (NoOrdering, e)
+  | Elet a e1 e2 -> L.return (NoOrdering, e)
+  | Eif e1 e2 e3 -> L.return (NoOrdering, e)
+  | Ecall f args -> L.return (NoOrdering, e)
+  | Esame e1 e2  -> L.return (NoOrdering, e)
+  | Eundef _     -> L.return (NoOrdering, e)
+  | Eerror       -> L.return (NoOrdering, e)
+
+
+(*
+  | Ewseq _as e1 e2
+  | Esseq _as e1 e2
+  | Easeq _a act pact
+  | Eindet e
+*)
+
+
+(* [one] is only called a particular Ebound and on that run ignore the inner Ebounds *)
+  | Ebound i e -> one e >>= fun (d, e') -> L.return (d, Ebound i e')
+
+(*
+  (* [one] is called of core expression corresponding to C expression so
+           there is no control operator *)
+  | Esave k e
+  | Erun k
+*)
+  
+(* (* this ctor can't already exist *)
+  | Ebefore e 
+  | Eafter e
+  | End es
+*)
+  | _ -> Boot.assert_false "[Core_indet.one] impossible case"
+  end
+
+(*
+one (Eatom a) = return (B, Ebefore (Eatom a)) `mplus` return (A, Eafter (Katom a))
+
+one (Eseq Kindet e2) = return (A, Eseq Eindet (Eafter e2)) -- CHECK returned Dir
+one (Eseq e1 Eindet) = return (B, Eseq (Ebefore e1) Eindet) -- CHECK returned Dir
+
+one (Eseq e1 e2) = do
+  (d, e1') <- one e1
+  case d of
+    B -> one e2 >>= \(d', e2') -> return (d', Eseq e1' e2') -- TODO: not sure about the returned dir
+    A -> return (d, Eseq e1' (Eafter e2))
+
+one (Eunseq es) = do
+  (ds, es') <- mapM one es >>= return . unzip
+  return (if all (==B) ds then B else A, Eunseq es')
+*)
+
+
+
+
+(*
+let rec b_action_one e =
+  match e with
+    | Eaction (p, act) -> L.return (Before, Ebefore $ Eaction (p, act))
+    | _                -> L.mzero
+  end
+
+and a_action_one e =
+  match e with
+    | Eaction (p, act) -> L.return (After, Eafter $ Eaction (p, act))
+    | _                -> L.mzero
+  end
+
+and wseq_l_one e =
+  match e with
+    | Ewseq _as e1 e2 -> one e1 >>= fun (ord, e1') ->
+                         L.return $ match ord with
+                           | Before -> (Before, Ewseq _as e1' e2         )
+                           | After  -> (After,  Ewseq _as e1' (Eafter e2))
+                         end
+    | _ -> L.mzero
+  end
+
+and wseq_r_one e =
+  match e with
+    | Ewseq _as e1 e2 -> one e2 >>= fun (ord, e2') ->
+                         L.return $ match ord with
+                           | Before -> (Before, Ewseq _as (Ebefore e1) e2 )
+                           | After  -> (After,  Ewseq _as e1           e2')
+                         end
+    | _ -> L.mzero
+  end
+
+and unseq_one e =
+  match e with
+    | Eunseq es -> pick_one es            >>= fun (es1, ej, es2) ->
+                   one ej                 >>= fun (ord, ej')     ->
+                   L.return (ord, Eunseq (es1 ++ ej' :: es2))
+    | _ -> L.mzero
+  end
+
+and one e = L.msum [
+  b_action_one e; a_action_one e;
+  wseq_l_one e; wseq_r_one e;
+ ]
+*)
+
+val determinate_expr: Core.expr zero -> list expr
+let determinate_expr e =
+  [import_expr e] (* TODO *)
+
+
+
+
+
+
+
+
+
+  *)
+
+let rec indet_hack expr =
+  match expr with
+    | Core.Epure _ ->
+        expr
+    | Core.Ememop _ _ ->
+        expr
+(*
+    | Core.Eraise _ ->
+        expr
+    | Core.Eregister _ _ ->
+        expr
+*)
+    | Core.Eskip ->
+        expr
+    | Core.Ecase pe xs ->
+        Core.Ecase pe (List.map (fun (pat, e) -> (pat, indet_hack e)) xs)
+    | Core.Elet sym pe1 e2 ->
+        Core.Elet sym pe1 (indet_hack e2)
+    | Core.Eif pe1 e2 e3 ->
+        Core.Eif pe1 (indet_hack e2) (indet_hack e3)
+    | Core.Eccall _ _ _ ->
+        expr
+    | Core.Eproc _ _ _ ->
+        expr
+    | Core.Eaction _ ->
+        expr
+    | Core.Eunseq es ->
+        Core.Eunseq (map indet_hack es)
+    | Core.Ewseq as_opt e1 e2 ->
+        Core.Ewseq as_opt (indet_hack e1) (indet_hack e2)
+    | Core.Esseq as_opt e1 e2 ->
+        Core.Esseq as_opt (indet_hack e1) (indet_hack e2)
+(* TODO: lem non termination bug *)
+    | Core.Easeq (Just (sym, bTy)) act pact ->
+        let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_indet, Easeq ==> assuming pact is a store()") in
+        Core.Ewseq (Core.CaseBase (Just sym, bTy))
+          (Core.Eaction (Core.Paction Core.Pos act))
+          (Core.Ewseq (Core.CaseBase (Nothing, Core.BTy_unit)) (Core.Eaction pact) (Core.Epure (Core.Pexpr () (Core.PEsym sym))))
+(*
+    | Core.Easeq _a_opt act pact ->
+        Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
+                            (Core.Ewseq [] (Core.Eaction pact) (Core.Esym match _a_opt with Just x -> x
+                                                                                           | _ -> Boot.assert_false "[Core_indet.indet_hack Easeq] impossible case" end))*)
+    | Core.Eindet _ e ->
+        indet_hack e
+    | Core.Ebound i e ->
+        indet_hack e
+    | Core.Esave sym sym_bTys e ->
+        Core.Esave sym sym_bTys (indet_hack e)
+    | Core.Erun bs sym pes ->
+        Core.Erun bs sym pes
+    | Core.End es ->
+        Core.End (map indet_hack es)
+    | Core.Epar es ->
+        Core.Epar (map indet_hack es)
+    | Core.Ewait tid ->
+        Core.Ewait tid
+    | Core.Eloc loc e ->
+        Core.Eloc loc (indet_hack e)
+    | Core.Estd s e ->
+        Core.Estd s (indet_hack e)
+    | _ ->
+        error ("Core_indet ==> " ^ Pp.stringFromCore_expr expr)
+end
+
+
+
+
+(* TODO: hack *)
+(*  *)
+val order: Core.file unit -> Exception.exceptM (list (nat * Core.file unit)) Errors.error
+let order (f: Core.file unit) =
+(*  let fbodies' = map (fun (_, (_, _, e)) -> determinate_expr e) $ Pmap.bindings f.Core.fun_map in *)
+  
+  
+  
+  Exception.return [(1, <| f with Core.funs= Map.map (function
+    | Core.Proc ty args e ->
+        Core.Proc ty args (indet_hack e)
+    | z ->
+        z
+  end) f.Core.funs |>)]
+
+(*
+
+
+  Exception.return <| f with fun_map= f.fun_map |>
+  Exception.return (numerote $ map export_expr (one (import_expr e))) (* (numerote $ map export_expr $ one (import_expr e)) (* [(1, e); (2, e)] *) *)
+  (* Boot.outOfHomeomorphism "hello" *)
+
+
+*)
+
+
+val hackish_order: Core.file unit -> Core.file unit
+let hackish_order file =
+  <| file with Core.funs= Map.map (function
+    | Core.Proc ty args e -> 
+        Core.Proc ty args (indet_hack e)
+    | z ->
+        z
+  end) file.Core.funs |>

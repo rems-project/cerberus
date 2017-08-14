@@ -1,0 +1,29 @@
+- connect back together 
+
+  -- turn on symbolic stuff (either use Z3 through console, or use
+     Kayvan's very incomplete solver)
+
+  -- include being able to run in sequential mode
+
+- run litmus tests that we had for popl (and fix some bug that we had
+  before)
+
+- hand-written driver for non-exhaustive interactive use
+
+  -- get concurrency model to announce what it's doing
+
+- consume
+
+- (more important than consume) mixed-size for nonatomics 
+
+- (mention oota and concurrency+undefined-beh issues)
+
+- write paper
+
+Kayvan:
+
+- ail type system
+
+- move from naive naive to real naive memory model
+
+- faff with cabs-to-ail to make tests work

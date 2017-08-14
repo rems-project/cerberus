@@ -1,0 +1,366 @@
+(* This file abstract the memory layout model actually being used *)
+(* include import Naive_memory *)
+open import Pervasives
+
+import Symbol Loc Cabs
+open import AilTypes Core_ctype Cthread
+
+include import Mem_common
+
+
+(*
+import Naive_memory
+module Impl = Naive_memory
+*)
+
+import Defacto_memory2
+import Defacto_memory_types2
+module Impl = struct
+  include import Defacto_memory2
+  include import Defacto_memory_types2
+end
+
+(*
+import Concrete_memory
+import Concrete_memory_types
+module Impl = struct
+  include import Concrete_memory
+  include import Concrete_memory_types
+end
+*)
+
+
+
+
+
+
+(* The API *)
+
+type pointer_value  = Impl.impl_pointer_value
+type mem_value      = Impl.impl_mem_value
+type integer_value  = Impl.impl_integer_value
+type floating_value = Impl.impl_floating_value
+
+
+
+val stringFromCtype:  Core_ctype.ctype -> string
+declare ocaml target_rep function stringFromCtype  = `String_core_ctype.string_of_ctype`
+val stringFromMem_value: mem_value -> string
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+val stringFromPointer_value: pointer_value -> string
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+val stringFromInteger_value: integer_value -> string
+declare ocaml target_rep function stringFromInteger_value = `String_defacto_memory.string_of_integer_value`
+
+
+
+
+(* This abstract in returns by memory actions and two footprints can be checked for overlapping.
+   They are in particular useful to detect races. *)
+type footprint = Impl.impl_footprint
+val do_overlap: footprint -> footprint -> bool
+let do_overlap = Impl.impl_do_overlap
+
+
+type mem_state = Impl.impl_mem_state
+
+
+type memM 'a = Impl.impl_memM 'a
+val return: forall 'a. 'a -> memM 'a
+val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
+val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_state))
+
+
+
+val initial_mem_state: mem_state
+
+(* Memory actions *)
+val allocate_static:    Cthread.thread_id  (* the allocating thread *)
+                     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> integer_value     (* alignment constraint *)
+                     -> Core_ctype.ctype  (* type of the allocation *)
+                     -> memM pointer_value
+
+val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
+                     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> integer_value     (* alignment constraint *)
+                     -> integer_value     (* size *)
+                     -> memM pointer_value
+
+val kill: pointer_value -> memM unit
+
+val load: ctype -> pointer_value -> memM (footprint * mem_value)
+val store: Loc.t -> ctype -> pointer_value -> mem_value -> memM footprint
+
+(* TODO: put somewhere *)
+val prettyStringFromMem_value: mem_value -> string
+
+(* Pointer value constructors *)
+val null_ptrval: ctype -> pointer_value
+val fun_ptrval: Symbol.sym -> pointer_value
+
+(* Operations on pointer values *)
+val eq_ptrval: pointer_value -> pointer_value -> memM bool
+val ne_ptrval: pointer_value -> pointer_value -> memM bool
+val lt_ptrval: pointer_value -> pointer_value -> memM bool
+val gt_ptrval: pointer_value -> pointer_value -> memM bool
+val le_ptrval: pointer_value -> pointer_value -> memM bool
+val ge_ptrval: pointer_value -> pointer_value -> memM bool
+val diff_ptrval: pointer_value -> pointer_value -> integer_value
+
+val validForDeref_ptrval: pointer_value -> bool
+
+val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
+
+(* Cast operations *)
+val ptrcast_ival: ctype (* original integer type *) -> ctype (* target reference type *) -> integer_value -> memM pointer_value
+val intcast_ptrval: ctype (* original reference type *) -> AilTypes.integerType (* target integer type *) -> pointer_value -> memM integer_value
+
+val array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> pointer_value
+val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
+
+
+
+
+
+(* Integer value constructors *)
+val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
+val integer_ival: integer -> integer_value
+val max_ival: integerType -> integer_value
+val min_ival: integerType -> integer_value
+val op_ival: integer_operator -> integer_value -> integer_value -> integer_value
+val offsetof_ival: Symbol.sym -> Cabs.cabs_identifier -> integer_value
+
+val sizeof_ival: Core_ctype.ctype -> integer_value
+val alignof_ival: Core_ctype.ctype -> integer_value
+
+val bitwise_complement_ival: AilTypes.integerType -> integer_value -> integer_value
+val bitwise_and_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_or_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_xor_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+
+val case_integer_value: forall 'a. (* TODO: expose more ctors *)
+    integer_value ->
+    (integer -> 'a) ->
+    (unit -> 'a) ->
+    'a
+
+val is_specified_ival: integer_value -> bool
+
+
+
+(* Predicats on integer values *)
+val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val lt_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val le_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+(* val is_concrete_ival: integer_value -> bool *)
+
+(* Memory value constructors *)
+(*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
+val unspecified_mval: ctype -> mem_value
+val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
+val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
+val pointer_mval: Core_ctype.ctype -> pointer_value -> mem_value
+val array_mval: list mem_value -> mem_value
+val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> mem_value
+val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
+
+(* Memory value destructor *)
+val case_mem_value: forall 'a.
+  mem_value ->
+  (Core_ctype.ctype -> 'a) -> (* unspecified case *)
+  (AilTypes.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+  (AilTypes.integerType -> integer_value -> 'a) ->
+  (AilTypes.floatingType -> floating_value -> 'a) ->
+  (Core_ctype.ctype -> pointer_value -> 'a) ->
+  (list mem_value -> 'a) ->
+  (Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> 'a) ->
+  (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
+  'a
+
+
+(* For race detection *)
+val sequencePoint: memM unit
+let sequencePoint = Impl.impl_sequencePoint
+
+(* ========== *)
+
+
+let return = Impl.impl_return
+let bind = Impl.impl_bind
+
+
+let prettyStringFromMem_value           = Impl.impl_prettyStringFromMem_value
+let runMem                              = Impl.impl_runMem
+let initial_mem_state                   = Impl.impl_initial_mem_state
+let null_ptrval                         = Impl.impl_null_ptrval
+let fun_ptrval                          = Impl.impl_fun_ptrval
+
+
+
+let intcast_ptrval ty ity ptrval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.intcast_ptrval(" ^ stringFromCtype ty ^ ", " ^ stringFromCtype (Basic (AilTypes.Integer ity)) ^ ", " ^ stringFromPointer_value ptrval ^ ")"
+  ) in
+  Impl.impl_intcast_ptrval ty ity ptrval
+
+let ptrcast_ival ty1 ty2 ival =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.intcast_ptrval(" ^ stringFromCtype ty1 ^ ", " ^ stringFromCtype ty2 ^ ", " ^ stringFromInteger_value ival ^ ")"
+  ) in
+  Impl.impl_ptrcast_ival ty1 ty2 ival
+
+let eq_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.eq_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_eq_ptrval ptrval1 ptrval2
+
+let ne_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.ne_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_ne_ptrval ptrval1 ptrval2
+
+let lt_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.lt_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_lt_ptrval ptrval1 ptrval2
+
+let gt_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.gt_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_gt_ptrval ptrval1 ptrval2
+
+let le_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.le_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+ Impl.impl_le_ptrval ptrval1 ptrval2
+
+let ge_ptrval ptrval1 ptrval2 =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.ge_ptrval(" ^ stringFromPointer_value ptrval1 ^ ", " ^ stringFromPointer_value ptrval2 ^ ")"
+  ) in
+  Impl.impl_ge_ptrval ptrval1 ptrval2
+
+let memcmp                              = Impl.impl_memcmp
+
+let validForDeref_ptrval                = Impl.impl_validForDeref_ptrval
+
+
+
+
+let diff_ptrval                         = Impl.impl_diff_ptrval
+(* let shift_ptrval                        = Impl.impl_shift_ptrval *)
+let array_shift_ptrval                  = Impl.impl_array_shift_ptrval
+let member_shift_ptrval                 = Impl.impl_member_shift_ptrval
+let concurRead_ival = Impl.impl_concurRead_ival
+let integer_ival                        = Impl.impl_integer_ival
+let max_ival                            = Impl.impl_max_ival
+let min_ival                            = Impl.impl_min_ival
+let op_ival                             = Impl.impl_op_ival
+let offsetof_ival                       = Impl.impl_offsetof_ival
+let sizeof_ival                         = Impl.impl_sizeof_ival
+let alignof_ival                        = Impl.impl_alignof_ival
+let bitwise_complement_ival             = Impl.impl_bitwise_complement_ival
+let bitwise_and_ival                    = Impl.impl_bitwise_and_ival
+let bitwise_or_ival                     = Impl.impl_bitwise_or_ival
+let bitwise_xor_ival                    = Impl.impl_bitwise_xor_ival
+let case_integer_value                  = Impl.impl_case_integer_value
+let is_specified_ival                   = Impl.impl_is_specified_ival
+let eq_ival                             = Impl.impl_eq_ival
+let lt_ival                             = Impl.impl_lt_ival
+let le_ival                             = Impl.impl_le_ival
+let unspecified_mval                    = Impl.impl_unspecified_mval
+let integer_value_mval                  = Impl.impl_integer_value_mval
+let floating_value_mval                 = Impl.impl_floating_value_mval
+let pointer_mval                        = Impl.impl_pointer_mval
+let array_mval                          = Impl.impl_array_mval
+let struct_mval                         = Impl.impl_struct_mval
+let union_mval                          = Impl.impl_union_mval
+let case_mem_value                      = Impl.impl_case_mem_value
+
+val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (string -> 'a) -> 'a
+let case_fval = Impl.impl_case_fval
+val zero_fval: floating_value
+let zero_fval = Impl.impl_zero_fval
+
+val str_fval: string -> floating_value
+let str_fval = Impl.impl_str_fval
+
+
+
+
+val eval_integer_value: integer_value -> maybe integer
+let eval_integer_value = Impl.impl_eval_integer_value
+
+
+type mem_iv_constraint = mem_constraint integer_value
+
+
+
+(*
+type mem_constraint = Impl.impl_mem_constraint
+
+(* TODO: move this up *)
+type mem_constraint2 = Impl.impl_mem_constraint2
+
+val constraint_eqIV: integer_value -> integer_value -> mem_constraint2
+val constraint_neIV: integer_value -> integer_value -> mem_constraint2
+val constraint_ltIV: integer_value -> integer_value -> mem_constraint2
+val constraint_leIV: integer_value -> integer_value -> mem_constraint2
+
+let constraint_eqIV = Impl.impl_constraint_eqIV
+let constraint_neIV = Impl.impl_constraint_neIV
+let constraint_ltIV = Impl.impl_constraint_ltIV
+let constraint_leIV = Impl.impl_constraint_leIV
+*)
+
+
+
+
+
+
+
+
+
+
+let stringFromPrefix = function
+  | Symbol.PrefSource syms ->
+      "{" ^ String.concat "." (List.map show syms) ^ "}"
+  | Symbol.PrefOther str ->
+      "{" ^ str ^ "}"
+end
+
+let allocate_static tid pref align_ival ty =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.allocate_static(" ^ stringFromPrefix pref ^ ")"
+  ) in
+  Impl.impl_allocate_static tid pref align_ival ty
+
+let allocate_dynamic tid pref align_ival size_ival =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.allocate_dynamic(" ^ stringFromPrefix pref ^ ")"
+  ) in
+  Impl.impl_allocate_dynamic tid pref align_ival size_ival
+
+let kill ptrval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.kill(" ^ stringFromPointer_value ptrval ^ ")"
+  ) in
+  Impl.impl_kill ptrval
+
+let load ty ptrval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.load(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
+  ) in
+  Impl.impl_load ty ptrval
+
+let store loc ty ptrval mval =
+  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
+    "Mem.store(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
+  ) in
+  Impl.impl_store loc ty ptrval mval

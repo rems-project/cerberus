@@ -1,0 +1,521 @@
+open import Pervasives
+open import Utils Show Core
+
+import Global
+
+open import Errors
+import Pp Cthread Cmm_csem
+
+import {hol} `pp_coreTheory`
+
+
+instance (Show core_run_error)
+  let show = function
+    | Illformed_program str ->
+        "Illformed_program[" ^ str ^ "]"
+    | Found_empty_stack str ->
+        "Found_empty_stack[" ^ str ^ "]"
+    | Reached_end_of_proc ->
+        "Reached_end_of_proc"
+    | Unknown_impl ->
+        "Unknown_impl"
+    | Unresolved_symbol sym ->
+        "Unresolved_symbol[" ^ show sym ^ "]"
+  end
+end
+
+
+
+type core_run_annotation = <|
+  sb_before:  set (Cthread.thread_id * Cmm_csem.aid);
+  dd_before:  set Cmm_csem.aid;
+  asw_before: set Cmm_csem.aid;
+|>
+
+let empty_annotation = <|
+  sb_before  = {};
+  dd_before  = {};
+  asw_before = {};
+|>
+
+instance (Default core_run_annotation)
+  let default = empty_annotation
+end
+
+
+
+
+val has_sbBefore_on_thread: Cthread.thread_id -> core_run_annotation -> bool
+let has_sbBefore_on_thread tid annot =
+  Set.any (fun (tid', _) ->
+    tid = tid'
+  ) annot.sb_before
+
+
+
+(* TODO: the following comment is probably out of date *)
+(* TODO: here I'm annotating all actions instead (this may reduce the number of
+         epsilon transitions) *)
+(* [annotate b e] add on each sb-minimal action of [e] an annotation meaning
+                  that this action is sequenced-after [act]
+  
+  in the rules comments, this function is noted: <b> e
+ *)
+(* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
+
+
+val     add_to_sb: set (polarity * (Cthread.thread_id * Cmm_csem.aid)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+let rec add_to_sb p_aids expr =
+  if Global.using_concurrency () then
+    match expr with
+      | Epure _ ->
+          (* no change *)
+          expr
+      | Ememop _ _ ->
+          (* no change *)
+          expr
+(*
+      | Eraise _ ->
+          (* no change *)
+          expr
+      | Eregister _ _ ->
+          (* no change *)
+          expr
+*)
+      | Eskip ->
+          (* no change *)
+          expr
+      | Elet a pe1 e2 ->
+          Elet a pe1 (add_to_sb p_aids e2)
+      | Eif pe1 e2 e3 ->
+          Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
+      | Ecase pe pat_es ->
+          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_sb p_aids e)) pat_es)
+      | Eproc annots nm pes ->
+          Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
+      | Eaction (Paction p' (Action loc annots a)) ->
+          Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+      | Eunseq es ->
+          Eunseq (List.map (add_to_sb p_aids) es)
+      | Ewseq _as e1 e2 ->
+          let is_positive = function
+            | (Pos, _) -> true
+            | _        -> false
+          end in
+          Ewseq _as (add_to_sb p_aids e1) (add_to_sb (Set.filter is_positive p_aids) e2)
+      | Esseq _as e1 e2 ->
+          Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
+      | Easeq _ _ _ ->
+          error "Core_run_aux.add_to_sb, Easeq"
+      | Eindet _ _ ->
+          error "Core_run_aux.add_to_sb, Eindet"
+      | Ebound _ _ ->
+          error "Core_run_aux.add_to_sb, Ebound"
+(*
+      | Esave k a_tys e ->
+          Esave k a_tys (add_to_sb p_aids e)
+      | Erun annots k a_vs ->
+          Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
+*)
+      | End es ->
+          End (List.map (add_to_sb p_aids) es)
+      | Epar es ->
+          Epar (List.map (add_to_sb p_aids) es)
+      | Ewait _ ->
+          (* no change *)
+          expr
+      | Eloc loc e ->
+          Eloc loc (add_to_sb p_aids e)
+      | Estd s e ->
+          Estd s (add_to_sb p_aids e)
+    end
+  else
+    expr
+
+
+val add_to_sb_stack: set (polarity * (Cthread.thread_id * Cmm_csem.aid)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+
+let rec add_to_sb_continuation p_aids = function
+  | [] ->
+      []
+  | Kunseq es1 es2 :: cont ->
+      Kunseq es1 es2 :: add_to_sb_continuation p_aids cont
+  | Kwseq _as e2 :: cont ->
+      let is_positive = function
+        | (Pos, _) -> true
+        | _        -> false
+      end in
+      Kwseq _as(add_to_sb (Set.filter is_positive p_aids) e2) :: add_to_sb_continuation p_aids cont
+  | Ksseq _as e2 :: cont ->
+      Ksseq _as (add_to_sb p_aids e2) :: add_to_sb_continuation p_aids cont
+end
+let rec add_to_sb_stack p_aids sk =
+  if Global.using_concurrency () then
+    match sk with
+      | Stack_empty ->
+          Stack_empty
+      | Stack_cons lconts cont sk ->
+          let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts") in
+          Stack_cons lconts (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+   end
+  else
+    sk
+
+
+
+
+val     add_to_asw: set Cmm_csem.aid -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+let rec add_to_asw aids expr =
+  if Global.using_concurrency () then
+    let () = Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "HELLO add_to_asw ====") in
+    match expr with
+      | Epure _ ->
+          (* no change *)
+          expr
+      | Ememop _ _ ->
+          (* no change *)
+          expr
+(*
+      | Eraise _ ->
+          (* no change *)
+          expr
+      | Eregister _ _ ->
+          (* no change *)
+          expr
+*)
+      | Eskip ->
+          (* no change *)
+          expr
+      | Elet a pe1 e2 ->
+          Elet a pe1 (add_to_asw aids e2)
+      | Eif pe1 e2 e3 ->
+          Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
+      | Ecase pe pat_es ->
+          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_asw aids e)) pat_es)
+      | Eproc annots nm pes ->
+          Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
+      | Eaction (Paction p' (Action loc annots a)) ->
+         let _ = Set.map (fun aid ->
+           Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "ADD_TO_ASW ==> " ^ show aid)
+          ) aids in
+          Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
+      | Eunseq es ->
+          Eunseq (List.map (add_to_asw aids) es)
+      | Ewseq _as e1 e2 ->
+          Ewseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
+      | Esseq _as e1 e2 ->
+          Esseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
+      | Easeq _ _ _ ->
+          error "Core_run_aux.add_to_asw, Easeq"
+      | Eindet _ _ ->
+          error "Core_run_aux.add_to_asw, Eindet"
+      | Ebound _ _ ->
+          error "Core_run_aux.add_to_asw, Ebound"
+(*
+      | Esave k a_tys e ->
+          Esave k a_tys (add_to_asw aids e)
+      | Erun annots k a_vs ->
+          Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
+*)
+      | End es ->
+          End (List.map (add_to_asw aids) es)
+      | Epar es ->
+          Epar (List.map (add_to_asw aids) es)
+      | Ewait _ ->
+          (* no change *)
+          expr
+      | Eloc loc e ->
+          Eloc loc (add_to_asw aids e)
+      | Estd s e ->
+          Estd s (add_to_asw aids e)
+    end
+  else
+    expr
+
+val add_to_asw_stack: set Cmm_csem.aid -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+
+let rec add_to_asw_continuation aids = function
+  | [] ->
+      []
+  | Kunseq es1 es2 :: cont ->
+      Kunseq (List.map (add_to_asw aids) es1) (List.map (add_to_asw aids) es2) :: add_to_asw_continuation aids cont
+  | Kwseq _as e2 :: cont ->
+      Kwseq _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
+  | Ksseq _as e2 :: cont ->
+      Ksseq _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
+end
+let rec add_to_asw_stack aids sk =
+  let () = Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "BOOM add_to_asw_stack ==> " ^ Pp.stringFromCore_stack sk) in
+  if Global.using_concurrency () then
+    match sk with
+      | Stack_empty ->
+          Stack_empty
+      | Stack_cons lconts cont sk ->
+          let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_asw_stack ==> is not touching lconts") in
+          Stack_cons lconts (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+    end
+  else
+    sk
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val     comma_list: forall 'a. ('a -> string) -> list 'a -> string
+let rec comma_list f = function
+  | [] ->
+      ""
+  | x::xs ->
+      f x ^ ", " ^ comma_list f xs
+end
+ 
+
+  (*
+let mk_string_of_continuation_element = function
+  | Kunseq es1 es2 ->
+      fun z ->
+        "unseq(" ^ comma_list Pp.pp_core_expr es1 ^ ", " ^ z ^ ", " ^
+                   comma_list Pp.pp_core_expr es2 ^ ")"
+  | Kwseq sym_opts e2 ->
+      fun z ->
+        "let weak SYMS = " ^ z ^ " in " ^ Pp.pp_core_expr e2
+  | Ksseq sym_opts e2 ->
+      fun z ->
+        "let strong SYMS = " ^ z ^ " in " ^ Pp.pp_core_expr e2
+end
+
+let rec string_of_continuation cont =
+  match cont with
+    | [] ->
+        "[]"
+    | elem::cont' ->
+        mk_string_of_continuation_element elem (string_of_continuation cont')
+  end
+
+
+let rec string_of_stack_aux sk =
+  match sk with
+    | Stack_empty ->
+        ""
+    | Stack_cons cont sk' ->
+        string_of_continuation cont ^ "; " ^ string_of_stack_aux sk'
+  end
+
+let string_of_stack sk =
+  "[" ^ string_of_stack_aux sk ^ "]"
+*)
+
+
+
+
+
+
+
+(* BEGIN silly *)
+(* Dummy function doing nothing, but required to typecheck *)
+val convert_ctor: forall 'bty. Core.generic_ctor 'bty -> Core.ctor
+let convert_ctor = function
+  | Cnil _ ->
+      Cnil ()
+  | Ccons ->
+      Ccons
+  | Ctuple ->
+      Ctuple
+  | Carray ->
+      Carray
+  | Civmax ->
+      Civmax
+  | Civmin ->
+      Civmin
+  | Civsizeof ->
+      Civsizeof
+  | Civalignof ->
+      Civalignof
+  | CivCOMPL ->
+      CivCOMPL
+  | CivAND ->
+      CivAND
+  | CivOR ->
+      CivOR
+  | CivXOR ->
+      CivXOR
+  | Cspecified ->
+      Cspecified
+  | Cunspecified ->
+      Cunspecified
+end
+
+val     convert_pattern: forall 'bty. Core.generic_pattern 'bty Symbol.sym -> Core.pattern
+let rec convert_pattern pat =
+  match pat with
+    | CaseBase (sym_opt, bTy) ->
+        CaseBase (sym_opt, bTy)
+    | CaseCtor ctor pats ->
+        CaseCtor (convert_ctor ctor) (List.map convert_pattern pats)
+  end
+
+val convert_pexpr: forall 'bty. generic_pexpr 'bty Symbol.sym -> pexpr
+let rec convert_pexpr (Pexpr _ pexpr_) =
+  Pexpr () match pexpr_ with
+  | PEsym sym ->
+      PEsym sym
+ | PEimpl iCst ->
+     PEimpl iCst
+ | PEval cval ->
+     PEval cval
+ | PEconstrained xs ->
+     PEconstrained (List.map (fun (constrs, pe) -> (constrs, convert_pexpr pe)) xs)
+ | PEundef ub ->
+     PEundef ub
+ | PEerror str pe ->
+     PEerror str (convert_pexpr pe)
+ | PEctor ctor pes ->
+     PEctor (convert_ctor ctor) (List.map convert_pexpr pes)
+ | PEcase pe pat_pes ->
+     PEcase (convert_pexpr pe) (List.map (fun (pat, pe) -> (convert_pattern pat, convert_pexpr pe)) pat_pes)
+ | PEarray_shift pe1 ty pe2 ->
+     PEarray_shift (convert_pexpr pe1) ty (convert_pexpr pe2)
+ | PEmember_shift pe sym ident ->
+     PEmember_shift (convert_pexpr pe) sym ident
+ | PEnot pe ->
+     PEnot (convert_pexpr pe)
+ | PEop bop pe1 pe2 ->
+     PEop bop (convert_pexpr pe1) (convert_pexpr pe2)
+ | PEstruct sym ident_pes ->
+     PEstruct sym (List.map (fun (ident, pe) -> (ident, convert_pexpr pe)) ident_pes)
+ | PEunion sym ident pe ->
+     PEunion sym ident (convert_pexpr pe)
+ | PEcall nm pes ->
+     PEcall nm (List.map convert_pexpr pes)
+ | PElet pat pe1 pe2 ->
+     PElet (convert_pattern pat) (convert_pexpr pe1) (convert_pexpr pe2)
+ | PEif pe1 pe2 pe3 ->
+     PEif (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3)
+ | PEis_scalar pe ->
+     PEis_scalar (convert_pexpr pe)
+ | PEis_integer pe ->
+     PEis_integer (convert_pexpr pe)
+ | PEis_signed pe ->
+     PEis_signed (convert_pexpr pe)
+ | PEis_unsigned pe ->
+     PEis_unsigned (convert_pexpr pe)
+ | PEstd str pe ->
+     PEstd str (convert_pexpr pe)
+  end
+
+val     convert_expr: forall 'bty 'a. Core.generic_expr 'a 'bty Symbol.sym -> Core.expr core_run_annotation
+let rec convert_expr expr =
+  match expr with
+    | Epure pe ->
+        Epure (convert_pexpr pe)
+    | Ememop memop pes ->
+        Ememop memop (List.map convert_pexpr pes)
+    | Eskip ->
+        Eskip
+    | Elet pat pe1 e2 ->
+        Elet (convert_pattern pat) (convert_pexpr pe1) (convert_expr e2)
+    | Eif pe1 e2 e3 ->
+        Eif (convert_pexpr pe1) (convert_expr e2) (convert_expr e3)
+    | Ecase pe pat_es ->
+        Ecase (convert_pexpr pe) (List.map (fun (pat, e) -> (convert_pattern pat, convert_expr e)) pat_es)
+    | Eccall _ pe pes ->
+        Eccall empty_annotation (convert_pexpr pe) (List.map convert_pexpr pes)
+    | Eproc _ nm pes ->
+        Eproc empty_annotation nm (List.map convert_pexpr pes)
+    | Eaction pact ->
+        Eaction (convert_paction pact)
+    | Eunseq es ->
+        Eunseq (List.map convert_expr es)
+    | Ewseq pat e1 e2 ->
+        Ewseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
+    | Esseq pat e1 e2 ->
+        Esseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
+    | Easeq sym_opt act1 pact2 ->
+        Easeq sym_opt (convert_action act1) (convert_paction pact2)
+    | Eindet i e ->
+        Eindet i (convert_expr e)
+    | Ebound i e ->
+        Ebound i (convert_expr e)
+    | Esave sym xs e ->
+        Esave sym (List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, convert_pexpr pe))) xs) (convert_expr e)
+    | Erun _ sym pes ->
+        Erun empty_annotation sym (List.map convert_pexpr pes)
+    | End es ->
+        End (List.map convert_expr es)
+    | Epar es ->
+        Epar (List.map convert_expr es)
+    | Ewait tid ->
+        Ewait tid
+    | Eloc loc e ->
+        Eloc loc (convert_expr e)
+    | Estd s e ->
+        Estd s (convert_expr e)
+  end
+
+and convert_action_ act_ =
+  match act_ with
+    | Create pe1 pe2 pref ->
+        Create (convert_pexpr pe1) (convert_pexpr pe2) pref
+    | Alloc pe1 pe2 pref ->
+        Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
+    | Kill pe ->
+        Kill (convert_pexpr pe)
+    | Store pe1 pe2 pe3 mo ->
+        Store (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
+    | Load pe1 pe2 mo ->
+        Load (convert_pexpr pe1) (convert_pexpr pe2) mo
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        RMW (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) (convert_pexpr pe4) mo1 mo2
+    | Fence mo ->
+        Fence mo
+  end
+
+and convert_action act =
+  match act with
+    | Action loc _ act_ ->
+        Action loc empty_annotation (convert_action_ act_)
+  end
+
+and convert_paction pact =
+  match pact with
+    | Paction p act ->
+        Paction p (convert_action act)
+  end
+
+let convert_impl_decl = function
+  | Def bTy pe ->
+      Def bTy (convert_pexpr pe)
+  | IFun bTy sym_bTys pe ->
+      IFun bTy sym_bTys (convert_pexpr pe)
+end
+
+val convert_file: forall 'bty 'a. generic_file 'bty 'a -> file core_run_annotation
+let convert_file file =
+  let convert_fun_map_decl = function
+    | Fun bTy params pe ->
+        Fun bTy params (convert_pexpr pe)
+    | ProcDecl bTy params ->
+        ProcDecl bTy params
+    | Proc bTy params e ->
+        Proc bTy params (convert_expr e)
+  end in
+
+ <|
+  main=    file.main;
+  tagDefs= file.tagDefs;
+  stdlib=  Map.map convert_fun_map_decl file.stdlib;
+  impl=    Map.map convert_impl_decl file.impl;
+  globs=   List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
+  funs=    Map.map convert_fun_map_decl file.funs;
+ |>
+(* END silly *)

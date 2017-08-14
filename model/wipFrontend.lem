@@ -1,0 +1,148 @@
+open import Pervasives Utils
+open import UniqueId Symbol
+
+
+import Core 
+module C = Core
+
+module A = struct
+  include import AilSyntax
+  include import AilTypes
+end
+import GenTypes GenTypesAux
+
+(* Ail typing *)
+import GenTyping ErrorMonad
+
+(* Elaboration *)
+open import Translation Translation_aux
+import Translation_effect
+module TranslateEff = Translation_effect
+
+(* Core evaluation *)
+import Core_run Core_run_aux Driver
+import Nondeterminism2
+module ND = Nondeterminism2
+
+(* Memory model *)
+import Mem_aux
+
+
+val runND_proxy:
+  Driver.driverM (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) -> Driver.driver_state ->
+  list (ND.nd_status (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) Driver.driver_error * list string * Driver.driver_state)
+declare ocaml target_rep function runND_proxy = `Smt.runND_exhaustive`
+
+val empty_sigma: forall 'a. A.sigma 'a
+let empty_sigma = <|
+  A.declarations= [];
+  A.object_definitions= [];
+  A.function_definitions= [];
+  A.static_assertions= [];
+  A.tag_definitions= [];
+|>
+
+
+import Exception Errors
+module Eff = Exception
+let inline (>>=) = Eff.bind
+
+
+val evalConstantExpressionAux:
+  Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  UniqueId.supply Symbol.sym ->
+  (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
+  A.expression unit -> Eff.exceptM C.value Errors.error
+
+let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbol_suppl typing_guard expr =
+  let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
+    GenTyping.annotate_expression empty_sigma [] (*TODO: check*)GenTyping.CTXother in
+  
+  let toCore: A.expression GenTypes.genTypeCategory -> TranslateEff.elabM (Core.expr unit) =
+    translate_expression (Translation_aux.mk_translation_stdlib (ailnames, stdlib_fun_map))
+      (Map.empty: C.core_tag_definitions) in
+  
+  (* typechecks the expression *)
+  match ErrorMonad.runErrorMonad (toAilTau expr) with
+    | Left (loc, err) ->
+        error "TODO: integer expression was illtyped"
+    | Right a_expr ->
+        (* applies the provided typing guard *)
+        typing_guard (GenTypes.genTypeCategoryOf a_expr) >>= fun () ->
+        
+        (* elaborate the typed expression into Core *)
+        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.init symbol_suppl) in
+        
+        let dr_st =
+          (* this just builds the shell of the driver state *)
+          let dummy_core_file = Core_run_aux.convert_file
+            <| C.main= Nothing
+             ; C.stdlib= stdlib_fun_map
+             ; C.impl= impl
+             ; C.globs= []
+             ; C.funs= Map.empty
+             ; C.tagDefs= Map.empty |> in
+          let init_dr_st = Driver.initial_driver_state translate_final_st.TranslateEff.symbol_supply dummy_core_file in
+          (* spawning a thread with the Core expression we just generated as it's arena *)
+          let ((tid, core_st), run_st) = State.run (
+            Core_run.spawn_thread Nothing <|
+              Core_run.arena=  Core_run_aux.convert_expr core_expr;
+              Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
+              Core_run.labels= Map.empty;
+              Core_run.labels2= Map.empty;
+              Core_run.current_loc= loc;
+              Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)
+            |> init_dr_st.Driver.core_state
+          ) init_dr_st.Driver.core_run_state in
+          (* now we can build the actual driver's initial state *)
+          <| init_dr_st with
+           Driver.core_state= core_st;
+           Driver.core_run_state= run_st |> in
+        
+        (* run the evaluator *)
+        let driver_action =
+          ND.bind (Driver.driver false) (fun () ->
+            ND.bind ND.get (fun dr_st' ->
+              ND.return (Driver.finalize "wipFrontend" dr_st')
+            )
+          ) in
+        match runND_proxy driver_action dr_st with
+          | [(ND.Active (_, (_, _, cval), _), _, _ )] ->
+              Eff.return cval
+          | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->
+              Eff.fail (ub_loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_UB ubs))
+          | _ ->
+              error "TODO error: the driver found less/more than one active execution"
+        end
+  end
+
+
+val evalIntegerConstantExpression:
+  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  UniqueId.supply Symbol.sym -> A.expression unit -> Eff.exceptM integer Errors.error
+
+let evalIntegerConstantExpression loc std_str core_env symbol_suppl expr =
+  let typing_guard gtc =
+    let do_fail = Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_notInteger std_str)) in
+    match gtc with
+      | GenTypes.GenLValueType _ _ _ ->
+          do_fail
+      | GenTypes.GenRValueType gTy ->
+          if GenTypesAux.is_integer gTy then
+            Eff.return ()
+          else
+            do_fail
+    end in
+  
+  evalConstantExpressionAux loc core_env symbol_suppl typing_guard expr >>= function
+    | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
+        match Mem.eval_integer_value ival with
+          | Just n ->
+              Eff.return n
+          | Nothing ->
+              error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
+        end
+    | _ ->
+        (* given that typing guard has passed the evaluator must evaluate to an integer value *)
+        Eff.fail (loc, Errors.Desugar_cause Errors.Desugar_impossible)
+  end
