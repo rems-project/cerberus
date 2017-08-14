@@ -102,7 +102,6 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Allocated
 
 
-(* ASK: This is not the same as type category defined in the standard, right? (6.2.5#25) *)
 type typeCategory [name = "tc*"] = 
  | LValueType of qualifiers * ctype * (* isRegister *) bool
  | RValueType of ctype

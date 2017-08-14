@@ -1829,7 +1829,7 @@ and desugar_alignment_specifier align_spec =
 
 (* val desugar_pointer_declarator: pointer_declarator -> E.desugM (qualifiers * (qualifiers -> ctype -> ctype)) *)
 and desugar_pointer_declarator_BROKEN ptr_decltor =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 2 [] (fun () ->
     "HELLO BROKEN POINTER"
   ) in
   match ptr_decltor with
@@ -2878,7 +2878,7 @@ let desugar_and_register_external_declaration edecl =
                   List.elem FS_Noreturn specifs.function_specifiers
                 )
             | _ ->
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 2 [] (fun () ->
                   "QS FOR Function declaration ==> " ^ Pp.stringFromAil_qualifiers qs
                 ) in
                 (* TODO: rename this function *)
@@ -2958,18 +2958,18 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
       
       desugar_pointer_declarator2 ptr_decltor1 >>= fun mk_type1 ->
       let (qs1, ty1) = mk_type1 base_qs1 base_ty1 in
-      let () = Debug.print_debug 0 [] (fun () -> "int const **ptrToPtrToConstInt") in
-      let () = Debug.print_debug 0 [] (fun () -> (Pp.stringFromAil_ctype qs1 ty1)) in
+      let () = Debug.print_debug 2 [] (fun () -> "int const **ptrToPtrToConstInt") in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs1 ty1)) in
       
       desugar_pointer_declarator2 ptr_decltor2 >>= fun mk_type2 ->
       let (qs2, ty2) = mk_type2 base_qs2 base_ty2 in
-      let () = Debug.print_debug 0 [] (fun () -> "int * const *ptrToConstPtrToInt") in
-      let () = Debug.print_debug 0 [] (fun () -> (Pp.stringFromAil_ctype qs2 ty2)) in
+      let () = Debug.print_debug 2 [] (fun () -> "int * const *ptrToConstPtrToInt") in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs2 ty2)) in
       
       desugar_pointer_declarator2 ptr_decltor3 >>= fun mk_type3 ->
       let (qs3, ty3) = mk_type3 base_qs3 base_ty3 in
-      let () = Debug.print_debug 0 [] (fun () -> "int ** const constPtrToPtrToInt") in
-      let () = Debug.print_debug 0 [] (fun () -> (Pp.stringFromAil_ctype qs3 ty3)) in
+      let () = Debug.print_debug 2 [] (fun () -> "int ** const constPtrToPtrToInt") in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs3 ty3)) in
       
       (* ----- *)
       
@@ -2992,8 +2992,8 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
         let (_, tquals_qs) = translate_type_qualifiers specifs1.type_qualifiers in
         mk_qs_type1 (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
       
-      let () = Debug.print_debug 0 [] (fun () -> "DECLTOR1:") in
-      let () = Debug.print_debug 0 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
+      let () = Debug.print_debug 2 [] (fun () -> "DECLTOR1:") in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
       
       (* ----- *)
       
@@ -3001,8 +3001,8 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
       desugar_init_declarator (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty specifs1.storage_classes
         (InitDecl Loc.unknown decltor1 Nothing) >>= fun (ident, (qs, ty), mk_desug_init) ->
       
-      let () = Debug.print_debug 0 [] (fun () -> "INIT DECLARATOR:") in
-      let () = Debug.print_debug 0 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
+      let () = Debug.print_debug 2 [] (fun () -> "INIT DECLARATOR:") in
+      let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
       
       
       

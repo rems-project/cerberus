@@ -630,105 +630,124 @@ let runND_random (ND m) st0 =
 *)
 
 let rec pick size =
-     Printf.printf "Non deterministic options. Choose option between: 1 to %d: " size;
+     Printf.printf "Choose option between: 1 to %d: " size;
      try
         let p = read_int() in
         if p > 0 && p <= size then p-1
         else (print_endline "Wrong option!"; pick size)
      with Failure _ -> print_endline "Wrong option! Enter a number."; pick size
 
+let pp_core_exp e =
+  PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout (Pp_core.Basic.pp_expr e)
+
+let print_thread_state tid st =
+  print_endline "-------";
+  Printf.printf "Thread %s:\n" (string_of_int tid);
+  begin match st.Core_run.arena with
+    | Core.Eunseq es ->
+      print_endline "Unsequenced executions. Choose one option to execute first:";
+      let i = ref 0 in
+      List.map (fun e -> i := !i + 1; Printf.printf "Option %d:\n" !i; pp_core_exp e; print_endline "") es |> ignore
+    | Core.End es ->
+      print_endline "Non deterministic executions. Choose one option to execute:";
+      let i = ref 0 in
+      List.map (fun e -> i := !i + 1; Printf.printf "Option %d:\n" !i; pp_core_exp e; print_endline "") es |> ignore
+    | Core.Eaction _ -> pp_core_exp st.Core_run.arena
+    | _ -> failwith "print_thread_state: unexpected Core expression"
+  end;
+  print_endline "-------"
+
 let print_driver_state st =
-    print_endline (String_core_run.string_of_core_state st.Driver.core_state)
+  List.map (fun(tid, (_, th_st)) -> print_thread_state tid th_st) (st.Driver.core_state.Core_run.thread_states)
+  |> ignore; flush stdout
 
 let runND_interactive (ND m) st0 =
   let slvSt = init_solver () in
-  let rec aux = function
+  let rec run_action = function
       | NDactive (a, st') ->
-          print_endline "NDactive";
-          print_driver_state st';
-          Params.update_param_value slvSt.ctx "timeout" "";
-          begin match check_sat slvSt.slv [] with
-            | Solver.UNKNOWN ->
-                print_endline "STILL UNKNOWN";
-            | _ ->
-                ()
-          end;
-          [Active a, Wip.to_strings (), st']
-      
+        Params.update_param_value slvSt.ctx "timeout" "";
+        begin match check_sat slvSt.slv [] with
+          | Solver.UNKNOWN ->
+              print_endline "STILL UNKNOWN";
+          | _ ->
+              ()
+        end;
+        Active a, Wip.to_strings (), st'
+
       | NDkilled r ->
-          print_endline "NDkilled";
-          [Killed r, Wip.to_strings (), st0]
-      
+        Killed r, Wip.to_strings (), st0
+
       | NDnd (debug_str, st, acts) ->
-          print_driver_state st;
-          print_endline ("NDnd(" ^ debug_str ^ ")");
-          let rec choose xs = 
-            let act = List.length xs |> pick |> List.nth xs in
-            try aux act
-            with Backtrack _ -> failwith "ND BACKTRACK" (*choose (List.filter (fun x -> not (x = act)) xs)*)
-          in choose acts
-      
+        let rec choose xs =
+          let rec rm_by_index acc xs i =
+            match xs with
+            | x::xs ->
+              if i = 0 then acc @ xs
+              else rm_by_index (acc@[x]) xs (i-1)
+            | _ -> failwith "runND_interactive: wrong index"
+          in
+          match List.length xs with
+          | 0 -> failwith "runND_interactive: no action"
+          | 1 -> run_action (List.hd xs)
+          | size ->
+            print_driver_state st;
+            let n = pick size in
+            try run_action (List.nth xs n)
+            with Backtrack _ ->
+              print_endline "Failed execution. Selecting alternative option.";
+              choose (rm_by_index [] xs n)
+        in choose acts
+
       | NDguard (debug_str, cs, act) ->
-          print_endline ("NDguard(" ^ debug_str ^ ")");
-          print_endline ("Add constraint: " ^ String_mem.string_of_iv_memory_constraint cs);
-          add_constraint slvSt cs;
-          begin match check_sat slvSt.slv [] with
-            | Solver.UNSATISFIABLE ->
-(*
-                print_endline (Solver.to_string slvSt.slv);
-                print_endline "NDguard BACKTRACKING";
-*)
-               raise (Backtrack [])
-            | _ ->
-               aux (*acc*) act
-          end
-      | NDbranch (debug_str, _, cs, act1, act2) ->
-(*          print_endline ("NDbranch(" ^ debug_str ^ ")"); *)
-          Solver.push slvSt.slv;
-          add_constraint slvSt cs;
-          let acc' = begin match check_sat slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
-(*               print_endline ("SAT ==> " ^ debug_str ^ " :- " ^ String_mem.string_of_iv_memory_constraint cs); *)
-               begin try
-                 aux (*acc*) act1
-               with
-                 | Backtrack new_acc ->
-                     new_acc (* acc *)
-               end
-            | Solver.UNSATISFIABLE ->
-                []
-                (*acc*)
-          end in
-          Solver.pop slvSt.slv 1;
-          Solver.push slvSt.slv;
-          add_constraint slvSt (MC_not cs);
-          let acc'' = begin match check_sat slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
-                begin try
-                  aux (*acc'*) act2
-                with
-                  | Backtrack new_acc ->
-                      new_acc (* acc' *)
-                end
-            | Solver.UNSATISFIABLE ->
-                Solver.pop slvSt.slv 1;
-                raise (Backtrack acc')
-          end in
-          Solver.pop slvSt.slv 1;
-          acc''
-      
-  in
-  try
-    let act = m st0 in
-    print_endline (dot_from_nd_action act);
-    aux act
-(*    aux (m st0) *)
-  with
-    | Backtrack acc ->
-        acc
+        print_endline ("Adding constraint: " ^ String_mem.string_of_iv_memory_constraint cs);
+        add_constraint slvSt cs;
+        begin match check_sat slvSt.slv [] with
+          | Solver.UNSATISFIABLE ->
+            print_endline "WARN: Unsatisfiable execution. Backtracking...";
+            raise (Backtrack [])
+          | _ ->
+             run_action act
+        end
+
+      | NDbranch (debug_str, st, cs, act1, act2) ->
+        Printf.printf "Branching options: %s\n" debug_str;
+        print_driver_state st;
+        let first = (pick 2 = 0) in
+        let (sel, sel_cs, alt, alt_cs) =
+          if first then (act1, cs, act2, MC_not cs)
+          else (act2, MC_not cs, act1, cs)
+        in
+        let exec_alt () =
+            Solver.pop slvSt.slv 1;
+            Solver.push slvSt.slv;
+            print_endline ("Adding constraint: " ^ String_mem.string_of_iv_memory_constraint alt_cs);
+            add_constraint slvSt alt_cs;
+            begin match check_sat slvSt.slv [] with
+              | Solver.SATISFIABLE | Solver.UNKNOWN ->
+                run_action alt
+              | Solver.UNSATISFIABLE ->
+                failwith "runND_inderactive: no satisiable execution"
+            end
+        in
+        Solver.push slvSt.slv;
+        print_endline ("Adding constraint: " ^ String_mem.string_of_iv_memory_constraint sel_cs);
+        add_constraint slvSt sel_cs;
+        begin match check_sat slvSt.slv [] with
+          | Solver.SATISFIABLE | Solver.UNKNOWN ->
+            begin
+              try run_action sel
+              with Backtrack _ ->
+                print_endline "Backtrack(NDbranch)";
+                exec_alt ()
+            end
+          | Solver.UNSATISFIABLE ->
+            print_endline "WARN: Unsatisfiable execution. Executing alternative option.";
+            exec_alt ()
+        end
+
+  in [run_action (m st0)]
 
 let runND m st0 =
-(*  print_endline "STARTING Smt.runND"; *)
   flush stdout;
   Global_ocaml.(match current_execution_mode () with
     | Some Random (* ->

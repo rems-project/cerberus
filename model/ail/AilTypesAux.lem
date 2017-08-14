@@ -319,6 +319,7 @@ let is_aggregate ty =
   is_array ty || is_struct ty
 
 (* STD §6.2.5#20 *)
+(* NOTE: dead code *)
 val is_derived: ctype -> bool
 let is_derived ty =
   match ty with
@@ -332,6 +333,7 @@ let is_derived ty =
   end
 
 (* STD §6.2.5#24 *)
+(* NOTE: dead code *)
 val is_derived_declarator: ctype -> bool
 let is_derived_declarator ty =
   match unatomic ty with
