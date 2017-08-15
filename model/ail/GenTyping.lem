@@ -137,13 +137,7 @@ let well_typed_assignment s ty1 gty2 null2 =
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
             Pp.stringFromAil_ctype no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           E.return (tag_sym1 = tag_sym2)
-          
-(* KKKKK WIP
-      | (Struct _, GenStruct id2 membrs2) ->
-          (* TODO: a bit hackish to do it like that *)
-          let _ = output_string "[well_typed_assignment] ??: bullet 2" in (* DEBUG *)
-          E.return (AAux.compatible ty1 (Struct id2 membrs2))
-*)
+      
       | (Union tag_sym1, GenUnion tag_sym2) ->
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
@@ -162,25 +156,23 @@ let well_typed_assignment s ty1 gty2 null2 =
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
       "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype no_qualifiers conv_ty1  ^
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
-    match (conv_ty1, gty2) with
-      | (Pointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
+    match (ty1, conv_ty1, gty2) with
+      | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* §6.5.16.1#1, bullet 3 *)
           (* doing the "qualified or unqualified versions of" by checking the compatibility of
              the unqualified referenced type with no qualifiers *)
-          let () = Debug.print_debug 0 [] (fun () ->
-            "TODO: I commented the AAux.unqualify, check if correct and remove for good"
-          ) in
-          if    AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) ref_ty1) (no_qualifiers, (*AAux.unqualify*) ref_ty2)
+          (* NOTE: for the left operand, we are looking at the qualifiers before
+             conversion (since the lvalue conversion removes the qualifiers) *)
+          if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 4 *)
-          else if (AAux.is_void ref_ty1 || AAux.is_void ref_ty2) &&
+          else if (   (AAux.is_object conv_ref_ty1 && AAux.is_void   ref_ty2)
+                   || (AAux.is_void   conv_ref_ty1 && AAux.is_object ref_ty2) ) &&
                   AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 4")        in (* DEBUG *)
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "qs1: " ^ Pp.stringFromAil_qualifiers ref_qs1) in (* DEBUG *)
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "qs2: " ^ Pp.stringFromAil_qualifiers ref_qs2) in (* DEBUG *)
             E.return true
           
           (* §6.5.16.1#1, bullet 5 *)
@@ -189,14 +181,18 @@ let well_typed_assignment s ty1 gty2 null2 =
             E.return true
           
           else
-            let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: is_pointer ty1 && gty2") in (* DEBUG *)
+            let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
+              "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^ Pp.stringFromAil_human_ctype ref_qs1 conv_ref_ty1 ^
+              ", (ref_qs2, ref_ty2)= " ^ Pp.stringFromAil_human_ctype ref_qs2 ref_ty2
+            ) in (* DEBUG *)
             E.return false
-      | (Pointer ref_qs1 ref_ty1, _) ->
+      | _ ->
           (* §6.5.16.1#1, bullet 5 *)
           E.return null2
-      | _ ->
+(*
           let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: is_pointer ty1") in (* DEBUG *)
           E.return false
+*)
     end
   
   (* §6.5.16.1#1, bullet 6 *)
@@ -592,7 +588,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
     | AilEident sym ->
         match (Context.lookup identifierEqual gamm sym, Context.lookup identifierEqual sigm.declarations sym) with
           | (Just (dur_opt, qs, ty), Nothing) ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               
@@ -602,7 +598,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
               end in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (Decl_object dur_opt qs ty)) ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               
@@ -949,7 +945,7 @@ TODO
         annotate_expression CTXassign e1 >>= fun e1' ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs1 ty1 _ ->
-              let () = Debug.print_debug 0 [Debug.DB_ail_typing] (fun () ->
+              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEassign] " ^ Pp.stringFromAil_ctype qs1 ty1
               ) in
               if AAux.modifiable sigm qs1 ty1 then
@@ -1400,7 +1396,7 @@ and function_decay sigm a_expr =
 and perform_decays sigm ctx a_expr =
   match genTypeCategoryOf a_expr with
     | GenLValueType qs ty isRegister ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "GenLValueType ==>" ^ Pp.stringFromAil_ctype qs ty
         ) in
         if    not (AAux.is_array ty)
@@ -2042,6 +2038,10 @@ let annotate_program (startup_opt, sigm) =
               else
                 E.fail Loc.unknown TError_main_return_type
           | _ ->
-              E.fail Loc.unknown (TError_TODO 67) (* TODO: this is not realy a type error, but more an csem internal one. *)
+              let () = Debug.print_debug 0 [] (fun () ->
+                "STARTUP ==> " ^ show startup
+              ) in
+              (* TODO: this is not realy a type error, but more an csem internal one. *)
+              E.fail Loc.unknown (TError_TODO 67)
         end
   end

@@ -264,132 +264,140 @@ let rec drive_core_thread tid =
   end in
   ND.msum "drive_core_thread" $ List.map (function
     | Core_run.Step_constrained debug_str xs ->
-        (* DEBUG *) ND.print_debug 1 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED") >>
-        ND.msum "step_constrained" (
-          List.map (fun (cs, step_m) ->
-            let () = Debug.print_debug 1 [] (fun () ->
-              "ADDING CONSTRAINTS (driver) ===> " ^ Pp.stringFromMem_iv_mem_constraint cs
-            ) in
-            ND.addConstraints "driver" cs >>
-            liftCore_run step_m >>= fun th_st' ->
-            ND.update (fun dr_st -> <| dr_st with
-              core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
-              dr_step_counter= dr_st.dr_step_counter + 1
-            |>) >>
-            drive_core_thread tid
-          ) xs
-        )
+        ( "Step_constrained(" ^ debug_str ^ ")"
+        , (* DEBUG *) ND.print_debug 1 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED, |xs| = " ^ show (List.length xs)) >>
+          ND.msum "step_constrained" (
+            List.map (fun (cs, step_m) ->
+              ( Pp.stringFromMem_iv_mem_constraint cs
+              , let () = Debug.print_debug 1 [] (fun () ->
+                  "ADDING CONSTRAINTS (driver) ===> " ^ Pp.stringFromMem_iv_mem_constraint cs
+                ) in
+                ND.addConstraints "driver" cs >>
+                liftCore_run step_m >>= fun th_st' ->
+                ND.update (fun dr_st -> <| dr_st with
+                  core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+                  dr_step_counter= dr_st.dr_step_counter + 1
+                |>) >>
+                drive_core_thread tid )
+            ) xs
+          ) )
     
     | Core_run.Step_action_request _ ->
-        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> ">> ACTION_REQUEST") >>
-        ND.return ()
+        ( "Step_action_request"
+        , ND.return () )
     | Core_run.Step_memop_request _ _ _ _ ->
-        ND.return ()
+        ( "Step_memop_request"
+        , ND.return () )
     | Core_run.Step_tau debug_str step_m ->
-        let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
-        let pre_th_st = (* DEBUG *)
-          snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
-        begin
-          if debug_str <> "Eloc" then
-          (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
-          (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.Core_run.arena ^ ";\nstack= " ^
-          (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.Core_run.stack)
-          else
-            ND.return ()
-        end >>
-        (* case where the Core program does a non pure but non memory-related
-           step (typically ordering related stuff) *)
-        liftCore_run step_m >>= fun th_st' ->
-        let () = Boot.end_timing () in (* DEBUG, PROFILING *)
-        ND.put <| dr_st with
-          core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
-          dr_step_counter= dr_st.dr_step_counter + 1
-        |> >>
-        drive_core_thread tid
+        ( "Step_tau(" ^ debug_str ^ ")"
+        , let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
+          let pre_th_st = (* DEBUG *)
+            snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
+          begin
+            if debug_str <> "Eloc" then
+            (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+            (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.Core_run.arena ^ ";\nstack= " ^
+            (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.Core_run.stack)
+            else
+              ND.return ()
+          end >>
+          (* case where the Core program does a non pure but non memory-related
+             step (typically ordering related stuff) *)
+          liftCore_run step_m >>= fun th_st' ->
+          let () = Boot.end_timing () in (* DEBUG, PROFILING *)
+          ND.put <| dr_st with
+            core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1
+          |> >>
+          drive_core_thread tid )
     | Core_run.Step_eval debug_str step_m ->
-        let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
-        let pre_th_st = (* DEBUG *)
-          snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
-        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "eval(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
-        (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.Core_run.arena ^ ";\nstack= " ^
-        (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.Core_run.stack) >>
-        (* case where the Core program does a pure step *)
-        liftCore_run step_m >>= fun th_st' ->
-        let () = Boot.end_timing () in (* DEBUG, PROFILING *)
-        ND.update (fun dr_st -> <| dr_st with
-          core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
-          dr_step_counter= dr_st.dr_step_counter + 1
-        |>) >>
-        drive_core_thread tid
+        ( "Step_eval(" ^ debug_str ^ ")"
+        , let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
+          let pre_th_st = (* DEBUG *)
+            snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
+          (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "eval(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+          (* DEBUG *)                   Pp.stringFromCore_expr pre_th_st.Core_run.arena ^ ";\nstack= " ^
+          (* DEBUG *)                   Pp.stringFromCore_stack pre_th_st.Core_run.stack) >>
+          (* case where the Core program does a pure step *)
+          liftCore_run step_m >>= fun th_st' ->
+          let () = Boot.end_timing () in (* DEBUG, PROFILING *)
+          ND.update (fun dr_st -> <| dr_st with
+            core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1
+          |>) >>
+          drive_core_thread tid )
     
     | Core_run.Step_thread_done parent_tid cval ->
-        (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "thread " ^ show tid ^ " is done") >>
-        let actions_of_current_thread: set Cmm.action =
-          Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
-        let last_actions_of_current_thread: set Cmm.action =
-          Set.filter (fun act ->
-            not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
-          ) actions_of_current_thread in
-        ND.put <| dr_st with
-          core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
-          dr_step_counter= dr_st.dr_step_counter + 1;
-        |> >>
-        drive_core_thread parent_tid
+        ( "Step_thread_done"
+        , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "thread " ^ show tid ^ " is done") >>
+          let actions_of_current_thread: set Cmm.action =
+            Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
+          let last_actions_of_current_thread: set Cmm.action =
+            Set.filter (fun act ->
+              not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
+            ) actions_of_current_thread in
+          ND.put <| dr_st with
+            core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1;
+          |> >>
+          drive_core_thread parent_tid )
     
     | Core_run.Step_blocked ->
-        (* error "WIP: Step_blocked" *) ND.return ()
+        ("Step_blocked", ND.return ())
     | Core_run.Step_error debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
     | Core_run.Step_done _ ->
-        ND.return ()
+        ("Step_done", ND.return ())
     | Core_run.Step_spawn_threads mk_th_st th_sts ->
-        ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_spawn_threads") >>
-        let ((th_tids, core_st'), run_st') = State.run (
-          State.foldlM (fun (th_tids_, core_st_) th_st ->
-            State.bind (Core_run.spawn_thread (Just tid) th_st core_st_)
-              (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
-          ) ([], dr_st.core_state) th_sts
-        ) dr_st.core_run_state in
-        ND.put <| dr_st with
-          core_run_state= run_st';
-          core_state= Core_run.update_thread_state tid
-                        (mk_th_st (Core.Eunseq $ List.reverse (List.map (fun z -> Core.Ewait z) th_tids)))
-                        core_st';
-        |> >>
-        ND.mapM_ drive_core_thread th_tids >>
-        drive_core_thread tid
+        ( "Step_spawn_threads"
+        , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_spawn_threads") >>
+          let ((th_tids, core_st'), run_st') = State.run (
+            State.foldlM (fun (th_tids_, core_st_) th_st ->
+              State.bind (Core_run.spawn_thread (Just tid) th_st core_st_)
+                (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
+            ) ([], dr_st.core_state) th_sts
+          ) dr_st.core_run_state in
+          ND.put <| dr_st with
+            core_run_state= run_st';
+            core_state= Core_run.update_thread_state tid
+                          (mk_th_st (Core.Eunseq $ List.reverse (List.map (fun z -> Core.Ewait z) th_tids)))
+                          core_st';
+          |> >>
+          ND.mapM_ drive_core_thread th_tids >>
+          drive_core_thread tid )
     
     | Core_run.Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
-        ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
-        let eval_conv (*ty1*) ty2 mval =
-          eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
-            (* Core.PEcall (Core.Sym conv_sym) *)
-            Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
-              [ Caux.mk_ctype_pe ty2
-              ; let (_, cval) = Core_aux.valueFromMemValue mval in
-                Core.Pexpr () (Core.PEval cval) ] in
-        liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) >>= fun out_chars_ ->
-        match out_chars_ with
-          | Left err ->
-              error "TODO(msg): a printf() got an error"
-          | Right (Undefined.Defined out_chars) ->
-              ND.update (fun dr_st ->
-                let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
-                 <| dr_st with
-                  core_state= <| core_st' with
-                    Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stdout=
-                          Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stdout
-                        |>
-                  |>;
-                  dr_step_counter= dr_st.dr_step_counter + 1;
-                |>
-              ) >>
-              drive_core_thread tid
+        ( "Step_printf2"
+        , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
+          let eval_conv (*ty1*) ty2 mval =
+            eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
+              (* Core.PEcall (Core.Sym conv_sym) *)
+              Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
+                [ Caux.mk_ctype_pe ty2
+                ; let (_, cval) = Core_aux.valueFromMemValue mval in
+                  Core.Pexpr () (Core.PEval cval) ] in
+          liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) >>= fun out_chars_ ->
+          match out_chars_ with
+            | Left err ->
+                error "TODO(msg): a printf() got an error"
+            | Right (Undefined.Defined out_chars) ->
+                ND.update (fun dr_st ->
+                  let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
+                  <| dr_st with
+                    core_state= <| core_st' with
+                      Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stdout=
+                            Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stdout
+                          |>
+                    |>;
+                    dr_step_counter= dr_st.dr_step_counter + 1;
+                  |>
+                ) >>
+                drive_core_thread tid
           | Right (Undefined.Error loc str) ->
               ND.kill (ND.Error loc str)
           | Right (Undefined.Undef loc ubs) ->
               ND.kill (ND.Undef loc ubs)
-        end
+        end )
   end) (Core_run.core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
 
 

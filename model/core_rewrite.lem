@@ -207,6 +207,12 @@ let rec remove_skips expr =
       End (List.map remove_skips es)
   | Epar es ->
       Epar (List.map remove_skips es)
+
+  | Eloc loc e ->
+      Eloc loc (remove_skips e)
+  | Estd str e ->
+      Estd str (remove_skips e)
+
   | _ ->
       expr
   end
@@ -305,6 +311,12 @@ let rec remove_unseqs expr =
 *)
   | Epar es ->
       Epar (List.map remove_unseqs es)
+
+    | Eloc loc e ->
+        Eloc loc (remove_unseqs e)
+    | Estd str e ->
+        Estd str (remove_unseqs e)
+
   | _ ->
       expr
   end
@@ -510,7 +522,12 @@ let rec flatten_seqs expr =
     | Epar es ->
         Epar (List.map flatten_seqs es)
     | Eloc _ e ->
+        (* TODO: bad to remove the Eloc? *)
         flatten_seqs e
+    
+    | Estd str e ->
+        Estd str (flatten_seqs e)
+
     | Ecase pe pat_es ->
         Ecase pe (List.map (fun (pat, e) -> (pat, flatten_seqs e)) pat_es)
     | _ ->
@@ -682,6 +699,10 @@ let rec remove_conv_int expr =
         expr
     | Eloc loc e ->
         Eloc loc (remove_conv_int e)
+
+    | Estd str e ->
+        Estd str (remove_conv_int e)
+
     | _ ->
         expr
   end
@@ -776,6 +797,11 @@ let rec sequentialise_creates_kills expr =
     | Epar es ->
         Epar (List.map sequentialise_creates_kills es)
     
+    | Eloc loc e ->
+        Eloc loc (sequentialise_creates_kills e)
+    | Estd str e ->
+        Estd str (sequentialise_creates_kills e)
+
     | _ ->
         expr
   end
@@ -1029,6 +1055,12 @@ let rec pure_propagation2 expr =
         End (List.map pure_propagation2 es)
     | Epar es ->
         Epar (List.map pure_propagation2 es)
+    
+    | Eloc loc e ->
+        Eloc loc (pure_propagation2 e)
+    | Estd str e ->
+        Estd str (pure_propagation2 e)
+
 
 (*
     | Epure pe ->

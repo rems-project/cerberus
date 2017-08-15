@@ -1366,22 +1366,22 @@ end
 
 
 (* Adjustment for function parameter types *)
-val adjust: ctype -> ctype
-let adjust = function
+val adjust: qualifiers -> ctype -> (qualifiers * ctype)
+let adjust qs = function
   | Array elem_ty _ ->
       (* STD §6.7.6.3#7 *)
       (* TODO: now that I removed qualifiers from Array, this function doesn't
          doesn't do the right thing. Cabs_to_ail should not use it anymore
          (at least not for Array) *)
-      let () = Debug.warn [] (fun () ->
-        "AilTypesAux.adjust is wrong for Array (doesn't have access to the potential qualifier)"
-      ) in
-      Pointer no_qualifiers elem_ty
+      (no_qualifiers, Pointer qs elem_ty)
  | Function hasProto ret_qs_ty params isVariadic ->
       (* STD §6.7.6.3#8 *)
-     Pointer no_qualifiers (Function hasProto ret_qs_ty params isVariadic)
+     let () = Debug.warn [] (fun () ->
+       "(unsure) AilTypesAux.Function, qualifiers"
+     ) in
+     (no_qualifiers, Pointer qs (Function hasProto ret_qs_ty params isVariadic))
  | ty ->
-     ty
+     (qs, ty)
 end
 
 
