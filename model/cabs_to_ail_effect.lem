@@ -855,10 +855,33 @@ let register_function_declaration loc sym is_proto decl =
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just (_, decl') ->
-        if decl <> decl' then
+    | Just (prev_has_proto, prev_decl) ->
+        let () = Debug.print_debug 0 [] (fun () ->
+          "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
+        ) in
+(*
+        let (prev_ret_qs_ty, prev_params, prev_is_variadic, prev_is_inline, prev_is_Noreturn) = prev_decl in
+        let (new_ret_qs_ty, new_params, new_is_variadic, new_is_inline, new_is_Noreturn) = decl in
+        
+        let prev_fun_type = Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
+        let new_fun_type  = Function new_has_proto new_ret_qs_ty new_params new_is_variadic in
+
+Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1
+
+AilTypesAux.make_composite
+
+
+
+  (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
+
+
+((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool)
+*)
+
+        if decl <> prev_decl then
           (* TODO: msg and location *)
-          fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^ show sym ^ ", old decl= " ^ string_of_decl decl' ^ " --- vs --- " ^ string_of_decl decl))
+          fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^
+                                                   show sym ^ ", old decl= " ^ string_of_decl prev_decl ^ " --- vs --- " ^ string_of_decl decl))
         else
           return ()
     | Nothing ->
@@ -896,8 +919,22 @@ let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
         )
   end
 
+val update_external_object_type: A.identifier -> ATypes.ctype -> desugM unit
+let update_external_object_type sym ty =
+  State_exception.update (fun st ->
+    match Map.lookup sym st.external_object_declarations with
+      | Nothing ->
+          error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
+      | Just (dur, is_register, qs, _) ->
+          <| st with external_object_declarations=
+            Map.insert sym (dur, is_register, qs, ty) st.external_object_declarations
+          |>
+    end
+  )
+
 (* TODO: factorize *)
-val register_internal_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+val register_internal_object_declaration:
+  A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_internal_object_declaration sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.internal_object_declarations

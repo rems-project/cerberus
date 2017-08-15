@@ -39,7 +39,7 @@ declare hol   target_rep function stringFromAil_expression =
                                   `pp_ail$pp_expression`
 
 val stringFromAil_human_ctype: AilTypes.qualifiers -> AilTypes.ctype -> string
-declare ocaml target_rep function stringFromAil_human_ctype = `String_ail.stringFromAil_ctype_human`
+declare ocaml target_rep function stringFromAil_human_ctype = `String_ail.string_of_ctype_human`
 
 
 val stringFromCore_ctype:  Core_ctype.ctype -> string

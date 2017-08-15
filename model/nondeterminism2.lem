@@ -39,7 +39,7 @@ end
 type nd_action 'a 'st 'err 'cs =
   | NDactive of 'a
   | NDkilled of kill_reason 'err
-  | NDnd of string * 'st * list (nd_action 'a 'st 'err 'cs)
+  | NDnd of string * 'st * list (string * nd_action 'a 'st 'err 'cs)
   | NDguard of string * 'cs * nd_action 'a 'st 'err 'cs
   | NDbranch of string * 'st * 'cs * nd_action 'a 'st 'err 'cs * nd_action 'a 'st 'err 'cs
 
@@ -51,8 +51,8 @@ let rec nd_action_bind act f =
         f z
     | NDkilled r ->
         NDkilled r
-    | NDnd debug_str st acts ->
-        NDnd debug_str st (List.map (fun z -> nd_action_bind z f) acts)
+    | NDnd debug_str st str_acts ->
+        NDnd debug_str st (List.map (fun (str, act) -> (str, nd_action_bind act f)) str_acts)
     | NDguard debug_str cs act' ->
         NDguard debug_str cs (nd_action_bind act' f)
     | NDbranch debug_str st cs act1 act2 ->
@@ -143,19 +143,19 @@ let mzero =
 let mplus m1 m2 =
   error "ND2.mplus"
 
-
-val msum: forall 'a 'err 'cs 'st. Constraints 'cs => string -> list (ndM 'a 'err 'cs 'st) -> ndM 'a 'err 'cs 'st (* GENERIC MonadPlus *)
+(* GENERIC MonadPlus *)
+val msum: forall 'a 'err 'cs 'st. Constraints 'cs => string -> list (string * ndM 'a 'err 'cs 'st) -> ndM 'a 'err 'cs 'st 
 let msum debug_str = function
   | [] ->
       error "ND2.msum []"
-  | [m] ->
+  | [(_, m)] ->
       m
-  | ms ->
+  | str_ms ->
     let () = Debug.print_debug 1 [] (fun () ->
-      "ND2.msum (|ms| = " ^ show (List.length ms) ^ ")"
+      "ND2.msum (|ms| = " ^ show (List.length str_ms) ^ ")"
     ) in
     ND (fun st ->
-      NDnd debug_str st (List.map (fun (ND m) -> m st) ms)
+      NDnd debug_str st (List.map (fun (str, ND m) -> (str, m st)) str_ms)
     )
 end
 (*
@@ -205,7 +205,7 @@ let pick debug_str = function
       ) in
       ND (fun st ->
         let f z = NDactive (z, st) in
-        NDnd debug_str st (f x :: List.map f xs)
+        NDnd debug_str st (("", f x) :: List.map (fun z -> ("", f z)) xs)
 (*
         List.foldl (fun acc x' -> NDbranch empty acc (NDactive (x', st))) (NDactive (x, st)) xs
 *)
@@ -260,8 +260,8 @@ let rec liftAction liftErr mk_st' = function
         | Other err ->
             Other (liftErr err)
       end
-  | NDnd debug_str st acts ->
-      NDnd debug_str (mk_st' st) (List.map (liftAction liftErr mk_st') acts)
+  | NDnd debug_str st str_acts ->
+      NDnd debug_str (mk_st' st) (List.map (fun (str, act) -> (str, liftAction liftErr mk_st' act)) str_acts)
   | NDguard debug_str cs act ->
       NDguard debug_str cs (liftAction liftErr mk_st' act)
   | NDbranch debug_str st cs act1 act2 ->
