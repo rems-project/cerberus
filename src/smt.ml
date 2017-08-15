@@ -405,10 +405,10 @@ let rec string_of_nd_action = function
       "NDactive(" ^ String_core.string_of_value cval ^ ")"
   | NDkilled _ ->
       "NDkilled"
-  | NDnd (debug_str, st, acts) ->
+  | NDnd (debug_str, st, str_acts) ->
       "NDnd(" ^ debug_str ^ ", " ^
       "STATE[ " ^ String_core_run.string_of_core_state st.Driver.core_state ^ " ] " ^
-      String.concat ", " (List.map string_of_nd_action acts) ^
+      String.concat ", " (List.map (fun (_, act) -> string_of_nd_action act) str_acts) ^
       ")"
   | NDguard (debug_str, cs, act) ->
       "NDguard(" ^ debug_str ^ ", " ^
@@ -428,35 +428,39 @@ let rec string_of_nd_action = function
 
 
 let dot_from_nd_action act =
+  Colour.do_colour := false;
   let rec aux n = function
     | NDactive (_, st) ->
         (n+1, [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^ String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"], [])
     | NDkilled _ ->
         (n+1, [string_of_int n ^"[label= \"killed(" ^ string_of_int n ^ ")\"]"], [])
-    | NDnd (_, st, acts) ->
-        let (n', ns, nodes, edges) =
-          List.fold_left (fun (n', accNs, accNodes, accEdges) act ->
+    | NDnd (debug_str, st, str_acts) ->
+        let (n', str_ns, nodes, edges) =
+          List.fold_left (fun (n', accNs, accNodes, accEdges) (str, act) ->
+            let str = if debug_str = "step_constrained" then "" else str in
             let (n'', nodes, edges) = aux n' act in
-            (n'', n' :: accNs, nodes @ accNodes, edges @ accEdges)
-          ) (n+1, [], [], []) acts in
+            (n'', (str, n') :: accNs, nodes @ accNodes, edges @ accEdges)
+          ) (n+1, [], [], []) str_acts in
         ( n'
-        , (string_of_int n ^"[label= \"nd(" ^ string_of_int n ^ ")\n" ^ String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]") :: nodes
-        , (List.map (fun z -> string_of_int n ^ " -> " ^ string_of_int z) ns) @ edges )
+        , (string_of_int n ^"[label= \"nd(" ^ string_of_int n ^ ")\\n[" ^ debug_str ^ "]\\n" ^
+           (*String.escaped (String_core_run.string_of_core_state st.Driver.core_state)*) "ARENA" ^ "\"]") :: nodes
+        , (List.map (fun (str, z) -> string_of_int n ^ " -> " ^ string_of_int z ^ "[label= \""^ String.escaped str ^ "\"]") str_ns) @ edges )
     | NDguard (_, _, act) ->
         let (n', nodes, edges) = aux (n+1) act in
         ( n'
         , (string_of_int n ^"[label= \"guard(" ^ string_of_int n ^ ")\"]") :: nodes
         , (string_of_int n ^ " -> " ^ string_of_int (n+1)) :: edges )
-    | NDbranch (_, _, _, act1, act2) ->
+    | NDbranch (debug_str, st, _, act1, act2) ->
         let (n' , nodes1, edges1) = aux (n+1) act1 in
         let (n'', nodes2, edges2) = aux (n'+1) act2 in
         ( n''
-        , (string_of_int n ^"[label= \"branch(" ^ string_of_int n ^ ")\"]") :: (nodes1 @ nodes2)
+        , (string_of_int n ^"[label= \"branch(" ^ string_of_int n ^ ")\\n[" ^ debug_str ^ "]\\n" ^
+           (*String.escaped (String_core_run.string_of_core_state st.Driver.core_state)*) "ARENA" ^ "\"]") :: (nodes1 @ nodes2)
         , (string_of_int n ^ " -> " ^ string_of_int (n+1)) ::
           (string_of_int n ^ " -> " ^ string_of_int (n'+1)) :: (edges1 @ edges2) )
   in
   let (_, nodes, edges) = aux 1 act in
-  "digraph G {" ^ String.concat ";" (nodes @ edges) ^ ";}"
+  "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}"
 
 
 
@@ -478,6 +482,13 @@ let check_sat slv es =
 
 (* val runND: forall 'a 'err 'cs 'st. ndM 'a 'err 'cs 'st -> list (nd_status 'a 'err * 'st) *)
 let runND_exhaustive (ND m) st0 =
+    let act = m st0 in
+    begin
+      let oc = open_out "graph.dot" in
+      output_string oc (dot_from_nd_action act);
+      close_out oc
+    end;
+
   let slvSt = init_solver () in
   let rec aux acc = function
       | NDactive (a, st') ->
@@ -497,9 +508,9 @@ let runND_exhaustive (ND m) st0 =
 (*          print_endline "NDkilled"; *)
           (Killed r, Wip.to_strings (), st0) :: acc
       
-      | NDnd (debug_str, _, acts) ->
+      | NDnd (debug_str, _, str_acts) ->
 (*          print_endline ("NDnd(" ^ debug_str ^ ")"); *)
-          List.fold_left aux acc acts
+          List.fold_left (fun acc (_, z) -> aux acc z) acc str_acts
       
       | NDguard (debug_str, cs, act) ->
 (*          print_endline ("NDguard(" ^ debug_str ^ ")"); *)
@@ -659,14 +670,14 @@ let runND_interactive (ND m) st0 =
           print_endline "NDkilled";
           [Killed r, Wip.to_strings (), st0]
       
-      | NDnd (debug_str, st, acts) ->
+      | NDnd (debug_str, st, str_acts) ->
           print_driver_state st;
           print_endline ("NDnd(" ^ debug_str ^ ")");
           let rec choose xs = 
-            let act = List.length xs |> pick |> List.nth xs in
+            let act = snd (List.length xs |> pick |> List.nth xs) in
             try aux act
             with Backtrack _ -> failwith "ND BACKTRACK" (*choose (List.filter (fun x -> not (x = act)) xs)*)
-          in choose acts
+          in choose str_acts
       
       | NDguard (debug_str, cs, act) ->
           print_endline ("NDguard(" ^ debug_str ^ ")");
@@ -720,7 +731,11 @@ let runND_interactive (ND m) st0 =
   in
   try
     let act = m st0 in
-    print_endline (dot_from_nd_action act);
+    begin
+      let oc = open_out "graph.dot" in
+      output_string oc (dot_from_nd_action act);
+      close_out oc
+    end;
     aux act
 (*    aux (m st0) *)
   with

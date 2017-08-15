@@ -222,7 +222,59 @@ let pp_basicType = function
   | Floating rft ->
       pp_floatingType rft
 
-
+let pp_ctype_aux pp_ident_opt qs ty =
+  let precOf = function
+    | Void
+    | Basic _
+    | Atomic _
+    | Struct _
+    | Union _
+    | Builtin _ ->
+        0
+    | Array _ ->
+        1
+    | Function _ ->
+        2
+    | Pointer _ ->
+        3
+  in
+  let rec aux p qs ty : P.document -> P.document =
+    let p' = precOf ty in
+    let aux = aux p' in
+    let wrap z = if p' > 0 && p' > p then z else P.parens z in
+    begin match ty with
+      | Void ->
+          fun k -> pp_qualifiers qs ^^ pp_type_keyword "void" ^^ k
+      | Basic bty ->
+          fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
+      | Array (elem_ty, n_opt) ->
+          fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
+      | Function (has_proto, (ret_qs, ret_ty), params, isVariadic) ->
+          fun _ -> !^ "WIP"
+      | Pointer (ref_qs, ref_ty) ->
+          fun k ->
+            aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+      | Atomic ty ->
+          fun k ->
+            pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^
+(*        P.parens (pp_ctype_aux None no_qualifiers ty) ^^ pp_spaced_ident *)
+            P.parens (aux no_qualifiers ty P.empty) ^^ k
+      | Struct sym ->
+          fun k ->
+            pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type sym ^^ k
+      | Union sym ->
+          fun k ->
+            pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ k
+      | Builtin str ->
+          fun k ->
+            pp_qualifiers qs ^^ !^ str ^^ k
+    end in
+  let pp_ident =
+    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in
+  let pp_spaced_ident =
+    match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
+  (aux 1 qs ty) pp_spaced_ident
+(*
 let rec pp_ctype_aux pp_ident_opt qs ty =
   let pp_ident =
     match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in
@@ -252,6 +304,7 @@ let rec pp_ctype_aux pp_ident_opt qs ty =
           )
         ) ret_qs ret_ty
         
+(*
         ^^ P.hardline ^^ P.hardline ^^
         
         pp_ctype_aux None ret_qs ret_ty ^^ pp_spaced_ident ^^ P.parens (
@@ -264,6 +317,7 @@ let rec pp_ctype_aux pp_ident_opt qs ty =
           else
             params_doc
         )
+*)
 
     | Pointer (ref_qs, ref_ty) ->
         pp_ctype_aux None ref_qs ref_ty ^^^ P.star ^^^ pp_qualifiers qs ^^ pp_ident
@@ -276,6 +330,7 @@ let rec pp_ctype_aux pp_ident_opt qs ty =
         pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ pp_spaced_ident
     | Builtin str ->
         pp_qualifiers qs ^^ !^ str ^^ pp_spaced_ident
+*)
 
 let pp_ctype qs ty =
   pp_ctype_aux None qs ty

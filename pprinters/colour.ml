@@ -35,9 +35,12 @@ let int_fg = function
   | Blinking  -> 5
   | Inverted  -> 7
 
+(* TODO: yuck!!!! *)
+let do_colour =
+  ref (Unix.isatty Unix.stdout)
 
 let ansi_format f str =
-  if Unix.isatty Unix.stdout then
+  if !do_colour then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
   else
@@ -45,7 +48,7 @@ let ansi_format f str =
 
 
 let pp_ansi_format f doc =
-  if Unix.isatty Unix.stdout then
+  if !do_colour then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m" (* TODO: optimize, someday *)
   else
