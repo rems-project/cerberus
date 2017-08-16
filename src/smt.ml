@@ -462,7 +462,11 @@ let dot_from_nd_action act =
   let (_, nodes, edges) = aux 1 act in
   "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}"
 
-
+let create_dot_file act =
+  (* TODO: should use the name of the c file here *)
+  let oc = open_out "cerb.dot" in
+  dot_from_nd_action act
+  |> Printf.fprintf oc "%s"
 
 
 exception Backtrack of
@@ -561,7 +565,9 @@ let runND_exhaustive (ND m) st0 =
           acc''
   in
   try
-    aux [] (m st0)
+    let act = m st0 in
+    if Global_ocaml.show_action_graph() then create_dot_file act;
+    aux [] act
   with
     | Backtrack acc ->
         acc
@@ -640,13 +646,13 @@ let runND_random (ND m) st0 =
         acc
 *)
 
-let rec pick size =
-     Printf.printf "Choose option between: 1 to %d: " size;
+let rec select options =
+     Printf.printf "Choose option between: 1 to %d: " options;
      try
         let p = read_int() in
-        if p > 0 && p <= size then p-1
-        else (print_endline "Wrong option!"; pick size)
-     with Failure _ -> print_endline "Wrong option! Enter a number."; pick size
+        if p > 0 && p <= options then p-1
+        else (print_endline "Wrong option!"; select options)
+     with Failure _ -> print_endline "Wrong option! Enter a number."; select options
 
 let pp_core_exp e =
   PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout (Pp_core.Basic.pp_expr e)
@@ -699,11 +705,11 @@ let runND_interactive (ND m) st0 =
           in
           match List.length xs with
           | 0 -> failwith "runND_interactive: no action"
-          | 1 -> run_action (List.hd xs)
+          | 1 -> run_action (snd (List.hd xs))
           | size ->
             print_driver_state st;
-            let n = pick size in
-            try run_action (List.nth xs n)
+            let n = select size in
+            try run_action (snd (List.nth xs n))
             with Backtrack _ ->
               print_endline "Failed execution. Selecting alternative option.";
               choose (rm_by_index [] xs n)
@@ -723,7 +729,7 @@ let runND_interactive (ND m) st0 =
       | NDbranch (debug_str, st, cs, act1, act2) ->
         Printf.printf "Branching options: %s\n" debug_str;
         print_driver_state st;
-        let first = (pick 2 = 0) in
+        let first = (select 2 = 0) in
         let (sel, sel_cs, alt, alt_cs) =
           if first then (act1, cs, act2, MC_not cs)
           else (act2, MC_not cs, act1, cs)

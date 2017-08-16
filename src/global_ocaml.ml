@@ -61,6 +61,7 @@ type cerberus_conf = {
   experimental_unseq: bool;
   typecheck_core:     bool;
   defacto:            bool;
+  action_graph:       bool;
 }
 
 let (!!) z = !z()
@@ -80,9 +81,12 @@ let current_execution_mode () =
 let isDefacto () =
   !!cerb_conf.defacto
 
+let show_action_graph () =
+  !!cerb_conf.action_graph
+
 let set_cerb_conf cpp_cmd pps pp_annotated core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
-                  typecheck_core defacto =
+                  typecheck_core defacto action_graph =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
@@ -100,10 +104,11 @@ let set_cerb_conf cpp_cmd pps pp_annotated core_stdlib core_impl_opt exec exec_m
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;
-    batch= batch;
+    batch=         batch;
     experimental_unseq= experimental_unseq;
-    typecheck_core= typecheck_core;
-    defacto= defacto;
+    typecheck_core=typecheck_core;
+    defacto=       defacto;
+    action_graph=  action_graph;
   }
 
 

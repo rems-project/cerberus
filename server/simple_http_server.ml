@@ -13,6 +13,12 @@ let run_cerberus args content =
   let headers = Cohttp.Header.of_list ["cerberus", string_of_int res] in
   (Server.respond_file ~headers) output ()
 
+let create_graph content =
+  ignore (run_cerberus "--exec --mode=exhaustive --graph" content);
+  let res = Sys.command "dot -Tsvg graph.dot -o graph.svg" in
+  let headers = Cohttp.Header.of_list ["cerberus", string_of_int res] in
+  (Server.respond_file ~headers) "graph.svg" ()
+
 let forbidden path =
   let body = Printf.sprintf
       "<html><body>\
@@ -54,6 +60,7 @@ let post ~docroot uri path content =
     | "/exhaustive" -> run_cerberus "--exec --batch --mode=exhaustive" content
     | "/random" -> run_cerberus "--exec --batch" content
     | "/core" -> run_cerberus "--pp=core --pp_annotated" content
+    | "/graph" -> create_graph content
     | _ -> forbidden path
   in catch try_with (fun _ -> forbidden path)
 

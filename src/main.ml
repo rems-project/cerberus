@@ -315,7 +315,7 @@ let gen_corestd stdlib impl =
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_opt progress rewrite
-             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto =
+             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -343,7 +343,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps pp_annotated core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
+    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
@@ -351,7 +351,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_
 
   set_cerb_conf cpp_cmd pps pp_annotated ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto;
+    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
@@ -503,6 +503,11 @@ let typecheck_core =
 let defacto =
   let doc = "relax some of the ISO constraints (outside of the memory)" in
   Arg.(value & flag & info["defacto"] ~doc)
+
+let action_graph =
+  let doc = "create a (dot) graph with all the possible executions" in
+  Arg.(value & flag & info["graph"] ~doc)
+
 (*
 let concurrency_tests =
   let doc = "Runs the concurrency regression tests" in
@@ -519,7 +524,7 @@ let () =
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
     $ pprints $ pp_annotated $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
-    $ batch $ experimental_unseq $ typecheck_core $ defacto ) in
+    $ batch $ experimental_unseq $ typecheck_core $ defacto $ action_graph ) in
   
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in
