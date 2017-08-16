@@ -122,6 +122,7 @@ class TabSource extends TabEditor {
     this._coreTab = null
     this._execTab = null
     this._consoleTab = null
+    this._graphTab = null
     this.data = null
     this._selection = false
   }
@@ -181,6 +182,16 @@ class TabSource extends TabEditor {
       this._consoleTab.setActive()
     }
     return this._consoleTab;
+  }
+
+  get graphTab() {
+    if (!this._graphTab) {
+      let corePane = this.parent.parent.secondaryPane
+      this._graphTab = new Tab(this.title + ' [graph]')
+      corePane.addTab(this._graphTab)
+      this._graphTab.setActive()
+    }
+    return this._graphTab;
   }
 
   getLocationFromSelection(from, to) {

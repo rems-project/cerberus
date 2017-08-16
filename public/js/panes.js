@@ -131,6 +131,25 @@ class UI {
       this.exec ('exhaustive')
     })
 
+    $('#graph').on('click', () => {
+      this.wait()
+      let tab = this.activePane.activeTab
+      $.ajax({
+        url: '/graph',
+        type: 'POST',
+        data: tab.editor.getValue(),
+        success: (data, status, query) => {
+          if (query.getResponseHeader('cerberus') == 0) {
+            tab.graphTab.content.append($(data).children('svg'));
+            tab.graphTab.setActive()
+          } else {
+            alert('could not run dot');
+          }
+          this.done()
+        }
+      })
+    })
+
     // Load
 
     $('#load').on('click', () => {
