@@ -225,3 +225,28 @@ html, body {
 .std hr {
   margin-top:20px;
 }
+
+/*********** Graphs ************/
+
+.graph polygon {
+  fill: #f1f1f1;
+}
+
+.node polygon {
+  fill: #ffffff;
+}
+
+.edge polygon {
+  fill: #ffffff;
+}
+
+.pane .CodeMirror {
+  /* HACK: I don't know how to make codemirror fill the entire screen */
+  height: calc(100vh - 60px);
+  border: 1px solid #eee;
+}
+
+.svg_container {
+  height: calc(100vh - 60px);
+  border: 1px solid #eee;
+}

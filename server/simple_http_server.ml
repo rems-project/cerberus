@@ -14,10 +14,10 @@ let run_cerberus args content =
   (Server.respond_file ~headers) output ()
 
 let create_graph content =
-  ignore (run_cerberus "--exec --mode=exhaustive --graph" content);
-  let res = Sys.command "dot -Tsvg graph.dot -o graph.svg" in
-  let headers = Cohttp.Header.of_list ["cerberus", string_of_int res] in
-  (Server.respond_file ~headers) "graph.svg" ()
+  ignore (run_cerberus "--exec --rewrite --mode=exhaustive --graph" content);
+  (*let res = Sys.command "dot -Tsvg graph.dot -o graph.svg" in*)
+  let headers = Cohttp.Header.of_list ["cerberus", "0"] in
+  (Server.respond_file ~headers) "cerb.json" ()
 
 let forbidden path =
   let body = Printf.sprintf
