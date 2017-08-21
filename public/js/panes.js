@@ -140,7 +140,7 @@ class UI {
         data: tab.editor.getValue(),
         success: (data, status, query) => {
           if (query.getResponseHeader('cerberus') == 0) {
-            tab.graphTab.content.append($(data).children('svg'));
+            tab.graphTab.setGraph(data)
             tab.graphTab.setActive()
           } else {
             alert('could not run dot');
