@@ -4,11 +4,13 @@
 let sourceCounter = 1
 let draggedTab = null // this is sad
 
+/* Generic Tab */
 class Tab {
   constructor(title) {
     this.parent = null
 
     this.title = title
+    this.alive = true
 
     if (!this.title) {
       this.title = 'Source #' + sourceCounter
@@ -24,8 +26,6 @@ class Tab {
 
     this.content = $(document.createElement('div'))
     this.content.addClass('tab-content')
-
-    this.dragDiv = null
 
     this.addEventListener()
   }
@@ -43,7 +43,6 @@ class Tab {
     this.tablink.on('dragstart', (evt) => {
       draggedTab = this
       $('body').addClass('grabbing')
-      // TODO: build a hover div
     })
 
     this.tablink.on('dragend', (evt) => {
@@ -59,7 +58,7 @@ class Tab {
   setActive() {
     if (this.parent) {
       this.parent.clearSelection()
-      this.parent.activeTab = this
+      this.parent.setActiveTab(this)
     }
     this.tablink.addClass('active')
     this.content.show()
@@ -80,6 +79,48 @@ class Tab {
 
 }
 
+/* Tab with SVG graph */
+class TabGraph extends Tab {
+  constructor(title, dot) {
+    super(title)
+
+    this.graph = $('#graph-template').clone().contents()
+    this.graph.appendTo(this.content);
+
+    this.svg_container = this.graph.find('.svg_container')
+    this.svg = null
+
+    this.graph.find('#centre').on('click', () => {
+      this.svg.panzoom('resetPan')
+    })
+
+    this.graph.find('#minus').on('click', () => {
+      this.svg.panzoom('zoom', true)
+    })
+
+    this.graph.find('#reset').on('click', () => {
+      this.svg.panzoom('resetZoom')
+    })
+
+    this.graph.find('#plus').on('click', () => {
+      this.svg.panzoom('zoom');
+    })
+
+  }
+
+  setGraph(data) {
+    // Remove previous one
+    if (this.svg)
+      this.svg.remove()
+
+    // Add to the container
+    this.svg_container.append(json_to_dot(data))
+    this.svg = this.graph.find('svg')
+    this.svg.panzoom()
+  }
+}
+
+/* Tab with CodeMirror editor */
 class TabEditor extends Tab {
   constructor(title) {
     super(title)
@@ -107,6 +148,7 @@ class TabEditor extends Tab {
   }
 }
 
+/* ReadOnly Editor */
 class TabReadOnly extends TabEditor {
   constructor (title) {
     super(title)
@@ -114,97 +156,7 @@ class TabReadOnly extends TabEditor {
   }
 }
 
-class TabGraph extends Tab {
-  constructor(title, dot) {
-    super(title)
-
-    this.graph = $('#graph-template').clone().contents()
-    this.graph.appendTo(this.content);
-
-    this.graph.find('#centre').on('click', () => {
-      this.svg.panzoom('resetPan')
-    })
-
-    this.graph.find('#minus').on('click', () => {
-      this.svg.panzoom('zoom', true)
-    })
-
-    this.graph.find('#reset').on('click', () => {
-      this.svg.panzoom('resetZoom')
-    })
-
-    this.graph.find('#plus').on('click', () => {
-      this.svg.panzoom('zoom');
-    })
-  }
-
-  json_to_dot(data) {
-    function aux (i, d) {
-      switch (d.label) {
-        case "active":
-          return {
-            index: i+1,
-            nodes: [parseInt(i) + '[label="' + d.arena + '"]'],
-            edges: []
-          }
-        case "killed":
-          return {
-            index: i+1,
-            nodes: [parseInt(i) + '[label="killed"]'],
-            edges: []
-          }
-        case "nd":
-          let nd = {
-            index: i,
-            nodes: [],
-            edges: []
-          }
-          for (let j = 0; j < d.children.length; j++) {
-            let c = aux(nd.index+1, d.children[j])
-            nd.nodes = nd.nodes.concat(c.nodes)
-            nd.edges = nd.edges.concat(c.edges)
-            nd.edges.push(parseInt(i) + " -> " + parseInt(nd.index+1))
-            nd.index = c.index
-          }
-          nd.nodes.push(parseInt(i) + '[label="nd"]')
-          return nd
-        case "guard":
-          let c = aux(i+1, d.child)
-          c.nodes.push(parseInt(i) + '[label="guard"]')
-          c.nodes.push(parseInt(i) + " -> " + parseInt(i+1))
-          return c
-        case "branch":
-          let c1 = aux(i+1, d.child1)
-          let c2 = aux(c1.index+1, d.child2)
-          let ns = c2.nodes.concat(c1.nodes)
-          let es = c2.edges.concat(c1.edges)
-          ns.push(parseInt(i) + '[label="branch"]')
-          es.push(parseInt(i) + " -> " + parseInt(i+1))
-          es.push(parseInt(i) + " -> " + parseInt(c1.index+1))
-          return {
-            index: c2.index,
-            nodes: ns,
-            edges: es
-          }
-      }
-      alert ('json_to_dot: fatal error')
-    }
-    let x = aux(1, data)
-    let dot = "digraph G {node[shape=box];"
-    for (let i = 0; i < x.nodes.length; i++)
-      dot += x.nodes[i] + ";"
-    for (let i = 0; i < x.edges.length; i++)
-      dot += x.edges[i] + ";"
-    return dot + "}"
-  }
-
-  setGraph(data) {
-    this.graph.find('.svg_container').append(Viz(this.json_to_dot(data)))
-    this.svg = this.graph.find('svg')
-    this.svg.panzoom()
-  }
-}
-
+/* Tab C source */
 class TabSource extends TabEditor {
   constructor(title ) {
     super(title)
@@ -214,13 +166,18 @@ class TabSource extends TabEditor {
     this._execTab = null
     this._consoleTab = null
     this._graphTab = null
-    this.data = null
+    this.locations = null
     this._selection = false
   }
 
   activity(doc) {
     let from = doc.getCursor('from')
     let to = doc.getCursor('to')
+
+    // If core tab is not alive anymore
+    // we should stop coloring
+    if (this._coreTab && !this._coreTab.alive)
+      this.dirty = true
 
     if (from === to) {
       if (!this._selection) return // nothing to do
@@ -232,6 +189,7 @@ class TabSource extends TabEditor {
 
     if (!this._selection) {
       this.clear()
+      this.coreTab.clear()
     }
 
     if (!this.dirty) {
@@ -242,52 +200,51 @@ class TabSource extends TabEditor {
       }
     }
     this._selection = true
-    console.log('selection')
   }
 
   get coreTab() {
-    if (!this._coreTab) {
-      let corePane = this.parent.parent.secondaryPane
-      this._coreTab = new TabCore(this.title + ' [core]')
-      corePane.addTab(this._coreTab)
-      this._coreTab.setActive()
-    }
+    if (this._coreTab && this._coreTab.alive)
+      return this._coreTab
+    let spane = this.parent.parent.secondaryPane
+    this._coreTab = new TabCore(this.title + ' [core]', this)
+    spane.addTab(this._coreTab)
+    this._coreTab.setActive()
     return this._coreTab;
   }
 
   get execTab() {
-    if (!this._execTab) {
-      let corePane = this.parent.parent.secondaryPane
-      this._execTab = new TabReadOnly(this.title + ' [exec]')
-      corePane.addTab(this._execTab)
-      this._execTab.setActive()
-    }
+    if (this._execTab && this._execTab.alive)
+      return this._execTab
+    let spane = this.parent.parent.secondaryPane
+    this._execTab = new TabReadOnly(this.title + ' [exec]')
+    spane.addTab(this._execTab)
+    this._execTab.setActive()
     return this._execTab;
   }
 
   get consoleTab() {
-    if (!this._consoleTab) {
-      let corePane = this.parent.parent.secondaryPane
-      this._consoleTab = new TabReadOnly(this.title + ' [console]')
-      corePane.addTab(this._consoleTab)
-      this._consoleTab.setActive()
-    }
+    if (this._consoleTab && this._consoleTab.alive)
+      return this._consoleTab
+    let spane = this.parent.parent.secondaryPane
+    this._consoleTab = new TabReadOnly(this.title + ' [console]')
+    spane.addTab(this._consoleTab)
+    this._consoleTab.setActive()
     return this._consoleTab;
   }
 
   get graphTab() {
-    if (!this._graphTab) {
-      let corePane = this.parent.parent.secondaryPane
-      this._graphTab = new TabGraph(this.title + ' [graph]')
-      corePane.addTab(this._graphTab)
-      this._graphTab.setActive()
-    }
+    if (this._graphTab && this._graphTab.alive)
+      return this._graphTab
+    let spane = this.parent.parent.secondaryPane
+    this._graphTab = new TabGraph(this.title + ' [graph]')
+    spane.addTab(this._graphTab)
+    this._graphTab.setActive()
     return this._graphTab;
   }
 
   getLocationFromSelection(from, to) {
-    for (let i = this.data.locations.length - 1; i >= 0; i--) {
-      let loc = this.data.locations[i]
+    for (let i = this.locations.length - 1; i >= 0; i--) {
+      let loc = this.locations[i]
       if ((loc.c.begin.line < from.line ||
           (loc.c.begin.line == from.line && loc.c.begin.ch <= from.ch))
         && (loc.c.end.line > to.line ||
@@ -301,14 +258,14 @@ class TabSource extends TabEditor {
     let marks = this.editor.getAllMarks()
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
-    if (this._coreTab)
+    if (this._coreTab && this._coreTab.active)
       this.coreTab.clear()
   }
 
   highlight() {
-    if (!this.data) return
-    for (let i = 0; i < this.data.locations.length; i++) {
-      let loc = this.data.locations[i]
+    if (!this.locations) return
+    for (let i = 0; i < this.locations.length; i++) {
+      let loc = this.locations[i]
       this.editor.markText (
         loc.c.begin, loc.c.end,
         {className: loc.color}
@@ -319,10 +276,13 @@ class TabSource extends TabEditor {
   }
 }
 
-
+/* Tab Core */
 class TabCore extends TabReadOnly {
-  constructor (title) {
+  constructor (title, srcTab) {
     super(title)
+
+    this.srcTab = srcTab
+    this._selection = false
 
     this.tooltip = $(document.createElement('div'))
     this.tooltip.addClass('tooltip')
@@ -330,6 +290,9 @@ class TabCore extends TabReadOnly {
     this.tooltipVisible = false
 
     this.editor.setOption('mode', 'text/x-core')
+    this.editor.on('cursorActivity', (doc) => this.activity(doc))
+
+    this.locations = null
 
     this.editor.addOverlay({
       token: (stream) => {
@@ -394,6 +357,44 @@ class TabCore extends TabReadOnly {
     })
   }
 
+  activity(doc) {
+    // If source tab is not alive or has been changed, don't do anything
+    if (!this.srcTab.alive || this.srcTab.dirty)
+      return
+
+    let from = doc.getCursor('from')
+    let to = doc.getCursor('to')
+
+    if (from === to) {
+      if (!this._selection) return // nothing to do
+      this.clear()
+      this.highlight()
+      this._selection = false
+      return
+    }
+
+    if (!this._selection) {
+      this.srcTab.clear()
+      this.clear()
+    }
+
+    let loc = this.getLocationFromSelection(from, to)
+    if (loc) {
+      this.srcTab.editor.markText (loc.c.begin, loc.c.end, {className: loc.color})
+      this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+    }
+
+    this._selection = true
+  }
+
+  getLocationFromSelection(from, to) {
+    for (let i = this.locations.length - 1; i >= 0; i--) {
+      let loc = this.locations[i]
+      if (loc.core.begin.line <= from.line && loc.core.end.line >= to.line)
+        return loc
+    }
+    return null
+  }
 
   clear() {
     this.editor.eachLine((line) => {
@@ -401,4 +402,15 @@ class TabCore extends TabReadOnly {
     })
   }
 
+  highlight() {
+    if (!this.locations) return
+    for (let i = 0; i < this.locations.length; i++) {
+      let loc = this.locations[i]
+      this.srcTab.editor.markText (
+        loc.c.begin, loc.c.end,
+        {className: loc.color}
+      )
+      this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+    }
+  }
 }

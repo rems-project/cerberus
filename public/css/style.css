@@ -85,6 +85,10 @@ html, body {
   display: block;
 }
 
+#header button:disabled {
+  color: #aaa;
+}
+
 /*********** Panes ************/
 
 #panes {
@@ -119,6 +123,7 @@ html, body {
   font-size:11px;
   margin: 0;
   background-color: #ccc;
+  color: #888;
   border: none;
   cursor: pointer;
   padding: 0;
@@ -135,8 +140,14 @@ html, body {
   z-index=2;
 }
 
+.active .tablink.active, .active .tablink.active button {
+  background-color: #f1f1f1;
+  color: #000;
+}
+
 .tablink.active, .tablink.active button {
   background-color: #f1f1f1;
+  color: #aaa;
 }
 
 .tablink .close {
