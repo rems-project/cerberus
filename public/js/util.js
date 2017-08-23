@@ -13,7 +13,6 @@ function generateColor() {
   return className
 }
 
-
 function createStyle() {
   let style = document.createElement('style')
   style.type = 'text/css'
@@ -96,26 +95,78 @@ function parseCerberusResult(res) {
   }
 }
 
-const ui = new UI()
-const style = createStyle()
-let std = null
+function json_to_dot(data) {
+  function aux (i, d) {
+    switch (d.label) {
+      case "active":
+        return {
+          index: i+1,
+          nodes: [parseInt(i) + '[label="' + d.arena + '"]'],
+          edges: []
+        }
+      case "killed":
+        return {
+          index: i+1,
+          nodes: [parseInt(i) + '[label="killed"]'],
+          edges: []
+        }
+      case "nd":
+        let nd = {
+          index: i,
+          nodes: [],
+          edges: []
+        }
+        for (let j = 0; j < d.children.length; j++) {
+          let c = aux(nd.index+1, d.children[j])
+          nd.nodes = nd.nodes.concat(c.nodes)
+          nd.edges = nd.edges.concat(c.edges)
+          nd.edges.push(parseInt(i) + " -> " + parseInt(nd.index+1))
+          nd.index = c.index
+        }
+        nd.nodes.push(parseInt(i) + '[label="nd"]')
+        return nd
+      case "guard":
+        let c = aux(i+1, d.child)
+        c.nodes.push(parseInt(i) + '[label="guard"]')
+        c.nodes.push(parseInt(i) + " -> " + parseInt(i+1))
+        return c
+      case "branch":
+        let c1 = aux(i+1, d.child1)
+        let c2 = aux(c1.index+1, d.child2)
+        let ns = c2.nodes.concat(c1.nodes)
+        let es = c2.edges.concat(c1.edges)
+        ns.push(parseInt(i) + '[label="branch"]')
+        es.push(parseInt(i) + " -> " + parseInt(i+1))
+        es.push(parseInt(i) + " -> " + parseInt(c1.index+1))
+        return {
+          index: c2.index,
+          nodes: ns,
+          edges: es
+        }
+    }
+    alert ('json_to_dot: fatal error')
+  }
+  let x = aux(1, data)
+  let dot = "digraph G {node[shape=box];"
+  for (let i = 0; i < x.nodes.length; i++)
+    dot += x.nodes[i] + ";"
+  for (let i = 0; i < x.edges.length; i++)
+    dot += x.edges[i] + ";"
+  dot += "}"
 
-$.getJSON('std.json').done((res) => std = res).fail(() => {
-  console.log('Failing when trying to download "std.json"')
-})
+  return Viz(dot)
+}
 
-$.get('buffer.c').done((data) => {
-  $(window).ready(() => {
-    ui.activePane = new Pane()
-    ui.addPane(ui.activePane)
-    ui.activePane.addTab(new TabSource())
-    ui.setup()
-    let tab = ui.activePane.activeTab;
-    tab.setTitle('hello.c')
-    tab.editor.setValue(data)
-    tab.setActive()
-    tab.refresh()
-  })
-}).fail(() => {
-  console.log('Failing when trying to download "buffer.c"')
-})
+function clone(data) {
+  return JSON.parse(JSON.stringify(data))
+}
+
+/* Extend jQuery */
+jQuery.fn.extend({
+  disable: function(state) {
+    return this.each(function() {
+      var $this = $(this);
+      $this.prop('disabled', state);
+    });
+  }
+});

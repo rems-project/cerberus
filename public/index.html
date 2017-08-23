@@ -18,15 +18,8 @@
     <div id="header">
       <div id="title">Cerberus</div>
       <div id="toolbar">
-        <div> Test T</div>
-        <div class="dropdown">
-          <button class="dropbtn" id="run">Run</button>
-          <div class="dropdown-content">
-            <button id="random">Random</button>
-            <button id="exhaustive">Exhaustive</button>
-          </div>
-        </div>
         <button id="load">Load</button>
+        <button id="save">Save</button>
         <div class="dropdown">
           <button class="dropbtn">View</button>
           <div class="dropdown-content">
@@ -34,6 +27,13 @@
             <button id="new_pane">Split Vertically</button>
             <button id="new_pane">Split Horizontally</button>
             <button>Unsplit All</button>
+          </div>
+        </div>
+        <div class="dropdown">
+          <button class="dropbtn" id="run">Run</button>
+          <div class="dropdown-content">
+            <button id="random">Random</button>
+            <button id="exhaustive">Exhaustive</button>
           </div>
         </div>
         <button id="core">Core</button>
@@ -72,8 +72,9 @@
     <h1>Help</h1>
     <p>TODO</p>
   </template>
+  <script type="text/javascript" src="js/util.js"></script>
   <script type="text/javascript" src="js/tabs.js"></script>
   <script type="text/javascript" src="js/panes.js"></script>
-  <script type="text/javascript" src="js/main.js"></script>
+  <script type="text/javascript" src="js/ui.js"></script>
 </body>
 </html>
