@@ -1,8 +1,6 @@
 'use_strict'
 
 // Globals
-let sourceCounter = 1
-let draggedTab = null // this is sad
 
 /* Generic Tab */
 class Tab {
@@ -12,9 +10,9 @@ class Tab {
     this.title = title
     this.alive = true
 
-    if (!this.title) {
-      this.title = 'Source #' + sourceCounter
-      sourceCounter++
+    if (!this.title && ui) {
+      this.title = 'Source #' + ui.sourceCounter
+      ui.sourceCounter++
     }
 
     this.tablink = $('#tablink-template').clone().contents()
@@ -41,7 +39,8 @@ class Tab {
     })
 
     this.tablink.on('dragstart', (evt) => {
-      draggedTab = this
+      if (ui)
+        ui.draggedTab = this
       $('body').addClass('grabbing')
     })
 
@@ -81,18 +80,15 @@ class Tab {
 
 /* Tab with SVG graph */
 class TabGraph extends Tab {
-  constructor(title, dot) {
+  constructor(title, srcTab) {
     super(title)
 
+    this.srcTab = srcTab
     this.graph = $('#graph-template').clone().contents()
     this.graph.appendTo(this.content);
 
     this.svg_container = this.graph.find('.svg_container')
     this.svg = null
-
-    this.graph.find('#centre').on('click', () => {
-      this.svg.panzoom('resetPan')
-    })
 
     this.graph.find('#minus').on('click', () => {
       this.svg.panzoom('zoom', true)
@@ -100,6 +96,7 @@ class TabGraph extends Tab {
 
     this.graph.find('#reset').on('click', () => {
       this.svg.panzoom('resetZoom')
+      this.svg.panzoom('resetPan')
     })
 
     this.graph.find('#plus').on('click', () => {
@@ -114,7 +111,8 @@ class TabGraph extends Tab {
       this.svg.remove()
 
     // Add to the container
-    this.svg_container.append(json_to_dot(data))
+    this.dot = json_to_dot(data)
+    this.svg_container.append(Viz(this.dot))
     this.svg = this.graph.find('svg')
     this.svg.panzoom()
   }
@@ -189,7 +187,8 @@ class TabSource extends TabEditor {
 
     if (!this._selection) {
       this.clear()
-      this.coreTab.clear()
+      if (this._coreTab && this._coreTab.alive)
+        this.coreTab.clear()
     }
 
     if (!this.dirty) {
@@ -205,9 +204,9 @@ class TabSource extends TabEditor {
   get coreTab() {
     if (this._coreTab && this._coreTab.alive)
       return this._coreTab
-    let spane = this.parent.parent.secondaryPane
+    if (!ui) return null;
     this._coreTab = new TabCore(this.title + ' [core]', this)
-    spane.addTab(this._coreTab)
+    ui.secondaryPane.addTab(this._coreTab)
     this._coreTab.setActive()
     return this._coreTab;
   }
@@ -215,9 +214,9 @@ class TabSource extends TabEditor {
   get execTab() {
     if (this._execTab && this._execTab.alive)
       return this._execTab
-    let spane = this.parent.parent.secondaryPane
+    if (!ui) return null;
     this._execTab = new TabReadOnly(this.title + ' [exec]')
-    spane.addTab(this._execTab)
+    ui.secondaryPane.addTab(this._execTab)
     this._execTab.setActive()
     return this._execTab;
   }
@@ -225,9 +224,9 @@ class TabSource extends TabEditor {
   get consoleTab() {
     if (this._consoleTab && this._consoleTab.alive)
       return this._consoleTab
-    let spane = this.parent.parent.secondaryPane
+    if (!ui) return null;
     this._consoleTab = new TabReadOnly(this.title + ' [console]')
-    spane.addTab(this._consoleTab)
+    ui.secondaryPane.addTab(this._consoleTab)
     this._consoleTab.setActive()
     return this._consoleTab;
   }
@@ -235,9 +234,9 @@ class TabSource extends TabEditor {
   get graphTab() {
     if (this._graphTab && this._graphTab.alive)
       return this._graphTab
-    let spane = this.parent.parent.secondaryPane
-    this._graphTab = new TabGraph(this.title + ' [graph]')
-    spane.addTab(this._graphTab)
+    if (!ui) return null;
+    this._graphTab = new TabGraph(this.title + ' [graph]', this)
+    ui.secondaryPane.addTab(this._graphTab)
     this._graphTab.setActive()
     return this._graphTab;
   }
@@ -330,29 +329,45 @@ class TabCore extends TabReadOnly {
     })
 
     this.editor.getWrapperElement().addEventListener ('mouseover', (e) => {
-      let pos = this.editor.coordsChar({left: e.pageX,top: e.pageY})
-      let token = this.editor.getTokenAt(pos)
-
       // If tooltip is still visible, remove it
       if (this.tooltipVisible) {
         this.tooltip.removeClass('tooltip-visible')
         this.tooltipVisible = false
       }
 
-      // Show tooltip for keywords
-      if (token.type === 'keyword') {
-        switch (token.string) {
-          default:
-            return;
-          case 'strong':
-          case 'weak':
-          case 'pure':
-            break;
-        }
+      if ($(e.target).hasClass('cm-std')) {
+        let content = getSTDSentence(e.target.textContent)
         this.tooltip.addClass('tooltip-visible')
         this.tooltip.css({left: e.pageX, top: e.pageY})
-        this.tooltip.text(token.string)
+        this.tooltip.text(content)
         this.tooltipVisible = true
+        return
+      }
+
+      let pos = this.editor.coordsChar({left: e.pageX,top: e.pageY})
+      let token = this.editor.getTokenAt(pos)
+      if (token.type == 'keyword') {
+        let msg = null
+        switch (token.string) {
+          case 'strong':
+            msg = 'strong sequencing dictates memory action order'
+            break
+          case 'weak':
+            msg = 'weak sequencing does not dictate memory action order'
+            break
+          case 'pure':
+            msg = 'a pure expression does not have any side effect.'
+            break
+          default:
+            return;
+        }
+        if (!msg)
+          return
+        this.tooltip.addClass('tooltip-visible')
+        this.tooltip.css({left: e.pageX, top: e.pageY})
+        this.tooltip.text(msg)
+        this.tooltipVisible = true
+        return
       }
     })
   }

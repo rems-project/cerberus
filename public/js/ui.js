@@ -6,7 +6,10 @@ class UI {
     this.panes = []
     window.prevWidth = window.innerWidth
     this.div = $('#panes')
+
     this.activePane = null
+    this.draggedTab = null
+    this.sourceCounter = 1
 
     // Run
     $('#run').on('click', () => {
@@ -40,6 +43,7 @@ class UI {
     })
 
     // Load
+
     $('#load').on('click', () => {
       $('#file-input').trigger('click');
     })
@@ -56,6 +60,41 @@ class UI {
         tab.setActive()
       }
       reader.readAsText(file)
+    })
+
+    $('#save').on('click', () => {
+      function download(data, filename) {
+        let a = document.createElement('a')
+        a.setAttribute('href', "data:text/plain;charset=utf-8,"
+          + encodeURIComponent(data))
+        a.setAttribute('download', filename)
+        a.click()
+      }
+
+      function getFilename(tab) {
+        if (tab instanceof TabCore) {
+          if (tab.srcTab)
+            return tab.srcTab.title + '.core'
+        }
+        return tab.title
+      }
+
+      if (!this.activePane || !this.activePane.activeTab)
+        alert('fatal error: no active tab')
+
+      let data = ""
+      let filename = ""
+
+      let tab = this.activePane.activeTab
+      if (tab instanceof TabGraph) {
+        data = tab.dot
+        filename = tab.srcTab ? tab.srcTab.title + '.dot' : tab.title
+      } else {
+        data = tab.editor.getValue()
+        filename = getFilename(tab)
+      }
+
+      download(data, filename)
     })
 
     $('#core').on('click', () => {
@@ -77,12 +116,34 @@ class UI {
       tab.setActive()
     })
 
+    $('#unsplit').on('click', () => {
+      let tabs = []
+      for (let i = 1; i < this.panes.length; i++) {
+        let pane = this.panes[i]
+        for (let j = 0; j < pane.tabs.length; j++) {
+          tabs.push(pane.tabs[j]);
+        }
+      }
+      for (let i = 0; i < tabs.length; i++) {
+        let tab = tabs[i]
+        tab.parent.removeTab(tab)
+        this.firstPane.addTab(tab);
+        tab.setActive()
+        tab.addEventListener()
+        tab.refresh()
+      }
+    })
+
     // Help
     $('#help').on('click', () => {
       let tab = new Tab('Help')
       tab.content.append($('#help-template').clone().contents())
       this.activePane.addTab(tab)
       tab.setActive()
+    })
+
+    $('#rems').on('click', () => {
+      window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
     window.onresize = () => this.refresh()
@@ -249,6 +310,10 @@ class UI {
     }
   }
 
+  get firstPane () {
+    return this.panes[0]
+  }
+
   addPane (pane) {
     if (this.panes.length > 0) {
       $('<div class="pane-separator vertical"></div>').appendTo(this.div)
@@ -274,11 +339,15 @@ class UI {
   }
 
   removePane (pane) {
+    // Last pane, don't remove it, add a blank tab instead
     if (this.panes.length == 1) {
-      pane.div.remove()
+      let tab = new TabSource()
+      pane.addTab(tab)
+      tab.setActive()
       this.setup()
       return
     }
+
     let sep = null
     if (this.panes[0] === pane)
       sep = pane.div.next('.pane-separator')

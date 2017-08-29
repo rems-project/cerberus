@@ -8,6 +8,10 @@ html, body {
   overflow: hidden;
 }
 
+button:focus {
+    outline:none;
+}
+
 .wait, .wait * { cursor: wait !important; }
 
 #container {
@@ -41,7 +45,7 @@ html, body {
   height: 100%;
 }
 
-#toolbar button {
+#header button {
   font-size: 13px;
   display: inline-block;
   padding: 4px 8px;
@@ -52,8 +56,13 @@ html, body {
   cursor: pointer;
 }
 
-#toolbar button:hover {
+#header button:hover {
   background-color: #7f7f7f;
+}
+
+#rems {
+  float: right;
+  margin: 2px;
 }
 
 .dropbtn {
@@ -260,4 +269,20 @@ html, body {
 .svg_container {
   height: calc(100vh - 60px);
   border: 1px solid #eee;
+  margin: 0px auto;
+}
+
+svg {
+  display: block;
+  width: auto;
+}
+
+.graph {
+  padding-right: 4px;
+}
+
+.graph button {
+  background-color: #f1f1f1;
+  cursor: pointer;
+  border: 1px solid #000;
 }
