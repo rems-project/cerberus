@@ -18,15 +18,15 @@
     <div id="header">
       <div id="title">Cerberus</div>
       <div id="toolbar">
-        <button id="load">Load</button>
-        <button id="save">Save</button>
+        <button id="load">Upload</button>
+        <button id="save">Download</button>
         <div class="dropdown">
           <button class="dropbtn">View</button>
           <div class="dropdown-content">
             <button id="new_tab">New Tab</button>
             <button id="new_pane">Split Vertically</button>
-            <button id="new_pane">Split Horizontally</button>
-            <button>Unsplit All</button>
+            <!--<button id="new_pane">Split Horizontally</button>-->
+            <button id="unsplit">Unsplit All</button>
           </div>
         </div>
         <div class="dropdown">
@@ -36,10 +36,11 @@
             <button id="exhaustive">Exhaustive</button>
           </div>
         </div>
-        <button id="core">Core</button>
-        <button id="graph">Graph</button>
+        <button id="core">Core File</button>
+        <button id="graph">Execution Graph</button>
         <button id="help">Help</button>
       </div>
+      <button id="rems">REMS</button>
     </div>
     <div id="panes"></div>
   </div> <!-- container -->
@@ -59,13 +60,11 @@
     </div>
   </template>
   <template id="graph-template">
-    <div>
-      <button id="download-dot">download .dot</button>
-      <button id="centre">centre</button>
+    <div class="graph" align="right">
       <button id="minus">-</button>
       <button id="reset">reset</button>
       <button id="plus">+</button>
-      <div class="svg_container"></div>
+      <div align="center" class="svg_container"></div>
     </div>
   </template>
   <template id="help-template">

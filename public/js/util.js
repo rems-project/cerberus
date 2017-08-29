@@ -44,6 +44,18 @@ function getSTDSection(section) {
   return {title: title, data: div}
 }
 
+function getSTDSentence(section) {
+  let ns = section.match(/\d+/g)
+  let title = '§'
+  let p = std
+  let content = ""
+  for (let i = 0; i < ns.length - 1; i++) {
+    p = p[ns[i]]
+  }
+  content += p['P'+ns[ns.length-1]]
+  return content
+}
+
 function parseCerberusResult(res) {
   function countLines(str) {
     return str.split(/\r\n|\r|\n/).length - 1
@@ -154,7 +166,7 @@ function json_to_dot(data) {
     dot += x.edges[i] + ";"
   dot += "}"
 
-  return Viz(dot)
+  return dot
 }
 
 function clone(data) {

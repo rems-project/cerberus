@@ -26,9 +26,9 @@ class Pane {
     })
 
     this.div.on('drop', (evt) => {
-      if (draggedTab) {
-        let tab = draggedTab
-        draggedTab = null
+      if (this.parent && this.parent.draggedTab) {
+        let tab = this.parent.draggedTab
+        this.parent.draggedTab = null
         if (tab.parent === this) return;
         tab.parent.removeTab(tab)
         let elem = $(document.elementFromPoint(evt.clientX, evt.clientY))
@@ -62,15 +62,22 @@ class Pane {
   }
 
   addTab (tab, beforeThisTab) {
+    // Push tab to array
     this.tabs.push(tab)
+
     if (beforeThisTab)
       beforeThisTab.before(tab.tablink)
     else
       this.tabadder.before(tab.tablink)
+
+    // Attach UI
     this.content.append(tab.content)
+
     tab.parent = this
+    tab.alive = true
     if (!this.activeTab)
       this.activeTab = tab
+
     tab.refresh()
   }
 
