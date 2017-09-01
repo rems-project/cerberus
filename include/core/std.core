@@ -117,19 +117,19 @@ fun conv_int (ty: ctype, n: integer): integer :=
     unspecified(ty)
   else
 -}
-  -- (§6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
+  -- (STD §6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
   -- equal to 0; otherwise, the result is 1.
   if ty = !(_Bool) then
     if n = 0 then 0 else 1
   
-  -- (§6.3.1.3#1) When a value with integer type is converted to another integer
+  -- (STD §6.3.1.3#1) When a value with integer type is converted to another integer
   -- type other than _Bool, if the value can be represented by the new type, it
   -- is unchanged.
   else
     if is_representable(n, ty) then
       n
   
-  -- (§6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
+  -- (STD §6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
   -- by repeatedly adding or subtracting one more than the maximum value that
   -- can be represented in the new type until the value is in the range of the
   -- new type.
@@ -137,7 +137,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
       if is_unsigned(ty) then
         wrapI(ty, n)
   
-  -- (§6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
+  -- (STD §6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
   -- represented in it; either the result is implementation-defined or an
   -- implementation-defined signal is raised.
       else

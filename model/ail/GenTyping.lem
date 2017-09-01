@@ -224,6 +224,7 @@ let well_typed_binary_arithmetic gt1 aop gt2 : bool =
     | Mod  -> is_integer    gt1 && is_integer    gt2
     | Add  -> is_arithmetic gt1 && is_arithmetic gt2
     | Sub  -> is_arithmetic gt1 && is_arithmetic gt2
+    (* STD §6.5#4, sentence 1 *)
     | Shl  -> is_integer    gt1 && is_integer    gt2
     | Shr  -> is_integer    gt1 && is_integer    gt2
     | Band -> is_integer    gt1 && is_integer    gt2
@@ -422,6 +423,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
           E.fail (locOf e) (TError "§6.5.3.3#1, sentence 1")
     
     | AilEunary (Bnot as uop) e ->
+        (* STD §6.5#4, sentence 1 *)
         (* STD §6.5.3.3#1, sentence 2 *)
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_integer gty then
@@ -1270,11 +1272,13 @@ STD_ "§6.5.2.1#1" $
         end
     
     | AilEconst cst ->
+        (* STD §6.5.1#3 *)
         annotate_constant cst >>= fun (cst', gty) ->
         E.return (AilEconst cst', gty)
     
     (* TODO: check *)
     | AilEstr lit ->
+        (* STD §6.5.1#4 *)
         annotate_stringLiteral lit
     
     (* TODO: maybe look at the type of inside? *)

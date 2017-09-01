@@ -536,7 +536,7 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
                                ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (C.Eunseq [core_e1; core_e2]) (
       C.Epure (
         C.Pexpr () (
-          C.PEcase (Caux.mk_std_pe "§6.5#4" $ Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+          C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
             [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
                                  ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
                (* Both operand are specified *)
@@ -580,24 +580,34 @@ and translate_expression stdlib tagDefs a_expr =
           error "TODO: §6.3.1.8, floating 2"
       | (Nothing, Nothing) ->
           (* TODO: this is so readable ... *)
+          (* STD §6.3.1.8#1, bullet 4 *)
           match (AilTypesAux.promotion tmp_implementation ty1, AilTypesAux.promotion tmp_implementation ty2) with
             | (Just (Aty.Basic (Aty.Integer ity1') as ty1'), Just (Aty.Basic (Aty.Integer ity2') as ty2')) ->
+                (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
                   (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty2' e2)
-                
+
+                (* "Otherwise, if both operands have signed integer types or both have unsigned integer types,
+                    the operand with the type of lesser integer conversion rank is converted to the type
+                    of the operand with greater rank." *)
                 else if   (AilTypesAux.is_signed_integer_type ty1' && AilTypesAux.is_signed_integer_type ty2')
                        || (AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.is_unsigned_integer_type ty2') then
                   if AilTypesAux.lt_integer_rank ity1' ity2' then
                     (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
                   else
                     (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty1' e2)
-                
+
+                (* "Otherwise, if the operand that has unsigned type has rank greater or equal to the rank of the
+                    rank of the type of the other operand, then the operand with signed integer type is converted
+                    to the type of the operand with unsigned integer type." *)
                 else if AilTypesAux.is_unsigned_integer_type ty1' && AilTypesAux.ge_integer_rank ity1' ity2' then
                   (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty1' e2)
-                
                 else if AilTypesAux.is_unsigned_integer_type ty2' && AilTypesAux.ge_integer_rank ity2' ity1' then
                   (stdlib.mkcall_conv_int ty2' e1, stdlib.mkcall_conv_int ty2' e2)
-                
+
+                (* "Otherwise, if the type of the operand with signed integer type can represent all of the values
+                    of the type of the operand with unsigned integer type, then the operand with unsigned integer
+                    type is converted to the type of the operand with signed integer type." *)
                 else if AilTypesAux.is_signed_integer_type ty1' then
 (*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty1')
@@ -611,13 +621,16 @@ and translate_expression stdlib tagDefs a_expr =
 *)
                   (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e1)
+                     (* "Otherwise, both operands are converted to the unsigned integer type corresponding to the type
+                         of the operand with signed integer type". *)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e1)
                   ,
                   Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e2)
                      (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
                   )
-                
+
+                  (* ASK: Should you not check that ty2 is signed ? Can we delete the previous code? *)
                 else (* if AilTypesAux.is_signed_integer_type ty2' then *)
 (*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty2')
@@ -926,7 +939,7 @@ If an invalid value has been assigned to the pointer, the behavior of the unary 
             C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded C.OTy_integer); Caux.mk_sym_pat e2_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [core_e1; core_e2]) (
               C.Epure (
                 C.Pexpr () (
-                  C.PEcase (Caux.mk_std_pe "§6.5#4" (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe]))
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                     [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
                                          ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
                                   
@@ -997,7 +1010,7 @@ else
                                        ; Caux.mk_sym_pat e2_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [core_e1; core_e2]) (
               C.Epure (
                 C.Pexpr () (
-                  C.PEcase (Caux.mk_std_pe "§6.5#4" $ Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
+                  C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                     [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
                                          ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
                        Caux.mk_undef_exceptional_condition ())
@@ -2816,6 +2829,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         (* TODO: the index *)
         translate_expression e >>= fun core_e ->
         E.return (
+          (* ASK: this annotation looks wrong!! is this really implementing 6.5#2 ? *)
           C.Estd "§6.5#2" $
           C.Esseq (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)))))
             (C.Ebound 0 core_e)
