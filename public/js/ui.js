@@ -136,10 +136,20 @@ class UI {
 
     // Help
     $('#help').on('click', () => {
-      let tab = new Tab('Help')
-      tab.content.append($('#help-template').clone().contents())
-      this.activePane.addTab(tab)
-      tab.setActive()
+      this.wait();
+      $.ajax({
+        url: 'help.html',
+        type: 'GET',
+        success: (data, status, query) => {
+          let tab = new Tab('Help')
+          let helpDiv = $('<div class="help"></div>')
+          helpDiv.append(data)
+          tab.content.append(helpDiv)
+          this.secondaryPane.addTab(tab)
+          tab.setActive()
+          this.done()
+        }
+      })
     })
 
     $('#rems').on('click', () => {

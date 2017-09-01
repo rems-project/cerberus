@@ -123,11 +123,7 @@ function json_to_dot(data) {
           edges: []
         }
       case "nd":
-        let nd = {
-          index: i,
-          nodes: [],
-          edges: []
-        }
+        let nd = { index: i, nodes: [], edges: [] }
         for (let j = 0; j < d.children.length; j++) {
           let c = aux(nd.index+1, d.children[j])
           nd.nodes = nd.nodes.concat(c.nodes)
@@ -135,11 +131,11 @@ function json_to_dot(data) {
           nd.edges.push(parseInt(i) + " -> " + parseInt(nd.index+1))
           nd.index = c.index
         }
-        nd.nodes.push(parseInt(i) + '[label="nd"]')
+        nd.nodes.push(parseInt(i) + '[label="nd('+ d.debug + ')"]')
         return nd
       case "guard":
         let c = aux(i+1, d.child)
-        c.nodes.push(parseInt(i) + '[label="guard"]')
+        c.nodes.push(parseInt(i) + '[label="guard(' + d.debug + ')"]')
         c.nodes.push(parseInt(i) + " -> " + parseInt(i+1))
         return c
       case "branch":
@@ -147,7 +143,7 @@ function json_to_dot(data) {
         let c2 = aux(c1.index+1, d.child2)
         let ns = c2.nodes.concat(c1.nodes)
         let es = c2.edges.concat(c1.edges)
-        ns.push(parseInt(i) + '[label="branch"]')
+        ns.push(parseInt(i) + '[label="branch(' + d.debug + ')"]')
         es.push(parseInt(i) + " -> " + parseInt(i+1))
         es.push(parseInt(i) + " -> " + parseInt(c1.index+1))
         return {
