@@ -10,6 +10,12 @@ else
   PARSER_PATH=$CERB_PATH/parsers
 fi
 
+if [ -z $CERB_PATH ]; then
+  CORELIB_PATH=.
+else
+  CORELIB_PATH=$CERB_PATH/include/core
+fi
+
 FILTER='
   BEGIN {
     FS=":"
@@ -23,4 +29,4 @@ FILTER='
   }
 '
 
-grep -HnER "STD|std" $MODEL_PATH $PARSER_PATH | awk ''"$FILTER"'' | sort
+grep -HnER "STD|std" $MODEL_PATH $PARSER_PATH $CORELIB_PATH | awk ''"$FILTER"'' | sort

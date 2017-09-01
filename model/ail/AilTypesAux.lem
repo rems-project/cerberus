@@ -600,15 +600,22 @@ let le_integer_range impl ity1 ity2 =
   end
 
 
-(* TODO: this is not symmetric ... *)
 val eq_integer_rank_base: integerType -> integerType -> bool
 let eq_integer_rank_base ity1 ity2 =
   match (ity1, ity2) with
+  (* STD §6.3.1.1#1, bullet 4 *)
   | (Signed ibty1, Unsigned ibty2) ->
       ibty1 = ibty2
+  | (Unsigned ibty1, Signed ibty2) ->
+      ibty1 = ibty2
+  (* STD §6.3.1.1#1, bullet 6 *)
   | (Char, Unsigned Ichar) ->
       true
   | (Char, Signed Ichar) ->
+      true
+  | (Unsigned Ichar, Char) ->
+      true
+  | (Signed Ichar, Char) ->
       true
   | _ ->
       false
@@ -618,13 +625,15 @@ let eq_integer_rank_base ity1 ity2 =
 (* TODO: K this looks wrong, in particular the STD says "No two signed integer types shall have the same rank" *)
 val eq_integer_rank: integerType -> integerType -> bool
 let eq_integer_rank ity1 ity2 =
-  ity1 = ity2 || eq_integer_rank_base ity1 ity2 || eq_integer_rank_base ity2 ity1
+  ity1 = ity2 || eq_integer_rank_base ity1 ity2
 
 val lt_integer_rank_base: implementation -> integerType -> integerType -> bool
 let lt_integer_rank_base impl ity1 ity2 =
   match (ity1, ity2) with
+    (* STD §6.3.1.1#1, bullet 7 *)
     | (Bool, _) ->
         not (Bool = ity2)
+    (* STD §6.3.1.1#1, bullet 3 *)
     | (Signed Long, Signed LongLong) ->
         true
     | (Signed Int_, Signed Long) ->
@@ -633,6 +642,7 @@ let lt_integer_rank_base impl ity1 ity2 =
         true
     | (Signed Ichar, Signed Short) ->
         true
+    (* STD §6.3.1.1#1, bullet 2 *)
     | (Signed ibty1, Signed ibty2) ->
         (impl.precision (Signed ibty1)) < (impl.precision (Signed ibty2))
     | _ ->
