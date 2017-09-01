@@ -208,7 +208,6 @@ button:focus {
 }
 
 .pane .CodeMirror {
-  /* HACK: I don't know how to make codemirror fill the entire screen */
   height: calc(100vh - 60px);
   border: 1px solid #eee;
 }
@@ -246,6 +245,22 @@ button:focus {
   margin-top:20px;
 }
 
+.help {
+  height: calc(100vh - 60px);
+  overflow: auto;
+  flex: 1 0 0;
+  padding: 15px;
+}
+
+.help #TOC {
+  border: 1px solid darkgray;
+  background: whitesmoke;
+  float: right;
+  font-size: 0.9em;
+  padding: 1em;
+  margin-left: 1em;
+  margin-bottom: 1em;
+}
 /*********** Graphs ************/
 
 .graph polygon {

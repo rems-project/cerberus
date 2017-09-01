@@ -400,32 +400,6 @@ let add_constraint slvSt cs =
 
 open Nondeterminism2
 
-let rec string_of_nd_action = function
-  | NDactive ((_, (_, _, cval), (_, _)), _) ->
-      "NDactive(" ^ String_core.string_of_value cval ^ ")"
-  | NDkilled _ ->
-      "NDkilled"
-  | NDnd (debug_str, st, str_acts) ->
-      "NDnd(" ^ debug_str ^ ", " ^
-      "STATE[ " ^ String_core_run.string_of_core_state st.Driver.core_state ^ " ] " ^
-      String.concat ", " (List.map (fun (_, act) -> string_of_nd_action act) str_acts) ^
-      ")"
-  | NDguard (debug_str, cs, act) ->
-      "NDguard(" ^ debug_str ^ ", " ^
-      String_mem.string_of_iv_memory_constraint cs ^
-      ", " ^
-      string_of_nd_action act ^
-      ")"
-  | NDbranch (debug_str, st, cs, act1, act2) ->
-      "NDbranch(" ^ debug_str ^ ", " ^
-        "STATE[ " ^ String_core_run.string_of_core_state st.Driver.core_state ^ " ] " ^
-        String_mem.string_of_iv_memory_constraint cs ^
-        ", " ^ 
-        string_of_nd_action act1 ^
-        ", " ^ 
-        string_of_nd_action act2 ^
-      ")"
-
 let dot_from_nd_action act =
   Colour.do_colour := false;
   let rec aux n = function
@@ -461,38 +435,40 @@ let dot_from_nd_action act =
   let (_, nodes, edges) = aux 1 act in
   "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}"
 
-
-let json_new items = "{" ^ String.concat "," items ^ "}"
-
-let json_val name value =
-  "\"" ^ name ^ "\":\"" ^ value ^ "\""
-
-let json_obj name value =
-  "\"" ^ name ^ "\":" ^ value
-
 let json_from_nd_action act =
+  let arena_thread0 st =
+    match st.Driver.core_state.Core_run.thread_states with
+    | [] -> failwith "json_from_nd_action: No thread!"
+    | (_, (_, th_st))::_ ->
+      String.escaped (String_core.string_of_expr th_st.Core_run.arena)
+  in
+  let json_new items = "{" ^ String.concat "," items ^ "}" in
+  let json_val name value = "\"" ^ name ^ "\":\"" ^ value ^ "\"" in
+  let json_obj name value = "\"" ^ name ^ "\":" ^ value in
   let rec aux = function
     | NDactive (_, st) ->
       [ json_val "label" "active";
-        json_val "arena" (String.escaped (String_core_run.string_of_core_state st.Driver.core_state))
+        json_val "arena" (arena_thread0 st)
       ] |> json_new
     | NDkilled _ ->
       [ json_val "label" "killed";
       ] |> json_new
     | NDnd (debug_str, st, str_acts) ->
       [ json_val "label" "nd";
-        json_val "arena" (String.escaped (String_core_run.string_of_core_state st.Driver.core_state));
+        json_val "debug" debug_str;
+        json_val "arena" (arena_thread0 st);
         json_obj "children" ("[" ^ String.concat "," (List.map (fun (_, a) -> aux a) str_acts) ^ "]")
       ]
       |> json_new
-    | NDguard (_, _, act) ->
+    | NDguard (debug_str, _, act) ->
       [ json_val "label" "guard";
+        json_val "debug" debug_str;
         json_obj "child" (aux act)
       ] |> json_new
     | NDbranch (debug_str, st, _, act1, act2) ->
       [ json_val "label" "branch";
         json_val "debug" debug_str;
-        json_val "arena" (String.escaped (String_core_run.string_of_core_state st.Driver.core_state));
+        json_val "arena" (arena_thread0 st);
         json_obj "child1" (aux act1);
         json_obj "child2" (aux act2)
       ] |> json_new
