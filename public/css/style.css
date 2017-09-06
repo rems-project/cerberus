@@ -222,14 +222,18 @@ button:focus {
 }
 
 .tooltip {
+  font-size: 11px;
+  transform: none;
   position: absolute;
   background-color: #5f5f5f;
   color: #f1f1f1;
   line-height: 1.2;
-  padding: 8px;
-  width: 120px;
+  padding: 9px;
   visibility: hidden;
   z-index: 1000;
+  overflow-y: auto;
+  max-height: 200px;
+  max-width: 300px;
 }
 
 .tooltip-visible {
