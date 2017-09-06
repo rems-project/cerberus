@@ -159,7 +159,9 @@ class UI {
     window.onresize = () => this.refresh()
   }
 
-  toggleSourceButtons (on) {
+  toggleSourceButtons () {
+    let tab = this.activePane.activeTab
+    let on = (tab instanceof TabSource) || (tab.srcTab && tab.srcTab.alive)
     $('#run').disable(!on);
     $('#random').disable(!on);
     $('#exhaustive').disable(!on);
@@ -167,9 +169,18 @@ class UI {
     $('#graph').disable(!on);
   }
 
+  getActiveSourceTab() {
+    let tab = this.activePane.activeTab
+    if (tab instanceof TabSource)
+      return tab
+    if (tab.srcTab && tab.srcTab.alive)
+      return tab.srcTab
+    alert('No active source tab!')
+  }
+
   exec (mode) {
     this.wait()
-    let tab = this.activePane.activeTab
+    let tab = this.getActiveSourceTab()
     $.ajax({
       url: '/'+mode,
       type: 'POST',
@@ -191,7 +202,7 @@ class UI {
 
   exec_core (mode) {
     this.wait()
-    let tab = this.activePane.activeTab
+    let tab = this.getActiveSourceTab()
     $.ajax({
       url: '/'+mode,
       type: 'POST',
@@ -240,7 +251,7 @@ class UI {
 
   run () {
     this.wait()
-    let tab = this.activePane.activeTab
+    let tab = this.getActiveSourceTab()
     let source = tab.editor.getValue()
     let result = parseCerberusResult(cerberus.run(source, false, false))
 
@@ -260,7 +271,7 @@ class UI {
   cerberusResult(result) {
     this.waitingResult = false
     //let result = parseCerberusResult(res)
-    let tab = this.activePane.activeTab
+    let tab = this.getActiveSourceTab()
 
     // Set colors for every location
     for (let i = 0; i < result.locations.length; i++)
@@ -310,7 +321,7 @@ class UI {
     if (this.activePane)
       this.activePane.setInactive()
     this.activePane = pane
-    this.toggleSourceButtons(this.activePane.activeTab instanceof TabSource)
+    this.toggleSourceButtons()
 
     // Change page name
     if (this.activePane && this.activePane.activeTab) {
