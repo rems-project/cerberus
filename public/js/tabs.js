@@ -216,6 +216,7 @@ class TabSource extends TabEditor {
       return this._execTab
     if (!ui) return null;
     this._execTab = new TabReadOnly(this.title + ' [exec]')
+    this._execTab.srcTab = this
     ui.secondaryPane.addTab(this._execTab)
     this._execTab.setActive()
     return this._execTab;
@@ -226,6 +227,7 @@ class TabSource extends TabEditor {
       return this._consoleTab
     if (!ui) return null;
     this._consoleTab = new TabReadOnly(this.title + ' [console]')
+    this._consoleTab.srcTab = this
     ui.secondaryPane.addTab(this._consoleTab)
     this._consoleTab.setActive()
     return this._consoleTab;
