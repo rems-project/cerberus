@@ -147,9 +147,11 @@ val case_integer_value: forall 'a. (* TODO: expose more ctors *)
 
 val is_specified_ival: integer_value -> bool
 
-(* Floating value constructors *)
+(* Floating operations *)
 val op_fval: floating_operator -> floating_value -> floating_value -> floating_value
-
+val eq_fval: floating_value -> floating_value -> bool
+val lt_fval: floating_value -> floating_value -> bool
+val le_fval: floating_value -> floating_value -> bool
 
 (* Predicats on integer values *)
 val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
@@ -277,6 +279,9 @@ let is_specified_ival                   = Impl.impl_is_specified_ival
 let eq_ival                             = Impl.impl_eq_ival
 let lt_ival                             = Impl.impl_lt_ival
 let le_ival                             = Impl.impl_le_ival
+let eq_fval                             = Impl.impl_eq_fval
+let lt_fval                             = Impl.impl_lt_fval
+let le_fval                             = Impl.impl_le_fval
 let unspecified_mval                    = Impl.impl_unspecified_mval
 let integer_value_mval                  = Impl.impl_integer_value_mval
 let floating_value_mval                 = Impl.impl_floating_value_mval

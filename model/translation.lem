@@ -720,10 +720,13 @@ and translate_expression stdlib tagDefs a_expr =
                     [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
                        let expr =
                          Caux.mk_op_pe C.OpSub zero_pe (mk_conversion (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym)) in
-                       Caux.mk_specified_pe (if AilTypesAux.is_signed_integer_type result_ty then
+                       Caux.mk_specified_pe (
+if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty expr
-                       else
-                         stdlib.mkcall_wrapI result_ty expr))
+else if AilTypesAux.is_integer result_ty then
+                         stdlib.mkcall_wrapI result_ty expr
+else
+                         expr))
                     ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype],
                        (* TODO: check that result_ty = promoted (ctype_of e) *)
                        Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
