@@ -752,6 +752,15 @@ val ge_integer_rank: integerType -> integerType -> bool
 let ge_integer_rank ity1 ity2 =
   le_integer_rank ity2 ity1
 
+(* STD §6.2.5#10 *)
+val le_real_floating_range : realFloatingType -> realFloatingType -> bool
+let le_real_floating_range fty1 fty2 =
+  match (fty1, fty2) with
+  | (Float, _) -> true
+  | (Double, Double) -> true
+  | (_, LongDouble) -> true
+  | _ -> false
+  end
 
 val is_corresponding_unsigned: integerType -> integerType -> bool
 let is_corresponding_unsigned ity1 ity2 =
@@ -920,15 +929,48 @@ let is_usual_arithmetic impl ty1 ty2 ty3 =
       false
   end
 
+val usual_arithmetic_floating: implementation -> floatingType -> floatingType -> floatingType
+let usual_arithmetic_floating impl ty1 ty2 = ty1
+
+(* STD §6.2.5#12 *)
+val corresponding_real_type: ctype -> maybe realFloatingType
+let corresponding_real_type ty =
+  if is_floating ty then
+    match ty with
+    | Basic (Floating (RealFloating rfty)) ->
+        Just rfty
+(*
+    | Basic (Floating (Complex fty))
+        Basic (Floating fty)
+*)
+    | _ ->
+        error "AilTypesAux.corresponding_real_type"
+    end
+  else
+    Nothing
+
 val usual_arithmetic: implementation -> ctype -> ctype -> maybe ctype
 let usual_arithmetic impl ty1 ty2 =
-  match (ty1, ty2) with
-  | (Basic (Integer ity1), Basic (Integer ity2)) ->
-      Just (Basic (Integer (usual_arithmetic_integer impl ity1 ity2)))
+  let mk_real rfty = Just (Basic (Floating (RealFloating rfty))) in
+  match (corresponding_real_type ty1, corresponding_real_type ty2) with
+  (* STD §6.3.1.8#1, bullet 1 *)
+  | (Just LongDouble, _) -> mk_real LongDouble
+  | (_, Just LongDouble) -> mk_real LongDouble
+  (* STD §6.3.1.8#1, bullet 2 *)
+  | (Just Double, _) -> mk_real Double
+  | (_, Just Double) -> mk_real Double
+  (* STD §6.3.1.8#1, bullet 3 *)
+  | (Just Float, _) -> mk_real Float
+  | (_, Just Float) -> mk_real Float
   | _ ->
-      error "AilTypesAux.usual_arithmetic" (* Nothing *)
+    (* STD §6.3.1.8#1, bullet 4 *)
+    match (ty1, ty2) with
+    | (Basic (Integer ity1), Basic (Integer ity2)) ->
+        Just (Basic (Integer (usual_arithmetic_integer impl ity1 ity2)))
+    | _ ->
+        error "AilTypesAux.usual_arithmetic" (* Nothing *)
+    end
   end
-
 
 
 (* assuming [ty] is an lvalue type, [modifiable ty] is true iff
@@ -1457,22 +1499,7 @@ end
 
 
 
-(* STD §6.2.5#12 *)
-val corresponding_real_type: ctype -> maybe ctype
-let corresponding_real_type ty =
-  if is_floating ty then
-    match ty with
-    | Basic (Floating (RealFloating _)) ->
-        Just ty
-(*
-    | Basic (Floating (Complex fty))
-        Basic (Floating fty)
-*)
-    | _ ->
-        error "AilTypesAux.corresponding_real_type"
-    end
-  else
-    Nothing
+
 
 (* TODO: this is such a bad name ... *)
 val     has_pointer_at_leafs: ctype -> bool

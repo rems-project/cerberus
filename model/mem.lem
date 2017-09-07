@@ -3,7 +3,7 @@
 open import Pervasives
 
 import Symbol Loc Cabs
-open import AilTypes Core_ctype Cthread
+open import AilTypes Core_ctype Cthread Float
 
 include import Mem_common
 
@@ -147,6 +147,8 @@ val case_integer_value: forall 'a. (* TODO: expose more ctors *)
 
 val is_specified_ival: integer_value -> bool
 
+(* Floating value constructors *)
+val op_fval: floating_operator -> floating_value -> floating_value -> floating_value
 
 
 (* Predicats on integer values *)
@@ -262,6 +264,7 @@ let integer_ival                        = Impl.impl_integer_ival
 let max_ival                            = Impl.impl_max_ival
 let min_ival                            = Impl.impl_min_ival
 let op_ival                             = Impl.impl_op_ival
+let op_fval                             = Impl.impl_op_fval
 let offsetof_ival                       = Impl.impl_offsetof_ival
 let sizeof_ival                         = Impl.impl_sizeof_ival
 let alignof_ival                        = Impl.impl_alignof_ival
@@ -283,7 +286,7 @@ let struct_mval                         = Impl.impl_struct_mval
 let union_mval                          = Impl.impl_union_mval
 let case_mem_value                      = Impl.impl_case_mem_value
 
-val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (string -> 'a) -> 'a
+val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (float -> 'a) -> 'a
 let case_fval = Impl.impl_case_fval
 val zero_fval: floating_value
 let zero_fval = Impl.impl_zero_fval

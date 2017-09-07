@@ -335,8 +335,10 @@ else
                       (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" $
 if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty core_pe
+else if AilTypesAux.is_integer result_ty then
+                         stdlib.mkcall_wrapI result_ty core_pe 
 else
-                         stdlib.mkcall_wrapI result_ty core_pe ))))) ]
+                         core_pe))))) ]
           )
         )
       )
@@ -574,10 +576,15 @@ and translate_expression stdlib tagDefs a_expr =
   (* STD §6.3.1.8 *)
   let usual_arithmetic_conversion (ty1: Aty.ctype) (ty2: Aty.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
     match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
-      | (Just _, _) ->
-          error "TODO: §6.3.1.8, floating 1"
-      | (_, Just _) ->
-          error "TODO: §6.3.1.8, floating 2"
+      (* TODO: Convert (lond double, double and float) to Ocaml float! This is not the standard behaviour! *)
+      | (Just _, Just _) ->
+          (e1, e2)
+          (*error "TODO: §6.3.1.8, floating 1" *)
+      | (Just _, _) ->error "TODO: §6.3.1.8, floating 2"
+          (*(e1, Float.of_nat e2)*)
+      | (_, Just _) ->error "TODO: §6.3.1.8, floating 2"
+          (* (Float.of_nat e1, e2) *)
+          (* error "TODO: §6.3.1.8, floating 2" *)
       | (Nothing, Nothing) ->
           (* TODO: this is so readable ... *)
           (* STD §6.3.1.8#1, bullet 4 *)
@@ -1166,8 +1173,10 @@ else (* pointer <-> pointer cast *)
                        Caux.mk_specified_pe $
 if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty core_mul
+else if AilTypesAux.is_integer result_ty then
+                         stdlib.mkcall_wrapI result_ty core_mul
 else
-                         stdlib.mkcall_wrapI result_ty core_mul )
+                         core_mul )
                     
                     ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                        (* If either operand is unspecified, the result is also unspecified is the
@@ -1216,8 +1225,10 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                          Caux.mk_specified_pe $
   if AilTypesAux.is_signed_integer_type result_ty then
                            stdlib.mkcall_catch_exceptional_condition result_ty core_add
+  else if AilTypesAux.is_integer result_ty then
+                           stdlib.mkcall_wrapI result_ty core_add
   else
-                           stdlib.mkcall_wrapI result_ty core_add )
+                           core_add )
                       
                       ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                          (* If either operand is unspecified, the result is also unspecified is the
@@ -1297,8 +1308,10 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                        Caux.mk_specified_pe $
   if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty core_sub
+  else if AilTypesAux.is_integer result_ty then
+                         stdlib.mkcall_wrapI result_ty core_sub
   else
-                         stdlib.mkcall_wrapI result_ty core_sub )
+                         core_sub )
                     ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                        (* If either operand is unspecified, the result is also unspecified is the
                           result type of unsigned. Otherwise it is undef, since the addition

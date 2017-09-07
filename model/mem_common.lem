@@ -38,6 +38,12 @@ type integer_operator =
   | IntRem_f (* flooring remainder *)
   | IntExp
 
+type floating_operator =
+  | FloatAdd
+  | FloatSub
+  | FloatMul
+  | FloatDiv
+
 
 type pure_memop =
   | PURE_MEMOP_TODO
@@ -106,6 +112,12 @@ let stringFromInteger_operator = function
 end
 
 
+let stringFromFloating_operator = function
+  | FloatAdd -> "FloatAdd"
+  | FloatSub -> "FloatSub"
+  | FloatMul -> "FloatMul"
+  | FloatDiv -> "FloatDiv"
+end
 
 
 type mem_constraint 'a =
