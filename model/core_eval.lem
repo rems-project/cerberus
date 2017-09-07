@@ -117,6 +117,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEconstrained [ (eq_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate eq_constr, Pexpr () (PEval Vfalse)) ])
             end
+
+        | (OpEq, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            EU.return (PEval (if Mem.eq_fval fval1 fval2 then Vtrue else Vfalse))
         
         | (OpLt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             match Mem.lt_ival mem_st_opt ival1 ival2 with
@@ -128,6 +131,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEconstrained [ (lt_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate lt_constr, Pexpr () (PEval Vfalse)) ])
             end
+
+        | (OpLt, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            EU.return (PEval (if Mem.lt_fval fval1 fval2 then Vtrue else Vfalse))
         
         | (OpLe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             match Mem.le_ival mem_st_opt ival1 ival2 with
@@ -139,6 +145,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEconstrained [ (le_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate le_constr, Pexpr () (PEval Vfalse)) ])
             end
+
+        | (OpLe, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            EU.return (PEval (if Mem.le_fval fval1 fval2 then Vtrue else Vfalse))
         
         | (OpGe, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
@@ -151,6 +160,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEconstrained [ (ge_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate ge_constr, Pexpr () (PEval Vfalse)) ])
             end
+
+        | (OpGe, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            EU.return (PEval (if Mem.le_fval fval2 fval1 then Vtrue else Vfalse))
         
         | (OpGt, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             (* TODO CHECK *)
@@ -163,6 +175,9 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEconstrained [ (gt_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate gt_constr, Pexpr () (PEval Vfalse)) ])
             end
+
+        | (OpGt, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            EU.return (PEval (if Mem.lt_fval fval2 fval1 then Vtrue else Vfalse))
         
         | (_, Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
             let iop = match binop with

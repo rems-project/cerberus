@@ -1482,6 +1482,14 @@ let impl_op_fval fop (FVconcrete fval1) (FVconcrete fval2) =
   | FloatDiv -> FVconcrete (Float.floatDiv fval1 fval2)
   end
 
+let impl_eq_fval (FVconcrete fval1) (FVconcrete fval2) =
+  (fval1 = fval2)
+
+let impl_lt_fval (FVconcrete fval1) (FVconcrete fval2) =
+  Float.floatLt fval1 fval2
+
+let impl_le_fval (FVconcrete fval1) (FVconcrete fval2) =
+  Float.floatLe fval1 fval2
 
 let impl_case_integer_value (IV _ ival) fint fother =
   match ival with

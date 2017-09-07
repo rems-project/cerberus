@@ -103,7 +103,7 @@ let is_scalar gty =
 
 
 
-let is_real gt : bool = is_integer gt
+let is_real gt : bool = is_integer gt || is_floating gt
 
 
 
@@ -245,8 +245,8 @@ let usual_arithmetic_integer git1 git2 : genIntegerType =
 let corresponding_real_type gt =
   if is_floating gt then
     match gt with
-    | GenBasic (GenFloating (RealFloating _)) ->
-        Just gt
+    | GenBasic (GenFloating (RealFloating rfty)) ->
+        Just rfty
     | _ ->
         error "GenTypesAux.corresponding_real_type"
     end
@@ -254,22 +254,17 @@ let corresponding_real_type gt =
     Nothing
 
 let usual_arithmetic gt1 gt2 =
+  let mk_real rfty = Just (GenBasic (GenFloating (RealFloating rfty))) in
   match (corresponding_real_type gt1, corresponding_real_type gt2) with
   (* STD §6.3.1.8#1, bullet 1 *)
-  | (Just (GenBasic (GenFloating (RealFloating LongDouble))), _) ->
-      Just (GenBasic (GenFloating (RealFloating LongDouble)))
-  | (_, Just (GenBasic (GenFloating (RealFloating LongDouble)))) ->
-      Just (GenBasic (GenFloating (RealFloating LongDouble)))
+  | (Just LongDouble, _) -> mk_real LongDouble
+  | (_, Just LongDouble) -> mk_real LongDouble
   (* STD §6.3.1.8#1, bullet 2 *)
-  | (Just (GenBasic (GenFloating (RealFloating Double))), _) ->
-      Just (GenBasic (GenFloating (RealFloating Double)))
-  | (_, Just (GenBasic (GenFloating (RealFloating Double)))) ->
-      Just (GenBasic (GenFloating (RealFloating Double)))
+  | (Just Double, _) -> mk_real Double
+  | (_, Just Double) -> mk_real Double
   (* STD §6.3.1.8#1, bullet 3 *)
-  | (Just (GenBasic (GenFloating (RealFloating Float))), _) ->
-      Just (GenBasic (GenFloating (RealFloating Float)))
-  | (_, Just (GenBasic (GenFloating (RealFloating Float)))) ->
-      Just (GenBasic (GenFloating (RealFloating Float)))
+  | (Just Float, _) -> mk_real Float
+  | (_, Just Float) -> mk_real Float
   | _ ->
     (* STD §6.3.1.8#1, bullet 4 *)
     match (gt1, gt2) with
