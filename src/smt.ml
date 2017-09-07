@@ -107,7 +107,10 @@ let init_solver () : solver_state =
     Datatype.mk_sort_s ctx "BasicType"
       [ Datatype.mk_constructor_s ctx "Integer_bty" (Symbol.mk_string ctx "is_Integer_bty")
           [Symbol.mk_string ctx "_Integer_bty"] [Some integerTypeSort]
-          [0(*TODO: no idea with I'm doing*)] ] in
+          [0(*TODO: no idea with I'm doing*)]
+      ; Datatype.mk_constructor_s ctx "Floating"
+          (Symbol.mk_string ctx "is_Floating") [] [] []
+      ] in
   
   let ctypeSort =
     (* TODO: Function, Struct, Union, Builtin *)
@@ -225,7 +228,9 @@ let basicType_to_expr slvSt (bty: AilTypes.basicType) =
     | Integer ity ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) [integerType_to_expr slvSt ity]
     | Floating _ ->
-        failwith "Smt.basicType_to_expr, Floating"
+      (* TODO: this is probably wrong *)
+        Expr.mk_app slvSt.ctx (List.nth fdecls 1) []
+      (*  failwith "Smt.basicType_to_expr, Floating" *)
   )
 
 let rec ctype_to_expr slvSt ty =

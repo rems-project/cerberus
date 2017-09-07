@@ -131,8 +131,8 @@ and pp_mem_value = function
 *)
   | MVinteger (ity, ival) ->
       !^ "MVinteger" ^^ P.parens (Pp_ail_raw.pp_integerType_raw ity ^^ P.comma ^^^ pp_integer_value ival)
-  | MVfloating (fty, FVconcrete str) ->
-      !^ ("MVfloating(" ^ str ^ ")")
+  | MVfloating (fty, FVconcrete x) ->
+      !^ ("MVfloating(" ^ string_of_float x ^ ")")
   | MVfloating (fty, FVunspecified) ->
       !^ ("MVfloating(unspec)")
   | MVpointer (ty, ptr_val) ->
@@ -195,8 +195,8 @@ let pp_pretty_integer_value format = function
 let pp_pretty_mem_value format = function
   | MVinteger (_, ival) ->
       pp_pretty_integer_value format ival
-  | MVfloating (fty, FVconcrete str) ->
-      !^ str
+  | MVfloating (fty, FVconcrete fval) ->
+      !^(string_of_float fval)
   | MVfloating (fty, FVunspecified) ->
       !^ "unspec(floating)"
 (*

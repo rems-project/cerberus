@@ -177,6 +177,17 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   error ("Core_eval.eval_pexpr, PEop Vinteger Vinteger: " ^ show binop)
             end in
             EU.return (PEval (Vobject (OVinteger (Mem.op_ival iop ival1 ival2))))
+
+        | (_, Just (Vobject (OVfloating fval1)), Just (Vobject (OVfloating fval2))) ->
+            let fop = match binop with
+              | OpAdd -> Mem_common.FloatAdd
+              | OpSub -> Mem_common.FloatSub
+              | OpMul -> Mem_common.FloatMul
+              | OpDiv -> Mem_common.FloatDiv
+              | _ ->
+                error ("Core_eval.eval_pexpr, PEop Vfloating Vfloating " ^ show binop)
+            end in
+            EU.return (PEval (Vobject (OVfloating (Mem.op_fval fop fval1 fval2))))
         
         | (OpAnd, Just v1, Just v2) ->
             let v1 = Core_aux.flatten_constrained_value v1 in

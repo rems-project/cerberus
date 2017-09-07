@@ -5,7 +5,7 @@ import String_extra Boot
 open import {hol} `pp_coreTheory` `pp_memTheory`
 
 open import Monadic_parsing
-import Errors AilTypesAux Core Core_aux Core_ctype Mem Mem_aux
+import Errors AilTypesAux Core Core_aux Core_ctype Mem Mem_aux Float
 import Decode
 module Cty = Core_ctype
 
@@ -667,7 +667,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                       Mem.return $ Right (U.return (
                         Mem.case_fval fval
                           (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
-                          (fun str -> String.toCharList str)
+                          (fun x -> String.toCharList (Float.string_of_float x))
                       , args'))
                   | _ ->
                       error "Output.aux should only be called on a loaded(arimetic value)"

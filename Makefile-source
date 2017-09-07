@@ -12,6 +12,7 @@ SOURCE_prelude=\
   cthread.lem \
   exception.lem \
   product.lem \
+  float.lem
 
 
 

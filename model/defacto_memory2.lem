@@ -4,7 +4,7 @@ import Num_extra Set_helpers (* fold *) Map_extra
 
 open import Utils
 
-import Symbolic Cthread Cabs AilTypes Dlist Loc
+import Symbolic Cthread Cabs AilTypes Dlist Loc Float
 
 open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype Core_ctype_aux
 
@@ -1474,7 +1474,13 @@ let impl_bitwise_xor_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
 
 
 
-
+let impl_op_fval fop (FVconcrete fval1) (FVconcrete fval2) =
+  match fop with
+  | FloatAdd -> FVconcrete (Float.floatAdd fval1 fval2)
+  | FloatSub -> FVconcrete (Float.floatSub fval1 fval2)
+  | FloatMul -> FVconcrete (Float.floatMul fval1 fval2)
+  | FloatDiv -> FVconcrete (Float.floatDiv fval1 fval2)
+  end
 
 
 let impl_case_integer_value (IV _ ival) fint fother =
@@ -1571,10 +1577,10 @@ let impl_case_fval fval funspec fconcrete =
 
 val impl_zero_fval: impl_floating_value
 let impl_zero_fval =
-  FVconcrete "0"
+  FVconcrete (Float.of_nat 0)
 
 val impl_str_fval: string -> impl_floating_value
-let impl_str_fval str = FVconcrete str
+let impl_str_fval str = FVconcrete (Float.of_string str)
 
 
 (*

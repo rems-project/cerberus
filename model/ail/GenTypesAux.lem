@@ -241,10 +241,42 @@ let usual_arithmetic_integer git1 git2 : genIntegerType =
     (integer_promotion git1)
     (integer_promotion git2)
 
+(* STD §6.2.5#12 *)
+let corresponding_real_type gt =
+  if is_floating gt then
+    match gt with
+    | GenBasic (GenFloating (RealFloating _)) ->
+        Just gt
+    | _ ->
+        error "GenTypesAux.corresponding_real_type"
+    end
+  else
+    Nothing
+
 let usual_arithmetic gt1 gt2 =
-  match (gt1, gt2) with
-  | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) -> Just (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
-  | (_ , _) -> Nothing
+  match (corresponding_real_type gt1, corresponding_real_type gt2) with
+  (* STD §6.3.1.8#1, bullet 1 *)
+  | (Just (GenBasic (GenFloating (RealFloating LongDouble))), _) ->
+      Just (GenBasic (GenFloating (RealFloating LongDouble)))
+  | (_, Just (GenBasic (GenFloating (RealFloating LongDouble)))) ->
+      Just (GenBasic (GenFloating (RealFloating LongDouble)))
+  (* STD §6.3.1.8#1, bullet 2 *)
+  | (Just (GenBasic (GenFloating (RealFloating Double))), _) ->
+      Just (GenBasic (GenFloating (RealFloating Double)))
+  | (_, Just (GenBasic (GenFloating (RealFloating Double)))) ->
+      Just (GenBasic (GenFloating (RealFloating Double)))
+  (* STD §6.3.1.8#1, bullet 3 *)
+  | (Just (GenBasic (GenFloating (RealFloating Float))), _) ->
+      Just (GenBasic (GenFloating (RealFloating Float)))
+  | (_, Just (GenBasic (GenFloating (RealFloating Float)))) ->
+      Just (GenBasic (GenFloating (RealFloating Float)))
+  | _ ->
+    (* STD §6.3.1.8#1, bullet 4 *)
+    match (gt1, gt2) with
+    | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) ->
+      Just (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
+    | (_ , _) -> Nothing
+    end
   end
 
 let rec interpret_genIntegerType impl git : errorM integerType =

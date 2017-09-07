@@ -1074,9 +1074,9 @@ STD_ "§6.5.2.1#1" $
           match usual_arithmetic gty1 gty2 with
           | Just gty ->
               E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error ("usual_arithmetic failed on two valid genTypes. 7 ==> " ^
-                       Pp.stringFromAil_genType gty1 ^ "<->" ^ Pp.stringFromAil_genType gty2)
+          | Nothing ->
+              error ("usual_arithmetic failed on two valid genTypes. 7 ==> " ^
+                     Pp.stringFromAil_genType gty1 ^ "<->" ^ Pp.stringFromAil_genType gty2)
           end
         else
           E.fail Loc.unknown (TError_TODO 37)

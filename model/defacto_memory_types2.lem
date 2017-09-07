@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Core_ctype Mem_common
+open import Core_ctype Mem_common Float
 import Symbol
 
 
@@ -107,7 +107,7 @@ and bitwise_operation =
 
 and impl_floating_value =
   | FVunspecified
-  | FVconcrete of string
+  | FVconcrete of float (* WARN: using Ocaml float representation *)
 
 (* The mem_value represents what can be stored in memory. *)
 (* the types below exist so that when looking at the representations of mem_values one knows what mapping to use *)

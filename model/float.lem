@@ -1,0 +1,33 @@
+type float
+declare ocaml target_rep type float = `float`
+
+val floatEq : float -> float -> bool
+declare ocaml target_rep function floatEq = infix `=`
+
+val floatAdd : float -> float -> float
+declare ocaml target_rep function floatAdd = `Floating.add`
+
+val floatSub : float -> float -> float
+declare ocaml target_rep function floatSub = `Floating.sub`
+
+val floatMul : float -> float -> float
+declare ocaml target_rep function floatMul = `Floating.mul`
+
+val floatDiv : float -> float -> float
+declare ocaml target_rep function floatDiv = `Floating.div`
+
+val of_nat : nat -> float
+declare ocaml target_rep function of_nat = `float_of_int`
+
+val of_string : string -> float
+declare ocaml target_rep function of_string = `float_of_string`
+
+val string_of_float : float -> string
+declare ocaml target_rep function string_of_float = `string_of_float`
+
+(*
+ LEM BUG: cannot handle dot after +
+instance (NumAdd float)
+  let (+) = floatAdd
+end
+*)

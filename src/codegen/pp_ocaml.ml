@@ -324,7 +324,7 @@ and print_pointer_value = function
 
 let print_floating_value = function
   | D.FVunspecified   -> !^"I.FVunspecified"
-  | D.FVconcrete str  -> !^"I.FVconcrete" ^^^ !^str
+  | D.FVconcrete x    -> !^"I.FVconcrete" ^^^ !^(string_of_float x)
 
 (* Core Types *)
 

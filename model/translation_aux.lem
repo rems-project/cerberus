@@ -236,7 +236,7 @@ let is_defined_ail_function sym (_, sigm) =
 
 
 
-
+(*
 (* STD §6.3.1.8#1 *)
 val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> AilTypes.ctype * C.pexpr -> AilTypes.ctype * C.pexpr -> C.pexpr
 let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
@@ -254,7 +254,7 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
     (* error "TODO: Translate_aux.mk_usual_arithmetic_conversions, integers case !!!!" *)
     (* TODO !!!!!!! *)
     mk_pexpr pe1 pe2
-
+*)
 
 
 val     combine_params_args: list (AilTypes.qualifiers * AilTypes.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
