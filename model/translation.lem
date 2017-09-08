@@ -580,10 +580,10 @@ and translate_expression stdlib tagDefs a_expr =
       | (Just _, Just _) ->
           (e1, e2)
           (*error "TODO: §6.3.1.8, floating 1" *)
-      | (Just _, _) ->error "TODO: §6.3.1.8, floating 2"
-          (*(e1, Float.of_nat e2)*)
-      | (_, Just _) ->error "TODO: §6.3.1.8, floating 2"
-          (* (Float.of_nat e1, e2) *)
+      | (Just _, _) ->
+          (e1, C.Pexpr () (C.PEctor C.Cfvcast [e2]))
+      | (_, Just _) ->
+          (C.Pexpr () (C.PEctor C.Cfvcast [e1]), e2)
           (* error "TODO: §6.3.1.8, floating 2" *)
       | (Nothing, Nothing) ->
           (* TODO: this is so readable ... *)
@@ -1102,13 +1102,24 @@ if AilTypesAux.is_pointer cast_ty && Aaux.is_null_pointer_constant e then
             end
 
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
-  if AilTypesAux.is_integer cast_ty && AilTypesAux.is_integer e_ty then
+  if AilTypesAux.is_integer cast_ty then
+    if AilTypesAux.is_integer e_ty then
               (* TODO: check *)
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
               C.Epure (stdlib.mkcall_conv_loaded_int cast_ty e_sym_pe)
             )
+    else (* cast_ty is floating since it is an arithmetic type *)
+            C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              C.Epure (C.Pexpr () (C.PEctor C.Civcast [Caux.mk_ail_ctype_pe cast_ty; e_sym_pe]))
+            )
   else
-            error "WIP elaboration of casts involving a non-integer arithmetic type"
+    if AilTypesAux.is_integer e_ty then
+            C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              C.Epure (C.Pexpr () (C.PEctor C.Cfvcast [e_sym_pe]))
+            )
+    else (* cast_ty is floating since it is an arithmetic type *)
+           (* TODO: should convert floating types *)
+           core_e
 
 else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
             (* making a pointer from an integer *)

@@ -1212,6 +1212,7 @@ STD_ "§6.5.2.1#1" $
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEcast qs Void e', GenRValueType GenVoid)
     
+      (* STD §6.5.4#2 *)
     | AilEcast qs ty e ->
         wf_lvalue sigm qs ty >>
         annotate_rvalue e >>= fun (e', gty) ->

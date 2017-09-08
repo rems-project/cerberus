@@ -494,6 +494,16 @@ let rec step_eval_pexpr loc mem_st_opt file pexpr =
               EU.return $ PEval (Vloaded (LVspecified oval))
           | (Cunspecified, Just [Vctype ty]) ->
               EU.return $ PEval (Vloaded (LVunspecified ty))
+
+          | (Cfvcast, Just [Vobject (OVinteger ival)]) ->
+              EU.return $ PEval (Vobject (OVfloating (Mem.fvcast ival)))
+          | (Civcast, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Vobject (OVfloating fval)]) ->
+              EU.return $ PEval (Vobject (OVinteger (Mem.ivcast ity fval)))
+
+          | (Cfvcast, Just [Vloaded (LVspecified (OVinteger ival))]) ->
+              EU.return $ PEval (Vloaded (LVspecified (OVfloating (Mem.fvcast ival))))
+          | (Civcast, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Vloaded (LVspecified (OVfloating fval))]) ->
+              EU.return $ PEval (Vloaded (LVspecified (OVinteger (Mem.ivcast ity fval))))
           
           | (_, Just cvals) ->
               if List.any Caux.isConstrainedValue cvals then
