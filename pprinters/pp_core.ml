@@ -335,6 +335,10 @@ let pp_ctor = function
       !^ "Specified"
   | Cunspecified ->
       !^ "Unspecified"
+  | Cfvcast ->
+      !^ "Fvcast"
+  | Civcast ->
+      !^ "Ivcast"
 
 
 let rec pp_pattern = function
