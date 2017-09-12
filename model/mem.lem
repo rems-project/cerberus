@@ -153,8 +153,8 @@ val eq_fval: floating_value -> floating_value -> bool
 val lt_fval: floating_value -> floating_value -> bool
 val le_fval: floating_value -> floating_value -> bool
 
-val fvcast: integer_value -> floating_value
-val ivcast: AilTypes.integerType -> floating_value -> integer_value
+val fvfromint: integer_value -> floating_value
+val ivfromfloat: AilTypes.integerType -> floating_value -> integer_value
 
 (* Predicats on integer values *)
 val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
@@ -285,8 +285,8 @@ let le_ival                             = Impl.impl_le_ival
 let eq_fval                             = Impl.impl_eq_fval
 let lt_fval                             = Impl.impl_lt_fval
 let le_fval                             = Impl.impl_le_fval
-let fvcast                              = Impl.impl_fvcast
-let ivcast                              = Impl.impl_ivcast
+let fvfromint                           = Impl.impl_fvfromint
+let ivfromfloat                         = Impl.impl_ivfromfloat
 let unspecified_mval                    = Impl.impl_unspecified_mval
 let integer_value_mval                  = Impl.impl_integer_value_mval
 let floating_value_mval                 = Impl.impl_floating_value_mval

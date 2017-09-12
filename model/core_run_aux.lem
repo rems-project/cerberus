@@ -353,10 +353,10 @@ let convert_ctor = function
       Cspecified
   | Cunspecified ->
       Cunspecified
-  | Cfvcast ->
-      Cfvcast
-  | Civcast ->
-      Civcast
+  | Cfvfromint ->
+      Cfvfromint
+  | Civfromfloat ->
+      Civfromfloat
 end
 
 val     convert_pattern: forall 'bty. Core.generic_pattern 'bty Symbol.sym -> Core.pattern

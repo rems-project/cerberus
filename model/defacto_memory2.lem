@@ -1491,11 +1491,11 @@ let impl_lt_fval (FVconcrete fval1) (FVconcrete fval2) =
 let impl_le_fval (FVconcrete fval1) (FVconcrete fval2) =
   (fval1 <= fval2)
 
-let impl_fvcast (IV _ (IVconcrete ival)) =
+let impl_fvfromint (IV _ (IVconcrete ival)) =
   FVconcrete (Float.of_integer ival)
 
 (* TODO: check type ranges after conversion *)
-let impl_ivcast ity (FVconcrete fval) =
+let impl_ivfromfloat ity (FVconcrete fval) =
   IV Prov_none (IVconcrete (Float.to_integer fval))
 
 
