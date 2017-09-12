@@ -215,8 +215,8 @@ type generic_ctor 'bty =
  | CivXOR (* bitwise XOR *)
  | Cspecified (* non-unspecified loaded value *)
  | Cunspecified (* unspecified value *)
- | Cfvcast (* cast integer to floating value *)
- | Civcast (* cast floating to integer value *)
+ | Cfvfromint (* cast integer to floating value *)
+ | Civfromfloat (* cast floating to integer value *)
 
 
 type generic_pattern 'bty 'sym = 
