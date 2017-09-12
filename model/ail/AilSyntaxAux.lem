@@ -15,8 +15,6 @@ let rec is_null_pointer_constant (AnnotatedExpression _ _ expr_) =
         false
   end
 
-
-
 (* ========== CLEAN UP TO HERE ========== *)
 
 (* TODO: doc *)

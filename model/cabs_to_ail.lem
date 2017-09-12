@@ -464,6 +464,8 @@ let is_address_constant a_expr =
   else match a_expr with
     | AnnotatedExpression () loc (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
+    | AnnotatedExpression () _ (AilEcast _ Pointer expr) ->
+        is_integer_constant_expression expr
     | _ ->
         E.return false
   end
