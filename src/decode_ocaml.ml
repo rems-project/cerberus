@@ -30,7 +30,6 @@ let decode_integer_constant str =
 
 (* TODO: making the implementation choice of using ASCII for now *)
 let decode_character_constant = function
-  (* NOTE: first there are the "basic source and basic execution sets" (see §5.2.1#2) *)
   (* uppercases letters *)
   | "A" -> Nat_big_num.of_int 65
   | "B" -> Nat_big_num.of_int 66
@@ -103,6 +102,7 @@ let decode_character_constant = function
   | "!"    -> Nat_big_num.of_int 33
   | "\""   -> Nat_big_num.of_int 34
   | "#"    -> Nat_big_num.of_int 35
+  | "$"    -> Nat_big_num.of_int 36
   | "%"    -> Nat_big_num.of_int 37
   | "&"    -> Nat_big_num.of_int 38
   | "'"    -> Nat_big_num.of_int 39
@@ -120,11 +120,13 @@ let decode_character_constant = function
   | "="    -> Nat_big_num.of_int 61
   | ">"    -> Nat_big_num.of_int 62
   | "?"    -> Nat_big_num.of_int 63
+  | "@"    -> Nat_big_num.of_int 64
   | "["    -> Nat_big_num.of_int 91
   | "\\\\" -> Nat_big_num.of_int 92
   | "]"    -> Nat_big_num.of_int 93
   | "^"    -> Nat_big_num.of_int 94
   | "_"    -> Nat_big_num.of_int 95
+  | "`"    -> Nat_big_num.of_int 96
   | "{"    -> Nat_big_num.of_int 123
   | "|"    -> Nat_big_num.of_int 124
   | "}"    -> Nat_big_num.of_int 125
@@ -140,11 +142,6 @@ let decode_character_constant = function
   | "\\r"   -> Nat_big_num.of_int 13
   | "\\t"   -> Nat_big_num.of_int 9
   | "\\v"   -> Nat_big_num.of_int 11
-
-  (* NOTE: here are the (graphical) extended characters from ASCII *)
-  | "$"     -> Nat_big_num.of_int 36
-  | "@"     -> Nat_big_num.of_int 64
-  | "`"     -> Nat_big_num.of_int 96
   
   | str ->
       if String.length str = 0 then

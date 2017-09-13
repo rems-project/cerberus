@@ -176,7 +176,6 @@ let shiftPathFromMember program tag ident =
 *)
 
 
-(*
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
   C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (
@@ -189,8 +188,6 @@ let translate_integerConstant iCst =
           Mem.min_ival ity
     end
   ))))
-*)
-
 
 val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_order
 let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
@@ -286,12 +283,12 @@ and translate_div_mod_operator translate usual_arithmetic_conversion stdlib resu
   E.fresh_symbol >>= fun conv1_sym ->
   E.fresh_symbol >>= fun conv2_sym ->
   let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-  let e1_sym_pe    = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym    in
-  let e2_sym_pe    = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym    in
-  let obj1_sym_pe  = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym  in
-  let obj2_sym_pe  = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym  in
-  let conv1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) conv1_sym in
-  let conv2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) conv2_sym in
+  let e1_sym_pe    = Caux.mk_sym_pe e1_sym    in
+  let e2_sym_pe    = Caux.mk_sym_pe e2_sym    in
+  let obj1_sym_pe  = Caux.mk_sym_pe obj1_sym  in
+  let obj2_sym_pe  = Caux.mk_sym_pe obj2_sym  in
+  let conv1_sym_pe = Caux.mk_sym_pe conv1_sym in
+  let conv2_sym_pe = Caux.mk_sym_pe conv2_sym in
   let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.5#3" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
   let (ub, core_pe) = match aop with
     | A.Div ->
@@ -367,10 +364,10 @@ and translate_relational_operator translate usual_arithmetic_conversion result_t
     | _    -> error "[Translation.translate_relational_operator], 'bop' must be relational"
   end in
   
-  let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
-  let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
-  let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
-  let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+  let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
+  let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
+  let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
+  let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
   E.return $
     C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
                                ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
@@ -417,7 +414,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (e_sym  , e_sym_pat  , e_sym_pe  ) ->
   E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
   E.fresh_symbol                                      >>= fun memop_sym                          ->
-  let memop_sym_pe = Caux.mk_sym_pe C.BTy_boolean memop_sym in
+  let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   let memop = match bop with
     | A.Eq -> Mem.PtrEq
     | A.Ne -> Mem.PtrNe
@@ -451,14 +448,14 @@ else (* both operands have arithmetic or pointer types *)
   (* The object type on which the Core operator is going to work on. *)
   (* By typing it is enough to look at the type of one of the operand (see STD §6.5.9#2) *)
   let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-  let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
-  let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
-  let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
-  let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+  let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
+  let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
+  let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
+  let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
   
   (* TODO: could case this only for the pointer case *)
   E.fresh_symbol >>= fun memop_sym ->
-  let memop_sym_pe = Caux.mk_sym_pe C.BTy_boolean memop_sym in
+  let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   
   E.return $
     C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -528,10 +525,10 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
   translate e1   >>= fun core_e1   ->
   translate e2   >>= fun core_e2   ->
   let oTy = C.OTy_integer in
-  let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
-  let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
-  let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
-  let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+  let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
+  let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
+  let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
+  let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
   let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe (std_id ^ "#3") $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
   E.return $
     C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -687,9 +684,9 @@ and translate_expression stdlib tagDefs a_expr =
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
               C.Epure (
                 C.Pexpr () (
-                  C.PEcase (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
+                  C.PEcase (Caux.mk_sym_pe e_sym)
                     [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
-                       Caux.mk_specified_pe (mk_conversion (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym)))
+                       Caux.mk_specified_pe (mk_conversion (Caux.mk_sym_pe obj_sym)))
                     ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
                        (* TODO: check that result_ty = promoted (ctype_of e) *)
                        Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
@@ -714,10 +711,10 @@ and translate_expression stdlib tagDefs a_expr =
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
               C.Epure (
                 C.Pexpr () (
-                  C.PEcase (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
+                  C.PEcase (Caux.mk_sym_pe e_sym)
                     [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
                        let expr =
-                         Caux.mk_op_pe C.OpSub zero_pe (mk_conversion (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym)) in
+                         Caux.mk_op_pe C.OpSub zero_pe (mk_conversion (Caux.mk_sym_pe obj_sym)) in
                        Caux.mk_specified_pe (
 if AilTypesAux.is_signed_integer_type result_ty then
                          stdlib.mkcall_catch_exceptional_condition result_ty expr
@@ -745,9 +742,9 @@ else
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
               C.Epure (
                 C.Pexpr () (
-                  C.PEcase (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
+                  C.PEcase (Caux.mk_sym_pe e_sym)
                     [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
-                       let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" $ integer_promotion (ctype_of e) (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym) in
+                       let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" $ integer_promotion (ctype_of e) (Caux.mk_sym_pe obj_sym) in
                        (* NOTE: result_ty == promoted type of e *)
                        Caux.mk_specified_pe (if AilTypesAux.is_unsigned_integer_type result_ty then
                          (* STD §6.5.3.3#4, sentence 3 *)
@@ -778,7 +775,7 @@ else
 (*             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in *)
              E.return $
                C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) core_e
-                 (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)))
+                 (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe sym)))
           else
             translate_function_designator stdlib e
       
@@ -849,9 +846,9 @@ end
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype ty)    in
           let core_ty_e = Caux.mk_ail_ctype_pe ty in
           
-          let lvalue_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) lvalue_sym in
-          let load_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) load_sym             in
-          let obj_sym_pe    = Caux.mk_sym_pe (C.BTy_object oTy) obj_sym              in
+          let lvalue_sym_pe = Caux.mk_sym_pe lvalue_sym in
+          let load_sym_pe   = Caux.mk_sym_pe load_sym             in
+          let obj_sym_pe    = Caux.mk_sym_pe obj_sym              in
           
           E._STD "§6.5.2.4#3" $
           (E.return $
@@ -897,14 +894,14 @@ else
           self e         >>= fun core_e   ->
           E.return $
             C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded C.OTy_pointer)) core_e
-              (C.Ecase (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) e_sym)
+              (C.Ecase (Caux.mk_sym_pe e_sym)
                  [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer)),
                     C.Ewseq (Caux.mk_sym_pat test_sym C.BTy_boolean)
-                      (C.Ememop Mem.PtrValidForDeref [Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) obj_sym])
-                      (C.Eif (Caux.mk_sym_pe C.BTy_boolean test_sym)
+                      (C.Ememop Mem.PtrValidForDeref [Caux.mk_sym_pe obj_sym])
+                      (C.Eif (Caux.mk_sym_pe test_sym)
                          begin
                            let obj_sym_pe = 
-                             Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) obj_sym in
+                             Caux.mk_sym_pe obj_sym in
 (*                             Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) obj_sym_pe Cmm.NA *)
                            C.Epure (obj_sym_pe)
                          end
@@ -935,13 +932,13 @@ If an invalid value has been assigned to the pointer, the behavior of the unary 
           E.fresh_symbol >>= fun promoted1_sym ->
           E.fresh_symbol >>= fun promoted2_sym ->
           E.fresh_symbol >>= fun res_sym       ->
-          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) e1_sym        in
-          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) e2_sym        in
-          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) obj1_sym      in
-          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) obj2_sym      in
-          let promoted1_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) promoted1_sym in
-          let promoted2_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) promoted2_sym in
-          let res_sym_pe       = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) res_sym       in
+          let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
+          let promoted1_sym_pe = Caux.mk_sym_pe promoted1_sym in
+          let promoted2_sym_pe = Caux.mk_sym_pe promoted2_sym in
+          let res_sym_pe       = Caux.mk_sym_pe res_sym       in
           E.return (
             C.Estd "§6.5.7" $
             C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded C.OTy_integer); Caux.mk_sym_pat e2_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [core_e1; core_e2]) (
@@ -1005,13 +1002,13 @@ else
           E.fresh_symbol >>= fun promoted1_sym ->
           E.fresh_symbol >>= fun promoted2_sym ->
           E.fresh_symbol >>= fun res_sym       ->
-          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) e1_sym        in
-          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) e2_sym        in
-          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) obj1_sym      in
-          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) obj2_sym      in
-          let promoted1_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) promoted1_sym in
-          let promoted2_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) promoted2_sym in
-          let res_sym_pe       = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) res_sym       in
+          let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
+          let promoted1_sym_pe = Caux.mk_sym_pe promoted1_sym in
+          let promoted2_sym_pe = Caux.mk_sym_pe promoted2_sym in
+          let res_sym_pe       = Caux.mk_sym_pe res_sym       in
           E.return (
             C.Estd "§6.5.7" $
             C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded C.OTy_integer)
@@ -1064,7 +1061,7 @@ else
             translate_function_designator stdlib a_expr
           else
             let id_sym_pe =
-              Caux.mk_sym_pe (C.BTy_object (force_core_object_type_of_ctype (Caux.proj_ctype result_ty))) id in
+              Caux.mk_sym_pe id in
             E.return (
               C.Epure id_sym_pe
             )
@@ -1127,7 +1124,7 @@ else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
                      C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_pointer))
                        (C.Ememop Mem.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe])
-                       (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) let_sym)))
+                       (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym)))
                     );
                     (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
                      (* Casting an unspecified integer to a pointer type gives an unspecified pointer *)
@@ -1143,7 +1140,7 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer)),
                      C.Ewseq (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
                        (C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe])
-                       (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe (C.BTy_object oTy) let_sym)))
+                       (C.Epure (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym)))
                     );
                     (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
                      (* Casting an unspecified pointer to an integer type gives an unspecified integer *)
@@ -1167,10 +1164,10 @@ else (* pointer <-> pointer cast *)
           E.fresh_symbol >>= fun obj1_sym ->
           E.fresh_symbol >>= fun obj2_sym ->
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
-          let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
-          let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
-          let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+          let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
+          let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
+          let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
+          let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
           let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.5#3" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
           E.return $
             C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -1219,10 +1216,10 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
             E.fresh_symbol >>= fun obj1_sym ->
             E.fresh_symbol >>= fun obj2_sym ->
             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-            let e1_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym   in
-            let e2_sym_pe   = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym   in
-            let obj1_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym in
-            let obj2_sym_pe = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym in
+            let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
+            let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
+            let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
+            let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
             let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.6#4" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
             E.return $
               C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
@@ -1272,10 +1269,10 @@ else
             E.fresh_symbol >>= fun integer_sym     ->
             E.fresh_symbol >>= fun ptr_obj_sym     ->
             E.fresh_symbol >>= fun integer_obj_sym ->
-            let ptr_sym_pe         = Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) ptr_sym         in
-            let ptr_obj_sym_pe     = Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_obj_sym     in
-            let integer_sym_pe     = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) integer_sym     in
-            let integer_obj_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) integer_obj_sym in
+            let ptr_sym_pe         = Caux.mk_sym_pe ptr_sym         in
+            let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
+            let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
+            let integer_obj_sym_pe = Caux.mk_sym_pe integer_obj_sym in
             E.return $
               C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
                                          ; Caux.mk_sym_pat integer_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) (
@@ -1383,10 +1380,10 @@ else
             E.fresh_symbol >>= fun integer_sym     ->
             E.fresh_symbol >>= fun ptr_obj_sym     ->
             E.fresh_symbol >>= fun integer_obj_sym ->
-            let ptr_sym_pe         = Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) ptr_sym         in
-            let ptr_obj_sym_pe     = Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_obj_sym     in
-            let integer_sym_pe     = Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) integer_sym     in
-            let integer_obj_sym_pe = Caux.mk_sym_pe (C.BTy_object C.OTy_integer) integer_obj_sym in
+            let ptr_sym_pe         = Caux.mk_sym_pe ptr_sym         in
+            let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
+            let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
+            let integer_obj_sym_pe = Caux.mk_sym_pe integer_obj_sym in
             E.return $
               C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
                                          ; Caux.mk_sym_pat integer_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) (
@@ -1468,10 +1465,10 @@ else
           (* The object type on which the Core operator is going to work on. *)
           (* By typing it is enough to look at the type of one of the operand (see STD §6.5.8#2) *)
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
-          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
-          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
-          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
           E.return $
             C.Ewseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)) core_e1 (
               C.Ecase e1_sym_pe
@@ -1511,10 +1508,10 @@ else
           (* The object type on which the Core operator is going to work on. *)
           (* By typing it is enough to look at the type of one of the operand (see STD §6.5.8#2) *)
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
-          let e1_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e1_sym        in
-          let e2_sym_pe        = Caux.mk_sym_pe (C.BTy_loaded oTy) e2_sym        in
-          let obj1_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj1_sym      in
-          let obj2_sym_pe      = Caux.mk_sym_pe (C.BTy_object oTy) obj2_sym      in
+          let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
+          let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
+          let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
+          let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
           E.return $
             C.Ewseq (Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)) core_e1 (
               C.Ecase e1_sym_pe
@@ -1636,7 +1633,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
   end
           end >>= fun (oTy2, core_e2, mk_stored_pe) ->
           E._STD "§6.5.16.1#2" $
-          let stored_pe = mk_stored_pe (Caux.mk_sym_pe (C.BTy_loaded oTy2) e2_sym) in
+          let stored_pe = mk_stored_pe (Caux.mk_sym_pe e2_sym) in
           
           E.return (
             C.Estd "§6.5.16#3, sentence 4" $
@@ -1739,8 +1736,8 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
            C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat object_sym  (C.BTy_object C.OTy_pointer)
                                       ; Caux.mk_sym_pat desired_sym (C.BTy_loaded C.OTy_pointer) ]) (C.Eunseq [object_core_e; desired_core_e])
              (C.Eaction (C.Paction C.Pos (C.Action loc () (C.Store (Caux.mk_ail_ctype_pe ref_ty)
-               (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) object_sym)
-               (Caux.mk_sym_pe (C.BTy_loaded C.OTy_pointer) desired_sym) mo)))
+               (Caux.mk_sym_pe object_sym)
+               (Caux.mk_sym_pe desired_sym) mo)))
              )
      
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
@@ -1759,7 +1756,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
            (* TODO: unspec for object_e *)
            C.Ewseq (Caux.mk_sym_pat object_sym (C.BTy_object C.OTy_pointer)) object_core_e
              (C.Eaction (C.Paction C.Pos (C.Action loc ()
-                (C.Load (Caux.mk_ail_ctype_pe ref_ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) object_sym) mo))))
+                (C.Load (Caux.mk_ail_ctype_pe ref_ty) (Caux.mk_sym_pe object_sym) mo))))
      
      (* TODO: allow non trivial call to atomic_thread_fence() ... *)
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEident (Symbol.Symbol _ (Just "atomic_thread_fence")))) [order_e] ->
@@ -1906,7 +1903,7 @@ TODO: #9
             let arg_sym_bTy =
               C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype arg_ty)) in
             let arg_ctype_pe = Caux.mk_ail_ctype_pe arg_ty in
-            let arg_val_sym_pe = Caux.mk_sym_pe arg_sym_bTy arg_val_sym in
+            let arg_val_sym_pe = Caux.mk_sym_pe arg_val_sym in
             E.return (
               C.Ewseq (Caux.mk_sym_pat arg_val_sym arg_sym_bTy)
                 core_arg_e
@@ -1923,9 +1920,9 @@ TODO: #9
                        else
                          arg_val_sym_pe in
                      (Caux.pstore loc arg_ctype_pe
-                        (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) arg_ptr_sym) conved_init Cmm.NA)
+                        (Caux.mk_sym_pe arg_ptr_sym) conved_init Cmm.NA)
                    end
-                   (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) arg_ptr_sym))))
+                   (C.Epure (Caux.mk_sym_pe arg_ptr_sym))))
             )
           ) (combine_params_args params es) >>= fun core_creates ->
           
@@ -1961,13 +1958,13 @@ TODO: #9
                             let arg_ptr_syms_pes =
                               let (xs_syms, ys_syms) = List.splitAt (List.length params) arg_ptr_syms  in
                               (* these are the arguments corresponding to declared parameters *)
-                              let xs = List.map (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) xs_syms in
+                              let xs = List.map Caux.mk_sym_pe xs_syms in
                               
                               if isVariadic then
                                  let ys = List.map (fun (e, sym) ->
                                    Caux.mk_tuple_pe
                                      [ Caux.mk_ail_ctype_pe (ctype_of e)
-                                     ; Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym ]
+                                     ; Caux.mk_sym_pe sym ]
                                  ) (List.zip (List.drop (List.length params) es) ys_syms) in
                                  xs ++ [Caux.mk_list_pe ys]
                               else
@@ -1982,7 +1979,7 @@ TODO: #9
                                 C.BTy_tuple (List.replicate (List.length arg_ptr_syms) C.BTy_unit) in
                             C.Esseq (Caux.mk_empty_pat bTy)
                               (* killing of the temporary objects *)
-                              (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) arg_ptr_syms))
+                              (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) arg_ptr_syms))
                               (* forwarding the value of call *)
                               (C.Epure call_sym_pe)
                           end
@@ -2124,9 +2121,9 @@ TODO: #9
           E.return $
             C.Esseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
               C.Epure (
-                Caux.mk_case_pe (Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym)
+                Caux.mk_case_pe (Caux.mk_sym_pe e_sym)
                   [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
-                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object oTy) obj_sym) (Caux.mk_integer_pe 0))
+                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe obj_sym) (Caux.mk_integer_pe 0))
                        (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                       Caux.mk_unit_pe
                      )
@@ -2166,10 +2163,10 @@ TODO: #9
                    let elem_pe =
                      (* TODO: check + std quote *)
                      if AilTypesAux.is_integer elem_ty then
-                       stdlib.mkcall_conv_loaded_int elem_ty (Caux.mk_sym_pe bTy e_sym)
+                       stdlib.mkcall_conv_loaded_int elem_ty (Caux.mk_sym_pe e_sym)
                      else
                        (* TODO: other conversions? *)
-                       Caux.mk_sym_pe bTy e_sym in 
+                       Caux.mk_sym_pe e_sym in 
                    E.return
                      (elem_pe :: acc, (C.Ewseq (Caux.mk_sym_pat e_sym bTy) core_e) -| mk_expr)
                | Nothing ->
@@ -2790,7 +2787,7 @@ let mk_run_e loc sym visibles_before visibles_after pes =
   let mk_kills_e =
     Caux.mk_unit_sseq (
       List.map (fun sym ->
-        Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)
+        Caux.pkill loc (Caux.mk_sym_pe sym)
       ) killed_syms
     ) in
   
@@ -2806,7 +2803,7 @@ let mk_run_e loc sym visibles_before visibles_after pes =
          let core_ty = Caux.mk_ail_ctype_pe ty in
          Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [(*f; *)sym]))
       ) created_sym_tys in
-  mk_kills_e (mk_creates_e (C.Erun () sym ((List.map (fun (sym, _) -> Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym) visibles_after) ++ pes)))
+  mk_kills_e (mk_creates_e (C.Erun () sym ((List.map (fun (sym, _) -> Caux.mk_sym_pe sym) visibles_after) ++ pes)))
   
 
 
@@ -2817,7 +2814,7 @@ type translate_stmt_env = <|
   
   return_lab  : C.ksym;
   default_lab : maybe C.ksym;
-  case_labs   : list (C.sym * C.ksym); (* the syms are bound to the pexprs corresponding to the integer constants *)
+  case_labs   : list (A.integerConstant * C.ksym);
   
   (* The lists are the objects visible from the loop and break labels *)
   loop:  maybe (
@@ -2841,6 +2838,10 @@ val translate_stmt:
 
 let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
   let translate_expression = translate_expression stdlib tagDefs in
+  let translate_cases_block case_labs default_lab =
+      translate_stmt2 stdlib tagDefs f <| env with case_labs=   case_labs;
+                                                   default_lab= default_lab |>
+  in
   let self = translate_stmt2 stdlib tagDefs f env in
   
   C.Eloc loc <$> match stmt with
@@ -2874,7 +2875,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           C.Esseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym])) (
             List.foldr (fun core_s acc ->
               C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_s acc
-            ) (Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) core_ss
+            ) (Caux.pkill loc (Caux.mk_sym_pe sym)) core_ss
           )
     
     | A.AilSblock binds ss ->
@@ -2891,7 +2892,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                    For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (Caux.pkill loc -| (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer)) -| fst) decls in
+            List.map (Caux.pkill loc -| (Caux.mk_sym_pe) -| fst) decls in
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
@@ -2922,9 +2923,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.return $
           (* NOTE: here we fix the strictness of unspecified values *)
           C.Ewseq (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
-            C.Ecase (Caux.mk_sym_pe (C.BTy_loaded oTy) sym_e)
+            C.Ecase (Caux.mk_sym_pe sym_e)
               [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat sym_obj (C.BTy_object oTy)],
-                 C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object oTy) sym_obj) (Caux.mk_integer_pe 1)))
+                 C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_obj) (Caux.mk_integer_pe 1)))
                    core_s1 core_s2)
                 (* non-deterministic branching if the test expression had unspecified value *)
               ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
@@ -2942,10 +2943,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_s
-            (C.Erun default sym_loop [ Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym | forall (sym MEM visible_syms) | true ]) in
+            (C.Erun default sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ]) in
         E.return $
           C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
-                                                                      Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
+                                                                      Caux.mk_sym_pe sym))) visible_syms) (
             C.Esseq test_sym_pat core_test (
               C.Ecase test_sym_pe
                 [ (Caux.mk_specified_pat case_sym_pat,
@@ -2967,18 +2968,18 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.get_visible_objects     >>= fun visible_syms ->
         
         let core_loop =
-          C.Erun default sym_loop [ Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym | forall (sym MEM visible_syms) | true ] in
+          C.Erun default sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ] in
         E.return $
           C.Esave (sym_loop, C.BTy_unit) (List.map (fun sym -> (sym, (C.BTy_object C.OTy_pointer,
-                                                         Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))) visible_syms) (
+                                                         Caux.mk_sym_pe sym))) visible_syms) (
             (* loop body *)
             C.Esseq (Caux.mk_empty_pat C.BTy_unit) core_s
               (* controlling expression *)
               begin
                 C.Esseq (Caux.mk_sym_pat sym_e (C.BTy_loaded C.OTy_integer)) core_e (
-                  C.Ecase (Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) sym_e)
+                  C.Ecase (Caux.mk_sym_pe sym_e)
                     [ (Caux.mk_specified_pat (Caux.mk_sym_pat sym_case (C.BTy_object C.OTy_integer)),
-                       C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe (C.BTy_object C.OTy_integer) sym_case) (Caux.mk_integer_pe 0)))
+                       C.Eif (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_case) (Caux.mk_integer_pe 0)))
                          core_loop C.Eskip)
                       (* non-deterministic branching if the test expression had unspecified value *)
                     ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
@@ -3004,7 +3005,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
             else
               C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
           C.Esseq (Caux.mk_empty_pat bTy)
-            (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym)) visible_syms)
+            (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) visible_syms)
             (* TODO: check the symbols *)
             (C.Erun () env.return_lab [Caux.mk_unit_pe])
     
@@ -3015,31 +3016,87 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
         let ret_pe =
           if AilTypesAux.is_integer env.return_ty then
-            stdlib.mkcall_conv_loaded_int env.return_ty (Caux.mk_sym_pe (C.BTy_loaded C.OTy_integer) e_sym)
+            stdlib.mkcall_conv_loaded_int env.return_ty (Caux.mk_sym_pe e_sym)
           else
-            Caux.mk_sym_pe (C.BTy_loaded oTy) e_sym in
+            Caux.mk_sym_pe e_sym in
         
         (* All the visible objects from the current function need to be killed. *)
         E.return $
           C.Esseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
             mk_run_e loc env.return_lab visible_syms [] [ret_pe]
           )
-    
+
+
     | A.AilSswitch e s ->
-        error "Translation.translate_stmt2, TODO AilSswitch e s"
+        (* Translate controlling expression *)
+        translate_expression e >>= fun core_e ->
+        E.fresh_symbol         >>= fun e_sym  ->
+        let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+        let e_pat = Caux.mk_sym_pat e_sym (C.BTy_loaded oTy) in
+
+        (* Integer promotion *)
+        E._STD "§6.8.4.2#5, sentence 1" (
+        E.fresh_symbol        >>= fun pe_sym ->
+        let pe_pat = Caux.mk_sym_pat e_sym (C.BTy_loaded oTy) in
+        let pe_promoted = stdlib.mkcall_conv_int
+          (fromJust "Translation.translate_stmt2: switch expr promotion"
+            (AilTypesAux.promotion tmp_implementation (ctype_of e)))
+          (Caux.mk_sym_pe e_sym)
+        in
+
+        (* Create case symbols and translate cases block *)
+        let cases    = collect_cases s in
+        let nb_cases = List.length cases.case_csts in
+        E.replicateM nb_cases (E.fresh_named_symbol "case")  >>= fun case_syms ->
+        E.fresh_named_symbol "default"                       >>= fun default_sym ->
+        let case_labs = List.zip cases.case_csts case_syms in
+        translate_cases_block case_labs (Just default_sym) s >>= fun core_s ->
+
+        E.get_visible_objects >>= fun visible_syms ->
+
+        (* Build translated switch *)
+        (* TODO: not sure if Ewseqs or Esseqs *)
+        E.return
+          (C.Ewseq e_pat core_e
+          (C.Ewseq pe_pat (C.Epure pe_promoted)
+            (List.foldl (fun acc (iC, case_lab) ->
+              C.Eif (Caux.mk_op_pe C.OpEq
+                      (Caux.mk_sym_pe e_sym)
+                      (translate_integerConstant iC))
+                (* TODO: not sure if the visible afters are the same *)
+                (mk_run_e loc case_lab visible_syms [] [])
+                acc)
+              (C.Ewseq (Caux.mk_empty_pat C.BTy_unit)
+                (if cases.found_default then
+                  mk_run_e loc default_sym [] [] []
+                 else C.Eskip)
+                core_s)
+              case_labs))))
     
     | A.AilScase iCst s ->
-        error "Translation.translate_stmt2, TODO AilScase iCst s"
+        self s                >>= fun core_s ->
+        match List.lookup iCst env.case_labs with
+        | Just lab ->
+          E.return $ C.Esave (lab, C.BTy_unit) [] core_s
+        | Nothing ->
+          error "Translation.translate_stmt2: case label not found."
+        end
     
     | A.AilSdefault s ->
-        error "Translation.translate_stmt2, TODO AilSdefault s"
+        self s                >>= fun core_s ->
+        match env.default_lab with
+        | Just lab ->
+          E.return $ C.Esave (lab, C.BTy_unit) [] core_s
+        | Nothing ->
+          error "Translation.translate_stmt2: default label not found."
+        end
     
     | A.AilSlabel sym s ->
         self s                >>= fun core_s       ->
         E.get_visible_objects >>= fun visible_syms ->
         E.return $
           C.Esave (sym, C.BTy_unit) (List.map (fun sym ->
-            (sym, (C.BTy_object C.OTy_pointer, Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym))
+            (sym, (C.BTy_object C.OTy_pointer, Caux.mk_sym_pe sym))
           ) visible_syms) core_s
     
     | A.AilSgoto sym ->
@@ -3058,23 +3115,23 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
             | Aty.Pointer _ ref_ty ->
                 if Aaux.is_null_pointer_constant e then
                   E.return (
-                    Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_sym)
+                    Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
                       (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ref_ty))) Cmm.NA
                   )
                   else
                     translate_expression e >>= fun core_e ->
                     E.return (
                       C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e
-                        (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_sym) e_sym_pe Cmm.NA)
+                        (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_sym_pe Cmm.NA)
                     )
             | ty ->
                 (* we are not dealing with a pointer initialisation *)
                 E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
                 translate_expression e                 >>= fun core_e         ->
-                let e_sym_pe = Caux.mk_sym_pe e_bTy e_sym in
+                let e_sym_pe = Caux.mk_sym_pe e_sym in
                 E.return (
                   C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e
-                    (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_sym)
+                    (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
                       (if AilTypesAux.is_integer ty then stdlib.mkcall_conv_loaded_int ty e_sym_pe else e_sym_pe) Cmm.NA)
                 )
           end
@@ -3148,9 +3205,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     , C.Esseq (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
                         C.Esseq (Caux.mk_empty_pat C.BTy_unit)
                           (* TODO: proper memory order *)
-                          (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global)
+                          (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe sym_global)
                              (Caux.zeros core_tagDefs (Caux.proj_ctype ty)) Cmm.NA)
-                          (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
+                          (C.Epure (Caux.mk_sym_pe sym_global))
                       ) ) :: gacc
                   , facc )
                 end
@@ -3173,10 +3230,10 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 end >>= fun (e_bTy, core_e) ->
                 let core_init_e =
                   if AilTypesAux.is_integer ty then
-                    stdlib.mkcall_conv_loaded_int ty (Caux.mk_sym_pe e_bTy e_sym)
+                    stdlib.mkcall_conv_loaded_int ty (Caux.mk_sym_pe e_sym)
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
-                    Caux.mk_sym_pe e_bTy e_sym in
+                    Caux.mk_sym_pe e_sym in
                 E.return begin
                   (
                     ( sym
@@ -3185,9 +3242,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                         C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e (
                          C.Esseq (Caux.mk_empty_pat C.BTy_unit)
                            (* TODO: proper memory order *)
-                           (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global)
+                           (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe sym_global)
                               core_init_e Cmm.NA)
-                           (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_global))
+                           (C.Epure (Caux.mk_sym_pe sym_global))
                         )
                       ) ) :: gacc
                   , facc )
@@ -3265,7 +3322,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (* §6.9.1#12 *)
                       Caux.mk_undef_pe Undefined.UB088_reached_end_of_function in
                   C.Esave (ret_label, ret_bTy) [(ret_sym, (ret_bTy, ret_pe))]
-                    (C.Epure (Caux.mk_sym_pe ret_bTy ret_sym))
+                    (C.Epure (Caux.mk_sym_pe ret_sym))
 
 (*
                   let run_e =
@@ -3304,8 +3361,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   E.fresh_symbol >>= fun sym_lit ->
     let expr =
       C.Esseq (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
-        (C.Esseq (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit) e_init Cmm.NA)
-          (C.Epure (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) sym_lit))) in
+        (C.Esseq (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe sym_lit) e_init Cmm.NA)
+          (C.Epure (Caux.mk_sym_pe sym_lit))) in
     E.return $ (sym, C.BTy_object C.OTy_pointer, expr) :: acc
   ) (List.reverse globs) xs >>= fun globs' ->
   E.return (core_tagDefs, List.reverse globs', cfuns)

@@ -274,7 +274,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         Eff.get         >>= fun st ->
         lookup_sym _sym >>= (function
           | Some (sym, _) ->
-              Eff.return (Caux.mk_sym_pe BTy_unit(*TODO: remove when mk_syn_pe doesn't require a bTy anymore*) sym)
+              Eff.return (Caux.mk_sym_pe sym)
           | None ->
               Eff.fail (Unresolved_symbol _sym)
         )

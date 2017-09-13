@@ -250,8 +250,8 @@ let mk_unspecified_pat pat =
 
 
 (* Core pexpr builders  ***************************************************** *)
-val mk_sym_pe: core_base_type -> Symbol.sym -> pexpr (* TODO: remove the bTy *)
-let mk_sym_pe bTy sym =
+val mk_sym_pe: Symbol.sym -> pexpr
+let mk_sym_pe sym =
   Pexpr () (PEsym sym)
 
 (* TODO: mk_impl_pe *)

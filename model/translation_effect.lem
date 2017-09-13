@@ -41,7 +41,7 @@ let elab_fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
 val wrapped_fresh_symbol: C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
 let wrapped_fresh_symbol bTy =
   elab_fresh_symbol >>= fun sym ->
-  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe bTy sym)
+  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
 
 (* TODO: remove this function and use wrapped_fresh_symbol instead *)
