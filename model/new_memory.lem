@@ -1,0 +1,655 @@
+
+
+(*
+  STUFF WE NEED
+
+  * given two writes Ky wants to know if they overlap
+  * the same given a write and a read request
+
+*)
+
+open import Pervasives Utils
+import New_memory_effect Symbolic State_exception AilTypes
+
+
+
+(*PS: we only have effects for semantic failures in the result type of the API, yes?  In which case I guess most of this goes away, but I don't know your normal failure plumbing  *)
+(* module E = New_memory_effect *)
+(* module Operators = struct *)
+(*   let inline (>>=)    = E.bind *)
+(*   let inline (>>) m f = E.bind m (fun _ -> f) *)
+(* (\*  let inline tid_of   = E.tid_of *\) *)
+(* end *)
+
+(* open Operators *)
+
+(* (\* Memory effect *\) *)
+(* type t 'a = E.t memory_state 'a *)
+(* 
+type memory_error
+*)
+
+type t = Exception.t  (* to represent failure cases *)
+
+
+
+
+type address = Symbolic.symbolic
+type size = Symbolic.symbolic
+
+
+
+
+type lifted_value 'a =
+  | Specified of 'a
+  | Unspecified of AilTypes.ctype
+  | Indeterminate_value of AilTypes.ctype
+
+
+
+
+type memory_write
+
+
+
+
+
+
+
+
+
+
+
+
+type pointer_provenance =
+  (* pointer to a statically allocated object *)
+  (*the metadata associated with those ids is kept in the driver_state *)
+  | Prov_sao of sao_id
+  
+  (* pointer to a dynamically allocated space (from malloc etc.) *) 
+  | Prov_das of das_id
+
+  (* pointer formed by casting from an integer, in the case where the
+     integer provenance-tracking machinery doesn't discover a good
+     original object for (so this case will never be used in standard
+     C. The `ctype' records the type used for the creating cast. *)
+  | Prov_intcast of AilTypes.ctype * mem_object_value
+
+
+type pointer_path_element =
+  | Path_array  of Symbolic.symbolic (* the index *) 
+  | Path_member of Symbolic.sym (* struct/union id *) * Symbolic.sym (* member id *) 
+
+type pointer_path = list pointer_path_element
+
+type pointer_nonnull = <|
+  ptr_provenance:      pointer_provenance;
+  ptr_view_type:       AilTypes.ctype; (* the "view type" of the pointer - this will change when you do a cast or a shift. *)
+  ptr_abstract_offset: maybe pointer_path; (* the position in the original object, represented as an abstract access path, where that makes sense  *)
+  ptr_numeric_offset:  maybe Symbolic.t; (* the position in the original object, represented with (possibly symbolic) address arithmetic (as an offset from the base address determined by the ptr_provenance field), where that makes sense *)
+  ptr_numeric_address: Symbolic.t  (* the address in memory *)
+|>
+
+type pointer_value =
+  | Pointer_null of AilTypes.ctype
+  | Pointer_nonnull of pointer_nonnull
+
+(* I wasn't completely sure about whether we should have this split
+here, instead of regarding a null pointer as a Prov_intcast 0.  But
+6.3.2.3p3 distinguishes between a null pointer constant (which has
+particular properties) and an arbitrary 0-valued integer cast to a
+pointer type, which doesn't. *)
+
+
+
+
+(* PS: not sure what this is for - why do we lift *pointer values* rather than general values? *)
+type mem_object_value =
+  | Obj_pointer of pointer_value
+
+  | Obj_unspecified of AilTypes.ctype
+(*  | Indeterminate_value of AilTypes.ctype *) (* TODO: we don't have trap value, so `Unspecified' is sufficient *)
+
+
+
+
+
+
+
+
+(** The memory layout API *)
+
+
+val create_sao:        AilTypes.ctype -> t pointer_value
+(*
+let create typ = 
+    - create a new unique id 
+    - calculate the size of typ
+    - call the allocator to construct a new address.  
+        We'll want a choice of several allocators, including:
+
+          - the most semantically general allocator: taking a new
+             symbolic variable with constraints that the new allocation
+             doesn't overlap the currently allocated (in some sense
+             TBD) things
+
+             WRT that, note 7.22.3p2 "A call to free or realloc that
+             deallocates a region p of memory synchronizes with any
+             allocation call that allocates all or part of the region
+             p. This synchronization occurs after any access of p by
+             the deallocating function, and before any such access by
+             the allocating function.",   which matches what I was
+             saying the other day:  we do have to make up new sw edges.    
+             Kyndylan will have to do this in his free()....
+          - a completely concrete next-address allocator (with no
+             reuse on free)
+
+        This has (somehow) to refer to and update the driver's current
+        constraint set and to the concurrency model's notion of the
+        currently allocated things.
+
+        Allocation can fail if the allocator runs out of memory.  For
+        create, that should give a whole-semantics failure(?) whereas
+        for malloc etc the call should return null.
+
+    - construct an updated driver memory metadata state, adding a maplet
+       from the unique id to the type and address
+    - construct a pointer_value from the statically_allocated_object_metadata:
+        Pointer_nonnull <|
+          ptr_provenance = Prov_sao (*resp. Prov_das*) of the unique id
+          ptr_view_type = typ
+          ptr_abstract_offset = Just [] (*resp. Nothing *)
+          ptr_numeric_offset =   a symbolic zero 
+          ptr_numeric_address = address injected into Symbolic.t  
+        |>      
+    - someone synthesises a concurrency-model Create event with the address and size
+*)
+
+
+(* Here E is the state-and-exception monad for the layout model.  Its
+state contains:
+- the sao and das symbol generators and maps
+- the allocator (a tag of 
+- the concurrency_model state
+*)
+
+type allocator = 
+  | Semantically_general of list (address*size)   (* the addresses in which we can allocate *)
+  | Trivial of address (* the next free address *)
+
+
+let create_sao tid ty ty_size ty_alignment = do E 
+
+  (* we pass in ty_size and ty_alignment here because calculating them
+  involves executing core functions (from the implementation file),
+  and in this module we don't have access to the core_run interpreter
+  *)
+
+  (* create a new unique id *)
+  sao_id <- E.fresh_sao_id;
+  
+  (* call the allocator to construct a new address *)
+  (address, new_allocator) <- do E 
+    allocator <- E.get_allocator; in
+    match allocator with
+    (* a completely concrete next-address allocator (with no reuse on free)*)
+    | Trivial next_address -> 
+        let next_address' = error "...round up next_address modulo ty_align" in
+        E.return (next_address', Trivial (next_address' + ty_size))
+
+    (* the most semantically general allocator: taking a new
+    symbolic variable with constraints that the new allocation
+    doesn't overlap the currently allocated (in some sense TBD) things*)
+    | Semantically_general allocatable_space-> do E
+        (* create a new symbolic variable*)
+        address <- E.fresh_symbolic_variable;
+        (* build constraints *)
+        st <- E.get_concurrency_model_state; in
+        let current_footprints : list (address * size)= Concurrency_model.hb_live_footprints st in
+        let new_constraints = 
+          (mk_constraint "address mod ty_size = 0") ::
+          (mk_constraint "(address,ty_size) inside allocatable_space ") ::
+          List.map (function (address',size') -> mk_constraint "(address,size) doesn't overlap (address',size')" ) current_footprints in do E
+          (* update the existing constraint set *)
+          E.add_constraints new_constraints;        
+          (* check satisfiable and fail if not *)
+          b <- E.check_constraints_satisfiable; in
+          if b then 
+            E.return (address, allocator)
+          else
+            E.fail (tag "run out of memory")
+            (* in fact an implementation might fail earlier than this
+            - so this allocator cannot match *all* behaviours of some
+            reasonable C implementations *)
+
+         end ;
+   E.set_allocator new_allocator ; 
+
+
+   let sao_metadata = <| obj_original_type = ty; obj_address = address |> in 
+
+   ... update with   Map.insert sao_id sao_metadata sao_map 
+
+   let ptr_val = 
+     Pointer_nonnull <|
+       ptr_provenance = Prov_sao sao_id;
+       ptr_view_type = ty;
+       ptr_abstract_offset = Just []; 
+       ptr_numeric_offset = Symbolic.zero;
+       ptr_numeric_address = address; 
+     |> in
+
+
+   st <- E.get_concurrency_model_state; in
+   let st' = Concurrency_model.create st tid ty ptr_val in
+
+   E.set_concurrency_model_state st'
+
+
+   E.return ptr_val
+
+
+
+
+
+
+
+val create_das:         Symbolic.symbolic -> t pointer value
+(* similar to create_sao except constructing a dynamically allocated space *)
+(* for calloc, core will also have to generate an initialisation write (of a char array of zeros *)
+(* there's an implementation-defined choice in 7.22.3 of what to do when a zero-sized allocation is requested; that can be done in core *)
+
+
+val kill_sao:          pointer_value -> t unit
+val free_das:          pointer_value -> t unit
+
+(* for objects with automatic or thread storage duration (c.f. 6.2.4),
+this will presumably be called with the pointer returned by create,
+and we could plumb the statically_allocated_object_id directly to here
+(returning it from create).  OTOH, free() might be called with an
+arbitrary pointer value. Do we want the same API call for both? *)
+
+(* for the automatic (or thread) storage-duration case: 
+
+   - someone synthesises a concurrency-model Kill event with the
+      address and size
+
+   - in the Standard semantics, with -pointer_lifetime_end_zap true,
+      someone finds all memory locations containing a pointer with the
+      same unique id (or a projected byte thereof) and for each
+      synthesises a concurrency-model Write event to the Undefined
+      value.
+   - in the Standard semantics with -pointer_lifetime_end_zap false,
+      we don't do that (we rely on the concurrency model liveness
+      checking wrt Create and Kill events to check accesses using the
+      pointer are legal)
+   - in the Concrete semantics, we don't do that (likewise relying on
+      access-time checking)
+
+   for the free() case:
+
+   - we have to check the pointer matches "a pointer earlier returned
+      by a memory management function" (7.22.3.3p2) and that it hasn't
+      been free'd (or realloc'd).  The latter is done by the
+      concurrency model liveness check.  For the former, 
+
+      - in the Standard semantics:
+
+         ptr_view_type       ... check equal to the type from driver metadata for the id of the pointer ?
+         ptr_abstract_offset ... check IN {Just [], Nothing}  ?
+         ptr_numeric_offset  ... check equal a symbolic zero ?
+         ptr_numeric_address ... check equal to the address from the driver metadata for the id of the pointer ? 
+
+       then we use the size from that type
+  
+      - in the Concrete semantics:  
+
+         we just use the ptr_numeric_address: there should be an
+         hb-visible Create with that address (and no hb-intervening or
+         hb-unordered Kill on it)
+
+       then we use the size from that Create
+
+   - Then we use that address and size to synthesise a Kill event. 
+
+   - In the Standard semantics with -pointer_lifetime_end_zap true, we
+      synthesise undefined-value writes as above.
+*)
+
+val load:          AilTypes.ctype -> pointer_value -> t object_value
+
+(* in the Standard semantics:
+
+   - check non-null
+
+   - either (reading a representation byte from an sao or das)
+  
+      - the ctype is char  (or char*, depending how this is set up)
+
+      - according to the ptr_numeric_offset and ptr_numeric_address the pointer points to somewhere in the footprint (padding included) of the original object (sao or das) (from the ptr_provenance)
+     
+   - or (reading a normal subobject member from a statically allocated object)
+    
+      - the ptr_provenance is an sao
+
+      - according to the ptr_abstract_offset the pointer points to the
+         original object or a subobject thereof (and not one of those
+         one-past things), which matches the ptr_view_type and the
+         ctype
+
+   - or (reading a not-necessarily-char from a dynamically allocated space)
+
+      - the ptr_provenance is a das
+
+      - some check wrt its ptr_view_type ? 
+
+      - according to the ptr_numeric_offset, the pointer points to
+         somewhere within the das (far enough from the end to fit the
+         ctype)
+
+      - all other checking is left to the effective type
+         checking below
+
+   in the Concrete semantics:
+
+    - check non-null
+
+    - nothing more, beyond the effective-type checking below?  (and
+       modulate that by only looking at the leaf types and by
+       optionally allowing representation casts)?
+
+*)
+
+(*When we do a (nonatomic) read, we expect the concurrency model to
+calculate the set of hb-most-recent writes (do I really mean hb?)
+that overlap the read location.  Presumably any of those writes that
+pairwise-overlap each other are themselves hb-related, otherwise we'd
+have already found a data race (but there might be a struct write and
+an hb-later member write, or an abstract value write and an hb-later
+representation-byte write, for example).  Then we need to reassemble
+the read value from that partial order of write values.  (which may be
+tricky if many things are symbolic...)
+
+What does "overlap the read location" really mean?  I've been
+imagining it was just overlap of (address,size) intervals (computing
+the size from the lvalue type and taking the address from the pointer
+value), but that's wrong: if we're reading a compound value as an
+abstract thing (i.e. not just as a char array), we should *not* be
+reading the padding, and should not get rf edges from padding writes
+etc.
+
+Moreover, in the Standard semantics (where padding always contains
+undefined values), the reassembly process (for any representation
+read) has to introduce those in the right places - to match compiler
+behaviour, presumably those should be determined by the static type of
+the load.
+
+In the Standard semantics, we also need to do effective-type checking:
+checking for each of the pieces of that reassembly that the type of
+the write is suitably compatible with the lvalue type of the load.
+
+In the Concrete semantics, do we do any type checking?  At least that
+we're not reading from non-allocated memory - but that follows from
+the concurrency model?
+
+Then someone has to synthesise a read event (or however this works in
+Kyndylan's current interface), and we rely on the concurrency model
+lifetime check (w.r.t. *all* the writes we read from).
+
+*)
+
+
+val store:         AilTypes.ctype -> pointer_value -> object_value -> t unit
+
+(* This is relatively straightforward: we basically just synthesise a
+Write event, after some checks similar to the load (abstract those
+out).
+
+In the Standard semantics we can look at the pointer_value to
+determined if we're writing to a statically allocated object (in which
+case the lvalue type should be suitably compatible with that) or to
+within a dynamically allocated space, in which case we use the
+supplied lvalue type as the effective type of the write.
+*)
+
+
+(* val same: address -> address -> t bool *)
+
+val pointer_member_offset: AilTypes.ctype (* static type of the pointer*) 
+                        -> pointer_value 
+                        -> Symbolic.sym (* the member id *) 
+                        -> t pointer_value
+
+(* - check the static type is a struct or union with that member
+      (otherwise the static type system should have told us, but we
+      should check dynamically too, absent a type soundness proof)
+
+   - check the pointer_value is non-null (only in the standard semantics?)
+
+   - in the Standard semantics: 
+      check the ptr_view_type is more-or-less equal (TODO?) to the
+      static type
+
+   - in the Concrete semantics:   
+      the same check?? 
+
+   - if the ptr_abstract_offset is non-Nothing, append the member id
+
+   - look up the (symbolic) offset for the member in this static type
+
+   - add it to the ptr_numeric_offset
+
+   - add it to the ptr_numeric_address
+
+*)
+
+val pointer_arithmetic: AilTypes.ctype (* static type of the pointer*) 
+                       -> pointer_value 
+                       -> Symbolic.symbolic  
+                       -> t pointer_value
+
+(*
+   - the actual offset is determined by the static type and the symbolic value
+
+   - in the Standard semantics:
+      allow only within an array (or one-past), remembering that
+      almost anything is considered an array of size 1.  We do this by
+      looking at the end of the ptr_abstract_offset, and mutate that.
+
+   - in the Concrete semantics:
+      allow any arithmetic (updating the ptr_abstract_offset if it
+      makes sense, otherwise zapping it)
+
+   - add the offset to the ptr_numeric_offset
+
+   - add the offset to the ptr_numeric_address
+
+*)
+
+
+(* See 6.3.2.3 for casts involving pointers *)
+
+val cast_pointer_to_pointer:  ctype (* the static type of the pointer *)
+                           -> pointer_value
+                           -> ctype (* the type specified in the cast *)
+                           -> t pointer_value
+
+(* 
+
+ - in the Standard semantics:
+
+     - casting a pointer "to an object type" (what's the force of 
+        that - not a function pointer?) to void* : this always succeeds
+        (6.3.2.3p1); it gives the same pointer value except for the
+        view type which we change to void?
+
+     - casting a pointer to void to a pointer "to an object type":
+        always succeeds, and again we just futz with the view type.
+        (say you have a pointer &s.f, cast to void*, and cast back to
+        float*, can it be used to access f ?  not in the standard,
+        anyhow)
+
+     - casts that add qualifiers just futz with the view type:
+        6.3.2.3p2 "For any qualifier q, a pointer to a non-q-qualified
+        type may be converted to a pointer to the q-qualified version
+        of the type; the values stored in the original and converted
+        pointers shall compare equal."
+
+     - casting of an "integer constant expression with the value 0"
+       (6.3.2.3p3) to a pointer type gives the Pointer_null value  
+
+     - casting the Pointer_null value to any pointer type leaves it
+       unchanged (6.3.2.3p3,4)
+
+     - casting to a pointer to a character type leaves the pointer
+       value unchanged except for the view type?  Maybe we need to
+       leave a marker in the ptr_abstract_offset too, so that we know
+       we can legally do char array arithmetic after that.
+
+       (6.3.2.3p7: "When a pointer to an object is converted to a
+       pointer to a character type, the result points to the lowest
+       addressed byte of the object. Successive increments of the
+       result, up to the size of the object, yield pointers to the
+       remaining bytes of the object."
+
+     - casting to another object type checks the alignment (undefined
+       if the result is not correctly aligned) then futz's with the
+       view type (maybe we don't need to do any more, if we are
+       checking that the view type is legal before doing any
+       accesses).  This will allow slightly more liberal roundtrips
+       than the standard, but not much.
+
+       (6.3.2.3p7: "A pointer to an object type may be converted to a
+       pointer to a different object type. If the resulting pointer is
+       not correctly aligned68) for the referenced type, the behavior
+       is undefined. Otherwise, when converted back again, the result
+       shall compare equal to the original pointer.")
+
+     - casts of function pointers to function pointers just futz with
+       the view type
+
+     - otherwise it's undefined behaviour (or unspecified value?)
+
+ - in the Concrete semantics:
+
+     - this pretty much always works, futzing with the view type,
+       except for alignment and object-pointer vs function-pointer stuff?
+
+  *)
+
+
+val cast_pointer_to_integer: pointer_value -> integerType -> t object_value
+
+(*  - for Pointer_null, take zero
+
+    - for Pointer_nonnull, take the ptr_numeric_address 
+
+    - record the pointer_value (or just its ptr_provenance?) in the
+      provenance tracking data of the resulting object_value
+
+    (and union up those taints in the core semantics with the
+    following - lift out the manipulation of this stuff)
+
+    the above is too liberal wrt the standard - 6.3.2.3p6 leaves this
+    implementation-defined: "Any pointer type may be converted to an
+    integer type. Except as previously specified, the result is
+    implementation-defined. If the result cannot be represented in the
+    integer type, the behavior is undefined. The result need not be in
+    the range of values of any integer type."
+
+ *)
+
+type provenance_tracking_data = list pointer_value
+val combine_provenance_data : list provenance_tracking_data -> provenance_tracking_data
+
+
+val cast_integer_to_pointer: object_value -> ctype -> t pointer_value
+
+(*
+
+  - in the Standard semantics:
+
+
+  - in the Concrete semantics:
+     this always works
+
+*)
+
+val pointer_diff:  ctype -> pointer_value -> ctype -> pointer_value -> t object_value
+
+type compare_operator = Lt | Gt | Ge | Le | Eq | Neq
+val pointer_compare:  compare_operator->  ctype -> pointer_value -> ctype -> pointer_value -> t bool
+
+
+(* these might be special-cased in the memory layout model so probably belong in this API? *)
+val memcpy 
+val memcmp
+
+
+
+
+(* TODO: add overlap and containment checking *)
+(* TODO: and functions to assemble a read value from a hb-partial-order of overlapping writes *)
+(* TODO: ...including reading representation bytes from an object etc. *)
+
+
+(*TODO: get Symbolic.sym  and  Symbolic.counter out of the "Symbolic" module *)
+
+
+
+
+(* ========= *)
+(* internal operations *)
+
+val gen_symbolic_address: t address
+let gen_symbolic_address =
+  error "WIP"
+(*
+  State_exception.modify (fun st ->
+    (st.mem_symbol_counter, <| st with mem_symbol_counter= st.mem_symbol_counter + 1 |>)
+  )
+*)
+
+val gen_mem_object_id: t mem_object_id
+let gen_mem_object_id =
+  error "WIP"
+
+
+
+
+
+
+
+
+let create ty =
+  gen_symbolic_address >>= fun addr   ->
+  gen_mem_object_id    >>= fun obj_id ->
+  State_exception.modify (fun st ->
+    let obj = <| obj_effective_type= Just ty; obj_address= addr |> in
+    (Pointer_object obj_id, <| st with mem_objects= Map.insert obj_id obj st.mem_objects |>)
+  )
+
+
+
+
+let store ty ptr v =
+  error "WIP"
+
+
+
+(*
+let load ty ptr =
+  
+*)
+
+
+
+let pointer_eq ptr1 ptr2 =
+  if is_null_pointer ptr1 && is_null_pointer ptr2 then
+    (* STD §6.3.2.3#4, sentence 2 *)
+    E.return true
+  else if is_null_pointer ptr1 || is_null_pointer ptr2 then
+    (* STD §6.3.2.3#3, sentence 2 *)
+    E.return false
+  else
+    error "WIP"

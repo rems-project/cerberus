@@ -1,0 +1,95 @@
+open Utils
+
+type t 'a = option 'a
+
+
+(* Functor *)
+val fmap: forall 'a 'b. ('a -> 'b) -> t 'a -> t 'b
+val (<$): forall 'a 'b. 'a -> t 'b -> t 'a
+
+(* fmap f m = m >>= (return -| f) *)
+let fmap f = function
+  | Just v  -> Just $ f v
+  | Nothing -> Nothing
+end
+
+let inline (<$) x m = fmap (const x) m
+
+
+(* Applicative *)
+val pure:  forall 'a. 'a -> t 'a
+val sapp:  forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
+
+let pure x =
+  Just x
+let sapp fm mx =
+  match (fm, mx) with
+    | (Just f, Just x) -> Just $ f x
+    | _                -> Nothing
+  end
+
+
+(* Monad *)
+val return: forall 'a. 'a -> t 'a
+val bind: forall 'a 'b. t 'a -> ('a -> t 'b) -> t 'b
+
+let return z = Just z
+
+let bind m f =
+  match m with
+    | Just z  -> f z
+    | Nothing -> Nothing
+  end
+
+
+
+(* Alternative *)
+val empty: forall 'a. t 'a
+let empty = Nothing
+
+
+
+  module Operators = struct
+    let inline (<$>) = fmap
+    let inline (>>=) = bind
+    
+    val (>>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let inline (>>) m1 m2 = m1 >>= fun _ -> m2
+    
+    val (<*>): forall 'a 'b. t ('a -> 'b) -> t 'a -> t 'b
+    let inline (<*>) = sapp
+    
+    val (|*>): forall 'a 'b. t 'a -> t 'b -> t 'b
+    let inline (|*>) ma mb = (const id) <$> ma <*> mb
+    
+    val (<*|): forall 'a 'b. t 'a -> t 'b -> t 'a
+    let inline (<*|) ma mb = const <$> ma <*> mb
+    
+    val (<|>): forall 'a. t 'a -> t 'a -> t 'a
+    let inline (<|>) m1 m2 =
+      match m1 with
+	| Just _  -> m1
+	| Nothing -> m2
+      end
+
+
+  end
+
+val isJust: forall 'a. t 'a -> bool
+let isJust = function
+  | Just _  -> true
+  | Nothing -> false
+end
+
+val option: forall 'a 'b. 'b -> ('a -> 'b) -> option 'a -> 'b
+let option z f = function
+  | Just x  -> f x
+  | Nothing -> z
+end
+
+(*
+val fromJust: forall 'a. option 'a -> 'a
+let fromJust = function
+  | Just x -> x
+end
+*)
