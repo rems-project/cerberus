@@ -7,7 +7,6 @@ module P = PPrint
 
 let isatty = ref false
 
-
 type doc_tree =
   | Dleaf of P.document
   | Dnode of P.document * doc_tree list
@@ -773,7 +772,14 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_declaration decl])
 
+let filter_external_decl edecls =
+  let f acc decl =
+    match decl with
+    | EDecl_func _ -> decl::acc
+    | _ -> acc
+  in List.rev (List.fold_left f [] edecls)
 
-let pp_translate_unit (TUnit edecls) =
+let pp_translate_unit show_ext_decl (TUnit edecls) =
   isatty := Unix.isatty Unix.stdout;
-  pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration edecls)) ^^ P.hardline
+  let filtered_edecls = if show_ext_decl then edecls else filter_external_decl edecls in
+  pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline
