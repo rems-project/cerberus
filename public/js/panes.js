@@ -4,33 +4,18 @@ class Pane {
   constructor () {
     this.tabs = []
 
-    // UI
     this.parent = null
 
-    this.dom = $('<div class="pane"></div>')
-    this.tablinks = $('<div class="tablinks"></div>')
-    this.content  = $('<div class="content"></div>')
-    this.dom.append(this.tablinks)
-    this.dom.append(this.content)
+    this.dom          = $('<div class="pane"></div>')
+    this.dom.tabs     = $('<div class="tablinks"></div>')
+    this.dom.content  = $('<div class="content"></div>')
+    this.dom.append(this.dom.tabs)
+    this.dom.append(this.dom.content)
 
-    //this.dom = $('#pane-template').clone().contents()
-
-    //this.tabadder = this.dom.find('.tabadder')
-    //this.tablinks = this.dom.find('.tablinks')
-    //this.content =  this.dom.find('.content')
     this.activeTab = null
 
     // Event listeners
-     /*
-    this.tabadder.on('click', () => {
-      let tab = new TabSource()
-      this.addTab(tab)
-      tab.setActive()
-      this.setActive()
-    })
-    */
-
-    this.content.on('click', () => {
+    this.dom.content.on('click', () => {
       this.setActive()
     })
 
@@ -42,21 +27,15 @@ class Pane {
         tab.parent.remove(tab)
         let elem = $(document.elementFromPoint(evt.clientX, evt.clientY))
         if (!elem.hasClass('tablink')) elem = null
-        this.addTab(tab, elem)
+        this.add(tab, elem)
         tab.setActive()
         tab.addEventListener()
         tab.refresh()
       }
     })
 
-    this.tablinks.on('dragover', (evt) => {
-      // Allows dropping over tablinks
-      evt.preventDefault()
-    })
-
-    this.tablinks.on('drop', (evt) => {
-
-    })
+    // Allows dragging over
+    this.dom.on('dragover', (evt) => evt.preventDefault())
   }
 
   get firstTab () {
@@ -75,14 +54,12 @@ class Pane {
     this.tabs.push(tab)
 
     if (beforeThisTab)
-      beforeThisTab.before(tab.tablink)
+      beforeThisTab.before(tab.dom)
     else
-      this.tablinks.append(tab.tablink);
-
-      //this.tabadder.before(tab.tablink)
+      this.dom.tabs.append(tab.dom);
 
     // Attach UI
-    this.content.append(tab.content)
+    this.dom.content.append(tab.dom.content)
 
     tab.parent = this
     tab.alive = true
@@ -92,7 +69,7 @@ class Pane {
     tab.refresh()
   }
 
-  remove (tab, doNotRemovePane) {
+  remove (tab) {
     // If removing active tab, then activate previous one
     if (tab === this.activeTab) {
       let prev = this.prevTab(tab)
@@ -103,11 +80,12 @@ class Pane {
     }
 
     // Remove from UI
-    tab.tablink.remove()
-    tab.content.remove()
+    tab.dom.remove()
+    tab.dom.content.remove()
 
     // Tab is not alive anymore
-    tab.alive = false
+    //tab.alive = false
+    tab.parent = null
 
     // Remove from list of tabs
     for(let i = 0; i < this.tabs.length; i++) {
@@ -117,7 +95,7 @@ class Pane {
     }
 
     // Remove pane if this was the last tab
-    if (this.tabs.length == 0 && !doNotRemovePane)
+    if (this.tabs.length == 0)
       this.parent.remove(this)
   }
 

@@ -25,16 +25,12 @@ class UI {
       if (!file)
         return;
       let reader = new FileReader()
-      reader.onload = (e) => {
-        let tab = new TabSource()
-        tab.editor.setValue(e.target.result)
-        this.activePane.addTab(tab)
-        tab.setActive()
-      }
+      reader.onload = (e) => this.add(new View(file.name, e.target.result))
       reader.readAsText(file)
     })
 
     // Save (download) file
+    // TODO: not being used right now
     $('#save').on('click', () => {
       function download(data, filename) {
         let a = document.createElement('a')
@@ -86,12 +82,7 @@ class UI {
     $('#core').on('click', () => this.ast ('core'))
 
     // Views
-    $('#new_pane').on('click', () => {
-      console.warn('TODO: for the time being, add source tab to new pane')
-      let pane = new Pane()
-      pane.add(this.currentView.source)
-      this.currentView.add(pane)
-    })
+    $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
     $('#source_tab') .on('click', () => this.currentView.source.setActive())
     $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
     $('#cabs_tab')   .on('click', () => this.currentView.cabs.setActive())
@@ -178,19 +169,16 @@ class UI {
   ast (mode) {
     this.request(mode, (data) => {
       let result = parseCerberusResult(data)
-      let source = this.currentView.source
-      let ast    = this.currentView[mode]
 
       // Set colors for every location
       for (let i = 0; i < result.locations.length; i++)
         result.locations[i].color = generateColor()
 
-      source.locations = result.locations
-      source.dirty = false
-
-      ast.locations = result.locations
-      ast.setValue(result.ast)
-      ast.highlight()
+      this.currentView[mode].setValue(result.ast)
+      this.currentView.source.dirty = false
+      this.currentView [mode].dirty = false
+      this.currentView.locations = result.locations
+      this.currentView.highlight()
     })
   }
 
@@ -207,7 +195,6 @@ class UI {
       this.currentView.refresh()
   }
 }
-
 
 /*
  * UI initialisation
