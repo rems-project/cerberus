@@ -38,7 +38,7 @@ button:focus {
   margin: 4px 16px;
 }
 
-#toolbar {
+.toolbar {
   display: inline-block;
   border-left: 1px solid #f1f1f1;
   padding-left: 10px;
@@ -79,7 +79,7 @@ button:focus {
   font-size: 0;
   display: none;
   position: absolute;
-  z-index: 3;
+  z-index: 100;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
 }
 
@@ -100,7 +100,7 @@ button:focus {
 
 /*********** Panes ************/
 
-#panes {
+.view {
   display: flex;
   flex-direction: row;
   height: 100%;
@@ -304,4 +304,21 @@ svg {
   background-color: #f1f1f1;
   cursor: pointer;
   border: 1px solid #000;
+}
+
+
+.dropdown-toggle::after {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 0.255em;
+  vertical-align: 0.255em;
+  content: "";
+  border-top: 0.3em solid;
+  border-right: 0.3em solid transparent;
+  border-left: 0.3em solid transparent;
+}
+
+.dropdown-toggle:empty::after {
+  margin-left: 0;
 }

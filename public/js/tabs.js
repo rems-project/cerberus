@@ -15,7 +15,7 @@ class Tab {
       ui.sourceCounter++
     }
 
-    this.tablink = $('#tablink-template').clone().contents()
+    this.tablink = $('#tab-template').clone().contents()
 
     this.tabtitle = this.tablink.find('.title')
     this.tabtitle.text(this.title)
@@ -105,7 +105,7 @@ class TabGraph extends Tab {
 
   }
 
-  setGraph(data) {
+  setValue(data) {
     // Remove previous one
     if (this.svg)
       this.svg.remove()
@@ -115,12 +115,16 @@ class TabGraph extends Tab {
     this.svg_container.append(Viz(this.dot))
     this.svg = this.graph.find('svg')
     this.svg.panzoom()
+
+    // Set active
+    this.setActive()
+    this.refresh()
   }
 }
 
 /* Tab with CodeMirror editor */
 class TabEditor extends Tab {
-  constructor(title) {
+  constructor(title, source) {
     super(title)
     this.editor = CodeMirror (this.content[0], {
       styleActiveLine: true,
@@ -132,6 +136,22 @@ class TabEditor extends Tab {
     this.content.addClass('editor')
     this.dirty = false
     this.editor.on('change', () => this.dirty = true)
+    if (source)
+      this.editor.setValue(source)
+  }
+
+  getValue() {
+    return this.editor.getValue()
+  }
+
+  setValue(value) {
+    this.editor.setValue(value)
+    this.setActive()
+    this.refresh()
+  }
+
+  appendValue(value) {
+    this.setValue(this.getValue()+value)
   }
 
   colorLines(i, e, color) {
@@ -156,8 +176,8 @@ class TabReadOnly extends TabEditor {
 
 /* Tab C source */
 class TabSource extends TabEditor {
-  constructor(title ) {
-    super(title)
+  constructor(title, source) {
+    super(title, source)
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (doc) => this.activity(doc))
     this._coreTab = null
@@ -376,8 +396,8 @@ class TabCore extends TabReadOnly {
 
   activity(doc) {
     // If source tab is not alive or has been changed, don't do anything
-    if (!this.srcTab.alive || this.srcTab.dirty)
-      return
+    //if (!this.srcTab.alive || this.srcTab.dirty)
+    //  return
 
     let from = doc.getCursor('from')
     let to = doc.getCursor('to')

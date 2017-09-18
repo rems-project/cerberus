@@ -59,6 +59,8 @@ let post ~docroot uri path content =
     match path with
     | "/exhaustive" -> run_cerberus "--exec --batch --mode=exhaustive" content
     | "/random" -> run_cerberus "--exec --batch" content
+    | "/cabs" -> run_cerberus "--pp=cabs --pp_annotated" content
+    | "/ail" -> run_cerberus "--pp=ail --pp_annotated" content
     | "/core" -> run_cerberus "--pp=core --pp_annotated" content
     | "/graph" -> create_graph content
     | _ -> forbidden path

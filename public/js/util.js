@@ -99,11 +99,8 @@ function parseCerberusResult(res) {
   })
 
   return {
-    success: true,
     locations: locs,
-    core: core,
-    console: '',
-    batch: ''
+    ast: core,
   }
 }
 

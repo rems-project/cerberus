@@ -1,36 +1,45 @@
 'use_strict'
 
 class Pane {
-  constructor (div) {
+  constructor () {
     this.tabs = []
 
     // UI
     this.parent = null
-    this.div = $('#pane-template').clone().contents()
 
-    this.tabadder = this.div.find('.tabadder')
-    this.tablinks = this.div.find('.tablinks')
-    this.content = this.div.find('.content')
+    this.dom = $('<div class="pane"></div>')
+    this.tablinks = $('<div class="tablinks"></div>')
+    this.content  = $('<div class="content"></div>')
+    this.dom.append(this.tablinks)
+    this.dom.append(this.content)
+
+    //this.dom = $('#pane-template').clone().contents()
+
+    //this.tabadder = this.dom.find('.tabadder')
+    //this.tablinks = this.dom.find('.tablinks')
+    //this.content =  this.dom.find('.content')
     this.activeTab = null
 
     // Event listeners
+     /*
     this.tabadder.on('click', () => {
       let tab = new TabSource()
       this.addTab(tab)
       tab.setActive()
       this.setActive()
     })
+    */
 
     this.content.on('click', () => {
       this.setActive()
     })
 
-    this.div.on('drop', (evt) => {
+    this.dom.on('drop', (evt) => {
       if (this.parent && this.parent.draggedTab) {
         let tab = this.parent.draggedTab
         this.parent.draggedTab = null
         if (tab.parent === this) return;
-        tab.parent.removeTab(tab)
+        tab.parent.remove(tab)
         let elem = $(document.elementFromPoint(evt.clientX, evt.clientY))
         if (!elem.hasClass('tablink')) elem = null
         this.addTab(tab, elem)
@@ -61,14 +70,16 @@ class Pane {
     return null
   }
 
-  addTab (tab, beforeThisTab) {
+  add (tab, beforeThisTab) {
     // Push tab to array
     this.tabs.push(tab)
 
     if (beforeThisTab)
       beforeThisTab.before(tab.tablink)
     else
-      this.tabadder.before(tab.tablink)
+      this.tablinks.append(tab.tablink);
+
+      //this.tabadder.before(tab.tablink)
 
     // Attach UI
     this.content.append(tab.content)
@@ -81,7 +92,7 @@ class Pane {
     tab.refresh()
   }
 
-  removeTab (tab, doNotRemovePane) {
+  remove (tab, doNotRemovePane) {
     // If removing active tab, then activate previous one
     if (tab === this.activeTab) {
       let prev = this.prevTab(tab)
@@ -107,17 +118,17 @@ class Pane {
 
     // Remove pane if this was the last tab
     if (this.tabs.length == 0 && !doNotRemovePane)
-      this.parent.removePane(this)
+      this.parent.remove(this)
   }
 
   setActive() {
     if (this.parent)
       this.parent.setActivePane(this)
-    this.div.addClass('active')
+    this.dom.addClass('active')
   }
 
   setInactive() {
-    this.div.removeClass('active')
+    this.dom.removeClass('active')
   }
 
   setActiveTab(tab) {
