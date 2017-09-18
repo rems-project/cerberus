@@ -5,7 +5,6 @@ class View {
     // Dom
     this.panes = []
     this.dom = $('<div class="view"></div>')
-    this.draggedTab = null
 
     // Create source tab
     this.title  = title
@@ -18,6 +17,10 @@ class View {
 
     // Activate source tab
     this.source.setActive()
+
+    // Global view variables
+    this.draggedTab = null
+    this.locations  = null
   }
 
   setActivePane(pane) {
@@ -60,15 +63,6 @@ class View {
   }
 
   remove (pane) {
-    // Last pane, don't remove it, add a blank tab instead
-    if (this.panes.length == 1) {
-      let tab = new TabSource()
-      pane.add(tab)
-      tab.setActive()
-      this.setup()
-      return
-    }
-
     let sep = null
     if (this.panes[0] === pane)
       sep = pane.dom.next('.pane-separator')
@@ -86,51 +80,50 @@ class View {
   }
 
   get exec() {
-    if (this._execTab && this._execTab.alive)
-      return this._execTab
-    this._execTab = new TabReadOnly(this.title + ' [exec]')
-    this.secondaryPane.add(this._execTab)
-    return this._execTab;
+    if (!this._execTab)
+      this._execTab = new TabReadOnly(this.title + ' [exec]')
+    if (!this._execTab.parent)
+      this.secondaryPane.add(this._execTab)
+    return this._execTab
   }
 
   get cabs() {
-    if (this._cabsTab && this._cabsTab.alive)
-      return this._cabsTab
-    this._cabsTab = new TabCore(this.title + ' [cabs]')
-    this.secondaryPane.add(this._cabsTab)
+    if (!this._cabsTab)
+      this._cabsTab = new TabCore(this.title + ' [cabs]')
+    if (!this._cabsTab.parent)
+      this.secondaryPane.add(this._cabsTab)
     return this._cabsTab;
   }
 
   get ail() {
-    if (this._ailTab && this._ailTab.alive)
-      return this._ailTab
-    this._ailTab = new TabCore(this.title + ' [ail]')
-    this.secondaryPane.add(this._ailTab)
+    if (!this._ailTab)
+      this._ailTab = new TabCore(this.title + ' [ail]')
+    if (!this._ailTab.parent)
+      this.secondaryPane.add(this._ailTab)
     return this._ailTab;
   }
 
   get core() {
-    if (this._coreTab && this._coreTab.alive)
-      return this._coreTab
-    this._coreTab = new TabCore(this.title + ' [core]')
-    this.secondaryPane.add(this._coreTab)
+    if (!this._coreTab)
+      this._coreTab = new TabCore(this.title + ' [core]')
+    if (!this._coreTab.parent)
+      this.secondaryPane.add(this._coreTab)
     return this._coreTab;
   }
 
   get console() {
-    if (this._consoleTab && this._consoleTab.alive)
-      return this._consoleTab
-    if (!ui) return null;
-    this._consoleTab = new TabReadOnly(this.title + ' [console]')
-    this.secondaryPane.add(this._consoleTab)
+    if (!this._consoleTab)
+      this._consoleTab = new TabReadOnly(this.title + ' [console]')
+    if (!this._consoleTab.parent)
+      this.secondaryPane.add(this._consoleTab)
     return this._consoleTab;
   }
 
   get graph() {
-    if (this._graphTab && this._graphTab.alive)
-      return this._graphTab
-    this._graphTab = new TabGraph(this.title + ' [graph]')
-    this.secondaryPane.add(this._graphTab)
+    if (!this._graphTab)
+      this._graphTab = new TabGraph(this.title + ' [graph]')
+    if (!this._graphTab.parent)
+      this.secondaryPane.add(this._graphTab)
     return this._graphTab;
   }
 
@@ -153,11 +146,43 @@ class View {
     for (let i = 0; i < tabs.length; i++) {
       let tab = tabs[i]
       tab.parent.remove(tab)
-      this.firstPane.add(tab);
+      this.firstPane.add(tab)
       tab.setActive()
       tab.addEventListener()
       tab.refresh()
     }
+    for (let i = 1; i < this.panes.length; i++) {
+      this.remove(this.panes[i])
+    }
+  }
+
+  mark(loc) {
+    this.source.markText (loc.c.begin, loc.c.end, {className: loc.color})
+    this._coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+  }
+
+  markSelection(loc) {
+    if (!this.source.dirty) {
+      this.isHighlighted = false
+      this.clear()
+      this.mark(loc)
+    }
+  }
+
+  highlight() {
+    if (!this._coreTab||!this.locations||this.isHighlighted||this.source.dirty)
+      return;
+    this.clear()
+    for (let i = 0; i < this.locations.length; i++) {
+      this.mark(this.locations[i])
+    }
+    this.isHighlighted = true
+  }
+
+  clear() {
+    this.source.clear()
+    if (this._coreTab)
+      this._coreTab.clear()
   }
 
   show() {
@@ -169,14 +194,10 @@ class View {
   }
 
   refresh () {
-    // TODO: this should redimension the panes according to a new
-    // width
-    console.warn('TODO: redinemension pane')
-    return;
     let factor = window.innerWidth / window.prevWidth
     for (let i = 0; i < this.panes.length; i++) {
-      let w = parseFloat(this.panes[i].dom.siblings()[0].style.width.slice(0, -2))
-      this.panes[i].dom.siblings()[0].style.width = (w * factor)+'px'
+      let w = parseFloat(this.panes[i].dom[0].style.width.slice(0, -2))
+      this.panes[i].dom[0].style.width = (w * factor)+'px'
     }
     window.prevWidth = window.innerWidth
   }
