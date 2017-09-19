@@ -87,7 +87,7 @@ class UI {
 
     // Views
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
-    $('#source_tab') .on('click', () => this.currentView.source.setActive())
+    $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
     $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
     $('#cabs_tab')   .on('click', () => this.currentView.cabs.setActive())
     $('#ail_tab')    .on('click', () => this.currentView.ail.setActive())
