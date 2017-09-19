@@ -8,10 +8,6 @@ html, body {
   overflow: hidden;
 }
 
-button:focus {
-    outline:none;
-}
-
 .wait, .wait * { cursor: wait !important; }
 
 #container {
@@ -28,41 +24,50 @@ button:focus {
   color: #f1f1f1;
   background-color: #5f5f5f;
   line-height: 1.5;
-  /*padding: 4px 16px;*/
   display: inline-block;
+}
+
+#header ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+#header ul li {
+  float: left;
+  margin: 0;
+  font-size: 12px;
+}
+
+#header ul .right {
+  float: right;
 }
 
 #title {
-  display: inline-block;
-  font-size: 14px;
-  margin: 4px 16px;
-}
-
-.toolbar {
-  display: inline-block;
-  border-left: 1px solid #f1f1f1;
-  padding-left: 10px;
-  height: 100%;
-}
-
-#header button {
-  font-size: 13px;
-  display: inline-block;
-  padding: 4px 8px;
-  margin-left: 2px;
-  background-color: #5f5f5f;
+  display: block;
+  padding: 5px 10px;
   color: #f1f1f1;
-  border: none;
-  cursor: pointer;
 }
 
-#header button:hover {
+#header li a {
+  display: block;
+  text-decoration: none;
+  padding: 5px 10px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+}
+
+#header li a:hover {
   background-color: #7f7f7f;
 }
 
-#rems {
-  float: right;
-  margin: 2px;
+#header ul .border {
+  border-right: 1px solid #f1f1f1;
+}
+
+#header hr {
+  display: block;
+  margin: 0;
 }
 
 .dropbtn {
@@ -76,26 +81,37 @@ button:focus {
 }
 
 .dropdown-content {
-  font-size: 0;
   display: none;
   position: absolute;
   z-index: 100;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
 }
 
-.dropdown-content button {
+.dropdown-content a {
   padding: 0;
   margin: 0;
   min-width: 150px;
   text-align: left;
 }
 
-.dropdown:hover .dropdown-content {
-  display: block;
+.dropdown-toggle::after {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 0.255em;
+  vertical-align: 0.255em;
+  content: "";
+  border-top: 0.3em solid;
+  border-right: 0.3em solid transparent;
+  border-left: 0.3em solid transparent;
 }
 
-#header button:disabled {
-  color: #aaa;
+.dropdown-toggle:empty::after {
+  margin-left: 0;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
 }
 
 /*********** Panes ************/
@@ -110,12 +126,6 @@ button:focus {
   border: 1px solid #ccc;
   background-color: #f1f1f1;
   font-size: 0;
-  /*min-width: 260px;*/
-}
-
-.tabadder {
-  font-size:11px !important;
-
 }
 
 .tablink {
@@ -208,7 +218,7 @@ button:focus {
 }
 
 .pane .CodeMirror {
-  height: calc(100vh - 60px);
+  height: calc(100vh - 50px);
   border: 1px solid #eee;
 }
 
@@ -222,22 +232,28 @@ button:focus {
 }
 
 .tooltip {
-  font-size: 11px;
   transform: none;
-  position: absolute;
-  background-color: #5f5f5f;
-  color: #f1f1f1;
-  line-height: 1.2;
-  padding: 9px;
-  visibility: hidden;
-  z-index: 1000;
-  overflow-y: auto;
-  max-height: 200px;
-  max-width: 300px;
+  margin: 0px;
 }
 
-.tooltip-visible {
-  visibility: visible !important;
+.tooltip-text {
+  display: block;
+  position: relative;
+  z-index: 10;
+  overflow: visible;
+  padding: 5px 8px;
+  margin-top: 10px;
+  line-height: 16px;
+  border-radius: 4px;
+  text-align: left;
+  color: #fff;
+  background-color: #5f5f5f;
+  pointer-events: none;
+  -o-transition: all 0.3s ease-out;
+  -ms-transition: all 0.3s ease-out;
+  -moz-transition: all 0.3s ease-out;
+  -webkit-transition: all 0.3s ease-out;
+  transition: all 0.3s ease-out;
 }
 
 .std {
@@ -279,12 +295,6 @@ button:focus {
   fill: #ffffff;
 }
 
-.pane .CodeMirror {
-  /* HACK: I don't know how to make codemirror fill the entire screen */
-  height: calc(100vh - 60px);
-  border: 1px solid #eee;
-}
-
 .svg {
   height: calc(100vh - 60px);
   border: 1px solid #eee;
@@ -307,18 +317,3 @@ svg {
 }
 
 
-.dropdown-toggle::after {
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin-left: 0.255em;
-  vertical-align: 0.255em;
-  content: "";
-  border-top: 0.3em solid;
-  border-right: 0.3em solid transparent;
-  border-left: 0.3em solid transparent;
-}
-
-.dropdown-toggle:empty::after {
-  margin-left: 0;
-}
