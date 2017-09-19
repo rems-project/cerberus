@@ -34,7 +34,12 @@ class View {
   }
 
   get firstPane () {
-    return this.panes[0]
+    if (this.panes.length > 0)
+      return this.panes[0]
+    let pane = new Pane()
+    this.add(pane)
+    this.setup()
+    return pane
   }
 
   get secondaryPane () {
@@ -77,6 +82,12 @@ class View {
       }
     }
     this.setup()
+  }
+
+  getSource() {
+    if (!this.source.parent)
+      this.firstPane.add(this.source)
+    return this.source;
   }
 
   get exec() {
