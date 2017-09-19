@@ -4,9 +4,6 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <title>Cerberus</title>
 
-  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
-  <link rel="stylesheet" type="text/css" href="css/style.css" />
-
   <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
   <script type="text/javascript" src="lib/jquery.panzoom.min.js"></script>
   <script type="text/javascript" src="lib/codemirror.js"></script>
@@ -14,58 +11,68 @@
   <script type="text/javascript" src="lib/clike.js"></script>
   <script type="text/javascript" src="js/core.js"></script>
 
+  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
+  <link rel="stylesheet" type="text/css" href="css/style.css" />
+
 </head>
 <body>
-  <input id="file-input" type="file" style="display:none;"/>
   <div id="container">
+    <input id="file-input" type="file" style="display:none;"/>
     <div id="header">
-      <div id="title">Cerberus</div>
-      <div class="toolbar dropdown">
-        <button id="current-view" class="dropbtn dropdown-toggle">current</button>
-        <div id="dropdown-views" class="dropdown-content"></div>
-      </div>
-      <div class="toolbar">
-        <button id="new">New</button>
-        <button id="load">Upload</button>
-        <!--<button id="save">Download</button>-->
-        <div class="dropdown">
-          <button class="dropbtn dropdown-toggle">View</button>
-          <div class="dropdown-content">
-            <button id="source_tab">Source</button>
-            <button id="exec_tab">Execution</button>
-            <button id="cabs_tab">Cabs</button>
-            <button id="ail_tab">Ail</button>
-            <button id="core_tab">Core</button>
-            <button id="console_tab">Console</button>
-            <button id="graph_tab">Graph</button>
-            <button id="new_pane">Split Vertically</button>
-            <button id="unsplit">Unsplit All</button>
+      <ul>
+        <li class="border"><div id="title">Cerberus</div></li>
+        <li class="border">
+          <div class="dropdown">
+            <a href="#" id="current-view" class="dropbtn dropdown-toggle"></a>
+            <div id="dropdown-views" class="dropdown-content"></div>
           </div>
-        </div>
-        <div class="dropdown">
-          <button class="dropbtn dropdown-toggle" id="run">Execute</button>
-          <div class="dropdown-content">
-            <button id="random">Random</button>
-            <button id="exhaustive">Exhaustive</button>
-            <button id="exhaustive">Interactive</button>
+        </li>
+        <li><a href="#" id="new">New</a></li>
+        <li><a href="#" id="load">Upload</a></li>
+        <!--<a id="save">Download</a>-->
+        <li>
+          <div class="dropdown">
+            <a href="#" class="dropbtn dropdown-toggle">View</a>
+            <div class="dropdown-content">
+              <a href="#" id="source_tab">Source</a>
+              <a href="#" id="exec_tab">Execution</a>
+              <a href="#" id="cabs_tab">Cabs</a>
+              <a href="#" id="ail_tab">Ail</a>
+              <a href="#" id="core_tab">Core</a>
+              <a href="#" id="console_tab">Console</a>
+              <a href="#" id="graph_tab">Graph</a>
+              <hr>
+              <a href="#" id="new_pane">New Pane</a>
+              <a href="#" id="unsplit">Unsplit All</a>
+            </div>
           </div>
-        </div>
-        <div class="dropdown">
-          <button class ="dropbtn dropdown-toggle" id="ast">AST</button>
-          <div class="dropdown-content">
-            <button id="cabs">Cabs</button>
-            <button id="ail">Ail</button>
-            <button id="core">Core</button>
+        </li>
+        <li>
+          <div class="dropdown">
+            <a href="#" class="dropbtn dropdown-toggle" id="run">Execute</a>
+            <div class="dropdown-content">
+              <a href="#" id="random">Random</a>
+              <a href="#" id="exhaustive">Exhaustive</a>
+              <a href="#" id="interactive">Interactive</a>
+            </div>
           </div>
-        </div>
-        <button id="graph">Execution Graph</button>
-        <button id="help">Help</button>
-      </div>
-      <button id="rems">REMS</button>
+        </li>
+        <li>
+          <div class="dropdown">
+            <a href="#" class ="dropbtn dropdown-toggle" id="ast">AST</a>
+            <div class="dropdown-content">
+              <a href="#" id="cabs">Cabs</a>
+              <a href="#" id="ail">Ail</a>
+              <a href="#" id="core">Core</a>
+            </div>
+          </div>
+        </li>
+        <li><a href="#" id="graph">Execution Graph</a></li>
+        <li><a href="#" id="help">Help</a></li>
+        <li class="right"><a href="#" id="rems">REMS</a></li>
+      </ul>
     </div>
-    <div id="views">
-      <!--<div class="panes"></div>-->
-    </div>
+    <div id="views"></div>
   </div> <!-- container -->
 
   <template id="tab-template">

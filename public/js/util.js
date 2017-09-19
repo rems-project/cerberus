@@ -25,14 +25,28 @@ function getSTDSection(section) {
   let title = '§'
   let p = std
   let content = ""
-  for (let i = 0; i < ns.length - 1; i++) {
+  let i = 0
+  for (; i < ns.length - 1; i++) {
     p = p[ns[i]]
     title += ns[i] + '.'
     if (p['title'])
       content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
   }
-  title = title.slice(0,-1) + '#' + ns[ns.length-1]
-  content += p['P'+ns[ns.length-1]]
+  // if has a paragraph
+  if (p['P'+ns[i]]) {
+    title = title.slice(0,-1) + '#' + ns[i]
+    content += p['P'+ns[i]]
+  } else {
+    p = p[ns[i]]
+    title += ns[i]
+    if (p['title'])
+      content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
+    let j = 1
+    while (p['P'+j]) {
+      content += p['P'+j] + '</br>'
+      j++
+    }
+  }
   let div = $('<div class="std">'+content+'</div>')
   // Create footnotes
   div.append('<hr/>')

@@ -115,13 +115,8 @@ class TabEditor extends Tab {
       lineNumbers: true,
       matchBrackets: true,
       tabSize: 2,
-      smartIndent: true
-    })
-
-    this.editor.on('change', () => {
-      if (ui.currentView)
-        ui.currentView.clear()
-      this.dirty = true
+      smartIndent: true,
+      lineWrapping: true
     })
 
     this.editor.on('blur', (doc) => {
@@ -139,6 +134,20 @@ class TabEditor extends Tab {
       this.skipCursorEvent = false
       this.markSelection(doc)
     })
+
+    this.editor.on('viewportChange', (doc) => {
+      console.log('view port change')
+    })
+
+    this.editor.on('refresh', (doc) => {
+      console.log('refresh')
+    })
+
+    this.editor.on('update', (doc) => {
+      console.log('update')
+    })
+
+
 
     if (source) this.editor.setValue(source)
 
@@ -210,6 +219,13 @@ class TabSource extends TabEditor {
     super(title, source)
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
+
+    this.editor.on('change', () => {
+      if (ui.currentView)
+        ui.currentView.clear()
+      this.dirty = true
+    })
+
   }
 
   getLocation(from, to) {
@@ -265,61 +281,20 @@ class TabCore extends TabReadOnly {
         if (re.test(word))
           return "std"
       }
-    }, { opaque: true }
+    }, { opaque: true, priority: 1000 }
     )
 
     this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
-      if ($(e.target).hasClass('cm-std')) {
-        if (this.parent) {
+      let edom = $(e.target);
+      if (edom.hasClass('cm-std')) {
+        if (edom.hasClass('tooltip')) {
+          edom.removeClass('tooltip')
+          edom.siblings('.tooltip-text').remove()
+        } else {
+          edom.addClass('tooltip')
           let content = getSTDSection(e.target.textContent)
-          let tab = new Tab(content.title)
-          this.parent.addTab(tab)
-          tab.dom.content.append(content.data)
-          tab.setActive()
+          edom.after($('<span class="tooltip-text"></span>').append(content.data))
         }
-      }
-    })
-
-    this.editor.getWrapperElement().addEventListener ('mouseover', (e) => {
-      // If tooltip is still visible, remove it
-      if (this.tooltipVisible) {
-        this.tooltip.removeClass('tooltip-visible')
-        this.tooltipVisible = false
-      }
-
-      if ($(e.target).hasClass('cm-std')) {
-        let content = getSTDSentence(e.target.textContent)
-        this.tooltip.addClass('tooltip-visible')
-        this.tooltip.css({left: e.pageX, top: e.pageY})
-        this.tooltip.text(content)
-        this.tooltipVisible = true
-        return
-      }
-
-      let pos = this.editor.coordsChar({left: e.pageX,top: e.pageY})
-      let token = this.editor.getTokenAt(pos)
-      if (token.type == 'keyword') {
-        let msg = null
-        switch (token.string) {
-          case 'strong':
-            msg = 'strong sequencing dictates memory action order'
-            break
-          case 'weak':
-            msg = 'weak sequencing does not dictate memory action order'
-            break
-          case 'pure':
-            msg = 'a pure expression does not have any side effect.'
-            break
-          default:
-            return;
-        }
-        if (!msg)
-          return
-        this.tooltip.addClass('tooltip-visible')
-        this.tooltip.css({left: e.pageX, top: e.pageY})
-        this.tooltip.text(msg)
-        this.tooltipVisible = true
-        return
       }
     })
   }

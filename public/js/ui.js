@@ -14,7 +14,11 @@ class UI {
      */
 
     // New view
-    $('#new').on('click', () => this.add(new View('new', 'hello')))
+    $('#new').on('click', () => {
+      let title = prompt('Please enter the file name', 'source.c');
+      if (title)
+        this.add(new View(title))
+    })
 
     // Load File
     $('#load').on('click', () => {
@@ -100,8 +104,8 @@ class UI {
         type: 'GET',
         success: (data, status, query) => {
           let tab = new Tab('Help')
-          tab.content.addClass('help');
-          tab.content.append(data)
+          tab.dom.content.addClass('help');
+          tab.dom.content.append(data)
           this.currentView.secondaryPane.add(tab)
           tab.setActive()
           this.done()
@@ -113,17 +117,6 @@ class UI {
     $('#rems').on('click', () => {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
-  }
-
-  // TODO: currently not being used
-  toggleNavBar () {
-    let tab = this.activePane.activeTab
-    let on = (tab instanceof TabSource) || (tab.srcTab && tab.srcTab.alive)
-    $('#run').disable(!on);
-    $('#random').disable(!on);
-    $('#exhaustive').disable(!on);
-    $('#core').disable(!on);
-    $('#graph').disable(!on);
   }
 
   setCurrentView(view) {
@@ -138,7 +131,7 @@ class UI {
     this.views.push(view)
     $('#views').append(view.dom)
 
-    let nav = $('<button>'+view.title+'</button>')
+    let nav = $('<a href="#">'+view.title+'</a>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
 
@@ -168,17 +161,21 @@ class UI {
 
   ast (mode) {
     this.request(mode, (data) => {
-      let result = parseCerberusResult(data)
+      if (mode == 'core') {
+        let result = parseCerberusResult(data)
 
-      // Set colors for every location
-      for (let i = 0; i < result.locations.length; i++)
-        result.locations[i].color = generateColor()
+        // Set colors for every location
+        for (let i = 0; i < result.locations.length; i++)
+          result.locations[i].color = generateColor()
 
-      this.currentView[mode].setValue(result.ast)
-      this.currentView.source.dirty = false
-      this.currentView [mode].dirty = false
-      this.currentView.locations = result.locations
-      this.currentView.highlight()
+        this.currentView[mode].setValue(result.ast)
+        this.currentView.source.dirty = false
+        this.currentView [mode].dirty = false
+        this.currentView.locations = result.locations
+        this.currentView.highlight()
+      } else {
+        this.currentView[mode].setValue(data)
+      }
     })
   }
 
