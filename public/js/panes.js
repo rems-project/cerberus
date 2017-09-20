@@ -66,6 +66,7 @@ class Pane {
     if (!this.activeTab)
       this.activeTab = tab
 
+    tab.addEventListener()
     tab.refresh()
   }
 

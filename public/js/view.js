@@ -43,6 +43,10 @@ class View {
   }
 
   get secondaryPane () {
+    let pane = new Pane()
+    this.add(pane)
+    return pane
+    /*
     if (this.panes.length < 2 || !this.activePane) {
       let pane = new Pane()
       this.add(pane)
@@ -54,6 +58,7 @@ class View {
         return this.panes[i]
     }
     return this.panes[this.panes.length - 1]
+    */
   }
 
   add (pane) {
@@ -86,7 +91,7 @@ class View {
 
   getSource() {
     if (!this.source.parent)
-      this.firstPane.add(this.source)
+      this.secondaryPane.add(this.source)
     return this.source;
   }
 
@@ -168,8 +173,10 @@ class View {
   }
 
   mark(loc) {
-    this.source.markText (loc.c.begin, loc.c.end, {className: loc.color})
-    this._coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+    if (loc) {
+      this.source.markText (loc.c.begin, loc.c.end, {className: loc.color})
+      this._coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+    }
   }
 
   markSelection(loc) {

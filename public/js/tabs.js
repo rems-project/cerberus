@@ -11,7 +11,7 @@ class Tab {
     this.dom.content = $('<div class="tab-content"></div>')
 
     this.setTitle(title)
-    this.addEventListener()
+    //this.addEventListener()
   }
 
   addEventListener() {
