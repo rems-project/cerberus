@@ -329,13 +329,19 @@ else
                    promoted2_pe
                    (Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_sym_pe (Caux.mk_integer_pe 0))
                       (Caux.mk_std_undef_pe "§6.5.5#5, sentence 2" ub)
-                      (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" $
-if AilTypesAux.is_signed_integer_type result_ty then
-                         stdlib.mkcall_catch_exceptional_condition result_ty core_pe
-else if AilTypesAux.is_integer result_ty then
-                         stdlib.mkcall_wrapI result_ty core_pe 
-else
-                         core_pe))))) ]
+                      (* if a/b is representable *)
+                      (Caux.mk_if_pe (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) result_ty)
+                         begin
+                           Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.5#5, sentence 1" $
+                             if AilTypesAux.is_signed_integer_type result_ty then
+                               stdlib.mkcall_catch_exceptional_condition result_ty core_pe
+                             else if AilTypesAux.is_integer result_ty then
+                               stdlib.mkcall_wrapI result_ty core_pe
+                             else
+                               core_pe)
+                         end
+                         (Caux.mk_undef_pe Undefined.UB045c_quotient_not_representable)
+                      )))) ]
           )
         )
       )
