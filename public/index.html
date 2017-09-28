@@ -7,12 +7,15 @@
   <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
   <script type="text/javascript" src="lib/jquery.panzoom.min.js"></script>
   <script type="text/javascript" src="lib/codemirror.js"></script>
+  <script type="text/javascript" src="lib/panels.js"></script>
   <script type="text/javascript" src="lib/viz.js"></script>
   <script type="text/javascript" src="lib/clike.js"></script>
   <script type="text/javascript" src="js/core.js"></script>
+  <script type="text/javascript" src="lib/gas.js"></script>
 
   <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
   <link rel="stylesheet" type="text/css" href="css/style.css" />
+  <link rel="stylesheet" type="text/css" href="css/scheme.css" />
 
 </head>
 <body>
@@ -29,7 +32,16 @@
         </li>
         <li><a href="#" id="new">New</a></li>
         <li><a href="#" id="load">Upload</a></li>
-        <!--<a id="save">Download</a>-->
+        <li>
+          <div class="dropdown">
+            <a href="#" class ="dropbtn dropdown-toggle" id="ast">Elaborate</a>
+            <div class="dropdown-content">
+              <a href="#" id="cabs">Cabs</a>
+              <a href="#" id="ail">Ail</a>
+              <a href="#" id="core">Core</a>
+            </div>
+          </div>
+        </li>
         <li>
           <div class="dropdown">
             <a href="#" class="dropbtn dropdown-toggle" id="run">Execute</a>
@@ -40,17 +52,8 @@
             </div>
           </div>
         </li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class ="dropbtn dropdown-toggle" id="ast">AST</a>
-            <div class="dropdown-content">
-              <a href="#" id="cabs">Cabs</a>
-              <a href="#" id="ail">Ail</a>
-              <a href="#" id="core">Core</a>
-            </div>
-          </div>
-        </li>
-        <li class="border"><a href="#" id="graph">Execution Graph</a></li>
+        <li><a href="#" id="compile">Compile</a></li>
+        <li class="border"><a href="#" id="graph">Generate Graph</a></li>
         <li>
           <div class="dropdown">
             <a href="#" class="dropbtn dropdown-toggle">Interface</a>
@@ -77,8 +80,8 @@
 
   <template id="tab-template">
     <div draggable="true" class="tablink active">
-      <button class="title"></button>
-      <button class="close"></button>
+      <button href="#" class="title"></button>
+      <img class="close" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg=="/>
     </div>
   </template>
 

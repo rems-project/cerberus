@@ -1,5 +1,6 @@
 'use_strict'
 
+// WARNING: Unused function
 function generateColor() {
   function basicColor (mix) {
     return Math.floor((Math.floor(Math.random()*256)+mix)/2)
@@ -12,6 +13,11 @@ function generateColor() {
     '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
   return className
 }
+
+function getColor(i) {
+  return 'color' + (i % 100)
+}
+
 
 function createStyle() {
   let style = document.createElement('style')

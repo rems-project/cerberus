@@ -58,9 +58,10 @@ class Tab {
     this.dom.hasClass('active')
   }
 
-  refresh () {
-    // Overwritten
-  }
+  // Dummy methods to be overwriten
+  refresh () {}
+  mark (loc) {}
+  clear ()   {}
 
 }
 
@@ -136,15 +137,15 @@ class TabEditor extends Tab {
     })
 
     this.editor.on('viewportChange', (doc) => {
-      console.log('view port change')
+      //console.log('view port change')
     })
 
     this.editor.on('refresh', (doc) => {
-      console.log('refresh')
+      //console.log('refresh')
     })
 
     this.editor.on('update', (doc) => {
-      console.log('update')
+      //console.log('update')
     })
 
 
@@ -180,10 +181,6 @@ class TabEditor extends Tab {
     this.editor.eachLine((line) => {
       this.editor.removeLineClass(line, 'background')
     })
-  }
-
-  markText (begin, end, cls) {
-    this.editor.markText(begin, end, cls)
   }
 
   markSelection(doc) {
@@ -239,6 +236,10 @@ class TabSource extends TabEditor {
         return loc
     }
     return null
+  }
+
+  mark(loc) {
+    this.editor.markText (loc.c.begin, loc.c.end, {className: loc.color})
   }
 
   clear() {
@@ -307,6 +308,103 @@ class TabCore extends TabReadOnly {
         return loc
     }
     return null
+  }
+
+  mark(loc) {
+    this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+  }
+
+}
+
+class TabAsm extends TabReadOnly {
+  constructor(cc) {
+    super(cc.name)
+
+    this.editor.setOption('mode', {name: "gas", architecture: "x86"})
+
+    let toolbar   = $(document.createElement("div"))
+
+    this.dropdownActive = $('<a href="#" class="dropbtn dropdown-toggle">'
+                          + cc.name + '</a>')
+    this.dropdown = $('<div class="dropdown"></div>')
+    this.dropdown.append(this.dropdownActive)
+    this.dropdown.append(this.createDropdownContent(this))
+
+    this.options  = $('<input type="text" placeholder="Compiler options...">')
+
+    toolbar.append(this.dropdown)
+    toolbar.append(this.options)
+
+    this.dom.content.addClass('tab-compiler')
+    this.dom.content.prepend(toolbar)
+
+    this.compile(cc)
+
+    this.thanks = $(document.createElement("div"))
+
+    let close = $(document.createElement("a"))
+    close.attr("title", "Remove me!")
+    close.addClass("remove-panel")
+    close.text("✖")
+    CodeMirror.on(close, "click", () => this.thanks.remove())
+
+    let label = $(document.createElement("span"))
+    label.text("I'm panel n°" + "blah")
+
+    this.thanks.append(close)
+    this.thanks.append(label)
+    this.editor.addPanel(this.thanks[0], {position: "bottom", stable: true});
+
+    this.locations = {}
+  }
+
+  createDropdownContent()
+  {
+    let dropdown = $('<div class="dropdown-content"></div>')
+    for (let i = 0; i < compilers.length; i++) {
+      let cc  = compilers[i]
+      let opt = $('<a href="#">' + cc.name + '</a>')
+      opt.on('click', () => {
+        this.compile(cc)
+        this.dropdownActive.text(cc.name)
+        this.setTitle(cc.name)
+      })
+      dropdown.append(opt)
+    }
+    return dropdown
+  }
+
+  mark(loc) {
+    let xs = this.locations[loc.c.begin.line]
+    if (xs) {
+      this.colorLines (xs[0], xs[xs.length-1], loc.color)
+    }
+  }
+
+  compile (cc) {
+    ui.wait()
+    $.ajax({
+      headers: {Accept: 'application/json'},
+      url: 'https://gcc.godbolt.org/api/compiler/'+cc.id+'/compile',
+      type: 'POST',
+      data: ui.currentView.getValue(),
+      success: (data, status, query) => {
+        console.log(data)
+        let value = ''
+        for (let i = 0; i < data.asm.length; i ++) {
+          let asm = data.asm[i]
+          value += asm.text + '\n'
+          if (asm.source && asm.source.line) {
+            if (!this.locations[asm.source.line])
+              this.locations[asm.source.line] = []
+            this.locations[asm.source.line].push(i)
+          }
+        }
+        console.log(this.locations)
+        this.setValue(value)
+        ui.done()
+      }
+    })
   }
 
 }

@@ -21,6 +21,10 @@ class View {
     // Global view variables
     this.draggedTab = null
     this.locations  = null
+
+    this.content = {}
+
+    this.dirty = true;
   }
 
   setActivePane(pane) {
@@ -42,23 +46,10 @@ class View {
     return pane
   }
 
-  get secondaryPane () {
+  get newPane () {
     let pane = new Pane()
     this.add(pane)
     return pane
-    /*
-    if (this.panes.length < 2 || !this.activePane) {
-      let pane = new Pane()
-      this.add(pane)
-      this.setup()
-      return pane
-    }
-    for (let i = 1; i < this.panes.length - 1; i++) {
-      if (this.panes[i-1] == this.activePane)
-        return this.panes[i]
-    }
-    return this.panes[this.panes.length - 1]
-    */
   }
 
   add (pane) {
@@ -91,55 +82,55 @@ class View {
 
   getSource() {
     if (!this.source.parent)
-      this.secondaryPane.add(this.source)
+      this.newPane.add(this.source)
     return this.source;
   }
 
   get exec() {
     if (!this._execTab)
-      this._execTab = new TabReadOnly(this.title + ' [exec]')
+      this._execTab = new TabReadOnly('Execution')
     if (!this._execTab.parent)
-      this.secondaryPane.add(this._execTab)
+      this.newPane.add(this._execTab)
     return this._execTab
   }
 
   get cabs() {
     if (!this._cabsTab)
-      this._cabsTab = new TabCore(this.title + ' [cabs]')
+      this._cabsTab = new TabReadOnly('Cabs')
     if (!this._cabsTab.parent)
-      this.secondaryPane.add(this._cabsTab)
+      this.newPane.add(this._cabsTab)
     return this._cabsTab;
   }
 
   get ail() {
     if (!this._ailTab)
-      this._ailTab = new TabCore(this.title + ' [ail]')
+      this._ailTab = new TabReadOnly('Ail')
     if (!this._ailTab.parent)
-      this.secondaryPane.add(this._ailTab)
+      this.newPane.add(this._ailTab)
     return this._ailTab;
   }
 
   get core() {
     if (!this._coreTab)
-      this._coreTab = new TabCore(this.title + ' [core]')
+      this._coreTab = new TabCore('Core')
     if (!this._coreTab.parent)
-      this.secondaryPane.add(this._coreTab)
+      this.newPane.add(this._coreTab)
     return this._coreTab;
   }
 
   get console() {
     if (!this._consoleTab)
-      this._consoleTab = new TabReadOnly(this.title + ' [console]')
+      this._consoleTab = new TabReadOnly('Console')
     if (!this._consoleTab.parent)
-      this.secondaryPane.add(this._consoleTab)
+      this.newPane.add(this._consoleTab)
     return this._consoleTab;
   }
 
   get graph() {
     if (!this._graphTab)
-      this._graphTab = new TabGraph(this.title + ' [graph]')
+      this._graphTab = new TabGraph('Graph')
     if (!this._graphTab.parent)
-      this.secondaryPane.add(this._graphTab)
+      this.newPane.add(this._graphTab)
     return this._graphTab;
   }
 
@@ -172,15 +163,24 @@ class View {
     }
   }
 
+  forEachTab(f) {
+    for (let i = 0; i < this.panes.length; i++)
+      for (let j = 0; j < this.panes[i].tabs.length; j++)
+        f(this.panes[i].tabs[j])
+  }
+
   mark(loc) {
     if (loc) {
-      this.source.markText (loc.c.begin, loc.c.end, {className: loc.color})
-      this._coreTab.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+      this.forEachTab((tab) => tab.mark(loc))
     }
   }
 
+  clear() {
+    this.forEachTab((tab) => tab.clear())
+  }
+
   markSelection(loc) {
-    if (!this.source.dirty) {
+    if (!this.source.dirty && loc) {
       this.isHighlighted = false
       this.clear()
       this.mark(loc)
@@ -188,19 +188,13 @@ class View {
   }
 
   highlight() {
-    if (!this._coreTab||!this.locations||this.isHighlighted||this.source.dirty)
+    if (!this.locations||this.isHighlighted||this.source.dirty)
       return;
     this.clear()
     for (let i = 0; i < this.locations.length; i++) {
       this.mark(this.locations[i])
     }
     this.isHighlighted = true
-  }
-
-  clear() {
-    this.source.clear()
-    if (this._coreTab)
-      this._coreTab.clear()
   }
 
   show() {
@@ -216,9 +210,69 @@ class View {
     for (let i = 0; i < this.panes.length; i++) {
       let w = parseFloat(this.panes[i].dom[0].style.width.slice(0, -2))
       this.panes[i].dom[0].style.width = (w * factor)+'px'
+      this.panes[i].refresh();
     }
     window.prevWidth = window.innerWidth
   }
+
+/*
+  onresize (evt) {
+    let x0 = evt.clientX
+    let sep = $(evt.currentTarget)
+    let prevPanes = sep.prevAll('.pane')
+    let prevPanesWidth = []
+    for (let i = 0; i < prevPanes.length; i++)
+      prevPanesWidth.push(parseInt(prevPanes[i].style.width.slice(0, -2)))
+    let nextPanes = sep.nextAll('.pane')
+    let nextPanesWidth = []
+    for (let i = 0; i < nextPanes.length; i++)
+      nextPanesWidth.push(parseInt(nextPanes[i].style.width.slice(0, -2)))
+    let minX = 60;
+    let maxX = window.innerWidth-60;
+
+    function resize (evt) {
+      if (minX < evt.clientX && evt.clientX < maxX) {
+        let xn = x0;
+        for (let i = 0; i < prevPanes.length; i++) {
+          let delta = evt.clientX - xn;
+          if (prevPanesWidth[i]+delta >= 60) {
+            prevPanes[i].style.width = (prevPanesWidth[i]+delta)+'px'
+            break;
+          } else {
+            prevPanes[i].style.width = '60px'
+            xn -= (prevPanesWidth[i]-60+3)
+          }
+        }
+        xn = x0;
+        for (let i = 0; i < nextPanes.length; i++) {
+          console.log("pane " + i + ": " + nextPanes[i].style.width);
+          let delta = evt.clientX - xn;
+          if (nextPanesWidth[i]-delta >= 60) {
+            nextPanes[i].style.width = (nextPanesWidth[i]-delta)+'px'
+            break;
+          } else {
+            nextPanes[i].style.width = '60px'
+            xn += 63;
+          }
+          console.log("delta: " + delta)
+          console.log("after pane " + i + ": " + nextPanes[i].style.width);
+        }
+      }
+    }
+
+    function stop (evt) {
+      sep.removeClass('resize')
+      $('div').each((i, e) => e.style.pointerEvents = '')
+      $(document).off('mousemove');
+      $(document).off('mouseup');
+    }
+
+    $(sep).addClass('resize')
+    $('div').each((i, e) => e.style.pointerEvents = 'none')
+    $(document).on('mousemove', e => resize(e));
+    $(document).on('mouseup', e => stop(e));
+  }
+*/
 
   onresize (evt) {
     let x0 = evt.clientX
@@ -227,8 +281,8 @@ class View {
     let paneWidth = pane.width()
     let nextPane = sep.next()
     let nextPaneWidth = nextPane.width()
-    let minX = pane.position().left
-    let maxX = nextPane.position().left + nextPaneWidth
+    let minX = pane.position().left + 60
+    let maxX = nextPane.position().left + nextPaneWidth - 60
 
     function resize (evt) {
       if (minX < evt.clientX && evt.clientX < maxX) {

@@ -6,6 +6,9 @@ class UI {
     this.views = []           /* List of existing views */
     this.currentView = null   /* Current displayed view */
 
+    this.dom = $('#views');
+    //this.dom.prevWidth = this.dom.width();
+
     window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
 
@@ -85,6 +88,11 @@ class UI {
     $('#ail') .on('click', () => this.ast ('ail'))
     $('#core').on('click', () => this.ast ('core'))
 
+    // Compilers
+    $('#compile').on('click', () => {
+      this.currentView.newPane.add(new TabAsm(defaultCompiler))
+    })
+
     // Views
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
     $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
@@ -106,7 +114,7 @@ class UI {
           let tab = new Tab('Help')
           tab.dom.content.addClass('help');
           tab.dom.content.append(data)
-          this.currentView.secondaryPane.add(tab)
+          this.currentView.newPane.add(tab)
           tab.setActive()
           this.done()
         }
@@ -117,6 +125,7 @@ class UI {
     $('#rems').on('click', () => {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
+
   }
 
   setCurrentView(view) {
@@ -129,7 +138,7 @@ class UI {
 
   add (view) {
     this.views.push(view)
-    $('#views').append(view.dom)
+    this.dom.append(view.dom)
 
     let nav = $('<a href="#">'+view.title+'</a>')
     $('#dropdown-views').append(nav)
@@ -144,6 +153,7 @@ class UI {
     $.ajax({
       url:  '/'+mode,
       type: 'POST',
+      headers: {Accept: 'application/json'},
       data: this.currentView.getValue(),
       success: (data, status, query) => {
         if (query.getResponseHeader('cerberus') == 0)
@@ -160,22 +170,38 @@ class UI {
   }
 
   ast (mode) {
-    this.request(mode, (data) => {
-      if (mode == 'core') {
-        let result = parseCerberusResult(data)
+    let view = this.currentView
 
-        // Set colors for every location
-        for (let i = 0; i < result.locations.length; i++)
-          result.locations[i].color = generateColor()
+    if (!view.dirty) {
+      view[mode].dirty = false
+      view[mode].setValue(view.content[mode]);
+      view.highlight()
+      return;
+    }
 
-        this.currentView[mode].setValue(result.ast)
-        this.currentView.source.dirty = false
-        this.currentView [mode].dirty = false
-        this.currentView.locations = result.locations
-        this.currentView.highlight()
-      } else {
-        this.currentView[mode].setValue(data)
-      }
+    this.request("elab", (data) => {
+
+
+      let result = parseCerberusResult(data.core)
+
+      // Set colors for every location
+      for (let i = 0; i < result.locations.length; i++)
+        result.locations[i].color = getColor(i)
+
+      view.dirty = false
+
+      view.source.dirty = false
+      view.locations = result.locations
+      view.isHighlighted = false
+
+      view.content.cabs = data.cabs;
+      view.content.ail  = data.ail;
+      view.content.core = result.ast
+
+      view[mode].dirty = false
+      view[mode].setValue(view.content[mode]);
+      view.highlight()
+
     })
   }
 
@@ -199,11 +225,24 @@ class UI {
 
 const ui = new UI()
 const style = createStyle()
-let std = null
+let std             = null
+let defaultCompiler = null
+let compilers       = null
 
 // Get standard
 $.getJSON('std.json').done((res) => std = res).fail(() => {
   console.log('Failing when trying to download "std.json"')
+})
+
+// Get list of compilers
+$.ajax({
+  headers: {Accept: 'application/json'},
+  url: 'https://gcc.godbolt.org/api/compilers',
+  type: 'GET',
+  success: (data, status, query) => {
+    defaultCompiler = $.grep(data, (e) => e.id == 'clang500')[0]
+    compilers       = data
+  }
 })
 
 // Get default buffer
