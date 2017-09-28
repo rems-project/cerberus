@@ -23,6 +23,10 @@ type language =
   | Ail
   | Core
 
+type pp_flag =
+  | Annot
+  | FOut
+
 (* val string_of_language: language -> string *)
 
 type error_verbosity =
@@ -33,7 +37,7 @@ type error_verbosity =
 type cerberus_conf = {
   cpp_cmd:         string;
   pps:             language list;
-  pp_annotated:    bool;
+  ppflags:         pp_flag list;
   core_stdlib:     (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:   Core.impl option;
   core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
@@ -66,7 +70,7 @@ val current_execution_mode: unit -> execution_mode option
 val set_cerb_conf:
     string ->
     language list ->
-    bool ->
+    pp_flag list ->
     (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
     Core.impl option ->
     bool ->

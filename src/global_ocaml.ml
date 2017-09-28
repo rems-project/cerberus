@@ -35,6 +35,9 @@ let string_of_language = function
   | Core ->
       "core"
 
+type pp_flag =
+  | Annot
+  | FOut
 
 type error_verbosity =
   | Basic    (* similar to a normal compiler *)
@@ -44,7 +47,7 @@ type error_verbosity =
 type cerberus_conf = {
   cpp_cmd:            string;
   pps:                language list;
-  pp_annotated:       bool;
+  ppflags:            pp_flag list;
   core_stdlib:        (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:      Core.impl option;
   core_parser:        Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
@@ -84,14 +87,14 @@ let isDefacto () =
 let show_action_graph () =
   !!cerb_conf.action_graph
 
-let set_cerb_conf cpp_cmd pps pp_annotated core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
+let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
                   typecheck_core defacto action_graph =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   cerb_conf := fun () -> {
     cpp_cmd=       cpp_cmd;
     pps=           pps;
-    pp_annotated=  pp_annotated;
+    ppflags=       ppflags;
     core_stdlib=   core_stdlib;
     core_impl_opt= core_impl_opt;
     core_parser=   core_parser;

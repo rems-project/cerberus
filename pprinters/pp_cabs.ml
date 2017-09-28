@@ -779,7 +779,7 @@ let filter_external_decl edecls =
     | _ -> acc
   in List.rev (List.fold_left f [] edecls)
 
-let pp_translate_unit show_ext_decl (TUnit edecls) =
-  isatty := Unix.isatty Unix.stdout;
+let pp_translate_unit show_ext_decl do_colour (TUnit edecls) =
+  isatty := do_colour && Unix.isatty Unix.stdout;
   let filtered_edecls = if show_ext_decl then edecls else filter_external_decl edecls in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline

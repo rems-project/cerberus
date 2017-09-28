@@ -34,4 +34,4 @@ val pp_pointer_declarator: pointer_declarator -> PPrint.document
 
 val pp_cabs_identifier: cabs_identifier -> PPrint.document
 val pp_cabs_type_specifier: cabs_type_specifier -> PPrint.document
-val pp_translate_unit: bool -> translation_unit -> PPrint.document
+val pp_translate_unit: bool -> bool -> translation_unit -> PPrint.document

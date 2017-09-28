@@ -66,12 +66,17 @@ let load_impl core_parse impl_name =
       | Exception.Exception err ->
           error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
 
-
-(* use this when calling a pretty printer *)
-let run_pp =
+let run_pp filename lang doc =
+  let fout = List.mem FOut !!cerb_conf.ppflags in
+  let oc   =
+    if fout then
+      open_out (Filename.chop_extension (Filename.basename filename) ^ "." ^ lang)
+    else Pervasives.stdout
+  in
+  Colour.do_colour := not fout;
   (* TODO(someday): dynamically get the width of the terminal *)
-  PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout
-
+  PPrint.ToChannel.pretty 1.0 150 oc doc;
+  if fout then close_out oc
 
 let set_progress n =
   Exception.fmap (fun v -> progress_sofar := n; v)
@@ -85,12 +90,13 @@ let c_frontend f =
       if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " 1> " ^ temp_name (*^ " 2> /dev/null"*)) <> 0 then
         error "the C preprocessor failed";
       Input.file temp_name in
+    let filename  = Input.name f in
     
        Exception.except_return (c_preprocessing f)
     |> Exception.rbind Cparser_driver.parse
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
-    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp -| Pp_cabs.pp_translate_unit false)
+    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit false (not $ List.mem FOut !!cerb_conf.ppflags))
     
 (* TODO TODO TODO *)
     |> Exception.rbind (fun z ->
@@ -109,7 +115,7 @@ let c_frontend f =
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
       if !Debug_ocaml.debug_level >= 4 then
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| Pp_ail.pp_program -| snd)
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail.pp_program -| snd)
       else
         Exception.fmap (fun z -> z)
     end
@@ -122,7 +128,7 @@ let c_frontend f =
         Exception.fmap (fun z -> z)
       else
         let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail.pp_program_with_annot else Pp_ail.pp_program in
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp -| pp_ail -| snd)
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail -| snd)
     end
     |> set_progress 12
     |> pass_message "3. Ail typechecking completed!"
@@ -254,7 +260,7 @@ let pipeline filename args =
   if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
     if List.mem Core !!cerb_conf.pps then begin
       print_endline "BEFORE CORE REWRITE:";
-      run_pp $ Pp_core.Basic.pp_file core_file;
+      run_pp filename "core" $ Pp_core.Basic.pp_file core_file;
       print_endline "===================="
     end;
   
@@ -264,16 +270,16 @@ let pipeline filename args =
       Debug_ocaml.warn [] (fun () -> "The normal backend is not actually using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
         | Exception.Result z ->
-            run_pp $ Pp_core.Basic.pp_file (Core_sequentialise.sequentialise_file z);
+            run_pp filename "core" $ Pp_core.Basic.pp_file (Core_sequentialise.sequentialise_file z);
         | Exception.Exception _ ->
             ();
     end else
       let module Param_pp_core = Pp_core.Make(struct
-        let show_std = !!cerb_conf.pp_annotated
-        let show_location = !!cerb_conf.pp_annotated
+        let show_std = List.mem Annot !!cerb_conf.ppflags
+        let show_location = List.mem Annot !!cerb_conf.ppflags
         let show_proc_decl = false
       end) in
-      run_pp $ Param_pp_core.pp_file rewritten_core_file;
+      run_pp filename "core" $ Param_pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
@@ -314,7 +320,7 @@ let gen_corestd stdlib impl =
       cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_opt progress rewrite
+let cerberus debug_level cpp_cmd impl_name exec exec_mode pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
@@ -342,14 +348,14 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps pp_annotated file_
   end in
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-  set_cerb_conf cpp_cmd pps pp_annotated core_stdlib None exec exec_mode Core_parser.parse progress rewrite
+  set_cerb_conf cpp_cmd pps ppflags core_stdlib None exec exec_mode Core_parser.parse progress rewrite
     sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
   Debug_ocaml.print_success "0.2. - Implementation file loaded.";
 
-  set_cerb_conf cpp_cmd pps pp_annotated ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
+  set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
     (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
@@ -459,9 +465,9 @@ let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] & info ["pp"] ~docv:"LANG1,..." ~doc)
 
-let pp_annotated =
-  let doc = "Add location and ISO annotations to the Core pretty printer." in
-  Arg.(value & flag & info ["pp_annotated"] ~doc)
+let ppflags =
+  let doc = "Pretty print flags [annot: include location and ISO annotations, fout: output in a file]." in
+  Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] & info ["pp_flags"] ~doc)
 
 let file =
   let doc = "source C or Core file" in
@@ -522,7 +528,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
-    $ pprints $ pp_annotated $ file $ progress $ rewrite $ sequentialise
+    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ action_graph ) in
   
