@@ -257,10 +257,23 @@ html, body {
   border: 1px solid #eee;
 }
 
+.tab-compiler {
+  height: 100%;
+}
+
+.tab-compiler {
+  height: 100%;
+}
+
+
+
 .pane .tab-compiler .CodeMirror {
   height: 100%;
 }
 
+.CodeMirror-placeholder {
+  color: #888;
+}
 
 
 .cm-std {
@@ -270,6 +283,10 @@ html, body {
 
 .grabbing {
   cursor: crosshair;
+}
+
+code {
+    font-family: monospace;
 }
 
 .tooltip {
@@ -284,7 +301,8 @@ html, body {
   overflow: visible;
   padding: 5px 8px;
   margin-top: 10px;
-  line-height: 16px;
+  line-height: 11px;
+  font-size: 11px;
   border-radius: 4px;
   text-align: left;
   color: #fff;
@@ -297,13 +315,21 @@ html, body {
   transition: all 0.3s ease-out;
 }
 
+.tooltip-text h3 {
+  margin: 6px;
+}
+
+.tooltip-text ul {
+  margin: 0;
+}
+
 .std {
   margin: auto;
   width: 90%;
 }
 
 .std hr {
-  margin-top:20px;
+  margin-top:10px;
 }
 
 .help {
