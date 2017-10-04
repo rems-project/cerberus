@@ -166,14 +166,18 @@ let mk_result file out err =
   let sorted_locs  =
     List.sort (fun ls1 ls2 -> loc_range_cmp (fst ls1) (fst ls2)) locs
   in
-  JsonMap [
-    ("cabs", json_of_file (f ^ ".cabs"));
-    ("ail",  json_of_file (f ^ ".ail"));
-    ("core", JsonStr core);
-    ("locs", JsonArray (json_of_locs sorted_locs));
-    ("stdout", json_of_file out);
-    ("stderr", json_of_file err);
-  ] |> string_of_json
+  let result =
+    JsonMap [
+      ("cabs", json_of_file (f ^ ".cabs"));
+      ("ail",  json_of_file (f ^ ".ail"));
+      ("core", JsonStr core);
+      ("locs", JsonArray (json_of_locs sorted_locs));
+      ("stdout", json_of_file out);
+      ("stderr", json_of_file err);
+    ] |> string_of_json
+  in
+  ignore (Sys.command "rm -f *.{cabs,ail,core}"); (* clean results *)
+  result
 
 (* Cerberus interaction *)
 

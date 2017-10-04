@@ -168,6 +168,7 @@ class UI {
   exec (mode) {
     this.request(mode, (data) => {
       this.currentView.update(data)
+      this.currentView.highlight()
       this.currentView.exec.setValue(data.stdout)
       if (data.stderr != "")
         this.currentView.console.setValue(data.stderr)
