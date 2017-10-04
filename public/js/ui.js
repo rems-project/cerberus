@@ -83,10 +83,10 @@ class UI {
       this.request('graph', (data) => this.currentView.graph.setValue(data))
     })
 
-    // Pretty print AST IRs
-    $('#cabs').on('click', () => this.ast ('cabs'))
-    $('#ail') .on('click', () => this.ast ('ail'))
-    $('#core').on('click', () => this.ast ('core'))
+    // Pretty print elab IRs
+    $('#cabs').on('click', () => this.elab ('cabs'))
+    $('#ail') .on('click', () => this.elab ('ail'))
+    $('#core').on('click', () => this.elab ('core'))
 
     // Compilers
     $('#compile').on('click', () => {
@@ -94,6 +94,7 @@ class UI {
     })
 
     // Views
+    // TODO tabs are not being used
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
     $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
     $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
@@ -126,6 +127,8 @@ class UI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
+    window.setInterval(() => this.elab(), 2000);
+
   }
 
   setCurrentView(view) {
@@ -156,53 +159,32 @@ class UI {
       headers: {Accept: 'application/json'},
       data: this.currentView.getValue(),
       success: (data, status, query) => {
-        if (query.getResponseHeader('cerberus') == 0)
-          onSuccess(data)
-        else
-          this.currentView.console.appendValue(data)
+        onSuccess(data);
         this.done()
       }
     })
   }
 
   exec (mode) {
-    this.request(mode, (data) => this.currentView.exec.setValue(data))
+    this.request(mode, (data) => {
+      this.currentView.update(data)
+      this.currentView.exec.setValue(data.stdout)
+      if (data.stderr != "")
+        this.currentView.console.setValue(data.stderr)
+    })
   }
 
-  ast (mode) {
+  elab (lang) {
     let view = this.currentView
-
     if (!view.dirty) {
-      view[mode].dirty = false
-      view[mode].setValue(view.content[mode]);
-      view.highlight()
-      return;
+      if (lang) view.newTab(lang)
+    } else {
+      this.request("elab", (data) => {
+        view.update(data);
+        view.source.highlight()
+        if (lang) view.newTab(lang)
+      })
     }
-
-    this.request("elab", (data) => {
-
-
-      let result = parseCerberusResult(data.core)
-
-      // Set colors for every location
-      for (let i = 0; i < result.locations.length; i++)
-        result.locations[i].color = getColor(i)
-
-      view.dirty = false
-
-      view.source.dirty = false
-      view.locations = result.locations
-      view.isHighlighted = false
-
-      view.content.cabs = data.cabs;
-      view.content.ail  = data.ail;
-      view.content.core = result.ast
-
-      view[mode].dirty = false
-      view[mode].setValue(view.content[mode]);
-      view.highlight()
-
-    })
   }
 
   wait () {

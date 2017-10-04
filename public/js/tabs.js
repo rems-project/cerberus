@@ -1,7 +1,5 @@
 'use_strict'
 
-// Globals
-
 /* Generic Tab */
 class Tab {
   constructor(title) {
@@ -11,7 +9,6 @@ class Tab {
     this.dom.content = $('<div class="tab-content"></div>')
 
     this.setTitle(title)
-    //this.addEventListener()
   }
 
   addEventListener() {
@@ -62,6 +59,8 @@ class Tab {
   refresh () {}
   mark (loc) {}
   clear ()   {}
+  update ()  {}
+  highlight() {}
 
 }
 
@@ -117,17 +116,19 @@ class TabEditor extends Tab {
       matchBrackets: true,
       tabSize: 2,
       smartIndent: true,
-      lineWrapping: true
+      lineWrapping: true,
+      placeholder: "<Elaboration failed...>"
     })
 
+    /*
     this.editor.on('blur', (doc) => {
-      if (!this.dirty) ui.currentView.highlight()
+      ui.currentView.highlight()
       this.skipCursorEvent = true
     })
-
+*/
     // CodeMirror overwrites 'click' events
     this.editor.on('mousedown', () => {
-      if (!this.dirty) ui.currentView.highlight()
+      ui.currentView.highlight()
       this.skipCursorEvent = true
     })
 
@@ -152,7 +153,6 @@ class TabEditor extends Tab {
 
     if (source) this.editor.setValue(source)
 
-    this.dirty = false
     this.skipCursorEvent = true
   }
 
@@ -173,7 +173,7 @@ class TabEditor extends Tab {
   colorLines(i, e, color) {
     for (let k = i; k <= e; k++) {
       this.editor.removeLineClass(k, 'background')
-      this.editor.addLineClass(k, 'background', color)
+      this.editor.addLineClass(k, 'background', 'color'+color)
     }
   }
 
@@ -190,11 +190,9 @@ class TabEditor extends Tab {
       return;
     }
     // If not dirty, then mark selection
-    if (!this.dirty) {
-      let from = doc.getCursor('from')
-      let to   = doc.getCursor('to')
-      ui.currentView.markSelection(this.getLocation(from, to))
-    }
+    let from = doc.getCursor('from')
+    let to   = doc.getCursor('to')
+    ui.currentView.markSelection(this.getLocation(from, to))
   }
 
   refresh () {
@@ -218,28 +216,35 @@ class TabSource extends TabEditor {
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
     this.editor.on('change', () => {
-      if (ui.currentView)
-        ui.currentView.clear()
-      this.dirty = true
+      ui.currentView.dirty = true;
+      //ui.currentView.clear()
     })
-
+    // No close button
+    this.dom.children('.close').hide()
   }
 
   getLocation(from, to) {
-    let locations = ui.currentView.locations;
-    for (let i = locations.length - 1; i >= 0; i--) {
+    let locations = ui.currentView.data.locs;
+    for (let i = 0; i < locations.length; i++) {
       let loc = locations[i]
       if ((loc.c.begin.line < from.line ||
           (loc.c.begin.line == from.line && loc.c.begin.ch <= from.ch))
         && (loc.c.end.line > to.line ||
-          (loc.c.end.line == to.line && loc.c.end.ch >= to.ch)))
+          (loc.c.end.line == to.line && loc.c.end.ch > to.ch)))
         return loc
     }
     return null
   }
 
   mark(loc) {
-    this.editor.markText (loc.c.begin, loc.c.end, {className: loc.color})
+    this.editor.markText (loc.c.begin, loc.c.end, {className: getColor(loc.color)})
+  }
+
+  highlight() {
+    let locations = ui.currentView.data.locs;
+    for (let i = 0; i < locations.length; i++) {
+      this.mark(locations[i])
+    }
   }
 
   clear() {
@@ -249,10 +254,34 @@ class TabSource extends TabEditor {
   }
 }
 
+/* Tab Cabs */
+class TabCabs extends TabReadOnly {
+  constructor() {
+    super('Cabs')
+  }
+
+  update() {
+    this.setValue(ui.currentView.data.cabs)
+  }
+}
+
+/* Tab Cabs */
+class TabAil extends TabReadOnly {
+  constructor() {
+    super('Ail')
+  }
+
+  update() {
+    this.setValue(ui.currentView.data.ail)
+  }
+}
+
+
+
 /* Tab Core */
 class TabCore extends TabReadOnly {
-  constructor (title) {
-    super(title)
+  constructor () {
+    super('Core')
 
     this.tooltip = $(document.createElement('div'))
     this.tooltip.addClass('tooltip')
@@ -301,8 +330,8 @@ class TabCore extends TabReadOnly {
   }
 
   getLocation(from, to) {
-    let locations = ui.currentView.locations
-    for (let i =locations.length - 1; i >= 0; i--) {
+    let locations = ui.currentView.data.locs
+    for (let i = 0; i < locations.length; i ++) {
       let loc = locations[i]
       if (loc.core.begin.line <= from.line && loc.core.end.line >= to.line)
         return loc
@@ -312,6 +341,17 @@ class TabCore extends TabReadOnly {
 
   mark(loc) {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+  }
+
+  highlight() {
+    let locations = ui.currentView.data.locs;
+    for (let i = locations.length - 1; i >= 0; i--) {
+      this.mark(locations[i])
+    }
+  }
+
+  update() {
+    this.setValue(ui.currentView.data.core)
   }
 
 }
@@ -353,8 +393,11 @@ class TabAsm extends TabReadOnly {
 
     this.thanks.append(close)
     this.thanks.append(label)
-    this.editor.addPanel(this.thanks[0], {position: "bottom", stable: true});
+    //this.editor.addPanel(this.thanks[0], {position: "bottom", stable: true});
 
+    this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
+
+    this.lines = {}
     this.locations = {}
   }
 
@@ -374,10 +417,39 @@ class TabAsm extends TabReadOnly {
     return dropdown
   }
 
+  update() {
+    let locs = ui.currentView.data.locs;
+    for (let i = locs.length - 1; i >= 0; i--) {
+      let l = locs[i].c.begin.line+1;
+      if (this.locations[l] || !this.lines[l])
+        continue;
+      this.locations[l] = {
+        begin: Math.min(...this.lines[l]),
+        end: Math.max(...this.lines[l]),
+        color: locs[i].color,
+        source: locs[i]
+      }
+    }
+  }
+
+
+  getLocation(from, to) {
+    for (const l in this.locations) {
+      if (this.locations[l].begin <= from.line && this.locations[l].end >= to.line)
+        return this.locations[l].source
+    }
+    return null
+  }
+
   mark(loc) {
-    let xs = this.locations[loc.c.begin.line]
-    if (xs) {
-      this.colorLines (xs[0], xs[xs.length-1], loc.color)
+    let l = this.locations[loc.c.begin.line+1]
+    if (l) this.colorLines (l.begin, l.end, l.color)
+  }
+
+  highlight() {
+    let locs = ui.currentView.data.locs;
+    for (let i = locs.length - 1; i >= 0; i--) {
+      this.mark(locs[i])
     }
   }
 
@@ -395,13 +467,14 @@ class TabAsm extends TabReadOnly {
           let asm = data.asm[i]
           value += asm.text + '\n'
           if (asm.source && asm.source.line) {
-            if (!this.locations[asm.source.line])
-              this.locations[asm.source.line] = []
-            this.locations[asm.source.line].push(i)
+            if (!this.lines[asm.source.line])
+              this.lines[asm.source.line] = []
+            this.lines[asm.source.line].push(i)
           }
         }
-        console.log(this.locations)
         this.setValue(value)
+        this.update()
+        this.highlight()
         ui.done()
       }
     })

@@ -20,10 +20,20 @@ class View {
 
     // Global view variables
     this.draggedTab = null
-    this.locations  = null
+
+    // Empty data
+    this.data = {
+      cabs: "",
+      ail:  "",
+      core: "",
+      locs: [],
+      stdout: "",
+      stderr: ""
+    }
 
     this.content = {}
 
+    this.isHighlighted = false;
     this.dirty = true;
   }
 
@@ -95,27 +105,21 @@ class View {
   }
 
   get cabs() {
-    if (!this._cabsTab)
-      this._cabsTab = new TabReadOnly('Cabs')
-    if (!this._cabsTab.parent)
-      this.newPane.add(this._cabsTab)
-    return this._cabsTab;
+    let tab = new TabCabs()
+    this.newPane.add(tab)
+    return tab
   }
 
   get ail() {
-    if (!this._ailTab)
-      this._ailTab = new TabReadOnly('Ail')
-    if (!this._ailTab.parent)
-      this.newPane.add(this._ailTab)
-    return this._ailTab;
+    let tab = new TabAil()
+    this.newPane.add(tab)
+    return tab
   }
 
   get core() {
-    if (!this._coreTab)
-      this._coreTab = new TabCore('Core')
-    if (!this._coreTab.parent)
-      this.newPane.add(this._coreTab)
-    return this._coreTab;
+    let tab = new TabCore()
+    this.newPane.add(tab)
+    return tab
   }
 
   get console() {
@@ -180,7 +184,7 @@ class View {
   }
 
   markSelection(loc) {
-    if (!this.source.dirty && loc) {
+    if (!this.dirty && loc) {
       this.isHighlighted = false
       this.clear()
       this.mark(loc)
@@ -188,12 +192,10 @@ class View {
   }
 
   highlight() {
-    if (!this.locations||this.isHighlighted||this.source.dirty)
+    if (this.isHighlighted||this.dirty)
       return;
     this.clear()
-    for (let i = 0; i < this.locations.length; i++) {
-      this.mark(this.locations[i])
-    }
+    this.forEachTab((tab) => tab.highlight())
     this.isHighlighted = true
   }
 
@@ -204,6 +206,21 @@ class View {
   hide() {
     this.dom.hide()
   }
+
+  update(data) {
+    this.dirty = false
+    this.isHighlighted = false
+    this.data = data
+    this.forEachTab((tab) => tab.update())
+    this.isHighlighted = false
+  }
+
+  newTab(mode) {
+    let tab = this[mode];
+    tab.setValue(this.data[mode])
+    tab.highlight()
+  }
+
 
   refresh () {
     let factor = window.innerWidth / window.prevWidth
