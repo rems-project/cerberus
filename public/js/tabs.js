@@ -116,16 +116,14 @@ class TabEditor extends Tab {
       matchBrackets: true,
       tabSize: 2,
       smartIndent: true,
-      lineWrapping: true,
-      placeholder: "<Elaboration failed...>"
+      lineWrapping: true
     })
 
-    /*
     this.editor.on('blur', (doc) => {
       ui.currentView.highlight()
       this.skipCursorEvent = true
     })
-*/
+
     // CodeMirror overwrites 'click' events
     this.editor.on('mousedown', () => {
       ui.currentView.highlight()
@@ -258,6 +256,7 @@ class TabSource extends TabEditor {
 class TabCabs extends TabReadOnly {
   constructor() {
     super('Cabs')
+    this.editor.setOption('placeholder', '<Cabs elaboration failed...>')
   }
 
   update() {
@@ -269,6 +268,7 @@ class TabCabs extends TabReadOnly {
 class TabAil extends TabReadOnly {
   constructor() {
     super('Ail')
+    this.editor.setOption('placeholder', '<Ail elaboration failed...>')
   }
 
   update() {
@@ -289,6 +289,7 @@ class TabCore extends TabReadOnly {
     this.tooltipVisible = false
 
     this.editor.setOption('mode', 'text/x-core')
+    this.editor.setOption('placeholder', '<Core elaboration failed...>')
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
     this.editor.addOverlay({
@@ -360,6 +361,7 @@ class TabAsm extends TabReadOnly {
   constructor(cc) {
     super(cc.name)
 
+    this.editor.setOption('placeholder', '<Compilation failed...>')
     this.editor.setOption('mode', {name: "gas", architecture: "x86"})
 
     let toolbar   = $(document.createElement("div"))
@@ -397,6 +399,7 @@ class TabAsm extends TabReadOnly {
 
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
+    this.cc = cc;
     this.lines = {}
     this.locations = {}
   }
@@ -418,6 +421,11 @@ class TabAsm extends TabReadOnly {
   }
 
   update() {
+    this.compile(this.cc)
+  }
+
+  updateLocations() {
+    this.locations = {}
     let locs = ui.currentView.data.locs;
     for (let i = locs.length - 1; i >= 0; i--) {
       let l = locs[i].c.begin.line+1;
@@ -473,7 +481,7 @@ class TabAsm extends TabReadOnly {
           }
         }
         this.setValue(value)
-        this.update()
+        this.updateLocations()
         this.highlight()
         ui.done()
       }
