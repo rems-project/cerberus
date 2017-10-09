@@ -85,3 +85,20 @@ end
 (* HACK: this is to prevent Lem's from renaming *)
 let inline mapM  = ailErr_mapM
 let inline foldM = ailErr_foldM
+
+
+(*
+type typing_state =
+  list (list string)
+
+type errorM 'a =
+  ErrorM of (typing_state -> either (Loc.t * typing_error) ('a * typing_state))
+
+(* errorM unit *)
+let push_std = fun ts -> ((), []::ts)
+
+let pop_std = function
+  | [] -> error "blah"
+  | q::qs -> (q, qs)
+ 
+*)
