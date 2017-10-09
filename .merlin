@@ -4,6 +4,7 @@ S src/web
 S src/codegen
 S pprinters
 S parsers/cparser
+S parsers/ncparser
 S parsers/coreparser
 
 B _build/ocaml_generated
@@ -12,6 +13,7 @@ B _build/src/web
 B _build/src/codegen
 B _build/pprinters
 B _build/parsers/cparser
+B _build/parsers/ncparser
 B _build/parsers/coreparser
 
 PKG pprint cmdliner zarith ounit js_of_ocaml js_of_ocaml.ppx Z3
