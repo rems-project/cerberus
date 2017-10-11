@@ -2,7 +2,7 @@
 
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/Applications/usr/lib
 
-cd $CERB_PATH/tests
+#cd $CERB_PATH/tests
 
 source tests.sh
 
@@ -59,7 +59,6 @@ function test {
   report $1 $?
 }
 
-
 # Running parsing tests
 for file in suite/parsing/*.c
 do
@@ -77,7 +76,7 @@ echo "FAILED: $fail"
 
 # JUnit XML output (for Jenkins report)
 echo "<testsuites>" > $JOUTPUT_FILE
-echo "<testsuite name=\"ci\" tests=\"$((pass + failt))\" failures=\"${fail}\" timestamp=\"$(date)\">" >> $JOUTPUT_FILE
+echo "<testsuite name=\"ci\" tests=\"$((pass + fail))\" failures=\"${fail}\" timestamp=\"$(date)\">" >> $JOUTPUT_FILE
 echo -e ${JOUTPUT} >> $JOUTPUT_FILE
 echo "</testsuite>" >> $JOUTPUT_FILE
 echo "</testsuites>" >> $JOUTPUT_FILE

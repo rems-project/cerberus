@@ -47,8 +47,6 @@ type token =
   | NORETURN
   | STATIC_ASSERT
   | THREAD_LOCAL
-  (* NOTE: this token is a hack to solve a grammar ambiguity (see lexer.mll) *)
-  | ATOMIC_LPAREN
 
   (* §6.4.2 Identifiers *)
   | NAME of string
@@ -164,7 +162,6 @@ let string_of_token = function
   | NORETURN -> "NORETURN"
   | STATIC_ASSERT -> "STATIC_ASSERT"
   | THREAD_LOCAL -> "THREAD_LOCAL"
-  | ATOMIC_LPAREN -> "ATOMIC_LPAREN"
   | NAME s -> "NAME(" ^ s ^ ")"
   | VARIABLE -> "VARIABLE"
   | TYPE -> "TYPE"

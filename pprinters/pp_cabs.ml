@@ -505,7 +505,7 @@ and pp_cabs_type_specifier = function
   | TSpec_Complex ->
       pp_ctor "TSpec__Complex"
   | TSpec_Atomic tyname ->
-      failwith "pp_ctor \"TSpec_Atomic\" ^^ P.brackets (pp_type_name tyname)"
+      pp_ctor "TSpec_Atomic" (*^^ P.brackets (pp_type_name tyname)*)
   | TSpec_struct (id_opt, s_decls_opt) ->
       pp_ctor "TSpec_struct" ^^ P.brackets (
         pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^

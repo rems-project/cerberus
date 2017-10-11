@@ -109,7 +109,5 @@ let fun_decl ptys ctxt d =
 
 let reinstall_function_context d =
   match d.sort with
-  | DeclFun ctxt ->
-    restore_context ctxt;
-    declare_varname d.id
+  | DeclFun ctxt -> restore_context ctxt; declare_varname d.id
   | _ -> ()

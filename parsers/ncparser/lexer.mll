@@ -87,29 +87,12 @@ let lex_comment remainder lexbuf =
 
 }
 
+(* ========================================================================== *)
+
 (* STD §6.4.4.1#1 *)
-let nondigit = ['_' 'a'-'z' 'A'-'Z']
 let digit    = ['0'-'9']
 
-let identifier_nondigit =
-    nondigit
-(*| universal_character_name *) (* TODO *)
-  | '$' (* TODO(check) NON-STD? *)
-
-let identifier = identifier_nondigit (identifier_nondigit | digit)*
-
-
-(* STD §6.4.4.1#1 *)
 let hexadecimal_digit = ['0'-'9' 'A'-'F' 'a'-'f']
-
-
-(* STD §6.4.3#1 *)
-let hex_quad = hexadecimal_digit hexadecimal_digit
-                 hexadecimal_digit hexadecimal_digit
-
-let universal_character_name =
-    "\\u" hex_quad
-  | "\\U" hex_quad hex_quad
 
 let long_long_suffix = "ll" | "LL"
 
@@ -137,12 +120,30 @@ let octal_constant = '0' octal_digit*
 
 let decimal_constant = nonzero_digit digit*
 
-(* (* NOTE: we instead do the decoding in `initial' *)
+(* NOTE: we do the decoding in `initial' *)
 let integer_constant =
-    decimal_constant integer_suffix?
-  | octal_constant integer_suffix?
-  | hexadecimal_constant integer_suffix?
-*)
+    decimal_constant
+  | octal_constant
+  | hexadecimal_constant
+
+
+(* STD §6.4.3#1 *)
+let hex_quad = hexadecimal_digit hexadecimal_digit
+                 hexadecimal_digit hexadecimal_digit
+
+let universal_character_name =
+    "\\u" hex_quad
+  | "\\U" hex_quad hex_quad
+
+
+(* STD §6.4.4.1#1 *)
+let nondigit = ['_' 'a'-'z' 'A'-'Z']
+
+let identifier_nondigit =
+    nondigit
+  | universal_character_name
+
+let identifier = identifier_nondigit (identifier_nondigit | digit)*
 
 
 (* STD §6.4.4.2#1 *)
@@ -214,43 +215,11 @@ let s_char =
     [^ '"' '\\' '\n']
   | escape_sequence
 
-(* let s_char_sequence = s_char+ *) (* NOTE: replaced by a rule of the same name *)
-
-(* (* NOTE: we instead do the decoding in `initial' *)
-let string_literal =
-    '"' s_char_sequence? '"'
-  | "u8" '"' s_char_sequence? '"'
-  | 'u' '"' s_char_sequence? '"'
-  | 'U' '"' s_char_sequence? '"'
-  | 'L' '"' s_char_sequence? '"'
-*)
-
-let integer_constant =
-    decimal_constant
-  | octal_constant
-  | hexadecimal_constant
-
 
 (* Whitespaces *)
 let whitespace_char = [' ' '\t' '\n' '\012' '\r']
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+(* ========================================================================== *)
 
 rule s_char_sequence = parse
   | s_char as x
@@ -258,8 +227,6 @@ rule s_char_sequence = parse
         x :: xs }
   | '"'
       { [] }
-
-
 
 (* Consume a comment: /* ... */ *)
 (* STD §6.4.9#1 *)
@@ -314,7 +281,7 @@ and initial = parse
 
   | '\n'            { Lexing.new_line lexbuf; initial lexbuf }
   | whitespace_char { initial lexbuf }
-  | '#'             { hash lexbuf; initial lexbuf }
+  | '#'             { ignore(hash lexbuf); initial lexbuf }
 
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -361,8 +328,8 @@ and initial = parse
         STRING_LITERAL (Some pref, strs) }
 
   (* STD §6.4.6#1 Punctuators *)
-  | '['   { LBRACK            }
-  | ']'   { RBRACK            }
+  | '['   { LBRACK              }
+  | ']'   { RBRACK              }
   | '('   { LPAREN              }
   | ')'   { RPAREN              }
   | '{'   { LBRACE              }
@@ -423,10 +390,6 @@ and initial = parse
   | "|||" { PIPES   }
   | "}-}" { RBRACES }
 
-
-  (* STD §6.7.2.4#4, sentence 2 *)
-  | "_Atomic" (' ')* "(" { ATOMIC_LPAREN }
-
   | identifier as id
     { try Hashtbl.find lexicon id
       with Not_found -> NAME id
@@ -438,11 +401,13 @@ and initial = parse
           lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
           lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum
       }
+
+(* ========================================================================== *)
+
 {
 
   type lexer_state =
     | LSRegular
-    | LSAtomic
     | LSIdentifier of string
 
   let lexer_state = ref LSRegular
@@ -451,25 +416,11 @@ and initial = parse
     match !lexer_state with
     | LSIdentifier i ->
         lexer_state := LSRegular;
-        prerr_endline (if Lexer_feedback.is_typedefname i then "TYPE" else "VAR");
         if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
-    | LSAtomic
     | LSRegular ->
         let token = initial lexbuf in
-        prerr_endline (string_of_token token);
-        match !lexer_state, token with
-        | _, NAME i ->
-            lexer_state := LSIdentifier i;
-            token
-        | LSAtomic, LPAREN ->
-            lexer_state := LSRegular;
-            ATOMIC_LPAREN
-        | _, ATOMIC ->
-            (* TODO: maybe I should delete this *)
-            lexer_state := LSRegular;
-            token
-        | _, _ ->
-            lexer_state := LSRegular;
-            token
+        match token with
+        | NAME i -> lexer_state := LSIdentifier i; token
+        | _ -> lexer_state := LSRegular; token
 
 }
