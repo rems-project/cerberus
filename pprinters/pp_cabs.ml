@@ -506,7 +506,6 @@ and pp_cabs_type_specifier = function
       pp_ctor "TSpec__Complex"
   | TSpec_Atomic tyname ->
       failwith "pp_ctor \"TSpec_Atomic\" ^^ P.brackets (pp_type_name tyname)"
-(*
   | TSpec_struct (id_opt, s_decls_opt) ->
       pp_ctor "TSpec_struct" ^^ P.brackets (
         pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
@@ -517,7 +516,6 @@ and pp_cabs_type_specifier = function
         pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
         pp_option (fun z -> P.brackets ((comma_list pp_struct_declaration) z)) s_decls_opt
       )
-*)
   | TSpec_enum (id_opt, enums_opt) ->
       pp_ctor "TSpec_enum" ^^ P.brackets (
         pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
@@ -526,8 +524,6 @@ and pp_cabs_type_specifier = function
   | TSpec_name id ->
       pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id)
 
-
-(*
 and pp_struct_declaration = function
   | Struct_declaration (specs, qs, s_decls) ->
       pp_ctor "Struct_declaration" ^^ P.brackets (
@@ -535,15 +531,17 @@ and pp_struct_declaration = function
         P.brackets (comma_list pp_cabs_type_qualifier qs) ^^ P.comma ^^^
         P.brackets (comma_list pp_struct_declarator s_decls)
       )
+        (*
   | Struct_assert sa_decl ->
       pp_ctor "Struct_assert" ^^ P.brackets (pp_static_assert_declaration sa_decl)
-
+*)
 and pp_struct_declarator = function
   | SDecl_simple decltor ->
-      pp_ctor "SDecl_simple" ^^ P.brackets (pp_declarator decltor)
+      pp_ctor "SDecl_simple" (*^^ P.brackets (pp_declarator decltor)*)
+(*
   | SDecl_bitfield (decltor_opt, e) ->
       pp_ctor "SDecl_bitfield" ^^ P.brackets (pp_option pp_declarator decltor_opt ^^ P.comma ^^^ failwith "pp_cabs_expression None e")
-*)
+   *)
 
 and pp_enumerator (id, e_opt) =
   P.parens (pp_cabs_identifier id ^^^ P.comma ^^^ pp_option (failwith "pp_cabs_expression None") e_opt)

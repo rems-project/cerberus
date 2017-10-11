@@ -7,7 +7,44 @@ module IdSet = Set.Make(String)
 
 type context = IdSet.t
 
-let current = ref IdSet.empty
+let cerb_builtin_types =
+  [ "jmp_buf";        "sig_atomic_t";     "va_list";
+    "ptrdiff_t";      "wchar_t";
+    "int8_t";         "int16_t";        "in32_t";         "int64_t";
+    "uint8_t";        "uint16_t";       "uin32_t";        "uint64_t";
+    "int_least8_t";   "int_least16_t";  "int_least32_t";  "int_least64_t";
+    "uint_least8_t";  "uint_least16_t"; "uint_least32_t"; "uint_least64_t";
+    "int_fast8_t";    "int_fast16_t";   "int_fast32_t";   "int_fast64_t";
+    "uint_fast8_t";   "uint_fast16_t";  "uint_fast32_t";  "uint_fast64_t";
+    "intptr_t";       "uintptr_t";
+    "intmax_t";       "uintmax_t";
+    "size_t";         "ssize_t";
+    "FILE";
+    "fpos_t";
+    "cnd_t";
+    "thrd_t";
+    "tss_t";          "mtx_t";
+    "once_flag";
+    "time_t";         "timer_t";        "clock_t";        "clockid_t";
+    "suseconds_t";
+    "blkcnt_t";       "blksize_t";
+    "dev_t";          "fsblkcnt_t";     "fsfilcnt_t";
+    "gid_t";          "id_t";           "uid_t";          "pid_t";
+    "key_t";          "mode_t";         "ino_t";          "nlink_t";
+    "nlink_t";        "off_t";
+    "pthread_attr_t"; "pthread_barrier_t"; "pthread_barrierattr_t";
+    "pthread_cond_t"; "pthread_condattr_t"; "pthread_key_t";
+    "pthread_mutex_t"; "pthread_mutexattr_t"; "pthread_once_t";
+    "pthread_rwloc_t"; "pthread_rwlockattr_t"; "pthread_spinlock_t";
+    "pthread_t";
+    "trace_attr_t";   "trace_event_id_t";   "trace_event_set_t";
+    "trace_id_t";
+  ]
+
+let current =
+  List.map (fun s -> "__cerbty_" ^ s) cerb_builtin_types
+  |> IdSet.of_list
+  |> ref
 
 let declare_typedefname id =
   current := IdSet.add id !current
@@ -75,4 +112,4 @@ let reinstall_function_context d =
   | DeclFun ctxt ->
     restore_context ctxt;
     declare_varname d.id
-  | _ -> failwith "error lex_feedback"
+  | _ -> ()
