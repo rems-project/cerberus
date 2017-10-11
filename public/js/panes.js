@@ -7,9 +7,11 @@ class Pane {
     this.parent = null
 
     this.dom          = $('<div class="pane"></div>')
+    let tabswrapper   = $('<div class="tablinks-wrapper"></div>')
     this.dom.tabs     = $('<div class="tablinks"></div>')
-    this.dom.content  = $('<div class="content"></div>')
-    this.dom.append(this.dom.tabs)
+    this.dom.content  = $('<div class="pane-content"></div>')
+    tabswrapper.append(this.dom.tabs)
+    this.dom.append(tabswrapper)
     this.dom.append(this.dom.content)
 
     this.activeTab = null
@@ -68,6 +70,8 @@ class Pane {
 
     tab.addEventListener()
     tab.refresh()
+
+    return tab
   }
 
   remove (tab) {
@@ -79,6 +83,9 @@ class Pane {
       else if (this.tabs.length > 0)
         this.firstTab.setActive()
     }
+
+    if (tab.dom instanceof Element)
+      this.dom.tabs.css(this.dom.tabs.css('min-width')-tab.dom.width())
 
     // Remove from UI
     tab.dom.remove()

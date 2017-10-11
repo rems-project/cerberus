@@ -239,11 +239,11 @@
       no matter what the sizes of those intervening bit-fields happen to be.
     P4: |
       EXAMPLE A structure declared as
-      <code>struct {
+      <pre><code>struct {
           char a;
           int b:5, c:11, :0, d:8;
           struct { int ee:8; } e;
-        }</code>
+        }</code></pre>
       contains four separate memory locations: The member a, and bit-fields d
       and e.ee are each separate memory locations, and can be modified
       concurrently without interfering with each other. The bit-fields b and c
@@ -357,12 +357,12 @@
     conforming program can use conditional features (see 6.10.8.3) provided the
     use is guarded by an appropriate conditional inclusion preprocessing
     directive using the related macro.
-    For example:<code>
+    For example:<pre><code>
     \#ifdef _ _STDC_IEC_559_ _ /* FE_UPWARD defined */
     /* ... */
     fesetround(FE_UPWARD);
     /* ... */
-    \#endif</code></foot> It shall not produce output dependent on any
+    \#endif</code></pre></foot> It shall not produce output dependent on any
     unspecified, undefined, or implementation-defined behavior, and shall not
     exceed any minimum implementation limit.
   P6: >
@@ -1060,14 +1060,14 @@
       P5: |
         EXAMPLE
         Given the following two file scope declarations:
-        <code>
+        <pre><code>
         int f(int (*)(), double (*)[3]);
         int f(int (*)(char *), double (*)[]);
-        </code>
+        </code></pre>
         The resulting composite type for the function is:
-        <code>
+        <pre><code>
         int f(int (*)(char *), double (*)[3]);
-        </code>
+        </code></pre>
     8:
       title: Alignment of objects 
       P1: >
@@ -1601,9 +1601,9 @@
           The identifier _ _func_ _ shall be implicitly declared by the
           translator as if, immediately following the opening brace of each
           function definition, the declaration
-          <code>
+          <pre><code>
           static const char _ _func_ _[] = "function-name";
-          </code>
+          </code></pre>
           appeared, where function-name is the name of the lexically-enclosing
           function. <foot>Since the name _ _func_ _ is reserved for any use by
           the implementation (7.1.3), if any other identifier is explicitly
@@ -1615,14 +1615,14 @@
         P3: |
           EXAMPLE
           Consider the code fragment:
-          <code>
+          <pre><code>
           \#include <stdio.h>
           void myfunc(void)
           {
             printf("%s\n", _ _func_ _);
             /* ... */
           }
-          </code>
+          </code></pre>
           Each time the function is called, it will print to the standard
           output stream: myfunc
     3:
@@ -2250,19 +2250,19 @@
       P4: |
         EXAMPLE
         The following sequence of characters:
-        <code>
+        <pre><code>
           0x3<1/a.h>1e2
           \#include <1/a.h>
           \#define const.member@$
-        </code>
+        </code></pre>
         forms the following sequence of preprocessing tokens (with each
         individual preprocessing token delimited by a { on the left and a } on
         the right).
-        <code>
+        <pre><code>
           {0x3}{<}{1}{/}{a}{.}{h}{>}{1e2}
           {#}{include} {<1/a.h>}
           {#}{define} {const}{.}{member}{@}{$}
-        </code>
+        </code></pre>
     8:
       title: Preprocessing numbers
       P1: |
@@ -2306,7 +2306,7 @@
         characters and to find the terminating new-line character.
       P3: |
         EXAMPLE
-        <code>
+        <pre><code>
         "a//b"                      // four-character string literal
         \#include "//e"             // undefined behavior
         // */                       // comment, not Syntax error
@@ -2320,7 +2320,7 @@
         /*//*/ l();                 // equivalent to l();
         m = n//**/o
         + p;                        // equivalent to m = n + p;
-        </code>
+        </code></pre>
   5:
     title: Expressions
     P1: >
@@ -2337,15 +2337,15 @@
       expression, the behavior is undefined if such an unsequenced side effect
       occurs in any of the orderings.
       <foot>This paragraph renders undefined statement expressions such as
-      <code>
+      <pre><code>
         i = ++i + 1;
         a[i++] = i;
-      </code>
+      </pre></code></pre>
       while allowing
-      <code>
+      <pre><code>
         i = i + 1;
         a[i] = i;
-      </code>
+      </pre></code></pre>
       </foot>
     P3: >
       The grouping of operators and operands is indicated by the Syntax.
@@ -2496,13 +2496,13 @@
         P5: |
           EXAMPLE
           The cbrt type-generic macro could be implemented as follows:
-          <code>
+          <pre><code>
           \#define cbrt(X) _Generic((X), \
                       long double: cbrtl, \
                       default: cbrt, \
                       float: cbrtf \
                       )(X)
-          </code>
+          </code></pre>
     2:
       title: Postfix operators
       P1: |
@@ -2549,9 +2549,9 @@
         P4: |
           EXAMPLE
           Consider the array object defined by the declaration
-          <code>
+          <pre><code>
             int x[3][5];
-          </code>
+          </code></pre>
           Here x is a 3 × 5 array of ints; more precisely, x is an array of
           three element objects, each of which is an array of five ints. In the
           expression x[i], which is equivalent to (*((x)+(i))), x is first
@@ -2564,7 +2564,7 @@
           to the first of the ints, so x[i][j] yields an int.
       2:
         title: Function calls
-        P1: |
+        P1: >
           <h3>Constraints</h3>
           The expression that denotes the called function<foot>Most often, this
           is the result of converting an identifier that is a function
@@ -2576,10 +2576,10 @@
           number of parameters. Each argument shall have a type such that its
           value may be assigned to an object with the unqualified version of
           the type of its corresponding parameter.
-        P3: |
+        P3: >
           <h3>Semantics</h3>
           A postfix expression followed by parentheses () containing a possibly
-          empty, commaseparated list of expressions is a function call. The
+          empty, comma separated list of expressions is a function call. The
           postfix expression denotes the called function. The list of
           expressions specifies the arguments to the function.
         P4: >
@@ -2597,7 +2597,7 @@
           to function returning an object type, the function call expression
           has the same type as that object type, and has the value determined
           as specified in 6.8.6.4. Otherwise, the function call has type void.
-        P6: |
+        P6: >
           If the expression that denotes the called function has a type that
           does not include a prototype, the integer promotions are performed on
           each argument, and arguments that have type float are promoted to
@@ -2611,11 +2611,13 @@
           include a prototype, and the types of the arguments after promotion
           are not compatible with those of the parameters after promotion, the
           behavior is undefined, except for the following cases:
-          — one promoted type is a signed integer type, the other promoted type
+          <ul>
+            <li>one promoted type is a signed integer type, the other promoted type
           is the corresponding unsigned integer type, and the value is
-          representable in both types;
-          — both types are pointers to qualified or unqualified versions of a
-          character type or void.
+          representable in both types;</li>
+            <li>both types are pointers to qualified or unqualified versions of a
+          character type or void.</li>
+          </ul>
         P7: >
           If the expression that denotes the called function has a type that
           does include a prototype, the arguments are implicitly converted, as
@@ -2649,15 +2651,15 @@
         P12: |
           EXAMPLE
           In the function call
-          <code>
+          <pre><code>
             (*pf[f1()]) (f2(), f3() + f4())
-          </code>
+          </code></pre>
           the functions f1, f2, f3, and f4 may be called in any order. All side
           effects have to be completed before the function pointed to by
           pf[f1()] is called.
       3:
         title: Structure and union members
-        P1: |
+        P1: >
           <h3>Constraints</h3>
           The first operand of the . operator shall have an atomic, qualified,
           or unqualified structure or union type, and the second operand shall
@@ -2714,25 +2716,25 @@
         P8: |
           EXAMPLE 2
           In:
-          <code>
+          <pre><code>
             struct s { int i; const int ci; };
             struct s s;
             const struct s cs;
             volatile struct s vs;
-          </code>
+          </code></pre>
           the various members have the types:
-          <code>
+          <pre><code>
             s.i    int
             s.ci   const int
             cs.i   const int
             cs.ci  const int
             vs.i   volatile int
             vs.ci  volatile const int
-          </code>
+          </code></pre>
         P9: |
           EXAMPLE 3
           The following is a valid fragment:
-          <code>
+          <pre><code>
             union {
               struct {
                 int
@@ -2756,10 +2758,10 @@
             if (u.n.alltypes == 1)
               if (sin(u.nf.doublenode) == 0.0)
                 /* ... */
-          </code>
+          </code></pre>
           The following is not a valid fragment (because the union type is not
           visible within function f):
-          <code>
+          <pre><code>
           struct t1 { int m; };
           struct t2 { int m; };
           int f(struct t1 *p1, struct t2 *p2)
@@ -2777,7 +2779,7 @@
             /* ... */
             return f(&u.s1, &u.s2);
           }
-          </code>
+          </code></pre>
       4:
         title: Postfix increment and decrement operators
         P1: |
@@ -2801,14 +2803,14 @@
           <foot> Where a pointer to an atomic object can be formed and E has
           integer type, E++ is equivalent to the following code sequence where T
           is the type of E:
-            <code>
+            <pre><code>
             T *addr = &E;
             T old = *addr;
             T new;
             do {
               new = old + 1;
             } while (!atomic_compare_exchange_strong(addr, &old, new));
-          </code>
+          </code></pre>
           with old being the result of the operation.  Special care must be
           taken if E has floating type; see 6.5.16.2.</foot>
         P3: >
@@ -2859,9 +2861,9 @@
         P8: |
           EXAMPLE 1
           The file scope definition
-          <code>
+          <pre><code>
             int *p = (int []){2, 4};
-          </code>
+          </code></pre>
           initializes p to point to the first element of an array of two ints,
           the first having the value two and the second, four. The expressions
           in this compound literal are required to be constant. The unnamed
@@ -2869,7 +2871,7 @@
         P9: |
           EXAMPLE 2
           In contrast, in
-          <code>
+          <pre><code>
           void f(void)
           {
             int *p;
@@ -2877,7 +2879,7 @@
             p = (int [2]){*p};
             /*...*/
           }
-          </code>
+          </code></pre>
           p is assigned the address of the first element of an array of two
           ints, the first having the value previously pointed to by p and the
           second, zero. The expressions in this compound literal need not be
@@ -2886,29 +2888,29 @@
           EXAMPLE 3 Initializers with designations can be combined with
           compound literals. Structure objects created using compound literals
           can be passed to functions without depending on member order:
-          <code>
+          <pre><code>
             drawline((struct point){.x=1, .y=1},
             (struct point){.x=3, .y=4});
-          </code>
+          </code></pre>
           Or, if drawline instead expected pointers to struct point:
-          <code>
+          <pre><code>
             drawline(&(struct point){.x=1, .y=1},
             &(struct point){.x=3, .y=4});
-          </code>
+          </code></pre>
         P11: |
           EXAMPLE 4
           A read-only compound literal can be specified through constructions like:
-          <code>
+          <pre><code>
             (const float []){1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6}
-          </code>
+          </code></pre>
         P12: |
           EXAMPLE 5
           The following three expressions have different meanings:
-          <code>
+          <pre><code>
             "/tmp/fileXXXXXX"
             (char []){"/tmp/fileXXXXXX"}
             (const char []){"/tmp/fileXXXXXX"}
-          </code>
+          </code></pre>
           The first always has static storage duration and has type array of
           char, but need not be modifiable; the last two have automatic storage
           duration when they occur within the body of a function, and the first
@@ -2916,9 +2918,9 @@
         P13: |
           EXAMPLE 6 Like string literals, const-qualified compound literals can
           be placed into read-only memory and can even be shared. For example,
-          <code>
+          <pre><code>
             (const char []){"abc"} == "abc"
-          </code>
+          </code></pre>
           might yield 1 if the literals’ storage is shared.
         P14: |
           EXAMPLE 7 Since compound literals are unnamed, a single compound
@@ -2926,15 +2928,15 @@
           is no way to write a self-referential compound literal that could be
           used as the function argument in place of the named object
           endless_zeros below:
-          <code>
+          <pre><code>
             struct int_list { int car; struct int_list *cdr; };
             struct int_list endless_zeros = {0, &endless_zeros};
             eval(endless_zeros);
-          </code>
+          </code></pre>
         P15: |
           EXAMPLE 8
           Each compound literal creates only a single object in a given scope:
-          <code>
+          <pre><code>
             struct s { int i; };
             int f (void)
             {
@@ -2945,7 +2947,7 @@
               if (j < 2) goto again;
               return p == q && q->i == 1;
             }
-          </code>
+          </code></pre>
           The function f() always returns the value 1.
         P16: >
           Note that if an iteration statement were used instead of an explicit
@@ -3092,10 +3094,10 @@
           with routines such as storage allocators and I/O systems. A
           storage-allocation function might accept a size (in bytes) of an object
           to allocate and return a pointer to void. For example:
-          <code>
+          <pre><code>
             extern void *alloc(size_t);
             double *dp = alloc(sizeof *dp);
-          </code>
+          </code></pre>
           The implementation of the alloc function should ensure that its
           return value is aligned suitably for conversion to a pointer to
           double.
@@ -3103,14 +3105,14 @@
           EXAMPLE 2
           Another use of the sizeof operator is to compute the number of
           elements in an array:
-          <code>
+          <pre><code>
             sizeof array / sizeof array[0]
-          </code>
+          </code></pre>
         P8: |
           EXAMPLE 3
           In this example, the size of a variable length array is computed and
           returned from a function:
-          <code>
+          <pre><code>
             \#include <stddef.h>
             size_t fsize3(int n)
             {
@@ -3123,7 +3125,7 @@
               size = fsize3(10); // fsize3 returns 13
               return 0;
             }
-          </code>
+          </code></pre>
     4:
       title: Cast operators
       P1: |
@@ -3273,7 +3275,7 @@
         EXAMPLE
         Pointer arithmetic is well defined with pointers to variable length
         array types.
-        <code>
+        <pre><code>
         {
           int n = 4, m = 3;
           int a[n][m];
@@ -3282,7 +3284,7 @@
           (*p)[2] = 99;    // a[1][2] == 99
           n = p - a;       // n == 1
         }
-        </code>
+        </code></pre>
       P11: >
         If array a in the above example were declared to be an array of known
         constant size, and pointer p were declared to be a pointer to an array
@@ -3523,7 +3525,7 @@
         conditional-expression:
           logical-OR-expression
           logical-OR-expression ? expression : conditional-expression
-      P2: |
+      P2: >
         <h3>Constraints</h3>
         The first operand shall have scalar type.
       P3: |
@@ -3536,7 +3538,7 @@
         — one operand is a pointer and the other is a null pointer constant; or
         — one operand is a pointer to an object type and the other is a pointer
         to a qualified or unqualified version of void.
-      P4: |
+      P4: >
         <h3>Semantics</h3>
         The first operand is evaluated; there is a sequence point between its
         evaluation and the evaluation of the second or third operand (whichever
@@ -3570,25 +3572,25 @@
         compatible types.
       P8: |
         Given the declarations
-        <code>
+        <pre><code>
           const void *c_vp;
           void *vp;
           const int *c_ip;
           volatile int *v_ip;
           int *ip;
           const char *c_cp;
-        </code>
+        </code></pre>
         the third column in the following table is the common type that is the
         result of a conditional expression in which the first two columns are the
         second and third operands (in either order):
-        <code>
+        <pre><code>
           c_vp  c_ip  const void *
           v_ip  0     volatile int *
           c_ip v_ip   const volatile int *
           vp   c_cp   const void *
           ip   c_ip   const int *
           vp   ip     void *
-        </code>
+        </code></pre>
     16:
       title: Assignment operators
       P1: |
@@ -3657,13 +3659,13 @@
         P4: |
           EXAMPLE 1
           In the program fragment
-          <code>
+          <pre><code>
             int f(void);
             char c;
             /* ... */
             if ((c = f()) == -1)
             /* ... */
-          </code>
+          </code></pre>
           the int value returned by the function may be truncated when stored
           in the char, and then converted back to int width prior to the
           comparison. In an implementation in which ‘‘plain’’ char has the same
@@ -3674,12 +3676,12 @@
         P5: |
           EXAMPLE 2
           In the fragment:
-          <code>
+          <pre><code>
             char c;
             int i;
             long l;
             l = (c = i);
-          </code>
+          </code></pre>
           the value of i is converted to the type of the assignment expression
           c = i, that is, char type. The value of the expression enclosed in
           parentheses is then converted to the type of the outer assignment
@@ -3687,14 +3689,14 @@
         P6: |
           EXAMPLE 3
           Consider the fragment:
-          <code>
+          <pre><code>
             const char **cpp;
             char *p;
             const char c = 'A';
             cpp = &p; // constraint violation
             *cpp = &c; // valid
             *p = 0; // valid
-          </code>
+          </code></pre>
           The first assignment is unsafe because it would allow the following
           valid code to attempt to change the value of the const object c.
       2:
@@ -3724,7 +3726,7 @@
           be formed and E1 and E2 have integer type, this is equivalent to the
           following code sequence where T1 is the type of E1 and T2 is the type
           of E2:
-          <code>
+          <pre><code>
             T1 *addr = &E1;
             T2 val = (E2);
             T1 old = *addr;
@@ -3732,7 +3734,7 @@
             do {
               new = old op val;
             } while (!atomic_compare_exchange_strong(addr, &old, new));
-          </code>
+          </code></pre>
           with new being the result of the operation.
           If E1 or E2 has floating type, then exceptional conditions or
           floating-point exceptions encountered during discarded evaluations of
@@ -3740,7 +3742,7 @@
           E1 op = E2 and E1 = E1 op (E2). For example, if annex F is in effect,
           the floating types involved have IEC 60559 formats, and
           FLT_EVAL_METHOD is 0, the equivalent code would be:
-          <code>
+          <pre><code>
             \#include <fenv.h>
             \#pragma STDC FENV_ACCESS ON
             /* ... */
@@ -3757,7 +3759,7 @@
                 feclearexcept(FE_ALL_EXCEPT);
               }
               feupdateenv(&fenv);
-          </code>
+          </code></pre>
           If FLT_EVAL_METHOD is not 0, then T2 must be a type with the range
           and precision to which E2 is evaluated in order to satisfy the
           equivalence.</foot>
@@ -4185,7 +4187,7 @@
         P19: |
           EXAMPLE 1
           The following illustrates anonymous structures and unions:
-          <code>
+          <pre><code>
             struct v {
               union {
                 // anonymous union
@@ -4198,92 +4200,92 @@
             v1.i = 2; // valid
             v1.k = 3; // invalid: inner structure is not anonymous
             v1.w.k = 5; // valid
-          </code>
+          </code></pre>
         P20: |
           EXAMPLE 2
           After the declaration:
-          <code>
+          <pre><code>
             struct s { int n; double d[]; };
-          </code>
+          </code></pre>
           the structure struct s has a flexible array member d. A typical way
           to use this is:
-          <code>
+          <pre><code>
             int m = /* some value */;
             struct s *p = malloc(sizeof (struct s) + sizeof (double [m]));
-          </code>
+          </code></pre>
           and assuming that the call to malloc succeeds, the object pointed to
           by p behaves, for most purposes, as if p had been declared as:
-          <code>
+          <pre><code>
             struct { int n; double d[m]; } *p;
-          </code>
+          </code></pre>
           (there are circumstances in which this equivalence is broken; in
           particular, the offsets of member d might not be the same).
         P21: |
           Following the above declaration:
-          <code>
+          <pre><code>
             struct s t1 = { 0 }; // valid
             struct s t2 = { 1, { 4.2 }}; // invalid
             t1.n = 4; // valid
             t1.d[0] = 4.2; // might be undefined behavior
-          </code>
+          </code></pre>
           The initialization of t2 is invalid (and violates a constraint)
           because struct s is treated as if it did not contain member d. The
           assignment to t1.d[0] is probably undefined behavior, but it is
           possible that
-          <code>
+          <pre><code>
             sizeof (struct s) >= offsetof(struct s, d) + sizeof (double)
-          </code>
+          </code></pre>
           in which case the assignment would be legitimate. Nevertheless, it
           cannot appear in strictly conforming code.
         P22: |
           After the further declaration:
-          <code>
+          <pre><code>
             struct ss { int n; };
-          </code>
+          </code></pre>
           the expressions:
-          <code>
+          <pre><code>
             sizeof (struct s) >= sizeof (struct ss)
             sizeof (struct s) >= offsetof(struct s, d)
-          </code>
+          </code></pre>
           are always equal to 1.
         P23: |
           If sizeof (double) is 8, then after the following code is executed:
-          <code>
+          <pre><code>
             struct s *s1;
             struct s *s2;
             s1 = malloc(sizeof (struct s) + 64);
             s2 = malloc(sizeof (struct s) + 46);
-          </code>
+          </code></pre>
           and assuming that the calls to malloc succeed, the objects pointed to
           by s1 and s2 behave, for most purposes, as if the identifiers had
           been declared as:
-          <code>
+          <pre><code>
             struct { int n; double d[8]; } *s1;
             struct { int n; double d[5]; } *s2;
-          </code>
+          </code></pre>
         P24: |
           Following the further successful assignments:
-          <code>
+          <pre><code>
             s1 = malloc(sizeof (struct s) + 10);
             s2 = malloc(sizeof (struct s) + 6);
-          </code>
+          </code></pre>
           they then behave as if the declarations were:
-          <code>
+          <pre><code>
             struct { int n; double d[1]; } *s1, *s2;
-          </code>
+          </code></pre>
           and:
-          <code>
+          <pre><code>
             double *dp;
             dp = &(s1->d[0]); // valid
             *dp = 42; // valid
             dp = &(s2->d[0]); //valid
             *dp = 42; // undefined behavior
-          </code>
+          </code></pre>
         P25: |
           The assignment:
-          <code>
+          <pre><code>
             *s1 = *s2;
-          </code>
+          </code></pre>
           only copies the member n; if any of the array elements are within the
           first sizeof (struct s) bytes of the structure, they might be copied
           or simply overwritten with indeterminate values.
@@ -4292,12 +4294,12 @@
           considered to be members of the containing structure or union, struct s
           in the following example has more than one named member and thus the
           use of a flexible array member is valid:
-          <code>
+          <pre><code>
             struct s {
               struct { int i; };
               int a[];
             };
-          </code>
+          </code></pre>
 
       2:
         title: Enumeration specifiers
@@ -4344,14 +4346,14 @@
         P5: |
           EXAMPLE
           The following fragment:
-          <code>
+          <pre><code>
             enum hue { chartreuse, burgundy, claret=20, winedark };
             enum hue col, *cp;
             col = claret;
             cp = &col;
             if (*cp != burgundy)
             /* ... */
-          </code>
+          </code></pre>
           makes hue the tag of an enumeration, and then declares col as an
           object that has that type and cp as a pointer to an object that has
           that type. The enumerated values are in the set { 0, 1, 20, 21 }.
@@ -4428,18 +4430,18 @@
         P10: |
           EXAMPLE 1
           This mechanism allows declaration of a self-referential structure.
-          <code>
+          <pre><code>
             struct tnode {
               int count;
               struct tnode *left, *right;
             };
-          </code>
+          </code></pre>
           specifies a structure that contains an integer and two pointers to
           objects of the same type. Once this declaration has been given, the
           declaration
-          <code>
+          <pre><code>
             struct tnode s, *sp;
-          </code>
+          </code></pre>
           declares s to be an object of the given type and sp to be a pointer
           to an object of the given type. With these declarations, the
           expression sp->left refers to the left struct tnode pointer of the
@@ -4447,21 +4449,21 @@
           the count member of the right struct tnode pointed to from s.
         P11: |
           The following alternative formulation uses the typedef mechanism:
-          <code>
+          <pre><code>
             typedef struct tnode TNODE;
             struct tnode {
               int count;
               TNODE *left, *right;
             };
             TNODE s, *sp;
-          </code>
+          </code></pre>
         P12: |
           EXAMPLE 2 To illustrate the use of prior declaration of a tag to
           specify a pair of mutually referential structures, the declarations
-          <code>
+          <pre><code>
             struct s1 { struct s2 *s2p; /* ... */ }; // D1
             struct s2 { struct s1 *s1p; /* ... */ }; // D2
-          </code>
+          </code></pre>
           specify a pair of structures that contain pointers to each other.
           Note, however, that if s2 were already declared as a tag in an
           enclosing scope, the declaration D1 would refer to it, not to the tag
@@ -4571,7 +4573,7 @@
       P12: |
         EXAMPLE 2 The following declarations and expressions illustrate the
         behavior when type qualifiers modify an aggregate type:
-        <code>
+        <pre><code>
           const struct s { int mem; } cs = { 1 };
           struct s ncs; // the object ncs is modifiable
           typedef int A[2][3];
@@ -4584,13 +4586,13 @@
           pi = &cs.mem;   // violates type <h3>Constraints</h3> for =
           pci = &cs.mem;  // valid
           pi = a[0];      // invalid: a[0] has type ‘‘const int *’’
-        </code>
+        </code></pre>
       P13: |
         EXAMPLE 3
         The declaration
-        <code>
+        <pre><code>
           _Atomic volatile int *p;
-        </code>
+        </code></pre>
         specifies that p has the type ‘‘pointer to volatile atomic int’’, a
         pointer to a volatile-qualified atomic type.
       1:
@@ -4639,24 +4641,24 @@
         P7: |
           EXAMPLE 1
           The file scope declarations
-          <code>
+          <pre><code>
             int * restrict a;
             int * restrict b;
             extern int c[];
-          </code>
+          </code></pre>
           assert that if an object is accessed using one of a, b, or c, and
           that object is modified anywhere in the program, then it is never
           accessed using either of the other two.
         P8: |
           EXAMPLE 2
           The function parameter declarations in the following example
-          <code>
+          <pre><code>
             void f(int n, int * restrict p, int * restrict q)
             {
               while (n-- > 0)
               *p++ = *q++;
             }
-          </code>
+          </code></pre>
           assert that, during each execution of the function, if an object is
           accessed through one of the pointer parameters, then it is not also
           accessed through the other.
@@ -4668,25 +4670,25 @@
           none give undefined behavior. For example, the second call of f in g
           has undefined behavior because each of d[1] through d[49] is accessed
           through both p and q.
-          <code>
+          <pre><code>
             void g(void)
             {
               extern int d[100];
               f(50, d + 50, d); // valid
               f(50, d + 1, d); // undefined behavior
             }
-          <code>
+          <pre><code>
         P10: |
           EXAMPLE 3
           The function parameter declarations
-          <code>
+          <pre><code>
             void h(int n, int * restrict p, int * restrict q, int * restrict r)
             {
               int i;
               for (i = 0; i < n; i++)
               p[i] = q[i] + r[i];
             }
-          </code>
+          </code></pre>
           illustrate how an unmodified object can be aliased through two
           restricted pointers. In particular, if a and b are disjoint arrays, a
           call of the form h(100, a, b, b) has defined behavior, because array
@@ -4697,7 +4699,7 @@
           block. With one exception, only ‘‘outer-to-inner’’ assignments
           between restricted pointers declared in nested blocks have defined
           behavior.
-          <code>
+          <pre><code>
           {
             int * restrict p1;
             int * restrict q1;
@@ -4709,14 +4711,14 @@
               p2 = q2; // undefined behavior
             }
           }
-          </code>
+          </code></pre>
         P12: |
           The one exception allows the value of a restricted pointer to be
           carried out of the block in which it (or, more precisely, the
           ordinary identifier used to designate it) is declared when that block
           finishes execution. For example, this permits new_vector to return a
           vector.
-          <code>
+          <pre><code>
             typedef struct { int n; float * restrict v; } vector;
             vector new_vector(int n)
             {
@@ -4725,7 +4727,7 @@
               t.v = malloc(n * sizeof (float));
               return t;
             }
-          </code>
+          </code></pre>
     4:
       title: Function specifiers
       P1: |
@@ -4797,7 +4799,7 @@
         for use only within the translation unit. A file scope declaration with
         extern creates an external definition. The following example shows an
         entire translation unit.
-        <code>
+        <pre><code>
           inline double fahr(double t)
           {
             return (9.0 * t) / 5.0 + 32.0;
@@ -4812,7 +4814,7 @@
           /* A translator may perform inline substitutions */
           return is_fahr ? cels(temp) : fahr(temp);
           }
-        </code>
+        </code></pre>
       P11: >
         Note that the definition of fahr is an external definition because fahr
         is also declared with extern, but the definition of cels is an inline
@@ -4822,14 +4824,14 @@
         and either may be used for the call.
       P12: |
         EXAMPLE 2
-        <code>
+        <pre><code>
           _Noreturn void f () {
             abort(); // ok
           }
           _Noreturn void g (int i) { // causes undefined behavior if i <= 0
             if (i > 0) abort();
           }
-        </code>
+        </code></pre>
     5:
       title: Alignment specifier
       P1: |
@@ -4919,9 +4921,9 @@
         type is itself variably modified.
       P4: |
         In the following subclauses, consider a declaration
-        <code>
+        <pre><code>
           T D1
-        </code>
+        </code></pre>
         where T contains the declaration specifiers that specify a type T (such
         as int) and D1 is a declarator that contains an identifier ident. The
         type specified for the identifier ident in the various forms of
@@ -4931,9 +4933,9 @@
         type specified for ident is T .
       P6: |
         If, in the declaration ‘‘T D1’’, D1 has the form
-        <code>
+        <pre><code>
         ( D )
-        </code>
+        </code></pre>
         then ident has the type specified by the declaration ‘‘T D’’. Thus, a
         declarator in parentheses is identical to the unparenthesized
         declarator, but the binding of complicated declarators may be altered
@@ -4962,10 +4964,10 @@
           EXAMPLE The following pair of declarations demonstrates the
           difference between a ‘‘variable pointer to a constant value’’ and a
           ‘‘constant pointer to a variable value’’.
-          <code>
+          <pre><code>
             const int *ptr_to_constant;
             int *const constant_ptr;
-          </code>
+          </code></pre>
           The contents of any object pointed to by ptr_to_constant shall not be
           modified through that pointer, but ptr_to_constant itself may be
           changed to point to another object. Similarly, the contents of the
@@ -4974,10 +4976,10 @@
         P4: |
           The declaration of the constant pointer constant_ptr may be clarified
           by including a definition for the type ‘‘pointer to int’’.
-          <code>
+          <pre><code>
             typedef int *int_ptr;
             const int_ptr constant_ptr;
-          </code>
+          </code></pre>
           declares constant_ptr as an object that has type ‘‘const-qualified
           pointer to int’’.
       2:
@@ -5043,18 +5045,18 @@
           two size specifiers evaluate to unequal values.
         P7: |
           EXAMPLE 1
-          <code>
+          <pre><code>
             float fa[11], *afp[17];
-          </code>
+          </code></pre>
           declares an array of float numbers and an array of pointers to float
           numbers.
         P8: |
           EXAMPLE 2
           Note the distinction between the declarations
-          <code>
+          <pre><code>
             extern int *x;
             extern int y[];
-          </code>
+          </code></pre>
           The first declares x to be a pointer to int; the second declares y to
           be an array of int of unspecified size (an incomplete type), the
           storage for which is defined elsewhere.
@@ -5062,7 +5064,7 @@
           EXAMPLE 3
           The following declarations demonstrate the compatibility rules for
           variably modified types.
-          <code>
+          <pre><code>
             extern int n;
             extern int m;
             void fcompat(void)
@@ -5075,7 +5077,7 @@
               r = c; // compatible, but defined behavior only if
                      // n == 6 and m == n+1
             }
-          </code>
+          </code></pre>
         P10: |
           EXAMPLE 4 All declarations of variably modified (VM) types have to be
           at either block scope or function prototype scope. Array objects
@@ -5085,7 +5087,7 @@
           type (that is, a pointer to a VLA type). Finally, all identifiers
           declared with a VM type have to be ordinary identifiers and cannot,
           therefore, be members of structures or unions.
-          <code>
+          <pre><code>
           extern int n;
           int A[n];            // invalid: file scope VLA
           extern int (*p2)[n]; // invalid: file scope VM
@@ -5108,7 +5110,7 @@
             extern int (*r)[m];        // invalid: r has linkage and points to VLA
             static int (*q)[m] = &B;   // valid: q is a static block pointer to VLA
           }
-          </code>
+          </code></pre>
       3:
         title: Function declarators (including prototypes)
         P1: |
@@ -5204,9 +5206,9 @@
         P16: |
           EXAMPLE 1
           The declaration
-          <code>
+          <pre><code>
             int f(void), *fip(), (*pfi)();
-          </code>
+          </code></pre>
           declares a function f with no parameters returning an int, a function
           fip with no parameter specification returning a pointer to an int,
           and a pointer pfi to a function with no parameter specification
@@ -5228,9 +5230,9 @@
         P18: |
           EXAMPLE 2
           The declaration
-          <code>
+          <pre><code>
             int (*apfi[3])(int *x, int *y);
-          </code>
+          </code></pre>
           declares an array apfi of three pointers to functions returning int.
           Each of these functions has two parameters that are pointers to int.
           The identifiers x and y are declared for descriptive purposes only
@@ -5238,9 +5240,9 @@
         P19: |
           EXAMPLE 3
           The declaration
-          <code>
+          <pre><code>
             int (*fpfi(int (*)(long), int))(int, ...);
-          </code>
+          </code></pre>
           declares a function fpfi that returns a pointer to a function
           returning an int. The function fpfi has two parameters: a pointer to a
           function returning an int (with one parameter of type long int), and an
@@ -5250,7 +5252,7 @@
         P20: |
           EXAMPLE 4
           The following prototype has a variably modified parameter.
-          <code>
+          <pre><code>
             void addscalar(int n, int m,
               double a[n][n*m+300], double x);
             int main()
@@ -5267,23 +5269,23 @@
                 // a is a pointer to a VLA with n*m+300 elements
                 a[i][j] += x;
             }
-          </code>
+          </code></pre>
         P21: |
           EXAMPLE 5
           The following are all compatible function prototype declarators.
-          <code>
+          <pre><code>
             double maximum(int n, int m, double a[n][m]);
             double maximum(int n, int m, double a[*][*]);
             double maximum(int n, int m, double a[ ][*]);
             double maximum(int n, int m, double a[ ][m]);
-          </code>
+          </code></pre>
           as are:
-          <code>
+          <pre><code>
             void f(double (* restrict a)[5]);
             void f(double a[restrict][5]);
             void f(double a[restrict 3][5]);
             void f(double a[restrict statuc 3][5]);
-          </code>
+          </code></pre>
           (Note that the last declaration also specifies that the argument
           corresponding to a in any call to f must be a non-null pointer to the
           first of at least three arrays of 5 doubles, which the others do
@@ -5354,10 +5356,10 @@
         is reached in the order of execution. A typedef declaration does not
         introduce a new type, only a synonym for the type so specified. That
         is, in the following declarations:
-        <code>
+        <pre><code>
           typedef T type_ident;
           type_ident D;
-        </code>
+        </code></pre>
         type_ident is defined as a typedef name with the type specified by the
         declaration specifiers in T (known as T ), and the identifier in D has
         the type ‘‘derived-declaratortype-list T ’’ where the
@@ -5367,17 +5369,17 @@
       P4: |
         EXAMPLE 1
         After
-        <code>
+        <pre><code>
           typedef int MILES, KLICKSP();
           typedef struct { double hi, lo; } range;
-        </code>
+        </code></pre>
         the constructions
-        <code>
+        <pre><code>
           MILES distance;
           extern KLICKSP *metricp;
           range x;
           range z, *zp;
-        </code>
+        </code></pre>
         are all valid declarations. The type of distance is int, that of
         metricp is ‘‘pointer to function with no parameter specification
         returning int’’, and that of x and z is the specified structure; zp is
@@ -5386,17 +5388,17 @@
       P5: |
         EXAMPLE 2
         After the declarations
-        <code>
+        <pre><code>
           typedef struct s1 { int x; } t1, *tp1;
           typedef struct s2 { int x; } t2, *tp2;
-        </code>
+        </code></pre>
         type t1 and the type pointed to by tp1 are compatible. Type t1 is also
         compatible with type struct s1, but not compatible with the types
         struct s2, t2, the type pointed to by tp2, or int.
       P6: |
         EXAMPLE 3
         The following obscure constructions
-        <code>
+        <pre><code>
           typedef signed int t;
           typedef int plain;
           struct tag {
@@ -5404,7 +5406,7 @@
             const t:5;
             plain r:5;
           };
-        </code>
+        </code></pre>
         declare a typedef name t with type signed int, a typedef name plain
         with type int, and a structure with three bit-field members, one named
         t that contains values in the range [0, 15], an unnamed constqualified
@@ -5416,10 +5418,10 @@
         (which forces t to be the name of a structure member), while const is a
         type qualifier (which modifies t which is still visible as a typedef
         name). If these declarations are followed in an inner scope by
-        <code>
+        <pre><code>
           t f(t (t));
           long t;
-        </code>
+        </code></pre>
         then a function f is declared with type ‘‘function returning signed int
         with one unnamed parameter with type pointer to function returning
         signed int with one unnamed parameter with type signed int’’, and an
@@ -5429,17 +5431,17 @@
         readability. All three of the following declarations of the signal
         function specify exactly the same type, the first without making use of
         any typedef names.
-        <code>
+        <pre><code>
           typedef void fv(int), (*pfv)(int);
           void (*signal(int, void (*)(int)))(int);
           fv *signal(int, fv *);
           pfv signal(int, pfv);
-        </code>
+        </code></pre>
       P8: |
         EXAMPLE 5 If a typedef name denotes a variable length array type, the
         length of the array is fixed at the time the typedef name is defined, not
         each time it is used:
-        <code>
+        <pre><code>
           void copyt(int n)
           {
             typedef int B[n]; // B is n ints, n evaluated now
@@ -5449,7 +5451,7 @@
             for (int i = 1; i < n; i++)
               a[i-1] = b[i];
           }
-        </code>
+        </code></pre>
     9:
       title: Initialization
       P1: |
@@ -5616,72 +5618,72 @@
       P24: |
         EXAMPLE 1
         Provided that <complex.h> has been \#included, the declarations
-        <code>
+        <pre><code>
           int i = 3.5;
           double complex c = 5 + 3 * I;
-        </code>
+        </code></pre>
         define and initialize i with the value 3 and c with the value 5. 0 + i3. 0.
       P25: |
         EXAMPLE 2
         The declaration
-        <code>
+        <pre><code>
           int x[] = { 1, 3, 5 };
-        </code>
+        </code></pre>
         defines and initializes x as a one-dimensional array object that has
         three elements, as no size was specified and there are three
         initializers.
       P26: |
         EXAMPLE 3
         The declaration
-        <code>
+        <pre><code>
           int y[4][3] =
             { 1, 3, 5 },
             { 2, 4, 6 },
             { 3, 5, 7 },
           };
-        <code>
+        <pre><code>
         is a definition with a fully bracketed initialization: 1, 3, and 5
         initialize the first row of y (the array object y[0]), namely y[0][0],
         y[0][1], and y[0][2]. Likewise the next two lines initialize y[1] and
         y[2]. The initializer ends early, so y[3] is initialized with zeros.
         Precisely the same effect could have been achieved by
-        <code>
+        <pre><code>
           int y[4][3] = {
             1, 3, 5, 2, 4, 6, 3, 5, 7
           };
-        </code>
+        </code></pre>
         The initializer for y[0] does not begin with a left brace, so three
         items from the list are used. Likewise the next three are taken
         successively for y[1] and y[2].
       P27: |
         EXAMPLE 4
         The declaration
-        <code>
+        <pre><code>
           int z[4][3] = {
             { 1 }, { 2 }, { 3 }, { 4 }
           };
-        </code>
+        </code></pre>
         initializes the first column of z as specified and initializes the rest
         with zeros.
       P28: |
         EXAMPLE 5
         The declaration
-        <code>
+        <pre><code>
           struct { int a[3], b; } w[] = { { 1 }, 2 };
-        </code>
+        </code></pre>
         is a definition with an inconsistently bracketed initialization. It
         defines an array with two element structures: w[0].a[0] is 1 and
         w[1].a[0] is 2; all the other elements are zero.
       P29: |
         EXAMPLE 6
         The declaration
-        <code>
+        <pre><code>
           short q[4][3][2] = {
             { 1 },
             { 2, 3 },
             { 4, 5, 6 }
           };
-        </code>
+        </code></pre>
         contains an incompletely but consistently bracketed initialization. It
         defines a three-dimensional array object: q[0][0][0] is 1, q[1][0][0] is
         2, q[1][0][1] is 3, and 4, 5, and 6 initialize q[2][0][0], q[2][0][1],
@@ -5694,15 +5696,15 @@
         subaggregates. If there had been more than six items in any of the lists,
         a diagnostic message would have been issued. The same initialization
         result could have been achieved by:
-        <code>
+        <pre><code>
           short q[4][3][2] = {
             1, 0, 0, 0, 0, 0,
             2, 3, 0, 0, 0, 0,
             4, 5, 6
           };
-        </code>
+        </code></pre>
         or by:
-        <code>
+        <pre><code>
           short q[4][3][2] = {
           {
               { 1 },
@@ -5715,7 +5717,7 @@
               { 6 },
           }
         };
-        </code>
+        </code></pre>
         in a fully bracketed form.
       P30: |
         Note that the fully bracketed and minimally bracketed forms of
@@ -5724,36 +5726,36 @@
         EXAMPLE 7
         One form of initialization that completes array types involves typedef
         names. Given the declaration
-        <code>
+        <pre><code>
           typedef int A[]; // OK - declared with block scope
-        </code>
+        </code></pre>
         the declaration
-        <code>
+        <pre><code>
           A a = { 1, 2 }, b = { 3, 4, 5 };
-        </code>
+        </code></pre>
         is identical to
-        <code>
+        <pre><code>
           int a[] = { 1, 2 }, b[] = { 3, 4, 5 };
-        </code>
+        </code></pre>
         due to the rules for incomplete types.
       P32: |
         EXAMPLE 8
         The declaration
-        <code>
+        <pre><code>
           char s[] = "abc", t[3] = "abc";
-        </code>
+        </code></pre>
         defines ‘‘plain’’ char array objects s and t whose elements are
         initialized with character string literals.  This declaration is
         identical to
-        <code>
+        <pre><code>
           char s[] = { 'a', 'b', 'c', '\0' },
           t[] = { 'a', 'b', 'c' };
-        </code>
+        </code></pre>
         The contents of the arrays are modifiable. On the other hand, the
         declaration
-        <code>
+        <pre><code>
           char *p = "abc";
-        </code>
+        </code></pre>
         defines p with type ‘‘pointer to char’’ and initializes it to point to
         an object with type ‘‘array of char’’ with length 4 whose elements are
         initialized with a character string literal. If an attempt is made to
@@ -5762,36 +5764,36 @@
         EXAMPLE 9
         Arrays can be initialized to correspond to the elements of an
         enumeration by using designators:
-        <code>
+        <pre><code>
           enum { member_one,
             const char *nm[] = {
             [member_two] = "member two",
             [member_one] = "member one",
           };
-        <code>
+        <pre><code>
       P34: |
         EXAMPLE 10
         Structure members can be initialized to nonzero values without
         depending on their order:
-        <code>
+        <pre><code>
           div_t answer = { .quot = 2, .rem = -1 };
-        </code>
+        </code></pre>
       P35: |
         EXAMPLE 11 Designators can be used to provide explicit initialization
         when unadorned initializer lists might be misunderstood:
-        <code>
+        <pre><code>
           struct { int a[3], b; } w[] =
             { [0].a = {1}, [1].a[0] = 2 };
-        </code>
+        </code></pre>
       P36: |
         EXAMPLE 12
         Space can be ‘‘allocated’’ from both ends of an array by using a single
         designator:
-        <code>
+        <pre><code>
           int a[MAX] = {
             1, 3, 5, 7, 9, [MAX-5] = 8, 6, 4, 2, 0
           };
-        </code>
+        </code></pre>
       P37: |
         In the above, if MAX is greater than ten, there will be some
         zero-valued elements in the middle; if it is less than ten, some of the
@@ -5800,9 +5802,9 @@
       P38: |
         EXAMPLE 13
         Any member of a union can be initialized:
-        <code>
+        <pre><code>
           union { /* ... */ } u = { .any_member = 42 };
-        </code>
+        </code></pre>
     10:
       title: Static assertions
       P1: |
@@ -5907,27 +5909,27 @@
         for its side effects only, the discarding of its value may be made
         explicit by converting the expression to a void expression by means of a
         cast:
-        <code>
+        <pre><code>
           int p(int);
           /* ... */
           (void)p(0);
-        </code>
+        </code></pre>
       P5: |
         EXAMPLE 2
         In the program fragment
-        <code>
+        <pre><code>
           char *s;
           /* ... */
           while (*s++ != '\0')
             ;
-        </code>
+        </code></pre>
         a null statement is used to supply an empty loop body to the iteration
         statement.
       P6: |
         EXAMPLE 3
         A null statement may also be used to carry a label just before the
         closing } of a compound statement.
-        <code>
+        <pre><code>
           while (loop1) {
             /* ... */
             while (loop2) {
@@ -5939,7 +5941,7 @@
             /* ... */
           end_loop1: ;
           }
-        </code>
+        </code></pre>
 
     4:
       title: Selection statements
@@ -6017,7 +6019,7 @@
         P7: |
           EXAMPLE
           In the artificial program fragment
-          <code>
+          <pre><code>
             switch (expr)
             {
               int i = 4;
@@ -6028,7 +6030,7 @@
             default:
               printf("%d\n", i);
             }
-          </code>
+          </code></pre>
           the object whose identifier is i exists with automatic storage
           duration (within the block) but is never initialized, and thus if the
           controlling expression has a nonzero value, the call to the printf
@@ -6141,7 +6143,7 @@
             3. The code to determine the next operation is at the head of the
             loop. (To allow it to be reached by continue statements, for
             example.)
-            <code>
+            <pre><code>
               /* ... */
               goto first_time;
               for (;;) {
@@ -6158,12 +6160,12 @@
                 // handle other operations
                 /* ... */
               }
-            </code>
+            </code></pre>
         P4: |
           EXAMPLE 2 A goto statement is not allowed to jump past any
           declarations of objects with variably modified types. A jump within
           the scope, however, is permitted.
-          <code>
+          <pre><code>
             goto lab3;       // invalid: going INTO scope of VLA.
             {
               double a[n];
@@ -6176,7 +6178,7 @@
               a[j] = 6.6;
             }
             goto lab4;     // invalid: going INTO scope of VLA.
-          </code>
+          </code></pre>
       2:
         title: The continue statement
         P1: |
@@ -6187,32 +6189,32 @@
           A continue statement causes a jump to the loop-continuation portion
           of the smallest enclosing iteration statement; that is, to the end of
           the loop body. More precisely, in each of the statements
-          <code>
+          <pre><code>
             while (/* ... */) {
               /* ... */
               continue;
               /* ... */
             contin: ;
             }
-          </code>
+          </code></pre>
 
-          <code>
+          <pre><code>
             do {
               /* ... */
               continue;
               /* ... */
             contin: ;
             } while (/* ... */);
-          </code>
+          </code></pre>
 
-          <code>
+          <pre><code>
             for (/* ... */) {
               /* ... */
               continue;
               /* ... */
             contin: ;
             }
-          </code>
+          </code></pre>
           unless the continue statement shown is in an enclosed iteration
           statement (in which case it is interpreted within that statement), it
           is equivalent to goto contin;.<foot>Following the contin: label is a
@@ -6251,7 +6253,7 @@
           used to remove this extra range and precision.</foot>
         P4: |
           EXAMPLE In:
-          <code>
+          <pre><code>
             struct s { double i; } f(void);
             union {
               struct {
@@ -6269,7 +6271,7 @@
             }
             /* ... */
             g.u2.f3 = f();
-          </code>
+          </code></pre>
           there is no undefined behavior, although there would be if the
           assignment were done directly (without using a function call to fetch
           the value).
@@ -6329,7 +6331,7 @@
         <foot>
         The intent is that the type category in a function definition cannot be
         inherited from a typedef:
-        <code>
+        <pre><code>
           typedef int F(void);          // type F is ‘‘function with no parameters
                                         // returning int’’
           F f, g;                       // f and g both have type compatible with F
@@ -6341,7 +6343,7 @@
           F *((e))(void) { /* ... */ }  // same: parentheses irrelevant
           int (*fp)(void);              // fp points to a function that has type F
           F *Fp;                        // Fp points to a function that has type F 
-        </code>
+        </code></pre>
         </foot>
       P3: >
         The return type of a function shall be void or a complete object type
@@ -6400,26 +6402,26 @@
       P13: |
         EXAMPLE 1
         In the following:
-        <code>
+        <pre><code>
           extern int max(int a, int b)
           {
             return a > b ? a : b;
           }
-        </code>
+        </code></pre>
         extern is the storage-class specifier and int is the type specifier;
         max(int a, int b) is the function declarator; and
-        <code>
+        <pre><code>
           { return a > b ? a : b; }
-        </code>
+        </code></pre>
         is the function body. The following similar definition uses the
         identifier-list form for the parameter declarations:
-        <code>
+        <pre><code>
           extern int max(a, b)
           int a, b;
           {
             return a > b ? a : b;
           }
-        </code>
+        </code></pre>
         Here int a, b; is the declaration list for the parameters. The
         difference between these two definitions is that the first form acts as
         a prototype declaration that forces conversion of the arguments of
@@ -6427,27 +6429,27 @@
       P14: |
         EXAMPLE 2
         To pass one function to another, one might say
-        <code>
+        <pre><code>
           int f(void);
           /* ... */
           g(f);
-        </code>
+        </code></pre>
         Then the definition of g might read
-        <code>
+        <pre><code>
           void g(int (*funcp)(void))
           {
             /* ... */
             (*funcp)(); /* or funcp(); ... */
           }
-        </code>
+        </code></pre>
         or, equivalently,
-        <code>
+        <pre><code>
           void g(int func(void))
           {
             /* ... */
             func(); /* or (*func)(); ... */
           }
-        </code>
+        </code></pre>
     2:
       title: External object definitions
       P1: |
@@ -6491,9 +6493,9 @@
       P5: |
         EXAMPLE 2
         If at the end of the translation unit containing
-        <code>
+        <pre><code>
           int i[];
-        </code>
+        </code></pre>
         the array i still has incomplete type, the implicit initializer causes
         it to have one element, which is set to zero on program startup.
 ## TODO: Section 6.10

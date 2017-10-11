@@ -1,5 +1,6 @@
 'use_strict'
 
+// WARNING: Unused function
 function generateColor() {
   function basicColor (mix) {
     return Math.floor((Math.floor(Math.random()*256)+mix)/2)
@@ -12,6 +13,11 @@ function generateColor() {
     '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
   return className
 }
+
+function getColor(i) {
+  return 'color' + (i % 100)
+}
+
 
 function createStyle() {
   let style = document.createElement('style')
@@ -30,7 +36,7 @@ function getSTDSection(section) {
     p = p[ns[i]]
     title += ns[i] + '.'
     if (p['title'])
-      content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
+      content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
   }
   // if has a paragraph
   if (p['P'+ns[i]]) {
@@ -40,7 +46,7 @@ function getSTDSection(section) {
     p = p[ns[i]]
     title += ns[i]
     if (p['title'])
-      content += '<h'+(i+1)+'>'+ns[i]+'. '+p['title']+'</h'+(i+1)+'>'
+      content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
     let j = 1
     while (p['P'+j]) {
       content += p['P'+j] + '</br>'
@@ -53,7 +59,7 @@ function getSTDSection(section) {
   div.children('foot').each(function(i) {
     let n = '['+(i+1)+']'
     $(this).replaceWith(n)
-    div.append('<div>'+n+'. '+ $(this).text()+'</div>')
+    div.append('<div style="margin-top: 5px;">'+n+'. '+ $(this).html()+'</div>')
   })
   return {title: title, data: div}
 }
@@ -70,6 +76,7 @@ function getSTDSentence(section) {
   return content
 }
 
+// TODO: function not being used anymore
 function parseCerberusResult(res) {
   function countLines(str) {
     return str.split(/\r\n|\r|\n/).length - 1

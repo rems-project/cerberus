@@ -680,7 +680,7 @@ let pp_tag_definition (tag, def) =
         ) ^^ P.semi
 
 let pp_program_aux pp_annot (startup, sigm) =
-  isatty := Unix.isatty Unix.stdout;
+  isatty := false; (*TODO: Unix.isatty Unix.stdout;*)
   (* Static assersions *)
   begin match sigm.static_assertions with
     | [] ->
