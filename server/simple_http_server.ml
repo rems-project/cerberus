@@ -77,7 +77,7 @@ let loc_range_cmp l1 l2 =
   if l1.init.line = l2.init.line then
     if l1.final.line = l2.final.line then
       if l1.init.col = l2.init.col then
-        l2.final.col - l1.final.col
+        l1.final.col - l2.final.col
       else l1.init.col - l2.init.col
     else l1.final.line - l2.final.line
   else l1.init.line - l2.init.line

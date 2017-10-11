@@ -6,7 +6,8 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
 "ocaml_generated": include
 "pprinters": include
 "parsers": include
-"parsers/cparser": include
+"parsers/ncparser": include
+#"parsers/cparser": include
 "parsers/coreparser": include
 "dependencies/cmdliner-0.9.7/src": include
 
@@ -16,7 +17,8 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
 
 
 
-<parsers/cparser/*.mly>: external_tokens(Tokens), explain
+#<parsers/cparser/*.mly>: external_tokens(Tokens), explain
+<parsers/ncparser/*.mly>: external_tokens(Tokens), explain
 <parsers/coreparser/core_parser.mly>: external_tokens(Core_parser_util), explain
 
 "cmdliner-0.9.7/_build/src": include
