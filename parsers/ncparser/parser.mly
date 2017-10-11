@@ -880,13 +880,18 @@ direct_declarator:
   ptys_ctxt= scoped(parameter_type_list) RPAREN
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 (* TODO: identifier list not supported *)
+| ddecltor= direct_declarator LPAREN ctxt=save_context RPAREN
+    { LF.fun_decl (Params ([], false)) ctxt ddecltor }
+(*
 | ddecltor= direct_declarator LPAREN ctxt=save_context identifier_list? RPAREN
     { LF.fun_decl (Params ([], false)) ctxt ddecltor }
-
+*)
+(*
 identifier_list:
 | var_name
 | identifier_list COMMA var_name
     {}
+*)
 
 pointer:
 | STAR tquals= type_qualifier_list? ptr_decltor= pointer?
