@@ -321,10 +321,6 @@ scoped(X):
 | ctxt=save_context x=X
     { LF.restore_context ctxt; x }
 
-ctxt_scoped(X):
-| ctxt=save_context x=X
-    { LF.restore_context ctxt; (x, ctxt) }
-
 declarator_varname:
 | decl = declarator
     { LF.declare_varname (LF.identifier decl); decl }
@@ -674,7 +670,9 @@ declaration_specifiers_typedef:
 | ts_specs= list_eq1_eq1(TYPEDEF,type_specifier_unique, declaration_specifier)
 | ts_specs= list_eq1_ge1(TYPEDEF,type_specifier_nonunique, declaration_specifier)
     { let (_, ts, ss) = ts_specs in
-      { (concat_specs ss) with type_specifiers= ts; } }
+      let specs = concat_specs ss in
+    { specs with storage_classes= SC_typedef::specs.storage_classes;
+                 type_specifiers= ts; } }
 
 init_declarator_list(declarator): (* NOTE: the list is in reverse *)
 | idecl= init_declarator(declarator)
@@ -854,36 +852,36 @@ alignment_specifier:
 
 declarator:
 | dd= direct_declarator
-  { dd }
+    { dd }
 | pdecl= pointer dd= direct_declarator
-  { LF.pointer_decl pdecl dd }
+    { LF.pointer_decl pdecl dd }
 
 direct_declarator:
 | i = general_identifier
-  { LF.identifier_decl (Loc_point $startpos(i)) i }
+    { LF.identifier_decl (Loc_point $startpos(i)) i }
 | LPAREN save_context decltor= declarator RPAREN
-  { LF.declarator_decl decltor }
+    { LF.declarator_decl decltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
   expr_opt= assignment_expression? RBRACK
-  { LF.array_decl (ADecl (Loc_region ($startpos, $endpos, None),
-      option [] List.rev tquals_opt, false,
-      map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
+    { LF.array_decl (ADecl (Loc_region ($startpos, $endpos, None),
+        option [] List.rev tquals_opt, false,
+        map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
 | ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list? expr= assignment_expression RBRACK
-  { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt,
-      true, Some (ADeclSize_expression expr))) ddecltor }
+    { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt,
+        true, Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
-  { LF.array_decl (ADecl (Loc_unknown, List.rev tquals, true,
-      Some (ADeclSize_expression expr))) ddecltor }
+    { LF.array_decl (ADecl (Loc_unknown, List.rev tquals, true,
+        Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
-  { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt, false,
-      Some ADeclSize_asterisk)) ddecltor }
+    { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt, false,
+        Some ADeclSize_asterisk)) ddecltor }
 | ddecltor= direct_declarator LPAREN
-  ptys_ctxt= ctxt_scoped(parameter_type_list) RPAREN
-  { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
+  ptys_ctxt= scoped(parameter_type_list) RPAREN
+    { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 (* TODO: identifier list not supported *)
-| ddecltor= direct_declarator LPAREN save_context identifier_list? RPAREN
-  { ddecltor }
+| ddecltor= direct_declarator LPAREN ctxt=save_context identifier_list? RPAREN
+    { LF.fun_decl (Params ([], false)) ctxt ddecltor }
 
 identifier_list:
 | var_name
@@ -902,9 +900,9 @@ type_qualifier_list: (* NOTE: the list is in reverse *)
 
 parameter_type_list:
 | param_decls= parameter_list ctxt= save_context
-    { Params (List.rev param_decls, false) }
+    { (Params (List.rev param_decls, false), ctxt) }
 | param_decls= parameter_list COMMA ELLIPSIS ctxt= save_context
-    { Params (List.rev param_decls, true)  }
+    { (Params (List.rev param_decls, true), ctxt)  }
 
 parameter_list: (* NOTE: the list is in reverse *)
 | param_decl= parameter_declaration
@@ -951,8 +949,12 @@ direct_abstract_declarator:
   { DAbs_array (dabs_decltor, ADecl (Loc_unknown, [], false,
       Some ADeclSize_asterisk)) }
 | dabs_decltor= ioption(direct_abstract_declarator) LPAREN
-    param_tys_opt= scoped(parameter_type_list)? RPAREN
-  { DAbs_function (dabs_decltor, option (Params ([], false)) id param_tys_opt) }
+    param_tys_ctxt_opt = scoped(parameter_type_list)? RPAREN
+  { match param_tys_ctxt_opt with
+    | Some (param_tys, _) ->
+      DAbs_function (dabs_decltor, param_tys)
+    | None ->
+      DAbs_function (dabs_decltor, Params ([], false)) }
 
 
 (* §6.7.8 Type definitions *)

@@ -17,7 +17,7 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
 
 
 
-# <parsers/cparser/*.mly>: external_tokens(Tokens), explain
+#<parsers/cparser/*.mly>: external_tokens(Tokens), explain
 <parsers/ncparser/*.mly>: external_tokens(Tokens), explain
 <parsers/coreparser/core_parser.mly>: external_tokens(Core_parser_util), explain
 

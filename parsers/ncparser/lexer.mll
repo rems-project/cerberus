@@ -58,16 +58,16 @@ let keywords: (string * Tokens.token) list = [
     "_Bool"          , BOOL;
     "_Complex"       , COMPLEX;
     "_Generic"       , GENERIC;
-(*    "_Imaginary"     , IMAGINARY; *)
+    "_Imaginary"     , IMAGINARY;
     "_Noreturn"      , NORETURN;
     "_Static_assert" , STATIC_ASSERT;
     "_Thread_local"  , THREAD_LOCAL;
-    
+
     "assert", ASSERT;
     "offsetof", OFFSETOF;
     "__cerbvar_va_start", VA_START;
     "__cerbvar_va_arg", VA_ARG;
-    
+
     "__cerb_printtype", PRINT_TYPE;
   ]
 
@@ -429,7 +429,7 @@ and initial = parse
 
   | identifier as id
     { try Hashtbl.find lexicon id
-       with Not_found -> NAME id
+      with Not_found -> NAME id
     }
   | eof
       { EOF }
@@ -443,21 +443,23 @@ and initial = parse
   type lexer_state =
     | LSRegular
     | LSAtomic
-    | LSIdent of string
+    | LSIdentifier of string
 
   let lexer_state = ref LSRegular
 
   let lexer lexbuf =
     match !lexer_state with
-    | LSIdent id ->
+    | LSIdentifier i ->
         lexer_state := LSRegular;
-        if Lexer_feedback.is_typedefname id then TYPE else VARIABLE
+        prerr_endline (if Lexer_feedback.is_typedefname i then "TYPE" else "VAR");
+        if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
     | LSAtomic
     | LSRegular ->
         let token = initial lexbuf in
+        prerr_endline (string_of_token token);
         match !lexer_state, token with
-        | _, NAME id ->
-            lexer_state := LSIdent id;
+        | _, NAME i ->
+            lexer_state := LSIdentifier i;
             token
         | LSAtomic, LPAREN ->
             lexer_state := LSRegular;
@@ -469,4 +471,5 @@ and initial = parse
         | _, _ ->
             lexer_state := LSRegular;
             token
+
 }

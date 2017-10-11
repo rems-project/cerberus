@@ -96,7 +96,7 @@ let c_frontend f =
     |> Exception.rbind Cparser_driver.parse
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
-    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit false (not $ List.mem FOut !!cerb_conf.ppflags))
+    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit true (not $ List.mem FOut !!cerb_conf.ppflags))
     
 (* TODO TODO TODO *)
     |> Exception.rbind (fun z ->
