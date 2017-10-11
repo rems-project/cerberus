@@ -6,6 +6,9 @@ class UI {
     this.views = []           /* List of existing views */
     this.currentView = null   /* Current displayed view */
 
+    this.dom = $('#views');
+    //this.dom.prevWidth = this.dom.width();
+
     window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
 
@@ -80,12 +83,18 @@ class UI {
       this.request('graph', (data) => this.currentView.graph.setValue(data))
     })
 
-    // Pretty print AST IRs
-    $('#cabs').on('click', () => this.ast ('cabs'))
-    $('#ail') .on('click', () => this.ast ('ail'))
-    $('#core').on('click', () => this.ast ('core'))
+    // Pretty print elab IRs
+    $('#cabs').on('click', () => this.elab ('cabs'))
+    $('#ail') .on('click', () => this.elab ('ail'))
+    $('#core').on('click', () => this.elab ('core'))
+
+    // Compilers
+    $('#compile').on('click', () => {
+      this.currentView.newPane.add(new TabAsm(defaultCompiler))
+    })
 
     // Views
+    // TODO tabs are not being used
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
     $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
     $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
@@ -106,7 +115,7 @@ class UI {
           let tab = new Tab('Help')
           tab.dom.content.addClass('help');
           tab.dom.content.append(data)
-          this.currentView.secondaryPane.add(tab)
+          this.currentView.newPane.add(tab)
           tab.setActive()
           this.done()
         }
@@ -117,6 +126,9 @@ class UI {
     $('#rems').on('click', () => {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
+
+    window.setInterval(() => this.elab(), 2000);
+
   }
 
   setCurrentView(view) {
@@ -129,7 +141,7 @@ class UI {
 
   add (view) {
     this.views.push(view)
-    $('#views').append(view.dom)
+    this.dom.append(view.dom)
 
     let nav = $('<a href="#">'+view.title+'</a>')
     $('#dropdown-views').append(nav)
@@ -144,39 +156,36 @@ class UI {
     $.ajax({
       url:  '/'+mode,
       type: 'POST',
+      headers: {Accept: 'application/json'},
       data: this.currentView.getValue(),
       success: (data, status, query) => {
-        if (query.getResponseHeader('cerberus') == 0)
-          onSuccess(data)
-        else
-          this.currentView.console.appendValue(data)
+        onSuccess(data);
         this.done()
       }
     })
   }
 
   exec (mode) {
-    this.request(mode, (data) => this.currentView.exec.setValue(data))
+    this.request(mode, (data) => {
+      this.currentView.update(data)
+      this.currentView.highlight()
+      this.currentView.exec.setValue(data.stdout)
+      if (data.stderr != "")
+        this.currentView.console.setValue(data.stderr)
+    })
   }
 
-  ast (mode) {
-    this.request(mode, (data) => {
-      if (mode == 'core') {
-        let result = parseCerberusResult(data)
-
-        // Set colors for every location
-        for (let i = 0; i < result.locations.length; i++)
-          result.locations[i].color = generateColor()
-
-        this.currentView[mode].setValue(result.ast)
-        this.currentView.source.dirty = false
-        this.currentView [mode].dirty = false
-        this.currentView.locations = result.locations
-        this.currentView.highlight()
-      } else {
-        this.currentView[mode].setValue(data)
-      }
-    })
+  elab (lang) {
+    let view = this.currentView
+    if (!view.dirty) {
+      if (lang) view.newTab(lang)
+    } else {
+      this.request("elab", (data) => {
+        view.update(data);
+        view.source.highlight()
+        if (lang) view.newTab(lang)
+      })
+    }
   }
 
   wait () {
@@ -199,11 +208,24 @@ class UI {
 
 const ui = new UI()
 const style = createStyle()
-let std = null
+let std             = null
+let defaultCompiler = null
+let compilers       = null
 
 // Get standard
 $.getJSON('std.json').done((res) => std = res).fail(() => {
   console.log('Failing when trying to download "std.json"')
+})
+
+// Get list of compilers
+$.ajax({
+  headers: {Accept: 'application/json'},
+  url: 'https://gcc.godbolt.org/api/compilers',
+  type: 'GET',
+  success: (data, status, query) => {
+    defaultCompiler = $.grep(data, (e) => e.id == 'clang500')[0]
+    compilers       = data
+  }
 })
 
 // Get default buffer

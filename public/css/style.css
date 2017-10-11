@@ -14,9 +14,13 @@ html, body {
   margin: 0;
   padding: 0;
   background-color: #FFFFFF;
-  height: 100%;
   display: flex;
   flex-direction:column;
+  height: 100%;
+}
+
+#views {
+  height: calc(100% - 28px); /* minus page header height */
 }
 
 #header {
@@ -25,6 +29,7 @@ html, body {
   background-color: #5f5f5f;
   line-height: 1.5;
   display: inline-block;
+  min-width: 750px;
 }
 
 #header ul {
@@ -85,6 +90,8 @@ html, body {
   position: absolute;
   z-index: 100;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: 300px;
+  overflow-y: scroll;
 }
 
 .dropdown-content a {
@@ -114,6 +121,26 @@ html, body {
   display: block;
 }
 
+.pane-content {
+  height: calc(100% - 20px); /* minus tab height */
+}
+
+.tab-content {
+  height: 100%;
+}
+
+
+.tab-compiler a {
+  display: block;
+  text-decoration: none;
+  padding: 2px 9px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+}
+
+.tab-compiler a:hover {
+  background-color: #7f7f7f;
+}
 /*********** Panes ************/
 
 .view {
@@ -126,6 +153,15 @@ html, body {
   border: 1px solid #ccc;
   background-color: #f1f1f1;
   font-size: 0;
+  overflow: hidden;
+}
+
+.tablinks-wrapper {
+  overflow-x: scroll;
+}
+
+.tablinks {
+  min-width: 750px;
 }
 
 .tablink {
@@ -170,7 +206,6 @@ html, body {
 }
 
 .tablink .close {
-  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg==);
   background-position: 50% 50%;
   background-repeat: no-repeat;
   display: inline-block;
@@ -218,9 +253,28 @@ html, body {
 }
 
 .pane .CodeMirror {
-  height: calc(100vh - 50px);
+  height: 100%;
   border: 1px solid #eee;
 }
+
+.tab-compiler {
+  height: 100%;
+}
+
+.tab-compiler {
+  height: 100%;
+}
+
+
+
+.pane .tab-compiler .CodeMirror {
+  height: 100%;
+}
+
+.CodeMirror-placeholder {
+  color: #888;
+}
+
 
 .cm-std {
   cursor: pointer;
@@ -229,6 +283,10 @@ html, body {
 
 .grabbing {
   cursor: crosshair;
+}
+
+code {
+    font-family: monospace;
 }
 
 .tooltip {
@@ -243,7 +301,8 @@ html, body {
   overflow: visible;
   padding: 5px 8px;
   margin-top: 10px;
-  line-height: 16px;
+  line-height: 11px;
+  font-size: 11px;
   border-radius: 4px;
   text-align: left;
   color: #fff;
@@ -256,17 +315,25 @@ html, body {
   transition: all 0.3s ease-out;
 }
 
+.tooltip-text h3 {
+  margin: 6px;
+}
+
+.tooltip-text ul {
+  margin: 0;
+}
+
 .std {
   margin: auto;
   width: 90%;
 }
 
 .std hr {
-  margin-top:20px;
+  margin-top:10px;
 }
 
 .help {
-  height: calc(100vh - 60px);
+  height: 100%;
   overflow: auto;
   flex: 1 0 0;
   padding: 15px;
@@ -296,7 +363,7 @@ html, body {
 }
 
 .svg {
-  height: calc(100vh - 60px);
+  height: 100%;
   border: 1px solid #eee;
   margin: 0px auto;
 }
@@ -307,6 +374,7 @@ svg {
 }
 
 .graph {
+  height: 100%;
   padding-right: 4px;
 }
 
