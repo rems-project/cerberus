@@ -54,7 +54,7 @@ let rec concat_specs = function
   FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
   STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
   ALIGNOF ATOMIC BOOL COMPLEX GENERIC IMAGINARY NORETURN STATIC_ASSERT
-  THREAD_LOCAL ATOMIC_LPAREN
+  THREAD_LOCAL
 
 (* §6.4.2 Identifiers *)
 %token<string> NAME (* NAME is either an variable identifier or a type name *)
@@ -333,7 +333,7 @@ declarator_typedefname:
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
-    { CabsIdentifier (Loc_point $startpos, i) }
+    { LF.declare_varname i; CabsIdentifier (Loc_point $startpos, i) }
 
 
 (* §6.5.1 Primary expressions *)
@@ -816,7 +816,6 @@ enumerator:
 (* §6.7.2.4 Atomic type specifiers *)
 atomic_type_specifier:
 | ATOMIC LPAREN ty= type_name RPAREN
-| ATOMIC ATOMIC_LPAREN ty= type_name RPAREN
     { TSpec_Atomic ty }
 
 
@@ -916,7 +915,7 @@ parameter_list: (* NOTE: the list is in reverse *)
     { param_decl::param_decls }
 
 parameter_declaration:
-| specifs= declaration_specifiers decltor= declarator
+| specifs= declaration_specifiers decltor= declarator_varname
     { PDeclaration_decl (specifs, LF.cabs_of_declarator decltor) }
 | specifs= declaration_specifiers abs_decltor_opt= abstract_declarator?
     { PDeclaration_abs_decl (specifs, abs_decltor_opt) }
