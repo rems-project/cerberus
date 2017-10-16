@@ -148,11 +148,11 @@ and generic_association 'a =
   | AilGAdefault of expression 'a
 
 and expression 'a [name = "e*"] =
-  | AnnotatedExpression of 'a * Loc.t * expression_ 'a
+  | AnnotatedExpression of 'a * list string * Loc.t * expression_ 'a
 
 instance forall 'a. (Located (expression 'a))
   let locOf a_expr =
-    let (AnnotatedExpression _ loc _) = a_expr in
+    let (AnnotatedExpression _ _ loc _) = a_expr in
     loc
 end
 
@@ -509,7 +509,7 @@ let rec expressionEqual' (eq_A : 'a -> 'a -> bool) e1 e2 =
   end
 and expressionEqual eq_A e1 e2 =
   match (e1, e2) with
-    | (AnnotatedExpression a1 _ e1, AnnotatedExpression a2 _ e2) ->
+    | (AnnotatedExpression a1 _ _ e1, AnnotatedExpression a2 _ _ e2) ->
         eq_A a1 a2 && expressionEqual' eq_A e1 e2
   end
 
@@ -751,7 +751,7 @@ let rec equiv_expression_ e1 e2 =
   end
 and equiv_expression e1 e2 =
   match (e1, e2) with
-  | (AnnotatedExpression _ _ e1, AnnotatedExpression _ _ e2) -> equiv_expression_ e1 e2
+  | (AnnotatedExpression _ _ _ e1, AnnotatedExpression _ _ _ e2) -> equiv_expression_ e1 e2
   end
 
 let equiv_arguments a1 a2 =

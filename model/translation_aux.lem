@@ -163,7 +163,7 @@ end
 
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
-  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _) -> (qs, ty)
+  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _ _) -> (qs, ty)
   | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
 
