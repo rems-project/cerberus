@@ -404,6 +404,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () loc expr_) =
   match expr_ with
     | AilEunary (Plus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
+        E.push_std "§6.5.3.3#1, sentence 1" >>= fun _ ->
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
           let mk_conversion =
@@ -1308,7 +1309,9 @@ STD_ "§6.5.2.1#1" $
         E.return (AilEprint_type a_e, gtc)
   end
   >>= fun (expr_', gtc) ->
-    perform_decays sigm ctx (AnnotatedExpression gtc loc expr_')
+  E.pop_std
+  >>= fun ss ->
+  perform_decays sigm ctx (AnnotatedExpression gtc loc expr_')
 
 
 and annotate_generic_association sigm gamm = function

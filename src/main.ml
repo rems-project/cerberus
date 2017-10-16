@@ -97,7 +97,9 @@ let c_frontend f =
     |> set_progress 10
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit true (not $ List.mem FOut !!cerb_conf.ppflags))
-    
+      (*
+  |> Exception.fmap (fun (z, _) -> z)
+    *)
 (* TODO TODO TODO *)
     |> Exception.rbind (fun z ->
          (* TODO: yuck *)
@@ -123,6 +125,10 @@ let c_frontend f =
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
+    |> Exception.fmap (fun (counter, (z, annots)) ->
+        (* Print type annotations *)
+        ignore (List.map (List.map print_endline) annots);
+        (counter, z))
     |> begin
       if !Debug_ocaml.debug_level >= 4 then
         Exception.fmap (fun z -> z)
@@ -145,6 +151,7 @@ let c_frontend f =
       |> pass_message "5. Core to Core simplication completed!"
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *)
 *)
+
 
 let (>>=) = Exception.except_bind
 
