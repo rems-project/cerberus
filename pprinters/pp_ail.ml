@@ -491,9 +491,10 @@ let rec pp_constant = function
 
 
 let rec pp_expression_aux mk_pp_annot a_expr =
-  let rec pp p (AnnotatedExpression (annot, loc, expr)) =
+  let rec pp p (AnnotatedExpression (annot, std_annots, loc, expr)) =
     let p' = precedence expr in
     let pp z = P.group (pp p' z) in
+    ignore (List.map print_endline std_annots);
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
         | AilEunary (PostfixIncr as o, e)

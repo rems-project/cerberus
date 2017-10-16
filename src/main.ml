@@ -115,12 +115,12 @@ let c_frontend f =
     
     |> set_progress 11
     |> pass_message "2. Cabs -> Ail completed!"
-    |> begin
+  (*  |> begin
       if !Debug_ocaml.debug_level >= 4 then
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail.pp_program -| snd)
       else
         Exception.fmap (fun z -> z)
-    end
+    end*)
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program z))
