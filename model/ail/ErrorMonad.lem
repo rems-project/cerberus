@@ -3,8 +3,7 @@ import Loc Exception
 
 (* HACK: most of the inlines are only added to prevent Lem's renaming *)
 
-type annots =
-  list (list string)
+type annots = list (list string)
 
 type errorM 'a =
   ErrorM of (annots -> either (Loc.t * typing_error) ('a * annots))
@@ -19,12 +18,18 @@ val fail: forall 'a. Loc.t -> typing_error -> errorM 'a
 let inline fail loc err =
   ErrorM (fun _ -> Left (loc, err))
 
-val push_std: string -> errorM unit
-let push_std a =
-  ErrorM (fun annots -> Right ((), [a]::annots))
+val add: string -> errorM unit
+let add a = ErrorM (fun ts ->
+    match ts with
+    | [] -> Right ((), [[a]])
+    | q::qs -> Right ((), (a::q)::qs)
+    end)
 
-val pop_std: errorM (list string)
-let pop_std = ErrorM (fun ts ->
+val pack: errorM unit
+let pack = ErrorM (fun ts -> Right ((), []::ts))
+
+val unpack: errorM (list string)
+let unpack = ErrorM (fun ts ->
   match ts with
     | [] -> Right ([], [])
     | q::qs -> Right (q, qs)

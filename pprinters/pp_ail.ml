@@ -494,7 +494,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, std_annots, loc, expr)) =
     let p' = precedence expr in
     let pp z = P.group (pp p' z) in
-    ignore (List.map print_endline std_annots);
+    (*!^"AnnotatedExpression" ^^^
+    P.parens (comma_list P.string std_annots) ^^^ P.parens*) (
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
         | AilEunary (PostfixIncr as o, e)
@@ -577,7 +578,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         
         | AilEprint_type e ->
             pp e
-      )) in
+      ))) in
   pp None a_expr
 
 and pp_generic_association_aux pp_annot = function
