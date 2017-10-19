@@ -1175,7 +1175,6 @@ let rec desugar_type_specifiers specs =
               end
           
           | _ ->
-              E.print_debugM 1 (fun () -> stringFromList Pp.stringFromCabs_type_specifier specs) >>
               E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
         end
 end

@@ -404,7 +404,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
   match expr_ with
     | AilEunary (Plus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
-        E.push_std "§6.5.3.3#1, sentence 1" >>= fun _ ->
+        E.add "§6.5.3.3#1, sentence 1" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
           let mk_conversion =
@@ -415,6 +415,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEunary (Minus as uop) e ->
         (* STD §6.5.3.3#1, sentence 1 *)
+        E.add "§6.5.3.3#1, sentence 1" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
           let mk_conversion =
@@ -426,6 +427,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEunary (Bnot as uop) e ->
         (* STD §6.5#4, sentence 1 *)
         (* STD §6.5.3.3#1, sentence 2 *)
+        E.add "STD §6.5.3.3#1, sentence 2" >>
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_integer gty then
           E.return (AilEunary uop a_e, GenRValueType (integer_promote gty))
@@ -434,6 +436,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEunary (Address as uop) e ->
         (* STD §6.5.3.2#1 *)
+        E.add "§6.5.3.2#1" >>
         annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
           | GenRValueType (GenFunction hasProto ty params isVariadic) ->
@@ -534,6 +537,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEcompound ty e ->
         (* STD §6.5.2.5#1 *)
+        E.add "§6.5.2.5#1" >>
         if    (AAux.is_complete sigm ty && AAux.is_object ty)
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
@@ -660,6 +664,7 @@ OLD(sigma_declaration)
     
     | AilEbinary e1 Comma e2 ->
         (* STD §6.5.17#3, sentence 3 *)
+        E.add "§6.5.17#3, sentence 3" >>
         annotate_rvalue e1 >>= fun (e1', _  ) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         E.return (AilEbinary e1' Comma e2', GenRValueType gty2)
@@ -708,6 +713,7 @@ OLD(sigma_declaration)
     
     | AilEcall e es ->
         (* STD §6.5.2.2#1 *)
+        E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
           | (e', GenPointer qs (Function has_proto (ret_qs, ret_ty) params is_variadic)) ->
               (* TODO: qualifiers *)
@@ -1174,6 +1180,7 @@ STD_ "§6.5.2.1#1" $
     | AilEsizeof qs ty ->
         wf_lvalue sigm qs ty >>
         (* STD §6.5.3.4#1 *)
+        E.add "§6.5.3.4#1" >>
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
           E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 1")
         else
@@ -1275,12 +1282,14 @@ STD_ "§6.5.2.1#1" $
     
     | AilEconst cst ->
         (* STD §6.5.1#3 *)
+        E.add "§6.5.1#3" >>
         annotate_constant cst >>= fun (cst', gty) ->
         E.return (AilEconst cst', gty)
     
     (* TODO: check *)
     | AilEstr lit ->
         (* STD §6.5.1#4 *)
+        E.add "§6.5.1#4" >>
         annotate_stringLiteral lit
     
     (* TODO: maybe look at the type of inside? *)
@@ -1309,8 +1318,7 @@ STD_ "§6.5.2.1#1" $
         E.return (AilEprint_type a_e, genTypeCategoryOf a_e)
   end
   >>= fun (expr_', gtc) ->
-  E.pop_std
-  >>= fun annots ->
+  E.unpack >>= fun annots ->
   perform_decays sigm ctx (AnnotatedExpression gtc annots loc expr_')
 
 
@@ -1747,6 +1755,7 @@ let rec annotate_statement_ sigm gamm ty stmt =
     | AilSif e s1 s2 ->
         annotate_rvalue e >>= fun (e', gty) ->
         (* STD §6.8.4.1#1 *)
+        E.add "§6.8.4.1#1" >>
         if is_scalar gty then
           annotate_statement s1 >>= fun s1' ->
           annotate_statement s2 >>= fun s2' ->
