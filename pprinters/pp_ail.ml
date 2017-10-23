@@ -9,7 +9,7 @@ open Colour
 
 open Pp_ail_raw
 
-let isatty = ref false
+(* let isatty = ref false *)
 
 
 module P = PPrint
@@ -80,17 +80,17 @@ let lt_precedence p1 p2 =
 
 
 
-let pp_keyword w      = if !isatty then pp_ansi_format [Bold; Cyan] !^ w else !^ w
-let pp_type_keyword w = if !isatty then pp_ansi_format [Green] !^ w else !^ w
-let pp_const   c = if !isatty then pp_ansi_format [Magenta] !^ c else !^ c
-let pp_comment str = if !isatty then pp_ansi_format [Red] !^ str else !^ str
+let pp_keyword w      = !^ (ansi_format [Bold; Cyan] w)
+let pp_type_keyword w = !^ (ansi_format [Green] w)
+let pp_const c        = !^ (ansi_format [Magenta] c)
+let pp_comment str    = !^ (ansi_format [Red] str)
 
 
 let pp_id id = !^ (Pp_symbol.to_string_pretty id)
-let pp_id_obj id = if !isatty then pp_ansi_format [Yellow] !^ (Pp_symbol.to_string_pretty id) else !^ (Pp_symbol.to_string_pretty id)
-let pp_id_label id = if !isatty then pp_ansi_format [Magenta] !^ (Pp_symbol.to_string_pretty id) else !^ (Pp_symbol.to_string_pretty id)
-let pp_id_type id = if !isatty then pp_ansi_format [Green] !^ (Pp_symbol.to_string_pretty id) else !^ (Pp_symbol.to_string_pretty id)
-let pp_id_func id = if !isatty then pp_ansi_format [Bold; Blue] !^ (Pp_symbol.to_string_pretty id) else !^ (Pp_symbol.to_string_pretty id)
+let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
+let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
+let pp_id_type id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty id))
+let pp_id_func id = !^ (ansi_format [Bold; Blue] (Pp_symbol.to_string_pretty id))
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
@@ -491,11 +491,9 @@ let rec pp_constant = function
 
 
 let rec pp_expression_aux mk_pp_annot a_expr =
-  let rec pp p (AnnotatedExpression (annot, std_annots, loc, expr)) =
+  let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
     let p' = precedence expr in
     let pp z = P.group (pp p' z) in
-    (*!^"AnnotatedExpression" ^^^
-    P.parens (comma_list P.string std_annots) ^^^ P.parens*) (
     (if lt_precedence p' p then fun z -> z else P.parens)
       (mk_pp_annot annot (match expr with
         | AilEunary (PostfixIncr as o, e)
@@ -577,8 +575,14 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp_keyword "function_decay" ^^ P.parens (pp e)
         
         | AilEprint_type e ->
-            pp e
-      ))) in
+(*            if !Debug_ocaml.debug_level > 5 then
+*)
+              pp_keyword "__cerb_printtype" ^^ P.parens (pp e)
+(*
+            else
+              pp e
+*)
+      )) in
   pp None a_expr
 
 and pp_generic_association_aux pp_annot = function
@@ -682,7 +686,7 @@ let pp_tag_definition (tag, def) =
         ) ^^ P.semi
 
 let pp_program_aux pp_annot (startup, sigm) =
-  isatty := false; (*TODO: Unix.isatty Unix.stdout;*)
+(*  isatty := false; (*TODO: Unix.isatty Unix.stdout;*) *)
   (* Static assersions *)
   begin match sigm.static_assertions with
     | [] ->
@@ -704,9 +708,8 @@ let pp_program_aux pp_annot (startup, sigm) =
       | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          (if !isatty then !^ "\x1b[31m" else P.empty) ^^
-          !^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty) ^^
-          (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
+          pp_ansi_format [Red] (!^ "// declare" ^^^ pp_id sym ^^^ !^ "as" ^^^ (pp_ctype_human qs ty)) ^^
+          P.hardline ^^
           
           (if !Debug_ocaml.debug_level > 5 then
             (* printing the types in a human readable format *)
@@ -721,11 +724,11 @@ let pp_program_aux pp_annot (startup, sigm) =
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
-          (if !isatty then !^ "\x1b[31m" else P.empty) ^^
-          !^ "// declare" ^^^ pp_id sym ^^^
-          (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-          !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, (ret_qs, ret_ty), params, is_variadic)) ^^
-          (if !isatty then !^ "\x1b[0m" else P.empty) ^^ P.hardline ^^
+          pp_ansi_format [Red] (
+            !^ "// declare" ^^^ pp_id sym ^^^
+            (if has_proto then !^ "WITH PROTO " else P.empty) ^^
+            !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, (ret_qs, ret_ty), params, is_variadic))
+          ) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
             (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
@@ -805,7 +808,7 @@ let pp_genBasicType_raw = function
 
 let pp_genType = function
  | GenVoid ->
-     !^ "GenVoid"
+     !^ "void"
  | GenBasic gbty ->
      pp_genBasicType_raw gbty
   | GenArray (ty, None) ->
@@ -823,7 +826,10 @@ let pp_genType = function
        )
 
  | GenPointer (ref_qs, ref_ty) ->
+     pp_ctype ref_qs ref_ty ^^ P.star
+(*
       !^ "GenPointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
+*)
   | GenStruct sym ->
       !^ "GenStruct" ^^ pp_id sym
   | GenUnion sym ->
