@@ -9,9 +9,6 @@ open Colour
 
 open Pp_ail_raw
 
-(* let isatty = ref false *)
-
-
 module P = PPrint
 
 let (!^ ) = P.(!^)

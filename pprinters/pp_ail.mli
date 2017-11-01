@@ -1,6 +1,7 @@
 open AilSyntax
 open AilTypes
 
+val pp_type_keyword: string -> PPrint.document
 val pp_keyword: string -> PPrint.document
 val pp_const: string -> PPrint.document
 
