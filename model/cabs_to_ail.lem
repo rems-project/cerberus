@@ -2640,7 +2640,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                           end >>
                           
                           E.return ( (sym, d_e) :: acc1
-                                   , (sym, (Just (dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                   , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                         | Nothing ->
                             E.return (acc1, acc2)
                       end

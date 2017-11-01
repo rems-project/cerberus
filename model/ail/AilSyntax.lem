@@ -157,9 +157,8 @@ instance forall 'a. (Located (expression 'a))
 end
 
 
-(* the storage duration must be Nothing iff the identifier is that of a function,
-   the boolean tells whether the object was declared with the register storage-class *)
-type bindings (*[name="b*"]*) = list (identifier * (maybe (storageDuration * bool) * qualifiers * ctype))
+  (* the boolean tells whether the object was declared with the register storage-class *)
+type bindings (*[name="b*"]*) = list (identifier * ((storageDuration * bool) * qualifiers * ctype))
 
 type statement_ 'a [name="s*"] = 
   | AilSskip
@@ -184,8 +183,7 @@ and statement 'a [name="s*"] =
 
 
 type declaration =
-    (* the storage duration is Nothin iff the object was declared with the register storage-class *)
-  | Decl_object   of maybe (storageDuration * bool) * qualifiers * ctype
+  | Decl_object   of (storageDuration * bool) * qualifiers * ctype
     (* has_prototype; return qualifiers and type; parameters types; is_variadic; is_inline; is_Noreturn *)
   | Decl_function of bool * (qualifiers * ctype) * (list (qualifiers * ctype * (* isRegister *)bool)) * bool * bool * bool
 
@@ -215,7 +213,7 @@ type sigma 'a = <|
 |>
 
 
-type gamma = Context.context identifier (maybe (storageDuration * bool) * qualifiers * ctype)
+type gamma = Context.context identifier ((storageDuration * bool) * qualifiers * ctype)
 
 type program 'a = maybe identifier * sigma 'a
 
@@ -979,7 +977,7 @@ let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
 let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
-val parameters_of_bindings: bindings -> list (maybe (storageDuration * bool) * qualifiers * ctype)
+val parameters_of_bindings: bindings -> list ((storageDuration * bool) * qualifiers * ctype)
 
 val type_from_sigma: forall 'a. (ctype * bindings * bool) * maybe (statement 'a) -> ctype
 

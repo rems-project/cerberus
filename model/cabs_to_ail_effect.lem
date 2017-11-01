@@ -314,11 +314,11 @@ let with_scope scope m =
         | Kind_object false ->
             match Map.lookup sym st.external_object_declarations with
               | Just (dur, isRegister, qs, ty) ->
-                  (sym, (Just (dur, isRegister), qs, ty)) :: acc
+                  (sym, ((dur, isRegister), qs, ty)) :: acc
               | Nothing ->
                   match Map.lookup sym st.internal_object_declarations with
                     | Just (dur, isRegister, qs, ty) ->
-                        (sym, (Just (dur, isRegister), qs, ty)) :: acc
+                        (sym, ((dur, isRegister), qs, ty)) :: acc
                     | Nothing ->
                         (* TODO: check *)
                         acc
@@ -1139,7 +1139,7 @@ let extract_program startup_str =
         end
         begin
           Map.map (fun (dur, isRegister, qs, ty) ->
-            A.Decl_object (Just (dur, isRegister)) qs ty
+            A.Decl_object (dur, isRegister) qs ty
           ) st.external_object_declarations
         end
     ) in
@@ -1194,7 +1194,7 @@ let get_sigma_sofar =
         end
         begin
           Map.map (fun (dur, isRegister, qs, ty) ->
-            A.Decl_object (Just (dur, isRegister)) qs ty
+            A.Decl_object ((dur, isRegister)) qs ty
           ) st.external_object_declarations
         end
     ) in

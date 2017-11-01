@@ -245,15 +245,15 @@ let dtree_of_function_definition pp_annot (fun_sym, (param_syms, stmt)) =
         , param_dtrees @ [dtree_of_statement pp_annot stmt] )
 
 let dtree_of_declaration (i, decl) =
-  let pp_maybe_storage = function
-    | Some (sd, b) -> pp_storageDuration sd (*TODO: what is this bool? *)
-    | None -> pp_keyword "register"
+  let pp_storage (sd, isRegister) =
+    pp_storageDuration sd ^^
+    (if isRegister then P.space ^^ pp_keyword "register" else P.empty)
   in
   match decl with
   | Decl_object (msd, qs, cty) ->
     Dnode (pp_ctor "Decl_object" ^^^ pp_id i, filter_opt_list
            [ Some (dtree_of_ctype cty)
-           ; Some (Dleaf (pp_maybe_storage msd))
+           ; Some (Dleaf (pp_storage msd))
            ; guarded_opt (qs.const || qs.restrict || qs.volatile)
                (Dleaf (pp_qualifiers qs))])
   | Decl_function (has_proto, (qs, cty), args, is_var, is_inline, is_noreturn) ->
