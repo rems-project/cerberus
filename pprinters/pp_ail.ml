@@ -609,12 +609,13 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
             (fun (id, (dur_reg_opt, qs, ty)) ->
               if !Debug_ocaml.debug_level > 5 then
                 (* printing the types in a human readable format *)
-                P.parens (
+                P.parens ( P.empty
+                             (* TODO
                   P.optional (fun (dur, isRegister) ->
                     (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
                       (pp_storageDuration dur)
                   ) dur_reg_opt ^^^ pp_ctype_human qs ty
-                ) ^^^ pp_id_obj id
+                ) ^^^ pp_id_obj id *) )
               else
                 pp_ctype qs ty ^^^ pp_id_obj id
                ) bindings ^^ P.semi ^^ P.break 1 ^^

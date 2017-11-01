@@ -594,25 +594,15 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEident sym ->
         match (Context.lookup identifierEqual gamm sym, Context.lookup identifierEqual sigm.declarations sym) with
-          | (Just (dur_opt, qs, ty), Nothing) ->
+          | (Just ((_, isRegister), qs, ty), Nothing) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
-              
-              let isRegister = match dur_opt with
-                | Just (_, b) -> b
-                | Nothing     -> false
-              end in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
-          | (Nothing, Just (Decl_object dur_opt qs ty)) ->
+          | (Nothing, Just (Decl_object (_, isRegister) qs ty)) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
-              
-              let isRegister = match dur_opt with
-                | Just (_, b) -> b
-                | Nothing     -> false
-              end in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
           | (Nothing, Just (Decl_function has_proto (ret_qs, ret_ty) params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
@@ -1936,7 +1926,7 @@ let annotate_sigma sigm =
            ) in
           let bindings = List.map (fun (ident, (qs, ty, isRegister)) ->
             (* STD §6.9.1#9, first sentence *)
-            (ident, (Just (Automatic, isRegister), qs, ty))
+            (ident, ((Automatic, isRegister), qs, ty))
           ) (List.zip param_idents params) in
           if sigma_fresh_bindings bindings sigm then
             annotate_statement sigm (Context.add_bindings bindings Context.empty) ret_ty s >>= fun s' ->
