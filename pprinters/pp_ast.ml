@@ -44,11 +44,25 @@ let pp_doc_tree dtree =
         end
   end
 
+let pp_keyword w      = !^ (ansi_format [Bold; Cyan] w)
+let pp_const c        = !^ (ansi_format [Magenta] c)
+
 let pp_ctor k =
   !^ (ansi_format [Bold; Cyan] k)
 
+let pp_type_keyword w = !^ (ansi_format [Green] w)
+
 let pp_stmt_ctor k =
   !^ (ansi_format [Bold; Magenta] k)
+
+let pp_decl_ctor w = !^ (ansi_format [Bold; Green] w)
+let pp_id_type id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty id))
+
+let pp_cond switch doc =
+  if switch then
+    (^^^) doc
+  else
+    (^^) P.empty
 
 let filter_opt_list xs =
   List.fold_left (fun acc opt -> match opt with None -> acc | Some x -> x::acc) [] xs
