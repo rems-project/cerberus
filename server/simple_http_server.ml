@@ -131,7 +131,8 @@ let parse_core_locs core =
             loop (chunks, (c_loc, mk_loc_line_range (l0, l))::locs) sp' l0' l rest
         (* otherwise push to stack *)
         else
-          loop (chunks, locs) (push sp (parse_loc loc, l0)) l l rest
+          let loc_no_unicode = Str.replace_first (Str.regexp_string "§") "" loc in
+          loop (chunks, locs) (push sp (parse_loc loc_no_unicode, l0)) l l rest
   in
   Str.full_split (Str.regexp "{-#[^#§]*#-}") core
   |> loop ([], []) [] 0 0
@@ -170,7 +171,7 @@ let mk_result file out err =
     JsonMap [
       ("cabs", json_of_file (f ^ ".cabs"));
       ("ail",  json_of_file (f ^ ".ail"));
-      ("core", JsonStr core);
+      ("core", JsonStr (Str.global_replace (Str.regexp_string "§") "" core));
       ("locs", JsonArray (json_of_locs sorted_locs));
       ("stdout", json_of_file out);
       ("stderr", json_of_file err);
