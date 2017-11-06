@@ -1,54 +1,79 @@
-open import Pervasives TypingError
+open import Pervasives TypingError Utils
 import Loc Exception
 
 (* HACK: most of the inlines are only added to prevent Lem's renaming *)
 
+type annots = list (list string)
 
-type errorM 'a = either (Loc.t * typing_error) 'a
+type errorM 'a =
+  ErrorM of (annots -> either (Loc.t * typing_error) ('a * annots))
+
+(* type errorM 'a = either (Loc.t * typing_error) 'a *)
 
 val return: forall 'a. 'a -> errorM 'a
-let inline return z         = Right z
+let inline return z         =
+  ErrorM (fun ts -> Right (z, ts))
 
 val fail: forall 'a. Loc.t -> typing_error -> errorM 'a
-let inline fail loc err = Left (loc, err)
+let inline fail loc err =
+  ErrorM (fun _ -> Left (loc, err))
+
+val add: string -> errorM unit
+let add a = ErrorM (fun ts ->
+    match ts with
+    | [] -> Right ((), [[a]])
+    | q::qs -> Right ((), (a::q)::qs)
+    end)
+
+val pack: errorM unit
+let pack = ErrorM (fun ts -> Right ((), []::ts))
+
+val unpack: errorM (list string)
+let unpack = ErrorM (fun ts ->
+  match ts with
+    | [] -> Right ([], [])
+    | q::qs -> Right (q, qs)
+  end)
+
+val run: forall 'a. errorM 'a -> annots -> either (Loc.t * typing_error) ('a * annots)
+let run (ErrorM m) ts = m ts
+
 
 val bind: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b
-let inline bind m f =
-  match m with
+let bind (ErrorM m) f = ErrorM (fun ts ->
+  match m ts with
     | Left l  -> Left l
-    | Right r -> f r
-  end
+    | Right (a, ts') -> run (f a) ts'
+  end)
 
-let inline fmap f = function
-  | Left  z -> Left z
-  | Right z -> Right (f z)
-end
+val fmap: forall 'a 'b. ('a -> 'b) -> errorM 'a -> errorM 'b
+let inline fmap f m = bind m (return -| f)
 
 let inline (>>=) m f = bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = fmap
 
-
-
 val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
-let tryM m f errCase =
-  match m with
-    | Left _ -> errCase
-    | Right z  -> f z
-  end
+let tryM (ErrorM m) f errCase = ErrorM (fun ts ->
+  match m ts with
+    | Left _ -> run errCase ts
+    | Right (a, ts') -> run (f a) ts'
+  end)
 
+(* NOTE: this run function does not consider annotations *)
 val runErrorMonad: forall 'a. errorM 'a -> either (Loc.t * typing_error) 'a
 let runErrorMonad m =
-  m
+  match run m [] with
+    | Left l -> Left l
+    | Right (r, _) -> Right r
+  end
 
-val to_exception: forall 'a 'msg. (Loc.t * typing_error -> 'msg) -> errorM 'a -> Exception.exceptM 'a 'msg
-let to_exception f = function
-  | Left loc_err ->
-      Exception.Exception (f loc_err)
-  | Right z ->
-      Exception.Result z
-end
-
+val to_exception: forall 'a 'msg. (Loc.t * typing_error -> 'msg) -> errorM 'a -> Exception.exceptM ('a * annots) 'msg
+let to_exception f m =
+  match run m [] with
+    | Left loc_err -> Exception.Exception (f loc_err)
+    | Right (z, annots) -> Exception.Result (z, annots)
+  end
 
 val     ailErr_mapM: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM (list 'b)
 let rec ailErr_mapM f ys =
@@ -63,8 +88,6 @@ let inline sequence_ ms = List.foldr (>>) (return ()) ms
 val mapM_: forall 'a 'b. ('a -> errorM 'b) -> list 'a -> errorM unit
 let inline mapM_ f _as =
   sequence_ (List.map f _as)
-
-
 
 val     ailErr_foldM: forall 'a 'b. ('a -> 'b -> errorM 'a) -> 'a -> list 'b -> errorM 'a (* GENERIC Monad *)
 let rec ailErr_foldM f a = function                                                       (* GENERIC Monad *)
@@ -85,20 +108,3 @@ end
 (* HACK: this is to prevent Lem's from renaming *)
 let inline mapM  = ailErr_mapM
 let inline foldM = ailErr_foldM
-
-
-(*
-type typing_state =
-  list (list string)
-
-type errorM 'a =
-  ErrorM of (typing_state -> either (Loc.t * typing_error) ('a * typing_state))
-
-(* errorM unit *)
-let push_std = fun ts -> ((), []::ts)
-
-let pop_std = function
-  | [] -> error "blah"
-  | q::qs -> (q, qs)
- 
-*)

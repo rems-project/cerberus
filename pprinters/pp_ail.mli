@@ -1,6 +1,11 @@
 open AilSyntax
 open AilTypes
 
+val pp_type_keyword: string -> PPrint.document
+val pp_keyword: string -> PPrint.document
+val pp_const: string -> PPrint.document
+
+
 val pp_id: identifier -> PPrint.document
 
 val pp_storageDuration: storageDuration -> PPrint.document
@@ -43,6 +48,7 @@ val pp_binaryOperator: binaryOperator -> PPrint.document
 val pp_unaryOperator: unaryOperator -> PPrint.document
 val pp_integerSuffix: integerSuffix -> PPrint.document
 val pp_integerConstant: integerConstant -> PPrint.document
+val pp_floatingConstant: string -> PPrint.document
 val pp_characterPrefix: characterPrefix -> PPrint.document
 val pp_characterConstant: characterConstant -> PPrint.document
 val pp_encodingPrefix: encodingPrefix -> PPrint.document

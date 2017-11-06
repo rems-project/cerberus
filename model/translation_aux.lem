@@ -163,7 +163,7 @@ end
 
 val from_lvalue_type: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let from_lvalue_type = function
-  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _) -> (qs, ty)
+  | (AilSyntax.AnnotatedExpression (GenTypes.GenLValueType qs ty _) _ _ _) -> (qs, ty)
   | _ -> error "[Translation_aux.from_lvalue_type] impossible case: TODO move to Exception.t"
 end
 
@@ -180,11 +180,12 @@ let exp_type_of a_expr =
 *)
 
 
-
+(* NOTE: it does not depend on the annotation state *)
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
-  match GenTypesAux.interpret_genTypeCategory tmp_implementation
-      (GenTypes.genTypeCategoryOf a_expr) with
+  match ErrorMonad.runErrorMonad
+      (GenTypesAux.interpret_genTypeCategory tmp_implementation
+        (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (AilTypes.LValueType _ ty _) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
@@ -196,10 +197,12 @@ let ctype_of a_expr =
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
+(* NOTE: it does not depend on the annotation state *)
 val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let qualified_ctype_of a_expr =
-  match GenTypesAux.interpret_genTypeCategory tmp_implementation
-      (GenTypes.genTypeCategoryOf a_expr) with
+  match ErrorMonad.runErrorMonad
+      (GenTypesAux.interpret_genTypeCategory tmp_implementation
+        (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (AilTypes.LValueType qs ty _) -> (qs, ty)
     | Right (AilTypes.RValueType   ty) -> (AilTypes.no_qualifiers, ty)
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->

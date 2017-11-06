@@ -148,18 +148,17 @@ and generic_association 'a =
   | AilGAdefault of expression 'a
 
 and expression 'a [name = "e*"] =
-  | AnnotatedExpression of 'a * Loc.t * expression_ 'a
+  | AnnotatedExpression of 'a * list string * Loc.t * expression_ 'a
 
 instance forall 'a. (Located (expression 'a))
   let locOf a_expr =
-    let (AnnotatedExpression _ loc _) = a_expr in
+    let (AnnotatedExpression _ _ loc _) = a_expr in
     loc
 end
 
 
-(* the storage duration must be Nothing iff the identifier is that of a function,
-   the boolean tells whether the object was declared with the register storage-class *)
-type bindings (*[name="b*"]*) = list (identifier * (maybe (storageDuration * bool) * qualifiers * ctype))
+  (* the boolean tells whether the object was declared with the register storage-class *)
+type bindings (*[name="b*"]*) = list (identifier * ((storageDuration * bool) * qualifiers * ctype))
 
 type statement_ 'a [name="s*"] = 
   | AilSskip
@@ -184,8 +183,7 @@ and statement 'a [name="s*"] =
 
 
 type declaration =
-    (* the storage duration is Nothin iff the object was declared with the register storage-class *)
-  | Decl_object   of maybe (storageDuration * bool) * qualifiers * ctype
+  | Decl_object   of (storageDuration * bool) * qualifiers * ctype
     (* has_prototype; return qualifiers and type; parameters types; is_variadic; is_inline; is_Noreturn *)
   | Decl_function of bool * (qualifiers * ctype) * (list (qualifiers * ctype * (* isRegister *)bool)) * bool * bool * bool
 
@@ -215,7 +213,7 @@ type sigma 'a = <|
 |>
 
 
-type gamma = Context.context identifier (maybe (storageDuration * bool) * qualifiers * ctype)
+type gamma = Context.context identifier ((storageDuration * bool) * qualifiers * ctype)
 
 type program 'a = maybe identifier * sigma 'a
 
@@ -509,7 +507,7 @@ let rec expressionEqual' (eq_A : 'a -> 'a -> bool) e1 e2 =
   end
 and expressionEqual eq_A e1 e2 =
   match (e1, e2) with
-    | (AnnotatedExpression a1 _ e1, AnnotatedExpression a2 _ e2) ->
+    | (AnnotatedExpression a1 _ _ e1, AnnotatedExpression a2 _ _ e2) ->
         eq_A a1 a2 && expressionEqual' eq_A e1 e2
   end
 
@@ -751,7 +749,7 @@ let rec equiv_expression_ e1 e2 =
   end
 and equiv_expression e1 e2 =
   match (e1, e2) with
-  | (AnnotatedExpression _ _ e1, AnnotatedExpression _ _ e2) -> equiv_expression_ e1 e2
+  | (AnnotatedExpression _ _ _ e1, AnnotatedExpression _ _ _ e2) -> equiv_expression_ e1 e2
   end
 
 let equiv_arguments a1 a2 =
@@ -979,7 +977,7 @@ let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
 let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
-val parameters_of_bindings: bindings -> list (maybe (storageDuration * bool) * qualifiers * ctype)
+val parameters_of_bindings: bindings -> list ((storageDuration * bool) * qualifiers * ctype)
 
 val type_from_sigma: forall 'a. (ctype * bindings * bool) * maybe (statement 'a) -> ctype
 

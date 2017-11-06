@@ -120,8 +120,8 @@ let force_core_object_type_of_ctype ty =
    sentence implicitly refers to that of the C binary equality operator.
    This function turns a [e] scalar expression into a [e == 0], so that elaboration
    of the equality operator can be reused *)
-val mkTestExpression: A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
-let mkTestExpression (A.AnnotatedExpression gty _ _ as a_expr) =
+val mkTestExpression: forall 'a. A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
+let mkTestExpression (A.AnnotatedExpression gty annots _ _ as a_expr) =
   let loc = locOf a_expr in
   let result_gty =
     (* STD §6.5.9#3, sentence 1 *)
@@ -136,8 +136,8 @@ let mkTestExpression (A.AnnotatedExpression gty _ _ as a_expr) =
       A.ConstantNull
     else
       error "[Translation.mkTestExpression] must be called on scalar expression" in
-  A.AnnotatedExpression result_gty loc
-    (A.AilEbinary a_expr A.Eq (A.AnnotatedExpression gty loc (A.AilEconst zero_const)))
+  A.AnnotatedExpression result_gty annots loc
+    (A.AilEbinary a_expr A.Eq (A.AnnotatedExpression gty annots loc (A.AilEconst zero_const)))
 
 
 
@@ -190,7 +190,7 @@ let translate_integerConstant iCst =
   ))))
 
 val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_order
-let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
+let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
   match expr with
     | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
         match natFromInteger n with
@@ -216,7 +216,7 @@ let translate_memory_order (A.AnnotatedExpression _ _ expr as a_expr) =
 
 
 val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
-let rec translate_function_designator stdlib (A.AnnotatedExpression _ (* TODO: loc *) _ expr as a_expr) =
+let rec translate_function_designator stdlib (A.AnnotatedExpression _ _ (* TODO: loc *) _ expr as a_expr) =
   match (ctype_of a_expr, expr) with
 (*
     | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
@@ -672,7 +672,7 @@ and translate_expression stdlib tagDefs a_expr =
     (* TODO: this is a bit tasteless as it makes the case AilEconst, ConstantNull unreachable *)
     E.return $ C.Epure (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype result_ty)))
   else
-    let A.AnnotatedExpression annot loc expr = a_expr in
+    let A.AnnotatedExpression annot std_annots loc expr = a_expr in
     C.Eloc loc <$> match expr with
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Plus e ->
@@ -766,7 +766,7 @@ else
           )
       
       (* CHECKED IN APR2016 *)
-      | A.AilEunary A.Address (A.AnnotatedExpression _ _ (A.AilEunary A.Indirection e)) ->
+      | A.AilEunary A.Address (A.AnnotatedExpression _ _ _ (A.AilEunary A.Indirection e)) ->
           (* STD §6.5.3.2#3, sentence 3 *)
           (* NOTE: footnote 102 makes it clear that this is valid even if 'e' evaluates to a null pointer *)
           E._STD "§6.5.3.2#3, sentence 3" (self e)
@@ -1723,7 +1723,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
                   C.
           end
 *)
-     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "atomic_store_explicit")) [object_e; desired_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of object_e with
@@ -1746,7 +1746,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
                (Caux.mk_sym_pe desired_sym) mo)))
              )
      
-     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "atomic_load_explicit")) [object_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of object_e with
@@ -1765,7 +1765,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
                 (C.Load (Caux.mk_ail_ctype_pe ref_ty) (Caux.mk_sym_pe object_sym) mo))))
      
      (* TODO: allow non trivial call to atomic_thread_fence() ... *)
-     | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEident (Symbol.Symbol _ (Just "atomic_thread_fence")))) [order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ (Just "atomic_thread_fence")))) [order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          E.return $
@@ -2499,7 +2499,7 @@ a
       
       | A.AilEsizeof_expr e ->
           (* TODO: check qualifiers *)
-          self (A.AnnotatedExpression annot loc (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
+          self (A.AnnotatedExpression annot std_annots loc (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
       
       | A.AilEalignof _ ty ->
           E.return $

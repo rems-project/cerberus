@@ -187,7 +187,7 @@ class TabEditor extends Tab {
       this.skipCursorEvent = false
       return;
     }
-    // If not dirty, then mark selection
+    if (!ui.colour_cursor) return;
     let from = doc.getCursor('from')
     let to   = doc.getCursor('to')
     ui.currentView.markSelection(this.getLocation(from, to))
@@ -482,7 +482,7 @@ class TabAsm extends TabReadOnly {
         }
         this.setValue(value)
         this.updateLocations()
-        this.highlight()
+        if (ui.colour) this.highlight()
         ui.done()
       }
     })
