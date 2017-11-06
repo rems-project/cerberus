@@ -73,14 +73,9 @@ let pp_colour_function_identifier id =
 let pp_colour_label (CabsIdentifier (_, str)) =
   !^(ansi_format [Magenta] str)
 
-let pp_ctor k =
-  !^ (ansi_format [Bold; Cyan] k)
-
 let pp_decl_ctor k =
   !^ (ansi_format [Bold; Green] k)
 
-let pp_stmt_ctor k =
-  !^ (ansi_format [Bold; Magenta] k)
 
 let pp_location = function
   | Location_ocaml.Loc_unknown ->

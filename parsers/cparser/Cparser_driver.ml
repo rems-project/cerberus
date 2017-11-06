@@ -155,6 +155,7 @@ let parse input =
             | NonStandard_string_concatenation ->
                 prerr_endline "ERROR: unsupported non-standard concatenation of string literals"
             | _ -> ());
+          print_endline ("TOK = " ^ tok);
           Exception.fail (Location_ocaml.point spos, Errors.(Cparser_cause (Cparser_unexpectedToken tok)))
 (*
           Printf.printf "PARSING ERROR: unexpected token: `%s' @ line: %d, char: %d\n"

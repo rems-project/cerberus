@@ -1748,6 +1748,7 @@ STD_ "§6.7.1#8" $
 (* E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * desugM (unit -> maybe expression unit)) *)
 and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) idecltor =
   (* NOTE: this function does NOT check the wf of the storage classes *)
+  E.get_scope >>= fun scope ->
   match idecltor with
     | InitDecl loc decltor Nothing ->
         desugar_declarator decltor >>= fun (ident, mk_qs_ctype) ->
@@ -1755,7 +1756,6 @@ and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) 
         let mk_desug_init =
           fun () -> E.return Nothing in
         (* STD §6.9.2#2, sentence 1 *)
-        E.get_scope >>= fun scope ->
         let is_tentative = match scope with
           | E.Scope_file ->
               AilTypesAux.is_object ty && (List.elem SC_static scs || scs = [])
@@ -1768,16 +1768,21 @@ and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) 
         desugar_declarator decltor >>= fun (ident, mk_qs_ctype) ->
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         
+        (* TODO: check that we really never have parameter objects here *)
+        let kind = if AilTypesAux.is_function ty then E.Kind_function else E.Kind_object false in
+        (* TODO: I don't like the fact that we are using this function directly here *)
+        E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
+        
         (* STD §6.7.9#3 *)
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
           E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#3")
+        
+        (* STD §6.7.9#5 *)
+        else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
+          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#5")
+        
         else
-          (* TODO: check that we really never have parameter objects here *)
-          let kind = if AilTypesAux.is_function ty then E.Kind_function else E.Kind_object false in
-          (* TODO: I don't like the fact that we are using this function directly here *)
-          E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
-          
           (* postponing the desugaring of the initialiser since the identifier
              (which gets register after the current function) need to be in scope *)
           let mk_desug_init () =
@@ -1977,7 +1982,43 @@ and static_thread_implicit_initializer tagDefs ty =
 (*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.desugM ? *)
 
 (* NOTE: the check for STD §6.7.9#3 is done by [desugar_init_declarator] *)
-and wip_desugar_initializer_ loc dur current_ty = function
+and wip_desugar_initializer_ loc dur current_ty init =
+(*
+  if AilTypesAux.is_scalar current_ty then
+    (* STD §6.7.9#10 *)
+    match init with
+      | Init_expr e ->
+          E.return e
+      | Init_list [(Nothing, Init_expr e)] ->
+          E.return e
+      | _ ->
+          (* STD §6.7.9#10, sentence 1 *)
+          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#11, sentence 1")
+    end >>= fun e ->
+    desugar_expression e >>= fun d_e ->
+    E.return (current_ty, d_e)
+  
+  let desugar_struct_union_initializer_ tag =
+    match init with
+      | Init_expr e ->
+          sugar_expression e >>= d_e ->
+          E.return (current_ty, d_e)
+      | Init_list desigs_opt_inits ->
+          
+    end
+  in
+  
+  
+  match current_ty with
+    | ATypes.Struct tag ->
+        desugar_struct_initializer_ tag
+    | ATypes.Union tag ->
+        desugar_union_initializer_ tag
+  end
+  
+  
+  
+  else *) match init with
   | Init_expr e ->
       (* we ignore the type here because the type checking will catch
          errors later *)
@@ -1993,14 +2034,22 @@ and wip_desugar_initializer_ loc dur current_ty = function
             (* TODO: what if the string it too short/long for current_ty *)
             desugar_expression e >>= function
               | (AnnotatedExpression () _ _ (AilEstr (Nothing, str)) as d_e) ->
+
+(* TODO: regarding the twos following commented regions:
+         
+         first §6.7.9#14 is not a constraint, second the text allows something instead of forbidding something *)
+(*
                   if not (AilTypesAux.is_array_of_character current_ty) then
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
+*)
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
               | (AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) as d_e) ->
+(*
                   if not (AilTypesAux.is_array_of_character current_ty) then
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
+*)
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
               | (AnnotatedExpression () _ _ (AilEstr (Just _, str)) as d_e) ->
                   E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
@@ -2043,6 +2092,87 @@ and wip_desugar_initializer_ loc dur current_ty = function
       end
   
   | Init_list desigs_opt_inits ->
+      (* STD §6.7.9#10 *)
+      E.get_tag_definitions >>= fun tagDefs ->
+      let implicit_e ty =
+        AnnotatedExpression () [] Loc.unknown (* TODO *) $ AilEconst match dur with
+          | ATypes.Automatic ->
+              (* STD §6.7.9#10, first sentence *)
+              ConstantIndeterminate ty
+          | ATypes.Allocated ->
+              error "not possible"
+          (* Static | Thread *)
+          | _ ->
+              static_thread_implicit_initializer tagDefs ty
+        end in
+
+
+      E.foldlM (fun (desigs_opt, init) (i, acc) ->
+        match desigs_opt with
+          | Nothing ->
+              E.return (0, [])
+
+              
+          | Just (Desig_array desig_e :: desigs) ->
+              (* STD §6.7.9#6 *)
+              if not (AilTypesAux.is_array current_ty) then
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+              else
+                E.return (0, [])
+
+
+          | Just (Desig_member ident :: desigs) ->
+              (* STD §6.7.9#7 *)
+              match current_ty with
+                | ATypes.Struct tag ->
+                    E.resolve_tag_definition tag >>= function
+                      | E.Struct_definition isAnonymous ident_tys ->
+                          match List.lookup ident ident_tys with
+                            | Just ty ->
+                                E.return ty
+                            | Nothing ->
+                                E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#7")
+                          end
+                      | _ ->
+                          error "internal error"
+                    end
+                | ATypes.Union tag ->
+                    E.resolve_tag_definition tag >>= function
+                      | E.Union_definition isAnonymous ident_tys ->
+                          match List.lookup ident ident_tys with
+                            | Just ty ->
+                                E.return ty
+                            | Nothing ->
+                                E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#7")
+                          end
+                      | _ ->
+                          error "internal error"
+                    end
+                | _ ->
+                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#7")
+              end >>= fun member_ty ->
+              
+              E.return (0, [])
+
+
+        end
+      ) desigs_opt_inits ((0: nat), ([] : list unit)) >>= fun _ ->
+      error "WIP"
+
+
+
+(*
+      (* NOTE: I know it would be more efficient to factorize these checks, but
+         these is more readable *)
+      if List.any (function
+           | (Just (Desig_array _ :: _), _) -> true
+           | _                              -> false
+         end) desigs_opt_inits && not (AilTypesAux.is_array current_ty) then
+        (* STD §6.7.9#6 *)
+        E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+      else
+
+
       E.get_tag_definitions >>= fun tagDefs ->
       match current_ty with
         | ATypes.Array elem_ty (Just n) ->
@@ -2061,30 +2191,31 @@ and wip_desugar_initializer_ loc dur current_ty = function
               match desigs_opt with
                 | Just (Desig_member _ :: _) ->
                     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.9#7")
-                | Just [Desig_array e] ->
-                    desugar_expression e               >>= fun d_e ->
-                    is_integer_constant_expression d_e >>= function
+                | Just [Desig_array desig_e] ->
+                    desugar_expression desig_e               >>= fun d_desig_e ->
+                    is_integer_constant_expression d_desig_e >>= function
                       | true ->
-                          evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun j               ->
-                          wip_desugar_initializer_ loc dur elem_ty init          >>= fun (elem_ty', d_e) ->
+                          evaluate_integer_constant_expression (Loc.locOf desig_e) d_desig_e >>= fun j                  ->
+                          wip_desugar_initializer_ loc dur elem_ty init                      >>= fun (elem_ty', d_init) ->
                           (* TODO: use elem_ty' *)
                           (* comparing the specified index with the
                              expected current index *)
                           match compare j i with
                             | LT ->
-                                E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
+                                E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
                             | EQ ->
-                                E.return (i+1, Just d_e :: acc)
+                                E.return (i+1, Just d_init :: acc)
                             | GT ->
-                                E.return (j+1, Just d_e :: (Utils.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
+                                (*  *)
+                                E.return (j+1, Just d_init :: (Utils.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
                           end
                       | false ->
-                          E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+                          E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
                     end
                 | Nothing ->
-                    wip_desugar_initializer_ loc dur elem_ty init >>= fun (elem_ty', d_e) ->
+                    wip_desugar_initializer_ loc dur elem_ty init >>= fun (elem_ty', d_init) ->
                     (* TODO: use elem_ty' *)
-                    E.return (i+1, Just d_e :: acc)
+                    E.return (i+1, Just d_init :: acc)
                 | _ ->
                     (* Multi-array designator *)
                     E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
@@ -2177,39 +2308,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
                   else
                     (* TODO: crazy stuff we don't deal with yet *)
                     E.fail loc (Errors.Desugar_NotyetSupported "crazy struct initializers")
-(*
-val foldl : forall 'a 'b. ('a -> 'b -> 'a) -> 'a -> list 'b -> 'a (* originally foldl *)
-*)
-(*
-                    | Init_list desigs_opt_inits ->
 
-
-  | Init_list of list (maybe (list designator) * initializer_)
-
-
-and designator =
-  | Desig_array of cabs_expression
-  | Desig_member of cabs_identifier
-
-
-*)
-(*
-WIP
-                  E.foldlM (fun (desigs_opt, init) (i, acc) ->
-                    match desigs_opt with
-                      |
-                    end
-                  ) desigs_opt_inits (0, []) >>= fun _ ->
-*)
-(*
-desigs_opt_inits
-
-  | Init_list of list (maybe (list designator) * initializer_)
-
-and designator =
-  | Desig_array of cabs_expression
-  | Desig_member of cabs_identifier
-*)
               | _ ->
                   E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
             end
@@ -2277,34 +2376,11 @@ and designator =
                        int a = {1, 2}; *)
                   error "WIP: error message. is that even a possible case? (11)"
             end
-(*
-(§6.7.9#11, sentence 1) The initializer for a scalar shall be a single expression, optionally enclosed in braces.
 
-(§6.7.9#11, sentence 2) The initial value of the object is that of the expression (after conversion);
-
-(§6.7.9#11, sentence 3) the same type constraints and conversions as for simple assignment apply, taking the type of the scalar to be the unqualified version of its declared type.
-*)
       end
+*)
 end
 
-
-(*
-and desugar_initializer_ init =
-  match init with
-    | Init_expr e ->
-        desugar_expression e
-    | Init_list inits ->
-        error "WIP 58"
-  end
-
-and desugar_designator desig =
-  match desig with
-    | Desig_array e ->
-       error "WIP 59"
-    | Desig_member id ->
-       error "WIP 60"
-  end
-*)
 
 
 and desugar_and_register_static_assert_declaration sa_decl =

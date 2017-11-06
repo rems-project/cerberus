@@ -1,14 +1,14 @@
 open import Core
 
 val     sequentialise_expr: typed_expr unit -> typed_expr unit
-let rec sequentialise_expr expr =
-  match expr with
+let rec sequentialise_expr (Expr annot expr_) =
+  Expr annot match expr_ with
     | Epure _ ->
-        expr
+        expr_
     | Ememop _ _ ->
-        expr
+        expr_
     | Eaction _ ->
-        expr
+        expr_
     | Ecase pe cases ->
         (* TODO: the typing should maybe forbid unseqs inside cases anyway? *)
         Ecase pe (List.map (fun (pat, e) -> (pat, sequentialise_expr e)) cases)
@@ -17,48 +17,40 @@ let rec sequentialise_expr expr =
     | Eif pe1 e2 e3 ->
         Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
     | Eskip ->
-        expr
+        expr_
     | Eccall _ _ _ ->
-        expr
+        expr_
     | Eproc _ _ _ ->
-        expr
+        expr_
     | Eunseq es ->
         let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_sequentialise ==> missed an unseq") in
-        expr
-(*
-        E.replicateM (List.length es) E.fresh_symbol >>= fun syms ->
-        
-        E.return expr
-*)
-(*
-        E.mapM sequentialise_expr es >>= fun es' ->
-        E.return (
-          Caux.mk_wseq (Epure (C.PEtuple (List.map (fun sym -> C.PEsym sym) syms)))
-            (Utils.map2 (fun sym e -> ([Just sym], e)) syms es')
-        )
-*)
-    | Ewseq (CaseBase Nothing) (Eunseq es) e2 ->
-        List.foldr (fun e acc ->
-          Ewseq (CaseBase Nothing) (sequentialise_expr e) acc
-        ) (sequentialise_expr e2) es
-    | Ewseq (CaseCtor Ctuple pats) (Eunseq es) e2 ->
-        List.foldr (fun (pat, e) acc ->
-          Ewseq pat (sequentialise_expr e) acc
-        ) (sequentialise_expr e2) (List.zip pats es)
+        expr_
+    | Ewseq (CaseBase Nothing) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun e acc ->
+          Expr [] (Ewseq (CaseBase Nothing) (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) es in
+        expr_'
+    | Ewseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
+          Expr [] (Ewseq pat (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) (List.zip pats es) in
+        expr_'
     | Ewseq pat e1 e2 ->
         Ewseq pat (sequentialise_expr e1) (sequentialise_expr e2)
-    | Esseq (CaseBase Nothing) (Eunseq es) e2 ->
-        List.foldr (fun e acc ->
-          Esseq (CaseBase Nothing) (sequentialise_expr e) acc
-        ) (sequentialise_expr e2) es
-    | Esseq (CaseCtor Ctuple pats) (Eunseq es) e2 ->
-        List.foldr (fun (pat, e) acc ->
-          Esseq pat (sequentialise_expr e) acc
-        ) (sequentialise_expr e2) (List.zip pats es)
+    | Esseq (CaseBase Nothing) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun e acc ->
+          Expr [] (Esseq (CaseBase Nothing) (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) es in
+        expr_'
+    | Esseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
+          Expr [] (Esseq pat (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) (List.zip pats es) in
+        expr_'
     | Esseq pat e1 e2 ->
         Esseq pat (sequentialise_expr e1) (sequentialise_expr e2)
     | Easeq _ _ _ ->
-        expr
+        expr_
     | Eindet i e ->
         Eindet i (sequentialise_expr e)
     | Ebound i e ->
@@ -68,22 +60,11 @@ let rec sequentialise_expr expr =
     | Esave sym_ty xs e ->
         Esave sym_ty xs (sequentialise_expr e)
     | Erun () sym es ->
-        expr
-
-(*
-    | Esave ksym sym_tys e ->
-        Esave ksym sym_tys (sequentialise_expr e)
-    | Erun _ _ _ ->
-        expr
-*)
+        expr_
     | Epar es ->
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->
-        expr
-    | Eloc loc e ->
-        Eloc loc (sequentialise_expr e)
-    | Estd s e ->
-        Estd s (sequentialise_expr e)
+        expr_
   end
 
 

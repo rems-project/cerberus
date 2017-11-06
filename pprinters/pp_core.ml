@@ -81,37 +81,34 @@ let rec precedence = function
   | PEstd (_, Pexpr (_, pe)) -> precedence pe
 
 let rec precedence_expr = function
- | Epure _
- | Ememop _
- | Eaction _
- | Ecase _
- | Eskip
- | Eproc _
- | Eccall _
- | Eunseq _
- | Eindet _
- | Ebound _
- | End _
- | Erun _
- | Epar _
- | Ewait _ ->
-     None
+  | Epure _
+  | Ememop _
+  | Eaction _
+  | Ecase _
+  | Eskip
+  | Eproc _
+  | Eccall _
+  | Eunseq _
+  | Eindet _
+  | Ebound _
+  | End _
+  | Erun _
+  | Epar _
+  | Ewait _ ->
+      None
 
- | Eif _ ->
-     Some 1
- | Elet _ ->
-     Some 2
- | Easeq _ ->
-     Some 3
- | Esseq _ ->
-     Some 3
- | Ewseq _ ->
-     Some 4
- | Esave _ ->
-     Some 5
- | Eloc (_, e)
- | Estd (_, e) ->
-    precedence_expr e
+  | Eif _ ->
+      Some 1
+  | Elet _ ->
+      Some 2
+  | Easeq _ ->
+      Some 3
+  | Esseq _ ->
+      Some 3
+  | Ewseq _ ->
+      Some 4
+  | Esave _ ->
+      Some 5
 
 
 let compare_precedence p1 p2 =
@@ -282,6 +279,7 @@ and pp_loaded_value = function
 
 
 let rec pp_value = function
+(*
   | Vconstrained xs ->
       !^ "{-val-}" ^^^ pp_keyword "constrained" ^^ P.parens (
         comma_list (fun (cs, cval) ->
@@ -289,6 +287,7 @@ let rec pp_value = function
           P.equals ^^ P.rangle ^^ pp_value cval
         ) xs
       )
+*)
   | Vunit ->
       pp_const "Unit"
   | Vtrue ->
@@ -454,6 +453,7 @@ let pp_pexpr pe =
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
         | PEstd (_, pe) ->
+            (* DEBUG *) !^ "{-PEstd-}" ^^^
             pp pe
     end
   in pp None pe
@@ -476,110 +476,121 @@ let location_to_string loc =
 
 
 let rec pp_expr expr =
-  let rec pp is_semi prec e =
+  let rec pp is_semi prec (Expr (annot, e)) =
     let prec' = precedence_expr e in
     let pp_ z = pp true prec' z in (* TODO: this is sad *)
     let pp  z = pp false prec' z in
+    
     begin
-      (* Here we check whether parentheses are needed *)
-      if compare_precedence prec' prec then
-        (* right associativity of ; *)
-        match (is_semi, e) with
-          | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
-              P.parens
-          | _ ->
-              fun z -> z
-      else
-        P.parens
+      fun doc ->
+        List.fold_left (fun acc annot_elem ->
+          match annot_elem with
+            | EA_loc loc ->
+                if show_location then
+                  !^"{-#"^^ !^(location_to_string loc)^^ !^"#-}" ^^ acc ^^ !^"{-#ELOC#-}"
+                else 
+                  acc
+            | EA_std str ->
+                if show_std then
+                  !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
+                else
+                  acc
+        ) doc annot
     end
-    begin match e with
-      | Epure pe ->
-          pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
-      | Ememop (memop, pes) ->
-          pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
-      | Eaction (Paction (p, (Action (_, bs, act)))) ->
-          pp_polarity p (pp_action act)
-      | Ecase (pe, pat_es) ->
-          pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
-          P.nest 2 (
-            P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
-              P.prefix 4 1
-                (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
-                (pp e)
-            ) pat_es 
-          ) ^^ P.break 1 ^^ pp_keyword "end"
-      | Elet (pat, pe1, e2) ->
-          P.group (
-            P.prefix 0 1
-              (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ pp_pexpr pe1 ^^^ pp_control "in")
-              (pp e2)
-         )
-      | Eif (pe1, e2, e3) ->
-          pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
-          P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
-          pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
-      | Eskip ->
-          pp_keyword "skip"
-      | Eproc (_, nm, pes) ->
-          pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
-      | Eccall (_, pe, pes) ->
-          pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
-      | Eunseq [] ->
-          !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
-      | Eunseq [e] ->
-          !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
-      | Eunseq es ->
-          pp_control "unseq" ^^ P.parens (comma_list pp es)
-      | Ewseq (pat, e1, e2) ->
-          P.group (
-            pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
-            let doc_e1 = pp e1 in
-            P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
-          ) ^^
-          P.break 1 ^^ (pp e2)
-      | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
-          (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
-      | Esseq (pat, e1, e2) ->
-          P.group (
-            pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
-            let doc_e1 = pp e1 in
-            P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
-          ) ^^
-          P.break 1 ^^ (pp e2)
-      | Easeq (None, act1, pact2) ->
-          pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
-          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
-      | Easeq (Some (sym, _), act1, pact2) ->
-          pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
-          pp (Eaction (Paction (Pos, act1))) ^^^ pp_control "in" ^^^ pp (Eaction pact2)
-      | Eindet (i, e) ->
-          pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
-      | Esave ((sym, bTy), sym_bTy_pes, e) ->
-          pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
-          P.parens (comma_list (fun (sym, (bTy, pe)) ->
-            pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
-          ) sym_bTy_pes) ^^^
-          pp_control "in" ^^^
-          P.nest 2 (P.break 1 ^^ pp e)
-      | Erun (_, sym, pes) ->
-          pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
-      | Epar es ->
-          pp_keyword "par" ^^ P.parens (comma_list pp es)
-      | Ewait tid ->
-          pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
-      | Eloc (l , e) ->
-        if show_location then
-          !^"{-#"^^ !^(location_to_string l)^^ !^"#-}" ^^pp_expr e ^^ !^"{-#ELOC#-}"
-        else pp_expr e
-      | Estd (s , e) ->
-        if show_std then
-          !^"{-#" ^^ !^s ^^ !^"#-}" ^^ P.hardline ^^ pp_expr e
-        else pp_expr e
-      | End es ->
-          pp_keyword "nd" ^^ P.parens (comma_list pp es)
-      | Ebound (i, e) ->
-          pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
-          P.parens (pp e)
+    begin
+      begin
+        (* Here we check whether parentheses are needed *)
+        if compare_precedence prec' prec then
+          (* right associativity of ; *)
+          match (is_semi, e) with
+            | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
+                P.parens
+            | _ ->
+                fun z -> z
+        else
+          P.parens
+      end
+      begin match e with
+        | Epure pe ->
+            pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
+        | Ememop (memop, pes) ->
+            pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_pexpr pes)
+        | Eaction (Paction (p, (Action (_, bs, act)))) ->
+            pp_polarity p (pp_action act)
+        | Ecase (pe, pat_es) ->
+            pp_keyword "case" ^^^ pp_pexpr pe ^^^ pp_keyword "of" ^^
+            P.nest 2 (
+              P.break 1 ^^ P.separate_map (P.break 1) (fun (cpat, e) ->
+                P.prefix 4 1
+                  (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
+                  (pp e)
+              ) pat_es 
+            ) ^^ P.break 1 ^^ pp_keyword "end"
+        | Elet (pat, pe1, e2) ->
+            P.group (
+              P.prefix 0 1
+                (pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^ pp_pexpr pe1 ^^^ pp_control "in")
+                (pp e2)
+           )
+        | Eif (pe1, e2, e3) ->
+            pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
+            P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
+            pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
+        | Eskip ->
+            pp_keyword "skip"
+        | Eproc (_, nm, pes) ->
+            pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
+        | Eccall (_, pe, pes) ->
+            pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
+        | Eunseq [] ->
+            !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
+        | Eunseq [e] ->
+            !^ "BUG: UNSEQ must have at least two arguments (seen 1)" ^^ (pp_control "[-[-[") ^^ pp e ^^ (pp_control "]-]-]")
+        | Eunseq es ->
+            pp_control "unseq" ^^ P.parens (comma_list pp es)
+        | Ewseq (pat, e1, e2) ->
+            P.group (
+              pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^
+              let doc_e1 = pp e1 in
+              P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
+            ) ^^
+            P.break 1 ^^ (pp e2)
+        | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
+            (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
+        | Esseq (pat, e1, e2) ->
+            P.group (
+              pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^
+              let doc_e1 = pp e1 in
+              P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
+            ) ^^
+            P.break 1 ^^ (pp e2)
+        | Easeq (None, act1, pact2) ->
+            pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
+            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
+        | Easeq (Some (sym, _), act1, pact2) ->
+            pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
+            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
+        | Eindet (i, e) ->
+            pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
+        | Esave ((sym, bTy), sym_bTy_pes, e) ->
+            pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+            P.parens (comma_list (fun (sym, (bTy, pe)) ->
+              pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^ P.colon ^^ P.equals ^^^ pp_pexpr pe
+            ) sym_bTy_pes) ^^^
+            pp_control "in" ^^^
+            P.nest 2 (P.break 1 ^^ pp e)
+        | Erun (_, sym, pes) ->
+            pp_keyword "run" ^^^ pp_symbol sym ^^ P.parens (comma_list pp_pexpr pes)
+        | Epar es ->
+            pp_keyword "par" ^^ P.parens (comma_list pp es)
+        | Ewait tid ->
+            pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+        | End es ->
+            pp_keyword "nd" ^^ P.parens (comma_list pp es)
+        | Ebound (i, e) ->
+            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
+            P.parens (pp e)
+      end
     end
     in pp false None expr
 

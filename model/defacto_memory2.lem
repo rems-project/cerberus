@@ -35,7 +35,7 @@ type mode =
 
 
 type write_event =
-  WriteEvent of ctype * impl_pointer_value * impl_mem_value
+  WriteEvent of Loc.t * ctype * impl_pointer_value * impl_mem_value
 
 
 type impl_mem_state = <|
@@ -815,7 +815,7 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
 
 (* Making an indirection here, so that future crazy optimisations won't be duplicated all over. *)
 let mk_op_ival_ iop ival_1 ival_2 =
-  either (fun z -> IVconcrete z) id (simplify_integer_value_base true (* TODO: false *) $ IVop iop [ival_1; ival_2])
+  either (fun z -> IVconcrete z) id (simplify_integer_value_base (*true*) false $ IVop iop [ival_1; ival_2])
 
 
 
@@ -1166,7 +1166,7 @@ and structural_equality_integer_value_base _ _ =
 
 
 val is_affecting: write_event -> ctype -> impl_pointer_value -> impl_memM bool
-let is_affection (WriteEvent w_ty w_ptr_val mval) r_ty r_ptr_val =
+let is_affection (WriteEvent loc w_ty w_ptr_val mval) r_ty r_ptr_val =
 (*
   get_allocation_id r_ptr_val >>= fun r_alloc_id_opt ->
   get_allocation_id w_ptr_val >>= fun w_alloc_id_opt ->
@@ -2482,13 +2482,32 @@ let get_allocation_size alloc_id =
   end
 
 
+type reason_cant_store =
+  | CantStoreNullPtr
+  | CantStoreFunctionPtr
+  | CantStoreDeadPtr
+  | CantStoreOutOfBoundPtr
+
+instance (Show reason_cant_store)
+  let show r = match r with
+    | CantStoreNullPtr ->
+        "NullPtr"
+    | CantStoreFunctionPtr ->
+        "FunctionPtr"
+    | CantStoreDeadPtr ->
+        "DeadPtr"
+    | CantStoreOutOfBoundPtr ->
+        "OutOfBoundPtr"
+  end
+end
+
 (* Decide whether a given pointer value can be use to perform a store *)
-val can_store: impl_pointer_value -> impl_memM (maybe allocation_id)
+val can_store: impl_pointer_value -> impl_memM (either reason_cant_store allocation_id)
 let can_store (PV prov ptr_val_ sh as ptr_val) =
   match ptr_val_ with
     (* null and function pointers obviously can't be used for stores. *)
-    | PVnull _     -> return Nothing
-    | PVfunction _ -> return Nothing
+    | PVnull _     -> return (Left CantStoreNullPtr)
+    | PVfunction _ -> return (Left CantStoreFunctionPtr)
     
     (* by WF-invariants, we have a pointer to an object *)
     | _ ->
@@ -2500,16 +2519,22 @@ let can_store (PV prov ptr_val_ sh as ptr_val) =
                       "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptr_val
                     ) in
                     (* can't store with a pointer to an object whose lifetime ended. *)
-                    return Nothing
+                    return (Left CantStoreDeadPtr)
                 | false ->
                     (* add the constraint that the ptr is inside the object *)
                     get_allocation_size alloc_id >>= fun size_ival_ ->
+
+let () = Debug.print_debug 1 [] (fun () ->
+  "CAN STORE size_ival_ ===> "  ^ stringFromInteger_value (IV Prov_none size_ival_)
+
+) in
+
                     let ptr_ival_ = real_address_expression_of_pointer ptr_val in
                     ifM "can_store"
                       (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id) ptr_ival_
                                ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id; size_ival_]) ])
-                        (return (Just alloc_id))
-                        (return Nothing)
+                        (return (Right alloc_id))
+                        (return (Left CantStoreOutOfBoundPtr))
               end
           
           (* we couldn't find an explicit allocation event *)
@@ -2562,10 +2587,12 @@ let can_store (PV prov ptr_val_ sh as ptr_val) =
 
 (* TODO: bug HOL -- "failure in internal translation to tupled format" *)
 (* TODO: with temporary simplification *)
-val     easy_update_mem_value_aux: bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
-let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval =
-  let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]") in
-  let easy_update_mem_value_aux = easy_update_mem_value_aux is_strong in
+val     easy_update_mem_value_aux: Loc.t -> bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
+let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval =
+  let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
+    "ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]"
+  ) in
+  let easy_update_mem_value_aux = easy_update_mem_value_aux loc is_strong in
   match (current_mval, sh) with
     | (_, []) ->
         (* SIMPLIFICATION: we assume that the footprint of the new value covers all of the old value *)
@@ -2606,9 +2633,26 @@ let rec easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval 
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
             | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
-                error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
+                (* TODO: this hacking away *)
+(*
+                match current_mval with
+                  | MVinteger ity (IV prov _) ->
+                      MVinteger ity (IV prov (IVcomposite [write_mval; current_mval]))
+                  | _ ->
+                      error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
+                end
+*)
+                      error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
             | _ ->
-                error ("WIP: easy_update_mem_value_aux ===> sh = " ^ stringFromShift_path sh ^ "; current_mval = " ^ stringFromMem_value current_mval)
+                (* *)
+
+
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "loc          = " ^ Loc.stringFromLocation loc ^ "\n" ^
+                  "sh           = " ^ stringFromShift_path sh ^ "\n" ^
+                  "current_mval = " ^ stringFromMem_value current_mval
+                ) in
+                error "WIP: easy_update_mem_value_aux"
           end
   end
 
@@ -2618,11 +2662,11 @@ declare hol target_rep function easy_update_mem_value_aux =
 
 
 val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_mem_value
-let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
+let easy_update_mem_value is_strong (WriteEvent loc write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
   (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
     "easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
   ) in
-  let ret = easy_update_mem_value_aux is_strong write_ty sh write_mval current_mval in
+  let ret = easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval in
   (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
     "DONE WITH easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
   ) in
@@ -2633,7 +2677,7 @@ let easy_update_mem_value is_strong (WriteEvent write_ty (PV prov ptr_val_ sh as
 
 (* update the memory state with a write event for a given allocation id *)
 val register_write_event: allocation_id -> write_event -> impl_memM unit
-let register_write_event alloc_id (WriteEvent _ _ mval as w) =
+let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
   (*DEBUG*)print_debugM 5 (fun () -> "REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
   get >>= fun st ->
   put <| st with allocations=
@@ -2668,13 +2712,14 @@ let impl_store loc lvalue_ty ptr_val mval =
   (*DEBUG*)print_debugM 5 (fun () -> "STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
   (*DEBUG*)                stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval) >>
   can_store ptr_val >>= function
-    | Just alloc_id ->
+    | Right alloc_id ->
 (*        addToLog alloc_id >> *)
-        register_write_event alloc_id (WriteEvent lvalue_ty ptr_val mval) >>
-        (*DEBUG*)print_debugM 5 (fun () -> "STORE DONE") >>
+        register_write_event alloc_id (WriteEvent loc lvalue_ty ptr_val mval) >>
+        (*DEBUG*)print_debugM 5 (fun () -> "STORE DONE (" ^ Loc.stringFromLocation loc ^ ")") >>
         return alloc_id
-    | Nothing ->
-        fail (MerrWIP $ "(" ^ Loc.stringFromLocation loc ^ ") attempted to store with pointer: " ^ stringFromPointer_value ptr_val)
+    | Left reason ->
+        fail (MerrWIP $ "(" ^ Loc.stringFromLocation loc ^ ") can't store [" ^ show reason ^
+              "] with pointer: " ^ stringFromPointer_value ptr_val)
   end
 
 

@@ -1,5 +1,11 @@
 open Global_ocaml
 
+(* BEGIN TMP MLM DEBUG *)
+let mlm_dbg_oc =
+  open_out (Unix.getenv "HOME" ^ "/.cerb")
+(* END TMP MLM DEBUG *)
+
+
 (* TODO: rewrite this file from scratch... *)
 
 
@@ -78,8 +84,12 @@ let run_pp filename lang doc =
   PPrint.ToChannel.pretty 1.0 150 oc doc;
   if fout then close_out oc
 
-let set_progress n =
-  Exception.fmap (fun v -> progress_sofar := n; v)
+let set_progress str n =
+  Exception.fmap (fun v ->
+    output_string mlm_dbg_oc (str ^ "  ");
+    progress_sofar := n;
+    v
+  )
 
 
 (* == parse a C translation-unit and elaborate it into a Core program =========================== *)
@@ -94,7 +104,7 @@ let c_frontend f =
     
        Exception.except_return (c_preprocessing f)
     |> Exception.rbind Cparser_driver.parse
-    |> set_progress 10
+    |> set_progress "CPARS" 10
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit false (not $ List.mem FOut !!cerb_conf.ppflags))
       (*
@@ -113,10 +123,10 @@ let c_frontend f =
 (*        cerb_conf := (fun () -> { (!cerb_conf()) with exec_mode_opt= saved_exec_mode_opt }) ; *)
           ret)
     
-    |> set_progress 11
+    |> set_progress "DESUG" 11
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
-      if !Debug_ocaml.debug_level >= 4 then
+      if !Debug_ocaml.debug_level > 4 then
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program -| snd)
       else
         Exception.fmap (fun z -> z)
@@ -130,18 +140,18 @@ let c_frontend f =
         ignore (List.map (List.map print_endline) annots);
         (counter, z))
     |> begin
-      if !Debug_ocaml.debug_level >= 4 then
+      if !Debug_ocaml.debug_level > 4 then
         Exception.fmap (fun z -> z)
       else
-        let pp_ail = if !Debug_ocaml.debug_level = 3 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program in
+        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program in
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail -| snd)
     end
-    |> set_progress 12
+    |> set_progress "AILTY" 12
     |> pass_message "3. Ail typechecking completed!"
     
     |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib
                          (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
-    |> set_progress 13
+    |> set_progress "ELABO" 13
     |> pass_message "4. Translation to Core completed!"
 
 (*
@@ -543,9 +553,15 @@ let () =
   let info = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
+        output_string mlm_dbg_oc "\n";
+        close_out mlm_dbg_oc;
         exit 1
     | `Ok n ->
+        output_string mlm_dbg_oc "\n";
+        close_out mlm_dbg_oc;
         exit n
     | `Version
     | `Help ->
+        output_string mlm_dbg_oc "\n";
+        close_out mlm_dbg_oc;
         exit 0

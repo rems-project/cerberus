@@ -833,3 +833,17 @@ let to_string (loc, err) =
   )
 *)
 *)
+
+
+
+let string_of_core_run_error = function
+  | Illformed_program str ->
+      "ill-formed program: `" ^ str ^ "'"
+  | Found_empty_stack str ->
+      "found an empty stack: `" ^ str ^ "'"
+  | Reached_end_of_proc ->
+      "reached the end of a procedure"
+  | Unknown_impl ->
+      "unknown implementation constant"
+  | Unresolved_symbol sym ->
+      "unersolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))

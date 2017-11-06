@@ -422,30 +422,6 @@ let le_integer_range impl ity1 ity2 =
     (* reflexive cases *)
     true
   else match (ity1, ity2) with
-(*
-    (* reflexive cases *)
-    | (Char, Char) ->
-        true
-    | (Bool, Bool) ->
-        true
-    | (Signed Short, Signed Short) ->
-        true
-    | (Signed Int_, Signed Int_) ->
-        true
-    | (Signed Long, Signed Long) ->
-        true
-    | (Signed LongLong, Signed LongLong) ->
-        true
-    | (Unsigned Short, Unsigned Short) ->
-        true
-    | (Unsigned Int_, Unsigned Int_) ->
-        true
-    | (Unsigned Long, Unsigned Long) ->
-        true
-    | (Unsigned LongLong, Unsigned LongLong) ->
-        true
-*)
-    
     | (Char, Signed Ichar) ->
         impl.signed Char
     | (Char, Signed ibty) ->
@@ -527,76 +503,85 @@ let le_integer_range impl ity1 ity2 =
     | (IBuiltin str1, IBuiltin str2) ->
         str1 = str2
   
-  
-
-(*  
-  | (Signed Int8_t    , Signed Int8_t    ) -> true
-  | (Signed Int8_t    , Signed Int16_t   ) -> true
-  | (Signed Int8_t    , Signed Int32_t   ) -> true
-  | (Signed Int8_t    , Signed Int64_t   ) -> true
-  
-  | (Signed Int16_t   , Signed Int8_t    ) -> false
-  | (Signed Int16_t   , Signed Int16_t   ) -> true
-  | (Signed Int16_t   , Signed Int32_t   ) -> true
-  | (Signed Int16_t   , Signed Int64_t   ) -> true
-  
-  | (Signed Int32_t   , Signed Int8_t    ) -> false
-  | (Signed Int32_t   , Signed Int16_t   ) -> false
-  | (Signed Int32_t   , Signed Int32_t   ) -> true
-  | (Signed Int32_t   , Signed Int64_t   ) -> true
-  
-  | (Signed Int64_t   , Signed Int8_t    ) -> false
-  | (Signed Int64_t   , Signed Int16_t   ) -> false
-  | (Signed Int64_t   , Signed Int32_t   ) -> false
-  | (Signed Int64_t   , Signed Int64_t   ) -> true
-  
-  
-  | (Unsigned Int8_t  , Unsigned Int8_t  ) -> true
-  | (Unsigned Int8_t  , Unsigned Int16_t ) -> true
-  | (Unsigned Int8_t  , Unsigned Int32_t ) -> true
-  | (Unsigned Int8_t  , Unsigned Int64_t ) -> true
-  
-  | (Unsigned Int16_t , Unsigned Int8_t  ) -> false
-  | (Unsigned Int16_t , Unsigned Int16_t ) -> true
-  | (Unsigned Int16_t , Unsigned Int32_t ) -> true
-  | (Unsigned Int16_t , Unsigned Int64_t ) -> true
-  
-  | (Unsigned Int32_t , Unsigned Int8_t  ) -> false
-  | (Unsigned Int32_t , Unsigned Int16_t ) -> false
-  | (Unsigned Int32_t , Unsigned Int32_t ) -> true
-  | (Unsigned Int32_t , Unsigned Int64_t ) -> true
-  
-  | (Unsigned Int64_t , Unsigned Int8_t  ) -> false
-  | (Unsigned Int64_t , Unsigned Int16_t ) -> false
-  | (Unsigned Int64_t , Unsigned Int32_t ) -> false
-  | (Unsigned Int64_t , Unsigned Int64_t ) -> true
-  
-  
-  | (Unsigned Int8_t  , Signed Int8_t    ) -> false
-  | (Unsigned Int8_t  , Signed Int16_t   ) -> false
-  | (Unsigned Int8_t  , Signed Int32_t   ) -> false
-  | (Unsigned Int8_t  , Signed Int64_t   ) -> false
-*)
-
+ 
   | (IBuiltin str, _) -> error ("WIP le_integer_range (left): " ^ str)
   | (_, IBuiltin str) -> error ("WIP le_integer_range (right): " ^ str)
-(*  | _ -> error ("WIP: le_integer_range: ") *)
+
+  | (Char, Char) -> true
+  | (Bool, Bool) -> true
+  | (Size_t, Size_t) -> true
+  | (Ptrdiff_t, Ptrdiff_t) -> true
+  | (Enum _, Enum _) ->
+      error "Enum, Enum"
+  
+  | (Char, Size_t) ->
+      error "Char, Size_t"
+  | (Char, Ptrdiff_t) ->
+      error "Char, Ptrdiff_t"
+  | (Char, Enum _) ->
+      error "Char, Enum"
+  
+  | (Bool, Size_t) ->
+      error "Bool, Size_t"
+  | (Bool, Ptrdiff_t) ->
+      error "Bool, Ptrdiff_t"
+  | (Bool, Enum _) ->
+      error "Bool, Enum"
+  
+  | (Signed _, Size_t) ->
+      error "Signed, Size_t"
+  | (Signed _, Ptrdiff_t) ->
+      error "Signed, Ptrdiff_t"
+  | (Signed _, Enum _) ->
+      error "Signed, Enum"
+  
+  | (Unsigned _, Size_t) ->
+      error "Unsigned, Size_t"
+  | (Unsigned _, Ptrdiff_t) ->
+      error "Unsigned, Ptrdiff_t"
+  | (Unsigned _, Enum _) ->
+      error "Unsigned, Enum"
+  
+  | (Ptrdiff_t, Char) ->
+      error "Ptrdiff_t, Char"
+  | (Ptrdiff_t, Bool) ->
+      error "Ptrdiff_t, Bool"
+  | (Ptrdiff_t, Signed _) ->
+      error "Ptrdiff_t, Signed"
+  | (Ptrdiff_t, Unsigned _) ->
+      error "Ptrdiff_t, Unsigned"
+  | (Ptrdiff_t, Enum _) ->
+      error "Ptrdiff_t, Enum"
+  | (Ptrdiff_t, Size_t) ->
+      error "Ptrdiff_t, Size_t"
+  
+  | (Size_t, Char) ->
+      error "Size_t, Char"
+  | (Size_t, Bool) ->
+      error "Size_t, Bool"
+  | (Size_t, Signed _) ->
+      error "==> Size_t, Signed"
+  | (Size_t, Unsigned _) ->
+      error "Size_t, Unsigned"
+  | (Size_t, Enum _) ->
+      error "Size_t, Enum"
+  | (Size_t, Ptrdiff_t) ->
+      error "Size_t, Ptrdiff_t"
+  
+  | (Enum _, Char) ->
+      error "Enum, Char"
+  | (Enum _, Bool) ->
+      error "Enum, Bool"
+  | (Enum _, Signed _) ->
+      error "Enum, Signed"
+  | (Enum _, Unsigned _) ->
+      error "Enum, Unsigned"
+  | (Enum _, Size_t) ->
+      error "Enum, Size_t"
+  | (Enum _, Ptrdiff_t) ->
+      error "Enum, Ptrdiff_t"
 
 
-(*
- | Int8_t
- | Int16_t
- | Int32_t
- | Int64_t
-
-
-
- | Wchar_t
- | Char16_t
- | Char32_t
-
-
-*)
   end
 
 
@@ -787,26 +772,6 @@ let make_corresponding_unsigned = function
       ity
 end
 
-val is_integer_promotion: implementation -> integerType -> integerType -> bool
-let is_integer_promotion impl ity1 ity2 =
-  match (ity1, ity2) with
-    | (Signed Int_, Signed Int_) ->
-        true
-    | (Unsigned Int_, Signed Int_) ->
-        false
-    | (Unsigned Int_, Unsigned Int_) ->
-        true
-    | (Signed Int_, Unsigned Int_) ->
-        false
-    | (_, Signed Int_) ->
-        le_integer_rank ity1 (Signed Int_) && le_integer_range impl ity1 (Signed Int_)
-    | (_, Unsigned Int_) ->
-        le_integer_rank ity1 (Signed Int_) && not (le_integer_range impl ity1 (Signed Int_))
-    | (Size_t, Size_t) ->
-        true (* TODO: check ==> not has the standard says *)
-    | _ ->
-        ity1 = ity2 && not (le_integer_rank ity1 (Signed Int_))
-  end
 
 val integer_promotion: implementation -> integerType -> integerType
 let integer_promotion impl = function
@@ -827,14 +792,6 @@ let integer_promotion impl = function
         ity
   end
 
-val is_promotion: implementation -> ctype -> ctype -> bool
-let is_promotion impl ty1 ty2 =
-  match (ty1, ty2) with
-  | (Basic (Integer ity1), Basic (Integer ity2)) ->
-      is_integer_promotion impl ity1 ity2
-  | _ ->
-      false
-  end
 
 val promotion: implementation -> ctype -> maybe ctype
 let promotion impl = function
@@ -844,93 +801,44 @@ let promotion impl = function
       Nothing
 end
 
-val is_usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType -> bool
-let is_usual_arithmetic_promoted_integer impl ity1 ity2 ity3 =
-  if signed_type ity1 then
-    if signed_type ity2 then
-      if lt_integer_rank ity2 ity1 then
-        ity1 = ity3
-      else
-        ity2 = ity3
-    else if unsigned_type ity2 then
-      if le_integer_rank ity1 ity2 then
-        ity2 = ity3
-      else
-        if le_integer_range impl ity2 ity1 then
-          ity1 = ity3
-        else
-          is_corresponding_unsigned ity1 ity3
-    else
-      false
-  else if unsigned_type ity1 then
-    if unsigned_type ity2 then
-      if lt_integer_rank ity2 ity1 then
-        ity1 = ity3
-      else
-        ity2 = ity3
-    else if signed_type ity2 then
-      if le_integer_rank ity2 ity1 then
-        ity1 = ity3
-      else if le_integer_range impl ity1 ity2 then
-        ity2 = ity3
-      else
-        is_corresponding_unsigned ity2 ity3
-    else
-      false
-  else
-    false
-
-val usual_arithmetic_promoted_integer: implementation -> integerType -> integerType -> integerType
-let usual_arithmetic_promoted_integer impl ity1 ity2 =
-  if signed_type ity1 then
-    if signed_type ity2 then
-      if lt_integer_rank ity2 ity1 then
-        ity1
-      else
-        ity2
-    else
-      if le_integer_rank ity1 ity2 then
-        ity2
-      else
-        if le_integer_range impl ity2 ity1 then
-          ity1
-        else
-          make_corresponding_unsigned ity1
-  else
-    if unsigned_type ity2 then
-      if lt_integer_rank ity2 ity1 then
-        ity1
-      else
-        ity2
-    else
-      if le_integer_rank ity2 ity1 then
-        ity1
-      else if le_integer_range impl ity1 ity2 then
-        ity2
-      else
-        make_corresponding_unsigned ity2
-
-val is_usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType -> bool
-let is_usual_arithmetic_integer impl ity1 ity2 ity3 =
-  is_usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
-                                            (integer_promotion impl ity2) ity3
 
 val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
 let usual_arithmetic_integer impl ity1 ity2 =
-  usual_arithmetic_promoted_integer impl (integer_promotion impl ity1)
-                                         (integer_promotion impl ity2)
+  let promoted_ity1 = integer_promotion impl ity1 in
+  let promoted_ity2 = integer_promotion impl ity2 in
+  if signed_type promoted_ity1 then
+    if signed_type promoted_ity2 then
+      if lt_integer_rank promoted_ity2 promoted_ity1 then
+        promoted_ity1
+      else
+        promoted_ity2
+    else
+      if le_integer_rank promoted_ity1 promoted_ity2 then
+        promoted_ity2
+      else
+        if le_integer_range impl promoted_ity2 promoted_ity1 then
+          promoted_ity1
+        else
+          make_corresponding_unsigned promoted_ity1
+  else
+    if unsigned_type promoted_ity2 then
+      if lt_integer_rank promoted_ity2 promoted_ity1 then
+        promoted_ity1
+      else
+        promoted_ity2
+    else
+      if le_integer_rank promoted_ity2 promoted_ity1 then
+        promoted_ity1
+      else if le_integer_range impl promoted_ity1 promoted_ity2 then
+        promoted_ity2
+      else
+        make_corresponding_unsigned promoted_ity2
 
-val is_usual_arithmetic: implementation -> ctype -> ctype -> ctype -> bool
-let is_usual_arithmetic impl ty1 ty2 ty3 =
-  match (ty1, ty2, ty3) with
-  | (Basic (Integer ity1), Basic (Integer ity2), Basic (Integer ity3)) ->
-      is_usual_arithmetic_integer impl ity1 ity2 ity3
-  | _ ->
-      false
-  end
 
+(* TODO *)
 val usual_arithmetic_floating: implementation -> floatingType -> floatingType -> floatingType
 let usual_arithmetic_floating impl ty1 ty2 = ty1
+
 
 (* STD §6.2.5#12 *)
 val corresponding_real_type: ctype -> maybe realFloatingType
@@ -948,29 +856,6 @@ let corresponding_real_type ty =
     end
   else
     Nothing
-
-val usual_arithmetic: implementation -> ctype -> ctype -> maybe ctype
-let usual_arithmetic impl ty1 ty2 =
-  let mk_real rfty = Just (Basic (Floating (RealFloating rfty))) in
-  match (corresponding_real_type ty1, corresponding_real_type ty2) with
-  (* STD §6.3.1.8#1, bullet 1 *)
-  | (Just LongDouble, _) -> mk_real LongDouble
-  | (_, Just LongDouble) -> mk_real LongDouble
-  (* STD §6.3.1.8#1, bullet 2 *)
-  | (Just Double, _) -> mk_real Double
-  | (_, Just Double) -> mk_real Double
-  (* STD §6.3.1.8#1, bullet 3 *)
-  | (Just Float, _) -> mk_real Float
-  | (_, Just Float) -> mk_real Float
-  | _ ->
-    (* STD §6.3.1.8#1, bullet 4 *)
-    match (ty1, ty2) with
-    | (Basic (Integer ity1), Basic (Integer ity2)) ->
-        Just (Basic (Integer (usual_arithmetic_integer impl ity1 ity2)))
-    | _ ->
-        error "AilTypesAux.usual_arithmetic" (* Nothing *)
-    end
-  end
 
 
 (* assuming [ty] is an lvalue type, [modifiable ty] is true iff

@@ -26,20 +26,26 @@ let lookup_tag_definition s sym =
 
 val type_of_constant: integerConstant -> genIntegerType
 let type_of_constant iCst =
+  let () = Debug.warn [] (fun () ->
+    "GenTyping.type_of_constant is BROKEN, using min ranges is wrong"
+  ) in
   match iCst with
     | IConstant n Decimal Nothing ->
         if AAux.in_min_integer_range n (Signed Int_) then
           Concrete (Signed Int_)
+(*
         else if AAux.in_min_integer_range n (Signed Long) then
           Concrete (Signed Long)
         else if AAux.in_min_integer_range n (Signed LongLong) then
           Concrete (Signed LongLong)
+*)
         else
           Unknown iCst
     | IConstant n _ Nothing ->
         (* Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Signed Int_) then
           Concrete (Signed Int_)
+(*
         else if AAux.in_min_integer_range n (Unsigned Int_) then
           Concrete (Unsigned Int_)
         else if AAux.in_min_integer_range n (Unsigned Long) then
@@ -48,6 +54,7 @@ let type_of_constant iCst =
           Concrete (Signed LongLong)
         else if AAux.in_min_integer_range n (Unsigned LongLong) then
           Concrete (Unsigned LongLong)
+*)
         else
           Unknown iCst
     
@@ -55,30 +62,36 @@ let type_of_constant iCst =
         (* Decimal, Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Unsigned Int_) then
           Concrete (Unsigned Int_)
+(*
         else if AAux.in_min_integer_range n (Unsigned Long) then
           Concrete (Unsigned Long)
         else if AAux.in_min_integer_range n (Unsigned LongLong) then
           Concrete (Unsigned LongLong)
+*)
         else
           Unknown iCst
     
     | IConstant n Decimal (Just L) ->
         if AAux.in_min_integer_range n (Signed Long) then
           Concrete (Signed Long)
+(*
         else if AAux.in_min_integer_range n (Signed LongLong) then
           Concrete (Signed LongLong)
+*)
         else
           Unknown iCst
     | IConstant n _ (Just L) ->
         (* Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Signed Long) then
           Concrete (Signed Long)
+(*
         else if AAux.in_min_integer_range n (Unsigned Long) then
           Concrete (Unsigned Long)
         else if AAux.in_min_integer_range n (Signed LongLong) then
           Concrete (Signed LongLong)
         else if AAux.in_min_integer_range n (Unsigned LongLong) then
           Concrete (Unsigned LongLong)
+*)
         else
           Unknown iCst
     
@@ -86,8 +99,10 @@ let type_of_constant iCst =
         (* Decimal, Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Unsigned Long) then
           Concrete (Unsigned Long)
+(*
         else if AAux.in_min_integer_range n (Unsigned LongLong) then
           Concrete (Unsigned LongLong)
+*)
         else
           Unknown iCst
     
@@ -100,8 +115,10 @@ let type_of_constant iCst =
         (* Octal or Hexadecimal *)
         if AAux.in_min_integer_range n (Signed LongLong) then
           Concrete (Signed LongLong)
+(*
         else if AAux.in_min_integer_range n (Unsigned LongLong) then
           Concrete (Unsigned LongLong)
+*)
         else
           Unknown iCst
     
@@ -121,14 +138,15 @@ end
 
 
 (* TODO: is only used once, could be inlined *)
+(* STD §6.5.16.1#1 *)
 val well_typed_assignment: sigma unit -> ctype -> genType -> bool -> E.errorM bool
 let well_typed_assignment s ty1 gty2 null2 =
-  (* §6.5.16.1#1, bullet 1 *)
+  (* STD §6.5.16.1#1, bullet 1 *)
   if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 then
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in
     E.return true
   
-  (* §6.5.16.1#1, bullet 2 *)
+  (* STD §6.5.16.1#1, bullet 2 *)
   else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty1 then
     match (ty1, gty2) with
       | (Struct tag_sym1, GenStruct tag_sym2) ->
@@ -158,7 +176,7 @@ let well_typed_assignment s ty1 gty2 null2 =
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
     match (ty1, conv_ty1, gty2) with
       | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
-          (* §6.5.16.1#1, bullet 3 *)
+          (* STD §6.5.16.1#1, bullet 3 *)
           (* doing the "qualified or unqualified versions of" by checking the compatibility of
              the unqualified referenced type with no qualifiers *)
           (* NOTE: for the left operand, we are looking at the qualifiers before
@@ -166,16 +184,28 @@ let well_typed_assignment s ty1 gty2 null2 =
           if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
+(*
+            let () = Debug.print_debug 0 [] (fun () ->
+              "ref_qs1= " ^ Pp.stringFromAil_qualifiers ref_qs1
+            ) in
+            let () = Debug.print_debug 0 [] (fun () ->
+              "ref_qs2= " ^ Pp.stringFromAil_qualifiers ref_qs2
+            ) in
+*)
+            let () = Debug.print_debug 0 [] (fun () ->
+              (* TODO !!!! *)
+              "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
+            ) in
             E.return true
           
-          (* §6.5.16.1#1, bullet 4 *)
+          (* STD §6.5.16.1#1, bullet 4 *)
           else if (   (AAux.is_object conv_ref_ty1 && AAux.is_void   ref_ty2)
                    || (AAux.is_void   conv_ref_ty1 && AAux.is_object ref_ty2) ) &&
                   AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 4")        in (* DEBUG *)
             E.return true
           
-          (* §6.5.16.1#1, bullet 5 *)
+          (* STD §6.5.16.1#1, bullet 5 *)
           else if null2 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 5") in (* DEBUG *)
             E.return true
@@ -187,7 +217,7 @@ let well_typed_assignment s ty1 gty2 null2 =
             ) in (* DEBUG *)
             E.return false
       | _ ->
-          (* §6.5.16.1#1, bullet 5 *)
+          (* STD §6.5.16.1#1, bullet 5 *)
           E.return null2
 (*
           let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: is_pointer ty1") in (* DEBUG *)
@@ -195,7 +225,7 @@ let well_typed_assignment s ty1 gty2 null2 =
 *)
     end
   
-  (* §6.5.16.1#1, bullet 6 *)
+  (* STD §6.5.16.1#1, bullet 6 *)
   else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 && GAux.is_pointer gty2 then
     let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
     E.return true
@@ -257,16 +287,57 @@ let combine_qualifiers_right gty1 gty2 =
   end
 
 
-val well_typed_conditional: genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
-let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
+val well_typed_conditional:
+    (Loc.t * Loc.t * Loc.t * Loc.t) ->
+    genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
+let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_null2 is_null3 =
+  let () = Debug.warn [] (fun () -> "TODO: need to clean GenTyping.well_typed_conditional (see the WIP comment)") in
+  
+(* STD §6.5.15#2 *)
   if is_scalar gty1 then
+    (* STD §6.5.15#3, bullet 1 *)
     if is_arithmetic gty2 && is_arithmetic gty3 then
-      match usual_arithmetic gty2 gty3 with
-        | Just gty ->
-            E.return (GenRValueType gty)
-        | Nothing ->
-            E.fail Loc.unknown (TError_TODO 8)
-      end
+      (* STD §6.5.15#5, sentence 1 *)
+      E.return (GenRValueType (usual_arithmetic gty2 gty3))
+    
+    (* STD §6.5.15#3, bullet 2 *)
+    else if GAux.is_struct_or_union gty2 && gty2 = gty3 then
+      (* STD §6.5.15#5, sentence 2 *)
+      E.return (GenRValueType gty2)
+    
+    (* STD §6.5.15#3, bullet 3 *)
+    else if GAux.void gty2 && GAux.void gty3 then
+      (* STD §6.5.15#5, sentence 3 *)
+      E.return (GenRValueType GenVoid)
+    
+(* WIP
+    else match (gty2, gty3) with
+      | (GenPointer ref_qs2 ref_ty2, GenPointer ref_qs3 ref_ty3) ->
+          (*  *)
+          let result_qs = AAux.combine_qualifiers ref_qs ref_qs2 in
+      
+
+
+
+    (* STD §6.5.15#3, bullet 5 *)
+    else if GAux.is_pointer gty2 && is_null3 then
+      (* STD §6.5.15#6, sentence 1 *)
+      (* STD §6.5.15#6, sentence 3 *)
+      E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
+    else if is_null2 && GAux.is_pointer gty3 then
+      (* STD §6.5.15#6, sentence 1 *)
+      (* STD §6.5.15#6, sentence 3 *)
+      E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
+    else 
+
+
+    (* STD §6.5.15#3, bullet 4 *)
+    (* STD §6.5.15#3, bullet 6 *)
+
+    else 
+
+    end
+*)
     
     else match composite_pointer gty2 gty3 with
       | Just gty ->
@@ -285,7 +356,7 @@ let well_typed_conditional gty1 gty2 gty3 is_null2 is_null3 =
           else E.fail Loc.unknown (TError_TODO 9)
     end
   else
-    E.fail Loc.unknown (TError_TODO 10)
+    E.fail (Loc.with_cursor_from loc_e1 loc_cond) (TError "§6.5.15#2")
 
 
 val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
@@ -391,9 +462,10 @@ type annotation_context =
   | CTXmemberof
     (* left operand of AilEassign or AilEcompoundAssign *)
   | CTXassign
+  (* array initialiser (used by AilEstr) *)
+  | CTXarray_init
     (* otherwise *)
   | CTXother
-(* TODO !! a AilEstr used to initialize an array *)
 
 val     annotate_expression: sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
 let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
@@ -893,7 +965,7 @@ TODO
                                 E.fail loc (TError "TODO[msg] Union memberof: invalid member")
                           end
                       | _ ->
-                          E.fail loc (TError "TODO[msg] AilEmemberof Union, failed to kind a valid tag definition")
+                          E.fail loc (TError "TODO[msg] AilEmemberof Union, failed to find a valid tag definition")
                     end
                 | _ ->
                     E.fail loc (TError "TODO[msg] AilEmemberof, the postfix-expression must have struct/union type")
@@ -918,7 +990,7 @@ TODO
                           E.fail Loc.unknown (TError "TODO[msg] Struct memberofptr: invalid member")
                     end
                 | _ ->
-                    E.fail loc (TError "TODO: AilEmemberofptr Struct, failed to kind a valid tag definition")
+                    E.fail loc (TError "TODO: AilEmemberofptr Struct, failed to find a valid tag definition")
               end
           | (e', GenPointer ref_qs (Union tag_sym)) ->
               match lookup_tag_definition sigm tag_sym with
@@ -944,13 +1016,11 @@ TODO
         annotate_expression CTXassign e1 >>= fun e1' ->
         match GenTypes.genTypeCategoryOf e1' with
           | GenLValueType qs1 ty1 _ ->
-              let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
-                "[AilEassign] " ^ Pp.stringFromAil_ctype qs1 ty1
-              ) in
               if AAux.modifiable sigm qs1 ty1 then
-                let ty = AAux.rvalue_coercion ty1 in
-                annotate_assignee ty e2 >>= fun e2' -> 
-                E.return (AilEassign e1' e2', GenRValueType (inject_type ty))
+                (* STD §6.5.16#3, sentence 3 *)
+                let assign_ty = AAux.rvalue_coercion ty1 in
+                annotate_assignee assign_ty e2 >>= fun e2' -> 
+                E.return (AilEassign e1' e2', GenRValueType (inject_type assign_ty))
               else
                 fail (* lvalue was not modifiable *)
           | _ ->
@@ -961,12 +1031,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 1"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail loc (TError_TODO 29)
     
@@ -974,12 +1039,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 2"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 30)
     
@@ -987,12 +1047,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 3"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 31)
     
@@ -1000,12 +1055,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 4"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 32)
     
@@ -1013,12 +1063,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 5"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 33)
     
@@ -1026,12 +1071,7 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 6"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 34)
     
@@ -1039,24 +1079,14 @@ TODO
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match promotion gty1 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "promotion failed on well typed binary arithmetic. 1"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
         else E.fail Loc.unknown (TError_TODO 35)
     
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
-          match promotion gty1 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "promotion failed on well typed binary arithmetic. 2"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
         else E.fail Loc.unknown (TError_TODO 36)
     
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
@@ -1068,13 +1098,7 @@ STD_ "§6.5.2.1#1" $
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty2)
         else if well_typed_binary_arithmetic gty1 Add gty2 then
-          match usual_arithmetic gty1 gty2 with
-          | Just gty ->
-              E.return (AilEbinary e1' bop e2', GenRValueType gty)
-          | Nothing ->
-              error ("usual_arithmetic failed on two valid genTypes. 7 ==> " ^
-                     Pp.stringFromAil_genType gty1 ^ "<->" ^ Pp.stringFromAil_genType gty2)
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 37)
     
@@ -1086,12 +1110,7 @@ STD_ "§6.5.2.1#1" $
         else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if well_typed_binary_arithmetic gty1 Sub gty2 then
-          match usual_arithmetic gty1 gty2 with
-            | Just gty ->
-                E.return (AilEbinary e1' bop e2', GenRValueType gty)
-            | Nothing ->
-                error "usual_arithmetic failed on two valid genTypes. 8"
-          end
+          E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
           E.fail Loc.unknown (TError_TODO 38)
     
@@ -1223,7 +1242,8 @@ STD_ "§6.5.2.1#1" $
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         annotate_rvalue e3 >>= fun (e3', gty3) ->
-        well_typed_conditional gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3') >>= fun genCat ->
+        well_typed_conditional (loc, locOf e1, locOf e2, locOf e3)
+            gty1 gty2 gty3 (is_null_pointer_constant e2') (is_null_pointer_constant e3') >>= fun genCat ->
         E.return (AilEcond e1' e2' e3', genCat)
     
     | AilEcompoundAssign e1 (Add as aop) e2 ->
@@ -1400,6 +1420,12 @@ and function_decay sigm a_expr =
 *)
 
 and perform_decays sigm ctx a_expr =
+  let is_literal = match a_expr with
+    | AnnotatedExpression _ _ _ (AilEstr _) ->
+        true
+    | _ ->
+        false
+  end in
   match annotations a_expr with
     | (std_annots, GenLValueType qs ty isRegister) ->
         let () = Debug.print_debug 1 [] (fun () ->
@@ -1420,7 +1446,9 @@ and perform_decays sigm ctx a_expr =
               AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
                 std_annots (Loc.locOf a_expr) (AilErvalue a_expr)
             )
-        else if AAux.is_array ty && not (List.elem ctx [CTXsizeof; CTXaddr (*TODO: ; CTXstr *)]) then
+        else if    AAux.is_array ty
+                && not (List.elem ctx [CTXsizeof; CTXaddr])
+                && not (List.elem ctx [CTXarray_init] && is_literal) then
           (* STD §6.3.2.1#3 *)
           (* performing the array decay *)
           if isRegister then
@@ -1476,21 +1504,6 @@ and annotate_rvalue sigm gamm expr =
      | GenLValueType qs ty isRegister ->
          (AnnotatedExpression (GenLValueType qs ty isRegister) std_annots loc expr_, inject_type ty)
    end
-
-
-(*
-and annotate_rvalue sigm gamm expr =
-  annotate_expression sigm gamm CTXother(*TODO*) expr >>= fun (AnnotatedExpression gtc loc e_ as expr') ->
-   match gtc with
-     | GenRValueType gty ->
-         let gty' = GAux.rvalue_coercion gty in
-         E.return (AnnotatedExpression (GenRValueType gty') loc e_, gty')
-     | GenLValueType qs ty isRegister ->
-        AAux.lvalue_coercion sigm ty >>= fun ty' ->
-        E.return (AnnotatedExpression (GenLValueType qs ty' isRegister) loc e_, inject_type ty')
-   end
-*)
-
 
 
 and annotate_assignee sigm gamm ty1 e2 =
@@ -1659,7 +1672,12 @@ and annotate_definition_aux sigm gamm (ty, e) =
       (* TODO: at this point we should now have a non character array *)
       else if AAux.is_array ty then
         (* TODO: check the std. (not that it says anything useful here ...) *)
-        annotate_expression sigm gamm CTXother e >>= fun a_e ->
+        let ctx =
+          if AAux.is_array_of_character ty then
+            CTXarray_init
+          else
+            CTXother in
+        annotate_expression sigm gamm ctx e >>= fun a_e ->
           let () = Debug.warn [Debug.DB_ail_typing]
             (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
@@ -1680,6 +1698,16 @@ and annotate_definition_aux sigm gamm (ty, e) =
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
+                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+
+         | (Array elem_ty1 (Just n1), GenLValueType qs2 (Array elem_ty2 (Just n2)) _) ->
+             (* TODO: isRegister? *)
+             (* TODO: what if n1 < n2? *)
+             (* TODO: check std *)
+             if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 >= n2 then
+               E.return a_e
+             else
+                error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
          | _ ->
              (* STD §6.7.9#14 *)

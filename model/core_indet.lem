@@ -1,5 +1,5 @@
 open import Pervasives Utils
-import Core (* Memory *) Exception Errors Pp (* Memory_order *)
+import Core Core_aux (* Memory *) Exception Errors Pp (* Memory_order *)
 
 open import {hol} `pp_coreTheory`
 
@@ -388,26 +388,20 @@ let determinate_expr e =
 
   *)
 
-let rec indet_hack expr =
-  match expr with
+let rec indet_hack (Core.Expr annot expr_ as expr) =
+  match expr_ with
     | Core.Epure _ ->
         expr
     | Core.Ememop _ _ ->
         expr
-(*
-    | Core.Eraise _ ->
-        expr
-    | Core.Eregister _ _ ->
-        expr
-*)
     | Core.Eskip ->
         expr
     | Core.Ecase pe xs ->
-        Core.Ecase pe (List.map (fun (pat, e) -> (pat, indet_hack e)) xs)
+        Core.Expr annot (Core.Ecase pe (List.map (fun (pat, e) -> (pat, indet_hack e)) xs))
     | Core.Elet sym pe1 e2 ->
-        Core.Elet sym pe1 (indet_hack e2)
+        Core.Expr annot (Core.Elet sym pe1 (indet_hack e2))
     | Core.Eif pe1 e2 e3 ->
-        Core.Eif pe1 (indet_hack e2) (indet_hack e3)
+        Core.Expr annot (Core.Eif pe1 (indet_hack e2) (indet_hack e3))
     | Core.Eccall _ _ _ ->
         expr
     | Core.Eproc _ _ _ ->
@@ -415,17 +409,20 @@ let rec indet_hack expr =
     | Core.Eaction _ ->
         expr
     | Core.Eunseq es ->
-        Core.Eunseq (map indet_hack es)
+        Core.Expr annot (Core.Eunseq (map indet_hack es))
     | Core.Ewseq as_opt e1 e2 ->
-        Core.Ewseq as_opt (indet_hack e1) (indet_hack e2)
+        Core.Expr annot (Core.Ewseq as_opt (indet_hack e1) (indet_hack e2))
     | Core.Esseq as_opt e1 e2 ->
-        Core.Esseq as_opt (indet_hack e1) (indet_hack e2)
+        Core.Expr annot (Core.Esseq as_opt (indet_hack e1) (indet_hack e2))
 (* TODO: lem non termination bug *)
     | Core.Easeq (Just (sym, bTy)) act pact ->
         let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_indet, Easeq ==> assuming pact is a store()") in
-        Core.Ewseq (Core.CaseBase (Just sym, bTy))
-          (Core.Eaction (Core.Paction Core.Pos act))
-          (Core.Ewseq (Core.CaseBase (Nothing, Core.BTy_unit)) (Core.Eaction pact) (Core.Epure (Core.Pexpr () (Core.PEsym sym))))
+        Core.Expr annot (Core.Ewseq (Core.CaseBase (Just sym, bTy))
+          (Core.Expr [] (Core.Eaction (Core.Paction Core.Pos act)))
+          (Core_aux.mk_wseq_e (Core.CaseBase (Nothing, Core.BTy_unit))
+             (Core.Expr [] (Core.Eaction pact))
+             (Core_aux.mk_pure_e (Core.Pexpr () (Core.PEsym sym)))
+          ))
 (*
     | Core.Easeq _a_opt act pact ->
         Core.Ewseq [_a_opt] (Core.Eaction (Core.Paction Core.Pos act))
@@ -434,23 +431,23 @@ let rec indet_hack expr =
     | Core.Eindet _ e ->
         indet_hack e
     | Core.Ebound i e ->
-        indet_hack e
+        Core.Expr annot (Core.Ebound i (indet_hack e))
     | Core.Esave sym sym_bTys e ->
-        Core.Esave sym sym_bTys (indet_hack e)
+        Core.Expr annot (Core.Esave sym sym_bTys (indet_hack e))
     | Core.Erun bs sym pes ->
-        Core.Erun bs sym pes
+        expr
     | Core.End es ->
-        Core.End (map indet_hack es)
+        Core.Expr annot (Core.End (map indet_hack es))
     | Core.Epar es ->
-        Core.Epar (map indet_hack es)
+        Core.Expr annot (Core.Epar (map indet_hack es))
     | Core.Ewait tid ->
-        Core.Ewait tid
+        Core.Expr annot (Core.Ewait tid)
+(*
     | Core.Eloc loc e ->
-        Core.Eloc loc (indet_hack e)
+        Core.Expr annot (Core.Eloc loc (indet_hack e))
     | Core.Estd s e ->
-        Core.Estd s (indet_hack e)
-    | _ ->
-        error ("Core_indet ==> " ^ Pp.stringFromCore_expr expr)
+        Core.Expr annot (Core.Estd s (indet_hack e))
+*)
 end
 
 
