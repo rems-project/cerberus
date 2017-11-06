@@ -12,6 +12,11 @@ class UI {
     window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
 
+    // UI settings
+    this.auto_refresh = true
+    this.colour = true
+    this.colour_cursor = true
+
     /*
      * Menu bar event handlers
      */
@@ -93,6 +98,7 @@ class UI {
       this.currentView.newPane.add(new TabAsm(defaultCompiler))
     })
 
+
     // Views
     // TODO tabs are not being used
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
@@ -104,6 +110,24 @@ class UI {
     $('#console_tab').on('click', () => this.currentView.console.setActive())
     $('#graph_tab')  .on('click', () => this.currentView.graph.setActive())
     $('#unsplit')    .on('click', () => this.currentView.unsplit())
+    $('#refresh')    .on('click', () => this.elab())
+
+    // Checkboxes
+    $('#auto_refresh').on('click', (e) => {
+      this.auto_refresh = !this.auto_refresh;
+      $('#cb_auto_refresh').prop('checked', this.auto_refresh)
+    })
+    $('#colour').on('click', (e) => {
+      this.colour = !this.colour
+      this.currentView.highlight()
+      if (!this.colour) this.currentView.isHighlighted = false
+      $('#cb_colour').prop('checked', this.colour)
+    })
+    $('#colour_cursor').on('click', (e) => {
+      this.colour_cursor = !this.colour_cursor;
+      $('#cb_colour_cursor').prop('checked', this.colour_cursor)
+    })
+
 
     // Help
     $('#help').on('click', () => {
@@ -127,7 +151,9 @@ class UI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
-    window.setInterval(() => this.elab(), 2000);
+    window.setInterval(() => {
+      if (this.auto_refresh) this.elab()
+    }, 2000);
 
   }
 
