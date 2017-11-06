@@ -70,3 +70,7 @@ tests/csmith/small_int_arith/*.c
 
 tests/ci_results.xml
 *~
+
+BACKUP/**
+ocaml_generated_OLD/**
+model/DEAD/**

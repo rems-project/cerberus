@@ -83,8 +83,8 @@ let fv_act (Paction(_, Action (_, _, act))) fvs =
     fv_pe pe1 fvs |> fv_pe pe2 |> fv_pe pe3 |> fv_pe pe4
   | Fence0 _ -> fvs
 
-let rec fv_core e fvs =
-  match e with
+let rec fv_core (Expr (_, e_)) fvs =
+  match e_ with
   | Epure pe            -> fv_pe pe fvs
   | Ememop (memop, pes) -> List.fold_left (flip fv_pe) fvs pes
   | Eaction act         -> fv_act act fvs
@@ -122,5 +122,3 @@ let rec fv_core e fvs =
   | Elet   _ -> raise (Unsupported "fv let")
   | Epar   _ -> raise (Unsupported "fv par")
   | Ewait  _ -> raise (Unsupported "fv wait")
-  | Eloc   _ -> raise (Unsupported "fv loc")
-  | Estd   _ -> raise (Unsupported "fv std")

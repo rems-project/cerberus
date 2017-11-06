@@ -5,10 +5,10 @@ import Core_aux
 module Caux = Core_aux
 
 
-open import Utils Show Core_eval Errors
+open import Utils Show Errors
 import Cmm_op Cmm_csem Cthread
 
-import Core_run
+import Core_eval Core_run
 
 
 import Translation_aux
@@ -360,7 +360,7 @@ let rec drive_core_thread tid =
           ND.put <| dr_st with
             core_run_state= run_st';
             core_state= Core_run.update_thread_state tid
-                          (mk_th_st (Core.Eunseq $ List.reverse (List.map (fun z -> Core.Ewait z) th_tids)))
+                          (mk_th_st (Core.Expr [] (Core.Eunseq $ List.reverse (List.map (fun z -> Core.Expr [] (Core.Ewait z)) th_tids))))
                           core_st';
           |> >>
           ND.mapM_ drive_core_thread th_tids >>
@@ -370,7 +370,8 @@ let rec drive_core_thread tid =
         ( "Step_printf2"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
           let eval_conv (*ty1*) ty2 mval =
-            eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
+            let () = Debug.print_debug 1 [] (fun () -> "XX 24") in
+            Core_eval.eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
               (* Core.PEcall (Core.Sym conv_sym) *)
               Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
                 [ Caux.mk_ctype_pe ty2
@@ -398,6 +399,16 @@ let rec drive_core_thread tid =
           | Right (Undefined.Undef loc ubs) ->
               ND.kill (ND.Undef loc ubs)
         end )
+
+    | Core_run.Step_bound step_m ->
+        ( "Step_bound"
+        , liftCore_run step_m >>= fun th_st' ->
+          ND.update (fun dr_st -> <| dr_st with
+            core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1
+          |>) >>
+          drive_core_thread tid )
+
   end) (Core_run.core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
 
 
@@ -788,7 +799,8 @@ let rec driver with_concurrency =
 
 val     hack: Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
-  match step_eval_pexpr Loc.unknown (Just mem_st) core_file pexpr with
+  let () = Debug.print_debug 1 [] (fun () -> "XX 25") in
+  match Core_eval.step_eval_pexpr Loc.unknown (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
@@ -947,7 +959,7 @@ let driver_globals with_concurrency sym_supply file =
   (* spawning a thread for the initialisation of globals, and later the execution of main *)
   spawn_thread Nothing <|
     (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
-    Core_run.arena=  Core.Eskip;
+    Core_run.arena=  Core.Expr [] Core.Eskip;
     Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
     Core_run.labels= Map.empty;
     Core_run.labels2= Map.empty;
@@ -1076,7 +1088,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply fil
     | Just decl ->
         match decl with
           | Core.Fun  _ params pe ->
-              ND.return (params, Core.Epure pe)
+              ND.return (params, Core.Expr [] (Core.Epure pe))
           | Core.ProcDecl _ _ ->
               ND.kill (ND.Other (DErr_other "the startup function has no definition"))
           | Core.Proc _ params e ->

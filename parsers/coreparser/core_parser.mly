@@ -428,92 +428,88 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         Eff.return (Pexpr ((), PEis_unsigned pe))
 
 
-let rec symbolify_expr : parsed_expr -> (unit expr) Eff.t = function
- | Epure _pe ->
-     symbolify_pexpr _pe >>= fun pe ->
-     Eff.return (Epure pe)
- | Ememop (memop, _pes) ->
-     Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-     Eff.return (Ememop (memop, pes))
- | Eaction _pact ->
-     symbolify_paction _pact >>= fun pact ->
-     Eff.return (Eaction pact)
- | Ecase (_pe, _pat_es) ->
-     symbolify_pexpr _pe >>= fun pe ->
-     Eff.mapM (fun (_pat, _e) ->
+let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
+  (fun z -> Expr ([], z)) <$> match expr_ with
+   | Epure _pe ->
+       symbolify_pexpr _pe >>= fun pe ->
+       Eff.return (Epure pe)
+   | Ememop (memop, _pes) ->
+       Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+       Eff.return (Ememop (memop, pes))
+   | Eaction _pact ->
+       symbolify_paction _pact >>= fun pact ->
+       Eff.return (Eaction pact)
+   | Ecase (_pe, _pat_es) ->
+       symbolify_pexpr _pe >>= fun pe ->
+       Eff.mapM (fun (_pat, _e) ->
+         under_scope (
+           symbolify_pattern _pat >>= fun pat ->
+           symbolify_expr _e      >>= fun e   ->
+           Eff.return (pat, e)
+         )
+       ) _pat_es >>= fun pat_es ->
+       Eff.return (Ecase (pe, pat_es))
+   | Elet (_pat, _pe1, _e2) ->
+       symbolify_pexpr _pe1 >>= fun pe1 ->
        under_scope (
          symbolify_pattern _pat >>= fun pat ->
-         symbolify_expr _e      >>= fun e   ->
-         Eff.return (pat, e)
+         symbolify_expr _e2     >>= fun e2  ->
+         Eff.return (Elet (pat, pe1, e2))
        )
-     ) _pat_es >>= fun pat_es ->
-     Eff.return (Ecase (pe, pat_es))
- | Elet (_pat, _pe1, _e2) ->
-     symbolify_pexpr _pe1 >>= fun pe1 ->
-     under_scope (
-       symbolify_pattern _pat >>= fun pat ->
-       symbolify_expr _e2     >>= fun e2  ->
-       Eff.return (Elet (pat, pe1, e2))
-     )
-  | Eif (_pe1, _e2, _e3) ->
-      symbolify_pexpr _pe1 >>= fun pe1 ->
-      symbolify_expr _e2   >>= fun e2  ->
-      symbolify_expr _e3   >>= fun e3  ->
-      Eff.return (
-        Eif (pe1, e2, e3)
-      )
-  | Eskip ->
-      Eff.return Eskip
-  | Eccall ((), _pe, _pes) ->
-     symbolify_pexpr _pe           >>= fun pe  ->
-     Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-     Eff.return (Eccall ((), pe, pes))
-  | Eproc ((), _nm, _pes) ->
-      symbolify_name _nm            >>= fun nm  ->
-      Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-      Eff.return (Eproc ((), nm, pes))
- | Eunseq _es ->
-     Eff.mapM symbolify_expr _es >>= fun es ->
-     Eff.return (Eunseq es)
- | Ewseq (_pat, _e1, _e2) ->
-     symbolify_expr _e1 >>= fun e1 ->
-     under_scope (
-       symbolify_pattern _pat >>= fun pat ->
-       symbolify_expr _e2     >>= fun e2  ->
-       Eff.return (Ewseq (pat, e1, e2))
-     )
- | Esseq (_pat, _e1, _e2) ->
-     symbolify_expr _e1 >>= fun e1 ->
-     under_scope (
-       symbolify_pattern _pat >>= fun pat ->
-       symbolify_expr _e2     >>= fun e2  ->
-       Eff.return (Esseq (pat, e1, e2))
-     )
- | Easeq _ ->
-     failwith "WIP: Core_parser.symbolify_expr, Easeq"
- | Eindet (n, _e) ->
-     symbolify_expr _e >>= fun e ->
-     Eff.return (Eindet (n, e))
- | Ebound (n, _e) ->
-     symbolify_expr _e >>= fun e ->
-     Eff.return (Ebound (n, e))
- | End _es ->
-     Eff.mapM symbolify_expr _es >>= fun es ->
-     Eff.return (End es)
- | Esave _ ->
-     failwith "WIP: Core_parser.symbolify_expr, Esave"
- | Erun _ ->
-     failwith "WIP: Core_parser.symbolify_expr, Erun"
- | Epar _es ->
-     Eff.mapM symbolify_expr _es >>= fun es ->
-     Eff.return (Epar es)
- | Ewait _ ->
-     assert false
- | Eloc (loc, _e) ->
-     symbolify_expr _e >>= fun e ->
-     Eff.return (Eloc (loc, e))
- | Estd _ ->
-     assert false
+   | Eif (_pe1, _e2, _e3) ->
+       symbolify_pexpr _pe1 >>= fun pe1 ->
+       symbolify_expr _e2   >>= fun e2  ->
+       symbolify_expr _e3   >>= fun e3  ->
+       Eff.return (
+         Eif (pe1, e2, e3)
+       )
+   | Eskip ->
+       Eff.return Eskip
+   | Eccall ((), _pe, _pes) ->
+       symbolify_pexpr _pe           >>= fun pe  ->
+       Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+       Eff.return (Eccall ((), pe, pes))
+   | Eproc ((), _nm, _pes) ->
+       symbolify_name _nm            >>= fun nm  ->
+       Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+       Eff.return (Eproc ((), nm, pes))
+   | Eunseq _es ->
+       Eff.mapM symbolify_expr _es >>= fun es ->
+       Eff.return (Eunseq es)
+   | Ewseq (_pat, _e1, _e2) ->
+       symbolify_expr _e1 >>= fun e1 ->
+       under_scope (
+         symbolify_pattern _pat >>= fun pat ->
+         symbolify_expr _e2     >>= fun e2  ->
+         Eff.return (Ewseq (pat, e1, e2))
+       )
+   | Esseq (_pat, _e1, _e2) ->
+       symbolify_expr _e1 >>= fun e1 ->
+       under_scope (
+         symbolify_pattern _pat >>= fun pat ->
+         symbolify_expr _e2     >>= fun e2  ->
+         Eff.return (Esseq (pat, e1, e2))
+       )
+   | Easeq _ ->
+       failwith "WIP: Core_parser.symbolify_expr, Easeq"
+   | Eindet (n, _e) ->
+       symbolify_expr _e >>= fun e ->
+       Eff.return (Eindet (n, e))
+   | Ebound (n, _e) ->
+       symbolify_expr _e >>= fun e ->
+       Eff.return (Ebound (n, e))
+   | End _es ->
+       Eff.mapM symbolify_expr _es >>= fun es ->
+       Eff.return (End es)
+   | Esave _ ->
+       failwith "WIP: Core_parser.symbolify_expr, Esave"
+   | Erun _ ->
+       failwith "WIP: Core_parser.symbolify_expr, Erun"
+   | Epar _es ->
+       Eff.mapM symbolify_expr _es >>= fun es ->
+       Eff.return (Epar es)
+   | Ewait _ ->
+       assert false
 
 and symbolify_action_ = function
  | Create (_pe1, _pe2, pref) ->
@@ -1170,62 +1166,63 @@ pexpr:
 
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
-    { Eloc (Loc_region ($startpos, $endpos, None), e_) }
+    { let Expr (annot, expr_) = e_ in
+      Expr (EA_loc (Loc_region ($startpos, $endpos, None)) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Eloc (Loc_region ($startpos, $endpos, None), Epure pe_) }
+    { Expr ([EA_loc (Loc_region ($startpos, $endpos, None))], Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
-    { Eloc (Loc_region ($startpos, $endpos, None), Ememop (memop, pes)) }
+    { Expr ([EA_loc (Loc_region ($startpos, $endpos, None))], Ememop (memop, pes)) }
 | SKIP
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _nm= name RPAREN
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eproc ((), _nm, []) ) }
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eproc ((), _nm, _pes) ) }
 | CCALL LPAREN _pe= pexpr RPAREN
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eccall ((), _pe, []) ) }
 | CCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eccall ((), _pe, _pes) ) }
 | _pact= paction
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Ewseq (_pat, _e1, _e2) ) }
 | _e1= expr SEMICOLON _e2= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Esseq (CaseBase (None, BTy_unit), _e1, _e2) ) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Esseq (_pat, _e1, _e2) ) }
 | LET ATOM _sym_bTy_opt= option(pair(SYM, core_base_type)) EQ _act1= action IN _pact2= paction
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Easeq (_sym_bTy_opt, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eindet (Nat_big_num.to_int n, _e) ) }
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Ebound (Nat_big_num.to_int n, _e) ) }
 (*
 | SAVE _sym= SYM LPAREN RPAREN IN _e= expr
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Esave2 () ) }
 
 
@@ -1233,10 +1230,10 @@ expr:
   | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
   *)
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Eloc ( Loc_region ($startpos, $endpos, None)
+    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Epar _es ) }
 ;
 

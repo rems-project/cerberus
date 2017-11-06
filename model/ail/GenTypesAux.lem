@@ -9,6 +9,13 @@ open import {hol} `utilTheory`
 import Debug
 
 
+let unatomic = function
+  | GenAtomic ty ->
+      inject_type ty
+  | gty ->
+      gty
+end
+
 (* == constructor predicates on ctypes =========================================================== *)
 val is_array: genType -> bool
 let is_array = function
@@ -63,6 +70,29 @@ let void = function
 end
 
 
+val is_struct: genType -> bool
+let is_struct ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | GenStruct _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_union: genType -> bool
+let is_union ty =
+  (* TODO: check atomic *)
+  match unatomic ty with
+  | GenUnion _ ->
+      true
+  | _ ->
+      false
+end
+
+val is_struct_or_union: genType -> bool
+let is_struct_or_union ty =
+  is_struct ty || is_union ty
 
 
 
@@ -215,12 +245,6 @@ let composite_pointer gty1 gty2 =
 let integer_promotion git : genIntegerType =
   Promote git
 
-(* TODO: made obsolete by integer_promote *)
-let promotion gt : maybe genType =
-  match gt with
-  | GenBasic (GenInteger git) -> Just (GenBasic (GenInteger (integer_promotion git)))
-  | _                         -> Nothing
-  end
 
 (* NOTE: must be called on a integer type *)
 val integer_promote: genType -> genType
@@ -253,25 +277,33 @@ let corresponding_real_type gt =
   else
     Nothing
 
-let usual_arithmetic gt1 gt2 =
-  let mk_real rfty = Just (GenBasic (GenFloating (RealFloating rfty))) in
-  match (corresponding_real_type gt1, corresponding_real_type gt2) with
-  (* STD §6.3.1.8#1, bullet 1 *)
-  | (Just LongDouble, _) -> mk_real LongDouble
-  | (_, Just LongDouble) -> mk_real LongDouble
-  (* STD §6.3.1.8#1, bullet 2 *)
-  | (Just Double, _) -> mk_real Double
-  | (_, Just Double) -> mk_real Double
-  (* STD §6.3.1.8#1, bullet 3 *)
-  | (Just Float, _) -> mk_real Float
-  | (_, Just Float) -> mk_real Float
-  | _ ->
-    (* STD §6.3.1.8#1, bullet 4 *)
-    match (gt1, gt2) with
-    | (GenBasic (GenInteger git1), GenBasic (GenInteger git2)) ->
-      Just (GenBasic (GenInteger (usual_arithmetic_integer git1 git2)))
-    | (_ , _) -> Nothing
-    end
+(* NOTE: must only be called on arithmetic types *)
+val usual_arithmetic: genType -> genType -> genType
+let usual_arithmetic gty1 gty2 =
+  (* STD §6.3.1.8#1, bullet 4 *)
+  match (gty1, gty2) with
+    | (GenBasic (GenInteger gity1), GenBasic (GenInteger gity2)) ->
+        GenBasic (GenInteger (usual_arithmetic_integer gity1 gity2))
+    | _ ->
+        match (corresponding_real_type gty1, corresponding_real_type gty2) with
+          (* STD §6.3.1.8#1, bullet 1 *)
+          | (Just LongDouble, _) ->
+              GenBasic (GenFloating (RealFloating LongDouble))
+          | (_, Just LongDouble) ->
+              GenBasic (GenFloating (RealFloating LongDouble))
+          (* STD §6.3.1.8#1, bullet 2 *)
+          | (Just Double, _) ->
+              GenBasic (GenFloating (RealFloating Double))
+          | (_, Just Double) ->
+              GenBasic (GenFloating (RealFloating Double))
+          (* STD §6.3.1.8#1, bullet 3 *)
+          | (Just Float, _) ->
+              GenBasic (GenFloating (RealFloating Float))
+          | (_, Just Float) ->
+              GenBasic (GenFloating (RealFloating Float))
+          | _ ->
+              error "GenTypesAux.usual_arithmetic must only be called on arithmetic types"
+        end
   end
 
 let rec interpret_genIntegerType impl git : errorM integerType =
@@ -387,12 +419,6 @@ end
 
 
 
-let unatomic = function
-  | GenAtomic ty ->
-      inject_type ty
-  | gty ->
-      gty
-end
 
 (* TODO: check (and sync with the AilTypesAux version *)
 val is_complete: forall 'a. sigma 'a -> genType -> bool

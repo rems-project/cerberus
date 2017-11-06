@@ -449,7 +449,7 @@ let rec print_value globs = function
   | Vctype ty        -> print_ctype ty
   | Vobject obv      -> print_object_value globs obv
   | Vloaded lv       -> print_loaded_value globs lv
-  | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.")
+(*  | Vconstrained _   -> raise (Unsupported "Unsupported constrained values.") *)
 
 let print_is_expr str pp pe =
   match pe with

@@ -184,7 +184,7 @@ and generic_loaded_value 'sym =
  | LVunspecified of ctype (* unspecified loaded value *)
 
 type generic_value 'sym =  (* Core values *)
- | Vconstrained of list (Mem.mem_iv_constraint * (generic_value 'sym))
+(* | Vconstrained of list (Mem.mem_iv_constraint * (generic_value 'sym)) *)
 (*
  | Vobject of (generic_object_value 'sym) (* C object value *)
  | Vspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
@@ -272,8 +272,11 @@ type generic_action 'a 'bty 'sym =  (* memory actions *)
 type generic_paction 'a 'bty 'sym =  (* memory actions with polarity *)
  | Paction of polarity * (generic_action 'a 'bty 'sym)
 
+type expr_annot =
+  | EA_std of string
+  | EA_loc of Loc.t
 
-type generic_expr 'a 'bty 'sym =  (* Core expressions *)
+type generic_expr_ 'a 'bty 'sym =  (* Core expressions *)
  | Epure of (generic_pexpr 'bty 'sym) (* pure expression *)
  | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
  | Eaction of (generic_paction 'a 'bty 'sym) (* memory action *)
@@ -281,14 +284,8 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
  | Elet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core let *)
  | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core if *)
  | Eskip (* skip *)
-(*
- | Eproc of 'a * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
-*)
  | Eccall of 'a * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core cfunction call *)
  | Eproc of 'a * generic_name 'sym * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
-
-
-
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
  | Ewseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
  | Esseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
@@ -300,11 +297,11 @@ type generic_expr 'a 'bty 'sym =  (* Core expressions *)
       doesn't come from a Erun) *)
  | Esave of (Symbol.sym * core_base_type) * list (Symbol.sym * (core_base_type * generic_pexpr 'bty 'sym)) * generic_expr 'a 'bty 'sym
  | Erun of 'a * Symbol.sym * list (generic_pexpr 'bty 'sym)
- 
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem thread creation *)
  | Ewait of Cthread.thread_id (* wait for thread termination *)
- | Eloc of Loc.t * (generic_expr 'a 'bty 'sym)
- | Estd of string * (generic_expr 'a 'bty 'sym)
+
+and generic_expr 'a 'bty 'sym =
+  | Expr of list expr_annot * generic_expr_ 'a 'bty 'sym
 
 (* TODO: don't we need any impl proc? *)
 type generic_impl_decl 'bty =

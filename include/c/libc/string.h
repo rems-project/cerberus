@@ -77,6 +77,7 @@ char *strcpy (char * restrict s1, const char * restrict s2)
   return (res);
 }
 
+/*
 void* memset(void * dst, int s, size_t count)
 {
   char * a = dst;
@@ -85,6 +86,7 @@ void* memset(void * dst, int s, size_t count)
     *a++ = s;
   return dst;
 }
+*/
 
 int strcmp (const char *s1, const char *s2)
 {

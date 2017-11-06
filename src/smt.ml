@@ -8,6 +8,10 @@ module Sym = Symbol
 open Z3
 
 
+let void (x : 'a) : unit =
+  let _ = x in
+  ()
+
 
 (* wip *)
 module Wip = struct
@@ -74,7 +78,7 @@ let mk_forall ctx syms sorts expr =
 
 
 let init_solver () : solver_state =
-  let ctx = mk_context [("timeout", "100")(*TODO*)] in
+  let ctx = mk_context [("timeout", "0")(*TODO*)] in
   
   let mk_ctor str =
     Datatype.mk_constructor_s ctx str (Symbol.mk_string ctx ("is_" ^ str)) [] [] [] in
@@ -319,11 +323,34 @@ let integer_value_base_to_expr slvSt ival_ =
     | IVsizeof (Core_ctype.Array0 (elem_ty, Some n)) ->
         Arithmetic.mk_mul slvSt.ctx
           [ Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
-          ; Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt elem_ty] ]
+(*          ; Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt elem_ty] ] *)
+          ; aux (IVsizeof elem_ty) ]
     | IVsizeof ty ->
-        Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
+        (* TODO: tmp hack to check performance *)
+        Core_ctype.(AilTypes.(match ty with
+          | Basic0 (Integer Char)
+          | Basic0 (Integer (Signed Ichar))
+          | Basic0 (Integer (Unsigned Ichar)) ->
+              Arithmetic.Integer.mk_numeral_i slvSt.ctx 1
+          | Basic0 (Integer (Signed Int_))
+          | Basic0 (Integer (Unsigned Int_)) ->
+              Arithmetic.Integer.mk_numeral_i slvSt.ctx 4
+          | Basic0 (Integer (Signed LongLong))
+          | Basic0 (Integer (Unsigned LongLong)) ->
+              Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
+          | Pointer0 _ ->
+              Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
+          | _ ->
+              Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
+        ))
+
+
     | IValignof ty ->
+        (* TODO: tmp hack to check performance *)
+        Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
+(*
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
+*)
   | IVoffsetof (tag_sym, memb_ident) ->
       failwith "IVoffsetof"
   | IVptrdiff ((ptrval_1, sh1), (ptrval_2, sh2)) ->
@@ -405,14 +432,91 @@ let add_constraint slvSt cs =
 
 open Nondeterminism2
 
-let dot_from_nd_action act =
+(* TODO: silly duplication *)
+type ('a, 'err, 'cs) nd_tree =
+  | Thole
+  | Tdeadend
+  | Tbtrack_marker of ('a, 'err, 'cs) nd_tree * ('a, 'err, 'cs) nd_tree
+  | Tactive of 'a
+  | Tkilled of 'err kill_reason
+  | Tnd of string * (string * ('a, 'err, 'cs) nd_tree) list
+  | Tguard of string * 'cs * ('a, 'err, 'cs) nd_tree
+  | Tbranch of string * 'cs * ('a, 'err, 'cs) nd_tree * ('a, 'err, 'cs) nd_tree
+
+let fill_hole_with t fill =
+  let rec aux = function
+    | Thole ->
+        Some fill
+    | Tdeadend ->
+        None
+    | Tbtrack_marker (t1, t2) ->
+        failwith ""
+    | Tactive _
+    | Tkilled _ ->
+        None
+    | Tnd (debug_str, str_ts) ->
+        let (b, xs) = List.fold_right (fun (str, t) _acc ->
+          match _acc with
+            | (true, xs) ->
+                (true, (str, t) :: xs)
+            | (false, xs) ->
+                begin match aux t with
+                  | Some t' ->
+                      (true, (str, t') :: xs)
+                  | None ->
+                      (false, (str, t) :: xs)
+                end
+        ) str_ts (false, []) in
+        if b then
+          Some (Tnd (debug_str, xs))
+        else
+          None
+    | Tguard (debug_str, cs, t') ->
+        begin match aux t' with
+          | Some z ->
+              Some (Tguard (debug_str, cs, z))
+          | None ->
+              None
+        end
+    | Tbranch (debug_str, cs, t1, t2) ->
+        begin match aux t1 with
+          | Some t1' ->
+              Some (Tbranch (debug_str, cs, t1', t2))
+          | None ->
+              begin match aux t2 with
+                | Some t2' ->
+                    Some (Tbranch (debug_str, cs, t1, t2'))
+                | None ->
+                    None
+              end
+        end in
+  match aux t with
+    | Some t' ->
+        t'
+    | None ->
+        t
+
+
+let dot_from_nd_tree t =
+  let saved = !Colour.do_colour in
   Colour.do_colour := false;
   let rec aux n = function
-    | NDactive (_, st) ->
-        (n+1, [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^ String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"], [])
-    | NDkilled _ ->
-        (n+1, [string_of_int n ^"[label= \"killed(" ^ string_of_int n ^ ")\"]"], [])
-    | NDnd (debug_str, st, str_acts) ->
+    | Thole ->
+        (n+1, [string_of_int n ^ "[label= \"HOLE\"]"], [])
+    | Tdeadend ->
+        ( n+1, [string_of_int n ^ "[label= \"DEAD END\"]"], [])
+    | Tbtrack_marker (_, t') ->
+        aux n t'
+    | Tactive (_, st) ->
+        ( n+1
+        , [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^
+           String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"]
+        , [] )
+    | Tkilled _ ->
+        ( n+1
+        , [string_of_int n ^"[label= \"killed(" ^ string_of_int n ^ ")\"]"]
+        , [] )
+    | Tnd (debug_str, str_acts) ->
         let (n', str_ns, nodes, edges) =
           List.fold_left (fun (n', accNs, accNodes, accEdges) (str, act) ->
             let str = if debug_str = "step_constrained" then "" else str in
@@ -423,12 +527,12 @@ let dot_from_nd_action act =
         , (string_of_int n ^"[label= \"nd(" ^ string_of_int n ^ ")\\n[" ^ debug_str ^ "]\\n" ^
            (*String.escaped (String_core_run.string_of_core_state st.Driver.core_state)*) "ARENA" ^ "\"]") :: nodes
         , (List.map (fun (str, z) -> string_of_int n ^ " -> " ^ string_of_int z ^ "[label= \""^ String.escaped str ^ "\"]") str_ns) @ edges )
-    | NDguard (_, _, act) ->
+    | Tguard (_, _, act) ->
         let (n', nodes, edges) = aux (n+1) act in
         ( n'
         , (string_of_int n ^"[label= \"guard(" ^ string_of_int n ^ ")\"]") :: nodes
         , (string_of_int n ^ " -> " ^ string_of_int (n+1)) :: edges )
-    | NDbranch (debug_str, st, _, act1, act2) ->
+    | Tbranch (debug_str, _, act1, act2) ->
         let (n' , nodes1, edges1) = aux (n+1) act1 in
         let (n'', nodes2, edges2) = aux (n'+1) act2 in
         ( n''
@@ -437,9 +541,14 @@ let dot_from_nd_action act =
         , (string_of_int n ^ " -> " ^ string_of_int (n+1)) ::
           (string_of_int n ^ " -> " ^ string_of_int (n'+1)) :: (edges1 @ edges2) )
   in
-  let (_, nodes, edges) = aux 1 act in
-  "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}"
+  let (_, nodes, edges) = aux 1 t in
+  let ret = "digraph G {node[shape=box];" ^ String.concat ";" (nodes @ edges) ^ ";}" in
+  Colour.do_colour := saved;
+  ret
 
+
+
+(*
 let json_from_nd_action act =
   let arena_thread0 st =
     match st.Driver.core_state.Core_run.thread_states with
@@ -478,17 +587,18 @@ let json_from_nd_action act =
         json_obj "child2" (aux act2)
       ] |> json_new
   in aux act
+*)
 
 
 let create_dot_file act =
   (* TODO: should use the name of the c file here *)
   let oc = open_out "cerb.dot" in
-  dot_from_nd_action act
+  "dot_from_nd_action act"
   |> Printf.fprintf oc "%s"
 
 let create_json_file act =
   let oc = open_out "cerb.json" in
-  json_from_nd_action act
+  "json_from_nd_action act"
   |> Printf.fprintf oc "%s"
 
 exception Backtrack of
@@ -496,71 +606,113 @@ exception Backtrack of
      string list *
      Driver.driver_state) list
 
+(* DEBUG *)
+let check_counter = ref 0
 
 let check_sat slv es =
-(*  print_string "CALLING Z3 ... ";
-  flush stdout; *)
+(*  print_endline (Colour.(ansi_format [Green] (Solver.to_string slv))); *)
+  print_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ");
+  flush stdout;
   let ret = Solver.check slv es in
-(*  print_endline "done"; *)
+  print_endline "done";
+  check_counter := !check_counter + 1;
   ret
 
 
 
 (* val runND: forall 'a 'err 'cs 'st. ndM 'a 'err 'cs 'st -> list (nd_status 'a 'err * 'st) *)
-let runND_exhaustive (ND m) st0 =
+let runND_exhaustive m st0 =
+  print_endline "HELLO runND_exhaustive";
+(*
     let act = m st0 in
     begin
       let oc = open_out "graph.dot" in
       output_string oc (dot_from_nd_action act);
       close_out oc
     end;
+*)
 
   let slvSt = init_solver () in
-  let rec aux acc = function
-      | NDactive (a, st') ->
-(*          print_endline "NDactive"; *)
+  (* TODO: yuck, redo it without a reference *)
+  let tree_so_far = ref Thole in
+
+  let rec aux acc (ND m_act) st =
+    let oc = open_out "graph.dot" in
+    output_string oc (dot_from_nd_tree !tree_so_far);
+    close_out oc;
+    let _ = Unix.system "dot -Tpdf graph.dot > graph.pdf" in
+    match m_act st with
+      | (NDactive a, st') ->
+          tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st'));
+          print_endline "NDactive";
 (*          print_endline (Solver.to_string slvSt.slv); *)
-          Params.update_param_value slvSt.ctx "timeout" "";
+
+(*          Params.update_param_value slvSt.ctx "timeout" ""; *)
           begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
                 print_endline "STILL UNKNOWN";
-            | _ ->
+            | Solver.UNSATISFIABLE ->
+                print_endline "NDactive found to be UNSATISFIABLE";
+            | Solver.SATISFIABLE ->
                 ()
           end;
 (*          (Active (a, Solver.to_string slvSt.slv), st') :: acc *)
           (Active a, Wip.to_strings (), st') :: acc
       
-      | NDkilled r ->
-(*          print_endline "NDkilled"; *)
-          (Killed r, Wip.to_strings (), st0) :: acc
+      | (NDkilled r, st') ->
+          tree_so_far := fill_hole_with !tree_so_far (Tkilled r);
+          print_endline "NDkilled";
+          (Killed r, Wip.to_strings (), st') :: acc
       
-      | NDnd (debug_str, _, str_acts) ->
-(*          print_endline ("NDnd(" ^ debug_str ^ ")"); *)
-          List.fold_left (fun acc (_, z) -> aux acc z) acc str_acts
+      | (NDnd (debug_str, str_ms), st') ->
+          print_endline ("NDnd(" ^ debug_str ^ ")[" ^ string_of_int (List.length str_ms) ^ "]");
+          List.fold_left (fun acc (_, m_act) ->
+            try
+              Wip.push ();
+              Solver.push slvSt.slv;
+              let ret = aux acc m_act st' in
+              void (Wip.pop ());
+              Solver.pop slvSt.slv 1;
+              ret
+            with Backtrack new_acc ->
+              void (Wip.pop ());
+              Solver.pop slvSt.slv 1;
+              new_acc
+          ) acc str_ms
       
-      | NDguard (debug_str, cs, act) ->
-(*          print_endline ("NDguard(" ^ debug_str ^ ")"); *)
+      | (NDguard (debug_str, cs, m_act), st') ->
+          tree_so_far := fill_hole_with !tree_so_far (Tguard (debug_str, cs, Thole));
+          print_endline ("NDguard(" ^ debug_str ^ ")");
           add_constraint slvSt cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
-(*
-                print_endline (Solver.to_string slvSt.slv);
+(*                print_endline (Solver.to_string slvSt.slv); *)
                 print_endline "NDguard BACKTRACKING";
-*)
+               tree_so_far := fill_hole_with !tree_so_far Tdeadend;
                raise (Backtrack acc)
-            | _ ->
-               aux acc act
+
+            | Solver.UNKNOWN ->
+                failwith "TIMEOUT in NDguard"
+
+            | Solver.SATISFIABLE ->
+               aux acc m_act st'
           end
       
-      | NDbranch (debug_str, _, cs, act1, act2) ->
-(*          print_endline ("NDbranch(" ^ debug_str ^ ")"); *)
+      | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
+          tree_so_far := fill_hole_with !tree_so_far (Tbranch (debug_str, cs, Thole, Thole));
+          print_endline ("NDbranch(" ^ debug_str ^ ")");
+          Wip.push ();
           Solver.push slvSt.slv;
           add_constraint slvSt cs;
           let acc' = begin match check_sat slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
+            | Solver.UNKNOWN ->
+                print_endline (Z3.Solver.to_string slvSt.slv);
+                failwith ("TIMEOUT in NDbranch 1 (" ^ debug_str ^ ")")
+
+            | Solver.SATISFIABLE (* | Solver.UNKNOWN *) ->
 (*               print_endline ("SAT ==> " ^ debug_str ^ " :- " ^ String_mem.string_of_iv_memory_constraint cs); *)
                begin try
-                 aux acc act1
+                 aux acc m_act1 st'
                with
                  | Backtrack new_acc ->
                      new_acc (* acc *)
@@ -568,105 +720,143 @@ let runND_exhaustive (ND m) st0 =
             | Solver.UNSATISFIABLE ->
                 acc
           end in
+          void (Wip.pop ());
           Solver.pop slvSt.slv 1;
+          Wip.push ();
           Solver.push slvSt.slv;
           add_constraint slvSt (MC_not cs);
           let acc'' = begin match check_sat slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
+            | Solver.UNKNOWN ->
+                failwith ("TIMEOUT in NDbranch 2(" ^ debug_str ^ ")")
+
+            | Solver.SATISFIABLE (* | Solver.UNKNOWN *) ->
                 begin try
-                  aux acc' act2
+                  aux acc' m_act2 st'
                 with
                   | Backtrack new_acc ->
                       new_acc (* acc' *)
                 end
             | Solver.UNSATISFIABLE ->
+                void (Wip.pop ());
                 Solver.pop slvSt.slv 1;
+               tree_so_far := fill_hole_with !tree_so_far Tdeadend;
                 raise (Backtrack acc')
           end in
+          void (Wip.pop ());
           Solver.pop slvSt.slv 1;
           acc''
   in
-  try
-    let act = m st0 in
+
+  let ret =
+    try
+(*    let act = m st0 in
     if Global_ocaml.show_action_graph() then (create_dot_file act; create_json_file act);
-    aux [] act
-  with
-    | Backtrack acc ->
-        acc
+*)
+      aux [] m st0
+    with
+      | Backtrack acc ->
+          acc
+  in
+  let oc = open_out "graph.dot" in
+  output_string oc (dot_from_nd_tree !tree_so_far);
+  close_out oc;
+  let _ = Unix.system "dot -Tpdf graph.dot > graph.pdf" in
+  ret
 
 
 exception Done of
   (((string * (bool * Cmm_op.symState * Core.value) * (int * int)) * string, Driver.driver_error) nd_status *
      Driver.driver_state)
 
-let runND_random (ND m) st0 =
-  failwith "runND_random"
-(*
+exception BacktrackRandom
+
+let runND_random m st0 =
   let slvSt = init_solver () in
-  let rec aux acc = function
-      | NDactive (a, st') ->
-          Params.update_param_value slvSt.ctx "timeout" "";
-          begin match Solver.check slvSt.slv [] with
-            | Solver.UNKNOWN ->
-                print_endline "STILL UNKNOWN";
-            | _ ->
-                ()
-          end;
-          raise (Done (Active (a, Solver.to_string slvSt.slv), st'))
-      
-      | NDkilled r ->
-          (Killed r, st0) :: acc
-      
-      | NDnd (_, acts) ->
-          failwith "List.fold_left aux acc acts"
-      
-      | NDguard (cs, act) ->
-          add_constraint slvSt cs;
-          begin match Solver.check slvSt.slv [] with
-            | Solver.UNSATISFIABLE ->
-               raise (Backtrack acc)
-            | _ ->
-               aux acc act
+  let rec aux (ND m_act) st =
+    let do_something now cs later =
+      let later' () =
+        void (Wip.pop ());
+        Solver.pop slvSt.slv 1;
+        later () in
+      Wip.push ();
+      Solver.push slvSt.slv;
+      add_constraint slvSt cs;
+      begin match check_sat slvSt.slv [] with
+        | Solver.UNKNOWN ->
+            failwith "TIMEOUT in NDbranch"
+        | Solver.SATISFIABLE ->
+            begin try
+              let ret = now () in
+              void (Wip.pop ());
+              Solver.pop slvSt.slv 1;
+              ret
+            with
+              | BacktrackRandom ->
+                  later' ()
+            end
+        | Solver.UNSATISFIABLE ->
+            later' ()
+      end in
+    
+    match m_act st with
+      | (NDactive a, st') ->
+          (Active a, Wip.to_strings (), st')
+      | (NDkilled r, st') ->
+          raise BacktrackRandom
+      | (NDnd (debug_str, str_ms), st') ->
+          (* TODO: this is not really random (see http://okmij.org/ftp/Haskell/perfect-shuffle.txt) *)
+          let suffled_str_ms =
+            let with_index = List.map (fun z ->
+              (Random.bits (), z)
+            ) str_ms in
+            List.map snd (List.sort (fun (x, _) (y, _) -> compare x y) with_index) in
+          let ret = List.fold_left (fun acc (str, m) ->
+            match acc with
+              | Some _ ->
+                  acc
+              | None ->
+                  try
+                    Wip.push ();
+                    Solver.push slvSt.slv;
+                    let ret = Some (aux m st') in
+                    void (Wip.pop ());
+                    Solver.pop slvSt.slv 1;
+                    ret
+                  with
+                    | BacktrackRandom ->
+                        None
+          ) None suffled_str_ms in
+          begin match ret with
+            | Some z ->
+                z
+            | None ->
+                raise BacktrackRandom
           end
-      
-      | NDbranch (cs, act1, act2) ->
-          let acc' = begin match Solver.check slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
-               begin try
-                 aux acc act1
-               with
-                 | Backtrack new_acc ->
-                     new_acc (* acc *)
-               end
+      | (NDguard (debug_str, cs, m_act), st') ->
+          add_constraint slvSt cs;
+          begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
-                acc
-          end in
-          Solver.pop slvSt.slv 1;
-          Solver.push slvSt.slv;
-          add_constraint slvSt (MC_not cs);
-          let acc'' = begin match Solver.check slvSt.slv [] with
-            | Solver.SATISFIABLE | Solver.UNKNOWN ->
-                begin try
-                  aux acc' act2
-                with
-                  | Backtrack new_acc ->
-                      new_acc (* acc' *)
-                end
-            | Solver.UNSATISFIABLE ->
-                Solver.pop slvSt.slv 1;
-                raise (Backtrack acc')
-          end in
-          Solver.pop slvSt.slv 1;
-          acc''
-  in
-  try
-    aux [] (m st0)
+                raise BacktrackRandom
+            | Solver.UNKNOWN ->
+                failwith "TIMEOUT in NDguard"
+            | Solver.SATISFIABLE ->
+                aux m_act st'
+          end
+      | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
+          let ret = if Random.bool () then
+            do_something (fun () -> aux m_act1 st') cs
+              (fun () -> do_something (fun () -> aux m_act2 st') (MC_not cs) (fun () ->
+                void (Wip.pop ()); Solver.pop slvSt.slv 1; raise BacktrackRandom))
+          else
+            do_something (fun () -> aux m_act2 st') (MC_not cs)
+              (fun () -> do_something (fun () -> aux m_act1 st') cs (fun () ->
+                void (Wip.pop ()); Solver.pop slvSt.slv 1; raise BacktrackRandom)) in
+          ret
+  in try
+    [aux m st0]
   with
-    | Done z ->
-        [z]
-    | Backtrack acc ->
-        acc
-*)
+    | BacktrackRandom ->
+        []
 
 let rec select options =
      Printf.printf "Choose option between: 1 to %d: " options;
@@ -683,15 +873,15 @@ let print_thread_state tid st =
   print_endline "-------";
   Printf.printf "Thread %s:\n" (string_of_int tid);
   begin match st.Core_run.arena with
-    | Core.Eunseq es ->
+    | Core.(Expr (_, Eunseq es)) ->
       print_endline "Unsequenced executions. Choose one option to execute first:";
       let i = ref 0 in
       List.map (fun e -> i := !i + 1; Printf.printf "Option %d:\n" !i; pp_core_exp e; print_endline "") es |> ignore
-    | Core.End es ->
+    | Core.(Expr(_, End es)) ->
       print_endline "Non deterministic executions. Choose one option to execute:";
       let i = ref 0 in
       List.map (fun e -> i := !i + 1; Printf.printf "Option %d:\n" !i; pp_core_exp e; print_endline "") es |> ignore
-    | Core.Eaction _ -> pp_core_exp st.Core_run.arena
+    | Core.(Expr (_, Eaction _)) -> pp_core_exp st.Core_run.arena
     | _ -> failwith "print_thread_state: unexpected Core expression"
   end;
   print_endline "-------"
@@ -701,6 +891,8 @@ let print_driver_state st =
   |> ignore; flush stdout
 
 let runND_interactive (ND m) st0 =
+  failwith "runND_interactive"
+(*
   let slvSt = init_solver () in
   let rec run_action = function
       | NDactive (a, st') ->
@@ -785,12 +977,13 @@ let runND_interactive (ND m) st0 =
         end
 
   in [run_action (m st0)]
+*)
 
 let runND m st0 =
   flush stdout;
   Global_ocaml.(match current_execution_mode () with
-    | Some Random (* ->
-        runND_random m st0 *)
+    | Some Random ->
+        runND_random m st0
     | Some Exhaustive ->
         runND_exhaustive m st0
     | Some Interactive ->

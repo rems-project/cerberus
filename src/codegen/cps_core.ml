@@ -107,13 +107,13 @@ let default = Symbol.Symbol (0, Some "cont")
 (* CPS transformation *)
 
 let cps_transform_expr sym_supply globs bvs e =
-  let rec tr_left bbs pat1 es pat2 ce e =
-    match e with
+  let rec tr_left bbs pat1 es pat2 ce (Expr (_, e_)) =
+    match e_ with
     | Esseq _ -> raise (Unexpected "Sequencing must be associate to the right!")
-    | e -> tr_right bbs pat1 es pat2 ce e
-  and tr_right bbs pat1 es pat2 ce e =
+    | _ -> tr_right bbs pat1 es pat2 ce e
+  and tr_right bbs pat1 es pat2 ce (Expr (_, e_) as e) =
     let to_basic e = (bbs, ((pat1, e)::es, (pat2, ce))) in
-    match e with
+    match e_ with
     | Epure pe            -> to_basic (CpsPure pe)
     | Ememop (memop, pes) -> to_basic (CpsMemop (memop, pes))
     | Eaction act         -> to_basic (CpsAction act)
@@ -176,8 +176,6 @@ let cps_transform_expr sym_supply globs bvs e =
     | Elet   _ -> raise (Unsupported "Let expressions must be eliminated.")
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
-    | Eloc   _ -> raise (Unsupported "Location operations should be eliminated")
-    | Estd   _ -> raise (Unsupported "STD annotations should be eliminated")
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)

@@ -44,7 +44,7 @@ let opt_passes core =
   elim_wseq core
   |> assoc_seq
   |> elim_skip
-  |> elim_loc
+(*  |> elim_loc *) (* TODO: K to V, you shouldn't need this anymore since I removed Eloc *)
   |> elim_let
 
 let create_globs name core =

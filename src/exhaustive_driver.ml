@@ -19,7 +19,7 @@ type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 let string_of_driver_error = function
   | Driver.DErr_core_run err ->
-      "TODO DErr_core_run"
+      Pp_errors.string_of_core_run_error err
   | Driver.DErr_memory err ->
       Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err
   | Driver.DErr_concurrency str ->
@@ -63,14 +63,11 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
     end;
     begin match z3_strs with
       | [] ->
-          ()
+          print_endline "EMPTY CONSTRAINTS"
       | _ ->
-(*
           print_endline "BEGIN CONSTRAINTS";
-          print_endline (Colour.(ansi_format [Blue] (String.concat "\n" z3_strs)));
-          print_endline "END CONSTRAINTS";
- *)
-          ()
+          print_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
+          print_endline "END CONSTRAINTS"
     end;
 
 (*

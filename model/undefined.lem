@@ -137,6 +137,7 @@ type undefined_behaviour =
   (* The value of the second operand of the / or % operator is zero (6.5.5). *)
   | UB045a_division_by_zero
   | UB045b_modulo_by_zero
+  | UB045c_quotient_not_representable
   (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
      produces a result that does not point into, or just beyond, the same array object (6.5.6). *)
   | UB046a_array_pointer_addition_outside
@@ -719,6 +720,7 @@ let ub_str_bimap =
     ; (UB044, "UB044")
     ; (UB045a_division_by_zero, "UB045a_division_by_zero")
     ; (UB045b_modulo_by_zero, "UB045b_modulo_by_zero")
+    ; (UB045c_quotient_not_representable, "UB045c_quotient_not_representable")
     ; (UB046a_array_pointer_addition_outside, "UB046a_array_pointer_addition_outside")
     ; (UB046b_array_pointer_subtraction_outside, "UB046b_array_pointer_subtraction_outside")
     ; (UB047a_array_pointer_addition_beyond_indirection, "UB047a_array_pointer_addition_beyond_indirection")
@@ -952,6 +954,8 @@ let pretty_string_of_undefined_behaviour = function
       "(§6.5.5#5) the value of the second operand of a / operator is zero."
   | UB045b_modulo_by_zero ->
       "(§6.5.5#5) the value of the second operand of a % operator is zero."
+  | UB045c_quotient_not_representable ->
+      "(§6.5.5#6) the quotient a/b is not representable."
   | UB046a_array_pointer_addition_outside ->
       "(§6.5.6#8) found the addition of a pointer into, or just beyond, and array object and an \
                   integer type procuding a result that does not point into, or just beyond, the \
