@@ -46,12 +46,12 @@ end
 
 val zeroAil: expression unit
 let zeroAil =
-  AnnotatedExpression () Loc.unknown
+  AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
 
 val oneAil: expression unit
 let oneAil =
-  AnnotatedExpression () Loc.unknown
+  AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
 
 
@@ -177,7 +177,7 @@ except as part of an operand to the sizeof or _Alignof operator.
 (* see §6.6#6 *)
 (* TODO: make the function pure, when complete *)
 val     is_integer_constant_expression: expression unit -> E.desugM bool
-let rec is_integer_constant_expression (AnnotatedExpression () loc expr) =
+let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEunary uop e ->
         match uop with
@@ -348,7 +348,7 @@ end
 (* TODO: this is super partial and hackish *)
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
 val     is_arithmetic_constant_expression: bool -> expression unit -> E.desugM bool
-let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () loc expr) as a_expr) =
+let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr) as a_expr) =
   (* TODO: enumeration constant *)
   match expr with
     | AilEconst (ConstantInteger _) ->
@@ -421,7 +421,7 @@ let rec is_arithmetic_constant_expression expr =
 
 
 val     is_lvalue_to_static_object: expression unit -> E.desugM bool
-let rec is_lvalue_to_static_object (AnnotatedExpression () loc expr) =
+let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEident sym ->
         E.fetch_object_declaration sym >>= fun (dur, _, _, _) ->
@@ -462,9 +462,9 @@ let is_address_constant a_expr =
     E.return true
   
   else match a_expr with
-    | AnnotatedExpression () loc (AilEunary Address expr) ->
+    | AnnotatedExpression () _ _ (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
-    | AnnotatedExpression () _ (AilEcast _ Pointer expr) ->
+    | AnnotatedExpression () _ _ (AilEcast _ Pointer expr) ->
         is_integer_constant_expression expr
     | _ ->
         E.return false
@@ -505,7 +505,7 @@ The array-subscript [] and member-access . and -> operators, the address & and i
    can have more things in them *)
 (* TODO: "or evaluate to" *)
 val is_initializer_constant_expression: expression unit -> E.desugM bool
-let is_initializer_constant_expression (AnnotatedExpression () loc expr as a_expr) =
+let is_initializer_constant_expression (AnnotatedExpression () _ loc expr as a_expr) =
   is_arithmetic_constant_expression false (* TODO check *) a_expr >>= fun b1 ->
   is_address_constant a_expr               >>= fun b2 ->
   (* STD §6.6#7, bullets 1 - 3 *)
@@ -822,7 +822,7 @@ let register_simple_enumerators ty enums =
       let expr =
         let basis = if n = 0 then Octal else Decimal in
         AilEannot ty (
-          AnnotatedExpression () Loc.unknown(* TODO *) (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
+          AnnotatedExpression () [] Loc.unknown(* TODO *) (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
         ) in
       
       E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
@@ -1175,7 +1175,6 @@ let rec desugar_type_specifiers specs =
               end
           
           | _ ->
-              E.print_debugM 1 (fun () -> stringFromList Pp.stringFromCabs_type_specifier specs) >>
               E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
         end
 end
@@ -1538,7 +1537,7 @@ and desugar_declarator (Declarator ptr_decltor_opt ddecltor) =
 
 (* val     desugar_expression: cabs_expression -> E.desugM (expression unit) *)
 and desugar_expression (CabsExpression loc expr) =
-  AnnotatedExpression () loc <$>
+  AnnotatedExpression () [] loc <$>
   match expr with
     | CabsEident ident ->
         let (CabsIdentifier _ str) = ident in (* DEBUG *)
@@ -1576,7 +1575,7 @@ STD_ "§6.5.1#2" $
     | CabsEsubscript e1 e2 ->
 STD_ "§6.5.2.1#2, sentence 2" $
         AilEunary Indirection <$> (
-          AnnotatedExpression () loc <$>
+          AnnotatedExpression () [] loc <$>
           (AilEbinary <$> desugar_expression e1
                       <*> E.return (Arithmetic Add)
                       <*> desugar_expression e2)
@@ -1609,7 +1608,7 @@ STD_ "§6.5.3.1#2, sentence 3" $
 *)
         (* TODO: temporary hack, while the elab doesn't support compound assigns *)
         desugar_expression e >>= fun d_e ->
-        E.return $ AilEassign d_e (AnnotatedExpression () loc (AilEbinary d_e (Arithmetic Add) oneAil))
+        E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Add) oneAil))
     | CabsEpredecr e ->
 STD_ "§6.5.3.1#3" $
 (*
@@ -1618,7 +1617,7 @@ STD_ "§6.5.3.1#3" $
 *)
         (* TODO: temporary hack, while the elab doesn't support compound assigns *)
         desugar_expression e >>= fun d_e ->
-        E.return $ AilEassign d_e (AnnotatedExpression () loc (AilEbinary d_e (Arithmetic Sub) oneAil))
+        E.return $ AilEassign d_e (AnnotatedExpression () [] loc (AilEbinary d_e (Arithmetic Sub) oneAil))
 
       (* (§6.5.3.3#5) *)
     | CabsEunary CabsNot e ->
@@ -1661,7 +1660,7 @@ STD_ "§6.5.3.1#3" $
               (* TODO: temporary hack, while the elab doesn't support compound assigns *)
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
-              E.return $ AilEassign d_e1 (AnnotatedExpression () loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
+              E.return $ AilEassign d_e1 (AnnotatedExpression () [] loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
         end 
     | CabsEcomma e1 e2 ->
         AilEbinary <$> desugar_expression e1
@@ -1676,7 +1675,7 @@ STD_ "§6.5.3.1#3" $
     | CabsEva_start e (CabsIdentifier loc str as ident) ->
         desugar_expression e                                       >>= fun d_e ->
         desugar_expression (CabsExpression loc (CabsEident ident)) >>= function
-          | AnnotatedExpression _ _ (AilEident sym) ->
+          | AnnotatedExpression _ _ _ (AilEident sym) ->
               E.return (AilEva_start d_e sym)
           | _ ->
               E.fail Loc.unknown (Errors.Desugar_TODOCTOR "the second operand of va_start() was not paramN")
@@ -1993,17 +1992,17 @@ and wip_desugar_initializer_ loc dur current_ty = function
         | ATypes.Automatic ->
             (* TODO: what if the string it too short/long for current_ty *)
             desugar_expression e >>= function
-              | (AnnotatedExpression () _ (AilEstr (Nothing, str)) as d_e) ->
+              | (AnnotatedExpression () _ _ (AilEstr (Nothing, str)) as d_e) ->
                   if not (AilTypesAux.is_array_of_character current_ty) then
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-              | (AnnotatedExpression () _ (AilEstr (Just Enc_u8, str)) as d_e) ->
+              | (AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) as d_e) ->
                   if not (AilTypesAux.is_array_of_character current_ty) then
                     E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-              | (AnnotatedExpression () _ (AilEstr (Just _, str)) as d_e) ->
+              | (AnnotatedExpression () _ _ (AilEstr (Just _, str)) as d_e) ->
                   E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
               | d_e ->
                   E.return (current_ty, d_e)
@@ -2018,17 +2017,17 @@ and wip_desugar_initializer_ loc dur current_ty = function
             is_initializer_constant_expression d_e >>= function
               | true ->
                   match d_e with
-                    | AnnotatedExpression () _ (AilEstr (Nothing, str)) ->
+                    | AnnotatedExpression () _ _ (AilEstr (Nothing, str)) ->
                         if not (AilTypesAux.is_array_of_character current_ty) then
                           E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                         else
                           E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-                    | AnnotatedExpression () _ (AilEstr (Just Enc_u8, str)) ->
+                    | AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) ->
                         if not (AilTypesAux.is_array_of_character current_ty) then
                           E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                         else
                           E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
-                    | AnnotatedExpression () _ (AilEstr (Just _, str)) ->
+                    | AnnotatedExpression () _ _ (AilEstr (Just _, str)) ->
                         E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
                     | _ ->
                         E.return (current_ty, d_e)
@@ -2047,7 +2046,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
       E.get_tag_definitions >>= fun tagDefs ->
       match current_ty with
         | ATypes.Array elem_ty (Just n) ->
-            let implicit = AnnotatedExpression () Loc.unknown (* TODO *) $ AilEconst match dur with
+            let implicit = AnnotatedExpression () [] Loc.unknown (* TODO *) $ AilEconst match dur with
               | ATypes.Automatic ->
                   (* STD §6.7.9#10, first sentence *)
                   ConstantIndeterminate elem_ty
@@ -2093,7 +2092,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
             ) desigs_opt_inits (0, []) >>= fun (_, xs) ->
             E.return
               ( current_ty
-              , AnnotatedExpression () Loc.unknown(* TODO *)
+              , AnnotatedExpression () [] Loc.unknown(* TODO *)
                   (* TODO: should use ConstantArray when possible *)
                   (AilEarray elem_ty (List.reverse (Utils.replicate_list (Just implicit) (natFromInteger n - List.length xs) ++ xs))) )
         
@@ -2118,7 +2117,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
                     
                     E.return
                       ( current_ty
-                      , AnnotatedExpression () Loc.unknown(* TODO *) (
+                      , AnnotatedExpression () [] Loc.unknown(* TODO *) (
                           AilEstruct tag (List.map (fun (ident, _) -> (ident, List.lookup ident xs)) ident_tys)
                         ) )
                   
@@ -2171,7 +2170,7 @@ and wip_desugar_initializer_ loc dur current_ty = function
                     
                     E.return
                       ( current_ty
-                      , AnnotatedExpression () Loc.unknown(* TODO *) (
+                      , AnnotatedExpression () [] Loc.unknown(* TODO *) (
                           AilEstruct tag (List.reverse xs_rev)
                         ) )
                   
@@ -2233,7 +2232,7 @@ and designator =
                         (* TODO: use first_ty' *)
                         E.return
                           ( current_ty
-                          , AnnotatedExpression () loc (
+                          , AnnotatedExpression () [] loc (
                               AilEunion tag first_ident (Just d_e)
                             )
                           )
@@ -2249,7 +2248,7 @@ and designator =
                         (* TODO: use membr_ty' *)
                         E.return
                           ( current_ty
-                          , AnnotatedExpression () loc (
+                          , AnnotatedExpression () [] loc (
                               AilEunion tag memb_ident (Just d_e)
                             )
                           )
@@ -2641,7 +2640,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                           end >>
                           
                           E.return ( (sym, d_e) :: acc1
-                                   , (sym, (Just (dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                   , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                         | Nothing ->
                             E.return (acc1, acc2)
                       end

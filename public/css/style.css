@@ -101,6 +101,10 @@ html, body {
   text-align: left;
 }
 
+.dropdown-content input[type="checkbox"] {
+  margin-right: 8px;
+}
+
 .dropdown-toggle::after {
   display: inline-block;
   width: 0;

@@ -3,7 +3,7 @@ open import Pervasives Common AilTypes AilTypesAux AilSyntax Loc
 
 (* STD §6.3.2.3#3, sentence 1 *)
 val is_null_pointer_constant: forall 'a. expression 'a -> bool
-let rec is_null_pointer_constant (AnnotatedExpression _ _ expr_) =
+let rec is_null_pointer_constant (AnnotatedExpression _ _ _ expr_) =
   match expr_ with
     | AilEconst ConstantNull ->
         true
@@ -41,7 +41,7 @@ let rec fv' (v : identifier) (e : expression_ 'a) : bool =
   end
 and fv (v : identifier) (ex : expression 'a) : bool =
   match ex with
-  | AnnotatedExpression _ _ e -> fv' v e
+  | AnnotatedExpression _ _ _ e -> fv' v e
   end
 
 (* TODO: doc *)
@@ -55,6 +55,6 @@ let expression_FromNat loc ty n =
   let basis =
     if n = 0 then Octal else Decimal in
   AilEannot ty (
-    AnnotatedExpression () loc (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
+    AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
   )
 

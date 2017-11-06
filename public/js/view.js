@@ -192,6 +192,10 @@ class View {
   }
 
   highlight() {
+    if (!ui.colour) {
+      this.clear()
+      return;
+    }
     if (this.isHighlighted||this.dirty)
       return;
     this.clear()
@@ -218,7 +222,7 @@ class View {
   newTab(mode) {
     let tab = this[mode];
     tab.setValue(this.data[mode])
-    tab.highlight()
+    if (ui.colour) tab.highlight()
   }
 
 

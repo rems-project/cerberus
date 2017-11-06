@@ -217,8 +217,9 @@ let inject_typeCategory = function
       GenRValueType (inject_type ty)
 end
 
-
+val annotations: forall 'a. expression 'a -> (list string * 'a)
+let annotations (AnnotatedExpression gtc annots _ _) = (annots, gtc)
 
 val genTypeCategoryOf: expression genTypeCategory -> genTypeCategory
-let genTypeCategoryOf (AnnotatedExpression gtc _ _) =
+let genTypeCategoryOf (AnnotatedExpression gtc _ _ _) =
   gtc

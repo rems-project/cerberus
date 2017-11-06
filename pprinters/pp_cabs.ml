@@ -1,66 +1,10 @@
 open Cabs
 
 open Pp_prelude
+open Pp_ast
 open Colour
 
 module P = PPrint
-
-let isatty = ref false
-
-type doc_tree =
-  | Dleaf of P.document
-  | Dnode of P.document * doc_tree list
-
-
-(* TODO: move to utils *)
-let map_with_last f_all f_last xs =
-  let rec aux acc = function
-    | [] ->
-        acc
-    | [x] ->
-        f_last x :: acc
-    | x::xs ->
-        aux (f_all x :: acc) xs
-  in
-  List.rev (aux [] xs)
-
-
-
-let pp_doc_tree dtree =
-  let to_space = function
-    | '|'
-      -> "|"
-    | _
-      -> " " in
-  let pp_prefix pref =
-    !^ (if !isatty then ansi_format [Blue] pref else pref) in
-  let rec aux (pref, (current : char)) = function
-    | Dleaf doc ->
-        pp_prefix (pref ^ String.make 1 current ^ "-") ^^ doc
-    | Dnode (_, []) ->
-        failwith ""
-    | Dnode (doc, dtrees) ->
-        P.separate P.hardline begin
-          (pp_prefix (pref ^ String.make 1 current ^ "-") ^^ doc) ::
-          map_with_last
-            (aux (pref ^ to_space current ^ " ", '|'))
-            (aux (pref ^ to_space current ^ " ", '`'))
-            dtrees
-        end
-  in
-  begin match dtree with
-    | Dleaf doc ->
-        doc
-    | Dnode (doc, dtrees) ->
-        doc ^^ P.hardline ^^
-        P.separate P.hardline begin
-          map_with_last
-            (aux ("", '|'))
-            (aux ("", '`'))
-            dtrees
-        end
-  end
-
 
 let precedence = function
   | CabsEident _
@@ -108,43 +52,35 @@ let precedence = function
   | CabsEassign _ -> Some 14
   | CabsEcomma _ -> Some 15
 
-
-
 let lt_precedence p1 p2 =
   match p1, p2 with
     | Some n1, Some n2 -> n1 < n2
     | Some _ , None    -> true
     | None   , _       -> false
 
-
 let pp_colour_keyword k =
-  !^ (if !isatty then ansi_format [Bold; Cyan] k else k)
+  !^(ansi_format [Bold; Cyan] k)
 
 let pp_colour_type_keyword k =
-  !^ (if !isatty then ansi_format [Green] k else k)
+  !^(ansi_format [Green] k)
 
 let pp_colour_identifier id =
-  !^ (if !isatty then ansi_format [Yellow] id else id)
+  !^(ansi_format [Yellow] id)
 
 let pp_colour_function_identifier id =
-  !^ (if !isatty then ansi_format [Bold; Blue] id else id)
+  !^(ansi_format [Bold; Blue] id)
 
 let pp_colour_label (CabsIdentifier (_, str)) =
-  !^ (if !isatty then ansi_format [Magenta] str else str)
-
-
+  !^(ansi_format [Magenta] str)
 
 let pp_ctor k =
-  !^ (if !isatty then ansi_format [Bold; Cyan] k else k)
-
+  !^ (ansi_format [Bold; Cyan] k)
 
 let pp_decl_ctor k =
-  !^ (if !isatty then ansi_format [Bold; Green] k else k)
+  !^ (ansi_format [Bold; Green] k)
 
 let pp_stmt_ctor k =
-  !^ (if !isatty then ansi_format [Bold; Magenta] k else k)
-
-
+  !^ (ansi_format [Bold; Magenta] k)
 
 let pp_location = function
   | Location_ocaml.Loc_unknown ->
@@ -163,10 +99,12 @@ let pp_location = function
         let end_col    = string_of_int (end_p.pos_cnum - end_p.pos_bol) in
         P.angles (
           if start_p.pos_lnum = end_p.pos_lnum then
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col)) ^^ P.comma ^^^
+            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
+            ^^ P.comma ^^^
             !^ (ansi_format [Yellow] ("col:" ^ end_col))
           else
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col)) ^^ P.comma ^^^
+            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
+            ^^ P.comma ^^^
             !^ (ansi_format [Yellow] ("line:" ^ end_line ^ ":" ^ end_col))
         ) ^^ P.optional (fun p ->
                let line = string_of_int p.pos_lnum in
@@ -180,9 +118,9 @@ let pp_location = function
              ) cursor_p_opt
       )
 
-
-
-
+let map_option f = function
+  | Some x -> Some (f x)
+  | None   -> None
 
 let pp_option pp = function
   | Some z ->
@@ -211,13 +149,18 @@ let node_of_option dtree_of = function
   | None ->
       Dleaf (pp_ctor "None")
 
+let node_of_list_option dtree_of = function
+  | Some xs ->
+      List.map dtree_of xs
+  | None ->
+      [ Dleaf (pp_ctor "None") ]
+
 let pp_cabs_identifier (CabsIdentifier (_, str)) =
   pp_colour_identifier str
 
 let pp_bool = function
   | true  -> !^ "true"
   | false -> !^ "false"
-
 
 let pp_cabs_integer_suffix = function
   | CabsSuffix_U   -> !^ "u"
@@ -256,7 +199,6 @@ let pp_cabs_encoding_prefix = function
 
 let pp_cabs_string_literal (pref_opt, strs) =
   P.optional pp_cabs_encoding_prefix pref_opt ^^ P.dquotes (!^ (String.concat "" strs))
-
 
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
   match expr with
@@ -335,7 +277,6 @@ and dtree_of_cabs_generic_association = function
   | GA_default e ->
       Dnode (pp_ctor "GA_default", [dtree_of_cabs_expression e])
 
-
 and pp_cabs_unary_operator = function
   | CabsAddress ->
       !^ "&"
@@ -388,7 +329,6 @@ and pp_cabs_binary_operator = function
   | CabsOr ->
       !^ "||"
 
-
 and pp_cabs_assignment_operator = function
   | Assign ->
       !^ "="
@@ -413,58 +353,29 @@ and pp_cabs_assignment_operator = function
   | Assign_Bor ->
       !^ "|="
 
-
 and dtree_of_declaration = function
   | Declaration_base (specifs, []) ->
-      Dleaf (pp_decl_ctor "Declaration_base" ^^ P.parens (pp_specifiers specifs) ^^^ !^ "empty")
+      Dnode (pp_decl_ctor "Declaration_base", [dtree_of_specifiers specifs])
   | Declaration_base (specifs, idecls) ->
-      Dnode ( pp_decl_ctor "Declaration_base" ^^ P.parens (pp_specifiers specifs)
-            , List.map dtree_of_init_declarator idecls )
+      Dnode ( pp_decl_ctor "Declaration_base"
+            , (dtree_of_specifiers specifs) :: List.map dtree_of_init_declarator idecls )
   | Declaration_static_assert sa_decl ->
       Dnode ( pp_decl_ctor "Declaration_static_assert"
             , [dtree_of_static_assert_declaration sa_decl] )
 
-(* TODO *)
-and pp_specifiers specifs =
-  P.braces (
-    P.brackets (comma_list pp_storage_class_specifier specifs.storage_classes     ) ^^ P.comma ^^^
-    P.brackets (comma_list pp_cabs_type_specifier     specifs.type_specifiers     ) ^^ P.comma ^^^
-    P.brackets (comma_list pp_cabs_type_qualifier     specifs.type_qualifiers     ) ^^ P.comma ^^^
-    P.brackets (comma_list pp_function_specifier      specifs.function_specifiers ) ^^ P.comma ^^^
-    P.brackets (comma_list pp_alignment_specifier     specifs.alignment_specifiers)
-  )
-
-(*
-  storage_classes:      list storage_class_specifier;
-  type_specifiers:      list cabs_type_specifier;
-  type_qualifiers:      list cabs_type_qualifier;
-  function_specifiers:  list function_specifier;
-  alignment_specifiers: list alignment_specifier;
-*)
-
-
-(*
-  let zs = List.map pp_storage_class_specifier specifs.storage_classes      @
-           List.map pp_cabs_type_specifier     specifs.type_specifiers      @
-           List.map pp_cabs_type_qualifier     specifs.type_qualifiers      @
-           List.map pp_function_specifier      specifs.function_specifiers  @
-           List.map pp_alignment_specifier     specifs.alignment_specifiers in
-*)
-(*
-  space_list pp_storage_class_specifier specifs.storage_classes      ^^ (if specifs.storage_classes      = [] then P.empty else P.space) ^^
-  space_list pp_cabs_type_specifier     specifs.type_specifiers      ^^ (if specifs.type_specifiers      = [] then P.empty else P.space) ^^
-  space_list pp_cabs_type_qualifier     specifs.type_qualifiers      ^^ (if specifs.type_qualifiers      = [] then P.empty else P.space) ^^
-  space_list pp_function_specifier      specifs.function_specifiers  ^^ (if specifs.function_specifiers  = [] then P.empty else P.space) ^^
-  space_list pp_alignment_specifier     specifs.alignment_specifiers ^^ (if specifs.alignment_specifiers = [] then P.empty else P.space)
-*)
-
+and dtree_of_specifiers specifs =
+  Dnode (pp_ctor "Specifiers", filter_opt_list [
+      leaf_opt_list "Storage_class_specifiers" pp_storage_class_specifier   specifs.storage_classes     ;
+      node_opt_list "Type_specifiers"          dtree_of_cabs_type_specifier specifs.type_specifiers     ;
+      leaf_opt_list "Type_qualifiers"          pp_cabs_type_qualifier       specifs.type_qualifiers     ;
+      leaf_opt_list "Function_specifiers"      pp_function_specifier        specifs.function_specifiers ;
+      node_opt_list "Alignment_specifiers"     dtree_of_alignment_specifier specifs.alignment_specifiers;
+  ])
 
 and dtree_of_init_declarator = function
   | InitDecl (_, decltor, init_opt) ->
       Dnode ( pp_decl_ctor "InitDecl"
             , [ dtree_of_declarator decltor; node_of_option dtree_of_initializer_ init_opt ] )
-
-
 
 and pp_storage_class_specifier = function
   | SC_typedef ->
@@ -480,72 +391,67 @@ and pp_storage_class_specifier = function
   | SC_register ->
       pp_ctor "SC_register"
 
-
-and pp_cabs_type_specifier = function
+and dtree_of_cabs_type_specifier = function
   | TSpec_void ->
-      pp_ctor "TSpec_void"
+      Dleaf (pp_ctor "TSpec_void")
   | TSpec_char ->
-      pp_ctor "TSpec_char"
+      Dleaf (pp_ctor "TSpec_char")
   | TSpec_short ->
-      pp_ctor "TSpec_short"
+      Dleaf (pp_ctor "TSpec_short")
   | TSpec_int ->
-      pp_ctor "TSpec_int"
+      Dleaf (pp_ctor "TSpec_int")
   | TSpec_long ->
-      pp_ctor "TSpec_long"
+      Dleaf (pp_ctor "TSpec_long")
   | TSpec_float ->
-      pp_ctor "TSpec_float"
+      Dleaf (pp_ctor "TSpec_float")
   | TSpec_double ->
-      pp_ctor "TSpec_double"
+      Dleaf (pp_ctor "TSpec_double")
   | TSpec_signed ->
-      pp_ctor "TSpec_signed"
+      Dleaf (pp_ctor "TSpec_signed")
   | TSpec_unsigned ->
-      pp_ctor "TSpec_unsigned"
+      Dleaf (pp_ctor "TSpec_unsigned")
   | TSpec_Bool ->
-      pp_ctor "TSpec__Bool"
+      Dleaf (pp_ctor "TSpec__Bool")
   | TSpec_Complex ->
-      pp_ctor "TSpec__Complex"
+      Dleaf (pp_ctor "TSpec__Complex")
   | TSpec_Atomic tyname ->
-      pp_ctor "TSpec_Atomic" (*^^ P.brackets (pp_type_name tyname)*)
+      Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
   | TSpec_struct (id_opt, s_decls_opt) ->
-      pp_ctor "TSpec_struct" ^^ P.brackets (
-        pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
-        pp_option (fun z -> P.brackets ((comma_list pp_struct_declaration) z)) s_decls_opt
-      )
+      Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+               node_of_list_option dtree_of_struct_declaration s_decls_opt)
   | TSpec_union (id_opt, s_decls_opt) ->
-      pp_ctor "TSpec_union" ^^ P.brackets (
-        pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
-        pp_option (fun z -> P.brackets ((comma_list pp_struct_declaration) z)) s_decls_opt
-      )
+      Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+               node_of_list_option dtree_of_struct_declaration s_decls_opt)
   | TSpec_enum (id_opt, enums_opt) ->
-      pp_ctor "TSpec_enum" ^^ P.brackets (
-        pp_option pp_cabs_identifier id_opt ^^ P.comma ^^^
-        pp_option (fun z -> P.brackets ((comma_list pp_enumerator) z)) enums_opt
-      )
+      Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+             node_of_list_option dtree_of_enumerator enums_opt)
   | TSpec_name id ->
-      pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id)
+      Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
 
-and pp_struct_declaration = function
+and dtree_of_struct_declaration = function
   | Struct_declaration (specs, qs, s_decls) ->
-      pp_ctor "Struct_declaration" ^^ P.brackets (
-        P.brackets (comma_list pp_cabs_type_specifier specs) ^^ P.comma ^^^
-        P.brackets (comma_list pp_cabs_type_qualifier qs) ^^ P.comma ^^^
-        P.brackets (comma_list pp_struct_declarator s_decls)
-      )
-        (*
+      Dnode (pp_ctor "Struct_declaration", filter_opt_list [
+        node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs  ;
+        leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs     ;
+        node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ])
   | Struct_assert sa_decl ->
-      pp_ctor "Struct_assert" ^^ P.brackets (pp_static_assert_declaration sa_decl)
-*)
-and pp_struct_declarator = function
+      Dnode (pp_ctor "Struct_assert", [dtree_of_static_assert_declaration sa_decl])
+
+and dtree_of_struct_declarator = function
   | SDecl_simple decltor ->
-      pp_ctor "SDecl_simple" (*^^ P.brackets (pp_declarator decltor)*)
-(*
+      Dnode (pp_ctor "SDecl_simple", [dtree_of_declarator decltor])
   | SDecl_bitfield (decltor_opt, e) ->
-      pp_ctor "SDecl_bitfield" ^^ P.brackets (pp_option pp_declarator decltor_opt ^^ P.comma ^^^ failwith "pp_cabs_expression None e")
-   *)
+      Dnode (pp_ctor "SDecl_bitfield", filter_opt_list [
+          map_option dtree_of_declarator decltor_opt;
+          Some (dtree_of_cabs_expression e) ])
 
-and pp_enumerator (id, e_opt) =
-  P.parens (pp_cabs_identifier id ^^^ P.comma ^^^ pp_option (failwith "pp_cabs_expression None") e_opt)
+and dtree_of_static_assert_declaration = function
+  | Static_assert (e, s) -> Dnode (pp_decl_ctor "Static_assert", [
+      dtree_of_cabs_expression e;
+      Dleaf (pp_cabs_string_literal s)])
 
+and dtree_of_enumerator (id, e_opt) =
+  Dnode (pp_cabs_identifier id ^^^ P.comma, [node_of_option dtree_of_cabs_expression e_opt])
 
 and pp_cabs_type_qualifier = function
   | Q_const ->
@@ -557,20 +463,17 @@ and pp_cabs_type_qualifier = function
   | Q_Atomic ->
       pp_ctor "Q_Atomic"
 
-
 and pp_function_specifier = function
   | FS_inline ->
       pp_ctor "FS_inline"
   | FS_Noreturn ->
       pp_ctor "FS_Noreturn"
 
-
-and pp_alignment_specifier = function
+and dtree_of_alignment_specifier = function
   | AS_type tyname ->
-      pp_ctor "AS_type" ^^ P.brackets (failwith "pp_type_name tyname")
+      Dnode (pp_ctor "AS_type", [dtree_of_type_name tyname])
   | AS_expr e ->
-      pp_ctor "AS_expr" ^^ P.brackets (failwith "pp_cabs_expression None e")
-
+      Dnode (pp_ctor "AS_expr", [dtree_of_cabs_expression e])
 
 and dtree_of_declarator = function
   | Declarator (ptr_decl_opt, ddecl) ->
@@ -619,26 +522,24 @@ and dtree_of_parameter_type_list = function
 
 and dtree_of_parameter_declaration = function
   | PDeclaration_decl (specifs, decltor) ->
-      Dnode ( pp_decl_ctor "PDeclaration_decl" ^^^ pp_specifiers specifs
-            , [dtree_of_declarator decltor] )
+      Dnode ( pp_decl_ctor "PDeclaration_decl"
+            , [dtree_of_specifiers specifs; dtree_of_declarator decltor] )
   | PDeclaration_abs_decl (specifs, None) ->
-      Dleaf (pp_ctor "PDeclaration_abs_decl" ^^^ pp_specifiers specifs)
+      Dnode (pp_ctor "PDeclaration_abs_decl", [dtree_of_specifiers specifs])
   | PDeclaration_abs_decl (specifs, Some abs_decltor) ->
-      Dnode ( pp_ctor "PDeclaration_abs_decl" ^^^ pp_specifiers specifs
-            , [dtree_of_abstract_declarator abs_decltor] )
-
-
+      Dnode ( pp_ctor "PDeclaration_abs_decl"
+              , [dtree_of_specifiers specifs; dtree_of_abstract_declarator abs_decltor] )
 
 and dtree_of_type_name = function
   | Type_name (specs, qs, None) ->
-      Dleaf ( pp_decl_ctor "Type_name" ^^^
-              P.brackets (comma_list pp_cabs_type_specifier specs) ^^^
-              P.brackets (comma_list pp_cabs_type_qualifier qs) )
+      Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
+        node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
+        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs   ] )
   | Type_name (specs, qs, Some a_decltor) ->
-      Dnode ( pp_decl_ctor "Type_name" ^^^
-              P.brackets (comma_list pp_cabs_type_specifier specs) ^^^
-              P.brackets (comma_list pp_cabs_type_qualifier qs)
-            , [dtree_of_abstract_declarator a_decltor] )
+      Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
+        node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
+        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs   ;
+        Some (dtree_of_abstract_declarator a_decltor)] )
 
 and dtree_of_abstract_declarator = function
   | AbsDecl_pointer ptr_decltor ->
@@ -673,15 +574,6 @@ and dtree_of_designator = function
   | Desig_member ident ->
       Dleaf (pp_decl_ctor "Desig_member" ^^^ pp_cabs_identifier ident)
 
-
-and dtree_of_static_assert_declaration = function
- | Static_assert (e, lit) ->
-     Dnode ( pp_decl_ctor "Static_assert"
-           , [dtree_of_cabs_expression e; Dleaf (pp_cabs_string_literal lit)] )
-
-
-(* TODO *)
-(* list (maybe (list designator) * initializer_) *)
 and dtree_of_initializer_list inits =
   dtree_of_list (fun (desigs_opt, init) ->
     match desigs_opt with
@@ -693,11 +585,6 @@ and dtree_of_initializer_list inits =
       | None ->
           dtree_of_initializer_ init
   ) inits
-(*
-  comma_list (fun (desigs_opt, init) ->
-    P.optional (fun z -> space_list pp_designator z ^^^ P.equals ^^ P.space) desigs_opt ^^ pp_initializer_ init
-  ) inits
-*)
 
 
 let rec dtree_of_cabs_statement (CabsStatement (loc, stmt_)) =
@@ -759,7 +646,7 @@ and dtree_of_for_clause = function
 
 let dtree_of_function_definition (FunDef (specifs, decltor, stmt)) =
   Dnode ( pp_ctor "FunDef"
-        , [ Dleaf (pp_specifiers specifs)
+        , [ dtree_of_specifiers specifs
           ; dtree_of_declarator decltor
           ; dtree_of_cabs_statement stmt ] )
 
@@ -778,7 +665,6 @@ let filter_external_decl edecls =
   in List.rev (List.fold_left f [] edecls)
 
 let pp_translate_unit show_ext_decl do_colour (TUnit edecls) =
-  isatty := do_colour && Unix.isatty Unix.stdout;
-  Colour.do_colour := !isatty;
+  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_edecls = if show_ext_decl then edecls else filter_external_decl edecls in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline
