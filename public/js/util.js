@@ -1,5 +1,14 @@
 'use_strict'
 
+function fadeOut(tooltip) {
+    function remove(node) {
+      var p = node && node.parentNode;
+      if (p) p.removeChild(node);
+    }
+    tooltip.style.opacity = "0";
+    setTimeout(function() { remove(tooltip); }, 1100);
+  }
+
 // WARNING: Unused function
 function generateColor() {
   function basicColor (mix) {
@@ -61,6 +70,7 @@ function getSTDSection(section) {
     $(this).replaceWith(n)
     div.append('<div style="margin-top: 5px;">'+n+'. '+ $(this).html()+'</div>')
   })
+  div.append('<br>')
   return {title: title, data: div}
 }
 

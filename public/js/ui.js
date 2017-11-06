@@ -155,6 +155,10 @@ class UI {
       if (this.auto_refresh) this.elab()
     }, 2000);
 
+    $('.cm-std').on('click', (e) => {
+      console.log($(e.target).text())
+    })
+
   }
 
   setCurrentView(view) {
