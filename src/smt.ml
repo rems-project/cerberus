@@ -787,15 +787,15 @@ let runND_random m st0 =
         | Solver.UNKNOWN ->
             failwith "TIMEOUT in NDbranch"
         | Solver.SATISFIABLE ->
-            begin try
-              let ret = now () in
-              void (Wip.pop ());
-              Solver.pop slvSt.slv 1;
-              ret
+            let ret = try
+              now ()
             with
               | BacktrackRandom ->
                   later' ()
-            end
+            in
+            void (Wip.pop ());
+            Solver.pop slvSt.slv 1;
+            ret
         | Solver.UNSATISFIABLE ->
             later' ()
       end in
@@ -847,12 +847,12 @@ let runND_random m st0 =
       | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
           let ret = if Random.bool () then
             do_something (fun () -> aux m_act1 st') cs
-              (fun () -> do_something (fun () -> aux m_act2 st') (MC_not cs) (fun () ->
-                void (Wip.pop ()); Solver.pop slvSt.slv 1; raise BacktrackRandom))
+              (fun () -> do_something (fun () -> aux m_act2 st') (MC_not cs)
+                           (fun () -> raise BacktrackRandom))
           else
             do_something (fun () -> aux m_act2 st') (MC_not cs)
-              (fun () -> do_something (fun () -> aux m_act1 st') cs (fun () ->
-                void (Wip.pop ()); Solver.pop slvSt.slv 1; raise BacktrackRandom)) in
+              (fun () -> do_something (fun () -> aux m_act1 st') cs
+                           (fun () -> raise BacktrackRandom)) in
           ret
   in try
     [aux m st0]
