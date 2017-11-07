@@ -293,6 +293,8 @@ code {
     font-family: monospace;
 }
 
+
+/*
 .tooltip {
   transform: none;
   margin: 0px;
@@ -318,13 +320,40 @@ code {
   -webkit-transition: all 0.3s ease-out;
   transition: all 0.3s ease-out;
 }
-
 .tooltip-text h3 {
   margin: 6px;
 }
 
 .tooltip-text ul {
   margin: 0;
+}
+*/
+
+.tooltip {
+  border: 1px solid silver;
+  border-radius: 3px;
+  color: #444;
+  padding: 2px 5px;
+  font-size: 90%;
+  font-family: monospace;
+  background-color: white;
+  white-space: pre-wrap;
+
+  overflow: scroll;
+
+  max-width: 40em;
+  max-height: 60em;
+  position: absolute;
+  z-index: 10;
+  -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+
+  transition: opacity 1s;
+  -moz-transition: opacity 1s;
+  -webkit-transition: opacity 1s;
+  -o-transition: opacity 1s;
+  -ms-transition: opacity 1s;
 }
 
 .std {
@@ -387,5 +416,6 @@ svg {
   cursor: pointer;
   border: 1px solid #000;
 }
+
 
 
