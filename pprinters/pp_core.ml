@@ -588,7 +588,7 @@ let rec pp_expr expr =
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
         | Ebound (i, e) ->
-            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^
+            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^^^
             P.parens (pp e)
       end
     end

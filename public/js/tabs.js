@@ -217,7 +217,7 @@ class TabEditor extends Tab {
       let minWidth = 300
       if (node.clientWidth < minWidth) {
         let dx = minWidth - node.clientWidth
-        node.style.left = (x - dx) + "px"
+        node.style.left = (x - dx - 10) + "px"
       }
       // Shifting Y
       let minHeight = 200
@@ -226,7 +226,7 @@ class TabEditor extends Tab {
         let maxHeight = document.body.clientHeight - y
         if (maxHeight < minHeight) {
           let dy = minHeight - maxHeight
-          node.style.top = (y - dy) + "px"
+          node.style.top = (y - dy - 10) + "px"
           maxHeight = minHeight
         }
         node.style.maxHeight = maxHeight + "px"
@@ -327,6 +327,7 @@ class TabSource extends TabEditor {
 class TabCabs extends TabReadOnly {
   constructor() {
     super('Cabs')
+    this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Cabs elaboration failed...>')
   }
 
@@ -339,6 +340,7 @@ class TabCabs extends TabReadOnly {
 class TabAil extends TabReadOnly {
   constructor() {
     super('Ail')
+    this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Ail elaboration failed...>')
 
     this.editor.addOverlay({

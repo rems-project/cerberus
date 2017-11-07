@@ -37,7 +37,13 @@ type json =
 
 let json_of_file filename = JsonStr (load_file filename)
 
-let in_quotes s = "\"" ^ String.escaped s ^ "\""
+let in_quotes s =
+  let escaped_no_unicode s =
+    String.escaped s
+      (* TODO: this is a horrible hack *)
+    |> Str.global_replace (Str.regexp "\\\\[0-9]+") ""
+  in
+  "\"" ^ (escaped_no_unicode s) ^ "\""
 
 let rec in_commas f = function
   | []    -> ""
@@ -179,6 +185,8 @@ let mk_result file out err =
     ] |> string_of_json
   in
   ignore (Sys.command "rm -f *.{cabs,ail,core}"); (* clean results *)
+  print_endline err;
+  print_endline (string_of_json (json_of_file err));
   result
 
 (* Cerberus interaction *)
