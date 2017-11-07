@@ -4,23 +4,6 @@ Cerberus
 Installation
 ---
 
-### LEM
-
-Install `lem` (you might also need `libgmp`):
-
-```bash
-$ git clone https://bitbucket.org/Peter_Sewell/lem.git
-$ cd lem
-$ make
-```
-
-Set `LEM_PATH` to `lem` directory and include it in your path:
-
-```bash
-$ export LEM_PATH=/home/<path>/lem
-$ export PATH=$LEM_PATH:$PATH
-```
-
 ### Ocaml and opam 
 
 Install `ocaml` (at least 4.02.0) and `opam`.
@@ -36,6 +19,23 @@ Then using opam, install:
 $ opam install ocamlfind cmdliner menhir pprint zarith
 ```
 
+### LEM
+
+Install `lem`
+
+```bash
+$ git clone https://bitbucket.org/Peter_Sewell/lem.git
+$ cd lem
+$ make
+```
+
+Set `LEM_PATH` to `lem` directory and include it in your path:
+
+```bash
+$ export LEM_PATH=/home/<path>/lem
+$ export PATH=$LEM_PATH:$PATH
+
+```
 ### Z3
 
 ```bash

@@ -135,10 +135,7 @@ let c_frontend f =
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
-    |> Exception.fmap (fun (counter, (z, annots)) ->
-        (* Print type annotations *)
-        ignore (List.map (List.map print_endline) annots);
-        (counter, z))
+    |> Exception.fmap (fun (counter, (z, annots)) -> (counter, z))
     |> begin
       if !Debug_ocaml.debug_level > 4 then
         Exception.fmap (fun z -> z)

@@ -61,13 +61,15 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
             "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
           end
     end;
+    (* TODO(victor): I've changed these to perr_endline, so that
+       ci/expected/* could match the output *)
     begin match z3_strs with
       | [] ->
-          print_endline "EMPTY CONSTRAINTS"
+          prerr_endline "EMPTY CONSTRAINTS"
       | _ ->
-          print_endline "BEGIN CONSTRAINTS";
-          print_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
-          print_endline "END CONSTRAINTS"
+          prerr_endline "BEGIN CONSTRAINTS";
+          prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
+          prerr_endline "END CONSTRAINTS"
     end;
 
 (*
