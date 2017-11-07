@@ -196,6 +196,77 @@ class TabEditor extends Tab {
   refresh () {
     this.editor.refresh()
   }
+
+  showTooltip(content) {
+    function elt(tagname, cls /*, ... elts*/) {
+      let e = document.createElement(tagname);
+      if (cls) e.className = cls;
+      for (let i = 2; i < arguments.length; ++i) {
+        let elt = arguments[i];
+        if (typeof elt == "string") elt = document.createTextNode(elt);
+        e.appendChild(elt);
+      }
+      return e;
+    }
+    function makeTooltip(x, y, content) {
+      let node = elt("div", "tooltip", content);
+      node.style.left = x + "px";
+      node.style.top = y + "px";
+      document.body.appendChild(node);
+      // Shifting X
+      let minWidth = 300
+      if (node.clientWidth < minWidth) {
+        let dx = minWidth - node.clientWidth
+        node.style.left = (x - dx) + "px"
+      }
+      // Shifting Y
+      let minHeight = 200
+      let maxY = y + node.clientHeight
+      if (document.body.clientHeight < maxY) {
+        let maxHeight = document.body.clientHeight - y
+        if (maxHeight < minHeight) {
+          let dy = minHeight - maxHeight
+          node.style.top = (y - dy) + "px"
+          maxHeight = minHeight
+        }
+        node.style.maxHeight = maxHeight + "px"
+      }
+
+      return node;
+    }
+    function onEditorActivity(cm, f) {
+      cm.on("cursorActivity", f)
+      cm.on("scroll", f)
+      cm.on("blur", f)
+      cm.on("setDoc", f)
+      return function() {
+        cm.off("cursorActivity", f)
+        cm.off("scroll", f)
+        cm.off("blur", f)
+        cm.off("setDoc", f)
+      }
+    }
+    function clear() {
+      if (tip.parentNode) fadeOut(tip)
+      this.tooltip = null
+      clearActivity()
+    }
+    let where = this.editor.cursorCoords()
+    let tip = makeTooltip(where.right + 1, where.bottom, content)
+    let mouseOnTip = false
+    CodeMirror.on(tip, "mousemove", function() { mouseOnTip = true; })
+    CodeMirror.on(tip, "mouseout", function(e) {
+      if (!CodeMirror.contains(tip, e.relatedTarget || e.toElement)) {
+        mouseOnTip = false;
+      }
+    })
+    let clearActivity = onEditorActivity(this.editor, () => {
+      if (tip.parentNode) fadeOut(tip)
+      this.tooltip = null
+      clearActivity()
+    })
+    this.tooltip = tip
+  }
 }
 
 /* ReadOnly Editor */
@@ -269,6 +340,43 @@ class TabAil extends TabReadOnly {
   constructor() {
     super('Ail')
     this.editor.setOption('placeholder', '<Ail elaboration failed...>')
+
+    this.editor.addOverlay({
+      token: (stream) => {
+        const rx_word = "\" "
+        let ch = stream.peek()
+        let word = ""
+
+        if (rx_word.includes(ch) || ch === '\uE000' || ch === '\uE001') {
+          stream.next()
+          return null
+        }
+
+        while ((ch = stream.peek()) && !rx_word.includes(ch)){
+          word += ch
+          stream.next()
+        }
+
+        let re = /\d(\.\d)*[#,]\d/
+        if (re.test(word))
+          return "std"
+      }
+    }, { opaque: true, priority: 1000 }
+    )
+
+    this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
+      let edom = $(e.target);
+      if (edom.hasClass('cm-std')) {
+        if (this.tooltip && e.target.tooltipVisible) {
+          fadeOut(this.tooltip)
+          e.target.tooltipVisible = false
+        } else {
+          this.showTooltip(getSTDSection(e.target.textContent).data[0]);
+          e.target.tooltipVisible = true;
+        }
+      }
+    })
+
   }
 
   update() {
@@ -282,11 +390,6 @@ class TabAil extends TabReadOnly {
 class TabCore extends TabReadOnly {
   constructor () {
     super('Core')
-
-    this.tooltip = $(document.createElement('div'))
-    this.tooltip.addClass('tooltip')
-    this.tooltip.appendTo(this.content)
-    this.tooltipVisible = false
 
     this.editor.setOption('mode', 'text/x-core')
     this.editor.setOption('placeholder', '<Core elaboration failed...>')
@@ -318,16 +421,16 @@ class TabCore extends TabReadOnly {
     this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
       let edom = $(e.target);
       if (edom.hasClass('cm-std')) {
-        if (edom.hasClass('tooltip')) {
-          edom.removeClass('tooltip')
-          edom.siblings('.tooltip-text').remove()
+        if (this.tooltip && e.target.tooltipVisible) {
+          fadeOut(this.tooltip)
+          e.target.tooltipVisible = false
         } else {
-          edom.addClass('tooltip')
-          let content = getSTDSection(e.target.textContent)
-          edom.after($('<span class="tooltip-text"></span>').append(content.data))
+          this.showTooltip(getSTDSection(e.target.textContent).data[0]);
+          e.target.tooltipVisible = true;
         }
       }
     })
+
   }
 
   getLocation(from, to) {
