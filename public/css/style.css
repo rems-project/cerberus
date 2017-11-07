@@ -418,4 +418,26 @@ svg {
 }
 
 
+/* ast-dump style */
 
+.cm-declarator {
+  font-weight: bold;
+  color: #00802b;
+}
+
+.cm-definition {
+  color: #3366ff;
+}
+
+.cm-line {
+  color: #999900;
+}
+
+.cm-type {
+  color: #00802b;
+}
+
+.cm-ast-constructor {
+  font-weight: bold;
+  color: #708;
+}
