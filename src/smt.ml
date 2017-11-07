@@ -871,6 +871,7 @@ let pp_core_exp e =
 
 let print_thread_state tid st =
   print_endline "-------";
+  (*
   Printf.printf "Thread %s:\n" (string_of_int tid);
   begin match st.Core_run.arena with
     | Core.(Expr (_, Eunseq es)) ->
@@ -884,6 +885,7 @@ let print_thread_state tid st =
     | Core.(Expr (_, Eaction _)) -> pp_core_exp st.Core_run.arena
     | _ -> failwith "print_thread_state: unexpected Core expression"
   end;
+     *)
   print_endline "-------"
 
 let print_driver_state st =
