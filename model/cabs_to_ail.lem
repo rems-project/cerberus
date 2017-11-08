@@ -1157,6 +1157,11 @@ let rec desugar_type_specifiers specs =
               let ty = ATypes.Basic (ATypes.Integer (ATypes.Enum sym)) in
               maybe (E.return ()) (register_simple_enumerators ty) enums_opt >>
               E.return (ATypes.no_qualifiers, ty)
+          
+          | [TSpec_enum Nothing enums_opt] ->
+              (* TODO *)
+              E.fail Loc.unknown (Errors.Desugar_NotyetSupported "enum specifier without an identifier")
+          
           (* *)
           | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
               E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
@@ -1169,8 +1174,10 @@ let rec desugar_type_specifiers specs =
                       | Just (_, (sym, E.Kind_typedef, _)) ->
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
-                      | _ ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: error case 1115")
+                      | Just _ ->
+                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: Tspec_name, not King_typedef")
+                      | Nothing ->
+                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: Tspec_name, not resolved")
                     end
               end
           
