@@ -28,6 +28,47 @@ module M = Map.Make (struct
   let compare = Pervasives.compare
 end)
 
+
+module StringConcatenation = struct
+  (* TODO: the location of the token following a string literal is broken (shows the start of the string) *)
+  let state = ref None
+  
+  let lexer lexbuf =
+    let rec concatStrings (previous_pref_opt, strs_acc) =
+(* (TODO: location broken)
+      let saved_lex_curr_p = lexbuf.Lexing.lex_curr_p in
+*)
+      match Lexer.lexer lexbuf with
+        | STRING_LITERAL (new_pref_opt, strs) ->
+            begin match merge_encoding_prefixes previous_pref_opt new_pref_opt with
+              | Some pref_opt ->
+                  concatStrings (pref_opt, strs_acc @ strs)
+              | None ->
+                  raise NonStandard_string_concatenation
+            end
+        | tok ->
+(* (TODO: location broken)           lexbuf.Lexing.lex_curr_p <- saved_lex_curr_p; *)
+            (STRING_LITERAL (previous_pref_opt, strs_acc), tok)
+    in
+    
+    match !state with
+      | Some tok ->
+          state := None;
+          tok
+      | None ->
+          begin match Lexer.lexer lexbuf with
+            | STRING_LITERAL lit ->
+                let saved_lex_start_p = lexbuf.Lexing.lex_start_p in
+                let (str_tok, tok') = concatStrings lit in
+                state := Some tok';
+                lexbuf.Lexing.lex_start_p <- saved_lex_start_p;
+                str_tok
+            | tok ->
+                tok
+          end
+end
+
+
 let parse input =
   let parse_channel ic =
     let lexbuf = Lexer.init (Input.name input) ic in
@@ -38,17 +79,17 @@ let parse input =
       let loc = Lexing.lexeme_start_p lexbuf |> Location_ocaml.point in
       Exception.fail (loc, cause)
     in
+    
     try
-      Parser.translation_unit Lexer.lexer lexbuf
+      Parser.translation_unit StringConcatenation.lexer lexbuf
       |> Exception.except_return
     with
     | Failure msg ->
-      prerr_endline "DEBUG: CPARSER_DRIVER, Failure";
-      failwith msg
+        prerr_endline "DEBUG: CPARSER_DRIVER, Failure";
+        failwith msg
     | NonStandard_string_concatenation ->
-      prerr_endline "ERROR: unsupported non-standard concatenation \
-                     of string literals";
-      fail lexbuf
+        prerr_endline "ERROR: unsupported non-standard concatenation of string literals";
+        fail lexbuf
     | _ ->
       fail lexbuf
   in
