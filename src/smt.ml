@@ -611,12 +611,13 @@ let check_counter = ref 0
 
 let check_sat slv es =
 (*  prerr_endline (Colour.(ansi_format [Green] (Solver.to_string slv))); *)
-  (* TODO(victor): I've changed these to perr_*, so that
-     ci/expected/* could match the output *)
-  prerr_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ");
-  flush stdout;
+  if !Debug_ocaml.debug_level >= 1 then begin
+    prerr_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ")
+  end;
   let ret = Solver.check slv es in
-  prerr_endline "done";
+  if !Debug_ocaml.debug_level >= 1 then begin
+    prerr_endline "done"
+  end;
   check_counter := !check_counter + 1;
   ret
 
@@ -803,6 +804,8 @@ let runND_random m st0 =
     match m_act st with
       | (NDactive a, st') ->
           (Active a, Wip.to_strings (), st')
+      | (NDkilled (Undef0 _ as reason), st') ->
+          (Killed reason, Wip.to_strings (), st')
       | (NDkilled r, st') ->
           raise BacktrackRandom
       | (NDnd (debug_str, str_ms), st') ->
