@@ -217,7 +217,7 @@ let s_char =
 
 
 (* Whitespaces *)
-let whitespace_char = [' ' '\t' '\n' '\012' '\r']
+let whitespace_char = [' ' '\t' (*'\n'*) '\012' '\r']
 
 (* ========================================================================== *)
 
@@ -316,7 +316,9 @@ and initial = parse
 
   (* NOTE: we partialy (TODO) decode string literals here *)
   | '"'
-      { let strs = s_char_sequence lexbuf in
+      { let saved_start_p = lexbuf.lex_start_p in
+        let strs = s_char_sequence lexbuf in
+        lexbuf.lex_start_p <- saved_start_p;
         STRING_LITERAL (None, strs) }
   | ("u8" | 'u' | 'U' | 'L') as pref '"'
       { let pref = match pref with
@@ -324,7 +326,9 @@ and initial = parse
           | "u"  -> Cabs.CabsEncPrefix_u
           | "U"  -> Cabs.CabsEncPrefix_U
           | "L"  -> Cabs.CabsEncPrefix_L  in
+        let saved_start_p = lexbuf.lex_start_p in
         let strs = s_char_sequence lexbuf in
+        lexbuf.lex_start_p <- saved_start_p;
         STRING_LITERAL (Some pref, strs) }
 
   (* STD §6.4.6#1 Punctuators *)
