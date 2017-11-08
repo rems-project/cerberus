@@ -335,7 +335,7 @@ let gen_corestd stdlib impl =
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode pps ppflags file_opt progress rewrite
-             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto action_graph =
+             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
@@ -363,7 +363,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps ppflags file_opt p
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps ppflags core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
+    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   
   (* Looking for and parsing the implementation file *)
   let core_impl = load_impl Core_parser.parse impl_name in
@@ -371,7 +371,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps ppflags file_opt p
 
   set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto action_graph;
+    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
@@ -524,6 +524,10 @@ let defacto =
   let doc = "relax some of the ISO constraints (outside of the memory)" in
   Arg.(value & flag & info["defacto"] ~doc)
 
+let default_impl =
+  let doc = "run cerberus with a default implementation choice" in
+  Arg.(value & flag & info["defacto_impl"] ~doc)
+
 let action_graph =
   let doc = "create a (dot) graph with all the possible executions" in
   Arg.(value & flag & info["graph"] ~doc)
@@ -544,7 +548,7 @@ let () =
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
-    $ batch $ experimental_unseq $ typecheck_core $ defacto $ action_graph ) in
+    $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
   
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in

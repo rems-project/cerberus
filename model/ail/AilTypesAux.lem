@@ -1242,7 +1242,9 @@ let is_extended_unsigned_integer_type _ =
 val is_unsigned_ity: integerType -> bool
 let is_unsigned_ity = function
   | Char ->
-      error "TODO: AilTypesAux.is_unsigned_ity, Char"
+      let () = Debug.warn [] (fun () -> "AilTypesAux.is_unsigned_ity, Char") in
+      false
+      (*error "TODO: AilTypesAux.is_unsigned_ity, Char"*)
   | Bool ->
       true
   | Signed _ ->
