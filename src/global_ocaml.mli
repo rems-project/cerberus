@@ -53,7 +53,8 @@ type cerberus_conf = {
   batch:           bool;
   experimental_unseq: bool;
   typecheck_core: bool;
-  defacto: bool;
+  defacto:        bool;
+  default_impl:   bool;
   action_graph:   bool;
 }
 
@@ -84,6 +85,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     error_verbosity ->
+    bool ->
     bool ->
     bool ->
     bool ->
