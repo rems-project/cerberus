@@ -76,7 +76,7 @@ let lexicon: (string, token) Hashtbl.t = Hashtbl.create 0
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder) keywords
 
-let init filename channel: Lexing.lexbuf =
+let init channel: Lexing.lexbuf =
   Lexing.from_channel channel
 
 let lex_comment remainder lexbuf =
