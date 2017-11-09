@@ -64,6 +64,8 @@ module StringConcatenation = struct
                 lexbuf.Lexing.lex_start_p <- saved_lex_start_p;
                 str_tok
             | tok ->
+                (* TODO(victor): fix position error *)
+                (*print_endline (Tokens.string_of_token tok ^ string_of_loc (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf));*)
                 tok
           end
 end
@@ -71,7 +73,7 @@ end
 
 let parse input =
   let parse_channel ic =
-    let lexbuf = Lexer.init (Input.name input) ic in
+    let lexbuf = Lexer.init ic in
     let fail lexbuf =
       let cause = Errors.Cparser_cause
           (Errors.Cparser_unexpectedToken (Lexing.lexeme lexbuf))
