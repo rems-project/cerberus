@@ -150,8 +150,8 @@ let node_of_list_option dtree_of = function
   | None ->
       [ Dleaf (pp_ctor "None") ]
 
-let pp_cabs_identifier (CabsIdentifier (loc, str)) =
-  pp_location loc ^^^ pp_colour_identifier str
+let pp_cabs_identifier (CabsIdentifier (_, str)) =
+  pp_colour_identifier str
 
 let pp_bool = function
   | true  -> !^ "true"

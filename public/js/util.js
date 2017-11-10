@@ -36,23 +36,26 @@ function createStyle() {
 }
 
 function getSTDSection(section) {
-  // TODO: this first match should not be necessary
-  let loc = section.match(/{-#.*/)[0].slice(3).split(/,/)[0].split(/#/)
-  let ns = loc[0].match(/\d+/g)
+  let ns = section.match(/\d+/g)
   let title = '§'
   let p = std
   let content = ""
-  for (let i = 0; i < ns.length; i++) {
+  let i = 0
+  for (; i < ns.length - 1; i++) {
     p = p[ns[i]]
     title += ns[i] + '.'
     if (p['title'])
       content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
   }
   // if has a paragraph
-  if (loc[1] && p['P'+loc[1]]) {
-    title = title.slice(0,-1) + '#' + loc[1]
-    content += p['P'+loc[1]]
+  if (p['P'+ns[i]]) {
+    title = title.slice(0,-1) + '#' + ns[i]
+    content += p['P'+ns[i]]
   } else {
+    p = p[ns[i]]
+    title += ns[i]
+    if (p['title'])
+      content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
     let j = 1
     while (p['P'+j]) {
       content += p['P'+j] + '</br>'

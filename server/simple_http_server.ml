@@ -191,10 +191,6 @@ let mk_result file out err =
 
 (* Cerberus interaction *)
 
-let elab_rewrite =
-  Printf.sprintf
-    "cerberus --pp=cabs,ail,core --rewrite --pp_flags=annot,fout %s > %s 2> %s"
-
 let elab =
   Printf.sprintf
     "cerberus --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
@@ -265,7 +261,6 @@ let post ~docroot uri path content =
     | "/exhaustive" -> cerberus (run "exhaustive") content
     | "/random" -> cerberus (run "random") content
     | "/graph" -> create_graph content
-    | "/elab_rewrite"  -> cerberus elab_rewrite content
     | "/elab"  -> cerberus elab content
     | _ -> forbidden path
   in catch try_with (fun _ -> forbidden path)

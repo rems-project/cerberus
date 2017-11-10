@@ -30,7 +30,7 @@ module Wip = struct
   let pop () =
     match !submitted with
       | [] ->
-          failwith "Wip.pop, empty"
+          failwith "Smt.Wip.pop, empty"
       | cs::css ->
           submitted := css;
           cs
@@ -169,6 +169,19 @@ let init_solver () : solver_state =
    ) in
   
   Solver.add slvSt.slv [axiom1; axiom2];
+
+(*
+  Pmap.iter (fun tag_sym membrs ->
+    begin match tag_sym with
+      | Sym.Symbol (n, Some str) ->
+          print_string (str ^ ":" ^ string_of_int n)
+      | Sym.Symbol (n, None) ->
+          print_string ("anon:" ^ string_of_int n)
+    end;
+    print_endline (" ==> " ^ string_of_int (List.length membrs))
+  )(Tags.tagDefs ());
+(* tagDefs: unit -> (Symbol.sym, (Cabs.cabs_identifier * Core_ctype.ctype0) list) Pmap.map *)
+*)
   slvSt
 
 
@@ -196,9 +209,9 @@ let integerBaseType_to_expr slvSt ibty =
     | IntN_t n ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) [Arithmetic.Integer.mk_numeral_i slvSt.ctx n]
     | Int_leastN_t _ ->
-        failwith "Smt.integerBaseType_to_expr, Int_leastN_t"
+        failwith "TODO Smt.integerBaseType_to_expr, Int_leastN_t"
     | Int_fastN_t _ ->
-        failwith "Smt.integerBaseType_to_expr, Int_fastN_t"
+        failwith "TODO Smt.integerBaseType_to_expr, Int_fastN_t"
     | Intmax_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 6) []
     | Intptr_t ->
@@ -217,9 +230,9 @@ let integerType_to_expr slvSt (ity: AilTypes.integerType) =
     | Unsigned ibty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3) [integerBaseType_to_expr slvSt ibty]
     | IBuiltin str ->
-        failwith ("Smt.integerType_to_expr, IBuiltin " ^ str)
+        failwith ("TODO Smt.integerType_to_expr, IBuiltin " ^ str)
     | Enum _ ->
-        failwith "Smt.integerType_to_expr, Enum"
+        failwith "TODO Smt.integerType_to_expr, Enum"
     | Size_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
@@ -246,7 +259,8 @@ let rec ctype_to_expr slvSt ty =
       | Basic0 bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
       | Array0 (_, None) ->
-          failwith "Smt.ctype_to_expr, Array None"
+          (* Ail type error *)
+          assert false
       | Array0 (elem_ty, Some n) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 2)
             [ctype_to_expr slvSt elem_ty; Arithmetic.Integer.mk_numeral_i slvSt.ctx (Nat_big_num.to_int n)]
@@ -286,15 +300,14 @@ let integer_value_base_to_expr slvSt ival_ =
         Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
     | IVaddress alloc_id ->
         Expr.mk_const_s slvSt.ctx ("addr_" ^ string_of_int alloc_id) slvSt.addrSort
-  | IVfromptr (ty, ity, ptrval_) ->
-    (* the result of a cast from pointer to integer. The first
-       parameter is the referenced type of the pointer value, the
-       second is the integer type *)
-      let ty_e = ctype_to_expr slvSt ty in
-      let ity_e = integerType_to_expr slvSt ity in
-      let ptrval_e = (* WIP *) aux (address_expression_of_pointer_base ptrval_) in
-      Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptrval_e]
-      
+    | IVfromptr (ty, ity, ptrval_) ->
+        (* the result of a cast from pointer to integer. The first
+           parameter is the referenced type of the pointer value, the
+           second is the integer type *)
+        let ty_e = ctype_to_expr slvSt ty in
+        let ity_e = integerType_to_expr slvSt ity in
+        let ptrval_e = (* WIP *) aux (address_expression_of_pointer_base ptrval_) in
+        Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptrval_e]
     | IVop (iop, [ival_1; ival_2]) ->
         let mk_op = function
           | IntAdd ->
@@ -306,67 +319,45 @@ let integer_value_base_to_expr slvSt ival_ =
           | IntDiv ->
               Arithmetic.mk_div slvSt.ctx 
           | IntRem_t ->
-              failwith "IntRem_t"
+              failwith "TODO Smt: IntRem_t"
           | IntRem_f ->
               Arithmetic.Integer.mk_mod slvSt.ctx 
           | IntExp ->
               Arithmetic.mk_power slvSt.ctx  in
         mk_op iop (aux ival_1) (aux ival_2)
     | IVop _ ->
-        failwith "Smt.integer_value_base_to_expr: IVop, arity error"
+        (* Core type error *)
+        assert false
     | IVmin ity ->
         Expr.mk_app slvSt.ctx slvSt.ivminDecl [integerType_to_expr slvSt ity]
     | IVmax ity ->
         Expr.mk_app slvSt.ctx slvSt.ivmaxDecl [integerType_to_expr slvSt ity]
-    | IVsizeof (Core_ctype.Array0 (_, None)) ->
-        failwith "Smt, sizeof array None"
-    | IVsizeof (Core_ctype.Array0 (elem_ty, Some n)) ->
-        Arithmetic.mk_mul slvSt.ctx
-          [ Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
-(*          ; Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt elem_ty] ] *)
-          ; aux (IVsizeof elem_ty) ]
     | IVsizeof ty ->
-        (* TODO: tmp hack to check performance *)
-        Core_ctype.(AilTypes.(match ty with
-          | Basic0 (Integer Char)
-          | Basic0 (Integer (Signed Ichar))
-          | Basic0 (Integer (Unsigned Ichar)) ->
-              Arithmetic.Integer.mk_numeral_i slvSt.ctx 1
-          | Basic0 (Integer (Signed Int_))
-          | Basic0 (Integer (Unsigned Int_)) ->
-              Arithmetic.Integer.mk_numeral_i slvSt.ctx 4
-          | Basic0 (Integer (Signed LongLong))
-          | Basic0 (Integer (Unsigned LongLong)) ->
-              Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
-          | Pointer0 _ ->
-              Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
-          | _ ->
-              Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
-        ))
-
-
+        Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
     | IValignof ty ->
-        (* TODO: tmp hack to check performance *)
-        Arithmetic.Integer.mk_numeral_i slvSt.ctx 8
-(*
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
-*)
-  | IVoffsetof (tag_sym, memb_ident) ->
-      failwith "IVoffsetof"
-  | IVptrdiff ((ptrval_1, sh1), (ptrval_2, sh2)) ->
-      let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
-                                                   ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
-      let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
-                                                   ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
-      Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2]
-  | IVbyteof (ival_, mval) ->
-      failwith "IVbyteof"
-  | IVcomposite ival_s ->
-      failwith "IVcomposite"
-  | IVbitwise (ity, bwop) ->
-      failwith "IVbitwise"
-  
-  in aux ival_
+    | IVoffsetof (tag_sym, memb_ident) ->
+      failwith "TODO Smt: IVoffsetof"
+    | IVptrdiff ((ptrval_1, sh1), (ptrval_2, sh2)) ->
+        let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
+                                                     ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
+        let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
+                                                     ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
+        Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2]
+    | IVbyteof (ival_, mval) ->
+        failwith "TODO Smt: IVbyteof"
+    | IVcomposite ival_s ->
+        failwith "TODO Smt: IVcomposite"
+    | IVbitwise (ity, bwop) ->
+        failwith "TODO Smt: IVbitwise"
+  in
+  aux (Either.either_case
+    (fun n -> IVconcrete n)
+    (fun z -> z)
+    (Mem_simplify.simplify_integer_value_base ival_)
+  )
+
+
 
 
 
@@ -664,7 +655,10 @@ let runND_exhaustive m st0 =
       
       | (NDkilled r, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tkilled r);
-          prerr_endline "NDkilled";
+          prerr_endline "NDkilled BEGIN";
+          prerr_endline (Z3.Solver.to_string slvSt.slv);
+          prerr_endline "END";
+          
           (Killed r, Wip.to_strings (), st') :: acc
       
       | (NDnd (debug_str, str_ms), st') ->
@@ -689,7 +683,10 @@ let runND_exhaustive m st0 =
           add_constraint slvSt cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
-(*                prerr_endline (Solver.to_string slvSt.slv); *)
+(*
+                prerr_endline ("BEGIN SOLVER\n" ^ Solver.to_string slvSt.slv ^ "\nEND");
+                prerr_endline ("BEGIN CS\n" ^ String.concat "\n" (Wip.to_strings ()) ^ "\nEND");
+*)
                 prerr_endline "NDguard BACKTRACKING";
                tree_so_far := fill_hole_with !tree_so_far Tdeadend;
                raise (Backtrack acc)

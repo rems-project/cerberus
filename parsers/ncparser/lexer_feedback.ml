@@ -85,11 +85,11 @@ let pointer_decl pdecl d =
            sort=    DeclOther;
   }
 
-let identifier_decl (Cabs.CabsIdentifier(_, str) as i) =
+let identifier_decl loc str =
   { id=      str;
     sort=    DeclId;
     pointer= None;
-    direct=  Cabs.DDecl_identifier i;
+    direct=  Cabs.DDecl_identifier (Cabs.CabsIdentifier (loc, str));
   }
 
 let declarator_decl d =

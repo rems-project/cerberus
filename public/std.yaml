@@ -3188,29 +3188,27 @@
         representable, the expression (a/b)*b + a%b shall equal a; otherwise,
         the behavior of both a/b and a%b is undefined.
     6:
-      title: Additive operators
+      titlle: Additive operators
       P1: |
         <h3>Syntax</h3>
         additive-expression:
           multiplicative-expression
           additive-expression + multiplicative-expression
           additive-expression - multiplicative-expression
-      P2: >
+      P2: |
         <h3>Constraints</h3>
         For addition, either both operands shall have arithmetic type, or one
         operand shall be a pointer to a complete object type and the other
         shall have integer type. (Incrementing is equivalent to adding 1.)
-      P3: >
+      P3: |
         For subtraction, one of the following shall hold:
-        <ul>
-          <li>both operands have arithmetic type;</li>
-          <li>both operands are pointers to qualified or unqualified versions of
-        compatible complete object types; or</li>
-          <li>the left operand is a pointer to a complete object type and the right
-        operand has integer type.</li>
-        </ul>
+        — both operands have arithmetic type;
+        — both operands are pointers to qualified or unqualified versions of
+        compatible complete object types; or
+        — the left operand is a pointer to a complete object type and the right
+        operand has integer type.
         (Decrementing is equivalent to subtracting 1.)
-      P4: >
+      P4: |
         <h3>Semantics</h3>
         If both operands have arithmetic type, the usual arithmetic conversions
         are performed on them.
