@@ -1,10 +1,7 @@
-
 #ifndef	_STRING_H_
 #define	_STRING_H_
 
-#ifndef _STDIO_H_
 typedef __cerbty_size_t size_t;
-#endif
 #define NULL __cerbvar_NULL
 
 void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
