@@ -1,6 +1,7 @@
 open Parser
 open Tokens
 
+(*
 let string_of_pos pos =
   Lexing.(Printf.sprintf "<%s:%d:%d>" pos.pos_fname pos.pos_lnum
                         (1 + pos.pos_cnum - pos.pos_bol))
@@ -22,13 +23,14 @@ let merge_encoding_prefixes pref1_opt pref2_opt =
         Some (Some pref1)
     | _ ->
         None
-
+*)
 module M = Map.Make (struct
   type t = string
   let compare = Pervasives.compare
 end)
 
 
+(*
 module StringConcatenation = struct
   (* TODO: the location of the token following a string literal is broken (shows the start of the string) *)
   let state = ref None
@@ -65,15 +67,15 @@ module StringConcatenation = struct
                 str_tok
             | tok ->
                 (* TODO(victor): fix position error *)
-                (*print_endline (Tokens.string_of_token tok ^ string_of_loc (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf));*)
+                print_endline (Tokens.string_of_token tok ^ string_of_loc (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf));
                 tok
           end
 end
-
+*)
 
 let parse input =
   let parse_channel ic =
-    let lexbuf = Lexer.init ic in
+    let lexbuf = Lexing.from_channel ic in
     let fail lexbuf =
       let cause = Errors.Cparser_cause
           (Errors.Cparser_unexpectedToken (Lexing.lexeme lexbuf))
@@ -81,17 +83,17 @@ let parse input =
       let loc = Lexing.lexeme_start_p lexbuf |> Location_ocaml.point in
       Exception.fail (loc, cause)
     in
-    
     try
-      Parser.translation_unit StringConcatenation.lexer lexbuf
+      Parser.translation_unit Lexer.lexer lexbuf
       |> Exception.except_return
     with
     | Failure msg ->
-        prerr_endline "DEBUG: CPARSER_DRIVER, Failure";
-        failwith msg
-    | NonStandard_string_concatenation ->
-        prerr_endline "ERROR: unsupported non-standard concatenation of string literals";
-        fail lexbuf
+      prerr_endline "DEBUG: CPARSER_DRIVER, Failure";
+      failwith msg
+    | Lexer.NonStandard_string_concatenation ->
+      prerr_endline "ERROR: unsupported non-standard concatenation of \
+                     string literals";
+      fail lexbuf
     | _ ->
       fail lexbuf
   in

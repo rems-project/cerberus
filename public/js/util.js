@@ -36,8 +36,7 @@ function createStyle() {
 }
 
 function getSTDSection(section) {
-  // TODO: this first match should not be necessary
-  let loc = section.match(/{-#.*/)[0].slice(3).split(/,/)[0].split(/#/)
+  let loc = section.match(/\d(\.\d)*(#\d)?/)[0].split(/#/)
   let ns = loc[0].match(/\d+/g)
   let title = '§'
   let p = std
