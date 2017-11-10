@@ -1,10 +1,7 @@
 #ifndef _SYS_TIME_H_
 #define	_SYS_TIME_H_
 
-// TODO fix parser ...
-#ifndef _TIME_H_
 typedef __cerbty_time_t      time_t;
-#endif
 typedef __cerbty_suseconds_t suseconds_t;
 
 struct timeval {

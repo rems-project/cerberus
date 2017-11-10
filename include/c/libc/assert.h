@@ -7,7 +7,8 @@
 #define assert(ignore) ((void)0)
 // #elif
 // void assert(scalar expression); // TODO the "polymorphic" type implies we need a specific construct in Cabs/Ail...
-#endif // NDEBUG
+#endif
+// NDEBUG
 
 #ifndef	_ASSERT_H_
 #define	_ASSERT_H_
