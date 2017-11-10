@@ -1,0 +1,83 @@
+open import Pervasives Either
+
+
+
+
+val option_bool : forall 'a. maybe 'a -> ('a -> bool) -> bool
+let option_bool =
+  fun o f ->
+    match o with
+    | Just a  -> f a
+    | Nothing -> false
+    end
+
+let equiv_pair (equiv_A : 'a1 -> 'a2 -> bool) (equiv_B : 'b1 -> 'b2 -> bool) : 'a1 * 'b1 -> 'a2 * 'b2 -> bool =
+  fun p1 p2 -> 
+    let (a1, b1) = p1 in
+    let (a2, b2) = p2 in
+    equiv_A a1 a2 && equiv_B b1 b2
+
+let equiv_triple (equiv_A : 'a1 -> 'a2 -> bool) (equiv_B : 'b1 -> 'b2 -> bool) (equiv_C : 'c1 -> 'c2 -> bool) :
+                 'a1 * 'b1 * 'c1 -> 'a2 * 'b2 * 'c2 -> bool =
+  fun p1 p2 -> 
+    let (a1, b1, c1) = p1 in
+    let (a2, b2, c2) = p2 in
+    equiv_A a1 a2 && equiv_B b1 b2 && equiv_C c1 c2
+
+let eq_triple (eq_A : 'a -> 'a -> bool) (eq_B : 'b -> 'b -> bool) (eq_C : 'c -> 'c -> bool) :
+    'a * 'b * 'c -> 'a * 'b * 'c -> bool =
+  fun p1 p2 -> 
+    let (a1, b1, c1) = p1 in
+    let (a2, b2, c2) = p2 in
+    eq_A a1 a2 && eq_B b1 b2 && eq_C c1 c2
+
+
+let eq_option (eq_A : 'a -> 'a -> bool) : maybe 'a -> maybe 'a -> bool =
+  fun o1 o2 -> 
+    match (o1, o2) with
+    | (Just a1, Just a2) -> eq_A a1 a2
+    | (Nothing, Nothing) -> true
+    | (_      , _      ) -> false
+end
+
+let equiv_option (equiv_A : 'a1 -> 'a2 -> bool) : maybe 'a1 -> maybe 'a2 -> bool =
+  fun o1 o2 -> 
+    match (o1, o2) with
+    | (Just a1, Just a2) -> equiv_A a1 a2
+    | (Nothing, Nothing) -> true
+    | (_      , _      ) -> false
+end
+
+
+val eq_either: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> either 'a 'b -> either 'a 'b -> bool
+let eq_either eq_A eq_B e1 e2 =
+  match (e1, e2) with
+    | (Left  l1, Left  l2) -> eq_A l1 l2
+    | (Right r1, Right r2) -> eq_B r1 r2
+    | (_       , _       ) -> false
+  end
+
+val equiv_either: forall 'a1 'a2 'b1 'b2.
+                  ('a1 -> 'a2 -> bool) -> ('b1 -> 'b2 -> bool) ->
+                  either 'a1 'b1 -> either 'a2 'b2 ->
+                  bool
+let equiv_either equiv_A equiv_B e1 e2 =
+  match (e1, e2) with
+    | (Either.Left  l1, Either.Left  l2) -> equiv_A l1 l2
+    | (Either.Right r1, Either.Right r2) -> equiv_B r1 r2
+    | (_       , _       ) -> false
+  end
+
+
+let rec in_list (eq_A : 'a -> 'a -> bool) (a : 'a) (ls : list 'a) : bool =
+  match ls with
+  | []    -> false
+  | x::xs -> eq_A x a || in_list eq_A a xs
+  end
+
+
+let sub_list (eq_A : 'a -> 'a -> bool) l1 l2 =
+  List.all (fun x -> in_list eq_A x l2) l1
+
+let equiv_list (eq_A : 'a -> 'a -> bool) l1 l2 =
+  sub_list eq_A l1 l2 && sub_list eq_A l2 l1

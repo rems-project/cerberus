@@ -1,0 +1,458 @@
+{-
+-- Ctype utilities
+-- these are hackish
+fun ctype_true(ty: ctype) : boolean :=
+  true
+fun ctype_false(ty: ctype) : boolean :=
+  false
+fun ctype_integer_false(ty: ctype, n: integer) : boolean :=
+  false
+
+
+ | Basic of AilTypes.basicType
+ | Array of ctype * maybe integer
+ | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
+ | Pointer of AilTypes.qualifiers * ctype
+ | Atomic of ctype
+ | Struct of struct_tag
+ | Union  of union_tag
+ | Builtin of string
+
+
+fun is_pointer(ty) : boolean :=
+  case_ctype(false, ctype_false, ctype_integer_false, ctype_true, TODO_function, ctype_false
+
+fun is_integer(ty) : boolean :=
+  case_ctype(false, 
+
+fun is_arithmetic(ty) : boolean :=
+  -- TODO: is_floating
+  is_integer(ty)
+
+fun is_scalar (ty: ctype) : boolean :=
+  is_pointer(ty) /\ is_arithmetic(ty)
+
+fun is_signed (ty: ctype) : boolean :=
+  
+fun is_unsigned (ty: ctype) : boolean :=
+-}
+
+
+
+
+-- Math utilities
+
+{-
+fun exp_aux(n: integer, m: integer, acc: integer) : integer :=
+  if m = 0 then
+    acc
+  else
+    exp_aux(n, m - 1, n * acc)
+  end
+
+
+-- TODO: diverges if m < 0
+fun exp (n: integer, m: integer) : integer :=
+  exp_aux(n, m, 1)
+--  if m = 0 then
+--    1
+--  else
+--    n * exp(n, m - 1)
+--  end
+
+-}
+
+{-
+fun is_signed (ty: ctype) : boolean :=
+  case ty of
+    | {_} signed _   -> true
+    | {_} unsigned _ -> false
+
+type ctype =
+  | VOID  of qualifiers
+  | BASIC of qualifiers * basic_type
+  (* TODO Need to convert integer constant to an actual value! Otherwise, we
+     cannot compare types! *)
+  | ARRAY of ctype * option int
+(* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
+
+(* NOTE: will need to make up ids for some of the bitfields *)
+  | STRUCT of qualifiers * id * list (id * member)
+  | UNION  of qualifiers * id * list (id * member)
+  | ENUM of id
+  | FUNCTION of ctype * list ctype
+  | POINTER of qualifiers * ctype
+  | ATOMIC of ctype
+  | TYPEDEF of id
+  
+  | SIZE_T
+  | INTPTR_T
+  | WCHAR_T
+  | CHAR16_T
+  | CHAR32_T
+-}
+
+
+fun is_representable (n: integer, ty: ctype): boolean :=
+--  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
+  Ivmin(ty) <= n /\ n <= Ivmax(ty)
+
+
+fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
+  Ivmin(ty2) <= Ivmin(ty1) /\ Ivmax(ty1) <= Ivmax(ty2)
+
+
+-- STD §6.5#5
+fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
+  if is_representable(n, ty) then
+    n
+  else
+    undef(<<UB036_exceptional_condition>>)
+
+
+-- [conv_int ty n] returns the value [n] converted to the integer type [ty]
+fun conv_int (ty: ctype, n: integer): integer :=
+{-
+  if is_unspec(n) then
+    unspecified(ty)
+  else
+-}
+  -- (STD §6.3.1.2#1) When any scalar value is converted to _Bool, the result is 0 if the value compares
+  -- equal to 0; otherwise, the result is 1.
+  if ty = !(_Bool) then
+    if n = 0 then 0 else 1
+  
+  -- (STD §6.3.1.3#1) When a value with integer type is converted to another integer
+  -- type other than _Bool, if the value can be represented by the new type, it
+  -- is unchanged.
+  else
+    if is_representable(n, ty) then
+      n
+  
+  -- (STD §6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
+  -- by repeatedly adding or subtracting one more than the maximum value that
+  -- can be represented in the new type until the value is in the range of the
+  -- new type.
+    else
+      if is_unsigned(ty) then
+        wrapI(ty, n)
+  
+  -- (STD §6.3.1.3#3) Otherwise, the new type is signed and the value cannot be
+  -- represented in it; either the result is implementation-defined or an
+  -- implementation-defined signal is raised.
+      else
+        <Integer.conv_nonrepresentable_signed_integer>(ty, n)
+
+-- auxiliary function for the [conv] (see §6.3.1.3#1)
+fun conv_aux (ty: ctype, n: integer) : integer :=
+  n rem_f (Ivmax(ty) - Ivmin(ty) + 1)
+
+fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
+  case _n of
+    | Specified(n:integer) =>
+        Specified(conv_int(ty, n))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+
+
+
+fun ctype_width (ty: ctype): integer :=
+  Ivsizeof(ty) * <bits_in_byte>
+
+
+
+
+
+-- encode an element of Z into an element of N following the
+-- two's complement encoding
+{-
+fun encodeTwos (ty : ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width = ctype_width(ty) in
+    if (n < 0 - 2^(width - 1)) \/ (2^(width - 1) - 1 < n) then
+      error(<<<encodeTwos>>>, (width, ty, n))
+    else
+      if 0 <= n then
+        n
+      else
+        2^width + n
+      end
+    end
+  end
+-}
+fun encodeTwos (ty : ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width: integer = ctype_width(ty) in
+  if n < Ivmin(ty) \/ Ivmax(ty) < n then
+    error(<<<encodeTwos>>>, (width, ty, n))
+  else if 0 <= n then
+    n
+  else
+    2^width + n
+
+
+
+-- the inverse of the previous function
+fun decodeTwos (ty: ctype, n: integer) : integer :=
+  -- TODO: this assumes no padding bits
+  let width: integer = ctype_width(ty) in
+  if (n < 0) \/ (2^width <= n) then
+    error(<<<decodeTwos>>>, (ty, n))
+  else if n <= 2^(width - 1) - 1 then
+    n
+  else
+    n - 2^width
+
+-- bitwise complement of a two's complement encoded integer
+fun complementTwos_aux (n: integer, w: integer) : integer :=
+  if w = 0 then
+    n
+  else
+    let n_: integer = n / 2 in
+    (1 - (n rem_f 2)) + 2 * complementTwos_aux(n_, w - 1)
+
+fun complementTwos (ty:ctype, n: integer) : integer :=
+  complementTwos_aux(n, ctype_width(ty))
+
+
+-- bitwise AND
+fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
+  if w = 0 then
+    0
+  else
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_AND_aux(n1_, n2_, w-1)
+
+fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bAND>>>, (ty, n1, n2))
+--  else
+    let n1_: integer = <Integer.encode>(ty, n1) in
+    let n2_: integer = <Integer.encode>(ty, n2) in
+    <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
+
+-- bitwise XOR
+fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
+  if w = 0 then
+    0
+  else
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0) + 2 * bitwise_XOR_aux(n1_, n2_, w-1)
+
+fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bXOR>>>, Unit)
+--  else
+  let n1_: integer = <Integer.encode>(ty, n1) in
+  let n2_: integer = <Integer.encode>(ty, n2) in
+  <Integer.decode>(ty, bitwise_XOR_aux(n1_, n2_, ctype_width(ty)))
+
+
+-- bitwise OR
+fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
+  if w = 0 then
+    0
+  else
+    let n1_: integer = n1 / 2 in
+    let n2_: integer = n2 / 2 in
+    (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_OR_aux(n1_, n2_, w-1)
+
+fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
+--  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--    error(<<<WIP_bOR>>>, Unit)
+--  else
+    let n1_: integer = <Integer.encode>(ty, n1) in
+    let n2_: integer = <Integer.encode>(ty, n2) in
+    <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
+
+-- ones_prefix(0, k, width) returns an positive integer whose binary
+-- representation is 1    ...   1 0      ...       0
+--                     k times     width - k times
+fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
+  if (0 <= i) /\ (i < k) then
+    2^(width - 1 - i) + ones_prefix(i+1, k, width)
+  else
+    0
+-- gccSHR_Twos n m =
+--  quot n (2^m) + (sum $ map (\i -> 2^(width - 1 - i)) [0..m-1])
+
+
+
+
+proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
+  let strong c_: loaded integer = load(!(char), array_shift(str, !(char), 0)) in
+  case c_ of
+    | Specified(c: integer) =>
+        if c = 0 then
+          pure(acc)
+        else
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, !(char), 1), Cons(c,acc)) in
+          pure(ret)
+    | Unspecified(_: ctype) =>
+        pure (undef(<<DUMMY>>)) -- TODO think about that
+  end
+{-
+    lets ret = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), cons(c,acc)) in
+    return(ret)
+-}
+
+
+-- TODO: this is the reverse
+proc rev_listFromStr(str: pointer) : eff [integer] :=
+--  pcall(Cfunction(rev_listFromStr_aux), str, [])
+
+  let strong ret: [integer] = pcall(rev_listFromStr_aux, str, []) in
+  pure(ret)
+
+
+
+
+
+proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong frmt_ptr_: loaded pointer = load(!(char*), tmp_ptr) in
+  case frmt_ptr_ of
+    | Specified(frmt_ptr: pointer) =>
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_printf>, xs, args) in
+        pure(ret)
+    | Unspecified(_: ctype) =>
+        pure (undef(<<DUMMY>>)) -- TODO think about that
+  end
+
+
+
+{-
+fun printf_zip_aux2(arg:pointer, args: [pointer]) : (pointer, [pointer]) :=
+  (arg, args)
+
+fun printf_zip_aux1(ty: ctype, args: [pointer]) : ((ctype, pointer), [pointer]) :=
+  let (arg, args) = case_list(args,
+    error <<<printf_zip_aux1>>>,
+    printf_zip_aux2
+  ) in
+  ((ty,arg), args)
+
+-- fun printf_zip(xs: [ctype], args: [pointer]) : [(ctype, pointer)] :=
+--  case_list(xs)
+
+
+proc printf_loader(tys: [ctype], args: [pointer]) : eff integer :=
+  return(0)
+  -}
+
+
+
+proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer :=
+  let strong size_: loaded integer = load(!(size_t), size_ptr) in
+  case size_ of
+    | Specified(size: integer) =>
+        let strong ptr: pointer = alloc(4 {- TODO -}, size) in
+        pure(Specified(ptr))
+    | Unspecified(_: ctype) =>
+        pure(error(<<<malloc_proxy>>>, False))
+  end
+
+
+
+
+
+-- see §5.1.2 from ISO/IEC 10967-1:1994(E)
+fun wrapI(ty: ctype, n: integer) : integer :=
+  let dlt: integer = Ivmax(ty) - Ivmin(ty) + 1 in
+  let r: integer = n rem_f dlt in
+  if r <= Ivmax(ty) then
+    r
+  else
+    r - dlt
+
+
+{-
+  if n < ivmin(ty) then
+    wrapI(ty, n + (ivmax(ty) - ivmin(ty) + 1))
+  else if ivmax(ty) < n then
+    wrapI(ty, n - (ivmax(ty) - ivmin(ty) + 1))
+  else
+    n
+-}
+
+
+{-
+fun signed_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
+                _n1: loaded integer, _n2: loaded integer) : loaded integer :=
+  case (_n1, _n2) of
+    | tuple(loaded(n1), loaded(n2)) =>
+        let conv1: integer = conv(ty1, ty1', n1) in
+        let conv2: integer = conv(ty2, ty2', n2) in
+        loaded(catch_exceptional_condition(result_ty, conv1 * conv2))
+    | _ =>
+        undef(Exception_condition)
+
+
+
+fun unsigned_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
+                  _n1: loaded integer, _n2: loaded integer) : loaded integer :=
+  case (_n1, _n2) of
+    | (loaded(n1), loaded(n2)) =>
+        let conv1: integer = conv(ty1, ty1', n1) in
+        let conv2: integer = conv(ty2, ty2', n2) in
+        loaded(wrapI(result_ty, conv1 * conv2))
+    | _ =>
+        unspecified(result_ty)
+  end
+-}
+
+{-
+fun foo(result_ty: ctype, ty1: ctype, ty1_: ctype, ty2: ctype, ty2_: ctype, _n1: loaded integer, _n2: loaded integer): integer :=
+  case (_n1, _n2) of
+   | (_, Unspecified(_)) =>
+       undef(<<Exceptional_condition>>)
+   | (Unspecified(_), _) =>
+       IF is_unsigned_integer_type (ctype_of e1) THEN
+       Unspecified(result_ty)
+       ELSE
+       undef(<<Exceptional_condition>>)
+   | (Loaded(n1), Loaded(n2)) =>
+       let promoted1 = conv(ty1, ty1_, n1) in
+       let promoted2 = conv(ty2, ty2_, n2) in
+       if promoted2 < 0 then
+         undef(<<Negative_shift>>) else
+       if promoted2 >= ctype_width(result_ty) then
+         undef(<<Shift_too_large>>) else
+       IF is_unsigned_integer_type (ctype_of e1) THEN
+         Loaded ((promoted1 * 2^promoted2) rem_t (Ivmax(result_ty) + 1))
+       ELSE
+       if promoted1 < 0 then
+         undef(<<Exceptional_condition>>)
+       else
+         let res = promoted1 * 2^promoted2 in
+         if is_representable(res, result_ty) then
+           Loaded(res)
+         else
+           undef(<<Exceptional_condition>>)
+  end
+-}
+
+{-
+proc ub_if_overlaps(store_ptr: pointer, ptrs: [pointer]) : eff unit :=
+  case ptrs of
+    | Nil() =>
+        pure(Unit)
+    | Cons(ptr: pointer, _ptrs: [pointer]) =>
+        let strong b: boolean = do
+  end
+
+-}
+
+proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr: pointer) : eff loaded integer :=
+  let strong _p: loaded pointer = load(!(void *), p_ptr) in
+  let strong _q: loaded pointer = load(!(void *), q_ptr) in
+  let strong _size: loaded integer = load(!(size_t), size_ptr) in
+  case (_p, _q, _size) of
+    | (Specified(p: pointer), Specified(q: pointer), Specified(size: integer)) =>
+        let strong res: integer = memop(Memcmp, p, q, size) in
+        pure(Specified(res))
+  end

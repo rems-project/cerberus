@@ -1,0 +1,443 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial,Helvetica,sans-serif;
+  font-size: 10pt;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.wait, .wait * { cursor: wait !important; }
+
+#container {
+  margin: 0;
+  padding: 0;
+  background-color: #FFFFFF;
+  display: flex;
+  flex-direction:column;
+  height: 100%;
+}
+
+#views {
+  height: calc(100% - 28px); /* minus page header height */
+}
+
+#header {
+  font-size: 0;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+  line-height: 1.5;
+  display: inline-block;
+  min-width: 750px;
+}
+
+#header ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+#header ul li {
+  float: left;
+  margin: 0;
+  font-size: 12px;
+}
+
+#header ul .right {
+  float: right;
+}
+
+#title {
+  display: block;
+  padding: 5px 10px;
+  color: #f1f1f1;
+}
+
+#header li a {
+  display: block;
+  text-decoration: none;
+  padding: 5px 10px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+}
+
+#header li a:hover {
+  background-color: #7f7f7f;
+}
+
+#header ul .border {
+  border-right: 1px solid #f1f1f1;
+}
+
+#header hr {
+  display: block;
+  margin: 0;
+}
+
+.dropbtn {
+  border: none;
+  cursor: pointer;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  z-index: 100;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: 300px;
+  overflow-y: scroll;
+}
+
+.dropdown-content a {
+  padding: 0;
+  margin: 0;
+  min-width: 150px;
+  text-align: left;
+}
+
+.dropdown-content input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.dropdown-toggle::after {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 0.255em;
+  vertical-align: 0.255em;
+  content: "";
+  border-top: 0.3em solid;
+  border-right: 0.3em solid transparent;
+  border-left: 0.3em solid transparent;
+}
+
+.dropdown-toggle:empty::after {
+  margin-left: 0;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.pane-content {
+  height: calc(100% - 20px); /* minus tab height */
+}
+
+.tab-content {
+  height: 100%;
+}
+
+
+.tab-compiler a {
+  display: block;
+  text-decoration: none;
+  padding: 2px 9px;
+  color: #f1f1f1;
+  background-color: #5f5f5f;
+}
+
+.tab-compiler a:hover {
+  background-color: #7f7f7f;
+}
+/*********** Panes ************/
+
+.view {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+.pane {
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+  font-size: 0;
+  overflow: hidden;
+}
+
+.tablinks-wrapper {
+  overflow-x: scroll;
+}
+
+.tablinks {
+  min-width: 750px;
+}
+
+.tablink {
+  margin: 0;
+  background-color: #ccc;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablink button  {
+  font-size:11px;
+  margin: 0;
+  background-color: #ccc;
+  color: #888;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: 0.3s;
+  display: inline-block;
+}
+
+.tablink:hover, .tablink:hover button {
+  background-color: #ddd;
+}
+
+.tablink.active {
+  box-shadow: 1px -1px 1px #888888;
+  z-index=2;
+}
+
+.active .tablink.active, .active .tablink.active button {
+  background-color: #f1f1f1;
+  color: #000;
+}
+
+.tablink.active, .tablink.active button {
+  background-color: #f1f1f1;
+  color: #aaa;
+}
+
+.tablink .close {
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  cursor: pointer;
+  width: 8px;
+  height: 8px;
+  margin-left: 5px;
+}
+
+.tablink .close:hover {
+  background-color: #ccc;
+}
+
+.tablink button:focus {
+  outline: 0;
+}
+
+.tablink.drag{
+  background-color: #ccc
+}
+
+.pane-separator {
+  z-index: 2;
+}
+
+.pane-separator.vertical {
+  cursor: col-resize;
+  width: 3px;
+}
+
+.pane-separator:hover {
+  background-color: #ccc;
+}
+
+.pane-separator.resize {
+  background-color: #ccc;
+}
+
+.tab-content {
+  font-size: 13px;
+}
+
+.editor {
+  font-size: 13px !important;
+}
+
+.pane .CodeMirror {
+  height: 100%;
+  border: 1px solid #eee;
+}
+
+.tab-compiler {
+  height: 100%;
+}
+
+.tab-compiler {
+  height: 100%;
+}
+
+
+
+.pane .tab-compiler .CodeMirror {
+  height: 100%;
+}
+
+.CodeMirror-placeholder {
+  color: #888;
+}
+
+
+.cm-std {
+  cursor: pointer;
+  color: #555;
+}
+
+.grabbing {
+  cursor: crosshair;
+}
+
+code {
+    font-family: monospace;
+}
+
+
+/*
+.tooltip {
+  transform: none;
+  margin: 0px;
+}
+
+.tooltip-text {
+  display: block;
+  position: relative;
+  z-index: 10;
+  overflow: visible;
+  padding: 5px 8px;
+  margin-top: 10px;
+  line-height: 11px;
+  font-size: 11px;
+  border-radius: 4px;
+  text-align: left;
+  color: #fff;
+  background-color: #5f5f5f;
+  pointer-events: none;
+  -o-transition: all 0.3s ease-out;
+  -ms-transition: all 0.3s ease-out;
+  -moz-transition: all 0.3s ease-out;
+  -webkit-transition: all 0.3s ease-out;
+  transition: all 0.3s ease-out;
+}
+.tooltip-text h3 {
+  margin: 6px;
+}
+
+.tooltip-text ul {
+  margin: 0;
+}
+*/
+
+.tooltip {
+  border: 1px solid silver;
+  border-radius: 3px;
+  color: #444;
+  padding: 2px 5px;
+  font-size: 90%;
+  font-family: monospace;
+  background-color: white;
+  white-space: pre-wrap;
+
+  overflow: scroll;
+
+  max-width: 40em;
+  max-height: 60em;
+  position: absolute;
+  z-index: 10;
+  -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+
+  transition: opacity 1s;
+  -moz-transition: opacity 1s;
+  -webkit-transition: opacity 1s;
+  -o-transition: opacity 1s;
+  -ms-transition: opacity 1s;
+}
+
+.std {
+  margin: auto;
+  width: 90%;
+}
+
+.std hr {
+  margin-top:10px;
+}
+
+.help {
+  height: 100%;
+  overflow: auto;
+  flex: 1 0 0;
+  padding: 15px;
+}
+
+.help #TOC {
+  border: 1px solid darkgray;
+  background: whitesmoke;
+  float: right;
+  font-size: 0.9em;
+  padding: 1em;
+  margin-left: 1em;
+  margin-bottom: 1em;
+}
+/*********** Graphs ************/
+
+.graph polygon {
+  fill: #f1f1f1;
+}
+
+.node polygon {
+  fill: #ffffff;
+}
+
+.edge polygon {
+  fill: #ffffff;
+}
+
+.svg {
+  height: 100%;
+  border: 1px solid #eee;
+  margin: 0px auto;
+}
+
+svg {
+  display: block;
+  width: auto;
+}
+
+.graph {
+  height: 100%;
+  padding-right: 4px;
+}
+
+.graph button {
+  background-color: #f1f1f1;
+  cursor: pointer;
+  border: 1px solid #000;
+}
+
+
+/* ast-dump style */
+
+.cm-declarator {
+  font-weight: bold;
+  color: #00802b;
+}
+
+.cm-definition {
+  color: #3366ff;
+}
+
+.cm-line {
+  color: #999900;
+}
+
+.cm-type {
+  color: #00802b;
+}
+
+.cm-ast-constructor {
+  font-weight: bold;
+  color: #708;
+}

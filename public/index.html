@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Cerberus</title>
+
+  <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
+  <script type="text/javascript" src="lib/jquery.panzoom.min.js"></script>
+  <script type="text/javascript" src="lib/codemirror.js"></script>
+  <script type="text/javascript" src="lib/panels.js"></script>
+  <script type="text/javascript" src="lib/placeholder.js"></script>
+  <script type="text/javascript" src="lib/viz.js"></script>
+  <script type="text/javascript" src="lib/clike.js"></script>
+  <script type="text/javascript" src="js/core.js"></script>
+  <script type="text/javascript" src="js/ast.js"></script>
+  <script type="text/javascript" src="lib/gas.js"></script>
+
+  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
+  <link rel="stylesheet" type="text/css" href="css/style.css" />
+  <link rel="stylesheet" type="text/css" href="css/scheme.css" />
+
+</head>
+<body>
+  <div id="container">
+    <input id="file-input" type="file" style="display:none;"/>
+    <div id="header">
+      <ul>
+        <li class="border"><div id="title">Cerberus</div></li>
+        <li class="border">
+          <div class="dropdown">
+            <a href="#" id="current-view" class="dropbtn dropdown-toggle"></a>
+            <div id="dropdown-views" class="dropdown-content"></div>
+          </div>
+        </li>
+        <li><a href="#" id="new">New</a></li>
+        <li><a href="#" id="load">Upload</a></li>
+        <li>
+          <div class="dropdown">
+            <a href="#" class ="dropbtn dropdown-toggle" id="ast">Elaborate</a>
+            <div class="dropdown-content">
+              <a href="#" id="cabs">Cabs</a>
+              <a href="#" id="ail">Ail</a>
+              <a href="#" id="core">Core</a>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div class="dropdown">
+            <a href="#" class="dropbtn dropdown-toggle" id="run">Execute</a>
+            <div class="dropdown-content">
+              <a href="#" id="random">Random</a>
+              <a href="#" id="exhaustive">Exhaustive</a>
+              <a href="#" id="interactive">Interactive</a>
+            </div>
+          </div>
+        </li>
+        <li><a href="#" id="compile">Compile</a></li>
+        <!--<li class="border"><a href="#" id="graph">Generate Graph</a></li>-->
+        <li>
+          <div class="dropdown">
+            <a href="#" class="dropbtn dropdown-toggle">Interface</a>
+            <div class="dropdown-content">
+              <!--
+              <a href="#" id="source_tab">Source</a>
+              <a href="#" id="exec_tab">Execution</a>
+              <a href="#" id="cabs_tab">Cabs</a>
+              <a href="#" id="ail_tab">Ail</a>
+              <a href="#" id="core_tab">Core</a>
+              <a href="#" id="console_tab">Console</a>
+              <a href="#" id="graph_tab">Graph</a>
+              <hr>-->
+              <a href="#" id="new_pane">New Pane</a>
+              <a href="#" id="unsplit">Unsplit All</a>
+              <hr>
+              <a href="#" id="refresh">Refresh</a>
+              <hr>
+              <a href="#" id="auto_refresh">
+                <input id="cb_auto_refresh" type="checkbox" checked>Auto Refresh
+              </a>
+              <a href="#" id="colour">
+                <input id="cb_colour" type="checkbox" checked>Colour
+              </a>
+              <a href="#" id="colour_cursor">
+                <input id="cb_colour_cursor" type="checkbox" checked>Colour Cursor
+              </a>
+            </div>
+          </div>
+        </li>
+        <li><a href="#" id="help">Help</a></li>
+        <li class="right"><a href="#" id="rems">REMS</a></li>
+      </ul>
+    </div>
+    <div id="views"></div>
+  </div> <!-- container -->
+
+  <template id="tab-template">
+    <div draggable="true" class="tablink active">
+      <button href="#" class="title"></button>
+      <img class="close" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg=="/>
+    </div>
+  </template>
+
+  <template id="graph-template">
+    <div class="graph" align="right">
+      <button id="minus">-</button>
+      <button id="reset">reset</button>
+      <button id="plus">+</button>
+      <div align="center" class="svg"></div>
+    </div>
+  </template>
+
+  <script type="text/javascript" src="js/util.js"></script>
+  <script type="text/javascript" src="js/tabs.js"></script>
+  <script type="text/javascript" src="js/panes.js"></script>
+  <script type="text/javascript" src="js/view.js"></script>
+  <script type="text/javascript" src="js/ui.js"></script>
+
+</body>
+</html>

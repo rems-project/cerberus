@@ -1,0 +1,3 @@
+BEGIN EXEC[0]
+Defined {value: "Specified(0)", stdout: "*p++ ==> 10\n*p   ==> 20\n", blocked: "false"}
+END EXEC[0]
