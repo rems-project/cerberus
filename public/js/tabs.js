@@ -234,10 +234,52 @@ class TabEditor extends Tab {
 
       return node;
     }
+
+    function clear() {
+      if (tip.parentNode) fadeOut(tip)
+      this.tooltip = null
+      clearActivity()
+    }
+
+    let where = this.editor.cursorCoords()
+    let tip = makeTooltip(where.right + 1, where.bottom, content)
+    let mouseOnTip = false
+    let cmIsBlur = false
+
+    CodeMirror.on(tip, "mousemove", () => {
+      console.log('on move');
+      mouseOnTip = true;
+    })
+
+    CodeMirror.on(tip, "mousedown", (e) => {
+      let x0 = e.clientX
+      let y0 = e.clientY
+      let pos = $(tip).position()
+      function moveTip(e) {
+        let dx = e.clientX - x0
+        let dy = e.clientY - y0
+        tip.style.cursor = 'move'
+        tip.style.left = (dx + pos.left) + "px";
+        tip.style.top = (dy + pos.top) + "px";
+      }
+      function stop(e) {
+        tip.style.cursor = 'auto'
+        $(document).off('mousemove')
+        $(document).off('mouseup')
+      }
+      tip.style.cursor = 'move'
+      $(document).on('mousemove', e => moveTip(e));
+      $(document).on('mouseup', e => stop(e));
+    })
+
     function onEditorActivity(cm, f) {
       cm.on("cursorActivity", f)
       cm.on("scroll", f)
-      cm.on("blur", f)
+      cm.on("blur", () => {
+        console.log('blur');
+        cmIsBlur = true
+        if (!mouseOnTip) f()
+      })
       cm.on("setDoc", f)
       return function() {
         cm.off("cursorActivity", f)
@@ -246,25 +288,22 @@ class TabEditor extends Tab {
         cm.off("setDoc", f)
       }
     }
-    function clear() {
-      if (tip.parentNode) fadeOut(tip)
-      this.tooltip = null
-      clearActivity()
-    }
-    let where = this.editor.cursorCoords()
-    let tip = makeTooltip(where.right + 1, where.bottom, content)
-    let mouseOnTip = false
-    CodeMirror.on(tip, "mousemove", function() { mouseOnTip = true; })
-    CodeMirror.on(tip, "mouseout", function(e) {
-      if (!CodeMirror.contains(tip, e.relatedTarget || e.toElement)) {
-        mouseOnTip = false;
-      }
-    })
+
     let clearActivity = onEditorActivity(this.editor, () => {
       if (tip.parentNode) fadeOut(tip)
       this.tooltip = null
       clearActivity()
     })
+
+    CodeMirror.on(tip, "mouseout", (e) => {
+      if (!CodeMirror.contains(tip, e.relatedTarget || e.toElement)) {
+        console.log('outside');
+        mouseOnTip = false;
+      }
+      if (cmIsBlur) this.editor.focus()
+
+    })
+
     this.tooltip = tip
   }
 }
@@ -359,7 +398,7 @@ class TabAil extends TabReadOnly {
           stream.next()
         }
 
-        let re = /\d(\.\d)*[#,]\d/
+        let re = /\[\d(\.\d)*(#\d)?\]/
         if (re.test(word))
           return "std"
       }
@@ -413,7 +452,7 @@ class TabCore extends TabReadOnly {
           stream.next()
         }
 
-        let re = /{-#.+[#,]/
+        let re = /{-#\d(\.\d)*(#\d)?/
         if (re.test(word))
           return "std"
       }
@@ -547,9 +586,9 @@ class TabAsm extends TabReadOnly {
 
 
   getLocation(from, to) {
-    for (const l in this.locations) {
-      if (this.locations[l].begin <= from.line && this.locations[l].end >= to.line)
-        return this.locations[l].source
+    for (let i = 0; i < this.locations.length; i++) {
+      if (this.locations[i].begin <= from.line && this.locations[i].end >= to.line)
+        return this.locations[i].source
     }
     return null
   }

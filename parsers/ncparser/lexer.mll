@@ -6,14 +6,12 @@ open Tokens
 let mk_loc lexbuf =
   (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
 
-let offset_location lexbuf new_file new_lnum char_offset =
+let offset_location lexbuf new_file new_lnum =
   Lexing.(
-    lexbuf.lex_curr_p <- {
-      pos_fname = new_file;
-      pos_lnum = new_lnum;
-      pos_bol = lexbuf.lex_curr_p.pos_bol + char_offset;
-      pos_cnum = lexbuf.lex_curr_p.pos_cnum + char_offset
-    }
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = new_file;
+                                                  pos_lnum = new_lnum-1;
+                         };
+    new_line lexbuf
   )
 
 (* STD §6.4.1#1 *)
@@ -76,8 +74,6 @@ let lexicon: (string, token) Hashtbl.t = Hashtbl.create 0
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder) keywords
 
-let init channel: Lexing.lexbuf =
-  Lexing.from_channel channel
 
 let lex_comment remainder lexbuf =
   let ch = Lexing.lexeme_char lexbuf 0 in
@@ -246,7 +242,7 @@ and onelinecomment = parse
 (* We assume gcc -E syntax. **)
 and hash = parse
   | (' ' (decimal_constant as n) " \""
-    ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n') as l
+    ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n')
       { Lexing.(
         let n =
           try int_of_string n
@@ -254,11 +250,10 @@ and hash = parse
             Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
               lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
         in
-        offset_location lexbuf file n ((String.length l));
-        String.length l
+        offset_location lexbuf file n
       )}
-  | ("pragma" [^ '\n']* '\n' as l)
-      { String.length l }
+  | ("pragma" [^ '\n']* '\n')
+      { }
   | [^ '\n']* eof
       { Parser_errors.fatal_error "%s:%d Error:@ unexpected end of file"
           lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
@@ -279,9 +274,9 @@ and initial = parse
   (* Single-line comment *)
   | "//" {let _ = onelinecomment lexbuf in Lexing.new_line lexbuf; initial lexbuf}
 
-  | '\n'            { Lexing.new_line lexbuf; initial lexbuf }
-  | whitespace_char { initial lexbuf }
-  | '#'             { ignore(hash lexbuf); initial lexbuf }
+  | '\n'             { Lexing.new_line lexbuf; initial lexbuf }
+  | whitespace_char+ { initial lexbuf }
+  | '#'              { hash lexbuf; initial lexbuf }
 
   (* NOTE: we decode integer constants here *)
   | (integer_constant as str) unsigned_suffix
@@ -410,21 +405,56 @@ and initial = parse
 
 {
 
+  (* TODO: get rid of that *)
+  exception NonStandard_string_concatenation
+
+  let merge_encoding_prefixes pref1_opt pref2_opt =
+    match (pref1_opt, pref2_opt) with
+    | (None, None) ->                                Some None
+    | (None     , Some pref)
+    | (Some pref, None     ) ->                      Some (Some pref)
+    | (Some pref1, Some pref2) when pref1 = pref2 -> Some (Some pref1)
+    | _ -> None
+
   type lexer_state =
     | LSRegular
     | LSIdentifier of string
+    | LSStringLiteral of (token * Lexing.position)
 
   let lexer_state = ref LSRegular
 
   let lexer lexbuf =
+    let rec concat_strings ((prev_pref_opt, strs_acc) as lit) lex_curr_p =
+      match initial lexbuf with
+      | STRING_LITERAL (new_pref_opt, strs) ->
+          begin match merge_encoding_prefixes prev_pref_opt new_pref_opt with
+          | Some pref_opt ->
+              concat_strings (pref_opt, strs_acc @ strs) lexbuf.lex_curr_p
+          | None          ->
+              raise NonStandard_string_concatenation
+          end
+      | tok -> (lit, tok, lex_curr_p)
+    in
     match !lexer_state with
+    | LSRegular ->
+        let token = initial lexbuf in
+        begin match token with
+        | NAME i -> lexer_state := LSIdentifier i; token
+        | STRING_LITERAL lit ->
+            let saved_lex_start_p = lexbuf.lex_start_p in
+            let (lit', tok', lex_curr_p')= concat_strings lit lexbuf.lex_curr_p in
+            lexer_state := LSStringLiteral (tok', lexbuf.lex_curr_p);
+            lexbuf.lex_start_p <- saved_lex_start_p;
+            lexbuf.lex_curr_p  <- lex_curr_p';
+            STRING_LITERAL lit'
+        | _ -> lexer_state := LSRegular; token
+        end
     | LSIdentifier i ->
         lexer_state := LSRegular;
         if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
-    | LSRegular ->
-        let token = initial lexbuf in
-        match token with
-        | NAME i -> lexer_state := LSIdentifier i; token
-        | _ -> lexer_state := LSRegular; token
+    | LSStringLiteral (tok, lex_curr_p) ->
+        lexer_state := LSRegular;
+        lexbuf.lex_curr_p <- lex_curr_p;
+        tok
 
 }
