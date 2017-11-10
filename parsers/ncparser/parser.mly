@@ -2,8 +2,8 @@
    "A simple, possibly correct LR parser for C11"
 
    NOTE: There is a reduce/reduce conflict in the grammar, which is solved
-         by reducing to the first production in the grammar (Menhir's default
-         behaviour). See Jourdan's paper.
+         by reducing to the first production (Menhir's default behaviour).
+         See Jourdan's paper.
 *)
 
 %{
@@ -45,6 +45,8 @@ let rec concat_specs = function
   | [] -> empty_specs
   | [spec] -> spec
   | s::ss -> append_specs s (concat_specs ss)
+
+let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 
 
 %}
@@ -89,7 +91,8 @@ let rec concat_specs = function
 
 (* ========================================================================== *)
 
-%type<string> typedef_name var_name general_identifier
+%type<string> typedef_name var_name
+%type<Cabs.cabs_identifier> general_identifier
 
 %type<LF.context> save_context
 
@@ -311,7 +314,7 @@ typedef_name_spec:
 general_identifier:
 | i= typedef_name
 | i= var_name
-    { i }
+    { CabsIdentifier (Loc_point $startpos, i) }
 
 save_context:
 | (* empty *)
@@ -333,7 +336,7 @@ declarator_typedefname:
 (* §6.4.4.3 Enumeration constants Primary expressions *)
 enumeration_constant:
 | i= general_identifier
-    { LF.declare_varname i; CabsIdentifier (Loc_point $startpos, i) }
+    { LF.declare_varname (string_of_cabs_id i); i }
 
 
 (* §6.5.1 Primary expressions *)
@@ -383,10 +386,10 @@ postfix_expression:
                       CabsEcall (expr, option [] List.rev exprs_opt)) }
 | expr= postfix_expression DOT i= general_identifier 
     { CabsExpression (Loc_region ($startpos, $endpos, None),
-        CabsEmemberof (expr, CabsIdentifier (Loc_point $startpos(i), i))) }
+        CabsEmemberof (expr, i)) }
 | expr= postfix_expression MINUS_GT i= general_identifier
     { CabsExpression (Loc_region ($startpos, $endpos, None),
-        CabsEmemberofptr (expr, CabsIdentifier (Loc_point $startpos(i), i))) }
+        CabsEmemberofptr (expr, i)) }
 | expr= postfix_expression PLUS_PLUS
     { CabsExpression (Loc_region ($startpos, $endpos, None),
                       CabsEpostincr expr) }
@@ -402,13 +405,13 @@ postfix_expression:
                       CabsEassert expr) }
 | VA_START LPAREN expr= assignment_expression COMMA i= general_identifier RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)),
-        CabsEva_start(expr, CabsIdentifier (Loc_point $startpos(i), i))) }
+        CabsEva_start(expr, i)) }
 | VA_ARG LPAREN expr= assignment_expression COMMA ty= type_name RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, Some $startpos($2)),
                       CabsEva_arg(expr, ty)) }
 | OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
     { CabsExpression (Loc_region ($startpos, $endpos, None),
-        CabsEoffsetof (ty, CabsIdentifier (Loc_point $startpos(i), i))) }
+        CabsEoffsetof (ty, i)) }
 (* NOTE: the following is a cerb extension allowing the user to the
    query the type of an expression  *)
 | PRINT_TYPE LPAREN expr= expression RPAREN
@@ -745,12 +748,9 @@ type_specifier_unique:
 struct_or_union_specifier:
 | ctor= struct_or_union iopt= general_identifier?
     LBRACE rev_decls= struct_declaration_list RBRACE
-    { let ident_opt = map_option
-        (fun i -> CabsIdentifier (Loc_point $startpos(iopt), i)) iopt
-      in
-      ctor ident_opt (Some (List.rev rev_decls)) }
+    { ctor iopt (Some (List.rev rev_decls)) }
 | ctor= struct_or_union i= general_identifier
-    { ctor (Some (CabsIdentifier (Loc_point $startpos(i), i))) None }
+    { ctor (Some i) None }
 
 struct_or_union:
 | STRUCT
@@ -794,11 +794,9 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM iopt= general_identifier? LBRACE enums= enumerator_list COMMA? RBRACE
-    { let ident_opt =
-        map_option (fun i -> CabsIdentifier (Loc_point $startpos(iopt), i)) iopt
-      in TSpec_enum (ident_opt, Some (List.rev enums)) }
+    { TSpec_enum (iopt, Some (List.rev enums)) }
 | ENUM i= general_identifier
-    { TSpec_enum (Some (CabsIdentifier (Loc_point $startpos(i), i)), None)  }
+    { TSpec_enum (Some i, None)  }
 
 enumerator_list: (* NOTE: the list is in reverse *)
 | enum= enumerator
@@ -857,7 +855,7 @@ declarator:
 
 direct_declarator:
 | i = general_identifier
-    { LF.identifier_decl (Loc_point $startpos(i)) i }
+    { LF.identifier_decl i }
 | LPAREN save_context decltor= declarator RPAREN
     { LF.declarator_decl decltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
@@ -992,7 +990,7 @@ designator:
 | LBRACK expr= constant_expression RBRACK
     { Desig_array expr }
 | DOT i= general_identifier
-    { Desig_member (CabsIdentifier (Loc_point $startpos(i), i)) }
+    { Desig_member i }
 
 (* §6.7.10 Static assertions *)
 static_assert_declaration:
@@ -1016,7 +1014,7 @@ statement:
 labeled_statement:
 | i= general_identifier COLON stmt= statement
     { CabsStatement (Loc_region ($startpos, $endpos, None),
-        CabsSlabel (CabsIdentifier (Loc_point $startpos(i), i), stmt)) }
+        CabsSlabel (i, stmt)) }
 | CASE expr= constant_expression COLON stmt= statement
     { CabsStatement (Loc_region ($startpos, $endpos, None),
         CabsScase (expr, stmt)) }
@@ -1094,7 +1092,7 @@ iteration_statement:
 jump_statement:
 | GOTO i= general_identifier SEMICOLON
     { CabsStatement (Loc_region ($startpos, $endpos, None),
-                     CabsSgoto (CabsIdentifier (Loc_point $startpos(i), i))) }
+                     CabsSgoto i) }
 | CONTINUE SEMICOLON
     { CabsStatement (Loc_region ($startpos, $endpos, None), CabsScontinue) }
 | BREAK SEMICOLON
