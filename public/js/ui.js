@@ -13,6 +13,7 @@ class UI {
     window.onresize = () => this.refresh()
 
     // UI settings
+    this.rewrite = true
     this.auto_refresh = true
     this.colour = true
     this.colour_cursor = true
@@ -112,7 +113,12 @@ class UI {
     $('#unsplit')    .on('click', () => this.currentView.unsplit())
     $('#refresh')    .on('click', () => this.elab())
 
-    // Checkboxes
+    // Settings
+    $('#rewrite').on('click', (e) => {
+      this.rewrite = !this.rewrite;
+      $('#cb_rewrite').prop('checked', this.rewrite)
+      this.currentView.dirty = true;
+    })
     $('#auto_refresh').on('click', (e) => {
       this.auto_refresh = !this.auto_refresh;
       $('#cb_auto_refresh').prop('checked', this.auto_refresh)
@@ -152,7 +158,7 @@ class UI {
     })
 
     window.setInterval(() => {
-      if (this.auto_refresh) this.elab()
+      if (this.auto_refresh) this.update()
     }, 2000);
 
     $('.cm-std').on('click', (e) => {
@@ -205,12 +211,23 @@ class UI {
     })
   }
 
+  update() {
+    let view = this.currentView
+    if (view.dirty) {
+      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
+        view.update(data);
+        view.source.highlight()
+        view.highlight()
+      })
+    }
+  }
+
   elab (lang) {
     let view = this.currentView
     if (!view.dirty) {
       if (lang) view.newTab(lang)
     } else {
-      this.request("elab", (data) => {
+      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
         view.update(data);
         view.source.highlight()
         if (lang) view.newTab(lang)
