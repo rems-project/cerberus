@@ -8,6 +8,7 @@ module Sym = Symbol
 open Z3
 
 
+(* TODO: why don't you use Ocaml's ignore? *)
 let void (x : 'a) : unit =
   let _ = x in
   ()
@@ -833,6 +834,7 @@ let runND_random m st0 =
           raise (BacktrackRandom "NDkilled")
       | (NDnd (debug_str, str_ms), st') ->
           (* TODO: this is not really random (see http://okmij.org/ftp/Haskell/perfect-shuffle.txt) *)
+          prerr_endline ("NDnd size " ^ string_of_int (List.length str_ms));
           let suffled_str_ms =
             let with_index = List.map (fun z ->
               (Random.bits (), z)
@@ -847,11 +849,11 @@ let runND_random m st0 =
                     Wip.push ();
                     Solver.push slvSt.slv;
                     let ret = Some (aux m st') in
-                    void (Wip.pop ());
-                    Solver.pop slvSt.slv 1;
                     ret
                   with
-                    | BacktrackRandom _ ->
+                    | BacktrackRandom _ -> 
+                        void (Wip.pop ());
+                        Solver.pop slvSt.slv 1;
                         None
           ) None suffled_str_ms in
           begin match ret with

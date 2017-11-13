@@ -110,6 +110,23 @@ let rec loop body n =
     loop body (n+1)
    )
 
+(* NOTE: Filename.remove_extension is only available in Ocaml 4.04 *)
+let remove_extension name =
+  let extension_len name =
+    let rec check i0 i =
+      if i < 0 then 0
+      else if name.[i] = '.' then check i0 (i - 1)
+      else String.length name - i0
+    in
+    let rec search_dot i =
+      if i < 0 then 0
+      else if name.[i] = '.' then check i (i - 1)
+      else search_dot (i - 1)
+    in
+    search_dot (String.length name - 1)
+  in
+  let l = extension_len name in
+  if l = 0 then name else String.sub name 0 (String.length name - l)
 
 
 let sigint_handler _ =
@@ -129,7 +146,7 @@ let () =
               false
       ) (Array.to_list (Sys.readdir ".")) in
     List.fold_left (fun acc f ->
-      let str = Filename.remove_extension f in
+      let str = remove_extension f in
       let n = int_of_string (String.sub str 7 (String.length str - 7)) in
       if n > acc then n else acc
     ) 0 csmithFiles
