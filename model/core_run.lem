@@ -12,7 +12,7 @@ open import Implementation_ Decode
 open import Cthread Errors
 
 
-open import Core_eval
+import Core_eval
 
 module EU  = Exception_undefined
 module SEU = State_exception_undefined
@@ -314,16 +314,31 @@ let rec hoist_negatives expr =
 module E = struct
   let return =
     SEU.return
-  let step_eval_pexprs loc mem_st file (*concur_sym_map*) pes =
-    SEU.runEU (EU.mapM (step_eval_pexpr loc (Just mem_st) file (*concur_sym_map*) false) pes)
-  let step_eval_pexpr loc mem_st file (*concur_sym_map*) pe =
-    SEU.runEU (step_eval_pexpr loc (Just mem_st) file (*concur_sym_map*) false pe)
+  let step_eval_pexprs loc mem_st file pes =
+    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr loc (Just mem_st) file false) pes)
+  let step_eval_pexpr loc mem_st file pe =
+    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    SEU.runEU (Core_eval.step_eval_pexpr loc (Just mem_st) file false pe)
   
   let eval_pexpr loc mem_st file pe =
-    SEU.runEU (eval_pexpr_aux loc (Just mem_st) file pe)
+    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)" ) in
+    SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
   
   let eval_pexpr2 loc mem_st file pe =
-    SEU.runEU (eval_pexpr_aux2 loc (Just mem_st) file pe)
+    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
+    SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)
+  
+  let wrapped_eval_pexpr2 loc mem_st file pe =
+    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
+    (* TODO: it would be better to just call eval_pexpr2, but
+       Lem generates buggy OCaml ... *)
+    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)) function
+      | Left pe' ->
+          SEU.return pe'
+      | Right cval ->
+          SEU.return (Core_aux.mk_value_pe cval)
+    end
   
   let fresh_action_id =
     SEU.runS fresh_action_id'
@@ -331,11 +346,6 @@ module E = struct
     SEU.runS fresh_symbol'
 end
 open SEU.Operators
-(*
-let inline (>>=) = SEU.bind
-let inline (>>) m1 m2 = SEU.bind m1 (fun _ -> m2)
-let inline (<$>) = SEU.fmap
-*)
 
 
 type action_request =
@@ -430,16 +440,14 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
               Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
           | (Nothing, _) ->
               Step_eval "first operand of a Create" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 1") in 
-                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
-                E.return <| th_st with arena=
-                  Expr [] (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
+                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
+                E.return <| th_st with
+                  arena= Expr [] (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Create" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 2") in 
-                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Create pe1 pe2' pref))))
                 |>
@@ -463,16 +471,14 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
               Step_error "found a alloc() with ill-typed operands"
           | (Nothing, _) ->
               Step_eval "first operand of a Alloc" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 3") in 
-                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref))))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Alloc" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 4") in 
-                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref))))
                 |>
@@ -496,8 +502,7 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
               Step_error "found a kill() with an ill-typed operand"
           | Nothing ->
               Step_eval "operand of kill()" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 5") in 
-                E.step_eval_pexpr loc mem_st file pe >>= fun pe' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Kill pe'))))
                 |>
@@ -562,26 +567,23 @@ KKK
                            Pp.stringFromCore_value cval1 ^ " <-> " ^ Pp.stringFromCore_value cval2 ^ " <-> " ^ Pp.stringFromCore_value cval3)
           | (Nothing, _, _) ->
               Step_eval "first operand of a Store" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 6") in 
-                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo))))
                 |>
               )
           | (_, Nothing, _) ->
               Step_eval "second operand of a Store" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 7") in 
-                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo))))
                 |>
               )
           | (_, _, Nothing) ->
               Step_eval "third operand of a Store" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 8") in 
-                E.step_eval_pexpr loc mem_st file pe3 >>= fun pe3' ->
-                E.return <| th_st with arena=
-                  Expr [] (Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo))))
+                E.wrapped_eval_pexpr2 loc mem_st file pe3 >>= fun pe3' ->
+                E.return <| th_st with
+                  arena= Expr [] (Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo))))
                 |>
               )
         end
@@ -606,16 +608,14 @@ KKK
               Step_error "found a load with ill-typed operands"
           | (Nothing, _) ->
               Step_eval "first operand of a Load" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 9") in 
-                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Load pe1' pe2 mo))))
                 |>
               )
           | (_, Nothing) ->
               Step_eval "second operand of a Load" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 10") in
-                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (Load pe1 pe2' mo))))
                 |>
@@ -665,32 +665,28 @@ KKK
               Step_error "found a rmw with ill-typed operands"
           | (Nothing, _, _, _) ->
               Step_eval "first operand of a RMW" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 11") in
-                E.step_eval_pexpr loc mem_st file pe1 >>= fun pe1' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (RMW pe1' pe2 pe3 pe4 mo1 mo2))))
                 |>
               )
           | (_, Nothing, _, _) ->
               Step_eval "second operand of a RMW" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 12") in
-                E.step_eval_pexpr loc mem_st file pe2 >>= fun pe2' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (RMW pe1 pe2' pe3 pe4 mo1 mo2))))
                 |>
               )
           | (_, _, Nothing, _) ->
               Step_eval "third operand of a RMW" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 13") in
-                E.step_eval_pexpr loc mem_st file pe3 >>= fun pe3' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe3 >>= fun pe3' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3' pe4 mo1 mo2))))
                 |>
               )
           | (_, _, _, Nothing) ->
               Step_eval "fourth operand of a RMW" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 14") in
-                E.step_eval_pexpr loc mem_st file pe4 >>= fun pe4' ->
+                E.wrapped_eval_pexpr2 loc mem_st file pe4 >>= fun pe4' ->
                 E.return <| th_st with arena=
                   Expr [] (Eaction (Paction p (Action loc annots (RMW pe1 pe2 pe3 pe4' mo1 mo2))))
                 |>
@@ -754,7 +750,7 @@ KKK
 val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
 let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
-  let Expr annot expr_ = th_st.arena in
+  let Expr arena_annots expr_ = th_st.arena in
   match (expr_, th_st.stack) with
     | (Eskip, Stack_cons lconts cont sk') ->
 (* -----------------------------------------
@@ -883,16 +879,10 @@ BEFORE EVAL_PEXPR2
               Step_error "the first operand of an Eif didn't evaluated to a boolean"
           | _ ->
               Step_eval "Eif" (
-                E.eval_pexpr2 th_st.current_loc mem_st file pe1 >>= function
-                  | Left pe1' ->
-                      E.return <| th_st with
-                        arena= Expr [] (Eif pe1' e2 e3)
-                      |>
-                  | Right cval ->
-                      E.return <| th_st with
-                        arena= Expr [] (Eif (Caux.mk_value_pe cval) e2 e3)
-                      |>
-                end
+                E.wrapped_eval_pexpr2 th_st.current_loc mem_st file pe1 >>= fun pe1' ->
+                E.return <| th_st with
+                  arena= Expr [] (Eif pe1' e2 e3)
+                |>
               )
 (*
 
@@ -1049,15 +1039,30 @@ end
         end
     
     | (Ewseq pat e1 e2, Stack_cons lconts cont sk) ->
-        (* TODO: negatives *)
-        one match strip_expr e1 with
-          | Epure pe ->
-              (* evaluate the pure first operand and substitute
-                 into the second *)
-              Step_eval "Ewseq subst" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 20") in
-                E.eval_pexpr th_st.current_loc mem_st file pe >>= fun cval ->
-                E.return <| th_st with arena= subst_pattern_val pat cval e2 |>
+        let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
+        one match e1 with
+          | Expr e1_annots (Epure (Pexpr () (PEconstrained xs1))) ->
+              Step_constrained "Ewseq" (
+                List.map (fun (cs, pe1) ->
+                  ( cs
+                  , E.return <| th_st with
+                      arena= Expr e1_annots (Epure pe1);
+                      stack= Stack_cons lconts (Kwseq pat e2 :: cont) sk
+                    |> )
+                ) xs1
+              )
+          
+          | Expr e1_annots (Epure pe1) ->
+              (* evaluate the pure first operand and substitute into the second
+                 if it's not constrained, otherwise put things back in place for
+                 Step_constrained to do the branching *)
+              Step_eval "Ewseq" (
+                E.eval_pexpr2 th_st.current_loc mem_st file pe1 >>= function
+                  | Left pe1' ->
+                      E.return <| th_st with arena= Expr arena_annots (Ewseq pat (Expr e1_annots (Epure pe1')) e2) |>
+                  | Right cval1 ->
+                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                end
               )
           | _ ->
               (* focus the execution on the first operand *)
@@ -1070,24 +1075,32 @@ end
         end
     
     | (Esseq pat e1 e2, Stack_cons lconts cont sk) ->
-        (* TODO: negatives *)
-        one match strip_expr e1 with
-          | Epure (Pexpr () (PEconstrained xs1)) ->
+        let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
+        one match e1 with
+          | Expr e1_annots (Epure (Pexpr () (PEconstrained xs1))) ->
               Step_constrained "Esseq" (
                 List.map (fun (cs, pe1) ->
                   ( cs
                   , E.return <| th_st with
-                      arena= Expr [] (Epure pe1);
+                      arena= Expr e1_annots (Epure pe1);
                       stack= Stack_cons lconts (Ksseq pat e2 :: cont) sk
                   |> )
                 ) xs1
               )
-          | Epure pe1 ->
-              (* evaluate the pure first operand and substitute
-                 into the second *)
-              Step_eval "Esseq subst" (
-                E.eval_pexpr th_st.current_loc mem_st file pe1 >>= fun cval ->
-                E.return <| th_st with arena= subst_pattern_val pat cval e2 |>
+          | Expr e1_annots (Epure pe1) ->
+              (* evaluate the pure first operand and substitute into the second
+                 if it's not constrained, otherwise put things back in place for
+                 Step_constrained to do the branching *)
+              Step_eval "Esseq" (
+                let () = Debug.print_debug 1 [] (fun () ->
+                  Pp.stringFromCore_pexpr pe1
+                ) in
+                E.eval_pexpr2 th_st.current_loc mem_st file pe1 >>= function
+                  | Left pe1' ->
+                      E.return <| th_st with arena= Expr arena_annots (Esseq pat (Expr e1_annots (Epure pe1')) e2) |>
+                  | Right cval1 ->
+                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                end
               )
           | _ ->
               (* focus the execution on the first operand *)
@@ -1115,8 +1128,19 @@ end
 *)
         one $ Step_eval "Esave" (
           SEU.foldM (fun acc (sym, (bTy, pe)) ->
-            let () = Debug.print_debug 1 [] (fun () -> "XX 22") in
+(*
+            E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
+              | Left pe' ->
+                  
+              | Right cval ->
+                  
+            end
+*)
+            let () = Debug.print_debug 1 [] (fun () -> "XXX 22") in
             E.eval_pexpr th_st.current_loc mem_st file pe >>= fun cval ->
+            let () = Debug.print_debug 1 [] (fun () ->
+              "XX 22 => " ^ Pp.stringFromCore_value cval
+            ) in
             E.return (subst_sym_expr sym cval acc)
           ) e sym_bTy_pes >>= fun e' ->
           E.return <| th_st with
@@ -1164,7 +1188,7 @@ end
                 List.map (fun (cs, pe') ->
                   ( cs
                   , E.return <| th_st with
-                      arena= Expr annot (Epure pe');
+                      arena= Expr arena_annots (Epure pe');
                     |> )
                 ) xs
               )
@@ -1185,7 +1209,7 @@ end
                           (* reached the end of the execution of a procedure. *)
                           Step_tau "end of procedure" (
                             E.return <| th_st with
-                              arena= apply_continuation cont (Expr annot (Epure (Caux.mk_value_pe cval)));
+                              arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
 (*                              stack= push_empty_continuation sk'; *)
                               stack= Stack_cons lconts [] sk';
                               labels= Map.empty; (* TODO: this is too violent, but doing no reset is unsound *)
@@ -1195,7 +1219,7 @@ end
                       | Stack_cons lconts cont sk' ->
                           Step_tau "Epure" (
                             E.return <| th_st with
-                              arena= apply_continuation cont (Expr annot (Epure (Caux.mk_value_pe cval)));
+                              arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
                               stack= Stack_cons lconts [] sk';
                             |>
                           )
@@ -1204,9 +1228,9 @@ end
                     Step_eval "Epure" (
                       E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
                         | Left pe' ->
-                            E.return <| th_st with arena= Expr annot (Epure pe') |>
+                            E.return <| th_st with arena= Expr arena_annots (Epure pe') |>
                         | Right cval ->
-                            E.return <| th_st with arena= Expr annot (Epure (Caux.mk_value_pe cval)) |>
+                            E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
                       end
                     )
               end

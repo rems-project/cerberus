@@ -402,6 +402,13 @@ val mk_std_pair_pe: string -> pexpr * pexpr -> pexpr * pexpr
 let mk_std_pair_pe std (pe1, pe2) =
   (mk_std_pe std pe1, mk_std_pe std pe2)
 
+
+val mk_call_pe: name -> list pexpr -> pexpr
+let mk_call_pe nm pes =
+  Pexpr () (PEcall nm pes)
+
+
+
 (* Some common undef *)
 
 val mk_undef_exceptional_condition: unit -> pexpr
@@ -420,15 +427,22 @@ let mk_undef_exceptional_condition () =
 
 
 val bitwise_complement_pe: pexpr -> pexpr -> pexpr
+(*
 val integer_encode_pe:     pexpr -> pexpr -> pexpr
 val integer_decode_pe:     pexpr -> pexpr -> pexpr
+*)
 
 let bitwise_complement_pe pe1 pe2 =
+  Pexpr () (PEctor CivCOMPL [pe1; pe2])
+(*
   Pexpr () (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
+*)
+(*
 let integer_encode_pe pe1 pe2 =
   Pexpr () (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
 let integer_decode_pe pe1 pe2 =
   Pexpr () (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
+*)
 
 (* Some aliases for positive actions *)
 let pcreate loc al ty pref =
@@ -1948,7 +1962,6 @@ let mk_if_e pe e1 e2 =
 val mk_let_e: pattern -> pexpr -> expr unit -> expr unit
 let mk_let_e pat pe e =
   Expr [] (Elet pat pe e)
-
 
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =

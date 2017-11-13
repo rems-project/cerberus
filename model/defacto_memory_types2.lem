@@ -118,6 +118,11 @@ and impl_mem_value =
   | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
   | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
   | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
+  
+  | MVcomposite of
+      list ((* byte offset *) integer_value_base * (* value of the written byte *) impl_integer_value) *
+      (* value written over *) impl_mem_value
+      (* INVARIANT: the mem_value should not be a MVcomposite *)
 
 (*  not sure whether these analogues of IVbyteof and IVcomposite should exist (think not)
   | MVmodified of list (shift_path * mem_value) * mem_value (* this is for when an object is modified as an
@@ -127,66 +132,9 @@ and impl_mem_value =
 type shift_path = list shift_path_element
 
 
-
+(*
 type allocation =
   | Alloc_static  of ctype (* * address *)
   | Alloc_dynamic of integer_value_base (* * address *)
-
-
-(*
-(* TODO: tentative *)
-type address_constraint =
-    (* the first address is distinct for the addresses in the set *)
-  | AC_distinct of address_id * set address_id
-    (* the address is equal to a specific integer value *)
-  | AC_equals of address_id * integer_value_base
 *)
 
-(*
-type address_expression =
-  | Addr_address_id of address_id
-  | Addr_ival of integer_value_base
-  | Addr_add of address_expression * address_expression
-  | Addr_sub of address_expression * address_expression
-*)
-
-(*
-type impl_mem_constraint =
-  | MC_eqIV of string (* TMP debug *) * integer_value_base * integer_value_base (* equality between integer values *)
-  | MC_neIV of integer_value_base * integer_value_base (* non-equality between integer values *)
-  | MC_leIV of integer_value_base * integer_value_base
-  
-  | MC_or of impl_mem_constraint * impl_mem_constraint
-  
-  | NC_not of list impl_mem_constraint
-
-  
-  (* TODO: remove this *)
-  | MC_addr_distinct of address * set address  (* the first address is distinct for the addresses in the set *)
-
-
-
-
-(* TODO: move this up *)
-type impl_mem_constraint2 =
-  | MC_eq_ival of impl_integer_value * impl_integer_value
-  | MC_ne_ival of impl_integer_value * impl_integer_value
-  | MC_lt_ival of impl_integer_value * impl_integer_value
-  | MC_le_ival of impl_integer_value * impl_integer_value
-
-val impl_constraint_eqIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_eqIV ival1 ival2 =
-  MC_eq_ival ival1 ival2
-
-val impl_constraint_neIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_neIV ival1 ival2 =
-  MC_ne_ival ival1 ival2
-
-val impl_constraint_ltIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_ltIV ival1 ival2 =
-  MC_lt_ival ival1 ival2
-
-val impl_constraint_leIV: impl_integer_value -> impl_integer_value -> impl_mem_constraint2
-let impl_constraint_leIV ival1 ival2 =
-  MC_le_ival ival1 ival2
-*)

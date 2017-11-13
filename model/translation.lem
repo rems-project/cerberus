@@ -1,7 +1,7 @@
 (* TODO: for now everything is mapped to nonatomics. The translation to atomics
          still needs to be defined *)
 
-open import Pervasives Utils Implementation_ Loc String_extra
+open import Pervasives Utils Loc String_extra
 
 import State Translation_effect Loc
 open import Translation_aux

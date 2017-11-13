@@ -192,7 +192,7 @@ let well_typed_assignment s ty1 gty2 null2 =
               "ref_qs2= " ^ Pp.stringFromAil_qualifiers ref_qs2
             ) in
 *)
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               (* TODO !!!! *)
               "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
             ) in
@@ -1100,7 +1100,7 @@ STD_ "§6.5.2.1#1" $
         else if well_typed_binary_arithmetic gty1 Add gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 37)
+          E.fail loc (TError_TODO 37)
     
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -2073,7 +2073,7 @@ let annotate_program (startup_opt, sigm) =
               else
                 E.fail Loc.unknown TError_main_return_type
           | _ ->
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.print_debug 1 [] (fun () ->
                 "STARTUP ==> " ^ show startup
               ) in
               (* TODO: this is not realy a type error, but more an csem internal one. *)

@@ -1,98 +1,3 @@
-{-
--- Ctype utilities
--- these are hackish
-fun ctype_true(ty: ctype) : boolean :=
-  true
-fun ctype_false(ty: ctype) : boolean :=
-  false
-fun ctype_integer_false(ty: ctype, n: integer) : boolean :=
-  false
-
-
- | Basic of AilTypes.basicType
- | Array of ctype * maybe integer
- | Function of ctype * list (AilTypes.qualifiers * ctype) * bool (*true for variadic*)
- | Pointer of AilTypes.qualifiers * ctype
- | Atomic of ctype
- | Struct of struct_tag
- | Union  of union_tag
- | Builtin of string
-
-
-fun is_pointer(ty) : boolean :=
-  case_ctype(false, ctype_false, ctype_integer_false, ctype_true, TODO_function, ctype_false
-
-fun is_integer(ty) : boolean :=
-  case_ctype(false, 
-
-fun is_arithmetic(ty) : boolean :=
-  -- TODO: is_floating
-  is_integer(ty)
-
-fun is_scalar (ty: ctype) : boolean :=
-  is_pointer(ty) /\ is_arithmetic(ty)
-
-fun is_signed (ty: ctype) : boolean :=
-  
-fun is_unsigned (ty: ctype) : boolean :=
--}
-
-
-
-
--- Math utilities
-
-{-
-fun exp_aux(n: integer, m: integer, acc: integer) : integer :=
-  if m = 0 then
-    acc
-  else
-    exp_aux(n, m - 1, n * acc)
-  end
-
-
--- TODO: diverges if m < 0
-fun exp (n: integer, m: integer) : integer :=
-  exp_aux(n, m, 1)
---  if m = 0 then
---    1
---  else
---    n * exp(n, m - 1)
---  end
-
--}
-
-{-
-fun is_signed (ty: ctype) : boolean :=
-  case ty of
-    | {_} signed _   -> true
-    | {_} unsigned _ -> false
-
-type ctype =
-  | VOID  of qualifiers
-  | BASIC of qualifiers * basic_type
-  (* TODO Need to convert integer constant to an actual value! Otherwise, we
-     cannot compare types! *)
-  | ARRAY of ctype * option int
-(* need also to support array types without a length, eg for pointer-to-an-array[10] or just pointer-to-an-array. also some length subtyping in function arguments in C11. so another type here, to have pointers to. *)
-
-(* NOTE: will need to make up ids for some of the bitfields *)
-  | STRUCT of qualifiers * id * list (id * member)
-  | UNION  of qualifiers * id * list (id * member)
-  | ENUM of id
-  | FUNCTION of ctype * list ctype
-  | POINTER of qualifiers * ctype
-  | ATOMIC of ctype
-  | TYPEDEF of id
-  
-  | SIZE_T
-  | INTPTR_T
-  | WCHAR_T
-  | CHAR16_T
-  | CHAR32_T
--}
-
-
 fun is_representable (n: integer, ty: ctype): boolean :=
 --  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
   Ivmin(ty) <= n /\ n <= Ivmax(ty)
@@ -163,25 +68,10 @@ fun ctype_width (ty: ctype): integer :=
 
 
 
-
+{-
 
 -- encode an element of Z into an element of N following the
 -- two's complement encoding
-{-
-fun encodeTwos (ty : ctype, n: integer) : integer :=
-  -- TODO: this assumes no padding bits
-  let width = ctype_width(ty) in
-    if (n < 0 - 2^(width - 1)) \/ (2^(width - 1) - 1 < n) then
-      error(<<<encodeTwos>>>, (width, ty, n))
-    else
-      if 0 <= n then
-        n
-      else
-        2^width + n
-      end
-    end
-  end
--}
 fun encodeTwos (ty : ctype, n: integer) : integer :=
   -- TODO: this assumes no padding bits
   let width: integer = ctype_width(ty) in
@@ -227,12 +117,13 @@ fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if n1 rem_f 2 = 1 /\ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_AND_aux(n1_, n2_, w-1)
 
 fun bitwise_AND (ty: ctype, n1: integer, n2: integer) : integer :=
---  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--  if ty = "unsigned long" then
 --    error(<<<WIP_bAND>>>, (ty, n1, n2))
 --  else
     let n1_: integer = <Integer.encode>(ty, n1) in
     let n2_: integer = <Integer.encode>(ty, n2) in
     <Integer.decode>(ty, bitwise_AND_aux(n1_, n2_, ctype_width(ty)))
+
 
 -- bitwise XOR
 fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
@@ -244,7 +135,7 @@ fun bitwise_XOR_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if (n1 rem_f 2) * (n2 rem_f 2) = 0 /\ not((n1 rem_f 2) + (n2 rem_f 2) = 0) then 1 else 0) + 2 * bitwise_XOR_aux(n1_, n2_, w-1)
 
 fun bitwise_XOR (ty: ctype, n1: integer, n2: integer) : integer :=
---  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--  if ty = "unsigned long" then
 --    error(<<<WIP_bXOR>>>, Unit)
 --  else
   let n1_: integer = <Integer.encode>(ty, n1) in
@@ -262,7 +153,7 @@ fun bitwise_OR_aux(n1: integer, n2: integer, w: integer) : integer :=
     (if n1 rem_f 2 = 1 \/ n2 rem_f 2 = 1 then 1 else 0) + 2 * bitwise_OR_aux(n1_, n2_, w-1)
 
 fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
---  if ty = "unsigned long" {- /\ (n1 = -39 \/ n2 = -39) -} then
+--  if ty = "unsigned long" then
 --    error(<<<WIP_bOR>>>, Unit)
 --  else
     let n1_: integer = <Integer.encode>(ty, n1) in
@@ -281,6 +172,9 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 --  quot n (2^m) + (sum $ map (\i -> 2^(width - 1 - i)) [0..m-1])
 
 
+-}
+
+
 
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
@@ -295,10 +189,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY>>)) -- TODO think about that
   end
-{-
-    lets ret = pcall(Cfunction(rev_listFromStr_aux), array_shift(str, "char", 1), cons(c,acc)) in
-    return(ret)
--}
+
 
 
 -- TODO: this is the reverse
@@ -323,26 +214,6 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
         pure (undef(<<DUMMY>>)) -- TODO think about that
   end
 
-
-
-{-
-fun printf_zip_aux2(arg:pointer, args: [pointer]) : (pointer, [pointer]) :=
-  (arg, args)
-
-fun printf_zip_aux1(ty: ctype, args: [pointer]) : ((ctype, pointer), [pointer]) :=
-  let (arg, args) = case_list(args,
-    error <<<printf_zip_aux1>>>,
-    printf_zip_aux2
-  ) in
-  ((ty,arg), args)
-
--- fun printf_zip(xs: [ctype], args: [pointer]) : [(ctype, pointer)] :=
---  case_list(xs)
-
-
-proc printf_loader(tys: [ctype], args: [pointer]) : eff integer :=
-  return(0)
-  -}
 
 
 
@@ -370,82 +241,7 @@ fun wrapI(ty: ctype, n: integer) : integer :=
     r - dlt
 
 
-{-
-  if n < ivmin(ty) then
-    wrapI(ty, n + (ivmax(ty) - ivmin(ty) + 1))
-  else if ivmax(ty) < n then
-    wrapI(ty, n - (ivmax(ty) - ivmin(ty) + 1))
-  else
-    n
--}
 
-
-{-
-fun signed_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
-                _n1: loaded integer, _n2: loaded integer) : loaded integer :=
-  case (_n1, _n2) of
-    | tuple(loaded(n1), loaded(n2)) =>
-        let conv1: integer = conv(ty1, ty1', n1) in
-        let conv2: integer = conv(ty2, ty2', n2) in
-        loaded(catch_exceptional_condition(result_ty, conv1 * conv2))
-    | _ =>
-        undef(Exception_condition)
-
-
-
-fun unsigned_cmul(result_ty: ctype, ty1: ctype, ty2: ctype,
-                  _n1: loaded integer, _n2: loaded integer) : loaded integer :=
-  case (_n1, _n2) of
-    | (loaded(n1), loaded(n2)) =>
-        let conv1: integer = conv(ty1, ty1', n1) in
-        let conv2: integer = conv(ty2, ty2', n2) in
-        loaded(wrapI(result_ty, conv1 * conv2))
-    | _ =>
-        unspecified(result_ty)
-  end
--}
-
-{-
-fun foo(result_ty: ctype, ty1: ctype, ty1_: ctype, ty2: ctype, ty2_: ctype, _n1: loaded integer, _n2: loaded integer): integer :=
-  case (_n1, _n2) of
-   | (_, Unspecified(_)) =>
-       undef(<<Exceptional_condition>>)
-   | (Unspecified(_), _) =>
-       IF is_unsigned_integer_type (ctype_of e1) THEN
-       Unspecified(result_ty)
-       ELSE
-       undef(<<Exceptional_condition>>)
-   | (Loaded(n1), Loaded(n2)) =>
-       let promoted1 = conv(ty1, ty1_, n1) in
-       let promoted2 = conv(ty2, ty2_, n2) in
-       if promoted2 < 0 then
-         undef(<<Negative_shift>>) else
-       if promoted2 >= ctype_width(result_ty) then
-         undef(<<Shift_too_large>>) else
-       IF is_unsigned_integer_type (ctype_of e1) THEN
-         Loaded ((promoted1 * 2^promoted2) rem_t (Ivmax(result_ty) + 1))
-       ELSE
-       if promoted1 < 0 then
-         undef(<<Exceptional_condition>>)
-       else
-         let res = promoted1 * 2^promoted2 in
-         if is_representable(res, result_ty) then
-           Loaded(res)
-         else
-           undef(<<Exceptional_condition>>)
-  end
--}
-
-{-
-proc ub_if_overlaps(store_ptr: pointer, ptrs: [pointer]) : eff unit :=
-  case ptrs of
-    | Nil() =>
-        pure(Unit)
-    | Cons(ptr: pointer, _ptrs: [pointer]) =>
-        let strong b: boolean = do
-  end
-
--}
 
 proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr: pointer) : eff loaded integer :=
   let strong _p: loaded pointer = load(!(void *), p_ptr) in

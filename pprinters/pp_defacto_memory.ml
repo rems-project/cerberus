@@ -155,6 +155,11 @@ and pp_mem_value = function
       P.braces (
         P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       )
+  | MVcomposite (xs, mval) ->
+      !^ "MVcomposite" ^^
+      P.parens (P.brackets (comma_list (fun (off_ival_, byte_ival) ->
+        P.parens (pp_integer_value_base off_ival_ ^^ P.comma ^^^ pp_integer_value byte_ival)
+      ) xs) ^^ P.comma ^^^ pp_mem_value mval)
 
 
 let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =

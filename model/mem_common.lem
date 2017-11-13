@@ -1,14 +1,62 @@
 (* Concrete types and functions common to all memory layout models *)
 open import Pervasives
 import Symbolic
+import Undefined
 
 open import Nondeterminism2
+
+
+type load_error =
+  | LoadNullPtr
+  | LoadDeadPtr
+
+instance (Show load_error)
+  let show err = match err with
+    | LoadNullPtr ->
+        "LoadNullPtr"
+    |LoadDeadPtr ->
+        "LoadDeadPtr"
+  end
+end
+
+
+type store_error =
+  | StoreNullPtr
+  | StoreFunctionPtr
+  | StoreDeadPtr
+  | StoreOutOfBoundPtr
+
+instance (Show store_error)
+  let show err = match err with
+    | StoreNullPtr ->
+        "StoreNullPtr"
+    | StoreFunctionPtr ->
+        "StoreFunctionPtr"
+    |StoreDeadPtr ->
+        "StoreDeadPtr"
+    | StoreOutOfBoundPtr ->
+        "StoreOutOfBoundPtr"
+  end
+end
+
+
+type access_kind =
+  | LoadAccess
+  | StoreAccess
+
+type access_error =
+  | NullPtr
+  | FunctionPtr
 
 type mem_error =
   | MerrUnitialised of string (* mem_read_request *)
   | MerrInternal of string
   | MerrOther of string
-  | MerrReadFromDead (* of string *)
+  
+  | MerrLoad of load_error
+  | MerrStore of store_error
+  
+  | MerrAccess of access_kind * access_error
   
   | MerrWIP of string
 
@@ -20,12 +68,34 @@ instance (Show mem_error)
         "MerrInternal \"" ^  str ^ "\""
     | MerrOther str ->
         "MerrOther \"" ^  str ^ "\""
-    | MerrReadFromDead ->
-        "MerrReadFromDead"
     | MerrWIP str ->
         "Memory WIP: " ^ str
+
+    | MerrLoad err ->
+        "MerrLoad " ^ show err
+    | MerrStore err ->
+        "MerrStore " ^ show err
   end
 end
+
+
+let undefinedFromMem_error = function
+  | MerrLoad LoadNullPtr ->
+      Just [Undefined.UB019_lvalue_not_an_object]
+  | MerrLoad LoadDeadPtr ->
+      Just [Undefined.UB010_pointer_to_dead_object]
+  | MerrStore StoreNullPtr ->
+      Just [Undefined.UB019_lvalue_not_an_object]
+  | MerrStore StoreDeadPtr ->
+      Just [Undefined.UB010_pointer_to_dead_object]
+
+  | _ ->
+      Nothing
+end
+
+
+
+
 
 
 

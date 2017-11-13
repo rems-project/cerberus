@@ -1032,11 +1032,11 @@ end
 let rec process_objet_value sym_assoc = function
   | (Core.Vobject (Core.OVinteger (IV prov ival_)) as cval) ->
       let ival_' =
-        either (fun z -> IVconcrete z) id (Defacto_memory2.simplify_integer_value_base false (process_integer_value_base sym_assoc ival_)) in
+        Defacto_memory_aux2.lifted_simplify_integer_value_base (process_integer_value_base sym_assoc ival_) in
       Core.Vobject (Core.OVinteger (IV prov ival_'))
   | (Core.Vloaded (Core.LVspecified (Core.OVinteger (IV prov ival_))) as cval) ->
       let ival_' =
-        either (fun z -> IVconcrete z) id (Defacto_memory2.simplify_integer_value_base false (process_integer_value_base sym_assoc ival_)) in
+        Defacto_memory_aux2.lifted_simplify_integer_value_base (process_integer_value_base sym_assoc ival_) in
       Core.Vloaded (Core.LVspecified (Core.OVinteger (IV prov ival_')))
 (*
   | (Core.Vobject (Core.OVinteger (Defacto_memory_types.IV _ (Defacto_memory_types.IVconcurRead _ sym))) as cval) ->

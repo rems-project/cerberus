@@ -178,6 +178,10 @@ type generic_object_value 'sym =  (* C object values *)
  | OVarray of list (generic_loaded_value 'sym) (* C array value *)
  | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.sym * Cabs.cabs_identifier * Mem.mem_value (* C union value *)
+ 
+ (* WIP: byte access *)
+ | OVcomposite of Mem.integer_value * Mem.integer_value * Mem.mem_value
+
 
 and generic_loaded_value 'sym =
  | LVspecified of generic_object_value 'sym (* non-unspecified loaded value *)

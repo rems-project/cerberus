@@ -8,104 +8,8 @@ open Nat_big_num
 
 open Either
 
+open Ocaml_implementation
 
-module type Implementation = sig
-  val name: string
-  val details: string
-  val char_is_signed: bool
-  val sizeof_ity: integerType -> int option
-  val sizeof_fty: floatingType -> int option
-  val alignof_ity: integerType -> int option
-end
-
-
-module DefaultImpl: Implementation = struct
-  let name = "clang9_x86_64-apple-darwin16.7.0"
-  let details = "Apple LLVM version 9.0.0 (clang-900.0.38)\nTarget: x86_64-apple-darwin16.7.0"
-  
-  let char_is_signed =
-    true
-  
-  let sizeof_ity = function
-    | Char
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-              
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | IBuiltin str ->
-        (* TODO *)
-        None
-    | Enum ident ->
-        (* TODO *)
-        None
-    | Size_t
-    | Ptrdiff_t ->
-        Some 8
-  
-  let sizeof_fty = function
-    | RealFloating Float ->
-        Some 4
-    | RealFloating Double ->
-        Some 8
-    | RealFloating LongDouble ->
-        Some 16
-  
-  let alignof_ity = function
-    | Char
-    | Bool ->
-        Some 1
-    | Signed ibty
-    | Unsigned ibty ->
-        Some begin match ibty with
-          | Ichar ->
-              1
-          | Short ->
-              2
-          | Int_ ->
-              4
-          | Long
-          | LongLong ->
-              8
-          | IntN_t n
-          | Int_leastN_t n
-          | Int_fastN_t n ->
-              n/8
-              
-          | Intmax_t
-          | Intptr_t ->
-              8
-        end
-    | IBuiltin str ->
-        (* TODO *)
-        None
-    | Enum ident ->
-        (* TODO *)
-        None
-    | Size_t
-    | Ptrdiff_t ->
-        Some 8
-end
-
-module Impl = DefaultImpl
 
 
 let rec simplify_integer_value_base ival_ =
@@ -113,9 +17,10 @@ let rec simplify_integer_value_base ival_ =
     either_case (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base x) in
     match ival_ with
       | IVunspecified
-      | IVconcurRead _
-      | IVconcrete _ ->
+      | IVconcurRead _ ->
           Right ival_
+      | IVconcrete n ->
+          Left n
       | IVaddress alloc_id ->
           Right ival_
       | IVfromptr (ty, ity, ptrval) ->
@@ -176,10 +81,42 @@ let rec simplify_integer_value_base ival_ =
     | IVmax ity ->
         begin match Impl.sizeof_ity ity with
           | Some n ->
+              let signed_max =
+                (sub (pow_int (of_int 2) (8*n-1)) (of_int 1)) in
+              let unsigned_max =
+                (sub (pow_int (of_int 2) (8*n)) (of_int 1)) in
+              begin match ity with
+                | Char ->
+                    Left (if Impl.char_is_signed then
+                      signed_max
+                    else
+                      unsigned_max)
+                | Bool ->
+                    (* TODO: not sure about this (maybe it should be 1 and not 255? *)
+                    Left unsigned_max
+                | Size_t
+                | Unsigned _ ->
+                    Left unsigned_max
+                | Ptrdiff_t
+                | Signed _ ->
+                    Left signed_max
+                | Enum _ ->
+                    failwith "IVmax Enum"
+                | IBuiltin _ ->
+                    failwith "IVmax IBuiltin"
+              end
+          | None ->
+              Right ival_
+        end
+
+(*
+        begin match Impl.sizeof_ity ity with
+          | Some n ->
               Left (sub (pow_int (of_int 2) (8*n-1)) (of_int 1))
           | None ->
               Right ival_
         end
+*)
     | IVsizeof ty ->
         begin match ty with
           | Void0 ->
@@ -237,7 +174,7 @@ let rec simplify_integer_value_base ival_ =
                     Right ival_
               end
           | Basic0 (Floating fty) ->
-              begin match failwith "Impl.alignof_fty fty" with
+              begin match Impl.alignof_fty fty with
                 | Some n ->
                     Left (of_int n)
                 | None ->
@@ -270,13 +207,37 @@ let rec simplify_integer_value_base ival_ =
     | IVcomposite _ ->
         failwith "simplify_integer_value: IVbyteof, IVcomposite"
     | IVbitwise (ity, BW_complement ival_1) ->
-        failwith "simplify_integer_value: IVbyteof, BW_complement"
+        begin match (Impl.sizeof_ity ity, simplify_integer_value_base ival_1) with
+          | (Some width, Left n1) ->
+              Left (Defacto_memory_aux2.tmp_compl width n1)
+          | (_, x) ->
+              let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise (ity, BW_complement (f x)))
+        end
     | IVbitwise (ity, BW_AND (ival_1, ival_2)) ->
-        failwith "simplify_integer_value: IVbyteof, BW_AND"
+        begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Left n1, Left n2) ->
+              Left (Nat_big_num.bitwise_and n1 n2)
+          | (x, y) ->
+              let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise (ity, BW_AND (f x, f y)))
+        end
     | IVbitwise (ity, BW_OR (ival_1, ival_2)) ->
-        failwith "simplify_integer_value: IVbyteof, BW_OR"
+        begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Left n1, Left n2) ->
+              Left (Nat_big_num.bitwise_or n1 n2)
+          | (x, y) ->
+              let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise (ity, BW_OR (f x, f y)))
+        end
     | IVbitwise (ity, BW_XOR (ival_1, ival_2)) ->
-        failwith "simplify_integer_value: IVbyteof, BW_XOR"
+        begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Left n1, Left n2) ->
+              Left (Nat_big_num.bitwise_xor n1 n2)
+          | (x, y) ->
+              let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise (ity, BW_XOR (f x, f y)))
+        end
 
 
 let simplify_integer_value (IV (prov, ival_)) : (num, integer_value) either =
@@ -285,3 +246,58 @@ let simplify_integer_value (IV (prov, ival_)) : (num, integer_value) either =
         Left n
     | Right ival_' ->
         Right (IV (prov, ival_'))
+
+
+
+(*
+let simplify_mem_constraint constr =
+  let lift = either_case (fun z -> (IV (Prov_none, IVconcrete z))) (fun z -> z) in
+  let simplify_binary acc op ival_1 ival_2 =
+    begin match (simplify_integer_value ival_1, simplify_integer_value ival_2) with
+      | (Left n1, Left n2) ->
+          if n1 = n2 then
+            Some acc
+          else
+            None
+      | (x, y) ->
+          Some (MC_eq (lift x, lift y) :: acc)
+    end in
+  let rec aux _acc constr =
+    match _acc with
+      | None ->
+          None
+      | Some acc ->
+          begin match constr with
+            | MC_empty ->
+                _acc
+            | MC_eq (ival_1, ival_2) ->
+                simplify_binary acc (=) ival_1 ival_2
+            | MC_le (ival_1, ival_2) ->
+                simplify_binary acc (<=) ival_1 ival_2
+            | MC_lt (ival_1, ival_2) ->
+                simplify_binary acc (<) ival_1 ival_2
+            | MC_or (constr1, constr2) ->
+                begin match (aux (Some []) constr1, aux (Some []) constr2) with
+                  | (None, Some cs)
+                  | (Some cs, None) ->
+                      Some (cs @ acc)
+                  | (None, None) ->
+                      None
+                  | (Some cs1, Some cs2) ->
+                      Some (MC_or (MC_conj cs1, MC_conj cs2) :: acc)
+                end
+            | MC_conj constrs ->
+                List.fold_left aux _acc constrs
+            | MC_not _ ->
+                (* TODO *)
+                Some (constr :: acc)
+          end
+  in
+  match aux (Some []) constr with
+    | None ->
+        MC_empty
+    | Some constrs ->
+        MC_conj constrs
+
+
+*)
