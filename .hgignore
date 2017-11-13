@@ -1,8 +1,11 @@
 syntax: glob
 
+
+tests/csmith/tools/ciValidate
+tests/csmith/tools/reValidate
+
 ocaml_generated/**
 _build/**
-_cbuild/**
 _lem/**
 _coq/**
 _coq-orig/**
@@ -24,6 +27,33 @@ tests/tmp/**
 
 generated_doc/
 
+dependencies/**
+*.cmx
+*.cmi
+*.cmo
+*.o
+depend
+
+*.orig
+*.LOCAL
+*_LOCAL.ml
+*_LOCAL.mli
+
+.DS_Store
+
+cbuild
+clink
+cerberus
+
+*.native
+*.byte
+*.d.byte
+
+parsers/cparser/Parser.ml
+parsers/cparser/Parser.mli
+parsers/cparser/pre_parser.ml
+parsers/cparser/pre_parser.mli
+
 parsers/coreparser/core_parser.ml
 parsers/coreparser/core_parser.mli
 
@@ -31,46 +61,10 @@ parsers/coreparser/*.conflicts
 parsers/cparser/*.conflicts
 
 
-dependencies/**
-*.cmx
-*.cmi
-*.cmo
-*.o
-*.orig
-*.lem_
-*.lemOLD
-*.mlSAV
-*.mlySAV
-*.lemSAV
-*.ml_
-depend
+tests/**/a.out
 
-.DS_Store
-
-cbuild
-clink
-cerberus
-main_.native
-main_.byte
-main_.d.byte
-
-*.native
-*.byte
-*.d.byte
-
-
-build_model
-build
-parsers/cparser/Parser.ml
-parsers/cparser/Parser.mli
-parsers/cparser/pre_parser.ml
-parsers/cparser/pre_parser.mli
-
-tests/csmith/small_int_arith/*.c
 
 tests/ci_results.xml
 *~
 
-BACKUP/**
-ocaml_generated_OLD/**
-model/DEAD/**
+LOCAL/**

@@ -415,6 +415,9 @@ let ident_is_in_current_scope ident namespace =
 
 val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
 let register_typedef sym (qs, ty) =
+  let () = Debug.print_debug 8 [Debug.DB_desugaring] (fun () ->
+    "registering typedef symbol: " ^ show sym
+  ) in
   State_exception.get >>= fun st ->
   match Map.lookup sym st.typedef_definitions with
     | Just (qs', ty') ->
@@ -856,7 +859,7 @@ let register_function_declaration loc sym is_proto decl =
     Map.lookup sym st.function_declarations
   ) >>= function
     | Just (prev_has_proto, prev_decl) ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
         ) in
 (*

@@ -42,15 +42,12 @@ let sub_qualifiers qs1 qs2 =
 
 
 (* == predicates on integerTypes ================================================================= *)
-(* TODO: change name *)
-val is_unsigned: implementation -> integerType -> bool
-let is_unsigned impl ity =
-  not (impl.signed ity)
-
-val signed_type: integerType -> bool
-let signed_type = function
+(* TODO: factorise is_signed_ity and is_unsigned_ity *)
+val is_signed_ity: integerType -> bool
+let is_signed_ity = function
   | Char ->
-      false (* TODO: impl-def *)
+      let () = Debug.warn [] (fun () -> "[AilTypesAux.is_signed_ity] assuming char is signed (like x86)") in
+      true
   | Bool ->
       false
   | Signed _ ->
@@ -58,20 +55,24 @@ let signed_type = function
   | Unsigned _ ->
       false
   | IBuiltin _ ->
-      false (* TODO: builtins here are of impl-def signess*)
+      error "TODO: AilTypesAux.is_signed_ity, IBuiltin"
   | Enum _ ->
-      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
-      true
+      (* TODO: see §6.7.2.2#4 *)
+      error "TODO: AilTypesAux.is_signed_ity, Enum"
   | Size_t ->
+      (* STD §7.19#2 *)
       false
   | Ptrdiff_t ->
+      (* STD §7.19#2 *)
       true
 end
 
-val unsigned_type: integerType -> bool
-let unsigned_type = function
+(* STD §6.2.5#6, sentence 4 *)
+val is_unsigned_ity: integerType -> bool
+let is_unsigned_ity = function
   | Char ->
-      false (* TODO: impl-def *)
+      let () = Debug.warn [] (fun () -> "[AilTypesAux.is_unsigned_ity] assuming char is signed (like x86)") in
+      false
   | Bool ->
       true
   | Signed _ ->
@@ -79,13 +80,15 @@ let unsigned_type = function
   | Unsigned _ ->
       true
   | IBuiltin _ ->
-      false (* TODO: builtins here are of impl-def signess*)
+      error "TODO: AilTypesAux.is_unsigned_ity, IBuiltin"
   | Enum _ ->
-      (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
-      false
+      (* TODO: see §6.7.2.2#4 *)
+      error "TODO: AilTypesAux.is_unsigned_ity, Enum"
   | Size_t ->
+      (* STD §7.19#2 *)
       true
   | Ptrdiff_t ->
+      (* STD §7.19#2 *)
       false
  end
 
@@ -806,8 +809,8 @@ val usual_arithmetic_integer: implementation -> integerType -> integerType -> in
 let usual_arithmetic_integer impl ity1 ity2 =
   let promoted_ity1 = integer_promotion impl ity1 in
   let promoted_ity2 = integer_promotion impl ity2 in
-  if signed_type promoted_ity1 then
-    if signed_type promoted_ity2 then
+  if is_signed_ity promoted_ity1 then
+    if is_signed_ity promoted_ity2 then
       if lt_integer_rank promoted_ity2 promoted_ity1 then
         promoted_ity1
       else
@@ -821,7 +824,7 @@ let usual_arithmetic_integer impl ity1 ity2 =
         else
           make_corresponding_unsigned promoted_ity1
   else
-    if unsigned_type promoted_ity2 then
+    if is_unsigned_ity promoted_ity2 then
       if lt_integer_rank promoted_ity2 promoted_ity1 then
         promoted_ity1
       else
@@ -1238,30 +1241,6 @@ val is_extended_unsigned_integer_type: ctype -> bool
 let is_extended_unsigned_integer_type _ =
   false
 
-(* STD §6.2.5#6, sentence 4 *)
-val is_unsigned_ity: integerType -> bool
-let is_unsigned_ity = function
-  | Char ->
-      let () = Debug.warn [] (fun () -> "[AilTypesAux.is_unsigned_ity] assuming char is signed (like x86)") in
-      false
-  | Bool ->
-      true
-  | Signed _ ->
-      false
-  | Unsigned _ ->
-      true
-  | IBuiltin str ->
-      error "TODO: AilTypesAux.is_unsigned_integer_type, IBuiltin"
-  | Enum ident ->
-      (* TODO: see §6.7.2.2#4 *)
-      error "TODO: AilTypesAux.is_unsigned_integer_type, Enum"
-  | Size_t ->
-      (* STD §7.19#2 *)
-      true
-  | Ptrdiff_t ->
-      (* STD §7.19#2 *)
-      false
-end
 
 val is_unsigned_integer_type: ctype -> bool
 let is_unsigned_integer_type = function

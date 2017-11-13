@@ -25,7 +25,7 @@ import Nondeterminism2
 module ND = Nondeterminism2
 
 (* Memory model *)
-import Mem_aux
+(* import Mem_aux *)
 
 
 val runND_proxy:

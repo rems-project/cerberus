@@ -55,7 +55,9 @@ void* memcpy(void * restrict s1, const void * restrict s2, size_t n)
 }
 
 
-int memcmp(const void *s1, const void *s2, size_t n)
+int memcmp(const void *s1, const void *s2, size_t n);
+// THIS IS IMPLEMENTED IN CORE (see memcmp_proxy in std.core)
+/*
 {
   unsigned char c1, c2;
   for (int i=0; i < n; i++) {
@@ -66,6 +68,7 @@ int memcmp(const void *s1, const void *s2, size_t n)
   }
   return 0;
 }
+*/
 
 char *strcpy (char * restrict s1, const char * restrict s2)
 {

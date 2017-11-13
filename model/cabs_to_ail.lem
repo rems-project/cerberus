@@ -2068,7 +2068,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
             error "not possible"
         (* Static | Thread *)
         | _ ->
-            let () = Debug.print_debug 0 [] (fun () -> "HELLO Init_expr") in
+            let () = Debug.print_debug 1 [] (fun () -> "HELLO Init_expr") in
             desugar_expression e                   >>= fun d_e ->
             is_initializer_constant_expression d_e >>= function
               | true ->
@@ -2401,7 +2401,7 @@ and desugar_and_register_static_assert_declaration sa_decl =
 (* TODO: this is broken *)
 val desugar_declaration_base: specifiers -> list init_declarator -> E.desugM (list (identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "BROKEN: desugar_declaration_base"
   ) in
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
@@ -2470,11 +2470,11 @@ let desugar_declaration_base specifs idecltors =
                       (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
-                          let () = Debug.print_debug 0 [] (fun () ->
+                          let () = Debug.print_debug 1 [] (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
                           ) in
                           begin if ty <> ty' then
-                            let () = Debug.print_debug 0 [] (fun () ->
+                            let () = Debug.print_debug 1 [] (fun () ->
                               "ty' is new"
                             ) in
                             (* TODO: tentative *)
@@ -2708,11 +2708,11 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                       mk_desug_init () >>= function
                         | Just (ty', d_e) ->
                           let dur = determinate_storage_duration link specifs.storage_classes in
-                          let () = Debug.print_debug 0 [] (fun () ->
+                          let () = Debug.print_debug 1 [] (fun () ->
                             "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
                           ) in
                           begin if ty <> ty' then
-                            let () = Debug.print_debug 0 [] (fun () ->
+                            let () = Debug.print_debug 1 [] (fun () ->
                               "ty' is new"
                             ) in
                             (* TODO: tentative *)
@@ -3119,8 +3119,14 @@ let desugar_and_register_external_declaration edecl =
         
         (* for each [init_declarator] *)
         E.mapM_ (fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
+          let () = Debug.print_debug 1 [] (fun () ->
+            "HELLO desugar_declaration_base ==> " ^ show ident
+          ) in
           let ty = if isAtomic then ATypes.Atomic _ty else _ty in
           if specifs.storage_classes = [SC_typedef] then
+            let () = Debug.print_debug 1 [] (fun () ->
+              "HELLO desugar_declaration_base, SC_typedef"
+            ) in
             (* Case of a typedef *)
             E.register_identifier ident
               (*TODO: remove the storage_classes since it's just typedef? *)
@@ -3142,7 +3148,7 @@ let desugar_and_register_external_declaration edecl =
                   List.elem FS_Noreturn specifs.function_specifiers
                 )
             | _ ->
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "is_tentative ==> " ^ if is_tentative then "true" else "false"
                 ) in
                 (* TODO: rename this function *)
@@ -3177,11 +3183,11 @@ let desugar_and_register_external_declaration edecl =
                 
                 mk_desug_init () >>= function
                   | Just (ty', d_e) ->
-                      let () = Debug.print_debug 0 [] (fun () ->
+                      let () = Debug.print_debug 1 [] (fun () ->
                         "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
                       ) in
                       begin if ty <> ty' then
-                        let () = Debug.print_debug 0 [] (fun () ->
+                        let () = Debug.print_debug 1 [] (fun () ->
                           "ty' is new"
                         ) in
                         (* TODO: tentative *)

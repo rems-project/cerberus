@@ -78,7 +78,7 @@ let mk_forall ctx syms sorts expr =
 
 
 let init_solver () : solver_state =
-  let ctx = mk_context [("timeout", "0")(*TODO*)] in
+  let ctx = mk_context [("timeout", "")(*TODO*)] in
   
   let mk_ctor str =
     Datatype.mk_constructor_s ctx str (Symbol.mk_string ctx ("is_" ^ str)) [] [] [] in
@@ -169,18 +169,17 @@ let init_solver () : solver_state =
    ) in
   
   Solver.add slvSt.slv [axiom1; axiom2];
-
+  
 (*
-  Pmap.iter (fun tag_sym membrs ->
-    begin match tag_sym with
-      | Sym.Symbol (n, Some str) ->
-          print_string (str ^ ":" ^ string_of_int n)
-      | Sym.Symbol (n, None) ->
-          print_string ("anon:" ^ string_of_int n)
-    end;
+  (* declaring symbolic constants of the byte paddings of struct/union members *)
+  Pmap.iter (fun (Sym.Symbol (tag_sym_n, _)) membrs ->
+    List.iter (fun (Cabs.CabsIdentifier (_, membr_str), _) ->
+      let padding_str = "byte_padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in
+      
+      assert false
+    ) membrs;
     print_endline (" ==> " ^ string_of_int (List.length membrs))
   )(Tags.tagDefs ());
-(* tagDefs: unit -> (Symbol.sym, (Cabs.cabs_identifier * Core_ctype.ctype0) list) Pmap.map *)
 *)
   slvSt
 
@@ -349,7 +348,25 @@ let integer_value_base_to_expr slvSt ival_ =
     | IVcomposite ival_s ->
         failwith "TODO Smt: IVcomposite"
     | IVbitwise (ity, bwop) ->
-        failwith "TODO Smt: IVbitwise"
+        let is_signed = AilTypesAux.is_signed_ity ity in
+        let size_ity = 64 in
+        BitVector.mk_bv2int slvSt.ctx begin match bwop with
+          | BW_complement ival_ ->
+              BitVector.mk_not slvSt.ctx
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_))
+          | BW_AND (ival_1, ival_2) ->
+              BitVector.mk_and slvSt.ctx
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
+          | BW_OR (ival_1, ival_2) ->
+              BitVector.mk_or slvSt.ctx
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
+          | BW_XOR (ival_1, ival_2) ->
+              BitVector.mk_xor slvSt.ctx
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
+                (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
+        end is_signed
   in
   aux (Either.either_case
     (fun n -> IVconcrete n)
@@ -410,7 +427,8 @@ let declare_address alloc_id : unit solverM =
   return ()
 *)
 
-let add_constraint slvSt cs =
+let add_constraint slvSt debug_str cs =
+(*  prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs); *)
   match mem_constraint_to_expr slvSt cs with
     | Some e ->
           Wip.add [cs];
@@ -680,7 +698,7 @@ let runND_exhaustive m st0 =
       | (NDguard (debug_str, cs, m_act), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tguard (debug_str, cs, Thole));
           prerr_endline ("NDguard(" ^ debug_str ^ ")");
-          add_constraint slvSt cs;
+          add_constraint slvSt debug_str cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
 (*
@@ -692,7 +710,8 @@ let runND_exhaustive m st0 =
                raise (Backtrack acc)
 
             | Solver.UNKNOWN ->
-                failwith "TIMEOUT in NDguard"
+                prerr_endline "TIMEOUT in NDguard";
+                aux acc m_act st'
 
             | Solver.SATISFIABLE ->
                aux acc m_act st'
@@ -703,7 +722,7 @@ let runND_exhaustive m st0 =
           prerr_endline ("NDbranch(" ^ debug_str ^ ")");
           Wip.push ();
           Solver.push slvSt.slv;
-          add_constraint slvSt cs;
+          add_constraint slvSt debug_str cs;
           let acc' = begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
                 prerr_endline (Z3.Solver.to_string slvSt.slv);
@@ -718,13 +737,16 @@ let runND_exhaustive m st0 =
                      new_acc (* acc *)
                end
             | Solver.UNSATISFIABLE ->
+                prerr_endline "NDbranch ==> UNSATISFIABLE";
+                prerr_endline (Z3.Solver.to_string slvSt.slv);
+                prerr_endline "END\n\n";
                 acc
           end in
           void (Wip.pop ());
           Solver.pop slvSt.slv 1;
           Wip.push ();
           Solver.push slvSt.slv;
-          add_constraint slvSt (MC_not cs);
+          add_constraint slvSt (debug_str ^ " (not)") (MC_not cs);
           let acc'' = begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
                 failwith ("TIMEOUT in NDbranch 2(" ^ debug_str ^ ")")
@@ -768,43 +790,47 @@ exception Done of
   (((string * (bool * Cmm_op.symState * Core.value) * (int * int)) * string, Driver.driver_error) nd_status *
      Driver.driver_state)
 
-exception BacktrackRandom
+exception BacktrackRandom of string
 
 let runND_random m st0 =
   let slvSt = init_solver () in
+  
+  let do_something cs now later =
+    Wip.push ();
+    Solver.push slvSt.slv;
+    add_constraint slvSt "TODO" cs;
+    begin match check_sat slvSt.slv [] with
+      | Solver.UNKNOWN ->
+          failwith "TIMEOUT in NDbranch"
+      | Solver.SATISFIABLE ->
+          let ret = try
+            Some (now ())
+          with
+          | BacktrackRandom _ ->
+              None
+          in
+          void (Wip.pop ());
+          Solver.pop slvSt.slv 1;
+          begin match ret with
+            | Some z ->
+                z
+            | None ->
+                later ()
+          end
+      | Solver.UNSATISFIABLE ->
+          void (Wip.pop ());
+          Solver.pop slvSt.slv 1;
+          later ()
+    end in
+  
   let rec aux (ND m_act) st =
-    let do_something now cs later =
-      let later' () =
-        void (Wip.pop ());
-        Solver.pop slvSt.slv 1;
-        later () in
-      Wip.push ();
-      Solver.push slvSt.slv;
-      add_constraint slvSt cs;
-      begin match check_sat slvSt.slv [] with
-        | Solver.UNKNOWN ->
-            failwith "TIMEOUT in NDbranch"
-        | Solver.SATISFIABLE ->
-            let ret = try
-              now ()
-            with
-              | BacktrackRandom ->
-                  later' ()
-            in
-            void (Wip.pop ());
-            Solver.pop slvSt.slv 1;
-            ret
-        | Solver.UNSATISFIABLE ->
-            later' ()
-      end in
-    
     match m_act st with
       | (NDactive a, st') ->
           (Active a, Wip.to_strings (), st')
       | (NDkilled (Undef0 _ as reason), st') ->
           (Killed reason, Wip.to_strings (), st')
       | (NDkilled r, st') ->
-          raise BacktrackRandom
+          raise (BacktrackRandom "NDkilled")
       | (NDnd (debug_str, str_ms), st') ->
           (* TODO: this is not really random (see http://okmij.org/ftp/Haskell/perfect-shuffle.txt) *)
           let suffled_str_ms =
@@ -825,20 +851,20 @@ let runND_random m st0 =
                     Solver.pop slvSt.slv 1;
                     ret
                   with
-                    | BacktrackRandom ->
+                    | BacktrackRandom _ ->
                         None
           ) None suffled_str_ms in
           begin match ret with
             | Some z ->
                 z
             | None ->
-                raise BacktrackRandom
+                raise (BacktrackRandom "NDnd")
           end
       | (NDguard (debug_str, cs, m_act), st') ->
-          add_constraint slvSt cs;
+          add_constraint slvSt debug_str cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
-                raise BacktrackRandom
+                raise (BacktrackRandom "NDguard")
             | Solver.UNKNOWN ->
                 failwith "TIMEOUT in NDguard"
             | Solver.SATISFIABLE ->
@@ -846,18 +872,19 @@ let runND_random m st0 =
           end
       | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
           let ret = if Random.bool () then
-            do_something (fun () -> aux m_act1 st') cs
-              (fun () -> do_something (fun () -> aux m_act2 st') (MC_not cs)
-                           (fun () -> raise BacktrackRandom))
+            do_something cs (fun () -> aux m_act1 st')
+              (fun () -> do_something (MC_not cs) (fun () -> aux m_act2 st')
+                           (fun () -> raise (BacktrackRandom "NDbranch 1")))
           else
-            do_something (fun () -> aux m_act2 st') (MC_not cs)
-              (fun () -> do_something (fun () -> aux m_act1 st') cs
-                           (fun () -> raise BacktrackRandom)) in
+            do_something (MC_not cs) (fun () -> aux m_act2 st')
+              (fun () -> do_something cs (fun () -> aux m_act1 st')
+                  (fun () -> raise (BacktrackRandom ("NDbranch 2 ==> " ^ debug_str)))) in
           ret
   in try
     [aux m st0]
   with
-    | BacktrackRandom ->
+    | BacktrackRandom str ->
+        prerr_endline ("runND_random (outer BacktrackRAandom '" ^ str ^ "')");
         []
 
 let rec select options =
