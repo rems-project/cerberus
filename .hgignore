@@ -6,6 +6,7 @@ tests/csmith/tools/reValidate
 
 ocaml_generated/**
 _build/**
+_cbuild/**
 _lem/**
 _coq/**
 _coq-orig/**
