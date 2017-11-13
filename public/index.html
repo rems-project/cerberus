@@ -32,13 +32,23 @@
             <div id="dropdown-views" class="dropdown-content"></div>
           </div>
         </li>
-        <li><a href="#" id="new">New</a></li>
-        <li><a href="#" id="load">Upload</a></li>
+        <li>
+          <div class="dropdown">
+            <a href="#" class ="dropbtn dropdown-toggle">File</a>
+            <div class="dropdown-content">
+              <a href="#" id="new">New empty file</a>
+              <hr>
+              <a href="#" id="load_defacto">Load defacto test</a>
+              <a href="#" id="load">Load from file</a>
+            </div>
+          </div>
+        </li>
         <li>
           <div class="dropdown">
             <a href="#" class ="dropbtn dropdown-toggle" id="ast">Elaborate</a>
             <div class="dropdown-content">
               <a href="#" id="cabs">Cabs</a>
+              <a href="#" id="ail-ast">Ail (AST)</a>
               <a href="#" id="ail">Ail</a>
               <a href="#" id="core">Core</a>
             </div>
@@ -50,7 +60,7 @@
             <div class="dropdown-content">
               <a href="#" id="random">Random</a>
               <a href="#" id="exhaustive">Exhaustive</a>
-              <a href="#" id="interactive">Interactive</a>
+              <!-- <a href="#" id="interactive">Interactive</a> -->
             </div>
           </div>
         </li>
@@ -115,6 +125,16 @@
       <div align="center" class="svg"></div>
     </div>
   </template>
+
+  <div id="defacto">
+    <div id="header">
+      <ul>
+        <li><a href="#" class="disable-events">Load defacto test...</a></li>
+        <li class="right"><a id="load_defacto_cancel" href="#">Cancel</a></li>
+      </ul>
+    </div>
+    <ul id="defacto_list"></ul>
+  </div>
 
   <script type="text/javascript" src="js/util.js"></script>
   <script type="text/javascript" src="js/tabs.js"></script>

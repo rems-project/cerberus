@@ -441,3 +441,49 @@ svg {
   font-weight: bold;
   color: #708;
 }
+
+#defacto {
+  visibility: hidden;
+
+  left: 40px;
+  top: 40px;
+
+  height: 80%;
+
+  border: 1px solid silver;
+  border-radius: 3px;
+  color: #444;
+  /* padding: 2px 5px; */
+  font-size: 90%;
+  font-family: monospace;
+  background-color: white;
+
+  overflow: hidden;
+
+  max-width: 40em;
+  max-height: 60em;
+
+  position: absolute;
+  z-index: 10;
+  -webkit-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  -moz-box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+  box-shadow: 2px 3px 5px rgba(0,0,0,.2);
+
+  transition: opacity 1s;
+  -moz-transition: opacity 1s;
+  -webkit-transition: opacity 1s;
+  -o-transition: opacity 1s;
+  -ms-transition: opacity 1s;
+}
+
+#defacto div {
+  font-family: Arial,Helvetica,sans-serif;
+  font-size: 10pt;
+  min-width: 100%;
+}
+
+#defacto_list {
+  height: calc(100% - 32px);
+  margin: 0;
+  overflow: scroll;
+}

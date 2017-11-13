@@ -178,6 +178,7 @@ let mk_result file out err =
     JsonMap [
       ("cabs", json_of_file (f ^ ".cabs"));
       ("ail",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
+      ("ail_ast",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
       ("core", JsonStr (elim_paragraph_sym core));
       ("locs", JsonArray (json_of_locs sorted_locs));
       ("stdout", json_of_file out);
@@ -249,8 +250,20 @@ let valid_file fname =
   | Unix.S_REG -> true
   | _ -> false
 
+let defacto_tests () =
+  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
+  let respond str = (Server.respond_string ~headers) `OK str () in
+  Sys.readdir "../public/defacto"
+  |> Array.to_list
+  |> List.fast_sort compare
+  |> List.map (fun x -> JsonStr x)
+  |> fun x -> JsonArray x
+  |> string_of_json
+  |> respond
+
 let get ~docroot uri path =
   let try_with () =
+    prerr_endline ("GET " ^ path);
     match path with
     | "/" -> Server.respond_file "../public/index.html" ()
     | _ ->
@@ -261,12 +274,14 @@ let get ~docroot uri path =
 
 let post ~docroot uri path content =
   let try_with () =
+    prerr_endline ("POST " ^ path);
     match path with
     | "/exhaustive" -> cerberus (run "exhaustive") content
     | "/random" -> cerberus (run "random") content
     | "/graph" -> create_graph content
     | "/elab_rewrite"  -> cerberus elab_rewrite content
     | "/elab"  -> cerberus elab content
+    | "/defacto" -> print_endline "DEFACTO"; defacto_tests ()
     | _ -> forbidden path
   in catch try_with (fun _ -> forbidden path)
 
