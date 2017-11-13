@@ -7,13 +7,6 @@ module Sym = Symbol
 
 open Z3
 
-
-(* TODO: why don't you use Ocaml's ignore? *)
-let void (x : 'a) : unit =
-  let _ = x in
-  ()
-
-
 (* wip *)
 module Wip = struct
   let submitted : ((Mem.mem_iv_constraint list) list) ref =
@@ -120,7 +113,7 @@ let init_solver () : solver_state =
   let ctypeSort =
     (* TODO: Function, Struct, Union, Builtin *)
     Datatype.mk_sort_s ctx "Ctype"
-      [ mk_ctor "void_ty"
+      [ mk_ctor "ignore_ty"
       ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
           [Symbol.mk_string ctx "_Basic_ty"] [Some basicTypeSort]
           [0(*TODO: no idea with I'm doing*)]
@@ -254,7 +247,7 @@ let rec ctype_to_expr slvSt ty =
   let fdecls = Datatype.get_constructors slvSt.ctypeSort in
   Core_ctype.(
     match ty with
-      | Void0 ->
+      | ignore0 ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
       | Basic0 bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
@@ -269,7 +262,7 @@ let rec ctype_to_expr slvSt ty =
             [ctype_to_expr slvSt ref_ty]
       | _ ->
           prerr_endline "TODO: Smt.ctype_to_expr";
-          Expr.mk_const_s slvSt.ctx "void_ty" slvSt.ctypeSort
+          Expr.mk_const_s slvSt.ctx "ignore_ty" slvSt.ctypeSort
   )
 
 
@@ -687,11 +680,11 @@ let runND_exhaustive m st0 =
               Wip.push ();
               Solver.push slvSt.slv;
               let ret = aux acc m_act st' in
-              void (Wip.pop ());
+              ignore (Wip.pop ());
               Solver.pop slvSt.slv 1;
               ret
             with Backtrack new_acc ->
-              void (Wip.pop ());
+              ignore (Wip.pop ());
               Solver.pop slvSt.slv 1;
               new_acc
           ) acc str_ms
@@ -743,7 +736,7 @@ let runND_exhaustive m st0 =
                 prerr_endline "END\n\n";
                 acc
           end in
-          void (Wip.pop ());
+          ignore (Wip.pop ());
           Solver.pop slvSt.slv 1;
           Wip.push ();
           Solver.push slvSt.slv;
@@ -760,12 +753,12 @@ let runND_exhaustive m st0 =
                       new_acc (* acc' *)
                 end
             | Solver.UNSATISFIABLE ->
-                void (Wip.pop ());
+                ignore (Wip.pop ());
                 Solver.pop slvSt.slv 1;
                tree_so_far := fill_hole_with !tree_so_far Tdeadend;
                 raise (Backtrack acc')
           end in
-          void (Wip.pop ());
+          ignore (Wip.pop ());
           Solver.pop slvSt.slv 1;
           acc''
   in
@@ -810,7 +803,7 @@ let runND_random m st0 =
           | BacktrackRandom _ ->
               None
           in
-          void (Wip.pop ());
+          ignore (Wip.pop ());
           Solver.pop slvSt.slv 1;
           begin match ret with
             | Some z ->
@@ -819,7 +812,7 @@ let runND_random m st0 =
                 later ()
           end
       | Solver.UNSATISFIABLE ->
-          void (Wip.pop ());
+          ignore (Wip.pop ());
           Solver.pop slvSt.slv 1;
           later ()
     end in
@@ -834,7 +827,6 @@ let runND_random m st0 =
           raise (BacktrackRandom "NDkilled")
       | (NDnd (debug_str, str_ms), st') ->
           (* TODO: this is not really random (see http://okmij.org/ftp/Haskell/perfect-shuffle.txt) *)
-          prerr_endline ("NDnd size " ^ string_of_int (List.length str_ms));
           let suffled_str_ms =
             let with_index = List.map (fun z ->
               (Random.bits (), z)
@@ -848,11 +840,10 @@ let runND_random m st0 =
                   try
                     Wip.push ();
                     Solver.push slvSt.slv;
-                    let ret = Some (aux m st') in
-                    ret
+                    Some (aux m st')
                   with
                     | BacktrackRandom _ -> 
-                        void (Wip.pop ());
+                        ignore (Wip.pop ());
                         Solver.pop slvSt.slv 1;
                         None
           ) None suffled_str_ms in

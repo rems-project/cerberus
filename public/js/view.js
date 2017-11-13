@@ -116,6 +116,13 @@ class View {
     return tab
   }
 
+  get ail_ast() {
+    let tab = new TabAil()
+    this.newPane.add(tab)
+    return tab
+  }
+
+
   get core() {
     let tab = new TabCore()
     this.newPane.add(tab)

@@ -79,6 +79,15 @@ class UI {
       download(data, filename)
     })
 
+    // Load defacto tests
+    $('#load_defacto').on('click', () => {
+      $('#defacto').css('visibility', 'visible')
+    })
+
+    $('#load_defacto_cancel').on('click', () => {
+      $('#defacto').css('visibility', 'hidden')
+    })
+
     // Run (Execute)
     $('#run').on('click', () => {})
     $('#random').on('click', () => this.exec ('random'))
@@ -91,6 +100,7 @@ class UI {
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('cabs'))
+    $('#ail_ast') .on('click', () => this.elab ('ail_ast'))
     $('#ail') .on('click', () => this.elab ('ail'))
     $('#core').on('click', () => this.elab ('core'))
 
@@ -274,6 +284,29 @@ $.ajax({
     compilers       = data
   }
 })
+
+// Get list of defacto tests
+$.ajax({
+  headers: {Accept: 'application/json'},
+  url: 'defacto',
+  type: 'POST',
+  success: (data, status, query) => {
+    let ul = $('#defacto_list')
+    for (let i = 0; i < data.length; i++) {
+      let name = data[i]
+      let link = $('<li><a href="#">' + name + '</a></li>')
+      ul.append(link)
+      link.on('click', () =>
+        $.get('defacto/' + name).done((data) => {
+          $('#defacto').css('visibility', 'hidden')
+          ui.add(new View(name, data))
+          ui.refresh()
+        })
+      )
+    }
+  }
+})
+
 
 // Get default buffer
 $.get('buffer.c').done((data) => {
