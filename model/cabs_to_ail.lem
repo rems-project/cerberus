@@ -2099,6 +2099,10 @@ and wip_desugar_initializer_ loc dur current_ty init =
       end
   
   | Init_list desigs_opt_inits ->
+(*
+
+TODO: BRING THIS BACK AND FINISH IT
+
       (* STD §6.7.9#10 *)
       E.get_tag_definitions >>= fun tagDefs ->
       let implicit_e ty =
@@ -2166,9 +2170,8 @@ and wip_desugar_initializer_ loc dur current_ty init =
       ) desigs_opt_inits ((0: nat), ([] : list unit)) >>= fun _ ->
       error "WIP"
 
+*)
 
-
-(*
       (* NOTE: I know it would be more efficient to factorize these checks, but
          these is more readable *)
       if List.any (function
@@ -2385,7 +2388,6 @@ and wip_desugar_initializer_ loc dur current_ty init =
             end
 
       end
-*)
 end
 
 

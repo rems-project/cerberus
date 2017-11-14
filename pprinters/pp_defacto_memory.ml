@@ -20,7 +20,7 @@ let string_of_integer_operator = function
   | Mem_common.IntRem_f ->
       "rem_f"
   | Mem_common.IntExp ->
-      "^"
+      "**"
 
 
 
@@ -90,8 +90,11 @@ and pp_integer_value_base = function
       !^ "IValignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
-  | IVptrdiff ((ptr_val_1, sh1), (ptr_val_2, sh2)) ->
+  | IVpadding (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+      !^ "IVpadding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
+  | IVptrdiff (ty, (ptr_val_1, sh1), (ptr_val_2, sh2)) ->
       !^ "IVptrdiff" ^^ P.parens (
+        Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^
         P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_shift_path sh1) ^^ P.comma ^^^
         P.parens (pp_pointer_value_base ptr_val_2 ^^ P.comma ^^^ pp_shift_path sh2)
       )
@@ -155,6 +158,11 @@ and pp_mem_value = function
       P.braces (
         P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       )
+  | MVdelayed (xs, mval) ->
+      !^ "MVcomposite" ^^
+      P.parens (P.brackets (comma_list (fun (sh, mval) ->
+        P.parens (pp_shift_path sh ^^ P.comma ^^^ pp_mem_value mval)
+      ) xs) ^^ P.comma ^^^ pp_mem_value mval)
   | MVcomposite (xs, mval) ->
       !^ "MVcomposite" ^^
       P.parens (P.brackets (comma_list (fun (off_ival_, byte_ival) ->
@@ -176,26 +184,66 @@ let pp_pretty_pointer_value (PV (_, ptr_val_, sh) as ptr_val) =
         assert false
 
 
-let pp_pretty_integer_value format = function
-  | IV (_, IVconcurRead (_, sym)) ->
-      !^ ("concur(" ^ Pp_symbol.to_string_pretty sym ^ ")")
-  | IV (_, IVconcrete n) ->
-      !^ begin
-           let b = match format.Boot_printf.basis with
-             | Some AilSyntax.Octal ->
-                 8
-             | Some AilSyntax.Decimal | None ->
-                 10
-             | Some AilSyntax.Hexadecimal ->
-                 16 in
-           let chars = String_nat_big_num.chars_of_num_with_basis b format.Boot_printf.use_upper n in
-           let bts = Bytes.create (List.length chars) in
-           List.iteri (Bytes.set bts) chars;
-           Bytes.to_string bts
-      end
-  | IV (_, ival_) ->
-(*      !^ "(symbolic ival)" *)
-      P.parens (pp_integer_value_base ival_)
+let pp_pretty_integer_value format (IV (_, ival_)) =
+  let rec aux = function
+    | IVconcurRead (_, sym) ->
+        !^ ("concur(" ^ Pp_symbol.to_string_pretty sym ^ ")")
+    | IVunspecified ->
+        !^ "UNSPEC"
+    | IVconcrete n ->
+        !^ begin
+             let b = match format.Boot_printf.basis with
+               | Some AilSyntax.Octal ->
+                   8
+               | Some AilSyntax.Decimal | None ->
+                   10
+               | Some AilSyntax.Hexadecimal ->
+                   16 in
+             let chars = String_nat_big_num.chars_of_num_with_basis b format.Boot_printf.use_upper n in
+             let bts = Bytes.create (List.length chars) in
+             List.iteri (Bytes.set bts) chars;
+             Bytes.to_string bts
+        end
+    | IVaddress alloc_id ->
+        P.at ^^ !^ (string_of_int alloc_id)
+    | IVfromptr (ty, ity, ptr_val_) ->
+        !^ "fromptr" ^^ P.parens (pp_pointer_value_base ptr_val_)
+    | IVop (iop, [ival_1; ival_2]) ->
+        P.parens (aux ival_1 ^^^ !^ (string_of_integer_operator iop) ^^^ aux ival_2)
+    | IVop _ ->
+        !^ "ERROR_IVop_illtyped"
+    | IVmax ity ->
+        !^ "ivmax" ^^ P.parens (Pp_ail.pp_integerType ity)
+    | IVmin ity ->
+        !^ "ivmin" ^^ P.parens (Pp_ail.pp_integerType ity)
+    | IVsizeof ty ->
+      !^ "ivsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+    | IValignof ty ->
+      !^ "ivalignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
+    | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+        !^ "IVoffsetof"
+    | IVpadding (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+        !^ "padding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
+    | IVptrdiff (ty, (ptr_val_1, sh1), (ptr_val_2, sh2)) ->
+      !^ "ptrdiff" ^^ P.parens (
+        Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^
+        P.parens (pp_pointer_value_base ptr_val_1 ^^ P.comma ^^^ pp_shift_path sh1) ^^ P.comma ^^^
+        P.parens (pp_pointer_value_base ptr_val_2 ^^ P.comma ^^^ pp_shift_path sh2)
+      )
+    | IVbyteof (ival_, mval) ->
+        !^ "IVbyteof" ^^ P.parens (aux ival_ ^^ P.comma ^^^ pp_mem_value mval)
+    | IVcomposite _ ->
+        !^ "IVcomposite(TODO)"
+    | IVbitwise (ity, BW_complement ival_) ->
+        !^ "compl" ^^ P.parens (aux ival_)
+    | IVbitwise (ity, BW_AND (ival_1, ival_2)) ->
+        P.parens (aux ival_1 ^^^ P.ampersand ^^^ aux ival_2)
+    | IVbitwise (ity, BW_OR (ival_1, ival_2)) ->
+        P.parens (aux ival_1 ^^^ P.bar ^^^ aux ival_2)
+    | IVbitwise (ity, BW_XOR (ival_1, ival_2)) ->
+        P.parens (aux ival_1 ^^^ P.caret ^^^ aux ival_2)
+  in
+  aux ival_
 
 let pp_pretty_mem_value format = function
   | MVinteger (_, ival) ->

@@ -149,11 +149,10 @@ let rec simplify_integer_value_base ival_ =
           | Atomic0 atom_ty ->
               simplify_integer_value_base (IVsizeof atom_ty)
           | Struct0 tag_sym ->
-              (* TODO: PADDINGS!! *)
-              let membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
+              let Tags.StructDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
               simplify_integer_value_base begin
-                List.fold_left (fun acc (_, ty) ->
-                  IVop (IntAdd, [lifted_self (IVsizeof ty); acc])
+                List.fold_left (fun acc (ident, ty) ->
+                  IVop (IntAdd, [lifted_self (IVsizeof ty); IVop (IntAdd, [IVpadding (tag_sym, ident);  acc])])
                 ) (IVconcrete (of_int 0)) membrs
               end
           | Union0 tag_sym ->
@@ -199,7 +198,9 @@ let rec simplify_integer_value_base ival_ =
         end
     | IVoffsetof (tag_sym, memb_ident) ->
         failwith "simplify_integer_value: IVoffsetof"
-    | IVptrdiff (ptrval1, ptrval2) ->
+    | IVpadding _ ->
+        Right ival_
+    | IVptrdiff (ty, ptrval1, ptrval2) ->
         (* TODO: check *)
         Right ival_
 
@@ -238,6 +239,13 @@ let rec simplify_integer_value_base ival_ =
               let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
               Right (IVbitwise (ity, BW_XOR (f x, f y)))
         end
+
+
+let lifted_simplify_integer_value_base ival_ =
+  Either.either_case
+    (fun n -> IVconcrete n)
+    (fun z -> z)
+    (simplify_integer_value_base ival_)
 
 
 let simplify_integer_value (IV (prov, ival_)) : (num, integer_value) either =

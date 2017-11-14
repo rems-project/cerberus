@@ -106,7 +106,7 @@ val lt_ptrval: pointer_value -> pointer_value -> memM bool
 val gt_ptrval: pointer_value -> pointer_value -> memM bool
 val le_ptrval: pointer_value -> pointer_value -> memM bool
 val ge_ptrval: pointer_value -> pointer_value -> memM bool
-val diff_ptrval: pointer_value -> pointer_value -> integer_value
+val diff_ptrval: Core_ctype.ctype -> pointer_value -> pointer_value -> memM integer_value
 
 val validForDeref_ptrval: pointer_value -> bool
 

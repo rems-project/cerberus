@@ -3,7 +3,8 @@ open import Pervasives Num_extra
 open import Utils
 open import AilTypes AilTypesAux
 
-open import Core_ctype Core_ctype_aux
+open import Core_ctype
+import Core_ctype_aux
 
 open import Mem_common Defacto_memory_types2
 
@@ -379,11 +380,11 @@ let rec simplify_integer_value_base ival_ =
           | Core_ctype.Atomic atom_ty ->
               simplify_integer_value_base (IVsizeof atom_ty)
           | Core_ctype.Struct tag_sym ->
-              (* TODO: PADDINGS!! *)
-              let Just membrs = Map.lookup tag_sym (Core_ctype_aux.tagDefs ()) in
+              let Core_ctype.StructDef membrs = Core_ctype_aux.get_membersDefs tag_sym in
               simplify_integer_value_base begin
-                List.foldl (fun acc (_, ty) ->
-                  IVop IntAdd [lifted_self (IVsizeof ty); acc]
+                List.foldl (fun acc (ident, ty) ->
+                  IVop IntAdd [ lifted_self (IVsizeof ty);
+                                IVop IntAdd [IVpadding tag_sym ident; acc] ]
                 ) (IVconcrete 0) membrs
               end
           | Core_ctype.Union tag_sym ->
@@ -427,9 +428,9 @@ let rec simplify_integer_value_base ival_ =
           | Core_ctype.Builtin str ->
               error "TODO simplify_integer_value: IValignof Builtin"
         end
-    | IVoffsetof tag_sym memb_ident ->
-        error "TODO: Defacto_memory_aux2.simplify_integer_value: IVoffsetof"
-    | IVptrdiff ptrval1 ptrval2 ->
+    | IVpadding _ _ ->
+        Right ival_
+    | IVptrdiff ty ptrval1 ptrval2 ->
         (* TODO: check *)
         Right ival_
 
@@ -473,12 +474,4 @@ let rec simplify_integer_value_base ival_ =
   end
 
 let rec lifted_simplify_integer_value_base ival_ =
-  either (fun n -> 
-
-if n = 122 then
-  error (stringFromInteger_value (IV Prov_none ival_)) else 
-
-
-
-
-IVconcrete n) (fun z -> z) (simplify_integer_value_base ival_)
+  either (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base ival_)

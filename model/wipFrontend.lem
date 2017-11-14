@@ -106,7 +106,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
               ND.return (Driver.finalize "wipFrontend" dr_st')
             )
           ) in
-        match runND_proxy driver_action dr_st with
+        let () = Core_ctype_aux.set_tagDefs (Map.empty) in (* TODO: maybe use Cabs_to_ail_effect.get_sigma_sofar *)
+        let execs = runND_proxy driver_action dr_st in
+        let () = Core_ctype_aux.reset_tagDefs () in
+        match execs with
           | [(ND.Active (_, (_, _, cval), _), _, _ )] ->
               Eff.return cval
           | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->

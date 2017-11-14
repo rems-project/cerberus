@@ -6,39 +6,6 @@ import Undefined
 open import Nondeterminism2
 
 
-type load_error =
-  | LoadNullPtr
-  | LoadDeadPtr
-
-instance (Show load_error)
-  let show err = match err with
-    | LoadNullPtr ->
-        "LoadNullPtr"
-    |LoadDeadPtr ->
-        "LoadDeadPtr"
-  end
-end
-
-
-type store_error =
-  | StoreNullPtr
-  | StoreFunctionPtr
-  | StoreDeadPtr
-  | StoreOutOfBoundPtr
-
-instance (Show store_error)
-  let show err = match err with
-    | StoreNullPtr ->
-        "StoreNullPtr"
-    | StoreFunctionPtr ->
-        "StoreFunctionPtr"
-    |StoreDeadPtr ->
-        "StoreDeadPtr"
-    | StoreOutOfBoundPtr ->
-        "StoreOutOfBoundPtr"
-  end
-end
-
 
 type access_kind =
   | LoadAccess
@@ -47,15 +14,27 @@ type access_kind =
 type access_error =
   | NullPtr
   | FunctionPtr
+  | DeadPtr
+  | OutOfBoundPtr
+
+
+let stringFromAccess_error = function
+  | NullPtr ->
+      "NullPtr"
+  | FunctionPtr ->
+      "FunctionPtr"
+  | DeadPtr ->
+      "DeadPtr"
+  | OutOfBoundPtr ->
+      "OutOfBoundPtr"
+end
 
 type mem_error =
   | MerrUnitialised of string (* mem_read_request *)
   | MerrInternal of string
   | MerrOther of string
   
-  | MerrLoad of load_error
-  | MerrStore of store_error
-  
+  | MerrPtrdiff
   | MerrAccess of access_kind * access_error
   
   | MerrWIP of string
@@ -71,22 +50,20 @@ instance (Show mem_error)
     | MerrWIP str ->
         "Memory WIP: " ^ str
 
-    | MerrLoad err ->
-        "MerrLoad " ^ show err
-    | MerrStore err ->
-        "MerrStore " ^ show err
+    | MerrAccess LoadAccess err ->
+        "MerrAccess Load " ^ stringFromAccess_error err
+    | MerrAccess StoreAccess err ->
+        "MerrAccess Store " ^ stringFromAccess_error err
   end
 end
 
 
 let undefinedFromMem_error = function
-  | MerrLoad LoadNullPtr ->
+  | MerrPtrdiff ->
+      Just [Undefined.UB048_disjoint_array_pointers_substraction]
+  | MerrAccess _ NullPtr ->
       Just [Undefined.UB019_lvalue_not_an_object]
-  | MerrLoad LoadDeadPtr ->
-      Just [Undefined.UB010_pointer_to_dead_object]
-  | MerrStore StoreNullPtr ->
-      Just [Undefined.UB019_lvalue_not_an_object]
-  | MerrStore StoreDeadPtr ->
+  | MerrAccess _ DeadPtr ->
       Just [Undefined.UB010_pointer_to_dead_object]
 
   | _ ->

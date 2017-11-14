@@ -90,8 +90,14 @@ and integer_value_base =
   | IVmax of AilTypes.integerType
   | IVsizeof of ctype
   | IValignof of ctype
+(*
   | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
-  | IVptrdiff of (pointer_value_base * list shift_path_element) * (pointer_value_base * list shift_path_element)
+*)
+    (* NOTE: this is a number bytes padding trailing a struct/union member *)
+  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+  | IVpadding of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+  
+  | IVptrdiff of ctype * (pointer_value_base * list shift_path_element) * (pointer_value_base * list shift_path_element)
   (* TODO: tentative *)
   | IVbyteof of integer_value_base * impl_mem_value (* the integer value is the position (indexed from zero) *)
   | IVcomposite of list integer_value_base (* a list of byte values reassembled *)
@@ -119,6 +125,8 @@ and impl_mem_value =
   | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
   | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
   
+  | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value
+  
   | MVcomposite of
       list ((* byte offset *) integer_value_base * (* value of the written byte *) impl_integer_value) *
       (* value written over *) impl_mem_value
@@ -129,7 +137,7 @@ and impl_mem_value =
                                                                uchar array (or the generalisation to other types of that) *)
   | MVbytes of byte_mask * mem_value * mem_value *)
 
-type shift_path = list shift_path_element
+and shift_path = list shift_path_element
 
 
 (*

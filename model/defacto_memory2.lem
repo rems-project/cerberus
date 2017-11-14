@@ -6,7 +6,8 @@ open import Utils
 
 import Symbolic Cthread Cabs AilTypes Dlist Loc Float
 
-open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype Core_ctype_aux
+open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype
+import Core_ctype_aux
 
 open import {hol} `utilTheory` `tagsTheory`
 
@@ -801,9 +802,9 @@ and explicitAllocationIdFromInteger_value_aux  ival_ =
         return Nothing
     | IValignof _->
         return Nothing
-    | IVoffsetof _ _->
+    | IVpadding _ _->
         return Nothing
-    | IVptrdiff _ _->
+    | IVptrdiff _ _ _->
         return Nothing
     | IVbyteof _ _->
         return Nothing
@@ -822,6 +823,36 @@ let mk_op_ival_ iop ival_1 ival_2 =
 
 
 
+let mk_offsetof_ival_ acc tag_sym memb_ident =
+  match Core_ctype_aux.get_membersDefs tag_sym with
+    | Core_ctype.StructDef xs ->
+        (* we take the prefix the members before the one we want to offset to *)
+        let prefix_xs =
+          List.takeWhile (fun (ident, _) -> memb_ident <> ident) xs in
+        (* then we sum their sizeof and trailing paddings *)
+        List.foldl (fun acc' (ident, ty) ->
+          if ident = memb_ident then
+            (* TODO: this should be dead code since we fold on the prefix *)
+            acc'
+          else
+            mk_op_ival_ IntAdd (IVsizeof ty)
+              (mk_op_ival_ IntAdd (IVpadding tag_sym ident) acc')
+        ) acc (List.reverse prefix_xs)
+    | Core_ctype.UnionDef _ ->
+        (* TODO: check, but if we have a struct this should be no offset to do *)
+        acc
+  end
+
+
+
+let impl_offsetof_ival tag_sym memb_ident =
+(*  IV Prov_none (lifted_simplify_integer_value_base (IVoffsetof tag_sym membr_ident)) *)
+  IV Prov_none (mk_offsetof_ival_ (IVconcrete 0) tag_sym memb_ident)
+
+
+
+
+
 val integer_value_baseFromShift_path: shift_path -> integer_value_base
 let integer_value_baseFromShift_path sh =
   List.foldl (fun acc spe ->
@@ -829,28 +860,10 @@ let integer_value_baseFromShift_path sh =
       | SPE_array ty ival_ ->
           mk_op_ival_ IntMul (IVsizeof ty) ival_
       | SPE_member tag_sym memb_ident ->
-          IVoffsetof tag_sym memb_ident
+          mk_offsetof_ival_ acc tag_sym memb_ident
     end in
     mk_op_ival_ IntAdd spe_ival_ acc
   ) (IVconcrete 0) sh
-
-
-
-
-
-
-(*
-  | IVconcrete of integer (* of Symbolic.symbolic *)
-  | IVfromptr of ctype * pointer_value_base (* the first parameter is the referenced type of the pointer value *)
-  | IVop of integer_operator * list integer_value_base
-  | IVsizeof of ctype
-  | IVoffsetof of Symbol.t * Cabs.cabs_identifier
-  | IVptrdiff of pointer_value_base * pointer_value_base
-*)
-
-
-
-
 
 
 
@@ -944,8 +957,11 @@ let rec mkUnspec ty =
     | (Atomic _ as ty) ->
         MVunspecified ty
 *)
-    | Struct tag ->
-        MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec ty)) (get_membersDefs tag)
+    | Struct tag_sym ->
+        let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+        MVstruct tag_sym (
+          List.map (fun (ident, ty) -> (ident, mkUnspec ty)) xs
+        )
 (*
     | (Union tag as ty) ->
         let () = Debug.warn "mkUnspec, Union ==> this is wrong" in
@@ -1238,24 +1254,6 @@ let fetch_first_write_event pred =
 
 
 
-(*
-val try_to_dereference_aux: provenance -> shift_path -> pointer_value_base -> memM (maybe mem_value)
-let try_to_dereference_aux prov sh = function
-  | PVnull _ ->
-      error "TODO: raise an undef (I guess)"
-  | PVfunction ->
-      error "TODO: raise an undef (I guess)"
-  | PVbase alloc_id _ ->
-      
-  | PVfromint _ ->
-      error "TODO: (try_to_dereference_aux) ?"
-end
-
-
-val try_to_dereference: pointer_value -> memM (maybe mem_value)
-let try_to_dereference (PV prov ptr_val_ sh) =
-*)
-
 
 
 val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_mem_value
@@ -1359,8 +1357,9 @@ let impl_load ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_
   print_debugM 5 (fun () -> "LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptrval) >> (* DEBUG *)
   
   match ptrval_ with
-    (* null pointers obviously can't be used for stores. *)
-    | PVnull _ -> fail (MerrLoad LoadNullPtr)
+    (* null and function pointers obviously can't be used for loads. *)
+    | PVnull _     -> fail (MerrAccess LoadAccess NullPtr)
+    | PVfunction _ -> fail (MerrAccess LoadAccess FunctionPtr)
     
     | _ ->
         explicitAllocationIdFromPointer_value_aux ptrval_ >>= function
@@ -1368,7 +1367,7 @@ let impl_load ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_
 (*        addToLog alloc_id >> *)
               get >>= fun mem_st ->
               if Set.member alloc_id mem_st.dead_allocations then
-                fail (MerrLoad LoadDeadPtr)
+                fail (MerrAccess LoadAccess DeadPtr)
               else match Map.lookup alloc_id mem_st.allocations with
                 | Just (Storage_static _ (Just mval)) ->
                     let mval' = apply_shift_path ty sh mval in
@@ -1449,7 +1448,13 @@ let internal_shift_ptrval ptr_val spe : impl_pointer_value =
               (* TODO: there should a be check for when we go out of an object *)
               PV prov ptr_val_ (insert_element_to_path sh spe)
           | Nothing ->
-              error "TODO internal_shift_ptrval: shift 2"
+              (* TODO: here we are probably shifting a NULL pointer, so in ISO this is "unclear" *)
+              (* TODO: add a warning or error in ISO mode *)
+              PV prov ptr_val_ (insert_element_to_path sh spe)
+(*
+              error ("TODO internal_shift_ptrval: shift 2 ==>" ^
+                     stringFromPointer_value ptr_val)
+*)
         end
   end
 
@@ -1483,11 +1488,6 @@ let impl_min_ival ity =
 
 let impl_op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
   IV (combine_prov prov1 prov2) (mk_op_ival_ iop ival_1 ival_2)
-
-
-let impl_offsetof_ival tag_sym membr_ident =
-  IV Prov_none (lifted_simplify_integer_value_base (IVoffsetof tag_sym membr_ident))
-
 
 let rec impl_sizeof_ival_aux ty =
   match ty with
@@ -1695,7 +1695,11 @@ let rec isBeginningShift sh =
             (isBeginningShift sh')
             (return false)
     | (SPE_member tag_sym memb_ident) :: sh' ->
-        match get_membersDefs tag_sym with
+        let xs = match Core_ctype_aux.get_membersDefs tag_sym with
+          | Core_ctype.StructDef z -> z
+          | Core_ctype.UnionDef  z -> z
+        end in
+        match xs with
           | [] ->
               error "Mem.isBeginningShift, get_membersDefs returning an empty list"
           | (memb_ident', _) :: _ ->
@@ -1954,30 +1958,22 @@ let impl_ge_ptrval ptrval1 ptrval2 =
 
 
 
-let impl_diff_ptrval (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) : impl_integer_value =
-  (* The result of subtraction of two pointer values is an integer value with
-     empty provenance, irrespective of the operand provenances *)
-  IV Prov_none (IVptrdiff (ptr_val_1, sh1) (ptr_val_2, sh2))
+(* STD §6.5.6#9 *)
+let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
+  match (ptrval1, ptrval2) with
+    | (PV (Prov_some alloc_id1) ptr_val_1 sh1, PV (Prov_some alloc_id2) ptr_val_2 sh2) ->
+        if alloc_id1 = alloc_id2 then
+          (* The result of subtraction of two pointer values is an integer value with
+             empty provenance, irrespective of the operand provenances *)
+          return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2)))
+        else
 (*
-  (* STD says "When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object" *)
-  (* TODO: too permissive for now *)
-  let prov = match (prov1, prov2) with
-    | (Prov_none, Prov_none) ->
-        Prov_none
-    | (Prov_some _, Prov_none) ->
-        prov1
-    | (Prov_none, Prov_some _) ->
-        prov2
-    | (Prov_some ids1, Prov_some ids2) ->
-        (* NOTE: note30 only seem to be thinking about the case where both
-           pointers have single provenance, so need to see if this
-           generalisation is what we want. *)
-        Prov_some (Set.difference (ids1 union ids2) (Set.intersection ids1 ids2))
-    | _ ->
-        error "WIP: diff_ptrval, wildcard/device provenance"
-  end in
-  IV prov (IVptrdiff (ptr_val_1, sh1) (ptr_val_2, sh2))
+          ifM "diff_ptrval"
 *)
+          fail MerrPtrdiff
+    | _ ->
+        fail MerrPtrdiff
+  end
 
 
 
@@ -2228,6 +2224,8 @@ let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
         Just true
     
     | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        error "WIP"
+(*
         if n <= 0 then
           match get_membersDefs tag_sym with
             | (ident', _)::_ ->
@@ -2241,6 +2239,7 @@ let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
           end
         else
           Nothing
+*)
     
     | (IVmin ity, IVconcrete n) ->
         let (is_exact, min, _) = minimal_range ity in
@@ -2300,7 +2299,7 @@ let rec has_concurRead ival_ =
         false
     | IVoffsetof _ _ ->
         false
-    | IVptrdiff _ _ ->
+    | IVptrdiff _ _ _ ->
         false
     | IVbyteof _ _ ->
         false
@@ -2570,12 +2569,12 @@ let get_allocation_size alloc_id =
 
 
 (* Decide whether a given pointer value can be use to perform a store *)
-val can_store: impl_pointer_value -> impl_memM (either store_error allocation_id)
-let can_store (PV prov ptr_val_ sh as ptr_val) =
+val can_store: Loc.t -> impl_pointer_value -> impl_memM (either access_error allocation_id)
+let can_store loc (PV prov ptr_val_ sh as ptr_val) =
   match ptr_val_ with
     (* null and function pointers obviously can't be used for stores. *)
-    | PVnull _     -> return (Left StoreNullPtr)
-    | PVfunction _ -> return (Left StoreFunctionPtr)
+    | PVnull _     -> return (Left NullPtr)
+    | PVfunction _ -> return (Left FunctionPtr)
     
     (* by WF-invariants, we have a pointer to an object *)
     | _ ->
@@ -2587,7 +2586,7 @@ let can_store (PV prov ptr_val_ sh as ptr_val) =
                       "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptr_val
                     ) in
                     (* can't store with a pointer to an object whose lifetime ended. *)
-                    return (Left StoreDeadPtr)
+                    return (Left DeadPtr)
                 | false ->
                     (* add the constraint that the ptr is inside the object *)
                     get_allocation_size alloc_id >>= fun size_ival_ ->
@@ -2598,11 +2597,11 @@ let () = Debug.print_debug 1 [] (fun () ->
 ) in
 
                     let ptr_ival_ = real_address_expression_of_pointer ptr_val in
-                    ifM "can_store"
+                    ifM ("can_store[" ^ Loc.stringFromLocation loc ^ "]")
                       (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id) ptr_ival_
                                ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id; size_ival_]) ])
                         (return (Right alloc_id))
-                        (return (Left StoreOutOfBoundPtr))
+                        (return (Left OutOfBoundPtr))
               end
           
           (* we couldn't find an explicit allocation event *)
@@ -2670,7 +2669,9 @@ val append_composite:
 val     easy_update_mem_value_aux: Loc.t -> bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
 let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval =
   let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
-    "ENTERING: easy_update_mem_value_aux [current_mval= " ^ stringFromMem_value current_mval ^ "]"
+    "ENTERING: easy_update_mem_value_aux\n" ^
+    "current_mval ==> " ^ stringFromMem_value current_mval ^ "\n" ^
+    "sh ==> " ^ stringFromShift_path sh
   ) in
   let easy_update_mem_value_aux = easy_update_mem_value_aux loc is_strong in
   match (current_mval, sh) with
@@ -2687,8 +2688,10 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
                 error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
           | Nothing ->
-              (* TODO: this is going to be complicated, probably require new variants in mem_value *)
+              MVdelayed [(sh, write_mval)] current_mval
+(*
               error "WIP: easy_update_mem_value_aux ==> symbolic SPE_array"
+*)
         end
     | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
         if tag_sym <> tag_sym_ then
@@ -2700,12 +2703,15 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         if is_strong then
           match sh with
             | SPE_member tag_sym memb_ident :: sh' ->
-                MVstruct tag_sym $ List.map (fun (ident, ty) ->
-                  (ident, if ident = memb_ident then
-                    easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty)
-                  else
-                    mkUnspec ty)
-                ) (get_membersDefs tag_sym)
+                let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+                MVstruct tag_sym (
+                  List.map (fun (ident, ty) ->
+                    (ident, if ident = memb_ident then
+                      easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty)
+                    else
+                      mkUnspec ty)
+                  ) xs
+                )
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
@@ -2797,7 +2803,7 @@ let impl_store loc lvalue_ty ptr_val mval =
     "STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
     stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval
   ) >>
-  can_store ptr_val >>= function
+  can_store loc ptr_val >>= function
     | Right alloc_id ->
 (*        addToLog alloc_id >> *)
         register_write_event alloc_id (WriteEvent loc lvalue_ty ptr_val mval) >>
@@ -2805,10 +2811,10 @@ let impl_store loc lvalue_ty ptr_val mval =
         return alloc_id
     | Left err ->
         print_debugM 5 (fun () ->
-          "STORE ERROR (" ^ Loc.stringFromLocation loc ^ ") ==> [" ^ show err ^
+          "STORE ERROR (" ^ Loc.stringFromLocation loc ^ ") ==> [" ^ show (MerrAccess StoreAccess err) ^
           "] with pointer: " ^ stringFromPointer_value ptr_val
         ) >>
-        fail (MerrStore err)
+        fail (MerrAccess StoreAccess err)
   end
 
 
