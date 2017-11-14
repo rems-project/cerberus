@@ -1256,7 +1256,7 @@ let fetch_first_write_event pred =
 
 
 
-val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_mem_value
+val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_memM impl_mem_value
 let apply_shift_path_element result_ty spe mval =
 (* TODO: use result_ty *)
   match (spe, mval) with
@@ -1267,7 +1267,7 @@ let apply_shift_path_element result_ty spe mval =
               if n < 0 || List.length mvals <= n then
                 error "Mem.apply_shift_path_element: out of bound array"
               else
-                fromJust "Defacto_memory.apply_shift_path_element, SPE_array vs MVarray" $ List.index mvals n
+                return (fromJust "Defacto_memory.apply_shift_path_element, SPE_array vs MVarray" $ List.index mvals n)
           | Nothing ->
               error ("Mem.apply_shift_path_element: symbolic array index ==> " ^
                      stringFromInteger_value (IV Prov_none ival_))
@@ -1277,20 +1277,22 @@ let apply_shift_path_element result_ty spe mval =
        if result_ty <> Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) then
          error ("WIP ==> result_ty <> not unsigned char, SPE_array, MVpointer ===> result_ty = " ^ stringFromCtype result_ty)
        else
-         MVinteger (AilTypes.Unsigned AilTypes.Ichar (* TODO: hack, hack *)) (IV Prov_none (IVbyteof ival_ mval))
+         return (MVinteger (AilTypes.Unsigned AilTypes.Ichar (* TODO: hack, hack *)) (IV Prov_none (IVbyteof ival_ mval)))
    
    | (SPE_member tag_sym memb_ident, MVstruct tag_sym_ xs) ->
        if tag_sym <> tag_sym_ then
          error "Mem.apply_shift_path_element, SPE_member vs MVstruct, TODO(msg) the tags didn't match"
        else
-         fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident xs)
+         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident xs))
    
    
    | (SPE_array elem_ty ival_1, MVinteger ity ival_2) ->
        error ("result_ty: " ^ stringFromCtype result_ty ^
               ", spe: " ^ stringFromShift_path [spe] ^
               ", ity: " ^ stringFromCtype (Basic (AilTypes.Integer ity)))
-
+   
+   | (SPE_array elem_ty offset_ival_, MVdelayed xs mval') ->
+       error "HELLO KKK"
 
    | (SPE_array _ _, _) ->
        error ("Mem.apply_shift_path_element, SPE_array ==> mval: " ^ stringFromMem_value mval ^ ", result_ty: " ^ stringFromCtype result_ty)
@@ -1298,8 +1300,10 @@ let apply_shift_path_element result_ty spe mval =
        error ("Mem.apply_shift_path_element, SPE_member ==> " ^ stringFromMem_value mval)
   end
 
+
 let apply_shift_path ty sh mval =
-  List.foldl (fun acc spe ->
+  (* foldl *)
+  foldM (fun acc spe ->
     apply_shift_path_element ty spe acc
   ) mval sh
 
@@ -1370,7 +1374,7 @@ let impl_load ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_
                 fail (MerrAccess LoadAccess DeadPtr)
               else match Map.lookup alloc_id mem_st.allocations with
                 | Just (Storage_static _ (Just mval)) ->
-                    let mval' = apply_shift_path ty sh mval in
+                    apply_shift_path ty sh mval >>= fun mval' ->
                     print_debugM 5 (fun () -> "==> found value (static): " ^ stringFromMem_value mval') >> (* DEBUG *)
                     return (alloc_id, mval')
                 | Just (Storage_static _ Nothing) ->
