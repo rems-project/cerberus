@@ -68,7 +68,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
           prerr_endline "EMPTY CONSTRAINTS"
       | _ ->
           prerr_endline "BEGIN CONSTRAINTS";
-(*          prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs))); *)
+          prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
           prerr_endline "END CONSTRAINTS"
     end;
 

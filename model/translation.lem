@@ -620,7 +620,7 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
 
 
 
-and translate_expression stdlib tagDefs a_expr : E.elabM (C.expr unit) =
+and translate_expression stdlib (tagDefs : Core.core_tag_definitions) a_expr : E.elabM (C.expr unit) =
   let self = translate_expression stdlib tagDefs in
   let is_lvalue = match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
@@ -1376,6 +1376,12 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj1_sym, obj1_sym_pat, obj1_sym_pe)    ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj2_sym, obj2_sym_pat, obj2_sym_pe)    ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (memop_sym, memop_sym_pat, memop_sym_pe) ->
+          
+          (* NOTE: by Ail typing we can just use the referenced type of either operand *)
+          let diff_ty_pe = match (ctype_of e1) with
+            | Aty.Pointer _ ref_ty1 ->
+                Caux.mk_ail_ctype_pe ref_ty1
+          end in
           E.return $
             C.Expr [C.EA_std "§6.5.6"] (
               C.Ewseq (Caux.mk_tuple_pat [e1_sym_pat; e2_sym_pat]) (Caux.mk_unseq [core_e1; core_e2]) (
@@ -1383,7 +1389,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                   [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
                                         ; Caux.mk_specified_pat obj2_sym_pat ]
                     , (* Both operand are specified *)
-                      Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop Mem.Ptrdiff [obj1_sym_pe; obj2_sym_pe])) (
+                      Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop Mem.Ptrdiff [diff_ty_pe; obj1_sym_pe; obj2_sym_pe])) (
                         Caux.mk_pure_e (Caux.mk_specified_pe memop_sym_pe)
                       ) )
 (*
@@ -2078,7 +2084,8 @@ TODO: #9
                 illTypedAil loc "AilEoffsetof"
           end in
           E.return $
-            Caux.mk_pure_e (C.Pexpr () (C.PEval (C.Vobject (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident)))))
+            Caux.mk_pure_e (C.Pexpr () (C.PEval (C.Vloaded
+              (C.LVspecified (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident))))))
       
       | A.AilEgeneric _ _ ->
           error "WIP: Translation.translate_expression, AilEgeneric"
@@ -2115,7 +2122,8 @@ TODO: #9
              mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          let ident_tys = fromJust "Translation.translate_expression, AilEstruct 1" $ Map.lookup tag_sym tagDefs in
+          let Cty.StructDef ident_tys =
+            fromJust "Translation.translate_expression, AilEstruct 1" (Map.lookup tag_sym tagDefs) in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -2165,7 +2173,7 @@ TODO: #9
           match Map.lookup tag_sym tagDefs with
             | Nothing ->
                 fail
-            | Just ident_tys ->
+            | Just (Cty.UnionDef ident_tys) ->
                 match List.lookup memb_ident ident_tys with
                   | Nothing ->
                       fail
@@ -3152,10 +3160,10 @@ let translate_tag_definitions ctx =
   Map.fromList $ List.map (function
     | (sym, A.StructDef tagDef) ->
         let () = Debug.warn [] (fun () -> "Translate_tag_definitions is removing the qualifiers!") in
-        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef)
+        (sym, Cty.StructDef (List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef))
     | (sym, A.UnionDef tagDef) ->
         let () = Debug.warn [] (fun () -> "Translate_tag_definitions is removing the qualifiers!") in
-        (sym, List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef)
+        (sym, Cty.UnionDef (List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef))
   end) ctx
 
 val translate_program:
@@ -3163,6 +3171,8 @@ val translate_program:
   E.elabM (C.core_tag_definitions * list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 let translate_program stdlib (startup_sym_opt, sigm) =
   let core_tagDefs = translate_tag_definitions sigm.A.tag_definitions in
+  let () = Core_ctype_aux.set_tagDefs core_tagDefs in
+  
   E.foldlM (fun (gacc, facc) (sym, decl) ->
     (* for each Ail declaration *)
     match decl with

@@ -680,9 +680,9 @@ let rec driver with_concurrency =
       driver with_concurrency
   | Core_run.Step_memop_request memop cvals tid mk_th_st ->
       match (memop, cvals) with
-        | (Mem_common.Ptrdiff, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
-            (* NOTE: this is pure *)
-            ND.return (mk_th_st (Core.Vobject (Core.OVinteger (Mem.diff_ptrval ptr_val1 ptr_val2))))
+        | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
         | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
             liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
@@ -1065,8 +1065,10 @@ val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file Core_run.core
            driverM (string * (bool * Cmm_op.symState * Core.value) * (nat * nat))
 let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
   (* Setting the read-only tag definitions (used by the memory model) *)
+(*
+TODO: this should be removable, since we already set it in Translation
   let () = Core_ctype_aux.set_tagDefs file.Core.tagDefs in
-  
+*)
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
   driver_globals with_concurrency sym_supply file >>= fun tid0 (*, post_globals_dr_st) *) ->

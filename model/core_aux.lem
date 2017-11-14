@@ -484,14 +484,14 @@ let rec zeros_aux tagDefs ty =
         zeros_aux tagDefs ty'
     | Core_ctype.Struct tag ->
         match Map.lookup tag tagDefs with
-          | Just ident_tys ->
+          | Just (Core_ctype.StructDef ident_tys) ->
               Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs ty)) ident_tys)
           | _ ->
               error "Core_aux.zeros_aux, not StructDef"
         end
     | Core_ctype.Union tag ->
         match Map.lookup tag tagDefs with
-          | Just ((ident, ty')::_) ->
+          | Just (Core_ctype.UnionDef ((ident, ty')::_)) ->
               Mem.union_mval tag ident (zeros_aux tagDefs ty')
           | _ ->
               error "Core_aux.zeros_aux, not UnionDef"

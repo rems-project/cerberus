@@ -445,7 +445,7 @@ val     step_eval_pexpr: Loc.t -> maybe Mem.mem_state -> Core.file core_run_anno
 let rec step_eval_pexpr loc mem_st_opt file hasConstrained pexpr =
   match pexpr with Pexpr () pexpr_  ->
   let strip (Pexpr _ pe_) = pe_ in
-  let self pe = step_eval_pexpr loc mem_st_opt file hasConstrained 
+  let self pe = step_eval_pexpr loc mem_st_opt file (*hasConstrained *) false
 
       pe
 (*((* TODO: is that necessary? *) (let () = Debug.print_debug 1 [] (fun () -> "BB") in pull_constrained) 0 pe)*) in
@@ -457,88 +457,19 @@ let rec step_eval_pexpr loc mem_st_opt file hasConstrained pexpr =
           let (cs, pe') = List.unzip xs in
           match Caux.valueFromPexprs pe' with
             | Just cvals ->
+(*
+                EU.return $ PEconstrained (List.zip cs (List.map Caux.mk_value_pe cvals))
+*)
                 error ("EU.return $ PEval (Vconstrained (List.zip cs cvals))\n cvals= " ^
                        Pp.stringFromCore_value (Vtuple cvals))
             | Nothing ->
                 EU.return $ PEconstrained (List.zip cs pe')
           end
         else
-          error "step_eval_pexpr, hasConstrained = False"
-
-(*
-BEGIN NEW pull_constrained
-    (* pulling the constrained up *)
-    | PEconstrained xs ->
-        EU.mapM (fun (cs, pe) ->
-          self pe >>= fun pe' ->
-          EU.return (cs, pe')
-        ) xs >>= fun xs' ->
-        let (cs, pe') = List.unzip xs' in
-        match Caux.valueFromPexprs pe' with
-          | Just cvals ->
-              EU.return $ PEval (Vconstrained (List.zip cs cvals))
-          | Nothing ->
-              EU.return $ PEconstrained (List.zip cs pe')
-        end
-    | PEnot (Pexpr _ (PEconstrained xs)) ->
-        EU.return $ PEconstrained (
-          List.map (fun (cs, pe) ->
-            (cs, Caux.mk_not_pe pe)
-          ) xs
-        )
-    
-    | PEop binop (Pexpr _ (PEconstrained xs1)) (Pexpr _ (PEconstrained xs2)) ->
-        EU.return $
-          PEconstrained (
-            List.map (fun ((cs1, pe1), (cs2, pe2)) ->
-              (ND.concat cs1 cs2, Caux.mk_op_pe binop pe1 pe2)
-            ) (Utils.product_list xs1 xs2)
-          )
-    | PEop binop (Pexpr _ (PEconstrained xs)) pe2 ->
-        EU.return $
-          PEconstrained (
-            List.map (fun (cs, pe) ->
-              (cs, Caux.mk_op_pe binop pe pe2)
-            ) xs
-          )
-    | PEop binop  pe1 (Pexpr _ (PEconstrained xs)) ->
-        EU.return $
-          PEconstrained (
-            List.map (fun (cs, pe) ->
-              (cs, Caux.mk_op_pe binop pe1 pe)
-            ) xs
-          )
-    
-    | PEif (Pexpr _ (PEconstrained xs)) pe2 pe3 ->
-        let () = Debug.print_debug 1 [] (fun () ->
-          "Core_eval ==> PEif (PEconstrained) ==> " ^ Pp.stringFromCore_pexpr pexpr
-        ) in
-        EU.return $
-          PEconstrained (
-            List.map (fun (cs, pe) ->
-              (cs, Caux.mk_if_pe pe pe2 pe3)
-            ) xs
-          )
-    
-    | PEcase (Pexpr _ (PEconstrained xs)) pat_pes ->
-              EU.return $
-                PEconstrained (
-                  List.map (fun (cs, pe) ->
-                    (cs, Caux.mk_case_pe pe pat_pes)
-                  ) xs
-                )
-
-END NEW pull_constrained
-*)
-
-
-
-
+          error ("step_eval_pexpr, hasConstrained = False  ==>  " ^
+                 Pp.stringFromCore_pexpr pexpr)
     | PEsym sym ->
-(*      if inside_if then
-          EU.return pexpr
-        else *)
-          EU.fail $ Unresolved_symbol sym
+        EU.fail $ Unresolved_symbol sym
     | PEimpl iCst ->
         match Map.lookup iCst file.impl with
           | Just (Def _ pe) ->
@@ -580,26 +511,6 @@ END NEW pull_constrained
                 | Just lvals ->
                     EU.return (PEval (Vobject (OVarray lvals)))
               end
-(*
-              match List.foldr (fun cval acc ->
-                match (cval, acc) with
-                  | (_, Left _) ->
-                      acc
-                  | (Vunspecified ty, _) ->
-                      Left ty
-                  | (Vobject oval, Right ovals) ->
-                      Right (oval :: ovals)
-                end
-              ) (Right []) cvals with
-                | Left ty ->
-                    (* HUM: this is ill-typed!!! *)
-                    let () = Debug.warn "(check with P) turning any array with at least one unspec element into an unspec" in
-                    EU.return $ PEval (Vunspecified (Core_ctype.Array ty (Just (integerFromNat $ List.length cvals))))
-                | Right ovals ->
-                    EU.return $ PEval (Vobject (OVarray ovals))
-                    
-              end
-*)
           | (Civmax, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
                 | (Core_ctype.Basic (AilTypes.Integer ity)) ->
@@ -769,9 +680,9 @@ END NEW pull_constrained
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
-                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident (
-                  fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs
-                )) in
+                let Core_ctype.StructDef membrs =
+                  fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs in
+                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
                 let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
                 (memb_ident, mval)
               ) (List.zip idents cvals) in
@@ -783,9 +694,9 @@ END NEW pull_constrained
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-                let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident (
-                  fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs
-                )) in
+                let Core_ctype.UnionDef membrs =
+                  fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs in
+                let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
               let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
               EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
           | Nothing ->
@@ -799,7 +710,13 @@ END NEW pull_constrained
                  as that could lead to non-termination. *)
               Exception.bind (call_function file nm cvals) (fun (Pexpr _ pe_) ->
                 (* TODO: maybe annyoing to have stripping if we want a proof of type preservation? *)
-                EU.return pe_)
+                EU.return pe_) >>= fun pe_' ->
+              (* TODO: check KKK *)
+              let (Pexpr _ pe_'') = pull_constrained 0 (Pexpr () pe_') in
+              let () = Debug.print_debug 0 [] (fun () ->
+                "PEcall ===> " ^ Pp.stringFromCore_pexpr (Pexpr () pe_'')
+              ) in
+              EU.return pe_''
 (* TODO OLD CONCUR
               if List.all Core_aux.is_concrete cvals then
                 (* We do not immediately call eval on the result of call_function,
@@ -940,7 +857,8 @@ let eval_pexpr loc mem_st_opt file pe =
 val     eval_pexpr_aux2: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
                          Core.pexpr ->
                          EU.t (either Core.pexpr Core.value) core_run_error
-let rec eval_pexpr_aux2 loc mem_st_opt file pe =
+let rec eval_pexpr_aux2_aux loc mem_st_opt file pe =
+(*
   step_eval_pexpr loc mem_st_opt file true (let () = Debug.print_debug 1 [] (fun () -> "AA") in pull_constrained 0 pe) >>= function
     | (Pexpr () (PEconstrained _) as pe') ->
         EU.return (Left pe')
@@ -952,17 +870,26 @@ let rec eval_pexpr_aux2 loc mem_st_opt file pe =
               eval_pexpr_aux2 loc mem_st_opt file pe'
         end
   end
+*)
+  step_eval_pexpr loc mem_st_opt file false pe >>= function
+    | (Pexpr () (PEconstrained _) as pe') ->
+        EU.return (Left pe')
+    | pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just cval ->
+              EU.return (Right cval)
+          | Nothing ->
+              eval_pexpr_aux2_aux loc mem_st_opt file pe'
+        end
+  end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+let eval_pexpr_aux2 loc mem_st_opt file pe =
+  let () = Debug.print_debug 0 [] (fun () ->
+    "CALLING eval_pexpr2_aux2\npe= " ^ Pp.stringFromCore_pexpr pe
+  ) in
+  let pe' = pull_constrained 0 pe in
+  let () = Debug.print_debug 0 [] (fun () ->
+    "pe'= " ^ Pp.stringFromCore_pexpr pe'
+  ) in
+  eval_pexpr_aux2_aux loc mem_st_opt file pe'

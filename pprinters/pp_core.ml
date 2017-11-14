@@ -651,14 +651,17 @@ let symbol_compare =
 let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
   
-  P.separate_map (P.break 1 ^^ P.break 1) (fun (tag, ident_tys) ->
-    pp_keyword "struct" ^^^ pp_symbol tag ^^^ P.braces (P.break 1 ^^
+  P.separate_map (P.break 1 ^^ P.break 1) (fun (tag, tagDef) ->
+    let (str, xs) = begin match tagDef with
+      | Tags.StructDef z -> ("struct", z)
+      | Tags.UnionDef  z -> ("union", z)
+    end in
+    pp_keyword str ^^^ pp_symbol tag ^^^ P.braces (P.break 1 ^^
       P.nest 2 (
-        P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> Pp_core_ctype.pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) ident_tys
+        P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> Pp_core_ctype.pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) xs
       ) ^^ P.break 1
     ) ^^ P.semi
   ) tagDefs
-
 
 
 let pp_argument (sym, bTy) =

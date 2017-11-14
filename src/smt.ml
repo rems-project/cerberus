@@ -9,14 +9,14 @@ open Z3
 
 (* wip *)
 module Wip = struct
-  let submitted : ((Mem.mem_iv_constraint list) list) ref =
+  let submitted : (((string * Mem.mem_iv_constraint) list) list) ref =
     ref []
   
   let to_strings () =
     let css = List.flatten !submitted in
-    List.mapi (fun i cs ->
-      "[" ^ (string_of_int i) ^ "] " ^ String_mem.string_of_iv_memory_constraint cs
-    ) (List.rev css (*TODO: why? *))
+    List.mapi (fun i (str, cs) ->
+      "\n[" ^ (string_of_int i) ^ "] -- '" ^ str ^ "'\n" ^ String_mem.string_of_iv_memory_constraint cs
+    ) (List.rev css)
   
   let push () =
     submitted := [] :: !submitted
@@ -164,17 +164,22 @@ let init_solver () : solver_state =
   
   Solver.add slvSt.slv [axiom1; axiom2];
   
-(*
-  (* declaring symbolic constants of the byte paddings of struct/union members *)
-  Pmap.iter (fun (Sym.Symbol (tag_sym_n, _)) membrs ->
-    List.iter (fun (Cabs.CabsIdentifier (_, membr_str), _) ->
-      let padding_str = "byte_padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in
-      
-      assert false
-    ) membrs;
-    print_endline (" ==> " ^ string_of_int (List.length membrs))
-  )(Tags.tagDefs ());
-*)
+  (* assert that all the struct/union paddings are positive *)
+  begin
+    Pmap.iter (fun (Sym.Symbol (tag_sym_n, _)) tagDef ->
+      let xs = match tagDef with
+        | Tags.StructDef z
+        | Tags.UnionDef z -> z in
+      List.iter (fun (Cabs.CabsIdentifier (_, membr_str), _) ->
+        let padding_str = "padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in
+        Solver.add slvSt.slv [
+          Arithmetic.mk_le ctx (Arithmetic.Integer.mk_numeral_i ctx 0)
+                               (Expr.mk_const_s slvSt.ctx padding_str slvSt.addrSort)
+        ]
+      ) xs
+  ) (Tags.tagDefs ())
+  end;
+  
   slvSt
 
 
@@ -331,12 +336,16 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
     | IVoffsetof (tag_sym, memb_ident) ->
       failwith "TODO Smt: IVoffsetof"
-    | IVptrdiff ((ptrval_1, sh1), (ptrval_2, sh2)) ->
+    | IVpadding (Sym.Symbol (tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
+        Expr.mk_const_s slvSt.ctx ("padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str) slvSt.addrSort
+    | IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
         let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
                                                      ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
         let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
                                                      ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
-        Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2]
+        Arithmetic.mk_div slvSt.ctx
+          (Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2])
+          (aux (Mem_simplify.lifted_simplify_integer_value_base (IVsizeof diff_ty)))
     | IVbyteof (ival_, mval) ->
         failwith "TODO Smt: IVbyteof"
     | IVcomposite ival_s ->
@@ -425,7 +434,7 @@ let add_constraint slvSt debug_str cs =
 (*  prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs); *)
   match mem_constraint_to_expr slvSt cs with
     | Some e ->
-          Wip.add [cs];
+          Wip.add [(debug_str, cs)];
         Solver.add slvSt.slv [e]
     | None ->
         ()

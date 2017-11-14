@@ -534,8 +534,12 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
         typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
         E.return (Pexpr (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
     | PEmember_shift pe tag_sym memb_ident ->
+        let xs = match fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.StructDef z -> z
+          | Core_ctype.UnionDef  z -> z
+        end in
         typecheck_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
-          match List.lookup memb_ident (fromJust "Core_typing.infer_pexpr, PEmember_shift" $ Map.lookup tag_sym tagDefs) with
+          match List.lookup memb_ident xs with
             | Nothing ->
                 E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
             | _ ->
@@ -787,7 +791,11 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
                        <*> E.return cTy
                        <*> typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2)
     | PEmember_shift pe tag_sym memb_ident ->
-          match List.lookup memb_ident (fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" $ Map.lookup tag_sym tagDefs) with
+          let xs = match fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
+            | Core_ctype.StructDef z -> z
+            | Core_ctype.UnionDef  z -> z
+          end in
+          match List.lookup memb_ident xs with
             | Nothing ->
                 E.fail loc (CoreTyping_TODO ("PEmember_shift, no member '" ^ show memb_ident ^ "' defined for the tag '" ^ show tag_sym ^ "'"))
             | _ ->
@@ -1023,7 +1031,7 @@ let memop_signature = function
   | Mem_common.PtrGe ->
       (BTy_boolean, [BTy_object OTy_pointer; BTy_object OTy_pointer])
   | Mem_common.Ptrdiff ->
-      (BTy_object OTy_integer, [BTy_object OTy_pointer; BTy_object OTy_pointer])
+      (BTy_object OTy_integer, [BTy_ctype; BTy_object OTy_pointer; BTy_object OTy_pointer])
   | Mem_common.IntFromPtr ->
       (BTy_object OTy_integer, [BTy_ctype; BTy_ctype; BTy_object OTy_pointer])
   | Mem_common.PtrFromInt ->

@@ -78,7 +78,7 @@ let gen filename corestd sym_supply core =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^//^
     print_funs globs cps_core.funs ^//^
-    print_foot (Pmap.bindings_list core.tagDefs) globs core.main
+    print_foot (failwith "(Pmap.bindings_list core.tagDefs)") globs core.main
   in
   let fl_ml = fl ^ ".ml" in
   let oc = open_out fl_ml in

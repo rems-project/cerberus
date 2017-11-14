@@ -1,3 +1,7 @@
+type tag_definition =
+  | StructDef of (Cabs.cabs_identifier * Core_ctype.ctype0) list
+  | UnionDef of (Cabs.cabs_identifier * Core_ctype.ctype0) list
+
 let _tagDefs =
   ref (false, None)
 
