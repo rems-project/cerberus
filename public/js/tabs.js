@@ -518,6 +518,14 @@ class TabAsm extends TabReadOnly {
 
     this.options  = $('<input type="text" placeholder="Compiler options...">')
 
+    this.options.on('blur', () => {
+      this.compile(cc)
+    })
+    this.options.on('keypress', (e) => {
+      if (e.which == 13) // Enter
+        this.compile(cc)
+    })
+
     toolbar.append(this.dropdown)
     toolbar.append(this.options)
 
@@ -526,19 +534,19 @@ class TabAsm extends TabReadOnly {
 
     this.compile(cc)
 
-    this.thanks = $(document.createElement("div"))
+    //this.thanks = $(document.createElement("div"))
 
-    let close = $(document.createElement("a"))
-    close.attr("title", "Remove me!")
-    close.addClass("remove-panel")
-    close.text("✖")
-    CodeMirror.on(close, "click", () => this.thanks.remove())
+    //let close = $(document.createElement("a"))
+    //close.attr("title", "Remove me!")
+    //close.addClass("remove-panel")
+    //close.text("✖")
+    //CodeMirror.on(close, "click", () => this.thanks.remove())
 
-    let label = $(document.createElement("span"))
-    label.text("I'm panel n°" + "blah")
+    //let label = $(document.createElement("span"))
+    //label.text("I'm panel n°" + "blah")
 
-    this.thanks.append(close)
-    this.thanks.append(label)
+    //this.thanks.append(close)
+    //this.thanks.append(label)
     //this.editor.addPanel(this.thanks[0], {position: "bottom", stable: true});
 
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
@@ -609,9 +617,27 @@ class TabAsm extends TabReadOnly {
     ui.wait()
     $.ajax({
       headers: {Accept: 'application/json'},
+      contentType: "application/json; charset=utf-8",
       url: 'https://gcc.godbolt.org/api/compiler/'+cc.id+'/compile',
       type: 'POST',
-      data: ui.currentView.getValue(),
+      data: JSON.stringify ({
+        source: ui.currentView.getValue(),
+        compiler: cc.id,
+        options: {
+          userOptions: this.options.val(),
+          compilerOptions: {},
+          filters: {
+            binary: false,
+            execute: false,
+            labels: true,
+            directives: true,
+            commentOnly: true,
+            trim: false,
+            intel: true,
+            demangle: true
+          }
+        }
+      }),
       success: (data, status, query) => {
         console.log(data)
         let value = ''

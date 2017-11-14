@@ -164,9 +164,11 @@ html, body {
   overflow-x: scroll;
 }
 
+/*
 .tablinks {
   min-width: 750px;
 }
+*/
 
 .tablink {
   margin: 0;
