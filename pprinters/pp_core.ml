@@ -435,7 +435,7 @@ let pp_pexpr pe =
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (pat, pe1, pe2) ->
-            (* DEBUG *) !^ "{-pe-}" ^^^
+            (* DEBUG  !^ "{-pe-}" ^^^ *)
             pp_control "let" ^^^ pp_pattern pat ^^^ P.equals ^^^
             pp pe1 ^^^ pp_control "in" ^^ P.break 1 ^^ pp pe2
         | PEif (pe1, pe2, pe3) ->
@@ -453,7 +453,7 @@ let pp_pexpr pe =
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
         | PEstd (_, pe) ->
-            (* DEBUG *) !^ "{-PEstd-}" ^^^
+            (* DEBUG  !^ "{-PEstd-}" ^^^ *)
             pp pe
     end
   in pp None pe
