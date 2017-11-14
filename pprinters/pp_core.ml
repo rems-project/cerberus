@@ -453,8 +453,7 @@ let pp_pexpr pe =
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
         | PEstd (_, pe) ->
-            (* DEBUG  !^ "{-PEstd-}" ^^^ *)
-            pp pe
+            !^ "{-PEstd-}" ^^^ pp pe
     end
   in pp None pe
 

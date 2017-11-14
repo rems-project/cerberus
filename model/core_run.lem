@@ -316,10 +316,10 @@ module E = struct
     SEU.return
   let step_eval_pexprs loc mem_st file pes =
     let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
-    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr loc (Just mem_st) file false) pes)
+    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
   let step_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
-    SEU.runEU (Core_eval.step_eval_pexpr loc (Just mem_st) file false pe)
+    SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
   
   let eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)" ) in
@@ -423,67 +423,91 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
   let asw_before = annots.asw_before union asw_before_ in
   match act with
     | Create pe1 pe2 pref ->
-        match (valueFromPexpr pe1, valueFromPexpr pe2) with
-          | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
-              Step_action_request (
-                E.fresh_action_id >>= fun create_aid ->
-                E.return (
-                  CreateRequest loc sb_before dd_before asw_before
-                    create_aid current_tid pref ival ty
-                    (fun ptr_val -> <| th_st with
-                        arena= Expr [] (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
-                        stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
-                    |>)
+        (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
+        match (pe1, pe2) with
+          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
+              error "Create PEconstrained 1 and 2"
+          | (Pexpr () (PEconstrained xs1), _) ->
+              error "Create PEconstrained 1"
+          | (_, Pexpr () (PEconstrained xs2)) ->
+              error "Create PEconstrained 2"
+          | _ ->
+              match (valueFromPexpr pe1, valueFromPexpr pe2) with
+                | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun create_aid ->
+                      E.return (
+                        CreateRequest loc sb_before dd_before asw_before
+                          create_aid current_tid pref ival ty
+                          (fun ptr_val -> <| th_st with
+                              arena= Expr [] (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
+                              stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>)
+                          )
+                        )
+                | (Just _, Just _) ->
+                    Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
+                | (Nothing, _) ->
+                    Step_eval "first operand of a Create" (
+                      E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
+                      E.return <| th_st with
+                        arena= Expr [] (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
+                      |>
                     )
-                  )
-          | (Just _, Just _) ->
-              Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
-          | (Nothing, _) ->
-              Step_eval "first operand of a Create" (
-                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
-                E.return <| th_st with
-                  arena= Expr [] (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
-                |>
-              )
-          | (_, Nothing) ->
-              Step_eval "second operand of a Create" (
-                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
-                E.return <| th_st with arena=
-                  Expr [] (Eaction (Paction p (Action loc annots (Create pe1 pe2' pref))))
-                |>
-              )
+                | (_, Nothing) ->
+                    Step_eval "second operand of a Create" (
+                      E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
+                      E.return <| th_st with arena=
+                        Expr [] (Eaction (Paction p (Action loc annots (Create pe1 pe2' pref))))
+                      |>
+                    )
+              end
         end
+    
     | Alloc pe1 pe2 pref ->
-        match (valueFromPexpr pe1, valueFromPexpr pe2) with
-          | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-              Step_action_request (
-                E.fresh_action_id >>= fun alloc_aid ->
-                E.return (
-                  AllocRequest loc sb_before dd_before asw_before
-                    alloc_aid current_tid pref ival1 ival2
-                    (fun ptr_val -> <| th_st with
-                        arena= Expr [] (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
-                        stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
-                    |>)
+        (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
+        match (pe1, pe2) with
+          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
+              error "Alloc PEconstrained 1 and 2"
+          | (Pexpr () (PEconstrained xs1), _) ->
+              error "Alloc PEconstrained 1"
+          | (_, Pexpr () (PEconstrained xs2)) ->
+              error "Alloc PEconstrained 2"
+          | _ ->
+              match (valueFromPexpr pe1, valueFromPexpr pe2) with
+                | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
+                    Step_action_request (
+                      E.fresh_action_id >>= fun alloc_aid ->
+                      E.return (
+                        AllocRequest loc sb_before dd_before asw_before
+                          alloc_aid current_tid pref ival1 ival2
+                          (fun ptr_val -> <| th_st with
+                              arena= Expr [] (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
+                              stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                          |>)
+                          )
+                        )
+                | (Just _, Just _) ->
+                    Step_error "found a alloc() with ill-typed operands"
+                | (Nothing, _) ->
+                    Step_eval "first operand of a Alloc" (
+                      E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
+                      E.return <| th_st with arena=
+                        Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref))))
+                      |>
                     )
-                  )
-          | (Just _, Just _) ->
-              Step_error "found a alloc() with ill-typed operands"
-          | (Nothing, _) ->
-              Step_eval "first operand of a Alloc" (
-                E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
-                E.return <| th_st with arena=
-                  Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1' pe2 pref))))
-                |>
-              )
-          | (_, Nothing) ->
-              Step_eval "second operand of a Alloc" (
-                E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
-                E.return <| th_st with arena=
-                  Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref))))
-                |>
-              )
+                | (_, Nothing) ->
+                    Step_eval "second operand of a Alloc" (
+                      E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
+                      E.return <| th_st with arena=
+                        Expr [] (Eaction (Paction p (Action loc annots (Alloc pe1 pe2' pref))))
+                      |>
+                    )
+              end
         end
+    
+    | Kill (Pexpr () (PEconstrained xs)) ->
+        error "Kill PEconstrained"
     | Kill pe ->
         match valueFromPexpr pe with
           | Just (Vobject (OVpointer ptr_val)) ->
@@ -509,6 +533,21 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
               )
         end
 
+(*
+    | Store (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) (Pexpr () (PEconstrained xs3)) mo ->
+        error "Store PEconstrained 1 and 2 and 3"
+    | Store (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) pe3 mo ->
+        error "Store PEconstrained 1 and 2"
+    | Store (Pexpr () (PEconstrained xs1)) pe2 (Pexpr () (PEconstrained xs3)) mo ->
+        error "Store PEconstrained 1 and 3"
+    | Store pe1 (Pexpr () (PEconstrained xs2)) (Pexpr () (PEconstrained xs3)) mo ->
+        error "Store PEconstrained 2 and 3"
+    | Store (Pexpr () (PEconstrained xs1)) pe2 pe3 mo ->
+        error "Store PEconstrained 1"
+    | Store pe1 (Pexpr () (PEconstrained xs2)) pe3 mo ->
+        error "Store PEconstrained 2"
+*)
+
     | Store pe1 pe2 (Pexpr () (PEconstrained xs3)) mo ->
         Step_constrained "Store" (
           List.map (fun (cs, pe3) ->
@@ -520,7 +559,6 @@ let core_action_step mem_st file current_tid (parent_tid_opt, th_st) (Paction p 
             |> )
           ) xs3
         )
-
     | Store pe1 pe2 pe3 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval) ->
@@ -587,6 +625,15 @@ KKK
                 |>
               )
         end
+
+(*
+    | Load (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) mo ->
+        error "Load PEconstrained 1 and 2"
+    | Load (Pexpr () (PEconstrained xs1)) pe2 mo ->
+        error "Load PEconstrained 1"
+    | Load pe1 (Pexpr () (PEconstrained xs2)) mo ->
+        error "Load PEconstrained 2"
+*)
     | Load pe1 pe2 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val))) ->
