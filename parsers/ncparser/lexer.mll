@@ -419,7 +419,8 @@ and initial = parse
   type lexer_state =
     | LSRegular
     | LSIdentifier of string
-    | LSStringLiteral of (token * Lexing.position)
+      (* next token, its starting and end position after a STRING_LITERAL *)
+    | LSStringLiteral of (token * (Lexing.position * Lexing.position))
 
   let lexer_state = ref LSRegular
 
@@ -443,7 +444,8 @@ and initial = parse
         | STRING_LITERAL lit ->
             let saved_lex_start_p = lexbuf.lex_start_p in
             let (lit', tok', lex_curr_p')= concat_strings lit lexbuf.lex_curr_p in
-            lexer_state := LSStringLiteral (tok', lexbuf.lex_curr_p);
+            lexer_state := LSStringLiteral (tok',
+                              (lexbuf.lex_start_p, lexbuf.lex_curr_p));
             lexbuf.lex_start_p <- saved_lex_start_p;
             lexbuf.lex_curr_p  <- lex_curr_p';
             STRING_LITERAL lit'
@@ -452,9 +454,10 @@ and initial = parse
     | LSIdentifier i ->
         lexer_state := LSRegular;
         if Lexer_feedback.is_typedefname i then TYPE else VARIABLE
-    | LSStringLiteral (tok, lex_curr_p) ->
+    | LSStringLiteral (tok, (lex_start_p, lex_curr_p)) ->
         lexer_state := LSRegular;
-        lexbuf.lex_curr_p <- lex_curr_p;
+        lexbuf.lex_start_p <- lex_start_p;
+        lexbuf.lex_curr_p  <- lex_curr_p;
         tok
 
 }
