@@ -67,15 +67,62 @@ let inline (>>=)    = EU.bind
 let inline (>>) m f = m >>= fun _ -> f
 let inline (<$>) = EU.fmap
 
-
+let pull_helper pull pe_cons (ps: list ('a * pexpr)) =
+  match List.foldl (fun acc (a, pe) ->
+    match pull pe with
+      | Pexpr () (PEconstrained xs) ->
+          let ys = match acc with
+            | Right pes -> [(ND.empty, pes)]
+            | Left ys -> ys
+          end in
+          Left (
+            List.map (fun ((cs1, pes1), (cs2, pes2)) ->
+              (ND.concat cs1 cs2, pes1 ++ pes2)
+              ) (Utils.product_list (List.map (fun (cs, pe) -> (cs, [(a, pe)])) xs) ys)
+            )
+      | pe' ->
+          match acc with
+            | Right pes' -> Right ((a, pe)::pes')
+            | Left ys -> Left (List.map (fun (cs, pes) -> (cs, (a, pe')::pes)) ys)
+          end
+    end
+  ) (Right []) ps with
+  | Left ys ->
+      PEconstrained (
+        List.map (fun (cs, pes_rev) -> (cs, Pexpr () (pe_cons (List.reverse pes_rev))))
+      ys )
+  | Right pes_rev ->
+      pe_cons (List.reverse pes_rev)
+end
 
 val     pull_constrained: nat -> pexpr -> pexpr
 let rec pull_constrained n (Pexpr () pexpr_ as pexpr) =
-  let pull_constrained pe = pull_constrained (n+1) pe in
-  let () = Debug.print_debug 2 [] (fun () ->
-(*    "pull_constrained ==> " ^ Pp.stringFromCore_pexpr pexpr *)
-    "pull_constrained ==> " ^ show n
-  ) in
+  let self pe = pull_constrained (n+1) pe in
+  let wrap f pe =
+    match self pe with
+    | Pexpr () (PEconstrained xs) ->
+        PEconstrained (List.map (fun (cs, pe') -> (cs, Pexpr () (f pe'))) xs)
+    | pe' -> f pe'
+    end
+  in
+  let wrap_bin f pe1 pe2 =
+    match (self pe1, self pe2) with
+    | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
+        PEconstrained (
+          List.map (fun ((cs1, pe1), (cs2, pe2)) ->
+              (ND.concat cs1 cs2, Pexpr () (f pe1 pe2))
+            ) (Utils.product_list xs1 xs2)
+          )
+    | (Pexpr () (PEconstrained xs1), pe2') ->
+        PEconstrained (List.map (fun (cs, pe) -> (cs, Pexpr () (f pe pe2'))) xs1)
+    | (pe1', Pexpr () (PEconstrained xs2)) ->
+        PEconstrained (List.map (fun (cs, pe) -> (cs, Pexpr () (f pe1' pe))) xs2)
+    | (pe1', pe2') -> f pe1' pe2'
+    end
+  in
+  let wrap_list f pes = pull_helper self (fun xs -> f (List.map snd xs))
+                          (List.map (fun pe -> ((), pe)) pes)
+  in
   Pexpr () match pexpr_ with
     | PEsym _ ->
         pexpr_
@@ -83,145 +130,62 @@ let rec pull_constrained n (Pexpr () pexpr_ as pexpr) =
         pexpr_
     | PEval _ ->
         pexpr_
-    | PEconstrained _ ->
-        pexpr_ (* TODO: check *)
+    | PEconstrained xs ->
+        PEconstrained (
+            List.foldl (fun acc (cs, pe) ->
+              match self pe with
+              | Pexpr () (PEconstrained xs) ->
+                  (List.map (fun (cs', pe') -> (ND.concat cs cs', pe')) xs) ++ acc
+              | pe' ->
+                  (cs, pe')::acc
+              end
+            ) [] xs)
     | PEundef _ ->
         pexpr_
-    | PEerror _ _ ->
-        pexpr_
-   
-    | PEctor ctor [pe] ->
-        match pull_constrained pe with
-          | Pexpr () (PEconstrained xs) ->
-              PEconstrained (
-                List.map (fun (cs, pe') ->
-                  (cs, Pexpr () (PEctor ctor [pe']))
-                ) xs
-              )
-          | pe' ->
-              PEctor ctor [pe']
-        end
-          
-    | PEctor _ _->
-        (* TODO *)
-        error "pull_constrained PEctor pexpr_"
+    | PEerror err_str pe ->
+        wrap (PEerror err_str) pe
+    | PEctor ctor pes->
+        wrap_list (PEctor ctor) pes
     | PEcase pe pat_pes ->
-        (* TODO: do the pes? *)
-        match pull_constrained pe with
+        match self pe with
           | Pexpr () (PEconstrained xs) ->
               PEconstrained (
                 List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_case_pe pe pat_pes)
+                  (cs, Pexpr () (pull_helper self (PEcase pe) pat_pes))
                 ) xs
               )
           | pe' ->
-              PEcase pe' pat_pes
+              pull_helper self (PEcase pe') pat_pes
         end
-    | PEarray_shift _ _ _->
-        (* TODO *)
-        pexpr_
-    | PEmember_shift _ _ _->
-        (* TODO *)
-        pexpr_
+    | PEarray_shift pe1 cty pe2->
+        wrap_bin (fun pe1 pe2 -> PEarray_shift pe1 cty pe2) pe1 pe2
+    | PEmember_shift pe sym cid->
+        wrap (fun pe -> PEmember_shift pe sym cid) pe
     | PEnot pe ->
-        match pull_constrained pe with
-          | Pexpr () (PEconstrained xs) ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_not_pe pe)
-                ) xs
-              )
-          | pe' ->
-              PEnot pe'
-        end
+        wrap PEnot pe
     | PEop binop pe1 pe2 ->
-        match (pull_constrained pe1, pull_constrained pe2) with
-          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
-              PEconstrained (
-                List.map (fun ((cs1, pe1), (cs2, pe2)) ->
-                  (ND.concat cs1 cs2, Caux.mk_op_pe binop pe1 pe2)
-                ) (Utils.product_list xs1 xs2)
-              )
-          | (Pexpr () (PEconstrained xs1), pe2') ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_op_pe binop pe pe2')
-                ) xs1
-              )
-          | (pe1', Pexpr () (PEconstrained xs2)) ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_op_pe binop pe1' pe)
-                ) xs2
-              )
-          | (pe1', pe2') ->
-              PEop binop pe1' pe2'
-        end
-    | PEstruct _ _ ->
-        (* TODO *)
-        pexpr_
-    | PEunion _ _ _ ->
-        (* TODO *)
-        pexpr_
+        wrap_bin (PEop binop) pe1 pe2
+    | PEstruct sym xs ->
+        pull_helper self (PEstruct sym) xs
+    | PEunion sym cid pe ->
+        wrap (PEunion sym cid) pe
     | PEcall nm pes ->
-        match pes with
-          | [] ->
-              (* TODO *)
-              pexpr_
-          | (pe1 :: Pexpr () (PEconstrained xs2) :: pes') ->
-              PEconstrained (
-                List.map (fun (cs, pe2) ->
-                  (cs, Caux.mk_call_pe nm (pe1 :: pe2 :: pes'))
-                ) xs2
-              )
-          | _ ->
-              pexpr_
-        end
+        wrap_list (PEcall nm) pes
     | PElet pat pe1 pe2 ->
-        match (pull_constrained pe1, pull_constrained pe2) with
-          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
-              PEconstrained (
-                List.map (fun ((cs1, pe1), (cs2, pe2)) ->
-                  (ND.concat cs1 cs2, Caux.mk_let_pe pat pe1 pe2)
-                ) (Utils.product_list xs1 xs2)
-              )
-          | (Pexpr () (PEconstrained xs1), pe2') ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_let_pe pat pe pe2')
-                ) xs1
-              )
-          | (pe1', Pexpr () (PEconstrained xs2)) ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_let_pe pat pe1' pe)
-                ) xs2
-              )
-          | (pe1', pe2') ->
-              PElet pat pe1' pe2'
-        end
+        wrap_bin (PElet pat) pe1 pe2
     | PEif pe1 pe2 pe3 ->
-        (* TODO: do pe2 and pe3? *)
-        match pull_constrained pe1 with
-          | Pexpr () (PEconstrained xs1) ->
-              PEconstrained (
-                List.map (fun (cs, pe) ->
-                  (cs, Caux.mk_if_pe pe pe2 pe3)
-                ) xs1
-              )
-          | pe1' ->
-              PEif pe1' pe2 pe3
-        end
-    | PEis_scalar _ ->
-        pexpr_
-    | PEis_integer _ ->
-        pexpr_
-    | PEis_signed _ ->
-        pexpr_
-    | PEis_unsigned _ ->
-        pexpr_
-    | PEstd _ _ ->
-        pexpr_
+        (* TODO: not sure about this one! *)
+        wrap_list (fun [pe1;pe2;pe3] -> PEif pe1 pe2 pe3) [pe1;pe2;pe3]
+    | PEis_scalar pe ->
+        wrap PEis_scalar pe
+    | PEis_integer pe ->
+        wrap PEis_integer pe
+    | PEis_signed pe ->
+        wrap PEis_signed pe
+    | PEis_unsigned pe ->
+        wrap PEis_unsigned pe
+    | PEstd std pe ->
+        wrap (PEstd std) pe
   end
 
 
