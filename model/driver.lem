@@ -610,7 +610,7 @@ let action_request_sequential = function
   
   | Core_run.LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
-      liftMem (Mem.load lvalue_ty ptr_val) >>= fun (fp, mval) ->
+      liftMem (Mem.load loc lvalue_ty ptr_val) >>= fun (fp, mval) ->
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid (mk_th_st' mval) dr_st.core_state) dr_st
       )
