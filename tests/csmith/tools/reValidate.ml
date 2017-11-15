@@ -3,7 +3,7 @@ open Unix
 let log_oc =
   if Sys.file_exists "LOG" then
     Sys.rename "LOG" "LOG.old";
-  open_out_gen [Open_creat] 0o022 "LOG"
+  open_out_gen [Open_creat] 0o777 "LOG"
 
 let should_stop = ref false
 
@@ -57,7 +57,7 @@ let run_cc filename =
   )
 
 let run_cerb filename =
-  let (ic, _, ic2) as chans = open_process_full ("gtimeout 30s " ^ cerbCmd ^ " " ^ filename) (environment ()) in
+  let (ic, _, ic2) as chans = open_process_full ("gtimeout 45s " ^ cerbCmd ^ " " ^ filename) (environment ()) in
   let str = collect_output ic in
   match close_process_full chans with
       | WEXITED n ->
