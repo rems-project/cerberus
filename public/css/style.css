@@ -23,7 +23,7 @@ html, body {
   height: calc(100% - 28px); /* minus page header height */
 }
 
-#header {
+.header {
   font-size: 0;
   color: #f1f1f1;
   background-color: #5f5f5f;
@@ -32,19 +32,19 @@ html, body {
   min-width: 750px;
 }
 
-#header ul {
+.header ul {
   list-style-type: none;
   margin: 0;
   padding: 0;
 }
 
-#header ul li {
+.header ul li {
   float: left;
   margin: 0;
   font-size: 12px;
 }
 
-#header ul .right {
+.header ul .right {
   float: right;
 }
 
@@ -54,7 +54,7 @@ html, body {
   color: #f1f1f1;
 }
 
-#header li a {
+.header li a {
   display: block;
   text-decoration: none;
   padding: 5px 10px;
@@ -62,15 +62,15 @@ html, body {
   background-color: #5f5f5f;
 }
 
-#header li a:hover {
+.header li a:hover {
   background-color: #7f7f7f;
 }
 
-#header ul .border {
+.header ul .border {
   border-right: 1px solid #f1f1f1;
 }
 
-#header hr {
+.header hr {
   display: block;
   margin: 0;
 }
@@ -444,7 +444,7 @@ svg {
   color: #708;
 }
 
-#defacto {
+.window {
   visibility: hidden;
 
   left: 40px;
@@ -478,19 +478,13 @@ svg {
   -ms-transition: opacity 1s;
 }
 
-#defacto div {
+.window div {
   font-family: Arial,Helvetica,sans-serif;
   font-size: 10pt;
   min-width: 100%;
 }
 
-#defacto_list {
-  height: calc(100% - 32px);
-  margin: 0;
-  overflow: scroll;
-}
-
-#defacto_body {
+.window_body {
   height: calc(100% - 32px);
   margin: 0;
   overflow: scroll;
