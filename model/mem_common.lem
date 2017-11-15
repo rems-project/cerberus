@@ -1,6 +1,6 @@
 (* Concrete types and functions common to all memory layout models *)
 open import Pervasives
-import Symbolic
+import Symbolic Loc
 import Undefined
 
 open import Nondeterminism2
@@ -35,7 +35,7 @@ type mem_error =
   | MerrOther of string
   
   | MerrPtrdiff
-  | MerrAccess of access_kind * access_error
+  | MerrAccess of Loc.t * access_kind * access_error
   
   | MerrWIP of string
 
@@ -50,10 +50,12 @@ instance (Show mem_error)
     | MerrWIP str ->
         "Memory WIP: " ^ str
 
-    | MerrAccess LoadAccess err ->
-        "MerrAccess Load " ^ stringFromAccess_error err
-    | MerrAccess StoreAccess err ->
-        "MerrAccess Store " ^ stringFromAccess_error err
+    | MerrAccess loc LoadAccess err ->
+        "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
+        stringFromAccess_error err
+    | MerrAccess loc StoreAccess err ->
+        "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
+        stringFromAccess_error err
   end
 end
 
@@ -61,9 +63,9 @@ end
 let undefinedFromMem_error = function
   | MerrPtrdiff ->
       Just [Undefined.UB048_disjoint_array_pointers_substraction]
-  | MerrAccess _ NullPtr ->
+  | MerrAccess _ _ NullPtr ->
       Just [Undefined.UB019_lvalue_not_an_object]
-  | MerrAccess _ DeadPtr ->
+  | MerrAccess _ _ DeadPtr ->
       Just [Undefined.UB010_pointer_to_dead_object]
 
   | _ ->
