@@ -332,7 +332,7 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         Mem.return (List.reverse acc)
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
-        Mem.bind (Mem.load Loc.unknown elem_ty ptrval) (fun (_, mval) ->
+        Mem.bind (Mem.load elem_ty ptrval) (fun (_, mval) ->
         Mem.case_mem_value mval
           (fun _ -> error "Output.load_character_array, unspecified")
           (fun _ _ -> error "Output.load_character_array, concurrency read")
@@ -596,7 +596,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
           Mem.return $
             Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
-          Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+          Mem.load arg_ty arg_ptr >>= fun (_, mval) ->
           (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
              is undefined, but that doesn't seem to match at all what people do. So we are
              just showing a warning for now and performing a conversion from arg_ty to expected_ty
@@ -771,7 +771,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                         Right (U.undef Loc.unknown [U.Illtyped_argument_for_format])
                       )
                     else
-                      Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+                      Mem.load arg_ty arg_ptr >>= fun (_, mval) ->
                       let prec = match prec_opt with
                         | Just (P_num z) ->
                             Just z
@@ -799,7 +799,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
                 Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
-              Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+              Mem.load arg_ty arg_ptr >>= fun (_, mval) ->
               match Mem_aux.pointerValueFromMemValue mval with
                 | Just (_, ptrval) ->
                     Mem.return (

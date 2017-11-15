@@ -9,80 +9,8 @@ import Core_ctype_aux
 open import Mem_common Defacto_memory_types2
 
 
-
-
-(* BEGIN fake stuff to get the concurrency to compile =========================================== *)
-let fake_pointer_value_eq (PV _ ptr_val_1 sh1) (PV _ ptr_val_2 sh2) =
-  match (ptr_val_1, ptr_val_2) with
-    | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
-        alloc_id1 = alloc_id2
-    | _ ->
-        error "DON'T USE Eq for pointer_value"
-  end
-instance (Eq impl_pointer_value)
-  let (=) = fake_pointer_value_eq
-  let (<>) ptr_val1 ptr_val2 = not (fake_pointer_value_eq ptr_val1 ptr_val2)
-end
-
-let rec fake_mem_value_eq mval1 mval2 =
-  match (mval1, mval2) with
-    | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
-        n1 = n2
-    | (MVarray mvals1, MVarray mvals2) ->
-        List.all (uncurry fake_mem_value_eq) (zip mvals1 mvals2)
-    | _ ->
-        error "DON'T USE Eq for mem_value"
-end
-
-instance (Eq impl_mem_value)
-  let (=) = fake_mem_value_eq
-  let (<>) mval1 mval2 = not (fake_mem_value_eq mval1 mval2)
-end
-
-instance (Show impl_mem_value)
-  let show x = "WIP: show mem_value"
-end
-
-instance (Show impl_pointer_value)
-  let show x = "WIP: show pointer_value"
-end
-
-(* END fake stuff to get the concurrency to compile ============================================= *)
-
-
-(* BEGIN debug ================================================================================== *)
-val stringFromPointer_value: impl_pointer_value -> string
-val stringFromMem_value: impl_mem_value -> string
 val stringFromInteger_value: impl_integer_value -> string
-val stringFromShift_path: shift_path -> string (* DEBUG *)
-val stringFromCore_ctype:  Core_ctype.ctype -> string
-
-declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
-declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
 declare ocaml target_rep function stringFromInteger_value = `String_defacto_memory.string_of_integer_value`
-declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
-declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
-
-(* TODO: HOL hack *)
-declare hol target_rep function stringFromPointer_value p = "??NOT IMPLEMENTED??"
-declare hol target_rep function stringFromMem_value p = "??NOT IMPLEMENTED??"
-declare hol target_rep function stringFromShift_path p = "??NOT IMPLEMENTED??"
-(* END debug ==================================================================================== *)
-
-
-val mk_iv_constr:
-    (impl_integer_value -> impl_integer_value -> mem_constraint impl_integer_value) ->
-    integer_value_base ->
-    integer_value_base ->
-    mem_constraint impl_integer_value
-let mk_iv_constr ctor ival_1 ival_2 =
-  (*simplify_constraint*) (ctor (IV Prov_none ival_1) (IV Prov_none ival_2))
-
-
-
-
-
-
 
 
 
@@ -95,6 +23,140 @@ type simpl_state = <|
   alignof_eqs: map ctype integer_value_base;
 |>
 
+
+
+
+(*
+val simplify_integer_value_base: simpl_state -> integer_value_base -> either integer integer_value_base
+let rec simplify_integer_value_base st ival_ =
+  let self = simplify_integer_value_base st in
+  let proj = function
+    | Left n ->
+        IVconcrete n
+    | Right ival_ ->
+        ival_
+  end in
+  match ival_ with
+    | IVunspecified ->
+        Right ival_
+    | IVconcurRead _ _ ->
+        error "Defacto_aux.simplify_integer_value_base IVconcurRead"
+    | IVconcrete n ->
+        Left n
+    | IVaddress _ ->
+        Right ival_
+(*
+    | IVfromptr of ctype * AilTypes.integerType * pointer_value_base 
+*)
+    | IVop op [ival_1; ival_2] ->
+        match (self ival_1, self ival_2) with
+          | (Left n1, Left n2) ->
+              Left match op with
+                | IntAdd ->
+                    n1 + n2
+                | IntSub ->
+                    n1 - n2
+                | IntMul ->
+                    n1 * n2
+                | IntDiv ->
+                    if n2 = 0 then 0 else Num_extra.integerDiv_t n1 n2
+                | IntRem_t ->
+                    if n2 = 0 then 0 else Num_extra.integerRem_t n1 n2
+                | IntRem_f ->
+                    if n2 = 0 then 0 else Num_extra.integerRem_f n1 n2
+                | IntExp ->
+                    n1 ** natFromInteger n2
+              end
+          | (Right IVunspecified, _) ->
+              (* Axiom: unspec OP ival = unspec *)
+              Right IVunspecified
+          | (_, Right IVunspecified) ->
+              (* Axiom: ival OP unspec = unspec *)
+              Right IVunspecified
+          | (simpl1, simpl2) ->
+              let ival_1' = proj simpl1 in
+              let ival_2' = proj simpl2 in
+              (* TODO: Lem needs guard patterns *)
+              if op = IntAdd && ival_1' = IVconcrete 0 then
+                (* Axiom: 0 + ival = ival *)
+                Right ival_2'
+              else if op = IntAdd && ival_2' = IVconcrete 0 then
+                (* Axiom: ival + 0 = ival *)
+                Right ival_1'
+              else if op = IntSub && ival_1' = ival_2' then
+                (* Axiom: ival - ival = 0 *)
+                Left 0
+              else if op = IntMul && (ival_1' = IVconcrete 0 || ival_2' = IVconcrete 0) then
+                Left 0
+              else if op = IntDiv && (ival_1' = IVconcrete 0 || ival_2' = IVconcrete 0) then
+                Left 0
+              else
+                Right (IVop op [ival_1'; ival_2'])
+        end
+    | IVmin ity ->
+        match ity with
+          | Char ->
+              (* the sign of Char is implementation defined *)
+              Right ival_
+          | _ ->
+              if AilTypesAux.is_unsigned_ity ity then
+                Left 0
+              else
+                Right ival_
+        end
+
+
+
+(*
+
+    | IVmax of AilTypes.integerType
+    | IVsizeof ty ->
+        maybe (Right ival_) Right (Map.lookup st.sizeof_eqs ty)
+    | IValignof of ctype
+    | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+    | IVptrdiff of pointer_value_base * pointer_value_base
+    | IVbyteof of integer_value_base * impl_mem_value (* the integer value is the position (indexed from zero) *)
+    | IVcomposite of list integer_value_base (* a list of byte values reassembled *)
+    | IVbitwise of AilTypes.integerType * bitwise_operation  end
+*)
+    | _ ->
+        Right ival_
+  end
+
+(*
+val mk_op_ival_: integer_operator -> integer_value_base -> integer_value_base -> integer_value_base
+let mk_op_ival_ iop ival_1 ival_2 =
+  either (fun z -> IVconcrete z) id (simplify_integer_value_base (IVop iop [ival_1; ival_2]))
+*)
+
+val simplify_integer_value: impl_integer_value -> impl_integer_value
+let simplify_integer_value (IV prov ival_) =
+  let tmp = <|
+    sizeof_eqs= Map.empty;
+    alignof_eqs= Map.empty;
+  |> in
+  IV prov (either IVconcrete id (simplify_integer_value_base tmp ival_))
+
+
+val     simplify_constraint: mem_constraint impl_integer_value -> mem_constraint impl_integer_value
+let rec simplify_constraint constr =
+  match constr with
+    | MC_empty ->
+        constr
+    | MC_eq ival1 ival2 ->
+        MC_eq (simplify_integer_value ival1) (simplify_integer_value ival2)
+    | MC_le ival1 ival2 ->
+        MC_le (simplify_integer_value ival1) (simplify_integer_value ival2)
+    | MC_lt ival1 ival2 ->
+        MC_lt (simplify_integer_value ival1) (simplify_integer_value ival2)
+    | MC_or constr1 constr2 ->
+        MC_or (simplify_constraint constr1) (simplify_constraint constr2)
+    | MC_conj constrs ->
+        MC_conj (List.map simplify_constraint constrs)
+    | MC_not constr ->
+        MC_not (simplify_constraint constr)
+  end
+*)
 
 
 let encode (nbits: nat) (n: integer) =
@@ -113,7 +175,7 @@ let decode (nbits: nat) (n: integer) =
 val     tmp_compl_aux: nat -> integer -> integer
 let rec tmp_compl_aux nbits n =
   if nbits = 0 then
-    n
+    0
   else
     let n_ = n / 2 in
     (1 - (integerRem_f n 2)) + 2 * tmp_compl_aux (nbits - 1) n_
@@ -292,7 +354,7 @@ let rec simplify_integer_value_base ival_ =
               (* Ail type error *)
               error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Void"
           | Core_ctype.Basic (Integer ity) ->
-              match Nothing (* Implementation_.sizeof_ity ity*) with
+              match Implementation_.sizeof_ity ity with
                 | Just n ->
                     Left (integerFromNat n)
                 | Nothing ->
@@ -411,12 +473,5 @@ let rec simplify_integer_value_base ival_ =
         end
   end
 
-
-
-val eval_integer_value_base: integer_value_base -> maybe integer
-let eval_integer_value_base ival_ =
-  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
-
-val     lifted_simplify_integer_value_base: integer_value_base -> integer_value_base
 let rec lifted_simplify_integer_value_base ival_ =
   either (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base ival_)

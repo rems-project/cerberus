@@ -173,8 +173,6 @@ type mem_constraint 'a =
   | MC_le of 'a * 'a
   | MC_lt of 'a * 'a
   
-  | MC_in_device of 'a
-  
   | MC_or of mem_constraint 'a * mem_constraint 'a
   | MC_conj of list (mem_constraint 'a)
   | MC_not of mem_constraint 'a

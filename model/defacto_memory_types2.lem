@@ -1,4 +1,4 @@
-open import Pervasives Utils
+open import Pervasives
 
 open import Core_ctype Mem_common Float
 import Symbol
@@ -8,6 +8,13 @@ import Symbol
 type allocation_id = nat
 
 type provenance_id = nat
+
+
+(* TODO: simplified for now (only work for scalars) *)
+type impl_footprint = allocation_id
+val impl_do_overlap: impl_footprint -> impl_footprint -> bool
+let impl_do_overlap = (=)
+
 
 
 
@@ -139,13 +146,3 @@ type allocation =
   | Alloc_dynamic of integer_value_base (* * address *)
 *)
 
-
-
-(* TODO: simplified for now (only work for scalars) *)
-type impl_footprint =
-  | FP_alloc of allocation_id * ctype
-  | FP_device of integer_value_base * ctype
-
-val impl_do_overlap: impl_footprint -> impl_footprint -> bool
-let impl_do_overlap _ _ =
-  error "impl_do_overlap"

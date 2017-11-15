@@ -1378,7 +1378,6 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (memop_sym, memop_sym_pat, memop_sym_pe) ->
           
           (* NOTE: by Ail typing we can just use the referenced type of either operand *)
-          (* TODO: check that, we "only" know that their referenced types are compatible *)
           let diff_ty_pe = match (ctype_of e1) with
             | Aty.Pointer _ ref_ty1 ->
                 Caux.mk_ail_ctype_pe ref_ty1
