@@ -1,0 +1,2858 @@
+(* De-facto C11 memory model *)
+open import Pervasives
+import Num_extra Set_helpers (* fold *) Map_extra
+
+open import Utils
+
+import Symbolic Cthread Cabs AilTypes Dlist Loc Float
+
+open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype
+import Core_ctype_aux
+
+open import {hol} `utilTheory` `tagsTheory`
+
+
+import State
+
+
+val stringFromCtype: ctype -> string
+declare ocaml target_rep function stringFromCtype = `String_core_ctype.string_of_ctype`
+
+(* TODO: HOL hack *)
+declare hol target_rep function stringFromCtype c = ""
+
+(* Semantic switches *)
+type mode =
+  | Mode_ISO
+    (* the bools are: "-no-strict-aliasing", multiple-provenance,
+       pointer-lifetime-zap *)
+  | Mode_Defacto of bool * bool * bool
+
+
+(* Basic representation:
+     assuming 8-bit bytes and two's complement arithmetic.
+ *)
+
+
+
+type write_event =
+  WriteEvent of Loc.t * ctype * impl_pointer_value * impl_mem_value
+
+
+type storage =
+  | Storage_static of ctype * maybe impl_mem_value
+  | Storage_dynamic of integer_value_base * list write_event
+
+
+type impl_mem_state = <|
+  (* this is read-only *)
+  flags: list memory_flag;
+  
+  (* machinery stuff *)
+  allocation_id_suppl: UniqueId.supply allocation_id;
+  
+  (* the semantic stuff starts here *)
+(*
+  old_allocations:         map allocation_id (allocation * maybe impl_mem_value);
+*)
+  
+  allocations: map allocation_id storage;
+  dead_allocations:    set allocation_id;
+(*  addresses:           set address; *)
+(*  constraints:         constraints; *)
+  
+  (* For the detection of races, need to be flushed at every sequence point *)
+  access_log: list allocation_id;
+|>
+
+
+
+
+(* TODO: only for the concurrency *)
+let fake_pointer_value_eq (PV _ ptr_val_1 sh1) (PV _ ptr_val_2 sh2) =
+  match (ptr_val_1, ptr_val_2) with
+    | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
+        alloc_id1 = alloc_id2
+    | _ ->
+        error "DON'T USE Eq for pointer_value"
+  end
+instance (Eq impl_pointer_value)
+  let (=) = fake_pointer_value_eq
+  let (<>) ptr_val1 ptr_val2 = not (fake_pointer_value_eq ptr_val1 ptr_val2)
+end
+
+let rec fake_mem_value_eq mval1 mval2 =
+  match (mval1, mval2) with
+    | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
+        n1 = n2
+    | (MVarray mvals1, MVarray mvals2) ->
+        List.all (uncurry fake_mem_value_eq) (zip mvals1 mvals2)
+    | _ ->
+        error "DON'T USE Eq for mem_value"
+end
+
+instance (Eq impl_mem_value)
+  let (=) = fake_mem_value_eq
+  let (<>) mval1 mval2 = not (fake_mem_value_eq mval1 mval2)
+end
+
+
+(* BEGIN string conversion functions ============================================================ *)
+instance (Show impl_mem_value)
+  let show x = "WIP: show mem_value"
+end
+
+instance (Show impl_pointer_value)
+  let show x = "WIP: show pointer_value"
+end
+
+val stringFromPointer_value: impl_pointer_value -> string
+val stringFromMem_value: impl_mem_value -> string
+val stringFromInteger_value: impl_integer_value -> string
+val stringFromShift_path: shift_path -> string (* DEBUG *)
+
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+declare ocaml target_rep function stringFromInteger_value = `String_defacto_memory.string_of_integer_value`
+declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
+
+
+(* TODO: HOL hack *)
+declare hol target_rep function stringFromPointer_value p = "??NOT IMPLEMENTED??"
+declare hol target_rep function stringFromMem_value p = "??NOT IMPLEMENTED??"
+
+declare hol target_rep function stringFromShift_path p = "??NOT IMPLEMENTED??"
+
+(* DEBUG *)
+
+
+
+
+
+
+
+
+
+
+
+
+(* BEGIN effect ================================================================================= *)
+open import Nondeterminism2
+type impl_memM 'a =
+  ndM 'a mem_error (mem_constraint impl_integer_value) impl_mem_state
+
+let impl_return = return
+let inline impl_bind = bind
+
+let inline (>>=)      = impl_bind
+let inline (>>) m1 m2 = impl_bind m1 (fun _ -> m2)
+
+let inline (<$>) f m =
+  m >>= return -| f
+
+
+(* TODO: debug *)
+val wip: forall 'a. string -> impl_memM 'a (* DEBUG *)
+let wip str =
+  kill (Other (MerrWIP str))
+
+
+val fail: forall 'a. mem_error -> impl_memM 'a
+let fail err =
+  match undefinedFromMem_error err with
+    | Just ubs ->
+        kill (Undef Loc.unknown ubs)
+    | Nothing ->
+        kill (Other err)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val fresh_address: Symbol.prefix -> impl_memM address
+let fresh_address pref =
+  error "WIP fresh_address"
+(*
+  get >>= fun mem_st ->
+  let (n, suppl') = UniqueId.fresh_id mem_st.suppl in
+  let addr = Address pref n in
+  put <| mem_st with
+    suppl= suppl';
+    constraints= declare_address addr mem_st.constraints;
+    addresses= Set.insert addr mem_st.addresses |> >>
+  return addr
+*)
+
+
+val fresh_allocation_id: impl_memM allocation_id
+let fresh_allocation_id =
+  get >>= fun mem_st ->
+  let (id, suppl') = UniqueId.fresh_id mem_st.allocation_id_suppl in
+  put <| mem_st with allocation_id_suppl= suppl' |> >>
+  return id
+
+
+val register_allocation: allocation_id -> storage -> impl_memM unit
+let register_allocation alloc_id stor =
+  get >>= fun mem_st ->
+  put <| mem_st with allocations=
+    Map.insert alloc_id stor mem_st.allocations
+  |>
+
+
+val allocation_is_dead: allocation_id -> impl_memM bool
+let allocation_is_dead alloc_id =
+  get >>= fun mem_st ->
+  return (alloc_id IN mem_st.dead_allocations)
+
+val resolve_allocation: allocation_id -> impl_memM storage
+let resolve_allocation alloc_id =
+  get >>= fun mem_st ->
+  maybe (fail (MerrInternal ("failed to resolve allocation: " ^ show alloc_id))) return
+    (Map.lookup alloc_id mem_st.allocations)
+
+(* END effect =================================================================================== *)
+
+
+
+
+
+let mk_iv_constr ctor ival_1 ival_2 =
+  (*simplify_constraint*) (ctor (IV Prov_none ival_1) (IV Prov_none ival_2))
+
+
+
+
+
+
+(*
+val add_constraints: list mem_constraint -> memM unit
+let add_constraints xs =
+  get >>= fun st ->
+  put <| st with constraints= xs ++ st.constraints |> >>
+  constraints_are_unsat >>= function
+    | true  -> mzero
+    | false -> return ()
+  end
+*)
+
+
+let integer_value_baseSimpl ival_ =
+  ival_
+
+let integer_value_baseEquality ival_1 ival_2 =
+  Nothing
+
+
+
+
+
+(* DEBUG, fixing impl: gcc-5 (Homebrew gcc 5.2.0) 5.2.0 *)
+val integer_range: AilTypes.integerType -> integer * integer
+let integer_range = function
+ | AilTypes.Char ->
+     (0-128, 127)
+ | AilTypes.Bool ->
+     error "WIP: Mem.integer_range, Bool"
+ | AilTypes.Signed AilTypes.Ichar ->
+     (0-128, 127)
+ | AilTypes.Signed AilTypes.Short ->
+     (0-32768, 32767)
+ | AilTypes.Signed AilTypes.Int_ ->
+     (0-2147483648, 2147483647)
+ | AilTypes.Signed AilTypes.Long ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Signed AilTypes.LongLong ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Signed (AilTypes.IntN_t n) ->
+     (0-(2**(n-1)), 2**(n-1) - 1)
+(*
+ | AilTypes.Signed (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.integer_range, Signed IBBuiltin ==> " ^ str)
+*)
+ | AilTypes.Unsigned AilTypes.Ichar ->
+     (0, 255)
+ | AilTypes.Unsigned AilTypes.Short ->
+     (0, 65535)
+ | AilTypes.Unsigned AilTypes.Int_ ->
+     (0, 4294967295)
+ | AilTypes.Unsigned AilTypes.Long ->
+     (0, 2**64-1)
+ | AilTypes.Unsigned AilTypes.LongLong ->
+     (0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IntN_t n)  ->
+     (0, 2**n - 1)
+(*
+ | AilTypes.Unsigned (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.integer_range, Unsigned IBBuiltin ==> " ^ str)
+*)
+ | AilTypes.IBuiltin str ->
+     error ("WIP: Mem.integer_range, IBuiltin ==> " ^ str)
+ | AilTypes.Enum sym ->
+     error "WIP: Mem.integer_range, Enum"
+ | AilTypes.Size_t ->
+     (0, 2**64-1)
+ | AilTypes.Ptrdiff_t ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Signed AilTypes.Intptr_t ->
+     (0-2**63, 2**63-1)
+ | AilTypes.Unsigned AilTypes.Intptr_t ->
+     (0, 2**64-1)
+end
+
+
+let rec  tmp_sizeof ty =
+  match ty with
+    | Core_ctype.Void ->
+        error "Defacto_memory.tmp_sizeof, Void"
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Char)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) ->
+        Just 1
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IntN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IntN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    (* TODO !!!!, fixing impl for testing purpose (Apple LLVM version 8.1.0 (clang-802.0.42) - x86_64-apple-darwin16.6.0) *)
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_leastN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_leastN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_fastN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_fastN_t n))) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming one byte = 8 bits") in
+        Just (integerFromNat (n / 8))
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intmax_t)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Intmax_t)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intptr_t)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer AilTypes.Size_t) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer AilTypes.Ptrdiff_t) ->
+        Just 8
+    
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short)) ->
+        Just 2
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short)) ->
+        Just 2
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_)) ->
+        Just 4
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_)) ->
+        Just 4
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong)) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong)) ->
+        Just 8
+    
+    | Core_ctype.Basic (AilTypes.Floating (AilTypes.RealFloating (AilTypes.Float))) ->
+        Just 4
+    | Core_ctype.Basic (AilTypes.Floating (AilTypes.RealFloating (AilTypes.Double))) ->
+        Just 8
+    | Core_ctype.Basic (AilTypes.Floating (AilTypes.RealFloating (AilTypes.LongDouble))) ->
+        Just 16
+
+    | Core_ctype.Array _ Nothing ->
+        error "Defacto_memory.tmp_sizeof, Array Nothing"
+    | Core_ctype.Array ty (Just n) ->
+        match tmp_sizeof ty with
+          | Just sz ->
+              Just (sz * n)
+          | Nothing ->
+              Nothing
+        end
+    | Core_ctype.Function _ _ _ ->
+        error "Defacto_memory.tmp_sizeof, Function"
+    | Core_ctype.Pointer _ _ ->
+        Nothing (*Just 8*)
+    | Core_ctype.Atomic ty ->
+        tmp_sizeof ty
+    | Core_ctype.Struct _ ->
+        Nothing
+    | Core_ctype.Union  _ ->
+        Nothing
+    | Core_ctype.Builtin _ ->
+        Nothing
+  end
+
+
+(*
+val     simplify_integer_value_base: bool -> integer_value_base -> either integer integer_value_base
+let rec simplify_integer_value_base do_unfolding ival_ =
+  match ival_ with
+    | IVconcrete n ->
+        Left n
+    | IVop iop ival_s ->
+        let op = match iop with
+          | IntAdd ->
+              fun x y -> x + y
+          | IntSub ->
+              fun x y -> x - y
+          | IntMul ->
+              fun x y -> x * y
+          | IntDiv ->
+              fun x y -> if y = 0 then 0 else Num_extra.integerDiv_t x y
+          | IntRem_t ->
+              fun x y -> if y = 0 then 0 else Num_extra.integerRem_t x y
+          | IntRem_f ->
+              fun x y -> if y = 0 then 0 else Num_extra.integerRem_f x y
+          | IntExp ->
+              fun x y -> x ** natFromInteger y
+        end in
+        match List.map (simplify_integer_value_base do_unfolding) ival_s with
+          | [Left n1; Left n2] ->
+              Left (op n1 n2)
+          | [Left n1; Right ival_2] ->
+              match iop with
+                | IntAdd ->
+                    if n1 = 0 then
+                      Right ival_2
+                    else
+                      Right (IVop iop [IVconcrete n1; ival_2])
+                | _ ->
+                    Right (IVop iop [IVconcrete n1; ival_2])
+              end
+          | [Right ival_1; Left n2] ->
+              match iop with
+                | IntAdd ->
+                    if n2 = 0 then
+                      Right ival_1
+                    else
+                      Right (IVop iop [ival_1; IVconcrete n2])
+                | _ ->
+                    Right (IVop iop [ival_1; IVconcrete n2])
+              end
+          | [Right ival_1; Right ival_2] ->
+              Right (IVop iop [ival_1; ival_2])
+          | _ ->
+              error "Mem.simplify_integer_value_base"
+        end
+    | IVfromptr ref_ty ity (PVfromint ival_') ->
+        simplify_integer_value_base do_unfolding ival_'
+    
+    
+    | IVsizeof ty ->
+        if do_unfolding then
+          match tmp_sizeof ty with
+            | Just n ->
+                Left n
+            | Nothing ->
+                Right ival_
+          end
+        else
+          Right ival_
+    
+    | IVmax ity ->
+        if do_unfolding then
+          match ity with
+            | AilTypes.Signed (AilTypes.IntN_t _) ->
+                Left (snd (integer_range ity))
+            | AilTypes.Unsigned (AilTypes.IntN_t _) ->
+                Left (snd (integer_range ity))
+            | _ ->
+                (* TODO: fixing implementation for debug *)
+                Left (snd (integer_range ity))
+          end
+        else
+          Right ival_
+
+    | IVmin ity ->
+        if do_unfolding then
+          match ity with
+            | AilTypes.Signed (AilTypes.IntN_t _) ->
+                Left (fst (integer_range ity))
+            | AilTypes.Unsigned (AilTypes.IntN_t _) ->
+                Left (fst (integer_range ity))
+            | _ ->
+                (* TODO: fixing implementation for debug *)
+                Left (fst (integer_range ity))
+          end
+        else
+          Right ival_
+    
+(*
+    | IVbitwise ity (BW_XOR ival_1 ival_2) ->
+        match (simplify_integer_value_base do_unfolding ival_1, simplify_integer_value_base do_unfolding ival_2) with
+          | (Left n1, Left n2) ->
+              
+        end
+*)
+    
+    | _ ->
+        (* TODO: can probably do much more *)
+        Right ival_
+  end
+*)
+
+val eval_integer_value_base: integer_value_base -> maybe integer
+let eval_integer_value_base ival_ =
+  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
+
+
+val impl_eval_integer_value: impl_integer_value -> maybe integer
+let impl_eval_integer_value (IV _ ival_) =
+  eval_integer_value_base ival_
+
+(*
+  match ival_ with
+    | IVconcrete n ->
+        Just n
+    | IVop iop ival_s ->
+        let op = match iop with
+          | IntAdd ->
+              fun x y -> x + y
+          | IntSub ->
+              fun x y -> x - y
+          | IntMul ->
+              fun x y -> x * y
+          | IntDiv ->
+              fun x y -> if y = 0 then 0 else x / y
+          | IntMod ->
+              fun x y -> if y = 0 then 0 else x mod y
+          | IntExp ->
+              fun x y -> x ** natFromInteger y
+        end in
+        match (iop, List.map eval_integer_value_base ival_s) with
+          | (_, [Just n1; Just n2]) ->
+              Just (op n1 n2)
+          | _ ->
+              Nothing
+        end
+    | IVfromptr ref_ty (PVfromint ival_') ->
+        eval_integer_value_base ival_'
+    
+    | _ ->
+        (* TODO: can probably do much more *)
+        Nothing
+  end
+*)
+
+
+
+
+val ifFlag: forall 'a. memory_flag -> impl_memM 'a -> impl_memM 'a -> impl_memM 'a
+let ifFlag flag mThen mElse =
+  get >>= fun st ->
+  if List.elem flag st.flags then
+    mThen
+  else
+    mElse
+
+
+
+
+
+val condM: string -> mem_constraint impl_integer_value -> impl_memM bool
+let condM debug_str cs =
+  ifM debug_str cs (return true) (return false)
+
+
+
+
+(* ============================================================================================== *)
+
+val print_debugM: nat -> (unit -> string) -> impl_memM unit
+let print_debugM n msg =
+  return (Debug.print_debug n [Debug.DB_memory] msg)
+
+
+
+val debug_check: string -> bool -> impl_memM unit
+let debug_check str = function
+  | true ->
+      return ()
+  | false ->
+      fail (MerrInternal ("debug_check failed ==> " ^ str))
+end
+
+
+
+
+
+
+(*
+  | Prov_wildcard
+  | Prov_none
+  | Prov_device
+  | Prov_some of set provenance_id (* INVARIANT: non empty set *)
+*)
+(*
+val share_common: provenance -> provenance -> bool
+let share_common prov1 prov2 =
+  match (prov1, prov2) with
+    | 
+  end
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+(*         |  empty    ID       ID'      wildcard
+  ---------+-------------------------------------
+  empty    |  empty    ID       ID'      wildcard
+  ID       |  ID       ID       empty    wildcard
+  ID'      |  ID'      empty    ID'      wildcard
+  wildcard |  wildcard wildcard wildcard wildcard *)
+val combine_prov: provenance -> provenance -> provenance
+let combine_prov prov1 prov2 =
+  match (prov1, prov2) with
+    | (Prov_none, Prov_none) ->
+        Prov_none
+    | (Prov_none, Prov_some id) ->
+        Prov_some id
+    | (Prov_none, Prov_wildcard) ->
+        Prov_wildcard
+    | (Prov_none, Prov_device) ->
+        Prov_device
+    
+    | (Prov_some id, Prov_none) ->
+        Prov_some id
+    | (Prov_some id1, Prov_some id2) ->
+        if id1 = id2 then
+          Prov_some id1
+        else
+          Prov_none
+    | (Prov_some _, Prov_wildcard) ->
+        Prov_wildcard
+    | (Prov_some _, Prov_device) ->
+        Prov_device
+    
+    | (Prov_device, Prov_none) ->
+        Prov_device
+    | (Prov_device, Prov_some _) ->
+        Prov_device
+    | (Prov_device, Prov_device) ->
+        Prov_device
+    | (Prov_device, Prov_wildcard) ->
+        Prov_wildcard
+    
+    | (Prov_wildcard, _) ->
+        Prov_wildcard
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+(* Wellformedness predicates (following the comments in the definitions of the related types). *)
+val wf_pointer_value: impl_pointer_value -> bool
+let wf_pointer_value = function
+  | PV Prov_none (PVnull _) _ ->
+      true
+  | PV _ (PVnull _) _ ->
+      false
+  | _ ->
+      true (* TODO !!!! error "WIP: wf_pointer_value" *)
+end
+
+
+
+
+
+(* Returns whether a given allocation has reached the end of its lifetime *)
+val is_dead: allocation_id -> impl_memM bool
+let is_dead alloc_id =
+  get >>= fun mem_st ->
+  return (Set.member alloc_id mem_st.dead_allocations)
+
+
+(* TODO: why is that effectfull? *)
+val     explicitAllocationIdFromPointer_value_aux: pointer_value_base -> impl_memM (maybe allocation_id)
+let rec explicitAllocationIdFromPointer_value_aux ptr_val_ =
+  match ptr_val_ with
+    | PVnull _ ->
+        return Nothing
+    | PVfunction _ ->
+        return Nothing
+    | PVbase alloc_id _ ->
+        return (Just alloc_id)
+    | PVfromint ival_ ->
+        explicitAllocationIdFromInteger_value_aux ival_
+  end
+
+and explicitAllocationIdFromInteger_value_aux  ival_ =
+  match ival_ with
+    | IVunspecified ->
+        return Nothing
+    | IVconcurRead _ _ ->
+        return Nothing
+    | IVconcrete _ ->
+        return Nothing
+    | IVaddress _ ->
+        return Nothing
+    | IVfromptr _ ity ptr_val_ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_
+    | IVop _ _ ->
+        return Nothing
+    | IVmin _ ->
+        return Nothing
+    | IVmax _->
+        return Nothing
+    | IVsizeof _->
+        return Nothing
+    | IValignof _->
+        return Nothing
+    | IVpadding _ _->
+        return Nothing
+    | IVptrdiff _ _ _->
+        return Nothing
+    | IVbyteof _ _->
+        return Nothing
+    | IVcomposite _ ->
+        return Nothing
+    | IVbitwise _ _ ->
+        return Nothing
+  end
+
+
+
+
+(* Making an indirection here, so that future crazy optimisations won't be duplicated all over. *)
+let mk_op_ival_ iop ival_1 ival_2 =
+  lifted_simplify_integer_value_base (IVop iop [ival_1; ival_2])
+
+
+
+let mk_offsetof_ival_ acc tag_sym memb_ident =
+  match Core_ctype_aux.get_membersDefs tag_sym with
+    | Core_ctype.StructDef xs ->
+        (* we take the prefix the members before the one we want to offset to *)
+        let prefix_xs =
+          List.takeWhile (fun (ident, _) -> memb_ident <> ident) xs in
+        (* then we sum their sizeof and trailing paddings *)
+        List.foldl (fun acc' (ident, ty) ->
+          if ident = memb_ident then
+            (* TODO: this should be dead code since we fold on the prefix *)
+            acc'
+          else
+            mk_op_ival_ IntAdd (IVsizeof ty)
+              (mk_op_ival_ IntAdd (IVpadding tag_sym ident) acc')
+        ) acc (List.reverse prefix_xs)
+    | Core_ctype.UnionDef _ ->
+        (* TODO: check, but if we have a struct this should be no offset to do *)
+        acc
+  end
+
+
+
+let impl_offsetof_ival tag_sym memb_ident =
+(*  IV Prov_none (lifted_simplify_integer_value_base (IVoffsetof tag_sym membr_ident)) *)
+  IV Prov_none (mk_offsetof_ival_ (IVconcrete 0) tag_sym memb_ident)
+
+
+
+
+
+val integer_value_baseFromShift_path: shift_path -> integer_value_base
+let integer_value_baseFromShift_path sh =
+  List.foldl (fun acc spe ->
+    let spe_ival_ = match spe with
+      | SPE_array ty ival_ ->
+          mk_op_ival_ IntMul (IVsizeof ty) ival_
+      | SPE_member tag_sym memb_ident ->
+          mk_offsetof_ival_ acc tag_sym memb_ident
+    end in
+    mk_op_ival_ IntAdd spe_ival_ acc
+  ) (IVconcrete 0) sh
+
+
+
+
+
+
+
+
+
+
+
+
+let impl_prettyStringFromMem_value mval =
+  error "WIP: prettyStringFromMem_value"
+
+
+
+(*
+type memM 'a =
+  mem_state -> list (list Symbolic.symbolic * either mem_error ('a * mem_state))
+*)
+let impl_runMem m st =
+  error "impl_runMem"
+(*
+  let xs = m st in
+  if List.null xs then
+    error "runMem: empty"
+  else
+    xs
+*)
+
+
+let impl_initial_mem_state = <|
+  flags= [];
+  allocation_id_suppl= UniqueId.new_supply;
+  
+  allocations= Map.empty;
+  dead_allocations= Set.empty;
+  
+  access_log= [];
+|>
+
+
+
+
+val get_allocation_id: pointer_value_base -> maybe allocation_id
+let rec get_allocation_id ptr_val_ =
+  match ptr_val_ with
+    | PVnull ty ->
+        Nothing
+    | PVbase alloc_id _ ->
+        Just alloc_id
+    | PVfromint (IVfromptr ref_ty ity ptr_val_') ->
+        get_allocation_id ptr_val_'
+    | _ ->
+        error "TODO: get_allocation_id, wildcard"
+  end
+
+
+
+(* Make a given address disjoint to all other existing address *)
+val register_distinctness_constraints: address -> integer_value_base -> impl_memM unit
+let register_distinctness_constraints addr ival_ =
+  error "register_distinctness_constraints"
+(*
+  get >>= fun mem_st ->
+  put <| mem_st with
+    constraints= add_constraint (MC_addr_distinct addr
+                                   (Set.filter (fun addr' -> addr <> addr') mem_st.addresses)) mem_st.constraints
+  |>
+         
+(*  wip "add_constraints [MC_addr_distinct addr_id (Set.filter (fun addr_id' -> addr_id <> addr_id') (Map.domain mem_st.addresses))]" *)
+*)
+
+
+
+
+
+val     mkUnspec: ctype -> impl_mem_value
+let rec mkUnspec ty =
+  match ty with
+    | Basic (AilTypes.Integer ity) ->
+        MVinteger ity (IV Prov_none IVunspecified) 
+    | Basic (AilTypes.Floating fty) ->
+        MVfloating fty FVunspecified
+    | Array ty (Just n) ->
+        MVarray $ replicate (natFromInteger n) (mkUnspec ty)
+    | (Pointer _ ty') ->
+        MVpointer ty' (PV Prov_none (PVunspecified ty') [])
+(*
+    | (Atomic _ as ty) ->
+        MVunspecified ty
+*)
+    | Struct tag_sym ->
+        let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+        MVstruct tag_sym (
+          List.map (fun (ident, ty) -> (ident, mkUnspec ty)) xs
+        )
+(*
+    | (Union tag as ty) ->
+        let () = Debug.warn "mkUnspec, Union ==> this is wrong" in
+        MVunion  ty
+*)
+(*
+    | (Builtin _ as ty) ->
+        MVunspecified ty
+*)
+    | _ ->
+        error ("Mem.mkUnspec: invalid type ==> " ^ stringFromCtype ty)
+  end
+
+
+
+(*
+val     traverse_with_shift_path: tag_definitions -> mem_value -> shift_path -> (mem_value -> mem_value)
+let rec traverse_with_shift_path tagDefs mval sh =
+  match (mval, sh) with
+    | (_, []) ->
+        fun z -> z
+    | (MVarray mvals, (SPE_array _ ival_) :: sh') ->
+        match simplify_integer_value_base ival_ with
+          | IVconcrete n ->
+              (* TODO: check here for ooba? *)
+              fun z ->
+                MVarray (list_index_update (natFromInteger n) (fun x -> traverse_with_shift_path tagDefs x sh' z) mvals)
+          | _ ->
+              error "traverse_with_shift_path: non-concrete array shift"
+        end
+(*
+    | (MVstruct mval_tag_sym xs, (SPE_member spe_tag_sym memb_ident) :: sh') ->
+        if mval_tag_sym = spe_tag_sym then
+          let Just ident_tys = Map.lookup mval_tag_sym tagDefs in
+          
+        else
+          error "traverse_with_shift_path: wrong struct tag"
+*)
+    | _ ->
+        error ("traverse_with_shift_path: " ^ stringFromMem_value mval ^ ", " ^ stringFromList stringFromShift_path_element sh)
+end
+*)
+
+
+(*
+and shift_path_element =
+  | SPE_array of ctype * integer_value_base
+(*  | SPE_member of ctype * integer (*TODO: bring back symbolic *) *)
+  | SPE_member of Symbol.t (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+ 
+and shift_path =
+  list shift_path_element
+*)
+
+
+
+(*
+val update_mem_value: tag_definitions -> write_event -> mem_value -> mem_value
+let update_mem_value tagDefs (WriteEvent ty (PV prov ptr_val_) mval') mval =
+  match ptr_val_ with
+    | PVbase _ ->
+        mval'
+    | PVshift _ sh ->
+        traverse_with_shift_path tagDefs mval sh mval'
+    
+    | _ ->
+        mval (* TODO *)
+  end
+*)
+
+
+
+
+
+
+
+val register_address_constraints: allocation_id -> integer_value_base -> integer_value_base -> impl_memM unit
+let register_address_constraints alloc_id size_ival_ align_ival_ =
+  get >>= fun st ->
+  (* list of previous allocations that must not clash with
+     the new allocations *)
+  let allocs =
+    List.filter (fun (z, _) ->
+      not (Set.member z st.dead_allocations)
+    ) (Map_extra.toList st.allocations) in
+  let distinctness_constrs =
+    (* forall z_id: allocations, *)
+    List.map (fun (z_id, z_stor) ->
+      let z_size_ival_ = match z_stor with
+        | Storage_static ty _ ->
+            IVsizeof ty
+        | Storage_dynamic ival_ _ ->
+            ival_
+      end in
+      (* @z_id + sizeof(int) <= @alloc_id \/ @alloc_id + sizeof(int) <= @z_id *)
+      MC_or (mk_iv_constr MC_le (IVop IntAdd [IVaddress z_id;     z_size_ival_]) (IVaddress alloc_id))
+            (mk_iv_constr MC_le (IVop IntAdd [IVaddress alloc_id; size_ival_  ]) (IVaddress z_id))
+    ) allocs in
+  (* @alloc_id mod align_ival = 0 *)
+  let align_constr =
+    mk_iv_constr MC_eq (IVop IntRem_f [IVaddress alloc_id; align_ival_]) (IVconcrete 0) in
+  addConstraints "address constraint"
+    ((*simplify_constraint $ *) MC_conj (align_constr :: distinctness_constrs))
+
+
+
+
+
+
+let impl_allocate_static tid pref (IV _ align_ival_) ty =
+  fresh_allocation_id >>= fun alloc_id ->
+  register_address_constraints alloc_id (IVsizeof ty) (align_ival_) >>
+  register_allocation alloc_id (Storage_static ty Nothing) >>
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
+  print_debugM 4 (fun () ->
+    "Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val
+  ) >> (* DEBUG *)
+  return ptr_val
+
+(*
+  (* the allocated object is given a new address (distinct from all other
+     existing addresses) *)
+  fresh_address pref >>= fun addr ->
+  register_distinctness_constraints addr (IVsizeof ty) >>
+  
+  fresh_allocation_id >>= fun alloc_id ->
+  register_allocation alloc_id (Alloc_static ty addr, Nothing (* mkUnspec ty *)) >>
+  
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
+  print_debugM 4 (fun () -> "Allocating (static) with type [" ^ stringFromCtype ty ^ "]: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  
+  return ptr_val
+*)
+
+
+let impl_allocate_dynamic tid pref (IV _ align_ival_) ((IV _ size_ival_) as size_ival) =
+  fresh_allocation_id >>= fun alloc_id ->
+  register_address_constraints alloc_id size_ival_ (align_ival_) >>
+  register_allocation alloc_id (Storage_dynamic size_ival_ []) >>
+  let ptr_val = PV (Prov_some alloc_id) (PVbase alloc_id pref) [] in
+  print_debugM 4 (fun () ->
+    "Allocating (dynamic) with size [" ^ stringFromInteger_value size_ival ^ "]: " ^ stringFromPointer_value ptr_val
+  ) >> (* DEBUG *)
+  return ptr_val
+
+(*
+  (* TODO *)
+  fresh_address pref >>= fun addr ->
+  register_distinctness_constraints addr size_ival_ >>
+  
+  fresh_allocation_id >>= fun alloc_id ->
+  let unsigned_char = Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) in
+  register_allocation alloc_id (Alloc_dynamic size_ival_, Nothing (* mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *))) *)) >>
+  
+  return (
+    PV (Prov_some alloc_id) (PVbase alloc_id pref) []
+  )
+*)
+
+
+let impl_kill (PV _ ptr_val_ sh as ptr_val) =
+  print_debugM 5 (fun () -> "KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
+  explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+    | Just alloc_id ->
+        (* TODO: turn the live pointers to this alloc_id into unspec values *)
+        get >>= fun mem_st ->
+        put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
+  end
+
+
+
+(* TODO: temporary *)
+let structural_equality_provenance prov1 prov2 =
+  match (prov1, prov2) with
+    | (Prov_wildcard, Prov_wildcard) ->
+        true
+    | (Prov_none, Prov_none) ->
+        true
+    | (Prov_device, Prov_device) ->
+        true
+    | (Prov_some id1, Prov_some id2) ->
+        id1 = id2
+    | _ ->
+        false
+  end
+
+let rec structural_equality_pointer_value (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) =
+     structural_equality_provenance prov1 prov2
+  && structural_equality_pointer_value_base ptr_val_1 ptr_val_2
+  && listEqualBy structural_equality_shift_path_element sh1 sh2
+
+and structural_equality_pointer_value_base ptr_val_1 ptr_val_2 =
+  match (ptr_val_1, ptr_val_2) with
+    | (PVnull ty1, PVnull ty2) ->
+        ty1 = ty2
+    | (PVfunction sym1, PVfunction sym2) ->
+        sym1 = sym2
+    | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
+        alloc_id1 = alloc_id2
+    | (PVfromint ival_1, PVfromint ival_2) ->
+        structural_equality_integer_value_base ival_1 ival_2
+    | _ ->
+        false
+  end
+
+and structural_equality_shift_path_element spe1 spe2 =
+  match (spe1, spe2) with
+    | (SPE_array ty1 ival_1, SPE_array ty2 ival_2) ->
+        ty1 = ty2 && structural_equality_integer_value_base ival_1 ival_2
+    | (SPE_member tag_sym1 memb_ident1, SPE_member tag_sym2 memb_ident2) ->
+        tag_sym1 = tag_sym2 && memb_ident1 = memb_ident2
+    | _ ->
+        false
+ end
+ 
+and structural_equality_shift_path sh1 sh2 =
+  List.all (uncurry structural_equality_shift_path_element) (zip sh1 sh2)
+
+and structural_equality_integer_value_base _ _ =
+  error "structural_equality_integer_value_base"
+
+
+
+
+val is_affecting: write_event -> ctype -> impl_pointer_value -> impl_memM bool
+let is_affection (WriteEvent loc w_ty w_ptr_val mval) r_ty r_ptr_val =
+(*
+  get_allocation_id r_ptr_val >>= fun r_alloc_id_opt ->
+  get_allocation_id w_ptr_val >>= fun w_alloc_id_opt ->
+  match (r_alloc_id_opt, w_alloc_id_opt) with
+    | (Just r_alloc_id, Just w_alloc_id) ->
+        if r_alloc_id = w_alloc_id then
+          condM (MC_conj (MC_le_ival_ (offset_ival_ w_ptr_val) (offset_ival_ r_ptr_val))
+                         (MC_le_ival_ () ())
+        else
+          wip "is_affecting 1"
+        condM (offset_ival 
+  end
+*)
+  error "is_affecting"
+
+
+
+
+
+
+(*
+val find_allocation_id: pointer_value -> memM allocation_id
+let find_allocation_id (PV 
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val     fetch_first_write_event: (write_event -> bool) -> impl_memM (maybe write_event)
+let rec fetch_first_write_event_aux pred = function
+  | [] ->
+      Nothing
+  | x :: xs ->
+      if pred x then Just x else fetch_first_write_event_aux pred xs
+end
+let fetch_first_write_event pred =
+  wip "fetch_frist_write_event"
+(*
+  get >>= fun st ->
+  return (fetch_first_write_event_aux pred st.writes)
+*)
+
+
+
+
+
+
+val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_memM impl_mem_value
+let apply_shift_path_element result_ty spe mval =
+(* TODO: use result_ty *)
+  match (spe, mval) with
+    | (SPE_array elem_ty ival_, MVarray mvals) ->
+        match eval_integer_value_base ival_ with
+          | Just n ->
+              let n = natFromInteger n in
+              if n < 0 || List.length mvals <= n then
+                error "Mem.apply_shift_path_element: out of bound array"
+              else
+                return (fromJust "Defacto_memory.apply_shift_path_element, SPE_array vs MVarray" $ List.index mvals n)
+          | Nothing ->
+              error ("Mem.apply_shift_path_element: symbolic array index ==> " ^
+                     stringFromInteger_value (IV Prov_none ival_))
+        end
+   | (SPE_array elem_ty ival_, MVpointer _ _) ->
+       (* TODO: shouldn't it be using elem_ty instead??? *)
+       if result_ty <> Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) then
+         error ("WIP ==> result_ty <> not unsigned char, SPE_array, MVpointer ===> result_ty = " ^ stringFromCtype result_ty)
+       else
+         return (MVinteger (AilTypes.Unsigned AilTypes.Ichar (* TODO: hack, hack *)) (IV Prov_none (IVbyteof ival_ mval)))
+   
+   | (SPE_member tag_sym memb_ident, MVstruct tag_sym_ xs) ->
+       if tag_sym <> tag_sym_ then
+         error "Mem.apply_shift_path_element, SPE_member vs MVstruct, TODO(msg) the tags didn't match"
+       else
+         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident xs))
+   
+   
+   | (SPE_array elem_ty ival_1, MVinteger ity ival_2) ->
+       error ("result_ty: " ^ stringFromCtype result_ty ^
+              ", spe: " ^ stringFromShift_path [spe] ^
+              ", ity: " ^ stringFromCtype (Basic (AilTypes.Integer ity)))
+   
+   | (SPE_array elem_ty offset_ival_, MVdelayed xs under_mval) ->
+       match xs with
+         | [(sh, new_mval)] ->
+             ifM "apply_shift_path_element"
+               (mk_iv_constr MC_eq (integer_value_baseFromShift_path [SPE_array elem_ty offset_ival_]) (integer_value_baseFromShift_path sh))
+               (return new_mval)
+               
+               (* TODO: hack *)
+               (return (MVinteger (AilTypes.Unsigned AilTypes.Ichar) (IV Prov_none (IVconcrete 142))))
+         | _ ->
+             error "Mem.apply_shift_path_element, HELLO KKK"
+       end
+       
+
+   | (SPE_array _ _, _) ->
+       error ("Mem.apply_shift_path_element, SPE_array ==> mval: " ^ stringFromMem_value mval ^ ", result_ty: " ^ stringFromCtype result_ty)
+   | (SPE_member _ _, _) ->
+       error ("Mem.apply_shift_path_element, SPE_member ==> " ^ stringFromMem_value mval)
+  end
+
+
+let apply_shift_path ty sh mval =
+  (* foldl *)
+  foldM (fun acc spe ->
+    apply_shift_path_element ty spe acc
+  ) mval sh
+
+
+
+
+
+
+
+val addToLog: allocation_id -> impl_memM unit
+let addToLog alloc_id =
+  print_debugM 1 (fun () -> "addToLog: " ^ show alloc_id) >>
+  get >>= fun mem_st ->
+  if List.elem alloc_id mem_st.access_log then
+    fail (MerrOther ("unsequenced race: " ^ show alloc_id))
+  else
+    put <| mem_st with access_log= alloc_id :: mem_st.access_log |>
+
+val impl_sequencePoint: impl_memM unit
+let impl_sequencePoint =
+  get >>= fun mem_st ->
+  put <| mem_st with access_log= [] |>
+
+
+(*
+
+(* Checks that a given pointer can be used *)
+let guard_perform_access kind (PV prov ptrval_ sh) =
+  match prov with
+    | Prov_none 
+
+
+
+  | PV _ PVundefined _ ->
+      error "TODO: guard_perform_access, PVunspecified"
+  | PV Prov_none (PVnull _) _ ->
+        fail (MerrAccess kind NullPtr)
+  | PV Prov_none (PVfunction _) _ ->
+      fail (MerrAccess kind FunctionPtr)
+  | PV prov (PVbase alloc_id pref) sh ->
+      
+  | PV prov (PVfromint ival_) sh ->
+      
+  | _ ->
+      error "Mem.guard_perform_access ill-formed pointer value"
+end
+*)
+
+
+
+
+
+
+let impl_load ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_mem_value) =
+  print_debugM 5 (fun () -> "LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptrval) >> (* DEBUG *)
+  
+  match ptrval_ with
+    (* null and function pointers obviously can't be used for loads. *)
+    | PVnull _     -> fail (MerrAccess LoadAccess NullPtr)
+    | PVfunction _ -> fail (MerrAccess LoadAccess FunctionPtr)
+    
+    | _ ->
+        explicitAllocationIdFromPointer_value_aux ptrval_ >>= function
+          | Just alloc_id ->
+(*        addToLog alloc_id >> *)
+              get >>= fun mem_st ->
+              if Set.member alloc_id mem_st.dead_allocations then
+                fail (MerrAccess LoadAccess DeadPtr)
+              else match Map.lookup alloc_id mem_st.allocations with
+                | Just (Storage_static _ (Just mval)) ->
+                    apply_shift_path ty sh mval >>= fun mval' ->
+                    print_debugM 5 (fun () -> "==> found value (static): " ^ stringFromMem_value mval') >> (* DEBUG *)
+                    return (alloc_id, mval')
+                | Just (Storage_static _ Nothing) ->
+                    return (alloc_id, mkUnspec ty)
+                | Just (Storage_dynamic _ ws) ->
+                    print_debugM 0 (fun () ->
+                      "Loading from dynamic storage, found " ^ show (List.length ws) ^ " write events"
+                    ) >>
+                    error "Mem.load, Storage_dynamic: TODO"
+                | Nothing ->
+                    error "Mem.load, couldn't find some allocation"
+              end
+          | Nothing ->
+              wip ("TODO: load, Nothing ==> " ^ stringFromPointer_value ptrval)
+        end
+  end
+
+
+(*
+  (* TODO: this just find the latest store done with exactly the same pointer value *)
+  fetch_first_write_event (fun (WriteEvent _ ptr_val' _) -> structural_equality_pointer_value ptr_val ptr_val') >>= function
+    | Just (WriteEvent _ _ mval) ->
+        print_debugM 4 ("Loading [" ^ stringFromCtype ty ^ "]: "^ stringFromMem_value mval ^ " from: " ^ stringFromPointer_value ptr_val) >>
+        return mval
+    | Nothing ->
+        fail (MerrWIP "load failed")
+  end
+*)
+
+
+
+
+
+
+
+
+let impl_null_ptrval ty =
+  PV Prov_none (PVnull ty) []
+
+let impl_fun_ptrval sym =
+  PV Prov_none (PVfunction sym) []
+
+
+(*
+val to_shift_path: tag_definitions -> list (Core_ctype.ctype * integer_value) -> shift_path
+let to_shift_path tagDefs xs =
+*)
+
+
+let insert_element_to_path sh spe2 =
+  match List.dest_init sh with
+    | Just (sh', spe1) ->
+        match (spe1, spe2) with
+          | (SPE_array ty1 ival1, SPE_array ty2 ival2) ->
+              if ty1 = ty2 then
+                sh' ++ [SPE_array ty1 (mk_op_ival_ IntAdd ival1 ival2)]
+              else
+                List.snoc spe2 sh
+          | _ ->
+              List.snoc spe2 sh
+        end
+    | Nothing ->
+        [spe2]
+  end
+
+let internal_shift_ptrval ptr_val spe : impl_pointer_value =
+  match ptr_val with
+(*
+    | PV Prov_none _ ->
+        Left (MerrOther "attempted to shift a pointer value with no provenance")
+*)
+    | PV prov ptr_val_ sh ->
+        match get_allocation_id ptr_val_ with
+          | Just alloc_id ->
+              (* TODO: there should a be check for when we go out of an object *)
+              PV prov ptr_val_ (insert_element_to_path sh spe)
+          | Nothing ->
+              (* TODO: here we are probably shifting a NULL pointer, so in ISO this is "unclear" *)
+              (* TODO: add a warning or error in ISO mode *)
+              PV prov ptr_val_ (insert_element_to_path sh spe)
+(*
+              error ("TODO internal_shift_ptrval: shift 2 ==>" ^
+                     stringFromPointer_value ptr_val)
+*)
+        end
+  end
+
+
+let impl_array_shift_ptrval ptr_val ty (IV _ ival_) =
+  let () = Debug.print_debug 5 [Debug.DB_memory] (fun () -> "Mem.array_shift_ptrval: " ^ stringFromPointer_value ptr_val) in
+  internal_shift_ptrval ptr_val (SPE_array ty ival_)
+
+let impl_member_shift_ptrval ptr_val tag_sym memb_ident =
+  internal_shift_ptrval ptr_val (SPE_member tag_sym memb_ident)
+
+
+
+
+
+let impl_concurRead_ival ity sym =
+  IV Prov_none (IVconcurRead ity sym)
+
+let impl_integer_ival n =
+  IV Prov_none (IVconcrete n)
+
+let impl_max_ival ity =
+  IV Prov_none (lifted_simplify_integer_value_base (IVmax ity))
+
+let impl_min_ival ity =
+  IV Prov_none (lifted_simplify_integer_value_base (IVmin ity))
+
+
+
+
+
+let impl_op_ival iop (IV prov1 ival_1) (IV prov2 ival_2) =
+  IV (combine_prov prov1 prov2) (mk_op_ival_ iop ival_1 ival_2)
+
+let rec impl_sizeof_ival_aux ty =
+  match ty with
+    | Core_ctype.Void ->
+        error "Mem.impl_sizeof_ival_aux, Void"
+    | Core_ctype.Basic (AilTypes.Integer ity) ->
+        match Implementation_.sizeof_ity ity with
+          | Just n ->
+              IVconcrete (integerFromNat n)
+          | Nothing ->
+              IVsizeof ty
+        end
+    | Core_ctype.Array _ Nothing ->
+        error "Mem.impl_sizeof_ival_aux, Array Nothing"
+    | Core_ctype.Array elem_ty (Just n) ->
+        IVop IntMul [impl_sizeof_ival_aux elem_ty; IVconcrete n]
+    | Core_ctype.Function _ _ _ ->
+        error "Mem.impl_sizeof_ival_aux, Function"
+    | Core_ctype.Pointer _ _ ->
+        IVconcrete 8 (* TODO *)
+    | Core_ctype.Atomic atom_ty ->
+        impl_sizeof_ival_aux atom_ty
+(*
+ | Struct of struct_tag
+ | Union  of union_tag
+ | Builtin of string
+*)
+end
+
+
+
+let impl_sizeof_ival ty =
+  IV Prov_none (impl_sizeof_ival_aux ty)
+
+let impl_alignof_ival ty =
+  IV Prov_none (IValignof ty)
+
+
+let impl_bitwise_complement_ival ity (IV prov ival_) =
+  IV prov (IVbitwise ity (BW_complement ival_))
+
+let impl_bitwise_and_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_AND ival_1 ival_2))
+
+let impl_bitwise_or_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_OR ival_1 ival_2))
+
+let impl_bitwise_xor_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
+  IV (combine_prov prov1 prov2) (IVbitwise ity (BW_XOR ival_1 ival_2))
+
+
+
+let impl_op_fval fop (FVconcrete fval1) (FVconcrete fval2) =
+  match fop with
+  | FloatAdd -> FVconcrete (fval1 + fval2)
+  | FloatSub -> FVconcrete (fval1 - fval2)
+  | FloatMul -> FVconcrete (fval1 * fval2)
+  | FloatDiv -> FVconcrete (fval1 / fval2)
+  end
+
+let impl_eq_fval (FVconcrete fval1) (FVconcrete fval2) =
+  (fval1 = fval2)
+
+let impl_lt_fval (FVconcrete fval1) (FVconcrete fval2) =
+  (fval1 < fval2)
+
+let impl_le_fval (FVconcrete fval1) (FVconcrete fval2) =
+  (fval1 <= fval2)
+
+let impl_fvfromint (IV _ (IVconcrete ival)) =
+  FVconcrete (Float.of_integer ival)
+
+(* TODO: check type ranges after conversion *)
+let impl_ivfromfloat ity (FVconcrete fval) =
+  IV Prov_none (IVconcrete (Float.to_integer fval))
+
+
+let impl_case_integer_value (IV _ ival) fint fother =
+  match ival with
+    | IVconcrete n ->
+        fint n
+    | _ ->
+        fother ()
+  end
+
+let impl_is_specified_ival (IV _ ival) =
+  match ival with
+    | IVunspecified ->
+        false
+    | _ ->
+        true
+end
+
+let is_concrete_ival ival =
+  error "WIP: is_concrete_ival"
+
+
+(* Memory value constructors *)
+(*
+let symbolic_mval symb =
+  let () = Debug.print_debug 1 "Mem.symbolic_mval !!!!!" in
+  MVsymbolic symb
+*)
+
+let impl_unspecified_mval ty =
+  mkUnspec ty
+
+let impl_integer_value_mval ity ival =
+  MVinteger ity ival
+
+let impl_floating_value_mval fty fval =
+  MVfloating fty fval
+
+let impl_pointer_mval ref_ty ptr_val =
+  MVpointer ref_ty ptr_val
+
+let impl_array_mval = function
+  | [] ->
+      error "Defacto_memory.array_mval, given an empty list"
+  | mvals ->
+      MVarray mvals
+end
+
+let impl_struct_mval tag_sym xs =
+  if List.null xs then
+    error "Defacto_memory.struct_mval, given an empty list of member values"
+  else
+    MVstruct tag_sym xs
+
+let impl_union_mval tag_sym memb_ident mval =
+  MVunion tag_sym memb_ident mval
+
+
+(* Memory value destructor *)
+let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval farr fstruct funion =
+  match mval with
+    | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
+        funspec (Pointer AilTypes.no_qualifiers ref_ty)
+    | MVinteger ity (IV _ IVunspecified) ->
+        funspec (Basic (AilTypes.Integer ity))
+    | MVfloating fty (FVunspecified) ->
+        funspec (Basic (AilTypes.Floating fty))
+
+    | MVinteger ity1 (IV _ (IVconcurRead ity2 sym)) ->
+        (* TODO: check ity1 vs ity2 ? *)
+        fconcur ity2 sym
+    
+    | MVinteger ity ival ->
+        fival ity ival
+    | MVfloating fty fval ->
+        ffval fty fval
+    | MVpointer ref_ty ptr_val ->
+        fptrval ref_ty ptr_val
+    | MVarray mvals ->
+        farr mvals
+    | MVstruct tag_sym xs ->
+        fstruct tag_sym xs
+    | MVunion tag_sym memb_ident mval ->
+        funion tag_sym memb_ident mval
+  end
+
+let impl_case_fval fval funspec fconcrete =
+  match fval with
+    | FVunspecified ->
+        funspec ()
+    | FVconcrete str ->
+        fconcrete str
+  end
+
+val impl_zero_fval: impl_floating_value
+let impl_zero_fval =
+  FVconcrete (Float.of_int 0)
+
+val impl_str_fval: string -> impl_floating_value
+let impl_str_fval str = FVconcrete (Float.of_string str)
+
+
+(*
+val address_of: allocation -> address
+let address_of = function
+  | Alloc_static _ addr ->
+      addr
+  | Alloc_dynamic _ addr ->
+      addr
+end
+*)
+
+
+val isEmptyShift: shift_path -> bool
+let isEmptyShift = function
+  | [] ->
+      true
+  | _ ->
+      false
+end
+
+val     isBeginningShift: shift_path -> impl_memM bool
+let rec isBeginningShift sh =
+  match sh with
+    | [] ->
+        return true
+    | (SPE_array _ ival_) :: sh' ->
+        ifM "isBeginningShift"
+          (mk_iv_constr MC_eq ival_ (IVconcrete 0))
+            (isBeginningShift sh')
+            (return false)
+    | (SPE_member tag_sym memb_ident) :: sh' ->
+        let xs = match Core_ctype_aux.get_membersDefs tag_sym with
+          | Core_ctype.StructDef z -> z
+          | Core_ctype.UnionDef  z -> z
+        end in
+        match xs with
+          | [] ->
+              error "Mem.isBeginningShift, get_membersDefs returning an empty list"
+          | (memb_ident', _) :: _ ->
+              return (memb_ident = memb_ident')
+        end
+  end
+
+
+
+
+val is_one_past_pointer: impl_pointer_value -> impl_memM bool
+let is_one_past_pointer (PV _ ptr_val_ sh) =
+  match ptr_val_ with
+    | PVnull _ ->
+        return false
+    | PVfunction _ ->
+        return false
+    | _ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+          | Just alloc_id ->
+              resolve_allocation alloc_id >>= fun stor ->
+                let size_ival_ = match stor with
+                  | Storage_static ty _ ->
+                      IVsizeof ty
+                  | Storage_dynamic ival_ _ ->
+                      ival_
+                end in
+                (* |sh| = sizeof ty *)
+                condM "is_one_past_pointer"
+                  (mk_iv_constr MC_eq (integer_value_baseFromShift_path sh) size_ival_)
+          | Nothing ->
+              wip "is_one_past_pointer, implicit allocation"
+        end
+  end
+
+(* TODO: wip *)
+let real_address_expression_of_pointer (PV _ ptrval sh) =
+  let ival_ = match ptrval with
+    | PVunspecified ty ->
+        error "real_address_expression_of_pointer, PVunspecified"
+    | PVnull ty ->
+        error "real_address_expression_of_pointer, PVnull"
+    | PVfunction sym ->
+        error "real_address_expression_of_pointer, PVfunction"
+    | PVbase alloc_id pref ->
+        IVaddress alloc_id
+    | PVfromint ival_ ->
+        ival_
+  end in
+  IVop IntAdd [ival_; integer_value_baseFromShift_path sh]
+
+
+(* TODO: (for statics) this is not doing the right thing *)
+(* TODO: by calling real_address_expression_of_pointer, this is now correct *)
+val address_expression_of_pointer: impl_pointer_value -> impl_memM integer_value_base
+let address_expression_of_pointer ptr_val =
+  return (real_address_expression_of_pointer ptr_val)
+(*
+let address_expression_of_pointer (PV _ ptr_val_ sh) =
+  match ptr_val_ with
+    | PVnull _ ->
+        fail (MerrInternal "called [address_expression_of_pointer] on null pointer")
+    | PVfunction _ ->
+        fail (MerrInternal "called [address_expression_of_pointer] on function pointer")
+    | _ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+          | Just alloc_id ->
+              resolve_allocation alloc_id >>= function
+                | Storage_static ty _ ->
+                  return $ mk_op_ival_ IntAdd (IVaddress alloc_id) (IVsizeof ty)
+                | Storage_dynamic ival_ _ ->
+                  return $ mk_op_ival_ IntAdd (IVaddress alloc_id) ival_
+              end
+          | Nothing ->
+              wip "address_expression_of_pointer, implicit allocation"
+        end
+end
+*)
+
+
+
+(*
+let rec integerTypes_of_ival ival =
+  match ival with
+    | IVconcrete _ ->
+        Nothing
+    | IVaddress _ ->
+        Nothing
+(*
+    | IVfromptr _ _ ->
+        [Cty.intptr_t; Cty.unintptr_t]
+*)
+    | IVop _ [ival_1; ival_2] ->
+        
+    | IVmin ity ->
+        
+    | IVmax of AilTypes.integerType
+    | IVsizeof of ctype
+    | IValignof of ctype
+    | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+    | IVptrdiff of pointer_value_base * pointer_value_base
+    | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
+    | IVcomposite of list integer_value_base
+  end
+*)
+
+
+
+
+
+
+(* WIP *)
+let impl_eq_ptrval ptr_val1 ptr_val2 =
+  print_debugM 6 (fun () -> "Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
+                  stringFromPointer_value ptr_val2) >>
+  match (ptr_val1, ptr_val2) with
+    | (PV prov1 ptr_val1_ sh1, PV prov2 ptr_val2_ sh2) ->
+        match (ptr_val1_, ptr_val2_) with
+          | (PVnull _, PVnull _) ->
+              (* STD §6.5.9#6 *)
+              return true
+          | (PVfunction sym1, PVfunction sym2) ->
+              return (sym1 = sym2)
+          | (PVnull _, _) ->
+              return false
+          | (_, PVnull _) ->
+              return false
+          | _ ->
+              explicitAllocationIdFromPointer_value_aux ptr_val1_ >>= fun alloc_id1_opt ->
+              explicitAllocationIdFromPointer_value_aux ptr_val2_ >>= fun alloc_id2_opt ->
+              match (alloc_id1_opt, alloc_id2_opt) with
+                | (Just alloc_id1, Just alloc_id2) ->
+                    ifFlag Allow_disjoint_alloc_tests
+                        (* non-STD flag *)
+                        begin
+                          address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
+                          address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
+                          ifM "eq_ptrval1"
+                            (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
+                              (* then *)
+                              (wip "then")
+                              (* else *)
+                              (wip "else")
+                        end
+                        
+                        (* STD case *)
+                        begin
+                          if alloc_id1 = alloc_id2 then
+                            (* this tests that at least one pointer is to a base object and the two
+                               is to either also to that base object or a beginning subobject *)
+                            if      isEmptyShift sh1 then isBeginningShift sh2
+                            else if isEmptyShift sh2 then isBeginningShift sh1
+                            else
+                              (* the pointers are to a same subobject *)
+                              return (sh1 = sh2)
+                          
+                          else
+                            is_one_past_pointer ptr_val1 >>= function
+                              | true ->
+                                  address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
+                                  address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
+                                  condM "eq_ptrval - left is one past"
+                                    (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
+                              | false ->
+                                  is_one_past_pointer ptr_val2 >>= function
+                                    | true ->
+                                        address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
+                                        address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
+                                        condM "eq_ptrval - right is one past"
+                                          (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
+                                    | false ->
+                                        return false
+                                  end
+                            end
+                        end
+                | _ ->
+                    error "WIP: Mem.eq_ptrval, not (Just alloc_id1, Just alloc_id2)"
+              end
+
+
+
+
+
+        end
+  end
+
+
+let rec silly_sh_eq sh1 sh2 =
+  match (sh1, sh2) with
+    | ([], []) ->
+        Just true
+    | (SPE_array ty1 ival_1 :: sh1', SPE_array ty2 ival_2 :: sh2') ->
+        if ty1 = ty2 then
+          match (eval_integer_value_base ival_1, eval_integer_value_base ival_2) with
+            | (Just n1, Just n2) ->
+                if n1 = n2 then silly_sh_eq sh1' sh2' else Nothing
+            | _ ->
+              Nothing
+          end
+        else
+          Nothing
+    | (SPE_member tag_sym1 membr_ident1 :: sh1', SPE_member tag_sym2 membr_ident2 :: sh2') ->
+        if tag_sym1 = tag_sym2 && membr_ident1 = membr_ident2 then
+          silly_sh_eq sh1' sh2'
+        else
+          Nothing
+  end
+
+(* TODO: more .... *)
+let impl_ne_ptrval (PV prov1 ptr_val_1 sh1 as ptrval1) (PV prov2 ptr_val_2 sh2 as ptrval2) =
+  match (ptr_val_1, ptr_val_2) with
+  | (PVnull _, PVnull _)->
+      return false
+  | (PVnull _, PVbase _ _) ->
+      return true
+  | (PVbase _ _, PVnull _) ->
+      return true
+  | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
+      if sh1 = [] && sh2 = [] then
+        return (alloc_id1 <> alloc_id2)
+      else
+        match (silly_sh_eq sh1 sh2) with
+          | Just true ->
+              return (alloc_id1 <> alloc_id2)
+          | _ ->
+              error ("WIP(1): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+        end
+        
+
+  | _ ->
+      error ("WIP(2): ne_ptrval ==> " ^ stringFromPointer_value ptrval1 ^ " <|> " ^ stringFromPointer_value ptrval2)
+  end
+
+
+
+
+let impl_lt_ptrval ptrval1 ptrval2 =
+  let ival_1 = real_address_expression_of_pointer ptrval1 in
+  let ival_2 = real_address_expression_of_pointer ptrval2 in
+  condM "lt_ptrval" (mk_iv_constr MC_lt ival_1 ival_2)
+
+let impl_gt_ptrval ptrval1 ptrval2 =
+  let ival_1 = real_address_expression_of_pointer ptrval1 in
+  let ival_2 = real_address_expression_of_pointer ptrval2 in
+  condM "gt_ptrval" (mk_iv_constr MC_lt ival_2 ival_1)
+
+let impl_le_ptrval ptrval1 ptrval2 =
+  let ival_1 = real_address_expression_of_pointer ptrval1 in
+  let ival_2 = real_address_expression_of_pointer ptrval2 in
+  condM "le_ptrval" (mk_iv_constr MC_le ival_1 ival_2)
+
+let impl_ge_ptrval ptrval1 ptrval2 = 
+  let ival_1 = real_address_expression_of_pointer ptrval1 in
+  let ival_2 = real_address_expression_of_pointer ptrval2 in
+  condM "ge_ptrval" (mk_iv_constr MC_le ival_2 ival_1)
+
+
+
+(*
+When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object;
+
+If the result is not representable in an object of that type, the behavior is undefined.
+
+*)
+
+
+(* TODO: check that, std says:
+Moreover, if the expression P points either to an element of an array object or
+one past the last element of an array object, and the expression Q points to the
+last element of the same array object, the expression ((Q)+1)-(P) has the same
+value as ((Q)-(P))+1 and as -((P)-((Q)+1)), and has the value zero if the
+expression P points one past the last element of the array object, even though
+the expression (Q)+1 does not point to an element of the array object.
+*)
+(* STD §6.5.6#9 *)
+let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
+  match (ptrval1, ptrval2) with
+    | (PV (Prov_some alloc_id1) ptr_val_1 sh1, PV (Prov_some alloc_id2) ptr_val_2 sh2) ->
+        if alloc_id1 = alloc_id2 then
+          address_expression_of_pointer ptrval1 >>= fun ival1 ->
+          address_expression_of_pointer ptrval2 >>= fun ival2 ->
+          resolve_allocation alloc_id1 >>= function
+            | Storage_static ty _ ->
+                (* STD §6.5.9#9 sentence1 *)
+                ifM "diff_ptrval_6.5.9#9__sentence_1"
+                  (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id1) ival1
+                           ; mk_iv_constr MC_le ival1 (IVop IntAdd [IVaddress alloc_id1; IVsizeof ty])
+                           ; mk_iv_constr MC_le (IVaddress alloc_id1) ival2
+                           ; mk_iv_constr MC_le ival2 (IVop IntAdd [IVaddress alloc_id1; IVsizeof ty]) ])
+                    (* NOTE: the result of subtraction of two pointer values is an integer value with
+                       empty provenance, irrespective of the operand provenances *)
+                  (return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2))))
+                  (fail MerrPtrdiff)
+            | Storage_dynamic _ _ ->
+                error "Mem.impl_diff_ptrval, Storage_dynamic"
+          end
+        else
+          fail MerrPtrdiff
+    | _ ->
+        fail MerrPtrdiff
+  end
+
+
+
+    
+(* TODO: looks too simple to be true *)
+let impl_intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
+  let ival = IV Prov_none (
+    mk_op_ival_ IntAdd (IVfromptr ref_ty ity ptr_val_) (integer_value_baseFromShift_path sh)
+   ) in
+  match ity with
+    | AilTypes.Signed AilTypes.Intptr_t ->
+        return ival
+    | AilTypes.Unsigned AilTypes.Intptr_t ->
+        return ival
+    | AilTypes.Unsigned AilTypes.Long ->
+        (* TODO: check that it's ok to assume intptr_t to caracterise the
+           size of pointers *)
+        (* TODO: maybe we should have a flag *)
+        let intptr_t =
+          Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intptr_t)) in
+        let unsigned_long =
+          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in
+        ifM "intcast_ptrval (unsigned long)"
+          (mk_iv_constr MC_le (IVsizeof intptr_t) (IVsizeof unsigned_long))
+          (return ival)
+          (fail (MerrWIP "casting a pointer to unsigned long, but the type is too small"))
+    | _ ->
+        fail (MerrWIP "casting a pointer to an invalid integer type")
+  end
+
+let impl_validForDeref_ptrval ptr_val =
+  let () = Debug.warn [] (fun () ->
+    "Mem.impl_validForDeref_ptrval IS WRONG"
+  ) in
+  true
+
+
+
+
+(* integer types minimal range (STD Annex E #1) *)
+val minimal_range: AilTypes.integerType -> bool * integer * integer
+let minimal_range ity =
+  let (min,max) = integer_range ity in
+  (true, min, max)
+(*
+let minimal_range = function
+ | AilTypes.Char ->
+     (* TODO: making an impl-choice here ===> char = signed char *)
+     (true, 0-127, 127)
+ | AilTypes.Bool ->
+     error "WIP: Mem.minimal_range, Bool"
+ | AilTypes.Signed AilTypes.Ichar ->
+     (true, 0-127, 127)
+ | AilTypes.Signed AilTypes.Short ->
+     (false, 0-32767, 32767)
+ | AilTypes.Signed AilTypes.Int_ ->
+     (false, 0-32767, 32767)
+ | AilTypes.Signed AilTypes.Long ->
+     (false, 0-2147483647, 2147483647)
+ | AilTypes.Signed AilTypes.LongLong ->
+     (false, 0-(2**63-1), 2**63-1)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int8_t")  ->
+     (true, 0-127, 127)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int16_t")  ->
+     (true, 0-32767, 32767)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int32_t")  ->
+     (true, 0-2147483647, 2147483647)
+ | AilTypes.Signed (AilTypes.IBBuiltin "int64_t")  ->
+     (true, 0-(2**63-1), 2**63-1)
+ | AilTypes.Signed (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.minimal_range, Signed IBBuiltin ==> " ^ str)
+ | AilTypes.Unsigned AilTypes.Ichar ->
+     (true, 0, 255)
+ | AilTypes.Unsigned AilTypes.Short ->
+     (false, 0, 65535)
+ | AilTypes.Unsigned AilTypes.Int_ ->
+     (false, 0, 65535)
+ | AilTypes.Unsigned AilTypes.Long ->
+     (false, 0, 4294967295)
+ | AilTypes.Unsigned AilTypes.LongLong ->
+     (false, 0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int8_t")  ->
+     (true, 0, 255)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int16_t")  ->
+     (true, 0, 65535)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int32_t")  ->
+     (true, 0, 4294967295)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin "int64_t")  ->
+     (true, 0, 2**64-1)
+ | AilTypes.Unsigned (AilTypes.IBBuiltin str)  ->
+     error ("WIP: Mem.minimal_range, Unsigned IBBuiltin ==> " ^ str)
+ | AilTypes.IBuiltin str ->
+     error ("WIP: Mem.minimal_range, IBuiltin ==> " ^ str)
+ | AilTypes.Enum sym ->
+     error "WIP: Mem.minimal_range, Enum"
+end
+*)
+
+
+
+let rec impl_eq_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
+  match (ival_1, ival_2) with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 = n2)
+    | _ ->
+        Nothing
+  end
+(*
+  let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_1) in
+  let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base false ival_2) in
+  match (ival_1', ival_2') with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 = n2)
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        if n = 0 then
+          match get_membersDefs tag_sym with
+            | (ident', _)::_ ->
+                if membr_ident = ident' then
+                  (* TODO: assuming no prefix padding *)
+                  Just true
+                else
+                  Just false
+            | _ ->
+                error "Mem.eq_ival, get_membersDefs returned an empty list"
+          end
+        else
+          Nothing
+    | (IVmin ity, IVconcrete n) ->
+        let (is_exact, min, _) = minimal_range ity in
+        if is_exact then
+          Just (min < n)
+        else
+          if min < n then
+            Just false
+          else
+            Nothing
+          
+    | (IVbyteof ival_1' (MVpointer ref_ty1 ptr_val1), IVbyteof ival_2' (MVpointer ref_ty2 ptr_val2)) ->
+        if ref_ty1 <> ref_ty2 then
+          Just false
+        (* TODO: check the provs *)
+        else match impl_eq_ival mem_st_opt (IV prov1 ival_1') (IV prov2 ival_2') with
+          | Just true ->
+              maybe Nothing (fun mem_st ->
+                match impl_runMem (impl_eq_ptrval ptr_val1 ptr_val2) mem_st with
+                  | [Right (b, _)] ->
+                      Just b
+                  | _ ->
+                    Nothing
+                end) mem_st_opt
+          | Just false ->
+              Just false
+          | Nothing ->
+              (* TODO *)
+              Nothing
+        end
+    | _ ->
+        let ival_1'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1') in
+        let ival_2'' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2') in
+        match (ival_1'', ival_2'') with
+          | (IVconcrete n1, IVconcrete n2) ->
+              Just (n1 = n2)
+          | _ ->
+              (* TODO *)
+              Nothing
+        end
+  end
+*)
+
+
+
+let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
+  let ival_1' = lifted_simplify_integer_value_base ival_1 in
+  let ival_2' = lifted_simplify_integer_value_base ival_2 in
+  match (ival_1', ival_2') with
+    | (IVconcrete n1, IVconcrete n2) ->
+        Just (n1 < n2)
+    
+    | (IVfromptr _ ity1 _, IVmin ity2) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval, not (Ivfromptr(ref_ty, ptrval) < Ivmin(\"intptr_t\"))"
+        ) in
+        if ity1 = ity2 then
+          Just false
+        else
+          Nothing
+    
+    | (IVmax ity1, IVfromptr _ ity2 _) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval, Ivmax(\"intptr_t\") < Ivfromptr(ref_ty, ptrval)"
+        ) in
+        if ity1 = ity2 then
+          Just false
+        else
+          Nothing
+(*
+    | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmin (AilTypes.Signed AilTypes.Intptr_t)) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval, not (Ivfromptr(ref_ty, ptrval) < Ivmin(\"intptr_t\"))"
+        ) in
+        Just false
+    
+    | (IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _, IVmin (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) < Ivmin(\"uintptr_t\")"
+        ) in
+        Just false
+    
+    | (IVmax (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval, Ivmax(\"intptr_t\") < Ivfromptr(ref_ty, ptrval)"
+        ) in
+        Just false
+    
+    | (IVmax (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _) ->
+        let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+          "using axiom ==> forall ref_ty ptrval,  Ivmax(\"uintptr_t\") < Ivfromptr(ref_ty, ptrval)"
+        ) in
+        Just false
+*)
+    | (IVbitwise ity1 _, IVmin ity2) ->
+        if ity1 = ity2 then
+          Just false
+        else
+          Nothing
+    | (IVmax ity1, IVbitwise ity2 _) ->
+        if ity1 = ity2 then
+          Just false
+        else
+          Nothing
+    
+    | (IVconcrete n, IVsizeof _) ->
+        if n <= 0 then
+          Just true
+        else
+          Nothing
+    
+    | (IVmin _, IVsizeof _) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+        Just true
+    | (IVmin _, IValignof _) ->
+        let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+        Just true
+    
+    | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+        error "WIP"
+(*
+        if n <= 0 then
+          match get_membersDefs tag_sym with
+            | (ident', _)::_ ->
+                if membr_ident = ident' then
+                  (* TODO: assuming no prefix padding *)
+                  Just false
+                else
+                  Just true
+            | _ ->
+                error "Mem.lt_ival, get_membersDefs returned an empty list"
+          end
+        else
+          Nothing
+*)
+    
+    | (IVmin ity, IVconcrete n) ->
+        let (is_exact, min, _) = minimal_range ity in
+        if is_exact then
+          Just (min < n)
+        else
+          if min < n then
+            Just true
+          else
+            Nothing
+
+    | (IVconcrete n, IVmax ity) ->
+        let (is_exact, _, max) = minimal_range ity in
+        if is_exact then
+          Just (n < max)
+        else
+          if n < max then
+            Just true
+          else
+            Nothing
+
+    | _ ->
+        let ival_1'' = lifted_simplify_integer_value_base ival_1' in
+        let ival_2'' = lifted_simplify_integer_value_base ival_2' in
+        match (ival_1'', ival_2'') with
+          | (IVconcrete n1, IVconcrete n2) ->
+              Just (n1 < n2)
+          | _ ->
+              (* TODO *)
+              Nothing
+        end
+  end
+
+
+(* TODO: temporary hack for concurrency (need to use a sat solver) *)
+let rec has_concurRead ival_ =
+  match ival_ with
+    | IVunspecified ->
+        false
+    | IVconcurRead _ _ ->
+        true
+    | IVconcrete _ ->
+        false
+    | IVaddress _ ->
+        false
+    | IVfromptr _ _ _ ->
+        false
+    | IVop _ ival_s ->
+        List.any has_concurRead ival_s
+    | IVmin _ ->
+        false
+    | IVmax _ ->
+        false
+    | IVsizeof _ ->
+        false
+    | IValignof _ ->
+        false
+    | IVoffsetof _ _ ->
+        false
+    | IVptrdiff _ _ _ ->
+        false
+    | IVbyteof _ _ ->
+        false
+    | IVcomposite ival_s ->
+        List.any has_concurRead ival_s
+    | IVbitwise _ (BW_complement ival_) ->
+        has_concurRead ival_
+    | IVbitwise _ (BW_AND ival_1 ival_2) ->
+        has_concurRead ival_1 || has_concurRead ival_2
+    | IVbitwise _ (BW_OR ival_1 ival_2) ->
+        has_concurRead ival_1 || has_concurRead ival_2        
+    | IVbitwise _ (BW_XOR ival_1 ival_2) ->
+        has_concurRead ival_1 || has_concurRead ival_2
+  end
+
+
+let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
+  match impl_lt_ival mem_st_opt ival1 ival2 with
+    | Just true ->
+        Just true
+    | _ ->
+        let ival_1' = lifted_simplify_integer_value_base ival_1 in
+        let ival_2' = lifted_simplify_integer_value_base ival_2 in
+        match (ival_1', ival_2') with
+          | (IVconcrete n1, IVconcrete n2) ->
+              Just (n1 = n2)
+          
+          | (IVmin ity1, IVfromptr _ ity2 _) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivmin(\"intptr_t\") <= Ivfromptr(ref_ty, ptrval)"
+              ) in
+              if ity1 = ity2 then
+                Just true
+              else
+                Nothing
+          | (IVfromptr _ ity1 _, IVmax ity2) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) <= Ivmax(\"intptr_t\")"
+              ) in
+              if ity1 = ity2 then
+                Just true
+              else
+                Nothing
+
+
+(*
+          | (IVmin (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivmin(\"intptr_t\") <= Ivfromptr(ref_ty, ptrval)"
+              ) in
+              Just true
+          
+          | (IVmin (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivmin(\"uintptr_t\") <= Ivfromptr(ref_ty, ptrval)"
+              ) in
+              Just true
+          
+          | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmax (AilTypes.Signed AilTypes.Intptr_t)) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) <= Ivmax(\"intptr_t\")"
+              ) in
+              Just true
+          
+          | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+              let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
+                "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) <= Ivmax(\"uintptr_t\")"
+              ) in
+              Just true
+*)
+          | (IVmin ity, IVbitwise ity' _) ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
+          | (IVbitwise ity _, IVmax ity') ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
+          
+          | (IVmin ity, IVconcurRead ity' _) ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
+          | (IVconcurRead ity' _, IVmax ity) ->
+              if ity = ity' then
+                Just true
+              else
+                Nothing
+          
+          | (IVmin ity, IVconcrete n) ->
+              let (is_exact, min, _) = minimal_range ity in
+              if is_exact then
+                Just (min <= n)
+              else
+                if min <= n then
+                  Just true
+                else
+                  Nothing
+          
+          | (IVconcrete n, IVsizeof _) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          | (IVmin _, IVsizeof _) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+              Just true
+          | (IVmin _, IValignof _) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "assuming that no integer type has a strictly positive minimal value") in
+              Just true
+
+          
+          | (IVconcrete n, IVmax ity) ->
+              let (is_exact, _, max) = minimal_range ity in
+              if is_exact then
+                Just (n <= max)
+              else
+                if n <= max then
+                  Just true
+                else
+                  Nothing
+          
+          | (IVmin (AilTypes.Size_t), IVoffsetof tag_sym membr_ident) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
+                             "' isn't so big the offset to member '" ^ show membr_ident ^
+                             "' is representable in size_t") in
+              (* TODO: check that *)
+              Just true
+          | (IVoffsetof tag_sym membr_ident, IVmax (AilTypes.Size_t)) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
+                             "' isn't so big the offset to member '" ^ show membr_ident ^
+                             "' is representable in size_t") in
+              Just true
+          
+
+
+          | (IVconcrete n, IVoffsetof tag_sym membr_ident) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          
+          (* a byte always range over uchar *)
+          | (IVmin (AilTypes.Unsigned AilTypes.Ichar), IVbyteof _ _) ->
+              Just true
+          | (IVbyteof _ _, IVmax (AilTypes.Unsigned AilTypes.Ichar)) ->
+              Just true
+
+          | (IVmin (AilTypes.Signed AilTypes.Int_), IVbyteof _ _) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
+              Just true
+          | (IVbyteof _ _, IVmax (AilTypes.Signed AilTypes.Int_)) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
+              Just true
+          
+          (* sizeof and alignof are always in range of size_t *)
+(*
+          | (IVmin AilTypes.Size_t, IVsizeof _) ->
+              Just true
+*)
+          | (IVsizeof _, IVmax AilTypes.Size_t) ->
+              Just true
+(*
+          | (IVmin AilTypes.Size_t, IValignof _) ->
+              Just true
+*)
+          | (IValignof _, IVmax AilTypes.Size_t) ->
+              Just true
+          
+          | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax AilTypes.Size_t) ->
+              if tag_sym1 = tag_sym2 then
+                let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that the delta between members '" ^ show membr_ident1 ^
+                               "' and '" ^ show membr_ident2 ^ "' of struct/union type '" ^ show tag_sym1 ^
+                               "' is representable in size_t") in
+                Just true
+              else
+                Nothing
+          | (IVconcrete n, IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2]) ->
+              if n <= 0 then
+                Just true
+              else
+                Nothing
+          
+          | (IVsizeof (Core_ctype.Pointer _ _), IVmax _) ->
+              let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: document") in
+              Just true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          | _ ->
+              let ival_1'' = lifted_simplify_integer_value_base ival_1' in
+              let ival_2'' = lifted_simplify_integer_value_base ival_2' in
+              match (ival_1'', ival_2'') with
+                | (IVconcrete n1, IVconcrete n2) ->
+                    Just (n1 <= n2)
+(* !!!!!! BEGIN HACK FOR CONCURRENCY, WILL FIX LATER *)
+          | (IVmin _, _) ->
+              Just true (* if has_concurRead ival_2'' then Just true else Nothing *)
+          | (_, IVmax _) ->
+              Just true (* if has_concurRead ival_1'' then Just true else Nothing *)
+(* !!!!!! END HACK FOR CONCURRENCY, WILL FIX LATER *)
+                | _ ->
+                    (* TODO *)
+                    Nothing
+              end
+        end
+  end
+
+
+
+(* Converting an integer value into a pointer value *)
+let impl_ptrcast_ival int_ty ref_ty (IV prov ival) =
+  (* TODO: check the types *)
+  match ival with
+    | IVfromptr ty ity ptrval_ ->
+        (* The integer value was made from an pointer value. the provenance is passed on *)
+        return (PV prov ptrval_ [])
+    | _ ->
+        ifM "ptrcasl_ival, null pointer"
+          (mk_iv_constr MC_eq ival (IVconcrete 0))
+          (* if the integer value is zero, then we make a null pointer (see Q28 in notes30) *)
+          (return (impl_null_ptrval ref_ty))
+          
+          (* otherwise we produce a runtime error (check with P) *)
+          (fail (MerrWIP "tried to cast to a pointer type an integer value non-equal to zero"))
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+(* ============================================================================================== *)
+
+
+
+let get_allocation_size alloc_id =
+  get >>= fun st ->
+  match Map.lookup alloc_id st.allocations with
+    | Just (Storage_static ty _) ->
+        return (IVsizeof ty)
+    | Just (Storage_dynamic ival_ _) ->
+        return ival_
+    | Nothing ->
+        error "Mem.get_allocation_size: TODO make it an error in the monad"
+  end
+
+
+(* Decide whether a given pointer value can be use to perform a store *)
+val can_store: Loc.t -> impl_pointer_value -> impl_memM (either access_error allocation_id)
+let can_store loc (PV prov ptr_val_ sh as ptr_val) =
+  match ptr_val_ with
+    (* null and function pointers obviously can't be used for stores. *)
+    | PVnull _     -> return (Left NullPtr)
+    | PVfunction _ -> return (Left FunctionPtr)
+    
+    (* by WF-invariants, we have a pointer to an object *)
+    | _ ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
+          | Just alloc_id ->
+              is_dead alloc_id >>= function
+                | true ->
+                    let () = Debug.print_debug 5 [Debug.DB_memory] (fun () ->
+                      "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptr_val
+                    ) in
+                    (* can't store with a pointer to an object whose lifetime ended. *)
+                    return (Left DeadPtr)
+                | false ->
+                    (* add the constraint that the ptr is inside the object *)
+                    get_allocation_size alloc_id >>= fun size_ival_ ->
+
+let () = Debug.print_debug 1 [] (fun () ->
+  "CAN STORE size_ival_ ===> "  ^ stringFromInteger_value (IV Prov_none size_ival_)
+
+) in
+
+                    let ptr_ival_ = real_address_expression_of_pointer ptr_val in
+                    ifM ("can_store[" ^ Loc.stringFromLocation loc ^ "]")
+                      (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id) ptr_ival_
+                               ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id; size_ival_]) ])
+                        (return (Right alloc_id))
+                        (return (Left OutOfBoundPtr))
+              end
+          
+          (* we couldn't find an explicit allocation event *)
+          | Nothing ->
+              error "WIP: can_store ==> don't know how to deal with the absence of explicit allocation id for now."
+        end
+  end
+
+
+
+(*
+    | PVbase alloc_id ->
+        is_dead alloc_id >>= function
+          | true ->
+              return Nothing
+          | false ->
+              return (Just alloc_id)
+        end
+    | PVshift ptr_val_' sh ->
+        explicitAllocationIdFromPointer_value_aux ptr_val_' >>= function
+          | Just alloc_id ->
+              allocation_is_dead alloc_id >>= function
+                | true ->
+                    return Nothing
+                | false ->
+                    resolve_allocation alloc_id >>= function
+                      | Alloc_static ty addr_id ->
+                          ifM (MC_leIV (integer_value_baseFromShift_path sh) (IVsizeof ty))
+                              (* then *)
+                              (return (Just alloc_id))
+                              (* else *)
+                              (return Nothing)
+(*
+                    wip "WIP: can_store, static" (* ifM (KKKK) *)
+*)
+                      | Alloc_dynamic ival_ addr_id ->
+                          wip "WIP: can_store, dynamic"
+                    end
+              end
+          | Nothing ->
+              wip "WIP: can_store, shift 2"
+        end
+    | _ ->
+        wip "WIP: can_store, others"
+  end
+*)
+
+(*
+val normalise_composite: impl_mem_value -> ???
+let normalise_composite mval =
+  match mval with
+    | MVcomposite off_ival_ byte_ival mval' ->
+        
+  end
+*)
+
+(*
+val append_composite: 
+*)
+
+
+
+(* TODO: bug HOL -- "failure in internal translation to tupled format" *)
+(* TODO: with temporary simplification *)
+val     easy_update_mem_value_aux: Loc.t -> bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value -> impl_mem_value
+let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval =
+  let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
+    "ENTERING: easy_update_mem_value_aux\n" ^
+    "current_mval ==> " ^ stringFromMem_value current_mval ^ "\n" ^
+    "sh ==> " ^ stringFromShift_path sh
+  ) in
+  let easy_update_mem_value_aux = easy_update_mem_value_aux loc is_strong in
+  match (current_mval, sh) with
+    | (_, []) ->
+        (* SIMPLIFICATION: we assume that the footprint of the new value covers all of the old value *)
+        write_mval
+    | (MVarray mvals, SPE_array elem_ty ival_ :: sh') ->
+        match Maybe.map natFromInteger (eval_integer_value_base ival_) with
+          | Just n ->
+              if 0 <= n && n < List.length mvals then
+                let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVarray") in
+                MVarray (List.update mvals n (easy_update_mem_value_aux write_ty sh' write_mval (fromJust "Defacto_memory.easy_update_mem_value_aux" $ List.index mvals n)))
+              else
+                (* TODO: if this can actually happen, then the error needs to be in the monad? *)
+                error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
+          | Nothing ->
+              MVdelayed [(sh, write_mval)] current_mval
+(*
+              error "WIP: easy_update_mem_value_aux ==> symbolic SPE_array"
+*)
+        end
+    | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
+        if tag_sym <> tag_sym_ then
+          error "WIP[easy_update_mem_value_aux]: TODO error message ===> struct value accessed with incompatible SPE"
+        else
+          let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVstruct") in
+          MVstruct tag_sym (assoc_adjust (easy_update_mem_value_aux write_ty sh' write_mval) memb_ident xs)
+    | _ ->
+        if is_strong then
+          match sh with
+            | SPE_member tag_sym memb_ident :: sh' ->
+                let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+                MVstruct tag_sym (
+                  List.map (fun (ident, ty) ->
+                    (ident, if ident = memb_ident then
+                      easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty)
+                    else
+                      mkUnspec ty)
+                  ) xs
+                )
+            | _ ->
+                error "WIP: easy_update_mem_value_aux, _, is_strong"
+          end
+        else
+(* TODO: this might need to be before the test on "is_strong" *)
+          match sh with
+            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
+                match write_mval with
+                  | MVinteger _ write_ival ->
+                      MVcomposite [(byte_ival_, write_ival)] current_mval
+                  | _ ->
+                      error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
+                end
+
+                (* TODO: this hacking away *)
+(*
+                match current_mval with
+                  | MVinteger ity (IV prov _) ->
+                      MVinteger ity (IV prov (IVcomposite [write_mval; current_mval]))
+                  | _ ->
+                      error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
+                end
+*)
+            | _ ->
+                (* *)
+
+
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "loc          = " ^ Loc.stringFromLocation loc ^ "\n" ^
+                  "sh           = " ^ stringFromShift_path sh ^ "\n" ^
+                  "current_mval = " ^ stringFromMem_value current_mval
+                ) in
+                error "WIP: easy_update_mem_value_aux"
+          end
+  end
+
+(* TODO: bug HOL -- "failure in internal translation to tupled format" *)
+declare hol target_rep function easy_update_mem_value_aux =
+                                `tags$easy_update_mem_value_aux`
+
+
+val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_mem_value
+let easy_update_mem_value is_strong (WriteEvent loc write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
+  (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
+    "easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
+  ) in
+  let ret = easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval in
+  (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
+    "DONE WITH easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
+  ) in
+  ret
+
+
+
+
+(* update the memory state with a write event for a given allocation id *)
+val register_write_event: allocation_id -> write_event -> impl_memM unit
+let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
+  (*DEBUG*)print_debugM 5 (fun () -> "REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
+  get >>= fun st ->
+  put <| st with allocations=
+    match Map.lookup alloc_id st.allocations with
+      | Just (Storage_static obj_ty current) ->
+          let is_strong = false in
+          let current_mval = match current with
+            | Just current_mval ->
+                current_mval
+            | Nothing ->
+                mkUnspec obj_ty
+          end in
+          Map.insert alloc_id (Storage_static obj_ty (Just (easy_update_mem_value is_strong w current_mval))) st.allocations
+     
+     | Just (Storage_dynamic size_ival_ ws) ->
+         (* TODO: check that the write offset is within range? *)
+         Map.insert alloc_id (Storage_dynamic size_ival_ (w :: ws)) st.allocations
+     
+     | Nothing ->
+         error "Mem.register_write_event, Nothing"
+    end
+  |> >>
+ print_debugM 5 (fun () -> "EXITING register_write_event")
+
+
+
+
+(* val store: ctype -> impl_pointer_value -> mem_value -> memM unit *)
+let impl_store loc lvalue_ty ptr_val mval =
+  print_debugM 5 (fun () ->
+    "STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
+    stringFromPointer_value ptr_val ^ " and value: " ^ stringFromMem_value mval
+  ) >>
+  can_store loc ptr_val >>= function
+    | Right alloc_id ->
+(*        addToLog alloc_id >> *)
+        register_write_event alloc_id (WriteEvent loc lvalue_ty ptr_val mval) >>
+        print_debugM 5 (fun () -> "STORE DONE (" ^ Loc.stringFromLocation loc ^ ")") >>
+        return alloc_id
+    | Left err ->
+        print_debugM 5 (fun () ->
+          "STORE ERROR (" ^ Loc.stringFromLocation loc ^ ") ==> [" ^ show (MerrAccess StoreAccess err) ^
+          "] with pointer: " ^ stringFromPointer_value ptr_val
+        ) >>
+        fail (MerrAccess StoreAccess err)
+  end
+
+
+
+
+val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
+let rec memcmp_load_aux ptrval offset max_offset acc =
+  let uchar_ty = Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) in
+  if offset > max_offset then
+    return (List.reverse acc)
+  else
+    let ptrval' = impl_array_shift_ptrval ptrval uchar_ty (IV Prov_none (IVconcrete offset)) in
+    impl_load uchar_ty ptrval' >>= fun (fp, mval) ->
+    memcmp_load_aux ptrval (offset+1) max_offset (mval :: acc)
+
+let rec memcmp_compare (mval1, mval2) : impl_memM integer =
+  match (mval1, mval2) with
+    | (MVinteger ity1 (IV _ (IVbyteof offset_ival1 mval1')), MVinteger ity2 (IV _ (IVbyteof offset_ival2 mval2'))) ->
+        ifM "memcmp_compare(byte offsets)"
+            (mk_iv_constr MC_eq offset_ival1 offset_ival2)
+            (memcmp_compare (mval1', mval2'))
+            (fail (MerrWIP "memcmp, two IVbyteof with different offsets"))
+    | (MVpointer ref_ty1 ptrval1, MVpointer ref_ty2 ptrval2) ->
+        address_expression_of_pointer ptrval1 >>= fun ival1 ->
+        address_expression_of_pointer ptrval2 >>= fun ival2 ->
+        ifM "memcmp_compare(two pointers equals?)"
+          (mk_iv_constr MC_eq ival1 ival2)
+          (return 0)
+          begin
+            ifM "memcmp_compare(two pointers equals?)"
+                (mk_iv_constr MC_lt ival1 ival2)
+                (return (0-1))
+                (return 1)
+          end
+    | _ ->
+        error "memcmp_compare"
+  end
+
+let rec fold_memcmp_compare mvals1 mvals2 ord_acc =
+  if ord_acc = 0 then
+    match (mvals1, mvals2) with
+      | ([], []) ->
+          return 0
+      | (mval1 :: xs1, mval2 :: xs2) ->
+          memcmp_compare (mval1, mval2) >>= fun ord ->
+          fold_memcmp_compare xs1 xs2 ord
+      | _ ->
+          error "Impossible: fold_memcmp_compare"
+    end
+  else
+    return ord_acc
+
+  
+
+let impl_memcmp ptr_val1 ptr_val2 size_ival =
+  match size_ival with
+    | IV _ (IVsizeof ty) ->
+        impl_load ty ptr_val1 >>= fun (fp1, mval1) ->
+        impl_load ty ptr_val2 >>= fun (fp2, mval2) ->
+        error "Mem.impl_memcmp"
+    | IV _ (IVconcrete n) ->
+        memcmp_load_aux ptr_val1 0 n [] >>= fun mvals1 ->
+        memcmp_load_aux ptr_val2 0 n [] >>= fun mvals2 ->
+        fold_memcmp_compare mvals1 mvals2 0 >>= fun ord ->
+        return (IV Prov_none (IVconcrete ord))
+(*
+        mapM memcmp_compare (List.zip mvals1 mvals2) >>= fun xs ->
+        return 
+*)
+    | _ ->
+        error ("Mem.impl_memcmp 3 ==> " ^ stringFromInteger_value size_ival)
+  end

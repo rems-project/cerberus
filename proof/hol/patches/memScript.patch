@@ -1,0 +1,234 @@
+--- memScript.sml	2016-03-18 14:57:18.000000000 +0000
++++ memScript.sml_new	2016-03-18 14:57:10.000000000 +0000
+@@ -32,15 +32,15 @@
+ 
+ (* The API *)
+ 
+-val _ = type_abbrev( "pointer_value0"  , ``: impl$pointer_value``);
+-val _ = type_abbrev( "mem_value0"      , ``: impl$mem_value``);
+-val _ = type_abbrev( "integer_value0"  , ``: impl$integer_value``);
+-val _ = type_abbrev( "floating_value0" , ``: impl$floating_value``);
++val _ = type_abbrev( "pointer_value0"  , ``: pointer_value``);
++val _ = type_abbrev( "mem_value0"      , ``: mem_value``);
++val _ = type_abbrev( "integer_value0"  , ``: integer_value``);
++val _ = type_abbrev( "floating_value0" , ``: floating_value``);
+ 
+-val _ = type_abbrev( "mem_state0" , ``: impl$mem_state``);
++val _ = type_abbrev( "mem_state0" , ``: mem_state``);
+ 
+ 
+-val _ = type_abbrev((*  'a *) "memM0" , ``: 'a impl$memM``);
++val _ = type_abbrev((*  'a *) "memM0" , ``: 'a memM``);
+ (*val return: forall 'a. 'a -> memM 'a*)
+ (*val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b*)
+ (*val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_state))*)
+@@ -145,161 +145,161 @@
+ 
+ 
+ val _ = Define `
+- (return1 = impl$return0)`;
++ (return1 = return0)`;
+ 
+ val _ = Define `
+- (bind1 = impl$bind0)`;
++ (bind1 = bind0)`;
+ 
+ 
+ 
+ val _ = Define `
+- (prettyStringFromMem_value0           = impl$prettyStringFromMem_value)`;
++ (prettyStringFromMem_value0           = prettyStringFromMem_value)`;
+ 
+ val _ = Define `
+- (runMem0                              = impl$runMem)`;
++ (runMem0                              = runMem)`;
+ 
+ val _ = Define `
+- (initial_mem_state0                   = impl$initial_mem_state)`;
++ (initial_mem_state0                   = initial_mem_state)`;
+ 
+ val _ = Define `
+- (null_ptrval0                         = impl$null_ptrval)`;
++ (null_ptrval0                         = null_ptrval)`;
+ 
+ val _ = Define `
+- (fun_ptrval0                          = impl$fun_ptrval)`;
++ (fun_ptrval0                          = fun_ptrval)`;
+ 
+ val _ = Define `
+- (eq_ptrval0                           = impl$eq_ptrval)`;
++ (eq_ptrval0                           = eq_ptrval)`;
+ 
+ val _ = Define `
+- (ne_ptrval0                           = impl$ne_ptrval)`;
++ (ne_ptrval0                           = ne_ptrval)`;
+ 
+ val _ = Define `
+- (lt_ptrval0                           = impl$lt_ptrval)`;
++ (lt_ptrval0                           = lt_ptrval)`;
+ 
+ val _ = Define `
+- (gt_ptrval0                           = impl$gt_ptrval)`;
++ (gt_ptrval0                           = gt_ptrval)`;
+ 
+ val _ = Define `
+- (le_ptrval0                           = impl$le_ptrval)`;
++ (le_ptrval0                           = le_ptrval)`;
+ 
+ val _ = Define `
+- (ge_ptrval0                           = impl$ge_ptrval)`;
++ (ge_ptrval0                           = ge_ptrval)`;
+ 
+ val _ = Define `
+- (diff_ptrval0                         = impl$diff_ptrval)`;
++ (diff_ptrval0                         = diff_ptrval)`;
+ 
+ val _ = Define `
+- (intcast_ptrval0                      = impl$intcast_ptrval)`;
++ (intcast_ptrval0                      = intcast_ptrval)`;
+ 
+ val _ = Define `
+- (validForDeref_ptrval0                = impl$validForDeref_ptrval)`;
++ (validForDeref_ptrval0                = validForDeref_ptrval)`;
+ 
+ (* let shift_ptrval                        = Impl.shift_ptrval *)
+ val _ = Define `
+- (array_shift_ptrval0                  = impl$array_shift_ptrval)`;
++ (array_shift_ptrval0                  = array_shift_ptrval)`;
+ 
+ val _ = Define `
+- (member_shift_ptrval0                 = impl$member_shift_ptrval)`;
++ (member_shift_ptrval0                 = member_shift_ptrval)`;
+ 
+ val _ = Define `
+- (integer_ival0                        = impl$integer_ival)`;
++ (integer_ival0                        = integer_ival)`;
+ 
+ val _ = Define `
+- (max_ival0                            = impl$max_ival)`;
++ (max_ival0                            = max_ival)`;
+ 
+ val _ = Define `
+- (min_ival0                            = impl$min_ival)`;
++ (min_ival0                            = min_ival)`;
+ 
+ val _ = Define `
+- (op_ival0                             = impl$op_ival)`;
++ (op_ival0                             = op_ival)`;
+ 
+ val _ = Define `
+- (offsetof_ival0                       = impl$offsetof_ival)`;
++ (offsetof_ival0                       = offsetof_ival)`;
+ 
+ val _ = Define `
+- (sizeof_ival0                         = impl$sizeof_ival)`;
++ (sizeof_ival0                         = sizeof_ival)`;
+ 
+ val _ = Define `
+- (alignof_ival0                        = impl$alignof_ival)`;
++ (alignof_ival0                        = alignof_ival)`;
+ 
+ val _ = Define `
+- (case_integer_value0                  = impl$case_integer_value)`;
++ (case_integer_value0                  = case_integer_value)`;
+ 
+ val _ = Define `
+- (eq_ival0                             = impl$eq_ival)`;
++ (eq_ival0                             = eq_ival)`;
+ 
+ val _ = Define `
+- (lt_ival0                             = impl$lt_ival)`;
++ (lt_ival0                             = lt_ival)`;
+ 
+ val _ = Define `
+- (le_ival0                             = impl$le_ival)`;
++ (le_ival0                             = le_ival)`;
+ 
+ val _ = Define `
+- (ptrcast_ival0                        = impl$ptrcast_ival)`;
++ (ptrcast_ival0                        = ptrcast_ival)`;
+ 
+ (* let is_concrete_ival                    = Impl.is_concrete_ival *)
+ val _ = Define `
+- (symbolic_mval0                       = impl$symbolic_mval)`;
++ (symbolic_mval0                       = symbolic_mval)`;
+ 
+ val _ = Define `
+- (unspecified_mval0                    = impl$unspecified_mval)`;
++ (unspecified_mval0                    = unspecified_mval)`;
+ 
+ val _ = Define `
+- (integer_value_mval0                  = impl$integer_value_mval)`;
++ (integer_value_mval0                  = integer_value_mval)`;
+ 
+ val _ = Define `
+- (floating_value_mval0                 = impl$floating_value_mval)`;
++ (floating_value_mval0                 = floating_value_mval)`;
+ 
+ val _ = Define `
+- (pointer_mval0                        = impl$pointer_mval)`;
++ (pointer_mval0                        = pointer_mval)`;
+ 
+ val _ = Define `
+- (array_mval0                          = impl$array_mval)`;
++ (array_mval0                          = array_mval)`;
+ 
+ val _ = Define `
+- (struct_mval0                         = impl$struct_mval)`;
++ (struct_mval0                         = struct_mval)`;
+ 
+ val _ = Define `
+- (union_mval0                          = impl$union_mval)`;
++ (union_mval0                          = union_mval)`;
+ 
+ val _ = Define `
+- (case_mem_value0                      = impl$case_mem_value)`;
++ (case_mem_value0                      = case_mem_value)`;
+ 
+ 
+ (*val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (string -> 'a) -> 'a*)
+ val _ = Define `
+- (case_fval0 = impl$case_fval)`;
++ (case_fval0 = case_fval)`;
+ 
+ (*val zero_fval: floating_value*)
+ val _ = Define `
+- (zero_fval0 = impl$zero_fval)`;
++ (zero_fval0 = zero_fval)`;
+ 
+ 
+ (*val str_fval: string -> floating_value*)
+ val _ = Define `
+- (str_fval0 = impl$str_fval)`;
++ (str_fval0 = str_fval)`;
+ 
+ 
+ val _ = Define `
+- (allocate_static0                     = impl$allocate_static)`;
++ (allocate_static0                     = allocate_static)`;
+ 
+ val _ = Define `
+- (allocate_dynamic0                    = impl$allocate_dynamic)`;
++ (allocate_dynamic0                    = allocate_dynamic)`;
+ 
+ val _ = Define `
+- (load0                                = impl$load)`;
++ (load0                                = load)`;
+ 
+ val _ = Define `
+- (store0                               = impl$store)`;
++ (store0                               = store)`;
+ 
+ 
+ (*val eval_integer_value: integer_value -> maybe integer*)
+ val _ = Define `
+- (eval_integer_value0 = impl$eval_integer_value)`;
++ (eval_integer_value0 = eval_integer_value)`;
+ 
+ 
+ 
+ (* TODO: move this up *)
+-val _ = type_abbrev( "mem_constraint1" , ``: impl$mem_constraint``);
++val _ = type_abbrev( "mem_constraint1" , ``: mem_constraint``);
+ val _ = export_theory()
+ 

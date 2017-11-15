@@ -1,0 +1,81 @@
+open import Bool Basic_classes Num
+
+type float
+declare ocaml target_rep type float = `float`
+
+(* Relational operations *)
+
+val floatEq : float -> float -> bool
+declare ocaml target_rep function floatEq = infix `=`
+
+instance (Eq float)
+  let (=) = floatEq
+  let (<>) x y = not (floatEq x y)
+end
+
+val floatLt : float -> float -> bool
+declare ocaml target_rep function floatLt = infix `<`
+
+val floatLe : float -> float -> bool
+declare ocaml target_rep function floatLe = infix `<=`
+
+val floatCompare : float -> float -> ordering
+let inline floatCompare = defaultCompare
+
+instance (Ord float)
+  let compare = floatCompare
+  let (<) = floatLt
+  let (<=) = floatLe
+  let (>) x y = not (floatLe x y)
+  let (>=) x y = not (floatLt x y)
+end
+
+(* Arithmetic Operations *)
+
+val floatAdd : float -> float -> float
+declare ocaml target_rep function floatAdd = `Floating.add`
+
+val floatSub : float -> float -> float
+declare ocaml target_rep function floatSub = `Floating.sub`
+
+val floatMul : float -> float -> float
+declare ocaml target_rep function floatMul = `Floating.mul`
+
+val floatDiv : float -> float -> float
+declare ocaml target_rep function floatDiv = `Floating.div`
+
+instance (NumAdd float)
+  let (+) = floatAdd
+end
+
+instance (NumMinus float)
+  let (-) = floatSub
+end
+
+instance (NumMult float)
+  let ( * ) = floatMul
+end
+
+instance (NumDivision float)
+  let (/) = floatDiv
+end
+
+(* Conversions *)
+
+val of_int : int -> float
+declare ocaml target_rep function of_int = `float_of_int`
+
+val of_integer : integer -> float
+let of_integer x = of_int (Num.intFromInteger x)
+
+val of_string : string -> float
+declare ocaml target_rep function of_string = `Floating.of_string`
+
+val string_of_float : float -> string
+declare ocaml target_rep function string_of_float = `string_of_float`
+
+val to_int : float -> int
+declare ocaml target_rep function to_int = `int_of_float`
+
+val to_integer : float -> integer
+let to_integer x = Num.integerFromInt (to_int x)

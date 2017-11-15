@@ -1,0 +1,29 @@
+true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg
+
+"src": include
+"src/codegen": include
+"src/web": include
+"ocaml_generated": include
+"pprinters": include
+"parsers": include
+"parsers/ncparser": include
+#"parsers/cparser": include
+"parsers/coreparser": include
+"dependencies/cmdliner-0.9.7/src": include
+
+
+# <ocaml_generated/genTyping.ml>: warn(A), warn(@8)
+
+
+
+
+#<parsers/cparser/*.mly>: external_tokens(Tokens), explain
+<parsers/ncparser/*.mly>: external_tokens(Tokens), explain
+<parsers/coreparser/core_parser.mly>: external_tokens(Core_parser_util), explain
+
+"cmdliner-0.9.7/_build/src": include
+"dependencies/pprint-20140424/src": include
+
+
+# Making partial pattern-matching a fatal error for the following files
+#        "ocaml_generated/core_aux.ml": warn(@8)

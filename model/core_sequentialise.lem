@@ -1,0 +1,90 @@
+open import Core
+
+val     sequentialise_expr: typed_expr unit -> typed_expr unit
+let rec sequentialise_expr (Expr annot expr_) =
+  Expr annot match expr_ with
+    | Epure _ ->
+        expr_
+    | Ememop _ _ ->
+        expr_
+    | Eaction _ ->
+        expr_
+    | Ecase pe cases ->
+        (* TODO: the typing should maybe forbid unseqs inside cases anyway? *)
+        Ecase pe (List.map (fun (pat, e) -> (pat, sequentialise_expr e)) cases)
+    | Elet sym pe1 e2 ->
+        Elet sym pe1 (sequentialise_expr e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
+    | Eskip ->
+        expr_
+    | Eccall _ _ _ ->
+        expr_
+    | Eproc _ _ _ ->
+        expr_
+    | Eunseq es ->
+        let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_sequentialise ==> missed an unseq") in
+        expr_
+    | Ewseq (CaseBase Nothing) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun e acc ->
+          Expr [] (Ewseq (CaseBase Nothing) (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) es in
+        expr_'
+    | Ewseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
+          Expr [] (Ewseq pat (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) (List.zip pats es) in
+        expr_'
+    | Ewseq pat e1 e2 ->
+        Ewseq pat (sequentialise_expr e1) (sequentialise_expr e2)
+    | Esseq (CaseBase Nothing) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun e acc ->
+          Expr [] (Esseq (CaseBase Nothing) (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) es in
+        expr_'
+    | Esseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+        let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
+          Expr [] (Esseq pat (sequentialise_expr e) acc)
+        ) (sequentialise_expr e2) (List.zip pats es) in
+        expr_'
+    | Esseq pat e1 e2 ->
+        Esseq pat (sequentialise_expr e1) (sequentialise_expr e2)
+    | Easeq _ _ _ ->
+        expr_
+    | Eindet i e ->
+        Eindet i (sequentialise_expr e)
+    | Ebound i e ->
+        Ebound i (sequentialise_expr e)
+    | End es ->
+        End (List.map sequentialise_expr es)
+    | Esave sym_ty xs e ->
+        Esave sym_ty xs (sequentialise_expr e)
+    | Erun () sym es ->
+        expr_
+    | Epar es ->
+        Epar (List.map sequentialise_expr es)
+    | Ewait _ ->
+        expr_
+  end
+
+
+val sequentialise_file: typed_file unit -> typed_file unit
+let sequentialise_file file =
+  <| file with funs= Map.map (function
+       | Proc bTy params e ->
+           Proc bTy params (sequentialise_expr e)
+       | ProcDecl bTy params ->
+           ProcDecl bTy params
+       | Fun bTy params pe ->
+           Fun bTy params pe
+     end) file.funs |>
+
+
+
+(*
+  main   : Symbol.sym;
+  stdlib : generic_fun_map 'bty 'a;
+  impl   : generic_impl 'bty;
+  globs  : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);
+  funs   : generic_fun_map 'bty 'a;
+*)

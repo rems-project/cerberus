@@ -1,0 +1,183 @@
+- section: Pointer provenance
+  questions:
+    - question: >
+        Q1. Must the pointer used for a memory access have the right provenance,
+        i.e. be derived from the pointer to the original allocation (with
+        undefined behaviour otherwise)? (This lets compilers do provenance-based
+        alias analysis)
+      tests:
+        - provenance_basic_global_yx.c
+        - provenance_basic_global_xy.c
+        - provenance_basic_auto_yx.c
+        - provenance_basic_auto_xy.c
+    - question: >
+        Q2. Can equality testing on pointers be affected by pointer provenance
+        information?
+      tests:
+        - provenance_equality_global_yx.c
+        - provenance_equality_global_xy.c
+        - provenance_equality_global_fn_xy.c
+        - provenance_equality_global_cu_xy_a.c
+        - provenance_equality_global_cu_xy_b.c
+        - provenance_equality_auto_yx.c
+        - provenance_equality_auto_fn_yx.c
+        - provenance_equality_auto_cu_yx_a.c
+        - provenance_equality_auto_cu_yx_b.c
+    - question: >
+        Q3. Can one make a usable pointer via casts to intptr t and back?
+      tests:
+        - provenance_roundtrip_via_intptr_t.c
+- section: Pointer provenance via integer types
+  questions:
+    - question: >
+        Q4. Can one make a usable pointer via casts to unsigned long and back?
+      tests:
+        - provenance_roundtrip_via_unsigned_long.c
+    - question: >
+        Q5. Must provenance information be tracked via casts to integer types
+        and integer arithmetic?
+      tests:
+        - provenance_basic_using_intptr_t_global_yx.c
+        - provenance_basic_using_intptr_t_global_xy_offset64.c
+        - provenance_basic_using_intptr_t_auto_yx.c
+        - provenance_basic_using_intptr_t_auto_yx_ offset-16.c
+        - provenance_basic_using_intptr_t_auto_xy.c
+        - provenance_basic_using_intptr_t_malloc_offset_8.c
+- section: Pointers involving multiple provenance
+  questions:
+    - question: >
+        Q6. Can one use bit manipulation and integer casts to store information
+        in unused bits of pointers?
+      tests:
+        - provenance_tag_bits_via_uintptr_t_1.c
+    - question: >
+        Q7. Can equality testing on integers that are derived from pointer
+        values be affected by their provenance?
+      tests:
+        - provenance_equality_uintptr_t_global_yx.c
+        - provenance_equality_uintptr_t_global_xy.c
+    - question: >
+        Q8. Should intra-object pointer subtraction give provenance-free
+        integer results?
+      tests:
+        - provenance_multiple_1_global.c
+        - provenance_multiple_2_global.c
+        - provenance_multiple_3_global_yx.c
+        - provenance_multiple_4_global_yx.c
+    - question: >
+        Q9. Can one make a usable offset between two separately allocated
+        objects by inter-object subtraction (using either pointer or integer
+        arithmetic), to make a usable pointer to the second by adding the
+        offset to thefirst?
+      tests:
+        - pointer_offset_from_subtraction_1_global.c
+        - pointer_offset_from_subtraction_1_auto.c
+        - pointer_offset_from_subtraction_1_malloc.c
+        - pointer_offset_constant_8_malloc.c
+    - question: >
+        Q11. Is the XOR linked list idiom supported?
+      tests:
+        - pointer_offset_xor_global.c
+        - pointer_offset_xor_auto.c
+- section: Pointer provenance via pointer represenatation copying
+  questions:
+    - question: >
+        Q13. Can one make a usable copy of a pointer by copying its
+        representation bytes using the library memcpy?
+      tests:
+        - pointer_copy_memcpy.c
+    - question: >
+        Q14. Can one make a usable copy of a pointer by copying its
+        representation bytes (unchanged) in user code?
+      tests:
+        - pointer_copy_user_dataflow_direct_bytewise.c
+    - question: >
+        Q15. Can one make a usable copy of a pointer by copying its
+        representation bytes by user code that indirectly computes the
+        identity function on those bytes?
+      tests:
+        - pointer_copy_user_dataflow_indirect_bytewise.c
+- section: Pointer provenance and union type punning
+  questions:
+    - question: >
+        Q17. Is type punning between integer and pointer values allowed?
+      tests:
+        - provenance_union_punning_1_global.c
+- section: Pointer provenance via IO
+  questions:
+    - question: >
+        Q19. Can one make a usable pointer via IO?
+      tests:
+        - provenance_via_io_percentp_global.c
+        - provenance_via_io_bytewise_global.c
+        - provenance_via_io_uintptr_t_global.c
+    - question: >
+        Q20. Can one make a usable pointer from a concrete address (of device
+        memory)?
+      tests:
+        - pointer_from_concrete_address_1.c
+        - pointer_from_concrete_address_2.c
+- section: Unspecified values
+  questions:
+    - question: >
+        Q48. Does reading an uninitialised object give rise to undefined behaviour?
+      tests:
+        - trap_representation_1.c
+        - trap_representation_2.c
+        - trap_representation_3.c
+        - frama-c-2013-03-13-2.c
+        - frama-c-2013-03-13-3.c
+        - frama-c-2013-03-13-3-uc.c
+    - question: >
+        Q49. Can library calls with unspecified-value arguments be assumed to
+        execute with an arbitrary choice of a concrete value (not necessarily
+        giving rise to undefined behaviour)?
+      tests:
+        - unspecified_value_library_call_argument.c
+    - question: >
+        Q50. Can control-flow choices based on unspecified values be assumed to
+        make an arbitrary choice (not giving rise to undefined behaviour)?
+      tests:
+        - unspecified_value_control_flow_choice.c
+    - question: >
+        Q52. Do operations on unspecified values result in unspecified values?
+      tests:
+        - unspecified_value_strictness_int.c
+        - unspecified_value_strictness_unsigned_char.c
+        - unspecified_value_strictness_mod_1.c
+        - unspecified_value_strictness_mod_2.c
+    - question: >
+        Q54. Must unspecified values be considered daemonically for
+        identification of other possible undefined behaviours?
+      tests:
+        - unspecified_value_daemonic_1.c
+    - question: >
+        Q55. Can a structure containing an unspecified-value member can be
+        copied as a whole?
+      tests:
+        - unspecified_value_struct_copy.c
+        - unspecified_value_union_1.c
+    - question: >
+        Q56. Given multiple bitfields that may be in the same word, can one be
+        a well-defined value while another is an unspecified value?
+      tests:
+        - besson_blazy_wilke_bitfields_1u.c
+    - question: >
+        Q57. Are the representation bytes of an unspecified value themselves
+        also unspecified values? (not an arbitrary choice of concrete byte
+        values)
+      tests:
+        - unspecified_value_representation_bytes_1.c
+    - question: >
+        Q58. If one writes some but not all of the representation bytes of an
+        uninitialized value, do the other representation bytes still hold
+        unspecified values?
+      tests:
+        - unspecified_value_representation_bytes_4.c
+    - question: >
+        Q59. If one writes some but not all of the representation bytes of an
+        uninitialized value, does a read of the whole value still give an
+        unspecified value?
+      tests:
+        - unspecified_value_representation_bytes_2.c
+        - unspecified_value_representation_bytes_3.c

@@ -1,0 +1,1190 @@
+open import Pervasives
+open import Utils Show Show_extra
+
+import State_exception_undefined
+import Symbol Symbolic Core_ctype Thread
+
+import Map_extra (* DEBUG *)
+
+open import Mem_common
+
+
+module SEU = State_exception_undefined
+  let inline (>>=)      = SEU.bind
+  let inline (>>) m1 m2 = SEU.bind m1 (fun () -> m2)
+  let inline (<$>)      = SEU.fmap
+
+
+
+
+(* TODO: debug *)
+val output_debug: nat -> string -> unit
+declare ocaml target_rep function output_debug = `Debug.print_debug`
+
+val string_of_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
+declare ocaml target_rep function string_of_ctype = `String_core_ctype.string_of_ctype`
+
+
+
+val begin_timing_: string -> unit
+declare ocaml target_rep function begin_timing_ = `Debug.begin_timing`
+val end_timing_: unit -> unit
+declare ocaml target_rep function end_timing_ = `Debug.end_timing`
+
+let begin_timing str =
+  let () = begin_timing_ str in
+  SEU.return ()
+
+let end_timing () =
+  let () = end_timing_ () in
+  SEU.return ()
+
+
+
+type object_id = nat * list Symbol.t (* symbols originating from C, for debugging purpose *)
+
+
+
+(* TODO: protection *)
+type offset =
+  list Core_ctype.ctype
+
+(* TODO: protection *)
+type footprint =
+  list Core_ctype.ctype
+
+
+type pointer_shift =
+(* TODO: bring back symbols *)
+(*  list (Core_ctype.ctype * Symbolic.symbolic) *)
+  list (Core_ctype.ctype * integer)
+
+
+type pointer_value =
+  | PVnull of Core_ctype.ctype
+  | PVobject of object_id * pointer_shift
+  | PVfunction of Symbol.t
+
+
+type integer_value =
+  (* TODO: merge the two kind of symbolics *)
+  | IVinteger of integer
+  | IVsymbolic of Symbolic.symbolic (* possibly-symbolic integer value *)
+  | IVptrdiff of pointer_value * pointer_value
+  | IVintptr of pointer_value
+  | IVop of integer_operator * integer_value * integer_value
+
+type mem_value =
+  | MVunspecified of Core_ctype.ctype (* this should only be used for base and union types *)
+  | MVinteger of integer_value
+  | MVfloating of string
+  | MVpointer of pointer_value
+  | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
+  | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+
+
+type mem_write =
+  MemWrite of pointer_value * Core_ctype.ctype * mem_value
+
+type mem_read_request = 
+  MemReadRequest of pointer_value * Core_ctype.ctype
+
+
+type tag_definitions =
+  map Symbol.t (list (Cabs.cabs_identifier * Core_ctype.ctype))
+
+
+type mem_state = <|
+  oid_supply: UniqueId.supply nat;
+  objTypes: map object_id (maybe Core_ctype.ctype);
+  tagDefinitions: tag_definitions;
+  memWrites: list mem_write
+|>
+
+
+type memM 'a = SEU.t 'a mem_state mem_error
+
+let return = SEU.return
+let bind = SEU.bind
+
+
+(* BEGIN CLASS ======================================================================== *)
+let pointer_valueCompare ptr_val1 ptr_val2 =
+  let ord = function
+    | PVnull _ ->
+        (0 : nat)
+    | PVobject _ _ ->
+        1
+    | PVfunction _ ->
+        2
+  end in
+  match (ptr_val1, ptr_val2) with
+    | (PVnull ty1, PVnull ty2) ->
+        setElemCompare ty1 ty2
+    | (PVobject oid1 sh1, PVobject oid2 sh2) ->
+        setElemCompare (oid1, sh1) (oid2, sh2)
+    | (PVfunction sym1, PVfunction sym2) ->
+        setElemCompare sym1 sym2
+    | _ ->
+        setElemCompare (ord ptr_val1) (ord ptr_val2)
+  end
+
+let pointer_valueEquals ptr_val1 ptr_val2 =
+  match pointer_valueCompare ptr_val1 ptr_val2 with
+    | EQ ->
+        true
+    | _ ->
+        false
+  end
+
+instance (Eq pointer_value)
+  let (=) = pointer_valueEquals
+  let (<>) = fun x y -> not (pointer_valueEquals x y)
+end
+instance (SetType pointer_value)
+  let setElemCompare = pointer_valueCompare
+end
+
+
+let rec mem_valueCompare mem_val1 mem_val2 =
+  match (mem_val1, mem_val2) with
+    | (MVunspecified ty1, MVunspecified ty2) ->
+        setElemCompare ty1 ty2
+    | (MVinteger symb1, MVinteger symb2) ->
+        (* TODO: should use the constrain solver somewhere *)
+        setElemCompare symb1 symb2
+    | (MVpointer ptr_val1, MVpointer ptr_val2) ->
+        pointer_valueCompare ptr_val1 ptr_val2
+    | (MVarray mem_vals1, MVarray mem_vals2) ->
+        lexicographicCompareBy mem_valueCompare mem_vals1 mem_vals2
+    | (MVstruct tag1 ident_vs1, MVstruct tag2 ident_vs2) ->
+        error "WIP: mem_valueCompare, MVstruct"
+(*
+        pairCompare setElemCompare
+          (lexicographicCompare (pairCompare setElemCompare mem_valueCompare))
+          (tag1, sym_vs1) (tag2, sym_vs2)
+*)
+    | (MVunion tag1 sym1 mem_val1, MVunion tag2 sym2 mem_val2) ->
+        error "WIP: mem_valueCompare, MVunion"
+    | _ ->
+        error "WIP: Naive mem_valueCompare"
+  end
+
+let mem_valueEquals mem_val1 mem_val2 =
+  match mem_valueCompare mem_val1 mem_val2 with
+    | EQ ->
+        true
+    | _ ->
+        false
+  end
+
+instance (Eq mem_value)
+  let (=) = mem_valueEquals
+  let (<>) = fun x y -> not (mem_valueEquals x y)
+end
+instance (SetType mem_value)
+  let setElemCompare = mem_valueCompare
+end
+
+
+
+
+(* TODO: debug *)
+let rec string_of_prefix syms =
+  let f = function
+    | Symbol.Symbol n (Just str) ->
+        str
+    | Symbol.Symbol n Nothing ->
+        "a_" ^ show n
+  end in
+  match syms with
+    | [] ->
+        ""
+    | [sym] ->
+        f sym
+    | sym :: syms' ->
+        f sym ^ "." ^ string_of_prefix syms'
+  end
+
+
+
+
+let rec stringFromPointer_value ptr_val =
+  match ptr_val with
+    | PVnull ty ->
+        "(PVnull " ^ string_of_ctype ty ^ ")"
+    | PVobject oid ptr_sh ->
+        "PVobject" ^
+        stringFromPair show (stringFromList (stringFromPair string_of_ctype show))
+          (oid, ptr_sh)
+    | PVfunction sym ->
+        "(PVfunction " ^ show sym ^ ")"
+  end
+
+instance (Show pointer_value)
+  let show = stringFromPointer_value
+end
+
+let stringFromInteger_operator = function
+  | IntAdd ->
+      "IntAdd"
+  | IntSub ->
+      "IntSub"
+  | IntMul ->
+      "IntMul"
+  | IntDiv ->
+      "IntDiv"
+  | IntMod ->
+      "IntMod"
+  | IntExp ->
+      "IntExp"
+end
+
+instance (Show integer_operator)
+  let show = stringFromInteger_operator
+end
+
+let rec stringFromInteger_value ival =
+  match ival with
+    | IVinteger n ->
+        "(IVinteger " ^ show n ^ ")"
+    | IVsymbolic symb ->
+        "(IVsymbolic " ^ show symb ^ ")"
+    | IVptrdiff ptr_val1 ptr_val2 ->
+        "(IVptrdiff " ^ show ptr_val1 ^ ", " ^ show ptr_val2 ^ ")"
+    | IVintptr ptr_val ->
+        "(IVintptr " ^ show ptr_val ^ ")"
+    | IVop op ival1 ival2 ->
+        "(IVop " ^ show op ^ ", " ^ stringFromInteger_value ival1 ^ ", " ^ stringFromInteger_value ival2 ^ ")"
+  end
+
+instance (Show integer_value)
+  let show = stringFromInteger_value
+end
+
+(* TODO: debug *)
+let rec stringFromMem_value mem_val =
+  match mem_val with
+    | MVunspecified ty ->
+        "(MVunspecified " ^ string_of_ctype ty ^ ")"
+    | MVinteger ival ->
+        "(MVinteger " ^ show ival ^ ")"
+    | MVpointer ptr_val ->
+        "(MVpointer " ^ show ptr_val ^ ")"
+    | MVarray mem_vals ->
+        "(MVarray " ^ stringFromList stringFromMem_value mem_vals ^ ")"
+    | MVstruct sym sym_vs ->
+        "MVstruct (" ^ show sym ^ ", " ^
+        stringFromList (stringFromPair show stringFromMem_value) sym_vs ^ ")"
+    | MVunion tag sym mem_val ->
+        "MVunion (" ^ show tag ^ ", " ^ show sym ^ ", " ^ stringFromMem_value mem_val ^ ")"
+  end
+
+instance (Show mem_value)
+  let show = stringFromMem_value
+end
+
+instance (Show mem_write)
+  let show w =
+    let MemWrite ptr_val ty mval = w in
+    "W " ^ show ptr_val ^ "(" ^ string_of_ctype ty ^ ") := " ^ show mval
+end
+
+instance (Show mem_read_request)
+  let show r =
+    let MemReadRequest ptr_val ty = r in
+    "R " ^ show ptr_val ^ "(" ^ string_of_ctype ty ^ ")"
+end
+
+
+let rec prettyStringFromMem_value mem_val =
+  match mem_val with
+    | MVinteger (IVinteger n) ->
+        show n
+    | MVinteger (IVsymbolic (Symbolic.SYMBconst n)) ->
+        show n
+    | MVpointer ptr_val ->
+        "PTR(" ^ show ptr_val ^ ")"
+    | _ ->
+        "[TODO]" (* TODO: check (I think this function is only used for printf *)
+  end
+
+
+let stringFromMem_state mem_st =
+  "TODO_stringFromMem_state"
+(*
+  let ws = Map_extra.toList mem_st.mem_writes in 
+  "state[" ^ (string_of_natural (naturalFromNat (Map.size mem_st.mem_writes))) ^ ";" ^
+  (string_of_natural (naturalFromNat (Map.size mem_st.mem_writes))) ^ "]{" ^ 
+  List.foldl (fun acc (ptr_val, mem_val_opt) ->
+    string_of_pointer_value ptr_val ^ " := " ^
+    match mem_val_opt with
+      | Just mem_val ->
+          string_of_mem_value mem_val
+      | Nothing ->
+          "uninit"
+    end ^ ", " ^ acc
+  ) "" ws
+  ^ "}"
+*)
+
+instance (Show mem_state)
+  let show = stringFromMem_state
+end
+
+
+
+
+(* END CLASS INSTANCES ========================================================================== *)
+
+(* Internals ================================================================ *)
+
+(*
+  Split a given offset at the point corresponding to the
+  footprint of the given memory value.
+  
+  Returns 'Nothing' of the offset was too small to cover the
+  footprint of the memory value
+*)
+module MaybeM = struct
+  let bind m f =
+    match m with
+      | Nothing ->
+          Nothing
+      | Just z ->
+          f z
+    end
+  
+  
+  (* NOTE: this is a foldl *)
+  val     foldM: forall 'a 'b. ('a -> 'b -> maybe 'a) -> 'a -> list 'b -> maybe 'a
+  let rec foldM f a = function
+    | [] ->
+        Just a
+    | (x::xs) ->
+        bind (f a x) (fun fax -> foldM f fax xs)
+  end
+end
+
+val     offsetSplitAt: offset -> mem_value -> maybe (offset * offset)
+let rec offsetSplitAt off mval =
+  match (off, mval) with
+    | (ty::off', MVunspecified ty') ->
+        if ty = ty' then
+          Just ([ty], off')
+        else
+          Nothing
+    
+    | (ty::off', MVinteger _) ->
+        Just ([ty], off')
+    
+    | ((Core_ctype.Pointer _ _ as ty)::off', MVpointer _) ->
+        Just ([ty], off')
+    
+    | (_, MVarray vs) ->
+        MaybeM.foldM (fun (acc, xs) v ->
+            MaybeM.bind (offsetSplitAt xs v) (fun (ys,zs) ->
+              Just (acc ++ ys, zs)
+            )
+        ) ([], off) vs
+    
+    | (_, MVstruct _ identVs) ->
+      MaybeM.foldM (fun (acc, xs) (_, v) ->
+        MaybeM.bind (offsetSplitAt xs v) (fun (ys,zs) ->
+          Just (acc ++ ys, zs)
+        )
+      ) ([], off) identVs
+    
+    | (_, MVunion _ _ mval') ->
+      offsetSplitAt off mval'
+    
+    | _ ->
+        Nothing
+  end
+
+
+val fpMatches: footprint -> mem_value -> bool
+let fpMatches fp mval =
+  match offsetSplitAt fp mval with
+    | Just (_, []) ->
+        true
+    | _ ->
+        false
+  end
+
+
+
+
+
+
+
+
+
+
+val setValue: tag_definitions -> mem_value -> offset -> mem_value -> mem_value
+let setValue tagDefs mval off mval' =
+  match (mval, off, mval') with
+    | (MVarray vs, [], MVarray vs') ->
+        if length vs = length vs' then
+          mval
+        else
+          MVarray $ vs' ++ List.drop (List.length vs') vs
+    
+    | (MVarray (_::vs), [], _) ->
+        MVarray (mval' :: vs)
+    
+    | ((* MVunspecified *) _, [], _) ->
+        mval' (* TODO: maybe check that v' match the footprint of the type of the unspec value *)
+    
+        
+    | _ ->
+        error "Mem.setValue: error case"
+  end
+
+
+val getSubValue: mem_value -> offset -> footprint -> maybe mem_value
+
+val     getSubValue_aux:  offset -> footprint -> mem_value -> maybe (either offset mem_value)
+val     getSubValue_array_aux: offset -> footprint -> list mem_value -> maybe (either offset mem_value)
+let rec getSubValue_array_aux offAcc fp = function
+  | [] ->
+      Just (Left offAcc)
+  | (v::vs') ->
+      match getSubValue_aux offAcc fp v with
+        | Just (Left offAcc') ->
+            getSubValue_array_aux offAcc' fp vs'
+        | Just (Right v') ->
+            Just (Right v')
+        | Nothing ->
+            Nothing
+      end
+end
+
+and getSubValue_struct_aux offAcc fp = function
+  | [] ->
+      Just (Left offAcc)
+  | ((_, mval) :: xs') ->
+      match getSubValue_aux offAcc fp mval with
+        | Just (Left offAcc') ->
+            getSubValue_struct_aux offAcc' fp xs'
+        | Just (Right v') ->
+            Just (Right v')
+        | Nothing ->
+            Nothing
+      end
+end
+
+
+
+and getSubValue_aux off fp mval =
+  match (mval, off, fp) with
+    | (MVunspecified ty, [], [ty']) ->
+        if ty = ty' then
+          Just (Right mval)
+        else
+          Nothing
+    
+    | (MVinteger _, [], [_]) ->
+        Just (Right mval)
+    
+    | (MVpointer _, [], [Core_ctype.Pointer _ _]) ->
+        Just (Right mval)
+    
+    (* only allowing single and complete elem of an array to be a subvalue *)
+    | (MVarray vs, _, _) ->
+        match off with
+          | [] ->
+              if fpMatches fp mval then
+                Just (Right mval)
+              else
+                getSubValue_array_aux off fp vs
+          | _ ->
+              getSubValue_array_aux off fp vs
+        end
+    
+    | (MVstruct _ xs, _, _) ->
+        match off with
+          | [] ->
+              if fpMatches fp mval then
+                Just (Right mval)
+              else
+                getSubValue_struct_aux off fp xs
+          | _ ->
+              getSubValue_struct_aux off fp xs
+        end
+    
+    | (MVunion _ _ mval, _, _) ->
+        getSubValue_aux off fp mval
+    
+    | _ ->
+        match offsetSplitAt off mval with
+          | Just (_, off') ->
+              Just (Left off')
+          | _ ->
+              Nothing
+        end
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let getSubValue mval off fp =
+  match getSubValue_aux off fp mval with
+    | Just (Right mval') ->
+        Just mval'
+    | _ ->
+        Nothing
+  end
+
+
+
+val     unfoldCtypes: tag_definitions -> list Core_ctype.ctype -> list Core_ctype.ctype
+let rec unfoldCtypes tagDefs = function
+  | [] ->
+      []
+  
+  | (Core_ctype.Array ty (Just n) :: sh) ->
+      let xs = unfoldCtypes tagDefs [ty] in
+      let ys = unfoldCtypes tagDefs sh   in
+      concatMap (replicate $ natFromInteger n) xs ++ ys
+  
+  | (Core_ctype.Struct tag :: sh) ->
+      let (Just ident_tys) = Map.lookup tag tagDefs in
+      (unfoldCtypes tagDefs (map snd ident_tys)) ++ (unfoldCtypes tagDefs sh)
+  
+  | (ty :: sh) ->
+      ty :: unfoldCtypes tagDefs sh
+end
+
+
+val offsetFromShift: tag_definitions -> pointer_shift -> offset
+val     offsetFromShift_aux: pointer_shift -> maybe (Core_ctype.ctype * pointer_shift)
+let rec offsetFromShift_aux xs =
+  match xs with
+    | [] ->
+        Nothing
+    | ((ty, n) :: sh' as sh) ->
+        if n = 0 then
+          offsetFromShift_aux sh'
+        else if n > 0 then
+          Just (ty, (ty, n-1) :: sh')
+        else
+          error "[Memory.offsetFromShift_aux] found a negative shift"
+  end
+
+let offsetFromShift tagDefs ptr_sh =
+  unfoldCtypes tagDefs $ unfoldr offsetFromShift_aux ptr_sh
+
+
+(* build a pointer shift to "one past" the footprint of a given type *)
+val     mkShiftToEnd: Core_ctype.ctype -> memM pointer_shift
+let rec mkShiftToEnd ty =
+  match ty with
+    | Core_ctype.Array ty (Just n) ->
+        SEU.replicateM (natFromInteger n) (mkShiftToEnd ty) >>= comb SEU.return List.concat
+    | Core_ctype.Struct tag ->
+        SEU.read (fun st -> Map.lookup tag st.tagDefinitions) >>= fun (Just ident_tys) ->
+        List.concat <$> SEU.mapM (comb mkShiftToEnd snd) ident_tys
+    | ty ->
+        SEU.return [(ty, 1)]
+  end
+
+
+(* TODO: rename *)
+val     foo: forall 'a. Eq 'a => list 'a -> list 'a -> maybe (either (list 'a) (list 'a))
+let rec foo xs ys =
+  match (xs, ys) with
+    | ([], ys) ->
+        Just (Right ys)
+    | (xs, []) ->
+        Just (Left  xs)
+    | (x::xs, y::ys) ->
+        if x = y then
+          foo xs ys
+        else
+          Nothing
+  end
+
+
+val decider: offset * footprint -> offset * footprint -> mem_value -> maybe (offset * footprint * mem_value)
+let decider (rOffset, rFootprint) (wOffset, wFootprint) wVal =
+  match foo rOffset wOffset with
+    | Nothing ->
+        (* some type in the read / write offsets didn't match *)
+        error "Mem.decider: type problem"
+    | Just (Left rOffset') ->
+        (* the read offset is larger than that of the write *)
+        match foo rOffset' wFootprint with
+          | Just (Right xs) ->
+              if xs <> [] then
+                Just (rOffset', rFootprint, wVal)
+              else
+                Nothing
+          | _ ->
+              Nothing
+        end
+    | Just (Right wOffset') ->
+        (* the read offset is shorter than that of the write *)
+        match foo rFootprint wOffset' with
+          | Nothing ->
+              error "Mem.decider: type problem"
+          | Just (Left rFootprint') ->
+              Just ([], rFootprint', wVal)
+          
+          | Just (Right _) ->
+              (* the read footprint ends before that of the write *)
+              Nothing
+        end
+  end
+
+
+val getAffection: mem_read_request -> mem_write -> memM (maybe (offset * footprint * mem_value))
+let getAffection r w =
+  match (r, w) with
+    | (MemReadRequest (PVobject rOid rSh) rTy, MemWrite (PVobject wOid wSh) wTy wVal) ->
+        if rOid <> wOid then
+          SEU.return Nothing
+        else
+          SEU.read (fun st -> st.tagDefinitions) >>= fun tagDefs ->
+          let rOffset = offsetFromShift tagDefs rSh in
+          let wOffset = offsetFromShift tagDefs wSh in
+          offsetFromShift tagDefs <$> mkShiftToEnd rTy >>= fun rFootprint ->
+          offsetFromShift tagDefs <$> mkShiftToEnd wTy >>= fun wFootprint ->
+          SEU.return $ decider (rOffset, rFootprint) (wOffset, wFootprint) wVal
+    | _ ->
+        error "Mem.getAffection"
+  end
+
+
+val     mkUnspec: tag_definitions -> Core_ctype.ctype -> mem_value
+let rec mkUnspec tagDefs ty =
+  match ty with
+    | (Core_ctype.Basic _ as ty) ->
+        MVunspecified ty
+    | Core_ctype.Array ty (Just n) ->
+        MVarray $ replicate (natFromInteger n) (mkUnspec tagDefs ty)
+    | (Core_ctype.Pointer _ _ as ty) ->
+        MVunspecified ty
+    | (Core_ctype.Atomic _ as ty) ->
+        MVunspecified ty
+    | Core_ctype.Struct tag ->
+        let (Just ident_tys) = Map.lookup tag tagDefs in
+        MVstruct tag $ map (fun (ident, ty) -> (ident, mkUnspec tagDefs ty)) ident_tys
+    | (Core_ctype.Union _ as ty) ->
+        MVunspecified ty
+    | (Core_ctype.Builtin _ as ty) ->
+        MVunspecified ty
+    | _ ->
+        error "Mem.mkUnspec: invalid type"
+  end
+
+
+(* TODO: for debug *)
+let rec stringFromMemValue mem_val =
+  match mem_val with
+    | MVunspecified ty ->
+        "(MVunspecified " ^ string_of_ctype ty ^ ")"
+    | MVinteger (IVinteger n) ->
+        "(MVinteger " ^ show n ^ ")"
+    | MVinteger _ ->
+        "(MVinteger TODO)"
+    | MVfloating str ->
+        "(MVfloating " ^ str ^ ")"
+    | MVpointer ptr_val ->
+        "(MVpointer " ^ show ptr_val ^ ")"
+    | MVarray mem_vals ->
+        "(MVarray " ^ stringFromList stringFromMemValue mem_vals ^ ")"
+    | MVstruct sym_tag ident_mem_vals ->
+        "(MVstruct " ^ show sym_tag ^ stringFromList (stringFromPair show stringFromMemValue) ident_mem_vals ^ ")"
+    | MVunion sym_tag sym_member mem_val ->
+        "(MVunion " ^ show sym_tag ^ " " ^ show sym_member ^ stringFromMemValue mem_val ^ ")"
+  end
+
+
+val combineWrites: mem_read_request -> list mem_write -> memM mem_value
+let combineWrites (MemReadRequest (PVobject _ rSh) rTy as r) ws =
+(*
+  let () = output_debug 4 $
+    show (List.map (fun MemWrite (ptr_val, ty, mem_val) -> "WRITE[" ^ show ptr_val ^ ", " ^ string_of_ctype ty ^ ", " ^ show mem_val ^ "]") ws)
+  in
+*)
+  catMaybes <$> SEU.mapM (getAffection r) ws >>= function
+    | [] ->
+        SEU.fail $ MerrOther ("myCombineWrites: uninit ==> " ^ show (r, ws))
+    |  xs ->
+        SEU.read (fun st -> st.tagDefinitions) >>= fun tagDefs ->
+        let unV = mkUnspec tagDefs rTy in
+        let rOff = offsetFromShift tagDefs rSh in
+        
+        (* TODO: may need a reverse of xs *)
+        SEU.foldM (fun acc (wOff, wFp, wVal) ->
+          match getSubValue wVal wOff wFp with
+            | Nothing ->
+                SEU.fail $ MerrOther ("myCombineWrites: some footprint was too big: " ^
+                                      stringFromMemValue wVal ^ ", " ^ stringFromList string_of_ctype wOff ^ ", " ^
+                                      stringFromList string_of_ctype wFp)
+
+            | Just mval ->
+                SEU.return $ setValue tagDefs acc (List.deletes wOff rOff) mval
+          end
+        ) unV (List.reverse xs) (* TODO: there is a problem somewhere (see Sandbox/cerb/array2.c) *)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* Memory layout model API ================================================== *)
+
+
+
+
+val initial_mem_stateWithTagDefinitions: tag_definitions -> mem_state
+
+
+val allocate_object:    Thread.thread_id  (* the allocating thread *)
+                     -> list Symbol.t     (* symbols coming from the Core/C program, for debugging purpose *)
+                     -> Core_ctype.ctype  (* type of the allocation *)
+(*                   -> Symbolic.symbolic (* size of that type *)
+                     -> Symbolic.symbolic (* alignment of that tyepe *)  *)
+                     -> memM pointer_value
+
+val load: Core_ctype.ctype -> pointer_value -> memM mem_value
+val store: Core_ctype.ctype -> pointer_value -> mem_value -> memM unit
+
+
+
+(* TODO: change the name *)
+val mk_integer_op: integer_operator -> integer_value -> integer_value -> integer_value
+
+val unspecified_mval: Core_ctype.ctype -> mem_value
+val integer_value_mval: integer_value -> mem_value
+val floating_mval: string -> mem_value
+val pointer_mval: pointer_value -> mem_value
+val array_mval: list mem_value -> mem_value
+val struct_mval: Symbol.t -> list (Cabs.cabs_identifier * mem_value) -> mem_value
+val union_mval: Symbol.t -> Cabs.cabs_identifier -> mem_value -> mem_value
+
+
+val mk_ptrdiff: pointer_value -> pointer_value -> mem_value
+
+
+val ptr_from_mem_value: mem_value -> maybe pointer_value
+val symb_from_mem_value: mem_value -> maybe Symbolic.symbolic
+
+
+
+(* memops *)
+val ptr_eq: pointer_value -> pointer_value -> bool (* TODO: no effect ? *)
+val ptr_diff: pointer_value -> pointer_value -> integer_value (* TODO: no effect ? *)
+val int_from_ptr: Core_ctype.ctype -> Core_ctype.ctype -> pointer_value -> integer_value (* TODO: no effect ? *)
+val ptr_from_int: Core_ctype.ctype -> Core_ctype.ctype -> integer_value -> pointer_value (* TODO: no effect ? *)
+val ptr_lt: pointer_value -> pointer_value -> bool (* TODO: no effect ? *)
+val ptr_valid_for_deref: pointer_value -> bool
+
+(* first type is that of integer, second on is type of reference *)
+
+
+(* STD §6.5.9#6 *)
+let ptr_eq ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (PVnull _, PVnull _) ->
+        (* STD "both are null pointers" *)
+        true
+    | (PVobject oid1 sh1, PVobject oid2 sh2) ->
+        (* STD "both are pointers to the same object (including a pointer to an
+                object and a subobject at its beginning)" *)
+        if oid1 = oid2 then
+          if List.null sh1 then
+            match sh2 with
+              | [(_, n)] ->
+                  n = 0
+              | _ ->
+                sh1 = sh2
+           end
+         else if List.null sh2 then
+            match sh1 with
+              | [(_, n)] ->
+                  n = 0
+              | _ ->
+                sh1 = sh2
+           end
+         else
+           sh1 = sh2
+(*
+          match (sh1, sh2) with
+            (* the two following cases correspond to one of the pointer pointing
+               to an object and the other to a subobject at its beginning *)
+            | ([], [(_, 0)]) ->
+                true
+            | ([(_, 0)], []) ->
+                true
+            | _ ->
+                sh1 = sh2
+          end
+*)
+        else
+          false
+  | (PVfunction sym1, PVfunction sym2) ->
+      (* STD "both are pointers to the same [...] function" *)
+      sym1 = sym2
+(* TODO: Two pointers compare equal if and only if
+  
+  * both are pointers to one past the last element of the same array object, or
+  * one is a pointer to one past the end of one array object and the other is a pointer to the start of a different array object that happens to immediately follow the first array object in the address space.
+*)
+  | _ ->
+      false
+end
+
+
+
+
+
+
+
+
+
+let int_from_ptr ref_ty ty = function
+  | PVnull _ ->
+      IVinteger 0 (* TODO: check, impl-choice here? *)
+  | ptr_val ->
+      (* TODO: check *)
+      IVintptr ptr_val
+end
+
+let ptr_from_int ty ref_ty = function
+  | IVinteger n ->
+      if n = 0 then
+        PVnull ref_ty
+      else
+        error "WIP: Mem.ptr_from_int 1"
+  | IVintptr ptr_val ->
+      ptr_val
+  | _ ->
+      error "WIP: Mem.ptr_from_int 2"
+end
+
+let ptr_valid_for_deref = function
+  | PVnull _ ->
+      false
+  | _ ->
+      (* TODO: allows to much *)
+      true
+end
+
+
+
+
+let runMem m mem_st =
+  match SEU.run m mem_st with
+    | Exception.Result (Undefined.Defined z, mem_st') ->
+        Right (z, mem_st')
+    | Exception.Exception err ->
+        Left err
+(* TODO: undef case *)
+  end
+
+
+let initial_mem_stateWithTagDefinitions tagDefs = <|
+  oid_supply=     UniqueId.new_supply;
+  objTypes=       Map.empty;
+  tagDefinitions= tagDefs;
+  memWrites=      [];
+|>
+
+
+val fresh_object_id: list Symbol.t -> State.t object_id mem_state
+let fresh_object_id pref =
+  State.modify (fun st ->
+    let (n, oid_suppl') = UniqueId.fresh_id st.oid_supply in
+    ((n, pref), <| st with oid_supply= oid_suppl' |>)
+  )
+
+
+
+
+
+let allocate_object tid pref ty =
+  SEU.runS (fresh_object_id pref) >>= fun oid ->
+  SEU.return $ PVobject oid []
+
+
+let load ty = function
+  | PVnull _ ->
+      SEU.fail $ MerrOther "Mem.load saw a null pointer"
+  | ptr_val ->
+      begin_timing "Mem.load" >>
+      SEU.read (fun st -> st.memWrites) >>=
+      combineWrites (MemReadRequest ptr_val ty) >>= fun ret ->
+      end_timing () >>
+      SEU.return ret
+end
+
+
+
+
+let store ty ptr_val mem_val =
+  SEU.update (fun st ->
+    <| st with memWrites= (MemWrite ptr_val ty mem_val) :: st.memWrites |>
+  )
+(*
+let store ty ptr_val mem_val =
+  let _ = output_debug 3 ("Mem.store: (" ^ string_of_ctype ty ^ ") " ^ show ptr_val ^ " := " ^ show mem_val) in
+  (* TODO: ty ?? *)
+  SEU.update (fun st ->
+    <| st with memWrites= (ptr_val, mem_val) :: st.memWrites |>
+  )
+*)
+
+
+let eq_ptrval eqs ptr_val1 ptr_val2 =
+  match (ptr_val1, ptr_val2) with
+    | (PVnull _, PVnull _) ->
+        Just true
+    | (PVobject oid1 sh1, PVobject oid2 sh2) ->
+        (* TODO: this equates two invalid pointers beyond a same object by the same shift *)
+        Just (oid1 = oid2 && sh1 = sh2)
+    | (PVfunction sym1, PVfunction sym2) ->
+        Just (sym1 = sym2)
+  end
+
+let ne_ptrval eqs ptr_val1 ptr_val2 =
+  maybe Nothing (Just -| not) (eq_ptrval eqs ptr_val1 ptr_val2)
+
+let lt_ptrval _ _ _ =
+  Nothing
+let gt_ptrval _ _ _ =
+  Nothing
+let le_ptrval _ _ _ =
+  Nothing
+let ge_ptrval _ _ _ =
+  Nothing
+let diff_ptrval _ _ =
+  error "Naive memory doesn't support pointer diffs"
+let intcast_ptrval _ _ _ =
+  error "Naive memory doesn't support pointer to int casts"
+let validForDeref_ptrval = function
+  | PVnull _ ->
+      false
+  | PVobject _ _ ->
+      true (* TODO: this is too permissive *)
+  | PVfunction _ ->
+      false
+end
+
+
+let shift_ptrval ptr_val ptr_sh' =
+  (* TODO: forcing concrete offsets for now *)
+  let ptr_sh' = map (fun (id, IVinteger n) -> (id, n)) ptr_sh' in
+  match ptr_val with
+    | PVobject oid ptr_sh ->
+        PVobject oid (ptr_sh ++ ptr_sh') (* (normaliseShift $ ptr_sh ++ ptr_sh') *)
+  end
+
+
+let integer_ival n = IVinteger n
+
+let symbolic_ival symb = IVsymbolic symb
+
+let inline op_ival iop ival1 ival2 =
+  let fop n1 n2 = match iop with
+    | IntAdd ->
+        n1 + n2
+    | IntSub ->
+        n1 - n2
+    | IntMul ->
+        n1 * n2
+    | IntDiv ->
+        if n2 = 0 then 0 else n1 / n2
+    | IntMod ->
+        if n2 = 0 then 0 else n1 mod n2
+    | IntExp ->
+        n1 ** natFromInteger n2
+  end in
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        IVinteger (fop n1 n2)
+    | _ ->
+        IVop iop ival1 ival2
+  end
+
+
+let case_integer_value ival finteger fdefault =
+  match ival with
+    | IVinteger n ->
+        finteger n
+    | _ ->
+        fdefault ()
+  end
+
+
+
+let mk_integer_symbolic symb =
+  IVsymbolic symb
+
+
+
+let unspecified_mval ty = MVunspecified ty
+let integer_value_mval ival = MVinteger ival
+let floating_mval str = MVfloating str
+let pointer_mval ptr_val = MVpointer ptr_val
+let array_mval mem_vals = MVarray mem_vals (* TODO: assert mem_vals <> [] *)
+let struct_mval tag_sym xs = MVstruct tag_sym xs
+let union_mval tag_sym mem_ident mem_val = MVunion tag_sym mem_ident mem_val
+
+
+let case_mem_value mem_val funspec fival ffloat fptr farray fstruct funion =
+  match mem_val with
+    | MVunspecified ty ->
+        funspec ty
+    | MVinteger ival ->
+        fival ival
+    | MVfloating str ->
+        ffloat str
+    | MVpointer ptr_val ->
+        fptr ptr_val
+    | MVarray mem_vals ->
+        farray mem_vals
+    | MVstruct tag_sym xs ->
+        fstruct tag_sym xs
+    | MVunion tag_sym mem_ident mem_val ->
+        funion tag_sym mem_ident mem_val
+  end
+
+
+
+
+let mk_ptrdiff ptr_val1 ptr_val2 =
+  MVinteger (IVptrdiff ptr_val1 ptr_val2)
+
+let null_ptrval ty =
+  PVnull ty
+
+let fun_ptrval fsym =
+  PVfunction fsym
+
+let ptr_from_mem_value = function
+  | MVpointer ptr_val ->
+      Just ptr_val
+  | _ ->
+      Nothing
+end
+
+let symb_from_mem_value = function
+  | MVinteger (IVsymbolic symb) ->
+      Just symb
+  | _ ->
+      Nothing
+end
+
+
+
+
+
+(* TODO: move up to API *)
+let rec eq_ival eqs ival1 ival2 =
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        Just (n1 = n2)
+    | (IVsymbolic symb1, IVsymbolic symb2) ->
+        (* NOTE: this is checking for syntactic equality of the symbolic expressions *)
+        if symb1 = symb2 then
+          Just true
+        else
+          Nothing
+    | (IVptrdiff ptr_val11 ptr_val12, IVptrdiff ptr_val21 ptr_val22) ->
+        if ptr_val11 = ptr_val21 && ptr_val12 = ptr_val22 then
+          Just true
+        else
+          Nothing
+    | (IVintptr ptr_val1, IVintptr ptr_val2) ->
+        if ptr_val1 = ptr_val2 then
+          Just true
+        else
+          Nothing (* TODO: or false? *)
+    | (IVop iop1 ival11 ival12, IVop iop2 ival21 ival22) ->
+        if iop1 = iop2 then
+          match (eq_ival eqs ival11 ival21, eq_ival eqs ival12 ival22) with
+            | (Just true, Just true) ->
+                Just true
+            | _ ->
+                Nothing (* TODO: could be more precise here ... *)
+          end
+        else
+          Nothing
+     | _ ->
+         Nothing
+  end
+
+let lt_ival _ ival1 ival2 =
+  match (ival1, ival2) with
+    | (IVinteger n1, IVinteger n2) ->
+        Just (n1 < n2)
+    | _ ->
+        Nothing
+  end
+
+let ptrcast_ival _ _ _ =
+  error "Naive memory doesn't support integer to pointer casts"
+
+
+
+let is_concrete_ival = function
+  | IVsymbolic _ ->
+      false
+  | _ ->
+      (* TODO: should it return false for IVptrdiff and IVintptr? *)
+      true
+end
+
+val     symbolify_mem_value: mem_value -> Symbolic.symbolic
+let rec symbolify_mem_value mem_val =
+  match mem_val with
+    | MVpointer ptr_val ->
+        error "TODO: Core_aux.symbolify_mem_value: MVpointer"
+(*
+        Symbolic.SYMBptr ptr_val
+*)
+    | MVinteger ival ->
+        error "TODO: symbolify integer_value"
+    | MVarray mem_vals ->
+        error "TODO: Core_aux.symbolify_mem_value: MVarray"
+(*
+        Symbolic.SYMBarray (List.map symbolic_mem_value mem_vals)
+*)
+  end

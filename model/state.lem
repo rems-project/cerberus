@@ -1,0 +1,94 @@
+open import Pervasives Utils
+
+type stateM 'a 's = 's -> ('a * 's)
+
+val return : forall 'a 's. 'a -> stateM 'a 's
+let return a = fun s -> (a, s)
+
+val bind : forall 'a 'b 's. stateM 'a 's -> ('a -> stateM 'b 's) -> stateM 'b 's
+let bind m f =
+  fun s ->
+    let (a, s') = m s in
+    f a s'
+
+val runStateM: forall 'a 'st. stateM 'a 'st -> 'st -> ('a * 'st)
+let runStateM m st =
+  m st
+
+
+let join m = bind m (fun x -> x)
+
+val map : forall 'a 'b 's. ('a -> 'b) -> stateM 'a 's -> stateM 'b 's
+let inline map f m = bind m (return -| f)
+
+val state_fmap: forall 'a 'b 'st. ('a -> 'b) -> stateM 'a 'st -> stateM 'b 'st
+let state_fmap f m = bind m (return -| f)
+
+val app : forall 'a 'b 's. stateM ('a -> 'b) 's -> stateM 'a 's -> stateM 'b 's
+let app mf m = bind mf (fun f -> map f m)
+
+val update : forall 'a 's. ('s -> 's) -> stateM unit 's
+let update f = fun s -> ((), f s)
+
+val modify : forall 'a 's. ('s -> 'a * 's) -> stateM 'a 's
+let modify f = fun s -> f s
+
+val read : forall 'a 's. ('s -> 'a) -> stateM 'a 's
+let read   f = fun s -> (f s, s)
+
+val eval : forall 'a 's. stateM 'a 's -> 's -> 'a
+let eval m st = fst (m st)
+
+val run : forall 'a 's. stateM 'a 's -> 's -> 'a * 's
+let run t s = t s
+
+
+let inline (>>=)    = bind
+let inline (>>) m f = bind m (fun _ -> f)
+
+
+let sequence ms =
+  foldr
+    (fun m m' ->
+      m  >>= fun x  ->
+      m' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
+
+let listM t xs = sequence (t xs)
+
+val mapM: forall 'a 'b 's. ('a -> stateM 'b 's) -> list 'a -> stateM (list 'b) 's
+let mapM f = listM (List.map f)
+
+val state_replicateM: forall 'a 'st. nat -> stateM 'a 'st -> stateM (list 'a) 'st
+let state_replicateM n x = sequence (replicate n x)
+
+let sequence_ ms = foldr (>>) (return ()) ms
+
+val mapM_: forall 'a 'b 's. ('a -> stateM 'b 's) -> list 'a -> stateM unit 's
+let mapM_ f _as = sequence_ (List.map f _as)
+
+
+
+
+val     foldlM: forall 'a 'b 's. ('a -> 'b -> stateM 'a 's) -> 'a -> list 'b -> stateM 'a 's
+let rec foldlM f a = function
+  | [] ->
+      return a
+  | x::xs ->
+      bind (f a x) (fun z -> foldlM f z xs)
+end
+
+
+val get: forall 's. stateM 's 's
+let get =
+  fun st -> (st, st)
+
+val put: forall 's. 's -> stateM unit 's
+let put st =
+  fun _ -> ((), st)
+
+
+(* HACK: inline only added to prevent Lem's renaming *)
+let inline fmap = state_fmap
+let inline replicateM = state_replicateM

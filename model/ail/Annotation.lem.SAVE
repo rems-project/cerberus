@@ -1,0 +1,20 @@
+open import AilSyntax GenTypes
+
+type annotation 'T1 'T2 =  <|
+  add_type : genTypeCategory -> 'T1 -> 'T2;
+  get_type : 'T2 -> genTypeCategory
+|>
+
+let make_annotation add_type get_type = <|
+  add_type = add_type;
+  get_type = get_type
+|>
+
+let type_of (A : annotation 'A1 'A2) (e : expression 'A2) =
+  let (AnnotatedExpression a _ _) = e in
+  A.get_type a
+
+let concrete_annotation : annotation unit genTypeCategory = <|
+  add_type = fun gtc _ -> gtc;
+  get_type = fun a -> a;
+|>
