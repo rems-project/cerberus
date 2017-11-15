@@ -1561,7 +1561,7 @@ let typecheck_program file =
       collect_labels env e >>= fun env ->
       typecheck_expr Loc.unknown file.tagDefs env bTy e >>= fun te ->
       E.return (insert_tdecl (Sym sym) (TDsym bTy) env, (sym, bTy, te) :: res_acc)
-    ) (env, []) file.globs >>= fun (env, globs') ->
+    ) (env, []) file.globs >>= fun (env, rev_globs') ->
     
     (* Registering the program functions *)
     let env = Map_extra.fold (fun sym decl acc ->
@@ -1587,7 +1587,7 @@ let typecheck_program file =
             Proc bTy sym_bTys <$> typecheck_expr Loc.unknown file.tagDefs env' bTy e
       end) file.funs >>= fun funs' ->
     
-    E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= globs'; funs= funs' |>
+    E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= List.reverse rev_globs'; funs= funs' |>
   in
   match E.runM aux with
     | Exception.Result file' ->
