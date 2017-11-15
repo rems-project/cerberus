@@ -55,6 +55,8 @@ type solver_state = {
   ivsizeofDecl: FuncDecl.func_decl;
   ivalignofDecl: FuncDecl.func_decl;
   fromptrDecl: FuncDecl.func_decl;
+  
+  in_device_memDecl: FuncDecl.func_decl;
 }
 
 (*
@@ -126,6 +128,7 @@ let init_solver () : solver_state =
           [0(*TODO: no idea with I'm doing*)] ] in
   
   let intSort = Arithmetic.Integer.mk_sort ctx in
+  let boolSort = Boolean.mk_sort ctx in
   let slvSt = {
 (*   allocations= []; *)
    ctx= ctx;
@@ -140,6 +143,7 @@ let init_solver () : solver_state =
    ivsizeofDecl= FuncDecl.mk_func_decl_s ctx "ivsizeof" [ctypeSort] intSort;
    ivalignofDecl= FuncDecl.mk_func_decl_s ctx "ivalignof" [ctypeSort] intSort;
    fromptrDecl= FuncDecl.mk_func_decl_s ctx "fromptr" [ctypeSort; integerTypeSort; intSort] intSort;
+   in_device_memDecl= FuncDecl.mk_func_decl_s ctx "in_device_mem" [intSort] boolSort;
   } in
   
   (* axiom1 ==> forall ty: Ctype, ivsizeof(ty) > 0 *)
@@ -376,9 +380,17 @@ let integer_value_base_to_expr slvSt ival_ =
                                                      ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
         let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
                                                      ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
+        (* TODO: maybe have that conversion be done when the IVptrdiff is created? *)
+        (* TODO: check that this is correct for arrays of arrays ... *)
+        let diff_ty' = begin match diff_ty with
+          | Core_ctype.Array0 (elem_ty, _) ->
+              elem_ty
+          | _ ->
+              diff_ty
+        end in
         Arithmetic.mk_div slvSt.ctx
           (Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2])
-          (aux (Mem_simplify.lifted_simplify_integer_value_base (IVsizeof diff_ty)))
+          (aux (Mem_simplify.lifted_simplify_integer_value_base (IVsizeof diff_ty')))
     | IVbyteof (ival_, mval) ->
         failwith "TODO Smt: IVbyteof"
     | IVcomposite ival_s ->
@@ -452,6 +464,8 @@ let mem_constraint_to_expr st constr =
           | None ->
               None
         end
+    | MC_in_device (IV (_, ival_)) ->
+        Some (Expr.mk_app st.ctx st.in_device_memDecl [integer_value_base_to_expr st ival_])
   in aux constr
 
 
@@ -670,16 +684,6 @@ let check_sat slv es =
 
 (* val runND: forall 'a 'err 'cs 'st. ndM 'a 'err 'cs 'st -> list (nd_status 'a 'err * 'st) *)
 let runND_exhaustive m st0 =
-  prerr_endline "HELLO runND_exhaustive";
-(*
-    let act = m st0 in
-    begin
-      let oc = open_out "graph.dot" in
-      output_string oc (dot_from_nd_action act);
-      close_out oc
-    end;
-*)
-
   let slvSt = init_solver () in
   (* TODO: yuck, redo it without a reference *)
   let tree_so_far = ref Thole in
@@ -692,9 +696,10 @@ let runND_exhaustive m st0 =
     match m_act st with
       | (NDactive a, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st'));
-          prerr_endline "NDactive";
-          prerr_endline (Solver.to_string slvSt.slv);
-
+          if !Debug_ocaml.debug_level >= 1 then begin
+            prerr_endline "NDactive";
+            prerr_endline (Solver.to_string slvSt.slv);
+          end;
 (*          Params.update_param_value slvSt.ctx "timeout" ""; *)
           begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
@@ -709,14 +714,17 @@ let runND_exhaustive m st0 =
       
       | (NDkilled r, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tkilled r);
-          prerr_endline "NDkilled BEGIN";
-          prerr_endline (Z3.Solver.to_string slvSt.slv);
-          prerr_endline "END";
-          
+          if !Debug_ocaml.debug_level >= 1 then begin
+            prerr_endline "NDkilled BEGIN";
+            prerr_endline (Z3.Solver.to_string slvSt.slv);
+            prerr_endline "END";
+          end;
           (Killed r, Wip.to_strings (), st') :: acc
       
       | (NDnd (debug_str, str_ms), st') ->
-          prerr_endline ("NDnd(" ^ debug_str ^ ")[" ^ string_of_int (List.length str_ms) ^ "]");
+          if !Debug_ocaml.debug_level >= 1 then begin
+            prerr_endline ("NDnd(" ^ debug_str ^ ")[" ^ string_of_int (List.length str_ms) ^ "]");
+          end;
           List.fold_left (fun acc (_, m_act) ->
             try
               Wip.push ();
@@ -733,7 +741,9 @@ let runND_exhaustive m st0 =
       
       | (NDguard (debug_str, cs, m_act), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tguard (debug_str, cs, Thole));
-          prerr_endline ("NDguard(" ^ debug_str ^ ")");
+          if !Debug_ocaml.debug_level >= 1 then begin
+            prerr_endline ("NDguard(" ^ debug_str ^ ")");
+          end;
           add_constraint slvSt debug_str cs;
           begin match check_sat slvSt.slv [] with
             | Solver.UNSATISFIABLE ->
@@ -741,12 +751,16 @@ let runND_exhaustive m st0 =
                 prerr_endline ("BEGIN SOLVER\n" ^ Solver.to_string slvSt.slv ^ "\nEND");
                 prerr_endline ("BEGIN CS\n" ^ String.concat "\n" (Wip.to_strings ()) ^ "\nEND");
 *)
-                prerr_endline "NDguard BACKTRACKING";
-               tree_so_far := fill_hole_with !tree_so_far Tdeadend;
-               raise (Backtrack acc)
+                if !Debug_ocaml.debug_level >= 1 then begin
+                  prerr_endline "NDguard BACKTRACKING";
+                end;
+                tree_so_far := fill_hole_with !tree_so_far Tdeadend;
+                raise (Backtrack acc)
 
             | Solver.UNKNOWN ->
-                prerr_endline "TIMEOUT in NDguard";
+                if !Debug_ocaml.debug_level >= 1 then begin
+                  prerr_endline "TIMEOUT in NDguard";
+                end;
                 aux acc m_act st'
 
             | Solver.SATISFIABLE ->
@@ -755,7 +769,9 @@ let runND_exhaustive m st0 =
       
       | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tbranch (debug_str, cs, Thole, Thole));
-          prerr_endline ("NDbranch(" ^ debug_str ^ ")");
+          if !Debug_ocaml.debug_level >= 1 then begin
+            prerr_endline ("NDbranch(" ^ debug_str ^ ")");
+          end;
           Wip.push ();
           Solver.push slvSt.slv;
           add_constraint slvSt debug_str cs;
@@ -773,9 +789,11 @@ let runND_exhaustive m st0 =
                      new_acc (* acc *)
                end
             | Solver.UNSATISFIABLE ->
-                prerr_endline "NDbranch ==> UNSATISFIABLE";
-                prerr_endline (Z3.Solver.to_string slvSt.slv);
-                prerr_endline "END\n\n";
+                if !Debug_ocaml.debug_level >= 1 then begin
+                  prerr_endline "NDbranch ==> UNSATISFIABLE";
+                  prerr_endline (Z3.Solver.to_string slvSt.slv);
+                  prerr_endline "END\n\n";
+                end;
                 acc
           end in
           ignore (Wip.pop ());

@@ -68,7 +68,6 @@ type mem_state = Impl.impl_mem_state
 type memM 'a = Impl.impl_memM 'a
 val return: forall 'a. 'a -> memM 'a
 val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
-val runMem: forall 'a. memM 'a -> mem_state -> list (either mem_error ('a * mem_state))
 
 
 
@@ -89,11 +88,9 @@ val allocate_dynamic:   Cthread.thread_id  (* the allocating thread *)
 
 val kill: pointer_value -> memM unit
 
-val load: ctype -> pointer_value -> memM (footprint * mem_value)
+val load: Loc.t -> ctype -> pointer_value -> memM (footprint * mem_value)
 val store: Loc.t -> ctype -> pointer_value -> mem_value -> memM footprint
 
-(* TODO: put somewhere *)
-val prettyStringFromMem_value: mem_value -> string
 
 (* Pointer value constructors *)
 val null_ptrval: ctype -> pointer_value
@@ -197,8 +194,6 @@ let return = Impl.impl_return
 let bind = Impl.impl_bind
 
 
-let prettyStringFromMem_value           = Impl.impl_prettyStringFromMem_value
-let runMem                              = Impl.impl_runMem
 let initial_mem_state                   = Impl.impl_initial_mem_state
 let null_ptrval                         = Impl.impl_null_ptrval
 let fun_ptrval                          = Impl.impl_fun_ptrval
@@ -366,11 +361,11 @@ let kill ptrval =
   ) in
   Impl.impl_kill ptrval
 
-let load ty ptrval =
+let load loc ty ptrval =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
     "Mem.load(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ")"
   ) in
-  Impl.impl_load ty ptrval
+  Impl.impl_load loc ty ptrval
 
 let store loc ty ptrval mval =
   let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
