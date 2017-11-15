@@ -982,8 +982,17 @@ BEFORE EVAL_PEXPR2
         end
     
     | (Eproc annots nm pes, sk) ->
-        one match valueFromPexprs pes with
-          | Just cvals ->
+        one match valueOrPEconstrainedFromPexprs pes with
+          | Just (Right ((i, xs), pes')) ->
+              Step_constrained "Eproc" (
+                List.map (fun (constrs, pe') ->
+                    ( constrs
+                    , E.return <| th_st with
+                        arena= Expr [] (Eproc annots nm (List.update pes' i pe'))
+                      |> )
+                ) xs
+              )
+          | Just (Left cvals) ->
               match nm with
                 | Sym psym ->
                     Step_tau "Eproc" (

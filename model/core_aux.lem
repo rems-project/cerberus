@@ -751,6 +751,31 @@ let rec valueFromPexprs pes =
           Nothing
     end) (Just []) pes
 
+val valueOrPEconstrainedFromPexpr: pexpr -> maybe (either value pexpr)
+let valueOrPEconstrainedFromPexpr pe =
+  match pe with
+    | Pexpr () (PEval cval) ->
+        Just (Left cval)
+    | Pexpr () (PEconstrained _) ->
+        Just (Right pe)
+    | _ ->
+        Nothing
+  end
+
+val     valueOrPEconstrainedFromPexprs: list pexpr -> maybe (either (list value) ((nat * (list (Mem.mem_iv_constraint  * pexpr))) * (list pexpr)))
+let rec valueOrPEconstrainedFromPexprs pes =
+  snd (List.foldr (fun pe (i, acc) ->
+      (i+1, match (valueOrPEconstrainedFromPexpr pe, acc) with
+        | (Just (Left cval), Just (Left cvals)) ->
+            Just (Left (cval :: cvals))
+        | (Just (Right (Pexpr () (PEconstrained xs) as pe)), Just (Left cvals)) ->
+            Just (Right ((i, xs), pe :: (List.map (fun v -> Pexpr () (PEval v)) cvals)))
+        | (Just (Right pe), Just (Right (i_xs, pes))) ->
+            Just (Right (i_xs, pe :: pes))
+        | _ ->
+            Nothing
+      end)) (0, Just (Left [])) pes)
+
 
 val to_integer: pexpr -> maybe integer
 let to_integer pe =
