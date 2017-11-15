@@ -6,6 +6,11 @@ val unknown: t
 declare ocaml target_rep function unknown = `Location_ocaml.unknown`
 declare hol target_rep function unknown = `()`
 
+val other: string -> t
+declare ocaml target_rep function other = `Location_ocaml.other`
+declare hol target_rep function other = `()`
+
+
 val with_cursor_from: t -> t -> t
 declare ocaml target_rep function with_cursor_from = `Location_ocaml.with_cursor_from`
 
