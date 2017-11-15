@@ -168,6 +168,8 @@ class UI {
           tab.setActive()
           this.done()
         }
+      }).fail(() => {
+        this.done()
       })
     })
 
@@ -215,11 +217,14 @@ class UI {
       data: this.currentView.getValue(),
       success: (data, status, query) => {
         onSuccess(data);
+        if (data.stderr != "")
+          this.currentView.console.setValue(data.stderr)
         this.done()
       }
     }).fail((e) => {
       console.log('Failed request!', e)
       this.currentView.dirty = false
+      this.done()
     })
   }
 

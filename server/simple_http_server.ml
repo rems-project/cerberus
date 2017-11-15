@@ -209,6 +209,14 @@ let run mode =
      --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
   mode
 
+type exec_status = Success | Timeout | Error
+
+let exec_command c =
+  let chans = Unix.open_process_full ("gtimeout 30s " ^ c) (Unix.environment()) in
+  match Unix.close_process_full chans with
+  | Unix.WEXITED n -> if n = 124 then Timeout else Success
+  | _ -> Error
+
 let cerberus f content =
   let source  = Filename.temp_file "source" ".c" in
   let out     = Filename.temp_file "out" ".res" in
@@ -216,7 +224,10 @@ let cerberus f content =
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   let respond str = (Server.respond_string ~headers) `OK str () in
   write_file source content;
-  ignore (Sys.command (f source out err));
+  begin match (exec_command (f source out err)) with
+    | Timeout -> ()
+    | _ -> ()
+  end;
   respond (mk_result source out err)
 
 (* TODO: not being used *)
