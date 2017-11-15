@@ -1353,7 +1353,7 @@ let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
     
 (* TODO: looks too simple to be true *)
 let impl_intcast_ptrval ref_ty ity (PV prov ptr_val_ sh) =
-  let ival = IV Prov_none (
+  let ival = IV prov (
     mk_op_ival_ IntAdd (IVfromptr ref_ty ity ptr_val_) (integer_value_baseFromShift_path sh)
    ) in
   match ity with
@@ -1778,6 +1778,7 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 
 (* Converting an integer value into a pointer value *)
+(*
 let impl_ptrcast_ival int_ty ref_ty (IV prov ival_) =
   (* TODO: check the types *)
   match ival_ with
@@ -1799,7 +1800,30 @@ let impl_ptrcast_ival int_ty ref_ty (IV prov ival_) =
               (fail (MerrWIP "tried to cast to a pointer type an (non device) integer value non-equal to zero"))
           end
   end
-
+*)
+let impl_ptrcast_ival int_ty ref_ty ival =
+  (* TODO: check the types *)
+  match ival with
+    | IV prov (IVfromptr ty ity ptrval_) ->
+        (* The integer value was made from an pointer value. the provenance is passed on *)
+        return (PV prov ptrval_ [])
+    | IV (Prov_some _ as prov) ival_ ->
+        return (PV prov (PVfromint ival_) [])
+    | IV _ ival_ ->
+        ifM "ptrcast_ival, null pointer"
+          (mk_iv_constr MC_eq ival_ (IVconcrete 0))
+          (* if the integer value is zero, then we make a null pointer (see Q28 in notes30) *)
+          (return (impl_null_ptrval ref_ty))
+          
+          begin
+            ifM "ptrcast_ival, device pointer"
+              (MC_in_device (IV Prov_none ival_))
+              (* if the integer value is within the device memory range *)
+              (return (PV Prov_device (PVfromint ival_) []))
+              (* otherwise we produce a runtime error (check with P) *)
+              (fail (MerrWIP "tried to cast to a pointer type an (non device) integer value non-equal to zero"))
+          end
+  end
 
 
 
@@ -1926,10 +1950,10 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
-            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
+            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) as spe_ty) byte_ival_] ->
                 match write_mval with
                   | MVinteger _ write_ival ->
-                      MVcomposite [(byte_ival_, write_ival)] current_mval
+                      MVcomposite [(mk_op_ival_ IntMul byte_ival_ (IVsizeof spe_ty), write_ival)] current_mval
                   | _ ->
                       error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
                 end
@@ -2012,8 +2036,8 @@ val can_access: forall 'a. access_kind -> Loc.t -> impl_pointer_value ->
 let perform_access accessKind loc ptrval do_normal do_device =
   match ptrval with
     (* null and function pointers obviously can't be used for accesses. *)
-    | PV _ (PVnull _) _     -> fail (MerrAccess accessKind NullPtr)
-    | PV _ (PVfunction _) _ -> fail (MerrAccess accessKind FunctionPtr)
+    | PV _ (PVnull _) _     -> fail (MerrAccess loc accessKind NullPtr)
+    | PV _ (PVfunction _) _ -> fail (MerrAccess loc accessKind FunctionPtr)
     
     (* by WF-invariants, we have a pointer to an object *)
     | (PV (Prov_some alloc_id) _ _ as ptrval) ->
@@ -2023,7 +2047,7 @@ let perform_access accessKind loc ptrval do_normal do_device =
                 "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptrval
               ) in
               (* can't store with a pointer to an object whose lifetime ended. *)
-              fail (MerrAccess accessKind DeadPtr)
+              fail (MerrAccess loc accessKind DeadPtr)
           | false ->
               (* add the constraint that the ptr is inside the object *)
               get_allocation_size alloc_id         >>= fun size_ival_ ->
@@ -2034,7 +2058,7 @@ let perform_access accessKind loc ptrval do_normal do_device =
                   (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id) ptr_ival_
                            ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id; size_ival_]) ])
                     (do_normal alloc_id)
-                    (fail (MerrAccess accessKind OutOfBoundPtr))
+                    (fail (MerrAccess loc accessKind OutOfBoundPtr))
         end
     
     (* device memory *)
@@ -2116,7 +2140,7 @@ let discardOccluded_write_events view_ptrval view_ty wevents =
 
 (* BEGIN ACCESS ================================================================================= *)
 let impl_load loc lvalue_ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_mem_value) =
-  print_debugM 5 (fun () ->
+  print_debugM 1 (fun () ->
     "LOAD [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^ stringFromPointer_value ptrval
   ) >>
   perform_access LoadAccess loc ptrval
@@ -2145,18 +2169,20 @@ let impl_load loc lvalue_ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footpr
             wip "TODO: loading from dynamic memory"
       end
     )
-    (wip "TODO: load from device memory")
+    begin
+      wip ("TODO: load from device memory ==> " ^ stringFromPointer_value ptrval)
+    end
 
 
-
+(*
 let impl_load_OLD ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * impl_mem_value) =
   print_debugM 5 (fun () ->
     "LOAD [" ^ stringFromCtype ty ^ "]: with pointer value: " ^ stringFromPointer_value ptrval
   ) >>
   match ptrval_ with
     (* null and function pointers obviously can't be used for loads. *)
-    | PVnull _     -> fail (MerrAccess LoadAccess NullPtr)
-    | PVfunction _ -> fail (MerrAccess LoadAccess FunctionPtr)
+    | PVnull _     -> fail (MerrAccess loc LoadAccess NullPtr)
+    | PVfunction _ -> fail (MerrAccess loc LoadAccess FunctionPtr)
     
     | _ ->
         explicitAllocationIdFromPointer_value_aux ptrval_ >>= function
@@ -2164,7 +2190,7 @@ let impl_load_OLD ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * i
 (*        addToLog alloc_id >> *)
               get >>= fun mem_st ->
               if Set.member alloc_id mem_st.dead_allocations then
-                fail (MerrAccess LoadAccess DeadPtr)
+                fail (MerrAccess loc LoadAccess DeadPtr)
               else match Map.lookup alloc_id mem_st.allocations with
                 | Just (Storage_static _ (Just mval)) ->
                     apply_shift_path ty sh mval >>= fun mval' ->
@@ -2186,7 +2212,7 @@ let impl_load_OLD ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * i
               wip ("TODO: load, Nothing ==> " ^ stringFromPointer_value ptrval)
         end
   end
-
+*)
 
 (*
   (* TODO: this just find the latest store done with exactly the same pointer value *)
@@ -2231,11 +2257,11 @@ let impl_store loc lvalue_ty ptrval mval =
 val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
 let rec memcmp_load_aux ptrval offset max_offset acc =
   let uchar_ty = Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) in
-  if offset > max_offset then
+  if offset >= max_offset then
     return (List.reverse acc)
   else
     let ptrval' = impl_array_shift_ptrval ptrval uchar_ty (IV Prov_none (IVconcrete offset)) in
-    impl_load Loc.unknown uchar_ty ptrval' >>= fun (fp, mval) ->
+    impl_load (Loc.other "memcmp_load_aux") uchar_ty ptrval' >>= fun (fp, mval) ->
     memcmp_load_aux ptrval (offset+1) max_offset (mval :: acc)
 
 let rec memcmp_compare (mval1, mval2) : impl_memM integer =
@@ -2280,8 +2306,8 @@ let rec fold_memcmp_compare mvals1 mvals2 ord_acc =
 let impl_memcmp ptr_val1 ptr_val2 size_ival =
   match size_ival with
     | IV _ (IVsizeof ty) ->
-        impl_load Loc.unknown ty ptr_val1 >>= fun (fp1, mval1) ->
-        impl_load Loc.unknown ty ptr_val2 >>= fun (fp2, mval2) ->
+        impl_load (Loc.other "memcmp, 1st pointer") ty ptr_val1 >>= fun (fp1, mval1) ->
+        impl_load (Loc.other "memcmp, 2nd pointer") ty ptr_val2 >>= fun (fp2, mval2) ->
         error "Mem.impl_memcmp"
     | IV _ (IVconcrete n) ->
         memcmp_load_aux ptr_val1 0 n [] >>= fun mvals1 ->

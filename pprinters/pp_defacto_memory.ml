@@ -260,7 +260,7 @@ let pp_pretty_mem_value format = function
       pp_mem_value mval
 
 
-let pp_integer_value_for_core (IV (_, ival_)) =
+let pp_integer_value_for_core (IV (prov, ival_)) =
   match ival_ with
     | IVconcrete n ->
         !^ (Nat_big_num.to_string n)
@@ -273,4 +273,4 @@ let pp_integer_value_for_core (IV (_, ival_)) =
     | IValignof ty ->
         !^ "Ivalignof" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
     | _ ->
-        !^ "TODO[IV] " ^^ P.parens (pp_integer_value_base ival_)
+        !^ "TODO[IV] " ^^ P.parens (pp_provenance prov ^^ P.comma ^^ pp_integer_value_base ival_)
