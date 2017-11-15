@@ -1,0 +1,8 @@
+fun main() : [integer] :=
+  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
+  let strong () = store("_Atomic(signed int)", x, 0) in
+  let strong r1 = load("_Atomic(signed int)", x, relaxed) in
+
+  return(r1)
+  
+  end end end

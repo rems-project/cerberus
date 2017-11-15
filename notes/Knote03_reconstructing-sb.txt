@@ -1,0 +1,138 @@
+This note shows a way to modify Core's small-step semantics (Knote01), so that
+generated traces are annotated to allow the reconstruction of the
+sequenced-before order.
+
+REMINDER:
+  the small-step sem occurs after the removal of indeterminately-sequenced
+  expressions, so here we only deal with of weak/strong sequencing operators.
+
+
+The scheme is a bit violent but works well: we change slightly the internal
+representation of Core's syntax before starting the reduction by adding
+"annotations" on the actions. These annotations are sets of "trace actions"
+which are fully evaluated analogues of the actions (ie. as arguments, they have
+values instead of expressions). Intuitively, at any point in the reduction of an
+expression, an action A is annotated with a set BS if we know at this point that
+the actions in BS are sequenced-before A. We use the following notation:
+
+  <B1, ..., Bk> A
+
+for an action A annotated with the set {B1, ..., Bk}. This notation has syntactic
+precedence over anything but substitution.
+
+Consider for example the following expression:
+
+  A >> (B || C) >> D >> E
+
+when we reach the points (two possible executions) where A, B and C have been
+executed, we know they are sequenced before D and E. Hence we reduced expression
+is:
+
+  <A,B,C> D >> <A,B,C> E
+
+(remember that the annotations are sets, the order in which they are shown here
+irrelevant. This is the reduced expression for both the execution where B is
+executed before C, and the one where C is executed first)
+
+Now for an example with a negative action, consider:
+
+  (A >> ~B) >> C
+
+this expression has a unique sb-relation:
+
+     A --.
+     |    \ sb
+  sb |     \
+     v      v
+     C      B
+
+and therefore has two possible executions: A, B, C and A, C, B giving
+respectively after one reduction step the following expressions:
+
+  <A> C    and    <A> B
+
+note for example in the first expression that even so B has been execution,
+it is not present in the annotation of C since we don't have B --sb--> C.
+
+
+When an action is performed, it is added to the execution trace with its
+annotation. With this the sequence-before order is trivially reconstructible
+by going through the trace.
+
+
+Let us define the function [annotate B e] (written <B> e) where B is a trace
+action and e is an expression, returning the expression e where B has been added
+to the annotations of all actions.
+We can then write the modified reduction semantics:
+
+
+             (S, e1) --a--> (S', v)
+------------------------------------------------- (wseq_l_value)
+(S, _as <- e1 >> e2) --a--> (S', <a> e2[_as \ v])
+
+               (S, e1) --a--> (S', e1')
+------------------------------------------------------ (wseq_l)
+(S, _as <- e1 >> e2) --a--> (S', _as <- e1' >> <a> e2)
+
+(where a is NOT a negative action)
+
+
+
+================================================================================
+================OLD STUFF=======================================================
+
+
+
+hum there is a problem because when negative actions are postponed, they are moved
+--> this may produce some loss of information ?
+
+
+A; B; C --A--> {A}(B; C) --{A}B-->{B}C --{B}C--> skip    A {A}B {B}C
+
+
+A; (B; C || D) --A-->    {A}(B; C || D)
+               --e-->    {A}(B;C) || {A}D
+               --{A}B--> {A}C || {A}D
+               --{A}D--> {A}C
+               --{A}C--> skip
+
+
+(A; ~B || C); D --C--> A; ~B; {C}D
+                --A--> {A}~B; {A}{C}D
+                --e--> {A}~B || D
+                --D--> {A}~B
+                --{A}B--> skip
+
+A --A--> skip
+----------------------
+A; B --A--> {A}skip; B
+-------------------------------
+A; B; C --A--> {A}skip; B; {A}C
+
+
+
+{A}skip; B; {A}C --e--> {A}B; {A}C
+
+Hum here we don't need annotate C about the A,
+because of the trans of sb.
+
+But the simpler rule seems to loose information when
+the first operand of ; has some unseq?
+
+
+
+A; (B; C || D)
+
+--A--> {A}skip; (B; C || D)
+--e--> {A}(B; C || D)
+--e--> {A}B ; {A}(C || D)
+--{A}B--> {B}skip ; {A}(C || D)
+--e--> {B, A}(C || D)
+--e--> {B, A}C || {B, A}D
+--{B, A}C--> {B, A}D
+--{B, A}D--> skip
+
+A
+{A}B
+{B, A}C
+{B, A}D

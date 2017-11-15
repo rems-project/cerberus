@@ -1,0 +1,75 @@
+open import Pervasives Common AilTypes AilTypesAux AilSyntax Loc
+
+
+(* Removes non-semantic constructor from a expression. Pattern matching with mor
+   than one level of unfolding should usually only be done on stripped expressions *)
+val     strip_expression: forall 'a. expression 'a -> expression 'a
+let rec strip_expression (AnnotatedExpression _ _ _ expr_ as expr) =
+  match expr_ with
+    | AilEannot _ e ->
+        strip_expression e
+    | AilEprint_type e ->
+        strip_expression e
+    | _ ->
+        expr
+  end
+
+
+(* STD §6.3.2.3#3, sentence 1 *)
+val is_null_pointer_constant: forall 'a. expression 'a -> bool
+let rec is_null_pointer_constant expr =
+  let AnnotatedExpression _ _ _ expr_ = strip_expression expr in
+  match expr_ with
+    | AilEconst ConstantNull ->
+        true
+    | AilEconst (ConstantInteger (IConstant n _ _)) ->
+        n = 0
+    | AilEcast cast_qs (Pointer referenced_qs Void) e ->
+        is_null_pointer_constant e && is_unqualified cast_qs && is_unqualified referenced_qs
+    | _ ->
+        false
+  end
+
+(* ========== CLEAN UP TO HERE ========== *)
+
+(* TODO: doc *)
+let rec fv_arguments_aux (fv : identifier -> expression 'a -> bool) (v : identifier) a : bool =
+  match a with
+  | []     -> false
+  | e :: a -> fv v e || fv_arguments_aux fv v a
+  end
+
+(* TODO: doc *)
+let rec fv' (v : identifier) (e : expression_ 'a) : bool =
+(* Bug HOL: mutually recursive call with a high order function as argument *)
+  let fv_arguments = fv_arguments_aux (fun x y -> fv x y) in
+  match e with
+  | AilEunary _ e -> fv v e
+  | AilEbinary e1 _ e2 -> fv v e1 || fv v e2
+  | AilEassign e1 e2 -> fv v e1 || fv v e2
+  | AilEcompoundAssign e1 _ e2 -> fv v e1 || fv v e2
+  | AilEcond e1 e2 e3 -> fv v e1 || fv v e2 || fv v e3
+  | AilEcast _ _ e -> fv v e
+  | AilEcall e ls -> fv v e || fv_arguments v ls
+  | AilEident v' -> identifierEqual v v'
+  | _ -> false
+  end
+and fv (v : identifier) (ex : expression 'a) : bool =
+  match ex with
+  | AnnotatedExpression _ _ _ e -> fv' v e
+  end
+
+(* TODO: doc *)
+let fv_arguments (v : identifier) (a: list (expression 'a)) : bool = fv_arguments_aux fv v a
+
+
+
+
+val expression_FromNat: Loc.t -> AilTypes.ctype -> nat -> expression_ unit
+let expression_FromNat loc ty n =
+  let basis =
+    if n = 0 then Octal else Decimal in
+  AilEannot ty (
+    AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
+  )
+

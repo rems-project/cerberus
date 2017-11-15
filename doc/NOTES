@@ -1,0 +1,607 @@
+2012-02-28 16:23 - K
+2012-02-29 17:02 - K, J
+
+[Introduction]
+Core aims at replacing csem's current pipeline starting from "reduction.lem". It
+is intended to correspond to the essence of the C. It has pure expressions;
+boolean tests over expressions; explicit memory actions (creation/kill of an
+object, load, store, ...); effectful statements allowing the implementation of
+C's statements but with a syntax making explicit the sequenced-before relation
+over the memory actions; explicit checks for non memory-related undefined
+behaviours.  Core will be the last intermediate language in the pipeline which
+will form the basis of:
+
+  * Simulator mode:    csem is given some setting for the implementation-defined
+                       behaviours and the Core program is (one possible)
+                       execution is evaluated. It will signal undefined
+                       behaviours it finds along the way.
+  
+  * Annotating mode:    csem is given a C progam and returns a C program free of
+                        undefined behaviours but "semantically equivalent"
+                        (whatever that means) to the original program.
+  
+  * Mark's mode:    The set of actions and all the possible sequenced-before
+                    relations are computed for the Core program.
+  
+  * Prover's mode:    Outputs a proof assistant readable encoding of the Core
+                      program (not just an execution) for verification purpose.
+  
+  * TODO mode:    specialisation of the Simulator mode, where csem shows the
+                  part of the standard being used while executing a program.
+
+Here we recall the "next" csem's intermediate languages and pipeline:
+--------------------------------------------------------------------------------
+Cabs    tries to follow as closely as possible the grammar given in the standard
+        (see Annex A), modulo: collapsing of "parsing motivated" structures of
+        the grammar (e.g. expressions); addition of some stuff defined as part
+        of the standard library, but which should really be part of the
+        language (e.g. setjmp).
+
+Ail    Cabs but with more structure: the type declarators are encoded in a form
+       where meaningless declarator are not representable (e.g. int char x;);
+       struct/union members are flattened (int x, y ==> int x; int y) and more
+       sensible blocks. Some construct of Cabs which are simply syntactic sugar
+       are also translated away (e.g. increment/decrement, BUT NOT array
+       subscripts because we need to keep them for typechecking).
+
+Ail_τ    Ail with type annotation everywhere
+
+Ail'_τ    Ail_τ after the final pass of sugaring: translating array subscripts
+          into arithmetic and deref (TODO: something else ?)
+
+Core    described here, and translated from Ail'_τ
+
+
+PIPELINE:
+  1) C      ----parsing-----> Cabs
+  2) Cabs   ---desugaring---> Ail
+  3) Ail    --typechecking--> Ail_τ
+  4) Ail_τ  --desugaring2---> Ail'_τ
+  5) Ail'_τ ----------------> Core
+--------------------------------------------------------------------------------
+
+
+[Syntax]
+  [Auxiliary stuff in the syntax] (TODO)
+    function name:              φ
+    symbols (address or value): α
+    C-type:                     τ
+
+[Core program]
+P = [(φ, S)] (TODO: this has/will change(d))
+
+== [statements] ================================================================
+  S ::= skip
+     |  fail
+     |  E
+     |  let α = S in S
+     |  if F then S else S
+     |  S + S
+     |  S || S
+     |  create_τ
+     |  kill α
+     |  store_τ α α
+     |  load_τ α
+     |  same α α
+     |  fun φ(α1, ..., αN) S (TODO: or outside of statements (?))
+     |  call φ(α1, ..., αN)
+
+== [expressions] ===============================================================
+  E::= n
+    |  α
+    |  E * E,  * ∈ {+,−,×,/,mod}
+    |  -E
+    |  max_τ
+    |  min_τ
+    |  sizeof_τ
+    |  alignof_τ
+    |  offsetof α
+
+== [boolean tests] =============================================================
+  F::= true
+    |  false
+    |  ¬F
+    |  F * F,  * ∈ {∧,∨}
+    |  E * E,  * ∈ {<,=}
+--------------------------------------------------------------------------------
+
+
+[Statics]
+  We give a nearly trivial type system to Core to avoid having meaningless
+  programs (may be useless for the "Prover mode").
+  
+  We have the following base types:
+    * unit    the classic unit type
+    * value   morally is the mathematical integers modulo Trap values,
+              indeterminate values, ... (Or I (K) am wrong ?)
+    * addr    the addr of a memory object
+  
+  We also have lists (written [ty]) and pairs (written (ty1, ty2)).
+  
+  EXPRESSIONS
+    [α]           lookup in the typing environment
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type
+                  value.
+    [-E]          E must be of type value and the result is of type value.
+    [max_τ]       is of type value
+    [min_τ]       is of type value
+    [sizeof_τ]    is of type value
+    [alignof_τ]   is of type value
+    [offsetof α]  α is of type addr (TODO: there is some metaphysical thoughts
+                  whether we have to enforce that α is not only of type addr but
+                  also corresponds to a struct/union members (which is the only
+                  case where offsetof makes any sense) or if we ignore this a
+                  the typing level and then makes the value of "offsetof α"
+                  equals 0 for any improper α (this should "just work" but this
+                  is nasty)
+  
+  BOOLEAN TESTS
+    [true]        is of type value
+    [false]       is of type value
+    [¬F]          F must be of type value and the result is of type value.
+    [F1 * F2]     F1 and F2 must be of type value and the result is of type value.
+    [E1 * E2]     E1 and E2 must be of type value and the result is of type value.
+  
+  STATEMENTS
+    [skip]                  is of type unit.
+    [fail]                  (TODO) J seems to want to have a base type
+                            "undefined" for this construct, whereas K don't see
+                            the point (or forgot it) and thinks the type unit is
+                            sufficient here.
+    [E]                     see the typing of expressions
+    [let α = S1 in S2]      is of the same type as S2, which is typed in the
+                            current type environmnent extended with "α is of the
+                            same type as S1".
+    [if F then S1 else S2]  F must be of type value, S1 and S2 must be of the
+                            same type (say ty) and result is of type ty.
+    [S1 + S2]               S1 and S2 must be of the same type (say ty) and
+                            result is of type ty.
+    [S1 || S2]              if S1 is of type ty1 and S2 of type ty2, then the
+                            result is of type (ty1, ty2)
+    [create_τ]              if τ is not a struct/union type, then the result is
+                            of type addr, otherwise it is of type [addr] with
+                            length equal to the number of fields of τ.
+    [kill α]                α must be of type addr, and the return type is unit.
+    [store_τ α1 α2]         α1 must be of type addr, α2 must be of type value
+                            and the return type is unit.
+    [load_τ α]              α must be of type addr and the return type is value.
+    [same α1 α2]            α1 and α2 must be of type addr and the return type
+                            is unit.
+    [fun φ(α1, ..., αN) S]  TODO
+    [call φ(α1, ..., αN)]   TODO
+--------------------------------------------------------------------------------
+
+
+[Dynamics]
+(We omit obvious stuff like booleans tests and arithmetic operations over
+ expressions)
+
+== [α] =========================================================================
+Is a symbol that occording to its type may correspond to a memory object (addr),
+a value computed using an expression/boolean test (val).
+TODO: also functions?
+
+== [max_τ / min_τ] =============================================================
+Is the maximum/minimum value (of Z) representable by the type τ.
+
+== [sizeof_τ / alignof_τ] ======================================================
+Is respectively the number of bytes needed to store in the memory an object of
+type τ and the memory alignment (given as a positive). These are needed to
+implement C's sizeof() and alignof() but may also appear on some explicit checks
+that we add to detect undefined behaviours.
+
+== [offsetof α] ================================================================
+If α designate a struct/union field, then the value of the expression "offsetof
+α" is the offset of that field in the memory representation of the containing
+object. Otherwise the value is 0.
+
+[K: the only alternative to the "otherwise" I see is to put a "binary" type for
+    Addr symbols, but this seems uselessly heavy. Morally the expression has no
+    real meaning for an α not corresponding to a struct/union field, but for
+    these the 0 should be correct (?)]
+
+The value of this construct is clearly implementation-defined; it is needed to
+implement the offsetof macro (§7.19).
+
+
+
+
+
+
+
+== [skip] ======================================================================
+Is just a "nop". Used for example to implement C's if-then statements and loop
+with empty bodies.
+
+== [fail] ======================================================================
+This construct represents an undefined behaviour. In the simulator mode this is
+implemented as an exception being thrown.
+
+== [let α = S1 in S2] ==========================================================
+In addition to meaning the usual stuff, this construct means that any action
+performed by S1 is sequenced-before any action performed by S2. If α is not used
+in S2 this just correspond the ';' of C.
+
+== [if F then S else S] ========================================================
+Classic if-then-else construct: the test is evaluated (remember that it is pure)
+and the corresponding branch is executed. This is used to implement C's
+if-then-else statement, but also to make explicit checks for non memory-related
+undefined behaviours (such as: arithmetic overflows, conversion errors, ...).
+
+== [S1 + S2] ===================================================================
+Non deterministic choice (TODO: why do we want this again?)
+
+
+== [S1 || S2] ==================================================================
+This is the unsequenced composition. If we consider the sb relation as a graph,
+this construct is simply placing the actions of S1 and S2 side-by-side without
+adding any new edges. The value returned by this statement is the pair made of
+the value of S1 and the value of S2. The state of the memory after this
+statement can be explained by applying an interleaving of the actions of S1 and
+S2 to the original state.
+
+== [create_τ] ==================================================================
+This statement creates in the memory an "object" (§3.15) with
+"effective type" (§6.5#6) τ. It returns one or more symbols of type Addr. Later,
+to refer to the object or its subobjects (fields of structs/unions) one has to
+use the corresponding symbol introduced by the create statement. 
+
+This construct typically corresponds to the translation of a C declaration,
+where it is used as the left operand of a let construct:
+
+  (in C)        (in Core)
+  
+  struct T {      let α1 = create_{signed int} in
+    int x, y;     let α2 = create_{signed_int} in
+  };              ...
+  ...             let [α3, α4, α5] = create_{struct T} in
+  int u, v;       
+  ...             
+  struct T w;     
+
+
+
+
+== [kill α] ====================================================================
+
+== [store_τ α1 α2] =============================================================
+
+== [load_τ α] ==================================================================
+
+== [fun φ(α1, ..., αN) S] ======================================================
+
+== [call φ(α1, ..., αN)] =======================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+== Proposed implementation of gotos ============================================
+We try to avoid having plain continuations in Core's syntax or semantics. For
+gotos, a possible hack is to make for each label a partial duplicate of the
+containing function. This would be done during the translation from Ail to Core.
+Goto statement would then simply translated as Core function calls. Here is an
+example:
+
+  (in C)                   (in Core)
+  int f(int x) {           fun φ1 x =
+    int i = 0;               let α1 = create_{signed int} in
+                             let α2 = 0 in
+                             if min_{signed int} ≤ α2 ≤ max_{signed int} then
+                               store_{signed int} α1 α2
+                             else
+                               fail
+    loop: if i<5 {           let (α3, α4) = load_{signed int} α1 || 5 in
+            i++;             if min_{signed int} ≤ α4 ≤ max_{signed int} then
+            goto loop;         if α3 < α4 then
+          }                      let α5 = load_{signed_int} α1 in
+   return i;                     let α6 = α5 + 1 in
+  }                              if min_{signed int} ≤ α6 ≤ max_{signed int} then
+                                   store_{signed int} α1 α6
+                                 else
+                                   fail
+                                 call φ2(x, α1)
+                               else
+                                 skip
+                             else
+                               fail
+                             let α7 = load_{signed int} α1 in
+                             α7
+                           
+                           fun φ2 x i =
+                             let (α1, α2) = load_{signed int} i || 5 in
+                             if min_{signed int} ≤ α2 ≤ max_{signed int} then
+                               if α1 < α2 then
+                                 let α3 = load_{signed_int} i in
+                                 let α4 = α3 + 1 in
+                                 if min_{signed int} ≤ α4 ≤ max_{signed int} then
+                                   store_{signed int} i α4
+                                 else
+                                   fail
+                                 call φ2 x i
+                               else
+                                 skip
+                             else
+                               fail
+                             let α5 = load_{signed int} i in
+                             α5
+
+However there are several problems:
+  * loss of original program structure
+  * when calling a function corresponding to a label, have to pass in addresses
+    of locals
+  * when jumping into new block, have to allocate new locals
+  * when jumping into a loop body, have to unfold loop once
+  * when jumping out of a block, have to kill locals
+
+
+Crazy remark by J: maybe goto in Core is a better option
+
+################################################################################
+2012-02-29 15:36 - K, J
+
+[Indeterminately sequenced]
+
+For each thread, the standard defines a sequenced-before (sb) relation between
+"evaluations" of that thread. This leads to a partial order over these
+"evaluations" but a difficulty comes from the fact the direction of some
+sb-edges are sometime left unspecified.
+
+BEGIN STANDARD
+  (§5.1.2.3#3)
+    "... Evaluations A and B are indeterminately sequenced when A is sequenced
+     either before or after B, but it is unspecified which. [13] ..."
+  
+  (footnote 13)
+    "The executions of unsequenced evaluations can interleave. Indeterminately
+     sequenced evaluations cannot interleave, but can be executed in any order."
+  
+  (footnote 86)
+    "In an expression that is evaluated more than once during the execution of a
+     program, unsequenced and indeterminately sequenced evaluations of its
+     subexpressions need not be performed consistently in different
+     evaluations."
+END STANDARD
+
+
+
+
+Only two things are stated as being indeterminately sequenced:
+  * (§6.5.2.2#10)
+      "... Every evaluation in the calling function (including other function
+       calls) that is not otherwise specifically sequenced before or after the
+       execution of the body of the called function is indeterminately sequenced
+       with respect to the execution of the called function."
+     (footnote 94)
+       "In other words, function executions do not ‘‘interleave’’ with each
+        other."
+  
+  * (§6.7.9#23)
+      "The evaluations of the initialization list expressions are
+       indeterminately sequenced with respect to one another and thus the order
+       in which any side effects occur is unspecified. [152]"
+    (footnote 152)
+      "In particular, the evaluation order need not be the same as the order of
+       subobject initialization."
+
+
+
+
+NOTE: we need to do something special for postfix increment/decrement and
+      compound assignments:
+  (§6.5.2.4#2)
+    "With respect to an indeterminately-sequenced function call, the operation
+     of postfix ++ is a single evaluation."
+
+  (§6.5.16.2#3)
+    "A compound assignment of the form E1 op = E2 is equivalent to the simple
+    assignment expression E1 = E1 op (E2), except that the lvalue E1 is
+    evaluated only once, and with respect to an indeterminately-sequenced
+    function call, the operation of a compound assignment is a single
+    evaluation. [113]"
+  
+  If no other construct of C has the same constraint, it looks like adding a
+  RMW statement to Core is sufficient. Otherwise we will need something like
+  "atomic blocks" which cannot interleave with its context.
+
+
+
+
+
+
+[All the things stated as unsequenced by the standard]
+  
+  * (6.5#3 Expressions)
+      "Except as specified later, side effects and value computations of
+       subexpressions are unsequenced. [86]"
+  
+  * (6.5.16#3 Assignment operators)
+      "The evaluations of the operands are unsequenced."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Consider the following C pseudo-program: A + B + f()
+
+The operands of the additions are "unsequenced", except for function calls which
+are indeterminately sequenced. Here the sb-relation look like:
+  
+       .- f() -.            A             B        A
+   sb /         \ sb        |             |         \ sb
+     |           |     OR   | sb       sb |   OR     '-> f()        OR
+     v           v           \           /                 \ sb
+     A           B            '-> f() <-'                   '-> B
+   
+                            B
+                             \ sb
+                              '-> f()
+                                    \ sb
+                                     '-> A
+   --------------------------------------------------------------------------
+
+== Previous attempt 1) at the definition of &:
+  f & A = f(); A or A; f
+  
+But if we have A = e_1 || e_2, we are missing the last two cases.
+
+
+== Previous attempt 2):
+  f (A || B) = f; (A || B) or (A||B); f + A; f; B + B; f; A
+
+But this is still not enough because of the following program:
+  f() + ((x, x=0) + y)
+
+
+== Third attempt:
+  
+
+
+
+
+--------------------------------------------------------------------------------
+
+[Abstract memory]
+  We represents the memory as a list of trees of memory objects. A memory object
+  is given by a symbolic name, an effective type and a content. The trees
+  corresponds to subobjects of struct/union types. As an example, consider the
+  following C declarations:
+    
+    int x = 0;
+    struct T {
+      int y = 1,z = 2;
+    } v;
+  
+  The memory after initialisation is encoded as:
+  
+  ---(S_x, signed int, Val 0)---------(S_v, T, _)------------------>
+                                        /    \
+                                     .-'      '-.
+                                    /            \
+                 (S_y, signed int, Val 1)    (S_z, signed int, Val 2)
+
+
+################################################################################
+2012-03-06 - J, K
+
+There are now some worries about Core being too far removed from the real C.
+There are two major problems:
+  - the "nasty conference question" where some random programmer complains that
+    our semantics doesn't talk about C but talks about some other (related)
+    language.
+
+  - we want to be able to formulate a logical statement about a C program (e.g.
+    "function f of file.c doesn't have any undefined behaviour") and show its
+    correctness. To do so, we intend to translate the C program into Core where
+    all the semantics goodness happens. Hence we have to problems: we need a
+    semantics to directly talk about properties of the original program and a
+    bijective truth-preserving translation to properties of the corresponding
+    Core program.
+
+
+
+
+
+TODO: I/O
+
+TODO: define what a "Value" is (talk somewhere about trap values, multiple representations)
+
+
+
+CHOICE:
+  In Core, do we write "by hand" check for type compatibility when doing a load/store or
+  do we hide these in the semantics of load/store ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[Compatible types (§6.2.7)]
+  
+  compatible τ1 τ2 <->
+    
+    * "their types are the same"
+    * Additional rules for determining whether two types are compatible are described in:
+        * 6.7.2 for type specifiers,
+        * 6.7.3 for type qualifiers,
+        * 6.7.6 for declarators.
+
+    
+    * If τ1 and τ2 are structure types declared in separate translation units:
+        * tag τ1 = tag τ2
+        ------------------------------------------------------------------------
+        * N = length (members τ1) = length (members τ2)
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, compatible (typeof (members τ1)[i])
+                                            (typeof (members τ2)[i])
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N,
+            forall a1 a2,
+              alignment_specifier (members τ1)[i] a1 ->
+              alignment_specifier (members τ2)[i] a2 ->
+              compatible_alignment a1 a2
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, name (members τ1)[i] = name (members τ2)[i]
+        ------------------------------------------------------------------------
+        * forall i, 1 <= i <= N, bitfield_width (members τ1)[i] =
+                                 bitfield_width (members τ2)[i]
+        
+
+
+
+    * two structure, union or enumerated types declared in separate translation
+      units are compatible if their tags and members satisfy the following
+      requirements:
+        * tag τ1 = tag τ2
+        ------------------------------------------------------------------------
+        * If both are completed anywhere within their respective translation
+          units, then the following additional requirements apply:
+            * there shall be a one-to-one correspondence between their members
+              such that each pair of corresponding members are declared with
+              compatible types;
+            --------------------------------------------------------------------
+            * if one member of the pair is declared with an alignment specifier,
+              the other is declared with an equivalent alignment specifier;
+            --------------------------------------------------------------------
+            * if one member of the pair is declared with a name, the other is
+              declared with the same name. For two structures, corresponding
+              members shall be declared in the same order. For two structures or unions, corresponding bit-fields shall have the same widths. For two enumerations, corresponding members shall have the same values.

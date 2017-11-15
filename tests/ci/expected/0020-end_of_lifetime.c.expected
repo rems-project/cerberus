@@ -1,0 +1,3 @@
+BEGIN EXEC[0]
+Killed {msg: memory layout error (load seq) ==> MerrReadFromDead}
+END EXEC[0]

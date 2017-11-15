@@ -1,0 +1,45 @@
+open import Pervasives
+
+import UniqueId Symbol Nondeterminism2
+import Core Core_ctype
+
+module ND = Nondeterminism2
+
+
+import Cmm_op
+open import Core_run Core_run_aux
+
+
+type driver_state = <|
+  (* Dynamic but non-semantic stuff *)
+  symbol_supply:     UniqueId.supply Symbol.sym;
+  core_run_state:    core_run_state;   (* state of the core evaluator *)
+  (* DEBUG *)
+  trace: list string;
+  dr_step_counter: nat;
+  
+  
+  (* Semantic stuff *)
+  core_file:         Core.file core_run_annotation;
+  core_state:        core_state;       (* state of the core program *)
+  concurrency_state: Cmm_op.symState; (* state of the concurrency memory model *)
+  
+(* sequential_state: sequential_state; *)
+  
+  blocked: bool; (* concurrency model ended by blocking *)
+|>
+
+
+
+type driverM 'a =
+  driver_state -> ND.ndM ('a * driver_state)
+
+
+val return: forall 'a. 'a -> driverM 'a
+let return x =
+  fun st -> ND.return (x, st)
+
+val bind: forall 'a 'b. driverM 'a -> ('a -> driverM 'b) -> driverM 'b
+let bind m f =
+  fun st ->
+    ND.bind (m st) (uncurry f)

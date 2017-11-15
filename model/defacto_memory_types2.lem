@@ -1,0 +1,151 @@
+open import Pervasives Utils
+
+open import Core_ctype Mem_common Float
+import Symbol
+
+
+(* TODO *)
+type allocation_id = nat
+
+type provenance_id = nat
+
+
+
+
+(* A 'provenance' keeps track of a how a pointer value was constructed *)
+type provenance =
+    (* the associated pointer do reference something but we don't know anything
+       about the associated allocation (e.g. the pointer was build using scanf()) *)
+  | Prov_wildcard
+  
+    (* the associated pointer do not reference anything (e.g. null pointer, function pointers) *)
+  | Prov_none
+  
+    (* the associated pointer was create using a provenance-less integer value
+       within the memory range reserved for devices *)
+  | Prov_device
+    
+    (* in this case we know of at least one allocation event *)
+  | Prov_some of provenance_id (* set provenance_id (* INVARIANT: non empty set *) *)
+
+
+
+(* a symbolic identifier representing the concrete address of a fresh allocation (the nat) together with the source location *)
+type address =
+  | Address of Symbol.prefix * allocation_id
+
+
+(*** Pointer value ****************************************************************************** *)
+
+(* Core values of type OTy_pointer will always be of this form *)
+type impl_pointer_value =
+    (* pointer values are annotated with a provenance *)
+  | PV of provenance * pointer_value_base * (list shift_path_element)
+
+and pointer_value_base =
+  | PVunspecified of ctype (* TODO: maybe put this ctor in pointer_value ? *)
+    (* a null pointer constructed by an expression of the given ctype. *)
+
+  | PVnull of ctype (* INVARIANT: the associated provenance must be Prov_none *)
+  
+  | PVfunction of Symbol.sym (* INVARIANT: the associated provenance must be Prov_none *)
+  
+  | PVbase of allocation_id * Symbol.prefix (* TODO: not sure about having the prefix here *)
+     (* the result of a dynamic or automatic/static/thread-local
+        allocation, generated with Prov_some
+        with the singleton set of its allocation_id *)
+     (* the Symbol.prefix is roughly the source location - the "syntactic provenance" :-*)
+
+  | PVfromint of integer_value_base (* INVARIANT: never an IVconcrete(0) or IVfromptr(PVnull), but could be a more complex integer_value_base which (perhaps after constraint solving) will always be zero *)
+
+(* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
+and shift_path_element =
+  | SPE_array of ctype * integer_value_base
+  | SPE_member of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+ 
+
+(* Core values of type OTy_integer will always be of this form *)
+and impl_integer_value =
+  | IV of provenance (* * AilTypes.integerType *) * integer_value_base
+
+and integer_value_base =
+  | IVunspecified
+  | IVconcurRead of AilTypes.integerType * Symbol.sym (* a fresh symbol from a concurrency-model read *)
+      (* the concurrency model is at present limited to reads of integer types, so not pointer types *)
+  | IVconcrete of integer 
+  | IVaddress of allocation_id (* address *) (* NOTE: this should never get out of this module *)
+  | IVfromptr of ctype * AilTypes.integerType * pointer_value_base 
+    (* the result of a cast from pointer to integer. The first
+       parameter is the referenced type of the pointer value, the
+       second is the integer type *)
+  | IVop of integer_operator * list integer_value_base
+  | IVmin of AilTypes.integerType
+  | IVmax of AilTypes.integerType
+  | IVsizeof of ctype
+  | IValignof of ctype
+(*
+  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+*)
+    (* NOTE: this is a number bytes padding trailing a struct/union member *)
+  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+  | IVpadding of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+  
+  | IVptrdiff of ctype * (pointer_value_base * list shift_path_element) * (pointer_value_base * list shift_path_element)
+  (* TODO: tentative *)
+  | IVbyteof of integer_value_base * impl_mem_value (* the integer value is the position (indexed from zero) *)
+  | IVcomposite of list integer_value_base (* a list of byte values reassembled *)
+  | IVbitwise of AilTypes.integerType * bitwise_operation
+
+and bitwise_operation =
+  | BW_complement of integer_value_base
+  | BW_AND of integer_value_base * integer_value_base
+  | BW_OR of integer_value_base * integer_value_base
+  | BW_XOR of integer_value_base * integer_value_base
+  (* shift? *)
+
+
+and impl_floating_value =
+  | FVunspecified
+  | FVconcrete of float (* WARN: using Ocaml float representation *)
+
+(* The mem_value represents what can be stored in memory. *)
+(* the types below exist so that when looking at the representations of mem_values one knows what mapping to use *)
+and impl_mem_value =
+  | MVinteger of AilTypes.integerType * impl_integer_value
+  | MVfloating of AilTypes.floatingType * impl_floating_value
+  | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
+  | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
+  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
+  
+  | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value
+  
+  | MVcomposite of
+      list ((* byte offset *) integer_value_base * (* value of the written byte *) impl_integer_value) *
+      (* value written over *) impl_mem_value
+      (* INVARIANT: the mem_value should not be a MVcomposite *)
+
+(*  not sure whether these analogues of IVbyteof and IVcomposite should exist (think not)
+  | MVmodified of list (shift_path * mem_value) * mem_value (* this is for when an object is modified as an
+                                                               uchar array (or the generalisation to other types of that) *)
+  | MVbytes of byte_mask * mem_value * mem_value *)
+
+and shift_path = list shift_path_element
+
+
+(*
+type allocation =
+  | Alloc_static  of ctype (* * address *)
+  | Alloc_dynamic of integer_value_base (* * address *)
+*)
+
+
+
+(* TODO: simplified for now (only work for scalars) *)
+type impl_footprint =
+  | FP_alloc of allocation_id * ctype
+  | FP_device of integer_value_base * ctype
+
+val impl_do_overlap: impl_footprint -> impl_footprint -> bool
+let impl_do_overlap _ _ =
+  error "impl_do_overlap"

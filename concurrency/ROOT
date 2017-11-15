@@ -1,0 +1,10 @@
+session "concurrency" = "LEM" +
+  options [document = pdf, document_output = "output"]
+  theories [document = false]
+    Cmm_aux
+    Cmm_csem
+    Loc
+  theories
+    Cmm_op
+  document_files
+    "root.tex"
