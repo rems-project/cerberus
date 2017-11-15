@@ -369,6 +369,9 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivmaxDecl [integerType_to_expr slvSt ity]
     | IVsizeof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
+    | IValignof (Core_ctype.Struct0 tag_sym) ->
+        print_endline "BOGUS!!!!";
+        Arithmetic.Integer.mk_numeral_s slvSt.ctx "8"
     | IValignof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
     | IVoffsetof (tag_sym, memb_ident) ->
@@ -671,7 +674,8 @@ let check_counter = ref 0
 let check_sat slv es =
 (*  prerr_endline (Colour.(ansi_format [Green] (Solver.to_string slv))); *)
   if !Debug_ocaml.debug_level >= 1 then begin
-    prerr_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ")
+    prerr_string ("CALLING Z3 (" ^ string_of_int !check_counter ^ ") ... ");
+    flush_all ();
   end;
   let ret = Solver.check slv es in
   if !Debug_ocaml.debug_level >= 1 then begin
