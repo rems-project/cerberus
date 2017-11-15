@@ -23,7 +23,7 @@
 <body>
   <div id="container">
     <input id="file-input" type="file" style="display:none;"/>
-    <div id="header">
+    <div class="header">
       <ul>
         <li class="border"><div id="title">Cerberus</div></li>
         <li class="border">
@@ -38,7 +38,8 @@
             <div class="dropdown-content">
               <a href="#" id="new">New empty file</a>
               <hr>
-              <a href="#" id="load_defacto">Load defacto test</a>
+              <a href="#" id="load_pldi">Load PLDI 2018 tests</a>
+              <a href="#" id="load_defacto">Load defacto tests</a>
               <a href="#" id="load">Load from file</a>
             </div>
           </div>
@@ -127,13 +128,24 @@
   </template>
 
   <div id="defacto" class="window">
-    <div id="header">
+    <div class="header">
       <ul>
         <li><a href="#" class="disable-events">Load defacto test...</a></li>
         <li class="right"><a id="load_defacto_cancel" href="#">Cancel</a></li>
       </ul>
     </div>
-    <div id="defacto_body">
+    <div id="defacto_body" class="window_body">
+    </div>
+  </div>
+
+  <div id="pldi" class="window">
+    <div class="header">
+      <ul>
+        <li><a href="#" class="disable-events">Load PLDI 2018 test...</a></li>
+        <li class="right"><a id="load_pldi_cancel" href="#">Cancel</a></li>
+      </ul>
+    </div>
+    <div id="pldi_body" class="window_body">
     </div>
   </div>
 
