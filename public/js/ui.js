@@ -217,6 +217,9 @@ class UI {
         onSuccess(data);
         this.done()
       }
+    }).fail((e) => {
+      console.log('Failed request!', e)
+      this.currentView.dirty = false
     })
   }
 
