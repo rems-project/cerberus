@@ -7,6 +7,9 @@ open Cohttp_lwt_body
 
 (* Util *)
 
+let debug = ignore
+(*let debug = prerr_endline*)
+
 let load_file f =
   try
     let ic  = open_in f in
@@ -186,8 +189,8 @@ let mk_result file out err =
     ] |> string_of_json
   in
   ignore (Sys.command "rm -f *.{cabs,ail,core}"); (* clean results *)
-  print_endline err;
-  print_endline (string_of_json (json_of_file err));
+  debug err;
+  debug (string_of_json (json_of_file err));
   result
 
 (* Cerberus interaction *)
@@ -263,7 +266,6 @@ let defacto_tests () =
 
 let get ~docroot uri path =
   let try_with () =
-    prerr_endline ("GET " ^ path);
     match path with
     | "/" -> Server.respond_file "../public/index.html" ()
     | _ ->
@@ -274,14 +276,14 @@ let get ~docroot uri path =
 
 let post ~docroot uri path content =
   let try_with () =
-    prerr_endline ("POST " ^ path);
+    debug ("POST " ^ path);
     match path with
     | "/exhaustive" -> cerberus (run "exhaustive") content
     | "/random" -> cerberus (run "random") content
     | "/graph" -> create_graph content
     | "/elab_rewrite"  -> cerberus elab_rewrite content
     | "/elab"  -> cerberus elab content
-    | "/defacto" -> print_endline "DEFACTO"; defacto_tests ()
+    | "/defacto" -> defacto_tests ()
     | _ -> forbidden path
   in catch try_with (fun _ -> forbidden path)
 
