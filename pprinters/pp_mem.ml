@@ -54,6 +54,8 @@ let rec pp_raw_mem_constraint pp constr =
         P.langle ^^ P.equals ^^^ pp cs1 ^^^ pp cs2
     | MC_lt (cs1, cs2) ->
         P.langle ^^^ pp cs1 ^^^ pp cs2
+    | MC_in_device a ->
+        !^ "in_device_mem" ^^^ pp a
     | MC_or (cs1, cs2) ->
         !^ "or" ^^^ pp_raw_mem_constraint pp cs1 ^^^ pp_raw_mem_constraint pp cs2
     | MC_conj css ->
@@ -64,7 +66,8 @@ let rec pp_raw_mem_constraint pp constr =
 
 let pp_mem_constraint pp constr =
   let prec = function
-    | MC_empty ->
+    | MC_empty
+    | MC_in_device _ ->
         None
     | MC_eq _ ->
         Some 1
@@ -94,6 +97,8 @@ let pp_mem_constraint pp constr =
           pp cs1 ^^^ P.langle ^^ P.equals ^^^ pp cs2
       | MC_lt (cs1, cs2) ->
           pp cs1 ^^^ P.langle ^^^ pp cs2
+      | MC_in_device a ->
+          !^ "in_device_mem" ^^^ P.parens (pp a)
       | MC_or (cs1, cs2) ->
           aux p cs1 ^^^ !^ "\\/" ^^^ aux p cs2
       | MC_conj css ->
