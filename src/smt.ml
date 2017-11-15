@@ -113,7 +113,7 @@ let init_solver () : solver_state =
   let ctypeSort =
     (* TODO: Function, Struct, Union, Builtin *)
     Datatype.mk_sort_s ctx "Ctype"
-      [ mk_ctor "ignore_ty"
+      [ mk_ctor "void_ty"
       ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
           [Symbol.mk_string ctx "_Basic_ty"] [Some basicTypeSort]
           [0(*TODO: no idea with I'm doing*)]
@@ -163,6 +163,26 @@ let init_solver () : solver_state =
    ) in
   
   Solver.add slvSt.slv [axiom1; axiom2];
+  
+  (* If the size of pointer is given specified, we can assert fromptr()
+     say within this size *)
+  (* NOTE: we assume 2's complement encoding with no padding bits *)
+(*
+  begin match Ocaml_implementation.Impl.sizeof_pointer with
+    | None ->
+        ()
+    | Some ptr_size ->
+        let ptr_min
+
+
+        let axiom3 =
+          let ival_sym = Symbol.mk_string ctx "ival" in
+          Quantifier.expr_of_quantifier (
+            mk_forall ctx [ival_sym] [intSort]
+            (Arithmetic.mk_lt ctx
+            ) in
+  end;
+*)
   
   (* assert that all the struct/union paddings are positive *)
   begin
@@ -252,7 +272,7 @@ let rec ctype_to_expr slvSt ty =
   let fdecls = Datatype.get_constructors slvSt.ctypeSort in
   Core_ctype.(
     match ty with
-      | ignore0 ->
+      | Void0 ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
       | Basic0 bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
@@ -265,9 +285,22 @@ let rec ctype_to_expr slvSt ty =
       | Pointer0 (_, ref_ty) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3)
             [ctype_to_expr slvSt ref_ty]
+      | Function0 _ ->
+          failwith "TODO: Smt.ctype_to_expr, Function"
+      | Atomic0 _ ->
+          failwith "TODO: Smt.ctype_to_expr, Atomic"
+      | Struct0 tag_sym ->
+          failwith "TODO: Smt.ctype_to_expr, Struct"
+      | Union0 _ ->
+          failwith "TODO: Smt.ctype_to_expr, Union"
+      | Builtin0 _ ->
+          failwith "TODO: Smt.ctype_to_expr, Builtin"
+      
+(*
       | _ ->
-          prerr_endline "TODO: Smt.ctype_to_expr";
-          Expr.mk_const_s slvSt.ctx "ignore_ty" slvSt.ctypeSort
+          failwith "TODO: Smt.ctype_to_expr"
+          (* Expr.mk_const_s slvSt.ctx "void_ty" slvSt.ctypeSort *)
+*)
   )
 
 
@@ -660,7 +693,7 @@ let runND_exhaustive m st0 =
       | (NDactive a, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st'));
           prerr_endline "NDactive";
-(*          prerr_endline (Solver.to_string slvSt.slv); *)
+          prerr_endline (Solver.to_string slvSt.slv);
 
 (*          Params.update_param_value slvSt.ctx "timeout" ""; *)
           begin match check_sat slvSt.slv [] with
@@ -752,6 +785,7 @@ let runND_exhaustive m st0 =
           add_constraint slvSt (debug_str ^ " (not)") (MC_not cs);
           let acc'' = begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
+                prerr_endline (Z3.Solver.to_string slvSt.slv);
                 failwith ("TIMEOUT in NDbranch 2(" ^ debug_str ^ ")")
 
             | Solver.SATISFIABLE (* | Solver.UNKNOWN *) ->

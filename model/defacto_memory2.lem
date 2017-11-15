@@ -567,79 +567,11 @@ let ifFlag flag mThen mElse =
 
 
 
-(*
-val ifM: forall 'a. impl_mem_constraint -> impl_memM 'a -> impl_memM 'a -> impl_memM 'a
-let ifM constr (MemM m_then) (MemM m_else) =
-  let () = Debug.print_debug 1 [Debug.DB_memory] (fun () ->
-    "USING Mem.ifM"
-  ) in
-  match constr with
-    | MC_eqIV debug_str ival_1 ival_2 ->
-        let ival_1' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_1) in
-        let ival_2' = either (fun z -> IVconcrete z) id (simplify_integer_value_base true ival_2) in
-        match (ival_1', ival_2') with
-          | (IVconcrete n1, IVconcrete n2) ->
-              MemM (if n1 = n2 then m_then else m_else)
-          | _ ->
-              MemM (fun mem_st ->
-                match check_sat (MC_eqIV debug_str ival_1' ival_2') mem_st.constraints with
-                  | Just true ->
-                      (* TODO: check, but it doesn't seem useful to add the constraint *)
-                      (m_then <| mem_st with constraints= add_constraint (MC_eqIV ("ifM(then)[" ^ debug_str ^ "]") ival_1' ival_2') mem_st.constraints |>)
-                  | Just false ->
-                      (* TODO: check, but it doesn't seem useful to add the constraint *)
-                      (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
-                  | Nothing ->
-                      (* DEBUG *) let () = Debug.print_debug 2 [Debug.DB_memory]
-                        (fun () -> "Defacto_memory.ifM ==> DID A ND SPLIT") in
-                      (m_then <| mem_st with constraints= add_constraint (MC_eqIV ("ifM(then)[" ^ debug_str ^ "]") ival_1' ival_2') mem_st.constraints |>) ++
-                      (m_else <| mem_st with constraints= add_constraint (MC_neIV ival_1' ival_2') mem_st.constraints |>)
-                end
-              )
-        end
-  | MC_neIV _ _ ->
-      wip "ifM, MC_neIV"
-  | MC_leIV _ _ ->
-      wip "ifM, MC_leIV"
-  | MC_addr_distinct _ _ ->
-      wip "ifM, MC_addr_distrinct"
-(*
-  | MC_addr_equals addr_expr1 addr_expr2 ->
-      wip "ifM, MC_addr_equals"
-*)
-  end
-*)
-
 
 
 val condM: string -> mem_constraint impl_integer_value -> impl_memM bool
 let condM debug_str cs =
   ifM debug_str cs (return true) (return false)
-
-
-(*
-  match constr with
-    | MC_eqIV ival_1 ival_2 ->
-        let ival_1' = integer_value_baseSimpl ival_1 in
-        let ival_2' = integer_value_baseSimpl ival_2 in
-        match integer_value_baseEquality ival_1' ival_2' with
-          | Just b ->
-              if b then m_then else m_else
-          | Nothing ->
-              mplus
-                (with_constraints [MC_eqIV ival_1' ival_2'] m_then)
-                (with_constraints [MC_neIV ival_1' ival_2'] m_else)
-
-
-              fun st ->
-                let (xs1, z1) = m_then st in
-                let (xs2, z2) = m_else st in
-                [ (MC_eqIV ival_1' ival_2' :: xs1, z1)
-                ; (MC_neIV ival_1' ival_2' :: xs2, z2)
-                ]
-        end
-  end
-*)
 
 
 
@@ -1291,8 +1223,19 @@ let apply_shift_path_element result_ty spe mval =
               ", spe: " ^ stringFromShift_path [spe] ^
               ", ity: " ^ stringFromCtype (Basic (AilTypes.Integer ity)))
    
-   | (SPE_array elem_ty offset_ival_, MVdelayed xs mval') ->
-       error "HELLO KKK"
+   | (SPE_array elem_ty offset_ival_, MVdelayed xs under_mval) ->
+       match xs with
+         | [(sh, new_mval)] ->
+             ifM "apply_shift_path_element"
+               (mk_iv_constr MC_eq (integer_value_baseFromShift_path [SPE_array elem_ty offset_ival_]) (integer_value_baseFromShift_path sh))
+               (return new_mval)
+               
+               (* TODO: hack *)
+               (return (MVinteger (AilTypes.Unsigned AilTypes.Ichar) (IV Prov_none (IVconcrete 142))))
+         | _ ->
+             error "Mem.apply_shift_path_element, HELLO KKK"
+       end
+       
 
    | (SPE_array _ _, _) ->
        error ("Mem.apply_shift_path_element, SPE_array ==> mval: " ^ stringFromMem_value mval ^ ", result_ty: " ^ stringFromCtype result_ty)
@@ -1962,18 +1905,45 @@ let impl_ge_ptrval ptrval1 ptrval2 =
 
 
 
+(*
+When two pointers are subtracted, both shall point to elements of the same array object, or one past the last element of the array object;
+
+If the result is not representable in an object of that type, the behavior is undefined.
+
+*)
+
+
+(* TODO: check that, std says:
+Moreover, if the expression P points either to an element of an array object or
+one past the last element of an array object, and the expression Q points to the
+last element of the same array object, the expression ((Q)+1)-(P) has the same
+value as ((Q)-(P))+1 and as -((P)-((Q)+1)), and has the value zero if the
+expression P points one past the last element of the array object, even though
+the expression (Q)+1 does not point to an element of the array object.
+*)
 (* STD §6.5.6#9 *)
 let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
   match (ptrval1, ptrval2) with
     | (PV (Prov_some alloc_id1) ptr_val_1 sh1, PV (Prov_some alloc_id2) ptr_val_2 sh2) ->
         if alloc_id1 = alloc_id2 then
-          (* The result of subtraction of two pointer values is an integer value with
-             empty provenance, irrespective of the operand provenances *)
-          return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2)))
+          address_expression_of_pointer ptrval1 >>= fun ival1 ->
+          address_expression_of_pointer ptrval2 >>= fun ival2 ->
+          resolve_allocation alloc_id1 >>= function
+            | Storage_static ty _ ->
+                (* STD §6.5.9#9 sentence1 *)
+                ifM "diff_ptrval_6.5.9#9__sentence_1"
+                  (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id1) ival1
+                           ; mk_iv_constr MC_le ival1 (IVop IntAdd [IVaddress alloc_id1; IVsizeof ty])
+                           ; mk_iv_constr MC_le (IVaddress alloc_id1) ival2
+                           ; mk_iv_constr MC_le ival2 (IVop IntAdd [IVaddress alloc_id1; IVsizeof ty]) ])
+                    (* NOTE: the result of subtraction of two pointer values is an integer value with
+                       empty provenance, irrespective of the operand provenances *)
+                  (return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2))))
+                  (fail MerrPtrdiff)
+            | Storage_dynamic _ _ ->
+                error "Mem.impl_diff_ptrval, Storage_dynamic"
+          end
         else
-(*
-          ifM "diff_ptrval"
-*)
           fail MerrPtrdiff
     | _ ->
         fail MerrPtrdiff
@@ -2015,11 +1985,6 @@ let impl_validForDeref_ptrval ptr_val =
   true
 
 
-let impl_memcmp ptr_val1 ptr_val2 size_ival =
-  error "Mem.impl_memcmp"
-(*
-  return (IV Prov_none (IVconcrete 0)) (* TODO *)
-*)
 
 
 (* integer types minimal range (STD Annex E #1) *)
@@ -2822,3 +2787,72 @@ let impl_store loc lvalue_ty ptr_val mval =
   end
 
 
+
+
+val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
+let rec memcmp_load_aux ptrval offset max_offset acc =
+  let uchar_ty = Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) in
+  if offset > max_offset then
+    return (List.reverse acc)
+  else
+    let ptrval' = impl_array_shift_ptrval ptrval uchar_ty (IV Prov_none (IVconcrete offset)) in
+    impl_load uchar_ty ptrval' >>= fun (fp, mval) ->
+    memcmp_load_aux ptrval (offset+1) max_offset (mval :: acc)
+
+let rec memcmp_compare (mval1, mval2) : impl_memM integer =
+  match (mval1, mval2) with
+    | (MVinteger ity1 (IV _ (IVbyteof offset_ival1 mval1')), MVinteger ity2 (IV _ (IVbyteof offset_ival2 mval2'))) ->
+        ifM "memcmp_compare(byte offsets)"
+            (mk_iv_constr MC_eq offset_ival1 offset_ival2)
+            (memcmp_compare (mval1', mval2'))
+            (fail (MerrWIP "memcmp, two IVbyteof with different offsets"))
+    | (MVpointer ref_ty1 ptrval1, MVpointer ref_ty2 ptrval2) ->
+        address_expression_of_pointer ptrval1 >>= fun ival1 ->
+        address_expression_of_pointer ptrval2 >>= fun ival2 ->
+        ifM "memcmp_compare(two pointers equals?)"
+          (mk_iv_constr MC_eq ival1 ival2)
+          (return 0)
+          begin
+            ifM "memcmp_compare(two pointers equals?)"
+                (mk_iv_constr MC_lt ival1 ival2)
+                (return (0-1))
+                (return 1)
+          end
+    | _ ->
+        error "memcmp_compare"
+  end
+
+let rec fold_memcmp_compare mvals1 mvals2 ord_acc =
+  if ord_acc = 0 then
+    match (mvals1, mvals2) with
+      | ([], []) ->
+          return 0
+      | (mval1 :: xs1, mval2 :: xs2) ->
+          memcmp_compare (mval1, mval2) >>= fun ord ->
+          fold_memcmp_compare xs1 xs2 ord
+      | _ ->
+          error "Impossible: fold_memcmp_compare"
+    end
+  else
+    return ord_acc
+
+  
+
+let impl_memcmp ptr_val1 ptr_val2 size_ival =
+  match size_ival with
+    | IV _ (IVsizeof ty) ->
+        impl_load ty ptr_val1 >>= fun (fp1, mval1) ->
+        impl_load ty ptr_val2 >>= fun (fp2, mval2) ->
+        error "Mem.impl_memcmp"
+    | IV _ (IVconcrete n) ->
+        memcmp_load_aux ptr_val1 0 n [] >>= fun mvals1 ->
+        memcmp_load_aux ptr_val2 0 n [] >>= fun mvals2 ->
+        fold_memcmp_compare mvals1 mvals2 0 >>= fun ord ->
+        return (IV Prov_none (IVconcrete ord))
+(*
+        mapM memcmp_compare (List.zip mvals1 mvals2) >>= fun xs ->
+        return 
+*)
+    | _ ->
+        error ("Mem.impl_memcmp 3 ==> " ^ stringFromInteger_value size_ival)
+  end

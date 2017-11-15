@@ -189,8 +189,7 @@ let rec simplify_integer_value_base ival_ =
           | Atomic0 atom_ty ->
               simplify_integer_value_base (IValignof atom_ty)
           | Struct0 tag_sym ->
-              (* TODO *)
-              Right ival_
+              failwith "TODO simplify_integer_value: IValignof Struct"
           | Union0 tag_sym ->
               failwith "TODO simplify_integer_value: IValignof Union"
           | Builtin0 str ->

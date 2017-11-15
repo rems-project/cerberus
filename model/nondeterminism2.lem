@@ -141,6 +141,19 @@ let msum debug_str = function
     )
 end
 
+let inline sequence ms =
+  foldr
+    (fun m m' ->
+      m  >>= fun x  ->
+      m' >>= fun xs ->
+      return (x::xs)
+    ) (return []) ms
+
+let inline listM t xs = sequence (t xs)
+
+val mapM: forall 'a 'b 'err 'cs 'st. ('a -> ndM 'b 'err 'cs 'st) -> list 'a -> ndM (list 'b) 'err 'cs 'st
+let inline mapM f = listM (List.map f)
+
 
 (* GENERIC Monad *)
 let sequence_ ms = foldr (fun m1 m2 -> bind m1 (fun _ -> m2)) (return ()) ms

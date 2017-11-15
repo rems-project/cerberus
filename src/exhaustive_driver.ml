@@ -63,13 +63,14 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
     end;
     (* TODO(victor): I've changed these to perr_endline, so that
        ci/expected/* could match the output *)
-    begin match z3_strs with
-      | [] ->
-          prerr_endline "EMPTY CONSTRAINTS"
-      | _ ->
-          prerr_endline "BEGIN CONSTRAINTS";
-          prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
-          prerr_endline "END CONSTRAINTS"
+    if !Debug_ocaml.debug_level > 0 then begin 
+      match z3_strs with
+        | [] ->
+            prerr_endline "EMPTY CONSTRAINTS"
+        | _ ->
+            prerr_endline "BEGIN CONSTRAINTS";
+            prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
+            prerr_endline "END CONSTRAINTS"
     end;
 
 (*

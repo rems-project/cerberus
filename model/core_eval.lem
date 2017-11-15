@@ -423,7 +423,6 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
   match pexpr with Pexpr () pexpr_  ->
   let strip (Pexpr _ pe_) = pe_ in
   let self pe =
-    let () = Debug.print_debug 0 [] (fun () -> "SELF(" ^ show n ^ ")") in
     step_eval_pexpr (n+1) loc mem_st_opt file (*hasConstrained *)false pe in
   Pexpr () <$> match pexpr_ with
 
@@ -692,7 +691,7 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
                 EU.return pe_) >>= fun pe_' ->
               (* TODO: check KKK *)
               let (Pexpr _ pe_'') = pull_constrained 0 (Pexpr () pe_') in
-              let () = Debug.print_debug 0 [] (fun () ->
+              let () = Debug.print_debug 1 [] (fun () ->
                 "PEcall ===> " ^ Pp.stringFromCore_pexpr (Pexpr () pe_'')
               ) in
               EU.return pe_''

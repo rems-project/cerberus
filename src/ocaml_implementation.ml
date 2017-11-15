@@ -4,6 +4,7 @@ module type Implementation = sig
   val name: string
   val details: string
   val char_is_signed: bool
+  val sizeof_pointer: int option
   val sizeof_ity: integerType -> int option
   val sizeof_fty: floatingType -> int option
   val alignof_ity: integerType -> int option
@@ -17,6 +18,9 @@ module DefaultImpl: Implementation = struct
   
   let char_is_signed =
     true
+  
+  let sizeof_pointer =
+    Some 8
   
   let sizeof_ity = function
     | Char
