@@ -15,7 +15,7 @@ let cerbCmd =
 *)
 
 let ccCmd =
-  "clang -DCSMITH_MINIMAL -I ../runtime -w"
+  "clang -DCSMITH_MINIMAL -I ../../runtime -w"
 
 
 let collect_output ic =
@@ -113,12 +113,7 @@ let () =
   
   let csmithFiles =
     List.filter (fun f ->
-      Filename.check_suffix f ".c" &&
-      try
-        String.sub f 0 7 = "csmith_"
-      with
-      | Invalid_argument _ ->
-          false
+      Filename.check_suffix f ".c"
     ) (Array.to_list (Sys.readdir ".")) in
   
   List.iter run_test csmithFiles
