@@ -15,7 +15,7 @@ let cerbCmd =
 *)
 
 let ccCmd =
-  "clang -DCSMITH_MINIMAL -I ../runtime -w"
+  "clang -DCSMITH_MINIMAL -I ../../runtime -w"
 
 
 let collect_output ic =
