@@ -1654,7 +1654,11 @@ if AilTypesAux.is_arithmetic (ctype_of e1) then
             E.return (
               force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)),
               core_e,
-              fun z -> stdlib.mkcall_conv_loaded_int (ctype_of e1) z
+              fun z ->
+if AilTypesAux.is_integer (ctype_of e1) then
+                stdlib.mkcall_conv_loaded_int (ctype_of e1) z
+else
+                z
             )
 
 else if AilTypesAux.is_struct_or_union (ctype_of e1) then

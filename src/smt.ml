@@ -358,12 +358,10 @@ let integer_value_base_to_expr slvSt ival_ =
            second is the integer type *)
         let ty_e = ctype_to_expr slvSt ty in
         let ity_e = integerType_to_expr slvSt ity in
-        let ptrval_e = (* WIP *) aux (address_expression_of_pointer_base ptrval_) in
-        let sh_ival_e = (* WIP *) aux (Defacto_memory2.integer_value_baseFromShift_path sh) in
-        if false then begin
-          (* TMP SIMPLIFICATION*)
-          prerr_endline "TEMP SIMPL: fromptr i = i";
-          ptrval_e
+        let ptrval_e = (* WIP *) aux (Mem_simplify.lifted_simplify_integer_value_base (address_expression_of_pointer_base ptrval_)) in
+        let sh_ival_e = (* WIP *) aux (Mem_simplify.lifted_simplify_integer_value_base (Defacto_memory2.integer_value_baseFromShift_path sh)) in
+        if Mem_simplify.simple_fromptr then begin
+          Arithmetic.mk_add slvSt.ctx [ptrval_e; sh_ival_e]
         end else begin
           Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; Arithmetic.mk_add slvSt.ctx [ptrval_e; sh_ival_e]]
         end
@@ -750,7 +748,7 @@ let runND_exhaustive m st0 =
             | Solver.UNKNOWN ->
                 prerr_endline "STILL UNKNOWN";
             | Solver.UNSATISFIABLE ->
-                prerr_endline "NDactive found to be UNSATISFIABLE";
+                failwith "NDactive found to be UNSATISFIABLE";
             | Solver.SATISFIABLE ->
                 ()
           end;
