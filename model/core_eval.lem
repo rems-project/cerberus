@@ -24,6 +24,9 @@ module ND = Nondeterminism2
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
                    Exception.exceptM Core.pexpr core_run_error
 let call_function file f_nm arg_cvals =
+  let () = Debug.print_debug 3 [] (fun () ->
+    "CALL_FUNCTION: " ^ Pp.stringFromCore_pexpr (Pexpr () (PEcall f_nm (List.map Caux.mk_value_pe arg_cvals)))
+  ) in
   Exception.bind match f_nm with
     | Sym f_a ->
         match Map.lookup f_a file.stdlib with

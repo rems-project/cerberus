@@ -670,8 +670,8 @@ let fetch_first_write_event pred =
 
 
 val apply_shift_path_element: ctype -> shift_path_element -> impl_mem_value -> impl_memM impl_mem_value
-let apply_shift_path_element result_ty spe mval =
-(* TODO: use result_ty *)
+let apply_shift_path_element lvalue_ty spe mval =
+(* TODO: use lvalue_ty *)
   match (spe, mval) with
     | (SPE_array elem_ty ival_, MVarray mvals) ->
         match eval_integer_value_base ival_ with
@@ -686,11 +686,17 @@ let apply_shift_path_element result_ty spe mval =
                      stringFromInteger_value (IV Prov_none ival_))
         end
    | (SPE_array elem_ty ival_, MVpointer _ _) ->
-       (* TODO: shouldn't it be using elem_ty instead??? *)
-       if result_ty <> Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) then
+(*
+       if lvalue_ty <> Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) then
          error ("WIP ==> result_ty <> not unsigned char, SPE_array, MVpointer ===> result_ty = " ^ stringFromCtype result_ty)
        else
-         return (MVinteger (AilTypes.Unsigned AilTypes.Ichar (* TODO: hack, hack *)) (IV Prov_none (IVbyteof ival_ mval)))
+*)
+       match lvalue_ty with
+         | Basic (AilTypes.Integer lvalue_ity) ->
+             return (MVinteger lvalue_ity (IV Prov_none (IVbyteof (mk_op_ival_ IntMul ival_ (IVsizeof elem_ty)) mval)))
+         | _ ->
+             error ("WIP ==> lvalue_ty <> not an integer value, SPE_array, MVpointer ===> lvalue_ty = " ^ stringFromCtype lvalue_ty)
+       end
    
    | (SPE_member tag_sym memb_ident, MVstruct tag_sym_ xs) ->
        if tag_sym <> tag_sym_ then
@@ -700,7 +706,7 @@ let apply_shift_path_element result_ty spe mval =
    
    
    | (SPE_array elem_ty ival_1, MVinteger ity ival_2) ->
-       error ("result_ty: " ^ stringFromCtype result_ty ^
+       error ("lvalue_ty: " ^ stringFromCtype lvalue_ty ^
               ", spe: " ^ stringFromShift_path [spe] ^
               ", ity: " ^ stringFromCtype (Basic (AilTypes.Integer ity)))
    
@@ -721,16 +727,16 @@ let apply_shift_path_element result_ty spe mval =
        
 
    | (SPE_array _ _, _) ->
-       error ("Mem.apply_shift_path_element, SPE_array ==> mval: " ^ stringFromMem_value mval ^ ", result_ty: " ^ stringFromCtype result_ty)
+       error ("Mem.apply_shift_path_element, SPE_array ==> mval: " ^ stringFromMem_value mval ^ ", lvalue_ty: " ^ stringFromCtype lvalue_ty)
    | (SPE_member _ _, _) ->
        error ("Mem.apply_shift_path_element, SPE_member ==> " ^ stringFromMem_value mval)
   end
 
 
-let apply_shift_path ty sh mval =
+let apply_shift_path lvalue_ty sh mval =
   (* foldl *)
   foldM (fun acc spe ->
-    apply_shift_path_element ty spe acc
+    apply_shift_path_element lvalue_ty spe acc
   ) mval sh
 
 
@@ -1195,11 +1201,9 @@ let impl_eq_ptrval ptr_val1 ptr_val2 =
                 (* defacto flag *)
                 begin
                   if alloc_id1 <> alloc_id2 then
-                    let () = Debug.print_debug 0 [] (fun () -> "HELLO POINTER EQ") in
-                    (* *)
                     Nondeterminism2.msum "pointer equality (different provenances)"
                       [ ("true", return true)
-                      ; ("false", return true) ]
+                      ; ("false", return false) ]
                   else
                     do_honest_equality
                 end
@@ -1234,10 +1238,10 @@ let impl_eq_ptrval ptr_val1 ptr_val2 =
                           end
                       end
                 end
-(*
-          | (Prov_some alloc_id1, Prov_some alloc_id2) ->
-*)
-
+          | (Prov_some _, _) ->
+              do_honest_equality
+          | (_, Prov_some _) ->
+              do_honest_equality
           | _ ->
               error "WIP: Mem.eq_ptrval, not (Just alloc_id1, Just alloc_id2)"
         end
@@ -1591,7 +1595,7 @@ let rec has_concurRead ival_ =
 
 
 let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "impl_le_ival ==> " ^ stringFromInteger_value ival1 ^ " -- " ^
     stringFromInteger_value ival2
   ) in
@@ -1612,7 +1616,7 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
               if ity1 = ity2 then
                 Just true
               else
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "impl_le_ival (IVmin vs IVfromptr) ==> " ^ stringFromInteger_value ival1 ^ " -- " ^
                   stringFromInteger_value ival2
                 ) in
@@ -2052,11 +2056,11 @@ let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
 
 
 
-val perform_access: forall 'a. access_kind -> Loc.t -> impl_pointer_value ->
+val perform_access: forall 'a. access_kind -> Loc.t -> ctype -> impl_pointer_value ->
   (allocation_id -> impl_memM 'a) ->
   impl_memM 'a ->
   impl_memM 'a
-let perform_access accessKind loc ptrval do_normal do_device =
+let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
   match ptrval with
     (* null and function pointers obviously can't be used for accesses. *)
     | PV _ (PVnull _) _     -> fail (MerrAccess loc accessKind NullPtr)
@@ -2079,7 +2083,8 @@ let perform_access accessKind loc ptrval do_normal do_device =
                  have a "one past" pointer *)
               ifM ("perform_access[" ^ Loc.stringFromLocation loc ^ "] provenance check")
                   (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id pref) ptr_ival_
-                           ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id pref; size_ival_]) ])
+                           ; mk_iv_constr MC_le (IVop IntAdd [ptr_ival_; IVsizeof lvalue_ty])
+                                                (IVop IntAdd [IVaddress alloc_id pref; size_ival_]) ])
                     (do_normal alloc_id)
                     (fail (MerrAccess loc accessKind OutOfBoundPtr))
         end
@@ -2166,17 +2171,23 @@ let impl_load loc lvalue_ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footpr
   print_debugM 1 (fun () ->
     "LOAD [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^ stringFromPointer_value ptrval
   ) >>
-  perform_access LoadAccess loc ptrval
+  perform_access LoadAccess loc lvalue_ty ptrval
     (fun alloc_id ->
       (* addToLog alloc_id >> *)
       resolve_allocation alloc_id >>= function
-        | Storage_static _ _ (Just mval) ->
+        | Storage_static stor_pref stor_ty (Just mval) ->
             (* found a stored value static memory *)
             apply_shift_path lvalue_ty sh mval >>= fun mval' ->
             print_debugM 5 (fun () ->
               "==> found value (static): " ^ stringFromMem_value mval'
             ) >>
-            return (FP_alloc alloc_id lvalue_ty, mval')
+(*
+            if stor_ty = lvalue_ty then
+              return (FP_alloc alloc_id lvalue_ty, mval')
+            else
+              error "WIP: LOAD, lvalue_ty <> stor_ty"
+*)
+              return (FP_alloc alloc_id lvalue_ty, mval')
         | Storage_static _ _ Nothing ->
             (* loading from uninitialised static memory *)
             return (FP_alloc alloc_id lvalue_ty, mkUnspec lvalue_ty)
@@ -2260,7 +2271,7 @@ let impl_store loc lvalue_ty ptrval mval =
   let wevent =
     WriteEvent loc lvalue_ty ptrval mval in
   
-  perform_access StoreAccess loc ptrval
+  perform_access StoreAccess loc lvalue_ty ptrval
     (fun alloc_id ->
       (* addToLog alloc_id >> *)
       register_write_event alloc_id wevent >>
