@@ -23,7 +23,7 @@ let rec simplify_integer_value_base ival_ =
           Left n
       | IVaddress alloc_id ->
           Right ival_
-      | IVfromptr (ty, ity, ptrval) ->
+      | IVfromptr (ty, ity, ptrval, sh) ->
           (* TODO *)
           Right ival_
     | IVop (iop, [ival_1; ival_2]) ->
