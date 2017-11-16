@@ -1,0 +1,89 @@
+open import Pervasives Utils
+open import Mem
+
+import Symbolic AilTypes Core_ctype
+
+
+val integerFromIntegerValue: integer_value -> maybe integer
+let integerFromIntegerValue ival =
+  eval_integer_value ival
+
+(*
+val symbolicFromIntegerValue: integer_value -> maybe Symbolic.symbolic
+let symbolicFromIntegerValue ival =
+  case_integer_value ival
+    (fun _ -> Nothing)
+    (fun symb -> Just symb)
+    (fun () -> Nothing)
+*)
+
+val integerValueFromMemValue: mem_value -> maybe (AilTypes.integerType * integer_value)
+let integerValueFromMemValue mval =
+  let () = Debug.print_debug 0 [] (fun () ->
+    "integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
+  ) in
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun ity ival -> Just (ity, ival))
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+
+(*
+val unspecifiedFromMemValue: mem_value -> maybe Core_ctype.ctype
+let unspecifiedFromMemValue mval =
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun ty -> Just ty)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+*)
+
+val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
+let symbolicFromMemValue mval =
+  error "symbolicFromMemValue"
+(*
+let symbolicFromMemValue mval =
+(*
+  maybe Nothing (symbolicFromIntegerValue -| snd) (integerValueFromMemValue mval)
+*)
+  case_mem_value mval
+    (fun _ -> Nothing)
+    (fun symb -> Just symb)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+*)
+
+
+
+val pointerValueFromMemValue: mem_value -> maybe (Core_ctype.ctype * pointer_value)
+let pointerValueFromMemValue mem_val =
+  let () = Debug.print_debug 0 [] (fun () ->
+    "pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
+  ) in
+  case_mem_value mem_val
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun ref_ty ptr_val -> Just (ref_ty, ptr_val))
+    (fun _ -> Nothing)
+    (fun _ _ -> Nothing)
+    (fun _ _ _ -> Nothing)
+
+
+
+val integer_mval: AilTypes.integerType -> integer -> mem_value
+let integer_mval ity n =
+  integer_value_mval ity (integer_ival n)

@@ -1,0 +1,28 @@
+{- In every execution the two non-atomic writes race.
+-}
+
+{-
+fun main () : [integer] :=
+  x <- create(signed int);
+  {{{
+       store(signed int, x, 0)
+  |||
+       store(signed int, x, 1)
+  }}};
+  kill(x);
+  ret 0
+-}
+fun main () : [integer] :=
+  let strong x = create(<alignof>("signed int"), "signed int") in
+  let strong _ = par(
+    let strong _ = store("signed int", x, 0) in
+    return (unit)
+    end
+  ,
+    let strong _ = store("signed int", x, 1) in
+    return (unit)
+    end
+  ) in
+  let strong _ = kill(x) in
+  return(0)
+  end end end

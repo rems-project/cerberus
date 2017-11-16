@@ -1,0 +1,130 @@
+open import Pervasives
+open import Utils Symbolic
+
+import Defacto_memory_types2 Core Mem
+
+  (*
+type t
+declare ocaml target_rep type t = `Smt_wrapper.assertions`
+
+
+val empty: t
+declare ocaml target_rep function empty = `Smt_wrapper.empty_assertions`
+
+
+val is_empty: t -> bool
+declare ocaml target_rep function is_empty = `Smt_wrapper.is_empty_assertions`
+
+val combine: t -> t -> t
+declare ocaml target_rep function combine = `Smt_wrapper.combine_assertions`
+
+val assert_eq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_eq = `Smt_wrapper.assert_eq`
+
+val assert_neq: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_neq = `Smt_wrapper.assert_neq`
+
+val assert_lt: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_lt = `Smt_wrapper.assert_lt`
+
+val assert_ge: symbolic -> symbolic -> t -> t
+declare ocaml target_rep function assert_ge = `Smt_wrapper.assert_ge`
+
+
+
+
+
+val isUnsat: t -> bool
+declare ocaml target_rep function isUnsat = `Smt_wrapper.is_unsat`
+*)
+
+type old_constraints =
+  (* TODO: assumes that the symbolic expressions have type "bool" *)
+  | Constraints of list (symbolic Core.object_value Mem.pointer_value)
+
+
+val empty: old_constraints
+let empty =
+  Constraints []
+
+
+val is_empty: old_constraints -> bool
+let is_empty (Constraints xs) =
+  List.null xs
+
+
+val combine: old_constraints -> old_constraints -> old_constraints
+let combine (Constraints xs) (Constraints ys) =
+  Constraints (xs ++ ys) (* TODO: simplification ? *)
+
+
+val assert_eq: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> old_constraints -> old_constraints
+let assert_eq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Eq symb1 symb2 :: xs)
+
+val assert_neq: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> old_constraints -> old_constraints
+let assert_neq symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Neq symb1 symb2 :: xs)
+
+val assert_lt: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> old_constraints -> old_constraints
+let assert_lt symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Lt symb1 symb2 :: xs)
+
+val assert_ge: symbolic Core.object_value Mem.pointer_value -> symbolic Core.object_value Mem.pointer_value -> old_constraints -> old_constraints
+let assert_ge symb1 symb2 (Constraints xs) =
+  Constraints (SYMBop Ge symb1 symb2 :: xs)
+
+
+
+
+val simplify: old_constraints -> old_constraints
+let simplify (Constraints xs) =
+  Constraints $
+  List.foldl (fun acc symb ->
+    let symb = Symbolic.reduce symb in
+    match symb with
+      | SYMBop Eq (SYMBsym _ sym) symb2 ->
+          symb :: List.map (subst_sym sym symb2) acc
+      | SYMBop Eq symb1 (SYMBsym _ sym) ->
+          symb :: List.map (subst_sym sym symb1) acc
+      | SYMBop Eq symb1 symb2 ->
+(*
+          if symb1 = symb2 then
+            acc
+          else
+*)
+            symb :: acc
+      | _ ->
+        symb :: acc
+    end
+  ) [] xs
+
+
+
+(* TODO: more "is clearly unsat" *)
+val isUnsat: old_constraints -> bool
+let isUnsat xs =
+  let Constraints xs = simplify xs in
+  List.any (function
+    | SYMBfalse ->
+        true
+(*
+    | SYMBop Eq (SYMBconst n1) (SYMBconst n2) ->
+        n1 <> n2
+    | SYMBop Neq (SYMBconst n1) (SYMBconst n2) ->
+        n1 = n2
+    | SYMBop Lt (SYMBconst n1) (SYMBconst n2) ->
+        n1 >= n2
+*)
+    | SYMBop Eq (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
+        n1 <> n2
+    | SYMBop Neq (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                 (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
+        n1 = n2
+    | SYMBop Lt (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n1))))
+                (SYMBconst (Core.OVinteger (Defacto_memory_types2.IV _ (Defacto_memory_types2.IVconcrete n2)))) ->
+        n1 >= n2
+    | _ ->
+        false
+  end) xs

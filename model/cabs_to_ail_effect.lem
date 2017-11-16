@@ -1,0 +1,1222 @@
+open import Pervasives Cabs Std Show Show_extra
+open import Utils
+import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
+
+open import Cabs_to_ail_aux
+
+import AilSyntax AilTypes AilTypesAux
+
+import Map_extra
+
+module A      = AilSyntax
+module ATypes = AilTypes
+
+open import {hol} `pp_ailTheory`
+
+
+type tag_definition =
+  | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Enum_definition (* TODO *)
+
+
+type member_kind =
+  (* TODO: we may be able to merge struct and union *)
+  | Kind_struct
+  | Kind_union
+  | Kind_enum
+
+(* STD §6.2.1#1, sentence 1 *)
+type identifier_kind =
+  (* the boolean is true iff we are dealing with a function parameter (needed to determinate the linkage ...) *)
+    (* TODO: should be a different ctor, but using a bool for now to make sure all the occurences
+             of the normal Kind_object also apply to Kind_parameter_object' *)
+  | Kind_object of bool
+
+  | Kind_function
+  (* TODO: putting the struct/union definition here is a bit of a hack *)
+  | Kind_tag
+  | Kind_member of member_kind
+  | Kind_typedef
+  | Kind_label
+(*
+  | Kind_macro_name
+  | Kind_macro_parameter
+*)
+
+instance (Eq identifier_kind)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show identifier_kind)
+  let show = function
+    | Kind_object false ->
+        "object"
+    | Kind_object true ->
+        "parameter"
+    | Kind_function ->
+        "function"
+    | Kind_tag ->
+        "tag"
+    | Kind_member Kind_struct ->
+        "struct_member"
+    | Kind_member Kind_union ->
+        "union_member"
+    | Kind_member Kind_enum ->
+        "enum_member"
+    | Kind_typedef ->
+        "typedef"
+    | Kind_label ->
+        "label"
+  end
+end
+
+instance (SetType identifier_kind)
+  let setElemCompare = defaultCompare
+end
+
+
+val is_object_kind: identifier_kind -> bool
+let is_object_kind = function
+  | Kind_object _ -> true
+  | _             -> false
+end
+
+val is_parameter_object_kind: identifier_kind -> bool
+let is_parameter_object_kind = function
+  | Kind_object true -> true
+  | _                -> false
+end
+
+
+
+
+(* STD §6.2.1#2 *)
+type block_id = nat
+type scope =
+  | Scope_function
+  | Scope_file
+  | Scope_block of block_id
+  | Scope_prototype
+
+instance (Eq scope)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+(* TODO DEBUG *)
+let string_of_scope = function
+  | Scope_function ->
+      "function"
+  | Scope_file ->
+      "file"
+  | Scope_block n ->
+      "block(" ^ show n ^ ")"
+  | Scope_prototype ->
+      "prototype"
+end
+
+let is_block_scope = function
+  | Scope_block _ ->
+      true
+  | _ ->
+      false
+end
+
+
+
+
+(* STD §6.2.3#1 *)
+type namespace =
+  | Namespace_label
+  | Namespace_tag
+  | Namespace_member of cabs_identifier (* NOTE: theses are only struct/union members *)
+  | Namespace_ordinary (* NOTE: enum members go here *)
+
+instance (Show namespace)
+  let show = function
+    | Namespace_label ->
+        "label"
+    | Namespace_tag ->
+        "tag"
+    | Namespace_member ident ->
+        "member{" ^ show ident ^ "}"
+    | Namespace_ordinary ->
+        "ordinary"
+  end
+end
+
+instance (SetType namespace)
+  let setElemCompare ns1 ns2 =
+    let ord = function
+      | Namespace_label ->
+          (0 : nat)
+      | Namespace_tag ->
+          1
+      | Namespace_member _ ->
+          2
+      | Namespace_ordinary ->
+          3
+    end in
+    match (ns1, ns2) with
+      | (Namespace_member ident1, Namespace_member ident2) ->
+          setElemCompare ident1 ident2
+      | _ ->
+          setElemCompare (ord ns1) (ord ns2)
+    end
+end
+
+
+
+
+type state = <|
+  (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
+  aux_supply: UniqueId.supply nat;
+  (* Counter for the symbol generator *)
+  symbol_supply: UniqueId.supply Symbol.sym;
+  (* table (with stacked scopes) associating C identifiers to symbols *)
+  
+  (* IMPORTANT: the two scope tables must be updated in sync *)
+  registered_identifiers:      Scope_table.t scope (cabs_identifier * namespace) (A.identifier * identifier_kind * linkage);
+(*  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration; *)
+  
+  tag_definitions: map A.identifier tag_definition;
+  
+  (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
+  (* the first boolean records whether the function has a prototype *)
+  (* the boolean in the parameters list tells whether there was a register storage-class *)
+  function_declarations:        map A.identifier (bool * ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
+  external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
+  internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
+  
+  function_definitions: map A.identifier (list A.identifier * A.statement unit);
+  external_object_definitions: map A.identifier (A.expression unit);
+  
+  (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
+  typedef_definitions: map A.identifier (ATypes.qualifiers * ATypes.ctype);
+  
+(* WIP
+  struct_definitions: map A.identifier (
+*)
+  
+  static_assertions: list (A.expression unit * A.stringLiteral);
+  
+(*
+  enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
+*)
+  (* STD §6.2.1#1, sentence 2 *)
+  enumeration_constants: map A.identifier (A.expression_ unit);
+  
+  (* TODO: this is idiotically inefficient, should store here the converse *)
+  (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
+     This is particularly useful when stdlib headers are included *)
+  used_identifier: list A.identifier;
+  current_return_type : ATypes.ctype;
+  
+  is_inside_loop:   bool;
+  is_inside_switch: bool;
+  
+  
+  (* TODO TODO TODO *)
+  core_eval_stuff: (map string Symbol.sym) * Core.fun_map unit * Core.impl;
+|>
+
+type desugM 'a = State_exception.stExceptM 'a state Errors.error
+
+val return: forall 'a. 'a -> desugM 'a
+let return = State_exception.return
+
+val bind: forall 'a 'b. desugM 'a -> ('a -> desugM 'b) -> desugM 'b
+let bind = State_exception.bind
+
+
+val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
+let fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
+
+
+
+val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
+val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
+let mapM = State_exception.mapM
+let mapM_ = State_exception.mapM_
+
+let foldlM = State_exception.foldlM
+let foldrM = State_exception.foldrM
+
+let iter = State_exception.iter
+
+val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
+let tryWith = State_exception.tryWith
+
+
+val fmap: forall 'a 'b. ('a -> 'b) -> desugM 'a -> desugM 'b
+let fmap = State_exception.fmap
+
+val app: forall 'a 'b. desugM ('a -> 'b) -> desugM 'a -> desugM 'b
+let app  = State_exception.app
+
+
+let inline (>>=)    = bind
+let inline (>>) m f = m >>= fun _ -> f (* NOTE: the inline is important *)
+let inline (<$>)    = fmap
+let inline (<*>)    = app
+
+
+val void: forall 'a. desugM 'a -> desugM unit
+let void m =
+  fmap (const ()) m
+
+
+val guard: forall 'a. desugM bool -> string -> desugM 'a -> desugM 'a
+let guard m_pred err_msg m =
+  m_pred >>= function
+    | true  -> m
+    | false -> error ("[Cabs_to_ail_effect] failed guard: " ^ err_msg ^ ".")
+  end
+
+
+val liftException: forall 'a. Exception.exceptM 'a Errors.error -> desugM 'a
+let liftException = State_exception.liftException
+
+(* ========================================================================== *)
+val current_scope_is: scope -> desugM bool
+let current_scope_is scope =
+  (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
+  State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers = scope)
+
+
+val get_scope: desugM scope
+let get_scope =
+  (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
+  State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
+
+
+(* TODO: revert this to simply return a a, and add a collect_bindings function *)
+val with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
+let with_scope scope m =
+  State_exception.update (fun st ->
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "ENTERING Scope: " ^ string_of_scope scope) in
+    
+    <| st with registered_identifiers=      Scope_table.create_scope scope st.registered_identifiers;
+(*               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations *) |> 
+  ) >>
+  m >>= fun res ->
+  State_exception.modify (fun st ->
+    let (idents_map, ident_table'  ) = Scope_table.destroy_scope st.registered_identifiers      in
+(*    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in *)
+    
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "EXITING Scope: " ^ string_of_scope scope) in
+    
+    (Set_helpers.fold (fun (sym, kind, _) acc ->
+      match kind with
+        | Kind_object false ->
+            match Map.lookup sym st.external_object_declarations with
+              | Just (dur, isRegister, qs, ty) ->
+                  (sym, ((dur, isRegister), qs, ty)) :: acc
+              | Nothing ->
+                  match Map.lookup sym st.internal_object_declarations with
+                    | Just (dur, isRegister, qs, ty) ->
+                        (sym, ((dur, isRegister), qs, ty)) :: acc
+                    | Nothing ->
+                        (* TODO: check *)
+                        acc
+                  end
+            end
+        | _ ->
+            (* TODO: functions *)
+            acc
+      end
+    ) (Map.range idents_map) [],
+    
+    <| st with registered_identifiers=      ident_table';
+(*               registered_tag_declarations= tagDecl_table' *) |>)
+  ) >>= fun bs ->
+  return (List.reverse bs, res)
+
+
+
+(* ========================================================================== *)
+val initial_state: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
+let initial_state n core_eval_stuff = <|
+  aux_supply=                  UniqueId.new_supply;
+  symbol_supply=               UniqueId.new_supply_from n;
+  registered_identifiers=      Scope_table.empty;
+(*  registered_tag_declarations= Scope_table.empty;*)
+  tag_definitions= Map.empty;
+
+  enumeration_constants=       Map.empty;
+  
+  function_declarations=        Map.empty;
+  external_object_declarations= Map.empty;
+  internal_object_declarations= Map.empty;
+  
+  function_definitions=        Map.empty;
+  external_object_definitions= Map.empty;
+  typedef_definitions=         Map.empty;
+  static_assertions=           [];
+  
+  used_identifier= [];
+  current_return_type= ATypes.Void; (* TODO: this is morally wrong *)
+  
+  is_inside_loop=   false;
+  is_inside_switch= false;
+  
+  core_eval_stuff= core_eval_stuff;
+|>
+
+val eval: forall 'a. nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a ->
+  Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
+let eval n core_eval_stuff m =
+  State_exception.eval (
+    m                                                 >>= fun res    ->
+    State_exception.read (fun st -> st.symbol_supply) >>= fun supply ->
+    return (supply, res)
+    ) (initial_state n core_eval_stuff)
+
+
+
+
+val freshify: cabs_identifier -> desugM cabs_identifier
+let freshify (CabsIdentifier loc str) =
+  State_exception.modify (fun st ->
+    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
+    (CabsIdentifier loc (str ^ show n), <| st with aux_supply= aux_supply' |>)
+  )
+
+val fresh_block_scope: desugM scope
+let fresh_block_scope =
+  State_exception.modify (fun st ->
+    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
+    (Scope_block n, <| st with aux_supply= aux_supply' |>)
+  )
+
+
+
+(* ========================================================================== *)
+val ident_is_in_scope: cabs_identifier -> namespace -> desugM bool
+let ident_is_in_scope ident namespace =
+  State_exception.read (fun st ->
+    Scope_table.is_in_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
+  )
+
+
+val ident_is_in_current_scope: cabs_identifier -> namespace -> desugM bool
+let ident_is_in_current_scope ident namespace =
+  State_exception.read (fun st ->
+    Scope_table.is_in_current_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
+  )
+
+
+
+
+
+
+val register_typedef: A.identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
+let register_typedef sym (qs, ty) =
+  let () = Debug.print_debug 8 [Debug.DB_desugaring] (fun () ->
+    "registering typedef symbol: " ^ show sym
+  ) in
+  State_exception.get >>= fun st ->
+  match Map.lookup sym st.typedef_definitions with
+    | Just (qs', ty') ->
+        (* STD §6.7#3, first bullet *)
+        if AilTypesAux.variably_modified ty then
+          fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet, variably modified")
+        else if qs <> qs' || ty <> ty' then
+(*        let () = Debug.print_debug 1 [] ("(qs, ty)   = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs, ty)) in
+          let () = Debug.print_debug 1 [] ("(qs', ty') = " ^ stringFromPair Pp.stringFromAil_qualifiers Pp.stringFromAil_ctype (qs', ty')) in *)
+          fail (*TODO loc*)Loc.unknown (Errors.Desugar_OtherViolation "§6.7#3, first bullet")
+        else
+          return ()
+    | Nothing ->
+        State_exception.put (<| st with typedef_definitions= Map.insert sym (qs, ty) st.typedef_definitions |>)
+  end
+
+val resolve_typedef: A.identifier -> desugM (ATypes.qualifiers * ATypes.ctype)
+let resolve_typedef sym =
+  State_exception.read (fun st ->
+    match Map.lookup sym st.typedef_definitions with
+      | Just qs_ty -> qs_ty
+      | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
+    end
+  )
+
+
+
+
+
+(* NOTE: this function shouldn't be called outside of the current module *)
+val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> desugM A.identifier
+let register_identifier_ ident namespace kind link =
+  get_scope >>= fun sc ->
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "attempting to register identifier `" ^ show ident ^
+       "' with scope= " ^ string_of_scope sc ^
+       " with namespace= " ^ show namespace ^
+       ", kind= " ^ show kind ^
+       ", linkage= " ^ show link)
+  ) >>
+  
+  let do_fresh =
+    (* generates a fresh symbol *)
+    State_exception.modify (fun st ->
+      let CabsIdentifier _ str = ident in
+      let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
+      (sym, <| st with symbol_supply = symbol_supply |>)
+    ) >>= fun sym ->
+    (* associates it to the identifier *)
+    State_exception.update (fun st ->
+      <| st with registered_identifiers= Scope_table.register (ident, namespace) (sym, kind, link) st.registered_identifiers |>
+    ) >>
+    return sym in
+  
+  State_exception.read (fun st ->
+    Scope_table.resolve (ident, namespace) st.registered_identifiers
+  ) >>= function
+    | Just (scope, (sym, kind', link')) ->
+        (* TODO: need to check that the kind/link match up *)
+        if link = Linkage_none then
+          (* §6.7#3 "except that ..." *)
+          if kind = Kind_typedef then
+            (* NOTE: the "except that ..." is deal with by the call to [register_typedef] that should be done just after *)
+            return sym
+          else if kind = Kind_tag then
+            (* TODO: multiple definition are not allowed *)
+            return sym
+          else
+            (* TODO: check *)
+            current_scope_is scope >>= function
+              | true ->
+                  (* TODO: location *)
+                  fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+              | false ->
+                  do_fresh
+            end
+        else
+          (* TODO: check *)
+          if kind = kind' && link = link' then
+            return sym
+          else
+            error "Cabs_to_ail_effect.register_identifier_"
+    | Nothing ->
+        do_fresh
+  end
+  
+
+
+val resolve_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind * linkage)))
+let resolve_identifier ident namespace =
+  State_exception.read (fun st ->
+    Scope_table.resolve (ident, namespace) st.registered_identifiers
+  )
+
+
+val     determinate_linkage: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM linkage
+let rec determinate_linkage ident namespace kind storage_classes =
+  get_scope >>= fun scope ->
+  let scs = List.delete SC_Thread_local storage_classes in
+  if    scope = Scope_file
+     && (kind = Kind_object false || kind = Kind_function)
+     && List.elem SC_static scs then
+STD_ "§6.2.2#3" $
+      return Linkage_internal
+  
+  else if List.elem SC_extern scs then
+STD_ "§6.2.2#4" $
+    resolve_identifier ident namespace >>= function
+      | Just (_, (_, _, link)) ->
+          if link = Linkage_internal || link = Linkage_external then
+            return link
+          else
+            return Linkage_external
+      | Nothing ->
+          return Linkage_external
+    end
+  
+  else if kind = Kind_function && List.null scs then
+STD_ "§6.2.2#5, sentence 1" $
+        determinate_linkage ident namespace kind [SC_extern]
+  
+  else if    scope = Scope_file
+          && kind = Kind_object false
+          && List.null scs then
+STD_ "§6.2.2#5, sentence 2" $
+    return Linkage_external
+    
+    else
+STD_ "§6.2.2#6" $
+    if    not (is_object_kind kind || kind = Kind_function)
+       || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
+       || is_block_scope scope && is_object_kind kind && scs <> [SC_extern] then
+      return Linkage_none
+    else
+      error "[Cabs_to_ail_effect.determinate_linkage] unknown case"
+(* TODO: we need when-patterns in Lem *)
+(*
+  match (scope, kind, List.delete SC_Thread_local storage_classes) with
+    | (Scope_file, Kind_object false, [SC_static]) ->
+STD_ "§6.2.2#3" $
+        return Linkage_internal
+    
+    | (Scope_file, Kind_function, [SC_static]) ->
+STD_ "§6.2.2#3" $
+        return Linkage_internal
+    
+    | (_, _, [SC_extern]) ->
+STD_ "§6.2.2#4" $
+        resolve_identifier ident namespace >>= function
+          | Just (_, (_, _, link)) ->
+              if link = Linkage_internal || link = Linkage_external then
+                return link
+              else
+                return Linkage_external
+          | Nothing ->
+              return Linkage_external
+        end
+    
+    | (_, Kind_function, []) ->
+STD_ "§6.2.2#5, sentence 1" $
+        determinate_linkage ident namespace kind [SC_extern]
+    
+    | (Scope_file, Kind_object false, []) ->
+STD_ "§6.2.2#5, sentence 2" $
+        return Linkage_external
+    
+    | (_, _, storage_class) ->
+STD_ "§6.2.2#6" $
+        if    not (is_object_kind kind || kind = Kind_function)
+           || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
+           || is_block_scope scope && is_object_kind kind && storage_class <> [SC_extern] then
+          return Linkage_none
+        else
+          error "[Cabs_to_ail_effect.determinate_linkage] unknown case"
+  end
+*)
+
+
+val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM (linkage * A.identifier)
+let register_identifier ident namespace kind storage_classes =
+  determinate_linkage ident namespace kind storage_classes >>= fun link ->
+  register_identifier_ ident namespace kind link           >>= fun sym  ->
+  return (link, sym)
+
+
+(*
+val register_function_parameter: cabs_identifier -> identifier_kind -> list storage_class_specifier -> desugM A.identifier
+let register_function_parameter ident kind storage_classes =
+STD_ "§6.2.2#6" $
+  register_identifier_ ident Namespace_ordinary kind Linkage_none
+*)
+
+
+
+
+
+
+
+val register_tag: Loc.t -> maybe cabs_identifier -> desugM A.identifier
+let register_tag loc tag_ident_opt =
+  (* generate a fresh tag identifier if none provided *)
+  maybe (freshify (CabsIdentifier loc "anonymous_tag_")) return tag_ident_opt  >>= fun tag_ident    ->
+  register_identifier tag_ident Namespace_tag Kind_tag [(* TODO: check *)]     >>= fun (_, tag_sym) ->
+  return tag_sym
+  
+
+
+val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> desugM unit
+let register_tag_definition loc tag_sym tag_decl =
+  let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG: " ^ show tag_sym) in
+  State_exception.read (fun st ->
+    Map.member tag_sym st.tag_definitions
+  ) >>= function
+    | true ->
+        (* TODO: check *)
+        fail loc (Errors.Desugar_Redefinition tag_sym)
+    | false ->
+        return ()
+  end >>
+  
+  State_exception.update (fun st ->
+    <| st with tag_definitions= Map.insert tag_sym tag_decl st.tag_definitions |>
+  )
+
+
+val resolve_tag_definition: A.identifier -> desugM tag_definition
+let resolve_tag_definition tag_sym =
+  State_exception.read (fun st ->
+    Map.lookup tag_sym st.tag_definitions
+  ) >>= function
+    | Just tag_decl ->
+        return tag_decl
+    | Nothing ->
+        (* TODO: I think this can only happen when seeing a tentative struct/union
+           with a member (or recursive...) whose type is the struct/union itself.
+           If this is indeed the case, we should give a better error message *)
+        fail Loc.unknown (Errors.Desugar_OtherViolation ("unregistered tag: " ^ show tag_sym ^
+          " (this may be from a violation of (§6.7.2.1#3, 1st sentence)"))
+  end
+
+
+val get_tag_definitions: desugM (map A.identifier tag_definition)
+let get_tag_definitions =
+  State_exception.read (fun st ->
+    st.tag_definitions
+  )
+
+
+
+val is_anonymous_struct_or_union: ATypes.ctype -> desugM bool
+let is_anonymous_struct_or_union ty =
+  match AilTypesAux.unatomic ty with
+    | ATypes.Struct tag_sym ->
+        resolve_tag_definition tag_sym >>= function
+          | Struct_definition isAnonymous _ ->
+              return isAnonymous
+          | _ ->
+              error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Struct -- Union_definition"
+        end
+    | ATypes.Union tag_sym ->
+        resolve_tag_definition tag_sym >>= function
+          | Union_definition isAnonymous _ ->
+              return isAnonymous
+          | _ ->
+              error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Union -- Struct_definition"
+        end
+    | _ ->
+        return false
+  end
+
+
+
+(*
+KKK
+
+type tag_declaration =
+  | Struct_declaration of list (Cabs.cabs_identifier * ATypes.ctype)
+
+
+
+  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration;
+*)
+
+
+
+(*
+  match tag_ident_opt with
+    | Just sym ->
+        return sym
+    | Nothing ->
+        State_exception.modify (fun st ->
+          let (sym, symbol_supply) = Symbol.fresh st.symbol_supply in
+          (sym, <| st with symbol_supply = symbol_supply |>)
+        )
+  end >>= fun tag_sym ->
+  
+  
+
+
+
+  (* associates it to the identifier *)
+  State_exception.update (fun st ->
+    <| st with registered_identifiers= Scope_table.register (tag_sym, Namespace_tag) (tag_sym, kind, link) st.registered_identifiers |>
+  ) >>
+  return sym
+*)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
+val resolve_identifier: cabs_identifier -> t (A.identifier * identifier_kind * linkage)
+let resolve_identifier name =
+  bind (State_exception.read (fun st -> Scope_table.lookup name st.registered_identifiers))
+    function
+      | Just x  -> return x
+      | Nothing -> fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
+    end
+*)
+
+
+
+
+
+
+
+
+(* TODO: move somewhere else *)
+(* 
+TODO: HIP
+
+
+val     sigma_declarations_insert: forall 'a 'b. A.sigma_declaration 'a 'b -> A.sigma 'a 'b -> A.sigma 'a 'b
+let rec sigma_declarations_insert decl decls =
+  match (decl, decls) with
+    | (_, []) ->
+        []
+    | (A.SDecl_fun ident fun_decl, [A.SDecl_fun ident' fun_decl']
+
+ function
+  | [] ->
+      []
+  | ((ident', _) as  :: xs ->
+      if ident = ident' then
+        (ident, decl) :: xs
+      else
+        (ident', decl') :: sigma_declarations_insert k v xs
+end
+*)
+
+
+(*
+val register_declaration: A.sigma_declaration Loc.t unit -> t unit
+let register_declaration decl =
+  let ident = match decl with
+    | A.SDecl_fun ident _ ->
+        ident
+    | A.SDecl_global ident _ ->
+        ident
+    | _ ->
+        error "register_declaration: found a static_assert"
+  end in
+  
+  (* TODO: detect multiple definitions *)
+  
+  State_exception.update (fun st ->
+    <| st with registered_declarations= (* assoc_insert ident decl *) decl :: st.registered_declarations |>
+  )
+
+val resolve_declarations: t (list (A.sigma_declaration Loc.t unit))
+let resolve_declarations =
+  State_exception.read (fun st ->
+    st.registered_declarations
+  )
+*)
+
+
+(* NOTE: no check for redefinition is made here *)
+val register_external_object_definition: A.identifier -> A.expression unit -> desugM unit
+let register_external_object_definition sym e =
+  (* this guard makes sure we are indeed registering the definition of an
+     external object (§6.9.2#1) *)
+  guard (current_scope_is Scope_file) "register_external_object_definition not in File scope" $
+    State_exception.update (fun st ->
+      <| st with external_object_definitions= Map.insert sym e st.external_object_definitions |>
+    )
+
+
+(* NOTE: no check for redefinition is made here *)
+val register_function_definition: A.identifier -> (list A.identifier * A.statement unit) -> desugM unit
+let register_function_definition sym fdef =
+  (* NOTE: unlike for external objects, we don't need to check the scope here,
+     because the parse won't allow block scoped function definitions anyway. *)
+  State_exception.update (fun st ->
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
+    <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
+  )
+
+
+val external_object_is_defined: A.identifier -> desugM bool
+let external_object_is_defined sym =
+  State_exception.read (fun st ->
+    Map.member sym st.external_object_definitions
+  )
+
+
+val function_is_defined: A.identifier -> desugM bool
+let function_is_defined sym =
+  State_exception.read (fun st ->
+    Map.member sym st.function_definitions
+  )
+
+
+val register_function_declaration:
+  Loc.t -> A.identifier -> bool -> ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
+let register_function_declaration loc sym is_proto decl =
+  (* DEBUG *)
+  let string_of_decl ((ret_qs, ret_ty), params, _, _, _) =
+    Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
+      fun (qs, ty, isRegister) ->
+        (if isRegister then "register " else "") ^ Pp.stringFromAil_ctype qs ty
+    ) params ^ ")" in
+  
+  State_exception.read (fun st ->
+    Map.lookup sym st.function_declarations
+  ) >>= function
+    | Just (prev_has_proto, prev_decl) ->
+        let () = Debug.print_debug 1 [] (fun () ->
+          "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
+        ) in
+(*
+        let (prev_ret_qs_ty, prev_params, prev_is_variadic, prev_is_inline, prev_is_Noreturn) = prev_decl in
+        let (new_ret_qs_ty, new_params, new_is_variadic, new_is_inline, new_is_Noreturn) = decl in
+        
+        let prev_fun_type = Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
+        let new_fun_type  = Function new_has_proto new_ret_qs_ty new_params new_is_variadic in
+
+Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1
+
+AilTypesAux.make_composite
+
+
+
+  (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
+
+
+((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool)
+*)
+
+        if decl <> prev_decl then
+          (* TODO: msg and location *)
+          fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^
+                                                   show sym ^ ", old decl= " ^ string_of_decl prev_decl ^ " --- vs --- " ^ string_of_decl decl))
+        else
+          return ()
+    | Nothing ->
+        State_exception.update (fun st ->
+          let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
+           string_of_decl decl) in
+          <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
+        )
+  end
+
+
+(* TODO: the redeclaration check don't mix external/internal declarations *)
+val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "attempting to register external object declaration of `" ^ show sym ^
+      "' with qs, ty= " ^ Pp.stringFromAil_ctype qs ty)
+  ) >>
+  
+  State_exception.read (fun st ->
+    Map.lookup sym st.external_object_declarations
+  ) >>= function
+    | Just decl' ->
+        if decl <> decl' then
+          (* TODO: msg and location *)
+          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+        else
+          let () = Debug.print_debug 7 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
+          return ()
+    | Nothing ->
+        State_exception.update (fun st ->
+          <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
+        )
+  end
+
+val update_external_object_type: A.identifier -> ATypes.ctype -> desugM unit
+let update_external_object_type sym ty =
+  State_exception.update (fun st ->
+    match Map.lookup sym st.external_object_declarations with
+      | Nothing ->
+          error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
+      | Just (dur, is_register, qs, _) ->
+          <| st with external_object_declarations=
+            Map.insert sym (dur, is_register, qs, ty) st.external_object_declarations
+          |>
+    end
+  )
+
+(* TODO: factorize *)
+val register_internal_object_declaration:
+  A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_internal_object_declaration sym decl =
+  State_exception.read (fun st ->
+    Map.lookup sym st.internal_object_declarations
+  ) >>= function
+    | Just decl' ->
+        if decl <> decl' then
+          (* TODO: msg and location *)
+          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+        else
+          return ()
+    | Nothing ->
+        State_exception.update (fun st ->
+          <| st with internal_object_declarations= Map.insert sym decl st.internal_object_declarations |>
+        )
+  end
+
+
+val register_static_assertion: A.expression unit -> A.stringLiteral -> desugM unit
+let register_static_assertion e strCst =
+  State_exception.update (fun st ->
+    <| st with static_assertions= (e, strCst) :: st.static_assertions |>
+  )
+
+
+
+
+
+
+val register_label: cabs_identifier -> desugM unit
+let register_label ident =
+  void (register_identifier_ ident Namespace_label Kind_label Linkage_none)
+
+val resolve_label: cabs_identifier -> desugM A.identifier
+let resolve_label ident =
+  (* TODO: §6.8.6.1#1 *)
+  resolve_identifier ident Namespace_label >>= function
+    | Just (_, (sym ,_, _)) ->
+        return sym
+    | Nothing ->
+        fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.8.6.1#1, sentence 1")
+  end
+
+
+(* Returns the return type of the function currently being desugared *)
+(* val get_current_return_type: desugM ATypes.ctype *)
+let get_current_return_type: desugM ATypes.ctype =
+  State_exception.read (fun st ->
+    st.current_return_type
+  )
+
+let set_current_return_type (ty: ATypes.ctype) : desugM unit =
+  State_exception.update (fun st ->
+    <| st with current_return_type= ty |>
+  )
+
+
+(* val is_switch_body: desugM bool *)
+let is_inside_switch: desugM bool =
+  State_exception.read (fun st ->
+    st.is_inside_switch
+  )
+
+(* val is_loop_body: desugM bool *)
+let is_inside_loop: desugM bool =
+  State_exception.read (fun st ->
+    st.is_inside_loop
+  )
+
+
+val perform_inside_switch: forall 'a. desugM 'a ->  desugM 'a
+let perform_inside_switch m =
+  is_inside_loop >>= function
+    | true ->
+        m
+    | false ->
+        State_exception.update (fun st -> <| st with is_inside_switch= true |>) >>
+        m >>= fun ret ->
+        State_exception.update (fun st -> <| st with is_inside_switch= false |>) >>
+        return ret
+  end
+
+
+val perform_inside_loop: forall 'a. desugM 'a -> desugM 'a
+let perform_inside_loop m =
+  is_inside_loop >>= function
+    | true ->
+        m
+    | false ->
+        State_exception.update (fun st -> <| st with is_inside_loop= true |>) >>
+        m >>= fun ret ->
+        State_exception.update (fun st -> <| st with is_inside_loop= false |>) >>
+        return ret
+  end
+
+
+
+
+(* TODO: would be more efficient to store in the state the list of unused functions *)
+val add_used_identifier: A.identifier -> desugM unit
+let add_used_identifier sym =
+  State_exception.update (fun st ->
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
+    <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
+  )
+
+val get_used_identifier: desugM (list A.identifier)
+let get_used_identifier =
+  State_exception.read (fun st ->
+    st.used_identifier
+  )
+
+
+
+
+
+
+val register_enum_constant: A.identifier -> A.expression_ unit -> desugM unit
+let register_enum_constant sym expr =
+  State_exception.update (fun st ->
+    <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
+  )
+
+val resolve_enum_constant: A.identifier -> desugM (A.expression_ unit)
+let resolve_enum_constant sym =
+  State_exception.read (fun st ->
+    st.enumeration_constants
+  ) >>= fun enumeration_constants ->
+  match Map.lookup sym enumeration_constants with
+    | Just e ->
+        return e
+    | Nothing ->
+        fail Loc.unknown Errors.Desugar_impossible
+  end
+
+(*
+val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> t (linkage * A.identifier)
+*)
+
+
+
+
+
+
+
+(* TODO: hackish, uber inefficient *)
+val remove_unused_identifiers: forall 'a. state -> A.identifier -> list (A.identifier * 'a) -> list (A.identifier * 'a)
+let remove_unused_identifiers st startup_sym xs =
+  List.filter (fun (sym, _) -> sym = startup_sym || List.elem sym st.used_identifier) xs
+
+(*
+val remove_block_scoped_identifiers: forall 'a. state -> list (A.identifier * 'a) -> list (A.identifier * 'a)
+let remove_block_scoped_identifiers st xs =
+  List.filter (fun (sym, _) ->
+    match Scope_table.resolve (sym, Namespace_ordinary) st.registered_identifiers with
+      | Just (Scope_file, _) ->
+          true
+      | _ ->
+          false
+    end
+  ) xs
+*)
+
+
+val fetch_object_declaration: A.identifier -> desugM (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
+let fetch_object_declaration sym =
+  State_exception.read (fun st ->
+    (* ... *)
+    let map_union = Map.(union) in
+    map_union st.external_object_declarations st.internal_object_declarations
+  ) >>= fun decls ->
+  match Map.lookup sym decls with
+    | Just decl ->
+        return decl
+    | Nothing ->
+        error "TODO: failed to fetch object declaration"
+  end
+
+
+
+
+
+
+(* TODO: ... *)
+let map_union = Map.(union)
+
+val extract_program: string -> desugM (A.program unit)
+let extract_program startup_str =
+  resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
+    | Just (_, (startup_sym, _, _)) -> return (Just startup_sym)
+    | Nothing                       -> return Nothing
+  end >>= fun startup_sym_opt ->
+  
+  State_exception.read (fun st ->
+    let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () ->
+      "Number of defined tags: " ^ show (Map.size st.tag_definitions)) in (* DEBUG *)
+    let decls = Map_extra.toList (
+      map_union
+        begin
+          Map.map (fun (hasProto, (ret_qs_ty, params, isVariadic, isInline, isNoreturn)) ->
+            A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn
+          ) st.function_declarations
+        end
+        begin
+          Map.map (fun (dur, isRegister, qs, ty) ->
+            A.Decl_object (dur, isRegister) qs ty
+          ) st.external_object_declarations
+        end
+    ) in
+    
+    (startup_sym_opt, <|
+       A.declarations=         (* remove_unused_identifiers st startup_sym *) decls;
+       A.object_definitions=   (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.external_object_definitions;
+       A.function_definitions= (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.function_definitions;
+       A.static_assertions=    st.static_assertions;
+       
+       A.tag_definitions= List.foldr (fun (sym, def) acc ->
+                            match def with
+                             | Struct_definition _ membersDefs ->
+                                 (sym, A.StructDef membersDefs) :: acc
+                             | Union_definition _ membersDefs ->
+                                 (sym, A.UnionDef membersDefs) :: acc
+                             | Enum_definition ->
+                                 acc
+                             end
+                          ) [] $ Map_extra.toList st.tag_definitions
+     |>)
+  )
+
+
+
+val print_debugM: nat -> (unit -> string) -> desugM unit
+let inline print_debugM n msg =
+  return (Debug.print_debug n [Debug.DB_desugaring] msg)
+
+
+(* TODO *)
+import Core
+val get_core_eval_stuff: desugM (((map string Symbol.sym) * Core.fun_map unit * Core.impl) * UniqueId.supply Symbol.sym)
+let get_core_eval_stuff =
+  State_exception.read (fun st ->
+    (st.core_eval_stuff, st.symbol_supply)
+  )
+
+
+
+(* Returns what would the Ail sigma be so far *)
+(* TODO: factorise with extract_program *)
+val get_sigma_sofar: desugM (A.sigma unit)
+let get_sigma_sofar =
+  State_exception.read (fun st ->
+    let decls = Map_extra.toList (
+      map_union
+        begin
+          Map.map (fun (hasProto, (ty, params, isVariadic, isInline, isNoreturn)) ->
+            A.Decl_function hasProto ty params isVariadic isInline isNoreturn
+          ) st.function_declarations
+        end
+        begin
+          Map.map (fun (dur, isRegister, qs, ty) ->
+            A.Decl_object ((dur, isRegister)) qs ty
+          ) st.external_object_declarations
+        end
+    ) in
+    
+    <|
+       A.declarations=         (* remove_unused_identifiers st startup_sym *) decls;
+       A.object_definitions=   (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.external_object_definitions;
+       A.function_definitions= (* remove_unused_identifiers st startup_sym $ *) Map_extra.toList st.function_definitions;
+       A.static_assertions=    st.static_assertions;
+       
+       A.tag_definitions= List.foldr (fun (sym, def) acc ->
+                            match def with
+                             | Struct_definition _ membersDefs ->
+                                 (sym, A.StructDef membersDefs) :: acc
+                             | Union_definition _ membersDefs ->
+                                 (sym, A.UnionDef membersDefs) :: acc
+                             | Enum_definition ->
+                                 acc
+                             end
+                          ) [] $ Map_extra.toList st.tag_definitions
+     |>
+  )

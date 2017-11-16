@@ -1,0 +1,2 @@
+digraph G {node[shape=box];1[label= "active(1)
+Thread 0:\n  arena= pure(Specified(3333333))\n \n"];}
