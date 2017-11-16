@@ -333,6 +333,9 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
         Mem.bind (Mem.load Loc.unknown elem_ty ptrval) (fun (_, mval) ->
+        let () = Debug.print_debug 0 [] (fun () ->
+            "load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
+        ) in
         Mem.case_mem_value mval
           (fun _ -> error "Output.load_character_array, unspecified")
           (fun _ _ -> error "Output.load_character_array, concurrency read")

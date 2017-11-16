@@ -272,7 +272,7 @@ let rec drive_core_thread tid =
               , let () = Debug.print_debug 1 [] (fun () ->
                   "ADDING CONSTRAINTS (driver) ===> " ^ Pp.stringFromMem_iv_mem_constraint cs
                 ) in
-                ND.addConstraints "driver" cs >>
+                ND.addConstraints ("driver: " ^ debug_str) cs >>
                 liftCore_run step_m >>= fun th_st' ->
                 ND.update (fun dr_st -> <| dr_st with
                   core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
