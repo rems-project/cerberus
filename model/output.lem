@@ -754,7 +754,17 @@ let convert eval_conv prec_opt lm_opt cspec args =
           (Just (Cty.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))), Nothing) in
         aux expected_ty_opt conv_ty_opt (fun _ -> []) (* TODO: ahem *)
     | CS_c ->
-        error "WIP: Output.convert, CS_c"
+        (* see (§7.21.6.1#8 c) *)
+        match lm_opt with
+          | Just LM_l ->
+              (* wint_t *) error "NOT YET SUPPORTED: %lc"
+          | Just _ ->
+              Mem.return (Right (U.undef (Loc.other "printf() CS_c") [U.DUMMY "TODO_find_quote_printf_CS_c"]))
+          | Nothing ->
+              aux (Just Cty.signed_int) (Just Cty.unsigned_char) (fun n ->
+                [Decode.encode_character_constant n]
+              )
+        end
     | CS_s ->
         (* TODO: I don't like it ==> should rewrite it *)
         match lm_opt with
