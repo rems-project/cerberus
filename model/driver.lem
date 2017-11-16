@@ -130,6 +130,37 @@ let add_to_concur_sym_map sym oval concur_sym_map =
   end
 
 
+val     print_eval_conv_aux: Undefined.t (either Core.pexpr Core.value) -> Mem.memM (Undefined.t Core.value)
+let rec print_eval_conv_aux xs = match xs with
+  | Undefined.Defined (Right cval) ->
+      ND.return (Undefined.Defined cval)
+  | Undefined.Defined (Left (Core.Pexpr () (Core.PEconstrained xs))) ->
+      ND.msum "printf_eval_conv" begin
+        List.map (fun (cs, pe) ->
+            ( "printf_eval_conv_pe_constrained"
+            , ND.addConstraints "printf_eval_conv" cs >> print_eval_conv_aux (Undefined.Defined (Left pe))
+            )) xs
+        end
+  | Undefined.Defined _ ->
+      error "print_eval_conv: should be a value or PEconstrained"
+  | Undefined.Undef loc undef ->
+      ND.return (Undefined.Undef loc undef)
+  | Undefined.Error loc err ->
+      ND.return (Undefined.Error loc err)
+end
+
+val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
+let printf_eval_conv dr_st cty mval =
+  let () = Debug.print_debug 1 [] (fun () -> "printf_eval_conv") in
+  let (_, cval) = Core_aux.valueFromMemValue mval in
+  let pe = Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
+            [ Caux.mk_ctype_pe cty; Core.Pexpr() (Core.PEval cval)] in
+  match Core_eval.eval_pexpr_aux2 Loc.unknown (Just dr_st.layout_state) dr_st.core_file pe with
+    | Exception.Result z ->
+        print_eval_conv_aux z >>= fun r -> ND.return (Right r)
+    | Exception.Exception err ->
+        ND.return (Left (Loc.unknown, Errors.Core_run_cause err))
+  end
 
 
 (* Perform a given number of successive steps of the concurrency model *)
@@ -371,15 +402,15 @@ let rec drive_core_thread tid =
     | Core_run.Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ( "Step_printf2"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
-          let eval_conv (*ty1*) ty2 mval =
+          (*let eval_conv (*ty1*) ty2 mval =
             let () = Debug.print_debug 1 [] (fun () -> "XX 24") in
             Core_eval.eval_pexpr Loc.unknown (Just dr_st.layout_state) dr_st.core_file (*dr_st.symbolic_assoc*) $
               (* Core.PEcall (Core.Sym conv_sym) *)
               Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
                 [ Caux.mk_ctype_pe ty2
                 ; let (_, cval) = Core_aux.valueFromMemValue mval in
-                  Core.Pexpr () (Core.PEval cval) ] in
-          liftMem (Output.printf eval_conv frmt_chars args_ty_ptrvals) >>= fun out_chars_ ->
+                  Core.Pexpr () (Core.PEval cval) ] in *)
+          liftMem (Output.printf (printf_eval_conv dr_st) frmt_chars args_ty_ptrvals) >>= fun out_chars_ ->
           match out_chars_ with
             | Left err ->
                 error "TODO(msg): a printf() got an error"

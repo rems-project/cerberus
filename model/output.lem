@@ -363,7 +363,7 @@ let load_character_array elem_ty ptrval prec_n_opt =
 
 
 (* TODO: need the length modifier to perform the loads using the proper ctype *)
-val convert: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val convert: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
              maybe precision -> maybe length_modifier -> conversion_specifier -> list (Cty.ctype * Mem.pointer_value) ->
              Mem.memM (either Errors.error (U.t (list char * list (Cty.ctype * Mem.pointer_value))))
 let convert eval_conv prec_opt lm_opt cspec args =
@@ -621,7 +621,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
             | Just conv_ty ->
                 let () = Debug.print_debug 2 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
                 let () = Debug.print_debug 2 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
-                match eval_conv (*arg_ty*) conv_ty mval with
+                eval_conv conv_ty mval >>= function
                   | Left err ->
                       let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
                       Mem.return (Left err)
@@ -648,6 +648,39 @@ let convert eval_conv prec_opt lm_opt cspec args =
                   | Right (U.Undef loc ubs) ->
                       Mem.return (Right (U.Undef loc ubs))
                 end
+
+
+
+                (*
+                eval_conv conv_ty mval >>= fun z ->
+                match z with
+                  | Left err ->
+                      let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
+                      Mem.return (Left err)
+                  | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
+                      match Mem_aux.integerFromIntegerValue ival with
+                        | Just n ->
+                            Mem.return $ Right (U.return (
+                              if prec = 0 && n = 0 then
+                                ([], args')
+                              else
+                                (cont n, args')
+                            ))
+                        | Nothing ->
+                            error ("WIP: convert --> not a concrete integer: " ^
+                                   stringFromMemValue (fromJust "Output, not a concrete integer" $
+                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))))
+                      end
+                  | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
+                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                  | Right (U.Defined cval) ->
+                      error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
+                  | Right (U.Error loc str) ->
+                      Mem.return (Right (U.Error loc str))
+                  | Right (U.Undef loc ubs) ->
+                      Mem.return (Right (U.Undef loc ubs))
+                end
+                *)
             | Nothing ->
                 (* TODO: this is wrong if "not (is_integer ty)" *)
                 match snd (Core_aux.valueFromMemValue mval) with
@@ -841,7 +874,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
 
 
 
-val     printf_aux: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val     printf_aux: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
                     list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let rec printf_aux eval_conv acc fs ty_ptrvals =
   match (fs, ty_ptrvals) with
@@ -878,7 +911,7 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
 
 
 
-val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> either Errors.error (Undefined.t Core.value)) ->
+val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
             list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let printf eval_conv frmt args =
   match parse format frmt with
