@@ -635,9 +635,12 @@ let convert eval_conv prec_opt lm_opt cspec args =
                                 (cont n, args')
                             ))
                         | Nothing ->
-                            error ("WIP: convert --> not a concrete integer: " ^
+                            Mem.return $ Right (U.return (
+                              (String.toCharList (Mem.stringFromInteger_value ival), args')
+                            ))
+                            (*error ("WIP: convert --> not a concrete integer: " ^
                                    stringFromMemValue (fromJust "Output, not a concrete integer" $
-                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))))
+                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival))))) *)
                       end
                   | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
                       Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
