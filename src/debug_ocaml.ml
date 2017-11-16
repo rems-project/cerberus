@@ -46,6 +46,8 @@ let location_to_string loc =
     match loc with
       | Loc_unknown ->
           "unknown location"
+      | Loc_other str ->
+          "other location:'" ^ str ^ "'"
       | Loc_point pos ->
           Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
       | Loc_region (pos1, pos2, _) ->

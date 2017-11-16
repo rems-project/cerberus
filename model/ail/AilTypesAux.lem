@@ -783,8 +783,14 @@ let integer_promotion impl = function
   | Unsigned Int_ ->
       Unsigned Int_
   | Size_t ->
-      (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased types *)
+      (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased type *)
       Size_t
+  | Signed Intptr_t ->
+      (* TODO: this is not standard, but in cerberus we don't treat intptr_t as aliased types *)
+      Signed Intptr_t
+  | Unsigned Intptr_t ->
+      (* TODO: this is not standard, but in cerberus we don't treat uintptr_t as aliased types *)
+      Unsigned Intptr_t
   | ity ->
       if le_integer_rank ity (Signed Int_) then
         if le_integer_range impl ity (Signed Int_) then
@@ -807,7 +813,7 @@ end
 
 val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
 let usual_arithmetic_integer impl ity1 ity2 =
-  (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased types *)
+  (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
   let () = Debug.warn [] (fun () ->
     "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
   ) in
@@ -816,6 +822,20 @@ let usual_arithmetic_integer impl ity1 ity2 =
         Size_t
     | (_, Size_t) ->
         Size_t
+    
+    | (Signed Intptr_t, Unsigned Intptr_t) ->
+        Unsigned Intptr_t
+    | (Signed Intptr_t, _) ->
+        Signed Intptr_t
+    | (Unsigned Intptr_t, Signed Intptr_t) ->
+        Unsigned Intptr_t
+    | (_, Signed Intptr_t) ->
+        Signed Intptr_t
+    | (Unsigned Intptr_t, _) ->
+        Unsigned Intptr_t
+    | (_, Unsigned Intptr_t) ->
+        Unsigned Intptr_t
+
     | _ ->
         let promoted_ity1 = integer_promotion impl ity1 in
         let promoted_ity2 = integer_promotion impl ity2 in
@@ -1201,6 +1221,7 @@ let ~{coq} pointers_to_compatible_types ty1 ty2 =
 (* STD §6.2.5#4, sentence 1 *)
 val is_standard_signed_integer_type: ctype -> bool
 let is_standard_signed_integer_type = function
+(*
   | Basic (Integer (Signed Ichar)) ->
       true
   | Basic (Integer (Signed Short)) ->
@@ -1211,6 +1232,9 @@ let is_standard_signed_integer_type = function
       true
   | Basic (Integer (Signed LongLong)) ->
       true
+*)
+  | Basic (Integer ity) ->
+      is_signed_ity ity
   | _ ->
       false
 end
@@ -1230,6 +1254,7 @@ let is_signed_integer_type ty =
 (* STD §6.2.5#6, sentences 1-2 *)
 val is_standard_unsigned_integer_type: ctype -> bool
 let is_standard_unsigned_integer_type = function
+(*
   | Basic (Integer Bool) ->
       true
   | Basic (Integer (Unsigned Ichar)) ->
@@ -1242,6 +1267,9 @@ let is_standard_unsigned_integer_type = function
       true
   | Basic (Integer (Unsigned LongLong)) ->
       true
+*)
+  | Basic (Integer ity) ->
+      is_unsigned_ity ity
   | _ ->
        false
 end
