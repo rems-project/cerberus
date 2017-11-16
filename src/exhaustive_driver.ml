@@ -48,9 +48,9 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
             "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped stdout ^
             "\", blocked: \"" ^ if isBlocked then "true\"}" else "false\"}"
           end
-      | ND.Killed (ND.Undef0 (_, ubs)) ->
+      | ND.Killed (ND.Undef0 (loc, ubs)) ->
           print_endline begin
-            "Undefined {id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
+            "Undefined [" ^ Location_ocaml.location_to_string loc ^ "]{id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
           end
       | ND.Killed (ND.Error0 (_, str)) ->
           print_endline begin

@@ -21,7 +21,7 @@ let rec simplify_integer_value_base ival_ =
           Right ival_
       | IVconcrete n ->
           Left n
-      | IVaddress alloc_id ->
+      | IVaddress (alloc_id, pref) ->
           Right ival_
       | IVfromptr (ty, ity, ptrval, sh) ->
           (* TODO *)
@@ -55,6 +55,11 @@ let rec simplify_integer_value_base ival_ =
         assert false
     | IVmin ity ->
         begin match ity with
+          (* TMP *)
+          | Unsigned Long
+          | Unsigned Intptr_t
+          | Signed Intptr_t ->
+              Right ival_
           | Char ->
               if Impl.char_is_signed then
                 Left (negate (pow_int (of_int 2) (8-1)))
@@ -78,6 +83,13 @@ let rec simplify_integer_value_base ival_ =
           | IBuiltin _ ->
               failwith "IVmin Enum, Builtin"
         end
+    
+    (* TMP *)
+    | IVmax (Unsigned Long)
+    | IVmax (Unsigned Intptr_t)
+    | IVmax (Signed Intptr_t) ->
+        Right ival_
+    
     | IVmax ity ->
         begin match Impl.sizeof_ity ity with
           | Some n ->

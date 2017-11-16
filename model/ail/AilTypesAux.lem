@@ -807,35 +807,46 @@ end
 
 val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
 let usual_arithmetic_integer impl ity1 ity2 =
-  let promoted_ity1 = integer_promotion impl ity1 in
-  let promoted_ity2 = integer_promotion impl ity2 in
-  if is_signed_ity promoted_ity1 then
-    if is_signed_ity promoted_ity2 then
-      if lt_integer_rank promoted_ity2 promoted_ity1 then
-        promoted_ity1
-      else
-        promoted_ity2
-    else
-      if le_integer_rank promoted_ity1 promoted_ity2 then
-        promoted_ity2
-      else
-        if le_integer_range impl promoted_ity2 promoted_ity1 then
-          promoted_ity1
+  (* TODO: this is not standard, but in cerberus we don't treat size_t as an aliased types *)
+  let () = Debug.warn [] (fun () ->
+    "NON STD: usual_arithmetic_integer ==> if any operand is of type size_t, then the common type is size_t"
+  ) in
+  match (ity1, ity2) with
+    | (Size_t, _) ->
+        Size_t
+    | (_, Size_t) ->
+        Size_t
+    | _ ->
+        let promoted_ity1 = integer_promotion impl ity1 in
+        let promoted_ity2 = integer_promotion impl ity2 in
+        if is_signed_ity promoted_ity1 then
+          if is_signed_ity promoted_ity2 then
+            if lt_integer_rank promoted_ity2 promoted_ity1 then
+              promoted_ity1
+            else
+              promoted_ity2
+          else
+            if le_integer_rank promoted_ity1 promoted_ity2 then
+              promoted_ity2
+            else
+              if le_integer_range impl promoted_ity2 promoted_ity1 then
+                promoted_ity1
+              else
+                make_corresponding_unsigned promoted_ity1
         else
-          make_corresponding_unsigned promoted_ity1
-  else
-    if is_unsigned_ity promoted_ity2 then
-      if lt_integer_rank promoted_ity2 promoted_ity1 then
-        promoted_ity1
-      else
-        promoted_ity2
-    else
-      if le_integer_rank promoted_ity2 promoted_ity1 then
-        promoted_ity1
-      else if le_integer_range impl promoted_ity1 promoted_ity2 then
-        promoted_ity2
-      else
-        make_corresponding_unsigned promoted_ity2
+          if is_unsigned_ity promoted_ity2 then
+            if lt_integer_rank promoted_ity2 promoted_ity1 then
+              promoted_ity1
+            else
+              promoted_ity2
+          else
+            if le_integer_rank promoted_ity2 promoted_ity1 then
+              promoted_ity1
+            else if le_integer_range impl promoted_ity1 promoted_ity2 then
+              promoted_ity2
+            else
+              make_corresponding_unsigned promoted_ity2
+  end
 
 
 (* TODO *)

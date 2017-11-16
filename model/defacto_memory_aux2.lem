@@ -189,7 +189,7 @@ let rec simplify_integer_value_base ival_ =
           Right ival_
       | IVconcrete n ->
           Left n
-      | IVaddress alloc_id ->
+      | IVaddress alloc_id pref ->
           Right ival_
       | IVfromptr ty ity ptrval sh ->
           (* TODO *)

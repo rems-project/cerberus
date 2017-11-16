@@ -284,7 +284,7 @@ let rec print_ctype = function
 
 let print_integer_value_base = function
   | D.IVconcrete bignum -> !^"I.IVconcrete" ^^^ P.parens (print_num bignum)
-  | D.IVaddress alloc_id -> !^"I.IVAddress" ^^^ !^(string_of_int alloc_id)
+  | D.IVaddress (alloc_id, _) -> !^"I.IVAddress" ^^^ !^(string_of_int alloc_id)
   | D.IVmax ait -> !^"I.IVmax" ^^^ P.parens (print_ail_integer_type ait)
   | D.IVmin ait -> !^"I.IVmin" ^^^ P.parens (print_ail_integer_type ait)
   | _  -> !^"I.IVunspecified"

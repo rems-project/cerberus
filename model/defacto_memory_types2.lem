@@ -26,7 +26,7 @@ type provenance =
   | Prov_device
     
     (* in this case we know of at least one allocation event *)
-  | Prov_some of provenance_id (* set provenance_id (* INVARIANT: non empty set *) *)
+  | Prov_some of (provenance_id * Symbol.prefix) (* set provenance_id (* INVARIANT: non empty set *) *)
 
 
 
@@ -73,7 +73,7 @@ and integer_value_base =
   | IVconcurRead of AilTypes.integerType * Symbol.sym (* a fresh symbol from a concurrency-model read *)
       (* the concurrency model is at present limited to reads of integer types, so not pointer types *)
   | IVconcrete of integer 
-  | IVaddress of allocation_id (* address *) (* NOTE: this should never get out of this module *)
+  | IVaddress of allocation_id * Symbol.prefix (* address *) (* NOTE: this should never get out of this module *)
   | IVfromptr of ctype * AilTypes.integerType * pointer_value_base * shift_path
     (* the result of a cast from pointer to integer. The first
        parameter is the referenced type of the pointer value, the

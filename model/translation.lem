@@ -3181,7 +3181,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           (* TODO: qualifiers? *)
           (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
-          let core_create = Caux.pcreate Loc.unknown (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
+          let core_create = Caux.pcreate (Loc.other "global alloc") (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
           E.fresh_symbol >>= fun sym_global ->
           
           E.print_debugM 2 (fun () -> "(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
@@ -3196,7 +3196,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     , Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
                         Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                           (* TODO: proper memory order *)
-                          (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe sym_global)
+                          (Caux.pstore (Loc.other "global init to zero") core_ty (Caux.mk_sym_pe sym_global)
                              (Caux.zeros core_tagDefs (Caux.proj_ctype ty)) Cmm.NA)
                           (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                       ) ) :: gacc
@@ -3233,7 +3233,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                         Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
                          Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                            (* TODO: proper memory order *)
-                           (Caux.pstore Loc.unknown core_ty (Caux.mk_sym_pe sym_global)
+                           (Caux.pstore (Loc.other "global init with value") core_ty (Caux.mk_sym_pe sym_global)
                               core_init_e Cmm.NA)
                            (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                         )

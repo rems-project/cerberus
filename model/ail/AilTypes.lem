@@ -22,7 +22,7 @@ type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
 
 
 (* STD §6.2.5#17, sentence 1 *)
-type integerType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] =
+type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Char
  | Bool
  | Signed of integerBaseType

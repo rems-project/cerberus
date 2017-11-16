@@ -166,7 +166,24 @@ let init_solver () : solver_state =
                               (Expr.mk_app ctx slvSt.ivmaxDecl [var_e]))
    ) in
   
-  Solver.add slvSt.slv [axiom1; axiom2];
+  (* axiom3 ==> forall ity: Ctype, ivmin(ity) <= fromptr(_, ity, _) <= ivmax(ity) *)
+  let axiom3 =
+    let ty_sym = Symbol.mk_string ctx "ty" in
+    let ity_sym = Symbol.mk_string ctx "ity" in
+    let ptr_i_sym = Symbol.mk_string ctx "ptr_i" in
+    let ty_e = Quantifier.mk_bound ctx 2 ctypeSort in
+    let ity_e = Quantifier.mk_bound ctx 1 integerTypeSort in
+    let ptr_i_e = Quantifier.mk_bound ctx 0 intSort in
+    Quantifier.expr_of_quantifier (
+      mk_forall ctx [ty_sym; ity_sym; ptr_i_sym] [ctypeSort; integerTypeSort; intSort]
+        (Boolean.mk_and ctx 
+          [ Arithmetic.mk_le ctx (Expr.mk_app ctx slvSt.ivminDecl [ity_e])
+                                 (Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptr_i_e])
+          ; Arithmetic.mk_le ctx (Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptr_i_e])
+                                 (Expr.mk_app ctx slvSt.ivmaxDecl [ity_e]) ])
+     ) in
+  
+  Solver.add slvSt.slv [axiom1; axiom2; axiom3];
   
   (* If the size of pointer is given specified, we can assert fromptr()
      say within this size *)
@@ -320,7 +337,7 @@ let address_expression_of_pointer_base = function
   | PVfunction sym ->
       failwith  "PVfunction"
   | PVbase (alloc_id, pref) ->
-      IVaddress alloc_id
+      IVaddress (alloc_id, pref)
   | PVfromint ival_ ->
       ival_
 
@@ -333,7 +350,7 @@ let integer_value_base_to_expr slvSt ival_ =
         failwith "Smt.integer_value_base_to_expr: IVconcurRead"
     | IVconcrete n ->
         Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
-    | IVaddress alloc_id ->
+    | IVaddress (alloc_id, _) ->
         Expr.mk_const_s slvSt.ctx ("addr_" ^ string_of_int alloc_id) slvSt.addrSort
     | IVfromptr (ty, ity, ptrval_, sh) ->
         (* the result of a cast from pointer to integer. The first
@@ -343,10 +360,13 @@ let integer_value_base_to_expr slvSt ival_ =
         let ity_e = integerType_to_expr slvSt ity in
         let ptrval_e = (* WIP *) aux (address_expression_of_pointer_base ptrval_) in
         let sh_ival_e = (* WIP *) aux (Defacto_memory2.integer_value_baseFromShift_path sh) in
-        (* TMP SIMPLIFICATION: Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptrval_e] *)
-        prerr_endline "TEMP SIMPL: fromptr i = i";
-        
-        ptrval_e
+        if false then begin
+          (* TMP SIMPLIFICATION*)
+          prerr_endline "TEMP SIMPL: fromptr i = i";
+          ptrval_e
+        end else begin
+          Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; Arithmetic.mk_add slvSt.ctx [ptrval_e; sh_ival_e]]
+        end
     | IVop (iop, [ival_1; ival_2]) ->
         let mk_op = function
           | IntAdd ->

@@ -38,8 +38,8 @@ let pp_provenance = function
       !^ "Prov_none"
   | Prov_device ->
       !^ "Prov_device"
-  | Prov_some id ->
-      !^ "Prov_some" ^^ pp_provenance_id id
+  | Prov_some (id, pref) ->
+      !^ "Prov_some" ^^ pp_provenance_id id ^^ Pp_symbol.pp_prefix pref
 
 
 let rec pp_pointer_value (PV (prov, ptr_val_, sh)) =
@@ -74,8 +74,8 @@ and pp_integer_value_base = function
       !^ "IVunspecified"
   | IVconcrete n ->
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
-  | IVaddress alloc_id ->
-      !^ "IVaddress" ^^ P.parens (!^ (string_of_int alloc_id))
+  | IVaddress (alloc_id, pref) ->
+      !^ "IVaddress" ^^ P.parens (!^ (string_of_int alloc_id) ^^ Pp_symbol.pp_prefix pref)
   | IVfromptr (ty, ity, ptr_val_, sh) ->
       !^ "IVfromptr" ^^ P.parens (
         Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^
@@ -209,10 +209,15 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
              List.iteri (Bytes.set bts) chars;
              Bytes.to_string bts
         end
-    | IVaddress alloc_id ->
-        P.at ^^ !^ (string_of_int alloc_id)
+    | IVaddress (alloc_id, pref) ->
+        P.at ^^ !^ (string_of_int alloc_id) ^^ Pp_symbol.pp_prefix pref
     | IVfromptr (ty, ity, ptr_val_, sh) ->
-        !^ "fromptr" ^^ P.parens (pp_pointer_value_base ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
+        !^ "fromptr" ^^ P.parens (
+          Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^
+          Pp_ail.pp_integerType ity ^^ P.comma ^^^
+          pp_pointer_value_base ptr_val_ ^^ P.comma ^^^
+          pp_shift_path sh
+        )
     | IVop (iop, [ival_1; ival_2]) ->
         P.parens (aux ival_1 ^^^ !^ (string_of_integer_operator iop) ^^^ aux ival_2)
     | IVop _ ->
