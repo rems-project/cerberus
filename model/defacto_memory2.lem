@@ -66,7 +66,7 @@ type impl_mem_state = <|
 |>
 
 let impl_initial_mem_state = <|
-  flags= [];
+  flags= [Allow_disjoint_alloc_tests];
   allocation_id_suppl= UniqueId.new_supply;
   
   allocations= Map.empty;
@@ -1162,75 +1162,86 @@ let impl_eq_ptrval ptr_val1 ptr_val2 =
   print_debugM 6 (fun () -> "Mem.eq_ptrval: " ^ stringFromPointer_value ptr_val1 ^ " vs " ^
                   stringFromPointer_value ptr_val2) >>
   match (ptr_val1, ptr_val2) with
+    | (PV _ (PVnull _) [], PV _ (PVnull _) []) ->
+        (* STD §6.5.9#6 *)
+        return true
+    | (PV _ (PVnull _) sh1, PV _ (PVnull _) sh2) ->
+        if false (* ISO mode *) then
+          (* STD §6.5.9#6 *)
+          (* TODO: check. I guess not UB here, because the UB should have come when shifting the pointer? *)
+          return false
+        else
+          condM "shifted null pointers equality"
+            (mk_iv_constr MC_eq (integer_value_baseFromShift_path sh1)
+                                (integer_value_baseFromShift_path sh2))
+    | (PV _ (PVfunction sym1) [], PV _ (PVfunction sym2) []) ->
+        return (sym1 = sym2)
+    | (PV _ (PVnull _) _, _) ->
+        (* STD §6.5.9#6 *)
+        return false
+    | (_, PV _ (PVnull _) _) ->
+        (* STD §6.5.9#6 *)
+        return false
+    
     | (PV prov1 ptr_val1_ sh1, PV prov2 ptr_val2_ sh2) ->
-        match (ptr_val1_, ptr_val2_) with
-          | (PVnull _, PVnull _) ->
-              (* STD §6.5.9#6 *)
-              return true
-          | (PVfunction sym1, PVfunction sym2) ->
-              return (sym1 = sym2)
-          | (PVnull _, _) ->
-              return false
-          | (_, PVnull _) ->
-              return false
-          | _ ->
-              explicitAllocationIdFromPointer_value_aux ptr_val1_ >>= fun alloc_id1_opt ->
-              explicitAllocationIdFromPointer_value_aux ptr_val2_ >>= fun alloc_id2_opt ->
-              match (alloc_id1_opt, alloc_id2_opt) with
-                | (Just alloc_id1, Just alloc_id2) ->
-                    ifFlag Allow_disjoint_alloc_tests
-                        (* non-STD flag *)
-                        begin
+        let do_honest_equality =
+          address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
+          address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
+          condM "honest pointer equality"
+            (mk_iv_constr MC_eq addr_ival_1 addr_ival_2) in
+        match (prov1, prov2) with
+          | (Prov_some alloc_id1, Prov_some alloc_id2) ->
+              ifFlag Allow_disjoint_alloc_tests
+                (* defacto flag *)
+                begin
+                  if alloc_id1 <> alloc_id2 then
+                    let () = Debug.print_debug 0 [] (fun () -> "HELLO POINTER EQ") in
+                    (* *)
+                    Nondeterminism2.msum "pointer equality (different provenances)"
+                      [ ("true", return true)
+                      ; ("false", return true) ]
+                  else
+                    do_honest_equality
+                end
+                
+                (* STD case *)
+                begin
+                  if alloc_id1 = alloc_id2 then
+                    (* this tests that at least one pointer is to a base object and the two
+                       is to either also to that base object or a beginning subobject *)
+                    if      isEmptyShift sh1 then isBeginningShift sh2
+                    else if isEmptyShift sh2 then isBeginningShift sh1
+                    else
+                      (* the pointers are to a same subobject *)
+                      return (sh1 = sh2)
+                  
+                  else
+                    is_one_past_pointer ptr_val1 >>= function
+                      | true ->
                           address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
                           address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
-                          ifM "eq_ptrval1"
+                          condM "eq_ptrval - left is one past"
                             (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
-                              (* then *)
-                              (wip "then")
-                              (* else *)
-                              (wip "else")
-                        end
-                        
-                        (* STD case *)
-                        begin
-                          if alloc_id1 = alloc_id2 then
-                            (* this tests that at least one pointer is to a base object and the two
-                               is to either also to that base object or a beginning subobject *)
-                            if      isEmptyShift sh1 then isBeginningShift sh2
-                            else if isEmptyShift sh2 then isBeginningShift sh1
-                            else
-                              (* the pointers are to a same subobject *)
-                              return (sh1 = sh2)
-                          
-                          else
-                            is_one_past_pointer ptr_val1 >>= function
-                              | true ->
-                                  address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
-                                  address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
-                                  condM "eq_ptrval - left is one past"
-                                    (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
-                              | false ->
-                                  is_one_past_pointer ptr_val2 >>= function
-                                    | true ->
-                                        address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
-                                        address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
-                                        condM "eq_ptrval - right is one past"
-                                          (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
-                                    | false ->
-                                        return false
-                                  end
-                            end
-                        end
-                | _ ->
-                    error "WIP: Mem.eq_ptrval, not (Just alloc_id1, Just alloc_id2)"
-              end
+                      | false ->
+                          is_one_past_pointer ptr_val2 >>= function
+                            | true ->
+                                address_expression_of_pointer ptr_val1 >>= fun addr_ival_1 ->
+                                address_expression_of_pointer ptr_val2 >>= fun addr_ival_2 ->
+                                condM "eq_ptrval - right is one past"
+                                  (mk_iv_constr MC_eq addr_ival_1 addr_ival_2)
+                            | false ->
+                                return false
+                          end
+                      end
+                end
+(*
+          | (Prov_some alloc_id1, Prov_some alloc_id2) ->
+*)
 
-
-
-
-
+          | _ ->
+              error "WIP: Mem.eq_ptrval, not (Just alloc_id1, Just alloc_id2)"
         end
-  end
+    end
 
 
 let rec silly_sh_eq sh1 sh2 =
