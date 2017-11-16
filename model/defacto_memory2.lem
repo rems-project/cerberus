@@ -2029,7 +2029,7 @@ let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
 
 
 
-val can_access: forall 'a. access_kind -> Loc.t -> impl_pointer_value ->
+val perform_access: forall 'a. access_kind -> Loc.t -> impl_pointer_value ->
   (allocation_id -> impl_memM 'a) ->
   impl_memM 'a ->
   impl_memM 'a
@@ -2044,7 +2044,7 @@ let perform_access accessKind loc ptrval do_normal do_device =
         is_dead alloc_id >>= function
           | true ->
               let () = Debug.print_debug 5 [Debug.DB_memory] (fun () ->
-                "CAN'T STORE : is_dead ==> " ^ stringFromPointer_value ptrval
+                "CAN'T ACCESS : is_dead ==> " ^ stringFromPointer_value ptrval
               ) in
               (* can't store with a pointer to an object whose lifetime ended. *)
               fail (MerrAccess loc accessKind DeadPtr)
@@ -2054,7 +2054,7 @@ let perform_access accessKind loc ptrval do_normal do_device =
               address_expression_of_pointer ptrval >>= fun ptr_ival_  ->
               (* NOTE: the MC_lt in the second constraint, i.e. we can't
                  have a "one past" pointer *)
-              ifM ("can_store[" ^ Loc.stringFromLocation loc ^ "] provenance check")
+              ifM ("perform_access[" ^ Loc.stringFromLocation loc ^ "] provenance check")
                   (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id) ptr_ival_
                            ; mk_iv_constr MC_lt ptr_ival_ (IVop IntAdd [IVaddress alloc_id; size_ival_]) ])
                     (do_normal alloc_id)
@@ -2066,7 +2066,7 @@ let perform_access accessKind loc ptrval do_normal do_device =
         do_device
 
     | (PV Prov_wildcard _ _ as ptrval) ->
-        error "TODO perform_access: PRov_wildcard"
+        error "TODO perform_access: Prov_wildcard"
   end
 
 

@@ -574,9 +574,26 @@ let dot_from_nd_tree t =
         , [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^
            String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"]
         , [] )
-    | Tkilled _ ->
+    | Tkilled r ->
+        let string_of_driver_error = function
+          | Driver.DErr_core_run err ->
+              Pp_errors.string_of_core_run_error err
+          | Driver.DErr_memory err ->
+              Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err
+          | Driver.DErr_concurrency str ->
+              "Concurrency error: " ^ str
+          | Driver.DErr_other str ->
+              str in
+        let str_r = begin match r with
+        | Nondeterminism2.Undef0 (_, ubs) ->
+            "Undefined {id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
+        | Nondeterminism2.Error0 (_, str) ->
+            "Error {msg: " ^ str ^ "}"
+      | Nondeterminism2.Other dr_err ->
+            "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
+        end in
         ( n+1
-        , [string_of_int n ^"[label= \"killed(" ^ string_of_int n ^ ")\"]"]
+        , [string_of_int n ^"[label= \"killed[" ^ string_of_int n ^ "](" ^ str_r ^ ")\"]"]
         , [] )
     | Tnd (debug_str, str_acts) ->
         let (n', str_ns, nodes, edges) =
@@ -589,10 +606,10 @@ let dot_from_nd_tree t =
         , (string_of_int n ^"[label= \"nd(" ^ string_of_int n ^ ")\\n[" ^ debug_str ^ "]\\n" ^
            (*String.escaped (String_core_run.string_of_core_state st.Driver.core_state)*) "ARENA" ^ "\"]") :: nodes
         , (List.map (fun (str, z) -> string_of_int n ^ " -> " ^ string_of_int z ^ "[label= \""^ String.escaped str ^ "\"]") str_ns) @ edges )
-    | Tguard (_, _, act) ->
+    | Tguard (debug_str, _, act) ->
         let (n', nodes, edges) = aux (n+1) act in
         ( n'
-        , (string_of_int n ^"[label= \"guard(" ^ string_of_int n ^ ")\"]") :: nodes
+        , (string_of_int n ^"[label= \"guard(" ^ string_of_int n ^ ")\\n[" ^ debug_str ^ "]\"]") :: nodes
         , (string_of_int n ^ " -> " ^ string_of_int (n+1)) :: edges )
     | Tbranch (debug_str, _, act1, act2) ->
         let (n' , nodes1, edges1) = aux (n+1) act1 in
@@ -726,6 +743,7 @@ let runND_exhaustive m st0 =
           (Killed r, Wip.to_strings (), st') :: acc
       
       | (NDnd (debug_str, str_ms), st') ->
+          tree_so_far := fill_hole_with !tree_so_far (Tnd (debug_str, List.map (fun (str, _) -> (str, Thole)) str_ms));
           if !Debug_ocaml.debug_level >= 1 then begin
             prerr_endline ("NDnd(" ^ debug_str ^ ")[" ^ string_of_int (List.length str_ms) ^ "]");
           end;
