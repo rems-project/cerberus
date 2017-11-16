@@ -712,7 +712,8 @@ let apply_shift_path_element result_ty spe mval =
                (return new_mval)
                
                (* TODO: hack *)
-               (error "Mem.apply_shift_path_element, todo MVdelayed ==> didn't match")
+               (wip ("Mem.apply_shift_path_element, todo MVdelayed ==> didn't match ==> sh: " ^
+                     stringFromShift_path [spe] ^ " -- mval: "^ stringFromMem_value mval))
                (* (return (MVinteger (AilTypes.Unsigned AilTypes.Ichar) (IV Prov_none (IVconcrete 142)))) *)
          | _ ->
              error "Mem.apply_shift_path_element, HELLO KKK"
@@ -1968,22 +1969,16 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
             | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) as spe_ty) byte_ival_] ->
+                MVdelayed [(sh, write_mval)] current_mval
+(*
                 match write_mval with
                   | MVinteger _ write_ival ->
                       MVcomposite [(mk_op_ival_ IntMul byte_ival_ (IVsizeof spe_ty), write_ival)] current_mval
                   | _ ->
                       error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
                 end
-
-                (* TODO: this hacking away *)
-(*
-                match current_mval with
-                  | MVinteger ity (IV prov _) ->
-                      MVinteger ity (IV prov (IVcomposite [write_mval; current_mval]))
-                  | _ ->
-                      error ("TODO: easy_update_mem_value_aux: object repr access; current_mval = " ^ stringFromMem_value current_mval)
-                end
 *)
+
             | _ ->
                 (* *)
 
