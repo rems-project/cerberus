@@ -129,39 +129,35 @@ let add_to_concur_sym_map sym oval concur_sym_map =
         Map.insert sym oval concur_sym_map
   end
 
-
-val     print_eval_conv_aux: Undefined.t (either Core.pexpr Core.value) -> Mem.memM (Undefined.t Core.value)
-let rec print_eval_conv_aux xs = match xs with
-  | Undefined.Defined (Right cval) ->
-      ND.return (Undefined.Defined cval)
-  | Undefined.Defined (Left (Core.Pexpr () (Core.PEconstrained xs))) ->
+val     print_eval_conv_aux: driver_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
+let rec print_eval_conv_aux dr_st pe =
+  match Core_eval.eval_pexpr_aux2 Loc.unknown (Just dr_st.layout_state) dr_st.core_file pe with
+  | Exception.Result (Undefined.Defined (Right cval)) ->
+      ND.return (Right (Undefined.Defined cval))
+  | Exception.Result (Undefined.Defined (Left (Core.Pexpr () (Core.PEconstrained xs)))) ->
       ND.msum "printf_eval_conv" begin
         List.map (fun (cs, pe) ->
             ( "printf_eval_conv_pe_constrained"
-            , ND.addConstraints "printf_eval_conv" cs >> print_eval_conv_aux (Undefined.Defined (Left pe))
+            , ND.addConstraints "printf_eval_conv" cs >> print_eval_conv_aux dr_st pe
             )) xs
         end
-  | Undefined.Defined _ ->
+  | Exception.Result (Undefined.Defined _) ->
       error "print_eval_conv: should be a value or PEconstrained"
-  | Undefined.Undef loc undef ->
-      ND.return (Undefined.Undef loc undef)
-  | Undefined.Error loc err ->
-      ND.return (Undefined.Error loc err)
+  | Exception.Result (Undefined.Undef loc undef) ->
+      ND.return (Right (Undefined.Undef loc undef))
+  | Exception.Result (Undefined.Error loc err) ->
+      ND.return (Right (Undefined.Error loc err))
+  | Exception.Exception err ->
+      ND.return (Left (Loc.unknown, Errors.Core_run_cause err))
 end
 
 val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let printf_eval_conv dr_st cty mval =
   let () = Debug.print_debug 1 [] (fun () -> "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
-  let pe = Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
-            [ Caux.mk_ctype_pe cty; Core.Pexpr() (Core.PEval cval)] in
-  match Core_eval.eval_pexpr_aux2 Loc.unknown (Just dr_st.layout_state) dr_st.core_file pe with
-    | Exception.Result z ->
-        print_eval_conv_aux z >>= fun r -> ND.return (Right r)
-    | Exception.Exception err ->
-        ND.return (Left (Loc.unknown, Errors.Core_run_cause err))
-  end
-
+  print_eval_conv_aux dr_st $
+    Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
+    [ Caux.mk_ctype_pe cty; Core.Pexpr() (Core.PEval cval)]
 
 (* Perform a given number of successive steps of the concurrency model *)
 val     stepConcurrency: nat -> driverM unit
