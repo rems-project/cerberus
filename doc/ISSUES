@@ -1,0 +1,85 @@
+Can we create pointers out of thin air?
+---------------------------------------
+
+struct point2 {
+  int x, y;
+} p;
+
+
+Case 1:
+int *p = 3456789098765432;
+*p = 1;
+
+Is usage of p always undefined? Or, more generally, if one execution of a
+program has undefined behaviour, do all executions have undefined behaviour?
+
+
+Case 2:
+int *px = (int *) ( ((void *) &p) + offsetof(struct point2, x));
+*px = 1;
+
+Is px a valid pointer? It should be but where does it say so in the standard?
+
+
+Does indeterminacy propagate?
+-----------------------------
+
+unsigned char x, y;
+y = x;
+if (y == y)
+  return 0;
+else
+  return -1;
+
+
+unsigned char x;
+x = x;
+if (x == x)
+  return 0;
+else
+  return -1;
+
+Can the programs output -1?
+
+
+What's a volatile union? Is it allowed?
+---------------------------------------
+
+
+Modifying the object representation of an object
+------------------------------------------------
+
+If one extracts a byte (using an unsigned char pointer) from a valid object and
+writes it back again, is the object still valid.
+
+
+
+Pointer comparison:
+- §6 6.5.9: ``Two pointers compare equal if [...]  one is a pointer to one past
+  the end of one array object and the other is a pointer to the start of a
+  different array object that happens to immediately follow the first array
+  object in the address space.``
+
+  Currently, the constraint solving procedures assumes that two pointers with
+  distinct base addresses do not compare equal.
+
+Pointer arithmetic:
+- Pointer overflow.
+- Pointer substraction, ptrdiff_t type.
+
+Symbolic execution:
+- No longer conviced that type conversions between signed and unsigned types
+  are necessary.
+
+Numbers:
+- Nat_num uses machine integers. We need proper integers.
+- Nat_num implements natural numbers. We need integers.
+- Write ZArith lem library.
+
+Solver:
+- "Fast congruence closure" algorithm uses ackermanization. We might be better
+  off using a slower algorithm that doesn't force us to ackermanize on every
+  single comparison.
+
+Alignment:
+- Need "type conversion" before we can do arithmetic on addresses.

@@ -1,0 +1,20 @@
+--- defacto_memoryScript.sml	2016-03-16 15:08:02.000000000 +0000
++++ defacto_memoryScript.sml_new	2016-03-16 15:01:54.000000000 +0000
+@@ -1102,7 +1102,7 @@
+   )))`;
+ 
+ 
+- val structural_equality_pointer_value_defn = Hol_defn "structural_equality_pointer_value" `
++ val structural_equality_pointer_value_defn = Defn.Hol_defns ["structural_equality_pointer_value", "structural_equality_pointer_value_base", "structural_equality_shift_path_element", "structural_equality_shift_path", "structural_equality_integer_value_base"] `
+  (structural_equality_pointer_value (PV prov1 ptr_val_1 sh1) (PV prov2 ptr_val_2 sh2) =     
+ (structural_equality_provenance prov1 prov2
+   /\ structural_equality_pointer_value_base ptr_val_1 ptr_val_2
+@@ -1142,7 +1142,7 @@
+ /\ (structural_equality_integer_value_base _ _ =  
+ (ARB "structural_equality_integer_value_base"))`;
+ 
+-val _ = Lib.with_flag (computeLib.auto_import_definitions, false) Defn.save_defn structural_equality_pointer_value_defn;
++val _ = Lib.with_flag (computeLib.auto_import_definitions, false) (List.map Defn.save_defn) structural_equality_pointer_value_defn;
+ 
+ 
+ 

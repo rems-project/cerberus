@@ -1,0 +1,43 @@
+<h1 id="cerberus">Cerberus</h1>
+<p>C remains central to our computing infrastructure but still lacks a clear and complete semantics. Programmers lack tools to explore the range of behaviours they should expect; compiler development lacks test oracles; and formal verification and analysis must make (explicitly or implicitly) many choices about the specific C they target. The ISO standards for C have been developed over many years but they remain unclear in some important respects, and in some areas there are differences between the properties of C that are relied on by the corpus of systems code in production, the properties that compiler implementers aim to provide, and the properties of C as it is specified in ISO C11.</p>
+<p>The Cerberus project is developing a semantic model for a substantial fragment of C. It has several distinctive features:</p>
+<ul>
+<li>Where the ISO C11 standard is clear and corresponds with practice, Cerberus aims to follow that.</li>
+<li>Where there are differences, chiefly in the <em>memory layout model</em> (the behaviour of pointers, pointer arithmetic, uninitialised values, etc.), we aim to clarify the de facto standards and understand how the ISO standard could be reconciled with them.</li>
+<li>Cerberus precisely defines a range of allowed behaviour, not just that of some specific implementation.</li>
+<li>It is executable, to explore all behaviours or single paths of small test programs.</li>
+<li>It is designed to be integrated with an operational model for C11 concurrency, with a mechanised proof of equivalence to the axiomatic C11 model of Batty et al.</li>
+<li>Its thread-local semantics is factored via an elaboration into a simpler Core language, to make it readable and conceptually and mathematically tractable; the dynamic semantics of Core can be linked with our sequential memory layout model or with that operational concurrency model.</li>
+<li>Its front-end is written from scratch to closely follow the C11 standard, including a parser that follows the C11 standard grammar, and a typechecker.</li>
+</ul>
+<p>This is a step towards a clear, consistent, and unambiguous semantics for C.</p>
+<h2 id="getting-started">Getting Started</h2>
+<p>To use the web version:</p>
+<ul>
+<li><p><strong>Upload</strong>: Upload a C file to be use by Cerberus.</p></li>
+<li><p><strong>Download</strong>: Download a C source file, a Core file, a .dot file represing the execution graph or a log file of executions.</p></li>
+<li><p><strong>View</strong>: Create new tabs, split a pane in two or rearrange the tabs into a single pane.</p></li>
+<li><p><strong>Run</strong>: Execute the C program in <em>random mode</em> or <em>exhaustive mode</em>.</p></li>
+<li><p><strong>Core File</strong>: Create a Core file from the C program. It hightlights the elaboration of every C expression into a Core expression. One can also select the precise expression to see its elaboration.</p></li>
+<li><p><strong>Execution Graph</strong>: Create the execution graph of the program with all possible executions.</p></li>
+<li><p><strong>Help</strong>: Open this help tab.</p></li>
+</ul>
+<h2 id="papers">Papers</h2>
+<ul>
+<li><a href="http://www.cl.cam.ac.uk/~km569/into_the_depths_of_C.pdf">Into the Depths of C: Elaborating the De Facto Standards</a>. Kayvan Memarian, Justus Matthiesen, James Lingard, Kyndylan Nienhuis, David Chisnall, Robert N. M. Watson, and Peter Sewell. In Proc. <a href="http://conf.researchr.org/home/pldi-2016">37th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI'16)</a>. Distinguished paper award.</li>
+</ul>
+<h2 id="people">People</h2>
+<p>Contributors:</p>
+<ul>
+<li>Kayvan Memarian</li>
+<li>Justus Matthiesen</li>
+<li>Kyndylan Nienhuis</li>
+<li>Victor B. F. Gomes</li>
+<li>James Lingard</li>
+<li>David Chisnall</li>
+<li>Robert N. M. Watson</li>
+<li>Peter Sewell</li>
+</ul>
+<p>The current main developers are Kayvan Memarian, Victor Gomes, and Kyndylan Nienhuis. Cerberus originated with Justus Matthiesen's 2010-11 Part II project dissertation and his 2011-12 MPhil dissertation; James Lingard's 2013-14 MPhil dissertation developed a certifying translation validator for simple C programs for the Clang front-end, w.r.t. the Cerberus and Vellvm semantics.</p>
+<h2 id="funding">Funding</h2>
+<p>This work is funded by <a href="http://www.cl.cam.ac.uk/~pes20/rems">REMS: Rigorous Engineering of Mainstream Systems</a>, EPSRC Programme Grant EP/K008528/1, EPSRC grant EP/H005633 (Leadership Fellowship, Sewell), and a Gates Cambridge Scholarship (Nienhuis). This work is also part of the CTSRD projects sponsored by the Defense Advanced Research Projects Agency (DARPA) and the Air Force Research Laboratory (AFRL), under contract FA8750-10-C-0237. The views, opinions, and/or findings contained in this paper are those of the authors and should not be interpreted as representing the official views or policies, either expressed or implied, of the Department of Defense or the U.S. Government.</p>

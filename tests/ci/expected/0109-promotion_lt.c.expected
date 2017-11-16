@@ -1,0 +1,3 @@
+BEGIN EXEC[0]
+Defined {value: "Specified(0)", stdout: "a >= b\na >= b\n", blocked: "false"}
+END EXEC[0]
