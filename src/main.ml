@@ -245,6 +245,12 @@ let backend sym_supply core_file args =
 let pipeline filename args =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
+
+  let module Param_pp_core = Pp_core.Make(struct
+    let show_std = List.mem Annot !!cerb_conf.ppflags
+    let show_location = List.mem Annot !!cerb_conf.ppflags
+    let show_proc_decl = false
+  end) in
   
   let f = Input.file filename in
   begin
@@ -284,15 +290,11 @@ let pipeline filename args =
       Debug_ocaml.warn [] (fun () -> "The normal backend is not actually using the sequentialised Core");
       match (Core_typing.typecheck_program rewritten_core_file) with
         | Exception.Result z ->
-            run_pp filename "core" $ Pp_core.Basic.pp_file (Core_sequentialise.sequentialise_file z);
+            run_pp filename "core" $ Param_pp_core.pp_file (Core_sequentialise.sequentialise_file z);
         | Exception.Exception _ ->
             ();
     end else
-      let module Param_pp_core = Pp_core.Make(struct
-        let show_std = List.mem Annot !!cerb_conf.ppflags
-        let show_location = List.mem Annot !!cerb_conf.ppflags
-        let show_proc_decl = false
-      end) in
+
       run_pp filename "core" $ Param_pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
