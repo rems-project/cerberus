@@ -74,7 +74,7 @@ and integer_value_base =
       (* the concurrency model is at present limited to reads of integer types, so not pointer types *)
   | IVconcrete of integer 
   | IVaddress of allocation_id (* address *) (* NOTE: this should never get out of this module *)
-  | IVfromptr of ctype * AilTypes.integerType * pointer_value_base 
+  | IVfromptr of ctype * AilTypes.integerType * pointer_value_base * shift_path
     (* the result of a cast from pointer to integer. The first
        parameter is the referenced type of the pointer value, the
        second is the integer type *)

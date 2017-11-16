@@ -335,14 +335,18 @@ let integer_value_base_to_expr slvSt ival_ =
         Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
     | IVaddress alloc_id ->
         Expr.mk_const_s slvSt.ctx ("addr_" ^ string_of_int alloc_id) slvSt.addrSort
-    | IVfromptr (ty, ity, ptrval_) ->
+    | IVfromptr (ty, ity, ptrval_, sh) ->
         (* the result of a cast from pointer to integer. The first
            parameter is the referenced type of the pointer value, the
            second is the integer type *)
         let ty_e = ctype_to_expr slvSt ty in
         let ity_e = integerType_to_expr slvSt ity in
         let ptrval_e = (* WIP *) aux (address_expression_of_pointer_base ptrval_) in
-        Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptrval_e]
+        let sh_ival_e = (* WIP *) aux (Defacto_memory2.integer_value_baseFromShift_path sh) in
+        (* TMP SIMPLIFICATION: Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; ptrval_e] *)
+        prerr_endline "TEMP SIMPL: fromptr i = i";
+        
+        ptrval_e
     | IVop (iop, [ival_1; ival_2]) ->
         let mk_op = function
           | IntAdd ->
@@ -811,7 +815,7 @@ let runND_exhaustive m st0 =
                      new_acc (* acc *)
                end
             | Solver.UNSATISFIABLE ->
-                if !Debug_ocaml.debug_level >= 1 then begin
+                if !Debug_ocaml.debug_level >= 2 then begin
                   prerr_endline "NDbranch ==> UNSATISFIABLE";
                   prerr_endline (Z3.Solver.to_string slvSt.slv);
                   prerr_endline "END\n\n";

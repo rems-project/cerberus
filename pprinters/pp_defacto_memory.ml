@@ -76,8 +76,13 @@ and pp_integer_value_base = function
       !^ "IVconcrete" ^^ P.parens (!^ (Nat_big_num.to_string n))
   | IVaddress alloc_id ->
       !^ "IVaddress" ^^ P.parens (!^ (string_of_int alloc_id))
-  | IVfromptr (ty, ity, ptr_val_) ->
-      !^ "IVfromptr" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^ Pp_ail.pp_integerType ity ^^ P.comma ^^^ pp_pointer_value_base ptr_val_)
+  | IVfromptr (ty, ity, ptr_val_, sh) ->
+      !^ "IVfromptr" ^^ P.parens (
+        Pp_core_ctype.pp_ctype ty ^^ P.comma ^^^
+        Pp_ail.pp_integerType ity ^^ P.comma ^^^
+        pp_pointer_value_base ptr_val_ ^^ P.comma ^^^
+        pp_shift_path sh
+      )
   | IVop (iop, ival_s) ->
       !^ "IVop" ^^ P.parens (!^ (string_of_integer_operator iop) ^^ P.comma ^^^ comma_list pp_integer_value_base ival_s)
   | IVmax ity ->
@@ -206,8 +211,8 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
         end
     | IVaddress alloc_id ->
         P.at ^^ !^ (string_of_int alloc_id)
-    | IVfromptr (ty, ity, ptr_val_) ->
-        !^ "fromptr" ^^ P.parens (pp_pointer_value_base ptr_val_)
+    | IVfromptr (ty, ity, ptr_val_, sh) ->
+        !^ "fromptr" ^^ P.parens (pp_pointer_value_base ptr_val_ ^^ P.comma ^^^ pp_shift_path sh)
     | IVop (iop, [ival_1; ival_2]) ->
         P.parens (aux ival_1 ^^^ !^ (string_of_integer_operator iop) ^^^ aux ival_2)
     | IVop _ ->
