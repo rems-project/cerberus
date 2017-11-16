@@ -473,7 +473,6 @@ let location_to_string loc =
     | Loc_region (pos1, pos2, _) ->
         string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
 
-
 let rec pp_expr expr =
   let rec pp is_semi prec (Expr (annot, e)) =
     let prec' = precedence_expr e in

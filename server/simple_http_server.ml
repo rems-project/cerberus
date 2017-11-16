@@ -93,12 +93,14 @@ let loc_range_cmp l1 l2 =
 
 (* Parse location markers: {-#dd:dd-dd:dd:#-} *)
 let parse_loc str =
-  match List.map int_of_string (Str.split (Str.regexp "[{}#:-]+") str) with
-  | [il; ic; fi; fc] ->
-    { init=  mk_loc (il-1, ic-1);
-      final= mk_loc (fi-1, fc-1);
-    }
-  | _ -> raise (Failure "get_c_locs: wrong format")
+  try
+    match List.map int_of_string (Str.split (Str.regexp "[{}#:-]+") str) with
+    | [il; ic; fi; fc] ->
+      Some { init=  mk_loc (il-1, ic-1);
+        final= mk_loc (fi-1, fc-1);
+      }
+    | _ -> None
+  with _ -> None
 
 let json_of_loc l =
   JsonMap [("line", JsonInt l.line); ("ch", JsonInt l.col)]
@@ -126,25 +128,33 @@ let parse_core_locs core =
    * l0     - line of last visited location mark
    * l      - current line
    **)
-  let rec loop (chunks, locs) sp l0 l = function
-    | [] -> (String.concat "" (List.rev chunks), locs)
-    | res::rest -> match res with
-      (* if chunk, add to chunks *)
-      | Str.Text chunk ->
-        loop (chunk::chunks, locs) sp l0 (l+(count_lines chunk)) rest
-      (* if location mark then ... *)
-      | Str.Delim loc  ->
-        (* if end mark then pop last location and save it in locs *)
-        if String.compare loc "{-#ELOC#-}" = 0 then
-          let ((c_loc, l0'), sp') = pop sp in
-            loop (chunks, (c_loc, mk_loc_line_range (l0, l))::locs) sp' l0' l rest
-        (* otherwise push to stack *)
-        else
-          let loc_no_unicode = Str.replace_first (Str.regexp_string "§") "" loc in
-          loop (chunks, locs) (push sp (parse_loc loc_no_unicode, l0)) l l rest
-  in
-  Str.full_split (Str.regexp "{-#[^#§]*#-}") core
-  |> loop ([], []) [] 0 0
+  try
+    let rec loop (chunks, locs) sp l0 l = function
+      | [] -> (String.concat "" (List.rev chunks), locs)
+      | res::rest -> match res with
+        (* if chunk, add to chunks *)
+        | Str.Text chunk ->
+          loop (chunk::chunks, locs) sp l0 (l+(count_lines chunk)) rest
+        (* if location mark then ... *)
+        | Str.Delim loc  ->
+          (* if end mark then pop last location and save it in locs *)
+          if String.compare loc "{-#ELOC#-}" = 0 then
+            match pop sp with
+            | ((Some c_loc, l0'), sp') ->
+              loop (chunks, (c_loc, mk_loc_line_range (l0, l))::locs) sp' l0' l rest
+            | ((None, l0'), sp') ->
+              loop (chunks, locs) sp' l0' l rest
+          else
+            let loc_no_unicode = Str.replace_first (Str.regexp_string "§") "" loc in
+            loop (chunks, locs) (push sp (parse_loc loc_no_unicode, l0)) l l rest
+    in
+    Str.full_split (Str.regexp "{-#[^#§]*#-}") core
+    |> loop ([], []) [] 0 0
+  with
+  | Not_found -> debug "parse_core: Not_found"; (core, [])
+  | Invalid_argument err -> debug ("parse_core: Invalid argument " ^ err); (core, [])
+  | Failure err -> debug ("parse_core: Failure " ^ err); (core, [])
+  | _ -> debug "parse_core: Fatal"; (core, [])
 
 let parse_cabs_locs cabs =
   let rec loop locs l = function
@@ -171,41 +181,41 @@ let json_of_locs locs=
   |> fst
 
 let mk_result file out err =
-  let f = Filename.chop_extension (Filename.basename file) in
-  let (core, locs) = parse_core_locs (load_file (f ^ ".core")) in
-  let sorted_locs  =
-    List.sort (fun ls1 ls2 -> loc_range_cmp (fst ls1) (fst ls2)) locs
-  in
-  let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
-  let result =
-    JsonMap [
-      ("cabs", json_of_file (f ^ ".cabs"));
-      ("ail",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
-      ("ail_ast",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
-      ("core", JsonStr (elim_paragraph_sym core));
-      ("locs", JsonArray (json_of_locs sorted_locs));
-      ("stdout", json_of_file out);
-      ("stderr", json_of_file err);
-    ] |> string_of_json
-  in
-  ignore (Sys.command "rm -f *.{cabs,ail,core}"); (* clean results *)
-  debug err;
-  debug (string_of_json (json_of_file err));
-  result
+  try
+    let f = Filename.chop_extension (Filename.basename file) in
+    let (core, locs) = parse_core_locs (load_file (f ^ ".core")) in
+    let sorted_locs  =
+      List.sort (fun ls1 ls2 -> loc_range_cmp (fst ls1) (fst ls2)) locs
+    in
+    let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
+    let result =
+      JsonMap [
+        ("cabs", json_of_file (f ^ ".cabs"));
+        ("ail",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
+        ("ail_ast",  JsonStr (elim_paragraph_sym (load_file (f ^ ".ail"))));
+        ("core", JsonStr (elim_paragraph_sym core));
+        ("locs", JsonArray (json_of_locs sorted_locs));
+        ("stdout", json_of_file out);
+        ("stderr", json_of_file err);
+      ] |> string_of_json
+    in
+    ignore (Sys.command "rm -f *.{cabs,ail,core}"); (* clean results *)
+    result
+  with _ -> debug "mkresult"; failwith "mk_result"
 
 (* Cerberus interaction *)
 
 let elab_rewrite =
   Printf.sprintf
-    "cerberus --pp=cabs,ail,core --rewrite --pp_flags=annot,fout %s > %s 2> %s"
+    "cerberus --defacto --sequentialise --pp=cabs,ail,core --rewrite --pp_flags=annot,fout %s > %s 2> %s"
 
 let elab =
   Printf.sprintf
-    "cerberus --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
+    "cerberus --defacto --sequentialise --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
 
 let run mode =
   Printf.sprintf
-    "cerberus --exec --batch --mode=%s                    \
+    "cerberus --defacto --sequentialise --exec --batch --rewrite --mode=%s                    \
      --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
   mode
 
@@ -222,12 +232,10 @@ let cerberus f content =
   let out     = Filename.temp_file "out" ".res" in
   let err     = Filename.temp_file "err" ".res" in
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
-  let respond str = (Server.respond_string ~headers) `OK str () in
+  let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
   write_file source content;
-  begin match (exec_command (f source out err)) with
-    | Timeout -> ()
-    | _ -> ()
-  end;
+  if (exec_command (f source out err) = Timeout) then
+      write_file out "Timeout!";
   respond (mk_result source out err)
 
 (* TODO: not being used *)
@@ -296,7 +304,7 @@ let post ~docroot uri path content =
     | "/elab"  -> cerberus elab content
     | "/defacto" -> defacto_tests ()
     | _ -> forbidden path
-  in catch try_with (fun _ -> forbidden path)
+  in catch try_with (fun e -> debug "fatal failure"; forbidden path)
 
 let handler docroot conn req body =
   let _ =
