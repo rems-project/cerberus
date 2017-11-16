@@ -325,10 +325,12 @@ let rec simplify_integer_value_base ival_ =
                                 IVop IntAdd [IVpadding tag_sym ident; acc] ]
                 ) (IVconcrete 0) membrs
               end
+           
+          (* TOOD: move the code from mem_simplify here *)
           | Core_ctype.Union tag_sym ->
-              error "TODO simplify_integer_value: IVsizeof Union"
+              Right ival_ (* error "TODO simplify_integer_value: IVsizeof Union" *)
           | Core_ctype.Builtin str ->
-              error "TODO simplify_integer_value: IVsizeof Builtin"
+              Right ival_ (* error "TODO simplify_integer_value: IVsizeof Builtin" *)
         end
     | IValignof ty ->
         match ty with

@@ -11,6 +11,11 @@ open Either
 open Ocaml_implementation
 
 
+let simple_fromptr =
+  false (* false = fromptr is an uninterpreted function for Z3 + the sizeof/_Alignof of
+           (u)intptr_t and unsigned long are left symbolic *)
+
+
 
 let rec simplify_integer_value_base ival_ =
   let lifted_self x =
@@ -55,23 +60,22 @@ let rec simplify_integer_value_base ival_ =
         assert false
     | IVmin ity ->
         begin match ity with
-          (* TMP *)
-          | Unsigned Long
-          | Unsigned Intptr_t
-          | Signed Intptr_t ->
-              Right ival_
           | Char ->
               if Impl.char_is_signed then
                 Left (negate (pow_int (of_int 2) (8-1)))
               else
                 Left (of_int 0)
           | Bool
-          | Size_t
-          | Unsigned _ ->
+          | Size_t ->
               (* all of these are unsigned *)
               Left (of_int 0)
-          | Ptrdiff_t
-          | Signed _ ->
+          | Unsigned ibty ->
+              if not simple_fromptr && (ibty = Long || ibty = Intptr_t) then
+                Right ival_
+              else
+                (* all of these are unsigned *)
+              Left (of_int 0)
+          | Ptrdiff_t ->
               (* and all of these are signed *)
               begin match Impl.sizeof_ity ity with
                 | Some n ->
@@ -79,19 +83,28 @@ let rec simplify_integer_value_base ival_ =
                 | None ->
                     Right ival_
               end
+
+          | Signed ibty ->
+              if not simple_fromptr && ibty = Intptr_t then
+                  Right ival_
+              else
+                (* and all of these are signed *)
+                begin match Impl.sizeof_ity ity with
+                  | Some n ->
+                      Left (negate (pow_int (of_int 2) (8*n-1)))
+                  | None ->
+                      Right ival_
+                end
           | Enum _
           | IBuiltin _ ->
               failwith "IVmin Enum, Builtin"
         end
     
-    (* TMP *)
-    | IVmax (Unsigned Long)
-    | IVmax (Unsigned Intptr_t)
-    | IVmax (Signed Intptr_t) ->
-        Right ival_
-    
     | IVmax ity ->
-        begin match Impl.sizeof_ity ity with
+        if   not simple_fromptr
+          && (ity = Unsigned Long || ity = Unsigned Intptr_t || ity = Signed Intptr_t) then
+          Right ival_
+        else begin match Impl.sizeof_ity ity with
           | Some n ->
               let signed_max =
                 (sub (pow_int (of_int 2) (8*n-1)) (of_int 1)) in
@@ -121,14 +134,6 @@ let rec simplify_integer_value_base ival_ =
               Right ival_
         end
 
-(*
-        begin match Impl.sizeof_ity ity with
-          | Some n ->
-              Left (sub (pow_int (of_int 2) (8*n-1)) (of_int 1))
-          | None ->
-              Right ival_
-        end
-*)
     | IVsizeof ty ->
         begin match ty with
           | Void0 ->
@@ -139,6 +144,7 @@ let rec simplify_integer_value_base ival_ =
                 | Some n ->
                     Left (of_int n)
                 | None ->
+                    prerr_endline (String_core_ctype.string_of_ctype ty);
                     Right ival_
               end
           | Basic0 (Floating fty) ->
@@ -168,7 +174,30 @@ let rec simplify_integer_value_base ival_ =
                 ) (IVconcrete (of_int 0)) membrs
               end
           | Union0 tag_sym ->
-              failwith "TODO simplify_integer_value: IVsizeof Union"
+              (* TODO: clean *)
+              (* NOTE: the size of a union type is maximum size among its
+                 members PLUS some padding to make it so that the address
+                 just one past the union respect it's own alignment constraint
+                 (i.e. we wan't to be able to have arrays of unions) *)
+              let Tags.UnionDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
+              let (size::sizes) =
+                List.map (fun (memb_ident, ty) ->
+                  match simplify_integer_value_base (IVsizeof ty) with
+                    | Left n ->
+                        n
+                    | Right _ ->
+                        failwith ("all the types used by members of a union type\
+                                   must have their sizeof constraint specified in\
+                                   the implementation. Please specify _Alignof(" ^
+                                  String_core_ctype.string_of_ctype ty)
+                ) membrs in
+              let align =
+                match simplify_integer_value_base (IValignof (Union0 tag_sym)) with
+                  | Left n ->
+                      n in
+              
+              let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
+              Left (add max_size (sub align (integerRem_f max_size align)))
           | Builtin0 str ->
               failwith "TODO simplify_integer_value: IVsizeof Builtin"
         end
@@ -204,7 +233,22 @@ let rec simplify_integer_value_base ival_ =
               (* This is done in Smt, because we need to actually generate constraints *)
               Right ival_
           | Union0 tag_sym ->
-              failwith "TODO simplify_integer_value: IValignof Union"
+              (* NOTE: these two partial patterns are ok by typing of Ail *)
+              let Tags.UnionDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
+              let (n::ns) =
+                List.map (fun (memb_ident, ty) ->
+                  match simplify_integer_value_base (IValignof ty) with
+                    | Left n ->
+                        n
+                    | Right _ ->
+                        failwith ("all the types used by members of a union type\
+                                   must have their alignment constraint specified in\
+                                   the implementation. Please specify _Alignof(" ^
+                                  String_core_ctype.string_of_ctype ty)
+                ) membrs in
+              (* NOTE: the alignment constraint of a union type is the largest
+                 alignment constraint of any of its member *)
+              Left (List.fold_left (fun acc z -> max z acc) n ns)
           | Builtin0 str ->
               failwith "TODO simplify_integer_value: IValignof Builtin"
         end
