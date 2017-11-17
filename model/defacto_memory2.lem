@@ -774,6 +774,9 @@ end
 
 let project_to_lvalue_type lvalue_ty mval =
   match (lvalue_ty, mval) with
+    | (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)), MVinteger (AilTypes.Unsigned AilTypes.Ichar) _) ->
+         return mval
+    
     | (Basic (AilTypes.Integer ((AilTypes.Unsigned AilTypes.Ichar) as uchar_ity)), _) ->
         let mval_prov = match mval with
           | MVinteger _ (IV prov _) ->
