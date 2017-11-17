@@ -19,7 +19,7 @@ let symbolicFromIntegerValue ival =
 
 val integerValueFromMemValue: mem_value -> maybe (AilTypes.integerType * integer_value)
 let integerValueFromMemValue mval =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "integerValueFromMemValue ==> " ^ Mem.stringFromMem_value mval
   ) in
   case_mem_value mval
@@ -69,7 +69,7 @@ let symbolicFromMemValue mval =
 
 val pointerValueFromMemValue: mem_value -> maybe (Core_ctype.ctype * pointer_value)
 let pointerValueFromMemValue mem_val =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   case_mem_value mem_val

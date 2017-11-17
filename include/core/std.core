@@ -233,17 +233,19 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
 
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
 fun wrapI(ty: ctype, n: integer) : integer :=
-{-
+  -- TODO: this is a temporary hack to prune executions with overflow on unsigned types
   if Ivmin(ty) <= n /\ n <= Ivmax(ty) then
     n
   else
--}
+    error(<<<wrapI>>>, Unit)
+{-
     let dlt: integer = Ivmax(ty) - Ivmin(ty) + 1 in
     let r: integer = n rem_f dlt in
     if r <= Ivmax(ty) then
       r
     else
       r - dlt
+-}
 
 
 

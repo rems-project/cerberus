@@ -392,7 +392,7 @@ let integer_value_base_to_expr slvSt ival_ =
     | IVsizeof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
     | IValignof (Core_ctype.Struct0 tag_sym) ->
-        print_endline "BOGUS!!!!";
+        prerr_endline "BOGUS!!!!";
         Arithmetic.Integer.mk_numeral_s slvSt.ctx "8"
     | IValignof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
@@ -422,7 +422,7 @@ let integer_value_base_to_expr slvSt ival_ =
         failwith "TODO Smt: IVcomposite"
     | IVbitwise (ity, bwop) ->
         let is_signed = AilTypesAux.is_signed_ity ity in
-        let size_ity = 64 in
+        let size_ity = 8 (* TODO: should be 64 *) in
         BitVector.mk_bv2int slvSt.ctx begin match bwop with
           | BW_complement ival_ ->
               BitVector.mk_not slvSt.ctx
@@ -594,7 +594,8 @@ let dot_from_nd_tree t =
     | Tactive (_, st) ->
         ( n+1
         , [string_of_int n ^"[label= \"active(" ^ string_of_int n ^ ")\n" ^
-           String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\"]"]
+           String.escaped (String_core_run.string_of_core_state st.Driver.core_state) ^ "\n" ^
+           String.escaped (String.concat "\n" (Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout))) ^ "\"; style=\"filled\"; fillcolor=\"darkgreen\"; fontcolor=\"white\"]"]
         , [] )
     | Tkilled r ->
         let string_of_driver_error = function
@@ -615,7 +616,7 @@ let dot_from_nd_tree t =
             "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
         end in
         ( n+1
-        , [string_of_int n ^"[label= \"killed[" ^ string_of_int n ^ "](" ^ str_r ^ ")\"]"]
+        , [string_of_int n ^"[label= \"killed[" ^ string_of_int n ^ "](" ^ str_r ^ ")\"; style=\"filled\"; fillcolor=\"red\"; fontcolor=\"white\"]"]
         , [] )
     | Tnd (debug_str, str_acts) ->
         let (n', str_ns, nodes, edges) =
@@ -738,7 +739,7 @@ let runND_exhaustive m st0 =
     let _ = Unix.system "dot -Tpdf graph.dot > graph.pdf" in
     match m_act st with
       | (NDactive a, st') ->
-          tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st'));
+(*          tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st')); *)
           if !Debug_ocaml.debug_level >= 1 then begin
             prerr_endline "NDactive";
             prerr_endline (Solver.to_string slvSt.slv);
@@ -747,13 +748,13 @@ let runND_exhaustive m st0 =
           begin match check_sat slvSt.slv [] with
             | Solver.UNKNOWN ->
                 prerr_endline "STILL UNKNOWN";
+                (Active a, Wip.to_strings (), st') :: acc
             | Solver.UNSATISFIABLE ->
                 failwith "NDactive found to be UNSATISFIABLE";
             | Solver.SATISFIABLE ->
-                ()
-          end;
-(*          (Active (a, Solver.to_string slvSt.slv), st') :: acc *)
-          (Active a, Wip.to_strings (), st') :: acc
+                tree_so_far := fill_hole_with !tree_so_far (Tactive (a, st'));
+                (Active a, Wip.to_strings (), st') :: acc
+          end
       
       | (NDkilled r, st') ->
           tree_so_far := fill_hole_with !tree_so_far (Tkilled r);
@@ -803,7 +804,7 @@ let runND_exhaustive m st0 =
 
             | Solver.UNKNOWN ->
                 if !Debug_ocaml.debug_level >= 1 then begin
-                  prerr_endline "TIMEOUT in NDguard";
+                  prerr_endline "UNKNOWN in NDguard";
                 end;
                 aux acc m_act st'
 
