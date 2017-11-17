@@ -261,7 +261,8 @@ let rec simplify_integer_value_base ival_ =
         Right ival_
 
     | IVbyteof (ival_, mval) ->
-        failwith (String_mem.string_of_mem_value mval)
+        failwith ("Mem_simplify, IVbyteof ==> " ^
+                  String_defacto_memory.string_of_integer_value (IV (Prov_none, ival_)) ^ " -- " ^ String_mem.string_of_mem_value mval)
         
     | IVcomposite _ ->
         failwith "simplify_integer_value: IVcomposite"
