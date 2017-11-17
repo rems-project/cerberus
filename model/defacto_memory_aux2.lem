@@ -375,7 +375,7 @@ let rec simplify_integer_value_base ival_ =
         Right ival_
 
     | IVbyteof _ _ ->
-        error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVbyteof"
+        Right ival_ (* error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVbyteof" *)
     | IVcomposite _ ->
         error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVcomposite"
     | IVbitwise ity (BW_complement ival_1) ->

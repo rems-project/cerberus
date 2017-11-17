@@ -758,12 +758,38 @@ let apply_shift_path_element lvalue_ty spe mval =
   end
 
 
+(*
+let mk_byteof ival_ = function
+  | MVinteger _ (IV _ IVunspecified) ->
+      IV 
+  | MVfloating of AilTypes.floatingType * impl_floating_value
+  | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
+  | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
+  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
+  
+  | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value
+end
+*)
 
 let project_to_lvalue_type lvalue_ty mval =
   match (lvalue_ty, mval) with
+    | (Basic (AilTypes.Integer ((AilTypes.Unsigned AilTypes.Ichar) as uchar_ity)), _) ->
+        let mval_prov = match mval with
+          | MVinteger _ (IV prov _) ->
+              prov
+          | MVpointer _ (PV prov _ _) ->
+              prov
+          | _ ->
+              Prov_none
+        end in
+        return (MVinteger uchar_ity (IV mval_prov (IVbyteof (IVconcrete 0) mval)))
+    
     | (Basic (AilTypes.Integer lvalue_ity), MVinteger mval_ity ival) ->
         if lvalue_ity = mval_ity then
           return mval
+        
+        (* TODO: check that we really allow arbitrary bytes accesses like this *)
         else match Implementation_.sizeof_ity lvalue_ity with
           | Nothing ->
               error "WIP: project_to_lvalue_type"
@@ -775,25 +801,71 @@ let project_to_lvalue_type lvalue_ty mval =
               ) in
               return (MVinteger lvalue_ity (IV Prov_none(*TODO*) ival_'))
         end
+    
+    | (Basic (AilTypes.Floating lvalue_fty), MVfloating mval_fty fval) ->
+        error "WIP: project_to_lvalue_type floating"
+    
+    | (Pointer _ lvalue_ref_ty, MVpointer mval_ref_ty (PV prov _ _)) ->
+        if lvalue_ref_ty = mval_ref_ty then
+          return mval
+        else
+          error "project_to_lvalue_type: Pointer vs MVpointer, with different referenced types"
+
+    | (_, MVarray mvals) ->
+        (* TODO: I guess that's not allowed *)
+        error "WIP: project_to_lvalue_type MVarray"
+        
+    | (Struct lvalue_tag_sym, MVstruct mval_tag_sym _) ->
+        if lvalue_tag_sym = mval_tag_sym then
+          return mval
+        else
+          error "project_to_lvalue_type: Struct vs MVstruct with non-equal tags"
+        
+    | (Union lvalue_tag_sym, MVunion mval_tag_sym memb_ident _) ->
+        if lvalue_tag_sym = mval_tag_sym then
+          return mval
+        else
+          error "project_to_lvalue_type: Union vs MVunion with non-equal tags"
+    
+    | (_, MVunion mval_tag memb_ident memb_mval) ->
+        (* TODO: this implementing that casting a pointer to a union, to
+           a pointer to one of it's member *)
+          let Core_ctype.UnionDef tagDef = Core_ctype_aux.get_membersDefs mval_tag in
+          match List.lookup memb_ident tagDef with
+            | Nothing ->
+                error "project_to_lvalue_type, MVunion was ill-typed (wrong member_ident)"
+            | Just memb_ty ->
+                if lvalue_ty = memb_ty then
+                  return memb_mval
+                else
+                  error "TODO: project_to_lvalue_type, union punning"
+          end
+
     | _ ->
         (* TODO *)
-        return mval
+        (* return mval *)
+        let () = Debug.print_debug 0 [] (fun () ->
+          "lvalue_ty  ===> " ^ stringFromCore_ctype lvalue_ty ^ 
+          "\nmval ===> " ^ stringFromMem_value mval
+        ) in
+        error "TODO: project_to_lvalue_type"
   end
 
 
 let apply_shift_path lvalue_ty sh mval =
   match sh with
     | [] ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "Mem.apply_shift_path, sh == []  ===> " ^
           stringFromMem_value mval
         ) in
-        return mval
+        project_to_lvalue_type lvalue_ty mval
     | _ ->
       (* foldl *)
       foldM (fun acc spe ->
         apply_shift_path_element lvalue_ty spe acc
-      ) mval sh
+      ) mval sh (* >>=
+        project_to_lvalue_type lvalue *)
   end
 
 
@@ -1420,15 +1492,15 @@ let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
                     (* NOTE: the result of subtraction of two pointer values is an integer value with
                        empty provenance, irrespective of the operand provenances *)
                   (return (IV Prov_none (IVptrdiff ty (ptr_val_1, sh1) (ptr_val_2, sh2))))
-                  (print_debugM 0 (fun () -> "MerrPtrdiff 1") >> fail MerrPtrdiff)
+                  (print_debugM 1 (fun () -> "MerrPtrdiff 1") >> fail MerrPtrdiff)
             | Storage_dynamic _ _ _ ->
                 error "Mem.impl_diff_ptrval, Storage_dynamic"
           end
         else
-          print_debugM 0 (fun () -> "MerrPtrdiff 2 ==> alloc_id1=" ^ show alloc_id1 ^ "; alloc_id2= " ^ show alloc_id2) >>
+          print_debugM 1 (fun () -> "MerrPtrdiff 2 ==> alloc_id1=" ^ show alloc_id1 ^ "; alloc_id2= " ^ show alloc_id2) >>
           fail MerrPtrdiff
     | _ ->
-        print_debugM 0 (fun () -> "MerrPtrdiff 3") >> fail MerrPtrdiff
+        print_debugM 1 (fun () -> "MerrPtrdiff 3") >> fail MerrPtrdiff
   end
 
 
@@ -1996,11 +2068,22 @@ let () = Debug.print_debug 1 [] (fun () ->
 
 
 
+
+let rec find_array_index size i ival_ =
+  if i >= size then
+    (fail (MerrOther "find_array_index failed"))
+  else
+    ifM "find_array_index"
+      (mk_iv_constr MC_eq ival_ (IVconcrete (integerFromNat i)))
+        (return i)
+        (find_array_index size (i+1) ival_)
+
+
 (* TODO: bug HOL -- "failure in internal translation to tupled format" *)
 (* TODO: with temporary simplification *)
 val easy_update_mem_value_aux:
   Loc.t -> bool -> ctype -> shift_path -> impl_mem_value -> impl_mem_value ->
-  impl_mem_value
+  impl_memM impl_mem_value
 let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval =
   let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
     "ENTERING: easy_update_mem_value_aux\n" ^
@@ -2011,7 +2094,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
   match (current_mval, sh) with
     | (_, []) ->
         (* SIMPLIFICATION: we assume that the footprint of the new value covers all of the old value *)
-        write_mval
+        return write_mval
     | (MVarray mvals, SPE_array elem_ty ival_ :: sh') ->
         match Maybe.map natFromInteger (eval_integer_value_base ival_) with
           | Just n ->
@@ -2019,24 +2102,30 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                 let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
                   "EXITING: easy_update_mem_value_aux, MVarray"
                 ) in
-                MVarray (List.update mvals n (easy_update_mem_value_aux write_ty sh' write_mval
-                           (fromJust "Defacto_memory.easy_update_mem_value_aux" $ List.index mvals n)))
+                let Just at_n_mval = List.index mvals n in
+                easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
+                return (MVarray (List.update mvals n at_n_mval'))
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
                 error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
           | Nothing ->
-              MVdelayed [(sh, write_mval)] current_mval
-(*
-              error "WIP: easy_update_mem_value_aux ==> symbolic SPE_array"
-*)
+              find_array_index (List.length mvals) 0 ival_ >>= fun n ->
+                let Just at_n_mval = List.index mvals n in
+                easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
+                return (MVarray (List.update mvals n at_n_mval'))
+
         end
     | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
         if tag_sym <> tag_sym_ then
           error "WIP[easy_update_mem_value_aux]: TODO error message ===> struct value accessed with incompatible SPE"
         else
           let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVstruct") in
-          MVstruct tag_sym (assoc_adjust (easy_update_mem_value_aux write_ty sh' write_mval) memb_ident xs)
-
+          MVstruct tag_sym <$>
+            mapM (fun (ident, memb_mval) ->
+              easy_update_mem_value_aux write_ty sh' write_mval memb_mval >>= fun memb_mval ->
+              return (ident, memb_mval)
+            ) xs
+    
     | (MVunion tag_sym old_memb_ident old_memb_mval, SPE_member tag_sym_ new_memb_ident :: sh') ->
         if tag_sym <> tag_sym_ then
           error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored \
@@ -2048,7 +2137,8 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                 error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored with \
                        incompatible SPE_member memb_ident"
             | Just _ ->
-                MVunion tag_sym new_memb_ident (easy_update_mem_value_aux write_ty sh' write_mval old_memb_mval)
+                easy_update_mem_value_aux write_ty sh' write_mval old_memb_mval >>= fun new_memb_mval ->
+                return (MVunion tag_sym new_memb_ident new_memb_mval)
           end
     
     | _ ->
@@ -2056,14 +2146,14 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
           match sh with
             | SPE_member tag_sym memb_ident :: sh' ->
                 let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
-                MVstruct tag_sym (
-                  List.map (fun (ident, ty) ->
-                    (ident, if ident = memb_ident then
-                      easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty)
+                MVstruct tag_sym <$>
+                  mapM (fun (ident, ty) ->
+                    if ident = memb_ident then
+                      easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty) >>= fun mval' ->
+                      return (ident, mval')
                     else
-                      mkUnspec ty)
+                      return (ident, mkUnspec ty)
                   ) xs
-                )
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
@@ -2071,7 +2161,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
             | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) as spe_ty) byte_ival_] ->
-                MVdelayed [(sh, write_mval)] current_mval
+                return (MVdelayed [(sh, write_mval)] current_mval)
 (*
                 match write_mval with
                   | MVinteger _ write_ival ->
@@ -2099,16 +2189,16 @@ declare hol target_rep function easy_update_mem_value_aux =
                                 `tags$easy_update_mem_value_aux`
 
 
-val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_mem_value
+val easy_update_mem_value: bool -> write_event -> impl_mem_value -> impl_memM impl_mem_value
 let easy_update_mem_value is_strong (WriteEvent loc write_ty (PV prov ptr_val_ sh as ptr_val) write_mval) current_mval =
   (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
     "easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
   ) in
-  let ret = easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval in
+  easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_mval >>= fun ret ->
   (*DEBUG*)let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
     "DONE WITH easy_update_mem_value: ptrval=" ^ stringFromPointer_value ptr_val ^ ", mval= " ^ stringFromMem_value write_mval
   ) in
-  ret
+  return ret
 
 
 
@@ -2118,7 +2208,6 @@ val register_write_event: allocation_id -> write_event -> impl_memM unit
 let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
   (*DEBUG*)print_debugM 5 (fun () -> "REGISTER_WRITE_EVENT: " ^ stringFromMem_value mval) >>
   get >>= fun st ->
-  put <| st with allocations=
     match Map.lookup alloc_id st.allocations with
       | Just (Storage_static pref obj_ty current) ->
           let is_strong = false in
@@ -2128,16 +2217,19 @@ let register_write_event alloc_id (WriteEvent loc _ _ mval as w) =
             | Nothing ->
                 mkUnspec obj_ty
           end in
-          Map.insert alloc_id (Storage_static pref obj_ty (Just (easy_update_mem_value is_strong w current_mval))) st.allocations
-     
+          easy_update_mem_value is_strong w current_mval >>= fun new_mval ->
+          put <| st with allocations=
+            Map.insert alloc_id (Storage_static pref obj_ty (Just new_mval)) st.allocations
+          |>
      | Just (Storage_dynamic pref size_ival_ ws) ->
          (* TODO: check that the write offset is within range? *)
-         Map.insert alloc_id (Storage_dynamic pref size_ival_ (w :: ws)) st.allocations
+         put <| st with allocations=
+           Map.insert alloc_id (Storage_dynamic pref size_ival_ (w :: ws)) st.allocations
+          |>
      
      | Nothing ->
          error "Mem.register_write_event, Nothing"
-    end
-  |> >>
+    end >>
  print_debugM 5 (fun () -> "EXITING register_write_event")
 
 
@@ -2280,11 +2372,11 @@ let impl_load loc lvalue_ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footpr
             return (FP_alloc alloc_id lvalue_ty, mkUnspec lvalue_ty)
         | Storage_dynamic _ _ ws ->
             (* loading from dynamic memory *)
-            print_debugM 0 (fun () ->
+            print_debugM 1 (fun () ->
               "Loading from dynamic storage, found " ^ show (List.length ws) ^ " write events"
             ) >>
             discardOccluded_write_events ptrval lvalue_ty ws >>= fun visible_ws ->
-            print_debugM 0 (fun () ->
+            print_debugM 1 (fun () ->
               "found " ^ show (List.length visible_ws) ^ " visible write events"
             ) >>
             wip "TODO: loading from dynamic memory"

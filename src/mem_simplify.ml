@@ -260,9 +260,11 @@ let rec simplify_integer_value_base ival_ =
         (* TODO: check *)
         Right ival_
 
-    | IVbyteof _
+    | IVbyteof (ival_, mval) ->
+        failwith (String_mem.string_of_mem_value mval)
+        
     | IVcomposite _ ->
-        failwith "simplify_integer_value: IVbyteof, IVcomposite"
+        failwith "simplify_integer_value: IVcomposite"
     | IVbitwise (ity, BW_complement ival_1) ->
         begin match (Impl.sizeof_ity ity, simplify_integer_value_base ival_1) with
           | (Some width, Left n1) ->
