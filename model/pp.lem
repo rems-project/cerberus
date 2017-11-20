@@ -1,7 +1,7 @@
 import Symbol
 import AilSyntax AilTypes GenTypes
 import Core Core_ctype
-import Cmm_op Symbolic (* DEBUG *)
+import Cmm_op (* DEBUG *)
 
 val stringFromSymbol_prefix: Symbol.prefix -> string
 
@@ -82,12 +82,8 @@ declare hol target_rep function pretty_stringFromMem_mem_value = `pp_mem$pp_mem_
 
 (* DEBUG *)
 val stringFromCmm_op_symState: Cmm_op.symState -> string
-val stringFromSymbolic: Symbolic.symbolic Core.object_value Mem.pointer_value -> string
-
 declare ocaml target_rep function stringFromCmm_op_symState = `Pp_cmm.string_of_exeState`
-declare ocaml target_rep function stringFromSymbolic = `Pp_cmm.pp_constraints_symbolic`
-
-declare hol target_rep function stringFromCmm_op_symState = `util$emptyString`
+declare hol   target_rep function stringFromCmm_op_symState = `util$emptyString`
 
 
 (*
