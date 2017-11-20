@@ -4,7 +4,7 @@ import Num_extra Set_helpers (* fold *) Map_extra
 
 open import Utils Enum
 
-import Symbolic Cthread Cabs AilTypes Dlist Loc Float
+import Cthread Cabs AilTypes Dlist Loc Float
 
 open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype
 import Core_ctype_aux

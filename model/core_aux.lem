@@ -1,6 +1,6 @@
 open import Pervasives Utils Show Core Core_ctype
 import AilSyntax AilTypes
-import Product Symbolic Exception Mem Mem_aux
+import Product Exception Mem Mem_aux
 
 open import Cthread Errors
 

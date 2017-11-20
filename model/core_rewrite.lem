@@ -1,7 +1,7 @@
 open import Pervasives
 
 open import Utils Core Core_aux Core_ctype
-import Symbol Symbolic AilTypes Mem
+import Symbol AilTypes Mem
 
 import Pp
 

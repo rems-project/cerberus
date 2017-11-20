@@ -1,7 +1,7 @@
 open import Pervasives Utils
 open import Mem
 
-import Symbolic AilTypes Core_ctype
+import AilTypes Core_ctype
 
 
 val integerFromIntegerValue: integer_value -> maybe integer
@@ -46,9 +46,11 @@ let unspecifiedFromMemValue mval =
     (fun _ _ _ -> Nothing)
 *)
 
+(*
 val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
 let symbolicFromMemValue mval =
   error "symbolicFromMemValue"
+*)
 (*
 let symbolicFromMemValue mval =
 (*

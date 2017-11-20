@@ -1,6 +1,6 @@
 (* Concrete types and functions common to all memory layout models *)
 open import Pervasives
-import Symbolic Loc
+import Loc
 import Undefined
 
 open import Nondeterminism2

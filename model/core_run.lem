@@ -2,7 +2,7 @@
 open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra
 import Set_extra (* Set_helpers *)
 import State Loc
-import Exception Errors Undefined Exception_undefined State_exception_undefined Symbolic
+import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax AilTypes AilTypesAux
 import Dlist
@@ -1150,7 +1150,7 @@ end
                  Step_constrained to do the branching *)
               Step_eval "Esseq" (
                 let () = Debug.print_debug 1 [] (fun () ->
-                  Pp.stringFromCore_pexpr pe1
+                  "Step_eval Esseq ==> pe1: " ^ Pp.stringFromCore_pexpr pe1
                 ) in
                 E.eval_pexpr2 th_st.current_loc mem_st file pe1 >>= function
                   | Left pe1' ->

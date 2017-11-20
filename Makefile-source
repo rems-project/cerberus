@@ -112,7 +112,6 @@ CERBERUS_LEM_FLAT_SOURCES=\
   $(SOURCE_cabs) \
   $(SOURCE_ail) \
   $(SOURCE_core_ctype) \
-  symbolic.lem \
   $(SOURCE_defacto) \
   $(FLAT_SOURCE_concurrency_interface) \
   $(SOURCE_core) \
@@ -133,11 +132,8 @@ CERBERUS_LEM_SOURCES=\
   output.lem \
   pp.lem \
   implementation_.lem \
-  symbolic.lem \
   $(SOURCE_defacto) \
   $(SOURCE_utils) \
-  constraints.lem \
-  nondeterminism.lem \
   nondeterminism2.lem \
   $(SOURCE_concurrency_interface) \
   $(SOURCE_core) \

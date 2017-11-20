@@ -39,7 +39,7 @@ open import {hol} `ppTheory`
 
 
 import Global
-import Constraints (* TODO remove *)
+
 
 
 (* DEBUG *)
@@ -270,6 +270,7 @@ let number_of_uncommitted concur_st =
   Set.size concur_st.Cmm_op.symPre.Cmm.actions - List.length concur_st.Cmm_op.symCommitted
 
 
+(*
 let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
   match ival_ with
   | Defacto_memory_types2.IVconcurRead _ sym ->
@@ -277,6 +278,7 @@ let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
   | _ ->
       Symbolic.SYMBconst (Core.OVinteger ival)
   end
+*)
 
 
 (* For a given thread, perform all possible step that are not action requests *)
@@ -846,10 +848,10 @@ let rec hack mem_st core_file concur_sym_map pexpr =
 *)
 end
 
+(*
 
 let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraints symbs) =
   Constraints.Constraints $ List.map (function
-(*
     | Symbolic.SYMBop op symb1 symb2 ->
         error "WIP Driver.finalize_constraints"
 *)
@@ -875,10 +877,10 @@ let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraint
           | (cval1, cval2) ->
               error ("Driver.finalize_constraints ==> " ^ stringFromValue cval1 ^ " <-> " ^ stringFromValue cval2)
         end
-*)
     | symb ->
         symb
   end) symbs
+*)
 
 
 
