@@ -7,7 +7,7 @@ open import Core_ctype
 import Core_ctype_aux
 import Implementation_
 
-open import Mem_common Defacto_memory_types2
+open import Mem_common Defacto_memory_types
 
 
 

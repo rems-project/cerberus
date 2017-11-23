@@ -8,8 +8,8 @@ open import{hol} `pp_coreTheory`
 
 import Debug Pp
 
-import Nondeterminism2
-module ND = Nondeterminism2
+import Nondeterminism
+module ND = Nondeterminism
 
 
 val strip: forall 'ty 'sym. generic_pexpr 'ty 'sym -> pexpr_ 'ty 'sym

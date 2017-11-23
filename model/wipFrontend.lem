@@ -21,11 +21,8 @@ module TranslateEff = Translation_effect
 
 (* Core evaluation *)
 import Core_run Core_run_aux Driver
-import Nondeterminism2
-module ND = Nondeterminism2
-
-(* Memory model *)
-(* import Mem_aux *)
+import Nondeterminism
+module ND = Nondeterminism
 
 
 val runND_proxy:

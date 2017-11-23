@@ -1,4 +1,4 @@
-open Defacto_memory_types2
+open Defacto_memory_types
 open Mem
 open Mem_common
 
@@ -269,7 +269,7 @@ let rec simplify_integer_value_base ival_ =
     | IVbitwise (ity, BW_complement ival_1) ->
         begin match (Impl.sizeof_ity ity, simplify_integer_value_base ival_1) with
           | (Some width, Left n1) ->
-              Left (Defacto_memory_aux2.tmp_compl width n1)
+              Left (Defacto_memory_aux.tmp_compl width n1)
           | (_, x) ->
               let f = either_case (fun z -> IVconcrete z) (fun z -> z) in
               Right (IVbitwise (ity, BW_complement (f x)))

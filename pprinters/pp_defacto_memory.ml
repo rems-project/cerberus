@@ -1,4 +1,4 @@
-open Defacto_memory_types2
+open Defacto_memory_types
 open Pp_prelude
 
 (* Use this to pprint things not yet recognised by the Core parser *)
