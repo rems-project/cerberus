@@ -3,7 +3,7 @@ open import Pervasives
 import Loc
 import Undefined
 
-open import Nondeterminism2
+open import Nondeterminism
 
 
 

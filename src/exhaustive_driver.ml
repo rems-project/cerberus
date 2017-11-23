@@ -3,7 +3,7 @@ open Core
 
 open Pp_run
 
-module ND  = Nondeterminism2
+module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
 let (>>=) = SEU.stExceptUndef_bind

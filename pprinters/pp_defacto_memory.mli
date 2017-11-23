@@ -1,4 +1,4 @@
-open Defacto_memory_types2
+open Defacto_memory_types
 
 val pp_pointer_value: impl_pointer_value -> PPrint.document
 val pp_integer_value: impl_integer_value -> PPrint.document

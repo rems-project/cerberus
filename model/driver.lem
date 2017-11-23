@@ -12,7 +12,7 @@ import Core_eval Core_run
 
 
 import Translation_aux
-import Enum State_exception_undefined Exception Undefined Nondeterminism2 Dlist
+import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 
 import AilSyntax AilTypes
@@ -33,7 +33,7 @@ module U = Undefined
 
 
 module SEU = State_exception_undefined
-module ND  = Nondeterminism2
+module ND  = Nondeterminism
 
 open import {hol} `ppTheory`
 
@@ -1041,8 +1041,7 @@ let driver_globals with_concurrency sym_supply file =
 val pp_exeState: Cmm_op.symState -> string
 declare ocaml target_rep function pp_exeState = `Pp_cmm.pp_execState`
 
-
-open Defacto_memory_types2
+(*
 let rec process_integer_value_base sym_assoc = function
   | (IVconcurRead _ sym as ival_) ->
       match Map.lookup sym sym_assoc with
@@ -1088,7 +1087,7 @@ let rec process_objet_value sym_assoc = function
   | cval ->
       cval
 end
-
+*)
 
 
 

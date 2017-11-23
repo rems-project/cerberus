@@ -6,7 +6,7 @@ open import Utils Enum
 
 import Cthread Cabs AilTypes Dlist Loc Float
 
-open import Mem_common Defacto_memory_aux2 Defacto_memory_types2 Core_ctype
+open import Mem_common Defacto_memory_aux Defacto_memory_types Core_ctype
 import Core_ctype_aux
 
 open import {hol} `utilTheory` `tagsTheory`
@@ -79,7 +79,7 @@ let impl_initial_mem_state = <|
 
 
 (* BEGIN effect ================================================================================= *)
-open import Nondeterminism2
+open import Nondeterminism
 type impl_memM 'a =
   ndM 'a mem_error (mem_constraint impl_integer_value) impl_mem_state
 
@@ -1343,7 +1343,7 @@ let impl_eq_ptrval ptr_val1 ptr_val2 =
                 (* defacto flag *)
                 begin
                   if alloc_id1 <> alloc_id2 then
-                    Nondeterminism2.msum "pointer equality (different provenances)"
+                    Nondeterminism.msum "pointer equality (different provenances)"
                       [ ("true", return true)
                       ; ("false", return false) ]
                   else

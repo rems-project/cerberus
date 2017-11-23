@@ -1,4 +1,4 @@
-open Defacto_memory_types2
+open Defacto_memory_types
 open Mem_common
 
 open State
@@ -359,7 +359,7 @@ let integer_value_base_to_expr slvSt ival_ =
         let ty_e = ctype_to_expr slvSt ty in
         let ity_e = integerType_to_expr slvSt ity in
         let ptrval_e = (* WIP *) aux (Mem_simplify.lifted_simplify_integer_value_base (address_expression_of_pointer_base ptrval_)) in
-        let sh_ival_e = (* WIP *) aux (Mem_simplify.lifted_simplify_integer_value_base (Defacto_memory2.integer_value_baseFromShift_path sh)) in
+        let sh_ival_e = (* WIP *) aux (Mem_simplify.lifted_simplify_integer_value_base (Defacto_memory.integer_value_baseFromShift_path sh)) in
         if Mem_simplify.simple_fromptr then begin
           Arithmetic.mk_add slvSt.ctx [ptrval_e; sh_ival_e]
         end else begin
@@ -402,9 +402,9 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_const_s slvSt.ctx ("padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str) slvSt.addrSort
     | IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
         let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
-                                                     ; Defacto_memory2.integer_value_baseFromShift_path sh1 ])) in
+                                                     ; Defacto_memory.integer_value_baseFromShift_path sh1 ])) in
         let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
-                                                     ; Defacto_memory2.integer_value_baseFromShift_path sh2 ])) in
+                                                     ; Defacto_memory.integer_value_baseFromShift_path sh2 ])) in
         (* TODO: maybe have that conversion be done when the IVptrdiff is created? *)
         (* TODO: check that this is correct for arrays of arrays ... *)
         let diff_ty' = begin match diff_ty with
@@ -503,7 +503,9 @@ let declare_address alloc_id : unit solverM =
 *)
 
 let add_constraint slvSt debug_str cs =
-(*  prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs); *)
+  if !Debug_ocaml.debug_level >= 1 then begin
+    prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs)
+  end;
   match mem_constraint_to_expr slvSt cs with
     | Some e ->
           Wip.add [(debug_str, cs)];
@@ -514,7 +516,7 @@ let add_constraint slvSt debug_str cs =
 
 
 
-open Nondeterminism2
+open Nondeterminism
 
 (* TODO: silly duplication *)
 type ('a, 'err, 'cs) nd_tree =
@@ -608,11 +610,11 @@ let dot_from_nd_tree t =
           | Driver.DErr_other str ->
               str in
         let str_r = begin match r with
-        | Nondeterminism2.Undef0 (_, ubs) ->
+        | Nondeterminism.Undef0 (_, ubs) ->
             "Undefined {id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
-        | Nondeterminism2.Error0 (_, str) ->
+        | Nondeterminism.Error0 (_, str) ->
             "Error {msg: " ^ str ^ "}"
-      | Nondeterminism2.Other dr_err ->
+      | Nondeterminism.Other dr_err ->
             "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
         end in
         ( n+1

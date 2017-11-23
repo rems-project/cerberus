@@ -14,8 +14,8 @@ module EU  = Exception_undefined
 
 import Exception
 
-import Nondeterminism2
-module ND = Nondeterminism2
+import Nondeterminism
+module ND = Nondeterminism
 
 
 

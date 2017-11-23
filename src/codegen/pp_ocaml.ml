@@ -6,7 +6,7 @@ open Pp_prelude
 open Core
 open Cps_core
 open AilTypes
-module D = Defacto_memory_types2
+module D = Defacto_memory_types
 open Core_ctype
 
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y

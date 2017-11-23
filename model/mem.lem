@@ -13,11 +13,11 @@ import Naive_memory
 module Impl = Naive_memorf
 *)
 
-import Defacto_memory2
-import Defacto_memory_types2
+import Defacto_memory
+import Defacto_memory_types
 module Impl = struct
-  include import Defacto_memory2
-  include import Defacto_memory_types2
+  include import Defacto_memory
+  include import Defacto_memory_types
 end
 
 (*
