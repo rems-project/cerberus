@@ -16,4 +16,4 @@ B _build/parsers/cparser
 B _build/parsers/ncparser
 B _build/parsers/coreparser
 
-PKG pprint cmdliner zarith ounit js_of_ocaml js_of_ocaml.ppx Z3
+PKG pprint cmdliner zarith ounit js_of_ocaml js_of_ocaml.ppx Z3 lwt cohttp cohttp.lwt

@@ -136,6 +136,10 @@ ocaml_byte:
 	  cp -L main_.d.byte cerberus; \
 	fi
 
+web: src/web.ml
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3,lwt,cohttp,cohttp.lwt -libs str web.native
+
+
 .PHONY: cbuild clink
 cbuild:
 	ocamlbuild -pkg cmdliner -libs str,unix tools/cbuild.native
