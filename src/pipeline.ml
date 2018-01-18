@@ -65,12 +65,28 @@ let load_core_stdlib () =
         error ("[Core parsing error: stdlib] " ^ Pp_errors.to_string err)
 
 
-let load_core_impl core_parse impl_name =
+let load_core_impl core_stdlib impl_name =
   let filepath = Filename.concat core_stdlib_path ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists filepath) then
     error ("couldn't find the implementation file\n (looked at: `" ^ filepath ^ "').");
+  let module Core_parser =
+    Parser_util.Make (struct
+      include Core_parser.Make (struct
+        let sym_counter = sym_counter
+        let mode = Core_parser_util.ImplORFileMode
+        let std = List.fold_left (fun acc (fsym, _) ->
+          match fsym with
+            | Symbol.Symbol (_, Some str) ->
+                let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
+                Pmap.add (str, (std_pos, std_pos)) fsym acc
+            | Symbol.Symbol (_, None) ->
+                 acc
+        ) (Pmap.empty Core_parser_util._sym_compare) (Pmap.bindings_list (snd core_stdlib))
+      end)
+      type result = Core_parser_util.result
+    end) (Lexer_util.Make (Core_lexer)) in
   (* TODO: maybe have a nicer handling of errors (though these are all fatal) *)
-  match core_parse (Input.file filepath) with
+  match Core_parser.parse (Input.file filepath) with
     | Exception.Result (Core_parser_util.Rimpl impl_map) ->
         impl_map
     | Exception.Result (Core_parser_util.Rfile _ | Core_parser_util.Rstd _) ->
@@ -89,7 +105,7 @@ let (>|>) m1 m2 =
   return z
 
 let whenM cond m =
-  if cond then m else return ()
+  if cond then m () else return ()
 
 type language =
   | Cabs | Ail | Core
@@ -129,10 +145,10 @@ let c_frontend (conf, io) ~filename =
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
-      io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
+      fun () -> io.run_pp None (Pp_cabs.pp_translation_unit true true cabs_tunit)
     end >>= fun () ->
     whenM (List.mem Cabs conf.pprints) begin
-      io.warn (fun () -> "TODO: Cabs pprint to yet supported")
+      fun () -> io.warn (fun () -> "TODO: Cabs pprint to yet supported")
     end >>= fun () -> return cabs_tunit in
   (* -- *)
   let desugar cabs_tunit =
@@ -143,10 +159,10 @@ let c_frontend (conf, io) ~filename =
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.astprints) begin
-            io.run_pp None (Pp_ail_ast.pp_program ail_prog)
+            fun () -> io.run_pp None (Pp_ail_ast.pp_program ail_prog)
           end
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
-            io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program ail_prog)
+            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program ail_prog)
           end
       >>= fun () -> return (sym_suppl, ail_prog) in
   (* -- *)
@@ -154,20 +170,22 @@ let c_frontend (conf, io) ~filename =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
       (GenTyping.annotate_program ail_prog) >>= fun (ailtau_prog, _) ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.astprints) begin
-      let doc = if conf.debug_level = 4 then
-        (* (for debug 4) pretty-printing Ail with type annotations *)
-        Pp_ail_ast.pp_program_with_annot ailtau_prog
-      else
-        Pp_ail_ast.pp_program ailtau_prog in
-      io.run_pp None doc
+      fun () ->
+        let doc = if conf.debug_level = 4 then
+          (* (for debug 4) pretty-printing Ail with type annotations *)
+          Pp_ail_ast.pp_program_with_annot ailtau_prog
+        else
+          Pp_ail_ast.pp_program ailtau_prog in
+        io.run_pp None doc
     end >>= fun () ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.pprints) begin
-      let doc = if conf.debug_level = 4 then
-        (* (for debug 4) pretty-printing Ail with type annotations *)
-        Pp_ail.pp_program_with_annot ailtau_prog
-      else
-        Pp_ail.pp_program ailtau_prog in
-      io.run_pp (wrap_fout (Some (filename, "ail"))) doc
+      fun () ->
+        let doc = if conf.debug_level = 4 then
+          (* (for debug 4) pretty-printing Ail with type annotations *)
+          Pp_ail.pp_program_with_annot ailtau_prog
+        else
+          Pp_ail.pp_program ailtau_prog in
+        io.run_pp (wrap_fout (Some (filename, "ail"))) doc
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
@@ -226,14 +244,16 @@ let core_frontend (conf, io) ~filename =
 let rewrite_core (conf, io) core_file =
   return (Core_rewrite.rewrite_file core_file) >|>
   whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
-    io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
-    io.run_pp None (Ast_core.ast_file core_file)   >>= fun () ->
-    io.print_endline "END"
+    fun () ->
+      io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
+      io.run_pp None (Ast_core.ast_file core_file)   >>= fun () ->
+      io.print_endline "END"
   end
   >|> whenM (conf.debug_level >= 5 && List.mem Core conf.pprints) begin
-    io.print_endline "BEGIN (before Core rewrite)"   >>= fun () ->
-    io.run_pp None (Pp_core.Basic.pp_file core_file) >>= fun () ->
-    io.print_endline "END"
+    fun () ->
+      io.print_endline "BEGIN (before Core rewrite)"   >>= fun () ->
+      io.run_pp None (Pp_core.Basic.pp_file core_file) >>= fun () ->
+      io.print_endline "END"
   end
 
 
@@ -245,8 +265,9 @@ let core_passes (conf, io) ~filename core_file =
     let show_proc_decl = false
   end) in
   whenM conf.typecheck_core begin
-    Core_typing.typecheck_program core_file >>= fun _ ->
-    io.pass_message "Core typechecking completed!"
+    fun () ->
+      Core_typing.typecheck_program core_file >>= fun _ ->
+      io.pass_message "Core typechecking completed!"
   end >>= fun () ->
   (* TODO: for now assuming a single order comes from indet expressions *)
    begin
@@ -264,10 +285,12 @@ let core_passes (conf, io) ~filename core_file =
     else
       typed_core_file' in
   whenM (List.mem Core conf.astprints) begin
-    io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file typed_core_file'')
+    fun () ->
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file typed_core_file'')
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
-    io.run_pp (wrap_fout (Some (filename, "core"))) (Param_pp_core.pp_file typed_core_file'')
+    fun () ->
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Param_pp_core.pp_file typed_core_file'')
   end >>= fun () -> return typed_core_file''
 
 

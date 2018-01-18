@@ -224,7 +224,7 @@ let pp_mem_addr (pref, addr) =
 let pp_thread_id n =
   !^ ("th_" ^ string_of_int n)
 
-
+(*
 let pp_pattern pat =
   let g = function
     | Some (sym, _) -> pp_symbol sym
@@ -233,6 +233,7 @@ let pp_pattern pat =
     | []   -> P.lparen ^^ P.rparen
     | [sym_ty] -> g sym_ty
     | _    -> P.parens (comma_list g pat)
+*)
 
 
 (*

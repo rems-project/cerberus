@@ -374,7 +374,7 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
           | Just _ ->
               E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "unresolved PEsym")
+              E.fail loc (CoreTyping_TODO ("unresolved PEsym ==> " ^ show sym))
         end
     (* FIXME: match type for each impl constant??? *)
     | PEimpl impl ->
@@ -811,7 +811,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
         (* TODO: this is going to give horrible error messages ... *)
         E.trysM (loc, Core_typing_cause (CoreTyping_TODO "PEop"))
         (fun (bTy', bTy1, bTy2) ->
-          guard_match loc "operator" bTy bTy' >>
+          guard_match loc ("operator ==>" ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)) bTy bTy' >>
           (PEop bop <$> typecheck_pexpr loc tagDefs env bTy1 pe1
                     <*> typecheck_pexpr loc tagDefs env bTy2 pe2)
         ) match bop with
@@ -873,7 +873,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               ) in
               E.fail loc (CoreTyping_TODO ("illtyped a fun/proc symbolic ==> " ^ Pp.stringFromCore_pexpr (Pexpr () (PEcall nm pes))))
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "unresolved PEcall")
+              E.fail loc (CoreTyping_TODO ("unresolved PEcall ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
         end
     | PElet pat pe1 pe2 ->
         infer_pexpr loc tagDefs env pe1 >>= fun ((Pexpr infer1 _) as pe1') ->

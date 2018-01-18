@@ -34,7 +34,7 @@ val load_core_stdlib:
   unit -> (string, Symbol.sym) Pmap.map * unit Core.fun_map
 
 val load_core_impl:
-  (Input.t -> (Core_parser_util.result, Location_ocaml.t * Errors.cause) Exception.exceptM) ->
+  (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
   string -> Core.impl
 
 val c_frontend:
