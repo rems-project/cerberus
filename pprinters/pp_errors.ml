@@ -231,6 +231,42 @@ let desugar_cause_to_string = function
   | Desugar_Redefinition loc ->
       "Desugar_Redefinition"
 
+(* TODO: improve *)
+let core_typing_cause_to_string = function
+  | Undefined_startup sym ->
+      "Undefined_startup " ^ Pp_symbol.to_string sym
+  | MismatchObject (expected_oTy, found_oTy) ->
+      "MismatchObject(" ^
+      String_core.string_of_core_object_type expected_oTy ^ ", " ^
+      String_core.string_of_core_object_type found_oTy ^ ")"
+  | Mismatch (info_str, expected_bTy, found_bTy) ->
+      "Mismatch(" ^ info_str ^ ", " ^
+      String_core.string_of_core_base_type expected_bTy ^ ", " ^
+      String_core.string_of_core_base_type found_bTy ^ ")"
+  | MismatchIf (then_bTy, else_bTy) ->
+      "MismatchIf"
+  | MismatchIfCfunction (xs_then, xs_else) ->
+      (* of (core_base_type * list core_base_type) (* then *) * (core_base_type * list core_base_type) (* else *) *)
+      "MismatchIfCfunction(TODO)"
+  | EmptyArray ->
+      "EmptyArray"
+  | CtorWrongNumber (expected_n, found_n) ->
+      "CtorWrongNumber(" ^ string_of_int expected_n ^ ", " ^ string_of_int found_n ^ ")"
+  | HeterogenousArray (expected_oTy, found_oTy) ->
+      "HeterogenousArray(" ^
+      String_core.string_of_core_object_type expected_oTy ^ ", " ^
+      String_core.string_of_core_object_type found_oTy ^ ")"
+  | HeterogenousList (expected_bTy, found_bTy) ->
+      "HeterogenousList(" ^
+      String_core.string_of_core_base_type expected_bTy ^ ", " ^
+      String_core.string_of_core_base_type found_bTy ^ ")"
+  | InvalidMember (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+      "InvalidMember(" ^ Pp_symbol.to_string tag_sym ^ ", " ^ memb_str ^ ")"
+  | CoreTyping_TODO str ->
+      "CoreTyping_TODO(" ^ str ^ ")"
+  | TooGeneral ->
+      "TooGeneral"
+
 
 
 let std_ref = function
@@ -330,8 +366,8 @@ let short_message = function
     | AIL_TYPING (TError_lvalue_coercion ty) ->
         "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
 
-    | _ ->
-        "TODO ERROR MESSAGE"
+(*    | _ ->
+        "TODO ERROR MESSAGE" *)
 
 
 
