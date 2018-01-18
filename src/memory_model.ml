@@ -17,6 +17,7 @@ module type Constraints = sig
 end
 
 module type Memory = sig
+  val name: string
 (*  include (module type of Mem_common) *)
   
   type pointer_value

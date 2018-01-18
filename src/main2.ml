@@ -26,7 +26,15 @@ type std_setting =
 
 type cerb_opts = {
   pipeline_conf: Pipeline.configuration;
-  
+  args: string list;
+  cpp_cmd: string;
+  std: std_setting;
+  mem: Prelude.mem_setting;
+  batch: bool;
+  exec: bool;
+  ocaml: bool;
+  ocaml_corestd: bool;
+  concurrency: bool;
 }
 
 (*
@@ -54,9 +62,11 @@ type cerb_opts = {
 let cerb_opts args cpp_cmd macros dirs std mem debug batch exec pps asts
               ppflags rewrite sequentialise ocaml ocaml_corestd
               concurrency =
-  Ocaml_mem.switch := mem;
+  (* From now on the Ocaml_mem module exposes the desired model *)
+  Prelude.mem_switch := mem;
   (* TODO: std *)
   (* TODO: set debug level *)
+(*
   { { debug_level= debug
     ; pprints= pps
     ; astprints= asts
@@ -67,12 +77,14 @@ let cerb_opts args cpp_cmd macros dirs std mem debug batch exec pps asts
     ; cpp_cmd= cpp_cmd ^ "SOMETHING macros, dirs"
     ; core_stdlib= failwith ""
     ; core_impl= failwith "" }
-  , args
-  , batch
-  , exec
-  , ocaml
-  , ocaml_corestd
-  , concurrency }
+  ; args
+  ; batch
+  ; exec
+  ; ocaml
+  ; ocaml_corestd
+  ; concurrency }
+*)
+  failwith "WIP"
 
 (*
   { args; cpp_cmd; macros; dirs; std; mem; debug; batch; exec; pps; asts;
@@ -121,7 +133,7 @@ let io = let open Pipeline in {
 
 
 let cerberus cerb_opts =
-  Debug_ocaml.debug_level := cerb_opts.debug; (* TODO: do something cleaner *)
+(*  Debug_ocaml.debug_level := cerb_opts.debug; (* TODO: do something cleaner *) *)
   Random.self_init ();
   
   (* Looking for and parsing the core standard library *)

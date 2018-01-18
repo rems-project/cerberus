@@ -1,3 +1,6 @@
+let () =
+  failwith "DON'T USE Smt.ml"
+
 (* open Defacto_memory_types *)
 open Mem_common
 

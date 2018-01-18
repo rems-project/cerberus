@@ -187,6 +187,7 @@ let rec alignof = function
 
 
 module Concrete : Memory = struct
+  let name = "I am the concrete memory model"
   open Eff
 (*  include Mem_common *)
   
