@@ -26,6 +26,8 @@ type io_helpers = {
   warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
+val cerb_path: string
+
 val run_pp: (string * string) option -> PPrint.document -> unit
 
 val load_core_stdlib:
