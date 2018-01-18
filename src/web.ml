@@ -30,8 +30,10 @@ let dummy_io =
 let dummy_conf =
   let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
                 ^ Pipeline.cerb_path ^ "/include/c/libc -I "
-                ^ Pipeline.cerb_path ^ "/include/c/posix"
-  in {
+                ^ Pipeline.cerb_path ^ "/include/c/posix" in
+  (* TODO: hack *)
+  let impl_filename = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
+  let core_stdlib = Pipeline.load_core_stdlib () in {
   Pipeline.debug_level=         0;
   Pipeline.pprints=             [];
   Pipeline.astprints=           [];
@@ -40,8 +42,8 @@ let dummy_conf =
   Pipeline.rewrite_core=        true;
   Pipeline.sequentialise_core=  true;
   Pipeline.cpp_cmd=             cpp_cmd;
-  Pipeline.core_stdlib=         Pipeline.load_core_stdlib ();
-  Pipeline.core_impl=           Pmap.empty (fun _ _ -> 0); (* empty impl *)
+  Pipeline.core_stdlib=         core_stdlib;
+  Pipeline.core_impl=           Pipeline.load_core_impl core_stdlib impl_filename;
 }
 
 (* Result *)
