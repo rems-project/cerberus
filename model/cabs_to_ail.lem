@@ -2538,7 +2538,7 @@ let desugar_declaration_base specifs idecltors =
                           E.return acc
                     end
             end
-          ) idecltors []
+          ) idecltors [] >>= (List.reverse |- E.return)
 
 
 
