@@ -261,7 +261,7 @@ type undefined_behaviour =
   | UB080
   (* The initializer for a scalar is neither a single expression nor a single expression enclosed in
      braces (6.7.9). *)
-  | UB081
+  | UB081_scalar_initializer_not_single_expression
   (* The initializer for a structure or union object that has automatic storage duration is neither
      an initializer list nor a single expression that has compatible structure or union type
      (6.7.9). *)
@@ -760,7 +760,7 @@ let ub_str_bimap =
     ; (UB078, "UB078")
     ; (UB079, "UB079")
     ; (UB080, "UB080")
-    ; (UB081, "UB081")
+    ; (UB081_scalar_initializer_not_single_expression, "UB081_scalar_initializer_not_single_expression")
     ; (UB082, "UB082")
     ; (UB083, "UB083")
     ; (UB084, "UB084")
@@ -991,6 +991,8 @@ let pretty_string_of_undefined_behaviour = function
   | UB053_distinct_aggregate_union_pointer_comparison ->
       "(§6.5.8#5) found the comparison of two pointers that do not point to the same aggregate or \
                   union (nor just beyond the same array object)."
+  | UB081_scalar_initializer_not_single_expression ->
+      "(§6.7.9#11) The initializer for a scalar shall be a single expression, optionally enclosed in braces."
   | UB088_reached_end_of_function ->
       "(§6.9.1#12) If the } that terminates a function is reached, and the value of\n \
                    the function call is used by the caller, the behavior is undefined."

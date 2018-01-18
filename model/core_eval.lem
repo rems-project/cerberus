@@ -239,7 +239,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  let eq_constr = Mem.MC_eq ival1 ival2 in
+                  let eq_constr = Mem_common.MC_eq ival1 ival2 in
 (*
                   let () = Debug.print_debug 1 [] (fun () ->
                     "SYMBOLIC INT EQ ==> " ^
@@ -259,7 +259,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  let lt_constr = Mem.MC_lt ival1 ival2 in
+                  let lt_constr = Mem_common.MC_lt ival1 ival2 in
                   EU.return (PEconstrained [ (lt_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate lt_constr, Pexpr () (PEval Vfalse)) ])
             end
@@ -273,7 +273,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  let le_constr = Mem.MC_le ival1 ival2 in
+                  let le_constr = Mem_common.MC_le ival1 ival2 in
                   EU.return (PEconstrained [ (le_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate le_constr, Pexpr () (PEval Vfalse)) ])
             end
@@ -288,7 +288,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  let ge_constr = Mem.MC_le ival2 ival1 in
+                  let ge_constr = Mem_common.MC_le ival2 ival1 in
                   EU.return (PEconstrained [ (ge_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate ge_constr, Pexpr () (PEval Vfalse)) ])
             end
@@ -303,7 +303,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
                   EU.return (PEval (if b then Vtrue else Vfalse))
               | Nothing ->
                   (* when both outcomes are still possible *)
-                  let gt_constr = Mem.MC_lt ival2 ival1 in
+                  let gt_constr = Mem_common.MC_lt ival2 ival1 in
                   EU.return (PEconstrained [ (gt_constr, Pexpr () (PEval Vtrue))
                                            ; (ND.negate gt_constr, Pexpr () (PEval Vfalse)) ])
             end

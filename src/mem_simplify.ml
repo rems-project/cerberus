@@ -1,5 +1,5 @@
 open Defacto_memory_types
-open Mem
+(* open Mem *)
 open Mem_common
 
 open Core_ctype
@@ -262,7 +262,7 @@ let rec simplify_integer_value_base ival_ =
 
     | IVbyteof (ival_, mval) ->
         failwith ("Mem_simplify, IVbyteof ==> " ^
-                  String_defacto_memory.string_of_integer_value (IV (Prov_none, ival_)) ^ " -- " ^ String_mem.string_of_mem_value mval)
+                  String_defacto_memory.string_of_integer_value (IV (Prov_none, ival_)) ^ " -- " ^ String_defacto_memory.string_of_mem_value mval)
         
     | IVcomposite _ ->
         failwith "simplify_integer_value: IVcomposite"
@@ -307,7 +307,7 @@ let lifted_simplify_integer_value_base ival_ =
     (simplify_integer_value_base ival_)
 
 
-let simplify_integer_value (IV (prov, ival_)) : (num, integer_value) either =
+let simplify_integer_value (IV (prov, ival_)) : (num, impl_integer_value) either =
   match simplify_integer_value_base ival_ with
     | Left n ->
         Left n

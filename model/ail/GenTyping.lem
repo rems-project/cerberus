@@ -1945,7 +1945,7 @@ let annotate_sigma sigm =
   ) sigm.object_definitions >>= fun object_defs' ->
   
   (* Typechecking of functions that have a definition *)
-  Context.mapP identifierEqual (fun ident (param_idents, s) ->
+  Context.mapP identifierEqual (fun ident (loc, param_idents, s) ->
     match Context.lookup identifierEqual sigm.declarations ident with
       | Just (Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
           (* TODO: qualifiers *)
@@ -1958,11 +1958,11 @@ let annotate_sigma sigm =
           ) (List.zip param_idents params) in
           if sigma_fresh_bindings bindings sigm then
             annotate_statement sigm (Context.add_bindings bindings Context.empty) ret_ty s >>= fun s' ->
-              E.return (param_idents, s')
+              E.return (loc, param_idents, s')
           else
-            E.fail Loc.unknown (TError_TODO 1001)
+            E.fail loc (TError_TODO 1001)
       | _ ->
-          E.fail Loc.unknown (TError_TODO 1002)
+          E.fail loc (TError_TODO 1002)
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   

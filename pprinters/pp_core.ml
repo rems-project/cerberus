@@ -249,9 +249,9 @@ let pp_pointer_action = function
 
 let rec pp_object_value = function
   | OVinteger ival ->
-      Pp_mem.pp_integer_value_for_core ival
+      Ocaml_mem.pp_integer_value_for_core ival
   | OVfloating fval ->
-      Mem.case_fval fval
+      Ocaml_mem.case_fval fval
         (fun () -> !^ "unspec(floating)")
         (fun fval -> !^(string_of_float fval))
 (*
@@ -259,7 +259,7 @@ let rec pp_object_value = function
       !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
 *)
   | OVpointer ptr_val ->
-      Pp_mem.pp_pointer_value ptr_val
+      Ocaml_mem.pp_pointer_value ptr_val
   | OVarray lvals ->
       pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
   | OVstruct (sym, xs) ->
@@ -369,7 +369,7 @@ let pp_pexpr pe =
         | PEconstrained xs ->
             pp_keyword "constrained" ^^ P.parens (
               comma_list (fun (cs, pe) ->
-                P.brackets (Pp_mem.pp_mem_constraint Pp_mem.pp_integer_value cs) ^^^
+                P.brackets (Pp_mem.pp_mem_constraint Ocaml_mem.pp_integer_value cs) ^^^
                 P.equals ^^ P.rangle ^^ pp pe
               ) xs
             )

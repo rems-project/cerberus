@@ -113,3 +113,5 @@ val concurrency_mode: unit -> bool
 val isDefacto: unit -> bool
 
 val show_action_graph: unit -> bool
+
+val new_int: unit -> int

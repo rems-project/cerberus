@@ -355,7 +355,7 @@ and external_declaration =
 
 (* §6.9.1 Function definitions, Syntax *)
 and function_definition =
-  | FunDef of specifiers * declarator * cabs_statement
+  | FunDef of Loc.t * specifiers * declarator * cabs_statement
 
 
 (* This type's sole purpose it to allow the construction of multiset of base

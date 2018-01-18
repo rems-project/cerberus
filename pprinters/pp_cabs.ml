@@ -639,7 +639,7 @@ and dtree_of_for_clause = function
      Dnode (pp_stmt_ctor "FC_decl", [dtree_of_declaration decl])
 
 
-let dtree_of_function_definition (FunDef (specifs, decltor, stmt)) =
+let dtree_of_function_definition (FunDef (_, specifs, decltor, stmt)) =
   Dnode ( pp_ctor "FunDef"
         , [ dtree_of_specifiers specifs
           ; dtree_of_declarator decltor
@@ -659,7 +659,7 @@ let filter_external_decl edecls =
     | _ -> acc
   in List.rev (List.fold_left f [] edecls)
 
-let pp_translate_unit show_ext_decl do_colour (TUnit edecls) =
+let pp_translation_unit show_ext_decl do_colour (TUnit edecls) =
   Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
   let filtered_edecls = if show_ext_decl then edecls else filter_external_decl edecls in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline

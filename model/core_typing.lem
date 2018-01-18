@@ -868,7 +868,10 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
             (PEcall nm <$> E.mapM (fun (bTy, pe) ->
               typecheck_pexpr loc tagDefs env bTy pe) (List.zip bTys pes))
           | Just _ ->
-              E.fail loc (CoreTyping_TODO "illtyped a fun/proc symbolic")
+              let () = Debug.print_debug 0 [] (fun () ->
+                Pp.stringFromCore_pexpr (Pexpr () (PEcall nm pes))
+              ) in
+              E.fail loc (CoreTyping_TODO ("illtyped a fun/proc symbolic ==> " ^ Pp.stringFromCore_pexpr (Pexpr () (PEcall nm pes))))
           | Nothing ->
               E.fail loc (CoreTyping_TODO "unresolved PEcall")
         end

@@ -49,7 +49,7 @@ declare ocaml target_rep function stringFromCore_core_state = `String_core_run.s
 
 type driver_error =
   | DErr_core_run of core_run_error
-  | DErr_memory of Mem.mem_error
+  | DErr_memory of Mem_common.mem_error
   | DErr_concurrency of string
   | DErr_other of string
 
@@ -883,9 +883,17 @@ let finalize_constraints mem_st core_file concur_sym_map (Constraints.Constraint
 *)
 
 
+type driver_result = <|
+  dres_blocked: bool;
+  dres_concurrency_state: Cmm_op.symState;
+  dres_driver_steps: nat;
+  dres_core_run_steps: nat;
+  dres_core_value: Core.value;
+  dres_stdout: string;
+|>
 
 
-val finalize: string -> driver_state -> (string * (bool * Cmm_op.symState * Core.value) * (nat * nat))
+val finalize: string -> driver_state -> driver_result (* (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) *)
 let finalize debug_str dr_st =
   match dr_st.core_state.Core_run.thread_states with
     | [(tid, (_, th_st))] ->
@@ -901,8 +909,14 @@ let finalize debug_str dr_st =
               | Nothing ->
                   error ("Driver.finalize: the arena wasn't pure ==> " ^ Pp.stringFromCore_expr th_st.Core_run.arena)
             end in
-        (List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stdout), (dr_st.blocked, dr_st.concurrency_state, cval),
-         (dr_st.dr_step_counter, dr_st.core_run_state.Core_run.step_counter))
+        <|
+          dres_blocked= dr_st.blocked;
+          dres_concurrency_state= dr_st.concurrency_state;
+          dres_driver_steps= dr_st.dr_step_counter;
+          dres_core_run_steps= dr_st.core_run_state.Core_run.step_counter;
+          dres_core_value= cval;
+          dres_stdout= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stdout);
+        |>
     | xs ->
         let () = Debug.print_debug 3 [Debug.DB_driver] (fun () -> "ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
         error ("BOOM finalize [" ^ debug_str ^ "]")
@@ -1092,7 +1106,7 @@ end
 
 
 val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file Core_run.core_run_annotation -> list string ->
-           driverM (string * (bool * Cmm_op.symState * Core.value) * (nat * nat))
+           driverM driver_result
 let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
   (* Setting the read-only tag definitions (used by the memory model) *)
 (*

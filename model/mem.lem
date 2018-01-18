@@ -1,3 +1,260 @@
+open import Pervasives
+import Symbol Cthread Core_ctype AilTypes Float
+
+import Mem_common
+
+type pointer_value
+type integer_value
+type floating_value
+declare ocaml target_rep type pointer_value  = `Ocaml_mem.pointer_value`
+declare ocaml target_rep type integer_value  = `Ocaml_mem.integer_value`
+declare ocaml target_rep type floating_value = `Ocaml_mem.floating_value`
+
+type mem_value
+declare ocaml target_rep type mem_value = `Ocaml_mem.mem_value`
+
+type mem_iv_constraint = Mem_common.mem_constraint integer_value
+
+
+instance (Show pointer_value)
+  let show ptrval = "TODO"
+end
+instance (Show mem_value)
+  let show mval = "TODO"
+end
+
+
+(* This abstract in returns by memory actions and two footprints can be checked for overlapping.
+   They are in particular useful to detect races. *)
+type footprint
+val do_overlap: footprint -> footprint -> bool
+declare ocaml target_rep type footprint = `Ocaml_mem.footprint`
+declare ocaml target_rep function do_overlap = `Ocaml_mem.do_overlap`
+
+
+type mem_state
+val initial_mem_state: mem_state
+declare ocaml target_rep type mem_state = `Ocaml_mem.mem_state`
+declare ocaml target_rep function initial_mem_state = `Ocaml_mem.initial_mem_state`
+
+
+type memM 'a =
+  Nondeterminism.ndM 'a Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
+
+val return: forall 'a. 'a -> memM 'a
+let return = Nondeterminism.return
+
+val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
+let bind = Nondeterminism.bind
+
+
+(* Memory actions *)
+val allocate_static:
+     Cthread.thread_id  (* the allocating thread *)
+  -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
+  -> integer_value      (* alignment constraint *)
+  -> Core_ctype.ctype   (* type of the allocation *)
+  -> memM pointer_value
+
+val allocate_dynamic:
+     Cthread.thread_id  (* the allocating thread *)
+  -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
+  -> integer_value      (* alignment constraint *)
+  -> integer_value      (* size *)
+  -> memM pointer_value
+
+val kill: pointer_value -> memM unit
+val load: Loc.t -> Core_ctype.ctype -> pointer_value -> memM (footprint * mem_value)
+val store: Loc.t -> Core_ctype.ctype -> pointer_value -> mem_value -> memM footprint
+
+declare ocaml target_rep function allocate_static = `Ocaml_mem.allocate_static`
+declare ocaml target_rep function allocate_dynamic = `Ocaml_mem.allocate_dynamic`
+declare ocaml target_rep function kill = `Ocaml_mem.kill`
+declare ocaml target_rep function load = `Ocaml_mem.load`
+declare ocaml target_rep function store = `Ocaml_mem.store`
+
+
+(* Pointer value constructors *)
+val null_ptrval: Core_ctype.ctype -> pointer_value
+val fun_ptrval: Symbol.sym -> pointer_value
+declare ocaml target_rep function null_ptrval = `Ocaml_mem.null_ptrval`
+declare ocaml target_rep function fun_ptrval = `Ocaml_mem.fun_ptrval`
+
+
+(* Operations on pointer values *)
+val eq_ptrval: pointer_value -> pointer_value -> memM bool
+val ne_ptrval: pointer_value -> pointer_value -> memM bool
+val lt_ptrval: pointer_value -> pointer_value -> memM bool
+val gt_ptrval: pointer_value -> pointer_value -> memM bool
+val le_ptrval: pointer_value -> pointer_value -> memM bool
+val ge_ptrval: pointer_value -> pointer_value -> memM bool
+val diff_ptrval: Core_ctype.ctype -> pointer_value -> pointer_value -> memM integer_value
+declare ocaml target_rep function eq_ptrval = `Ocaml_mem.eq_ptrval`
+declare ocaml target_rep function ne_ptrval = `Ocaml_mem.ne_ptrval`
+declare ocaml target_rep function lt_ptrval = `Ocaml_mem.lt_ptrval`
+declare ocaml target_rep function gt_ptrval = `Ocaml_mem.gt_ptrval`
+declare ocaml target_rep function le_ptrval = `Ocaml_mem.le_ptrval`
+declare ocaml target_rep function ge_ptrval = `Ocaml_mem.ge_ptrval`
+declare ocaml target_rep function diff_ptrval = `Ocaml_mem.diff_ptrval`
+
+val validForDeref_ptrval: pointer_value -> bool
+declare ocaml target_rep function validForDeref_ptrval = `Ocaml_mem.validForDeref_ptrval`
+
+
+(* Casting operations *)
+(* the first ctype is the original integer type, the second is the target referenced type *)
+val ptrcast_ival: Core_ctype.ctype -> Core_ctype.ctype -> integer_value -> memM pointer_value
+(* the first ctype is the original referenced type, the integerType is the target integer type *)
+val intcast_ptrval: Core_ctype.ctype -> AilTypes.integerType -> pointer_value -> memM integer_value
+declare ocaml target_rep function ptrcast_ival = `Ocaml_mem.ptrcast_ival`
+declare ocaml target_rep function intcast_ptrval = `Ocaml_mem.intcast_ptrval`
+
+
+(* Pointer shifting constructors *)
+val array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> pointer_value
+val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
+declare ocaml target_rep function array_shift_ptrval = `Ocaml_mem.array_shift_ptrval`
+declare ocaml target_rep function member_shift_ptrval = `Ocaml_mem.member_shift_ptrval`
+
+
+val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
+declare ocaml target_rep function memcmp = `Ocaml_mem.memcmp`
+
+
+(* Integer value constructors *)
+val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
+val integer_ival: integer -> integer_value
+val max_ival: AilTypes.integerType -> integer_value
+val min_ival: AilTypes.integerType -> integer_value
+val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
+val offsetof_ival: Symbol.sym -> Cabs.cabs_identifier -> integer_value
+val sizeof_ival: Core_ctype.ctype -> integer_value
+val alignof_ival: Core_ctype.ctype -> integer_value
+val bitwise_complement_ival: AilTypes.integerType -> integer_value -> integer_value
+val bitwise_and_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_or_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_xor_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+declare ocaml target_rep function concurRead_ival = `Ocaml_mem.concurRead_ival`
+declare ocaml target_rep function integer_ival = `Ocaml_mem.integer_ival`
+declare ocaml target_rep function max_ival = `Ocaml_mem.max_ival`
+declare ocaml target_rep function min_ival = `Ocaml_mem.min_ival`
+declare ocaml target_rep function op_ival = `Ocaml_mem.op_ival`
+declare ocaml target_rep function offsetof_ival = `Ocaml_mem.offsetof_ival`
+declare ocaml target_rep function sizeof_ival = `Ocaml_mem.sizeof_ival`
+declare ocaml target_rep function alignof_ival = `Ocaml_mem.alignof_ival`
+declare ocaml target_rep function bitwise_complement_ival = `Ocaml_mem.bitwise_complement_ival`
+declare ocaml target_rep function bitwise_and_ival = `Ocaml_mem.bitwise_and_ival`
+declare ocaml target_rep function bitwise_or_ival = `Ocaml_mem.bitwise_or_ival`
+declare ocaml target_rep function bitwise_xor_ival = `Ocaml_mem.bitwise_xor_ival`
+
+(* Integer value destructors *)
+val case_integer_value: forall 'a. (* TODO: expose more ctors *)
+    integer_value ->
+    (integer -> 'a) ->
+    (unit -> 'a) ->
+    'a
+val is_specified_ival: integer_value -> bool
+declare ocaml target_rep function case_integer_value = `Ocaml_mem.case_integer_value`
+declare ocaml target_rep function is_specified_ival = `Ocaml_mem.is_specified_ival`
+
+(* Predicates on integer values *)
+val eq_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val lt_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+val le_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
+declare ocaml target_rep function eq_ival = `Ocaml_mem.eq_ival`
+declare ocaml target_rep function lt_ival = `Ocaml_mem.lt_ival`
+declare ocaml target_rep function le_ival = `Ocaml_mem.le_ival`
+
+
+val eval_integer_value: integer_value -> maybe integer
+declare ocaml target_rep function eval_integer_value = `Ocaml_mem.eval_integer_value`
+
+
+(* Floating value constructors *)
+val zero_fval: floating_value
+val str_fval: string -> floating_value
+declare ocaml target_rep function zero_fval = `Ocaml_mem.zero_fval`
+declare ocaml target_rep function str_fval = `Ocaml_mem.str_fval`
+
+(* Floating value destructors *)
+val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (Float.float -> 'a) -> 'a
+declare ocaml target_rep function case_fval = `Ocaml_mem.case_fval`
+
+(* Predicates on floating values *)
+val op_fval: Mem_common.floating_operator -> floating_value -> floating_value -> floating_value
+val eq_fval: floating_value -> floating_value -> bool
+val lt_fval: floating_value -> floating_value -> bool
+val le_fval: floating_value -> floating_value -> bool
+declare ocaml target_rep function op_fval = `Ocaml_mem.op_fval`
+declare ocaml target_rep function eq_fval = `Ocaml_mem.eq_fval`
+declare ocaml target_rep function lt_fval = `Ocaml_mem.lt_fval`
+declare ocaml target_rep function le_fval = `Ocaml_mem.le_fval`
+
+
+(* Integer <-> Floating casting constructors *)
+val fvfromint: integer_value -> floating_value
+val ivfromfloat: AilTypes.integerType -> floating_value -> integer_value
+declare ocaml target_rep function fvfromint = `Ocaml_mem.fvfromint`
+declare ocaml target_rep function ivfromfloat = `Ocaml_mem.ivfromfloat`
+
+
+(* Memory value constructors *)
+val unspecified_mval: Core_ctype.ctype -> mem_value
+val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
+val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
+val pointer_mval: Core_ctype.ctype -> pointer_value -> mem_value
+val array_mval: list mem_value -> mem_value
+val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> mem_value
+val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
+declare ocaml target_rep function unspecified_mval = `Ocaml_mem.unspecified_mval`
+declare ocaml target_rep function integer_value_mval = `Ocaml_mem.integer_value_mval`
+declare ocaml target_rep function floating_value_mval = `Ocaml_mem.floating_value_mval`
+declare ocaml target_rep function pointer_mval = `Ocaml_mem.pointer_mval`
+declare ocaml target_rep function array_mval = `Ocaml_mem.array_mval`
+declare ocaml target_rep function struct_mval = `Ocaml_mem.struct_mval`
+declare ocaml target_rep function union_mval = `Ocaml_mem.union_mval`
+
+
+(* Memory value destructor *)
+val case_mem_value: forall 'a.
+  mem_value ->
+  (Core_ctype.ctype -> 'a) -> (* unspecified case *)
+  (AilTypes.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+  (AilTypes.integerType -> integer_value -> 'a) ->
+  (AilTypes.floatingType -> floating_value -> 'a) ->
+  (Core_ctype.ctype -> pointer_value -> 'a) ->
+  (list mem_value -> 'a) ->
+  (Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> 'a) ->
+  (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
+  'a
+declare ocaml target_rep function case_mem_value = `Ocaml_mem.case_mem_value`
+
+
+
+
+
+
+
+
+
+
+
+val stringFromCtype:  Core_ctype.ctype -> string
+val stringFromMem_value: mem_value -> string
+val stringFromPointer_value: pointer_value -> string
+val stringFromInteger_value: integer_value -> string
+declare ocaml target_rep function stringFromCtype  = `String_core_ctype.string_of_ctype`
+declare ocaml target_rep function stringFromMem_value = `Ocaml_mem.string_of_mem_value`
+declare ocaml target_rep function stringFromPointer_value = `Ocaml_mem.string_of_pointer_value`
+declare ocaml target_rep function stringFromInteger_value = `Ocaml_mem.string_of_integer_value`
+
+
+
+
+
+
+
+(*
 (* This file abstract the memory layout model actually being used *)
 (* include import Naive_memory *)
 open import Pervasives
@@ -372,3 +629,4 @@ let store loc ty ptrval mval =
     "Mem.store(" ^ stringFromCtype ty ^ ", " ^ stringFromPointer_value ptrval ^ ", " ^ stringFromMem_value mval ^ ")"
   ) in
   Impl.impl_store loc ty ptrval mval
+*)

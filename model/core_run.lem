@@ -382,7 +382,7 @@ type action_request =
 
 type core_step =
   | Step_action_request of core_runM action_request
-  | Step_memop_request of Mem.memop * list Core.value * thread_id * (Core.value -> thread_state)
+  | Step_memop_request of Mem_common.memop * list Core.value * thread_id * (Core.value -> thread_state)
   | Step_tau of string * core_runM thread_state
   | Step_eval of string * core_runM thread_state
   | Step_thread_done of thread_id * Core.value

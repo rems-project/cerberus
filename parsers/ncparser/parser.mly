@@ -1131,7 +1131,10 @@ function_definition:
   stmt= compound_statement
   { let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
     LF.restore_context ctxt;
-    FunDef (specifs, LF.cabs_of_declarator decltor, stmt)
+    (* NOTE: when dugaring to Ail we add to following location the marker for
+       the function identifier *)
+    FunDef ( Location_ocaml.Loc_region ($startpos, $endpos, None)
+           , specifs, LF.cabs_of_declarator decltor, stmt)
   }
 
 declaration_list:

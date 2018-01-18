@@ -1,4 +1,4 @@
-open Defacto_memory_types
+(* open Defacto_memory_types *)
 open Mem_common
 
 open State
@@ -330,29 +330,29 @@ let rec ctype_to_expr slvSt ty =
 
 
 let address_expression_of_pointer_base = function
-  | PVunspecified ty ->
+  | Defacto_memory_types.PVunspecified ty ->
       failwith "PVunspecified"
-  | PVnull ty ->
+  | Defacto_memory_types.PVnull ty ->
       failwith "PVnull"
-  | PVfunction sym ->
+  | Defacto_memory_types.PVfunction sym ->
       failwith  "PVfunction"
-  | PVbase (alloc_id, pref) ->
-      IVaddress (alloc_id, pref)
-  | PVfromint ival_ ->
+  | Defacto_memory_types.PVbase (alloc_id, pref) ->
+      Defacto_memory_types.IVaddress (alloc_id, pref)
+  | Defacto_memory_types.PVfromint ival_ ->
       ival_
 
 
 let integer_value_base_to_expr slvSt ival_ =
   let rec aux = function
-    | IVunspecified ->
+    | Defacto_memory_types.IVunspecified ->
         failwith "IVunspecified"
-    | IVconcurRead _ ->
+    | Defacto_memory_types.IVconcurRead _ ->
         failwith "Smt.integer_value_base_to_expr: IVconcurRead"
-    | IVconcrete n ->
+    | Defacto_memory_types.IVconcrete n ->
         Arithmetic.Integer.mk_numeral_s slvSt.ctx (Nat_big_num.to_string n)
-    | IVaddress (alloc_id, _) ->
+    | Defacto_memory_types.IVaddress (alloc_id, _) ->
         Expr.mk_const_s slvSt.ctx ("addr_" ^ string_of_int alloc_id) slvSt.addrSort
-    | IVfromptr (ty, ity, ptrval_, sh) ->
+    | Defacto_memory_types.IVfromptr (ty, ity, ptrval_, sh) ->
         (* the result of a cast from pointer to integer. The first
            parameter is the referenced type of the pointer value, the
            second is the integer type *)
@@ -365,7 +365,7 @@ let integer_value_base_to_expr slvSt ival_ =
         end else begin
           Expr.mk_app slvSt.ctx slvSt.fromptrDecl [ty_e; ity_e; Arithmetic.mk_add slvSt.ctx [ptrval_e; sh_ival_e]]
         end
-    | IVop (iop, [ival_1; ival_2]) ->
+    | Defacto_memory_types.IVop (iop, [ival_1; ival_2]) ->
         let mk_op = function
           | IntAdd ->
               fun e1 e2 -> Arithmetic.mk_add slvSt.ctx [e1; e2]
@@ -382,29 +382,29 @@ let integer_value_base_to_expr slvSt ival_ =
           | IntExp ->
               Arithmetic.mk_power slvSt.ctx  in
         mk_op iop (aux ival_1) (aux ival_2)
-    | IVop _ ->
+    | Defacto_memory_types.IVop _ ->
         (* Core type error *)
         assert false
-    | IVmin ity ->
+    | Defacto_memory_types.IVmin ity ->
         Expr.mk_app slvSt.ctx slvSt.ivminDecl [integerType_to_expr slvSt ity]
-    | IVmax ity ->
+    | Defacto_memory_types.IVmax ity ->
         Expr.mk_app slvSt.ctx slvSt.ivmaxDecl [integerType_to_expr slvSt ity]
-    | IVsizeof ty ->
+    | Defacto_memory_types.IVsizeof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
-    | IValignof (Core_ctype.Struct0 tag_sym) ->
+    | Defacto_memory_types.IValignof (Core_ctype.Struct0 tag_sym) ->
         prerr_endline "BOGUS!!!!";
         Arithmetic.Integer.mk_numeral_s slvSt.ctx "8"
-    | IValignof ty ->
+    | Defacto_memory_types.IValignof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
-    | IVoffsetof (tag_sym, memb_ident) ->
+    | Defacto_memory_types.IVoffsetof (tag_sym, memb_ident) ->
       failwith "TODO Smt: IVoffsetof"
-    | IVpadding (Sym.Symbol (tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
+    | Defacto_memory_types.IVpadding (Sym.Symbol (tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
         Expr.mk_const_s slvSt.ctx ("padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str) slvSt.addrSort
-    | IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
-        let ptrval_e1 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
-                                                     ; Defacto_memory.integer_value_baseFromShift_path sh1 ])) in
-        let ptrval_e2 = (* WIP *) aux (IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
-                                                     ; Defacto_memory.integer_value_baseFromShift_path sh2 ])) in
+    | Defacto_memory_types.IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
+        let ptrval_e1 = (* WIP *) aux (Defacto_memory_types.IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
+                                                                          ; Defacto_memory.integer_value_baseFromShift_path sh1 ])) in
+        let ptrval_e2 = (* WIP *) aux (Defacto_memory_types.IVop (IntAdd, [ address_expression_of_pointer_base ptrval_2
+                                                                          ; Defacto_memory.integer_value_baseFromShift_path sh2 ])) in
         (* TODO: maybe have that conversion be done when the IVptrdiff is created? *)
         (* TODO: check that this is correct for arrays of arrays ... *)
         let diff_ty' = begin match diff_ty with
@@ -415,34 +415,34 @@ let integer_value_base_to_expr slvSt ival_ =
         end in
         Arithmetic.mk_div slvSt.ctx
           (Arithmetic.mk_sub slvSt.ctx [ptrval_e1; ptrval_e2])
-          (aux (Mem_simplify.lifted_simplify_integer_value_base (IVsizeof diff_ty')))
-    | IVbyteof (ival_, mval) ->
+          (aux (Mem_simplify.lifted_simplify_integer_value_base (Defacto_memory_types.IVsizeof diff_ty')))
+    | Defacto_memory_types.IVbyteof (ival_, mval) ->
         failwith "TODO Smt: IVbyteof"
-    | IVcomposite ival_s ->
+    | Defacto_memory_types.IVcomposite ival_s ->
         failwith "TODO Smt: IVcomposite"
-    | IVbitwise (ity, bwop) ->
+    | Defacto_memory_types.IVbitwise (ity, bwop) ->
         let is_signed = AilTypesAux.is_signed_ity ity in
         let size_ity = 8 (* TODO: should be 64 *) in
         BitVector.mk_bv2int slvSt.ctx begin match bwop with
-          | BW_complement ival_ ->
+          | Defacto_memory_types.BW_complement ival_ ->
               BitVector.mk_not slvSt.ctx
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_))
-          | BW_AND (ival_1, ival_2) ->
+          | Defacto_memory_types.BW_AND (ival_1, ival_2) ->
               BitVector.mk_and slvSt.ctx
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
-          | BW_OR (ival_1, ival_2) ->
+          | Defacto_memory_types.BW_OR (ival_1, ival_2) ->
               BitVector.mk_or slvSt.ctx
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
-          | BW_XOR (ival_1, ival_2) ->
+          | Defacto_memory_types.BW_XOR (ival_1, ival_2) ->
               BitVector.mk_xor slvSt.ctx
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_1))
                 (Arithmetic.Integer.mk_int2bv slvSt.ctx size_ity (aux ival_2))
         end is_signed
   in
   aux (Either.either_case
-    (fun n -> IVconcrete n)
+    (fun n -> Defacto_memory_types.IVconcrete n)
     (fun z -> z)
     (Mem_simplify.simplify_integer_value_base ival_)
   )
@@ -455,11 +455,11 @@ let mem_constraint_to_expr st constr =
   let rec aux = function
     | MC_empty ->
         None
-    | MC_eq (IV (_, ival_1), IV (_, ival_2)) ->
+    | MC_eq (Defacto_memory_types.IV (_, ival_1), Defacto_memory_types.IV (_, ival_2)) ->
         Some (Boolean.mk_eq st.ctx (integer_value_base_to_expr st ival_1) (integer_value_base_to_expr st ival_2))
-    | MC_lt (IV (_, ival_1), IV (_, ival_2)) ->
+    | MC_lt (Defacto_memory_types.IV (_, ival_1), Defacto_memory_types.IV (_, ival_2)) ->
         Some (Arithmetic.mk_lt st.ctx (integer_value_base_to_expr st ival_1) (integer_value_base_to_expr st ival_2))
-    | MC_le (IV (_, ival_1), IV (_, ival_2)) ->
+    | MC_le (Defacto_memory_types.IV (_, ival_1), Defacto_memory_types.IV (_, ival_2)) ->
         Some (Arithmetic.mk_le st.ctx (integer_value_base_to_expr st ival_1) (integer_value_base_to_expr st ival_2))
     | MC_or (cs1, cs2) ->
         begin match (aux cs1, aux cs2) with
@@ -489,7 +489,7 @@ let mem_constraint_to_expr st constr =
           | None ->
               None
         end
-    | MC_in_device (IV (_, ival_)) ->
+    | MC_in_device (Defacto_memory_types.IV (_, ival_)) ->
         Some (Expr.mk_app st.ctx st.in_device_memDecl [integer_value_base_to_expr st ival_])
   in aux constr
 
@@ -502,7 +502,7 @@ let declare_address alloc_id : unit solverM =
   return ()
 *)
 
-let add_constraint slvSt debug_str cs =
+let add_constraint slvSt debug_str (cs: Ocaml_mem.mem_iv_constraint) =
   if !Debug_ocaml.debug_level >= 1 then begin
     prerr_endline ("ADDING CONSTRAINT [" ^ debug_str ^ "] ==> " ^ String_mem.string_of_iv_memory_constraint cs)
   end;
@@ -706,7 +706,7 @@ let create_json_file act =
   |> Printf.fprintf oc "%s"
 
 exception Backtrack of
-  ((string * (bool * Cmm_op.symState * Core.value) * (int * int), Driver.driver_error) nd_status *
+  ((Driver.driver_result, Driver.driver_error) nd_status *
      string list *
      Driver.driver_state) list
 

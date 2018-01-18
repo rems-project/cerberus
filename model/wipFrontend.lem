@@ -26,9 +26,11 @@ module ND = Nondeterminism
 
 
 val runND_proxy:
-  Driver.driverM (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) -> Driver.driver_state ->
-  list (ND.nd_status (string * (bool * Cmm_op.symState * Core.value) * (nat * nat)) Driver.driver_error * list string * Driver.driver_state)
-declare ocaml target_rep function runND_proxy = `Smt.runND_exhaustive`
+  Driver.driverM Driver.driver_result -> Driver.driver_state ->
+  list (ND.nd_status Driver.driver_result Driver.driver_error * list string * Driver.driver_state)
+
+
+declare ocaml target_rep function runND_proxy = `Smt2.runND Ocaml_mem.cs_module`
 
 val empty_sigma: forall 'a. A.sigma 'a
 let empty_sigma = <|
@@ -107,8 +109,8 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
         let execs = runND_proxy driver_action dr_st in
         let () = Core_ctype_aux.reset_tagDefs () in
         match execs with
-          | [(ND.Active (_, (_, _, cval), _), _, _ )] ->
-              Eff.return cval
+          | [(ND.Active dres, _, _ )] ->
+              Eff.return dres.Driver.dres_core_value
           | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->
               Eff.fail (ub_loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_UB ubs))
           | _ ->

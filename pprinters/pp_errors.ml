@@ -160,6 +160,8 @@ let desugar_cause_to_string = function
       "violation of contraint " ^ msg
   | Desugar_OtherViolation msg ->
       "other violation: " ^ msg
+  | Desugar_UndefinedBehaviour ub ->
+      "undefined behaviour: " ^ Undefined.pretty_string_of_undefined_behaviour ub
   
 (* TODO: move these to Desugar_ConstraintViolation *)
   | Desugar_FunctionRedefinition sym ->

@@ -297,7 +297,7 @@ let print_provenance = function
   | D.Prov_some ids -> raise (Unsupported "prov_some")
 
 let print_iv_value iv =
-  Mem.case_integer_value iv
+  Ocaml_mem.case_integer_value iv
     (fun n -> !^"A.mk_int" ^^^ P.dquotes (!^(Nat_big_num.to_string n)))
     (fun _ -> raise (Unexpected "iv value"))
 
@@ -431,8 +431,8 @@ let rec print_object_value globs = function
   | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
   | OVcfunction nm -> print_name nm
   | OVinteger iv   -> print_iv_value iv
-  | OVfloating fv  -> print_floating_value fv
-  | OVpointer pv   -> print_pointer_value pv
+  | OVfloating fv  -> failwith "print_floating_value fv"
+  | OVpointer pv   -> failwith "print_pointer_value pv"
   | OVarray lvs   -> print_list (print_loaded_value globs) lvs
 
 and print_loaded_value globs = function
@@ -540,17 +540,17 @@ let print_pure_expr globs pe =
 
 let print_memop globs memop pes =
   (match memop with
-   | Mem.PtrEq -> !^"A.eq_ptrval"
-   | Mem.PtrNe -> !^"A.ne_ptrval"
-   | Mem.PtrGe -> !^"A.ge_ptrval"
-   | Mem.PtrLt -> !^"A.lt_ptrval"
-   | Mem.PtrGt -> !^"A.gt_ptrval"
-   | Mem.PtrLe -> !^"A.le_ptrval"
-   | Mem.Ptrdiff -> !^"A.diff_ptrval"
-   | Mem.IntFromPtr -> !^"A.intcast_ptrval"
-   | Mem.PtrFromInt -> !^"A.ptrvast_ival"
-   | Mem.PtrValidForDeref -> !^"A.valid_for_deref_ptrval"
-   | Mem.Memcmp -> !^"A.memcmp"
+   | Mem_common.PtrEq -> !^"A.eq_ptrval"
+   | Mem_common.PtrNe -> !^"A.ne_ptrval"
+   | Mem_common.PtrGe -> !^"A.ge_ptrval"
+   | Mem_common.PtrLt -> !^"A.lt_ptrval"
+   | Mem_common.PtrGt -> !^"A.gt_ptrval"
+   | Mem_common.PtrLe -> !^"A.le_ptrval"
+   | Mem_common.Ptrdiff -> !^"A.diff_ptrval"
+   | Mem_common.IntFromPtr -> !^"A.intcast_ptrval"
+   | Mem_common.PtrFromInt -> !^"A.ptrvast_ival"
+   | Mem_common.PtrValidForDeref -> !^"A.valid_for_deref_ptrval"
+   | Mem_common.Memcmp -> !^"A.memcmp"
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
 let choose_load_type (Pexpr (_, PEval cty)) =

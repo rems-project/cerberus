@@ -36,13 +36,15 @@ let pp_memop = function
 
 
 (* let pp_pointer_shift = Impl.pp_pointer_shift *)
-let pp_pointer_value = Impl.pp_pointer_value
-let pp_integer_value = Impl.pp_integer_value
-let pp_integer_value_for_core = Impl.pp_integer_value_for_core
-let pp_mem_value = Impl.pp_mem_value
-let pp_pretty_pointer_value = Impl.pp_pretty_pointer_value
-let pp_pretty_integer_value = Impl.pp_pretty_integer_value
-let pp_pretty_mem_value = Impl.pp_pretty_mem_value
+(*
+let pp_pointer_value = failwith "Impl.pp_pointer_value"
+let pp_integer_value = failwith "Impl.pp_integer_value"
+let pp_integer_value_for_core = failwith "Impl.pp_integer_value_for_core"
+let pp_mem_value = failwith "Impl.pp_mem_value"
+let pp_pretty_pointer_value = failwith "Impl.pp_pretty_pointer_value"
+let pp_pretty_integer_value = failwith "Impl.pp_pretty_integer_value"
+let pp_pretty_mem_value = failwith "Impl.pp_pretty_mem_value"
+*)
 
 let rec pp_raw_mem_constraint pp constr =
   P.parens begin match constr with
