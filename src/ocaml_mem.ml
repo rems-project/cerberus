@@ -1,7 +1,9 @@
 open Memory_model
 
+(*
 (* we need to do this because of Lem's renaming not understanding modules... *)
 module Defacto : Memory = struct
+  let name = "I am the defacto memory model" (* TODO: debug *)
   type pointer_value = Defacto_memory_types.impl_pointer_value
   type integer_value = Defacto_memory_types.impl_integer_value
   type floating_value = Defacto_memory_types.impl_floating_value
@@ -94,21 +96,17 @@ module Defacto : Memory = struct
   
   include Pp_defacto_memory
 end
+*)
 
-
-type mem_setting =
-  [ `MemDefacto | `MemConcrete ]
-(* TODO: I hate that *)
-let switch : mem_setting ref =
-  ref `MemDefacto
 
 module Mem = (
-  val match !switch with
-    | `MemDefacto  -> (module Defacto : Memory_model.Memory)
+  val match !Prelude.mem_switch with
+    | `MemDefacto  -> (module Ocaml_defacto : Memory_model.Memory)
     | `MemConcrete -> (module Concrete : Memory_model.Memory)
 )
 
 include Mem
+
 
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)

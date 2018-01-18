@@ -366,8 +366,10 @@ let short_message = function
     | AIL_TYPING (TError_lvalue_coercion ty) ->
         "[Ail typing error]\n failed lvalue coercion of type \"" ^ Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
 
-(*    | _ ->
-        "TODO ERROR MESSAGE" *)
+    | Core_typing_cause cause ->
+        core_typing_cause_to_string cause
+    | _ ->
+        "TODO ERROR MESSAGE"
 
 
 
