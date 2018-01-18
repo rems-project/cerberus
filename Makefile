@@ -141,7 +141,7 @@ ocaml_byte:
 	fi
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3,lwt,cohttp,cohttp.lwt -libs str web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,Z3,lwt,cohttp,cohttp.lwt -libs str web.native
 
 
 .PHONY: cbuild clink

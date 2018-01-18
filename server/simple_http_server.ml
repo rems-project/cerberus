@@ -3,7 +3,7 @@
 open Lwt
 open Cohttp_lwt_unix
 
-open Cohttp_lwt_body
+open Cohttp_lwt__Body
 
 (* Util *)
 
@@ -319,7 +319,7 @@ let handler docroot conn req body =
   match meth with
   | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
   | `GET  -> get ~docroot uri path
-  | `POST -> Cohttp_lwt_body.to_string body >>= post ~docroot uri path
+  | `POST -> to_string body >>= post ~docroot uri path
   | _ -> not_allowed meth path
 
 let usage () =
