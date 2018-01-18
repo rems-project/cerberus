@@ -1,0 +1,64 @@
+open import Pervasives
+open import Utils Cabs
+
+import AilTypes
+
+module ATypes = AilTypes
+
+(* STD §6.2.2#1 *)
+type linkage =
+  | Linkage_external
+  | Linkage_internal
+  | Linkage_none
+
+instance (Eq linkage)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (Show linkage)
+  let show = function
+    | Linkage_external ->
+        "external"
+    | Linkage_internal ->
+        "internal"
+    | Linkage_none ->
+        "none"
+  end
+end
+
+instance (SetType linkage)
+  let setElemCompare = defaultCompare
+end
+
+
+
+val specifiers_of_external_declaration: external_declaration -> maybe specifiers
+let specifiers_of_external_declaration = function
+  | EDecl_func (FunDef _ specifs _ _) ->
+      Just specifs
+  | EDecl_decl (Declaration_base specifs _) ->
+      Just specifs
+  | EDecl_decl (Declaration_static_assert _) ->
+      Nothing
+end
+
+
+val determinate_storage_duration: linkage -> list storage_class_specifier -> ATypes.storageDuration
+let determinate_storage_duration link scs =
+  if not (List.elem SC_Thread_local scs) &&
+     (link = Linkage_external || link = Linkage_internal ||
+      List.elem SC_static scs) then
+(* STD §6.2.4#3, sentence 1 *)
+    ATypes.Static
+  
+  else if List.elem SC_Thread_local scs then
+(* STD §6.2.4#4, sentence 1 *)
+    ATypes.Thread
+  
+  else if link = Linkage_none && not (List.elem SC_static scs) then
+(* STD §6.2.4#5, sentence 1 *)
+    ATypes.Automatic
+  
+  else
+    error "determinate_storage_duration"

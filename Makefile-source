@@ -1,0 +1,145 @@
+SOURCE_prelude=\
+  utils.lem \
+  global.lem \
+  loc.lem \
+  bimap.lem \
+  dlist.lem \
+  debug.lem \
+  enum.lem \
+  state.lem \
+  uniqueId.lem \
+  symbol.lem \
+  cthread.lem \
+  exception.lem \
+  product.lem \
+  float.lem
+
+
+
+SOURCE_cabs=\
+  cabs.lem \
+  undefined.lem
+
+
+SOURCE_ail=\
+  Common.lem \
+  AilTypes.lem \
+  TypingError.lem \
+  ErrorMonad.lem \
+  Context.lem \
+  AilSyntax.lem \
+  GenTypes.lem
+
+SOURCE_core_ctype=\
+  core_ctype.lem \
+  core_ctype_aux.lem
+
+SOURCE_core=\
+  core.lem \
+  errors.lem \
+  core_aux.lem
+
+SOURCE_core_typing=\
+  core_typing.lem \
+  core_typing_aux.lem \
+  core_typing_effect.lem
+
+SOURCE_utils=\
+  boot.lem \
+  decode.lem \
+  exception_undefined.lem \
+  multiset.lem \
+  state_exception.lem \
+  state_exception_undefined.lem \
+  std.lem \
+  monadic_parsing.lem
+
+SOURCE_ail_typing=\
+  Range.lem \
+  Implementation.lem \
+  AilTypesAux.lem \
+  AilSyntaxAux.lem \
+  AilWf.lem \
+  AilTyping.lem \
+  GenTypesAux.lem \
+  GenTyping.lem
+
+SOURCE_cabs_to_ail=\
+  cabs_to_ail_aux.lem \
+  scope_table.lem \
+  cabs_to_ail_effect.lem \
+  cabs_to_ail.lem \
+  wipFrontend.lem
+
+SOURCE_core_to_core=\
+  core_sequentialise.lem \
+  core_indet.lem \
+  core_rewrite.lem 
+
+SOURCE_core_dynamics=\
+  core_run_aux.lem \
+  core_eval.lem \
+  core_run.lem \
+  driver.lem
+
+SOURCE_elaboration=\
+  translation_effect.lem \
+  translation_aux.lem \
+  translation.lem 
+
+SOURCE_defacto=\
+  mem_common.lem \
+  defacto_memory_types.lem \
+  defacto_memory_aux.lem \
+  defacto_memory.lem \
+  mem.lem \
+  mem_aux.lem
+
+SOURCE_concurrency_interface=\
+  cmm_aux.lem 
+
+FLAT_SOURCE_concurrency_interface=\
+  cmm_aux.lem \
+  cmm_csem.lem
+
+
+SOURCE_language_aux=\
+
+
+
+CERBERUS_LEM_FLAT_SOURCES=\
+  $(SOURCE_prelude) \
+  $(SOURCE_cabs) \
+  $(SOURCE_ail) \
+  $(SOURCE_core_ctype) \
+  $(SOURCE_defacto) \
+  $(FLAT_SOURCE_concurrency_interface) \
+  $(SOURCE_core) \
+  $(SOURCE_utils) \
+  $(SOURCE_ail_typing) \
+  $(SOURCE_cabs_to_ail) \
+  $(SOURCE_core_to_core) \
+  $(SOURCE_elaboration) \
+  $(SOURCE_core_dynamics)
+
+
+CERBERUS_LEM_SOURCES=\
+  $(SOURCE_prelude) \
+  $(SOURCE_cabs) \
+  $(addprefix ail/, $(SOURCE_ail)) \
+  $(SOURCE_core_ctype) \
+  builtins.lem \
+  output.lem \
+  pp.lem \
+  implementation_.lem \
+  $(SOURCE_defacto) \
+  $(SOURCE_utils) \
+  nondeterminism.lem \
+  $(SOURCE_concurrency_interface) \
+  $(SOURCE_core) \
+  $(SOURCE_core_typing) \
+  $(addprefix ail/, $(SOURCE_ail_typing)) \
+  $(SOURCE_cabs_to_ail) \
+  $(SOURCE_core_to_core) \
+  $(SOURCE_core_dynamics) \
+  $(SOURCE_elaboration)

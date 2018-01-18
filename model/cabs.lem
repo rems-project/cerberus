@@ -1,0 +1,436 @@
+open import Pervasives Loc
+
+type cabs_identifier =
+  | CabsIdentifier of Loc.t * string
+
+instance (Eq cabs_identifier)
+  let (=) ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    str1 = str2
+  let (<>) ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    str1 <> str2
+end
+
+instance (SetType cabs_identifier)
+  let setElemCompare ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    setElemCompare str1 str2
+end
+
+(*
+instance (MapKeyType cabs_identifier)
+  let mapKeyCompare ident1 ident2 =
+    let (CabsIdentifier _ str1) = ident1 in
+    let (CabsIdentifier _ str2) = ident2 in
+    mapKeyCompare str1 str2
+end
+*)
+
+instance (Located cabs_identifier)
+  let locOf ident =
+    let (CabsIdentifier loc _) = ident in
+    loc
+end
+
+
+instance (Show cabs_identifier)
+  let show ident =
+    let CabsIdentifier _ str = ident in
+    str
+end
+
+
+
+
+(* §6.4.4 Constants *)
+type cabs_integer_suffix =
+  | CabsSuffix_U
+  | CabsSuffix_UL
+  | CabsSuffix_ULL
+  | CabsSuffix_L
+  | CabsSuffix_LL
+
+type cabs_integer_constant = string * maybe cabs_integer_suffix
+
+type cabs_character_prefix =
+  | CabsPrefix_L
+  | CabsPrefix_u
+  | CabsPrefix_U
+
+type cabs_character_constant = maybe cabs_character_prefix * string
+
+
+(* TODO *)
+type cabs_constant =
+  | CabsInteger_const     of cabs_integer_constant
+  | CabsFloating_const    of string
+  | CabsEnumeration_const 
+  | CabsCharacter_const   of cabs_character_constant
+
+
+(* §6.4.5 String literals *)
+type cabs_encoding_prefix =
+  | CabsEncPrefix_u8
+  | CabsEncPrefix_u
+  | CabsEncPrefix_U
+  | CabsEncPrefix_L
+
+type cabs_string_literal = maybe cabs_encoding_prefix * list string
+
+
+(* §6.5 Expressions *)
+type cabs_expression_ =
+  (* §6.5.1 Primary expressions, Syntax *)
+  | CabsEident of cabs_identifier
+  | CabsEconst of cabs_constant
+  | CabsEstring of cabs_string_literal
+  | CabsEgeneric of cabs_expression * list cabs_generic_association
+  (* §6.5.2 Postfix operators, Syntax *)
+  | CabsEsubscript of cabs_expression * cabs_expression
+  | CabsEcall of cabs_expression * list cabs_expression
+  | CabsEmemberof of cabs_expression * cabs_identifier
+  | CabsEmemberofptr of cabs_expression * cabs_identifier
+  | CabsEpostincr of cabs_expression
+  | CabsEpostdecr of cabs_expression
+  | CabsEcompound of type_name * list (maybe (list designator) * initializer_)
+  (* §6.5.3 Unary operators, Syntax *)
+  | CabsEpreincr of cabs_expression
+  | CabsEpredecr of cabs_expression
+  | CabsEunary of cabs_unary_operator * cabs_expression
+  | CabsEsizeof_expr of cabs_expression
+  | CabsEsizeof_type of type_name
+  | CabsEalignof of type_name
+  (* §6.5.4 Cast operators, Syntax *)
+  | CabsEcast of type_name * cabs_expression
+  (* §6.5.5-14 Multiplicative/... operators, Syntax *)
+  | CabsEbinary of cabs_binary_operator * cabs_expression * cabs_expression
+  (* §6.5.15 Conditional operator, Syntax *)
+  | CabsEcond of cabs_expression * cabs_expression * cabs_expression
+  (* §6.5.16 Assignment operators, Syntax *)
+  | CabsEassign of cabs_assignment_operator * cabs_expression * cabs_expression
+  (* §6.5.17 Comma operator, Syntax *)
+  | CabsEcomma of cabs_expression * cabs_expression
+  (* NOTE: the following are suppose to be in the library, but need special treatment *)
+  | CabsEassert of cabs_expression
+  | CabsEoffsetof of type_name * cabs_identifier
+  | CabsEva_start of cabs_expression * cabs_identifier
+  | CabsEva_arg of cabs_expression * type_name
+  | CabsEprint_type of cabs_expression (* CERBERUS EXTENSION *)
+and cabs_expression =
+  | CabsExpression of Loc.t * cabs_expression_
+
+(* §6.5.1.1 Generic selection, Syntax *)
+and cabs_generic_association =
+  | GA_type of type_name * cabs_expression
+  | GA_default of cabs_expression
+
+
+(* §6.5.3 Unary operators, Syntax *)
+and cabs_unary_operator =
+  | CabsAddress
+  | CabsIndirection
+  | CabsPlus
+  | CabsMinus
+  | CabsBnot
+  | CabsNot
+
+and cabs_binary_operator =
+  (* §6.5.5 Multiplicative operators, Syntax *)
+  | CabsMul | CabsDiv | CabsMod
+  (* §6.5.6 Additive operators, Syntax *)
+  | CabsAdd | CabsSub
+  (* §6.5.7 Shift operators, Syntax *)
+  | CabsShl | CabsShr
+  (* §6.5.8 Relational operators, Syntax *)
+  | CabsLt | CabsGt | CabsLe | CabsGe
+  (* §6.5.9 Equality operators, Syntax *)
+  | CabsEq | CabsNe
+  (* §6.5.10 Bitwise AND operator, Syntax *)
+  | CabsBand
+  (* §6.5.11 Bitwise exclusive OR operator, Syntax *)
+  | CabsBxor
+  (* §6.5.12 Bitwise inclusive OR operator, Syntax *)
+  | CabsBor
+  (* §6.5.13 Logical AND operator *)
+  | CabsAnd
+  (* §6.5.14 Logical OR operator, Syntax *)
+  | CabsOr
+
+(* §6.5.16 Assignment operators, Syntax *)
+and cabs_assignment_operator =
+  | Assign
+  | Assign_Mul
+  | Assign_Div
+  | Assign_Mod
+  | Assign_Add
+  | Assign_Sub
+  | Assign_Shl
+  | Assign_Shr
+  | Assign_Band
+  | Assign_Bxor
+  | Assign_Bor
+
+
+(* §6.7 Declarations, Syntax *)
+and declaration =
+  | Declaration_base of specifiers * list init_declarator
+  | Declaration_static_assert of static_assert_declaration
+
+and specifiers = <|
+  storage_classes:      list storage_class_specifier;
+  type_specifiers:      list cabs_type_specifier;
+  type_qualifiers:      list cabs_type_qualifier;
+  function_specifiers:  list function_specifier;
+  alignment_specifiers: list alignment_specifier;
+|>
+
+and init_declarator =
+  | InitDecl of Loc.t * declarator * maybe initializer_
+
+
+(* §6.7.1 Storage-class specifiers, Syntax *)
+and storage_class_specifier =
+  | SC_typedef
+  | SC_extern
+  | SC_static
+  | SC_Thread_local
+  | SC_auto
+  | SC_register
+
+
+(* §6.7.2 Type specifiers, Syntax *)
+and cabs_type_specifier =
+  | TSpec_void
+  | TSpec_char
+  | TSpec_short
+  | TSpec_int
+  | TSpec_long
+  | TSpec_float
+  | TSpec_double
+  | TSpec_signed
+  | TSpec_unsigned
+  | TSpec_Bool
+  | TSpec_Complex
+  | TSpec_Atomic of type_name (* §6.7.2.4 Atomic type specifiers, Syntax *)
+  | TSpec_struct of maybe cabs_identifier * maybe (list struct_declaration)
+  | TSpec_union  of maybe cabs_identifier * maybe (list struct_declaration)
+  | TSpec_enum   of maybe cabs_identifier * maybe (list (cabs_identifier * maybe
+                                                           cabs_expression))
+  | TSpec_name   of cabs_identifier
+
+(* §6.7.2.1 Structure and union specifiers, Syntax *)
+and struct_declaration =
+  | Struct_declaration of list cabs_type_specifier * list cabs_type_qualifier * list struct_declarator
+  | Struct_assert      of static_assert_declaration
+
+and struct_declarator =
+  | SDecl_simple   of declarator
+  | SDecl_bitfield of maybe declarator * cabs_expression
+
+(* §6.7.3 Type qualifiers, Syntax *)
+and cabs_type_qualifier =
+  | Q_const
+  | Q_restrict
+  | Q_volatile
+  | Q_Atomic
+
+
+(* §6.7.4 Function specifiers, Syntax *)
+and function_specifier =
+  | FS_inline
+  | FS_Noreturn
+
+
+(* §6.7.5 Alignment specifier, Syntax *)
+and alignment_specifier =
+  | AS_type of type_name
+  | AS_expr of cabs_expression
+
+
+(* §6.7.6 Declarators, Syntax *)
+and declarator =
+  | Declarator of maybe pointer_declarator * direct_declarator
+
+and direct_declarator =
+  | DDecl_identifier of cabs_identifier
+  | DDecl_declarator of declarator
+  | DDecl_array      of direct_declarator * array_declarator
+  | DDecl_function   of direct_declarator * parameter_type_list
+and array_declarator =
+    (* the bool indicate the occurence of the static keyword *)
+  | ADecl of Loc.t * list cabs_type_qualifier * bool * maybe array_declarator_size
+and array_declarator_size =
+  | ADeclSize_expression of cabs_expression
+  | ADeclSize_asterisk
+
+and pointer_declarator =
+  | PDecl of list cabs_type_qualifier * maybe pointer_declarator
+
+and parameter_type_list =
+  | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
+
+and parameter_declaration =
+  | PDeclaration_decl     of specifiers * declarator
+  | PDeclaration_abs_decl of specifiers * maybe abstract_declarator
+
+
+(* §6.7.7 Type names, Syntax *)
+and type_name =
+  | Type_name of list cabs_type_specifier * list cabs_type_qualifier * maybe abstract_declarator
+
+and abstract_declarator =
+  | AbsDecl_pointer of pointer_declarator
+  | AbsDecl_direct  of maybe pointer_declarator * direct_abstract_declarator
+
+and direct_abstract_declarator =
+  | DAbs_abs_declarator of abstract_declarator
+  | DAbs_array          of maybe direct_abstract_declarator * array_declarator
+  | DAbs_function       of maybe direct_abstract_declarator * parameter_type_list
+
+
+(* §6.7.9 Initialization, Syntax *)
+and initializer_ =
+  | Init_expr of cabs_expression
+  | Init_list of list (maybe (list designator) * initializer_)
+
+and designator =
+  | Desig_array of cabs_expression
+  | Desig_member of cabs_identifier
+
+
+(* §6.7.10 Static assertions *)
+and static_assert_declaration =
+ | Static_assert of cabs_expression * cabs_string_literal
+
+(* §6.7.2.2 Enumeration specifiers, Syntax *)
+type enumerator = cabs_identifier * maybe cabs_expression
+
+(* §6.8 Statements and blocks, Syntax *)
+type cabs_statement_ =
+  (* §6.8.1 Labeled statements, Syntax *)
+  | CabsSlabel of cabs_identifier * cabs_statement
+  | CabsScase of cabs_expression * cabs_statement
+  | CabsSdefault of cabs_statement
+  (* §6.8.2 Compound statement, Syntax *)
+  | CabsSblock of list cabs_statement
+  (* §, Syntax *)
+  | CabsSdecl of declaration
+  (* §6.8.3 Expression and null statements, Syntax *)
+  | CabsSnull
+  | CabsSexpr of cabs_expression
+  (* §6.8.4 Selection statements, Syntax *)
+  | CabsSif of cabs_expression * cabs_statement * maybe cabs_statement
+  | CabsSswitch of cabs_expression * cabs_statement
+  (* §6.8.5 Iteration statements, Syntax *)
+  | CabsSwhile of cabs_expression * cabs_statement
+  | CabsSdo of cabs_expression * cabs_statement
+  | CabsSfor of maybe for_clause * maybe cabs_expression * maybe cabs_expression * cabs_statement
+  (* §6.8.6 Jump statements, Syntax *)
+  | CabsSgoto of cabs_identifier
+  | CabsScontinue
+  | CabsSbreak
+  | CabsSreturn of maybe cabs_expression
+  (* NON-STD cppmem par construct *)
+  | CabsSpar of list cabs_statement
+
+and cabs_statement =
+  | CabsStatement of Loc.t * cabs_statement_
+
+and for_clause =
+ | FC_expr of cabs_expression
+ | FC_decl of declaration
+
+
+(* §6.9 External definitions, Syntax *)
+type translation_unit =
+  | TUnit of list external_declaration
+
+and external_declaration =
+  | EDecl_func of function_definition
+  | EDecl_decl of declaration
+
+(* §6.9.1 Function definitions, Syntax *)
+and function_definition =
+  | FunDef of Loc.t * specifiers * declarator * cabs_statement
+
+
+(* This type's sole purpose it to allow the construction of multiset of base
+   type specifiers *)
+type cabs_base_type_specifier =
+  | BTSpec_void
+  | BTSpec_char
+  | BTSpec_short
+  | BTSpec_int
+  | BTSpec_long
+  | BTSpec_float
+  | BTSpec_double
+  | BTSpec_signed
+  | BTSpec_unsigned
+  | BTSpec_Bool
+  | BTSpec_Complex
+
+
+instance (Located cabs_expression)
+  let locOf expr =
+    let (CabsExpression loc _) = expr in
+    loc
+end
+
+instance (Located cabs_statement)
+  let locOf stmt =
+    let (CabsStatement loc _) = stmt in
+    loc
+end
+
+
+instance (Eq storage_class_specifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+
+instance (SetType cabs_base_type_specifier)
+  let setElemCompare bspecif1 bspecif2 =
+    let ord = function
+      | BTSpec_void ->
+          (0 : nat)
+      | BTSpec_char ->
+          1
+      | BTSpec_short ->
+          2
+      | BTSpec_int ->
+          3
+      | BTSpec_long ->
+          4
+      | BTSpec_float ->
+          5
+      | BTSpec_double ->
+          6
+      | BTSpec_signed ->
+          7
+      | BTSpec_unsigned ->
+          8
+      | BTSpec_Bool ->
+          9
+      | BTSpec_Complex ->
+          10
+    end in
+    setElemCompare (ord bspecif1) (ord bspecif2)
+end
+
+
+instance (Eq cabs_type_qualifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
+instance (Eq function_specifier)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end

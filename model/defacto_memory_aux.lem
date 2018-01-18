@@ -1,0 +1,425 @@
+open import Pervasives Num_extra
+
+open import Utils
+open import AilTypes AilTypesAux 
+
+open import Core_ctype
+import Core_ctype_aux
+import Implementation_
+
+open import Mem_common Defacto_memory_types
+
+
+
+
+(* BEGIN fake stuff to get the concurrency to compile =========================================== *)
+let fake_pointer_value_eq (PV _ ptr_val_1 sh1) (PV _ ptr_val_2 sh2) =
+  match (ptr_val_1, ptr_val_2) with
+    | (PVbase alloc_id1 _, PVbase alloc_id2 _) ->
+        alloc_id1 = alloc_id2
+    | _ ->
+        error "DON'T USE Eq for pointer_value"
+  end
+instance (Eq impl_pointer_value)
+  let (=) = fake_pointer_value_eq
+  let (<>) ptr_val1 ptr_val2 = not (fake_pointer_value_eq ptr_val1 ptr_val2)
+end
+
+let rec fake_mem_value_eq mval1 mval2 =
+  match (mval1, mval2) with
+    | (MVinteger _ (IV _ (IVconcrete n1)), MVinteger _ (IV _ (IVconcrete n2))) ->
+        n1 = n2
+    | (MVarray mvals1, MVarray mvals2) ->
+        List.all (uncurry fake_mem_value_eq) (zip mvals1 mvals2)
+    | _ ->
+        error "DON'T USE Eq for mem_value"
+end
+
+instance (Eq impl_mem_value)
+  let (=) = fake_mem_value_eq
+  let (<>) mval1 mval2 = not (fake_mem_value_eq mval1 mval2)
+end
+
+instance (Show impl_mem_value)
+  let show x = "WIP: show mem_value"
+end
+
+instance (Show impl_pointer_value)
+  let show x = "WIP: show pointer_value"
+end
+
+(* END fake stuff to get the concurrency to compile ============================================= *)
+
+
+(* BEGIN debug ================================================================================== *)
+val stringFromPointer_value: impl_pointer_value -> string
+val stringFromMem_value: impl_mem_value -> string
+val stringFromInteger_value: impl_integer_value -> string
+val stringFromShift_path: shift_path -> string (* DEBUG *)
+val stringFromCore_ctype:  Core_ctype.ctype -> string
+
+declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
+declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
+declare ocaml target_rep function stringFromInteger_value = `String_defacto_memory.string_of_integer_value`
+declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
+declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
+
+(* TODO: HOL hack *)
+declare hol target_rep function stringFromPointer_value p = "??NOT IMPLEMENTED??"
+declare hol target_rep function stringFromMem_value p = "??NOT IMPLEMENTED??"
+declare hol target_rep function stringFromShift_path p = "??NOT IMPLEMENTED??"
+(* END debug ==================================================================================== *)
+
+
+val mk_iv_constr:
+    (impl_integer_value -> impl_integer_value -> mem_constraint impl_integer_value) ->
+    integer_value_base ->
+    integer_value_base ->
+    mem_constraint impl_integer_value
+let mk_iv_constr ctor ival_1 ival_2 =
+  (*simplify_constraint*) (ctor (IV Prov_none ival_1) (IV Prov_none ival_2))
+
+
+
+
+
+
+
+
+
+type simpl_state = <|
+(*
+  min_eqs: map integerType integer_value_base;
+  max_eqs: map integerType integer_value_base;
+*)
+  sizeof_eqs: map ctype integer_value_base;
+  alignof_eqs: map ctype integer_value_base;
+|>
+
+
+
+let encode (nbits: nat) (n: integer) =
+  if 0 <= n then
+    n
+  else
+    (2 ** nbits) + n
+
+let decode (nbits: nat) (n: integer) =
+  if n <= 2 ** (nbits - 1) - 1 then
+    n
+  else
+    n - (2 ** nbits)
+
+
+val     tmp_compl_aux: nat -> integer -> integer
+let rec tmp_compl_aux nbits n =
+  if nbits = 0 then
+    0
+  else
+    let n_ = n / 2 in
+    (1 - (integerRem_f n 2)) + 2 * tmp_compl_aux (nbits - 1) n_
+
+val tmp_compl: nat -> integer -> integer
+let tmp_compl nbits n =
+  decode nbits (tmp_compl_aux nbits (encode nbits n))
+
+
+val     tmp_AND_aux: nat -> integer -> integer -> integer
+let rec tmp_AND_aux nbits n1 n2 =
+  if nbits = 0 then
+    0
+  else
+    let n1_ = n1 / 2 in
+    let n2_ = n2 / 2 in
+    (if (integerRem_f n1 2) = 1 && (integerRem_f n2 2) = 1 then 1 else 0) + 2 * (tmp_AND_aux (nbits-1) n1_ n2_)
+
+
+val     tmp_OR_aux: nat -> integer -> integer -> integer
+let rec tmp_OR_aux nbits n1 n2 =
+  if nbits = 0 then
+    0
+  else
+    let n1_ = n1 / 2 in
+    let n2_ = n2 / 2 in
+    (if (integerRem_f n1 2) = 1 || (integerRem_f n2 2) = 1 then 1 else 0) + 2 * (tmp_OR_aux (nbits-1) n1_ n2_)
+
+
+val     tmp_XOR_aux: nat -> integer -> integer -> integer
+let rec tmp_XOR_aux nbits n1 n2 =
+  if nbits = 0 then
+    0
+  else
+    let n1_ = n1 / 2 in
+    let n2_ = n2 / 2 in
+    (if (integerRem_f n1 2) * (integerRem_f n2 2) = 0 &&
+        not ((integerRem_f n1 2) + (integerRem_f n2 2) = 0) then 1 else 0) + 2 * (tmp_XOR_aux (nbits-1) n1_ n2_)
+
+
+val tmp_AND: nat -> integer -> integer -> integer
+val tmp_OR:  nat -> integer -> integer -> integer
+val tmp_XOR: nat -> integer -> integer -> integer
+
+let tmp_AND width n1 n2 =
+  let nbits = 8 * width in
+  decode nbits (tmp_AND_aux nbits (encode nbits n1) (encode nbits n2))
+
+let tmp_OR width n1 n2 =
+  let nbits = 8 * width in
+  let n1_ = encode nbits n1 in
+  let n2_ = encode nbits n2 in
+  let () = Debug.print_debug 0 [] (fun () ->
+    "nbits= " ^ show nbits ^ ", n1 = " ^ show n1 ^ " -- n1_= " ^ show n1_
+  ) in
+  let () = Debug.print_debug 0 [] (fun () ->
+    "nbits= " ^ show nbits ^ ", n2 = " ^ show n2 ^ " -- n2_= " ^ show n2_
+  ) in
+  decode nbits (tmp_OR_aux nbits n1_ n2_)
+
+let tmp_XOR width n1 n2 =
+  let nbits = 8 * width in
+  decode nbits (tmp_XOR_aux nbits (encode nbits n1) (encode nbits n2))
+
+
+let rec simplify_integer_value_base ival_ =
+  let lifted_self x =
+    either (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base x) in
+    match ival_ with
+      | IVunspecified ->
+          Right ival_
+      | IVconcurRead _ _ ->
+          Right ival_
+      | IVconcrete n ->
+          Left n
+      | IVaddress alloc_id pref ->
+          Right ival_
+      | IVfromptr ty ity ptrval sh ->
+          (* TODO *)
+          Right ival_
+    | IVop iop [ival_1; ival_2] ->
+        let num_op = match iop with
+          | IntAdd ->
+              (+)
+          | IntSub ->
+              (-)
+          | IntMul ->
+              ( * )
+          | IntDiv ->
+              fun x y -> if y = 0 then 0 else integerDiv_t x y
+          | IntRem_t ->
+              fun x y -> if y = 0 then 0 else integerRem_t x y
+          | IntRem_f ->
+              fun x y -> if y = 0 then 0 else integerRem_f x y
+          | IntExp ->
+              fun x y -> x ** natFromInteger y
+        end in
+        match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Left n1, Left n2) ->
+              Left (num_op n1 n2)
+          | (x, y) ->
+              let f = either (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVop iop [f x; f y])
+        end
+    | IVop _ _ ->
+        (* Core type error *)
+        error "Defacto_memory_aux2.simplify_integer_value_base, IVop: Core type error"
+    | IVmin ity ->
+        match ity with
+          | Char ->
+              if Implementation_.char_is_signed then
+                Left (0 - (2 ** (8-1)))
+              else
+                Left 0
+          | Bool ->
+              (* this type is unsigned *)
+              Left 0
+          | Size_t ->
+              (* this type is unsigned *)
+              Left 0
+          | Unsigned _ ->
+              Left 0
+          | Ptrdiff_t ->
+              (* this type is signed *)
+              match Implementation_.sizeof_ity ity with
+                | Just n ->
+                    Left (0 - (2 ** (8*n-1)))
+                | Nothing ->
+                    Right ival_
+              end
+          | Signed _ ->
+              match Implementation_.sizeof_ity ity with
+                | Just n ->
+                    Left (0 -  (2 ** (8*n-1)))
+                | Nothing ->
+                    Right ival_
+              end
+          | Enum _ ->
+              error "IVmin Enum"
+          | IBuiltin _ ->
+              error "IVmin IBuiltin"
+        end
+    | IVmax ity ->
+        match Implementation_.sizeof_ity ity with
+          | Just n ->
+              let signed_max   = (2 ** (8*n-1))  - 1 in
+              let unsigned_max = (2 ** (8*n))  - 1   in
+              match ity with
+                | Char ->
+                    Left (if Implementation_.char_is_signed then
+                      signed_max
+                    else
+                      unsigned_max)
+                | Bool ->
+                    (* TODO: not sure about this (maybe it should be 1 and not 255? *)
+                    Left unsigned_max
+                | Size_t ->
+                    Left unsigned_max
+                | Unsigned _ ->
+                    Left unsigned_max
+                | Ptrdiff_t ->
+                    Left signed_max
+                | Signed _ ->
+                    Left signed_max
+                | Enum _ ->
+                    error "IVmax Enum"
+                | IBuiltin _ ->
+                    error "IVmax IBuiltin"
+              end
+          | Nothing ->
+              Right ival_
+        end
+    | IVsizeof ty ->
+        match ty with
+          | Core_ctype.Void ->
+              (* Ail type error *)
+              error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Void"
+          | Core_ctype.Basic (Integer ity) ->
+              match Nothing (* Implementation_.sizeof_ity ity*) with
+                | Just n ->
+                    Left (integerFromNat n)
+                | Nothing ->
+                    Right ival_
+              end
+          | Core_ctype.Basic (Floating fty) ->
+              match Implementation_.sizeof_fty fty with
+                | Just n ->
+                    Left (integerFromNat n)
+                | Nothing ->
+                    Right ival_
+              end
+          | Core_ctype.Array elem_ty Nothing ->
+              (* Ail type error *)
+              error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Array Nothing"
+          | Core_ctype.Array elem_ty (Just n) ->
+              simplify_integer_value_base (IVop IntMul [IVsizeof elem_ty; IVconcrete n])
+          | Core_ctype.Function _ _ _ ->
+              (* Ail type error *)
+              error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Function"
+          | Core_ctype.Pointer _ ref_ty ->
+              Left 8
+          | Core_ctype.Atomic atom_ty ->
+              simplify_integer_value_base (IVsizeof atom_ty)
+          | Core_ctype.Struct tag_sym ->
+              let Core_ctype.StructDef membrs = Core_ctype_aux.get_membersDefs tag_sym in
+              simplify_integer_value_base begin
+                List.foldl (fun acc (ident, ty) ->
+                  IVop IntAdd [ lifted_self (IVsizeof ty);
+                                IVop IntAdd [IVpadding tag_sym ident; acc] ]
+                ) (IVconcrete 0) membrs
+              end
+           
+          (* TOOD: move the code from mem_simplify here *)
+          | Core_ctype.Union tag_sym ->
+              Right ival_ (* error "TODO simplify_integer_value: IVsizeof Union" *)
+          | Core_ctype.Builtin str ->
+              Right ival_ (* error "TODO simplify_integer_value: IVsizeof Builtin" *)
+        end
+    | IValignof ty ->
+        match ty with
+          | Core_ctype.Void ->
+              (* Ail type error *)
+              error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Void"
+          | Core_ctype.Basic (Integer ity) ->
+              match Implementation_.alignof_ity ity with
+                | Just n ->
+                    Left (integerFromNat n)
+                | Nothing ->
+                    Right ival_
+              end
+          | Core_ctype.Basic (Floating fty) ->
+              match Implementation_.alignof_fty fty with
+                | Just n ->
+                    Left (integerFromNat n)
+                | Nothing ->
+                    Right ival_
+              end
+          | Core_ctype.Array elem_ty _ ->
+              simplify_integer_value_base (IValignof elem_ty)
+          | Core_ctype.Function _ _ _ ->
+              (* Ail type error *)
+              error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Function"
+          | Core_ctype.Pointer _ ref_ty ->
+              Left 8
+          | Core_ctype.Atomic atom_ty ->
+              simplify_integer_value_base (IValignof atom_ty)
+          | Core_ctype.Struct tag_sym ->
+              (* TODO *)
+              Right ival_
+          | Core_ctype.Union tag_sym ->
+              error "TODO simplify_integer_value: IValignof Union"
+          | Core_ctype.Builtin str ->
+              error "TODO simplify_integer_value: IValignof Builtin"
+        end
+    | IVpadding _ _ ->
+        Right ival_
+    | IVptrdiff ty ptrval1 ptrval2 ->
+        (* TODO: check *)
+        Right ival_
+
+    | IVbyteof _ _ ->
+        Right ival_ (* error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVbyteof" *)
+    | IVcomposite _ ->
+        error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVcomposite"
+    | IVbitwise ity (BW_complement ival_1) ->
+        match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1) with
+          | (Just w, Left n1) ->
+              Left (tmp_compl w n1)
+          | (_, Left n1) ->
+              Right (IVbitwise ity (BW_complement (IVconcrete n1)))
+          | (_, Right ival_1') ->
+              Right (IVbitwise ity (BW_complement ival_1'))
+        end
+    | IVbitwise ity (BW_AND ival_1 ival_2) ->
+        match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Just w, Left n1, Left n2) ->
+              Left (tmp_AND w n1 n2)
+          | (_, x, y) ->
+              let f = either (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise ity (BW_AND (f x) (f y)))
+        end
+    | IVbitwise ity (BW_OR ival_1 ival_2) ->
+        match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Just w, Left n1, Left n2) ->
+              Left (tmp_OR w n1 n2)
+          | (_, x, y) ->
+              let f = either (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise ity (BW_OR (f x) (f y)))
+        end
+    | IVbitwise ity (BW_XOR ival_1 ival_2) ->
+        match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          | (Just w, Left n1, Left n2) ->
+              Left (tmp_XOR w n1 n2)
+          | (_, x, y) ->
+              let f = either (fun z -> IVconcrete z) (fun z -> z) in
+              Right (IVbitwise ity (BW_XOR (f x) (f y)))
+        end
+  end
+
+
+
+val eval_integer_value_base: integer_value_base -> maybe integer
+let eval_integer_value_base ival_ =
+  either (fun n -> Just n) (fun _ -> Nothing) (simplify_integer_value_base ival_)
+
+val     lifted_simplify_integer_value_base: integer_value_base -> integer_value_base
+let rec lifted_simplify_integer_value_base ival_ =
+  either (fun n -> IVconcrete n) (fun z -> z) (simplify_integer_value_base ival_)

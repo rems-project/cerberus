@@ -1,0 +1,1246 @@
+open import Pervasives
+
+open import Utils Core Core_aux Core_ctype
+import Symbol AilTypes Mem
+
+import Pp
+
+module ATypes = AilTypes
+module Caux = Core_aux
+
+val pp_pexpr: pexpr -> string
+declare ocaml target_rep function pp_pexpr = `String_core.string_of_pexpr`
+
+
+(*
+type rewriter = <|
+  unit_rwter:                                                      expr unit;
+  false_rwter:                                                     expr unit;
+  const_rwter:       Mem.mem_value                              -> expr unit;
+  list_rwter:        list (expr unit)                           -> expr unit;
+  ctype_rwter:       ctype                                      -> expr unit;
+  sym_rwter:         sym                                        -> expr unit;
+  impl_rwter:        Implementation_.implementation_constant    -> expr unit;
+  tuple_rwter:       list (expr unit)                           -> expr unit;
+  not_rwter:         expr unit                                  -> expr unit;
+  op_rwter:          binop -> expr unit -> expr unit            -> expr unit;
+  call_rwter:        name -> list (expr unit)                   -> expr unit;
+  output_rwter:      string                                     -> expr unit;
+  undef_rwter:       Undefined.undefined_behaviour              -> expr unit;
+  error_rwter:                                                     expr unit;
+  skip_rwter:                                                      expr unit;
+  let_rwter:         sym -> expr unit -> expr unit              -> expr unit;
+  if_rwter:          expr unit -> expr unit -> expr unit        -> expr unit;
+  proc_rwter:        name -> list (expr unit)                   -> expr unit;
+  action_rwter:      paction unit                               -> expr unit;
+  unseq_rwter:       list (expr unit)                           -> expr unit;
+  wseq_rwter:        list (maybe sym) -> expr unit -> expr unit -> expr unit;
+  sseq_rwter:        list (maybe sym) -> expr unit -> expr unit -> expr unit;
+  aseq_rwter:        maybe sym -> action unit -> paction unit   -> expr unit;
+  indet_rwter:       expr unit                                  -> expr unit;
+  bound_rwter:       nat -> expr unit                           -> expr unit;
+  save_rwter:        ksym -> list (sym * ctype) -> expr unit    -> expr unit;
+  run_rwter:         ksym -> list (sym * expr unit)             -> expr unit;
+  ret_rwter:         expr unit                                  -> expr unit;
+  nd_rwter:          list (expr unit)                           -> expr unit;
+  par_rwter:         list (expr unit)                           -> expr unit;
+  wait_rwter:        Thread.thread_id                           -> expr unit;
+  is_scalar_rwter:   expr unit                                  -> expr unit;
+  is_integer_rwter:  expr unit                                  -> expr unit;
+  is_signed_rwter:   expr unit                                  -> expr unit;
+  is_unsigned_rwter: expr unit                                  -> expr unit;
+|>
+
+
+(* TODO: check if lem now translates properly partially applied ctors *)
+val rwter_identity: rewriter
+let rwter_identity = <|
+  unit_rwter=        Eunit;
+  false_rwter=       Efalse;
+  const_rwter=       fun cst -> Econst cst;
+  list_rwter=        fun pes -> Elist pes;
+  ctype_rwter=       fun ty -> Ectype ty;
+  sym_rwter=         fun a -> Esym a;
+  impl_rwter=        fun impl -> Eimpl impl;
+  tuple_rwter=       fun pes -> Etuple pes;
+  not_rwter=         fun pe -> Enot pe;
+  op_rwter=          fun bop e1 e2 -> Eop bop e1 e2;
+  call_rwter=        fun nm pes -> Ecall nm pes;
+  output_rwter=      fun str -> Eoutput str;
+  undef_rwter=       fun ubs -> Eundef ubs;
+  error_rwter=       Eerror;
+  skip_rwter=        Eskip;
+  let_rwter=         fun a pe1 e2 -> Elet a pe1 e2;
+  if_rwter=          fun pe1 e2 e3 -> Eif pe1 e2 e3;
+  proc_rwter=        fun nm pes -> Eproc () nm pes;
+  action_rwter=      fun pact -> Eaction pact;
+  unseq_rwter=       fun es -> Eunseq es;
+  wseq_rwter=        fun _as e1 e2 -> Ewseq _as e1 e2;
+  sseq_rwter=        fun _as e1 e2 -> Esseq _as e1 e2;
+  aseq_rwter=        fun a_opt act1 pact2 -> Easeq a_opt act1 pact2;
+  indet_rwter=       fun e -> Eindet e;
+  bound_rwter=       fun n e -> Ebound n e;
+  save_rwter=        fun k a_tys e -> Esave k a_tys e;
+  run_rwter=         fun k a_es -> Erun () k a_es;
+  ret_rwter=         fun pe -> Eret pe;
+  nd_rwter=          fun es -> End es;
+  par_rwter=         fun es -> Epar es;
+  wait_rwter=        fun tid -> Ewait tid;
+  is_scalar_rwter=   fun pe -> Eis_scalar pe;
+  is_integer_rwter=  fun pe -> Eis_integer pe;
+  is_signed_rwter=   fun pe -> Eis_signed pe;
+  is_unsigned_rwter= fun pe -> Eis_unsigned pe
+|>
+
+type only_effectful_rewriter = <|
+  skip_erwter:                                                 expr unit;
+  let_erwter:    sym -> expr unit -> expr unit              -> expr unit;
+  if_erwter:     expr unit -> expr unit -> expr unit        -> expr unit;
+  proc_erwter:   name -> list (expr unit)                   -> expr unit;
+  action_erwter: paction unit                               -> expr unit;
+  unseq_erwter:  list (expr unit)                           -> expr unit;
+  wseq_erwter:   list (maybe sym) -> expr unit -> expr unit -> expr unit;
+  sseq_erwter:   list (maybe sym) -> expr unit -> expr unit -> expr unit;
+  aseq_erwter:   maybe sym -> action unit -> paction unit   -> expr unit;
+  indet_erwter:  expr unit                                  -> expr unit;
+  bound_erwter:  nat -> expr unit                           -> expr unit;
+  save_erwter:   ksym -> list (sym * ctype) -> expr unit    -> expr unit;
+  run_erwter:    ksym -> list (sym * expr unit)             -> expr unit;
+  ret_erwter:    expr unit                                  -> expr unit;
+  nd_erwter:     list (expr unit)                           -> expr unit;
+  par_erwter:    list (expr unit)                           -> expr unit;
+  wait_erwter:   Thread.thread_id                           -> expr unit;
+|>
+
+val rwter_only_effectful: only_effectful_rewriter -> rewriter
+let rwter_only_effectful r = <| rwter_identity with
+  skip_rwter=   r.skip_erwter;
+  let_rwter=    fun a pe1 e2 -> if is_pure e2 then Elet a pe1 e2 else r.let_erwter a pe1 e2;
+  if_rwter=     fun pe1 e2 e3 -> if is_pure e2 && is_pure e3 then Eif pe1 e2 e3 else r.if_erwter pe1 e2 e3;
+  proc_rwter=   r.proc_erwter;
+  action_rwter= r.action_erwter;
+  unseq_rwter=  r.unseq_erwter;
+  wseq_rwter=   r.wseq_erwter;
+  sseq_rwter=   r.sseq_erwter;
+  aseq_rwter=   r.aseq_erwter;
+  indet_rwter=  r.indet_erwter;
+  bound_rwter=  r.bound_erwter;
+  save_rwter=   r.save_erwter;
+  run_rwter=    r.run_erwter;
+  ret_rwter=    r.ret_erwter;
+  nd_rwter=     r.nd_erwter;
+  par_rwter=    r.par_erwter;
+  wait_rwter=   r.wait_erwter
+|>
+*)
+
+
+
+
+
+
+
+
+
+(* Removes unnecessary Eskip ctors using the following rewritings:
+
+     let weak/strong pat = skip in e2      ===>    e2 [pat \ Vunit]
+     let weak/strong pat = e1 in skip      ===>    e1               *)
+let rec remove_skips (Expr annot expr_ as expr) =
+  match expr_ with
+    | Epure pe ->
+        (* unchanged *)
+        expr
+    | Ememop _ _ ->
+        (* unchanged *)
+        expr
+    | Eaction _ ->
+        (* unchanged *)
+        expr
+    | Ecase pe pat_es ->
+        (* just traversing *)
+        Expr annot (Ecase pe (List.map (fun (pat, e) -> (pat, remove_skips e)) pat_es))
+    | Elet pat pe1 e2 ->
+        (* just traversing *)
+        Expr annot (Elet pat pe1 (remove_skips e2))
+    | Eif pe1 e2 e3 ->
+        (* just traversing *)
+        Expr annot (Eif pe1 (remove_skips e2) (remove_skips e3))
+    | Eskip ->
+        (* unchanged *)
+        expr
+    | Eccall _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eproc _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eunseq es ->
+        (* just traversing *)
+        Expr annot (Eunseq (List.map remove_skips es))
+    | Ewseq pat e1 e2 ->
+        match remove_skips e1 with
+          | Expr _ Eskip ->
+              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | e1' ->
+              match remove_skips e2 with
+                | (Expr _ Eskip) ->
+                    e1'
+                | e2' ->
+                    Expr annot (Ewseq pat e1' e2')
+              end
+        end
+    | Esseq pat e1 e2 ->
+        match remove_skips e1 with
+          | Expr _ Eskip ->
+              remove_skips (Core_aux.unsafe_subst_pattern pat Core_aux.mk_unit_pe e2)
+          | e1' ->
+              match remove_skips e2 with
+                | (Expr _ Eskip) ->
+                    e1'
+                | e2' ->
+                    Expr annot (Esseq pat e1' e2')
+              end
+        end
+    | Easeq _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eindet i e ->
+        (* just traversing *)
+        Expr annot (Eindet i (remove_skips e))
+    | Ebound i e ->
+        (* just traversing *)
+        Expr annot (Ebound i (remove_skips e))
+    | End es ->
+        (* just traversing *)
+        Expr annot (End (List.map remove_skips es))
+    | Esave sym_bTy sym_bTy_pes e ->
+        (* just traversing *)
+        Expr annot (Esave sym_bTy sym_bTy_pes (remove_skips e))
+    | Erun _ _ _ ->
+        (* unchanged *)
+        expr
+    | Epar es ->
+        (* just traversing *)
+        Expr annot (Epar (List.map remove_skips es))
+    | Ewait _ ->
+        (* unchanged *)
+        expr
+  end
+
+
+let rec remove_unseqs (Expr annot expr_ as expr) =
+  match expr_ with
+    | Epure _ ->
+        (* unchanged *)
+        expr
+    | Ememop _ _ ->
+        (* unchanged *)
+        expr
+    | Eaction _ ->
+        (* unchanged *)
+        expr
+    | Ecase pe pat_es ->
+        (* just traversing *)
+        Expr annot (Ecase pe (List.map (fun (pat, e) -> (pat, remove_unseqs e)) pat_es))
+    | Elet pat pe1 e2 ->
+        (* just traversing *)
+        Expr annot (Elet pat pe1 (remove_unseqs e2))
+    | Eif pe1 e2 e3 ->
+        (* just traversing *)
+        Expr annot (Eif pe1 (remove_unseqs e2) (remove_unseqs e3))
+    | Eskip ->
+        (* unchanged *)
+        expr
+    | Eccall _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eproc _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eunseq es ->
+        let pes_opt = List.foldr (fun e acc_opt ->
+          match (acc_opt, to_pure e) with
+            | (Just acc, Just pe) ->
+                Just (pe :: acc)
+            | _ ->
+                Nothing
+          end) (Just []) es in
+        Expr annot (maybe (Eunseq (List.map remove_unseqs es)) (fun pes -> Epure (Caux.mk_tuple_pe pes)) pes_opt)
+(* TODO (bring back)
+  | Ewseq pat (Eunseq es) e2 ->
+      (* ys is the assoc list of symbolic names, values that can be substituted away *)
+      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
+        match to_pure e with
+          | Just cval ->
+              (acc1, (sym_opt, cval) :: acc2)
+          | Nothing ->
+              ((sym_opt, remove_unseqs e) :: acc1, acc2)
+        end) ([], []) (List.zip pat es) in
+      
+      let e2' =
+        remove_unseqs $ List.foldl (fun acc (sym_opt, cval) ->
+          maybe acc (fun (sym, _) -> subst_sym sym cval acc) sym_opt
+        ) e2 rev_ys in
+      
+      match rev_xs with
+        | [] ->
+            e2'
+        | [(a_opt, e')] ->
+            Ewseq [a_opt] e' e2'
+        | _ ->
+            let (_as', es') = List.unzip $ List.reverse rev_xs in
+            Ewseq _as' (Eunseq es') e2'
+      end
+*)
+(* TODO (bring back)
+  | Esseq _as (Eunseq es) e2 ->
+      let (rev_xs, rev_ys) = List.foldl (fun (acc1, acc2) (sym_opt, e) ->
+        match to_pure e with
+          | Just pe ->
+              (acc1, (sym_opt, pe) :: acc2)
+          | Nothing ->
+              ((sym_opt, remove_unseqs e) :: acc1, acc2)
+        end) ([], []) (List.zip _as es) in
+      
+      let e2' =
+        remove_unseqs $ List.foldl (fun acc (sym_opt, pe) ->
+          maybe acc (fun (sym, _) -> subst_sym sym pe acc) sym_opt
+        ) e2 rev_ys in
+      
+      match rev_xs with
+        | [] ->
+            e2'
+        | [(sym_opt, e')] ->
+            Esseq [sym_opt] e' e2'
+        | _ ->
+            let (_as', es') = List.unzip $ List.reverse rev_xs in
+            Esseq _as' (Eunseq es') e2'
+      end
+*)
+    | Ewseq pat e1 e2 ->
+        (* just traversing *)
+        Expr annot (Ewseq pat (remove_unseqs e1) (remove_unseqs e2))
+    | Esseq pat e1 e2 ->
+        (* just traversing *)
+        Expr annot (Esseq pat (remove_unseqs e1) (remove_unseqs e2))
+    | Easeq _ _ _ ->
+        (* unchanged *)
+        expr
+    | Eindet i e ->
+        (* just traversing *)
+        Expr annot (Eindet i (remove_unseqs e))
+    | Ebound i e ->
+        (* just traversing *)
+        Expr annot (Ebound i (remove_unseqs e))
+    | End es ->
+        (* just traversing *)
+        Expr annot (End (List.map remove_unseqs es))
+    | Esave sym_bTy sym_bTy_pes e ->
+        (* just traversing *)
+        Expr annot (Esave sym_bTy sym_bTy_pes (remove_unseqs e))
+    | Erun _ _ _ ->
+        (* unchanged *)
+        expr
+    | Epar es ->
+        (* just traversing *)
+        Expr annot (Epar (List.map remove_unseqs es))
+    | Ewait _ ->
+        (* unchanged *)
+        expr
+  end
+
+
+(*
+let rec remove_seqs expr =
+  match expr with
+  | Elet pat e1 e2 ->
+      Elet pat e1 (remove_seqs e2)
+
+  | Eif pe1 e2 e3 ->
+      Eif pe1 (remove_seqs e2) (remove_seqs e3)
+
+  | Eunseq es ->
+      Eunseq (List.map remove_seqs es)
+  
+  | Ewseq _as e1 e2 ->
+      let e1' = remove_seqs e1 in
+      let e2' = remove_seqs e2 in
+      match _as with
+        | [Just a] ->
+            if is_pure e1' then
+              subst_sym a e1' e2'
+            else
+              Ewseq _as e1' e2'
+        | _ ->
+            if is_value e1' then
+              subst_syms _as e1' e2'
+            else
+              Ewseq _as e1' e2'
+      end
+  
+  | Esseq _as e1 e2 ->
+      let e1' = remove_seqs e1 in
+      let e2' = remove_seqs e2 in
+      match _as with
+        | [Just a] ->
+            if is_pure e1' then
+              subst_sym a e1' e2'
+            else
+              Esseq _as e1' e2'
+        | _ ->
+            if is_value e1' then
+              subst_syms _as e1' e2'
+            else
+              Esseq _as e1' e2'
+      end
+  
+(*
+  | Etry e str_es ->
+      Etry (remove_seqs e) (List.map (fun (str, e) -> (str, remove_seqs e)) str_es)
+*)
+  | Eindet e ->
+      Eindet (remove_seqs e)
+  | Ebound n e ->
+      Ebound n (remove_seqs e)
+  | Esave k sym_tys e ->
+      Esave k sym_tys (remove_seqs e)
+  | End es ->
+      End (List.map remove_seqs es)
+  | Epar es ->
+      Epar (List.map remove_seqs es)
+  | _ ->
+      expr
+  end
+*)
+
+
+(* returns a Right iff the expression always ends with a return() *)
+val extract_either: forall 'a. either 'a 'a -> 'a
+let extract_either = function
+  | Left z ->
+      z
+  | Right z ->
+      z
+end
+
+let rec remove_dead_aux (Expr annot expr_ as expr) =
+  match expr_ with
+    | Epure _ ->
+        Left expr
+    | Ememop _ _ ->
+        Left expr
+    | Eaction _ ->
+        Left expr
+    | Ecase pe pat_es ->
+        let aux (pat, e) =
+          Either.either
+            (fun e' -> Left (pat, e'))
+            (fun e' -> Right (pat, e'))
+            (remove_dead_aux e) in
+        let _rev_pat_es' = List.foldl (fun _acc _pat_e' ->
+          match (_pat_e', _acc) with
+            | (Right pat_e', Right acc) ->
+                Right (pat_e' :: acc)
+            | _ ->
+                Left ((extract_either _pat_e') :: (extract_either _acc))
+          end
+        ) (Right []) (List.map aux pat_es) in
+        match _rev_pat_es' with
+          | Left rev_pat_es' ->
+              Left (Expr annot (Ecase pe (List.reverse rev_pat_es')))
+          | Right rev_pat_es' ->
+              Right (Expr annot (Ecase pe (List.reverse rev_pat_es')))
+        end
+    | Elet pat pe1 e2 ->
+        match remove_dead_aux e2 with
+          | Left e2' ->
+              Left (Expr annot (Elet pat pe1 e2'))
+          | Right e2' ->
+              Right (Expr annot (Elet pat pe1 e2'))
+        end
+    | Eif pe1 e2 e3 ->
+        match (remove_dead_aux e2, remove_dead_aux e3) with
+          | (Right e2', Right e3') ->
+              Right (Expr annot (Eif pe1 e2' e3'))
+          | (Left e2', Right e3') ->
+              Left (Expr annot (Eif pe1 e2' e3'))
+          | (Right e2', Left e3') ->
+              Left (Expr annot (Eif pe1 e2' e3'))
+          | (Left e2', Left e3') ->
+              Left (Expr annot (Eif pe1 e2' e3'))
+        end
+    | Eskip ->
+        Left expr
+    | Eccall _ _ _ ->
+        Left expr
+    | Eproc _ _ _ ->
+        Left expr
+    | Eunseq es ->
+        let _es' = List.map remove_dead_aux es in
+        (* TODO: this is inefficient (but readable) see Ecase, End, Epar for the
+           unreadable but efficient alternative. We should rewrite some
+           combinator for either *)
+        if List.all isRight _es' then
+          Right (Expr annot (Eunseq (List.map extract_either _es')))
+        else
+          Left (Expr annot (Eunseq (List.map extract_either _es')))
+    | Ewseq _as e1 e2 ->
+        match remove_dead_aux e1 with
+          | Left e1' ->
+              match remove_dead_aux e2 with
+                | Left e2' ->
+                    Left (Expr annot (Ewseq _as e1' e2'))
+                | Right e2' ->
+                    Right (Expr annot (Ewseq _as e1' e2'))
+              end
+          | Right e1' ->
+              Right e1'
+        end
+    | Esseq _as e1 e2 ->
+        match remove_dead_aux e1 with
+          | Left e1' ->
+              match remove_dead_aux e2 with
+                | Left e2' ->
+                    Left (Expr annot (Esseq _as e1' e2'))
+                | Right e2' ->
+                    Right (Expr annot (Esseq _as e1' e2'))
+              end
+          | Right e1' ->
+              Right e1'
+        end
+    | Easeq _ _ _ ->
+        Left expr
+    | Eindet i e ->
+        match remove_dead_aux e with
+          | Left e' ->
+              Left (Expr annot (Eindet i e'))
+          | Right e' ->
+              Right (Expr annot (Eindet i e'))
+        end
+    | Ebound i e ->
+        match remove_dead_aux e with
+          | Left e' ->
+              Left (Expr annot (Ebound i e'))
+          | Right e' ->
+              Right (Expr annot (Ebound i e'))
+        end
+    | End es ->
+        let _rev_es' = List.foldl (fun _acc _e' ->
+          match (_e', _acc) with
+            | (Right e', Right acc) ->
+                Right (e' :: acc)
+            | _ ->
+                Left ((extract_either _e') :: (extract_either _acc))
+          end
+        ) (Right []) (List.map remove_dead_aux es) in
+        match _rev_es' with
+          | Left rev_es' ->
+              Left (Expr annot (End (List.reverse rev_es')))
+          | Right rev_es' ->
+              Right (Expr annot (End (List.reverse rev_es')))
+        end
+    | Esave sym_bTy sym_bTy_pes e ->
+        match remove_dead_aux e with
+          | Left e' ->
+              Left (Expr annot (Esave sym_bTy sym_bTy_pes e'))
+          | Right e' ->
+              Right (Expr annot (Esave sym_bTy sym_bTy_pes e'))
+        end
+    | Erun _ _ _ ->
+        Left expr
+    | Epar es ->
+        let _rev_es' = List.foldl (fun _acc _e' ->
+          match (_e', _acc) with
+            | (Right e', Right acc) ->
+                Right (e' :: acc)
+            | _ ->
+                Left ((extract_either _e') :: (extract_either _acc))
+          end
+        ) (Right []) (List.map remove_dead_aux es) in
+        match _rev_es' with
+          | Left rev_es' ->
+              Left (Expr annot (Epar (List.reverse rev_es')))
+          | Right rev_es' ->
+              Right (Expr annot (Epar (List.reverse rev_es')))
+        end
+    | Ewait _ ->
+        Left expr
+  end
+
+let remove_dead expr =
+  match remove_dead_aux expr with
+    | Left expr' ->
+        expr'
+    | Right expr' ->
+        expr'
+  end
+
+
+let rec flatten_seqs (Expr annot expr_ as expr) =
+  match expr_ with
+    | Epure _ ->
+        expr
+    | Ememop _ _ ->
+        expr
+    | Eaction _ ->
+        expr
+    | Ecase pe pat_es ->
+        Expr annot (Ecase pe (List.map (fun (pat, e) -> (pat, flatten_seqs e)) pat_es))
+    | Elet pat pe1 e2 ->
+        Expr annot (Elet pat pe1 (flatten_seqs e2))
+    | Eif pe1 e2 e3 ->
+        Expr annot (Eif pe1 (flatten_seqs e2) (flatten_seqs e3))
+    | Eskip ->
+        expr
+    | Eccall _ _ _ ->
+        expr
+    | Eproc _ _ _ ->
+        expr
+    | Eunseq es ->
+        Expr annot (Eunseq (List.map flatten_seqs es))
+    | Ewseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+        (* TODO: could be generalised to any "always defined" Epure *)
+        flatten_seqs e2
+    | Ewseq pat e1 e2 ->
+        match (flatten_seqs e1, flatten_seqs e2) with
+          | (Expr annot1 (Ewseq pat1 e11 e12), e2') ->
+              Expr annot1 (Ewseq pat1 e11 (flatten_seqs (Expr annot (Ewseq pat e12 e2'))))
+          | (Expr annot1 (Esseq pat1 e11 e12), e2') ->
+              Expr annot1 (Esseq pat1 e11 (flatten_seqs (Expr annot (Ewseq pat e12 e2'))))
+          | (e1', e2') ->
+              Expr annot (Ewseq pat e1' e2')
+        end
+    | Esseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+        (* TODO: could be generalised to any "always defined" Epure *)
+        flatten_seqs e2
+    | Esseq pat e1 e2 ->
+        match (flatten_seqs e1, flatten_seqs e2) with
+          | (Expr annot1 (Ewseq pat1 e11 e12), e2') ->
+              Expr annot1 (Ewseq pat1 e11 (flatten_seqs (Expr annot (Esseq pat e12 e2'))))
+          | (Expr annot1 (Esseq pat1 e11 e12), e2') ->
+              Expr annot1 (Esseq pat1 e11 (flatten_seqs (Expr annot (Esseq pat e12 e2'))))
+          | (e1', e2') ->
+              Expr annot (Esseq pat e1' e2')
+        end
+    | Easeq _ _ _ ->
+        expr
+    | Eindet i e ->
+        Expr annot (Eindet i (flatten_seqs e))
+    | Ebound i e ->
+        Expr annot (Ebound i (flatten_seqs e))
+    | End es ->
+        Expr annot (End (List.map flatten_seqs es))
+    | Esave sym sym_bTys e ->
+        Expr annot (Esave sym sym_bTys (flatten_seqs e))
+    | Erun _ _ _ ->
+        expr
+    | Epar es ->
+        Expr annot (Epar (List.map flatten_seqs es))
+    | Ewait _ ->
+        expr
+  end
+
+
+(* TODO: very quick'n'dirty *)
+(* remove call to conv_int obviously not doing anything (using §5.2.4.2.1) *)
+val in_minimal_range: ctype -> integer -> bool
+let in_minimal_range ty n =
+  match ty with
+    | Basic (ATypes.Integer ATypes.Char) ->
+        false (* TODO: because we don't use char is signed or unsigned *)
+    | Basic (ATypes.Integer ATypes.Bool) ->
+        n = 0 && n = 1
+    | Basic (ATypes.Integer (ATypes.Signed ATypes.Ichar)) ->
+        (0-127) <= n && n <= 127
+    | Basic (ATypes.Integer (ATypes.Signed ATypes.Short)) ->
+        (0-32767) <= n && n <= 32767
+    | Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) ->
+        (0-32767) <= n && n <= 32767
+    | Basic (ATypes.Integer (ATypes.Signed ATypes.Long)) ->
+        (0-2147483647) <= n && n <= 2147483647
+    | Basic (ATypes.Integer (ATypes.Signed ATypes.LongLong)) ->
+        let k = 2 ** 63 - 1 in
+        (0 - k) <= n && n <= k
+    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Ichar)) ->
+        0 <= n && n <= 255
+    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Short)) ->
+        0 <= n && n <= 65535
+    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) ->
+        0 <= n && n <= 65535
+    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Long)) ->
+        0 <= n && n <= 4294967295
+    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.LongLong)) ->
+        let k = 2 ** 64 - 1 in
+        0 <= n && n <= k
+    | _ ->
+        false (* others are impl-def are should be given at conv_int as argument *)
+  end
+
+
+val     remove_conv_int_pexpr: pexpr -> pexpr
+let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
+  Pexpr bTy match _pe with
+    | PEsym _ ->
+        _pe
+    | PEimpl _ ->
+        _pe
+    | PEval _ ->
+        _pe
+    | PEconstrained xs ->
+        PEconstrained begin
+          List.map (fun (constr, pe) ->
+            (constr, remove_conv_int_pexpr pe)
+          ) xs
+        end
+    | PEundef _ ->
+        _pe
+    | PEerror str pe ->
+        PEerror str (remove_conv_int_pexpr pe)
+    | PEctor ctor pes ->
+        PEctor ctor (List.map remove_conv_int_pexpr pes)
+    | PEcase pe pat_pes ->
+        PEcase (remove_conv_int_pexpr pe) begin
+          List.map (fun (pat, pe) ->
+            (pat, remove_conv_int_pexpr pe)
+          ) pat_pes
+        end
+    | PEarray_shift pe1 ty pe2 ->
+        PEarray_shift (remove_conv_int_pexpr pe1) ty (remove_conv_int_pexpr pe2)
+    | PEmember_shift pe tag_sym memb_ident ->
+        PEmember_shift (remove_conv_int_pexpr pe) tag_sym memb_ident
+    | PEnot pe ->
+        PEnot (remove_conv_int_pexpr pe)
+    | PEop bop pe1 pe2 ->
+        PEop bop (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEstruct sym ident_pes ->
+        PEstruct sym (List.map (fun (ident, pe) -> (ident, remove_conv_int_pexpr pe)) ident_pes)
+    | PEunion sym ident pe ->
+        PEunion sym ident (remove_conv_int_pexpr pe)
+    | PEcall nm pes ->
+        let pes' = List.map remove_conv_int_pexpr pes in
+        match (nm, pes') with
+          (* TODO: hack !!!!!!!!! *)
+          | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
+              match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
+                | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
+                    match Mem_aux.integerFromIntegerValue ival with
+                      | Just n ->
+                          if in_minimal_range ty n then
+                            PEval cval
+                          else
+                            PEcall nm pes'
+                      | Nothing ->
+                          PEcall nm pes'
+                    end
+                | _ ->
+                    PEcall nm pes'
+(*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
+              end
+          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _pe_n]) ->
+              if pe_ty1 = pe_ty2 then
+                _pe_n
+              else
+                PEcall nm pes'
+          | _ ->
+              PEcall nm pes'
+        end
+    | PElet pat pe1 pe2 ->
+        PElet pat (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
+    | PEif pe1 pe2 pe3 ->
+        PEif (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3)
+    | PEis_scalar pe ->
+        PEis_scalar (remove_conv_int_pexpr pe)
+    | PEis_integer pe ->
+        PEis_integer (remove_conv_int_pexpr pe)
+    | PEis_signed pe ->
+        PEis_signed (remove_conv_int_pexpr pe)
+    | PEis_unsigned pe ->
+        PEis_unsigned (remove_conv_int_pexpr pe)
+    | PEstd str pe ->
+        PEstd str (remove_conv_int_pexpr pe)
+  end
+
+let rec remove_conv_int (Expr annot expr_) =
+  Expr annot match expr_ with
+    | Epure pe ->
+        Epure (remove_conv_int_pexpr pe)
+    | Ememop memop pes ->
+        Ememop memop (List.map remove_conv_int_pexpr pes)
+    | Eaction pact ->
+        Eaction (remove_conv_int_paction pact)
+    | Ecase pe pat_es ->
+        Ecase (remove_conv_int_pexpr pe) begin
+          List.map (fun (pat, e) ->
+            (pat, remove_conv_int e)
+          ) pat_es
+        end
+    | Elet pat pe1 e2 ->
+        Elet pat (remove_conv_int_pexpr pe1) (remove_conv_int e2)
+    | Eif pe1 e2 e3 ->
+        Eif (remove_conv_int_pexpr pe1) (remove_conv_int e2) (remove_conv_int e3)
+    | Eskip ->
+        expr_
+    | Eccall () pe pes ->
+        Eccall () (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
+    | Eproc () nm pes ->
+        Eproc () nm (List.map remove_conv_int_pexpr pes)
+    | Eunseq es ->
+        Eunseq (List.map remove_conv_int es)
+    | Ewseq pat e1 e2 ->
+        Ewseq pat (remove_conv_int e1) (remove_conv_int e2)
+    | Esseq pat e1 e2 ->
+        Esseq pat (remove_conv_int e1) (remove_conv_int e2)
+    | Easeq a_opt act1 pact2 ->
+        Easeq a_opt (remove_conv_int_action act1) (remove_conv_int_paction pact2)
+    | Eindet i e ->
+        Eindet i (remove_conv_int e)
+    | Ebound i e ->
+        Ebound i (remove_conv_int e)
+    | End es ->
+        End (List.map remove_conv_int es)
+    | Esave sym_bTy sym_bTy_pes e ->
+        Esave sym_bTy begin
+          List.map (fun (sym, (bTy, pe)) ->
+            (sym, (bTy, remove_conv_int_pexpr pe))
+          ) sym_bTy_pes
+        end (remove_conv_int e)
+    | Erun annot sym pes ->
+        Erun annot sym (List.map remove_conv_int_pexpr pes)
+    | Epar es ->
+        Epar (List.map remove_conv_int es)
+    | Ewait _ ->
+        expr_
+  end
+
+and remove_conv_int_action_ act_ =
+  match act_ with
+    | Create pe1 pe2 pref ->
+        Create (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
+    | Alloc pe1 pe2 pref ->
+        Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
+    | Kill pe ->
+        Kill (remove_conv_int_pexpr pe)
+    | Store pe1 pe2 pe3 mo ->
+        Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
+    | Load pe1 pe2 mo ->
+        Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        RMW (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
+    | Fence mo ->
+        Fence mo
+  end
+
+and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)
+and remove_conv_int_paction (Paction p act) = Paction p (remove_conv_int_action act)
+
+
+
+let is_create = function
+  | Expr _ (Eaction (Paction _ (Action _ _ (Create _ _ _)))) ->
+      true
+  | _ ->
+      false
+end
+
+let is_kill = function
+  | Expr _ (Eaction (Paction _ (Action _ _ (Kill _)))) ->
+      true
+  | _ ->
+      false
+end
+
+(* TODO: not sure if this in general a sound optimisation, but it violently reduces ND *)
+let rec sequentialise_creates_kills (Expr annot expr_) =
+  Expr annot match expr_ with
+    | Epure _ ->
+        expr_
+    | Ememop _ _ ->
+        expr_
+    | Eaction _ ->
+        expr_
+    | Ecase pe pat_es ->
+        Ecase pe begin
+          List.map (fun (pat, e) ->
+            (pat, sequentialise_creates_kills e)
+          ) pat_es
+        end
+    | Elet pat pe1 e2 ->
+        Elet pat pe1 (sequentialise_creates_kills e2)
+    | Eif pe1 e2 e3 ->
+        Eif pe1 (sequentialise_creates_kills e2) (sequentialise_creates_kills e3)
+    | Eskip ->
+        expr_
+    | Eccall _ _ _ ->
+        expr_
+    | Eproc _ _ _ ->
+        expr_
+    | Eunseq es ->
+        if List.all is_kill es then
+          List.foldr (fun e acc ->
+            Esseq (CaseBase (Nothing, BTy_unit)) e (Expr [] acc)
+          ) Eskip es
+        else
+          Eunseq (List.map sequentialise_creates_kills es)
+(* TODO
+    | Ewseq pat ((Eunseq es1) as e1) e2 ->
+        if List.all is_create es1 then
+          List.foldr (fun (sym_opt, e) acc ->
+            Ewseq (CaseBase sym_opt) e acc
+          ) (sequentialise_creates_kills e2) (zip pat es1)
+        else
+          Ewseq pat (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+*)
+    | Ewseq pat e1 e2 ->
+        Ewseq pat (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+(* TODO
+    | Esseq pat ((Eunseq es1) as e1) e2 ->
+        if List.all is_create es1 then
+          List.foldr (fun (sym_opt, e) acc ->
+            Esseq [sym_opt] e acc
+          ) (sequentialise_creates_kills e2) (zip pat es1)
+        else
+          Esseq pat (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+*)
+    | Esseq pat e1 e2 ->
+        Esseq pat (sequentialise_creates_kills e1) (sequentialise_creates_kills e2)
+    | Easeq _ _ _ ->
+        expr_
+    | Eindet i e ->
+        Eindet i (sequentialise_creates_kills e)
+    | Ebound i e ->
+        Ebound i (sequentialise_creates_kills e)
+    | End es ->
+        End (List.map sequentialise_creates_kills es)
+    | Esave sym_bTy sym_bTy_pes e ->
+        Esave sym_bTy sym_bTy_pes (sequentialise_creates_kills e)
+    | Erun _ _ _ ->
+        expr_
+    | Epar es ->
+        Epar (List.map sequentialise_creates_kills es)
+    | Ewait _ ->
+        expr_
+  end
+
+
+(* TODO: check the soundness ... *)
+(* sequentialise unseq with independant  *)
+
+
+(*
+let rec pure_propagation expr =
+  match expr with
+    | Elet pat pe1 e2 ->
+        let e2' = pure_propagation e2 in
+        match to_pure e2' with
+          | Just pe2 ->
+              Epure (PElet pat pe1 pe2)
+          | Nothing ->
+              Elet pat pe1 e2'
+        end
+    | Eif pe1 e2 e3 ->
+        let e2' = pure_propagation e2 in
+        let e3' = pure_propagation e3 in
+        match (to_pure e2', to_pure e3') with
+          | (Just pe2, Just pe3) ->
+              Epure (PEif pe1 pe2 pe3)
+          | (Just pe2, Nothing) ->
+              Eif pe1 (Epure pe2) e3'
+          | (Nothing, Just pe3) ->
+              Eif pe1 e2' (Epure pe3)
+          | (Nothing, Nothing) ->
+              Eif pe1 e2' e3'
+        end
+    | Eunseq es ->
+        (* TODO: do better *)
+        let es' = List.map pure_propagation es in
+        match to_pures es' with
+          | Just pes ->
+              Epure (PEtuple pes)
+          | Nothing ->
+              Eunseq es'
+        end
+    | Ewseq pat e1 e2 ->
+        let e1' = pure_propagation e1 in
+        match to_pure e1' with
+          | Just pe1 ->
+              pure_propagation (subst_syms pat pe1 e2)
+          | Nothing ->
+              Ewseq pat e1' (pure_propagation e2)
+       end
+    | Esseq pat e1 e2 ->
+        let e1' = pure_propagation e1 in
+        match to_pure e1' with
+          | Just pe1 ->
+              pure_propagation (subst_syms pat pe1 e2)
+          | Nothing ->
+              Esseq pat e1' (pure_propagation e2)
+       end
+    | Eindet e ->
+        Eindet (pure_propagation e)
+    | Ebound n e ->
+        Ebound n (pure_propagation e)
+    | Esave sym sym_tys e ->
+        Esave sym sym_tys (pure_propagation e)
+    | End es ->
+        End (List.map pure_propagation es)
+    | Epar es ->
+        Epar (List.map pure_propagation es)
+    | _ ->
+        expr
+  end
+*)
+
+
+
+
+
+let rec isAlwaysDefined (Pexpr _ pexpr_) =
+  match pexpr_ with
+    | PEsym _ ->
+        true
+    | PEimpl _ ->
+        true (* TODO: check *)
+    | PEval _ ->
+        true
+    | PEconstrained xs ->
+        List.all (fun (_, pe) -> isAlwaysDefined pe) xs
+    | PEundef _ ->
+        false
+    | PEerror _ _ ->
+        false
+    | PEctor _ pes ->
+        List.all isAlwaysDefined pes
+    | PEcase pe pat_pes ->
+        isAlwaysDefined pe && List.all (fun (_, pe) -> isAlwaysDefined pe) pat_pes
+    | PEarray_shift pe1 _ pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEmember_shift pe _ _ ->
+        isAlwaysDefined pe
+    | PEnot pe ->
+        isAlwaysDefined pe
+    | PEop _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEstruct _ ident_pes ->
+        List.all (fun (_, pe) -> isAlwaysDefined pe) ident_pes
+    | PEunion _ _ pe ->
+        isAlwaysDefined pe
+    | PEcall _ pes ->
+        (* the called function may raise an undef/error *)
+        false (* List.all isAlwaysDefined pes *)
+    | PElet _ pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
+    | PEif pe1 pe2 pe3 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2 && isAlwaysDefined pe3
+    | PEis_scalar pe ->
+        isAlwaysDefined pe
+    | PEis_integer pe ->
+        isAlwaysDefined pe
+    | PEis_signed pe ->
+        isAlwaysDefined pe
+    | PEis_unsigned pe ->
+        isAlwaysDefined pe
+    | PEstd _ pe ->
+        isAlwaysDefined pe
+end
+
+let rec pure_propagation2 (Expr annot expr_ as expr) =
+  let to_pure' e =
+    match to_pure e with
+      | Just pe ->
+          if isAlwaysDefined pe then
+            Just pe
+          else
+            Nothing
+      | Nothing ->
+          Nothing
+    end in
+  
+  let to_pures' es =
+    List.foldr (fun e acc_opt ->
+      match (to_pure' e, acc_opt) with
+        | (Just pe, Just acc) ->
+            Just (pe :: acc)
+        | _ ->
+            Nothing
+      end) (Just []) es in
+  
+  match expr_ with
+    | Epure _ ->
+        expr
+    | Ememop _ _ ->
+        expr
+    | Eaction _ ->
+        expr
+    | Ecase pe pat_es ->
+        (* TODO: do more *)
+        let pat_es' = List.map (fun (pat, e) ->
+          (pat, pure_propagation2 e)
+        ) pat_es in
+        Expr annot (Ecase pe pat_es')
+    | Elet pat pe1 e2 ->
+        let e2' = pure_propagation2 e2 in
+        match to_pure' e2' with
+          | Just (Pexpr bTy _ as pe2) ->
+              (* TODO: loosing std annot *)
+              Core_aux.mk_pure_e (Pexpr bTy (PElet pat pe1 pe2))
+          | Nothing ->
+              Expr annot (Elet pat pe1 e2')
+        end
+    | Eif pe1 e2 e3 ->
+        let e2' = pure_propagation2 e2 in
+        let e3' = pure_propagation2 e3 in
+        match (to_pure' e2', to_pure' e3') with
+          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
+              (* TODO: loosing std annot *)
+              Core_aux.mk_pure_e (Pexpr bTy (PEif pe1 pe2 pe3))
+          | (Just pe2, Nothing) ->
+              Expr annot (Eif pe1 (Core_aux.mk_pure_e pe2) e3')
+          | (Nothing, Just pe3) ->
+              Expr annot (Eif pe1 e2' (Core_aux.mk_pure_e pe3))
+          | (Nothing, Nothing) ->
+              Expr annot (Eif pe1 e2' e3')
+        end
+    | Eskip ->
+        expr
+    | Eccall _ _ _ ->
+        expr
+    | Eproc _ _ _ ->
+        expr
+    | Eunseq es ->
+        (* TODO: do better *)
+        let es' = List.map pure_propagation2 es in
+        match to_pures' es' with
+          | Just pes ->
+              Core_aux.mk_pure_e (Caux.mk_tuple_pe pes)
+          | Nothing ->
+              let es'' =
+                List.map (fun e ->
+                  match to_pure' e with
+                    | Just pe ->
+                        Core_aux.mk_pure_e pe
+                    | Nothing ->
+                        e
+                  end) es' in
+              Expr annot (Eunseq es'')
+        end
+    | Ewseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+        let (cont, pats', es') =
+          List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
+            let e = (pure_propagation2 e) in
+            match to_pure' e with
+              | Just pe ->
+                  (fun z -> unsafe_subst_pattern pat pe (cont z), pats_acc, es_acc)
+              | Nothing ->
+                  (cont, pat :: pats_acc, e :: es_acc)
+            end) (id, [], []) (List.zip pats es) in
+       match (pats', es') with
+         | ([], []) ->
+             pure_propagation2 (cont e2)
+         | ([pat'], [e']) ->
+             Expr annot (Ewseq pat' e' (pure_propagation2 (cont e2)))
+         | _ ->
+             Expr annot (Ewseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+       end
+    | Ewseq pat e1 e2 ->
+        let e1' = pure_propagation2 e1 in
+        match to_pure' e1' with
+          | Just pe1 ->
+              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+          | Nothing ->
+              Expr annot (Ewseq pat e1' (pure_propagation2 e2))
+       end
+    | Esseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+        let (cont, pats', es') =
+          List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
+            let e = (pure_propagation2 e) in
+            match to_pure' e with
+              | Just pe ->
+                  (fun z -> unsafe_subst_pattern pat pe (cont z), pats_acc, es_acc)
+              | Nothing ->
+                  (cont, pat :: pats_acc, e :: es_acc)
+            end) (id, [], []) (List.zip pats es) in
+       match (pats', es') with
+         | ([], []) ->
+             pure_propagation2 (cont e2)
+         | ([pat'], [e']) ->
+             Expr annot (Esseq pat' e' (pure_propagation2 (cont e2)))
+         | _ ->
+             Expr annot (Esseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+       end
+    | Esseq pat e1 e2 ->
+        let e1' = pure_propagation2 e1 in
+        match to_pure' e1' with
+          | Just pe1 ->
+              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+          | Nothing ->
+              Expr annot (Esseq pat e1' (pure_propagation2 e2))
+       end
+    | Easeq _ _ _ ->
+        expr
+    | Eindet i e ->
+        Expr annot (Eindet i (pure_propagation2 e))
+    | Ebound i e ->
+        Expr annot (Ebound i (pure_propagation2 e))
+    | End es ->
+        Expr annot (End (List.map pure_propagation2 es))
+    | Esave sym sym_tys e ->
+        Expr annot (Esave sym sym_tys (pure_propagation2 e))
+    | Erun _ _ _ ->
+        expr
+    | Epar es ->
+        Expr annot (Epar (List.map pure_propagation2 es))
+    | Ewait _ ->
+        expr
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* ========================================================================== *)
+
+let rewrite_pexpr pexpr =
+(*  remove_conv_int_pexpr pexpr *)
+  pexpr
+
+
+let rewrite_expr expr =
+  (pure_propagation2 -| flatten_seqs) expr
+(*
+  (pure_propagation2 -| remove_conv_int -| flatten_seqs -|
+   (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|
+   sequentialise_creates_kills) expr
+*)
+
+let rewrite_fun_map fun_map =
+  Map.map (function
+    | Fun ty params pe ->
+        Fun ty params (rewrite_pexpr pe)
+    | ProcDecl ty params ->
+        ProcDecl ty params
+    | Proc ty params e ->
+        Proc ty params (rewrite_expr e)
+  end) fun_map
+
+
+
+
+(* TODO *)
+let rewrite_file file =
+  <| file with funs=  rewrite_fun_map file.funs;
+               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>
