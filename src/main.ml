@@ -106,7 +106,7 @@ let c_frontend f =
     |> Exception.rbind Cparser_driver.parse
     |> set_progress "CPARS" 10
     |> pass_message "1. C Parsing completed!"
-    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translate_unit true (not $ List.mem FOut !!cerb_conf.ppflags))
+    |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translation_unit true (not $ List.mem FOut !!cerb_conf.ppflags))
       (*
   |> Exception.fmap (fun (z, _) -> z)
     *)
@@ -196,20 +196,24 @@ let run_test (run: string -> Exhaustive_driver.execution_result) (test:Tests.tes
 
 
 let backend sym_supply core_file args =
+  let dr_conf = {
+    Exhaustive_driver.concurrency= !!cerb_conf.concurrency;
+    Exhaustive_driver.experimental_unseq= !!cerb_conf.experimental_unseq
+  } in
   match !!cerb_conf.exec_mode_opt with
     | None ->
         0
     | Some (Interactive | Exhaustive | Random) ->
         if !!cerb_conf.batch then
           begin
-            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) !!cerb_conf;
+            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) dr_conf;
             0
           end
         else
           
         
         (* TODO: temporary hack for the command name *)
-        Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) !!cerb_conf with
+        Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
           | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
             begin
               (* TODO: yuck *)
@@ -294,7 +298,6 @@ let pipeline filename args =
         | Exception.Exception _ ->
             ();
     end else
-
       run_pp filename "core" $ Param_pp_core.pp_file rewritten_core_file;
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
@@ -410,39 +413,6 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode pps ppflags file_opt p
                 14
               else
                 n
-
-(* TODO: this function wasn't used *)
-(*
-let gen_ocaml_corestd debug_level impl_name =
-  Debug_ocaml.debug_level := debug_level;
-  (* TODO: move this to the random driver *)
-  Random.self_init ();
-  
-  (* Looking for and parsing the core standard library *)
-  let core_stdlib = snd (load_stdlib ()) in
-  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
-  
-  (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
-  let module Core_parser_base = struct
-    include Core_parser.Make (struct
-        let sym_counter = core_sym_counter
-        let mode = Core_parser_util.ImplORFileMode
-        let std = List.fold_left (fun acc ((Symbol.Symbol (_, Some str)) as fsym, _) ->
-          let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
-          Pmap.add (str, (std_pos, std_pos)) fsym acc
-        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list (core_stdlib)
-      end)
-    type result = Core_parser_util.result
-  end in
-  let module Core_parser =
-    Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-  
-  (* Looking for and parsing the implementation file *)
-  let core_impl = load_impl Core_parser.parse impl_name in
-  Debug_ocaml.print_success "0.2. - Implementation file loaded.";
-
-  ()
-*)
 
 (* CLI stuff *)
 open Cmdliner

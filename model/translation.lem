@@ -438,10 +438,10 @@ and translate_relational_operator translate usual_arithmetic_conversion result_t
                  )
 else
                  let memop = match bop with
-                   | A.Lt -> Mem.PtrLt
-                   | A.Gt -> Mem.PtrGt
-                   | A.Le -> Mem.PtrLe
-                   | A.Ge -> Mem.PtrGe
+                   | A.Lt -> Mem_common.PtrLt
+                   | A.Gt -> Mem_common.PtrGt
+                   | A.Le -> Mem_common.PtrLe
+                   | A.Ge -> Mem_common.PtrGe
                    | _    -> error "[Translation.translate_relational_operator], 'bop' must be relational"
                  end in
                  C.Expr [] (
@@ -478,8 +478,8 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   E.fresh_symbol                                      >>= fun memop_sym                          ->
   let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   let memop = match bop with
-    | A.Eq -> Mem.PtrEq
-    | A.Ne -> Mem.PtrNe
+    | A.Eq -> Mem_common.PtrEq
+    | A.Ne -> Mem_common.PtrNe
     | _    -> error "[Translation.translate_equality_operator], 'bop' must be an equality operator"
   end in
   
@@ -550,8 +550,8 @@ else (* both operand have pointer type *)
             [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
                                  ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
   let memop = match bop with
-    | A.Eq -> Mem.PtrEq
-    | A.Ne -> Mem.PtrNe
+    | A.Eq -> Mem_common.PtrEq
+    | A.Ne -> Mem_common.PtrNe
     | _    -> error "[Translation.translate_equality_operator], 'bop' must be relational"
   end in
                Caux.mk_wseq_e (Caux.mk_sym_pat memop_sym C.BTy_boolean) (C.Expr [] (C.Ememop memop [obj1_sym_pe; obj2_sym_pe])) (
@@ -975,7 +975,7 @@ else
                     [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer))
                       , C.Expr [] (
                           C.Ewseq (Caux.mk_sym_pat test_sym C.BTy_boolean)
-                            (C.Expr [] (C.Ememop Mem.PtrValidForDeref [Caux.mk_sym_pe obj_sym])) (
+                            (C.Expr [] (C.Ememop Mem_common.PtrValidForDeref [Caux.mk_sym_pe obj_sym])) (
                               C.Expr [] (
                                 C.Eif (Caux.mk_sym_pe test_sym)
                                   begin
@@ -1209,7 +1209,7 @@ else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
                 Caux.mk_case_e e_sym_pe
                   [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy))
                     , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_pointer))
-                        (C.Expr [] (C.Ememop Mem.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe]))
+                        (C.Expr [] (C.Ememop Mem_common.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe]))
                         (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
                   ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                     , (* Casting an unspecified integer to a pointer type gives an unspecified pointer *)
@@ -1223,7 +1223,7 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
                   Caux.mk_case_e e_sym_pe
                     [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer))
                       , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
-                          (C.Expr [] (C.Ememop Mem.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe]))
+                          (C.Expr [] (C.Ememop Mem_common.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
                     ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
                       , (* Casting an unspecified pointer to an integer type gives an unspecified integer *)
@@ -1390,7 +1390,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                   [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
                                         ; Caux.mk_specified_pat obj2_sym_pat ]
                     , (* Both operand are specified *)
-                      Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop Mem.Ptrdiff [diff_ty_pe; obj1_sym_pe; obj2_sym_pe])) (
+                      Caux.mk_wseq_e memop_sym_pat (C.Expr [] (C.Ememop Mem_common.Ptrdiff [diff_ty_pe; obj1_sym_pe; obj2_sym_pe])) (
                         Caux.mk_pure_e (Caux.mk_specified_pe memop_sym_pe)
                       ) )
 (*
@@ -3263,7 +3263,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (C.ProcDecl ret_bTy (List.map (fun _ -> C.BTy_object C.OTy_pointer) params))
                       facc )
             
-            | Just (param_syms, stmt) ->
+            | Just (_, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
 

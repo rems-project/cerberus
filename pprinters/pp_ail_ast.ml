@@ -13,6 +13,49 @@ module P = PPrint
 open Lem_pervasives
 open Either
 
+
+let pp_loc =
+  let last_pos = ref Lexing.dummy_pos in
+  fun loc ->
+
+  let open Location_ocaml in
+  let string_of_pos p =
+    let open Lexing in
+    let ret =
+      if !last_pos.pos_fname <> p.pos_fname then
+        p.pos_fname ^ ":" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
+      else if !last_pos.pos_lnum <> p.pos_lnum then
+        "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
+      else
+        "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
+    last_pos := p;
+    ret in
+  
+  match loc with
+    | Loc_unknown ->
+        P.angles !^ (ansi_format [Yellow] "unknown location")
+    | Loc_other str ->
+        P.angles !^ (ansi_format [Yellow] ("other location (" ^ str ^ ")"))
+    | Loc_point pos ->
+        let pos_str = string_of_pos pos in
+        P.angles !^ (ansi_format [Yellow] pos_str)
+    | Loc_region (start_p, end_p, cursor_p_opt) ->
+        let start_p_str = string_of_pos start_p in
+        let end_p_str   = string_of_pos start_p in
+        let cursor_p_str =
+          match cursor_p_opt with
+            | None -> ""
+            | Some cursor_p -> " " ^ string_of_pos cursor_p in
+
+        P.angles (
+          !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
+          !^ (ansi_format [Yellow] end_p_str)
+        ) ^^
+        P.optional (fun _ -> !^ (ansi_format [Yellow] cursor_p_str)) cursor_p_opt
+
+
+
+
 let pp_symbol sym =
   !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty sym))
 
@@ -117,6 +160,12 @@ let pp_ctype qs ty =
 
 let dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
+    let pp_std_annot =
+      match std_annots with
+        | [] -> P.empty
+        | _  -> pp_ansi_format [Bold] (P.brackets (semi_list P.string std_annots)) in
+
+(*
     let dleaf_std_annot =
       Dleaf (pp_ctor "STD" ^^^ P.brackets (semi_list P.string std_annots))
     in
@@ -130,8 +179,12 @@ let dtree_of_expression pp_annot expr =
       | [] -> Dleaf pp
       | _ -> Dnode (pp, [dleaf_std_annot])
     in
+*)
     let pp_stmt_ctor str =
-      pp_stmt_ctor str ^^^ pp_annot annot in
+      pp_std_annot ^^^ pp_stmt_ctor str ^^^ pp_loc loc ^^^ pp_annot annot in
+    let pp_implicit_ctor str =
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ pp_loc loc ^^^ pp_annot annot in
+    
     let pp_cabs_id = Pp_cabs.pp_cabs_identifier in
     let dtree_of_generic_association = function
       | AilGAtype (ty, e) ->
@@ -145,96 +198,94 @@ let dtree_of_expression pp_annot expr =
       | Some e -> Dnode (pp_cabs_id cid, [self e])
       | None   -> Dleaf (pp_cabs_id cid)
     in
-    let pp_implicit_ctor str =
-      !^ (ansi_format [Bold; Red] str) ^^^ pp_annot annot in
     begin match expr_ with
       | AilEunary (uop, e) ->
           Dnode ( pp_stmt_ctor "AilEunary" ^^^ P.squotes (pp_unaryOperator uop)
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEbinary (e1, bop, e2) ->
           Dnode ( pp_stmt_ctor "AilEbinary" ^^^ P.squotes (pp_binaryOperator bop)
-                , add_std_annot [self e1; self e2] )
+                , (*add_std_annot*) [self e1; self e2] )
       | AilEassign (e1, e2) ->
           Dnode ( pp_stmt_ctor "AilEassign"
-                , add_std_annot [self e1; self e2] )
+                , (*add_std_annot*) [self e1; self e2] )
       | AilEcompoundAssign (e1, aop, e2) ->
           Dnode ( pp_stmt_ctor "AilEcompoundAssign"
                   ^^^ P.squotes (pp_arithmeticOperator aop)
-                , add_std_annot [self e1; self e2] )
+                , (*add_std_annot*) [self e1; self e2] )
       | AilEcond (e1, e2, e3) ->
           Dnode ( pp_stmt_ctor "AilEcond"
-                , add_std_annot [self e1; self e2; self e3] )
+                , (*add_std_annot*) [self e1; self e2; self e3] )
       | AilEcast (qs, ty, e) ->
           Dnode ( pp_stmt_ctor "AilEcast" ^^^ P.squotes (pp_ctype qs ty)
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEcall (e, es) ->
           Dnode ( pp_stmt_ctor "AilEcall"
-                , add_std_annot (self e :: List.map self es) )
+                , (*add_std_annot*) (self e :: List.map self es) )
       | AilEassert e ->
           Dnode ( pp_stmt_ctor "AilEassert"
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEoffsetof (ty, ident) ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEoffsetof" ^^^ pp_cabs_id ident ^^^
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEoffsetof" ^^^ pp_cabs_id ident ^^^
                 P.squotes (pp_ctype empty_qs ty))
       | AilEgeneric (e, gas) ->
           Dnode ( pp_stmt_ctor "AilEgeneric"
-                , add_std_annot (self e :: List.map dtree_of_generic_association
+                , (*add_std_annot*) (self e :: List.map dtree_of_generic_association
                                    gas) )
       | AilEarray (ty, e_opts) ->
           Dnode ( pp_stmt_ctor "AilEarray" ^^^ P.squotes (pp_ctype empty_qs ty)
-                , add_std_annot (filter_opt_list
+                , (*add_std_annot*) (filter_opt_list
                                    (List.map (option None self) e_opts)) )
       | AilEstruct (tag_sym, xs) ->
           Dnode ( pp_stmt_ctor "AilEstruct" ^^^ pp_id tag_sym
-                , add_std_annot (List.map dtree_of_field xs) )
+                , (*add_std_annot*) (List.map dtree_of_field xs) )
       | AilEunion (tag_sym, memb_ident, e_opt) ->
           Dnode ( pp_stmt_ctor "AilEunion" ^^^ pp_id tag_sym
-                , add_std_annot [dtree_of_field (memb_ident, e_opt)] )
+                , (*add_std_annot*) [dtree_of_field (memb_ident, e_opt)] )
       | AilEcompound (ty, e) ->
           Dnode ( pp_stmt_ctor "AilEcompound" ^^^ P.squotes (pp_ctype empty_qs ty)
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEmemberof (e, ident) ->
           Dnode ( pp_stmt_ctor "AilEmemberof" ^^^ pp_cabs_id ident
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEmemberofptr (e, ident) ->
           Dnode ( pp_stmt_ctor "AilEmemberofptr" ^^^ pp_cabs_id ident
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEbuiltin str ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEbuiltin" ^^^ !^str )
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEbuiltin" ^^^ !^str )
       | AilEstr lit ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEstr" ^^^ pp_stringLiteral lit )
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEstr" ^^^ pp_stringLiteral lit )
       | AilEconst c ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEconst" ^^^ pp_constant c )
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEconst" ^^^ pp_constant c )
       | AilEident sym ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEident" ^^^ pp_symbol sym )
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEident" ^^^ pp_symbol sym )
       | AilEsizeof (qs, ty) ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEsizeof"
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEsizeof"
                             ^^^ P.squotes (pp_ctype qs ty) )
       | AilEsizeof_expr e ->
-          Dnode ( pp_stmt_ctor "AilEsizeof_expr", add_std_annot [self e] )
+          Dnode ( pp_stmt_ctor "AilEsizeof_expr", (*add_std_annot*) [self e] )
       | AilEalignof (qs, ty) ->
-          add_std_to_leaf ( pp_stmt_ctor "AilEalignof"
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEalignof"
                             ^^^ P.squotes (pp_ctype qs ty) )
       | AilEannot (ty, e) ->
           Dnode ( pp_stmt_ctor "AilEannot" ^^^ P.squotes (pp_ctype empty_qs ty),
-                  add_std_annot [self e] )
+                  (*add_std_annot*) [self e] )
       | AilEva_start (e, sym) ->
           Dnode ( pp_stmt_ctor "AilEva_start" ^^^ pp_id sym
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEva_arg (e, ty) ->
           Dnode ( pp_stmt_ctor "AilEva_arg" ^^^ P.squotes (pp_ctype empty_qs ty)
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEprint_type e ->
-          Dnode ( pp_stmt_ctor "AilEprint_type", add_std_annot [self e])
+          Dnode ( pp_stmt_ctor "AilEprint_type", (*add_std_annot*) [self e])
       | AilErvalue e ->
           Dnode ( pp_implicit_ctor "AilErvalue"
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEarray_decay e ->
           Dnode ( pp_implicit_ctor "AilEarray_decay"
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
       | AilEfunction_decay e ->
           Dnode ( pp_implicit_ctor "AilEfunction_decay"
-                , add_std_annot [self e] )
+                , (*add_std_annot*) [self e] )
     end in
   self expr
 
@@ -299,10 +350,10 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
     | AilSpar ss ->
         failwith "NON-STD cppmem threads"
 
-let dtree_of_function_definition pp_annot (fun_sym, (param_syms, stmt)) =
+let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
   let param_dtrees =
     [] in
-  Dnode ( pp_id fun_sym
+  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc loc ^^^ pp_id fun_sym
         , param_dtrees @ [dtree_of_statement pp_annot stmt] )
 
 let pp_storageDuration = function

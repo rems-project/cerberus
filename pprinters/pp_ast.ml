@@ -65,7 +65,7 @@ let pp_cond switch doc =
     (^^) P.empty
 
 let filter_opt_list xs =
-  List.fold_left (fun acc opt -> match opt with None -> acc | Some x -> x::acc) [] xs
+  List.fold_left (fun acc opt -> match opt with None -> acc | Some x -> x::acc) [] (List.rev xs)
 let opt_list f = function
   | [] -> None
   | xs -> Some (f xs)

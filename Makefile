@@ -41,8 +41,8 @@ BUILD_DIR=ocaml_generated
 $(BUILD_DIR):
 	@echo $(BOLD)CREATING the OCaml build directory$(RESET)
 	@mkdir $(BUILD_DIR)
-	@echo $(BOLD)COPYING the Lem ocaml libraries$(RESET)
-	@cp $(LEM_PATH)/ocaml-lib/*.ml $(LEM_PATH)/ocaml-lib/*.mli $(BUILD_DIR)
+#	@echo $(BOLD)COPYING the Lem ocaml libraries$(RESET)
+#	@cp $(LEM_PATH)/ocaml-lib/*.ml $(LEM_PATH)/ocaml-lib/*.mli $(BUILD_DIR)
 
 # Copy the cmm model files to the build dir
 copy_cmm: $(addprefix $(CMM_MODEL_DIR)/, $(CMM_MODEL_LEM)) | $(BUILD_DIR)
@@ -102,13 +102,17 @@ smt:
 test:
 	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str test.native
 
+
+new_main:
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,Z3 -libs unix,str main2.native
+
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str main_.native; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,Z3 -libs unix,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native

@@ -14,6 +14,11 @@ let isActive = function
   | _ ->
       false
 
+type driver_conf = {
+  concurrency: bool;
+  experimental_unseq: bool;
+}
+
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 
@@ -29,7 +34,7 @@ let string_of_driver_error = function
 
 
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
-let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args cerb_conf : unit =
+let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args conf : unit =
   Random.self_init ();
   
   (* changing the annotations type from unit to core_run_annotation *)
@@ -37,16 +42,16 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt.runND (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) initial_dr_st in
+  let values = Smt2.runND Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   
   List.iteri (fun i (res, z3_strs, nd_st) ->
     print_endline ("BEGIN EXEC[" ^ string_of_int i ^ "]");
     begin match res with
-      | ND.Active (stdout, (isBlocked, _, cval), _) ->
-          let str_v = String_core.string_of_value cval in
+      | ND.Active dres ->
+          let str_v = String_core.string_of_value dres.Driver.dres_core_value in
           print_endline begin
-            "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped stdout ^
-            "\", blocked: \"" ^ if isBlocked then "true\"}" else "false\"}"
+            "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
+            "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}"
           end
       | ND.Killed (ND.Undef0 (loc, ubs)) ->
           print_endline begin
@@ -82,7 +87,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
 
 
 
-let drive sym_supply file args cerb_conf : execution_result =
+let drive sym_supply file args conf : execution_result =
   Random.self_init ();
   
   (* changing the annotations type from unit to core_run_annotation *)
@@ -90,7 +95,7 @@ let drive sym_supply file args cerb_conf : execution_result =
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt.runND (Driver.drive cerb_conf.concurrency cerb_conf.experimental_unseq sym_supply file args) initial_dr_st in
+  let values = Smt2.runND Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
@@ -129,33 +134,33 @@ end
   
   List.iteri (fun n exec ->
     match exec with
-      | (ND.Active (stdout, (is_blocked, conc_st, cval), (dr_steps, coreRun_steps)), z3_strs, st) ->
-          let str_v = String_core.string_of_value cval in
-          let str_v_ = str_v ^ stdout in
+      | (ND.Active dres (* (stdout, (is_blocked, conc_st, cval), (dr_steps, coreRun_steps)) *), z3_strs, st) ->
+          let str_v = String_core.string_of_value dres.Driver.dres_core_value in
+          let str_v_ = str_v ^ dres.Driver.dres_stdout in
           if true (* not (List.mem str_v_ !ky) *) then (
             if Debug_ocaml.get_debug_level () = 0 then
-              (print_string stdout; flush_all());
+              (print_string dres.Driver.dres_stdout; flush_all());
             
             Debug_ocaml.print_debug 1 [] (fun () ->
 (*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
-              Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" stdout ^
-              Printf.sprintf "driver steps: %d, core steps: %d\n" dr_steps coreRun_steps (* ^ 
+              Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" dres.Driver.dres_stdout ^
+              Printf.sprintf "driver steps: %d, core steps: %d\n" dres.Driver.dres_driver_steps dres.Driver.dres_core_run_steps (* ^ 
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG" (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log)))) *)
 
 (* ^
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG\n" (String.concat "\n" (List.rev (Dlist.toList log))) *)
             );
           );
-          if not (List.mem str_v_ !ky) && not is_blocked then (
+          if not (List.mem str_v_ !ky) && not dres.Driver.dres_blocked then (
 (*
-            if cerb_conf.concurrency then
+            if conf.concurrency then
               Debug_ocaml.print_debug 2 [] (fun () -> Pp_cmm.dot_of_exeState conc_st str_v (Pp_cmm.pp_old_constraints st.ND.eqs)); *)
             
             ky := str_v_ :: !ky;
-            ret := cval :: !ret;
+            ret := dres.Driver.dres_core_value :: !ret;
         ) else
           Debug_ocaml.print_debug 4 [] (fun () ->
-            "SKIPPING: " ^ if is_blocked then "(blocked)" else "" ^
+            "SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
             "eqs= " ^ "Pp_cmm.pp_old_constraints st.ND.eqs"
           );
 

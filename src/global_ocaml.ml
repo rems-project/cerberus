@@ -151,3 +151,17 @@ let user_request_driver (strs: string list) : int =
 
 let concurrency_mode () =
   !!cerb_conf.concurrency
+
+
+
+
+
+let new_int =
+  let counter = ref 0 in
+  fun () ->
+    let n = !counter in
+    incr counter;
+    if n > !counter then
+      assert false (* overflow *)
+    else
+      n

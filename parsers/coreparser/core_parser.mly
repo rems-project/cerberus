@@ -181,6 +181,7 @@ let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
   let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
   M.sym_counter := !M.sym_counter + 1;
+(*  let sym = Symbol.Symbol (Global_ocaml.new_int (), Some (fst _sym)) in *)
   Eff.put {st with
     sym_scopes=
       match st.sym_scopes with
@@ -1093,7 +1094,7 @@ value:
   | Vunspecified of ctype
 *)
 | n= INT_CONST
-    { Vobject (OVinteger (Mem.integer_ival n)) }
+    { Vobject (OVinteger (Ocaml_mem.integer_ival n)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
 | UNIT_VALUE
@@ -1140,7 +1141,7 @@ pexpr:
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ((), PEnot _pe) }
 | MINUS _pe= pexpr
-    { Pexpr ((), PEop (OpSub, Pexpr ((), PEval (Vobject (OVinteger (Mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+    { Pexpr ((), PEop (OpSub, Pexpr ((), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ((), PEop (bop, _pe1, _pe2)) }
 (*

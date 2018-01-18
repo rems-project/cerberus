@@ -1790,6 +1790,25 @@ and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) 
           E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#5")
         
         else
+(*
+          if AilTypesAux.is_array ty then
+            (*  *)
+            match init with
+              | Init_expr (CabsExpression e_loc (CabsEstring lit)) ->
+                  error ("initialisation of array with string literal ==> " ^ Loc.stringFromLocation e_loc)
+              | Init_list [(Nothing, Init_expr (CabsExpression e_loc (CabsEstring lit)))] ->
+                  error ("initialisation of array with string literal in braces ==> " ^ Loc.stringFromLocation e_loc)
+              | _ ->
+                  error "initialisation of array with something else"
+            end
+
+          else
+KKK
+
+*)
+
+
+
           (* postponing the desugaring of the initialiser since the identifier
              (which gets register after the current function) need to be in scope *)
           let mk_desug_init () =
@@ -1990,16 +2009,45 @@ and static_thread_implicit_initializer tagDefs ty =
 
 (* NOTE: the check for STD §6.7.9#3 is done by [desugar_init_declarator] *)
 and wip_desugar_initializer_ loc dur current_ty init =
+  if AilTypesAux.is_scalar current_ty then
+    match init with
+      | Init_expr e ->
+          E.return e
+      | Init_list [(Nothing, Init_expr e)] ->
+          (* NOTE: scalar can be initialised with optional enclosing braces *)
+          E.return e
+      | _ ->
+          (* STD §6.7.9#11, sentence 1 *)
+          (* NOTE: the STD says "shall" and this is not a 'Constraints' section,
+             so this is undefined behaviour... *)
+          E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB081_scalar_initializer_not_single_expression)
+    end >>= fun e ->
+    desugar_expression e >>= fun d_e ->
+    E.return (current_ty, d_e)
+  
+  else if AilTypesAux.is_array_of_character current_ty then
+    (* TODO: if we rewrite AilEstr into an AilEarray, I guess I won't need to change the elaboration?? *)
+(*    KKK2 *)
+    error "TODO: wip_desugar_initializer_, AilTypesAux.is_array_of_character"
+  
+  else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
+    error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
+
+  else
+    let () = Debug.print_debug 0 [] (fun () ->
+      "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
+    ) in
 (*
   if AilTypesAux.is_scalar current_ty then
-    (* STD §6.7.9#10 *)
+    (* STD §6.7.9#11 *)
     match init with
       | Init_expr e ->
           E.return e
       | Init_list [(Nothing, Init_expr e)] ->
           E.return e
       | _ ->
-          (* STD §6.7.9#10, sentence 1 *)
+          (* STD §6.7.9#11, sentence 1 *)
+          (* TODO: that's an undefined behaviour *)
           E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#11, sentence 1")
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
@@ -2465,7 +2513,7 @@ let desugar_declaration_base specifs idecltors =
                       ) [] (Map_extra.toList ident_tagDefs);
                   |> in
                   if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                    E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7")
+                    E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
                   else
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_internal_object_declaration sym
@@ -2907,7 +2955,7 @@ let rec register_labels (CabsStatement _ stmt_) =
 
 (* TODO: check + annotate with STD *)
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
-let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_decltor_opt ddecltor) s) =
+let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declarator ptr_decltor_opt ddecltor) s) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#4")
   else
@@ -2983,8 +3031,10 @@ let desugar_and_register_function_definition (FunDef specifs (Declarator ptr_dec
               
               E.set_current_return_type return_ty >>
               desugar_statement s >>= fun d_s ->
-              E.register_function_definition fun_sym (List.map fst bindings, d_s)
-
+              E.register_function_definition fun_sym
+                (* NOTE: the Cabs parser can't easily find the location of the
+                   function identifier, so add it here *)
+                (Loc.with_cursor_from fundef_loc (Loc.locOf fun_ident), List.map fst bindings, d_s)
             ))
           ))
 
@@ -3101,7 +3151,7 @@ let desugar_and_register_external_declaration edecl =
     maybe [] (fun z -> z.storage_classes) (specifiers_of_external_declaration edecl) in
   
   (* STD §6.9#2 *)
-  if List.elem SC_auto storage_classes || List.elem SC_register storage_classes then
+  if List.any (fun z -> z = SC_auto || z = SC_register) storage_classes then
     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9#2")
   
   else match edecl with
@@ -3121,14 +3171,8 @@ let desugar_and_register_external_declaration edecl =
         
         (* for each [init_declarator] *)
         E.mapM_ (fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
-          let () = Debug.print_debug 1 [] (fun () ->
-            "HELLO desugar_declaration_base ==> " ^ show ident
-          ) in
           let ty = if isAtomic then ATypes.Atomic _ty else _ty in
           if specifs.storage_classes = [SC_typedef] then
-            let () = Debug.print_debug 1 [] (fun () ->
-              "HELLO desugar_declaration_base, SC_typedef"
-            ) in
             (* Case of a typedef *)
             E.register_identifier ident
               (*TODO: remove the storage_classes since it's just typedef? *)
@@ -3197,12 +3241,9 @@ let desugar_and_register_external_declaration edecl =
                       else
                         E.return ()
                       end >>
-
-
-
                       (* NOTE: it is the type after the initialisation which must be complete *)
                       if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7")
+                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
                       else
                         (* TODO: use ty' *)
                         (* STD §6.9#3, first sentence *)
@@ -3217,7 +3258,7 @@ let desugar_and_register_external_declaration edecl =
                         (* TODO: this is wrong (see tentative definition in the STD) *)
                         E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.2#3")
                       else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7")
+                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
                       else
                         E.return ()
                 end

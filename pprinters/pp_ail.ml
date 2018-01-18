@@ -738,7 +738,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                   pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
               end ^^
               (match Context.lookup identifierEqual sigm.function_definitions sym with
-                | Some (param_syms, stmt) ->
+                | Some (_, param_syms, stmt) ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty, isRegister)) ->
                         if !Debug_ocaml.debug_level > 5 then

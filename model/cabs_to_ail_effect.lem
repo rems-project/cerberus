@@ -191,7 +191,7 @@ type state = <|
   external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
-  function_definitions: map A.identifier (list A.identifier * A.statement unit);
+  function_definitions: map A.identifier (Loc.t * list A.identifier * A.statement unit);
   external_object_definitions: map A.identifier (A.expression unit);
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
@@ -821,7 +821,7 @@ let register_external_object_definition sym e =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.identifier -> (list A.identifier * A.statement unit) -> desugM unit
+val register_function_definition: A.identifier -> (Loc.t * list A.identifier * A.statement unit) -> desugM unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)

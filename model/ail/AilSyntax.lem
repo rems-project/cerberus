@@ -206,7 +206,7 @@ type sigma 'a = <|
   declarations: Context.context identifier declaration;
   object_definitions: Context.context identifier (expression 'a);
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: Context.context identifier (list identifier * statement 'a);
+  function_definitions: Context.context identifier (Loc.t * list identifier * statement 'a);
   static_assertions: list (expression 'a * stringLiteral);
   
   tag_definitions: Context.context identifier tag_definition
@@ -625,11 +625,13 @@ let eq_sigma_declaration eq_A eq_B sdecl1 sdecl2 =
 
 
 
+(*
 let eq_sigma eq_A sig1 sig2 =
   eq_context identifierEqual eq_declaration sig1.declarations sig1.declarations &&
   eq_context identifierEqual (expressionEqual eq_A) sig1.object_definitions sig2.object_definitions &&
   eq_context identifierEqual (pairEqualBy (List.listEqualBy identifierEqual) (statementEqual eq_A)) sig1.function_definitions sig2.function_definitions &&
   List.listEqualBy (pairEqualBy (expressionEqual eq_A) stringLiteralEqual) sig1.static_assertions sig2.static_assertions
+*)
 
 (*
 let eq_sigma eq_A eq_B =
@@ -647,8 +649,10 @@ let eq_sigma eq_A eq_B =
 let eq_gamma g1 g2 =
   eq_context identifierEqual (pairEqualBy qualifiersEqual ctypeEqual) g1 g2
 
+(*
 let eq_program eq_A p1 p2 =
   pairEqualBy identifierEqual (eq_sigma eq_A) p1 p2
+*)
 (* (NEW OLD)
      identifierEqual p1.startup p2.startup
   && eq_context identifierEqual (pairEqualBy (eq_triple eq_ctype eq_bindings (=)) (eq_option (statementEqual eq_A eq_B)))
