@@ -97,7 +97,7 @@ type language =
 type pp_flag =
   | Annot | FOut
 
-type cerb_conf = {
+type configuration = {
   debug_level: int;
   pprints: language list;
   astprints: language list;
