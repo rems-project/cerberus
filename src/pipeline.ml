@@ -291,7 +291,7 @@ let core_passes (conf, io) ~filename core_file =
   whenM (List.mem Core conf.pprints) begin
     fun () ->
       io.run_pp (wrap_fout (Some (filename, "core"))) (Param_pp_core.pp_file typed_core_file'')
-  end >>= fun () -> return typed_core_file''
+  end >>= fun () -> return (core_file', typed_core_file'')
 
 
 let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experimental_unseq exec_mode =
@@ -322,8 +322,10 @@ let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experime
 
 let ocaml_backend (conf, io) ~filename ~ocaml_corestd sym_suppl core_file =
   (* the OCaml backend really needs things to have been sequentialised *)
-  (if conf.sequentialise_core then fun z -> z else Core_sequentialise.sequentialise_file) <$>
-    core_passes (conf, io) filename core_file
+  (fun (_, typed_core) ->
+     if conf.sequentialise_core then typed_core
+     else Core_sequentialise.sequentialise_file typed_core)
+  <$> core_passes (conf, io) filename core_file
   >>= Codegen_ocaml.gen filename ocaml_corestd sym_suppl
 
 
