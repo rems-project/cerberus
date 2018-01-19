@@ -197,6 +197,10 @@ let c_frontend (conf, io) ~filename =
   parse processed_filename  >>= fun cabs_tunit            ->
   desugar cabs_tunit        >>= fun (sym_suppl, ail_prog) ->
   ail_typechecking ail_prog >>= fun ailtau_prog           ->
+  (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
+     used more than once, we need to do reset here *)
+  (* TODO(someday): find a better way *)
+  Tags.reset_tagDefs ();
   let (sym_suppl', core_file) =
     Translation.translate conf.core_stdlib conf.core_impl (sym_suppl, ailtau_prog) in
   io.set_progress "ELABO" >>= fun () ->
