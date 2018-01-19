@@ -55,7 +55,7 @@ val core_frontend:
 
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
-  (unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM
+  (unit Core.file * unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val interp_backend:
   io_helpers -> Symbol.sym -> unit Core.file ->
