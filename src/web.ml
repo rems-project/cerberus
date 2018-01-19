@@ -68,13 +68,21 @@ let string_of_doc d =
   PPrint.ToBuffer.pretty 1.0 150 buf d;
   Buffer.contents buf
 
-let success ?(result="") (cabs, ail, core) =
+let success (res, cabs, ail, _, core) =
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
   let json_of_doc d = Json.Str (elim_paragraph_sym (string_of_doc d)) in
-  Colour.do_colour := false;
-  let pp_core = string_of_doc (Pp_core.All.pp_file core) in
+  let pp_core =
+    let module Param_pp_core = Pp_core.Make (struct
+        let show_std = true
+        let show_location = true
+        let show_proc_decl = false
+      end) in
+    Colour.do_colour := false;
+    Param_pp_core.pp_file core
+    |> string_of_doc
+  in
   let (core_str, locs) = Location_mark.extract pp_core in
   Json.Map [
     ("cabs",    json_of_doc (Pp_cabs.pp_translation_unit false false cabs));
@@ -82,7 +90,7 @@ let success ?(result="") (cabs, ail, core) =
     ("ail_ast", json_of_doc (Pp_ail_ast.pp_program ail));
     ("core",    Json.Str (elim_paragraph_sym core_str));
     ("locs",    locs);
-    ("stdout",  Json.Str result);
+    ("stdout",  Json.Str res);
     ("stderr",  Json.empty);
   ] |> Json.string_of |> respond
 
@@ -124,45 +132,35 @@ let not_allowed meth path =
 
 (* Cerberus actions *)
 
-let elab_rewrite ~filename ~conf =
-  match Pipeline.c_frontend conf filename with
-  | Exception.Result (Some cabs, Some ail, _, core) ->
-    success (cabs, ail, core)
-  | _ ->
-    forbidden "elab"
-
-let elab ~filename ~conf =
-  match Pipeline.c_frontend conf filename with
-  | Exception.Result (Some cabs, Some ail, _, core) ->
-    begin match Pipeline.core_passes conf ~filename core with
-      | Exception.Result core' ->
-        success (cabs, ail, core')
-      | Exception.Exception (loc, err) ->
-        print_endline (Pp_errors.short_message err);
-        forbidden "fail"
-    end
-  | _ ->
-    forbidden "elab_rewrite"
-
-let execute ~filename ~conf =
-  match Pipeline.c_frontend conf filename with
-  | Exception.Result (Some cabs, Some ail, sym_suppl, core) ->
-    begin match Pipeline.core_passes conf ~filename core with
-      | Exception.Result core' ->
-        begin match Pipeline.interp_backend dummy_io sym_suppl core []
-                      true false false `Random with
-          | Exception.Result r ->
-            success ~result:(string_of_int r) (cabs, ail, core')
-          | Exception.Exception (loc, err) ->
-            print_endline (Pp_errors.short_message err);
-            forbidden "fail"
-        end
-      | Exception.Exception (loc, err) ->
-        print_endline (Pp_errors.short_message err);
-        forbidden "fail"
-    end
-  | _ ->
-    forbidden "elab_rewrite"
+let run ~filename ~conf (action: [`Elaborate | `Execute]) =
+  let return = Exception.except_return in
+  let (>>=)  = Exception.except_bind in
+  let elaborate () =
+    Pipeline.c_frontend conf filename
+    >>= function
+    | (Some cabs, Some ail, sym_suppl, core) ->
+      Pipeline.core_passes conf ~filename core
+      >>= fun (core', _) -> return ("", cabs, ail, sym_suppl, core')
+    | _ ->
+      Exception.throw (Location_ocaml.unknown,
+                       Errors.OTHER "fatal failure core pass")
+  in
+  let execute () =
+    elaborate ()
+    >>= fun (_, cabs, ail, sym_suppl, core) ->
+    Pipeline.interp_backend dummy_io sym_suppl core [] true false false `Random
+    >>= fun res ->
+    return (string_of_int res, cabs, ail, sym_suppl, core)
+  in
+  let respond = function
+    | Exception.Result res ->
+      success res
+    | Exception.Exception (_, err) ->
+      failure (Pp_errors.short_message err)
+  in
+  match action with
+  | `Elaborate -> elaborate () |> respond
+  | `Execute -> execute () |> respond
 
 (* GET and POST *)
 
@@ -189,9 +187,9 @@ let post ~docroot ~conf uri path content =
     Debug.print 9 ("POST " ^ path);
     let filename = write_tmp_file content in
     match path with
-    | "/elab" -> elab ~filename ~conf
-    | "/elab_rewrite" -> elab_rewrite ~filename ~conf
-    | "/ramdom" -> execute ~filename ~conf
+    | "/elab_rewrite"
+    | "/elab" -> run ~filename ~conf `Elaborate
+    | "/ramdom" -> run ~filename ~conf `Execute
     | _ -> forbidden path
   in catch try_with (fun e -> Debug.error "POST"; forbidden path)
 
