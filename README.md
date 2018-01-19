@@ -6,14 +6,13 @@ Installation
 
 ### Ocaml and opam 
 
-Install `ocaml` (at least 4.02.0) and `opam`.
+Install `ocaml` (at least 4.06.0) and `opam`.
 Then using opam, install:
 
-* ocamlfind (tested with 1.5.3)
-* cmdliner  (tested with 0.9.5)
-* menhir    (tested with 20130912)
-* pprint    (tested with 20140424)
-* zarith    (tested with 1.4.1)
+* ocamlfind (tested with 1.7.3-1)
+* cmdliner  (tested with 1.0.2)
+* menhir    (tested with 20171212)
+* pprint    (tested with 20171003)
 
 ```bash
 $ opam install ocamlfind cmdliner menhir pprint zarith
@@ -27,6 +26,7 @@ Install `lem`
 $ git clone https://bitbucket.org/Peter_Sewell/lem.git
 $ cd lem
 $ make
+$ cd ocaml-lib; sudo make install
 ```
 
 Set `LEM_PATH` to `lem` directory and include it in your path:
