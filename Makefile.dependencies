@@ -19,12 +19,11 @@ endif
 
 default:
 	@if (command -v opam >/dev/null 2>&1); then \
-	  echo "Please install the following packages with opam: cmdliner, pprint, zarith"; \
+	  echo "Please install the following packages with opam: cmdliner, pprint"; \
 	else \
 	  make -f ../Makefile.dependencies cmdliner pprint zarith z3; \
 	fi
 #  make cmdliner pprint zarith
-
 
 cmdliner:
 	@if ! (ocamlfind query cmdliner >/dev/null 2>&1); then \
@@ -56,15 +55,15 @@ pprint:
           fi; \
         fi
 
-zarith:
-	@if ! (ocamlfind query zarith >/dev/null 2>&1); then \
-	  echo "INSTALLING pprint"; \
-	  if [ ! -d $(ZARITH_PATH) ] ; then \
-	    echo DOWNLOADING $(ZARITH_SOURCE) ; \
-	    $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
-	  fi; \
-	  cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make && make install; \
-	fi
+#zarith:
+#	@if ! (ocamlfind query zarith >/dev/null 2>&1); then \
+#	  echo "INSTALLING pprint"; \
+#	  if [ ! -d $(ZARITH_PATH) ] ; then \
+#	    echo DOWNLOADING $(ZARITH_SOURCE) ; \
+#	    $(CMD) $(ZARITH_SOURCE) && tar -zxf $(shell basename $(ZARITH_SOURCE)) && rm -f $(shell basename $(ZARITH_SOURCE)) ; \
+#	  fi; \
+#	  cd $(ZARITH_PATH); if [ ! -f Makefile ]; then ./configure ; fi && make && make install; \
+#	fi
 
 z3:
 	@if ! (ocamlfind query z3 >/dev/null 2>&1); then \
@@ -79,6 +78,8 @@ z3:
 	  cd build; \
 	  make && make install; \
 	fi
+
+.PHONY: z3 pprint cmdliner
 
 clean:
 	rm -rf $(shell basename $(CMDLINER_SOURCE) .tbz) $(shell basename $(PPRINT_SOURCE) .tar.gz) $(shell basename $(ZARITH_SOURCE) .tgz) ${Z3_SOURCE_PATH}
