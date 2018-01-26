@@ -44,7 +44,7 @@ let collect_output ic =
   end
 
 type status =
-  | Done of int * string
+  | Done of int * string * string
   | Timeout
   | Error of string
 
@@ -63,20 +63,21 @@ let run_cc filename =
           if n = 124 then
             Timeout
           else
-            Done (n, str)
+            Done (n, str, "")
       | _ ->
           Error ("(CC) failed to execute the binary of '" ^ filename ^ "'")
   )
 
 let run_cerb filename =
-  let (ic, _, ic2) as chans = open_process_full ("gtimeout 45s " ^ cerbCmd ^ " " ^ filename) (environment ()) in
-  let str = collect_output ic in
+  let (stdout_ic, _, stderr_ic) as chans = open_process_full ("gtimeout 45s " ^ cerbCmd ^ " " ^ filename) (environment ()) in
+  let stdout_str = collect_output stdout_ic in
+  let stderr_str = collect_output stderr_ic in
   match close_process_full chans with
       | WEXITED n ->
           if n = 124 then
             Timeout
           else
-            Done (n, str)
+            Done (n, stdout_str, stderr_str)
       | _ ->
           Error ("(Cerberus) failed to execute the binary of '" ^ filename ^ "'")
 
@@ -120,7 +121,7 @@ let run_test filename =
       | Error str ->
           Pervasives.(output_string stderr (str ^ "\n"));
           exit 1
-      | Done (n_cc, stdout_cc) ->
+      | Done (n_cc, stdout_cc, _) ->
           begin match run_cerb filename with
             | Timeout ->
                 print_endline "\x1b[33mTO\x1b[0m";
@@ -128,10 +129,15 @@ let run_test filename =
             | Error str ->
                 Pervasives.(output_string stderr (str ^ "\n"));
                 exit 1
-            | Done (n_cerb, stdout_cerb) ->
+            | Done (n_cerb, stdout_cerb, stderr_cerb) ->
                 if n_cc = n_cerb && stdout_cc = stdout_cerb then (
-                  print_endline "\x1b[32mOK\x1b[0m";
-                  output_string log_oc ("OK " ^ filename ^ "\n")
+                  let time_str =
+                    match String.split_on_char '\n' stderr_cerb with
+                      | [] -> ""
+                      | [x] -> x
+                      | xs -> List.nth xs (List.length xs - 1) in
+                  print_endline ("\x1b[32mOK\x1b[0m: " ^ time_str);
+                  output_string log_oc ("OK " ^ filename ^ " ==> " ^ time_str ^ "\n")
                  ) else (
                   print_endline "\x1b[31mKO\x1b[0m";
                   output_string log_oc ("KO " ^ filename ^ "\n")
