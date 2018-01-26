@@ -129,9 +129,9 @@ let progress_sofar = ref 1
 
 
 (* some block functions used by the pipeline *)
-let pass_through        f = Exception.fmap (fun v ->           f v        ; v)
-let pass_through_test b f = Exception.fmap (fun v -> if b then f v else (); v)
-let pass_message      msg = Exception.fmap (fun v -> Debug_ocaml.print_success msg; v)
+let pass_through        f = Exception.except_fmap (fun v ->           f v        ; v)
+let pass_through_test b f = Exception.except_fmap (fun v -> if b then f v else (); v)
+let pass_message      msg = Exception.except_fmap (fun v -> Debug_ocaml.print_success msg; v)
 let return_none m         = Exception.except_bind m (fun _ -> Exception.except_return None)
 let return_empty m        = Exception.except_bind m (fun _ -> Exception.except_return [])
 
