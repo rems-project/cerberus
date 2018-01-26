@@ -1,9 +1,6 @@
-open Mem
-open Mem_common
-
 open Pp_prelude
 
-module Impl = Pp_defacto_memory
+open Mem_common
 
 
 let pp_pure_memop = function

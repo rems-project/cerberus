@@ -15,6 +15,8 @@ let isActive = function
       false
 
 type driver_conf = {
+(* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
+  exec_mode: Smt2.execution_mode;
   concurrency: bool;
   experimental_unseq: bool;
 }
@@ -42,7 +44,7 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt2.runND Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
+  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   
   List.iteri (fun i (res, z3_strs, nd_st) ->
     print_endline ("BEGIN EXEC[" ^ string_of_int i ^ "]");
@@ -95,7 +97,7 @@ let drive sym_supply file args conf : execution_result =
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt2.runND Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
+  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in

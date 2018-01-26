@@ -11,13 +11,6 @@ external (|>) : 'a -> ('a -> 'b) -> 'b = "%revapply"
 *)
 
 
-type execution_mode =
-  | Interactive
-  | Exhaustive
-  | Random
-
-val string_of_execution_mode: execution_mode -> string
-
 type language =
   | Cabs
   | Ail
@@ -41,7 +34,7 @@ type cerberus_conf = {
   core_stdlib:     (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:   Core.impl option;
   core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
-  exec_mode_opt:   execution_mode option;
+  exec_mode_opt:   Smt2.execution_mode option;
   ocaml:           bool;
   ocaml_corestd:   bool;
   progress:        bool;
@@ -66,7 +59,7 @@ val (!!): (unit -> 'a) ref -> 'a
 
 val cerb_conf: (unit -> cerberus_conf) ref
 
-val current_execution_mode: unit -> execution_mode option
+val current_execution_mode: unit -> Smt2.execution_mode option
 
 val set_cerb_conf:
     string ->
@@ -75,7 +68,7 @@ val set_cerb_conf:
     (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
     Core.impl option ->
     bool ->
-    execution_mode ->
+    Smt2.execution_mode ->
     (Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM) ->
     bool ->
     bool ->

@@ -24,7 +24,7 @@ module ND = Nondeterminism
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
                    Exception.exceptM Core.pexpr core_run_error
 let call_function file f_nm arg_cvals =
-  let () = Debug.print_debug 3 [] (fun () ->
+  let () = Debug.print_debug 4 [] (fun () ->
     "CALL_FUNCTION: " ^ Pp.stringFromCore_pexpr (Pexpr () (PEcall f_nm (List.map Caux.mk_value_pe arg_cvals)))
   ) in
   Exception.bind match f_nm with
@@ -694,7 +694,7 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
                 EU.return pe_) >>= fun pe_' ->
               (* TODO: check KKK *)
               let (Pexpr _ pe_'') = pull_constrained 0 (Pexpr () pe_') in
-              let () = Debug.print_debug 1 [] (fun () ->
+              let () = Debug.print_debug 4 [] (fun () ->
                 "PEcall ===> " ^ Pp.stringFromCore_pexpr (Pexpr () pe_'')
               ) in
               EU.return pe_''
@@ -727,7 +727,7 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
               EU.return $ PElet pat pe1' pe2
         end
     | PEif pe1 pe2 pe3 ->
-        let () = Debug.print_debug 2 [] (fun () ->
+        let () = Debug.print_debug 4 [] (fun () ->
           "Core_eval ==> PEif (_) ==> " ^ Pp.stringFromCore_pexpr pexpr
         ) in
         self pe1 >>= fun pe1' ->
@@ -818,12 +818,12 @@ val     eval_pexpr_aux2: Loc.t -> maybe Mem.mem_state -> Core.file core_run_anno
                          Core.pexpr ->
                          EU.t (either Core.pexpr Core.value) core_run_error
 let rec eval_pexpr_aux2 loc mem_st_opt file pe =
-  let () = Debug.print_debug 2 [] (fun () ->
+  let () = Debug.print_debug 4 [] (fun () ->
     "ENTERING Core_eval.eval_pexpr_aux2 ==> " ^ Pp.stringFromCore_pexpr pe
   ) in
   match let pulled = pull_constrained 0 pe in
 
-  let () = Debug.print_debug 2 [] (fun () ->
+  let () = Debug.print_debug 4 [] (fun () ->
     "pulled ==> " ^ Pp.stringFromCore_pexpr pulled
   ) in
   pulled
@@ -880,7 +880,7 @@ val     eval_pexpr_aux_broken: Loc.t -> maybe Mem.mem_state -> Core.file core_ru
                         Core.pexpr ->
                         EU.t Core.value core_run_error
 let rec eval_pexpr_aux_broken loc mem_st_opt file pe =
-  step_eval_pexpr 0 loc mem_st_opt file false (let ()=Debug.print_debug 2 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
+  step_eval_pexpr 0 loc mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval

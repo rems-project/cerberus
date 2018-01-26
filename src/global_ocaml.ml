@@ -8,7 +8,7 @@ let (>?>) x b f g = if b then f x else g x
 (* let (|>) x f = f x *)
 external (|>) : 'a -> ('a -> 'b) -> 'b = "%revapply"
 
-
+(*
 type execution_mode =
   | Interactive
   | Exhaustive
@@ -21,6 +21,7 @@ let string_of_execution_mode = function
       "exhaustive"
   | Random ->
       "random"
+*)
 
 type language =
   | Cabs
@@ -51,7 +52,7 @@ type cerberus_conf = {
   core_stdlib:        (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:      Core.impl option;
   core_parser:        Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
-  exec_mode_opt:      execution_mode option;
+  exec_mode_opt:      Smt2.execution_mode option;
   ocaml:              bool;
   ocaml_corestd:      bool;
   progress:           bool;
@@ -76,7 +77,7 @@ let cerb_conf =
 
 (* TODO: temporary, should use the field in cerb_conf *)
 let cerb_exec_mode_opt =
-  ref (Some Random)
+  ref (Some Smt2.Random)
 
 let current_execution_mode () =
 (*  !!cerb_conf.exec_mode_opt *)

@@ -60,7 +60,9 @@ val core_passes:
 val interp_backend:
   io_helpers -> Symbol.sym -> unit Core.file ->
   args:(string list) -> do_batch:bool -> concurrency:bool -> experimental_unseq:bool ->
-  [`Interactive | `Exhaustive | `Random] ->
+(* TODO: we would be using poly variants if it weren't for Lem... *)
+(*  [`Interactive | `Exhaustive | `Random] -> *)
+  Smt2.execution_mode ->
   (int, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val ocaml_backend:
