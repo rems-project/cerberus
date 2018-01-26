@@ -21,6 +21,7 @@ module Constraints = struct
     Quantifier.mk_forall ctx sorts syms expr None [] [] None None
   
   type solver_state = {
+      submitted: (string * t) list;
       ctx: context;
       slv: Solver.solver;
       
@@ -97,6 +98,7 @@ module Constraints = struct
     let boolSort = Boolean.mk_sort ctx in
     let slvSt = {
   (*   allocations= []; *)
+     submitted= [];
      ctx= ctx;
      slv= Solver.mk_solver ctx None;
      addrSort= Arithmetic.Integer.mk_sort ctx;
@@ -202,15 +204,24 @@ module Constraints = struct
       mb st
     )
   
-  let foldlM f a bs = failwith "List.fold_left f a bs"
-
+  let rec foldlM f a = function
+    | [] -> return a
+    | b::bs -> bind (f a b) (fun a' -> foldlM f a' bs)
   
   let runEff (Eff mk) =
     mk (init_solver ())
 
 
   let string_of_solver =
-    Eff (fun st -> [Solver.to_string st.slv])
+    Eff (fun st ->
+      List.mapi (fun i (str, cs) ->
+        "\n[" ^ (string_of_int i) ^ "] -- '" ^ str ^ "'\n" ^ String_defacto_memory.string_of_iv_memory_constraint cs
+      ) (List.rev st.submitted)
+
+(*
+      [Solver.to_string st.slv]
+*)
+    )
 
   let check_sat =
     Eff (fun st ->
@@ -497,7 +508,8 @@ let mem_constraint_to_expr st (constr: mem_iv_constraint) =
         | None ->
             ()
       end;
-      let ret = m st in
+      let st' = { st with submitted= (debug_str, cs) :: st.submitted } in
+      let ret = m st' in
       Solver.pop st.slv 1;
       ret
     )

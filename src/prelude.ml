@@ -6,7 +6,7 @@ let error ?(code = 1) msg =
 type mem_setting =
   [ `MemDefacto | `MemConcrete ]
 
-(* TODO: I hate that. And this doesn't work ... *)
+(* TODO: I hate this. And it doesn't even work ... *)
 let mem_switch: mem_setting ref =
-  ref `MemDefacto
-(*  ref `MemConcrete *)
+(*  ref `MemDefacto *)
+  ref `MemConcrete

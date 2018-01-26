@@ -1,4 +1,3 @@
-open Ocaml_mem
 open Mem_common
 
 val pp_pure_memop: pure_memop -> PPrint.document

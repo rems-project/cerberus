@@ -124,7 +124,7 @@ let liftConc =
 let add_to_concur_sym_map sym oval concur_sym_map =
   match oval with
     | _ ->
-        let () = Debug.print_debug 2 [Debug.DB_driver; Debug.DB_concurrency]
+        let () = Debug.print_debug 4 [Debug.DB_driver; Debug.DB_concurrency]
             (fun () -> "ADDING TO ASSOC ==> " ^ show sym ^ " := " ^ Pp.stringFromCore_value (Core.Vobject oval)) in
         Map.insert sym oval concur_sym_map
   end
@@ -153,7 +153,7 @@ end
 
 val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let printf_eval_conv dr_st cty mval =
-  let () = Debug.print_debug 1 [] (fun () -> "printf_eval_conv") in
+  let () = Debug.print_debug 4 [] (fun () -> "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
   print_eval_conv_aux dr_st $
     Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
@@ -294,11 +294,11 @@ let rec drive_core_thread tid =
   ND.msum "drive_core_thread" $ List.map (function
     | Core_run.Step_constrained debug_str xs ->
         ( "Step_constrained(" ^ debug_str ^ ")"
-        , (* DEBUG *) ND.print_debug 1 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED, |xs| = " ^ show (List.length xs)) >>
+        , (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED, |xs| = " ^ show (List.length xs)) >>
           ND.msum "step_constrained" (
             List.map (fun (cs, step_m) ->
               ( Pp.stringFromMem_iv_mem_constraint cs
-              , let () = Debug.print_debug 1 [] (fun () ->
+              , let () = Debug.print_debug 4 [] (fun () ->
                   "ADDING CONSTRAINTS (driver) ===> " ^ Pp.stringFromMem_iv_mem_constraint cs
                 ) in
                 ND.addConstraints ("driver: " ^ debug_str) cs >>
@@ -319,7 +319,7 @@ let rec drive_core_thread tid =
         , ND.return () )
     | Core_run.Step_tau debug_str step_m ->
         ( "Step_tau(" ^ debug_str ^ ")"
-        , let () = Debug.print_debug 2 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+        , let () = Debug.print_debug 4 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
           let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
           let pre_th_st = (* DEBUG *)
             snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
@@ -342,7 +342,7 @@ let rec drive_core_thread tid =
           drive_core_thread tid )
     | Core_run.Step_eval debug_str step_m ->
         ( "Step_eval(" ^ debug_str ^ ")"
-        , let () = Debug.print_debug 2 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+        , let () = Debug.print_debug 4 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
           let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
           let pre_th_st = (* DEBUG *)
             snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in

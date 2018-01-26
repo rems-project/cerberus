@@ -196,46 +196,40 @@ let run_test (run: string -> Exhaustive_driver.execution_result) (test:Tests.tes
 
 
 let backend sym_supply core_file args =
-  let dr_conf = {
-    Exhaustive_driver.concurrency= !!cerb_conf.concurrency;
-    Exhaustive_driver.experimental_unseq= !!cerb_conf.experimental_unseq
-  } in
   match !!cerb_conf.exec_mode_opt with
     | None ->
         0
-    | Some (Interactive | Exhaustive | Random) ->
+    | Some exec_mode ->
+        let dr_conf = {
+          Exhaustive_driver.exec_mode= exec_mode;
+          Exhaustive_driver.concurrency= !!cerb_conf.concurrency;
+          Exhaustive_driver.experimental_unseq= !!cerb_conf.experimental_unseq
+        } in
         if !!cerb_conf.batch then
           begin
             Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) dr_conf;
             0
           end
         else
-          
-        
-        (* TODO: temporary hack for the command name *)
-        Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
-          | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-            begin
-              (* TODO: yuck *)
-              try
-                int_of_string (String_mem.string_pretty_of_integer_value ival)
-              with | _ ->
-                Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+          (* TODO: temporary hack for the command name *)
+          Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
+            | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
+              begin
+                (* TODO: yuck *)
+                try
+                  int_of_string (String_mem.string_pretty_of_integer_value ival)
+                with | _ ->
+                  Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                  0
+              end
+            | Exception.Result (cval :: _) ->
+                Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_value cval); 0
+            | Exception.Result [] ->
+                Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
                 0
-            end
-          | Exception.Result (cval :: _) ->
-              Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_value cval); 0
-          | Exception.Result [] ->
-              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
-              0
-          | Exception.Exception _ ->
-              Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
-              0
-(*
-          | _ ->
-              Debug_ocaml.warn "Return value was not a specified integer or was an undef/error";
-              0)
-*)
+            | Exception.Exception _ ->
+                Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
+                0
 )
 
 
@@ -445,7 +439,7 @@ let exec =
 
 let exec_mode =
   let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["interactive", Interactive; "exhaustive", Exhaustive; "random", Random]) Random & info ["mode"] ~docv:"MODE" ~doc)
+  Arg.(value & opt (enum [(*"interactive", Smt2.Interactive; *)"exhaustive", Smt2.Exhaustive; "random", Smt2.Random]) Smt2.Random & info ["mode"] ~docv:"MODE" ~doc)
 
 let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
@@ -532,6 +526,8 @@ let () =
     | `Ok n ->
         output_string mlm_dbg_oc "\n";
         close_out mlm_dbg_oc;
+        (* TODO: hack *)
+        Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
         exit n
     | `Version
     | `Help ->

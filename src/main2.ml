@@ -27,7 +27,6 @@ type std_setting =
 type cerb_opts = {
   pipeline_conf: Pipeline.configuration;
   args: string list;
-  cpp_cmd: string;
   std: std_setting;
   mem: Prelude.mem_setting;
   batch: bool;
@@ -64,32 +63,39 @@ let cerb_opts args cpp_cmd macros dirs std mem debug batch exec pps asts
               concurrency =
   (* From now on the Ocaml_mem module exposes the desired model *)
   Prelude.mem_switch := mem;
-  (* TODO: std *)
-  (* TODO: set debug level *)
-(*
-  { { debug_level= debug
-    ; pprints= pps
-    ; astprints= asts
-    ; ppflags= ppflags
-    ; typecheck_core= failwith "TODO: remove"
-    ; rewrite_core= rewrite
-    ; sequentialise_core= sequentialise
-    ; cpp_cmd= cpp_cmd ^ "SOMETHING macros, dirs"
-    ; core_stdlib= failwith ""
-    ; core_impl= failwith "" }
+  (* Looking for and parsing the core standard library *)
+  let core_stdlib = Pipeline.load_core_stdlib () in
+  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
+  let pipeline_conf = {
+    debug_level= debug;
+    pprints= pps;
+    astprints= asts;
+    ppflags= ppflags;
+    typecheck_core= failwith "TODO: remove";
+    rewrite_core= rewrite;
+    sequentialise_core= sequentialise;
+    cpp_cmd=
+      String.concat " " begin
+        cpp_cmd ::
+        List.map (function
+          | (str1, None)      -> "-D" ^ str1
+          | (str1, Some str2) -> "-D" ^ str1 ^ "=" ^ str2
+        ) macros @
+        List.map (fun str -> "-I " ^ str) dirs
+      end;
+    core_stdlib= core_stdlib;
+    core_impl= failwith "TODO";
+  } in
+  
+  { pipeline_conf
   ; args
+  ; std
+  ; mem
   ; batch
   ; exec
   ; ocaml
   ; ocaml_corestd
   ; concurrency }
-*)
-  failwith "WIP"
-
-(*
-  { args; cpp_cmd; macros; dirs; std; mem; debug; batch; exec; pps; asts;
-    ppflags; rewrite; sequentialise; ocaml; ocaml_corestd; concurrency; }
-*)
 
 
 
@@ -136,9 +142,7 @@ let cerberus cerb_opts =
 (*  Debug_ocaml.debug_level := cerb_opts.debug; (* TODO: do something cleaner *) *)
   Random.self_init ();
   
-  (* Looking for and parsing the core standard library *)
-  let core_stdlib = Pipeline.load_core_stdlib () in
-  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
+  
 
 
 

@@ -1,4 +1,6 @@
 type driver_conf = {
+(* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
+  exec_mode: Smt2.execution_mode;
   concurrency: bool;
   experimental_unseq: bool;
 }

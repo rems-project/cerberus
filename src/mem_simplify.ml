@@ -261,8 +261,31 @@ let rec simplify_integer_value_base ival_ =
         Right ival_
 
     | IVbyteof (ival_, mval) ->
-        failwith ("Mem_simplify, IVbyteof ==> " ^
-                  String_defacto_memory.string_of_integer_value (IV (Prov_none, ival_)) ^ " -- " ^ String_defacto_memory.string_of_mem_value mval)
+        begin match (ival_, mval) with
+          | (IVconcrete n, MVcomposite (xs, mval')) ->
+              let pred = function
+                | IVconcrete n' when n = n' -> true
+                | _ -> false in
+              begin match List.find_opt (fun (z, _) -> pred z) xs with
+                | Some (_, IV (_, ival_')) ->
+                    simplify_integer_value_base ival_'
+                | None ->
+                    failwith "Mem_simplify, IVbyteof ==> need to look inside a MVcomposite"
+              end
+          | _ ->
+              failwith ("Mem_simplify, IVbyteof ==> " ^
+                        String_defacto_memory.string_of_integer_value (IV (Prov_none, ival_)) ^
+                        " -- " ^ String_defacto_memory.string_of_mem_value mval)
+
+        end
+(*
+        (* TODO/NOTE: assuming little endian two's complement encoding *)
+*)
+(*
+let byteof i n = let n' = n `div` (2 ^ (i * 8)) in mod n' 256
+*)
+
+        
         
     | IVcomposite _ ->
         failwith "simplify_integer_value: IVcomposite"

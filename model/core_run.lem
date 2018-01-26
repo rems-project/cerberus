@@ -315,22 +315,22 @@ module E = struct
   let return =
     SEU.return
   let step_eval_pexprs loc mem_st file pes =
-    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
     SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
   let step_eval_pexpr loc mem_st file pe =
-    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
     SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
   
   let eval_pexpr loc mem_st file pe =
-    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)" ) in
+    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)" ) in
     SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
   
   let eval_pexpr2 loc mem_st file pe =
-    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
+    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
     SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)
   
   let wrapped_eval_pexpr2 loc mem_st file pe =
-    let () = Debug.print_debug 1 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
+    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
     (* TODO: it would be better to just call eval_pexpr2, but
        Lem generates buggy OCaml ... *)
     SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)) function
@@ -966,7 +966,7 @@ BEFORE EVAL_PEXPR2
                     end
                 | Nothing ->
                     Step_eval "Eccall" (
-                      let () = Debug.print_debug 1 [] (fun () -> "XX 16") in
+                      let () = Debug.print_debug 4 [] (fun () -> "XX 16") in
                       E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
                       E.return <| th_st with arena= Expr arena_annots (Eccall annots pe pes') |>
                     )
@@ -976,7 +976,7 @@ BEFORE EVAL_PEXPR2
                 Pp.stringFromCore_value cval ^ "")
           | Nothing ->
               Step_eval "Eccall" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 17") in
+                let () = Debug.print_debug 4 [] (fun () -> "XX 17") in
                 E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
                 E.return <| th_st with arena= Expr arena_annots (Eccall annots pe' pes) |>
               )
@@ -1038,7 +1038,7 @@ BEFORE EVAL_PEXPR2
               end
           | Nothing ->
               Step_eval "Eproc" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 18") in
+                let () = Debug.print_debug 4 [] (fun () -> "XX 18") in
                 E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
                 E.return <| th_st with arena= Expr arena_annots (Eproc annots nm pes') |>
               )
@@ -1055,7 +1055,7 @@ BEFORE EVAL_PEXPR2
               )
           | Nothing ->
               Step_eval "Ememop" (
-                let () = Debug.print_debug 1 [] (fun () -> "XX 19") in
+                let () = Debug.print_debug 4 [] (fun () -> "XX 19") in
                 SEU.mapM (E.eval_pexpr th_st.current_loc mem_st file) pes >>= fun cval' ->
                 let pes' = List.map Caux.mk_value_pe cval' in
                 E.return <| th_st with arena= Expr arena_annots (Ememop memop pes') |>
@@ -1149,7 +1149,7 @@ end
                  if it's not constrained, otherwise put things back in place for
                  Step_constrained to do the branching *)
               Step_eval "Esseq" (
-                let () = Debug.print_debug 1 [] (fun () ->
+                let () = Debug.print_debug 4 [] (fun () ->
                   "Step_eval Esseq ==> pe1: " ^ Pp.stringFromCore_pexpr pe1
                 ) in
                 E.eval_pexpr2 th_st.current_loc mem_st file pe1 >>= function
@@ -1193,9 +1193,9 @@ end
                   
             end
 *)
-            let () = Debug.print_debug 1 [] (fun () -> "XXX 22") in
+            let () = Debug.print_debug 4 [] (fun () -> "XXX 22") in
             E.eval_pexpr th_st.current_loc mem_st file pe >>= fun cval ->
-            let () = Debug.print_debug 1 [] (fun () ->
+            let () = Debug.print_debug 4 [] (fun () ->
               "XX 22 => " ^ Pp.stringFromCore_value cval
             ) in
             E.return (subst_sym_expr sym cval acc)
@@ -1335,7 +1335,7 @@ end
     | (Eindet _ _, _) ->
         error "Core_run must be called after Core_indet"
     | (Ebound _ e, _) ->
-        let () = Debug.print_debug 1 [] (fun () ->
+        let () = Debug.print_debug 4 [] (fun () ->
           "STEP Ebound"
         ) in
         (* TODO: use the index ? *)

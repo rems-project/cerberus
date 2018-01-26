@@ -263,14 +263,24 @@ let rec pp_object_value = function
       Ocaml_mem.pp_pointer_value ptr_val
   | OVarray lvals ->
       pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
-  | OVstruct (sym, xs) ->
-      !^ "TODO(Vstruct)" 
-      (* pp_const "struct" ^^ P.parens *)
-  | OVunion (sym, ident, mem_val) ->
-      !^ "TODO(Vunion)" 
-      (* pp_const "struct" ^^ P.parens *)
+  | OVstruct (tag_sym, xs) ->
+      P.parens (pp_const "struct" ^^^ pp_symbol tag_sym) ^^
+      P.braces (
+        comma_list (fun (ident, mval) -> 
+          P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^
+          P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        ) xs
+      )
+  | OVunion (tag_sym, memb_ident, mval) ->
+      P.parens (pp_const "union" ^^^ pp_symbol tag_sym) ^^
+      P.braces (
+        P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^
+        P.equals ^^^ Ocaml_mem.pp_mem_value mval
+      )
   | OVcfunction nm ->
       !^ "Cfunction" ^^ P.parens (pp_name nm)
+  | OVcomposite _ ->
+      !^ "TODO(OVcomposite)" 
 
 and pp_loaded_value = function
   | LVspecified oval ->

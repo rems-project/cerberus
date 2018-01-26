@@ -10,10 +10,10 @@ instance (Eq execution_mode)
   let (<>) = unsafe_structural_inequality
 end
 
-declare ocaml target_rep type     execution_mode = `Global_ocaml.execution_mode`
-declare ocaml target_rep function Interactive    = `Global_ocaml.Interactive`
-declare ocaml target_rep function Exhaustive     = `Global_ocaml.Exhaustive`
-declare ocaml target_rep function Random         = `Global_ocaml.Random`
+declare ocaml target_rep type     execution_mode = `Smt2.execution_mode`
+declare ocaml target_rep function Interactive    = `Smt2.Interactive`
+declare ocaml target_rep function Exhaustive     = `Smt2.Exhaustive`
+declare ocaml target_rep function Random         = `Smt2.Random`
 
 declare hol target_rep type     execution_mode = `util$execution_mode`
 declare hol target_rep function Interactive    = `util$Interactive`

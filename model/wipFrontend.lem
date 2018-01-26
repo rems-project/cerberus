@@ -30,7 +30,7 @@ val runND_proxy:
   list (ND.nd_status Driver.driver_result Driver.driver_error * list string * Driver.driver_state)
 
 
-declare ocaml target_rep function runND_proxy = `Smt2.runND Ocaml_mem.cs_module`
+declare ocaml target_rep function runND_proxy = `Smt2.runND Exhaustive Ocaml_mem.cs_module`
 
 val empty_sigma: forall 'a. A.sigma 'a
 let empty_sigma = <|
