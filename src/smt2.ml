@@ -7,7 +7,7 @@ type execution_mode =
   | Random
 
 let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) =
-  Debug_ocaml.print_debug 0 [] (fun () ->
+  Debug_ocaml.print_debug 1 [] (fun () ->
     "HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->
           "exhaustive"
@@ -32,8 +32,10 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) 
     (* TODO: graph export *)
     match m_act st with
       | (NDactive a, st') ->
-          print_endline "NDactive";
+(*
+          prerr_endline "NDactive";
           flush_all ();
+*)
           check_sat >>= begin function
             | `UNSAT ->
                 failwith "NDactive found to be UNSATISFIABLE"
@@ -43,14 +45,18 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) 
           end
 
       | (NDkilled r, st') ->
-          print_endline "NDkilled";
+(*
+          prerr_endline "NDkilled";
           flush_all ();
+*)
           CS.string_of_solver >>= fun str ->
           return [(Killed r, str, st')]
 
       | (NDnd (debug_str, str_ms), st') ->
+(*
           Printf.printf "NDnd[%s]\n" debug_str;
           flush_all ();
+*)
           begin match exec_mode with
             | Random ->
                 with_backtracking (fun (_, z) -> aux z st') str_ms
@@ -66,8 +72,10 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) 
 *)
           end
       | (NDguard (debug_str, cs, m_act), st') ->
+(*
           Printf.printf "NDguard[%s]\n" debug_str;
           flush_all ();
+*)
           with_constraints debug_str cs begin
             check_sat >>= function
               | `UNSAT ->
@@ -76,8 +84,10 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) 
                   aux m_act st'
           end
       | (NDbranch (debug_str, cs, m_act1, m_act2), st') ->
+(*
           Printf.printf "NDbranch[%s]\n" debug_str;
           flush_all ();
+*)
           begin match exec_mode with
 (*
             | Some Interactive ->
