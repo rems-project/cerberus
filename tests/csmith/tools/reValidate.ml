@@ -89,9 +89,10 @@ let should_rerun filename =
     let rec loop () =
       try
         let str = input_line log_ic in
-        if String.sub str 3 (String.length str - 3) = filename then begin
+        if String.length str >= String.length filename + 3 &&
+           String.sub str 3 (String.length filename) = filename then begin
           match String.sub str 0 2 with
-            | "XX" | "TO" | "KO" ->
+            (* | "XX" | "TO" | *) "KO" ->
                 true
             | _ ->
                 output_string log_oc (str ^ "\n");
@@ -114,6 +115,7 @@ let run_test filename =
     print_endline ("Skipping " ^ filename)
   else begin
     print_string (filename ^ " --> ");
+    flush_all ();
     begin match run_cc filename with
       | Timeout ->
           print_endline "\x1b[33mXX\x1b[0m";
