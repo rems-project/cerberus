@@ -260,7 +260,7 @@ module Concrete : Memory = struct
       Eff (fun b -> ((if b then `SAT else `UNSAT), b))
     
     let with_constraints _ cs (Eff ma) =
-      prerr_endline "HELLO: Concrete.with_constraints";
+      Debug_ocaml.print_debug 1 [] (fun () -> "HELLO: Concrete.with_constraints");
       let rec eval_cs = function
         | MC_empty ->
             true
@@ -323,16 +323,20 @@ module Concrete : Memory = struct
   
   (* TODO: DEBUG *)
   let print_bytemap str =
-    Printf.printf "BEGIN BYTEMAP ==> %s\n" str;
-    get >>= fun st ->
-    IntMap.iter (fun addr (prov, c_opt) ->
-      Printf.printf "@%s ==> %s: %s\n"
-        (N.to_string addr)
-        (match prov with Prov_none -> "" | Prov_some alloc_id -> N.to_string alloc_id)
-        (match c_opt with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
-    ) st.bytemap;
-    print_endline "END";
+    if !Debug_ocaml.debug_level > 0 then begin
+      Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
+      get >>= fun st ->
+      IntMap.iter (fun addr (prov, c_opt) ->
+        Printf.fprintf stderr "@%s ==> %s: %s\n"
+          (N.to_string addr)
+          (match prov with Prov_none -> "" | Prov_some alloc_id -> N.to_string alloc_id)
+          (match c_opt with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+      ) st.bytemap;
+      prerr_endline "END";
     return ()
+    end else
+      return ()
+
   
   let get_allocation alloc_id : allocation memM =
     get >>= fun st ->
@@ -496,7 +500,7 @@ module Concrete : Memory = struct
           aux (Nat_big_num.to_int n) [] bs
       | Pointer0 (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-          prerr_endline "TODO: Concrete, assuming pointer repr is unsigned??";
+          Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (provs, bs1') = List.split bs1 in
           let prov = combine_provenances provs in
           (begin match extract_unspec bs1' with
@@ -574,7 +578,7 @@ module Concrete : Memory = struct
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
-          prerr_endline "NOTE: we fix the sizeof pointers to 8 bytes";
+          Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
           let ptr_size = match Impl.sizeof_pointer with
             | None ->
                 failwith "the concrete memory model requires a complete implementation"
@@ -582,7 +586,7 @@ module Concrete : Memory = struct
                 z in
           begin match ptrval_ with
             | PVnull _ ->
-                prerr_endline "NOTE: we fix the representation of all NULL pointers to be 0x0";
+                Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
             | PVfunction _ ->
                 failwith "TODO: explode_bytes, PVfunction"
@@ -787,7 +791,7 @@ addr1
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     PV (prov, match ptrval_ with
       | PVnull _ ->
-          prerr_endline "TODO(check): array_shift_ptrval, PVnull";
+          Debug_ocaml.print_debug 1 [] (fun () -> "TODO(check): array_shift_ptrval, PVnull");
           PVconcrete offset
       | PVfunction _ ->
           failwith "Concrete.array_shift_ptrval, PVfunction"
