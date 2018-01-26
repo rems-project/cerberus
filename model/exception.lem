@@ -21,7 +21,7 @@ let fail = throw
 let inline join m = bind m (fun x -> x)
 
 val fmap: forall 'a 'b 'msg. ('a -> 'b) -> exceptM 'a 'msg -> exceptM 'b 'msg
-let except_fmap f m = bind m (return -| f)
+let except_fmap f m = except_bind m (except_return -| f)
 
 (* HACK: the indirection is for the hand-written OCaml code *)
 let inline return = except_return
