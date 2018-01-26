@@ -85,7 +85,7 @@ let run_pp filename lang doc =
   if fout then close_out oc
 
 let set_progress str n =
-  Exception.fmap (fun v ->
+  Exception.except_fmap (fun v ->
     output_string mlm_dbg_oc (str ^ "  ");
     progress_sofar := n;
     v
@@ -108,7 +108,7 @@ let c_frontend f =
     |> pass_message "1. C Parsing completed!"
     |> pass_through_test (List.mem Cabs !!cerb_conf.pps) (run_pp filename "cabs" -| Pp_cabs.pp_translation_unit true (not $ List.mem FOut !!cerb_conf.ppflags))
       (*
-  |> Exception.fmap (fun (z, _) -> z)
+  |> Exception.except_fmap (fun (z, _) -> z)
     *)
 (* TODO TODO TODO *)
     |> Exception.rbind (fun z ->
@@ -129,16 +129,16 @@ let c_frontend f =
       if !Debug_ocaml.debug_level > 4 then
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program -| snd)
       else
-        Exception.fmap (fun z -> z)
+        Exception.except_fmap (fun z -> z)
     end
     |> Exception.rbind (fun (counter, z) ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program z))
           (fun z -> Exception.except_return (counter, z)))
-    |> Exception.fmap (fun (counter, (z, annots)) -> (counter, z))
+    |> Exception.except_fmap (fun (counter, (z, annots)) -> (counter, z))
     |> begin
       if !Debug_ocaml.debug_level > 4 then
-        Exception.fmap (fun z -> z)
+        Exception.except_fmap (fun z -> z)
       else
         let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program in
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail -| snd)
@@ -146,14 +146,14 @@ let c_frontend f =
     |> set_progress "AILTY" 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.fmap (Translation.translate !!cerb_conf.core_stdlib
+    |> Exception.except_fmap (Translation.translate !!cerb_conf.core_stdlib
                          (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
     |> set_progress "ELABO" 13
     |> pass_message "4. Translation to Core completed!"
 
 (*
 (*
-      |> Exception.fmap Core_simpl.simplify
+      |> Exception.except_fmap Core_simpl.simplify
 
       |> pass_message "5. Core to Core simplication completed!"
       |> pass_through_test !print_core (run_pp -| Pp_core.pp_file) *)
