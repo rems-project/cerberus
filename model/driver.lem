@@ -1165,7 +1165,7 @@ TODO: this should be removable, since we already set it in Translation
               (* allocating and initialising an object for main.argc *)
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
-                  Mem.bind (Mem.store Loc.unknown Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
+                  Mem.bind (Mem.store (Loc.other "argc init") Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
@@ -1175,7 +1175,7 @@ TODO: this should be removable, since we already set it in Translation
               ND.foldM (fun ptr_vals (arg_mem_val, arg_ty) ->
                 liftMem (
                   Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
-                    Mem.bind (Mem.store Loc.unknown arg_ty ptr_val arg_mem_val) (fun _ ->
+                    Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty ptr_val arg_mem_val) (fun _ ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
                   )
@@ -1187,7 +1187,7 @@ TODO: this should be removable, since we already set it in Translation
               let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
-                  Mem.bind (Mem.store Loc.unknown argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval argv_elem_ty) (List.reverse ptr_vals_rev))) (fun _ ->
+                  Mem.bind (Mem.store (Loc.other "argv init") argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev))) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
