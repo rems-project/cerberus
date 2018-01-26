@@ -321,6 +321,51 @@ module Concrete : Memory = struct
   let return = Eff.return
   let bind = Eff.(>>=)
   
+
+
+
+
+  (* pretty printing *)
+  open PPrint
+  let pp_pointer_value (PV (_, ptrval_))=
+    match ptrval_ with
+      | PVnull ty ->
+          !^ "NULL"
+      | PVfunction sym ->
+          !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
+      | PVconcrete n ->
+          !^ (Nat_big_num.to_string n)
+  
+  let pp_integer_value (IV (_, n)) =
+        !^ (Nat_big_num.to_string n)
+    
+  let pp_integer_value_for_core = pp_integer_value
+    
+  let rec pp_mem_value = function
+    | MVunspecified _ ->
+        PPrint.string "UNSPEC"
+    | MVinteger (_, ival) ->
+        pp_integer_value ival
+    | MVfloating (_, fval) ->
+        !^ (string_of_float fval)
+    | MVpointer (_, ptrval) ->
+        !^ "ptr" ^^ parens (pp_pointer_value ptrval)
+    | MVarray mvals ->
+        braces (
+         Pp_prelude.comma_list pp_mem_value mvals
+        )
+    | MVstruct (tag_sym, xs) ->
+        failwith "pp MVstruct"
+    | MVunion (tag_sym, membr_ident, mval) ->
+        failwith "pp MVunion"
+
+
+
+
+
+
+
+
   (* TODO: DEBUG *)
   let print_bytemap str =
     if !Debug_ocaml.debug_level > 0 then begin
@@ -643,6 +688,8 @@ module Concrete : Memory = struct
       Printf.printf "STORE typeof mval ==> %s\n"
         (String_core_ctype.string_of_ctype (typeof mval));
       Printf.printf "STORE ==> %s\n" (Location_ocaml.location_to_string loc);
+      Printf.printf "STORE mval ==> %s\n"
+        (Pp_utils.to_plain_string (pp_mem_value mval));
       fail (MerrOther "store with an ill-typed memory value")
     end else match (prov, ptrval_) with
       | (_, PVnull _) ->
@@ -1025,39 +1072,6 @@ let combine_prov prov1 prov2 =
     return ()
   
   
-  (* pretty printing *)
-  open PPrint
-  let pp_pointer_value (PV (_, ptrval_))=
-    match ptrval_ with
-      | PVnull ty ->
-          !^ "NULL"
-      | PVfunction sym ->
-          !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
-      | PVconcrete n ->
-          !^ (Nat_big_num.to_string n)
-  
-  let pp_integer_value (IV (_, n)) =
-        !^ (Nat_big_num.to_string n)
-    
-  let pp_integer_value_for_core = pp_integer_value
-    
-  let rec pp_mem_value = function
-    | MVunspecified _ ->
-        PPrint.string "UNSPEC"
-    | MVinteger (_, ival) ->
-        pp_integer_value ival
-    | MVfloating (_, fval) ->
-        !^ (string_of_float fval)
-    | MVpointer (_, ptrval) ->
-        pp_pointer_value ptrval
-    | MVarray mvals ->
-        braces (
-         Pp_prelude.comma_list pp_mem_value mvals
-        )
-    | MVstruct (tag_sym, xs) ->
-        failwith "pp MVstruct"
-    | MVunion (tag_sym, membr_ident, mval) ->
-        failwith "pp MVunion"
 
 
   let pp_pretty_pointer_value = pp_pointer_value
