@@ -49,7 +49,8 @@ instance (Show mem_error)
         "MerrOther \"" ^  str ^ "\""
     | MerrWIP str ->
         "Memory WIP: " ^ str
-
+    | MerrPtrdiff ->
+        "MerrPtrdiff"
     | MerrAccess loc LoadAccess err ->
         "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
