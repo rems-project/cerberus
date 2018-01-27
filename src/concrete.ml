@@ -73,7 +73,7 @@ end = struct
   let get = Nondeterminism.get0
   let put = Nondeterminism.put0
   let fail err = Nondeterminism.kill (Other err)
-  let mapM _ _ = failwith "mapM"
+  let mapM _ _ = failwith "TODO: mapM"
   
   let msum str xs =
     Nondeterminism.(
@@ -304,7 +304,7 @@ module Concrete : Memory = struct
         | MC_lt (IV (prov1, n1), IV (prov2, n2)) ->
             Nat_big_num.less n1 n2
         | MC_in_device _ ->
-            failwith "Concrete, with_constraints: MC_in_device"
+            failwith "TODO: Concrete, with_constraints: MC_in_device"
         | MC_or (cs1, cs2) ->
             eval_cs cs1 || eval_cs cs2
         | MC_conj css ->
@@ -583,7 +583,7 @@ module Concrete : Memory = struct
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVfloating ( fty
-                           , Int64.to_float (N.to_int64 (int64_of_bytes true cs)) )
+                           , Int64.float_of_bits (N.to_int64 (int64_of_bytes true cs)) )
             | None ->
                 MVunspecified ty
           end, bs2)
@@ -608,7 +608,7 @@ module Concrete : Memory = struct
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
       | Atomic0 atom_ty ->
-          failwith "WIP: combine_bytes, Atomic"
+          failwith "TODO: combine_bytes, Atomic"
       | Struct0 tag_sym ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
 (*
@@ -629,9 +629,9 @@ module Concrete : Memory = struct
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
           (MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
-          failwith "WIP: combine_bytes, Union (as value)"
+          failwith "TODO: combine_bytes, Union (as value)"
       | Builtin0 str ->
-          failwith "WIP: combine_bytes, Builtin"
+          failwith "TODO: combine_bytes, Builtin"
   
   
   (* INTERNAL bytes_of_int64 *)
@@ -690,7 +690,7 @@ module Concrete : Memory = struct
           List.map (fun z -> (Prov_none, z)) begin
             bytes_of_int64
               true (* TODO: check that *)
-              (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.of_float fval))
+              (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
@@ -731,8 +731,12 @@ module Concrete : Memory = struct
             ) (0, []) offs xs
           end @
           List.init final_pad (fun _ -> (Prov_none, None))
-      | MVunion _ ->
-          failwith "TODO: explode_bytes, MVunion"
+      | MVunion (tag_sym, memb_ident, mval) ->
+          let size = sizeof (Core_ctype.Union0 tag_sym) in
+          let bs = explode_bytes mval in
+          bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
+
+  
   
   let load loc ty (PV (prov, ptrval_)) =
     print_bytemap "ENTERING LOAD" >>= fun () ->
@@ -962,9 +966,9 @@ module Concrete : Memory = struct
             | Signed _ ->
                 signed_max
             | Enum _ ->
-                failwith "max_ival: Enum"
+                failwith "TODO: max_ival: Enum"
             | IBuiltin _ ->
-                failwith "max_ival: IBuiltin"
+                failwith "TODO: max_ival: IBuiltin"
           end
       | None ->
           failwith "the concrete memory model requires a complete implementation"
@@ -994,7 +998,7 @@ module Concrete : Memory = struct
           end
       | Enum _
       | IBuiltin _ ->
-          failwith "minv_ival: Enum, Builtin"
+          failwith "TODO: minv_ival: Enum, Builtin"
     end)
   
 
@@ -1108,10 +1112,10 @@ let combine_prov prov1 prov2 =
     fval1 <= fval2
   
   let fvfromint (IV (_, n)) =
-    Int64.to_float (N.to_int64 n)
+    Int64.float_of_bits (N.to_int64 n)
   
   let ivfromfloat ity fval =
-    IV (Prov_none, N.of_int64 (Int64.of_float fval))
+    IV (Prov_none, N.of_int64 (Int64.bits_of_float fval))
   
   let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
@@ -1165,48 +1169,8 @@ let combine_prov prov1 prov2 =
   let pp_pretty_pointer_value = pp_pointer_value
   let pp_pretty_integer_value _ = pp_integer_value
   let pp_pretty_mem_value _ = pp_mem_value
-
-
-(*
-  open Nondeterminism
-  let runND m st0 =
-    let rec aux (ND m_act) st =
-      match m_act st with
-        | (NDactive a, st') ->
-            [(Active a, [], st')]
-      | (NDkilled (Undef0 _ as reason), st') ->
-          [(Killed reason, [], st')]
-      | (NDkilled r, st') ->
-          failwith "Concrete.runND NDkilled"
-      | (NDnd (debug_str, str_ms), st') ->
-          if true (* is_exhaustive *) then
-            L.concat (
-              L.map (fun (_, z) -> aux z st') str_ms 
-            )
-          else
-            (* TODO: this is not really random (see http://okmij.org/ftp/Haskell/perfect-shuffle.txt) *)
-            let suffled_str_ms =
-              let with_index = List.map (fun z ->
-                (Random.bits (), z)
-              ) str_ms in
-              List.map snd (List.sort (fun (x, _) (y, _) -> Pervasives.compare x y) with_index) in
-            begin match suffled_str_ms with
-              | [] ->
-                  assert false
-              | (_, m_act) :: _ ->
-                  aux m_act st'
-            end
-      | (NDguard (debug_str, _, _), _) ->
-          print_endline debug_str;
-          assert false
-      | (NDbranch (debug_str, _, _, _), _) ->
-          print_endline debug_str;
-          assert false
-    in
-    aux m st0
-*)
-
-
+  
+  
   (* TODO: validate more, but looks good *)
   let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
     let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
