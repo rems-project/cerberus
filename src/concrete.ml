@@ -90,6 +90,8 @@ module IntMap = Map.Make(struct
 end)
 
 
+(* TODO: memoise this, it's stupid to recompute this every time... *)
+(* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
 let rec offsetsof tag_sym =
   match Pmap.find tag_sym (Tags.tagDefs ()) with
     | Tags.StructDef membrs ->
@@ -99,11 +101,11 @@ let rec offsetsof tag_sym =
             let align = alignof ty in
             let x = last_offset mod align in
             let pad = if x = 0 then 0 else align - x in
-            ((membr, size, last_offset + pad) :: xs, last_offset + pad + size)
+            ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
           ) ([], 0) membrs in
         (List.rev xs, maxoffset)
     | Tags.UnionDef membrs ->
-        (List.map (fun (ident, ty) -> (ident, sizeof ty, 0)) membrs, 0)
+        (List.map (fun (ident, ty) -> (ident, ty, 0)) membrs, 0)
 
 and sizeof = function
   | Void0 | Array0 (_, None) | Function0 _ ->
@@ -188,28 +190,48 @@ and alignof = function
   | Atomic0 atom_ty ->
       alignof atom_ty
   | Struct0 tag_sym ->
-      let Tags.StructDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
-      (* NOTE: Structs (and unions) alignment is that of the maximum alignment
-         of any of their components. *)
-      begin match membrs with
-        | [] ->
+      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+        | Tags.UnionDef _ ->
             assert false
-        | (_, ty0) :: xs ->
+        | Tags.StructDef membrs  ->
+            (* NOTE: Structs (and unions) alignment is that of the maximum alignment
+               of any of their components. *)
             List.fold_left (fun acc (_, ty) ->
-              let n = alignof ty in if n > acc then n else acc
-            ) (alignof ty0) xs
+              max (alignof ty) acc
+            ) 0 membrs
+(*
+            (* TODO: remove the pattern matching, this is dumb ... *)
+            begin match membrs with
+              | [] ->
+                  assert false
+              | (_, ty0) :: xs ->
+                  List.fold_left (fun acc (_, ty) ->
+                    let n = alignof ty in if n > acc then n else acc
+                                 ) (alignof ty0) xs
+            end
+*)
       end
   | Union0 tag_sym ->
-      let Tags.UnionDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
-      (* NOTE: Structs (and unions) alignment is that of the maximum alignment
-         of any of their components. *)
-      begin match membrs with
-        | [] ->
+      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+        | Tags.StructDef _ ->
             assert false
-        | (_, ty0) :: xs ->
+        | Tags.UnionDef membrs ->
+            (* NOTE: Structs (and unions) alignment is that of the maximum alignment
+               of any of their components. *)
             List.fold_left (fun acc (_, ty) ->
-              let n = alignof ty in if n > acc then n else acc
-            ) (alignof ty0) xs
+              max (alignof ty) acc
+            ) 0 membrs
+(*
+            (* TODO: remove the pattern matching, this is dumb ... *)
+            begin match membrs with
+              | [] ->
+                  assert false
+              | (_, ty0) :: xs ->
+                  List.fold_left (fun acc (_, ty) ->
+                    let n = alignof ty in if n > acc then n else acc
+                  ) (alignof ty0) xs
+            end
+*)
       end
   | Builtin0 str ->
      failwith "TODO: sizeof Builtin"
@@ -338,6 +360,7 @@ module Concrete : Memory = struct
 
   (* pretty printing *)
   open PPrint
+  open Pp_prelude
   let pp_pointer_value (PV (_, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
@@ -363,12 +386,19 @@ module Concrete : Memory = struct
         !^ "ptr" ^^ parens (pp_pointer_value ptrval)
     | MVarray mvals ->
         braces (
-         Pp_prelude.comma_list pp_mem_value mvals
+         comma_list pp_mem_value mvals
         )
     | MVstruct (tag_sym, xs) ->
-        failwith "pp MVstruct"
+        parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
+          comma_list (fun (ident, mval) ->
+            dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ equals ^^^ pp_mem_value mval
+          ) xs
+        )
     | MVunion (tag_sym, membr_ident, mval) ->
-        failwith "pp MVunion"
+        parens (!^ "union" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
+          dot ^^ Pp_cabs.pp_cabs_identifier membr_ident ^^ equals ^^^
+          pp_mem_value mval
+        )
 
 
 
@@ -471,7 +501,9 @@ module Concrete : Memory = struct
       ) (List.init n_bytes (fun z ->
            (* NOTE: the reversal in the offset is to model
               little-endianness *)
-           let offset = n_bytes - 1 - z in
+(*           let offset = n_bytes - 1 - z in *)
+(*KKK*)
+           let offset = z in
            Nat_big_num.(add base_addr (of_int offset))
          ))
     )
@@ -490,32 +522,27 @@ module Concrete : Memory = struct
         end
     end
   
-  let int64_of_bytes is_signed = function
-    | [] ->
-        assert false
-    | cs when L.length cs > 8 ->
-        assert false
-    | (first::_ as cs) ->
-        (* NOTE: this is to preserve the binary signedness *)
-        let init =
-          if is_signed && N.(equal (succ zero) (extract_num (of_int (int_of_char first)) 7 1)) then
-            N.of_int (-1)
-          else
-            N.zero in
-        let rec aux acc = function
-          | [] ->
-              acc
-          | c::cs' ->
-              aux N.(bitwise_xor (of_int (int_of_char c)) (shift_left acc 8)) cs' in
-        aux init cs
+  let int64_of_bytes is_signed bs =
+    (* NOTE: the reverse is from little-endianness *)
+    match List.rev bs with
+      | [] ->
+          assert false
+      | cs when L.length cs > 8 ->
+          assert false
+      | (first::_ as cs) ->
+          (* NOTE: this is to preserve the binary signedness *)
+          let init =
+            if is_signed && N.(equal (succ zero) (extract_num (of_int (int_of_char first)) 7 1)) then
+              N.of_int (-1)
+            else
+              N.zero in
+          let rec aux acc = function
+            | [] ->
+                acc
+            | c::cs' ->
+                aux N.(bitwise_xor (of_int (int_of_char c)) (shift_left acc 8)) cs' in
+          aux init cs
   
-(*
-  let int64_of_bytes b cs =
-    print_endline "BEGIN int64_of_bytes"; flush_all ();
-    let ret = int64_of_bytes_ b cs in
-    print_endline "END int64_of_bytes"; flush_all ();
-    ret
-*)
   let combine_provenances = function
     | [] ->
         failwith "combine_provenances ==> empty"
@@ -547,10 +574,19 @@ module Concrete : Memory = struct
                 MVinteger ( ity
                           , IV (prov, int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
             | None ->
-                MVunspecified (Core_ctype.Basic0 (AilTypes.Integer ity))
+                MVunspecified ty
           end , bs2)
-      | Basic0 (Floating ity) ->
-          failwith "WIP: combine_bytes"
+      | Basic0 (Floating fty) ->
+          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+          (* we don't care about provenances for floats *)
+          let bs1' = List.map snd bs1 in
+          (begin match extract_unspec bs1' with
+            | Some cs ->
+                MVfloating ( fty
+                           , Int64.to_float (N.to_int64 (int64_of_bytes true cs)) )
+            | None ->
+                MVunspecified ty
+          end, bs2)
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
             if n < 0 then
@@ -572,13 +608,30 @@ module Concrete : Memory = struct
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
       | Atomic0 atom_ty ->
-          failwith "WIP: combine_bytes"
+          failwith "WIP: combine_bytes, Atomic"
       | Struct0 tag_sym ->
-          failwith "WIP: combine_bytes"
+          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+(*
+          print_string "COMBINE: ";
+          List.iter (fun (_, c_opt) ->
+            match c_opt with
+              | Some c -> print_string (string_of_int (int_of_char c) ^ " ")
+              | None   -> print_string "U "
+          ) bs1;
+          print_newline ();
+*)
+          let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
+            let pad = memb_offset - previous_offset in
+            let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
+            ((memb_ident, mval)::acc_xs, previous_offset + sizeof memb_ty, acc_bs')
+          ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
+          (* TODO: check that bs' = last padding of the struct *)
+(*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
+          (MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
-          failwith "WIP: combine_bytes"
+          failwith "WIP: combine_bytes, Union (as value)"
       | Builtin0 str ->
-          failwith "WIP: combine_bytes"
+          failwith "WIP: combine_bytes, Builtin"
   
   
   (* INTERNAL bytes_of_int64 *)
@@ -668,9 +721,10 @@ module Concrete : Memory = struct
           let (offs, last_off) = offsetsof tag_sym in
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
           snd begin
-            List.fold_left2 (fun (last_off, acc) (ident, size, off) (_, mval) ->
+            (* TODO: rewrite now that offsetsof returns the paddings *)
+            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, mval) ->
               let pad = off - last_off in
-              ( off+size
+              ( off + sizeof ty
               , acc @
                 List.init pad (fun _ -> (Prov_none, None)) @
                 explode_bytes mval )
@@ -681,7 +735,7 @@ module Concrete : Memory = struct
           failwith "TODO: explode_bytes, MVunion"
   
   let load loc ty (PV (prov, ptrval_)) =
-(*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
+    print_bytemap "ENTERING LOAD" >>= fun () ->
     match ptrval_ with
       | PVnull _ ->
           fail (MerrAccess (loc, LoadAccess, NullPtr))
@@ -1034,19 +1088,30 @@ let combine_prov prov1 prov2 =
     fconcrete fval
   
   let op_fval fop fval1 fval2 =
-    failwith "TODO: op_fval"
-  let eq_fval fval1 fval2 =
-    failwith "TODO: eq_fval"
-  let lt_fval fval1 fval2 =
-    failwith "TODO: lt_fval"
-  let le_fval fval1 fval2 =
-    failwith "TODO: le_fval"
+    match fop with
+      | FloatAdd ->
+          fval1 +. fval2
+      | FloatSub ->
+          fval1 +. fval2
+      | FloatMul ->
+          fval1 *. fval2
+      | FloatDiv ->
+          fval1 /. fval2
   
-  let fvfromint ival =
-    failwith "TODO: fvfromint"
+  let eq_fval fval1 fval2 =
+    fval1 = fval2
+  
+  let lt_fval fval1 fval2 =
+    fval1 < fval2
+  
+  let le_fval fval1 fval2 =
+    fval1 <= fval2
+  
+  let fvfromint (IV (_, n)) =
+    Int64.to_float (N.to_int64 n)
   
   let ivfromfloat ity fval =
-    failwith "TODO: ivfromfloat"
+    IV (Prov_none, N.of_int64 (Int64.of_float fval))
   
   let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
