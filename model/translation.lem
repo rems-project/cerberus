@@ -2982,7 +2982,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
         let ret_pe =
           if AilTypesAux.is_integer env.return_ty then
-            stdlib.mkcall_conv_loaded_int env.return_ty (Caux.mk_sym_pe e_sym)
+            if AilTypesAux.is_floating (ctype_of e) then
+              error "TODO: need to add memory operators to cast between integers and floatings"
+            else
+              stdlib.mkcall_conv_loaded_int env.return_ty (Caux.mk_sym_pe e_sym)
           else
             Caux.mk_sym_pe e_sym in
         
