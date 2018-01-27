@@ -140,7 +140,18 @@ and sizeof = function
       let x = max_offset mod align in
       if x = 0 then max_offset else max_offset + (align - x)
   | Union0 tag_sym ->
-     failwith "TODO: sizeof Union"
+      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+        | Tags.StructDef _ ->
+            assert false
+        | Tags.UnionDef membrs ->
+            let (max_size, max_align) =
+              List.fold_left (fun (acc_size, acc_align) (_, ty) ->
+                (max acc_size (sizeof ty), max acc_align (alignof ty))
+              ) (0, 0) membrs in
+            (* NOTE: adding padding at the end to satisfy alignment constraints *)
+            let x = max_size mod max_align in
+            if x = 0 then max_size else max_size + (max_align - x)
+      end
   | Builtin0 str ->
      failwith "TODO: sizeof Builtin"
 
@@ -368,7 +379,7 @@ module Concrete : Memory = struct
 
   (* TODO: DEBUG *)
   let print_bytemap str =
-    if !Debug_ocaml.debug_level > 0 then begin
+    if !Debug_ocaml.debug_level > 4 then begin
       Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
       get >>= fun st ->
       IntMap.iter (fun addr (prov, c_opt) ->
@@ -389,7 +400,7 @@ module Concrete : Memory = struct
       | Some ret ->
           return ret
       | None ->
-          fail (MerrUnitialised "Concrete.get_allocation")
+          fail (MerrUnitialised ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
   
   let is_within_bound alloc_id addr =
     get_allocation alloc_id >>= fun alloc ->
@@ -400,6 +411,9 @@ module Concrete : Memory = struct
     let size = N.of_int (sizeof ty) in
     modify begin fun st ->
       let alloc_id = st.next_alloc_id in
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ " --> alloc_id= " ^ N.to_string alloc_id
+      );
       let addr = Nat_big_num.(
         let m = modulus st.next_address align in
         if equal m zero then st.next_address else add st.next_address (sub align m)
@@ -437,6 +451,9 @@ module Concrete : Memory = struct
           | false ->
               fail (MerrOther "attempted to kill with an out-of-bound pointer")
           | true ->
+              Debug_ocaml.print_debug 1 [] (fun () ->
+                "KILLING alloc_id= " ^ N.to_string alloc_id
+              );
               update begin fun st ->
                 {st with allocations= IntMap.remove alloc_id st.allocations}
               end
@@ -779,27 +796,33 @@ module Concrete : Memory = struct
       | _ ->
           fail (MerrWIP "ge_ptrval")
   
-
-
-  let diff_ptrval ty ptrval1 ptrval2 =
+  
+  let diff_ptrval diff_ty ptrval1 ptrval2 =
     match ptrval1, ptrval2 with
-      | PV (Prov_some alloc_id1, ptrval_1), PV (Prov_some alloc_id2, ptrval_2)
+      | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2))
         when N.equal alloc_id1 alloc_id2 ->
-          failwith "WIP"
-(*
-addr1
-
-
-                  (MC_conj [ mk_iv_constr MC_le (IVaddress alloc_id1 pref1) ival1
-                           ; mk_iv_constr MC_le ival1 (IVop IntAdd [IVaddress alloc_id1 pref1; IVsizeof ty])
-                           ; mk_iv_constr MC_le (IVaddress alloc_id1 pref1) ival2
-                           ; mk_iv_constr MC_le ival2 (IVop IntAdd [IVaddress alloc_id1 pref1; IVsizeof ty]) ])
-
-*)
-
+          get_allocation alloc_id1 >>= fun alloc ->
+          (* NOTE: this is not like "is_within_bound" because it allows one-past pointers *)
+          if   N.less_equal alloc.base addr1
+             && N.less_equal addr1 (N.add alloc.base alloc.size)
+             && N.less_equal alloc.base addr2
+             && N.less_equal addr2 (N.add alloc.base alloc.size) then
+            (* NOTE: the result of subtraction of two pointer values is an integer value with
+               empty provenance, irrespective of the operand provenances *)
+            (* TODO: check that this is correct for arrays of arrays ... *)
+            (* TODO: if not, sync with symbolic defacto *)
+            let diff_ty' = match diff_ty with
+              | Core_ctype.Array0 (elem_ty, _) ->
+                  elem_ty
+              | _ ->
+                  diff_ty
+              in
+            return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
+          else
+            fail MerrPtrdiff
       | _ ->
           fail MerrPtrdiff
-
+  
   
   let validForDeref_ptrval = function
     | PV (_, PVnull _)
