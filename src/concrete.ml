@@ -442,7 +442,8 @@ module Concrete : Memory = struct
     modify begin fun st ->
       let alloc_id = st.next_alloc_id in
       Debug_ocaml.print_debug 1 [] (fun () ->
-        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ " --> alloc_id= " ^ N.to_string alloc_id
+        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ N.to_string alloc_id
       );
       let addr = Nat_big_num.(
         let m = modulus st.next_address align in
@@ -740,21 +741,27 @@ module Concrete : Memory = struct
   
   let load loc ty (PV (prov, ptrval_)) =
     print_bytemap "ENTERING LOAD" >>= fun () ->
-    match ptrval_ with
-      | PVnull _ ->
+    match (prov, ptrval_) with
+      | (_, PVnull _) ->
           fail (MerrAccess (loc, LoadAccess, NullPtr))
-      | PVfunction _ ->
+      | (_, PVfunction _) ->
           fail (MerrAccess (loc, LoadAccess, FunctionPtr))
-      | PVconcrete addr ->
-          get >>= fun st ->
-          fetch_bytes addr (sizeof ty) >>= fun bs ->
-          let (mval, bs') = combine_bytes ty bs in
-          begin match bs' with
-            | [] ->
-                return (Footprint, mval)
-            | _ ->
-                fail (MerrWIP "load, bs' <> []")
-          end
+      | (Prov_none, _) ->
+          fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+      | (Prov_some alloc_id, PVconcrete addr) ->
+          is_within_bound alloc_id addr >>= function
+            | false ->
+                fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+            | true ->
+                get >>= fun st ->
+                fetch_bytes addr (sizeof ty) >>= fun bs ->
+                let (mval, bs') = combine_bytes ty bs in
+                begin match bs' with
+                  | [] ->
+                      return (Footprint, mval)
+                  | _ ->
+                      fail (MerrWIP "load, bs' <> []")
+                end
   
   let store loc ty (PV (prov, ptrval_)) mval =
     if not (ctype_equal ty (typeof mval)) then begin
