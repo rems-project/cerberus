@@ -55,8 +55,8 @@ let rec core_object_type_of_ctype ty =
        Just (OTy_struct tag_sym)
    | Union tag_sym ->
        Just (OTy_union tag_sym)
-   | Builtin _ ->
-       error "TODO: Caux.object_type_of_ctype Builtin"
+   | Builtin str ->
+       error ("TODO: Caux.object_type_of_ctype Builtin ==> " ^ str)
   end
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type

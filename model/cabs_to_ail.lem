@@ -2513,7 +2513,7 @@ let desugar_declaration_base specifs idecltors =
                       ) [] (Map_extra.toList ident_tagDefs);
                   |> in
                   if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                    E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
+                    E.fail (*TODO*)(Loc.locOf ident) (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
                   else
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_internal_object_declaration sym

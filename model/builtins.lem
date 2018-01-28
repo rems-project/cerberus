@@ -380,7 +380,8 @@ let builtin = [
   (* TODO: from wctype.h (§7.30) *)
   
 
-
+  (* TODO: some POSIX stuff *)
+  ("__cerbty_ssize_t", Typename)
 ]
 
 
@@ -510,6 +511,16 @@ let translate_builtin_typenames = function
       Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "wchar_t")))
   | "__cerbty_time_t" ->
       Just (ATypes.Builtin "time_t")
+
+
+  (* TODO: some POSIX stuff *)
+  | "__cerbty_ssize_t" ->
+      (* in sys/types.h *)
+      (* it's a signed integer type *)
+      Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "ssize_t")))
+
+
+
   | str ->
       (* TODO *)
       let chars = String.toCharList str in
