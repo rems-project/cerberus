@@ -145,7 +145,9 @@ long double tgammal(long double x);
 double ceil(double x);
 float ceilf(float x);
 long double ceill(long double x);
+*/
 double floor(double x);
+/*
 float floorf(float x);
 long double floorl(long double x);
 double nearbyint(double x);

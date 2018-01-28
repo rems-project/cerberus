@@ -465,7 +465,7 @@ else
 
 
 (* STD §6.5.9 Equality operators *)
-and translate_equality_operator translate usual_arithmetic_conversion result_ty bop e1 e2 =
+and translate_equality_operator loc translate usual_arithmetic_conversion result_ty bop e1 e2 =
     (* STD §6.5.9 *)
 if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
    || AilTypesAux.is_pointer (ctype_of e1) && Aaux.is_null_pointer_constant e2 then
@@ -493,10 +493,10 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
              )
-           ))
-        ; (Caux.mk_empty_pat (C.BTy_loaded C.OTy_pointer),
-           (* TODO: check with Peter *)
-           Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator"))) ]
+    ))
+    ; (Caux.mk_empty_pat (C.BTy_loaded C.OTy_pointer),
+       (* TODO: check with Peter *)
+       Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY ("Elab. equality operator (ptr vs NULL) ==> " ^ Loc.stringFromLocation loc)))) ]
     )
   )
   
@@ -563,7 +563,7 @@ else (* both operand have pointer type *)
                  ) )
             ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
                (* TODO: check with Peter *)
-               Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator"))) ]
+               Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator (both arith or ptr)"))) ]
             )
 
 
@@ -1480,11 +1480,11 @@ else
             result_ty bop e1 e2
       
       | A.AilEbinary e1 (A.Eq as bop) e2 ->
-          translate_equality_operator
+          translate_equality_operator loc
             self usual_arithmetic_conversion
             result_ty bop e1 e2
       | A.AilEbinary e1 (A.Ne as bop) e2 ->
-          translate_equality_operator
+          translate_equality_operator loc
             self usual_arithmetic_conversion
             result_ty bop e1 e2
       

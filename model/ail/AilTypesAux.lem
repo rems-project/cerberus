@@ -396,6 +396,8 @@ let is_complete sigm ty =
         | _ ->
             false
       end
+  | Builtin str ->
+      true (* FIXME: error ("TODO: AilTypesAux.is_complete, Builtin ==> " ^ str) *)
   | _ ->
       false
 end

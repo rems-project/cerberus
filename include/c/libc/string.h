@@ -77,16 +77,13 @@ char *strcpy (char * restrict s1, const char * restrict s2)
   return (res);
 }
 
-/*
-void* memset(void * dst, int s, size_t count)
+void* memset(void *s, int c, size_t n)
 {
-  char * a = dst;
-  count++;
-  while (--count)
-    *a++ = s;
-  return dst;
+  unsigned char *p = s;
+  while (n--)
+    *p++ = (unsigned char)c;
+  return s;
 }
-*/
 
 int strcmp (const char *s1, const char *s2)
 {

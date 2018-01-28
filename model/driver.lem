@@ -1143,7 +1143,7 @@ TODO: this should be removable, since we already set it in Translation
         
         match params with
           | [(argc_sym, _); (argv_sym, _)] ->
-              (* memomy_values to be stored in memory objects pointed to by
+              (* memory_values to be stored in memory objects pointed to by
                  the element of main.argv  *)
               let args_mem_val_tys =
                 List.map (fun arg_str ->
@@ -1183,11 +1183,16 @@ TODO: this should be removable, since we already set it in Translation
               ) [] args_mem_val_tys >>= fun ptr_vals_rev ->
               
               (* allocating and initialising an object for main.argv *)
+              (* NOTE: the element argv[argc] is required to be a null pointer
+                 by the STD, hence argv has one more element than the number
+                 of supplied arguments *)
               let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
-              let argv_ty = Core_ctype.Array argv_elem_ty (Just (integerFromNat $ List.length ptr_vals_rev)) in
+              let argv_ty = Core_ctype.Array argv_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev))) in
+              let argv_mem_val = Mem.array_mval $
+                List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Core_ctype.char]) in
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
-                  Mem.bind (Mem.store (Loc.other "argv init") argv_ty ptr_val (Mem.array_mval $ List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev))) (fun _ ->
+                  Mem.bind (Mem.store (Loc.other "argv init") argv_ty ptr_val argv_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
