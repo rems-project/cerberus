@@ -243,6 +243,7 @@ module Concrete : Memory = struct
   type provenance =
     | Prov_none
     | Prov_some of Nat_big_num.num
+    | Prov_device
   
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
@@ -332,7 +333,7 @@ module Concrete : Memory = struct
   type mem_state = {
     next_alloc_id: allocation_id;
     allocations: allocation IntMap.t;
-    next_address: Nat_big_num.num;
+    next_address: address;
     bytemap: (provenance * char option) IntMap.t;
   }
   
@@ -401,7 +402,29 @@ module Concrete : Memory = struct
         )
 
 
-
+  
+  
+  (* TODO: this is stupid, we need to allow the outside work to specify
+     what memory range is is device *)
+  let device_ranges : (address * address) list =
+    (* TODO: these are some hardcoded ranges to match the Charon tests... *)
+    (* NOTE: these two ranges only have 4 bytes (e.g. one int) *)
+    [ (N.of_int64 0x40000000L, N.of_int64 0x40000004L)
+    ; (N.of_int64 0xABCL, N.of_int64 0XAC0L) ]
+  
+  
+  
+  
+  
+  
+  
+  
+  let string_of_provenance = function
+    | Prov_none -> ""
+    | Prov_some alloc_id ->
+        N.to_string alloc_id
+    | Prov_device ->
+        "dev"
 
 
 
@@ -415,7 +438,7 @@ module Concrete : Memory = struct
       IntMap.iter (fun addr (prov, c_opt) ->
         Printf.fprintf stderr "@%s ==> %s: %s\n"
           (N.to_string addr)
-          (match prov with Prov_none -> "" | Prov_some alloc_id -> N.to_string alloc_id)
+          (string_of_provenance prov)
           (match c_opt with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
       ) st.bytemap;
       prerr_endline "END";
@@ -436,19 +459,29 @@ module Concrete : Memory = struct
     get_allocation alloc_id >>= fun alloc ->
     return (N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size))
   
+  let is_within_device ty addr =
+    return begin
+      List.exists (fun (min, max) ->
+        N.less_equal min addr && N.less_equal (N.add addr (N.of_int (sizeof ty))) max
+      ) device_ranges
+    end
+  
   let allocate_static tid pref (IV (_, align)) ty : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
     modify begin fun st ->
       let alloc_id = st.next_alloc_id in
-      Debug_ocaml.print_debug 1 [] (fun () ->
-        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-        " --> alloc_id= " ^ N.to_string alloc_id
-      );
       let addr = Nat_big_num.(
         let m = modulus st.next_address align in
         if equal m zero then st.next_address else add st.next_address (sub align m)
       ) in
+      
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ N.to_string alloc_id ^
+        ", size= " ^ N.to_string size ^
+        ", addr= " ^ N.to_string addr
+      );
       ( PV (Prov_some alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
@@ -477,6 +510,9 @@ module Concrete : Memory = struct
           fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
           fail (MerrOther "attempted to kill with a pointer lacking a provenance")
+    | PV (Prov_device, PVconcrete _) ->
+        (* TODO: should that be an error ?? *)
+        return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
         is_within_bound alloc_id addr >>= function
           | false ->
@@ -740,7 +776,17 @@ module Concrete : Memory = struct
   
   
   let load loc ty (PV (prov, ptrval_)) =
-    print_bytemap "ENTERING LOAD" >>= fun () ->
+(*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
+    let do_load addr =
+      get >>= fun st ->
+      fetch_bytes addr (sizeof ty) >>= fun bs ->
+      let (mval, bs') = combine_bytes ty bs in
+      begin match bs' with
+        | [] ->
+            return (Footprint, mval)
+        | _ ->
+            fail (MerrWIP "load, bs' <> []")
+      end in
     match (prov, ptrval_) with
       | (_, PVnull _) ->
           fail (MerrAccess (loc, LoadAccess, NullPtr))
@@ -748,22 +794,30 @@ module Concrete : Memory = struct
           fail (MerrAccess (loc, LoadAccess, FunctionPtr))
       | (Prov_none, _) ->
           fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-      | (Prov_some alloc_id, PVconcrete addr) ->
-          is_within_bound alloc_id addr >>= function
+      | (Prov_device, PVconcrete addr) ->
+          begin is_within_device ty addr >>= function
             | false ->
-                fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
             | true ->
-                get >>= fun st ->
-                fetch_bytes addr (sizeof ty) >>= fun bs ->
-                let (mval, bs') = combine_bytes ty bs in
-                begin match bs' with
-                  | [] ->
-                      return (Footprint, mval)
-                  | _ ->
-                      fail (MerrWIP "load, bs' <> []")
-                end
+                do_load addr
+          end
+      | (Prov_some alloc_id, PVconcrete addr) ->
+          begin is_within_bound alloc_id addr >>= function
+            | false ->
+                Debug_ocaml.print_debug 1 [] (fun () ->
+                  "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
+                );
+                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+            | true ->
+                do_load addr
+          end
+  
   
   let store loc ty (PV (prov, ptrval_)) mval =
+    Debug_ocaml.print_debug 3 [] (fun () ->
+      "ENTERING STORE: " ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+      ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
+    );
     if not (ctype_equal ty (typeof mval)) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
@@ -773,29 +827,40 @@ module Concrete : Memory = struct
       Printf.printf "STORE mval ==> %s\n"
         (Pp_utils.to_plain_string (pp_mem_value mval));
       fail (MerrOther "store with an ill-typed memory value")
-    end else match (prov, ptrval_) with
-      | (_, PVnull _) ->
-          fail (MerrAccess (loc, StoreAccess, NullPtr))
-      | (_, PVfunction _) ->
-          fail (MerrAccess (loc, StoreAccess, FunctionPtr))
-      | (Prov_none, _) ->
-          fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-      | (Prov_some alloc_id, PVconcrete addr) ->
-          is_within_bound alloc_id addr >>= function
-            | false ->
-                fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-            | true ->
-                let bs = List.mapi (fun i b ->
-                  (Nat_big_num.add addr (Nat_big_num.of_int i), b)
-                ) (explode_bytes mval) in
-                update begin fun st ->
-                  { st with bytemap=
-                    List.fold_left (fun acc (addr, b) ->
-                      IntMap.add addr b acc
-                    ) st.bytemap bs }
-                end >>
-                print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-                return Footprint
+    end else
+      let do_store addr =
+        let bs = List.mapi (fun i b ->
+          (Nat_big_num.add addr (Nat_big_num.of_int i), b)
+        ) (explode_bytes mval) in
+        update begin fun st ->
+          { st with bytemap=
+            List.fold_left (fun acc (addr, b) ->
+              IntMap.add addr b acc
+            ) st.bytemap bs }
+        end >>
+        print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
+        return Footprint in
+      match (prov, ptrval_) with
+        | (_, PVnull _) ->
+            fail (MerrAccess (loc, StoreAccess, NullPtr))
+        | (_, PVfunction _) ->
+            fail (MerrAccess (loc, StoreAccess, FunctionPtr))
+        | (Prov_none, _) ->
+            fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+        | (Prov_device, PVconcrete addr) ->
+            begin is_within_device ty addr >>= function
+              | false ->
+                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+              | true ->
+                  do_store addr
+            end
+        | (Prov_some alloc_id, PVconcrete addr) ->
+            begin is_within_bound alloc_id addr >>= function
+              | false ->
+                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+              | true ->
+                  do_store addr
+            end
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
@@ -893,6 +958,8 @@ module Concrete : Memory = struct
     | PV (_, PVnull _)
     | PV (_, PVfunction _) ->
         false
+    | PV (Prov_device, PVconcrete _) ->
+        true
     | PV (Prov_some _, PVconcrete _) ->
         true
     | PV (Prov_none, _) ->
@@ -900,7 +967,15 @@ module Concrete : Memory = struct
   
   
   let ptrcast_ival _ _ (IV (prov, n)) =
-    return (PV (prov, PVconcrete n))
+    match prov with
+      | Prov_none ->
+          (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+          if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+            return (PV (Prov_device, PVconcrete n))
+          else
+            return (PV (Prov_none, PVconcrete n))
+      | _ ->
+          return (PV (prov, PVconcrete n))
   
   (* TODO: conversion? *)
   let intcast_ptrval _ ity (PV (prov, ptrval_)) =
@@ -1018,9 +1093,9 @@ let combine_prov prov1 prov2 =
 (*
     | (Prov_none, Prov_wildcard) ->
         Prov_wildcard
+*)
     | (Prov_none, Prov_device) ->
         Prov_device
-*)
     | (Prov_some id, Prov_none) ->
         Prov_some id
     | (Prov_some id1, Prov_some id2) ->
@@ -1031,15 +1106,16 @@ let combine_prov prov1 prov2 =
 (*
     | (Prov_some _, Prov_wildcard) ->
         Prov_wildcard
+*)
     | (Prov_some _, Prov_device) ->
         Prov_device
-    
     | (Prov_device, Prov_none) ->
         Prov_device
     | (Prov_device, Prov_some _) ->
         Prov_device
     | (Prov_device, Prov_device) ->
         Prov_device
+(*
     | (Prov_device, Prov_wildcard) ->
         Prov_wildcard
     
