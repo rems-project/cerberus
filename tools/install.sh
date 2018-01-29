@@ -9,16 +9,20 @@ PREFIX=$1
 ! [ $PREFIX/bitbucket/csem ] && echo Please specify prefix such that \$PREFIX/bitbucket/csem && exit 1
 
 # If opam exists quit
-[ `which opam` ] && echo Opam already installed! && exit 1
+#[ `which opam` ] && echo Opam already installed! && exit 1
 
 # Get OPAM
 wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s $PREFIX/usr/local/bin
 
-opam init --comp 4.06.0
+# Update PATH
+echo export PATH=${PREFIX}/usr/local/bin:${PREFIX}/usr/bin:\$PATH >> ~/.profile
+export PATH=${PREFIX}/usr/local/bin:${PREFIX}/usr/bin:$PATH
+
+opam switch 4.06.0
 eval `opam config env`
 
 # Install Ocamlfind Zarith and Num
-opam install ocamlfind zarith num
+opam install ocamlfind ocamlbuild zarith num
 
 # Install lem
 cd $PREFIX/bitbucket/
