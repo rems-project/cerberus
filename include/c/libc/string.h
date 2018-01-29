@@ -92,5 +92,11 @@ int strcmp (const char *s1, const char *s2)
   return (*s1 - *s2);
 }
 
+char * strdup (const char *s) {
+	// TODO: this is a dummy implementation!! it is wrong
+	return (char*)s;
+}
+
+
 #else
 #endif
