@@ -102,6 +102,9 @@ class UI {
     $('#random').on('click', () => this.exec ('random'))
     $('#exhaustive').on('click', () => this.exec ('exhaustive'))
 
+    $('#random_concrete').on('click', () => this.exec ('random_concrete'))
+    $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
+
     // Create Execution Graph
     $('#graph').on('click', () => {
       this.request('graph', (data) => this.currentView.graph.setValue(data))
