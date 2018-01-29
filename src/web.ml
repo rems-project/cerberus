@@ -5,11 +5,24 @@ open Cohttp_lwt_unix
 
 module Debug =
 struct
+
   let level = ref 0
+
   let print n msg =
-    if !level >= n then Printf.printf "%d: %s\n%!" n msg
-  let warn msg = Printf.printf "[WARN]: %s\n%!" msg
-  let error msg = Printf.printf "[ERROR]: %s\n%!" msg
+    if !level >= n then Printf.printf "[%d]: %s\n%!" n msg
+
+  let warn msg  =
+    if !level > 0 then Printf.printf "\x1b[33m[ WARN  ]: %s\n\x1b[0m%!" msg
+
+  let error msg =
+    Printf.printf "\x1b[31m[ ERROR ]: %s\n\x1b[0m%!" msg
+
+  let warn_exception msg e =
+    warn (msg ^ " " ^ Printexc.to_string e)
+
+  let error_exception msg e =
+    error (msg ^ " " ^ Printexc.to_string e)
+
 end
 
 (* Util *)
@@ -29,7 +42,9 @@ let write_tmp_file content =
     output_string oc content;
     close_out oc;
     tmp
-  with _ -> failwith "write_tmp_file"
+  with _ ->
+    Debug.warn "Error when writing the contents in disk.";
+    failwith "write_tmp_file"
 
 (* Initialise pipeline *)
 
@@ -136,21 +151,27 @@ let run ~filename ~conf (action: [`Elaborate | `Execute]) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   let elaborate () =
-    Pipeline.c_frontend conf filename
-    >>= function
-    | (Some cabs, Some ail, sym_suppl, core) ->
-      Pipeline.core_passes conf ~filename core
-      >>= fun (core', _) -> return ("", cabs, ail, sym_suppl, core')
-    | _ ->
-      Exception.throw (Location_ocaml.unknown,
-                       Errors.OTHER "fatal failure core pass")
+    try
+      Pipeline.c_frontend conf filename
+      >>= function
+      | (Some cabs, Some ail, sym_suppl, core) ->
+        Pipeline.core_passes conf ~filename core
+        >>= fun (core', _) -> return ("", cabs, ail, sym_suppl, core')
+      | _ ->
+        Exception.throw (Location_ocaml.unknown,
+                         Errors.OTHER "fatal failure core pass")
+    with
+    | e -> Debug.warn_exception "Exception raised during elaboration." e; raise e
   in
   let execute () =
-    elaborate ()
-    >>= fun (_, cabs, ail, sym_suppl, core) ->
-    Pipeline.interp_backend dummy_io sym_suppl core [] true false false `Random
-    >>= fun res ->
-    return (string_of_int res, cabs, ail, sym_suppl, core)
+    try
+      elaborate ()
+      >>= fun (_, cabs, ail, sym_suppl, core) ->
+      Pipeline.interp_backend dummy_io sym_suppl core [] true false false `Random
+      >>= fun res ->
+      return (string_of_int res, cabs, ail, sym_suppl, core)
+    with
+    | e -> Debug.warn_exception "Exception raised during execution." e; raise e
   in
   let respond = function
     | Exception.Result res ->
@@ -180,18 +201,25 @@ let get ~docroot uri path =
     match path with
     | "/" -> Server.respond_file "public/index.html" ()
     | _   -> get_local_file ()
-  in catch try_with (fun _ -> Debug.error "GET"; forbidden path)
+  in catch try_with begin fun e ->
+    Debug.error_exception "GET" e;
+    forbidden path
+  end
 
 let post ~docroot ~conf uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     let filename = write_tmp_file content in
+    Debug.print 8 ("Contents written at: " ^ filename);
     match path with
     | "/elab_rewrite"
     | "/elab" -> run ~filename ~conf `Elaborate
-    | "/ramdom" -> run ~filename ~conf `Execute
+    | "/random" -> run ~filename ~conf `Execute
     | _ -> forbidden path
-  in catch try_with (fun e -> Debug.error "POST"; forbidden path)
+  in catch try_with begin fun e ->
+    Debug.error_exception "POST" e;
+    forbidden path
+  end
 
 (* Main *)
 
