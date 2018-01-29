@@ -38,14 +38,13 @@ opam install cmdliner menhir pprint z3
 echo export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:`ocamlfind query z3` >> ~./profile
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 
-# Update cerberus
-cd $PREFIX/bitbucket/csem
-hg pull
-make
-
 # Update PATH
 echo export PATH=${PREFIX}/bitbucket/csem:\$PATH >> ~/.profile
 export PATH=${PREFIX}/bitbucket/csem:$PATH
 echo export CERB_PATH=${PREFIX}/bitbucket/csem >> ~/.profile
 export CERB_PATH=${PREFIX}/bitbucket/csem
 
+# Update cerberus
+cd $PREFIX/bitbucket/csem
+hg pull
+make

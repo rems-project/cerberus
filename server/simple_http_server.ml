@@ -219,10 +219,17 @@ let run mode =
      --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
   mode
 
+let run_concrete mode =
+  Printf.sprintf
+    "cerb_concrete --defacto --sequentialise --exec --batch --rewrite --mode=%s                    \
+     --pp=cabs,ail,core --pp_flags=annot,fout %s > %s 2> %s"
+  mode
+
+
 type exec_status = Success | Timeout | Error
 
 let exec_command c =
-  let chans = Unix.open_process_full ("gtimeout 30s " ^ c) (Unix.environment()) in
+  let chans = Unix.open_process_full ("gtimeout 30s " ^ c) (Unix.unsafe_environment()) in
   match Unix.close_process_full chans with
   | Unix.WEXITED n -> if n = 124 then Timeout else Success
   | _ -> Error
@@ -299,6 +306,8 @@ let post ~docroot uri path content =
     match path with
     | "/exhaustive" -> cerberus (run "exhaustive") content
     | "/random" -> cerberus (run "random") content
+    | "/exhaustive_concrete" -> cerberus (run_concrete "exhaustive") content
+    | "/random_concrete" -> cerberus (run_concrete "random") content
     | "/graph" -> create_graph content
     | "/elab_rewrite"  -> cerberus elab_rewrite content
     | "/elab"  -> cerberus elab content
