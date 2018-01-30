@@ -559,7 +559,7 @@ let is_initializer_constant_expression (AnnotatedExpression () _ loc expr as a_e
 
 
 (* These are OK *)
-val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
+val desugar_struct_declaration: bool -> struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
 val desugar_struct_declarator:
   struct_declarator -> E.desugM (cabs_identifier * (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
 val desugar_init_declarator:            ATypes.qualifiers -> ATypes.ctype -> list storage_class_specifier -> init_declarator ->
@@ -1111,8 +1111,8 @@ let rec desugar_type_specifiers specs =
               match sdecls_opt with
                 | Just sdecls ->
                     (* NOTE: the checking of typing constraints on memberDefs is done by GenTyping *)
-                    List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
                     let isAnonymous = isNothing tag_ident_opt in
+                    List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
                     E.register_tag_definition Loc.unknown tag_sym
                       (E.Struct_definition isAnonymous memberDefs) >>
                     E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
@@ -1128,8 +1128,8 @@ let rec desugar_type_specifiers specs =
                 | Just sdecls ->
                     (* NOTE: the checking of typing constraints on memberDefs is
                        done by the Ail typing *)
-                    List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
                     let isAnonymous = isNothing tag_ident_opt in
+                    List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
                     E.register_tag_definition Loc.unknown tag_sym
                       (E.Union_definition isAnonymous memberDefs) >>
                     E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
@@ -1821,11 +1821,20 @@ KKK
 
 
 (* val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype)) *)
-and desugar_struct_declaration struct_decl =
+and desugar_struct_declaration isAnonymous struct_decl =
   match struct_decl with
     | Struct_declaration specs qs sdecltors ->
         desugar_type_specifiers specs >>= fun (qs, ty) ->
         (* STD §6.7.6.1#2 *)
+        begin if isAnonymous then
+          E.return ()
+        else
+          if List.null sdecltors then
+            E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.1#2")
+          else
+            E.return ()
+        end >>
+(*
         E.is_anonymous_struct_or_union ty >>= function
           | false ->
               if List.null sdecltors then
@@ -1835,6 +1844,7 @@ and desugar_struct_declaration struct_decl =
           | true ->
               E.return ()
         end >>
+*)
         E.mapM (fun sdecltor ->
           desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
           (* TODO: check !!! *)
