@@ -74,19 +74,21 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Ememop _ _ ->
           (* no change *)
           expr_
-      | Eskip ->
-          (* no change *)
-          expr_
+      | Eaction (Paction p' (Action loc annots a)) ->
+          Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
+      | Ecase pe pat_es ->
+          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_sb p_aids e)) pat_es)
       | Elet a pe1 e2 ->
           Elet a pe1 (add_to_sb p_aids e2)
       | Eif pe1 e2 e3 ->
           Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
-      | Ecase pe pat_es ->
-          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_sb p_aids e)) pat_es)
+      | Eskip ->
+          (* no change *)
+          expr_
+      | Eccall annots pe pes ->
+          Eccall <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> pe pes
       | Eproc annots nm pes ->
           Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
-      | Eaction (Paction p' (Action loc annots a)) ->
-          Eaction (Paction p' (Action loc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> a))
       | Eunseq es ->
           Eunseq (List.map (add_to_sb p_aids) es)
       | Ewseq _as e1 e2 ->
@@ -103,25 +105,17 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           error "Core_run_aux.add_to_sb, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_sb, Ebound"
-(*
-      | Esave k a_tys e ->
-          Esave k a_tys (add_to_sb p_aids e)
-      | Erun annots k a_vs ->
-          Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> k a_vs
-*)
       | End es ->
           End (List.map (add_to_sb p_aids) es)
+      | Esave sym_bTy xs e ->
+          Esave sym_bTy xs (add_to_sb p_aids e)
+      | Erun annots sym pes ->
+          Erun <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> sym pes
       | Epar es ->
           Epar (List.map (add_to_sb p_aids) es)
       | Ewait _ ->
           (* no change *)
           expr_
-(*
-      | Eloc loc e ->
-          Eloc loc (add_to_sb p_aids e)
-      | Estd s e ->
-          Estd s (add_to_sb p_aids e)
-*)
     end
   else
     expr
@@ -169,22 +163,24 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
       | Ememop _ _ ->
           (* no change *)
           expr_
-      | Eskip ->
-          (* no change *)
-          expr_
-      | Elet a pe1 e2 ->
-          Elet a pe1 (add_to_asw aids e2)
-      | Eif pe1 e2 e3 ->
-          Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
-      | Ecase pe pat_es ->
-          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_asw aids e)) pat_es)
-      | Eproc annots nm pes ->
-          Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
       | Eaction (Paction p' (Action loc annots a)) ->
          let _ = Set.map (fun aid ->
            Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "ADD_TO_ASW ==> " ^ show aid)
           ) aids in
           Eaction (Paction p' (Action loc <| annots with asw_before= aids union annots.asw_before |> a))
+      | Ecase pe pat_es ->
+          Ecase pe (List.map (fun (pat, e) -> (pat, add_to_asw aids e)) pat_es)
+      | Elet a pe1 e2 ->
+          Elet a pe1 (add_to_asw aids e2)
+      | Eif pe1 e2 e3 ->
+          Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
+      | Eskip ->
+          (* no change *)
+          expr_
+      | Eccall annots pe pes ->
+          Eccall <| annots with asw_before= aids union annots.asw_before |> pe pes
+      | Eproc annots nm pes ->
+          Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
       | Eunseq es ->
           Eunseq (List.map (add_to_asw aids) es)
       | Ewseq _as e1 e2 ->
@@ -197,12 +193,10 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           error "Core_run_aux.add_to_asw, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_asw, Ebound"
-(*
-      | Esave k a_tys e ->
-          Esave k a_tys (add_to_asw aids e)
-      | Erun annots k a_vs ->
-          Erun <| annots with asw_before= aids union annots.asw_before |> k a_vs
-*)
+      | Esave sym_bTy xs e ->
+          Esave sym_bTy xs (add_to_asw aids e)
+      | Erun annots sym pes ->
+          Erun <| annots with asw_before= aids union annots.asw_before |> sym pes
       | End es ->
           End (List.map (add_to_asw aids) es)
       | Epar es ->
@@ -210,12 +204,6 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
       | Ewait _ ->
           (* no change *)
           expr_
-(*
-      | Eloc loc e ->
-          Eloc loc (add_to_asw aids e)
-      | Estd s e ->
-          Estd s (add_to_asw aids e)
-*)
     end
   else
     expr

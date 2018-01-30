@@ -49,7 +49,7 @@ let opt_passes core =
 
 let create_globs name core =
   {
-    interface = String.capitalize name ^ "I.";
+    interface = String.capitalize_ascii name ^ "I.";
     statics = List.map (fun (s,_,_) -> s) core.Core.globs;
     externs = Pmap.fold
         (fun s f es -> match f with

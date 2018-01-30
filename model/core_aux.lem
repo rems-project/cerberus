@@ -905,15 +905,13 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
     | Esseq pat e1 e2 ->
         Esseq pat (subst_sym_expr sym cval e1)
           (if in_pattern sym pat then e2 else subst_sym_expr sym cval e2)
-    | Easeq pat act1 pact2 ->
-        Easeq pat (subst_sym_action sym cval act1) (
-          match pat with
-            | Just (sym, _) ->
-                pact2
-            | Nothing ->
-                subst_sym_paction sym cval pact2
-          end
-        )
+    | Easeq (sym', bTy) act1 pact2 ->
+        Easeq (sym', bTy) (subst_sym_action sym cval act1) begin
+          if sym = sym' then
+            pact2
+          else
+            subst_sym_paction sym cval pact2
+        end
     | Eindet i e ->
         Eindet i (subst_sym_expr sym cval e)
     | Ebound i e ->
@@ -1024,6 +1022,10 @@ let rec subst_pattern_val pat cval expr =
               "specified"
           | Cunspecified ->
               "unspecified"
+          | Cfvfromint ->
+              "fvfromint"
+          | Civfromfloat ->
+              "ivfromfloat"
         end in
         error ("WIP: Core_aux.subst_pattern_val ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)
@@ -1139,18 +1141,13 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Ewseq pat (unsafe_subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else unsafe_subst_sym_expr sym pe' e2)
     | Esseq pat e1 e2 ->
         Esseq pat (unsafe_subst_sym_expr sym pe' e1) (if in_pattern sym pat then e2 else unsafe_subst_sym_expr sym pe' e2)
-    | Easeq pat act1 pact2 ->
-        Easeq pat (unsafe_subst_sym_action sym pe' act1) (
-          match pat with
-            | Just (sym', _) ->
-                if sym = sym' then
-                  pact2
-                else
-                  unsafe_subst_sym_paction sym pe' pact2
-            | Nothing ->
-                unsafe_subst_sym_paction sym pe' pact2
-          end
-        )
+    | Easeq (sym', bTy) act1 pact2 ->
+        Easeq (sym', bTy) (unsafe_subst_sym_action sym pe' act1) begin
+          if sym = sym' then
+            pact2
+          else
+            unsafe_subst_sym_paction sym pe' pact2
+        end
     | Eindet i e ->
         Eindet i (unsafe_subst_sym_expr sym pe' e)
     | Ebound i e ->
@@ -1287,6 +1284,10 @@ let rec unsafe_subst_pattern pat pe' expr =
               "specified"
           | Cunspecified ->
               "unspecified"
+          | Cfvfromint ->
+              "fvfromint"
+          | Civfromfloat ->
+              "ivfromfloat"
         end in
         error ("WIP: Core_aux.subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')

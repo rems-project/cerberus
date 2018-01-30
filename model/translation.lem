@@ -46,6 +46,7 @@ let illTypedAil loc debug_str =
   error ("[Translation => '" ^ debug_str ^ "'] fatal error, the Ail program was ill-typed")
 
 
+(*
 (* Return the core_object_type that the elaboration of an ail expression of a
    given ctype will have *)
 val     core_type_of_expr_ctype: Aty.ctype -> either C.core_base_type C.core_object_type
@@ -60,25 +61,8 @@ let rec core_type_of_expr_ctype ty =
     | Aty.Array _ _ ->
         Right C.OTy_pointer
 (*
-  | Aty.Function has_proto ret_ty params is_variadic -> (*of (* has_proto *)bool * ctype * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool *)
-        let ret_oTy_opt = match core_type_of_expr_ctype ret_ty with
-          | Rigth oTy ->
-              Just oTy
-          | Left C.BTy_unit ->
-              Nothing
-          | Left _ ->
-              
-        end in
-        Left (C.BTy_tuple [ C.BTy_object (C.OTy_function )
-                          ; C.BTy_object C.OTy_integer
-                          ; C.BTy_boolean])
-*)
-(*
- | OTy_cfunction of maybe core_object_type (* return type *) * nat (* number of params *) * bool (* isVariadic *)
-*)
-
-
-
+    | Aty.Function of (AilTypes.qualifiers * ctype) * list (AilTypes.qualifiers * ctype) * bool (*isVariadic*) ->
+*)      
     | Aty.Pointer _ _ ->
         Right C.OTy_pointer
     | Aty.Atomic atom_ty ->
@@ -90,7 +74,7 @@ let rec core_type_of_expr_ctype ty =
     | Aty.Builtin str ->
         error "TODO: Translation.core_object_type_of_expr_ctype"
   end
-
+*)
 
 
 let force_core_object_type_of_ctype ty =
@@ -874,7 +858,7 @@ else
             C.Expr [C.EA_std "§6.5.2.4"; C.EA_std "§6.5.2.4#2, sentence 1"; C.EA_std "§6.5.2.4#2, sentence 3"] (
               C.Ewseq lvalue_sym_pat core_e (
                 C.Expr [C.EA_std "§6.5.2.4#2, sentence 4"] (
-                  C.Easeq (Just (load_sym, C.BTy_loaded oTy))
+                  C.Easeq ((load_sym, C.BTy_loaded oTy))
                     (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
                     (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
                        lvalue_sym_pe
@@ -928,7 +912,7 @@ end
             C.Expr [C.EA_std "§6.5.2.4#3"] (
               C.Ewseq (Caux.mk_sym_pat lvalue_sym (C.BTy_object C.OTy_pointer)) core_e (
                 C.Expr [] (
-                  C.Easeq (Just (load_sym, C.BTy_loaded oTy))
+                  C.Easeq ((load_sym, C.BTy_loaded oTy))
                     (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
                     (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
                        lvalue_sym_pe
@@ -1382,6 +1366,8 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           let diff_ty_pe = match (ctype_of e1) with
             | Aty.Pointer _ ref_ty1 ->
                 Caux.mk_ail_ctype_pe ref_ty1
+            | _ ->
+                illTypedAil loc "ptrdiff"
           end in
           E.return $
             C.Expr [C.EA_std "§6.5.6"] (
@@ -2127,8 +2113,12 @@ TODO: #9
              mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
       
       | A.AilEstruct tag_sym ident_e_opts ->
-          let Cty.StructDef ident_tys =
-            fromJust "Translation.translate_expression, AilEstruct 1" (Map.lookup tag_sym tagDefs) in
+          let ident_tys = match Map.lookup tag_sym tagDefs with
+            | Just (Cty.StructDef z) ->
+                z
+            | _ ->
+                illTypedAil loc "AilEstruct"
+          end in
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
@@ -2174,14 +2164,15 @@ TODO: #9
           error "WIP: Translation.translate_expression, AilEcompound"
       
       | A.AilEunion tag_sym memb_ident e_opt ->
-          let fail = illTypedAil loc "AilEunion" in
           match Map.lookup tag_sym tagDefs with
             | Nothing ->
-                fail
+                illTypedAil loc "AilEunion: couldn't find the definition"
+            | Just (Cty.StructDef ident_tys) ->
+                illTypedAil loc "AilEunion: found a struct definition"
             | Just (Cty.UnionDef ident_tys) ->
                 match List.lookup memb_ident ident_tys with
                   | Nothing ->
-                      fail
+                      illTypedAil loc "AilEunion: couldn't find a union definition"
                   | Just memb_ty ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with

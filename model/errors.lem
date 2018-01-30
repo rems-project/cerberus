@@ -7,7 +7,6 @@ type desugar_cause =
   | Desugar_ConstraintViolation of string
   | Desugar_OtherViolation of string
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour (* TODO: maybe only allow the relevant subset of ubs *)
-
 (* TODO: move these to Desugar_ConstraintViolation *)
   | Desugar_ExternalObjectRedefinition of identifier (* STD §6.9#3, first sentence *)
   | Desugar_FunctionRedefinition of identifier
@@ -17,24 +16,13 @@ type desugar_cause =
   | Desugar_NotConstantExpression
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultipleDeclaration of cabs_identifier
-  
   | Desugar_InvalidMember of cabs_identifier * AilTypes.ctype
-  
   | Desugar_NonvoidReturn (* §6.8.6.4#1, 2nd sentence *)
-
-
   | Desugar_Redefinition of identifier
-
-
   | Desugar_NeverSupported of string
-
   | Desugar_NotyetSupported of string
-
-
   | Desugar_TODOCTOR of string
-  
   | Desugar_impossible
-
   | Desugar_constantExpression_notInteger of string (* the std location for this particular instance *)
   | Desugar_constantExpression_UB of list Undefined.undefined_behaviour
 

@@ -534,13 +534,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           | GenPointer qs (Function has_proto ty params is_variadic) ->
               if AAux.is_unqualified qs
               then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function has_proto ty params is_variadic)))
-              else E.fail Loc.unknown (TError_TODO 18)
+              else E.fail loc (TError_TODO 18)
           | GenPointer qs ty ->
               if AAux.is_complete sigm ty && AAux.is_object ty
               then E.return (AilEunary Indirection e', GenLValueType qs ty false)
-              else E.fail Loc.unknown (TError_TODO 19)
+              else E.fail loc (TError_TODO 19)
           | _ ->
-              E.fail Loc.unknown (TError_TODO 20)
+              E.fail loc (TError_TODO 20)
         end
     
     | AilEunary (PostfixIncr as uop) e ->
@@ -551,8 +551,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               if AAux.modifiable sigm qs' ty' && (AAux.is_real ty' || AAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
-                E.fail Loc.unknown (TError_TODO 21)
-          | _ -> E.fail Loc.unknown (TError_TODO 22)
+                E.fail loc (TError_TODO 21)
+          | _ -> E.fail loc (TError_TODO 22)
         end
     
     | AilEunary (PostfixDecr as uop) e ->
@@ -563,8 +563,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               if AAux.modifiable sigm qs' ty' && (AAux.is_real ty' || AAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
-                E.fail Loc.unknown (TError_TODO 23)
-          | _ -> E.fail Loc.unknown (TError_TODO 24)
+                E.fail loc (TError_TODO 23)
+          | _ -> E.fail loc (TError_TODO 24)
         end
     
     | AilEarray elem_ty e_opts ->
@@ -617,7 +617,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           error "XXX E.return (AilEcompound ty a_e, GenRValue)"
           
         else
-          E.fail Loc.unknown (TError "AilEcompound")
+          E.fail loc (TError "AilEcompound")
 (* of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *) *)
     
     | AilEbuiltin str ->
@@ -785,14 +785,14 @@ OLD(sigma_declaration)
               (* NOTE: I don't see how the C syntax would allow one to have
                  a "pointer to function returning array" anyway... *)
               if not (ret_ty = Void || (AAux.is_complete_object sigm ret_ty && not (AAux.is_array ret_ty))) then
-                E.fail Loc.unknown (TError "§6.5.2.2#1")
+                E.fail loc (TError "§6.5.2.2#1")
               else if AAux.is_unqualified qs then
                 annotate_arguments has_proto is_variadic es params >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
-                E.fail Loc.unknown (TError_TODO 25)
+                E.fail loc (TError_TODO 25)
           | _ ->
-              E.fail Loc.unknown (TError_TODO 26)
+              E.fail loc (TError_TODO 26)
         end
     
     | AilEassert e ->
@@ -800,13 +800,13 @@ OLD(sigma_declaration)
         if is_scalar gty then
           E.return (AilEassert e', GenRValueType GenVoid)
         else
-          E.fail Loc.unknown (TError "§7.2.1.1#1")
+          E.fail loc (TError "§7.2.1.1#1")
     
     | AilEoffsetof ty ident ->
         E.return (AilEoffsetof ty ident, GenRValueType (GenBasic (GenInteger SizeT)))
     
     | AilEgeneric (* e gas *) _ _ ->
-        E.fail Loc.unknown (TError "WIP: GenTyping AilEgeneric")
+        E.fail loc (TError "WIP: GenTyping AilEgeneric")
 (*
         annotate_expression e                     >>= fun e'   ->
         E.mapM (annotate_generic_association a s g) gas >>= fun gas' ->
@@ -987,7 +987,7 @@ TODO
                           E.return ( AilEmemberofptr e' memb_ident
                                    , GenLValueType (AAux.combine_qualifiers ref_qs memb_qs) memb_ty false )
                       | Nothing ->
-                          E.fail Loc.unknown (TError "TODO[msg] Struct memberofptr: invalid member")
+                          E.fail loc (TError "TODO[msg] Struct memberofptr: invalid member")
                     end
                 | _ ->
                     E.fail loc (TError "TODO: AilEmemberofptr Struct, failed to find a valid tag definition")
@@ -1000,7 +1000,7 @@ TODO
                           E.return ( AilEmemberofptr e' memb_ident
                                    , GenLValueType (AAux.combine_qualifiers ref_qs memb_qs) memb_ty false )
                       | Nothing ->
-                          E.fail Loc.unknown (TError "TODO[msg] Union memberofptr: invalid member")
+                          E.fail loc (TError "TODO[msg] Union memberofptr: invalid member")
                     end
                 | _ ->
                     E.fail loc (TError "TODO: AilEmemberofptr Union, failed to kind a valid tag definition")
@@ -1041,7 +1041,7 @@ TODO
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 30)
+          E.fail loc (TError_TODO 30)
     
     | AilEbinary e1 (Arithmetic (Mod  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1049,7 +1049,7 @@ TODO
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 31)
+          E.fail loc (TError_TODO 31)
     
     | AilEbinary e1 (Arithmetic (Band as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1057,7 +1057,7 @@ TODO
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 32)
+          E.fail loc (TError_TODO 32)
     
     | AilEbinary e1 (Arithmetic (Bxor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1065,7 +1065,7 @@ TODO
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 33)
+          E.fail loc (TError_TODO 33)
     
     | AilEbinary e1 (Arithmetic (Bor  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1073,21 +1073,21 @@ TODO
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 34)
+          E.fail loc (TError_TODO 34)
     
     | AilEbinary e1 (Arithmetic (Shl  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
-        else E.fail Loc.unknown (TError_TODO 35)
+        else E.fail loc (TError_TODO 35)
     
     | AilEbinary e1 (Arithmetic (Shr  as aop) as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
         if well_typed_binary_arithmetic gty1 aop gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (integer_promote gty1))
-        else E.fail Loc.unknown (TError_TODO 36)
+        else E.fail loc (TError_TODO 36)
     
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1112,7 +1112,7 @@ STD_ "§6.5.2.1#1" $
         else if well_typed_binary_arithmetic gty1 Sub gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail Loc.unknown (TError_TODO 38)
+          E.fail loc (TError_TODO 38)
     
     | AilEbinary e1 (And as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1120,7 +1120,7 @@ STD_ "§6.5.2.1#1" $
         if is_scalar gty1 && is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 39)
+          E.fail loc (TError_TODO 39)
     
     | AilEbinary e1 (Or  as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1128,7 +1128,7 @@ STD_ "§6.5.2.1#1" $
         if is_scalar gty1 && is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 40)
+          E.fail loc (TError_TODO 40)
     
     | AilEbinary e1 (Lt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1138,7 +1138,7 @@ STD_ "§6.5.2.1#1" $
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 41)
+          E.fail loc (TError_TODO 41)
     
     | AilEbinary e1 (Gt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1147,7 +1147,7 @@ STD_ "§6.5.2.1#1" $
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else E.fail Loc.unknown (TError_TODO 42)
+        else E.fail loc (TError_TODO 42)
     
     | AilEbinary e1 (Le as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1157,7 +1157,7 @@ STD_ "§6.5.2.1#1" $
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 43)
+          E.fail loc (TError_TODO 43)
     
     | AilEbinary e1 (Ge as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1167,7 +1167,7 @@ STD_ "§6.5.2.1#1" $
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 44)
+          E.fail loc (TError_TODO 44)
     
     | AilEbinary e1 (Eq as bop) e2 ->
         (* STD §6.5.9#2 *)
@@ -1176,7 +1176,7 @@ STD_ "§6.5.2.1#1" $
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError "§6.5.9#2")
+          E.fail loc (TError "§6.5.9#2")
     
     | AilEbinary e1 (Ne as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1184,14 +1184,14 @@ STD_ "§6.5.2.1#1" $
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail Loc.unknown (TError_TODO 46)
+          E.fail loc (TError_TODO 46)
     
     | AilEsizeof qs ty ->
         wf_lvalue sigm qs ty >>
         (* STD §6.5.3.4#1 *)
         E.add "§6.5.3.4#1" >>
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
-          E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 1")
+          E.fail loc (TError "§6.5.3.4#1, sentence 1")
         else
           (* STD §6.5.3.4#6 *)
           E.return (AilEsizeof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
@@ -1210,7 +1210,7 @@ STD_ "§6.5.2.1#1" $
               inject_type ty
         end in
         if GAux.is_function gty || GAux.is_incomplete sigm gty then
-          E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 1")
+          E.fail loc (TError "§6.5.3.4#1, sentence 1")
         else
           (* STD §6.5.3.4#6 *)
           E.return (AilEsizeof_expr a_e, GenRValueType (GenBasic (GenInteger SizeT)))
@@ -1219,7 +1219,7 @@ STD_ "§6.5.2.1#1" $
         wf_lvalue sigm qs ty >>
         (* STD §6.5.3.4#1 *)
         if AAux.is_function ty || AAux.is_incomplete sigm ty then
-          E.fail Loc.unknown (TError "§6.5.3.4#1, sentence 2")
+          E.fail loc (TError "§6.5.3.4#1, sentence 2")
         else
           (* STD §6.5.3.4#6 *)
           E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
@@ -1236,7 +1236,7 @@ STD_ "§6.5.2.1#1" $
         if is_scalar gty && AAux.is_scalar ty then
           E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
         else
-          E.fail Loc.unknown (TError_TODO 50)
+          E.fail loc (TError "AilEcast")
     
     | AilEcond e1 e2 e3 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1256,9 +1256,9 @@ STD_ "§6.5.2.1#1" $
                    && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
                   E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
                 else
-                  E.fail Loc.unknown (TError_TODO 52)
+                  E.fail loc (TError_TODO 52)
           | _ ->
-              E.fail Loc.unknown (TError_TODO 53)
+              E.fail loc (TError_TODO 53)
         end
     
     | AilEcompoundAssign e1 (Sub as aop) e2 ->
@@ -1271,9 +1271,9 @@ STD_ "§6.5.2.1#1" $
                    && (AAux.is_arithmetic ty1 && is_arithmetic gty2 || AAux.is_pointer_to_complete_object sigm ty && is_integer gty2) then
                   E.return (AilEcompoundAssign e1' aop e2', GenRValueType (inject_type ty1))
                 else
-                  E.fail Loc.unknown (TError_TODO 54)
+                  E.fail loc (TError_TODO 54)
           | _ ->
-              E.fail Loc.unknown (TError_TODO 55)
+              E.fail loc (TError_TODO 55)
         end
     
     | AilEcompoundAssign e1 aop e2 ->
@@ -1285,9 +1285,9 @@ STD_ "§6.5.2.1#1" $
               if AAux.modifiable sigm qs ty && well_typed_binary_arithmetic gty1 aop gty2 then
                 E.return (AilEcompoundAssign e1' aop e2', GenRValueType gty1)
               else
-                E.fail Loc.unknown (TError_TODO 56)
+                E.fail loc (TError_TODO 56)
           | _ ->
-              E.fail Loc.unknown (TError_TODO 57)
+              E.fail loc (TError_TODO 57)
         end
     
     | AilEconst cst ->
@@ -1312,7 +1312,7 @@ STD_ "§6.5.2.1#1" $
           | (e', GenBuiltin "va_list") ->
               E.return (AilEva_start e' sym, GenRValueType GenVoid)
           | _ ->
-              E.fail Loc.unknown (TError "va_start")
+              E.fail loc (TError "va_start")
         end
     
     | AilEva_arg e ty ->
@@ -1320,12 +1320,25 @@ STD_ "§6.5.2.1#1" $
           | (e', GenBuiltin "va_list") ->
               E.return (AilEva_arg e' ty, GenRValueType (inject_type ty))
           | _ ->
-              E.fail Loc.unknown (TError "va_arg")
+              E.fail loc (TError "va_arg")
         end
     
     | AilEprint_type e ->
         annotate_expression ctx e >>= fun a_e ->
         E.return (AilEprint_type a_e, genTypeCategoryOf a_e)
+    
+    | AilErvalue _ ->
+        (* This should be impossible because the desugaring doesn't emit
+           any AilErvalue *)
+        E.fail loc (TError "ail typing found a AilErvalue")
+    | AilEarray_decay _ ->
+        (* This should be impossible because the Desugaring doesn't emit
+           any AilEarray_decay *)
+        E.fail loc (TError "ail typing found a AilEarray_decay")
+    | AilEfunction_decay _ ->
+        (* This should be impossible because the Desugaring doesn't emit
+           any AilEfunction_decay *)
+        E.fail loc (TError "ail typing found a AilEfunction_decay")
   end
   >>= fun (expr_', gtc) ->
   E.unpack >>= fun annots ->

@@ -20,7 +20,7 @@ type globals = {
 }
 
 let empty_globs fname = {
-  interface = String.capitalize fname ^ "I.";
+  interface = String.capitalize_ascii fname ^ "I.";
   statics = [];
   externs = []
 }
@@ -144,12 +144,15 @@ let print_loc loc =
     ^^^ !^(string_of_int pos.Lexing.pos_bol)
     ^^^ !^(string_of_int pos.Lexing.pos_cnum)
   in
+  let open Location_ocaml in
   match loc with
-  | Location_ocaml.Loc_unknown ->
+  | Loc_unknown ->
     !^"Location_ocaml.unknown"
-  | Location_ocaml.Loc_point pos ->
+  | Loc_other str ->
+      !^ "Location_ocaml.other" ^^ P.parens (P.dquotes !^ (String.escaped str))
+  | Loc_point pos ->
     !^"Location_ocaml.point" ^^^ P.parens (print_lex pos)
-  | Location_ocaml.Loc_region (pos1, pos2, opos3) ->
+  | Loc_region (pos1, pos2, opos3) ->
     !^"Location_ocaml.Loc_region"
       ^^^ P.parens (print_lex pos1)
       ^^^ P.parens (print_lex pos2)
@@ -226,6 +229,8 @@ and print_match_ctor arg = function
   | CivAND       -> !^"A.ivand"
   | CivOR        -> !^"A.ivor"
   | CivXOR       -> !^"A.ivxor"
+  | Cfvfromint   -> !^"A.fvfromint"
+  | Civfromfloat -> !^"A.ivfromfloat"
 
 let rec print_call_pattern = function
   | CaseBase (None, _) -> P.parens P.empty (* WARNING: should this ever match? *)
@@ -427,13 +432,14 @@ let lt_precedence p1 p2 =
 
 let rec print_object_value globs = function
   | OVstruct _
-  | OVunion  _     -> raise (Unsupported "struct or union")
+  | OVunion  _          -> raise (Unsupported "struct or union")
   | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
-  | OVcfunction nm -> print_name nm
-  | OVinteger iv   -> print_iv_value iv
-  | OVfloating fv  -> failwith "print_floating_value fv"
-  | OVpointer pv   -> failwith "print_pointer_value pv"
-  | OVarray lvs   -> print_list (print_loaded_value globs) lvs
+  | OVcfunction nm      -> print_name nm
+  | OVinteger iv        -> print_iv_value iv
+  | OVfloating fv       -> failwith "print_floating_value fv"
+  | OVpointer pv        -> failwith "print_pointer_value pv"
+  | OVarray lvs         -> print_list (print_loaded_value globs) lvs
+  | OVcomposite _       -> raise (Unsupported "OVcomposite")
 
 and print_loaded_value globs = function
   | LVspecified v ->
@@ -484,6 +490,9 @@ let print_ctor pp ctor pes =
   | CivAND       -> !^"A.ivand" ^^^ pp_args P.space
   | CivOR        -> !^"A.ivor" ^^^ pp_args P.space
   | CivXOR       -> !^"A.ivxor" ^^^ pp_args P.space
+  | Cfvfromint   -> !^"A.fvfromint" ^^^ pp_args P.space
+  | Civfromfloat -> !^"A.ivfromfloat" ^^^ pp_args P.space
+
 
 let print_pure_expr globs pe =
   let rec pp prec pe =

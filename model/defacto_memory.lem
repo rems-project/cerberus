@@ -166,6 +166,14 @@ let integer_range = function
      (0-2**63, 2**63-1)
  | AilTypes.Signed (AilTypes.IntN_t n) ->
      (0-(2**(n-1)), 2**(n-1) - 1)
+ | AilTypes.Signed (AilTypes.Int_leastN_t n) ->
+     (0-(2**(n-1)), 2**(n-1) - 1)
+ | AilTypes.Signed (AilTypes.Int_fastN_t n) ->
+     (0-(2**(n-1)), 2**(n-1) - 1)
+ | AilTypes.Signed AilTypes.Intmax_t ->
+     (0-(2**63), 2**63 - 1)
+ | AilTypes.Signed AilTypes.Intptr_t ->
+     (0-(2**63), 2**63 - 1)
  | AilTypes.Unsigned AilTypes.Ichar ->
      (0, 255)
  | AilTypes.Unsigned AilTypes.Short ->
@@ -178,6 +186,14 @@ let integer_range = function
      (0, 2**64-1)
  | AilTypes.Unsigned (AilTypes.IntN_t n)  ->
      (0, 2**n - 1)
+ | AilTypes.Unsigned (AilTypes.Int_leastN_t n)  ->
+     (0, 2**n - 1)
+ | AilTypes.Unsigned (AilTypes.Int_fastN_t n)  ->
+     (0, 2**n - 1)
+ | AilTypes.Unsigned AilTypes.Intmax_t ->
+     (0, 2**64 - 1)
+ | AilTypes.Unsigned AilTypes.Intptr_t ->
+     (0, 2**64 - 1)
  | AilTypes.IBuiltin str ->
      error ("WIP: Mem.integer_range, IBuiltin ==> " ^ str)
  | AilTypes.Enum sym ->
@@ -186,10 +202,6 @@ let integer_range = function
      (0, 2**64-1)
  | AilTypes.Ptrdiff_t ->
      (0-2**63, 2**63-1)
- | AilTypes.Signed AilTypes.Intptr_t ->
-     (0-2**63, 2**63-1)
- | AilTypes.Unsigned AilTypes.Intptr_t ->
-     (0, 2**64-1)
 end
 
 
@@ -276,6 +288,8 @@ let is_dead alloc_id =
 val     explicitAllocationIdFromPointer_value_aux: pointer_value_base -> impl_memM (maybe (allocation_id * Symbol.prefix))
 let rec explicitAllocationIdFromPointer_value_aux ptr_val_ =
   match ptr_val_ with
+    | PVunspecified _ ->
+        return Nothing
     | PVnull _ ->
         return Nothing
     | PVfunction _ ->
@@ -307,6 +321,8 @@ and explicitAllocationIdFromInteger_value_aux ival_ =
     | IVsizeof _->
         return Nothing
     | IValignof _->
+        return Nothing
+    | IVoffsetof _ _ ->
         return Nothing
     | IVpadding _ _->
         return Nothing
@@ -383,33 +399,32 @@ let integer_value_baseFromShift_path sh =
 val     mkUnspec: ctype -> impl_mem_value
 let rec mkUnspec ty =
   match ty with
+    | Void ->
+        error "Defacto_memory.mkUnspec: called on Void"
     | Basic (AilTypes.Integer ity) ->
         MVinteger ity (IV Prov_none IVunspecified) 
     | Basic (AilTypes.Floating fty) ->
         MVfloating fty FVunspecified
+    | Array _ Nothing ->
+        error "Defacto_memory.mkUnspec: called on Array _ Nothing"
     | Array ty (Just n) ->
         MVarray $ replicate (natFromInteger n) (mkUnspec ty)
+    | Function _ _ _ ->
+        error "Defacto_memory.mkUnspec: called on Function _ _ _"
     | (Pointer _ ty') ->
         MVpointer ty' (PV Prov_none (PVunspecified ty') [])
-(*
-    | (Atomic _ as ty) ->
-        MVunspecified ty
-*)
+    | Atomic _ ->
+        error ("TODO: Defacto_memory.mkUnspec ==> " ^ stringFromCtype ty)
     | Struct tag_sym ->
-        let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
+        let xs = Core_ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
           List.map (fun (ident, ty) -> (ident, mkUnspec ty)) xs
         )
     | (Union tag_sym) ->
-        let Core_ctype.UnionDef ((memb_ident, ty) :: _) = Core_ctype_aux.get_membersDefs tag_sym in
-        
+        let ((memb_ident, ty), _) = Core_ctype_aux.get_unionDef tag_sym in
         MVunion tag_sym memb_ident (mkUnspec ty)
-(*
-    | (Builtin _ as ty) ->
-        MVunspecified ty
-*)
-    | _ ->
-        error ("Mem.mkUnspec: invalid type ==> " ^ stringFromCtype ty)
+    | Builtin _ ->
+        error ("TODO: Defacto_memory.mkUnspec ==> " ^ stringFromCtype ty)
   end
 
 
@@ -556,6 +571,8 @@ let impl_kill (PV _ ptr_val_ sh as ptr_val) =
         (* TODO: turn the live pointers to this alloc_id into unspec values *)
         get >>= fun mem_st ->
         put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
+    | Nothing ->
+        fail (MerrOther "trying to kill with an invalid pointer")
   end
 
 
@@ -833,8 +850,8 @@ let project_to_lvalue_type lvalue_ty mval =
     | (_, MVunion mval_tag memb_ident memb_mval) ->
         (* TODO: this implementing that casting a pointer to a union, to
            a pointer to one of it's member *)
-          let Core_ctype.UnionDef tagDef = Core_ctype_aux.get_membersDefs mval_tag in
-          match List.lookup memb_ident tagDef with
+          let (x, xs) = Core_ctype_aux.get_unionDef mval_tag in
+          match List.lookup memb_ident (x::xs) with
             | Nothing ->
                 error "project_to_lvalue_type, MVunion was ill-typed (wrong member_ident)"
             | Just memb_ty ->
@@ -1006,9 +1023,8 @@ let rec impl_sizeof_ival_aux ty =
     | Union tag_sym ->
         (* TODO: move the code from mem_simplify *)
         IVsizeof (Union tag_sym)
-(*
- | Builtin of string
-*)
+    | Builtin str ->
+        error "TODO: Defacto_memory.impl_sizeof_ival, Builtin"
 end
 
 
@@ -1034,30 +1050,62 @@ let impl_bitwise_xor_ival ity (IV prov1 ival_1) (IV prov2 ival_2) =
 
 
 
-let impl_op_fval fop (FVconcrete fval1) (FVconcrete fval2) =
-  match fop with
-  | FloatAdd -> FVconcrete (fval1 + fval2)
-  | FloatSub -> FVconcrete (fval1 - fval2)
-  | FloatMul -> FVconcrete (fval1 * fval2)
-  | FloatDiv -> FVconcrete (fval1 / fval2)
+let impl_op_fval fop fval1 fval2 =
+  match (fval1, fval2) with
+    | (FVunspecified, _) ->
+        FVunspecified
+    | (_, FVunspecified) ->
+        FVunspecified
+    | (FVconcrete fval1, FVconcrete fval2) ->
+        match fop with
+          | FloatAdd -> FVconcrete (fval1 + fval2)
+          | FloatSub -> FVconcrete (fval1 - fval2)
+          | FloatMul -> FVconcrete (fval1 * fval2)
+          | FloatDiv -> FVconcrete (fval1 / fval2)
+        end
   end
 
-let impl_eq_fval (FVconcrete fval1) (FVconcrete fval2) =
-  (fval1 = fval2)
+let impl_eq_fval fval1 fval2 =
+  match (fval1, fval2) with
+    | (FVconcrete fval1, FVconcrete fval2) ->
+        (fval1 = fval2)
+    | _ ->
+        error "TODO: Defacto_memory.impl_eq_fval, unspecified"
+  end
 
-let impl_lt_fval (FVconcrete fval1) (FVconcrete fval2) =
-  (fval1 < fval2)
+let impl_lt_fval fval1 fval2 =
+  match (fval1, fval2) with
+    | (FVconcrete fval1, FVconcrete fval2) ->
+        (fval1 < fval2)
+    | _ ->
+        error "TODO: Defacto_memory.impl_lt_fval, unspecified"
+  end
 
-let impl_le_fval (FVconcrete fval1) (FVconcrete fval2) =
-  (fval1 <= fval2)
+let impl_le_fval fval1 fval2 =
+  match (fval1, fval2) with
+    | (FVconcrete fval1, FVconcrete fval2) ->
+        (fval1 <= fval2)
+    | _ ->
+        error "TODO: Defacto_memory.impl_lt_fval, unspecified"
+  end
 
-let impl_fvfromint (IV _ (IVconcrete ival)) =
-  FVconcrete (Float.of_integer ival)
+let impl_fvfromint (IV _ ival_) =
+  match ival_ with
+    | IVunspecified ->
+        FVunspecified
+    | IVconcrete ival ->
+        FVconcrete (Float.of_integer ival)
+    | _ ->
+        error "TODO: Defacto_memory.impl_fvfromint, symbolic integer value"
+  end
 
 (* TODO: check type ranges after conversion *)
-let impl_ivfromfloat ity (FVconcrete fval) =
-  IV Prov_none (IVconcrete (Float.to_integer fval))
-
+let impl_ivfromfloat _ = function
+  | FVunspecified ->
+      IV Prov_none IVunspecified
+  | FVconcrete fval ->
+      IV Prov_none (IVconcrete (Float.to_integer fval))
+end
 
 let impl_case_integer_value (IV _ ival) fint fother =
   match ival with
@@ -1118,30 +1166,43 @@ let impl_union_mval tag_sym memb_ident mval =
 (* Memory value destructor *)
 let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval farr fstruct funion =
   match mval with
-    | MVpointer ref_ty (PV _ (PVunspecified _) _) -> (* TODO: or use the type in PVunspecified ? *)
-        funspec (Pointer AilTypes.no_qualifiers ref_ty)
-    | MVinteger ity (IV _ IVunspecified) ->
-        funspec (Basic (AilTypes.Integer ity))
-    | MVfloating fty (FVunspecified) ->
-        funspec (Basic (AilTypes.Floating fty))
-
-    | MVinteger ity1 (IV _ (IVconcurRead ity2 sym)) ->
-        (* TODO: check ity1 vs ity2 ? *)
-        fconcur ity2 sym
-    
-    | MVinteger ity ival ->
-        fival ity ival
+    | MVinteger ity (IV _ ival_ as ival) ->
+        match ival_ with
+          | IVunspecified ->
+              funspec (Basic (AilTypes.Integer ity))
+          | IVconcurRead ity2 sym ->
+              (* TODO: check ity1 vs ity2 ? *)
+              fconcur ity2 sym
+          | _ ->
+              fival ity ival
+        end
     | MVfloating fty fval ->
-        ffval fty fval
-    | MVpointer ref_ty ptr_val ->
-        fptrval ref_ty ptr_val
+        match fval with
+          | FVunspecified ->
+              funspec (Basic (AilTypes.Floating fty))
+          | _ ->
+              ffval fty fval
+        end
+    | MVpointer ref_ty (PV _ ptrval_ _ as ptrval) ->
+        match ptrval_ with
+          | PVunspecified _ ->
+              (* TODO: or use the type in PVunspecified? *)
+              funspec (Pointer AilTypes.no_qualifiers ref_ty)
+          | _ ->
+              fptrval ref_ty ptrval
+        end
     | MVarray mvals ->
         farr mvals
     | MVstruct tag_sym xs ->
         fstruct tag_sym xs
     | MVunion tag_sym memb_ident mval ->
         funion tag_sym memb_ident mval
+    | MVdelayed _ _ ->
+        error "TODO: Defacto_memory.impl_case_mem_value, MVdelayed"
+    | MVcomposite _ _ ->
+        error "TODO: Defacto_memory.impl_case_mem_value, MVcomposite"
   end
+
 
 let impl_case_fval fval funspec fconcrete =
   match fval with
@@ -1409,6 +1470,8 @@ let rec silly_sh_eq sh1 sh2 =
           silly_sh_eq sh1' sh2'
         else
           Nothing
+    | _ ->
+        Just false
   end
 
 (* TODO: more .... *)
@@ -1718,6 +1781,8 @@ let rec has_concurRead ival_ =
     | IValignof _ ->
         false
     | IVoffsetof _ _ ->
+        false
+    | IVpadding _ _ ->
         false
     | IVptrdiff _ _ _ ->
         false
@@ -2105,18 +2170,27 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                 let () = Debug.print_debug 2 [Debug.DB_memory] (fun () ->
                   "EXITING: easy_update_mem_value_aux, MVarray"
                 ) in
-                let Just at_n_mval = List.index mvals n in
-                easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
-                return (MVarray (List.update mvals n at_n_mval'))
+                match List.index mvals n with
+                  | Just at_n_mval ->
+                      easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
+                      return (MVarray (List.update mvals n at_n_mval'))
+                  | Nothing ->
+                      (* NOTE: this is impossible *)
+                      fail (MerrInternal "easy_update_mem_value_aux, out of array index")
+                end
               else
                 (* TODO: if this can actually happen, then the error needs to be in the monad? *)
                 error "easy_update_mem_value_aux ==> concrete SPE_array was out of bound"
           | Nothing ->
               find_array_index (List.length mvals) 0 ival_ >>= fun n ->
-                let Just at_n_mval = List.index mvals n in
-                easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
-                return (MVarray (List.update mvals n at_n_mval'))
-
+              match List.index mvals n with
+                | Just at_n_mval ->
+                    easy_update_mem_value_aux write_ty sh' write_mval at_n_mval >>= fun at_n_mval' ->
+                    return (MVarray (List.update mvals n at_n_mval'))
+                | Nothing ->
+                    (* NOTE: this is impossible *)
+                    fail (MerrInternal "easy_update_mem_value_aux, out of array index (symb)")
+              end
         end
     | (MVstruct tag_sym xs, SPE_member tag_sym_ memb_ident :: sh') ->
         if tag_sym <> tag_sym_ then
@@ -2134,8 +2208,8 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
           error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored \
                  with incompatible SPE_member tag"
         else
-          let Core_ctype.UnionDef tagDef = Core_ctype_aux.get_membersDefs tag_sym in
-          match List.lookup new_memb_ident tagDef with
+          let (x, xs) = Core_ctype_aux.get_unionDef tag_sym in
+          match List.lookup new_memb_ident (x::xs) with
             | Nothing ->
                 error "WIP[easy_update_mem_value_aux]: TODO error message ===> union value stored with \
                        incompatible SPE_member memb_ident"
@@ -2148,7 +2222,6 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         if is_strong then
           match sh with
             | SPE_member tag_sym memb_ident :: sh' ->
-                let Core_ctype.StructDef xs = Core_ctype_aux.get_membersDefs tag_sym in
                 MVstruct tag_sym <$>
                   mapM (fun (ident, ty) ->
                     if ident = memb_ident then
@@ -2156,7 +2229,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                       return (ident, mval')
                     else
                       return (ident, mkUnspec ty)
-                  ) xs
+                  ) (Core_ctype_aux.get_structDef tag_sym)
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
@@ -2247,6 +2320,8 @@ let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
     (* null and function pointers obviously can't be used for accesses. *)
     | PV _ (PVnull _) _     -> fail (MerrAccess loc accessKind NullPtr)
     | PV _ (PVfunction _) _ -> fail (MerrAccess loc accessKind FunctionPtr)
+    
+    | PV Prov_none _ _ -> fail (MerrAccess loc accessKind NoProvPtr)
     
     (* by WF-invariants, we have a pointer to an object *)
     | (PV (Prov_some (alloc_id, pref)) _ _ as ptrval) ->

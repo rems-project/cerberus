@@ -80,6 +80,8 @@ let pp_decl_ctor k =
 let pp_location = function
   | Location_ocaml.Loc_unknown ->
       P.angles (!^ "unknown location")
+  | Location_ocaml.Loc_other str ->
+      P.angles (!^ ("other location: " ^ str))
   | Location_ocaml.Loc_point pos ->
       Lexing.(
         let line = string_of_int pos.pos_lnum in

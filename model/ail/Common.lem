@@ -37,7 +37,8 @@ let eq_option (eq_A : 'a -> 'a -> bool) : maybe 'a -> maybe 'a -> bool =
     match (o1, o2) with
     | (Just a1, Just a2) -> eq_A a1 a2
     | (Nothing, Nothing) -> true
-    | (_      , _      ) -> false
+    | (Just _ , Nothing) -> false
+    | (Nothing, Just _ ) -> false
 end
 
 let equiv_option (equiv_A : 'a1 -> 'a2 -> bool) : maybe 'a1 -> maybe 'a2 -> bool =
@@ -45,7 +46,8 @@ let equiv_option (equiv_A : 'a1 -> 'a2 -> bool) : maybe 'a1 -> maybe 'a2 -> bool
     match (o1, o2) with
     | (Just a1, Just a2) -> equiv_A a1 a2
     | (Nothing, Nothing) -> true
-    | (_      , _      ) -> false
+    | (Just _ , Nothing) -> false
+    | (Nothing, Just _ ) -> false
 end
 
 
@@ -54,7 +56,8 @@ let eq_either eq_A eq_B e1 e2 =
   match (e1, e2) with
     | (Left  l1, Left  l2) -> eq_A l1 l2
     | (Right r1, Right r2) -> eq_B r1 r2
-    | (_       , _       ) -> false
+    | (Left _  , Right _ ) -> false
+    | (Right _ , Left _  ) -> false
   end
 
 val equiv_either: forall 'a1 'a2 'b1 'b2.
@@ -63,9 +66,10 @@ val equiv_either: forall 'a1 'a2 'b1 'b2.
                   bool
 let equiv_either equiv_A equiv_B e1 e2 =
   match (e1, e2) with
-    | (Either.Left  l1, Either.Left  l2) -> equiv_A l1 l2
-    | (Either.Right r1, Either.Right r2) -> equiv_B r1 r2
-    | (_       , _       ) -> false
+    | (Left  l1, Left  l2) -> equiv_A l1 l2
+    | (Right r1, Right r2) -> equiv_B r1 r2
+    | (Left _  , Right _ ) -> false
+    | (Right _ , Left _  ) -> false
   end
 
 

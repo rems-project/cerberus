@@ -236,26 +236,22 @@ let rec symbolify_value _cval =
        assert false
 
 let convert_ctor : unit generic_ctor -> ctor = function
- | Cnil () ->
-     failwith "TODO: Core parser ==> Cnil"
- | Ccons ->
-     Ccons
- | Ctuple ->
-     Ctuple
- | Carray ->
-     Carray
- | Civmax ->
-     Civmax
- | Civmin ->
-     Civmin
- | Civsizeof ->
-     Civsizeof
- | Civalignof ->
-     Civalignof
- | Cspecified ->
-     Cspecified
- | Cunspecified ->
-     Cunspecified
+ | Cnil ()      -> failwith "TODO: Core parser ==> Cnil"
+ | Ccons        -> Ccons
+ | Ctuple       -> Ctuple
+ | Carray       -> Carray
+ | Civmax       -> Civmax
+ | Civmin       -> Civmin
+ | Civsizeof    -> Civsizeof
+ | Civalignof   -> Civalignof
+ | CivCOMPL     -> CivCOMPL
+ | CivAND       -> CivAND
+ | CivOR        -> CivOR
+ | CivXOR       -> CivXOR
+ | Cspecified   -> Cspecified
+ | Cunspecified -> Cunspecified
+ | Cfvfromint   -> Cfvfromint
+ | Civfromfloat -> Civfromfloat
 
 let rec symbolify_pattern _pat : pattern Eff.t =
   Eff.get >>= fun st ->
@@ -357,6 +353,45 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
+    | PEctor (CivCOMPL, _pes) ->
+        begin match _pes with
+          | [_pe1; _pe2] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              Eff.return (Core_aux.bitwise_complement_pe pe1 pe2)
+          | _ ->
+              Eff.fail (CtorWrongApplication (2, List.length _pes))
+        end
+    | PEctor (CivAND, _pes) ->
+        begin match _pes with
+          | [_pe1; _pe2; _pe3] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              symbolify_pexpr _pe3 >>= fun pe3 ->
+              Eff.return (Pexpr ((), PEctor (CivAND, [pe1; pe2; pe3])))
+          | _ ->
+              Eff.fail (CtorWrongApplication (3, List.length _pes))
+        end
+    | PEctor (CivOR, _pes) ->
+        begin match _pes with
+          | [_pe1; _pe2; _pe3] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              symbolify_pexpr _pe3 >>= fun pe3 ->
+              Eff.return (Pexpr ((), PEctor (CivOR, [pe1; pe2; pe3])))
+          | _ ->
+              Eff.fail (CtorWrongApplication (3, List.length _pes))
+        end
+    | PEctor (CivXOR, _pes) ->
+        begin match _pes with
+          | [_pe1; _pe2; _pe3] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              symbolify_pexpr _pe3 >>= fun pe3 ->
+              Eff.return (Pexpr ((), PEctor (CivXOR, [pe1; pe2; pe3])))
+          | _ ->
+              Eff.fail (CtorWrongApplication (3, List.length _pes))
+        end
     | PEctor (Cspecified, _pes) ->
         begin match _pes with
           | [_pe] ->
@@ -372,6 +407,23 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
               Eff.return (Pexpr ((), PEctor (Cunspecified, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
+        end
+    | PEctor (Cfvfromint, _pes) ->
+        begin match _pes with
+          | [_pe] ->
+              symbolify_pexpr _pe >>= fun pe ->
+              Eff.return (Pexpr ((), PEctor (Cfvfromint, [pe])))
+          | _ ->
+              Eff.fail (CtorWrongApplication (1, List.length _pes))
+        end
+    | PEctor (Civfromfloat, _pes) ->
+        begin match _pes with
+          | [_pe1; _pe2] ->
+              symbolify_pexpr _pe1 >>= fun pe1 ->
+              symbolify_pexpr _pe2 >>= fun pe2 ->
+              Eff.return (Pexpr ((), PEctor (Civfromfloat, [pe1; pe2])))
+          | _ ->
+              Eff.fail (CtorWrongApplication (2, List.length _pes))
         end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
@@ -427,6 +479,9 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
     | PEis_unsigned _pe ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr ((), PEis_unsigned pe))
+    | PEstd (str, _pe) ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ((), PEstd (str, pe)))
 
 
 let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
@@ -491,8 +546,13 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
          symbolify_expr _e2     >>= fun e2  ->
          Eff.return (Esseq (pat, e1, e2))
        )
-   | Easeq _ ->
-       failwith "WIP: Core_parser.symbolify_expr, Easeq"
+   | Easeq ((_sym, bTy), Action (loc, (), _act1_), _pact2) ->
+       symbolify_action_ _act1_ >>= fun act1_ ->
+       under_scope (
+         register_sym _sym        >>= fun sym   ->
+         symbolify_paction _pact2 >>= fun pact2 ->
+         Eff.return (Easeq ((sym, bTy), Action (loc, (), act1_), pact2))
+       )
    | Eindet (n, _e) ->
        symbolify_expr _e >>= fun e ->
        Eff.return (Eindet (n, e))
@@ -1212,9 +1272,9 @@ expr:
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Esseq (_pat, _e1, _e2) ) }
-| LET ATOM _sym_bTy_opt= option(pair(SYM, core_base_type)) EQ _act1= action IN _pact2= paction
+| LET ATOM _sym_bTy= pair(SYM, core_base_type) EQ _act1= action IN _pact2= paction
     { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
-           , Easeq (_sym_bTy_opt, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
+           , Easeq (_sym_bTy, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
            , Eindet (Nat_big_num.to_int n, _e) ) }

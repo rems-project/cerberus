@@ -19,5 +19,34 @@ val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
   fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())
 
+val get_structDef: Symbol.sym -> list (Cabs.cabs_identifier * ctype)
+let get_structDef tag_sym =
+  match Map.lookup tag_sym (tagDefs ()) with
+    | Just (Core_ctype.StructDef xs) ->
+        xs
+    | Just _ ->
+        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+               "): found a union definition instead of a struct")
+    | Nothing ->
+        error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
+               "): couldn't find a struct/union definition")
+  end
+
+val get_unionDef: Symbol.sym -> (Cabs.cabs_identifier * ctype) * list (Cabs.cabs_identifier * ctype)
+let get_unionDef tag_sym =
+  match Map.lookup tag_sym (tagDefs ()) with
+    | Just (Core_ctype.UnionDef []) ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): found an empty union definition")
+    | Just (Core_ctype.UnionDef (x::xs)) ->
+        (x, xs)
+    | Just _ ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): found a struct definition instead of a union")
+    | Nothing ->
+        error ("Core_type.aux.get_unionDef (" ^ show tag_sym ^
+               "): couldn't find a struct/union definition")
+  end
+
 val reset_tagDefs: unit -> unit
 declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`

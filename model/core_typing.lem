@@ -25,12 +25,6 @@ let inline (<$>)      = E.fmap
 let inline (<*>)      = E.app
 
 
-val     typecheck_pattern2: Loc.t -> inferred -> pattern -> E.eff (typing_env * inferred_pattern)
-let rec typecheck_pattern2 loc infer = function
-  | _ ->
-      error "WIP: typecheck_pattern2"
-end
-
 val     infer_pattern: Loc.t -> pattern -> E.eff (typing_env * inferred * inferred_pattern)
 let rec infer_pattern loc = function
   | CaseBase (Nothing, bTy) ->
@@ -40,14 +34,22 @@ let rec infer_pattern loc = function
   | CaseCtor ctor pats ->
       let fail_ctorArity n = E.fail loc (CtorWrongNumber n (List.length pats))in
       match (ctor, pats) with
-        
         | (Cnil (), []) ->
             let infer = InferredType_list InferredUnknown in
-            E.return (empty_env, infer, CaseCtor (Cnil infer) [])
+            E.return (empty_env, infer,CaseCtor (Cnil infer) [])
+        | (Cnil (), _) ->
+            fail_ctorArity 0
         | (Ccons, [pat1; pat2]) ->
-            infer_pattern loc pat1                                 >>= fun (env1, infer1, tpat1) ->
-            typecheck_pattern2 loc (InferredType_list infer1) pat2 >>= fun (env2, tpat2)         ->
-            E.return (env_union env1 env2, InferredType_list infer1, CaseCtor Ccons [tpat1; tpat2])
+            infer_pattern loc pat1 >>= fun (env1, infer1, tpat1) ->
+            match toCoreBaseType infer1 with
+              | Just bTy ->
+                  typecheck_pattern loc (BTy_list bTy) pat2 >>= fun (env2, tpat2) ->
+                  E.return (env_union env1 env2, InferredType_list infer1, CaseCtor Ccons [tpat1; tpat2])
+              | Nothing ->
+                  E.fail loc TooGeneral
+            end
+        | (Ccons, _) ->
+            fail_ctorArity 2
         | (Ctuple, _) ->
             unzip3 <$> E.mapM (infer_pattern loc) pats >>= fun (envs, infers, pats') ->
             E.return (env_unions envs,
@@ -56,70 +58,93 @@ let rec infer_pattern loc = function
         | (Carray, _) ->
             error "Core_typing.Carray: WIP, Carray"
         | (Civmax, [pat']) ->
-            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor Civmax [tpat'])
-        | (Civmin, [pat']) ->
-            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor Civmin [tpat'])
-        | (Civsizeof, [pat']) ->
-            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor Civsizeof [tpat'])
-        | (Civalignof, [pat']) ->
-            typecheck_pattern2 loc InferredType_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor Civalignof [tpat'])
-        | (CivCOMPL, [pat1; pat2]) ->
-            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor CivCOMPL [tpat1; tpat2])
-        | (CivAND, [pat1; pat2; pat3]) ->
-            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor CivAND [tpat1; tpat2; tpat3])
-        | (CivOR, [pat1; pat2; pat3]) ->
-            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor CivOR [tpat1; tpat2; tpat3])
-        | (CivXOR, [pat1; pat2; pat3]) ->
-            typecheck_pattern2 loc InferredType_ctype pat1                >>= fun (env, tpat1) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat2 >>= fun (env, tpat2) ->
-            typecheck_pattern2 loc (InferredType_object OTy_integer) pat3 >>= fun (env, tpat3) ->
-            E.return (env, InferredType_object OTy_integer, CaseCtor CivXOR [tpat1; tpat2; tpat3])
-        
-        | (Cnil ()      , _) -> fail_ctorArity 0
-        | (Ccons        , _) -> fail_ctorArity 2
-        | (Civmax       , _) -> fail_ctorArity 1
-        | (Civmin       , _) -> fail_ctorArity 1
-        | (Civsizeof    , _) -> fail_ctorArity 1
-        | (Civalignof   , _) -> fail_ctorArity 1
-        | (CivCOMPL     , _) -> fail_ctorArity 2
-        | (CivAND       , _) -> fail_ctorArity 3
-        | (CivOR        , _) -> fail_ctorArity 3
-        | (CivXOR       , _) -> fail_ctorArity 3
-        | (Cspecified   , _) -> fail_ctorArity 1
-        | (Cunspecified , _) -> fail_ctorArity 1
-
-
-(*
-
-
-        | (Cspecified, BTy_loaded oTy, [pat']) ->
-            typecheck_pattern loc (BTy_object oTy) pat' >>= fun (env, tpat') ->
-            E.return (env, CaseCtor Cspecified [tpat'])
-
-        | (Cunspecified, BTy_loaded oTy, [pat']) ->
-            (* TODO: dependent types here .... *)
             typecheck_pattern loc BTy_ctype pat' >>= fun (env, tpat') ->
-            E.return (env, CaseCtor Cunspecified [tpat'])
-*)
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civmax [tpat'])
+        | (Civmax, _) ->
+            fail_ctorArity 1
+        | (Civmin, [pat']) ->
+            typecheck_pattern loc BTy_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civmin [tpat'])
+        | (Civmin, _) ->
+            fail_ctorArity 1
+        | (Civsizeof, [pat']) ->
+            typecheck_pattern loc BTy_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civsizeof [tpat'])
+        | (Civsizeof, _) ->
+            fail_ctorArity 1
+        | (Civalignof, [pat']) ->
+            typecheck_pattern loc BTy_ctype pat' >>= fun (env, tpat') ->
+            E.return (env, InferredType_object OTy_integer, CaseCtor Civalignof [tpat'])
+        | (Civalignof, _) ->
+            fail_ctorArity 1
+        | (CivCOMPL, [pat1; pat2]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
+            E.return ( env_union env1 env2
+                     , InferredType_object OTy_integer
+                     , CaseCtor CivCOMPL [tpat1; tpat2] )
+        | (CivCOMPL, _) ->
+            fail_ctorArity 2
+        | (CivAND, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
+            E.return ( env_unions [env1; env2; env3]
+                     , InferredType_object OTy_integer
+                     , CaseCtor CivAND [tpat1; tpat2; tpat3] )
+        | (CivAND, _) ->
+            fail_ctorArity 3
+        | (CivOR, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
+            E.return ( env_unions [env1; env2; env3]
+                     , InferredType_object OTy_integer
+                     , CaseCtor CivOR [tpat1; tpat2; tpat3] )
+        | (CivOR, _) ->
+            fail_ctorArity 3
+        | (CivXOR, [pat1; pat2; pat3]) ->
+            typecheck_pattern loc BTy_ctype pat1                >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat3 >>= fun (env3, tpat3) ->
+            E.return ( env_unions [env1; env2; env3]
+                     , InferredType_object OTy_integer
+                     , CaseCtor CivXOR [tpat1; tpat2; tpat3] )
+        | (CivXOR, _) ->
+            fail_ctorArity 3
+        | (Cspecified, [pat']) ->
+            infer_pattern loc pat' >>= fun (env, infer', tpat') ->
+            match infer' with
+              | InferredType_object oTy ->
+                  E.return (env, InferredType_loaded oTy, CaseCtor Cspecified [tpat'])
+              | _ ->
+                  E.fail loc (CoreTyping_TODO "Specified() expects an object type")
+            end
+        | (Cspecified, _) ->
+            fail_ctorArity 1
+        | (Cunspecified, [_]) ->
+            E.fail loc TooGeneral
+        | (Cunspecified, _) ->
+            fail_ctorArity 1
+        | (Cfvfromint, [pat]) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
+            E.return (env, InferredType_object OTy_floating, CaseCtor Cfvfromint [tpat])
+        | (Cfvfromint, _) ->
+            fail_ctorArity 1
+        | (Civfromfloat, [pat1; pat2]) ->
+            typecheck_pattern loc BTy_ctype                 pat1 >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
+            E.return ( env_union env1 env2
+                     , InferredType_object OTy_integer
+                     , CaseCtor Civfromfloat [tpat1; tpat2] )
+        | (Civfromfloat, _) ->
+            fail_ctorArity 2
       end
 end
 
 
-
-val     typecheck_pattern: Loc.t -> core_base_type -> pattern -> E.eff (typing_env * inferred_pattern)
-let rec typecheck_pattern loc expected_bTy = function
+(* val     typecheck_pattern: Loc.t -> core_base_type -> pattern -> E.eff (typing_env * inferred_pattern) *)
+and typecheck_pattern loc expected_bTy = function
   | CaseBase (Nothing, bTy) ->
       guard_match loc "empty pattern" expected_bTy bTy >>
       E.return (empty_env, CaseBase (Nothing, bTy))
@@ -237,6 +262,22 @@ let rec typecheck_pattern loc expected_bTy = function
             E.fail loc (CoreTyping_TODO "typecheck Cunspecified, illtyped 1")
         | (Cunspecified, _, _) ->
             E.fail loc (CoreTyping_TODO "typecheck Cunspecified, illtyped 2")
+        | (Cfvfromint, BTy_object OTy_floating, [pat]) ->
+            typecheck_pattern loc (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
+            E.return (env, CaseCtor Cfvfromint [tpat])
+        | (Cfvfromint, _, [_]) ->
+            E.fail loc (CoreTyping_TODO "typecheck Cfvfromint, illtyped 1")
+        | (Cfvfromint, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck Cfvfromint, illtyped 2")
+        | (Civfromfloat, BTy_object OTy_integer, [pat1; pat2]) ->
+            typecheck_pattern loc BTy_ctype                pat1  >>= fun (env1, tpat1) ->
+            typecheck_pattern loc (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
+            E.return ( env_union env1 env2
+                     , CaseCtor Civfromfloat [tpat1; tpat2] )
+        | (Civfromfloat, _, [_; _]) ->
+            E.fail loc (CoreTyping_TODO "typecheck Civfromfloat, illtyped 1")
+        | (Civfromfloat, _, _) ->
+            E.fail loc (CoreTyping_TODO "typecheck Civfromfloat, illtyped 2")
       end
 end
 
@@ -302,19 +343,14 @@ let rec typeof_object_value loc env oval =
        ) lvals' >>
        E.return (OTy_array oTy)
    | OVstruct tag_sym _ ->
-       let () = Debug.warn [Debug.DB_core_typing] (fun () -> "Core typing, OVstruct doesn't check the validity of the member") in
+       let () = Debug.warn [Debug.DB_core_typing] (fun () ->
+         "Core typing, OVstruct doesn't check the validity of the member"
+       ) in
        E.return (OTy_struct tag_sym)
-(*
-       E.foldlM (fun ((found_ident, mval), (expected_ident, expected_ty)) () ->
-         if found_ident <> expected_ident then
-           E.fail loc (InvalidMember tag_sym found_ident)
-         else
-           TODO
-       ) () (List.zip xs (Cty.get_membersDefs tag_sym)) >>
-       E.return (OTy_struct tag_sym)
-*)
    | OVunion tag_sym _ _ ->
        E.return (OTy_union tag_sym)
+   | OVcomposite _ _ _ ->
+       E.return OTy_integer
   end
 
 (* val     typeof_loaded_value: Loc.t -> typing_env -> loaded_value -> E.eff core_object_type *)
@@ -323,7 +359,7 @@ and typeof_loaded_value loc env (lval: loaded_value) : E.eff core_object_type =
     | LVspecified oval ->
         typeof_object_value loc env oval
     | LVunspecified ty ->
-        error "typeof_loaded_value, LVunspecified"
+        error "TODO: typeof_loaded_value, LVunspecified"
   end
 
 
@@ -696,7 +732,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
           | (Cnil (), BTy_list elem_bTy, []) ->
               E.return (PEctor (Cnil (toInferred elem_bTy)) [])
           | (Cnil _, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped list")
+              E.fail loc (CoreTyping_TODO "illtyped Nil()")
           | (Ccons, BTy_list elem_bTy, [pe]) ->
               ret_ctor Ccons <$> typecheck_pexpr loc tagDefs env elem_bTy pe
           | (Ccons, BTy_list elem_bTy, [pe1; pe2]) ->
@@ -704,7 +740,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               typecheck_pexpr loc tagDefs env bTy pe2      >>= fun pe2' ->
               E.return (PEctor Ccons [pe1'; pe2'])
           | (Ccons, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped list")
+              E.fail loc (CoreTyping_TODO "illtyped Cons()")
           | (Ctuple, BTy_tuple bTys, _) ->
               E.mapM (fun (bTy, pe) -> typecheck_pexpr loc tagDefs env bTy pe)
                 (List.zip bTys pes) >>=
@@ -715,6 +751,8 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               PEctor Carray <$> E.mapM (fun pe ->
                 typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe
               ) pes
+          | (Carray, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped Array()")
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr loc tagDefs env (BTy_ctype) pe
           | (Civmax, _, _) ->
@@ -768,9 +806,22 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               ret_ctor Cunspecified <$> typecheck_pexpr loc tagDefs env BTy_ctype pe
           | (Cunspecified, _, _) ->
               E.fail loc (CoreTyping_TODO "illtyped Cunspecified")
+          | (Cfvfromint, BTy_object OTy_floating, [pe]) ->
+              ret_ctor Cfvfromint <$>
+                typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe
+          | (Cfvfromint, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped Cfvfromint")
+          | (Civfromfloat, BTy_object OTy_integer, [pe_ty; pe_fval]) ->
+              typecheck_pexpr loc tagDefs env BTy_ctype                 pe_ty   >>= fun pe_ty'   ->
+              typecheck_pexpr loc tagDefs env (BTy_object OTy_floating) pe_fval >>= fun pe_fval' ->
+              E.return (PEctor Civfromfloat [pe_ty'; pe_fval'])
+          | (Civfromfloat, _, _) ->
+              E.fail loc (CoreTyping_TODO "illtyped Civfromfloat")
+(*
           | _ ->
               error ("WIP: typecheck_pexpr bTy= " ^
               Pp.stringFromCore_core_base_type bTy ^ ", " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_))
+*)
         end
     | PEcase pe cases ->
         infer_pexpr loc tagDefs env pe >>= fun (Pexpr infer _ as pe') ->
@@ -1359,7 +1410,8 @@ and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_)
                         E.mapM (fun pe ->
                           typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe
                         ) first_pes >>= fun first_pes' ->
-                        typecheck_export_pexpr loc tagDefs env (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
+                        typecheck_export_pexpr loc tagDefs env
+                          (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
                         E.return (first_pes' ++ [last_pe'])
                   end
                 else
@@ -1369,6 +1421,8 @@ and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_)
               end >>= fun pes' ->
               guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
               E.return (Eccall () pe' pes')
+          | _ ->
+              E.fail loc (CoreTyping_TODO "the first operand of ccall() should have a C function type")
         end
     | Eproc () nm pes ->
         match Map.lookup nm env.decls with
@@ -1429,19 +1483,12 @@ and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_)
       export_pattern loc _pat'       >>= fun pat'          ->
       Esseq pat' e1' <$> typecheck_expr loc (Map.(union) env env') bTy e2
 *)
-    | Easeq sym_bTy_opt act1 (Paction p act2) ->
-        match sym_bTy_opt with
-          | Just (sym, sym_bTy) ->
-              guard_match loc "atomic seq" expected_bTy sym_bTy >>
-              let env' = insert_tdecl (Sym sym) (TDsym sym_bTy) env in
-              typecheck_action tagDefs env  sym_bTy act1      >>= fun act1' ->
-              typecheck_action tagDefs env' BTy_unit (*expected_bTy*) act2 >>= fun act2' ->
-              E.return (Easeq sym_bTy_opt act1' (Paction p act2'))
-          | Nothing ->
-              infer_action tagDefs env act1                  >>= fun (_, act1') ->
-              typecheck_action tagDefs env expected_bTy act2 >>= fun act2'      ->
-              E.return (Easeq sym_bTy_opt act1' (Paction p act2'))
-        end
+    | Easeq (sym, sym_bTy) act1 (Paction p act2) ->
+        guard_match loc "atomic seq" expected_bTy sym_bTy >>
+        let env' = insert_tdecl (Sym sym) (TDsym sym_bTy) env in
+        typecheck_action tagDefs env  sym_bTy act1      >>= fun act1' ->
+        typecheck_action tagDefs env' BTy_unit (*expected_bTy*) act2 >>= fun act2' ->
+        E.return (Easeq (sym, sym_bTy) act1' (Paction p act2'))
     | Eindet n e ->
         (* TODO *)
         Eindet n <$> typecheck_expr loc tagDefs env expected_bTy e

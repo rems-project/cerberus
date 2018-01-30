@@ -82,6 +82,7 @@ type thread_state = <|
 (* TODO: more *)
 type io_state = <|
   stdout: Dlist.dlist string;
+  stderr: Dlist.dlist string;
 |>
 
 type core_state = <|
@@ -800,6 +801,9 @@ let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_op
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
   match (expr_, th_st.stack) with
+    | (Eskip, Stack_empty) ->
+        error "reached empty stack with an Eskip"
+    
     | (Eskip, Stack_cons lconts cont sk') ->
 (* -----------------------------------------
    <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
@@ -883,6 +887,9 @@ BEFORE EVAL_PEXPR2
               )
         end
     
+    | (Eif _ _ _, Stack_empty) ->
+        error "reached empty stack with an Eif"
+    
     | (Eif pe1 e2 e3, Stack_cons _ cont _) ->
 (*              [| pe1 |] = v    e' = e2 labels e2
    -----------------------------------------------------------------
@@ -959,7 +966,11 @@ BEFORE EVAL_PEXPR2
                             ) >>= fun expr ->
                             (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                             let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
-                            E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                            E.return <| th_st with
+                              arena= a_expr;
+                              stack= push_empty_continuation sk;
+                              exec_loc= push_exec_loc psym th_st.exec_loc
+                            |>
                           )
                       | _ ->
                           error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena)
@@ -1062,6 +1073,9 @@ BEFORE EVAL_PEXPR2
               )
         end
     
+    | (Eunseq _, Stack_empty) ->
+        error "reached empty stack with an Eunseq"
+    
     | (Eunseq es, Stack_cons lconts cont sk) ->
         match to_pures es with
           | Just pes ->
@@ -1080,20 +1094,23 @@ BEFORE EVAL_PEXPR2
               else
                 if false(*EXPERIMENTAL UNSEQ*) then
                   []
-                else
-begin
-                let xs = 
-                List.map (fun (es1, ej, es2) ->
-                  Step_tau "Eunseq" (
-                    E.return <| th_st with arena= ej; stack= Stack_cons lconts (Kunseq es1 es2 :: cont) sk |>
-                  )
-                ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
-                if List.length xs = 0 then
-                  error ("BOOM Core_run, Eunseq, empty list ==> " ^ Pp.stringFromCore_expr (Expr arena_annots (Eunseq es))) (* TODO: debug *)
-                else
-                  xs
-end
+                else begin
+                  let xs = 
+                    List.map (fun (es1, ej, es2) ->
+                      Step_tau "Eunseq" (
+                        E.return <| th_st with arena= ej; stack= Stack_cons lconts (Kunseq es1 es2 :: cont) sk |>
+                      )
+                    ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
+                  if List.length xs = 0 then
+                    error ("BOOM Core_run, Eunseq, empty list ==> " ^
+                           Pp.stringFromCore_expr (Expr arena_annots (Eunseq es))) (* TODO: debug *)
+                  else
+                    xs
+                end
         end
+    
+    | (Ewseq _ _ _, Stack_empty) ->
+        error "reached empty stack with an Ewseq"
     
     | (Ewseq pat e1 e2, Stack_cons lconts cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
@@ -1130,6 +1147,9 @@ end
                 |>
               )
         end
+    
+    | (Esseq _ _ _, Stack_empty) ->
+        error "reached empty stack with an Esseq"
     
     | (Esseq pat e1 e2, Stack_cons lconts cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
@@ -1169,6 +1189,9 @@ end
               )
         end
     
+    | (Esave _ _ _, Stack_empty) ->
+        error "reached empty stack with an Esave"
+    
     | (Esave (sym, _) sym_bTy_pes e, Stack_cons _ cont _) ->
 (*
         let sym_bTy_cvals_opt =
@@ -1207,6 +1230,9 @@ end
             labels2= Map.insert sym (List.map fst sym_bTy_pes, apply_continuation cont e) th_st.labels2 |>
         )
     
+    | (Erun _ _ _, Stack_empty) ->
+        error "reached empty stack with an Erun"
+    
     | (Erun annots sym pes, Stack_cons lconts cont sk) ->
         one $ Step_tau "Erun" (
           match Map.lookup sym lconts (* YYY Map.lookup sym th_st.labels2 *) with
@@ -1238,59 +1264,72 @@ end
           |>
         )
     
+    | (Epure (Pexpr () (PEconstrained xs)), _) ->
+        one $ Step_constrained "Epure" (
+          List.map (fun (cs, pe') ->
+            ( cs
+            , E.return <| th_st with arena= Expr arena_annots (Epure pe') |> )
+          ) xs
+        )
+    
+    | (Epure (Pexpr () (PEval cval)), Stack_empty) ->
+        (* End of program execution *)
+        one (Step_done cval)
+    
+    | (Epure pe, Stack_empty) ->
+        one $ Step_eval "Epure" (
+          E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
+            | Left pe' ->
+                E.return <| th_st with
+                  arena= Expr arena_annots (Epure pe')
+                |>
+            | Right cval ->
+                E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
+          end
+        )
+    
     | (Epure pe, sk) ->
-        one match pe with
-          | Pexpr () (PEconstrained xs) ->
-              Step_constrained "Epure" (
-                List.map (fun (cs, pe') ->
-                  ( cs
-                  , E.return <| th_st with
-                      arena= Expr arena_annots (Epure pe');
-                    |> )
-                ) xs
-              )
-          | _ ->
-              match valueFromPexpr pe with
-                | Just cval ->
-                    match sk with
-                      | Stack_cons _ [] Stack_empty ->
-                          (* reached the end of the execution of a thread. *)
-                          match parent_tid_opt with
-                            | Just parent_tid ->
-                                Step_thread_done parent_tid cval
-                            | Nothing ->
-                                (* this was the startup thread *)
-                                Step_done cval
-                          end
-                      | Stack_cons _ [] (Stack_cons lconts cont sk') ->
-                          (* reached the end of the execution of a procedure. *)
-                          Step_tau "end of procedure" (
-                            E.return <| th_st with
-                              arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
-(*                              stack= push_empty_continuation sk'; *)
-                              stack= Stack_cons lconts [] sk';
-                              labels= Map.empty; (* TODO: this is too violent, but doing no reset is unsound *)
-                              labels2= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
-                            |>
-                          )
-                      | Stack_cons lconts cont sk' ->
-                          Step_tau "Epure" (
-                            E.return <| th_st with
-                              arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
-                              stack= Stack_cons lconts [] sk';
-                            |>
-                          )
+        one match valueFromPexpr pe with
+          | Just cval ->
+              match sk with
+                | Stack_empty ->
+                    error "impossible"
+                | Stack_cons _ [] Stack_empty ->
+                    (* reached the end of the execution of a thread. *)
+                    match parent_tid_opt with
+                      | Just parent_tid ->
+                          Step_thread_done parent_tid cval
+                      | Nothing ->
+                          (* this was the startup thread *)
+                          Step_done cval
                     end
-                | Nothing ->
-                    Step_eval "Epure" (
-                      E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
-                        | Left pe' ->
-                            E.return <| th_st with arena= Expr arena_annots (Epure pe') |>
-                        | Right cval ->
-                            E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
-                      end
+                | Stack_cons _ [] (Stack_cons lconts cont sk') ->
+                    (* reached the end of the execution of a procedure. *)
+                    Step_tau "end of procedure" (
+                      E.return <| th_st with
+                        arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
+                        stack= Stack_cons lconts [] sk';
+                        labels= Map.empty; (* TODO: this is too violent, but doing no reset is unsound *)
+                        labels2= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
+                      |>
+                    )
+                | Stack_cons lconts cont sk' ->
+                    Step_tau "Epure" (
+                      E.return <| th_st with
+                        arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
+                        stack= Stack_cons lconts [] sk';
+                      |>
                     )
               end
+          | Nothing ->
+              Step_eval "Epure" (
+                E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
+                  | Left pe' ->
+                      E.return <| th_st with arena= Expr arena_annots (Epure pe') |>
+                  | Right cval ->
+                      E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
+                end
+              )
         end
     
     | (End es, _) ->
@@ -1317,19 +1356,6 @@ end
            substitute the corresponding wait in parent thread with the returned
            value. *)
         error "Core_run, Ewait"
-    
-(*
-    | (Eloc loc e, _) ->
-        one $ Step_tau "Eloc" (
-          E.return <| th_st with current_loc= loc; arena= e |>
-        )
-    
-    | (Estd str e, _) ->
-        one $ Step_tau "Estd" (
-          E.return <| th_st with arena= e |>
-        )
-    
-*)
     | (Easeq _ _ _, _) ->
         error "Core_run must be called after Core_indet"
     | (Eindet _ _, _) ->
@@ -1342,57 +1368,13 @@ end
         one $ Step_bound (
           E.return <| th_st with arena= e |>
         )
-(*
-        error "Core_run must be called after Core_indet"
-*)
-    
-    | (e, Stack_empty) ->
-        (* End of program execution *)
-        one match e with
-          | Epure (Pexpr () (PEconstrained xs)) ->
-              Step_constrained "Epure" (
-                List.map (fun (cs, pe) ->
-                  ( cs
-                  , E.return <| th_st with arena= Expr arena_annots (Epure pe) |> )
-                ) xs
-              )
-          | Epure (Pexpr () (PEval cval)) ->
-              Step_done cval
-          | Epure pe ->
-              Step_eval "Epure" (
-                E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
-                  | Left pe' ->
-                      E.return <| th_st with
-                        arena= Expr arena_annots (Epure pe')
-                      |>
-                  | Right cval ->
-                      E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
-                end
-              )
-(*
-BEFORE EVAL_PEXPR2
-          | Epure pe ->
-              Step_eval "Epure" (
-                E.eval_pexpr th_st.current_loc mem_st file pe >>= fun cval ->
-                E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe cval)) |>
-              )
-*)
-        end
-(*
-        one match maybe Nothing valueFromPexpr (to_pure e) with
-          | Just cval ->
-              Step_done cval
-          | Nothing ->
-              Step_error ("reached empty stack on a non-value arena: " ^
-                          Pp.stringFromCore_expr e) (* TODO: better error message *)
-        end
-*)
   end
 
 
 val initial_io_state: io_state
 let initial_io_state = <|
   stdout= Dlist.nil;
+  stderr= Dlist.nil;
 |>
 
 val initial_core_state: core_state

@@ -26,7 +26,11 @@ let min_precision = function
   | Long     -> 32
   | LongLong -> 64
   (* TODO: check the following *)
-  | IntN_t n  -> n
+  | IntN_t n       -> n
+  | Int_leastN_t n -> n
+  | Int_fastN_t n  -> n
+  | Intmax_t       -> 64 (* TODO: hack *)
+  | Intptr_t       -> 64 (* TODO: hack *)
 end
 
 type implementation = <|
@@ -90,6 +94,8 @@ let min_integer_range = function
   | IBuiltin str -> error ("WIP min_integer_range: " ^ str)
   (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
   | Enum _ -> min_range_signed Int_
+  | Size_t -> error "TODO: min_integer_range, Size_t"
+  | Ptrdiff_t -> error "TODO: min_integer_range, Ptrdiff_t"
 end
 
 val min_implementation_signed_char: implementation
@@ -104,6 +110,8 @@ let min_implementation_signed_char =
         | IBuiltin str -> error ("WIP: min_implementation_signed_char 1" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> true
+        | Size_t -> error "TODO: min_implementation_signed_char, Size_t 1"
+        | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 1"
       end
     )
     ( function
@@ -119,15 +127,25 @@ let min_implementation_signed_char =
         | Unsigned Long     -> 32
         | Signed   LongLong -> 63
         | Unsigned LongLong -> 64
-
+        
         | Signed (IntN_t n) -> n-1
         | Unsigned (IntN_t n) -> n
         
+        | Signed (Int_leastN_t _)   -> error "TODO: min_implementation_signed_char, Signed Int_leastN_t"
+        | Unsigned (Int_leastN_t _) -> error "TODO: min_implementation_signed_char, Unsigned Int_leastN_t"
+        | Signed (Int_fastN_t n)    -> error "TODO: min_implementation_signed_char, Signed Int_fastN_t"
+        | Unsigned (Int_fastN_t n)  -> error "TODO: min_implementation_signed_char, Unsigned Int_fastN_t"
+        | Signed Intmax_t           -> error "TODO: min_implementation_signed_char, Signed Intmax_t"
+        | Unsigned Intmax_t         -> error "TODO: min_implementation_signed_char, Signed Intmax_t"
+        | Signed Intptr_t           -> error "TODO: min_implementation_signed_char, Unsigned Intptr_t"
+        | Unsigned Intptr_t         -> error "TODO: min_implementation_signed_char, Unsigned Intptr_t"
         
         | IBuiltin str -> error ("WIP: min_implementation_signed_char 4" ^ str)
         
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> 15
+        | Size_t -> error "TODO: min_implementation_signed_char, Size_t 2"
+        | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 2"
       end
     )
     (Unsigned Long)
@@ -145,6 +163,8 @@ let min_implementation_unsigned_char =
         | IBuiltin str -> error ("WIP min_implementation_unsigned_char 1:" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> true
+        | Size_t -> error "TODO: min_implementation_unsigned_char, Size_t 1"
+        | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 1"
       end
     )
     ( function
@@ -162,12 +182,22 @@ let min_implementation_unsigned_char =
         | Unsigned LongLong -> 64
         
         | Signed (IntN_t n) -> n-1
-
         | Unsigned (IntN_t n) -> n
-
+        
+        | Signed (Int_leastN_t _)   -> error "TODO: min_implementation_unsigned_char, Signed Int_leastN_t"
+        | Unsigned (Int_leastN_t _) -> error "TODO: min_implementation_unsigned_char, Unsigned Int_leastN_t"
+        | Signed (Int_fastN_t n)    -> error "TODO: min_implementation_unsigned_char, Signed Int_fastN_t"
+        | Unsigned (Int_fastN_t n)  -> error "TODO: min_implementation_unsigned_char, Unsigned Int_fastN_t"
+        | Signed Intmax_t           -> error "TODO: min_implementation_unsigned_char, Signed Intmax_t"
+        | Unsigned Intmax_t         -> error "TODO: min_implementation_unsigned_char, Signed Intmax_t"
+        | Signed Intptr_t           -> error "TODO: min_implementation_unsigned_char, Unsigned Intptr_t"
+        | Unsigned Intptr_t         -> error "TODO: min_implementation_unsigned_char, Unsigned Intptr_t"
+        
         | IBuiltin str -> error ("WIP: min_implementation_unsigned_char 4" ^ str)
         (* TODO: making an implementation choice here (see §6.7.2.3#4) *)
         | Enum _ -> 15
+        | Size_t -> error "TODO: min_implementation_unsigned_char, Size_t 2"
+        | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 2"
       end
     )
     (Unsigned Long)

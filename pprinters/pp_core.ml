@@ -479,6 +479,8 @@ let location_to_string loc =
   match loc with
     | Loc_unknown ->
         "unknown location"
+    | Loc_other str ->
+        "other location: " ^ str
     | Loc_point pos ->
         string_of_pos pos ^ ":"
     | Loc_region (pos1, pos2, _) ->
@@ -573,10 +575,7 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Easeq (None, act1, pact2) ->
-            pp_control "let" ^^^ pp_control "atom" ^^^ P.underscore ^^^ P.equals ^^^
-            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
-        | Easeq (Some (sym, _), act1, pact2) ->
+        | Easeq ((sym, _), act1, pact2) ->
             pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
             pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
         | Eindet (i, e) ->
