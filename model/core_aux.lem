@@ -2005,3 +2005,14 @@ let add_loc loc (Expr annot expr_) =
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
   Expr (EA_std str :: annot) expr_
+
+val     get_loc: list expr_annot -> maybe Loc.t
+let rec get_loc annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (EA_loc loc :: _) ->
+        Just loc
+    | (EA_std _ :: annots') ->
+        get_loc annots'
+  end

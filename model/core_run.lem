@@ -316,14 +316,20 @@ module E = struct
   let return =
     SEU.return
   let step_eval_pexprs loc mem_st file pes =
-    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    let () = Debug.print_debug 4 [] (fun () ->
+      "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
+    ) in
     SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
   let step_eval_pexpr loc mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)" ) in
+    let () = Debug.print_debug 4 [] (fun () ->
+      "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
+    ) in
     SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
   
   let eval_pexpr loc mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)" ) in
+    let () = Debug.print_debug 4 [] (fun () ->
+      "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
+    ) in
     SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
   
   let eval_pexpr2 loc mem_st file pe =
@@ -800,6 +806,12 @@ val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Sym
 let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
+  let th_st = match Caux.get_loc arena_annots with
+    | Nothing ->
+        th_st
+    | Just loc ->
+        <| th_st with current_loc= loc |>
+    end in
   match (expr_, th_st.stack) with
     | (Eskip, Stack_empty) ->
         error "reached empty stack with an Eskip"
@@ -1014,7 +1026,11 @@ BEFORE EVAL_PEXPR2
                       ) >>= fun expr ->
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                       let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
-                      E.return <| th_st with arena= a_expr; stack= push_empty_continuation sk; exec_loc= push_exec_loc psym th_st.exec_loc |>
+                      E.return <| th_st with
+                        arena= a_expr;
+                        stack= push_empty_continuation sk;
+                        exec_loc= push_exec_loc psym th_st.exec_loc
+                      |>
                     )
                 | Impl (StdFunction "printf") ->
                     match cvals with

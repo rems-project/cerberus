@@ -676,17 +676,19 @@ module Concrete : Memory = struct
     let nbits = 8 * size in
     let (min, max) =
       if is_signed then
-        (Nat_big_num.negate (Nat_big_num.pow_int (Nat_big_num.of_int 2) (nbits-1)), Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) (nbits-1)) Nat_big_num.(succ zero))
+        ( N.negate (N.pow_int (N.of_int 2) (nbits-1))
+        , N.sub (N.pow_int (N.of_int 2) (nbits-1)) N.(succ zero) )
       else
-        (Nat_big_num.zero, Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) nbits) Nat_big_num.(succ zero)) in
-    if not (min <= i && i <= max) || nbits > 64 then
-      (Printf.printf "failed: bytes_of_int64(%s), i= %s, nbits= %d, [%s ... %s]\n"
-         (if is_signed then "signed" else "unsigned")
-         (Nat_big_num.to_string i) nbits (Nat_big_num.to_string min) (Nat_big_num.to_string max);
-      assert false)
-    else
+        ( N.zero
+        , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
+    if not (min <= i && i <= max) || nbits > 64 then begin
+      Printf.printf "failed: bytes_of_int64(%s), i= %s, nbits= %d, [%s ... %s]\n"
+        (if is_signed then "signed" else "unsigned")
+        (N.to_string i) nbits (N.to_string min) (N.to_string max);
+      assert false
+    end else
       List.init size (fun n ->
-        Some (char_of_int (Nat_big_num.to_int (Nat_big_num.extract_num i (8*n) 8)))
+        Some (char_of_int (N.to_int (N.extract_num i (8*n) 8)))
       )
   
   let rec typeof mval =
@@ -815,7 +817,9 @@ module Concrete : Memory = struct
   
   let store loc ty (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
-      "ENTERING STORE: " ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+      "ENTERING STORE: ty=" ^
+      String_core_ctype.string_of_ctype ty ^ "@" ^
+      Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
     if not (ctype_equal ty (typeof mval)) then begin

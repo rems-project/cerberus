@@ -10,3 +10,7 @@ type mem_setting =
 let mem_switch: mem_setting ref =
 (*  ref `MemDefacto *)
   ref `MemConcrete
+
+(*
+external round_to_float32: float -> float = "round_to_float"
+*)
