@@ -131,7 +131,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 
 val     print_eval_conv_aux: driver_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st pe =
-  match Core_eval.eval_pexpr_aux2 Loc.unknown (Just dr_st.layout_state) dr_st.core_file pe with
+  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined (Left (Core.Pexpr () (Core.PEconstrained xs)))) ->
@@ -148,7 +148,7 @@ let rec print_eval_conv_aux dr_st pe =
   | Exception.Result (Undefined.Error loc err) ->
       ND.return (Right (Undefined.Error loc err))
   | Exception.Exception err ->
-      ND.return (Left (Loc.unknown, Errors.Core_run_cause err))
+      ND.return (Left (Loc.other "Driver.print_eval_conv_aux", Errors.Core_run_cause err))
 end
 
 val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
@@ -832,7 +832,7 @@ let rec driver with_concurrency =
 val     hack: Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack mem_st core_file concur_sym_map pexpr =
   let () = Debug.print_debug 1 [] (fun () -> "XX 25") in
-  match Core_eval.step_eval_pexpr 0 Loc.unknown (Just mem_st) core_file false pexpr with
+  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
@@ -1009,7 +1009,7 @@ let driver_globals with_concurrency sym_supply file =
     Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
     Core_run.labels= Map.empty;
     Core_run.labels2= Map.empty;
-    Core_run.current_loc= Loc.unknown;
+    Core_run.current_loc= Loc.other "Driver.driver_globals 1";
     Core_run.exec_loc= Core_run.ELoc_globals;
   |> >>= fun tid0 ->
   
@@ -1024,7 +1024,7 @@ let driver_globals with_concurrency sym_supply file =
       Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
       Core_run.labels= Map.empty;
       Core_run.labels2= Map.empty;
-      Core_run.current_loc= Loc.unknown;
+      Core_run.current_loc= Loc.other "Driver.driver_globals 2";
       Core_run.exec_loc= Core_run.ELoc_globals;
     |> >>= fun () ->
     
@@ -1214,7 +1214,7 @@ TODO: this should be removable, since we already set it in Translation
           Core_run.stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
           Core_run.labels= Map.empty;
           Core_run.labels2= Map.empty;
-          Core_run.current_loc= Loc.unknown;
+          Core_run.current_loc= Loc.other "Driver.drive";
           Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
         |> >>
         driver with_concurrency >>

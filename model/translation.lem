@@ -1309,8 +1309,8 @@ else
                           Caux.mk_specified_pe (
                             Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) integer_obj_sym_pe
                           ) )
-(*                    ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
-                        error "UNSPEC pointer + integer") *) ]
+                      ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
+                        , Caux.mk_undef_pe (Undefined.DUMMY "unspecified array_shift (addr)") ) ]
                   )
                 )
               )
@@ -1429,25 +1429,12 @@ else
                          Caux.mk_specified_pe (
                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_neg_pe integer_obj_sym_pe)
                          ))
-                      
-(*
-                      ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
-                        error "UNSPEC pointer + integer") *) ]
+                        ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
+                          , Caux.mk_undef_pe (Undefined.DUMMY "unspecified array_shift (sub)") ) ]
                   )
                 )
               )
-
-
-
-
-
-
-
-
-
-
-
-
+      
       | A.AilEbinary e1 (A.Lt as bop) e2 ->
           translate_relational_operator
             self usual_arithmetic_conversion
@@ -2396,14 +2383,24 @@ TODO: #9
                 (* STD §6.4.5#6, sentence 5 *)
                 Cty.Builtin "whcar_t"
           end in
-          
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lit_sym, _, lit_sym_pe) ->
           (* TODO: making an implementation fix here (ASCII), not doing prefix properly *)
+(*
           let elem_lvals = List.map (fun c_str ->
             C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant c_str)))
           ) strs ++ [C.LVspecified (C.OVinteger (Mem.integer_ival 0))] in
           E.register_string_literal loc lit_sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elem_lvals)))
             (C.Pexpr () (C.PEval (C.Vloaded (C.LVspecified (C.OVarray elem_lvals))))) >>
+*)
+          (* TODO(check): here we convert the string elements to the type of the array *)
+          let elem_pes = List.map (fun c_str ->
+             Caux.mk_specified_pe (
+               stdlib.mkcall_conv_int (Caux.unproj_ctype elem_ty)
+                 (Caux.mk_integer_pe (Decode.decode_character_constant c_str))
+             )
+          ) strs ++ [Caux.mk_specified_pe (Caux.mk_integer_pe 0)] in
+          E.register_string_literal loc lit_sym (Cty.Array elem_ty (Just (integerFromNat $ List.length elem_pes)))
+            (Caux.mk_specified_pe (Caux.mk_array_pe elem_pes))  >>
           E.return (
             Caux.mk_pure_e lit_sym_pe
           )

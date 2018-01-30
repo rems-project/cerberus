@@ -332,8 +332,8 @@ let rec load_character_array_aux elem_ty ptrval prec_n_opt acc =
         Mem.return (List.reverse acc)
     | _ ->
         let prec_n_opt' = Maybe.map (fun z -> z-1) prec_n_opt in
-        Mem.bind (Mem.load Loc.unknown elem_ty ptrval) (fun (_, mval) ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        Mem.bind (Mem.load (Loc.other "Output.load_character_array_aux") elem_ty ptrval) (fun (_, mval) ->
+        let () = Debug.print_debug 5 [] (fun () ->
             "load_character_array_aux ==> " ^ Mem.stringFromMem_value mval
         ) in
         Mem.case_mem_value mval
@@ -597,9 +597,9 @@ let convert eval_conv prec_opt lm_opt cspec args =
     match args with
       | [] ->
           Mem.return $
-            Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
+            Right (U.undef (Loc.other "Output.aux") [U.UB152_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
-          Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+          Mem.load (Loc.other "Output.aux") arg_ty arg_ptr >>= fun (_, mval) ->
           (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
              is undefined, but that doesn't seem to match at all what people do. So we are
              just showing a warning for now and performing a conversion from arg_ty to expected_ty
@@ -810,17 +810,17 @@ let convert eval_conv prec_opt lm_opt cspec args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
+                      Right (U.undef (Loc.other "printf() %s") [U.UB152_insufficient_arguments_for_format])
                     )
                 | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
                       (* TODO: this is not a strong enough check, we need to point to
                          the "initial element of an array of character type" *)
                       Mem.return (
-                        Right (U.undef Loc.unknown [U.Illtyped_argument_for_format])
+                        Right (U.undef (Loc.other "printf() %s") [U.Illtyped_argument_for_format])
                       )
                     else
-                      Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+                      Mem.load (Loc.other "printf() %s") arg_ty arg_ptr >>= fun (_, mval) ->
                       let prec = match prec_opt with
                         | Just (P_num z) ->
                             Just z
@@ -845,10 +845,10 @@ let convert eval_conv prec_opt lm_opt cspec args =
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef Loc.unknown [U.UB152_insufficient_arguments_for_format])
+                Right (U.undef (Loc.other "printf() %p") [U.UB152_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
-              Mem.load Loc.unknown arg_ty arg_ptr >>= fun (_, mval) ->
+              Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
               match Mem_aux.pointerValueFromMemValue mval with
                 | Just (_, ptrval) ->
                     Mem.return (
@@ -859,7 +859,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
               end
           | _ ->
               Mem.return (
-                Right (U.undef Loc.unknown [U.Illtyped_argument_for_format])
+                Right (U.undef (Loc.other "printf() %p") [U.Illtyped_argument_for_format])
               )
         end
     | CS_n ->
@@ -922,7 +922,7 @@ let printf eval_conv frmt args =
         printf_aux eval_conv [] fs args
     | _ ->
         Mem.return $
-          Right (U.undef Loc.unknown [U.Invalid_format (String.toString frmt)])
+          Right (U.undef (Loc.other "printf()") [U.Invalid_format (String.toString frmt)])
   end
 
 
