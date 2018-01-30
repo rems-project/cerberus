@@ -2409,6 +2409,10 @@ TODO: BRING THIS BACK AND FINISH IT
                               AilEunion tag memb_ident (Just d_e)
                             )
                           )
+                    | _ ->
+                        (* NOTE: finding a Desig_array here should be impossible
+                           before of an earlier check *)
+                        error "TODO: Cabs_to_ail.wip_desugar_initializer_, not a singleton list"
                   end
 (*  list (maybe (list designator) * initializer_)  *)
 (*                let () = Debug.print_debug 1
@@ -3014,11 +3018,14 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
 
               let (fun_qs, fun_ty) =
                 mk_qs_ctype ATypes.no_qualifiers
-                  (ATypes.Function false (mk_pointer_qs_ctype base_qs base_ty) (List.map snd params) isVariadic) in
+                  (ATypes.Function false (mk_pointer_qs_ctype base_qs base_ty)
+                     (List.map snd params) isVariadic) in
               
               let (return_qs, return_ty) = match fun_ty with
                 | ATypes.Function _ (qs, ty) _ _ ->
                     (qs, ty)
+                | _ ->
+                    error "impossible"
               end in
               
               E.register_function_declaration (Loc.locOf fun_ident) fun_sym false (

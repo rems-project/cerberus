@@ -83,9 +83,6 @@ and integer_value_base =
   | IVmax of AilTypes.integerType
   | IVsizeof of ctype
   | IValignof of ctype
-(*
-  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
-*)
     (* NOTE: this is a number bytes padding trailing a struct/union member *)
   | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
   | IVpadding of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)

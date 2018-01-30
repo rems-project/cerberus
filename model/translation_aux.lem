@@ -109,11 +109,14 @@ let tmp_implementation =
 	| Aty.Signed   _ -> true
         | Aty.Bool       -> false
 	| Aty.Unsigned _ -> false
-
         | Aty.IBuiltin str ->
             error ("WIP: Translation_aux.tmp_implementation (1), IBuiltin '" ^ str ^ "'")
         | Aty.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
+        | Aty.Size_t ->
+            error "WIP: Translation_aux.tmp_implementation (1), Size_t"
+        | Aty.Ptrdiff_t ->
+            error "WIP: Translation_aux.tmp_implementation (1), Ptrdiff_t"
       end
     )
     ( function
@@ -130,19 +133,33 @@ let tmp_implementation =
         | Aty.Signed   Aty.LongLong -> 63
         | Aty.Unsigned Aty.LongLong -> 64
 
-        | Aty.Signed (Aty.IntN_t 8) -> 7
-        | Aty.Signed (Aty.IntN_t 16) -> 15
-        | Aty.Signed (Aty.IntN_t 32) -> 31
-        | Aty.Signed (Aty.IntN_t 64) -> 63
-        | Aty.Unsigned (Aty.IntN_t 8) -> 8
-        | Aty.Unsigned (Aty.IntN_t 16) -> 16
-        | Aty.Unsigned (Aty.IntN_t 32) -> 32
-        | Aty.Unsigned (Aty.IntN_t 64) -> 64
+        | Aty.Signed (Aty.IntN_t n)   -> n-1
+        | Aty.Unsigned (Aty.IntN_t n) -> n
+        | Aty.Signed (Aty.Int_leastN_t _) ->
+            error "WIP: Translation_aux.tmp_implementation, Signed Int_leastN_T"
+        | Aty.Unsigned (Aty.Int_leastN_t _) ->
+            error "WIP: Translation_aux.tmp_implementation, Unsigned Int_leastN_T"
+        | Aty.Signed (Aty.Int_fastN_t _) ->
+            error "WIP: Translation_aux.tmp_implementation, Signed Int_fastN_T"
+        | Aty.Unsigned (Aty.Int_fastN_t _) ->
+            error "WIP: Translation_aux.tmp_implementation, Unsigned Int_fastN_T"
+        | Aty.Signed (Aty.Intmax_t) ->
+            error "WIP: Translation_aux.tmp_implementation, Signed Intmax_T"
+        | Aty.Unsigned (Aty.Intmax_t) ->
+            error "WIP: Translation_aux.tmp_implementation, Unsigned Intmax_T"
+        | Aty.Signed (Aty.Intptr_t) ->
+            error "WIP: Translation_aux.tmp_implementation, Signed Intptr_T"
+        | Aty.Unsigned (Aty.Intptr_t) ->
+            error "WIP: Translation_aux.tmp_implementation, Unsigned Intptr_T"
         
         | Aty.IBuiltin str ->
             error ("WIP: Translation_aux.tmp_implementation (2), IBuiltin '" ^ str ^ "'")
         | Aty.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
+        | Aty.Size_t ->
+            error "WIP: Translation_aux.tmp_implementation (2), Size_t"
+        | Aty.Ptrdiff_t ->
+            error "WIP: Translation_aux.tmp_implementation (2), Ptrdiff_t"
       end
     )
     (Aty.Size_t)

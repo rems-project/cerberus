@@ -157,79 +157,52 @@ let location_to_string  = function
 
 let desugar_cause_to_string = function
   | Desugar_ConstraintViolation msg ->
-      "violation of contraint " ^ msg
+      "violation of constraint " ^ msg
   | Desugar_OtherViolation msg ->
       "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
-      "undefined behaviour: " ^ Undefined.pretty_string_of_undefined_behaviour ub
-  
-(* TODO: move these to Desugar_ConstraintViolation *)
+      "undefined behaviour: " ^
+      Undefined.pretty_string_of_undefined_behaviour ub
+  | Desugar_ExternalObjectRedefinition sym ->
+      "redefinition of an external object: " ^
+      Pp_utils.to_plain_string (Pp_ail.pp_id sym)
   | Desugar_FunctionRedefinition sym ->
-       "(TODO msg) redefinition of '" ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
+       "(TODO msg) redefinition of '" ^
+      (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
   | Desugar_BlockScoped_Thread_local_alone ->
       "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
        ``In the declaration of an object with block scope, if the declaration \
        specifiers include _Thread_local, they shall also include either static \
        or extern. [...].. ``\n"
-(*
-  | CABS_TO_AIL_THREAD_LOCAL_FUNCTION ->
-      "Violation of constraint 6.7.1#4 Storage-class specifiers, Contraints: \
-       ``_Thread_local shall not appear in the declaration specifiers of a \
-       function declaration.``\n"
-  | CABS_TO_AIL_BLOCK_FUNCTION_STORAGE ->
-      "Violation of constraint 6.7.1#7 Storage-class specifiers, Contraints: \
-       ``The declaration of an identifier for a function that has block scope \
-       shall have no explicit storage-class specifier other than extern.``\n"
-  | CABS_TO_AIL_CASE_NOT_INTEGER_CONSTANT_EXRESSION ->
-      "Violation of constraint 6.8.4.2#3 The switch statement, Constraints: \
-       ``The expression of each case label shall be an integer constant \
-       expression [...]``\n"
-*)
   | Desugar_NotConstantExpression ->
       "found a non-contant expression in place of a constant one.\n"
   | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
-      "violation of constraint (§6.7#3): multiple declaration of `" ^ str ^ "'."
-
+      "violation of constraint (§6.7#3): multiple declaration of `" ^
+      str ^ "'."
   | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
-      "member '" ^ str ^ "' is not defined for type '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
-
-(*
-  | CABS_TO_AIL_DUPLICATED_LABEL ->
-    "Violation of contraint 6.8.1#3 Labeled statements, Constaints: ``Label \
-     names shall be unique within a function.``\n"
-  | CABS_TO_AIL_UNDECLARED_IDENTIFIER id ->
-      "FOUND> " ^ id ^
-      "\nViolation of constraint 6.7#3 as described by footnote 91 \
-       ``..[A]n undeclared identifier is a violation of syntax..``\n"
-  (* TODO: find if there is some relevant text in the std *)
-  | CABS_TO_AIL_UNDECLARED_TYPENAME id ->
-      "Found undeclared typename> " ^ id
-  | CABS_TO_AIL_MULTIPLE_STORAGE_CLASS ->
-      "Violation of constraint 6.7.1#1 Storage-class specifiers, Contraints: \
-       ``..At most, one storage-class specifier may be given [...]..``\n"
-  | CABS_TO_AIL_ITERATION_DECLARATON_WRONG_STORAGE ->
-      "Violation of constraint 6.8.5#3 Iteration statements, \
-       Constraints: ..The declaration part of a for statement \
-       shall only declare identifiers for objects having storage \
-       class auto or register.. in\n"
-*)
+      "member '" ^ str ^ "' is not defined for type '" ^
+      String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
+  | Desugar_NonvoidReturn ->
+      "found a void return in a non-void function"
+  | Desugar_Redefinition sym ->
+      "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
   | Desugar_NeverSupported str ->
-      "this feature won't be supported: " ^ str ^ "."
-
+      "feature that will never supported: " ^ str
   | Desugar_NotyetSupported str ->
-      "this feature is not supported: " ^ str ^ "."
-
+      "feature not yet supported: " ^ str
   | Desugar_TODOCTOR str ->
       "Desugar_TODOCOTR[" ^ str ^ "]"
-  
   | Desugar_impossible ->
       "impossible error"
-  | Desugar_NonvoidReturn ->
-      "Desugar_NonvoidReturn"
-  | Desugar_ExternalObjectRedefinition ident ->
-      "Desugar_ExternalObjectRedefinition: " ^ Pp_symbol.to_string ident
-  | Desugar_Redefinition loc ->
-      "Desugar_Redefinition"
+  | Desugar_constantExpression_notInteger str ->
+      "TODO(msg) Desugar_constantExpression_notInteger: " ^ str
+  | Desugar_constantExpression_UB ubs ->
+      "TODO(msg) Desugar_constantExpression_UB: " ^
+      Pp_utils.to_plain_string (
+        comma_list (fun z -> !^ (Undefined.pretty_string_of_undefined_behaviour z))
+        ubs
+      )
+
 
 (* TODO: improve *)
 let core_typing_cause_to_string = function

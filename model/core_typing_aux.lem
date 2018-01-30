@@ -165,6 +165,10 @@ let export_ctor loc = function
      E.return Cspecified
  | Cunspecified ->
      E.return Cunspecified
+ | Cfvfromint ->
+     E.return Cfvfromint
+ | Civfromfloat ->
+     E.return Civfromfloat
 end
 
 val     export_pattern: Loc.t -> inferred_pattern -> E.eff typed_pattern
@@ -187,9 +191,11 @@ let rec export_pexpr loc (Pexpr infer pexpr_) =
         E.return (PEimpl iCst)
     | PEval cval ->
         E.return (PEval cval)
-(*
-    | PEconstrained of list (list Mem.mem_constraint2 * (generic_pexpr 'bty 'sym)) (* constrained value *)
-*)
+    | PEconstrained xs ->
+        PEconstrained <$> E.mapM (fun (cs, pe) ->
+          export_pexpr loc pe >>= fun pe' ->
+          E.return (cs, pe')
+        ) xs
     | PEundef ub ->
         E.return (PEundef ub)
     | PEerror str pe ->

@@ -178,7 +178,11 @@ let rec pull_constrained n (Pexpr () pexpr_ as pexpr) =
         wrap_bin (PElet pat) pe1 pe2
     | PEif pe1 pe2 pe3 ->
         (* TODO: not sure about this one! *)
-        wrap_list (fun [pe1;pe2;pe3] -> PEif pe1 pe2 pe3) [pe1;pe2;pe3]
+        let aux = function
+          | [pe1;pe2;pe3] -> PEif pe1 pe2 pe3
+          | _             -> error "impossible"
+        end in 
+        wrap_list aux [pe1;pe2;pe3]
     | PEis_scalar pe ->
         wrap PEis_scalar pe
     | PEis_integer pe ->
@@ -661,11 +665,14 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
         match Caux.valueFromPexprs pes' with
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
-                let Core_ctype.StructDef membrs =
-                  fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs in
-                let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
-                let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
-                (memb_ident, mval)
+                match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
+                  | Core_ctype.StructDef membrs ->
+                      let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                      let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
+                      (memb_ident, mval)
+                  | Core_ctype.UnionDef _ ->
+                      error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
+                end
               ) (List.zip idents cvals) in
               EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs))))
           | Nothing ->
@@ -675,11 +682,14 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
-                let Core_ctype.UnionDef membrs =
-                  fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs in
-                let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
-              let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
-              EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
+              match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
+                | Core_ctype.UnionDef membrs ->
+                    let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                    let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
+                    EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
+                | Core_ctype.StructDef _ ->
+                      error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
+                end
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
         end

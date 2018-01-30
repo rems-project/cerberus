@@ -176,8 +176,9 @@ let rec stepConcurrency n =
           ND.put <| dr_st with concurrency_state= concur_st' |>
       
       (* TODO: the variables names seems completely messed up here *)
-(*
       | Cmm_op.ReadsFrom (new_concrete_mval: Mem.mem_value) (previous_symbolic_mval: Mem.mem_value) performed_act concur_st' ->
+          error "WIP: Driver.stepConcurrency, ReadsFrom"
+(*
           ND.log ("ReadsFrom with aid: " ^ show (Cmm.aid_of performed_act) ^ " with concrete: " ^ (* DEBUG *)
                   Pp.pretty_stringFromMem_mem_value new_concrete_mval ^ " and previous: " ^       (* DEBUG *)
                   Pp.pretty_stringFromMem_mem_value previous_symbolic_mval) >>                    (* DEBUG *)

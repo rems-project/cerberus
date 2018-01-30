@@ -91,32 +91,35 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
 
 let drive sym_supply file args conf : execution_result =
   Random.self_init ();
-  
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
-  
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
-  
+  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module
+      (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in
-  
-  Debug_ocaml.print_debug 1 [] (fun () -> Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives));
-  
+  Debug_ocaml.print_debug 1 [] (fun () ->
+    Printf.sprintf "Number of executions: %d actives (%d killed)\n" n_actives (n_execs - n_actives)
+  );
   if n_actives = 0 then begin
     print_endline Colour.(ansi_format [Red]
       (Printf.sprintf "FOUND NO ACTIVE EXECUTION (with %d killed)\n" (n_execs - n_actives))
     );
-    List.iteri (fun n (ND.Killed reason, z3_strs, st) ->
-      let reason_str = match reason with
-        | ND.Undef0 (loc, ubs) ->
-            "undefined behaviour[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
-        | ND.Error0 (loc , str) ->
-            "static error[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str
-        | ND.Other str ->
-            string_of_driver_error str in
-begin
+    List.iteri (fun n exec ->
+      match exec with
+        | (ND.Active _, _, _) ->
+            assert false
+        | (ND.Killed reason, z3_strs, st) ->
+            let reason_str = match reason with
+              | ND.Undef0 (loc, ubs) ->
+                  "undefined behaviour[" ^ Location_ocaml.location_to_string loc ^ "]: "
+                  ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+              | ND.Error0 (loc , str) ->
+                  "static error[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str
+              | ND.Other str ->
+                  string_of_driver_error str in
+            begin
 (*
       if reason_str = "reached unsatisfiable constraints" then
       print_endline Colour.(ansi_format [Red] 
@@ -127,7 +130,7 @@ else
         Debug_ocaml.print_debug 2 [] (fun () -> Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
               n reason_str (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (Dlist.toList st.ND.log))))
 *)
-end
+            end
     ) values
   end;
   

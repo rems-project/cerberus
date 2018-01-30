@@ -320,7 +320,8 @@ and initial = parse
           | "u8" -> Cabs.CabsEncPrefix_u8
           | "u"  -> Cabs.CabsEncPrefix_u
           | "U"  -> Cabs.CabsEncPrefix_U
-          | "L"  -> Cabs.CabsEncPrefix_L  in
+          | "L"  -> Cabs.CabsEncPrefix_L
+          | _    -> assert false in
         let saved_start_p = lexbuf.lex_start_p in
         let strs = s_char_sequence lexbuf in
         lexbuf.lex_start_p <- saved_start_p;

@@ -16,6 +16,7 @@ type access_error =
   | FunctionPtr
   | DeadPtr
   | OutOfBoundPtr
+  | NoProvPtr
 
 
 let stringFromAccess_error = function
@@ -27,6 +28,8 @@ let stringFromAccess_error = function
       "DeadPtr"
   | OutOfBoundPtr ->
       "OutOfBoundPtr"
+  | NoProvPtr ->
+      "NoProvPtr"
 end
 
 type mem_error =
