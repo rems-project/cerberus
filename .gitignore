@@ -1,5 +1,6 @@
 _build
 ocaml_generated
+generated_doc
 
 core-ott/*.tex
 core-ott/*.aux
@@ -12,7 +13,24 @@ src/main_.ml
 tests/csmith/tools/ciValidate
 tests/csmith/tools/reValidate
 
+*.cmx
+*.cmo
+*.cmi
+*.o
+
+*.orig
+*.LOCAL
+*_LOCAL.ml
+*_LOCAL.mli
+
 *.native
 *.byte
 
 cerberus
+cerb.concrete
+cerb.symbolic
+
+web.byte
+public/include
+public/node_modules
+public/js/cerberus.js
