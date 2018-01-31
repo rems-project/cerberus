@@ -1,5 +1,5 @@
 CMDLINER_SOURCE=http://erratique.ch/software/cmdliner/releases/cmdliner-0.9.7.tbz
-PPRINT_SOURCE=http://gallium.inria.fr/~fpottier/pprint/pprint-20140424.tar.gz
+PPRINT_SOURCE=http://gallium.inria.fr/~fpottier/pprint/pprint-20171003.tar.gz
 ZARITH_SOURCE=http://forge.ocamlcore.org/frs/download.php/1471/zarith-1.3.tgz
 Z3_SOURCE=https://github.com/Z3Prover/z3.git
 
