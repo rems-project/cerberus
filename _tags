@@ -6,8 +6,8 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg, color(always)
 "ocaml_generated": include
 "pprinters": include
 "parsers": include
-"parsers/ncparser": include
-"parsers/coreparser": include
+"parsers/c": include
+"parsers/core": include
 "dependencies/cmdliner-0.9.7/src": include
 
 # Non-exhaustive patterns raise an error for Lem generated modules
@@ -16,8 +16,8 @@ true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg, color(always)
 <ocaml_generated/*.ml>: warn(@8)
 true: warn(+8)
 
-<parsers/ncparser/*>: external_tokens(Tokens), explain, warn(@8)
-<parsers/coreparser/*>: external_tokens(Core_parser_util), explain, warn(@8)
+<parsers/c/*>: external_tokens(Tokens), explain, warn(@8)
+<parsers/core/*>: external_tokens(Core_parser_util), explain, warn(@8)
 
 "cmdliner-0.9.7/_build/src": include
 "dependencies/pprint-20140424/src": include
