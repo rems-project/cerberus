@@ -237,6 +237,8 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 %% (* ======================================================================= *)
 
 translation_unit: (* NOTE: this is not present in the standard *)
+| EOF
+    { TUnit [] }
 | edecls= external_declaration_list EOF
     { TUnit (List.rev edecls) }
 
