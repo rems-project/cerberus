@@ -852,4 +852,4 @@ let string_of_core_run_error = function
   | Unknown_impl ->
       "unknown implementation constant"
   | Unresolved_symbol sym ->
-      "unersolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
+      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))

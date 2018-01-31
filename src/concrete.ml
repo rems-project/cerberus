@@ -971,6 +971,11 @@ module Concrete : Memory = struct
   
   
   let ptrcast_ival _ _ (IV (prov, n)) =
+    if not (N.equal n N.zero) then
+      (* STD §6.3.2.3#5 *)
+      Debug_ocaml.warn [] (fun () ->
+        "implementation defined cast from integer to pointer"
+      );
     match prov with
       | Prov_none ->
           (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
