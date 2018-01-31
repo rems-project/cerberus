@@ -3,6 +3,13 @@ ifeq (, $(shell which ocamlfind))
 $(warning "ocamlfind is required to build the executable part of Cerberus")
 endif
 
+# Deal with Z3 package installed by opam
+ifneq (, $(shell ocamlfind query Z3))
+Z3="z3"
+else
+Z3="Z3"
+endif
+
 
 BOLD="\033[1m"
 RED="\033[31m"
@@ -97,14 +104,14 @@ alldoc.pdf: alldoc.tex
 
 
 smt:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str smt.native
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str smt.native
 
 test:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,str test.native
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str test.native
 
 
 new_main:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,Z3 -libs unix,str main2.native
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str main2.native
 
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -112,7 +119,7 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,Z3 -libs unix,str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
@@ -136,12 +143,12 @@ ocaml_byte:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
 	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,Z3 -libs unix,nums,str main_.d.byte; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,nums,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,Z3,lwt,cohttp,cohttp.lwt -libs str web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt -libs str web.native
 
 
 .PHONY: cbuild clink
