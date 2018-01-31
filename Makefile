@@ -118,7 +118,7 @@ ocaml_native:
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
@@ -131,7 +131,7 @@ ocaml_profiling:
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs landmarks.ppx,landmarks -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
@@ -142,7 +142,7 @@ ocaml_byte:
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
-	  sed s/"<<HG-IDENTITY>>"/"`hg id` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,nums,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi

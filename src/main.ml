@@ -517,7 +517,7 @@ let () =
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
   
   (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<HG-IDENTITY>>" ~doc:"Cerberus C semantics"  in
+  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
   match Term.eval (cerberus_t, info) with
     | `Error _ ->
         output_string mlm_dbg_oc "\n";
