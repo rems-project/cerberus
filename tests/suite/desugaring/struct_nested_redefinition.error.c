@@ -1,3 +1,3 @@
 struct T {
-  struct T { int x} st;
+  struct T { int x; } st;
 };
