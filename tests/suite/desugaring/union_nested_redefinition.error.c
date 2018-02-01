@@ -1,3 +1,3 @@
 union T {
-  union T { int x} un;
+  union T { int x; } un;
 };
