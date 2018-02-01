@@ -28,6 +28,8 @@ tests/csmith/tools/reValidate
 *.native
 *.byte
 
+.*
+
 cerberus
 cerb.concrete
 cerb.symbolic

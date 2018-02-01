@@ -29,7 +29,7 @@ type undefined_behaviour =
   | UB007
   (* The same identifier has both internal and external linkage in the same translation unit
      (6.2.2). *)
-  | UB008
+  | UB008_multiple_linkage
   (* An object is referred to outside of its lifetime (6.2.4). *)
   | UB009_outside_lifetime
   (* The value of a pointer to an object whose lifetime has ended is used (6.2.4). *)
@@ -681,7 +681,7 @@ let ub_str_bimap =
     ; (UB005_data_race, "UB005_data_race")
     ; (UB006, "UB006")
     ; (UB007, "UB007")
-    ; (UB008, "UB008")
+    ; (UB008_multiple_linkage, "UB008_multiple_linkage")
     ; (UB009_outside_lifetime, "UB009_outside_lifetime")
     ; (UB010_pointer_to_dead_object, "UB010_pointer_to_dead_object")
     ; (UB011_use_indeterminate_automatic_object, "UB011_use_indeterminate_automatic_object")

@@ -10,6 +10,8 @@ module type Implementation = sig
   val sizeof_fty: floatingType -> int option
   val alignof_ity: integerType -> int option
   val alignof_fty: floatingType -> int option
+  val register_enum: Symbol.sym -> Nat_big_num.num list -> bool
+  val typeof_enum: Symbol.sym -> integerType option
 end
 
 
@@ -111,6 +113,35 @@ module DefaultImpl: Implementation = struct
         Some 8
     | RealFloating LongDouble ->
         Some 16
+  
+  
+  (* INTERNAL *)
+  let registered_enums =
+    ref []
+  
+  let sym_eq =
+    Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.isEqual_method
+  
+  (* NOTE: for enums implementation we follow GCC, since Clang doesn't document
+     it's implementation details... *)
+  let register_enum tag_sym ns =
+    (* NOTE: we don't support GCC's -fshort-enums option *)
+    let ity =
+      if List.exists (fun n -> Nat_big_num.less n Nat_big_num.zero) ns then
+        Signed Int_
+      else
+        Unsigned Int_ in
+    if List.exists (fun (z, _) -> sym_eq z tag_sym) !registered_enums then
+      false
+    else begin
+      registered_enums := (tag_sym, ity) :: !registered_enums;
+      true
+    end
+
+  let typeof_enum tag_sym =
+    match List.find_opt (fun (z, _) -> sym_eq z tag_sym) !registered_enums with
+      | None        -> None
+      | Some (_, z) -> Some z
 end
 
 module Impl = DefaultImpl
