@@ -496,11 +496,13 @@ let register_identifier_ ident namespace kind link =
                   do_fresh
             end
         else
-          (* TODO: check *)
-          if kind = kind' && link = link' then
-            return sym
+          if link <> link' then
+            fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
           else
-            error "Cabs_to_ail_effect.register_identifier_"
+            if kind = kind' then
+              return sym
+            else
+              error "TODO: Cabs_to_ail_effect.register_identifier_, kind <> kind'"
     | Nothing ->
         do_fresh
   end
