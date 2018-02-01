@@ -66,13 +66,11 @@ let inline mapM_ f _as = sequence_ (List.map f _as)
 
 
 
-
-val     stExcept_foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'b 's 'msg) -> list 'a -> 'b -> stExceptM 'b 's 'msg
-let rec stExcept_foldlM f l a =
-  match l with
-    | [] -> return a
-    | x::xs -> f x a >>= stExcept_foldlM f xs
-  end
+val     stExcept_foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'a 's 'msg) -> 'a -> list 'b -> stExceptM 'a 's 'msg
+let rec stExcept_foldlM f a = function
+  | []    -> return a
+  | b::bs -> f a b >>= fun a' -> stExcept_foldlM f a' bs
+end
 
 val     foldrM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'b 's 'msg) -> 'b -> list 'a -> stExceptM 'b 's 'msg
 let rec foldrM f a = function
@@ -80,7 +78,7 @@ let rec foldrM f a = function
   | x::xs -> foldrM f a xs >>= f x
 end
 
-let inline iter f l = stExcept_foldlM (fun a () -> f a) l ()
+let inline iter f l = stExcept_foldlM (fun () a -> f a) () l
 
 
 (* Exception stuff *)
