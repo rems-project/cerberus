@@ -17,26 +17,27 @@ open import {hol} `pp_ailTheory`
 type tag_definition =
   | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
   | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
-  | Enum_definition (* TODO *)
+  | Enum_definition of list integer
 
 
-type member_kind =
+type tag_kind =
   (* TODO: we may be able to merge struct and union *)
   | Kind_struct
   | Kind_union
   | Kind_enum
 
 (* STD §6.2.1#1, sentence 1 *)
-type identifier_kind =
+type ordinary_kind = (* the ones that can have a linkage *)
   (* the boolean is true iff we are dealing with a function parameter (needed to determinate the linkage ...) *)
     (* TODO: should be a different ctor, but using a bool for now to make sure all the occurences
-             of the normal Kind_object also apply to Kind_parameter_object' *)
-  | Kind_object of bool
+             of the normal Kind_object also apply to Kind_parameter_object *)
+  | OK_object of bool
+  | OK_function
+  | OK_member of tag_kind
 
-  | Kind_function
-  (* TODO: putting the struct/union definition here is a bit of a hack *)
-  | Kind_tag
-  | Kind_member of member_kind
+type identifier_kind =
+  | Kind_ordinary of ordinary_kind
+  | Kind_tag of tag_kind
   | Kind_typedef
   | Kind_label
 (*
@@ -51,20 +52,24 @@ end
 
 instance (Show identifier_kind)
   let show = function
-    | Kind_object false ->
+    | Kind_ordinary (OK_object false) ->
         "object"
-    | Kind_object true ->
+    | Kind_ordinary (OK_object true) ->
         "parameter"
-    | Kind_function ->
+    | Kind_ordinary OK_function ->
         "function"
-    | Kind_tag ->
-        "tag"
-    | Kind_member Kind_struct ->
+    | Kind_ordinary (OK_member Kind_struct) ->
         "struct_member"
-    | Kind_member Kind_union ->
+    | Kind_ordinary (OK_member Kind_union) ->
         "union_member"
-    | Kind_member Kind_enum ->
+    | Kind_ordinary (OK_member Kind_enum) ->
         "enum_member"
+    | Kind_tag Kind_struct ->
+        "struct tag"
+    | Kind_tag Kind_union ->
+        "union tag"
+    | Kind_tag King_enum ->
+        "enum tag"
     | Kind_typedef ->
         "typedef"
     | Kind_label ->
@@ -77,16 +82,16 @@ instance (SetType identifier_kind)
 end
 
 
-val is_object_kind: identifier_kind -> bool
+val is_object_kind: ordinary_kind -> bool
 let is_object_kind = function
-  | Kind_object _ -> true
-  | _             -> false
+  | OK_object _ -> true
+  | _           -> false
 end
 
-val is_parameter_object_kind: identifier_kind -> bool
+val is_parameter_object_kind: ordinary_kind -> bool
 let is_parameter_object_kind = function
-  | Kind_object true -> true
-  | _                -> false
+  | OK_object true -> true
+  | _              -> false
 end
 
 
@@ -133,7 +138,7 @@ type namespace =
   | Namespace_label
   | Namespace_tag
   | Namespace_member of cabs_identifier (* NOTE: theses are only struct/union members *)
-  | Namespace_ordinary (* NOTE: enum members go here *)
+  | Namespace_ordinary (* NOTE: enumeration constants go here *)
 
 instance (Show namespace)
   let show = function
@@ -169,8 +174,6 @@ instance (SetType namespace)
 end
 
 
-
-
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
   aux_supply: UniqueId.supply nat;
@@ -178,9 +181,8 @@ type state = <|
   symbol_supply: UniqueId.supply Symbol.sym;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   
-  (* IMPORTANT: the two scope tables must be updated in sync *)
-  registered_identifiers:      Scope_table.t scope (cabs_identifier * namespace) (A.identifier * identifier_kind * linkage);
-(*  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration; *)
+  (* TODO: this type of too large, maybe separate the namespaces into different maps under the scope table *)
+  registered_identifiers:      Scope_table.t scope (cabs_identifier * namespace) (A.identifier * identifier_kind * maybe linkage);
   
   tag_definitions: map A.identifier tag_definition;
   
@@ -311,7 +313,7 @@ let with_scope scope m =
     
     (Set_helpers.fold (fun (sym, kind, _) acc ->
       match kind with
-        | Kind_object false ->
+        | Kind_ordinary (OK_object false) ->
             match Map.lookup sym st.external_object_declarations with
               | Just (dur, isRegister, qs, ty) ->
                   (sym, ((dur, isRegister), qs, ty)) :: acc
@@ -448,17 +450,27 @@ let resolve_typedef sym =
 
 
 (* NOTE: this function shouldn't be called outside of the current module *)
-val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> linkage -> desugM A.identifier
-let register_identifier_ ident namespace kind link =
+val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> maybe linkage -> desugM A.identifier
+let register_identifier_ ident namespace kind link_opt =
+  match (kind, link_opt) with
+    | (Kind_ordinary _, Just _) ->
+        return ()
+    | _ ->
+        (* register_indentifier_ was improperly called *)
+        fail (Loc.locOf ident) (Errors.Desugar_impossible)
+  end >>
   get_scope >>= fun sc ->
-  return (
+  let () =
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register identifier `" ^ show ident ^
        "' with scope= " ^ string_of_scope sc ^
        " with namespace= " ^ show namespace ^
        ", kind= " ^ show kind ^
-       ", linkage= " ^ show link)
-  ) >>
+       match link_opt with
+         | Nothing -> ""
+         | Just link -> ", linkage= " ^ show link_opt
+       end
+    ) in
   
   let do_fresh =
     (* generates a fresh symbol *)
@@ -469,23 +481,26 @@ let register_identifier_ ident namespace kind link =
     ) >>= fun sym ->
     (* associates it to the identifier *)
     State_exception.update (fun st ->
-      <| st with registered_identifiers= Scope_table.register (ident, namespace) (sym, kind, link) st.registered_identifiers |>
+      <| st with registered_identifiers= Scope_table.register (ident, namespace) (sym, kind, link_opt) st.registered_identifiers |>
     ) >>
     return sym in
   
   State_exception.read (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   ) >>= function
-    | Just (scope, (sym, kind', link')) ->
+    | Just (scope, (sym, kind', link_opt')) ->
         (* TODO: need to check that the kind/link match up *)
-        if link = Linkage_none then
+        if link_opt = Just Linkage_none then
           (* §6.7#3 "except that ..." *)
+          (* TODO: this should be dead code now *)
           if kind = Kind_typedef then
             (* NOTE: the "except that ..." is deal with by the call to [register_typedef] that should be done just after *)
             return sym
+(*
           else if kind = Kind_tag then
             (* TODO: multiple definition are not allowed *)
             return sym
+*)
           else
             (* TODO: check *)
             current_scope_is scope >>= function
@@ -496,32 +511,65 @@ let register_identifier_ ident namespace kind link =
                   do_fresh
             end
         else
-          if link <> link' then
-            fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+          if kind <> kind' then
+            error "TODO: Cabs_to_ail_effect.register_identifier_, kind <> kind'"
           else
-            if kind = kind' then
-              return sym
+            if link_opt <> link_opt' then
+              (* STD §6.2.2#7 *)
+              fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
             else
-              error "TODO: Cabs_to_ail_effect.register_identifier_, kind <> kind'"
+              return sym
     | Nothing ->
         do_fresh
   end
   
 
+(* Ordinary identifiers are those declared by ordinary declarators (i.e. object
+    or functions) or enumeration constants *)
+val resolve_ordinary_identifier: cabs_identifier -> desugM (maybe (scope * either A.identifier (A.identifier * ordinary_kind * linkage)))
+let resolve_ordinary_identifier ident =
+  State_exception.read (fun st ->
+    match Scope_table.resolve (ident, Namespace_ordinary) st.registered_identifiers with
+      | Nothing ->
+          Nothing
+      | Just (scope, (ident, Kind_ordinary OK_enum, Nothing)) ->
+          Just (scope, Left ident)
+      | Just (scope, (ident, Kind_ordinary kind, Just link)) ->
+          Just (scope, Right (ident, kind, link))
+      | _ ->
+          error "Cabs_to_ail_effect.resolve_ordinary_identifier"
+    end
+  )
 
-val resolve_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind * linkage)))
+val resolve_extraordinary_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind)))
+let resolve_extraordinary_identifier ident namespace =
+  State_exception.read (fun st ->
+    match Scope_table.resolve (ident, namespace) st.registered_identifiers with
+      | Nothing ->
+          Nothing ->
+      | Just (_, (_, Kind_ordinary _, _)) ->
+          error "Cabs_to_ail_effect.resolve_extraordinary_identifier (1)"
+      | Just (_, (_, _, Just _)) ->
+          error "Cabs_to_ail_effect.resolve_extraordinary_identifier (2)"
+      | Just (scope, (ident, kind, Nothing)) ->
+          Just (scope, (ident, kind))
+    end
+  )
+
+
+val resolve_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind * maybe linkage)))
 let resolve_identifier ident namespace =
   State_exception.read (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   )
 
 
-val     determinate_linkage: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM linkage
+val     determinate_linkage: cabs_identifier -> namespace -> ordinary_kind -> list storage_class_specifier -> desugM linkage
 let rec determinate_linkage ident namespace kind storage_classes =
   get_scope >>= fun scope ->
   let scs = List.delete SC_Thread_local storage_classes in
   if    scope = Scope_file
-     && (kind = Kind_object false || kind = Kind_function)
+     && (kind = OK_object false || kind = OK_function)
      && List.elem SC_static scs then
 STD_ "§6.2.2#3" $
       return Linkage_internal
@@ -529,28 +577,30 @@ STD_ "§6.2.2#3" $
   else if List.elem SC_extern scs then
 STD_ "§6.2.2#4" $
     resolve_identifier ident namespace >>= function
-      | Just (_, (_, _, link)) ->
+      | Just (_, (_, _, Just link)) ->
           if link = Linkage_internal || link = Linkage_external then
             return link
           else
             return Linkage_external
+      | Just _ ->
+          fail Loc.unknown (Errors.Desugar_TODOCTOR "determinate_linkage ==> resolved an previous registration with Nothing as linkage")
       | Nothing ->
           return Linkage_external
     end
   
-  else if kind = Kind_function && List.null scs then
+  else if kind = OK_function && List.null scs then
 STD_ "§6.2.2#5, sentence 1" $
         determinate_linkage ident namespace kind [SC_extern]
   
   else if    scope = Scope_file
-          && kind = Kind_object false
+          && kind = OK_object false
           && List.null scs then
 STD_ "§6.2.2#5, sentence 2" $
     return Linkage_external
     
     else
 STD_ "§6.2.2#6" $
-    if    not (is_object_kind kind || kind = Kind_function)
+    if    not (is_object_kind kind || kind = OK_function)
        || is_parameter_object_kind kind (* identifier declared to be a function parameter *)
        || is_block_scope scope && is_object_kind kind && scs <> [SC_extern] then
       return Linkage_none
@@ -599,10 +649,10 @@ STD_ "§6.2.2#6" $
 *)
 
 
-val register_identifier: cabs_identifier -> namespace -> identifier_kind -> list storage_class_specifier -> desugM (linkage * A.identifier)
-let register_identifier ident namespace kind storage_classes =
-  determinate_linkage ident namespace kind storage_classes >>= fun link ->
-  register_identifier_ ident namespace kind link           >>= fun sym  ->
+val register_ordinary_identifier: cabs_identifier -> namespace -> ordinary_kind -> list storage_class_specifier -> desugM (linkage * A.identifier)
+let register_ordinary_identifier ident namespace kind storage_classes =
+  determinate_linkage ident namespace kind storage_classes              >>= fun link ->
+  register_identifier_ ident namespace (Kind_ordinary kind) (Just link) >>= fun sym  ->
   return (link, sym)
 
 
@@ -619,13 +669,25 @@ STD_ "§6.2.2#6" $
 
 
 
-val register_tag: Loc.t -> maybe cabs_identifier -> desugM A.identifier
-let register_tag loc tag_ident_opt =
+val register_tag: tag_kind -> maybe cabs_identifier -> desugM A.identifier
+let register_tag kind tag_ident_opt =
   (* generate a fresh tag identifier if none provided *)
-  maybe (freshify (CabsIdentifier loc "anonymous_tag_")) return tag_ident_opt  >>= fun tag_ident    ->
-  register_identifier tag_ident Namespace_tag Kind_tag [(* TODO: check *)]     >>= fun (_, tag_sym) ->
+  maybe
+    (freshify (CabsIdentifier (Loc.other "anonymous_tag") "anonymous_tag_"))
+    return
+    tag_ident_opt                                                      >>= fun tag_ident ->
+  register_identifier_ tag_ident Namespace_tag (Kind_tag kind) Nothing >>= fun tag_sym   ->
   return tag_sym
-  
+
+(*
+val resolve_tag: cabs_identifier -> debugM A.identifier
+let resolve_tag tag_ident =
+  resolve_identifier tag_ident Namespace_tag >>= function
+    | Nothing ->
+        
+    | Just (_, (ident, _, _)) ->
+        return ident
+*)
 
 
 val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> desugM unit
@@ -635,12 +697,22 @@ let register_tag_definition loc tag_sym tag_decl =
     Map.member tag_sym st.tag_definitions
   ) >>= function
     | true ->
-        (* TODO: check *)
-        fail loc (Errors.Desugar_Redefinition tag_sym)
+        fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.3#1")
     | false ->
         return ()
   end >>
-  
+  match tag_decl with
+    | Enum_definition ns_rev ->
+        (* NOTE: this function doesn't care about the order of the integers *)
+        (* NOTE2: this function is effectful but by its use this shouldn't be observable *)
+        if Implementation_.register_enum tag_sym ns_rev then
+          return ()
+        else
+          (* this should have been caught as redefinition just earlier *)
+          fail loc Errors.Desugar_impossible
+    | _ ->
+        return ()
+  end >>
   State_exception.update (fun st ->
     <| st with tag_definitions= Map.insert tag_sym tag_decl st.tag_definitions |>
   )
@@ -970,7 +1042,7 @@ let register_static_assertion e strCst =
 
 val register_label: cabs_identifier -> desugM unit
 let register_label ident =
-  void (register_identifier_ ident Namespace_label Kind_label Linkage_none)
+  void (register_identifier_ ident Namespace_label Kind_label Nothing)
 
 val resolve_label: cabs_identifier -> desugM A.identifier
 let resolve_label ident =

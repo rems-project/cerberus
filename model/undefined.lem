@@ -917,6 +917,8 @@ let pretty_string_of_undefined_behaviour = function
       "DUMMY undefined behaviour (" ^ str ^ ")"
   | UB005_data_race ->
       "(§5.1.2.4#25) the execution of the program contains a data race."
+  | UB008_multiple_linkage ->
+      "(§6.2.2#7) an identifier appeared with both internal and external linkage"
   | UB009_outside_lifetime ->
       "(§6.2.4#2) an object is referred to outside of its lifetime."
   | UB010_pointer_to_dead_object ->
