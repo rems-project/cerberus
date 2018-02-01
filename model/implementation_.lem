@@ -11,11 +11,17 @@ val sizeof_fty: AilTypes.floatingType -> maybe nat
 val alignof_ity: AilTypes.integerType -> maybe nat
 val alignof_fty: AilTypes.floatingType -> maybe nat
 
+val register_enum: Symbol.sym -> list integer -> bool
+val typeof_enum: Symbol.sym -> maybe AilTypes.integerType
+
+
 declare ocaml target_rep function char_is_signed = `Ocaml_implementation.Impl.char_is_signed`
 declare ocaml target_rep function sizeof_ity = `Ocaml_implementation.Impl.sizeof_ity`
 declare ocaml target_rep function sizeof_fty = `Ocaml_implementation.Impl.sizeof_fty`
 declare ocaml target_rep function alignof_ity = `Ocaml_implementation.Impl.alignof_ity`
 declare ocaml target_rep function alignof_fty = `Ocaml_implementation.Impl.alignof_fty`
+declare ocaml target_rep function register_enum = `Ocaml_implementation.Impl.register_enum`
+declare ocaml target_rep function typeof_enum = `Ocaml_implementation.Impl.typeof_enum`
 
 
 

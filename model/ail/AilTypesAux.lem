@@ -1,4 +1,5 @@
 open import Pervasives Common Utils AilSyntax AilTypes Implementation ErrorMonad TypingError
+import Implementation_
 import Loc Debug
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
@@ -43,54 +44,62 @@ let sub_qualifiers qs1 qs2 =
 
 (* == predicates on integerTypes ================================================================= *)
 (* TODO: factorise is_signed_ity and is_unsigned_ity *)
-val is_signed_ity: integerType -> bool
-let is_signed_ity = function
-  | Char ->
-      let () = Debug.warn [] (fun () -> "[AilTypesAux.is_signed_ity] assuming char is signed (like x86)") in
-      true
-  | Bool ->
-      false
-  | Signed _ ->
-      true
-  | Unsigned _ ->
-      false
-  | IBuiltin _ ->
-      error "TODO: AilTypesAux.is_signed_ity, IBuiltin"
-  | Enum _ ->
-      (* TODO: see §6.7.2.2#4 *)
-      error "TODO: AilTypesAux.is_signed_ity, Enum"
-  | Size_t ->
-      (* STD §7.19#2 *)
-      false
-  | Ptrdiff_t ->
-      (* STD §7.19#2 *)
-      true
-end
+val     is_signed_ity: integerType -> bool
+let rec is_signed_ity ity =
+  match ity with
+    | Char ->
+        Implementation_.char_is_signed
+    | Bool ->
+        false
+    | Signed _ ->
+        true
+    | Unsigned _ ->
+        false
+    | IBuiltin _ ->
+        error "TODO: AilTypesAux.is_signed_ity, IBuiltin"
+    | Enum tag_sym ->
+        match Implementation_.typeof_enum tag_sym with
+          | Just ity ->
+              is_signed_ity ity
+          | Nothing ->
+              error ("AilTypesAux.is_signed_ity: enum tag `" ^ show tag_sym ^ "' was not registered")
+        end
+    | Size_t ->
+        (* STD §7.19#2 *)
+        false
+    | Ptrdiff_t ->
+        (* STD §7.19#2 *)
+        true
+  end
 
 (* STD §6.2.5#6, sentence 4 *)
-val is_unsigned_ity: integerType -> bool
-let is_unsigned_ity = function
-  | Char ->
-      let () = Debug.warn [] (fun () -> "[AilTypesAux.is_unsigned_ity] assuming char is signed (like x86)") in
-      false
-  | Bool ->
-      true
-  | Signed _ ->
-      false
-  | Unsigned _ ->
-      true
-  | IBuiltin _ ->
-      error "TODO: AilTypesAux.is_unsigned_ity, IBuiltin"
-  | Enum _ ->
-      (* TODO: see §6.7.2.2#4 *)
-      error "TODO: AilTypesAux.is_unsigned_ity, Enum"
-  | Size_t ->
-      (* STD §7.19#2 *)
-      true
-  | Ptrdiff_t ->
-      (* STD §7.19#2 *)
-      false
- end
+val     is_unsigned_ity: integerType -> bool
+let rec is_unsigned_ity ity =
+  match ity with
+    | Char ->
+        not (Implementation_.char_is_signed)
+    | Bool ->
+        true
+    | Signed _ ->
+        false
+    | Unsigned _ ->
+        true
+    | IBuiltin _ ->
+        error "TODO: AilTypesAux.is_unsigned_ity, IBuiltin"
+    | Enum tag_sym ->
+        match Implementation_.typeof_enum tag_sym with
+          | Just ity ->
+              is_unsigned_ity ity
+          | Nothing ->
+              error ("AilTypesAux.is_signed_ity: enum tag `" ^ show tag_sym ^ "' was not registered")
+        end
+    | Size_t ->
+        (* STD §7.19#2 *)
+        true
+    | Ptrdiff_t ->
+        (* STD §7.19#2 *)
+        false
+  end
 
 
 
