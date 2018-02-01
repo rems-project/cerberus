@@ -1051,14 +1051,14 @@ let rec desugar_type_specifiers specs =
                 E.return (ATypes.no_qualifiers, ATypes.Void)
           
           | [TSpec_struct Nothing Nothing] ->
-              error "WIP: TSpec_struct Nothing, Nothing"
+              error "TODO: TSpec_struct Nothing, Nothing"
           
           | [TSpec_struct (Just tag_ident) Nothing] ->
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
                     E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
                 | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "")
+                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "TODO(std), TSpec_struct not Kind_struct")
                 | Nothing ->
                     error "[TSpec_struct (Just tag_ident) Nothing], unresolved tag"
               end
@@ -1067,29 +1067,37 @@ let rec desugar_type_specifiers specs =
               (* §6.7.2.3#7 *)
               
               E.register_tag E.Kind_struct tag_ident_opt >>= fun tag_sym ->
-              (* NOTE: the checking of typing constraints on memberDefs is done by GenTyping *)
+              (* NOTE: the checking of typing constraints on memberDefs is done
+                 by GenTyping *)
               let isAnonymous = isNothing tag_ident_opt in
               List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
               E.register_tag_definition Loc.unknown tag_sym
                 (E.Struct_definition isAnonymous memberDefs) >>
               E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
           
-          | [TSpec_union tag_ident_opt sdecls_opt] ->
+          | [TSpec_union Nothing Nothing] ->
+              error "TODO: TSpec_union Nothing, Nothing"
+          
+          | [TSpec_union (Just tag_ident) Nothing] ->
+              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+                | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
+                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+                | Just _ ->
+                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "TODO(std), TSpec_union not Kind_nion")
+                | Nothing ->
+                    error "[TSpec_union (Just tag_ident) Nothing], unresolved tag"
+              end
+          
+          | [TSpec_union tag_ident_opt (Just sdecls)] ->
               (* §6.7.2.3#7 *)
               E.register_tag E.Kind_union tag_ident_opt >>= fun tag_sym ->
-              match sdecls_opt with
-                | Just sdecls ->
-                    (* NOTE: the checking of typing constraints on memberDefs is
-                       done by the Ail typing *)
-                    let isAnonymous = isNothing tag_ident_opt in
-                    List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
-                    E.register_tag_definition Loc.unknown tag_sym
-                      (E.Union_definition isAnonymous memberDefs) >>
-                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-                | Nothing ->
-                    (* TODO: bogus? *)
-                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-              end
+              (* NOTE: the checking of typing constraints on memberDefs is done
+                 by GenTyping *)
+              let isAnonymous = isNothing tag_ident_opt in
+              List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
+              E.register_tag_definition Loc.unknown tag_sym
+                (E.Union_definition isAnonymous memberDefs) >>
+              E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
           
           | [TSpec_Atomic tyname] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1158,7 +1166,6 @@ end
 
 
 
-
 (* val register_enumerators: Symbol.sym -> list enumerator -> E.desugM unit *)
 and register_enumerators tag_loc tag_sym enums =
   (* STD §6.7.2.2#3 *)
@@ -1179,12 +1186,14 @@ and register_enumerators tag_loc tag_sym enums =
     (* STD §6.2.1#7, sentence 2 *)
     (* the scope  of an enumeration constant start just after it's appearance in
        the enumerator list *)
-    error "E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) []" >>= fun (_, sym) ->
+    E.register_enum_constant ident d_e >>
+(*
+    E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
     E.register_enum_constant sym d_e >>
+*)
     E.return (n + 1, n :: acc)
   ) (0, []) enums >>= fun (_, ns_rev) ->
   E.return ns_rev
-
 
 
 
@@ -2494,17 +2503,14 @@ let desugar_declaration_base specifs idecltors =
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)
-              E.register_identifier ident
-                E.Namespace_ordinary E.OK_typedef specifs.storage_classes >>= fun (_, sym) ->
-              (* TODO: mk_desug_init may change the type, is this relevant here? *)
-              E.register_typedef sym (qs, ty) >>
+              E.register_typedef ident (qs, ty) >>
               E.return acc
               
             else match ty with
               | ATypes.Function _ return_qs_ty params is_variadic ->
                   check_storage_class_specifiers Function_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
-                    E.Namespace_ordinary E.OK_function specifs.storage_classes >>= fun (_, sym) ->
+                    E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration (Loc.locOf ident) sym true (
                     return_qs_ty,
                     params,
@@ -2516,7 +2522,7 @@ let desugar_declaration_base specifs idecltors =
               | _ ->
                   check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
-                    E.Namespace_ordinary (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
+                    (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                   
                   (* TODO: STD check+quote *)
                   E.get_tag_definitions >>= fun ident_tagDefs ->
@@ -2778,8 +2784,8 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                   | ATypes.Function _ _ _ _ ->
                       E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
                   | _ ->
-                      E.register_identifier ident
-                        E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
+                      E.register_ordinary_identifier ident
+                        (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                       mk_desug_init () >>= function
                         | Just (ty', d_e) ->
                           let dur = determinate_storage_duration link specifs.storage_classes in
@@ -2999,8 +3005,8 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
           E.with_scope E.Scope_prototype
             (desugar_parameter_type_list param_tys) >>= fun (_, (params, isVariadic)) ->
           
-          E.register_identifier fun_ident
-            E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, fun_sym) ->
+          E.register_ordinary_identifier fun_ident
+            E.OK_function specifs.storage_classes >>= fun (_, fun_sym) ->
           
           E.function_is_defined fun_sym >>= function
             | true  -> E.fail Loc.unknown (Errors.Desugar_FunctionRedefinition fun_sym)
@@ -3029,7 +3035,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
                             E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1, sub-sentence 2")
                         | Just ident ->
                             let scs = if isRegister then [SC_register] else [] in
-                            E.register_identifier ident E.Namespace_ordinary (E.Kind_object true) scs >>= fun (_, sym) ->
+                            E.register_ordinary_identifier ident (E.OK_object true) scs >>= fun (_, sym) ->
                             E.return (sym, (qs, ty, isRegister))
                       end
                     ) params
@@ -3202,18 +3208,15 @@ let desugar_and_register_external_declaration edecl =
           let ty = if isAtomic then ATypes.Atomic _ty else _ty in
           if specifs.storage_classes = [SC_typedef] then
             (* Case of a typedef *)
-            E.register_identifier ident
-              (*TODO: remove the storage_classes since it's just typedef? *)
-              E.Namespace_ordinary E.Kind_typedef specifs.storage_classes >>= fun (_, sym) ->
-            E.register_typedef sym (qs, ty)
+            E.register_typedef ident (qs, ty)
           
           else match ty with
             | ATypes.Function _ return_ty params is_variadic ->
                 (* TODO: rename this function *)
                 check_storage_class_specifiers Function_decl_context specifs.storage_classes >>= fun () ->
                 
-                E.register_identifier ident
-                  E.Namespace_ordinary E.Kind_function specifs.storage_classes >>= fun (_, sym) ->
+                E.register_ordinary_identifier ident
+                  E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                 E.register_function_declaration (Loc.locOf ident) sym true (
                   return_ty,
                   params,
@@ -3228,8 +3231,8 @@ let desugar_and_register_external_declaration edecl =
                 (* TODO: rename this function *)
                 check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
                 
-                E.register_identifier ident
-                  E.Namespace_ordinary (E.Kind_object false) specifs.storage_classes >>= fun (link, sym) ->
+                E.register_ordinary_identifier ident
+                  (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                 
                 let dur = determinate_storage_duration link specifs.storage_classes in
                 E.register_external_object_declaration sym
