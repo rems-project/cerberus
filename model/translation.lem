@@ -1231,7 +1231,7 @@ else (* pointer <-> pointer cast *)
                               (C.Expr [] (C.Ememop Mem_common.PtrWellAligned [Caux.mk_ail_ctype_pe cast_ref_ty; obj_sym_pe]))
                               (Caux.mk_pure_e (Caux.mk_if_pe (Caux.mk_sym_pe let_sym) obj_sym_pe ub_pe)) )
                         ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                          , (* we are being daemonic (case were the resulting pointer would be misaligned) *)
+                          , (* we are being daemonic (case where the resulting pointer would be misaligned) *)
                             Caux.mk_pure_e ub_pe ) ]
                     end
                 | _ ->

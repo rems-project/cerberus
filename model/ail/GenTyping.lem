@@ -1234,10 +1234,13 @@ STD_ "§6.5.2.1#1" $
     | AilEcast qs ty e ->
         wf_lvalue sigm qs ty >>
         annotate_rvalue e >>= fun (e', gty) ->
-        if is_scalar gty && AAux.is_scalar ty then
-          E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
+        if not (is_scalar gty && AAux.is_scalar ty) then
+          E.fail loc (TError "§6.5.4#2")
+        else if    is_pointer gty && AAux.is_floating ty
+           || is_floating gty && AAux.is_pointer ty then
+          E.fail loc (TError "§6.5.4#4")
         else
-          E.fail loc (TError "AilEcast")
+          E.return (AilEcast qs ty e', GenRValueType (inject_type ty))
     
     | AilEcond e1 e2 e3 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
