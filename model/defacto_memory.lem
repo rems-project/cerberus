@@ -1613,7 +1613,8 @@ let impl_validForDeref_ptrval ptr_val =
   ) in
   true
 
-
+let impl_isWellAligned_ptrval ref_ty ptr_val =
+  error "TODO: Symbolic defacto, isWellAligned_ptrval"
 
 
 (* integer types minimal range (STD Annex E #1) *)

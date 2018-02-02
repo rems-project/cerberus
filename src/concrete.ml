@@ -453,7 +453,7 @@ module Concrete : Memory = struct
       | Some ret ->
           return ret
       | None ->
-          fail (MerrUnitialised ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
+          fail (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
   
   let is_within_bound alloc_id addr =
     get_allocation alloc_id >>= fun alloc ->
@@ -969,6 +969,13 @@ module Concrete : Memory = struct
     | PV (Prov_none, _) ->
         false
   
+  let isWellAligned_ptrval ref_ty = function
+    | PV (_, PVnull _) ->
+        return true
+    | PV (_, PVfunction _) ->
+        failwith "TODO (Concrete): isWellAligned_ptrval, PVfunction"
+    | PV (_, PVconcrete addr) ->
+        return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
   
   let ptrcast_ival _ _ (IV (prov, n)) =
     if not (N.equal n N.zero) then
@@ -985,16 +992,6 @@ module Concrete : Memory = struct
             return (PV (Prov_none, PVconcrete n))
       | _ ->
           return (PV (prov, PVconcrete n))
-  
-  (* TODO: conversion? *)
-  let intcast_ptrval _ ity (PV (prov, ptrval_)) =
-    match ptrval_ with
-      | PVnull _ ->
-          return (IV (prov, Nat_big_num.zero))
-      | PVfunction _ ->
-          failwith "TODO: intcast_ptrval PVfunction"
-      | PVconcrete addr ->
-        return (IV (prov, addr))
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1092,6 +1089,21 @@ module Concrete : Memory = struct
           failwith "TODO: minv_ival: Enum, Builtin"
     end)
   
+
+  (* TODO: conversion? *)
+  let intcast_ptrval _ ity (PV (prov, ptrval_)) =
+    match ptrval_ with
+      | PVnull _ ->
+          return (IV (prov, Nat_big_num.zero))
+      | PVfunction _ ->
+          failwith "TODO: intcast_ptrval PVfunction"
+      | PVconcrete addr ->
+          let IV (_, ity_max) = max_ival ity in
+          let IV (_, ity_min) = min_ival ity in
+          if N.(less addr ity_min || less ity_max addr) then
+            fail MerrIntFromPtr
+          else
+            return (IV (prov, addr))
 
 let combine_prov prov1 prov2 =
   match (prov1, prov2) with

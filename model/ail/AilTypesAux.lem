@@ -1383,7 +1383,7 @@ let lvalue_conversion S ty =
     fail Loc.unknown (TError "trying to do a lvalue conversion on an array type")
   
   else if is_incomplete S ty && not (is_array ty) then
-    fail Loc.unknown (TError_undef "§6.3.2.1#2, sentence 3: lvalue conversion of an incomplete non-array type")
+    fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
   
   (* STD §6.3.2.1#2, sentence 2 *)
   else match ty with

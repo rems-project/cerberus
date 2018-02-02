@@ -33,19 +33,21 @@ let stringFromAccess_error = function
 end
 
 type mem_error =
-  | MerrUnitialised of string (* mem_read_request *)
+  | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
   | MerrOther of string
   
   | MerrPtrdiff
   | MerrAccess of Loc.t * access_kind * access_error
   
+  | MerrIntFromPtr
+  
   | MerrWIP of string
 
 instance (Show mem_error)
   let show = function
-    | MerrUnitialised str ->
-        "MerrUnitialised \"" ^  str ^ "\""
+    | MerrOutsideLifetime str ->
+        "MerrOutsideLifetime \"" ^  str ^ "\""
     | MerrInternal str ->
         "MerrInternal \"" ^  str ^ "\""
     | MerrOther str ->
@@ -60,18 +62,23 @@ instance (Show mem_error)
     | MerrAccess loc StoreAccess err ->
         "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
+    | MerrIntFromPtr ->
+        "MerrIntFromPtr"
   end
 end
 
 
 let undefinedFromMem_error = function
+  | MerrOutsideLifetime _ ->
+      Just [Undefined.UB009_outside_lifetime]
   | MerrPtrdiff ->
       Just [Undefined.UB048_disjoint_array_pointers_substraction]
   | MerrAccess _ _ NullPtr ->
       Just [Undefined.UB019_lvalue_not_an_object]
   | MerrAccess _ _ DeadPtr ->
       Just [Undefined.UB010_pointer_to_dead_object]
-
+  | MerrIntFromPtr ->
+      Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
   | _ ->
       Nothing
 end
@@ -110,10 +117,12 @@ type memop =
   | PtrGe
 (*  | PtrIsNull *)
   
-  | Ptrdiff     (* (address, address) -> integer *)
-  | IntFromPtr  (* (ctype, ctype, address) -> integer *) (* first type is that of the referenced type, second on is type of integer *)
-  | PtrFromInt  (* (ctype, ctype, integer) -> address *) (* first type is that of integer, second on is type of reference *)
-  | PtrValidForDeref (* address -> boolean *)
+  | Ptrdiff     (* (address, address) -> eff integer *)
+  | IntFromPtr  (* (ctype, ctype, address) -> eff integer *) (* first type is that of the referenced type, second on is type of integer *)
+  | PtrFromInt  (* (ctype, ctype, integer) -> eff address *) (* first type is that of integer, second on is type of reference *)
+  | PtrValidForDeref (* address -> eff boolean *)
+  
+  | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
   | Memcmp
 
@@ -140,6 +149,8 @@ instance (Show memop)
         "ptrfromint"
     | PtrValidForDeref ->
         "ptrvalidforderef"
+    | PtrWellAligned ->
+        "ptrwellaligned"
     | Memcmp ->
         "memcmp"
   end
