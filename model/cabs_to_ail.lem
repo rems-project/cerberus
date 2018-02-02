@@ -563,7 +563,7 @@ let is_initializer_constant_expression (AnnotatedExpression () _ loc expr as a_e
 
 
 (* These are OK *)
-val desugar_struct_declaration: bool -> struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
+val desugar_struct_declaration: struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
 val desugar_struct_declarator:
   struct_declarator -> E.desugM (cabs_identifier * (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
 val desugar_init_declarator:            ATypes.qualifiers -> ATypes.ctype -> list storage_class_specifier -> init_declarator ->
@@ -757,18 +757,6 @@ let translate_assignment_operator = function
   | Assign_Bxor -> Just Bxor
   | Assign_Bor  -> Just Bor
 end
-
-(* TODO
-val translate_storage_class_specifier: C.storage_class_specifier -> 
-let translate_storage_class_specifier = function
-  | C.SC_typedef
-  | C.SC_extern
-  | C.SC_static
-  | C.SC_Thread_local
-  | C.SC_auto
-  | C.SC_register
-end
-*)
 
 
 
@@ -1054,6 +1042,9 @@ let rec desugar_type_specifiers specs =
               error "TODO: TSpec_struct Nothing, Nothing"
           
           | [TSpec_struct (Just tag_ident) Nothing] ->
+              (* §6.7.2.3#7 *)
+              error "TODO: the commented code is wrong, read the STD again ..."
+(*
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
                     E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
@@ -1062,23 +1053,51 @@ let rec desugar_type_specifiers specs =
                 | Nothing ->
                     error "[TSpec_struct (Just tag_ident) Nothing], unresolved tag"
               end
+*)
           
           | [TSpec_struct tag_ident_opt (Just sdecls)] ->
-              (* §6.7.2.3#7 *)
-              
+              (* STD §6.7.2.1#8, sentence 1 *)
+              (* NOTE: the std say that because we have a 'Just sdecls', a new
+                 type is being declared within the translation unit *)
               E.register_tag E.Kind_struct tag_ident_opt >>= fun tag_sym ->
-              (* NOTE: the checking of typing constraints on memberDefs is done
-                 by GenTyping *)
-              let isAnonymous = isNothing tag_ident_opt in
-              List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
+              
+              (* TODO: §6.7.2.1#3 ==> check that no member type is incomplete or
+                 a function. REMEMBER that struct/union/enums are incomplete
+                 until their closing } *)
+              (* TODO: check that is indeed the UB I'm thinking of... *)
+              List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun (* TODO KKK xs ->
+              match Utils.last xs with
+                | Nothing ->
+                    (* xs was an empty list *)
+                    (* STD §6.7.2.1#8, sentence 3 *)
+                    E.fail Loc.unknown
+                      (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
+                | Just (last_membDef, membDefs) ->
+                    *)
+ memberDefs ->
+
+(* KKK
+              E.mapM_ (fun (memb_ident, (memb_qs, memb_ty)) ->
+                E.is_incomplete memb_ty >>= function
+                  | true ->
+                      E.fail (Loc.locOf memb_ident)
+                        (Error.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
+                  | false ->
+                      
+                end
+              ) memberDefs >>
+*)
               E.register_tag_definition Loc.unknown tag_sym
-                (E.Struct_definition isAnonymous memberDefs) >>
+                (E.Struct_definition (isNothing tag_ident_opt) memberDefs) >>
               E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
           
           | [TSpec_union Nothing Nothing] ->
               error "TODO: TSpec_union Nothing, Nothing"
           
           | [TSpec_union (Just tag_ident) Nothing] ->
+              (* §6.7.2.3#7 *)
+              error "TODO: the commented code is wrong, read the STD again ..."
+(*
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
                     E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
@@ -1087,16 +1106,15 @@ let rec desugar_type_specifiers specs =
                 | Nothing ->
                     error "[TSpec_union (Just tag_ident) Nothing], unresolved tag"
               end
+*)
           
           | [TSpec_union tag_ident_opt (Just sdecls)] ->
-              (* §6.7.2.3#7 *)
               E.register_tag E.Kind_union tag_ident_opt >>= fun tag_sym ->
               (* NOTE: the checking of typing constraints on memberDefs is done
                  by GenTyping *)
-              let isAnonymous = isNothing tag_ident_opt in
-              List.concat <$> E.mapM (desugar_struct_declaration isAnonymous) sdecls >>= fun memberDefs ->
+              List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
               E.register_tag_definition Loc.unknown tag_sym
-                (E.Union_definition isAnonymous memberDefs) >>
+                (E.Union_definition (isNothing tag_ident_opt) memberDefs) >>
               E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
           
           | [TSpec_Atomic tyname] ->
@@ -1824,37 +1842,30 @@ KKK
   end
 
 
-
-(* val desugar_struct_declaration:         struct_declaration -> E.desugM (list (cabs_identifier * ATypes.ctype)) *)
-and desugar_struct_declaration isAnonymous struct_decl =
+and desugar_struct_declaration struct_decl =
   match struct_decl with
-    | Struct_declaration specs qs sdecltors ->
-        desugar_type_specifiers specs >>= fun (qs, ty) ->
-        (* STD §6.7.6.1#2 *)
-        begin if isAnonymous then
-          E.return ()
+    | Struct_declaration specs tquals sdecltors ->
+        desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
+        let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
+        if List.null sdecltors then
+          E.get_anonymous_struct_or_union base_ty >>= function
+            | Just membrs ->
+                (* this is an unammed anonymous structure or union *)
+                E.return membrs
+            | Nothing ->
+                (* STD §6.7.2.1#2 *)
+                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.1#2")
+          end
         else
-          if List.null sdecltors then
-            E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.1#2")
-          else
-            E.return ()
-        end >>
-(*
-        E.is_anonymous_struct_or_union ty >>= function
-          | false ->
-              if List.null sdecltors then
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.1#2")
-              else
-                E.return ()
-          | true ->
-              E.return ()
-        end >>
-*)
-        E.mapM (fun sdecltor ->
-          desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
-          (* TODO: check !!! *)
-          E.return (ident, mk_qs_ctype qs ty)
-        ) sdecltors
+          E.mapM (fun sdecltor ->
+            desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
+            (* NOTE: the checks for §6.7.2.1#3 are done by
+               desugar_type_specifiers because we need to special case the last
+               member. *)
+            let (qs, ty) =
+              mk_qs_ctype (AilTypesAux.combine_qualifiers tquals_qs specs_qs) base_ty in
+            E.return (ident, (qs, if isAtomic then ATypes.Atomic ty else ty))
+          ) sdecltors
     
     | Struct_assert sa_decl ->
         desugar_and_register_static_assert_declaration sa_decl >>

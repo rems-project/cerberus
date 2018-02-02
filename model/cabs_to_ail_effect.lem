@@ -824,25 +824,33 @@ let get_tag_definitions =
 
 
 
-val is_anonymous_struct_or_union: ATypes.ctype -> desugM bool
-let is_anonymous_struct_or_union ty =
-  match AilTypesAux.unatomic ty with
+val get_anonymous_struct_or_union:
+  ATypes.ctype -> desugM (maybe (list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))))
+let get_anonymous_struct_or_union ty =
+  (* TODO: the unatomic is commented because clang doesn't consider an atomic
+     struct/union an anonymous (regardless of the absence of tag). So we do
+     the same for now, but need to check further the STD... *)
+  match (* AilTypesAux.unatomic *) ty with
     | ATypes.Struct tag_sym ->
         resolve_tag_definition tag_sym >>= function
-          | Struct_definition isAnonymous _ ->
-              return isAnonymous
+          | Struct_definition isAnonymous membrs ->
+              return begin
+                if isAnonymous then Just membrs else Nothing
+              end
           | _ ->
               error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Struct -- Union_definition"
         end
     | ATypes.Union tag_sym ->
         resolve_tag_definition tag_sym >>= function
-          | Union_definition isAnonymous _ ->
-              return isAnonymous
+          | Union_definition isAnonymous membrs ->
+              return begin
+                if isAnonymous then Just membrs else Nothing
+              end
           | _ ->
               error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Union -- Struct_definition"
         end
     | _ ->
-        return false
+        return Nothing
   end
 
 
@@ -1375,3 +1383,12 @@ let get_sigma_sofar =
                           ) [] $ Map_extra.toList st.tag_definitions
      |>
   )
+
+
+val is_incomplete: A.sigma unit -> ATypes.ctype -> desugM bool
+let is_incomplete sigm ty =
+  
+  error "TODO: Cabs_to_ail_effect.is_incomplete"
+
+
+
