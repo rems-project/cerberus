@@ -322,17 +322,17 @@ end
 let pickWith pred xs =
   pickWith_ pred [] xs
 
-val     last: forall 'a. list 'a -> maybe 'a
-let rec last xs =
+val     last: forall 'a. list 'a -> maybe ('a * list 'a)
+let rec last_aux acc xs =
   match xs with
     | [] ->
         Nothing
     | [x] ->
-        Just x
-    | _::xs ->
-        last xs
+        Just (x, List.reverse acc)
+    | x::xs ->
+        last_aux (x::acc) xs
   end
-
+let last xs = last_aux [] xs
 
 val     list_unfoldr: forall 'a 'b. ('b -> maybe ('a * 'b)) -> 'b -> list 'a
 let rec list_unfoldr_aux acc ctor b0 =
