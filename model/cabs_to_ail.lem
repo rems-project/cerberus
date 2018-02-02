@@ -558,48 +558,57 @@ let is_initializer_constant_expression (AnnotatedExpression () _ loc expr as a_e
 
 
 
+type qs_ctype_builder =
+  ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)
 
 
+val desugar_struct_declaration:
+  struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
 
-
-(* These are OK *)
-val desugar_struct_declaration: struct_declaration -> E.desugM (list (cabs_identifier * (ATypes.qualifiers * ATypes.ctype)))
 val desugar_struct_declarator:
-  struct_declarator -> E.desugM (cabs_identifier * (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype))) (* TODO *)
-val desugar_init_declarator:            ATypes.qualifiers -> ATypes.ctype -> list storage_class_specifier -> init_declarator ->
-                                        E.desugM (cabs_identifier * bool * (ATypes.qualifiers * ATypes.ctype) *
-                                                    (unit -> E.desugM (maybe (ATypes.ctype * expression unit))))
+  struct_declarator -> E.desugM (cabs_identifier * qs_ctype_builder)
 
+val desugar_init_declarator:
+  ATypes.qualifiers -> ATypes.ctype -> list storage_class_specifier -> init_declarator ->
+  E.desugM (cabs_identifier * bool * (ATypes.qualifiers * ATypes.ctype) *
+            (unit -> E.desugM (maybe (ATypes.ctype * expression unit))))
 
+val desugar_generic_association:
+  cabs_generic_association -> E.desugM (generic_association unit)
 
+val check_storage_class_specifiers:
+  declaration_context -> list storage_class_specifier -> E.desugM unit
 
+val desugar_enumerator:
+  enumerator -> E.desugM (cabs_identifier * maybe (Loc.t * integer))
 
-
-val desugar_generic_association:        cabs_generic_association -> E.desugM (generic_association unit)
-(* val desugar_declaration:                declaration -> E.desugM (list (sigma_declaration Loc.t unit)) *)
-val check_storage_class_specifiers:                 declaration_context -> list storage_class_specifier -> E.desugM unit (* TODO *)
-val desugar_enumerator:                 enumerator -> E.desugM (cabs_identifier * maybe (Loc.t * integer))
-val desugar_alignment_specifier:        alignment_specifier -> E.desugM unit (* TODO *)
-
-
+val desugar_alignment_specifier:
+  alignment_specifier -> E.desugM unit
 
 val desugar_parameter_type_list:
   parameter_type_list -> E.desugM (list (maybe cabs_identifier * (ATypes.qualifiers * ATypes.ctype * bool)) * bool)
 
+val desugar_type_name:
+  type_name -> E.desugM (ATypes.qualifiers * AilTypes.ctype)
 
-val desugar_type_name:                  type_name -> E.desugM (ATypes.qualifiers * AilTypes.ctype)
+val desugar_initializer_:
+  initializer_ -> E.desugM (expression unit)
 
+val desugar_designator:
+  designator -> E.desugM unit
 
-val desugar_initializer_:               initializer_ -> E.desugM (expression unit) (* TODO *)
-val desugar_designator:                 designator -> E.desugM unit (* TODO *)
+val desugar_and_register_static_assert_declaration:
+  static_assert_declaration -> E.desugM unit
 
-val desugar_and_register_static_assert_declaration:  static_assert_declaration -> E.desugM unit
-
-val desugar_for_clause:                 for_clause -> E.desugM unit (* TODO *)
+val desugar_for_clause:
+  for_clause -> E.desugM unit
 
 (* TODO: WIP *)
-val wip_desugar_initializer_: Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.desugM (ATypes.ctype * expression unit)
-val static_thread_implicit_initializer: map identifier E.tag_definition -> ATypes.ctype -> constant
+val wip_desugar_initializer_:
+  Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.desugM (ATypes.ctype * expression unit)
+
+val static_thread_implicit_initializer:
+  map identifier E.tag_definition -> ATypes.ctype -> constant
 
 
 
