@@ -227,7 +227,8 @@ let rec translate_function_designator stdlib (A.AnnotatedExpression _ _ (* TODO:
               ; Caux.mk_boolean_pe is_variadic ]
           )
     | _ ->
-        error "[Translation.translate_function_designator] wildcard case"
+        error ("[Translation.translate_function_designator] wildcard case ==> " ^
+               Pp.stringFromAil_expression a_expr)
   end
 
 
@@ -1126,10 +1127,12 @@ else
             )
       
       | A.AilEident id ->
+(*
           if AilTypesAux.is_pointer_to_function result_ty then
             (* TODO: remove, this is now never possible  (see function_decay) *)
             translate_function_designator stdlib a_expr
           else
+*)
             let id_sym_pe =
               Caux.mk_sym_pe id in
             E.return $
