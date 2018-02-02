@@ -3,6 +3,11 @@
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
 
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/local/jenkins/home/workspace/ocaml46/ocaml/ocaml-4.06.0/lib/ocaml/site-lib/Z3
+
+# the path doesn't seem to work on Jenkins
+echo $LD_LIBRARY_PATH
+
 #cd $CERB_PATH/tests
 
 source tests.sh
