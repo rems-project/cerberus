@@ -1385,10 +1385,27 @@ let get_sigma_sofar =
   )
 
 
-val is_incomplete: A.sigma unit -> ATypes.ctype -> desugM bool
-let is_incomplete sigm ty =
-  
-  error "TODO: Cabs_to_ail_effect.is_incomplete"
+val is_incomplete: ATypes.ctype -> desugM bool
+let is_incomplete ty =
+  get_tag_definitions >>= fun ident_tagDefs ->
+  let (fake_ail_sigma : A.sigma unit) = <|
+    A.declarations= [];
+    A.object_definitions= [];
+    A.function_definitions= [];
+    A.static_assertions= [];
+    A.tag_definitions=
+      List.foldl (fun acc (ident, tagDef) ->
+        match tagDef with
+          | Struct_definition _ xs ->
+              (ident, A.StructDef xs) :: acc
+          | Union_definition _ xs ->
+              (ident, A.UnionDef xs) :: acc
+          | Enum_definition _ ->
+              acc
+        end
+      ) [] (Map_extra.toList ident_tagDefs);
+  |> in
+  return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 
 
 

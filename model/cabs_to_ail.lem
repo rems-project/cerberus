@@ -1023,9 +1023,25 @@ val desugar_direct_abstract_declarator:
 
 
 
+(* STD §6.7.2.1#3, except for the flexible array part *)
+let check_members membrDefs =
+  E.mapM_ (fun (ident, (_, ty)) ->
+    E.is_incomplete ty >>= function
+      | true ->
+          E.fail (Loc.locOf ident)
+            (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
+      | false ->
+          if AilTypesAux.is_function ty then
+            E.fail (Loc.locOf ident)
+              (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, function")
+          else
+            E.return ()
+    end
+  ) membrDefs
 
-
-
+type struct_or_union =
+  | STRUCT
+  | UNION
 
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
@@ -1038,6 +1054,54 @@ let rec desugar_type_specifiers specs =
     | Just bty ->
         E.return (ATypes.no_qualifiers, ATypes.Basic bty)
     | Nothing ->
+        let desugar_new_struct_or_union struct_or_union tag_ident_opt sdecls =
+          let (kind_ctor, def_ctor, type_ctor) =
+            match struct_or_union with
+              | STRUCT ->
+                  (E.Kind_struct, E.Struct_definition, ATypes.Struct)
+              | UNION ->
+                  (E.Kind_union, E.Union_definition, ATypes.Union)
+            end in
+          (* STD §6.7.2.1#8, sentence 1 *)
+          (* NOTE: the std say that because we have a 'Just sdecls', a new
+             type is being declared within the translation unit *)
+          E.register_tag kind_ctor tag_ident_opt >>= fun tag_sym ->
+          (* TODO: §6.7.2.1#3 ==> check that no member type is incomplete or
+             a function. REMEMBER that struct/union/enums are incomplete
+             until their closing } *)
+          (* TODO: check that is indeed the UB I'm thinking of... *)
+          List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun all_membDefs ->
+          begin
+            if List.length all_membDefs = 1 || struct_or_union = UNION then
+              check_members all_membDefs
+            else match Utils.last all_membDefs with
+              | Nothing ->
+                  (* xs was an empty list *)
+                  (* STD §6.7.2.1#8, sentence 3 *)
+                  E.fail Loc.unknown
+                    (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
+              | Just ((last_ident, (_, lastMemb_ty)), membDefs) ->
+                  (* STD §6.7.2.1#3 *)
+                  check_members membDefs >>
+                  if AilTypesAux.is_function lastMemb_ty then
+                    E.fail (Loc.locOf last_ident)
+                      (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, function")
+                  else
+                    E.is_incomplete lastMemb_ty >>= function
+                      | true ->
+                          if AilTypesAux.is_array_unknown_size lastMemb_ty then
+                            E.return ()
+                          else
+                            E.fail (Loc.locOf last_ident)
+                              (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
+                      | false ->
+                          E.return ()
+                    end
+            end
+          end >>
+          E.register_tag_definition Loc.unknown tag_sym
+            (def_ctor (isNothing tag_ident_opt) all_membDefs) >>
+          E.return (ATypes.no_qualifiers, type_ctor tag_sym) in
         match specs with
           | [] ->
               STD_ "§6.7.2#2, sentence 1"
@@ -1050,81 +1114,50 @@ let rec desugar_type_specifiers specs =
           | [TSpec_struct Nothing Nothing] ->
               error "TODO: TSpec_struct Nothing, Nothing"
           
-          | [TSpec_struct (Just tag_ident) Nothing] ->
-              (* §6.7.2.3#7 *)
-              error "TODO: the commented code is wrong, read the STD again ..."
-(*
-              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-                | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
-                | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "TODO(std), TSpec_struct not Kind_struct")
-                | Nothing ->
-                    error "[TSpec_struct (Just tag_ident) Nothing], unresolved tag"
-              end
-*)
-          
-          | [TSpec_struct tag_ident_opt (Just sdecls)] ->
-              (* STD §6.7.2.1#8, sentence 1 *)
-              (* NOTE: the std say that because we have a 'Just sdecls', a new
-                 type is being declared within the translation unit *)
-              E.register_tag E.Kind_struct tag_ident_opt >>= fun tag_sym ->
-              
-              (* TODO: §6.7.2.1#3 ==> check that no member type is incomplete or
-                 a function. REMEMBER that struct/union/enums are incomplete
-                 until their closing } *)
-              (* TODO: check that is indeed the UB I'm thinking of... *)
-              List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun (* TODO KKK xs ->
-              match Utils.last xs with
-                | Nothing ->
-                    (* xs was an empty list *)
-                    (* STD §6.7.2.1#8, sentence 3 *)
-                    E.fail Loc.unknown
-                      (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
-                | Just (last_membDef, membDefs) ->
-                    *)
- memberDefs ->
-
-(* KKK
-              E.mapM_ (fun (memb_ident, (memb_qs, memb_ty)) ->
-                E.is_incomplete memb_ty >>= function
-                  | true ->
-                      E.fail (Loc.locOf memb_ident)
-                        (Error.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
-                  | false ->
-                      
-                end
-              ) memberDefs >>
-*)
-              E.register_tag_definition Loc.unknown tag_sym
-                (E.Struct_definition (isNothing tag_ident_opt) memberDefs) >>
-              E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
-          
           | [TSpec_union Nothing Nothing] ->
               error "TODO: TSpec_union Nothing, Nothing"
           
-          | [TSpec_union (Just tag_ident) Nothing] ->
-              (* §6.7.2.3#7 *)
-              error "TODO: the commented code is wrong, read the STD again ..."
+          | [TSpec_enum (Just ident) Nothing] ->
+              error "TODO: §6.7.2.3#3"
 (*
-              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-                | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
-                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-                | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "TODO(std), TSpec_union not Kind_nion")
-                | Nothing ->
-                    error "[TSpec_union (Just tag_ident) Nothing], unresolved tag"
-              end
+              let () = Debug.warn [] (fun () ->
+                "TODO: need add a check for (§6.7.2.3#3)"
+              ) in
+              E.resolve_tag ident >>= tag_sym ->
+              E.return (qs, ATypes.Enum tag_sym)
 *)
           
+          | [TSpec_struct (Just tag_ident) Nothing] ->
+              (* NOTE: 'desugar_type_specifiers' must NOT be called on a
+                 specifier occuring in the form described by §6.7.2.3#7 *)
+              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+                | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
+                    (* STD §6.7.2.3#9 *)
+                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+                | Just _ ->
+                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                | Nothing ->
+                    error "TODO: §6.7.2.3#8, struct"
+              end
+          
+          | [TSpec_union (Just tag_ident) Nothing] ->
+              (* NOTE: 'desugar_type_specifiers' must NOT be called on a
+                 specifier occuring in the form described by §6.7.2.3#7 *)
+              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+                | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
+                    (* STD §6.7.2.3#9 *)
+                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+                | Just _ ->
+                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                | Nothing ->
+                    error "TODO: §6.7.2.3#8, union"
+              end
+          
+          | [TSpec_struct tag_ident_opt (Just sdecls)] ->
+              desugar_new_struct_or_union STRUCT tag_ident_opt sdecls
+          
           | [TSpec_union tag_ident_opt (Just sdecls)] ->
-              E.register_tag E.Kind_union tag_ident_opt >>= fun tag_sym ->
-              (* NOTE: the checking of typing constraints on memberDefs is done
-                 by GenTyping *)
-              List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun memberDefs ->
-              E.register_tag_definition Loc.unknown tag_sym
-                (E.Union_definition (isNothing tag_ident_opt) memberDefs) >>
-              E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+              desugar_new_struct_or_union UNION tag_ident_opt sdecls
           
           | [TSpec_Atomic tyname] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
@@ -1142,17 +1175,7 @@ let rec desugar_type_specifiers specs =
           | [TSpec_enum Nothing Nothing] ->
               (* the C parsing should have failed *)
               E.fail Loc.unknown Errors.Desugar_impossible
-            
-          | [TSpec_enum (Just ident) Nothing] ->
-              error "TODO: §6.7.2.3#3"
-(*
-              let () = Debug.warn [] (fun () ->
-                "TODO: need add a check for (§6.7.2.3#3)"
-              ) in
-              E.resolve_tag ident >>= tag_sym ->
-              E.return (qs, ATypes.Enum tag_sym)
-*)
-
+          
           | [TSpec_enum ident_opt (Just enums)] ->
               E.register_tag E.Kind_enum ident_opt >>= fun tag_sym ->
               let loc = match ident_opt with
@@ -3212,6 +3235,16 @@ let desugar_and_register_external_declaration edecl =
   else match edecl with
     | EDecl_func fdef ->
         desugar_and_register_function_definition fdef
+    
+    (* struct-or-union identifier ; *)
+    | EDecl_decl (Declaration_base <|
+        storage_classes= [];
+        type_specifiers= [TSpec_struct (Just ident) Nothing];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      |> []) ->
+        error "TODO: §6.7.2.3#7"
     
     (* TODO: check *)
     | EDecl_decl (Declaration_base specifs idecltors) ->
