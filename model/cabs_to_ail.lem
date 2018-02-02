@@ -1066,9 +1066,6 @@ let rec desugar_type_specifiers specs =
           (* NOTE: the std say that because we have a 'Just sdecls', a new
              type is being declared within the translation unit *)
           E.register_tag kind_ctor tag_ident_opt >>= fun tag_sym ->
-          (* TODO: §6.7.2.1#3 ==> check that no member type is incomplete or
-             a function. REMEMBER that struct/union/enums are incomplete
-             until their closing } *)
           (* TODO: check that is indeed the UB I'm thinking of... *)
           List.concat <$> E.mapM desugar_struct_declaration sdecls >>= fun all_membDefs ->
           begin
@@ -1137,7 +1134,10 @@ let rec desugar_type_specifiers specs =
                 | Just _ ->
                     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
                 | Nothing ->
-                    error "TODO: §6.7.2.3#8, struct"
+                    (* STD §6.7.2.3#8 *)
+                    (* TODO: check, but this seems right *)
+                    E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
+                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
               end
           
           | [TSpec_union (Just tag_ident) Nothing] ->
@@ -1150,7 +1150,10 @@ let rec desugar_type_specifiers specs =
                 | Just _ ->
                     E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
                 | Nothing ->
-                    error "TODO: §6.7.2.3#8, union"
+                    (* STD §6.7.2.3#8 *)
+                    (* TODO: check, but this seems right *)
+                    E.register_tag E.Kind_union (Just tag_ident) >>= fun tag_sym ->
+                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
               end
           
           | [TSpec_struct tag_ident_opt (Just sdecls)] ->
