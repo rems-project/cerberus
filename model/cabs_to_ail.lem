@@ -1850,6 +1850,7 @@ and desugar_struct_declaration struct_decl =
         if List.null sdecltors then
           E.get_anonymous_struct_or_union base_ty >>= function
             | Just membrs ->
+                (* STD §6.7.2.1#13 *)
                 (* this is an unammed anonymous structure or union *)
                 E.return membrs
             | Nothing ->
