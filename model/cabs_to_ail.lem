@@ -353,7 +353,6 @@ end
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
 val     is_arithmetic_constant_expression: bool -> expression unit -> E.desugM bool
 let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr) as a_expr) =
-  (* TODO: enumeration constant *)
   match expr with
     | AilEconst (ConstantInteger _) ->
         E.return true
@@ -778,8 +777,6 @@ let desugar_cabs_constant loc = function
       E.return (ConstantInteger (translate_integer_constant iCst))
   | CabsFloating_const str ->
       E.return (ConstantFloating str)
-  | CabsEnumeration_const ->
-      E.fail loc (Errors.Desugar_NotyetSupported "WIP: desugar_cabs_constant, CabsEnumeration_const")
   | CabsCharacter_const cCst ->
       desugar_character_constant cCst >>= fun d_cCst ->
       E.return (ConstantCharacter d_cCst)
@@ -1114,15 +1111,24 @@ let rec desugar_type_specifiers specs =
           | [TSpec_union Nothing Nothing] ->
               error "TODO: TSpec_union Nothing, Nothing"
           
-          | [TSpec_enum (Just ident) Nothing] ->
-              error "TODO: §6.7.2.3#3"
-(*
-              let () = Debug.warn [] (fun () ->
-                "TODO: need add a check for (§6.7.2.3#3)"
-              ) in
-              E.resolve_tag ident >>= tag_sym ->
-              E.return (qs, ATypes.Enum tag_sym)
-*)
+          | [TSpec_enum (Just tag_ident) Nothing] ->
+              (* STD §6.7.2.3#9, enum *)
+              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+                | Nothing ->
+                    (* TODO: find if there is a better quote *)
+                    E.fail (Loc.locOf tag_ident)
+                      (Errors.Desugar_OtherViolation "footnote 131")
+                | Just (_, (tag_sym, _)) ->
+                    E.resolve_tag_definition tag_sym >>= function
+                      | Nothing ->
+                          (* STD §6.7.2.3#3 *)
+                          E.fail (Loc.locOf tag_ident)
+                            (Errors.Desugar_ConstraintViolation "§6.7.2.3#3")
+                      | Just _ ->
+                          E.return ( ATypes.no_qualifiers
+                                   , ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)) )
+                    end
+              end
           
           | [TSpec_struct (Just tag_ident) Nothing] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
@@ -1215,10 +1221,6 @@ let rec desugar_type_specifiers specs =
 end
 
 
-
-
-
-
 (* val register_enumerators: Symbol.sym -> list enumerator -> E.desugM unit *)
 and register_enumerators tag_loc tag_sym enums =
   (* STD §6.7.2.2#3 *)
@@ -1240,10 +1242,6 @@ and register_enumerators tag_loc tag_sym enums =
     (* the scope  of an enumeration constant start just after it's appearance in
        the enumerator list *)
     E.register_enum_constant ident d_e >>
-(*
-    E.register_identifier ident E.Namespace_ordinary (E.Kind_member E.Kind_enum) [] >>= fun (_, sym) ->
-    E.register_enum_constant sym d_e >>
-*)
     E.return (n + 1, n :: acc)
   ) (0, []) enums >>= fun (_, ns_rev) ->
   E.return ns_rev
@@ -2367,7 +2365,7 @@ TODO: BRING THIS BACK AND FINISH IT
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)
             E.resolve_tag_definition tag >>= function
-              | E.Struct_definition isAnonymous ident_tys ->
+              | Just (E.Struct_definition isAnonymous ident_tys) ->
                   (* TODO: (for now) only allowing explicit and complete initializer *)
                   if List.all (function
                        | (Just [Desig_member _], Init_expr _) -> true
@@ -2451,7 +2449,7 @@ TODO: BRING THIS BACK AND FINISH IT
         | ATypes.Union tag ->
             (* TODO: check the STD, the following is mostly improvised... *)
             E.resolve_tag_definition tag >>= function
-              | E.Union_definition isAnonymous ident_tys ->
+              | Just (E.Union_definition isAnonymous ident_tys) ->
                   match desigs_opt_inits with
                     | [(Nothing, init')] ->
                         let (first_ident, (_, first_ty)) = match ident_tys with

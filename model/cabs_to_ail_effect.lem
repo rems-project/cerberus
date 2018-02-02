@@ -800,11 +800,13 @@ let register_tag_definition loc tag_sym tag_decl =
   )
 
 
-val resolve_tag_definition: A.identifier -> desugM tag_definition
+val resolve_tag_definition: A.identifier -> desugM (maybe tag_definition)
 let resolve_tag_definition tag_sym =
   State_exception.read (fun st ->
     Map.lookup tag_sym st.tag_definitions
-  ) >>= function
+  ) 
+(*
+>>= function
     | Just tag_decl ->
         return tag_decl
     | Nothing ->
@@ -814,6 +816,7 @@ let resolve_tag_definition tag_sym =
         fail Loc.unknown (Errors.Desugar_OtherViolation ("unregistered tag: " ^ show tag_sym ^
           " (this may be from a violation of (§6.7.2.1#3, 1st sentence)"))
   end
+*)
 
 
 val get_tag_definitions: desugM (map A.identifier tag_definition)
@@ -833,7 +836,7 @@ let get_anonymous_struct_or_union ty =
   match (* AilTypesAux.unatomic *) ty with
     | ATypes.Struct tag_sym ->
         resolve_tag_definition tag_sym >>= function
-          | Struct_definition isAnonymous membrs ->
+          | Just (Struct_definition isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -842,7 +845,7 @@ let get_anonymous_struct_or_union ty =
         end
     | ATypes.Union tag_sym ->
         resolve_tag_definition tag_sym >>= function
-          | Union_definition isAnonymous membrs ->
+          | Just (Union_definition isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end

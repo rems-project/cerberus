@@ -64,11 +64,9 @@ type cabs_character_prefix =
 type cabs_character_constant = maybe cabs_character_prefix * string
 
 
-(* TODO *)
 type cabs_constant =
   | CabsInteger_const     of cabs_integer_constant
   | CabsFloating_const    of string
-  | CabsEnumeration_const 
   | CabsCharacter_const   of cabs_character_constant
 
 
