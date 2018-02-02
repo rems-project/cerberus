@@ -45,7 +45,7 @@ function report {
 # 1: file name
 # 2: relative path
 function test_exec {
-  ../cerberus --exec --batch $2/$1 > tmp/result 2> /dev/null
+  ../cerberus --exec --batch $2/$1 | tee tmp/result 2> /dev/null
   if [ -f $2/expected/$1.expected ]; then
     cmp --silent tmp/result $2/expected/$1.expected
   fi
@@ -56,7 +56,7 @@ function test_exec {
 # 1: file name
 # 2: relative path
 function test {
-  ../cerberus $2/$1 > tmp/result 2> /dev/null
+  ../cerberus $2/$1 | tee tmp/result 2> /dev/null
   report $1 $?
 }
 
