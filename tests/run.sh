@@ -3,11 +3,6 @@
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/local/jenkins/home/workspace/ocaml46/ocaml/ocaml-4.06.0/lib/ocaml/site-lib/Z3
-
-# the path doesn't seem to work on Jenkins
-echo $LD_LIBRARY_PATH
-
 #cd $CERB_PATH/tests
 
 source tests.sh
@@ -24,22 +19,29 @@ JOUTPUT_FILE="ci_results.xml"
 # 1: test case name
 # 2: result (0 is success)
 function report {
+  #If the test should fail
   if [[ $1 == *.fail.c ]]; then
     res="1 - $2";
   else
     res=$2;
   fi
 
-  if [[ "$res" -eq "0" ]]; then
+  #If the test is about undef
+  if [[ $1 == *.undef.c ]]; then
+    cat tmp/result | grep Undefined
+    res=$?
+  fi
+
+  if [[ "$((res))" -eq "0" ]]; then
     res="\033[1m\033[32mPASSED!\033[0m"
     pass=$((pass+1))
     JOUTPUT+="\t<testcase name=\"$1\"/>\n"
   else
     res="\033[1m\033[31mFAILED!\033[0m"
     fail=$((fail+1))
-    cat tmp/result
+    cat tmp/result tmp/stderr
     JOUTPUT+="\t<testcase name=\"$1\">\n"
-    JOUTPUT+="\t\t<error message=\"fail\">`cat tmp/result`</error>\n"
+    JOUTPUT+="\t\t<error message=\"fail\">`cat tmp/result tmp/stderr`</error>\n"
     JOUTPUT+="\t</testcase>\n"
   fi
 
@@ -50,7 +52,7 @@ function report {
 # 1: file name
 # 2: relative path
 function test_exec {
-  ../cerberus --exec --batch $2/$1 | tee tmp/result 2> /dev/null
+  ../cerberus --exec --batch $2/$1 > tmp/result 2> tmp/stderr
   if [ -f $2/expected/$1.expected ]; then
     cmp --silent tmp/result $2/expected/$1.expected
   fi
@@ -61,7 +63,7 @@ function test_exec {
 # 1: file name
 # 2: relative path
 function test {
-  ../cerberus $2/$1 | tee tmp/result 2> /dev/null
+  ../cerberus $2/$1 > tmp/result 2> tmp/stderr
   report $1 $?
 }
 
