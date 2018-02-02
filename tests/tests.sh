@@ -75,5 +75,9 @@ citests=(
   0110-loop_in_loop.c
   0111-skipped_label.c
   0112-call_in_label.c
+# 0113-cast_assign_parsing.error.c
+# 0114-const_return.error.c
+  0115-hex_char_const.c
+  0116-enum_constants.c
 )
 

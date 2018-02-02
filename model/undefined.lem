@@ -199,7 +199,7 @@ type undefined_behaviour =
   | UB060
   (* A structure or union is defined without any named members (including those specified indirectly
      via anonymous structures and unions) (6.7.2.1). *)
-  | UB061
+  | UB061_no_named_members
   (* An attempt is made to access, or generate a pointer to just past, a flexible array member of a
      structure when the referenced object provides no elements for that array (6.7.2.1). *)
   | UB062
@@ -740,7 +740,7 @@ let ub_str_bimap =
     ; (UB058, "UB058")
     ; (UB059, "UB059")
     ; (UB060, "UB060")
-    ; (UB061, "UB061")
+    ; (UB061_no_named_members, "UB061_no_named_members")
     ; (UB062, "UB062")
     ; (UB063, "UB063")
     ; (UB064, "UB064")
@@ -917,6 +917,8 @@ let pretty_string_of_undefined_behaviour = function
       "DUMMY undefined behaviour (" ^ str ^ ")"
   | UB005_data_race ->
       "(§5.1.2.4#25) the execution of the program contains a data race."
+  | UB008_multiple_linkage ->
+      "(§6.2.2#7) an identifier appeared with both internal and external linkage"
   | UB009_outside_lifetime ->
       "(§6.2.4#2) an object is referred to outside of its lifetime."
   | UB010_pointer_to_dead_object ->

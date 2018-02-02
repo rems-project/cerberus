@@ -1,0 +1,3 @@
+BEGIN EXEC[0]
+Defined {value: "Specified(0)", stdout: "A= 0\nB= 1\nC= 10\nD= 11\nE= 14\nF= 15\n", blocked: "false"}
+END EXEC[0]
