@@ -1092,6 +1092,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_ctype; BTy_ctype; BTy_object OTy_integer])
   | Mem_common.PtrValidForDeref ->
       (BTy_boolean, [BTy_object OTy_pointer])
+  | Mem_common.PtrWellAligned ->
+      (BTy_boolean, [BTy_ctype; BTy_object OTy_pointer])
   | Mem_common.Memcmp ->
       (BTy_object OTy_integer, [BTy_object OTy_pointer; BTy_object OTy_pointer; BTy_object OTy_integer])
 end

@@ -202,15 +202,8 @@ type state = <|
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
   typedef_definitions: map A.identifier (ATypes.qualifiers * ATypes.ctype);
   
-(* WIP
-  struct_definitions: map A.identifier (
-*)
-  
   static_assertions: list (A.expression unit * A.stringLiteral);
   
-(*
-  enumeration_constants: map cabs_identifier (A.identifier * A.expression unit);
-*)
   (* STD §6.2.1#1, sentence 2 *)
   enumeration_constants: map A.identifier (A.expression_ unit);
   
@@ -1078,8 +1071,9 @@ let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
-          (* TODO: msg and location *)
-          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+          (* STD §6.2.7#2 *)
+          fail Loc.unknown
+            (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
         else
           let () = Debug.print_debug 7 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
           return ()
@@ -1111,8 +1105,9 @@ let register_internal_object_declaration sym decl =
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
-          (* TODO: msg and location *)
-          fail Loc.unknown (Errors.Desugar_OtherViolation "redeclaration of a object with a different type")
+          (* STD §6.2.7#2 *)
+          fail Loc.unknown
+            (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
         else
           return ()
     | Nothing ->

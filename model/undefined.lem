@@ -48,13 +48,13 @@ type undefined_behaviour =
   | UB014_unsupported_negative_zero
   (* Two declarations of the same object or function specify types that are not compatible
      (6.2.7). *)
-  | UB015
+  | UB015_incompatible_redeclaration
   (* A program requires the formation of a composite type from a variable length array type whose
      size is specified by an expression that is not evaluated (6.2.7). *)
   | UB016
   (* Conversion to or from an integer type produces a value outside the range that can be
      represented (6.3.1.4). *)
-  | UB017
+  | UB017_out_of_range_floating_integer_conversion
   (* Demotion of one real floating type to another produces a value outside the range that can be
      represented (6.3.1.5). *)
   | UB018
@@ -62,23 +62,23 @@ type undefined_behaviour =
   | UB019_lvalue_not_an_object
   (* A non-array lvalue with an incomplete type is used in a context that requires the value of the
      designated object (6.3.2.1). *)
-  | UB020
+  | UB020_nonarray_incomplete_lvalue_conversion
   (* An lvalue designating an object of automatic storage duration that could have been declared
      with the register storage class is used in a context that requires the value of the designated
      object, but the object is uninitialized. (6.3.2.1). *)
   | UB021
   (* An lvalue having array type is converted to a pointer to the initial element of the array, and
      the array object has register storage class (6.3.2.1). *)
-  | UB022
+  | UB022_register_array_decay
   (* An attempt is made to use the value of a void expression, or an implicit or explicit conversion
      (except to void) is applied to a void expression (6.3.2.2). *)
   | UB023
   (* Conversion of a pointer to an integer type produces a value outside the range that can be
      represented (6.3.2.3). *)
-  | UB024
+  | UB024_out_of_range_pointer_to_integer_conversion
   (* Conversion between two pointer types produces a result that is incorrectly aligned
      (6.3.2.3). *)
-  | UB025
+  | UB025_misaligned_pointer_conversion
   (* A pointer is used to call a function whose type is not compatible with the referenced type
      (6.3.2.3). *)
   | UB026
@@ -213,7 +213,7 @@ type undefined_behaviour =
      an lvalue with non-volatile-qualified type (6.7.3). *)
   | UB065
   (* The specification of a function type includes any type qualifiers (6.7.3). *)
-  | UB066
+  | UB066_qualified_function_specification
   (* Two qualified types that are required to be compatible do not have the identically qualified
      version of a compatible type (6.7.3). *)
   | UB067
@@ -666,6 +666,29 @@ type undefined_behaviour =
   | UB202
 
 
+val std_of_undefined_behaviour: undefined_behaviour -> maybe string
+let std_of_undefined_behaviour = function
+  | UB005_data_race ->
+      Just "§5.1.2.4#25, sentence 2"
+  | UB008_multiple_linkage ->
+      Just "§6.2.2#7"
+  | UB009_outside_lifetime ->
+      Just "§6.2.4#2, sentence 3"
+  | UB010_pointer_to_dead_object ->
+      Nothing (* TODO *)
+  | UB012_lvalue_read_trap_representation ->
+      Just "§6.2.6.1#5, sentence 2"
+  | UB013_lvalue_side_effect_trap_representation ->
+      Just "§6.2.6.1#5, sentence 3"
+  | UB015_incompatible_redeclaration ->
+      Just "§6.2.7#2"
+  | _ ->
+      (* TODO *)
+      Nothing
+end
+
+
+
 
 
 
@@ -688,17 +711,17 @@ let ub_str_bimap =
     ; (UB012_lvalue_read_trap_representation, "UB012_lvalue_read_trap_representation")
     ; (UB013_lvalue_side_effect_trap_representation, "UB013_lvalue_side_effect_trap_representation")
     ; (UB014_unsupported_negative_zero, "UB014_unsupported_negative_zero")
-    ; (UB015, "UB015")
+    ; (UB015_incompatible_redeclaration, "UB015_incompatible_redeclaration")
     ; (UB016, "UB016")
-    ; (UB017, "UB017")
+    ; (UB017_out_of_range_floating_integer_conversion, "UB017_out_of_range_floating_integer_conversion")
     ; (UB018, "UB018")
     ; (UB019_lvalue_not_an_object, "UB019_lvalue_not_an_object")
-    ; (UB020, "UB020")
+    ; (UB020_nonarray_incomplete_lvalue_conversion, "UB020_nonarray_incomplete_lvalue_conversion")
     ; (UB021, "UB021")
-    ; (UB022, "UB022")
+    ; (UB022_register_array_decay, "UB022_register_array_decay")
     ; (UB023, "UB023")
-    ; (UB024, "UB024")
-    ; (UB025, "UB025")
+    ; (UB024_out_of_range_pointer_to_integer_conversion, "UB024_out_of_range_pointer_to_integer_conversion")
+    ; (UB025_misaligned_pointer_conversion, "UB025_misaligned_pointer_conversion")
     ; (UB026, "UB026")
     ; (UB027, "UB027")
     ; (UB028, "UB028")
@@ -745,7 +768,7 @@ let ub_str_bimap =
     ; (UB063, "UB063")
     ; (UB064, "UB064")
     ; (UB065, "UB065")
-    ; (UB066, "UB066")
+    ; (UB066_qualified_function_specification, "UB066_qualified_function_specification")
     ; (UB067, "UB067")
     ; (UB068, "UB068")
     ; (UB069, "UB069")
@@ -934,8 +957,16 @@ let pretty_string_of_undefined_behaviour = function
   | UB014_unsupported_negative_zero ->
       "(§6.2.6.2#3) the evaluation of one of these operators: &, |, ^, ~, <<, and >> produced a \
                     negative zero, but this implementation being used does not support them."
+  | UB015_incompatible_redeclaration ->
+      "(§6.2.7#2) multiple declarations of a same object or function had incompatible types"
   | UB019_lvalue_not_an_object ->
       "(§6.3.2.1#1) found an lvalue that does not designate an object when evaluted."
+  | UB020_nonarray_incomplete_lvalue_conversion ->
+      "TODO(msg) UB020_nonarray_incomplete_lvalue_conversion"
+  | UB022_register_array_decay ->
+      "TODO(msg) UB022_register_array_decay"
+  | UB024_out_of_range_pointer_to_integer_conversion ->
+      "TODO(msg) UB024_out_of_range_pointer_to_integer_conversion"
   | UB035_unsequenced_race ->
       "(§6.5#2) a side effect on a scalar object is unsequenced relative to either a different \
                 side effect on the same scalar object or a value computation using the value of \
@@ -993,6 +1024,8 @@ let pretty_string_of_undefined_behaviour = function
   | UB053_distinct_aggregate_union_pointer_comparison ->
       "(§6.5.8#5) found the comparison of two pointers that do not point to the same aggregate or \
                   union (nor just beyond the same array object)."
+  | UB061_no_named_members ->
+      "TODO(msg) UB061_no_named_members"
   | UB081_scalar_initializer_not_single_expression ->
       "(§6.7.9#11) The initializer for a scalar shall be a single expression, optionally enclosed in braces."
   | UB088_reached_end_of_function ->

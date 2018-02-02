@@ -758,6 +758,10 @@ let rec driver with_concurrency =
             liftMem (Mem.memcmp ptr_val1 ptr_val2 size_ival) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
         
+        | (Mem_common.PtrWellAligned, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptrval)]) ->
+            liftMem (Mem.isWellAligned_ptrval ref_ty ptrval) >>= fun b ->
+            ND.return (mk_th_st (if b then Core.Vtrue else Core.Vfalse))
+        
         | _ ->
             error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
       end >>= fun th_st' ->

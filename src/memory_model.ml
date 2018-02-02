@@ -74,6 +74,7 @@ module type Memory = sig
   val diff_ptrval: Core_ctype.ctype0 -> pointer_value -> pointer_value -> integer_value memM
   
   val validForDeref_ptrval: pointer_value -> bool
+  val isWellAligned_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)

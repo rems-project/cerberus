@@ -1156,7 +1156,7 @@ else
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
           (* STD §6.3.2.1#2 "lvalue conversion" *)
 (*          E._STD "§6.3.2.1#2" $ (* TODO: what it this std refering too? *) *)
-          self e >>= fun core_e ->
+          self e         >>= fun core_e  ->
           E.fresh_symbol >>= fun let_sym ->
           E.return $
             Caux.add_std "§6.5.4" (
@@ -1173,16 +1173,16 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
   if AilTypesAux.is_integer cast_ty then
     if AilTypesAux.is_integer e_ty then
               (* TODO: check *)
-              Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int cast_ty e_sym_pe)
               )
     else (* cast_ty is floating since it is an arithmetic type *)
-              Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (C.Pexpr () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe cast_ty; e_sym_pe]))
               )
   else
     if AilTypesAux.is_integer e_ty then
-              Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_pure_e (C.Pexpr () (C.PEctor C.Cfvfromint [e_sym_pe]))
               )
     else (* cast_ty is floating since it is an arithmetic type *)
@@ -1192,9 +1192,9 @@ else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_arithmetic e_ty then
 else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
             (* making a pointer from an integer *)
               let ref_ty = fromJust "Translation.translate_expression, AilEcast 1" $ AilTypesAux.referenced_type cast_ty in
-              Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              Caux.mk_wseq_e e_sym_pat core_e (
                 Caux.mk_case_e e_sym_pe
-                  [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy))
+                  [ ( Caux.mk_specified_pat obj_sym_pat
                     , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_pointer))
                         (C.Expr [] (C.Ememop Mem_common.PtrFromInt [Caux.mk_ail_ctype_pe e_ty; Caux.mk_ail_ctype_pe ref_ty; obj_sym_pe]))
                         (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
@@ -1206,9 +1206,9 @@ else if AilTypesAux.is_pointer cast_ty && AilTypesAux.is_arithmetic e_ty then
 else if AilTypesAux.is_arithmetic cast_ty && AilTypesAux.is_pointer e_ty then
               (* making an integer from a pointer *)
               let ref_ty = fromJust "Translation.translate_expression, AilEcast 2" $ AilTypesAux.referenced_type e_ty in
-              Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+              Caux.mk_wseq_e e_sym_pat core_e (
                   Caux.mk_case_e e_sym_pe
-                    [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer))
+                    [ ( Caux.mk_specified_pat obj_sym_pat
                       , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym (C.BTy_object C.OTy_integer))
                           (C.Expr [] (C.Ememop Mem_common.IntFromPtr [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_ail_ctype_pe cast_ty; obj_sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_sym_pe let_sym))) )
@@ -1221,7 +1221,22 @@ else (* pointer <-> pointer cast *)
               let () = Debug.warn [Debug.DB_elaboration] (fun () ->
                 "NOTE: the elaboration does the identity for casts between pointer types (this is different from ISO)"
               ) in
-              core_e
+              let ub_pe = Caux.mk_undef_pe Undefined.UB025_misaligned_pointer_conversion in
+              match AilTypesAux.referenced_type cast_ty with
+                | Just cast_ref_ty ->
+                    Caux.mk_wseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e begin
+                      Caux.mk_case_e e_sym_pe
+                        [ ( Caux.mk_specified_pat obj_sym_pat
+                          , Caux.mk_wseq_e (Caux.mk_sym_pat let_sym C.BTy_ctype)
+                              (C.Expr [] (C.Ememop Mem_common.PtrWellAligned [Caux.mk_ail_ctype_pe cast_ref_ty; obj_sym_pe]))
+                              (Caux.mk_pure_e (Caux.mk_if_pe (Caux.mk_sym_pe let_sym) obj_sym_pe ub_pe)) )
+                        ; ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                          , (* we are being daemonic (case were the resulting pointer would be misaligned) *)
+                            Caux.mk_pure_e ub_pe ) ]
+                    end
+                | _ ->
+                    error "Translation AilEcast, ptr vs ptr: just should be impossible"
+              end
             )
       
       | A.AilEbinary e1 (A.Arithmetic A.Mul) e2 ->

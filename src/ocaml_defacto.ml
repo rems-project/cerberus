@@ -578,6 +578,7 @@ let le_ptrval = Defacto_memory.impl_le_ptrval
 let ge_ptrval = Defacto_memory.impl_ge_ptrval
 let diff_ptrval = Defacto_memory.impl_diff_ptrval
 let validForDeref_ptrval = Defacto_memory.impl_validForDeref_ptrval
+let isWellAligned_ptrval = Defacto_memory.impl_isWellAligned_ptrval
 let ptrcast_ival = Defacto_memory.impl_ptrcast_ival
 let intcast_ptrval = Defacto_memory.impl_intcast_ptrval
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval

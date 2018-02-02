@@ -2,6 +2,7 @@ open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf Typing
 open import GenTypes GenTypesAux
 open import Std Loc
 
+import Undefined
 import Builtins Debug Pp
 
 import Global
@@ -1453,7 +1454,8 @@ and perform_decays sigm ctx a_expr =
           ) in
           let rvalue_ty = AAux.unatomic ((*AAux.unqualify*) ty) in
           if AAux.is_incomplete sigm ty then
-            error "TODO: perform_decays ==> undefined behaviour"
+            (* STD §6.3.2.1#2, sentence 3 *)
+            E.fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
           else
             E.return (
               AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
@@ -1465,7 +1467,7 @@ and perform_decays sigm ctx a_expr =
           (* STD §6.3.2.1#3 *)
           (* performing the array decay *)
           if isRegister then
-            error "TODO: perform_decays ==> undefined behaviour"
+            E.fail Loc.unknown (TError_undef Undefined.UB022_register_array_decay)
           else
             (* TODO: qualifiers?? *)
             let () = begin

@@ -242,7 +242,7 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
     | AilEannot _ expr' ->
         is_integer_constant_expression expr'
     | _ ->
-        error ("WIP: Cabs_to_ail.is_integer_constant_expression, wildcard ==> " ^
+        error ("TODO: Cabs_to_ail.is_integer_constant_expression, wildcard ==> " ^
                Pp.stringFromAil_expression expr)
 end
 
@@ -1209,9 +1209,9 @@ let rec desugar_type_specifiers specs =
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
                       | Just _ ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: Tspec_name, not King_typedef")
+                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not King_typedef")
                       | Nothing ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "WIP: Tspec_name, not resolved")
+                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not resolved")
                     end
               end
           
@@ -1938,9 +1938,9 @@ and desugar_enumerator (ident, e_opt) =
 and desugar_alignment_specifier align_spec =
   match align_spec with
     | AS_type tyname ->
-      error "WIP 40"
+      error "TODO 40"
     | AS_expr e ->
-      error "WIP 41"
+      error "TODO 41"
   end
 
 
@@ -2337,7 +2337,7 @@ TODO: BRING THIS BACK AND FINISH IT
                              expected current index *)
                           match compare j i with
                             | LT ->
-                                E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "WIP: find the STD text")
+                                E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "TODO: find the STD text")
                             | EQ ->
                                 E.return (i+1, Just d_init :: acc)
                             | GT ->
@@ -2377,7 +2377,7 @@ TODO: BRING THIS BACK AND FINISH IT
                             desugar_expression e >>= fun d_e ->
                             E.return $ (ident, d_e) :: acc
                         | _ ->
-                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, not Desig_member vs Init_expr"
+                            error "TODO: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, not Desig_member vs Init_expr"
                       end
                     ) [] desigs_opt_inits >>= fun xs_rev ->
                     E.return
@@ -2429,7 +2429,7 @@ TODO: BRING THIS BACK AND FINISH IT
                                     AilEstruct 
                               end    *)
                         | _ ->
-                            error "WIP: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
+                            error "TODO: Cabs_to_ail.wip_desugar_initializer_, Struct, Struct_definition, else"
                       end
                     ) [] (List.zip ident_tys desigs_opt_inits) >>= fun xs_rev ->
                     E.return
@@ -2511,7 +2511,7 @@ TODO: BRING THIS BACK AND FINISH IT
               | _ ->
                   (* TODO: this (at leat) possible with something like:
                        int a = {1, 2}; *)
-                  error "WIP: error message. is that even a possible case? (11)"
+                  error "TODO: error message. is that even a possible case? (11)"
             end
 
       end
@@ -2679,7 +2679,7 @@ WIP KKK
 
 val do_while_hack: cabs_expression -> cabs_statement -> E.desugM cabs_statement
 let do_while_hack e (CabsStatement loc smt) =
-  error "WIP, Cabs_to_ail.do_while_hack"
+  error "TODO, Cabs_to_ail.do_while_hack"
 (*
 WIP KKK
   (* TODO: it would be nice to only generate these names, if they are needed *)
@@ -2939,7 +2939,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
             | (Nothing, Nothing) ->
                 E.return (AilSwhile d_e2 d_s)
             | _ ->
-              error "WIP: Cabs_to_ail.desugar_statement, CabsSfor"
+              error "TODO: Cabs_to_ail.desugar_statement, CabsSfor"
           end
       
       | CabsSgoto ident ->
