@@ -182,8 +182,6 @@ let pp_cabs_constant = function
       pp_stmt_ctor "CabsInteger_const" ^^^ pp_cabs_integer_constant icst
   | CabsFloating_const str ->
       pp_stmt_ctor "CabsFloating_const" ^^^ !^ str
-  | CabsEnumeration_const ->
-      pp_stmt_ctor "CabsEnumeration_const"
   | CabsCharacter_const ccst ->
       pp_stmt_ctor "CabsCharacter_const" ^^^ pp_cabs_character_constant ccst
 
