@@ -1535,9 +1535,15 @@ and desugar_parameter_declaration param_decl =
           let (_qs, _ty) =
             mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
-          E.return (Just ident, ( qs
-                                , if isAtomic then ATypes.Atomic ty else ty
-                                , List.elem SC_register specifs.storage_classes ))
+          E.is_incomplete ty >>= function
+            | true ->
+                E.fail Loc.unknown
+                  (Errors.Desugar_UndefinedBehaviour Undefined.UB086_incomplete_adjusted_parameter)
+            | false ->
+                E.return (Just ident, ( qs
+                                    , if isAtomic then ATypes.Atomic ty else ty
+                                    , List.elem SC_register specifs.storage_classes ))
+          end
         
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
@@ -1791,7 +1797,8 @@ STD_ "§6.7.1#4" $
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
 STD_ "§6.7.1#7" $
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#7")
+    E.fail Loc.unknown
+      (Errors.Desugar_UndefinedBehaviour Undefined.UB060_block_scope_function_with_storage_class)
   else
 STD_ "§6.7.1#8" $
     (* TODO *)

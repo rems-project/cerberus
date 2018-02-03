@@ -482,3 +482,7 @@ val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
   Basic (Integer (Unsigned (Int_leastN_t 32)))
+
+val ptrdiff_t: ctype
+let ptrdiff_t =
+  Basic (Integer Ptrdiff_t)

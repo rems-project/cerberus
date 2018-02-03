@@ -196,7 +196,7 @@ type undefined_behaviour =
   | UB059
   (* A function is declared at block scope with an explicit storage-class specifier other than
      extern (6.7.1). *)
-  | UB060
+  | UB060_block_scope_function_with_storage_class
   (* A structure or union is defined without any named members (including those specified indirectly
      via anonymous structures and unions) (6.7.2.1). *)
   | UB061_no_named_members
@@ -229,7 +229,7 @@ type undefined_behaviour =
      defined in the same translation unit (6.7.4). *)
   | UB070
   (* A function declared with a _Noreturn function specifier returns to its caller (6.7.4). *)
-  | UB071
+  | UB071_noreturn
   (* The definition of an object has an alignment specifier and another declaration of that object
      has a different alignment specifier (6.7.5). *)
   | UB072
@@ -277,7 +277,7 @@ type undefined_behaviour =
      declared in a following declaration list (6.9.1). *)
   | UB085
   (* An adjusted parameter type in a function definition is not a complete object type (6.9.1). *)
-  | UB086
+  | UB086_incomplete_adjusted_parameter
   (* A function that accepts a variable number of arguments is defined without a parameter type list
      that ends with the ellipsis notation (6.9.1). *)
   | UB087
@@ -682,6 +682,16 @@ let std_of_undefined_behaviour = function
       Just "§6.2.6.1#5, sentence 3"
   | UB015_incompatible_redeclaration ->
       Just "§6.2.7#2"
+
+  | UB050_pointers_substraction_not_representable ->
+      Just "§6.5.6#9, sentence 3"
+
+  | UB060_block_scope_function_with_storage_class ->
+      Just "§6.7.1#7"
+
+  | UB086_incomplete_adjusted_parameter ->
+      Just "§6.9.1#7, sentence 4"
+
   | _ ->
       (* TODO *)
       Nothing
@@ -762,7 +772,7 @@ let ub_str_bimap =
     ; (UB057, "UB057")
     ; (UB058, "UB058")
     ; (UB059, "UB059")
-    ; (UB060, "UB060")
+    ; (UB060_block_scope_function_with_storage_class, "UB060_block_scope_function_with_storage_class")
     ; (UB061_no_named_members, "UB061_no_named_members")
     ; (UB062, "UB062")
     ; (UB063, "UB063")
@@ -773,7 +783,7 @@ let ub_str_bimap =
     ; (UB068, "UB068")
     ; (UB069, "UB069")
     ; (UB070, "UB070")
-    ; (UB071, "UB071")
+    ; (UB071_noreturn, "UB071_noreturn")
     ; (UB072, "UB072")
     ; (UB073, "UB073")
     ; (UB074, "UB074")
@@ -788,7 +798,7 @@ let ub_str_bimap =
     ; (UB083, "UB083")
     ; (UB084, "UB084")
     ; (UB085, "UB085")
-    ; (UB086, "UB086")
+    ; (UB086_incomplete_adjusted_parameter, "UB086_incomplete_adjusted_parameter")
     ; (UB087, "UB087")
     ; (UB088_reached_end_of_function, "UB088_reached_end_of_function")
     ; (UB089, "UB089")
