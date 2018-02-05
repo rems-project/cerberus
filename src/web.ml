@@ -148,7 +148,7 @@ let not_allowed meth path =
 (* Cerberus actions *)
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
-let hack conf =
+let hack conf mode =
   let open Global_ocaml in
   cerb_conf := fun () -> {
     cpp_cmd=            conf.Pipeline.cpp_cmd;
@@ -157,7 +157,7 @@ let hack conf =
     core_stdlib=        conf.Pipeline.core_stdlib;
     core_impl_opt=      Some conf.Pipeline.core_impl;
     core_parser=        (fun _ -> failwith "No core parser");
-    exec_mode_opt=      Some Random;
+    exec_mode_opt=      Some mode;
     ocaml=              false;
     ocaml_corestd=      false;
     progress=           false;
@@ -175,10 +175,11 @@ let hack conf =
   }
 
 
-let run ~filename ~conf (action: [`Elaborate | `Execute]) =
+let run ~filename ~conf (action: [`Elaborate | `Execute]) (mode: Smt2.execution_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   let elaborate () =
+    Debug.print 2 ("Elaborating: " ^ filename);
     try
       Pipeline.c_frontend conf filename
       >>= function
@@ -192,13 +193,21 @@ let run ~filename ~conf (action: [`Elaborate | `Execute]) =
     | e -> Debug.warn_exception "Exception raised during elaboration." e; raise e
   in
   let execute () =
-    hack (fst conf);
+    hack (fst conf) mode;
+    let string_of_mode = function
+      | Smt2.Random -> "random"
+      | Smt2.Exhaustive -> "exhaustive"
+    in
+    Debug.print 2 ("Executing in " ^ string_of_mode mode ^ " mode: " ^ filename);
     try
       elaborate ()
       >>= fun (_, cabs, ail, sym_suppl, core) ->
-      Pipeline.interp_backend dummy_io sym_suppl core [] true false false Random
-      >>= fun res ->
-      return (string_of_int res, cabs, ail, sym_suppl, core)
+      Pipeline.interp_backend dummy_io sym_suppl core [] true false false mode
+      >>= function
+      | Either.Left res ->
+        return (String.concat "\n" res, cabs, ail, sym_suppl, core)
+      | Either.Right res ->
+        return (string_of_int res, cabs, ail, sym_suppl, core)
     with
     | e -> Debug.warn_exception "Exception raised during execution." e; raise e
   in
@@ -242,8 +251,9 @@ let post ~docroot ~conf uri path content =
     Debug.print 8 ("Contents written at: " ^ filename);
     match path with
     | "/elab_rewrite"
-    | "/elab" -> run ~filename ~conf `Elaborate
-    | "/random" -> run ~filename ~conf `Execute
+    | "/elab" -> run ~filename ~conf `Elaborate Smt2.Random
+    | "/random" -> run ~filename ~conf `Execute Smt2.Random
+    | "/exhaustive" -> run ~filename ~conf `Execute Smt2.Exhaustive
     | _ -> forbidden path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
@@ -267,6 +277,8 @@ let setup cerb_debug_level debug_level impl cpp_cmd port docroot =
     let conf = (setup_cerb_conf cerb_debug_level cpp_cmd impl, dummy_io) in
     Debug_ocaml.debug_level := cerb_debug_level;
     Debug.level := debug_level;
+    Debug.print 1 ("Starting server with public folder: " ^ docroot
+                   ^ " in port: " ^ string_of_int port);
     Server.make ~callback: (request ~docroot ~conf) ()
     |> Server.create ~mode:(`TCP (`Port port))
     |> Lwt_main.run
@@ -308,7 +320,7 @@ let docroot =
 
 let port =
   let doc = "Set TCP port." in
-  Arg.(value & opt int 80 & info ["p"; "port"] ~docv:"PORT" ~doc)
+  Arg.(value & opt int 8080 & info ["p"; "port"] ~docv:"PORT" ~doc)
 
 let () =
   let server = Term.(pure setup $ cerb_debug_level $ debug_level

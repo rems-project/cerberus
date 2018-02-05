@@ -63,7 +63,7 @@ val interp_backend:
 (* TODO: we would be using poly variants if it weren't for Lem... *)
 (*  [`Interactive | `Exhaustive | `Random] -> *)
   Smt2.execution_mode ->
-  (int, Location_ocaml.t * Errors.cause) Exception.exceptM
+  ((string list, int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val ocaml_backend:
   (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> Symbol.sym -> unit Core.file ->
