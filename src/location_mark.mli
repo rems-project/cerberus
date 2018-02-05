@@ -1,1 +1,1 @@
-val extract: string -> (string * Json.t)
+val extract: string -> (string * Yojson.json)

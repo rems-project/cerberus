@@ -1,5 +1,4 @@
 (* Extract location marks from a pretty printer Core *)
-
 type t =
   { line: int;
     col:  int;
@@ -45,17 +44,17 @@ let parse str =
 
 let json_of_range l =
   let json_of_point l =
-    Json.Map [("line", Json.Int l.line); ("ch", Json.Int l.col)]
+    `Assoc [("line", `Int l.line); ("ch", `Int l.col)]
   in
-  Json.Map [("begin", json_of_point l.init); ("end", json_of_point l.final)]
+  `Assoc [("begin", json_of_point l.init); ("end", json_of_point l.final)]
 
-let json_of locs = Json.Array
+let json_of locs: Yojson.json = `List
   (List.fold_left (
     fun (jss, i) (cloc, coreloc) ->
-      let js = Json.Map [
+      let js = `Assoc [
           ("c", json_of_range cloc);
           ("core", json_of_range coreloc);
-          ("color", Json.Int i);
+          ("color", `Int i);
         ]
       in (js::jss, i+1)
   ) ([], 1) (sort locs)
