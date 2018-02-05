@@ -303,25 +303,25 @@ let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experime
   let conf = {concurrency; experimental_unseq; exec_mode=exec_mode } in
   (* TODO: temporary hack for the command name *)
   if do_batch then begin
-    batch_drive sym_suppl core_file ("cmdname" :: args) conf;
-    return 0
+    let executions = batch_drive sym_suppl core_file ("cmdname" :: args) conf in
+    return (Either.Left executions)
   end else
     let open Core in
     drive sym_suppl core_file ("cmdname" :: args) conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
-          return begin try
+          return (Either.Right begin try
             int_of_string (String_mem.string_pretty_of_integer_value ival)
           with | _ ->
             Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
             0
-          end
+          end)
       | (cval :: _) ->
           io.warn (fun () -> "HELLO> " ^ String_core.string_of_value cval) >>= fun () ->
-          return 0
+          return (Either.Right 0)
       | [] ->
           io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") >>= fun () ->
-          return 0
+          return (Either.Right 0)
 
 
 let ocaml_backend (conf, io) ~filename ~ocaml_corestd sym_suppl core_file =
