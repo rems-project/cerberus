@@ -97,7 +97,7 @@ let load_core_impl core_stdlib impl_name =
 
 let return = Exception.except_return
 let (>>=)  = Exception.except_bind
-let (<$>)  = Exception.fmap
+let (<$>)  = Exception.except_fmap
 
 let (>|>) m1 m2 =
   m1 >>= fun z  ->
@@ -300,7 +300,7 @@ let core_passes (conf, io) ~filename core_file =
 
 let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experimental_unseq exec_mode =
   let open Exhaustive_driver in
-  let conf = {concurrency; experimental_unseq} in
+  let conf = {concurrency; experimental_unseq; exec_mode=exec_mode } in
   (* TODO: temporary hack for the command name *)
   if do_batch then begin
     batch_drive sym_suppl core_file ("cmdname" :: args) conf;
