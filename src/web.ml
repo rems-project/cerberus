@@ -147,6 +147,34 @@ let not_allowed meth path =
 
 (* Cerberus actions *)
 
+(* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
+let hack conf =
+  let open Global_ocaml in
+  cerb_conf := fun () -> {
+    cpp_cmd=            conf.Pipeline.cpp_cmd;
+    pps=                [];
+    ppflags=            [];
+    core_stdlib=        conf.Pipeline.core_stdlib;
+    core_impl_opt=      Some conf.Pipeline.core_impl;
+    core_parser=        (fun _ -> failwith "No core parser");
+    exec_mode_opt=      Some Random;
+    ocaml=              false;
+    ocaml_corestd=      false;
+    progress=           false;
+    rewrite=            conf.Pipeline.rewrite_core;
+    sequentialise=      conf.Pipeline.sequentialise_core;
+    concurrency=        false;
+    preEx=              false;
+    error_verbosity=    Global_ocaml.Basic;
+    batch=              true;
+    experimental_unseq= false;
+    typecheck_core=     conf.Pipeline.typecheck_core;
+    defacto=            false;
+    default_impl=       false;
+    action_graph=       false;
+  }
+
+
 let run ~filename ~conf (action: [`Elaborate | `Execute]) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
@@ -164,10 +192,11 @@ let run ~filename ~conf (action: [`Elaborate | `Execute]) =
     | e -> Debug.warn_exception "Exception raised during elaboration." e; raise e
   in
   let execute () =
+    hack (fst conf);
     try
       elaborate ()
       >>= fun (_, cabs, ail, sym_suppl, core) ->
-      Pipeline.interp_backend dummy_io sym_suppl core [] true false false `Random
+      Pipeline.interp_backend dummy_io sym_suppl core [] true false false Random
       >>= fun res ->
       return (string_of_int res, cabs, ail, sym_suppl, core)
     with
@@ -234,12 +263,17 @@ let request ~docroot ~conf conn req body =
   | _     -> not_allowed meth path
 
 let setup cerb_debug_level debug_level impl cpp_cmd port docroot =
-  let conf = (setup_cerb_conf cerb_debug_level cpp_cmd impl, dummy_io) in
-  Debug_ocaml.debug_level := cerb_debug_level;
-  Debug.level := debug_level;
-  Server.make ~callback: (request ~docroot ~conf) ()
-  |> Server.create ~mode:(`TCP (`Port port))
-  |> Lwt_main.run
+  try
+    let conf = (setup_cerb_conf cerb_debug_level cpp_cmd impl, dummy_io) in
+    Debug_ocaml.debug_level := cerb_debug_level;
+    Debug.level := debug_level;
+    Server.make ~callback: (request ~docroot ~conf) ()
+    |> Server.create ~mode:(`TCP (`Port port))
+    |> Lwt_main.run
+  with
+  | e ->
+    Debug.error_exception "Fatal error:" e;
+    Debug.error ("Check port " ^ string_of_int port ^ " access right")
 
 (* Arguments *)
 
