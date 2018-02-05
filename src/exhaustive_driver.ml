@@ -36,7 +36,7 @@ let string_of_driver_error = function
 
 
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
-let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args conf : unit =
+let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args conf : string list =
   Random.self_init ();
   
   (* changing the annotations type from unit to core_run_annotation *)
@@ -46,47 +46,39 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
   let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   
-  List.iteri (fun i (res, z3_strs, nd_st) ->
-    print_endline ("BEGIN EXEC[" ^ string_of_int i ^ "]");
-    begin match res with
+  List.mapi (fun i (res, z3_strs, nd_st) ->
+    let result = begin match res with
       | ND.Active dres ->
           let str_v = String_core.string_of_value dres.Driver.dres_core_value in
-          print_endline begin
+          begin
             "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
             "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}"
           end
       | ND.Killed (ND.Undef0 (loc, ubs)) ->
-          print_endline begin
+          begin
             "Undefined [" ^ Location_ocaml.location_to_string loc ^ "]{id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
           end
       | ND.Killed (ND.Error0 (_, str)) ->
-          print_endline begin
+          begin
             "Error {msg: " ^ str ^ "}"
           end
       | ND.Killed (ND.Other dr_err) ->
-          print_endline begin
+          begin
             "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
           end
-    end;
-    (* TODO(victor): I've changed these to perr_endline, so that
-       ci/expected/* could match the output *)
-    if !Debug_ocaml.debug_level > 0 then begin 
-      match z3_strs with
-        | [] ->
-            prerr_endline "EMPTY CONSTRAINTS"
-        | _ ->
-            prerr_endline "BEGIN CONSTRAINTS";
-            prerr_endline (Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs)));
-            prerr_endline "END CONSTRAINTS"
-    end;
-
-(*
-    print_endline ("  log: " ^ String.concat "\n  log: " (Dlist.toList nd_st.ND.log));
-*)
-    print_endline ("END EXEC[" ^ string_of_int i ^ "]")
+    end in
+    let constraints =
+      if !Debug_ocaml.debug_level > 0 then begin
+        match z3_strs with
+          | [] ->
+              "\nEMPTY CONSTRAINTS"
+          | _ ->
+              Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs))
+              |> Printf.sprintf "\nBEGIN CONSTRAINTS%sEND CONSTRAINTS"
+      end else ""
+    in
+    Printf.sprintf "BEGIN EXEC[%d]\n%s%s\nEND EXEC[%d]" i result constraints i
   ) values
-
-
 
 
 let drive sym_supply file args conf : execution_result =

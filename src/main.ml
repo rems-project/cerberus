@@ -207,7 +207,8 @@ let backend sym_supply core_file args =
         } in
         if !!cerb_conf.batch then
           begin
-            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) dr_conf;
+            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) dr_conf
+            |> List.iter print_endline;
             0
           end
         else
