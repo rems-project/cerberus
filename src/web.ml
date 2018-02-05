@@ -1,6 +1,8 @@
 open Lwt
 open Cohttp_lwt_unix
 
+open Sexp
+
 (* Debugging *)
 
 module Debug =
@@ -78,16 +80,18 @@ let setup_cerb_conf cerb_debug_level cpp_cmd impl_filename =
 
 (* Result *)
 
+
 let string_of_doc d =
   let buf = Buffer.create 1024 in
   PPrint.ToBuffer.pretty 1.0 150 buf d;
   Buffer.contents buf
 
 let success (res, cabs, ail, _, core) =
+  let open Yojson in
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
-  let json_of_doc d = Json.Str (elim_paragraph_sym (string_of_doc d)) in
+  let json_of_doc d = `String (elim_paragraph_sym (string_of_doc d)) in
   let pp_core =
     let module Param_pp_core = Pp_core.Make (struct
         let show_std = true
@@ -99,28 +103,28 @@ let success (res, cabs, ail, _, core) =
     |> string_of_doc
   in
   let (core_str, locs) = Location_mark.extract pp_core in
-  Json.Map [
+  `Assoc [
     ("cabs",    json_of_doc (Pp_cabs.pp_translation_unit false false cabs));
     ("ail",     json_of_doc (Pp_ail.pp_program ail));
     ("ail_ast", json_of_doc (Pp_ail_ast.pp_program ail));
-    ("core",    Json.Str (elim_paragraph_sym core_str));
+    ("core",    `String (elim_paragraph_sym core_str));
     ("locs",    locs);
-    ("stdout",  Json.Str res);
-    ("stderr",  Json.empty);
-  ] |> Json.string_of |> respond
+    ("stdout",  `String res);
+    ("stderr",  `Null);
+  ] |> Yojson.to_string |> respond
 
 let failure msg =
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
-  Json.Map [
-    ("cabs",    Json.empty);
-    ("ail",     Json.empty);
-    ("ail_ast", Json.empty);
-    ("core",    Json.empty);
-    ("locs",    Json.empty);
-    ("stdout",  Json.empty);
-    ("stderr",  Json.Str msg);
-  ] |> Json.string_of |> respond
+  `Assoc [
+    ("cabs",    `Null);
+    ("ail",     `Null);
+    ("ail_ast", `Null);
+    ("core",    `Null);
+    ("locs",    `Null);
+    ("stdout",  `Null);
+    ("stderr",  `String msg);
+  ] |> Yojson.to_string |> respond
 
 (* Server default responses *)
 
@@ -247,6 +251,7 @@ let get ~docroot uri path =
 let post ~docroot ~conf uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
+    Debug.print 8 ("POST content " ^ content);
     let filename = write_tmp_file content in
     Debug.print 8 ("Contents written at: " ^ filename);
     match path with

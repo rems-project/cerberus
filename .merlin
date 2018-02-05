@@ -15,5 +15,4 @@ B _build/parsers/c
 B _build/parsers/core
 
 
-PKG lem cmdliner pprint ounit js_of_ocaml js_of_ocaml.ppx Z3 lwt cohttp cohttp.lwt
-
+PKG lem cmdliner pprint ounit js_of_ocaml js_of_ocaml.ppx Z3 lwt cohttp cohttp.lwt yojson
