@@ -1295,6 +1295,91 @@ let combine_prov prov1 prov2 =
      return (IV (Prov_none, List.fold_left (fun acc (n1, n2) ->
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
+
+
+  (* JSON serialisation *)
+
+  open Json
+
+  let serialise_prov = function
+    | Prov_none -> `String "None"
+    | Prov_some n -> `Assoc [("Some", BigIntJSON.serialise n)]
+    | Prov_device -> `String "Device"
+  let parse_prov = function
+    | `String "None" -> Prov_none
+    | `Assoc [("Some", n)] -> Prov_some (BigIntJSON.parse n)
+    | `String "Device" -> Prov_device
+    | _ -> throw "Concrete.provenance"
+
+  let serialise_ptrval_base = function
+    | PVnull cty -> `Assoc [("PVnull", CtypeJSON.serialise cty)]
+    | PVfunction sym -> `Assoc [("PVfunction", SymJSON.serialise sym)]
+    | PVconcrete n -> `Assoc [("PVconcrete", BigIntJSON.serialise n)]
+  let parse_ptrval_base = function
+    | `Assoc [("PVnull", cty)] -> PVnull (CtypeJSON.parse cty)
+    | `Assoc [("PVfunction", sym)] -> PVfunction (SymJSON.parse sym)
+    | `Assoc [("PVconcrete", n)] -> PVconcrete (BigIntJSON.parse n)
+    | _ -> throw "Concrete.pointer_value_base"
+
+  let serialise_pointer_value = function
+    | PV (prov, pvb) -> `List [serialise_prov prov; serialise_ptrval_base pvb]
+  let parse_pointer_value = function
+    | `List [prov; pvb] -> PV (parse_prov prov, parse_ptrval_base pvb)
+    | _ -> throw "Concrete.pointer_value"
+
+  let serialise_integer_value = function
+    | IV (prov, n) -> `List [serialise_prov prov; BigIntJSON.serialise n]
+  let parse_integer_value = function
+    | `List [prov; n] -> IV (parse_prov prov, BigIntJSON.parse n)
+    | _ -> throw "Concrete.integer_value"
+
+  let serialise_floating_value f = `String (string_of_float f)
+  let parse_floating_value = function
+    | `String s -> float_of_string s
+    | _ -> throw "Concrete.floating_value"
+
+  let rec serialise_mem_value = function
+    | MVunspecified cty ->
+      `Assoc [("MVunspecified", CtypeJSON.serialise cty)]
+    | MVinteger (ait, iv) ->
+      `Assoc [("MVinteger", `List [AilIntJSON.serialise ait;
+                                  serialise_integer_value iv])]
+    | MVfloating (ft, fv) ->
+      `Assoc [("MVfloating", `List [AilFloatingJSON.serialise ft;
+                                    serialise_floating_value fv])]
+    | MVpointer (cty, pv) ->
+      `Assoc [("MVpointer", `List [CtypeJSON.serialise cty;
+                                   serialise_pointer_value pv])]
+    | MVarray mvs ->
+      `List (List.map serialise_mem_value mvs)
+    | MVstruct (sym, fs) ->
+      `Assoc [("MVstruct", `List [SymJSON.serialise sym;
+                                  `List (List.map serialise_field fs)])]
+    | MVunion (sym, cid, mv) ->
+      `Assoc [("MVunion", `List [SymJSON.serialise sym;
+                                  serialise_field (cid, mv)])]
+  and serialise_field (cid, mv) =
+    `List [ CabsIdJSON.serialise cid; serialise_mem_value mv]
+  let rec parse_mem_value = function
+    | `Assoc [("MVunspecified", cty)] ->
+      MVunspecified (CtypeJSON.parse cty)
+    | `Assoc [("MVinteger", `List [ait; iv])] ->
+      MVinteger (AilIntJSON.parse ait, parse_integer_value iv)
+    | `Assoc [("MVfloating", `List [ft; fv])] ->
+      MVfloating (AilFloatingJSON.parse ft, parse_floating_value fv)
+    | `Assoc [("MVpointer", `List [cty; pv])] ->
+      MVpointer (CtypeJSON.parse cty, parse_pointer_value pv)
+    | `List mvs ->
+      MVarray (List.map parse_mem_value mvs)
+    | `Assoc [("MVstruct", `List [sym; `List fs])] ->
+      MVstruct (SymJSON.parse sym, List.map parse_field fs)
+    | `Assoc [("MVunion", `List [sym; `List [cid; mv]])] ->
+      MVunion (SymJSON.parse sym, CabsIdJSON.parse cid, parse_mem_value mv)
+    | _ -> throw "Concrete.mem_value"
+  and parse_field = function
+    | `List [cid; mv] -> (CabsIdJSON.parse cid, parse_mem_value mv)
+    | _ -> throw "Concrete.mem_value"
+
 end
 
 include Concrete

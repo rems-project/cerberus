@@ -1,7 +1,7 @@
 open Lwt
 open Cohttp_lwt_unix
 
-open Sexp
+open Core_json
 
 (* Debugging *)
 
@@ -102,6 +102,7 @@ let success (res, cabs, ail, _, core) =
     Param_pp_core.pp_file core
     |> string_of_doc
   in
+  print_endline (Yojson.to_string (Core_json.FileJSON.serialise core));
   let (core_str, locs) = Location_mark.extract pp_core in
   `Assoc [
     ("cabs",    json_of_doc (Pp_cabs.pp_translation_unit false false cabs));
@@ -111,6 +112,7 @@ let success (res, cabs, ail, _, core) =
     ("locs",    locs);
     ("stdout",  `String res);
     ("stderr",  `Null);
+    ("test",    Core_json.FileJSON.serialise core);
   ] |> Yojson.to_string |> respond
 
 let failure msg =
