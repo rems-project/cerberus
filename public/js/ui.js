@@ -217,7 +217,7 @@ class UI {
       url:  '/'+mode,
       type: 'POST',
       headers: {Accept: 'application/json'},
-      data: JSON.stringify ({"value": this.currentView.getValue()}),
+      data: /* JSON.stringify ({"value":*/ this.currentView.getValue(), //}),
       success: (data, status, query) => {
         onSuccess(data);
         if (data.stderr != "")
