@@ -2,11 +2,25 @@ exception FailParseJSON of string
 
 let throw s = raise (FailParseJSON s)
 
+type json =
+    [ `Assoc of (string * json) list
+    | `Bool of bool
+    | `Float of float
+    | `Floatlit of string
+    | `Int of int
+    | `Intlit of string
+    | `List of json list
+    | `Null
+    | `String of string
+    | `Stringlit of string
+    | `Tuple of json list
+    | `Variant of string * json option ]
+
 module type JSON =
 sig
   type t
-  val serialise: t -> Yojson.json
-  val parse: Yojson.json -> t
+  val serialise: t -> json
+  val parse: json -> t
 end
 
 (* Basic types *)
