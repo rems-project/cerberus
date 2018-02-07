@@ -118,7 +118,7 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3},yojson -libs unix,str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
@@ -142,7 +142,7 @@ ocaml_byte:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3},yojson -libs unix,nums,str main_.d.byte; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,nums,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 
