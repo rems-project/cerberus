@@ -52,7 +52,6 @@ let keywords =
       ("unit",    T.UNIT   );
       ("boolean", T.BOOLEAN);
       ("ctype",   T.CTYPE  );
-      ("list",    T.LIST   );
       ("loaded",  T.LOADED );
       
       (* for Core types *)
@@ -258,9 +257,6 @@ and main = parse
   | '-'   { T.MINUS }
   | '*'   { T.STAR }
   | '/'   { T.SLASH }
-(*
-  | '%'   { T.PERCENT }
-*)
   | "rem_t" { T.REM_T }
   | "rem_f" { T.REM_F }
   | '^'   { T.CARET }
@@ -275,9 +271,6 @@ and main = parse
   (* negative action *)
   | "neg" { T.NEG }
   
-  | "||"  { T.PIPE_PIPE }
-  | "|||"  { T.PIPES }
-  
   (* list symbols *)
   | "::" { T.COLON_COLON }
   | "[]" { T.BRACKETS }
@@ -286,18 +279,10 @@ and main = parse
   | "_"  { T.UNDERSCORE }
   
   | "| "  { T.PIPE }
-  | "-> " { T.MINUS_GT }
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
-  | '{'   { T.LBRACE }
-  | '}'   { T.RBRACE }
-  | "{{{" { T.LBRACES }
-  | "}}}" { T.RBRACES }
   | '['	  { T.LBRACKET }
   | ']'	  { T.RBRACKET }
-  | '<'	  { T.LANGLE }
-  | '>'	  { T.RANGLE }
-  | '.'   { T.DOT }
   | "..." { T.DOTS }
   | ";"   { T.SEMICOLON }
   | ','   { T.COMMA }
