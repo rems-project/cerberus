@@ -27,6 +27,20 @@ let keywords =
       ("union",       T.UNION      );
       ("unsigned",    T.UNSIGNED   );
       ("void",        T.VOID       );
+      ("int8_t",      T.INT8_T     );
+      ("int16_t",     T.INT16_T    );
+      ("int32_t",     T.INT32_T    );
+      ("int64_t",     T.INT64_T    );
+      ("uint8_t",     T.UINT8_T    );
+      ("uint16_t",    T.UINT16_T   );
+      ("uint32_t",    T.UINT32_T   );
+      ("uint64_t",    T.UINT64_T   );
+      ("intptr_t",    T.INTPTR_T   );
+      ("intmax_t",    T.INTMAX_T   );
+      ("uintptr_t",   T.UINTPTR_T  );
+      ("uintmax_t",   T.UINTMAX_T  );
+      ("size_t",      T.SIZE_T     );
+      ("ptrdiff_t",   T.PTRDIFF_T  );
       
       (* for Core object types *)
       ("integer",   T.INTEGER  );
@@ -54,9 +68,11 @@ let keywords =
       ("Ivalignof",   T.IVALIGNOF      );
       ("Unspecified", T.UNSPECIFIED    );
       ("Cfunction",   T.CFUNCTION_VALUE);
+(*
       ("Nil",         T.NIL            );
       ("Cons",        T.CONS           );
       ("Tuple",  T.TUPLE );
+*)
       ("Array",       T.ARRAY          );
       ("Specified",   T.SPECIFIED      );
       
@@ -261,6 +277,10 @@ and main = parse
   
   | "||"  { T.PIPE_PIPE }
   | "|||"  { T.PIPES }
+  
+  (* list symbols *)
+  | "::" { T.COLON_COLON }
+  | "[]" { T.BRACKETS }
   
   (* pattern symbols *)
   | "_"  { T.UNDERSCORE }

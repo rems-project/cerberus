@@ -52,6 +52,11 @@ let rec mk_list_pe = function
   | _pe::_pes ->
       Pexpr ((), PEctor (Ccons, [_pe; mk_list_pe _pes]))
 
+let rec mk_list_pat = function
+  | [] ->
+      CaseCtor (Cnil (), [])
+  | _pat::_pats ->
+      CaseCtor (Ccons, [_pat; mk_list_pat _pats])
 
 
 type symbolify_state = {
@@ -236,7 +241,7 @@ let rec symbolify_value _cval =
        assert false
 
 let convert_ctor : unit generic_ctor -> ctor = function
- | Cnil ()      -> failwith "TODO: Core parser ==> Cnil"
+ | Cnil ()      -> Cnil ()
  | Ccons        -> Ccons
  | Ctuple       -> Ctuple
  | Carray       -> Carray
@@ -790,10 +795,13 @@ let mk_file decls =
 %token <Mem_common.memop> MEMOP_OP
 
 (* ctype tokens *)
-%token VOID ATOMIC (* SIZE_T INTPTR_T PTRDIFF_T WCHAR_T CHAR16_T CHAR32_T *) DOTS
+%token VOID ATOMIC DOTS
+%token FLOAT DOUBLE LONG_DOUBLE
 %token ICHAR SHORT INT LONG LONG_LONG
 %token CHAR BOOL SIGNED UNSIGNED
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
+%token INTPTR_T INTMAX_T UINTPTR_T UINTMAX_T
+%token SIZE_T PTRDIFF_T
 (* %token STRUCT UNION *) (* TODO *)
 
 (* C11 memory orders *)
@@ -812,6 +820,9 @@ let mk_file decls =
 %token<string> CSTRING STRING
 %token SKIP IF THEN ELSE
 %nonassoc ELSE
+
+(* list expression symbols *)
+%token BRACKETS COLON_COLON
 
 
 (* Core exception operators *)
@@ -855,15 +866,9 @@ let mk_file decls =
 
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
-%token NIL CONS TUPLE ARRAY SPECIFIED UNSPECIFIED
+%token ARRAY SPECIFIED UNSPECIFIED
 
 %token CASE PIPE EQ_GT OF
-
-(* TODO: not used yet, but the tracing mode of the parser crash othewise ..... *)
-(*
-%token FLOAT DOUBLE LONG_DOUBLE STRUCT UNION ENUM FUNCTION
-RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES LANGLE RANGLE DOT SEMICOLON
- *)
 
 (* Attributes *)
 %token AILNAME
@@ -874,6 +879,7 @@ RETURN   PROC CASE OF  TILDE PIPES PIPE MINUS_GT LBRACE RBRACE LBRACES RBRACES L
 %right SLASH_BACKSLASH
 %left EQ GT LT GE LE
 %left PLUS MINUS
+%right COLON_COLON
 %left STAR SLASH REM_T REM_F
 %nonassoc CARET
 
@@ -961,15 +967,38 @@ integer_type:
     { AilTypes.Unsigned (AilTypes.IntN_t 32) }
 | UINT64_T
     { AilTypes.Unsigned (AilTypes.IntN_t 64) }
+| INTMAX_T
+    { AilTypes.(Signed Intmax_t) }
+| INTPTR_T
+    { AilTypes.(Signed Intptr_t) }
+| UINTMAX_T
+    { AilTypes.(Unsigned Intmax_t) }
+| UINTPTR_T
+    { AilTypes.(Unsigned Intptr_t) }
 | SIGNED ibty= integer_base_type
     { AilTypes.Signed ibty }
 | UNSIGNED ibty= integer_base_type
     { AilTypes.Unsigned ibty }
+| SIZE_T
+    { AilTypes.Size_t }
+| PTRDIFF_T
+    { AilTypes.Ptrdiff_t }
+;
+
+floating_type:
+| FLOAT
+    { AilTypes.(RealFloating Float) }
+| DOUBLE
+    { AilTypes.(RealFloating Double) }
+| LONG_DOUBLE
+    { AilTypes.(RealFloating LongDouble) }
 ;
 
 basic_type:
 | ity= integer_type
     { AilTypes.Integer ity }
+| fty= floating_type
+    { AilTypes.Floating fty }
 ;
 
 ctype:
@@ -1097,12 +1126,6 @@ memory_order:
 
 
 ctor:
-| NIL
-    { Cnil () }
-| CONS
-    { Ccons }
-| TUPLE
-    { Ctuple }
 | ARRAY
     { Carray }
 | IVMAX
@@ -1118,17 +1141,26 @@ ctor:
 | UNSPECIFIED
     { Cunspecified }
 
+list_pattern:
+| BRACKETS
+    { CaseCtor (Cnil (), []) }
+|  _pat1= pattern COLON_COLON _pat2= pattern
+    { CaseCtor (Ccons, [_pat1; _pat2]) }
+| _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET)
+    { mk_list_pat _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
     { CaseBase (Some _sym, bTy) }
 | UNDERSCORE COLON bTy= core_base_type
     { CaseBase (None, bTy) }
-| ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
-    { CaseCtor (ctor, _pats) }
 (* Syntactic sugar for tuples and lists *)
+| _pat= list_pattern
+    { _pat }
 | LPAREN _pat= pattern COMMA _pats= separated_nonempty_list(COMMA, pattern) RPAREN
     { CaseCtor (Ctuple, _pat :: _pats) }
+| ctor=ctor _pats= delimited(LPAREN, separated_list(COMMA, pattern), RPAREN)
+    { CaseCtor (ctor, _pats) }
 ;
 
 pattern_pair(X):
@@ -1167,6 +1199,13 @@ value:
     { Vctype ty }
 
 
+list_pexpr:
+| BRACKETS
+    { Pexpr ((), PEctor (Cnil (), [])) }
+|  _pe1= pexpr COLON_COLON _pe2= pexpr
+    { Pexpr ((), PEctor (Ccons, [_pe1; _pe2])) }
+| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
+    { mk_list_pe _pes }
 
 pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
@@ -1177,9 +1216,6 @@ pexpr:
     { Pexpr ((), PEerror (str, _pe))  }
 | _cval= value
     { Pexpr ((), PEval _cval) }
-(*
-  | PEconstrained of list (list Mem.mem_constraint * generic_pexpr 'ty 'sym)
-*)
 | _sym= SYM
     { Pexpr ((), PEsym _sym) }
 | iCst= IMPL
@@ -1187,8 +1223,8 @@ pexpr:
 (* Syntactic sugar for tuples and lists *)
 | LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Pexpr ((), PEctor (Ctuple, _pe :: _pes)) }
-| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
-    { mk_list_pe _pes }
+| _pe= list_pexpr
+  { _pe }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Pexpr ((), PEctor (ctor, _pes)) }
 | CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
