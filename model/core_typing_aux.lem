@@ -258,3 +258,72 @@ let rec export_pexpr loc (Pexpr infer pexpr_) =
 val guard_match: Loc.t -> string -> core_base_type -> core_base_type -> E.eff unit
 let guard_match loc str bTy1 bTy2 =
   E.guard (bTy1 = bTy2) loc (Mismatch str bTy1 bTy2)
+
+
+val unify: inferred -> inferred -> maybe (maybe inferred * maybe inferred)
+let rec unify infer1 infer2 =
+  match (infer1, infer2) with
+    | (InferredUnknown, InferredUnknown) ->
+        Nothing
+    | (_, InferredUnknown) ->
+        Just (Nothing, Just infer1)
+    | (InferredUnknown, _) ->
+        Just (Just infer2, Nothing)
+    | (InferredType_list elem_infer1, InferredType_list elem_infer2) ->
+        match unify elem_infer1 elem_infer2 with
+          | Nothing ->
+              Nothing
+          | Just (Nothing, Nothing) ->
+              Just (Nothing, Nothing)
+          | Just (Nothing, Just elem_infer2') ->
+              Just (Nothing, Just (InferredType_list elem_infer2'))
+          | Just (Just elem_infer1', Nothing) ->
+              Just (Just (InferredType_list elem_infer1'), Nothing)
+          | Just (Just elem_infer1', Just elem_infer2') ->
+              Just (Just (InferredType_list elem_infer1'), Just (InferredType_list elem_infer2'))
+        end
+    | (InferredType_tuple infers1, InferredType_tuple infers2) ->
+        error "TODO: Core_typing_aux.unify tuples"
+    | _ ->
+        if infer1 = infer2 then
+          Just (Nothing, Nothing)
+        else
+          Nothing
+  end
+
+(*
+val     inject_inferred: inferred -> inferred_pexpr -> E.eff inferred_pexpr
+let rec inject_inferred infer (Pexpr _ pexpr_) =
+  match pexpr_ with
+    | PEsym _ ->
+        
+    | PEimpl _ ->
+        
+    | PEval cval ->
+        
+(*
+    | PEconstrained of list (Mem.mem_iv_constraint  * (generic_pexpr 'bty 'sym)) (* constrained value *)
+*)
+    | PEundef _ ->
+        
+    | PEerror _ pe ->
+        
+    | PEctor of (generic_ctor 'bty) * list (generic_pexpr 'bty 'sym) (* constructor application *)
+    | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
+    | PEarray_shift of (generic_pexpr 'bty 'sym) * ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
+    | PEmember_shift of (generic_pexpr 'bty 'sym) * Symbol.sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
+    | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
+    | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* binary operators *)
+    | PEstruct of Symbol.sym * list (Cabs.cabs_identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
+    | PEunion of Symbol.sym * Cabs.cabs_identifier * (generic_pexpr 'bty 'sym) (* C union expression *)
+    | PEcall of (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* pure Core function call *)
+    | PElet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure Core let *)
+    | PEif of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure Core if *)
+    | PEis_scalar of (generic_pexpr 'bty 'sym)
+    | PEis_integer of (generic_pexpr 'bty 'sym)
+    | PEis_signed of (generic_pexpr 'bty 'sym)
+    | PEis_unsigned of (generic_pexpr 'bty 'sym)
+    | PEstd _ pe ->
+        
+  end
+*)

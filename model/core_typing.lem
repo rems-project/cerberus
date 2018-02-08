@@ -435,10 +435,43 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
               E.fail loc (CtorWrongNumber 0 (List.length pes))
           | (Ccons, [pe1; pe2]) ->
               infer_pexpr loc tagDefs env pe1 >>= fun (Pexpr infer1 _ as pe1') ->
-              infer_pexpr loc tagDefs env pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+              match toCoreBaseType infer1 with
+                | Just bTy1 ->
+                    typecheck_pexpr loc tagDefs env (BTy_list bTy1) pe2 >>= fun pe2' ->
+                    E.return (Pexpr (InferredType_list infer1) (PEctor Ccons [pe1'; pe2']))
+                | Nothing ->
+                    infer_pexpr loc tagDefs env pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+                    match toCoreBaseType infer2 with
+                      | Just (BTy_list elem_bTy2) ->
+                          typecheck_pexpr loc tagDefs env elem_bTy2 pe1 >>= fun pe1' ->
+                            E.return (Pexpr infer2 (PEctor Ccons [pe1'; pe2']))
+                      | Just _ ->
+                          E.fail loc (CoreTyping_TODO "the list constructor expects a list as it's second operand")
+                      | Nothing ->
+                          (* TODO: can maybe be improved (see Core_typing_aux.unify) *)
+                          E.fail loc TooGeneral
+                    end
+              end
+(*
+              let str =
+                let str1 = match toCoreBaseType infer1 with
+                  | Just bTy ->
+                      Pp.stringFromCore_core_base_type bTy
+                  | Nothing ->
+                      "?"
+                end in
+                let str2 = match toCoreBaseType infer2 with
+                  | Just bTy ->
+                      Pp.stringFromCore_core_base_type bTy
+                  | Nothing ->
+                      "?"
+                end in
+                str1 ^ " <- vs -> " ^ str2
+              in
               E.guard (InferredType_list infer1 = infer2)
-                loc (CoreTyping_TODO "annotate Ccons: illtyped list") >>
+                loc (CoreTyping_TODO ("annotate Ccons: illtyped list ==> " ^ str)) >>
               E.return (Pexpr infer2 (PEctor Ccons [pe1'; pe2']))
+*)
           | (Ccons, _) ->
               E.fail loc (CtorWrongNumber 2 (List.length pes))
           | (Ctuple, _) ->
@@ -630,12 +663,25 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
     | PElet pat pe1 pe2 ->
         infer_pattern loc pat >>= fun (pat_env, pat_infer, pat') ->
         match toCoreBaseType pat_infer with
-          | Nothing ->
-              E.fail loc TooGeneral
+          (* if we can infer the type of the pattern, we use it to
+             typecheck pe1 *)
           | Just pat_bTy ->
               typecheck_pexpr loc tagDefs env pat_bTy pe1         >>= fun pe1'                     ->
               infer_pexpr loc tagDefs (env_union env pat_env) pe2 >>= fun (Pexpr infer2 _ as pe2') ->
               E.return (Pexpr infer2 (PElet pat' pe1' pe2'))
+          (* otherwise we need to infer the type of pe1 and use it to typecheck
+             the pattern *)
+          | Nothing ->
+              infer_pexpr loc tagDefs env pe1 >>= fun (Pexpr pe1_infer _ as pe1') ->
+              match toCoreBaseType pe1_infer with
+                | Just pe1_bTy ->
+                  typecheck_pattern loc pe1_bTy pat                   >>= fun (pat_env, pat')          ->
+                  infer_pexpr loc tagDefs (env_union env pat_env) pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+                  E.return (Pexpr infer2 (PElet pat' pe1' pe2'))
+                | Nothing ->
+                    (* we couldn't infer the types of neither the pattern not pe1 *)
+                    E.fail loc TooGeneral
+              end
         end
     | PEif pe1 pe2 pe3 ->
         infer_pexpr loc tagDefs env pe2 >>= fun (Pexpr infer2 _ as pe2') ->
@@ -904,12 +950,20 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
     | PElet pat pe1 pe2 ->
         infer_pattern loc pat >>= fun (pat_env, pat_infer, pat') ->
         match toCoreBaseType pat_infer with
-          | Nothing ->
-              E.fail loc TooGeneral
           | Just pat_bTy ->
               typecheck_pexpr loc tagDefs env pat_bTy pe1                 >>= fun pe1' ->
               typecheck_pexpr loc tagDefs (env_union env pat_env) bTy pe2 >>= fun pe2' ->
               E.return (PElet pat' pe1' pe2')
+          | Nothing ->
+              infer_pexpr loc tagDefs env pe1 >>= fun (Pexpr pe1_infer _ as pe1') ->
+              match toCoreBaseType pe1_infer with
+                | Just pe1_bTy ->
+                    typecheck_pattern loc pe1_bTy pat                           >>= fun (pat_env, pat') ->
+                    typecheck_pexpr loc tagDefs (env_union env pat_env) bTy pe2 >>= fun pe2'            ->
+                    E.return (PElet pat' pe1' pe2')
+                | Nothing ->
+                    E.fail loc TooGeneral
+              end
         end
     | PEif pe1 pe2 pe3 ->
         PEif <$> typecheck_pexpr loc tagDefs env BTy_boolean pe1
@@ -1134,6 +1188,12 @@ let rec collect_labels env (Expr _ expr_) =
 
 (* val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit) *)
 and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
+  let loc = match Core_aux.get_loc annot with
+    | Just loc' ->
+        loc'
+    | Nothing ->
+        loc
+  end in
   Expr annot <$> match expr_ with
     | Epure pe ->
         Epure <$> typecheck_export_pexpr loc tagDefs env expected_bTy pe
