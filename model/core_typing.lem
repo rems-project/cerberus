@@ -648,13 +648,13 @@ let rec infer_pexpr loc tagDefs env (Pexpr () pexpr_) =
               E.fail loc (CoreTyping_TODO ("PEcall, couldn't resolve the name: " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
         end
     | PElet pat pe1 pe2 ->
-        infer_pexpr loc tagDefs env pe1 >>= fun (Pexpr infer1 _ as pe1') ->
-        match toCoreBaseType infer1 with
+        infer_pattern loc pat >>= fun (pat_env, pat_infer, pat') ->
+        match toCoreBaseType pat_infer with
           | Nothing ->
               E.fail loc TooGeneral
-          | Just bTy1 ->
-              typecheck_pattern loc bTy1 pat >>= fun (env', pat') ->
-              infer_pexpr loc tagDefs (env_union env env') pe2 >>= fun (Pexpr infer2 _ as pe2') ->
+          | Just pat_bTy ->
+              typecheck_pexpr loc tagDefs env pat_bTy pe1         >>= fun pe1'                     ->
+              infer_pexpr loc tagDefs (env_union env pat_env) pe2 >>= fun (Pexpr infer2 _ as pe2') ->
               E.return (Pexpr infer2 (PElet pat' pe1' pe2'))
         end
     | PEif pe1 pe2 pe3 ->
@@ -927,13 +927,14 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr (
               E.fail loc (CoreTyping_TODO ("unresolved PEcall ==> " ^ Pp.stringFromCore_pexpr (Pexpr () pexpr_)))
         end
     | PElet pat pe1 pe2 ->
-        infer_pexpr loc tagDefs env pe1 >>= fun ((Pexpr infer1 _) as pe1') ->
-        match toCoreBaseType infer1 with
+        infer_pattern loc pat >>= fun (pat_env, pat_infer, pat') ->
+        match toCoreBaseType pat_infer with
           | Nothing ->
               E.fail loc TooGeneral
-          | Just bTy1 ->
-              typecheck_pattern loc bTy1 pat >>= fun (env', pat') ->
-              PElet pat' pe1' <$> typecheck_pexpr loc tagDefs (env_union env env') bTy pe2
+          | Just pat_bTy ->
+              typecheck_pexpr loc tagDefs env pat_bTy pe1                 >>= fun pe1' ->
+              typecheck_pexpr loc tagDefs (env_union env pat_env) bTy pe2 >>= fun pe2' ->
+              E.return (PElet pat' pe1' pe2')
         end
     | PEif pe1 pe2 pe3 ->
         PEif <$> typecheck_pexpr loc tagDefs env BTy_boolean pe1
