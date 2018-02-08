@@ -184,7 +184,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
         if c = 0 then
           pure(acc)
         else
-          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, !(char), 1), Cons(c,acc)) in
+          let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, !(char), 1), c :: acc) in
           pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY>>)) -- TODO think about that

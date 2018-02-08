@@ -54,14 +54,19 @@ type token =
   | UINT16_T
   | UINT32_T
   | UINT64_T
+
+  | INTPTR_T
+  | INTMAX_T
+  | UINTPTR_T
+  | UINTMAX_T
+  
+  | SIZE_T
+  | PTRDIFF_T
   
   | ATOMIC
-  | STRUCT
-  | UNION
-  | ENUM
-  | SIZE_T
-  | INTPTR_T
-  | PTRDIFF_T
+  | STRUCT (* TODO *)
+  | UNION (* TODO *)
+  | ENUM (* TODO *)
   | WCHAR_T
   | CHAR16_T
   | CHAR32_T
@@ -195,10 +200,8 @@ type token =
   | PCALL
   | CFUNCTION_VALUE
 
-
-  | NIL
-  | CONS
-  | TUPLE
+  | COLON_COLON
+  | BRACKETS
   | ARRAY
   | LOADED
   | SPECIFIED
