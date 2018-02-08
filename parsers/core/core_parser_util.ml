@@ -67,9 +67,9 @@ type token =
   | STRUCT (* TODO *)
   | UNION (* TODO *)
   | ENUM (* TODO *)
-  | WCHAR_T
-  | CHAR16_T
-  | CHAR32_T
+  | WCHAR_T (* TODO *)
+  | CHAR16_T (* TODO *)
+  | CHAR32_T (* TODO *)
   | INTEGER
   | FLOATING
   | BOOLEAN
@@ -79,7 +79,6 @@ type token =
   | UNIT
   | UNIT_VALUE
   | EFF
-  | LIST
   | TRUE
   | FALSE
   | NOT
@@ -95,10 +94,10 @@ type token =
   | WEAK
   | STRONG
   | ATOM
-  | SAVE
-  | RUN
-  | RAISE
-  | REGISTER
+  | SAVE (* TODO *)
+  | RUN (* TODO *)
+  | RAISE (* TODO *)
+  | REGISTER (* TODO *)
 (*
   | TRY
   | WITH
@@ -150,7 +149,6 @@ type token =
   | MINUS
   | STAR
   | SLASH
-(*  | PERCENT *)
   | REM_T
   | REM_F
   | CARET
@@ -162,34 +160,24 @@ type token =
   | SLASH_BACKSLASH
   | BACKSLASH_SLASH
   | NEG
-  | PIPES
   | UNDERSCORE
   | PIPE
-  | MINUS_GT
   | LPAREN
   | RPAREN
-  | LBRACE
-  | RBRACE
-  | LBRACES
-  | RBRACES
   | LBRACKET
   | RBRACKET
-  | LANGLE
-  | RANGLE
-  | DOT
   | DOTS
   | SEMICOLON
   | COMMA
   | COLON
   | COLON_EQ
   | EOF
-  | PIPE_PIPE
   
   | PAR
   | ND
-  | WAIT
+  | WAIT (* TODO *)
   | ARRAY_SHIFT
-  | MEMBER_SHIFT
+  | MEMBER_SHIFT (* TODO *)
   
   (* integer values *)
   | IVMAX
@@ -212,50 +200,3 @@ type token =
   | MEMOP_OP of Mem_common.memop
   
   | AILNAME
-
-(*
-  | UNION
-  | UNDEF
-  | TRUE
-  | THEN
-  | STRUCT
-  | STORE
-  | SKIP
-  | SIZE_T
-  | SIGNED
-  | SHORT
-  | OF
-  | NOT
-  | NAME of Core.name
-  | LONG_LONG
-  | LONG_DOUBLE
-  | LONG
-  | LOAD
-  | COMPARE_EXCHANGE_STRONG
-  | COMPARE_EXCHANGE_WEAK
-  | LET
-  | KILL
-  | INT
-  | IN
-  | IF
-  | ICHAR
-  | FUN
-  | EXCLAM
-  | ERROR
-  | ENUM
-  | END
-  | ELSE
-  | DOUBLE
-  | DEF
-  | CTYPE
-  | CREATE
-  | COMPLEX
-  | CHAR32_T
-  | CHAR16_T
-  | CHAR
-  | CASE
-  | BOOLEAN
-  | BOOL
-  | ALLOC
-  | ADDRESS
- *)
