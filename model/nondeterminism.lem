@@ -44,6 +44,7 @@ type nd_action 'a 'err 'cs 'st =
   | NDnd of string * list (string * ndM 'a 'err 'cs 'st)
   | NDguard of string * 'cs * ndM 'a 'err 'cs 'st
   | NDbranch of string * 'cs * ndM 'a 'err 'cs 'st * ndM 'a 'err 'cs 'st
+  | NDstep of list (string * ndM 'a 'err 'cs 'st)
 
 and ndM 'a 'err 'cs 'st =
   ND of ('st -> (nd_action 'a 'err 'cs 'st * 'st))
@@ -71,6 +72,8 @@ let rec bind (ND m_act) f =
           (NDguard debug_str cs (bind m_act' f), st')
       | (NDbranch debug_str cs m_act1 m_act2, st') ->
           (NDbranch debug_str cs (bind m_act1 f) (bind m_act2 f), st')
+      | (NDstep str_ms, st') ->
+          (NDstep (List.map (fun (str, m) -> (str, bind m f)) str_ms), st')
     end
   )
 
@@ -252,6 +255,8 @@ let rec liftAction get put liftErr = function
       NDguard debug_str cs (liftND get put liftErr act)
   | NDbranch debug_str cs m_act1 m_act2 ->
       NDbranch debug_str cs (liftND get put liftErr m_act1) (liftND get put liftErr m_act2)
+  | NDstep str_ms ->
+      NDstep (List.map (fun (str, m) -> (str, liftND get put liftErr m)) str_ms)
 end
 
 and liftND get put liftErr (ND m) =
@@ -259,6 +264,12 @@ and liftND get put liftErr (ND m) =
     let (act, st1') = m (get st2) in
     (liftAction get put liftErr act, put st2 st1')
   )
+
+
+
+let mk_step _ xs =
+  ND (fun st -> (NDstep xs, st))
+
 
 
 
