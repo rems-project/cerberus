@@ -119,5 +119,7 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) 
                 end >>= fun xs2 ->
                 return (xs1 @ xs2)
                 end
+      | (NDstep str_ms, st') -> aux (ND (fun st -> NDnd ("step", str_ms), st)) st'
+
   in runEff (aux m st0)
 
