@@ -292,7 +292,7 @@ let rec drive_core_thread tid =
     | _ ->
         error "drive_core_thread, wrong tid"
   end in
-  ND.msum "drive_core_thread" $ List.map (function
+  ND.mk_step "drive_core_thread" $ List.map (function
     | Core_run.Step_constrained debug_str xs ->
         ( "Step_constrained(" ^ debug_str ^ ")"
         , (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED, |xs| = " ^ show (List.length xs)) >>
