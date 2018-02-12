@@ -6,10 +6,6 @@ module Sym = Symbol
 type ksym = Sym.sym
 type ksym_supply = ksym UniqueId.supply
 
-type k_norm_pexpr_state = 
-  { normed: typed_pexpr;
-    sym_supply: ksym_supply;
-  }
 
 
 (* ========== Debug ========== *)

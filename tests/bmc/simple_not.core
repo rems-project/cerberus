@@ -1,0 +1,4 @@
+fun main() : integer :=
+  let x: integer = 10 in
+  let y: integer = x + 1 in
+  if (not(x > 5)) then 0 else 1

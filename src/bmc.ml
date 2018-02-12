@@ -17,6 +17,8 @@ let run_bmc (core_file : 'a typed_file)
   pp_file core_file;
   let (normalized_file, _) = normalize_file core_file sym_supply in
   pp_file normalized_file;
+
+  print_string "Done normalization\n";
   bmc_file normalized_file; 
 
 
