@@ -1,0 +1,5 @@
+fun main() : boolean :=
+  let x: integer = 10 in
+  let y: boolean = (x > 10) in
+  let z: boolean = not(y) in
+  z 

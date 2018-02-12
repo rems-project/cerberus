@@ -1,0 +1,4 @@
+fun main() : integer :=
+  let x: integer = 5 in
+  let y:integer =  undef(<<UB045a_division_by_zero>>) + 1
+    in y

@@ -1,4 +1,5 @@
 open Global_ocaml
+open Bmc
 
 (* BEGIN TMP MLM DEBUG *)
 let mlm_dbg_oc =
@@ -298,7 +299,13 @@ let pipeline filename args =
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
-  
+
+  (* TODO (sl715): Call BMC *)
+  Core_typing.typecheck_program rewritten_core_file >>= fun f ->
+    Exception.except_return (run_bmc f sym_supply)
+  ;
+
+
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
     >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply

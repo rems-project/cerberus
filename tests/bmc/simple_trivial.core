@@ -1,0 +1,2 @@
+fun main(x: integer) : integer :=
+  5

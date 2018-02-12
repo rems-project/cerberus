@@ -1,0 +1,5 @@
+proc main(): eff (loaded integer) :=
+  let strong ptr: pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong _: unit = store(!(signed int), ptr, Specified(42)) in
+  let strong n: loaded integer = load(!(signed int), ptr) in
+  pure(n)

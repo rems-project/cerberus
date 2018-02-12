@@ -1,0 +1,16 @@
+fun main() : integer :=
+let x: integer = (if 5 > 4 then 1 else 0) in
+let y: integer = (if x >= 1 
+  then 
+    let z: integer = 
+      if 3 > 2 then 1  else undef(<<UB045a_division_by_zero>>) 
+    in 
+      z
+  else 
+    let z: integer =
+      if 3 > 2 then 0 else undef(<<UB045a_division_by_zero>>) + 1
+    in z
+  )
+in y
+
+

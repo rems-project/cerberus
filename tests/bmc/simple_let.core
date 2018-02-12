@@ -1,0 +1,6 @@
+fun main() : integer :=
+  let x: integer = 10 in
+  let y: integer = x + 1 in
+  let y: integer = x + x in
+  let z: integer = x + y in
+  x + y + z

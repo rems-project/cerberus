@@ -1,0 +1,2 @@
+fun main() : loaded integer :=
+  Specified(5)

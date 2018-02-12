@@ -1,0 +1,4 @@
+fun main() : integer :=
+  let x : integer = (let y : integer = 5 + 5 in y) in
+  let y : integer = 10 in
+  x + y + 5
