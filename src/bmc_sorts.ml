@@ -18,6 +18,13 @@ let core_object_type_to_z3_sort (ctx: context)
    | OTy_union _ ->
        assert false
 
+(*
+module type CustomSort =
+  sig
+    val mk_sort: context -> Sort.sort
+  end
+*)
+
 module UnitSort = 
   struct
     let mk_sort (ctx: context) =
@@ -67,4 +74,5 @@ struct
     assert false
 end
 
+(* TODO: Functorize *)
 module LoadedInteger = LoadedSort (struct let cot = OTy_integer end)

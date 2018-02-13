@@ -23,6 +23,54 @@ open Bmc_sorts
 
 type ksym_table = (int, Expr.expr) Pmap.map
 
+(* Pointer state: 
+ * For every variable of Core type pointer, 
+ *    - Map it to set of addresses it refers to
+ *    - int (core symbol) -> PointerState = Set of addresses
+ *
+ * An address consists of a unique allocation
+ *    - fun: is_eq (check if same address)
+ *    - map from int to symbol?
+ *
+ * For let x: pointer = Create...
+ *    - Create a new address
+ *    - Don't insert into bmc_state?
+ *    - Add it to pointer state
+ *    - "x: SMT ptr sort" = address
+ *
+ * For let y: pointer = x
+ *    - pointer state
+ *    - "y : SMT ptr sort" = x (address)
+ *
+ * For store:
+ *    - create fresh var for the address and assign it to a value
+ *
+ * For load:
+ *    - lookup address variable points to, assign it current value in z3
+ *
+ * bmc_state:
+ *    - map from address -> cur_value (int?)
+ *    - pointer state: symbol -> PointerState map
+ *)
+
+module type Address =
+  sig
+    type addr
+    val is_eq: addr -> addr -> bool
+
+    (* Given previous addr, make a new one *)
+    val mk_fresh: addr -> addr
+    val mk_sort: context -> Sort.sort
+  end
+
+module IntAddress : Address = 
+  struct
+    type addr = int
+    let is_eq = (==)
+    let mk_fresh = succ
+    let mk_sort = Integer.mk_sort
+  end
+
 type bmc_state = {
   ctx         : context;
   solver      : Solver.solver;
@@ -30,6 +78,7 @@ type bmc_state = {
 
   vcs         : Expr.expr list;
 }
+
 
 (* ========== BMC ========== *)
 
@@ -216,8 +265,37 @@ let rec bmc_pexpr (state: bmc_state)
       assert false
   in
     z_pe, state'
+    
+let rec bmc_expr (state: bmc_state) 
+                 (Expr(annot, expr_) as expr: 'a typed_expr) =
+  let (z_e, state') = match expr_ with
+  | Epure _
+  | Ememop _ 
+  | Eaction _
+  | Ecase _
+  | Eskip
+  | Eproc _
+  | Eccall _
+  | Eunseq _
+  | Eindet _ 
+  | Ebound _
+  | End _
+  | Erun _
+  | Epar _
+  | Ewait _ 
+  | Eif _ 
+  | Elet _ 
+  | Easeq _ 
+  | Ewseq _ ->
+      assert false
+  | Esseq (pat, e1, e2) ->
+      assert false
+  | Esave _  ->
+    assert false
+  in (z_e, state')
 
 
+(* TODO: only handles one function *)
 let bmc_fun_map (state: bmc_state)
                 (funs: ('a, 'b typed_fun_map_decl) Pmap.map) =
   Pmap.map (function
@@ -231,7 +309,11 @@ let bmc_fun_map (state: bmc_state)
     | ProcDecl (ty, params) ->
         assert false
     | Proc (ty, params, e) ->        
-        assert false
+        let (_, state1) = bmc_expr state e in
+        let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
+                               state1.vcs
+        in
+        Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] 
   ) funs
 
 
