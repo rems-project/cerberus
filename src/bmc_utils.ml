@@ -1,6 +1,7 @@
 open Core
 
 module Sym = Symbol
+open Z3
 
 (* ========== Type aliases ========== *)
 type ksym = Sym.sym
@@ -74,3 +75,9 @@ module State(St : sig type t end) = struct
 end
 
 
+(* ========== Z3 aliases ========== *)
+let mk_sym (ctx:context) = Symbol.mk_string ctx
+
+
+(* ========== Core Symbols ========== *)
+let symbol_to_int (Symbol(i, _): Sym.sym) : int = i

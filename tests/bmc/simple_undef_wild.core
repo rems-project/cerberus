@@ -1,0 +1,3 @@
+fun main() : integer :=
+  let _: integer = undef(<<UB045a_division_by_zero>>)  in
+  1

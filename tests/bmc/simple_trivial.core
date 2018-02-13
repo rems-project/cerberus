@@ -1,2 +1,2 @@
-fun main(x: integer) : integer :=
+fun main() : integer :=
   5
