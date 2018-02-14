@@ -19,6 +19,7 @@ open Bmc_utils
 open Bmc_normalize
 open Bmc_sorts
 
+open Pp_core
 (* ========== Type definitions ========== *)
 
 type ksym_table = (int, Expr.expr) Pmap.map
@@ -31,6 +32,7 @@ type ksym_table = (int, Expr.expr) Pmap.map
  * An address consists of a unique allocation
  *    - fun: is_eq (check if same address)
  *    - map from int to symbol?
+ *    - type ? 
  *
  * For let x: pointer = Create...
  *    - Create a new address
@@ -53,31 +55,70 @@ type ksym_table = (int, Expr.expr) Pmap.map
  *    - pointer state: symbol -> PointerState map
  *)
 
-module type Address =
+module type AddressType =
   sig
     type addr
     val is_eq: addr -> addr -> bool
 
     (* Given previous addr, make a new one *)
-    val mk_fresh: addr -> addr
+    val mk_fresh: addr ref -> addr
     val mk_sort: context -> Sort.sort
-  end
+    val mk_initial: addr
+    val to_string: addr -> string
+  end 
 
-module IntAddress : Address = 
+module IntAddress : AddressType = 
   struct
     type addr = int
     let is_eq = (==)
-    let mk_fresh = succ
+    let mk_fresh st = (let ret = succ !st in (st := ret; ret))
     let mk_sort = Integer.mk_sort
+    let mk_initial = 0
+    let to_string = string_of_int
   end
+
+module Address = (IntAddress : AddressType)
+
+(* "Symbol: @int_int" *)
+type kbmc_address = {
+  addr        : Address.addr;
+  seq_ctr     : int ref;
+  hist        : ((int, Expr.expr) Pmap.map) ref;
+}
 
 type bmc_state = {
   ctx         : context;
   solver      : Solver.solver;
   sym_table   : ksym_table ref;
 
+  (* Make fresh allocations using Address.mk_fresh *)
+  addr_gen    : Address.addr ref;
+
+  (* Map from int -> address *)
+  addr_map    : (Address.addr, kbmc_address) Pmap.map ref;
+
+  (* ------------- *)
+  
+  (* Map from address to Z3 symbol representing value *)
+  heap        : (Address.addr, Expr.expr) Pmap.map;
+
+  (* Map from Core symbol to set of addresses *)
+  ptr_map     : (int, Address.addr list) Pmap.map;
+
   vcs         : Expr.expr list;
 }
+
+type bmc_ret = 
+  | BmcAddress of kbmc_address
+  | BmcZ3Expr  of Expr.expr option
+  | BmcTODO
+  | BmcNone
+
+(* PPrinters *)
+
+let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
+  Pmap.mapi (fun k v-> (Printf.printf "%d -> " k;
+            List.iter(fun s -> Printf.printf "%s " (Address.to_string s)) v)) map
 
 
 (* ========== BMC ========== *)
@@ -89,6 +130,13 @@ let symbol_to_z3 (ctx: context) (sym: Sym.sym) =
   | Symbol (num, None) ->
       mk_sym ctx ((string_of_int num) ^ "_" ^ "a")
 
+let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
+  (!(bmc_address.seq_ctr))
+
+let mk_next_seq_symbol (ctx: context) (bmc_address : kbmc_address) =
+  bmc_address.seq_ctr := succ (!(bmc_address.seq_ctr));
+  mk_sym ctx ("@" ^ (Address.to_string (bmc_address.addr)) ^ "_" ^ 
+              (string_of_int (!(bmc_address.seq_ctr))))
 
 (* core_base_type to z3 sort *)
 let cbt_to_z3 (ctx: context) (cbt : core_base_type) : Z3.Sort.sort =
@@ -119,6 +167,13 @@ let initial_bmc_state (_ : unit) : bmc_state =
     ctx = ctx;
     solver = Solver.mk_solver ctx None;
     sym_table = ref (Pmap.empty Pervasives.compare);
+
+    addr_gen = ref (Address.mk_initial);
+    addr_map = ref (Pmap.empty Pervasives.compare);
+
+    heap = Pmap.empty Pervasives.compare;
+    ptr_map = Pmap.empty Pervasives.compare;
+
     vcs = []
   }
 let integer_value_to_z3 (ctx: context) ival =
@@ -180,11 +235,51 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpAnd -> Boolean.mk_and ctx [ pe1; pe2 ] 
   | OpOr -> Boolean.mk_or ctx [ pe1; pe2 ]
 
+let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
+               (ty : core_base_type) (bmc_expr : bmc_ret) =
+  match m_sym with
+  | None -> state (* Do nothing *)
+  | Some sym -> 
+      match ty with
+      | BTy_object OTy_pointer -> 
+          (* Pointer equality *)
+          begin
+          match bmc_expr with
+          | BmcAddress addr -> 
+              (* let x: pointer = Create... *)
+              (* TODO: Z3 equality of address *)
+              let sym_id = symbol_to_int sym in
+
+              (* Add symbol to sym_table *)
+              (* Map sym_id to address *)
+              ({state with ptr_map = (Pmap.add sym_id [ addr.addr ]
+                                      state.ptr_map)})
+          | _ -> assert false
+          end
+      | BTy_object _ ->  assert false
+      | BTy_loaded cot ->
+          (* TODO duplicated code: should case on bmc_expr instead maybe *)
+          let pat_symbol = symbol_to_z3 state.ctx sym in
+          let z3_sort = cbt_to_z3 state.ctx ty in
+          let expr_pat = Expr.mk_const state.ctx pat_symbol z3_sort in
+          state.sym_table := Pmap.add (symbol_to_int sym) expr_pat 
+                                      (!(state.sym_table));
+          match bmc_expr with
+          | BmcZ3Expr None -> state
+          | BmcZ3Expr (Some expr) ->
+              begin
+              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
+              state
+              end
+          | _ -> assert false
+      | _ -> assert false
 
 let rec bmc_pexpr (state: bmc_state) 
                   (Pexpr(bTy, pe) as pexpr : typed_pexpr) =
   let (z_pe, state') = match pe with
     | PEsym sym ->
+        pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
+        Printf.printf "\n";
         let sym_expr = 
           match Pmap.lookup (symbol_to_int sym) (!(state.sym_table)) with
           | Some z -> z
@@ -216,9 +311,12 @@ let rec bmc_pexpr (state: bmc_state)
           | _ -> None, state2
         end
     | PEstruct _
-    | PEunion _
-    | PEcall _ -> 
-        assert false
+    | PEunion _ -> assert false
+    | PEcall (Sym (Symbol(_, Some "conv_loaded_int")), (typ :: pe :: [])) -> 
+        (* TODO: special case conv_loaded_int *)
+        (* TODO: range check *)
+        bmc_pexpr state pe 
+    | PEcall (_, args) -> assert false
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
         let z3_sort = cbt_to_z3 (state.ctx) pat_ty in
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
@@ -265,33 +363,108 @@ let rec bmc_pexpr (state: bmc_state)
       assert false
   in
     z_pe, state'
-    
+
+
+
+
+let mk_bmc_address (addr : Address.addr) =
+  {addr = addr; seq_ctr = ref 0; hist = ref (Pmap.empty Pervasives.compare)}
+
+let bmc_paction (state: bmc_state)
+                (Paction(_, action) as paction : 'a typed_paction) =
+  let Action(_, _, action_) = action in
+  match action_ with
+  | Create _ ->
+      (* Create a new addr *)
+      let addr = Address.mk_fresh state.addr_gen in
+      let bmc_addr : kbmc_address = mk_bmc_address addr in
+      (* Add address to addr_map *)
+      state.addr_map :=  Pmap.add addr bmc_addr (!(state.addr_map));
+      BmcAddress bmc_addr, state
+  | Alloc0 _ ->
+      assert false
+  | Kill _ ->
+      BmcTODO, state
+  | Store0 (_, Pexpr(_, PEsym sym), p_value, _) ->
+      (* Look up symbol in ptr_map *)
+      (* Look up address in addr_map *)
+      let addr = 
+        match Pmap.lookup (symbol_to_int sym) (state.ptr_map) with
+        | Some (addr :: []) -> addr (* TODO: assume singleton address *)
+        | _ -> assert false
+      in   
+      (* Generate new seq variable *)
+      let bmc_address =
+        match Pmap.lookup addr (!(state.addr_map)) with
+        | Some x -> x
+        | None -> assert false
+      in
+      let new_sym = mk_next_seq_symbol state.ctx bmc_address in
+      let seq_num = get_last_seqnum state.ctx bmc_address in
+      (* Add to history *)
+      (* TODO: Type is wrong *)
+      Printf.printf "%s\n" (Symbol.to_string new_sym);
+      let Pexpr(typ, _) = p_value in
+      let z3_sort = cbt_to_z3 state.ctx typ in
+      let expr_pat = Expr.mk_const state.ctx new_sym z3_sort in
+      bmc_address.hist := Pmap.add seq_num expr_pat (!(bmc_address.hist));
+      let (expr_value, state1) = bmc_pexpr state p_value in
+
+      Printf.printf "XX %s\n" (Solver.to_string state1.solver);
+      begin
+      match expr_value with
+      | None -> assert false
+      | Some v -> Solver.add state1.solver 
+                  [ Boolean.mk_eq state1.ctx expr_pat v]
+      end;
+      Printf.printf "YY %s\n" (Solver.to_string state1.solver);
+      BmcNone,  state1
+  | Store0 _
+  | Load0 _
+  | RMW0 _
+  | Fence0 _ ->
+      assert false
+
 let rec bmc_expr (state: bmc_state) 
                  (Expr(annot, expr_) as expr: 'a typed_expr) =
   let (z_e, state') = match expr_ with
-  | Epure _
-  | Ememop _ 
-  | Eaction _
+  | Epure pe ->
+      let (maybe_ret1, state1)  = bmc_pexpr state pe in
+      BmcZ3Expr (maybe_ret1), state1
+  | Ememop _ ->
+      assert false
+  | Eaction paction ->
+      bmc_paction state paction
   | Ecase _
   | Eskip
   | Eproc _
-  | Eccall _
-  | Eunseq _
-  | Eindet _ 
-  | Ebound _
+  | Eccall _ 
+  | Eunseq _ -> assert false
+  | Eindet _ -> assert false
+  | Ebound (_, e1) ->
+      (* TODO: bound ignored *)
+      bmc_expr state e1 
   | End _
   | Erun _
   | Epar _
   | Ewait _ 
   | Eif _ 
   | Elet _ 
-  | Easeq _ 
-  | Ewseq _ ->
+  | Easeq _ ->
       assert false
-  | Esseq (pat, e1, e2) ->
+  | Ewseq (pat, e1, e2) ->
+      let (ret_e1, state1) = bmc_expr state e1 in
+      Printf.printf "DONE WEAK\n";
+      assert false
+  | Esseq (CaseBase(sym, typ), e1, e2) ->
+      let (ret_e1, state1) = bmc_expr state e1 in
+      let state2 = mk_eq_expr state1 sym typ ret_e1 in
+      (Printf.printf "EEK: %s\n" (Solver.to_string state2.solver));
+      bmc_expr state2 e2
+  | Esseq _  ->
       assert false
   | Esave _  ->
-    assert false
+      BmcTODO, state
   in (z_e, state')
 
 

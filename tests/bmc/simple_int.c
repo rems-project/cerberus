@@ -1,3 +1,3 @@
-void f(void) {
+int main(void) {
   int x = 1;
 }

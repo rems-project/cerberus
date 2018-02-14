@@ -302,7 +302,8 @@ let pipeline filename args =
   
   (* TODO (sl715): Call BMC *)
   Core_typing.typecheck_program rewritten_core_file >>= fun f ->
-    Exception.except_return (run_bmc f sym_supply)
+    Exception.except_return 
+      (run_bmc (Core_sequentialise.sequentialise_file f) sym_supply)
   ;
 
 
