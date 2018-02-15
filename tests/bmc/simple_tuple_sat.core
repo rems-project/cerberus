@@ -3,6 +3,6 @@ fun main() : integer :=
     let (a: integer, b: integer, c: integer) = (3, 4, 5) in  
     let (p: (integer, integer), q: integer) = ((6, 7), 8)  
     in 
-      if not (a = 3) then
+      if (a =  3) then
           undef(<<UB045a_division_by_zero>>) 
       else 0

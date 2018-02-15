@@ -13,7 +13,6 @@ open Z3
 open Z3.Arithmetic
 
 open Mem
-
 open Ocaml_mem
 open Bmc_utils
 open Bmc_normalize
@@ -90,6 +89,7 @@ type bmc_state = {
   ctx         : context;
   solver      : Solver.solver;
   sym_table   : ksym_table ref;
+  sym_supply  : ksym_supply ref;
 
   (* Make fresh allocations using Address.mk_fresh *)
   addr_gen    : Address.addr ref;
@@ -123,7 +123,7 @@ let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
 
 (* ========== BMC ========== *)
 
-let symbol_to_z3 (ctx: context) (sym: Sym.sym) =
+let symbol_to_z3 (ctx: context) (sym: ksym) =
   match sym with
   | Symbol (num, Some str) ->
       mk_sym ctx ((string_of_int num) ^ "_" ^ str)
@@ -138,17 +138,59 @@ let mk_next_seq_symbol (ctx: context) (bmc_address : kbmc_address) =
   mk_sym ctx ("@" ^ (Address.to_string (bmc_address.addr)) ^ "_" ^ 
               (string_of_int (!(bmc_address.seq_ctr))))
 
+
+let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor) 
+               (pes: Expr.expr list) (sort: Sort.sort) =
+  match ctor with
+  | Cnil _ (* empty list *)
+  | Ccons -> 
+      assert false
+  | Ctuple ->
+      (* sort should be a tuple sort *)
+      assert (List.length pes = Tuple.get_num_fields sort);
+      let mk_decl = Tuple.get_mk_decl sort in
+      FuncDecl.apply mk_decl pes
+
+  | Carray (* C array *)
+  | Civmax (* max integer value *)
+  | Civmin (* min integer value *)
+  | Civsizeof (* sizeof value *)
+  | Civalignof (* alignof value *)
+  | CivCOMPL (* bitwise complement *)
+  | CivAND (* bitwise AND *)
+  | CivOR (* bitwise OR *)
+  | CivXOR (* bitwise XOR *)
+  | Cspecified (* non-unspecified loaded value *)
+  | Cunspecified (* unspecified value *)
+  | Cfvfromint (* cast integer to floating value *)
+  | Civfromfloat (* cast floating to integer value *) ->
+      assert false
+
 (* core_base_type to z3 sort *)
-let cbt_to_z3 (ctx: context) (cbt : core_base_type) : Z3.Sort.sort =
+let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Z3.Sort.sort =
+  let ctx = state.ctx in
   match cbt with
    | BTy_unit  -> 
         UnitSort.mk_sort ctx
    | BTy_boolean ->
         Boolean.mk_sort ctx
    | BTy_ctype 
-   | BTy_list _ 
-   | BTy_tuple _ ->
-        assert false
+   | BTy_list _ -> assert false
+   | BTy_tuple (cbt_list) ->
+        let (new_sym, supply1) = Sym.fresh (!(state.sym_supply)) in
+        state.sym_supply := supply1;
+        let sort_to_string = fun t -> pp_to_string
+                              (Pp_core.Basic.pp_core_base_type t) in
+        let sort_name = sort_to_string cbt in
+        let sort_symbol = mk_sym state.ctx sort_name in
+
+        let sym_list = List.mapi 
+            (fun i v -> mk_sym state.ctx 
+                  ( "#" ^ (string_of_int i)))
+            (*      ((sort_to_string v) ^ "_" ^ (string_of_int i))) *)
+            cbt_list in
+        let sort_list = List.map (fun t -> cbt_to_z3 state t) cbt_list in
+        Tuple.mk_sort ctx sort_symbol sym_list sort_list
    | BTy_object obj_type ->
        core_object_type_to_z3_sort ctx obj_type
    | BTy_loaded obj_type ->
@@ -160,13 +202,16 @@ let cbt_to_z3 (ctx: context) (cbt : core_base_type) : Z3.Sort.sort =
           | _ -> assert false
        end
 
-let initial_bmc_state (_ : unit) : bmc_state = 
+                       
+
+let initial_bmc_state (supply : ksym_supply) : bmc_state = 
   let cfg = [("model", "true"); ("proof", "false")] in
   let ctx = mk_context cfg in
   {
     ctx = ctx;
     solver = Solver.mk_solver ctx None;
     sym_table = ref (Pmap.empty Pervasives.compare);
+    sym_supply = ref supply;
 
     addr_gen = ref (Address.mk_initial);
     addr_map = ref (Pmap.empty Pervasives.compare);
@@ -235,12 +280,32 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpAnd -> Boolean.mk_and ctx [ pe1; pe2 ] 
   | OpOr -> Boolean.mk_or ctx [ pe1; pe2 ]
 
+
 let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
                (ty : core_base_type) (bmc_expr : bmc_ret) =
   match m_sym with
   | None -> state (* Do nothing *)
   | Some sym -> 
+      let sym_id = symbol_to_int sym in
+      let pat_sym = symbol_to_z3 state.ctx sym in
+      begin
       match ty with
+      | BTy_unit -> assert false
+      | BTy_boolean -> assert false
+      | BTy_ctype -> assert false
+      | BTy_list _ -> assert false
+      | BTy_tuple ty_list -> 
+          (* TODO: duplicate *)
+          begin
+          match bmc_expr with
+          | BmcZ3Expr (Some expr) ->
+              let sort = cbt_to_z3 state ty in
+              let expr_pat = Expr.mk_const state.ctx pat_sym sort in
+              state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
+              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
+              state
+          | _ -> assert false
+          end
       | BTy_object OTy_pointer -> 
           (* Pointer equality *)
           begin
@@ -248,10 +313,8 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
           | BmcAddress addr -> 
               (* let x: pointer = Create... *)
               (* TODO: Z3 equality of address *)
-              let sym_id = symbol_to_int sym in
 
               (* Add symbol to sym_table: x -> Pointer x *)
-              let pat_sym = symbol_to_z3 state.ctx sym in
               let expr_pat = PointerSort.mk_ptr state.ctx 
                                   (PointerSort.mk_addr state.ctx sym_id) in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
@@ -282,14 +345,26 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                 assert false
           | _ -> assert false
           end
-      | BTy_object _ ->  assert false
+      | BTy_object _ -> 
+          (* TODO: duplicated *)
+          begin
+          match bmc_expr with
+          | BmcZ3Expr (Some expr) ->
+              let sort = cbt_to_z3 state ty in
+              let expr_pat = Expr.mk_const state.ctx pat_sym sort in
+              state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
+              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
+              state
+          | _ -> assert false
+          end
       | BTy_loaded cot ->
           (* TODO duplicated code: should case on bmc_expr instead maybe *)
           let pat_symbol = symbol_to_z3 state.ctx sym in
-          let z3_sort = cbt_to_z3 state.ctx ty in
+          let z3_sort = cbt_to_z3 state ty in
           let expr_pat = Expr.mk_const state.ctx pat_symbol z3_sort in
           state.sym_table := Pmap.add (symbol_to_int sym) expr_pat 
                                       (!(state.sym_table));
+          begin
           match bmc_expr with
           | BmcZ3Expr None -> state
           | BmcZ3Expr (Some expr) ->
@@ -298,7 +373,58 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
               state
               end
           | _ -> assert false
-      | _ -> assert false
+          end
+        end
+
+let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
+                      (ty: core_base_type) (bmc_expr: bmc_ret) =
+  match pattern with
+  | CaseBase(maybe_sym, typ) ->
+      mk_eq_expr state maybe_sym typ bmc_expr
+  | CaseCtor(ctor, patlist) -> 
+      match ctor with
+      | Cnil _
+      | Ccons -> 
+          assert false
+      | Ctuple ->
+          begin
+          match ty with
+          | BTy_tuple ty_list -> 
+              assert (List.length ty_list = List.length patlist);
+              let z3_sort = cbt_to_z3 state ty in
+              let indices = List.mapi (fun i v -> i) ty_list in
+              let zipped = List.combine ty_list patlist in
+              let fields = Tuple.get_field_decls z3_sort in
+              let expr = (
+                match bmc_expr with
+                | BmcZ3Expr (Some expr) -> expr
+                | _ -> assert false 
+              ) in
+              let get_field i = 
+                FuncDecl.apply (List.nth fields i) [ expr ] in
+
+              assert (List.length fields = List.length patlist);
+
+              List.fold_left2 (fun s (ty, pat) i ->
+                mk_eq_pattern s pat ty 
+                  (BmcZ3Expr (Some (get_field i))
+              )) state zipped indices;
+          | _ -> assert false
+          end
+      | Carray (* C array *)
+      | Civmax (* max integer value *)
+      | Civmin (* min integer value *)
+      | Civsizeof (* sizeof value *)
+      | Civalignof (* alignof value *)
+      | CivCOMPL (* bitwise complement *)
+      | CivAND (* bitwise AND *)
+      | CivOR (* bitwise OR *)
+      | CivXOR (* bitwise XOR *)
+      | Cspecified (* non-unspecified loaded value *)
+      | Cunspecified (* unspecified value *)
+      | Cfvfromint (* cast integer to floating value *)
+      | Civfromfloat (* cast floating to integer value *) ->
+          assert false
 
 let rec bmc_pexpr (state: bmc_state) 
                   (Pexpr(bTy, pe) as pexpr : typed_pexpr) =
@@ -322,11 +448,36 @@ let rec bmc_pexpr (state: bmc_state)
         let new_state = {state with vcs = new_vcs} in
         None, new_state
     | PEerror _ -> assert false
-    | PEctor _ -> assert false
-    | PEcase _ -> assert false
+    | PEctor (ctor, pelist) -> 
+        let sort = cbt_to_z3 state bTy in
+        (* assert pelist just consists of pesyms *)
+        let _ = List.iter 
+                (fun pe -> match pe with
+                           | Pexpr(_, PEsym sym) -> ()
+                           | _ -> assert false )
+                pelist in
+        (* TODO: state needs to be propagated *) 
+        (* Should just be a lookup *)
+        let z3_pelist = List.map (fun pe -> 
+          match (bmc_pexpr state pe) with
+          | (None, _) -> assert false
+          | (Some x, _) -> x 
+          ) pelist in
+
+        let ret = ctor_to_z3 state ctor z3_pelist sort in
+        Some ret,  state
+    | PEcase (pe1, patlist) -> 
+        let (maybe_pe1) = bmc_pexpr state pe1 in 
+        assert false
     | PEarray_shift _ -> assert false
     | PEmember_shift _ -> assert false
-    | PEnot _ -> assert false
+    | PEnot pe1 -> 
+        let (maybe_pe1, state1) = bmc_pexpr state pe1 in  
+        begin
+          match maybe_pe1 with
+          | Some x -> Some (Boolean.mk_not state.ctx x), state1
+          | _ -> None, state1
+        end
     | PEop (bop, pe1, pe2) ->
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
         let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
@@ -344,7 +495,8 @@ let rec bmc_pexpr (state: bmc_state)
         bmc_pexpr state pe 
     | PEcall (_, args) -> assert false
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
-        let z3_sort = cbt_to_z3 (state.ctx) pat_ty in
+        let (Pexpr(pat_type, _)) = pe1 in
+        let z3_sort = cbt_to_z3 state pat_type in
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
 
         (* Add new symbol to sym_table *)
@@ -353,18 +505,24 @@ let rec bmc_pexpr (state: bmc_state)
         state1.sym_table := Pmap.add (symbol_to_int sym) expr_pat 
                                      (!(state1.sym_table));
 
-        let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
         begin
           match maybe_pe1 with
-          | Some pe -> Solver.add (state2.solver) 
-                                  [ Boolean.mk_eq (state2.ctx) expr_pat pe ]
+          | Some pe -> Solver.add (state1.solver) 
+                                  [ Boolean.mk_eq (state1.ctx) expr_pat pe ]
           | None -> ()
         end;
+
+        let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
         maybe_pe2, state2
     | PElet (CaseBase(None, pat_ty), pe1, pe2) ->
         assert false
-    | PElet (_, pe1, pe2) ->
-        assert false
+    | PElet (CaseCtor(ctor, patList), pe1, pe2) ->
+        let (Pexpr(pat_type, _)) = pe1 in
+        let z3_sort = cbt_to_z3 state pat_type in
+        let (maybe_pe1, state1) = bmc_pexpr state pe1 in
+        let state2 = mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
+                     pat_type (BmcZ3Expr maybe_pe1) in
+        bmc_pexpr state2 pe2
     | PEif (pe1, pe2, pe3) ->
         let (maybe_pe1, s1) = bmc_pexpr state pe1 in
         let (maybe_pe2, s2) = bmc_pexpr ({state with vcs = []}) pe2 in
@@ -430,7 +588,7 @@ let bmc_paction (state: bmc_state)
       (* Add to history *)
       (* TODO: Type is wrong *)
       let Pexpr(typ, _) = p_value in
-      let z3_sort = cbt_to_z3 state.ctx typ in
+      let z3_sort = cbt_to_z3 state typ in
       let expr_pat = Expr.mk_const state.ctx new_sym z3_sort in
       bmc_address.hist := Pmap.add seq_num expr_pat (!(bmc_address.hist));
 
@@ -494,7 +652,7 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Ewseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let state2 = mk_eq_expr state1 sym typ ret_e1 in
+      let state2 = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
       Printf.printf "HERE\n";
       Printf.printf "%s\n" (Solver.to_string state2.solver);
       Printf.printf "THERE\n";
@@ -502,7 +660,7 @@ let rec bmc_expr (state: bmc_state)
   | Ewseq _ -> assert false
   | Esseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let state2 = mk_eq_expr state1 sym typ ret_e1 in
+      let state2 = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
       (Printf.printf "EEK: %s\n" (Solver.to_string state2.solver));
       bmc_expr state2 e2
   | Esseq _  ->
@@ -536,8 +694,8 @@ let bmc_fun_map (state: bmc_state)
   ) funs
 
 
-let bmc_file (file: 'a typed_file) =
-  let initial_state = initial_bmc_state () in
+let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
+  let initial_state = initial_bmc_state supply in
   bmc_fun_map initial_state file.funs;
   (* TODO globals *)
   Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (initial_state.solver));
@@ -560,10 +718,10 @@ let run_bmc (core_file : 'a typed_file)
             (sym_supply: ksym_supply)    = 
   print_string "ENTER: BMC PIPELINE \n";
   pp_file core_file;
-  let (normalized_file, _) = normalize_file core_file sym_supply in
+  let (normalized_file, supply1) = normalize_file core_file sym_supply in
   pp_file normalized_file;
 
   print_string "Done normalization\n";
-  bmc_file normalized_file; 
+  bmc_file normalized_file supply1; 
 
   print_string "EXIT: BMC PIPELINE \n";

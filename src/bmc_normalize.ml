@@ -36,8 +36,18 @@ let rec normalize_pexpr (Pexpr(annot, pexpr_) as pexpr: typed_pexpr)
     | PEval _
     | PEconstrained _ 
     | PEundef _ 
-    | PEerror _ 
-    | PEctor _
+    | PEerror _ ->
+        wrap_pexpr_with_let annot pexpr supply 
+    | PEctor (ctor, pelist) ->
+        let norm_sym_list = 
+          List.map (fun pe -> normalize_pexpr pe supply) pelist in
+        let sym_list = List.map (fun (k,v) -> v) norm_sym_list in
+        let new_pexpr = Pexpr(annot, PEctor(ctor, sym_list)) in
+        let (new_let, sym) = wrap_pexpr_with_let annot new_pexpr supply in
+        let (Pexpr(_, ret_)) = List.fold_right 
+          (fun (k,v) b -> (Pexpr(annot, flatten_pexpr_lets k b))) 
+                        norm_sym_list (Pexpr(annot, new_let)) in
+        ret_, sym
     | PEcase _
     | PEarray_shift _
     | PEmember_shift _ ->
