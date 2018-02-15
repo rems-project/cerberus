@@ -25,6 +25,29 @@ module type CustomSort =
   end
 *)
 
+module PointerSort =
+  struct
+    let mk_sort (ctx: context) = 
+      Datatype.mk_sort_s ctx ("pointer")
+      [ Datatype.mk_constructor_s ctx ("pointer") (mk_sym ctx "isPointer")
+          [ mk_sym ctx "addr" ] [ Some (Integer.mk_sort ctx)] [0]
+      ]
+
+    let mk_ptr (ctx: context) (addr: Expr.expr) =
+      let sort = mk_sort ctx in
+      let constructors = Datatype.get_constructors sort in
+      let func_decl = List.nth constructors 0 in
+      Expr.mk_app ctx func_decl [ addr ]
+
+    let mk_addr (ctx: context) (n: int) =
+      Integer.mk_numeral_i ctx n
+
+    let get_addr (expr: Expr.expr) =
+      let v = List.hd (Expr.get_args expr) in
+      Integer.get_int v
+
+  end
+
 module UnitSort = 
   struct
     let mk_sort (ctx: context) =
