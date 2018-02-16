@@ -21,8 +21,20 @@ void f() {
   x=7;
 }
 
-  phase 3: core function calls so that conv_int can work properly
-    (including ctypes and impl-defined functions and ivmin/ivmax to use the defined implementation)
+2018-02-16:  now basically all this phase 2 stuff is sort-of working, but the impl is horrid.  imperative ocaml code. 
+
+             currently assuming simple variables - basically no pointers.  haven't yet done the smt address-variable thing
+
+
+  phase 3: inline core function calls so that conv_int can work properly. 
+    (including ctypes and impl-defined functions and ivmin/ivmax to use the defined implementation - core-to-core transform that replaces ivmin etc. by the value coming from `Ocaml_implementation.Impl.sizeof_ity` and suchlike)
+
+           assume we only need non-recursive functions for now
+
+           accumulating a good collection of handwritten ones. Can use the Cerberus CI tests too.   
+
+           worth looking at some csmith tests, with the hash stuf commented out.   Kayvan should look at the new INRIA generator.
+
 
   or dealing with more complex loads and stores, or concurrency model, or _bounded_ model checking, or....
 
