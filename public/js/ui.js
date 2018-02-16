@@ -99,8 +99,9 @@ class UI {
 
     // Run (Execute)
     $('#run').on('click', () => {})
-    $('#random').on('click', () => this.exec ('random'))
-    $('#exhaustive').on('click', () => this.exec ('exhaustive'))
+    $('#step').on('click', () => this.step ())
+    $('#random').on('click', () => this.exec ('Random'))
+    $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
 
     $('#random_concrete').on('click', () => this.exec ('random_concrete'))
     $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
@@ -114,7 +115,7 @@ class UI {
     $('#cabs').on('click', () => this.elab ('cabs'))
     $('#ail_ast') .on('click', () => this.elab ('ail_ast'))
     $('#ail') .on('click', () => this.elab ('ail'))
-    $('#core').on('click', () => this.elab ('core'))
+    $('#core').on('click', () => this.elab ('pp','core'))
 
     // Compilers
     $('#compile').on('click', () => {
@@ -214,14 +215,21 @@ class UI {
   request (mode, onSuccess) {
     this.wait()
     $.ajax({
-      url:  '/'+mode,
+      url:  '/cerberus',
       type: 'POST',
       headers: {Accept: 'application/json'},
-      data: /* JSON.stringify ({"value":*/ this.currentView.getValue(), //}),
+      data: JSON.stringify ({
+        'action':  mode,
+        'source':  this.currentView.getValue(),
+        'rewrite': this.rewrite,
+        'steps':   this.currentView.data.steps,
+        'state':   (this.currentView.data.state ? this.currentView.data.state : "")
+      }),
       success: (data, status, query) => {
         onSuccess(data);
-        if (data.stderr != "")
-          this.currentView.console.setValue(data.stderr)
+        // TODO: check success somehow
+        //if (data.console != "")
+        //  this.currentView.console.setValue(data.console)
         this.done()
       }
     }).fail((e) => {
@@ -231,20 +239,43 @@ class UI {
     })
   }
 
+  step () {
+    this.request('Step', (data) => {
+      this.currentView.update(data)
+      this.currentView.highlight()
+      let g = "digraph D { ";
+      let steps = this.currentView.data.steps;
+      for (let i = steps.length-1; i >= 0; i--) {
+        g += "a" + i + " [label=\"" + steps[i] + "\"];";
+      }
+
+      for (let i = steps.length-1; i >= 0; i--) {
+        if (i != steps.length-1) {
+          g += " -> ";
+        }
+        g += "a" + i
+      }
+      g += ";}"
+      this.currentView.graph.setValue(g)
+      if (data.console != "")
+        this.currentView.console.setValue(data.console)
+    })
+  }
+
   exec (mode) {
     this.request(mode, (data) => {
       this.currentView.update(data)
       this.currentView.highlight()
-      this.currentView.exec.setValue(data.stdout)
-      if (data.stderr != "")
-        this.currentView.console.setValue(data.stderr)
+      this.currentView.exec.setValue(data.console)
+      if (data.console != "")
+        this.currentView.console.setValue(data.console)
     })
   }
 
   update() {
     let view = this.currentView
     if (view.dirty) {
-      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
+      this.request('Elaborate', (data) => {
         view.update(data);
         view.source.highlight()
         view.highlight()
@@ -252,15 +283,15 @@ class UI {
     }
   }
 
-  elab (lang) {
+  elab (mode, lang) {
     let view = this.currentView
     if (!view.dirty) {
-      if (lang) view.newTab(lang)
+      if (lang) view.newTab(mode, lang)
     } else {
-      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
+      this.request('Elaborate', (data) => {
         view.update(data);
         view.source.highlight()
-        if (lang) view.newTab(lang)
+        if (lang) view.newTab(mode, lang)
       })
     }
   }

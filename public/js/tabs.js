@@ -93,8 +93,8 @@ class TabGraph extends Tab {
       this.svg.remove()
 
     // Add to the container
-    this.dot = json_to_dot(data)
-    this.dom.graph.children('.svg').append(Viz(this.dot))
+    //this.dot = json_to_dot(data)
+    this.dom.graph.children('.svg').append(Viz(data))
     this.svg = this.dom.graph.find('svg')
     this.svg.panzoom()
 
@@ -421,6 +421,7 @@ class TabAil extends TabReadOnly {
   }
 
   update() {
+    // TODO: this is not right
     this.setValue(ui.currentView.data.ail)
   }
 }
@@ -496,7 +497,7 @@ class TabCore extends TabReadOnly {
   }
 
   update() {
-    this.setValue(ui.currentView.data.core)
+    this.setValue(ui.currentView.data.pp.core)
   }
 
 }

@@ -189,6 +189,7 @@ module type Memory = sig
   val parse_floating_value: Json.json -> floating_value
   val serialise_mem_value: mem_value -> Json.json
   val parse_mem_value: Json.json -> mem_value
+  val serialise_mem_state: mem_state -> Json.json
   
   
   
