@@ -118,9 +118,10 @@ let rec normalize_expr (Expr(annot, expr_): 'a typed_expr)
         let (norm, _) = normalize_pexpr pe supply in
         Epure norm 
     | Ememop( _, _) 
-    | Eaction _ 
-    | Ecase _ ->
+    | Eaction _ -> 
         expr_
+    | Ecase (pe, clist) ->
+        Ecase(pe, List.map (fun (k,v) -> (k, normalize_expr v supply)) clist)
     | Elet( pat, pe1, e2) ->
         let (norm_pe1, _) = normalize_pexpr pe1 supply in
         Elet( pat, norm_pe1, normalize_expr e2 supply)

@@ -4,20 +4,6 @@ open Z3.Arithmetic
 open Bmc_utils
 open Core
 
-let core_object_type_to_z3_sort (ctx: context) 
-                                (cot: core_object_type) 
-                                : Z3.Sort.sort =
-  match cot with
-   | OTy_integer ->
-       Integer.mk_sort ctx
-   | OTy_floating  -> assert false
-   | OTy_pointer -> assert false
-   | OTy_cfunction _ -> assert false
-   | OTy_array _
-   | OTy_struct _
-   | OTy_union _ ->
-       assert false
-
 (*
 module type CustomSort =
   sig
@@ -25,12 +11,39 @@ module type CustomSort =
   end
 *)
 
+module type AddressType =
+  sig
+    type addr
+    val is_eq: addr -> addr -> bool
+
+    (* Given previous addr, make a new one *)
+    val mk_fresh: addr ref -> addr
+    val mk_sort: context -> Sort.sort
+    val mk_initial: addr
+    val to_string: addr -> string
+    val mk_expr: context -> addr -> Expr.expr
+  end 
+
+module IntAddress : AddressType = 
+  struct
+    type addr = int
+    let is_eq = (==)
+    let mk_fresh st = (let ret = succ !st in (st := ret; ret))
+    let mk_sort = Integer.mk_sort
+    let mk_initial = 0
+    let to_string = string_of_int
+    let mk_expr ctx ad = Integer.mk_numeral_i ctx ad
+  end
+
+module Address = (IntAddress : AddressType)
+
+
 module PointerSort =
   struct
     let mk_sort (ctx: context) = 
-      Datatype.mk_sort_s ctx ("pointer")
-      [ Datatype.mk_constructor_s ctx ("pointer") (mk_sym ctx "isPointer")
-          [ mk_sym ctx "addr" ] [ Some (Integer.mk_sort ctx)] [0]
+      Datatype.mk_sort_s ctx ("ptr")
+      [ Datatype.mk_constructor_s ctx ("addr") (mk_sym ctx "isPointer")
+          [ mk_sym ctx "get_addr" ] [ Some (Address.mk_sort ctx)] [0]
       ]
 
     let mk_ptr (ctx: context) (addr: Expr.expr) =
@@ -39,14 +52,32 @@ module PointerSort =
       let func_decl = List.nth constructors 0 in
       Expr.mk_app ctx func_decl [ addr ]
 
-    let mk_addr (ctx: context) (n: int) =
-      Integer.mk_numeral_i ctx n
+    let mk_addr (ctx: context) (n: Address.addr) =
+      Address.mk_expr ctx n
 
-    let get_addr (expr: Expr.expr) =
-      let v = List.hd (Expr.get_args expr) in
-      Integer.get_int v
+    let get_addr (ctx: context) (expr: Expr.expr) =
+      let sort = mk_sort ctx in
+      let accessors = Datatype.get_accessors sort in
+      let func_decl = List.hd (List.nth accessors 0) in
+      Expr.mk_app ctx func_decl [ expr ]
 
   end
+
+let core_object_type_to_z3_sort (ctx: context) 
+                                (cot: core_object_type) 
+                                : Z3.Sort.sort =
+  match cot with
+   | OTy_integer ->
+       Integer.mk_sort ctx
+   | OTy_floating  -> assert false
+   | OTy_pointer -> 
+       PointerSort.mk_sort ctx
+   | OTy_cfunction _ -> assert false
+   | OTy_array _
+   | OTy_struct _
+   | OTy_union _ ->
+       assert false
+
 
 module UnitSort = 
   struct
@@ -117,3 +148,5 @@ end
 
 (* TODO: Functorize *)
 module LoadedInteger = LoadedSort (struct let cot = OTy_integer end)
+
+module LoadedPointer = LoadedSort (struct let cot = OTy_pointer end)
