@@ -581,7 +581,12 @@ let rec bmc_pexpr (state: bmc_state)
         (* TODO: range check *)
         bmc_pexpr state pe 
 
-    | PEcall (_, args) -> assert false
+    | PEcall (Sym (Symbol(_, Some "catch_exceptional_condition")), (typ :: pe :: [])) -> 
+        (* TODO: special case conv_loaded_int *)
+        (* TODO: range check *)
+
+        bmc_pexpr state pe 
+    | PEcall _ -> assert false
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
         let z3_sort = cbt_to_z3 state pat_type in
@@ -663,6 +668,8 @@ let bmc_paction (state: bmc_state)
       assert false
   | Kill _ ->
       BmcTODO, state
+  | Store0 (_, Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
+    (* Fall through *)
   | Store0 (_, Pexpr(_, PEsym sym), p_value, _) ->
       (* Look up symbol in ptr_map *)
       (* Look up address in addr_map *)
@@ -726,10 +733,21 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Eaction paction ->
       bmc_paction state paction
-  | Ecase _
-  | Eskip
-  | Eproc _
-  | Eccall _ 
+  | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
+      let (Pexpr(pe_type, pe_)) = pe in
+      let (maybe_pe, st) = bmc_pexpr state pe in 
+      let (eq_expr, st_eq) = 
+            mk_eq_pattern st pat1 pe_type (BmcZ3Expr maybe_pe) in
+      let (bmc_e1, st1) = bmc_expr state e1 in
+      let (bmc_e2, st2) = bmc_expr state e2 in
+      Printf.printf "HERE %s\n" (Expr.to_string eq_expr);
+
+      assert false
+
+  | Ecase _ ->  assert false
+  | Eskip -> assert false
+  | Eproc _ -> assert false
+  | Eccall _  -> assert false
   | Eunseq _ -> assert false
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
