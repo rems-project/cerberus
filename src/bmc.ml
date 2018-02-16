@@ -83,7 +83,12 @@ type kbmc_address = {
   addr        : Address.addr;
   seq_ctr     : int ref;
   hist        : ((int, Expr.expr) Pmap.map) ref;
+
+  (* TODO *)
+  (* sort        : Sort.sort *)
 }
+
+type kheap = (Address.addr, Expr.expr) Pmap.map
 
 type bmc_state = {
   ctx         : context;
@@ -119,6 +124,15 @@ type bmc_ret =
 let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
   Pmap.mapi (fun k v-> (Printf.printf "%d -> " k;
             List.iter(fun s -> Printf.printf "%s " (Address.to_string s)) v)) map
+
+let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
+  Printf.printf "HEAP\n";
+  Pmap.iter (fun k v-> (Printf.printf "E: %s -> %s\n" 
+                  (Address.to_string k) (Expr.to_string v))) heap ;
+  Printf.printf "END_HEAP\n"
+
+
+
 
 
 (* ========== BMC ========== *)
@@ -201,7 +215,7 @@ let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Z3.Sort.sort =
         UnitSort.mk_sort ctx
    | BTy_boolean ->
         Boolean.mk_sort ctx
-   | BTy_ctype 
+   | BTy_ctype -> assert false
    | BTy_list _ -> assert false
    | BTy_tuple (cbt_list) ->
         let (new_sym, supply1) = Sym.fresh (!(state.sym_supply)) in
@@ -651,16 +665,20 @@ let rec bmc_pexpr (state: bmc_state)
 
 
 let mk_bmc_address (addr : Address.addr) =
-  {addr = addr; seq_ctr = ref 0; hist = ref (Pmap.empty Pervasives.compare)}
+  {addr = addr; 
+   seq_ctr = ref 0; 
+   hist = ref (Pmap.empty Pervasives.compare)
+  }
 
 let bmc_paction (state: bmc_state)
                 (Paction(_, action) as paction : 'a typed_paction) =
   let Action(_, _, action_) = action in
   match action_ with
   | Create _ ->
+      (* TODO: use type information *)
       (* Create a new addr *)
       let addr = Address.mk_fresh state.addr_gen in
-      let bmc_addr : kbmc_address = mk_bmc_address addr in
+      let bmc_addr : kbmc_address = mk_bmc_address addr  in
       (* Add address to addr_map *)
       state.addr_map :=  Pmap.add addr bmc_addr (!(state.addr_map));
       BmcAddress bmc_addr, state
@@ -696,7 +714,6 @@ let bmc_paction (state: bmc_state)
       (* Update heap *)
       let new_heap = Pmap.add addr expr_pat state.heap in
       let (expr_value, state1) = bmc_pexpr state p_value in
-
       begin
       match expr_value with
       | None -> assert false
@@ -723,6 +740,40 @@ let bmc_paction (state: bmc_state)
   | Fence0 _ ->
       assert false
 
+(* if guard then heap1 else heap2 for all addresses in alist *)
+let merge_heaps (state: bmc_state) 
+                (heap1: kheap) (heap2: kheap) 
+                (guard: Expr.expr) : kheap =
+  Pmap.merge (
+    fun k e1_ e2_ -> 
+      let (e1, e2) = match (e1_, e2_) with
+        | (Some x, Some y) -> (x, y)
+        | _ -> assert false
+      in
+      (* TODO: duplicated code *)
+      let bmc_address = 
+        match Pmap.lookup k (!(state.addr_map)) with
+        | Some x -> x
+        | None -> assert false
+      in
+      let new_sym = mk_next_seq_symbol state.ctx bmc_address in
+      let seq_num = get_last_seqnum state.ctx bmc_address in
+      (* TODO: sort should be in bmc_address *)
+      assert (Sort.equal (Expr.get_sort e1) (Expr.get_sort e2));
+      let sort = Expr.get_sort e1 in
+      let new_expr = Expr.mk_const state.ctx new_sym sort in
+      bmc_address.hist := Pmap.add seq_num new_expr (!(bmc_address.hist));
+     
+      (* Add equality *) 
+      Solver.add state.solver 
+        [ Boolean.mk_implies state.ctx guard 
+            (Boolean.mk_eq state.ctx new_expr e1) ;
+          Boolean.mk_implies state.ctx (Boolean.mk_not state.ctx guard)
+            (Boolean.mk_eq state.ctx new_expr e2) 
+        ];
+      Some new_expr 
+      ) heap1 heap2
+
 let rec bmc_expr (state: bmc_state) 
                  (Expr(annot, expr_) as expr: 'a typed_expr) =
   let (z_e, state') = match expr_ with
@@ -740,12 +791,24 @@ let rec bmc_expr (state: bmc_state)
             mk_eq_pattern st pat1 pe_type (BmcZ3Expr maybe_pe) in
       let (bmc_e1, st1) = bmc_expr state e1 in
       let (bmc_e2, st2) = bmc_expr state e2 in
-      Printf.printf "HERE %s\n" (Expr.to_string eq_expr);
-
-      assert false
+      Solver.add state.solver [ eq_expr ];
+      begin
+        match (bmc_e1, bmc_e2) with
+        | (BmcNone, BmcNone) -> 
+            let new_vc1 = List.map(
+              fun vc -> Boolean.mk_implies st.ctx eq_expr vc) st1.vcs in
+            let new_vc2 = List.map(
+              fun vc -> Boolean.mk_implies st.ctx (Boolean.mk_not st.ctx eq_expr) vc) st2.vcs in
+            let new_vc = st_eq.vcs @ new_vc1 @ new_vc2 in
+            let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
+            print_heap new_heap;
+            BmcNone, ({st with vcs = new_vc; heap = new_heap})
+        | _ -> assert false
+      end
 
   | Ecase _ ->  assert false
-  | Eskip -> assert false
+  | Eskip -> 
+      BmcNone, state 
   | Eproc _ -> assert false
   | Eccall _  -> assert false
   | Eunseq _ -> assert false
@@ -753,12 +816,40 @@ let rec bmc_expr (state: bmc_state)
   | Ebound (_, e1) ->
       (* TODO: bound ignored *)
       bmc_expr state e1 
-  | End _
+  | End elist ->
+      Printf.printf "TODO ND sequencing: currrently treated as undef\n";
+      let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
+      let new_state = {state with vcs = new_vcs} in
+      BmcNone, new_state
   | Erun _
   | Epar _
-  | Ewait _ 
-  | Eif _ 
-  | Elet _ 
+  | Ewait _ -> assert false
+  | Eif (pe, e1, e2) -> 
+      let (maybe_pe, st) = bmc_pexpr state pe in
+      let (bmc_e1, st1) = bmc_expr ({st with vcs = []}) e1 in
+      let (bmc_e2, st2) = bmc_expr ({st with vcs = []}) e2 in
+      let ret = 
+        (* TODO: special cased *)
+        match (maybe_pe, bmc_e1, bmc_e2) with
+        | (Some pexpr, BmcNone, BmcNone) -> 
+          let new_vc1 = List.map 
+              (fun vc -> Boolean.mk_implies st1.ctx pexpr vc) 
+              st1.vcs in
+          let new_vc2 = List.map 
+              (fun vc -> Boolean.mk_implies st2.ctx
+                            (Boolean.mk_not st2.ctx pexpr) vc)
+              st2.vcs in
+          let new_vc = st.vcs @ new_vc1 @ new_vc2 in
+          let new_heap = merge_heaps st st1.heap st2.heap pexpr in
+
+          (* Return state conditional upon which store occurred *)
+          (* TODO: record which addresses each state may have changed *) 
+          (* TODO: ptr_map *)
+          BmcNone, ({st with heap = new_heap; vcs = new_vc})
+        | _ -> assert false
+      in 
+      ret    
+  | Elet _ -> assert false
   | Easeq _ ->
       assert false
   | Ewseq (CaseBase(sym, typ), e1, e2) ->
