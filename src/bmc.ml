@@ -326,10 +326,21 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
   | Some sym -> 
       let sym_id = symbol_to_int sym in
       let pat_sym = symbol_to_z3 state.ctx sym in
+      (* TODO: case on bmc_expr instead *)
       begin
       match ty with
       | BTy_unit -> assert false
-      | BTy_boolean -> assert false
+      | BTy_boolean -> 
+          (* TODO: duplicated code *)
+          let sort = cbt_to_z3 state ty in
+          let expr_pat = Expr.mk_const state.ctx pat_sym sort in
+          state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
+          begin
+          match bmc_expr with
+          | BmcZ3Expr (Some expr) ->
+              (Boolean.mk_eq state.ctx expr_pat expr), state
+          | _ -> assert false
+          end
       | BTy_ctype -> assert false
       | BTy_list _ -> assert false
       | BTy_tuple ty_list -> 
@@ -512,18 +523,12 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
 
                     let loaded_value = LoadedPointer.get_loaded_value state.ctx expr
                     in
-                    Printf.printf "TEST %s\n" (Expr.to_string expr);
-
-                    Printf.printf "HERE %s\n" (Expr.to_string is_loaded);
-                    Printf.printf "Loaded %s\n" (Expr.to_string loaded_value);
-                    Printf.printf "%s\n" (Solver.to_string (state.solver) );
                     let (eq_expr, st1) = mk_eq_expr state maybe_sym
                                          (BTy_object OTy_pointer) 
                                          (BmcZ3Expr (Some loaded_value)) in
-                    Printf.printf "EQ: %s\n" (Expr.to_string eq_expr);
-
-
-                    assert false
+                    let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr
+                    in
+                    (guarded, st1)
                 | _ -> assert false
                 end
 
@@ -590,9 +595,6 @@ let rec bmc_pexpr (state: bmc_state)
         Some ret,  state
     | PEcase (pe, ((pat1, pe1):: (pat2, pe2):: [])) -> 
         (* TODO: special case for now. c1 else c2 *)
-        Printf.printf "PECASE: ";
-        pp_to_stdout (Pp_core.Basic.pp_pexpr pe);
-        Printf.printf "\n";
         let (Pexpr(pe_type, pe_)) = pe in
         let (maybe_pe, st) = bmc_pexpr state pe in 
         let (eq_expr, st_eq) = 
@@ -725,8 +727,12 @@ let ctype_to_sort (state: bmc_state) ty =
     end
   | Array0 _ -> assert false
   | Function0 _ -> assert false
-  | Pointer0 _ -> assert false
+  | Pointer0 _ -> 
+      LoadedPointer.mk_sort state.ctx 
   | Atomic0 _ -> assert false 
+  | Struct0 _ 
+  | Union0 _
+  | Builtin0 _ -> assert false
 
 let bmc_paction (state: bmc_state)
                 (Paction(_, action) as paction : 'a typed_paction) =
@@ -760,9 +766,9 @@ let bmc_paction (state: bmc_state)
       (* TODO *)
       Printf.printf "TODO: KILL\n";
       BmcNone, state
-  | Store0 (_, Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
+  | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
     (* Fall through *)
-  | Store0 (_, Pexpr(_, PEsym sym), p_value, _) ->
+  | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), p_value, _) ->
       (* Overview:
          For each possible address, 
          if (get_addr sym == @a) @a_i = p_value; @a_i = (cur value)
@@ -770,8 +776,10 @@ let bmc_paction (state: bmc_state)
 
          This is extremely naiive and generates equations for every created
          address. 
+
+         Need to check sorts are the same.
        *)
-       
+      let sort = ctype_to_sort state ty in 
       let (maybe_value, state1) = bmc_pexpr state p_value in
       let value = match maybe_value with | None -> assert false | Some x -> x in
       let sym_id = symbol_to_int sym in
@@ -779,33 +787,36 @@ let bmc_paction (state: bmc_state)
         | None -> assert false
         | Some x -> x
       in
-
       let update = (fun addr bmc_addr heap ->
-            let cur_value = match (Pmap.lookup addr heap) with
-                | None -> assert false
-                | Some x -> x in
-            (* Create a fresh value *)
-            let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
-            let new_expr = Expr.mk_const state.ctx new_sym bmc_addr.sort in
-            (* get_addr sym == @a *)
-            let addr_eq = Boolean.mk_eq state.ctx 
-                  (PointerSort.get_addr state.ctx z3_sym)
-                  (Address.mk_expr state.ctx addr) in 
+            if (not(Sort.equal (bmc_addr.sort) sort)) then
+              heap
+            else
+              begin
+                let cur_value = match (Pmap.lookup addr heap) with
+                    | None -> assert false
+                    | Some x -> x in
+                (* Create a fresh value *)
+                let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
+                let new_expr = Expr.mk_const state.ctx new_sym bmc_addr.sort in
+                (* get_addr sym == @a *)
+                let addr_eq = Boolean.mk_eq state.ctx 
+                      (PointerSort.get_addr state.ctx z3_sym)
+                      (Address.mk_expr state.ctx addr) in 
+                (* @a_i = p_value *)
+                let new_eq = Boolean.mk_eq state.ctx new_expr value in
 
-            (* @a_i = p_value *)
-            let new_eq = Boolean.mk_eq state.ctx new_expr value in
+                (* @a_i = (cur value) *)
+                let old_eq = Boolean.mk_eq state.ctx new_expr cur_value in
 
-            (* @a_i = (cur value) *)
-            let old_eq = Boolean.mk_eq state.ctx new_expr cur_value in
+                let ite = Boolean.mk_ite state.ctx addr_eq new_eq old_eq in
+                Solver.add state.solver [ ite ];
 
-            let ite = Boolean.mk_ite state.ctx addr_eq new_eq old_eq in
-            Solver.add state.solver [ ite ];
+                (* Update heap *)
+                let new_heap = Pmap.add addr new_expr heap in
 
-            (* Update heap *)
-            let new_heap = Pmap.add addr new_expr heap in
-
-           (* Return new heap *) 
-            new_heap
+               (* Return new heap *) 
+                new_heap
+              end
         )
       in
       let new_heap = Pmap.fold update (!(state.addr_map)) state.heap in
@@ -882,8 +893,11 @@ let bmc_paction (state: bmc_state)
           else 
             (expr_list, addr_list)
        ) in
+       Printf.printf "ENTER\n";
        let (expr_eqs, addr_eqs) = Pmap.fold iterate (!(state.addr_map)) 
                                         ([], []) in
+       
+       Printf.printf "EXIT\n";
        let ret = Boolean.mk_and state.ctx expr_eqs in
        let new_vc = Boolean.mk_or state.ctx addr_eqs in
        Solver.add state.solver [ ret ];
@@ -956,8 +970,10 @@ let rec bmc_expr (state: bmc_state)
   | Epure pe ->
       let (maybe_ret1, state1)  = bmc_pexpr state pe in
       BmcZ3Expr (maybe_ret1), state1
+  | Ememop (PtrValidForDeref, _) ->
+      Printf.printf "TODO: Ememop PtrValidForDeref: currently always true\n";
+      BmcZ3Expr (Some (Boolean.mk_true state.ctx)), state
   | Ememop _ ->
-      Printf.printf "TODO: Ememop\n";
       assert false
   | Eaction paction ->
       bmc_paction state paction
@@ -969,18 +985,20 @@ let rec bmc_expr (state: bmc_state)
       let (bmc_e1, st1) = bmc_expr state e1 in
       let (bmc_e2, st2) = bmc_expr state e2 in
       Solver.add state.solver [ eq_expr ];
+      (* Similar to Eif*)
       begin
         match (bmc_e1, bmc_e2) with
         | (BmcNone, BmcNone) -> 
-            let new_vc1 = List.map(
-              fun vc -> Boolean.mk_implies st.ctx eq_expr vc) st1.vcs in
-            let new_vc2 = List.map(
-              fun vc -> Boolean.mk_implies st.ctx (Boolean.mk_not st.ctx eq_expr) vc) st2.vcs in
-            let new_vc = st_eq.vcs @ new_vc1 @ new_vc2 in
+            let new_vc = st_eq.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
             let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
-            print_heap new_heap;
             BmcNone, ({st with vcs = new_vc; heap = new_heap})
-        | _ -> (Printf.printf "TODO: Do Ecase properly \n"; assert false)
+        | (BmcZ3Expr (Some a1), BmcZ3Expr (Some a2)) -> 
+            let new_vc = st_eq.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
+            let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
+            
+            BmcZ3Expr (Some (Boolean.mk_ite st.ctx eq_expr a1 a2)),
+            ({st with heap = new_heap; vcs = new_vc})
+        | _ -> (Printf.printf "TODO: Do ECase properly\n"; assert false)
       end
 
   | Ecase _ ->  
@@ -1007,24 +1025,25 @@ let rec bmc_expr (state: bmc_state)
       let (maybe_pe, st) = bmc_pexpr state pe in
       let (bmc_e1, st1) = bmc_expr ({st with vcs = []}) e1 in
       let (bmc_e2, st2) = bmc_expr ({st with vcs = []}) e2 in
+
+      Printf.printf "TODO: only heap/vcs are updated after Eif\n";
       let ret = 
         (* TODO: special cased *)
         match (maybe_pe, bmc_e1, bmc_e2) with
         | (Some pexpr, BmcNone, BmcNone) -> 
-          let new_vc1 = List.map 
-              (fun vc -> Boolean.mk_implies st1.ctx pexpr vc) 
-              st1.vcs in
-          let new_vc2 = List.map 
-              (fun vc -> Boolean.mk_implies st2.ctx
-                            (Boolean.mk_not st2.ctx pexpr) vc)
-              st2.vcs in
-          let new_vc = st.vcs @ new_vc1 @ new_vc2 in
+          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
           let new_heap = merge_heaps st st1.heap st2.heap pexpr in
 
           (* Return state conditional upon which store occurred *)
           (* TODO: record which addresses each state may have changed *) 
           (* TODO: ptr_map *)
           BmcNone, ({st with heap = new_heap; vcs = new_vc})
+        | (Some pexpr, BmcZ3Expr (Some e1), BmcZ3Expr (Some e2)) -> 
+            (* TODO: duplicated *)
+          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
+          let new_heap = merge_heaps st st1.heap st2.heap pexpr in
+          BmcZ3Expr (Some (Boolean.mk_ite state.ctx pexpr e1 e2)),
+            ({st with heap = new_heap; vcs = new_vc})
         | _ -> assert false
       in 
       ret    
