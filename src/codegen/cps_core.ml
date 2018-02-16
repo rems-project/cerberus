@@ -74,7 +74,7 @@ let fresh_label () =
   Symbol.Symbol (0, Some ("__l" ^ string_of_int !label_id))
 
 (* TODO: correctly type this *)
-let pexpr_of_sym sym = Pexpr (BTy_unit, PEsym sym)
+let pexpr_of_sym sym = Pexpr ([], BTy_unit, PEsym sym)
 
 (* Helper functions *)
 

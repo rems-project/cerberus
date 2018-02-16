@@ -221,7 +221,7 @@ let rec hoist_negatives expr =
         State.return expr
     | Eaction pact ->
         if is_negative_action pact then
-          add_neg expr >> State.return (Epure (Pexpr () (PEval Vunit)))
+          add_neg expr >> State.return (Epure (Pexpr [] () (PEval Vunit)))
         else
           State.return expr
     | Ecase pe pat_es ->
@@ -409,7 +409,7 @@ type core_step =
 
 
 val core_action_step:
-    list expr_annot -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
+    list annot -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
     (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
@@ -433,11 +433,11 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
     | Create pe1 pe2 pref ->
         (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
         match (pe1, pe2) with
-          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
+          | (Pexpr [] () (PEconstrained xs1), Pexpr [] () (PEconstrained xs2)) ->
               error "Create PEconstrained 1 and 2"
-          | (Pexpr () (PEconstrained xs1), _) ->
+          | (Pexpr [] () (PEconstrained xs1), _) ->
               error "Create PEconstrained 1"
-          | (_, Pexpr () (PEconstrained xs2)) ->
+          | (_, Pexpr [] () (PEconstrained xs2)) ->
               error "Create PEconstrained 2"
           | _ ->
               match (valueFromPexpr pe1, valueFromPexpr pe2) with
@@ -448,7 +448,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                         CreateRequest loc sb_before dd_before asw_before
                           create_aid current_tid pref ival ty
                           (fun ptr_val -> <| th_st with
-                              arena= Expr arena_annots (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
+                              arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
                               stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>)
                           )
@@ -475,11 +475,11 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
     | Alloc pe1 pe2 pref ->
         (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
         match (pe1, pe2) with
-          | (Pexpr () (PEconstrained xs1), Pexpr () (PEconstrained xs2)) ->
+          | (Pexpr [] () (PEconstrained xs1), Pexpr [] () (PEconstrained xs2)) ->
               error "Alloc PEconstrained 1 and 2"
-          | (Pexpr () (PEconstrained xs1), _) ->
+          | (Pexpr [] () (PEconstrained xs1), _) ->
               error "Alloc PEconstrained 1"
-          | (_, Pexpr () (PEconstrained xs2)) ->
+          | (_, Pexpr [] () (PEconstrained xs2)) ->
               error "Alloc PEconstrained 2"
           | _ ->
               match (valueFromPexpr pe1, valueFromPexpr pe2) with
@@ -490,7 +490,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                         AllocRequest loc sb_before dd_before asw_before
                           alloc_aid current_tid pref ival1 ival2
                           (fun ptr_val -> <| th_st with
-                              arena= Expr arena_annots (Epure (Pexpr () (PEval (Vobject (OVpointer ptr_val)))));
+                              arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
                               stack= add_to_sb_stack {(p, (current_tid, alloc_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>)
                           )
@@ -514,7 +514,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
               end
         end
     
-    | Kill (Pexpr () (PEconstrained xs)) ->
+    | Kill (Pexpr [] () (PEconstrained xs)) ->
         error "Kill PEconstrained"
     | Kill pe ->
         match valueFromPexpr pe with
@@ -542,21 +542,21 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
         end
 
 (*
-    | Store (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) (Pexpr () (PEconstrained xs3)) mo ->
+    | Store (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) (Pexpr [] () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 1 and 2 and 3"
-    | Store (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) pe3 mo ->
+    | Store (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) pe3 mo ->
         error "Store PEconstrained 1 and 2"
-    | Store (Pexpr () (PEconstrained xs1)) pe2 (Pexpr () (PEconstrained xs3)) mo ->
+    | Store (Pexpr [] () (PEconstrained xs1)) pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 1 and 3"
-    | Store pe1 (Pexpr () (PEconstrained xs2)) (Pexpr () (PEconstrained xs3)) mo ->
+    | Store pe1 (Pexpr [] () (PEconstrained xs2)) (Pexpr [] () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 2 and 3"
-    | Store (Pexpr () (PEconstrained xs1)) pe2 pe3 mo ->
+    | Store (Pexpr [] () (PEconstrained xs1)) pe2 pe3 mo ->
         error "Store PEconstrained 1"
-    | Store pe1 (Pexpr () (PEconstrained xs2)) pe3 mo ->
+    | Store pe1 (Pexpr [] () (PEconstrained xs2)) pe3 mo ->
         error "Store PEconstrained 2"
 *)
 
-    | Store pe1 pe2 (Pexpr () (PEconstrained xs3)) mo ->
+    | Store pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
         Step_constrained "Store" (
           List.map (fun (cs, pe3) ->
             ( cs
@@ -635,11 +635,11 @@ KKK
         end
 
 (*
-    | Load (Pexpr () (PEconstrained xs1)) (Pexpr () (PEconstrained xs2)) mo ->
+    | Load (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) mo ->
         error "Load PEconstrained 1 and 2"
-    | Load (Pexpr () (PEconstrained xs1)) pe2 mo ->
+    | Load (Pexpr [] () (PEconstrained xs1)) pe2 mo ->
         error "Load PEconstrained 1"
-    | Load pe1 (Pexpr () (PEconstrained xs2)) mo ->
+    | Load pe1 (Pexpr [] () (PEconstrained xs2)) mo ->
         error "Load PEconstrained 2"
 *)
     | Load pe1 pe2 mo ->
@@ -654,7 +654,7 @@ KKK
                     (fun mem_val -> <| th_st with
                         (* NOTE: the parenthesis are needed because of a Lem's bug... *)
                         arena= (let (oTy, cval) = valueFromMemValue mem_val in
-                                Expr arena_annots (Epure (Pexpr () (PEval cval))));
+                                Expr arena_annots (Epure (Pexpr [] () (PEval cval))));
                         stack= add_to_sb_stack {(p, (current_tid, load_aid))} (* TODO: remove for sequential !!! *) th_st.stack
                     |>)
                 )
@@ -687,7 +687,7 @@ KKK
                         RMWRequest loc sb_before dd_before asw_before
                           rmw_aid current_tid mo1 mo2 ty ptr_val mval_expected mval_desired
                           <| th_st with
-                            arena= Expr arena_annots (Epure (Pexpr () (PEval Vtrue))); (* TODO *)
+                            arena= Expr arena_annots (Epure (Pexpr [] () (PEval Vtrue))); (* TODO *)
                             stack= add_to_sb_stack {(p, (current_tid, rmw_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
                           |>
                       )
@@ -821,14 +821,14 @@ let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_op
    <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
         one $ Step_tau "Eskip" (
           E.return <| th_st with
-            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr () (PEval Vunit))));
+            arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
             stack= Stack_cons lconts [] sk'
           |>
         )
     
     | (Ecase pe pat_es, _) ->
         one match pe with
-          | Pexpr () (PEconstrained xs) ->
+          | Pexpr [] () (PEconstrained xs) ->
               Step_constrained "Ecase" (
                 List.map (fun (constrs, pe') ->
                     ( constrs
@@ -837,7 +837,7 @@ let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_op
                       |> )
                 ) xs
               )
-          | Pexpr () (PEval cval) ->
+          | Pexpr [] () (PEval cval) ->
               match select_case subst_sym_expr cval pat_es with
                 | Just e' ->
                     Step_tau "Ecase" (
@@ -877,7 +877,7 @@ BEFORE EVAL_PEXPR2
    --------------------------------------------------------
    <let pat = pe1 in e2, κs, Λ> --τ--> <e2[pat \ v], κs, Λ> *)
         one match pe1 with
-          | Pexpr () (PEconstrained xs1) ->
+          | Pexpr [] () (PEconstrained xs1) ->
               Step_constrained "Elet" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1078,7 +1078,7 @@ BEFORE EVAL_PEXPR2
         one match valueFromPexprs pes with
           | Just bTy_cvals ->
               Step_memop_request memop bTy_cvals current_tid (fun cval ->
-                <| th_st with arena= Expr arena_annots (Epure (Pexpr () (PEval cval))) |>
+                <| th_st with arena= Expr arena_annots (Epure (Pexpr [] () (PEval cval))) |>
               )
           | Nothing ->
               Step_eval "Ememop" (
@@ -1131,7 +1131,7 @@ BEFORE EVAL_PEXPR2
     | (Ewseq pat e1 e2, Stack_cons lconts cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
-          | Expr e1_annots (Epure (Pexpr () (PEconstrained xs1))) ->
+          | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
               Step_constrained "Ewseq" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1170,7 +1170,7 @@ BEFORE EVAL_PEXPR2
     | (Esseq pat e1 e2, Stack_cons lconts cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
-          | Expr e1_annots (Epure (Pexpr () (PEconstrained xs1))) ->
+          | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
               Step_constrained "Esseq" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1215,7 +1215,7 @@ BEFORE EVAL_PEXPR2
             match (acc_opt, pe) with
               | (Nothing, _) ->
                   Nothing
-              | (Just acc, Pexpr () (PEval cval) ->
+              | (Just acc, Pexpr [] () (PEval cval) ->
                   Just ((sym, (bTy, cval)) :: acc)
               | _ ->
                   Nothing
@@ -1280,7 +1280,7 @@ BEFORE EVAL_PEXPR2
           |>
         )
     
-    | (Epure (Pexpr () (PEconstrained xs)), _) ->
+    | (Epure (Pexpr [] () (PEconstrained xs)), _) ->
         one $ Step_constrained "Epure" (
           List.map (fun (cs, pe') ->
             ( cs
@@ -1288,7 +1288,7 @@ BEFORE EVAL_PEXPR2
           ) xs
         )
     
-    | (Epure (Pexpr () (PEval cval)), Stack_empty) ->
+    | (Epure (Pexpr [] () (PEval cval)), Stack_empty) ->
         (* End of program execution *)
         one (Step_done cval)
     

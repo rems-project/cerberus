@@ -48,9 +48,9 @@ let rec hasAilname: attribute list -> string option = function
 (* TODO: move to Caux *)
 let rec mk_list_pe = function
   | [] ->
-      Pexpr ((), PEctor (Cnil (), []))
+      Pexpr ([], (), PEctor (Cnil (), []))
   | _pe::_pes ->
-      Pexpr ((), PEctor (Ccons, [_pe; mk_list_pe _pes]))
+      Pexpr ([], (), PEctor (Ccons, [_pe; mk_list_pe _pes]))
 
 let rec mk_list_pat = function
   | [] ->
@@ -270,7 +270,7 @@ let rec symbolify_pattern _pat : pattern Eff.t =
         Eff.mapM symbolify_pattern _pats >>= fun pat ->
         Eff.return (CaseCtor (convert_ctor _ctor, pat))
 
-let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
+let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t =
   match _pexpr with
     | PEsym _sym ->
         Eff.get         >>= fun st ->
@@ -281,33 +281,33 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
               Eff.fail (Unresolved_symbol _sym)
         )
     | PEimpl iCst ->
-        Eff.return (Pexpr ((), PEimpl iCst))
+        Eff.return (Pexpr ([], (), PEimpl iCst))
     | PEval (Vobject (OVinteger ival)) ->
-        Eff.return (Pexpr ((), PEval (Vobject (OVinteger ival))))
+        Eff.return (Pexpr ([], (), PEval (Vobject (OVinteger ival))))
     | PEval (Vobject (OVcfunction _nm)) ->
         symbolify_name _nm >>= fun nm ->
-        Eff.return (Pexpr ((), PEval (Vobject (OVcfunction nm))))
+        Eff.return (Pexpr ([], (), PEval (Vobject (OVcfunction nm))))
     | PEval Vunit ->
-        Eff.return (Pexpr ((), PEval Vunit))
+        Eff.return (Pexpr ([], (), PEval Vunit))
     | PEval Vtrue ->
-        Eff.return (Pexpr ((), PEval Vtrue))
+        Eff.return (Pexpr ([], (), PEval Vtrue))
     | PEval Vfalse ->
-        Eff.return (Pexpr ((), PEval Vfalse))
+        Eff.return (Pexpr ([], (), PEval Vfalse))
     | PEval (Vctype ty) ->
-        Eff.return (Pexpr ((), PEval (Vctype ty)))
+        Eff.return (Pexpr ([], (), PEval (Vctype ty)))
     | PEval _cval ->
         failwith "WIP: Core parser -> PEval"
     | PEconstrained _ ->
         assert false
     | PEundef ub ->
-        Eff.return (Pexpr ((), PEundef ub))
+        Eff.return (Pexpr ([], (), PEundef ub))
     | PEerror (str, _pe) ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEerror (str, pe)))
+        Eff.return (Pexpr ([], (), PEerror (str, pe)))
     | PEctor (Cnil (), _pes) ->
         begin match _pes with
           | [] ->
-              Eff.return (Pexpr ((), PEctor (Cnil (), [])))
+              Eff.return (Pexpr ([], (), PEctor (Cnil (), [])))
           | _ ->
               Eff.fail (CtorWrongApplication (0, List.length _pes))
         end
@@ -316,7 +316,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
           | [_pe1; _pe2] ->
               symbolify_pexpr _pe1 >>= fun pe1 ->
               symbolify_pexpr _pe2 >>= fun pe2 ->
-              Eff.return (Pexpr ((), PEctor (Ccons, [pe1; pe2])))
+              Eff.return (Pexpr ([], (), PEctor (Ccons, [pe1; pe2])))
           | _ ->
               Eff.fail (CtorWrongApplication (2, List.length _pes))
         end
@@ -325,12 +325,12 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         Eff.return (Core_aux.mk_tuple_pe pes)
     | PEctor (Carray, _pes) ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-        Eff.return (Pexpr ((), PEctor (Carray, pes)))
+        Eff.return (Pexpr ([], (), PEctor (Carray, pes)))
     | PEctor (Civmax, _pes) ->
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Civmax, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Civmax, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -338,7 +338,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Civmin, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Civmin, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -346,7 +346,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Civsizeof, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Civsizeof, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -354,7 +354,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Civalignof, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Civalignof, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -373,7 +373,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
               symbolify_pexpr _pe1 >>= fun pe1 ->
               symbolify_pexpr _pe2 >>= fun pe2 ->
               symbolify_pexpr _pe3 >>= fun pe3 ->
-              Eff.return (Pexpr ((), PEctor (CivAND, [pe1; pe2; pe3])))
+              Eff.return (Pexpr ([], (), PEctor (CivAND, [pe1; pe2; pe3])))
           | _ ->
               Eff.fail (CtorWrongApplication (3, List.length _pes))
         end
@@ -383,7 +383,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
               symbolify_pexpr _pe1 >>= fun pe1 ->
               symbolify_pexpr _pe2 >>= fun pe2 ->
               symbolify_pexpr _pe3 >>= fun pe3 ->
-              Eff.return (Pexpr ((), PEctor (CivOR, [pe1; pe2; pe3])))
+              Eff.return (Pexpr ([], (), PEctor (CivOR, [pe1; pe2; pe3])))
           | _ ->
               Eff.fail (CtorWrongApplication (3, List.length _pes))
         end
@@ -393,7 +393,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
               symbolify_pexpr _pe1 >>= fun pe1 ->
               symbolify_pexpr _pe2 >>= fun pe2 ->
               symbolify_pexpr _pe3 >>= fun pe3 ->
-              Eff.return (Pexpr ((), PEctor (CivXOR, [pe1; pe2; pe3])))
+              Eff.return (Pexpr ([], (), PEctor (CivXOR, [pe1; pe2; pe3])))
           | _ ->
               Eff.fail (CtorWrongApplication (3, List.length _pes))
         end
@@ -409,7 +409,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Cunspecified, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Cunspecified, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -417,7 +417,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
         begin match _pes with
           | [_pe] ->
               symbolify_pexpr _pe >>= fun pe ->
-              Eff.return (Pexpr ((), PEctor (Cfvfromint, [pe])))
+              Eff.return (Pexpr ([], (), PEctor (Cfvfromint, [pe])))
           | _ ->
               Eff.fail (CtorWrongApplication (1, List.length _pes))
         end
@@ -426,7 +426,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
           | [_pe1; _pe2] ->
               symbolify_pexpr _pe1 >>= fun pe1 ->
               symbolify_pexpr _pe2 >>= fun pe2 ->
-              Eff.return (Pexpr ((), PEctor (Civfromfloat, [pe1; pe2])))
+              Eff.return (Pexpr ([], (), PEctor (Civfromfloat, [pe1; pe2])))
           | _ ->
               Eff.fail (CtorWrongApplication (2, List.length _pes))
         end
@@ -439,11 +439,11 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
             Eff.return (pat, pe)
           )
         ) _pat_pes >>= fun pat_pes ->
-        Eff.return (Pexpr ((), PEcase (pe, pat_pes)))
+        Eff.return (Pexpr ([], (), PEcase (pe, pat_pes)))
     | PEarray_shift (_pe1, ty, _pe2) ->
         symbolify_pexpr _pe1 >>= fun pe1 ->
         symbolify_pexpr _pe2 >>= fun pe2 ->
-        Eff.return (Pexpr ((), PEarray_shift (pe1, ty, pe2)))
+        Eff.return (Pexpr ([], (), PEarray_shift (pe1, ty, pe2)))
     | PEmember_shift (_pe, tag_sym, member_ident) ->
         failwith "WIP: PEmember_shift"
     | PEnot _pe ->
@@ -459,7 +459,7 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
     | PEcall (_nm, _pes) ->
         symbolify_name _nm >>= fun nm ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-        Eff.return (Pexpr ((), PEcall (nm, pes)))
+        Eff.return (Pexpr ([], (), PEcall (nm, pes)))
     | PElet (_pat, _pe1, _pe2) ->
         symbolify_pexpr _pe1   >>= fun pe1 ->
         open_scope             >>
@@ -474,19 +474,16 @@ let rec symbolify_pexpr (Pexpr ((), _pexpr): parsed_pexpr) : pexpr Eff.t =
           <*> symbolify_pexpr _pe3
     | PEis_scalar _pe ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEis_scalar pe))
+        Eff.return (Pexpr ([], (), PEis_scalar pe))
     | PEis_integer _pe ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEis_integer pe))
+        Eff.return (Pexpr ([], (), PEis_integer pe))
     | PEis_signed _pe ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEis_signed pe))
+        Eff.return (Pexpr ([], (), PEis_signed pe))
     | PEis_unsigned _pe ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEis_unsigned pe))
-    | PEstd (str, _pe) ->
-        symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr ((), PEstd (str, pe)))
+        Eff.return (Pexpr ([], (), PEis_unsigned pe))
 
 
 let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
@@ -1201,9 +1198,9 @@ value:
 
 list_pexpr:
 | BRACKETS
-    { Pexpr ((), PEctor (Cnil (), [])) }
+    { Pexpr ([], (), PEctor (Cnil (), [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
-    { Pexpr ((), PEctor (Ccons, [_pe1; _pe2])) }
+    { Pexpr ([], (), PEctor (Ccons, [_pe1; _pe2])) }
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
     { mk_list_pe _pes }
 
@@ -1211,115 +1208,115 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ((), PEundef ub) }
+    { Pexpr ([], (), PEundef ub) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
-    { Pexpr ((), PEerror (str, _pe))  }
+    { Pexpr ([], (), PEerror (str, _pe))  }
 | _cval= value
-    { Pexpr ((), PEval _cval) }
+    { Pexpr ([], (), PEval _cval) }
 | _sym= SYM
-    { Pexpr ((), PEsym _sym) }
+    { Pexpr ([], (), PEsym _sym) }
 | iCst= IMPL
-    { Pexpr ((), PEimpl iCst) }
+    { Pexpr ([], (), PEimpl iCst) }
 (* Syntactic sugar for tuples and lists *)
 | LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Pexpr ((), PEctor (Ctuple, _pe :: _pes)) }
+    { Pexpr ([], (), PEctor (Ctuple, _pe :: _pes)) }
 | _pe= list_pexpr
   { _pe }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ((), PEctor (ctor, _pes)) }
+    { Pexpr ([], (), PEctor (ctor, _pes)) }
 | CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
-    { Pexpr ((), PEcase (_pe, _pat_pes)) }
+    { Pexpr ([], (), PEcase (_pe, _pat_pes)) }
 | ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= core_ctype COMMA _pe2= pexpr RPAREN
-    { Pexpr ((), PEarray_shift (_pe1, ty, _pe2)) }
+    { Pexpr ([], (), PEarray_shift (_pe1, ty, _pe2)) }
 (*
 | MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA RPAREN
 *)
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ((), PEnot _pe) }
+    { Pexpr ([], (), PEnot _pe) }
 | MINUS _pe= pexpr
-    { Pexpr ((), PEop (OpSub, Pexpr ((), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+    { Pexpr ([], (), PEop (OpSub, Pexpr ([], (), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
-    { Pexpr ((), PEop (bop, _pe1, _pe2)) }
+    { Pexpr ([], (), PEop (bop, _pe1, _pe2)) }
 (*
   | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
   | PEstruct of Symbol.t * list (Cabs.cabs_identifier * generic_pexpr 'ty 'sym)
 *)
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ((), PEcall (nm, _pes)) }
+    { Pexpr ([], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
-    { Pexpr ((), PElet (_pat, _pe1, _pe2)) }
+    { Pexpr ([], (), PElet (_pat, _pe1, _pe2)) }
 | IF _pe1= pexpr THEN _pe2= pexpr ELSE _pe3= pexpr
-    { Pexpr ((), PEif (_pe1, _pe2, _pe3)) }
+    { Pexpr ([], (), PEif (_pe1, _pe2, _pe3)) }
 | IS_SCALAR _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ((), PEis_scalar _pe) }
+    { Pexpr ([], (), PEis_scalar _pe) }
 | IS_INTEGER _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ((), PEis_integer _pe) }
+    { Pexpr ([], (), PEis_integer _pe) }
 | IS_SIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ((), PEis_signed _pe) }
+    { Pexpr ([], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ((), PEis_unsigned _pe) }
+    { Pexpr ([], (), PEis_unsigned _pe) }
 ;
 
 
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
     { let Expr (annot, expr_) = e_ in
-      Expr (EA_loc (Loc_region ($startpos, $endpos, None)) :: annot, expr_) }
+      Expr (Aloc (Loc_region ($startpos, $endpos, None)) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Expr ([EA_loc (Loc_region ($startpos, $endpos, None))], Epure pe_) }
+    { Expr ([Aloc (Loc_region ($startpos, $endpos, None))], Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
-    { Expr ([EA_loc (Loc_region ($startpos, $endpos, None))], Ememop (memop, pes)) }
+    { Expr ([Aloc (Loc_region ($startpos, $endpos, None))], Ememop (memop, pes)) }
 | SKIP
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _nm= name RPAREN
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eproc ((), _nm, []) ) }
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eproc ((), _nm, _pes) ) }
 | CCALL LPAREN _pe= pexpr RPAREN
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eccall ((), _pe, []) ) }
 | CCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eccall ((), _pe, _pes) ) }
 | _pact= paction
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Ewseq (_pat, _e1, _e2) ) }
 | _e1= expr SEMICOLON _e2= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Esseq (CaseBase (None, BTy_unit), _e1, _e2) ) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Esseq (_pat, _e1, _e2) ) }
 | LET ATOM _sym_bTy= pair(SYM, core_base_type) EQ _act1= action IN _pact2= paction
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Easeq (_sym_bTy, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Eindet (Nat_big_num.to_int n, _e) ) }
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Ebound (Nat_big_num.to_int n, _e) ) }
 (*
 | SAVE _sym= SYM LPAREN RPAREN IN _e= expr
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Esave2 () ) }
 
 
@@ -1327,10 +1324,10 @@ expr:
   | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
   *)
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [EA_loc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Epar _es ) }
 ;
 

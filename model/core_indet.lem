@@ -421,7 +421,7 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
           (Core.Expr [] (Core.Eaction (Core.Paction Core.Pos act)))
           (Core_aux.mk_wseq_e (Core.CaseBase (Nothing, Core.BTy_unit))
              (Core.Expr [] (Core.Eaction pact))
-             (Core_aux.mk_pure_e (Core.Pexpr () (Core.PEsym sym)))
+             (Core_aux.mk_pure_e (Core.Pexpr [] () (Core.PEsym sym)))
           ))
 (*
     | Core.Easeq _a_opt act pact ->
