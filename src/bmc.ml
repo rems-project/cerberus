@@ -123,6 +123,22 @@ let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
 
 (* ========== BMC ========== *)
 
+let check_solver (solver: Solver.solver) =
+  begin
+  if (Solver.check solver []) != SATISFIABLE then
+    Printf.printf "NOT SAT :) \n"
+  else
+    begin 
+    Printf.printf "SAT :( \n";
+    let model = Solver.get_model solver in
+      match model with
+      | Some m -> Printf.printf "Model: \n%s\n" (Model.to_string m)
+      | None -> Printf.printf "No model\n"
+    ;
+    end
+  end
+
+
 let symbol_to_z3 (ctx: context) (sym: ksym) =
   match sym with
   | Symbol (num, Some str) ->
@@ -159,8 +175,19 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | CivCOMPL (* bitwise complement *)
   | CivAND (* bitwise AND *)
   | CivOR (* bitwise OR *)
-  | CivXOR (* bitwise XOR *)
-  | Cspecified (* non-unspecified loaded value *)
+  | CivXOR ->
+      assert false (* bitwise XOR *) 
+  | Cspecified ->
+      begin
+        match pes with
+        | (expr :: []) ->
+            (* TODO: terrible... *)
+            if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
+              LoadedInteger.mk_loaded state.ctx expr
+            else
+              assert false
+        | _ -> assert false
+      end
   | Cunspecified (* unspecified value *)
   | Cfvfromint (* cast integer to floating value *)
   | Civfromfloat (* cast floating to integer value *) ->
@@ -239,7 +266,7 @@ let object_value_to_z3 (ctx: context) = function
   | OVcomposite _ ->
       assert false
 
-let rec value_to_z3 (ctx: context) (cval: value) =
+let rec value_to_z3 (ctx: context) (cval: value) (typ: core_base_type) =
   match cval with
   | Vunit -> UnitSort.mk_unit ctx
   | Vtrue -> Boolean.mk_true ctx
@@ -262,7 +289,12 @@ let rec value_to_z3 (ctx: context) (cval: value) =
             LoadedInteger.mk_loaded ctx iexpr
           | _ -> assert false
           end
-      | LVunspecified _ -> assert false
+      | LVunspecified _ -> 
+          begin
+          match typ with
+          | BTy_loaded OTy_integer -> LoadedInteger.mk_unspec ctx
+          | _ -> assert false 
+          end
 
 let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = function
   | OpAdd -> Arithmetic.mk_add ctx [ pe1; pe2 ]
@@ -284,7 +316,7 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
 let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
                (ty : core_base_type) (bmc_expr : bmc_ret) =
   match m_sym with
-  | None -> state (* Do nothing *)
+  | None -> Boolean.mk_true state.ctx, state (* Do nothing *)
   | Some sym -> 
       let sym_id = symbol_to_int sym in
       let pat_sym = symbol_to_z3 state.ctx sym in
@@ -302,8 +334,9 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
               let sort = cbt_to_z3 state ty in
               let expr_pat = Expr.mk_const state.ctx pat_sym sort in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
-              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
-              state
+              (* Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat
+               * expr]; *)
+              (Boolean.mk_eq state.ctx expr_pat expr), state
           | _ -> assert false
           end
       | BTy_object OTy_pointer -> 
@@ -319,7 +352,8 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                                   (PointerSort.mk_addr state.ctx sym_id) in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
               (* Map sym_id to address *)
-              ({state with ptr_map = (Pmap.add sym_id [ addr.addr ]
+              Boolean.mk_true state.ctx, 
+                ({state with ptr_map = (Pmap.add sym_id [ addr.addr ]
                                       state.ptr_map)})
           | BmcZ3Expr (Some expr) ->
               if Sort.equal (Expr.get_sort expr) (PointerSort.mk_sort state.ctx)
@@ -338,7 +372,8 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                                       (PointerSort.mk_addr state.ctx sym_id) in
                   state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
                   (* Only changed line *)
-                  ({state with ptr_map = (Pmap.add sym_id addr_list
+                  Boolean.mk_true state.ctx, 
+                    ({state with ptr_map = (Pmap.add sym_id addr_list
                                           state.ptr_map)})
                 end 
               else
@@ -353,8 +388,9 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
               let sort = cbt_to_z3 state ty in
               let expr_pat = Expr.mk_const state.ctx pat_sym sort in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
-              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
-              state
+              (* Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat
+               * expr]; *)
+              (Boolean.mk_eq state.ctx expr_pat expr), state
           | _ -> assert false
           end
       | BTy_loaded cot ->
@@ -366,11 +402,10 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                                       (!(state.sym_table));
           begin
           match bmc_expr with
-          | BmcZ3Expr None -> state
+          | BmcZ3Expr None -> Boolean.mk_true state.ctx, state
           | BmcZ3Expr (Some expr) ->
               begin
-              Solver.add state.solver [ Boolean.mk_eq state.ctx expr_pat expr];
-              state
+              (Boolean.mk_eq state.ctx expr_pat expr), state
               end
           | _ -> assert false
           end
@@ -405,10 +440,11 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
 
               assert (List.length fields = List.length patlist);
 
-              List.fold_left2 (fun s (ty, pat) i ->
-                mk_eq_pattern s pat ty 
-                  (BmcZ3Expr (Some (get_field i))
-              )) state zipped indices;
+              List.fold_left2 (fun (exp, s) (ty, pat) i ->
+                let (e, s') = mk_eq_pattern s pat ty 
+                              (BmcZ3Expr (Some (get_field i))) in
+                (Boolean.mk_and s'.ctx [e; exp], s')
+              ) (Boolean.mk_and state.ctx [], state) zipped indices;
           | _ -> assert false
           end
       | Carray (* C array *)
@@ -419,8 +455,32 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
       | CivCOMPL (* bitwise complement *)
       | CivAND (* bitwise AND *)
       | CivOR (* bitwise OR *)
-      | CivXOR (* bitwise XOR *)
-      | Cspecified (* non-unspecified loaded value *)
+      | CivXOR -> assert false (* bitwise XOR *)
+      | Cspecified -> (* non-unspecified loaded value *)
+          begin
+          assert (ty = BTy_loaded OTy_integer);
+          match patlist with
+          | (CaseBase(maybe_sym, BTy_object OTy_integer):: []) -> 
+              let expr = (match bmc_expr with
+                | BmcZ3Expr (Some expr) -> expr
+                | _ -> assert false ) in
+              (* Guard by ensuring expr is constructed with loaded *)
+              let is_loaded = LoadedInteger.is_loaded state.ctx expr in
+              let loaded_value = LoadedInteger.get_loaded_value state.ctx expr
+              in     
+              let (eq_expr, st1) = mk_eq_expr state maybe_sym
+                                   (BTy_object OTy_integer) 
+                                   (BmcZ3Expr (Some loaded_value)) in
+              let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr in
+              (* 
+              Printf.printf "IsExpr: %s\n" (Expr.to_string is_loaded);
+              Printf.printf "Loaded: %s\n" (Expr.to_string loaded_value);
+              Printf.printf "EqExpr: %s\n" (Expr.to_string eq_expr);
+              Printf.printf "Guarded: %s\n" (Expr.to_string guarded);
+              *)
+              (guarded, st1)
+          | _ -> assert false
+          end
       | Cunspecified (* unspecified value *)
       | Cfvfromint (* cast integer to floating value *)
       | Civfromfloat (* cast floating to integer value *) ->
@@ -440,24 +500,28 @@ let rec bmc_pexpr (state: bmc_state)
         Some sym_expr, state
     | PEimpl _ -> assert false
     | PEval cval ->
-        (Some (value_to_z3 state.ctx cval), state)
+        (Some (value_to_z3 state.ctx cval bTy), state)
     | PEconstrained _ ->
         assert false
     | PEundef _ ->
         let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
         None, new_state
-    | PEerror _ -> assert false
+    | PEerror _ -> 
+        let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
+        let new_state = {state with vcs = new_vcs} in
+        None, new_state
     | PEctor (ctor, pelist) -> 
         let sort = cbt_to_z3 state bTy in
+        (*
         (* assert pelist just consists of pesyms *)
         let _ = List.iter 
                 (fun pe -> match pe with
                            | Pexpr(_, PEsym sym) -> ()
                            | _ -> assert false )
                 pelist in
+        *)
         (* TODO: state needs to be propagated *) 
-        (* Should just be a lookup *)
         let z3_pelist = List.map (fun pe -> 
           match (bmc_pexpr state pe) with
           | (None, _) -> assert false
@@ -466,8 +530,27 @@ let rec bmc_pexpr (state: bmc_state)
 
         let ret = ctor_to_z3 state ctor z3_pelist sort in
         Some ret,  state
-    | PEcase (pe1, patlist) -> 
-        let (maybe_pe1) = bmc_pexpr state pe1 in 
+    | PEcase (pe, ((pat1, pe1):: (pat2, pe2):: [])) -> 
+        (* TODO: special case for now. c1 else c2 *)
+        let (Pexpr(pe_type, pe_)) = pe in
+        let (maybe_pe, st) = bmc_pexpr state pe in 
+        let (eq_expr, st_eq) = 
+            mk_eq_pattern st pat1 pe_type (BmcZ3Expr maybe_pe) in
+        let (maybe_pe1, st1) = bmc_pexpr ({state with vcs = []}) pe1 in
+        let (maybe_pe2, st2) = bmc_pexpr ({state with vcs = []}) pe2 in
+        Solver.add state.solver [ eq_expr ];
+        begin
+        match (maybe_pe, maybe_pe1, maybe_pe2) with
+        | (Some a, Some b, Some c) -> 
+            let new_vc2 = List.map(
+              fun vc -> Boolean.mk_implies st.ctx eq_expr vc) st1.vcs in
+            let new_vc3 = List.map(
+              fun vc -> Boolean.mk_implies st.ctx (Boolean.mk_not st.ctx eq_expr) vc) st2.vcs in
+            let new_vc = st_eq.vcs @ new_vc2 @ new_vc3 in
+            Some (Boolean.mk_ite st.ctx eq_expr b c), ({st_eq with vcs = new_vc})
+        | _ -> assert false
+        end
+    | PEcase _ -> 
         assert false
     | PEarray_shift _ -> assert false
     | PEmember_shift _ -> assert false
@@ -493,6 +576,11 @@ let rec bmc_pexpr (state: bmc_state)
         (* TODO: special case conv_loaded_int *)
         (* TODO: range check *)
         bmc_pexpr state pe 
+    | PEcall (Sym (Symbol(_, Some "conv_int")), (typ :: pe :: [])) -> 
+        (* TODO: special case conv_loaded_int *)
+        (* TODO: range check *)
+        bmc_pexpr state pe 
+
     | PEcall (_, args) -> assert false
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
@@ -520,8 +608,10 @@ let rec bmc_pexpr (state: bmc_state)
         let (Pexpr(pat_type, _)) = pe1 in
         let z3_sort = cbt_to_z3 state pat_type in
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
-        let state2 = mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
+        let (eq_expr, state2) = 
+          mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
                      pat_type (BmcZ3Expr maybe_pe1) in
+        Solver.add state2.solver [ eq_expr ];
         bmc_pexpr state2 pe2
     | PEif (pe1, pe2, pe3) ->
         let (maybe_pe1, s1) = bmc_pexpr state pe1 in
@@ -536,15 +626,19 @@ let rec bmc_pexpr (state: bmc_state)
                                                 (Boolean.mk_not s3.ctx a) vc)
                                      s3.vcs in
               let new_vc = s1.vcs @ new_vc2 @ new_vc3 in
-              Some (Boolean.mk_ite s3.ctx a b c), ({s3 with vcs = new_vc})
+              Some (Boolean.mk_ite s3.ctx a b c), ({s1 with vcs = new_vc})
           | _ -> assert false (* TODO *)
         end
-    | PEis_scalar _
-    | PEis_integer _
-    | PEis_signed _
-    | PEis_unsigned _
-    | PEstd _ ->
-      assert false
+    | PEis_scalar _ ->
+        assert false
+    | PEis_integer _ ->
+        assert false
+    | PEis_signed _ ->
+        assert false
+    | PEis_unsigned _ ->
+        assert false
+    | PEstd (str, pe) ->
+        bmc_pexpr state pe;
   in
     z_pe, state'
 
@@ -611,7 +705,6 @@ let bmc_paction (state: bmc_state)
         | Some (addr :: []) -> addr
         | _ -> assert false
       in
-      Printf.printf "Addr: %s\n" (Address.to_string addr);
       let heap_value = 
         match Pmap.lookup addr state.heap with
         | Some x -> x
@@ -652,23 +745,20 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Ewseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let state2 = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
-      Printf.printf "HERE\n";
-      Printf.printf "%s\n" (Solver.to_string state2.solver);
-      Printf.printf "THERE\n";
+      let (eq_expr, state2) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      Solver.add state2.solver [ eq_expr ];
       bmc_expr state2 e2
   | Ewseq _ -> assert false
   | Esseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let state2 = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
-      (Printf.printf "EEK: %s\n" (Solver.to_string state2.solver));
+      let (eq_expr, state2) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      Solver.add state2.solver [ eq_expr ];
       bmc_expr state2 e2
   | Esseq _  ->
       assert false
   | Esave _  ->
       BmcTODO, state
   in 
-    Printf.printf "%s\n" (Solver.to_string state'.solver);
     (z_e, state')
 
 
@@ -700,19 +790,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   (* TODO globals *)
   Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (initial_state.solver));
   Printf.printf "Checking sat\n";
-  begin
-  if (Solver.check (initial_state.solver) []) != SATISFIABLE then
-    Printf.printf "NOT SAT :) \n"
-  else
-    begin 
-    Printf.printf "SAT :( \n";
-    let model = Solver.get_model (initial_state.solver) in
-      match model with
-      | Some m -> Printf.printf "Model: \n%s\n" (Model.to_string m)
-      | None -> Printf.printf "No model\n"
-    ;
-    end
-  end
+  check_solver (initial_state.solver)
 
 let run_bmc (core_file : 'a typed_file) 
             (sym_supply: ksym_supply)    = 

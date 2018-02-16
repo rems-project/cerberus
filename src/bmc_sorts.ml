@@ -85,7 +85,26 @@ struct
                                 
   (* ---- end private *)
   let mk_sort (ctx: context) = 
-    Datatype.mk_sort_s ctx (sort_name ctx) [unspec_ctor ctx; loaded_ctor ctx]
+    Datatype.mk_sort_s ctx (sort_name ctx) 
+        [unspec_ctor ctx; loaded_ctor ctx]
+
+  let is_loaded (ctx: context) (expr: Expr.expr) =
+    let sort = mk_sort ctx in
+    let recognizers = Datatype.get_recognizers sort in
+    let func_decl = List.nth recognizers 1 in
+    Expr.mk_app ctx func_decl [ expr ]
+
+  let get_loaded_value (ctx: context) (expr: Expr.expr) =
+    let sort = mk_sort ctx in
+    let accessors = Datatype.get_accessors sort in
+    let func_decl = List.hd (List.nth accessors 1) in
+    Expr.mk_app ctx func_decl [ expr ]
+  
+  let mk_unspec (ctx: context) : Expr.expr =
+    let sort = mk_sort ctx in
+    let constructors = Datatype.get_constructors sort in
+    let func_decl = List.nth constructors 0 in
+    Expr.mk_app ctx func_decl [ ]
 
   let mk_loaded (ctx: context) (expr: Expr.expr) =
     let sort = mk_sort ctx in
@@ -93,8 +112,7 @@ struct
     let func_decl = List.nth constructors 1 in
     Expr.mk_app ctx func_decl [ expr ]
 
-  let mk_unspec (ctx: context) : Expr.expr =
-    assert false
+
 end
 
 (* TODO: Functorize *)
