@@ -230,6 +230,9 @@ type generic_pattern 'bty 'sym =
 type sym = Symbol.sym
 type ksym = Symbol.sym
 
+type annot =
+  | Astd of string
+  | Aloc of Loc.t
 
 type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym (* Core identifier *)
@@ -253,10 +256,9 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEis_integer of (generic_pexpr 'bty 'sym)
  | PEis_signed of (generic_pexpr 'bty 'sym)
  | PEis_unsigned of (generic_pexpr 'bty 'sym)
- | PEstd of string * (generic_pexpr 'bty 'sym)
 
 and generic_pexpr 'bty 'sym = 
- | Pexpr of 'bty * (pexpr_ 'bty 'sym)
+ | Pexpr of list annot * 'bty * (pexpr_ 'bty 'sym)
 
 
 type generic_action_ 'bty 'sym =  (* memory actions *)
@@ -275,10 +277,6 @@ type generic_action 'a 'bty 'sym =  (* memory actions *)
 
 type generic_paction 'a 'bty 'sym =  (* memory actions with polarity *)
  | Paction of polarity * (generic_action 'a 'bty 'sym)
-
-type expr_annot =
-  | EA_std of string
-  | EA_loc of Loc.t
 
 type generic_expr_ 'a 'bty 'sym =  (* Core expressions *)
  | Epure of (generic_pexpr 'bty 'sym) (* pure expression *)
@@ -305,7 +303,7 @@ type generic_expr_ 'a 'bty 'sym =  (* Core expressions *)
  | Ewait of Cthread.thread_id (* wait for thread termination *)
 
 and generic_expr 'a 'bty 'sym =
-  | Expr of list expr_annot * generic_expr_ 'a 'bty 'sym
+  | Expr of list annot * generic_expr_ 'a 'bty 'sym
 
 (* TODO: don't we need any impl proc? *)
 type generic_impl_decl 'bty =

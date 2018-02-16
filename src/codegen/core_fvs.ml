@@ -34,7 +34,7 @@ let fv_pat_opt = function
   | None -> []
   | Some pat -> fv_pat [] pat
 
-let rec fv_pe (Pexpr (_, e)) fvs =
+let rec fv_pe (Pexpr (_,_, e)) fvs =
   match e with
   | PEsym l -> l::fvs
   | PEimpl _ -> fvs
@@ -68,8 +68,7 @@ let rec fv_pe (Pexpr (_, e)) fvs =
   | PEis_scalar pe
   | PEis_integer pe
   | PEis_signed pe
-  | PEis_unsigned pe
-  | PEstd (_, pe) -> fv_pe pe fvs
+  | PEis_unsigned pe -> fv_pe pe fvs
 
 let fv_act (Paction(_, Action (_, _, act))) fvs =
   match act with

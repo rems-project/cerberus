@@ -378,7 +378,7 @@ let print_eff_function name pmrs ty body =
 
 (* Binary operations and precedences *)
 
-let print_binop bop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
+let print_binop bop pp (Pexpr (_, t1, pe1_) as pe1) (Pexpr (_, t2, pe2_) as pe2) =
   let app bop = !^bop ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2) in
   let case_by_type f g h =
     match t1 with
@@ -408,7 +408,7 @@ let print_binop bop pp (Pexpr (t1, pe1_) as pe1) (Pexpr (t2, pe2_) as pe2) =
   | OpAnd -> pp pe1 ^^^ !^" && " ^^^ pp pe2
   | OpOr  -> pp pe1 ^^^ !^ "||" ^^^ pp pe2
 
-let binop_precedence (Pexpr (_, pe)) = match pe with
+let binop_precedence (Pexpr (_, _, pe)) = match pe with
   | PEop (OpExp, _, _) -> Some 1
   | PEop (OpMul, _, _)
   | PEop (OpDiv, _, _)
@@ -460,8 +460,8 @@ let rec print_value globs = function
 
 let print_is_expr str pp pe =
   match pe with
-  | Pexpr (_, PEval (Vctype _))
-  | Pexpr (_, PEsym _) -> !^"A." ^^ !^str ^^^ P.parens (pp pe)
+  | Pexpr (_, _, PEval (Vctype _))
+  | Pexpr (_, _, PEsym _) -> !^"A." ^^ !^str ^^^ P.parens (pp pe)
   | _ -> !^str ^^^ pp pe
 
 let print_tag pp (cid, pe) =
@@ -500,7 +500,7 @@ let print_pure_expr globs pe =
     let pp z  = P.group (pp prec' z) in
     (if lt_precedence prec' prec then fun z -> z else P.parens)
     begin
-      match pe with Pexpr (t, pe') ->
+      match pe with Pexpr (_, t, pe') ->
       match pe' with
       | PEsym sym ->
         print_globs_prefix globs sym ^^ print_symbol sym
@@ -531,10 +531,10 @@ let print_pure_expr globs pe =
         print_name nm ^^^ (
           if List.length pes = 0
           then P.parens P.empty
-          else P.separate_map P.space (fun (Pexpr (t, x)) ->
+          else P.separate_map P.space (fun (Pexpr (_, t, x)) ->
               match x with
-              | (PEsym sym) -> pp (Pexpr (t, PEsym sym))
-              | _           -> P.parens (pp (Pexpr (t, x)))
+              | (PEsym sym) -> pp (Pexpr ([], t, PEsym sym))
+              | _           -> P.parens (pp (Pexpr ([], t, x)))
             ) pes
         )
       | PElet (p, pe1, pe2) -> print_let_in (print_pattern p) (pp pe1) (pp pe2)
@@ -543,7 +543,6 @@ let print_pure_expr globs pe =
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
       | PEis_signed pe -> print_is_expr "is_signed" pp pe
       | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
-      | PEstd (_, pe) -> pp pe
     end
   in pp None pe
 
@@ -562,7 +561,7 @@ let print_memop globs memop pes =
    | Mem_common.Memcmp -> !^"A.memcmp"
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
-let choose_load_type (Pexpr (_, PEval cty)) =
+let choose_load_type (Pexpr (_, _, PEval cty)) =
   match cty with
   | Vctype (Basic0 (Integer ity)) ->
     !^"A.load_integer" ^^^ P.parens (print_ail_integer_type ity)
@@ -587,7 +586,7 @@ let print_store_array_type = function
       ^^^ P.parens (print_ctype cty)
   | _ -> raise (Unsupported "store array not implemented")
 
-let choose_store_type (Pexpr (_, PEval cty)) =
+let choose_store_type (Pexpr (_, _, PEval cty)) =
   match cty with
   | Vctype (Basic0 (Integer ity)) ->
     !^"A.store_integer" ^^^ P.parens (print_ail_integer_type ity)

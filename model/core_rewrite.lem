@@ -679,8 +679,8 @@ let in_minimal_range ty n =
 
 
 val     remove_conv_int_pexpr: pexpr -> pexpr
-let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
-  Pexpr bTy match _pe with
+let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
+  Pexpr annot bTy match _pe with
     | PEsym _ ->
         _pe
     | PEimpl _ ->
@@ -737,7 +737,7 @@ let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
               end
-          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _pe_n]) ->
+          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _ _pe_n]) ->
               if pe_ty1 = pe_ty2 then
                 _pe_n
               else
@@ -757,8 +757,6 @@ let rec remove_conv_int_pexpr (Pexpr bTy _pe) =
         PEis_signed (remove_conv_int_pexpr pe)
     | PEis_unsigned pe ->
         PEis_unsigned (remove_conv_int_pexpr pe)
-    | PEstd str pe ->
-        PEstd str (remove_conv_int_pexpr pe)
   end
 
 let rec remove_conv_int (Expr annot expr_) =
@@ -995,7 +993,7 @@ let rec pure_propagation expr =
 
 
 
-let rec isAlwaysDefined (Pexpr _ pexpr_) =
+let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
   match pexpr_ with
     | PEsym _ ->
         true
@@ -1040,8 +1038,6 @@ let rec isAlwaysDefined (Pexpr _ pexpr_) =
         isAlwaysDefined pe
     | PEis_unsigned pe ->
         isAlwaysDefined pe
-    | PEstd _ pe ->
-        isAlwaysDefined pe
 end
 
 let rec pure_propagation2 (Expr annot expr_ as expr) =
@@ -1081,9 +1077,9 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
     | Elet pat pe1 e2 ->
         let e2' = pure_propagation2 e2 in
         match to_pure' e2' with
-          | Just (Pexpr bTy _ as pe2) ->
+          | Just (Pexpr annot bTy _ as pe2) ->
               (* TODO: loosing std annot *)
-              Core_aux.mk_pure_e (Pexpr bTy (PElet pat pe1 pe2))
+              Core_aux.mk_pure_e (Pexpr annot bTy (PElet pat pe1 pe2))
           | Nothing ->
               Expr annot (Elet pat pe1 e2')
         end
@@ -1091,9 +1087,9 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         let e2' = pure_propagation2 e2 in
         let e3' = pure_propagation2 e3 in
         match (to_pure' e2', to_pure' e3') with
-          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
+          | (Just (Pexpr annot bTy _ as pe2), Just pe3) ->
               (* TODO: loosing std annot *)
-              Core_aux.mk_pure_e (Pexpr bTy (PEif pe1 pe2 pe3))
+              Core_aux.mk_pure_e (Pexpr annot bTy (PEif pe1 pe2 pe3))
           | (Just pe2, Nothing) ->
               Expr annot (Eif pe1 (Core_aux.mk_pure_e pe2) e3')
           | (Nothing, Just pe3) ->
