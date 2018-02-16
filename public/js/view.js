@@ -23,12 +23,21 @@ class View {
 
     // Empty data
     this.data = {
-      cabs: "",
-      ail:  "",
-      core: "",
+      pp: {
+        cabs: "",
+        ail:  "",
+        core: ""
+      },
+      ast: {
+        cabs: "",
+        ail:  "",
+        core: ""
+      },
       locs: [],
       stdout: "",
-      stderr: ""
+      stderr: "",
+      steps: [],
+      console: ""
     }
 
     this.content = {}
@@ -219,16 +228,16 @@ class View {
   }
 
   update(data) {
+    Object.assign(this.data, data)
     this.dirty = false
     this.isHighlighted = false
-    this.data = data
     this.forEachTab((tab) => tab.update())
     this.isHighlighted = false
   }
 
-  newTab(mode) {
-    let tab = this[mode];
-    tab.setValue(this.data[mode])
+  newTab(mode, lang) {
+    let tab = this[lang];
+    tab.setValue(this.data[mode][lang])
     if (ui.colour) tab.highlight()
   }
 
