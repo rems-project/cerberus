@@ -112,21 +112,22 @@ class UI {
     })
 
     // Pretty print elab IRs
-    $('#cabs').on('click', () => this.elab ('cabs'))
-    $('#ail_ast') .on('click', () => this.elab ('ail_ast'))
-    $('#ail') .on('click', () => this.elab ('ail'))
+    $('#cabs').on('click', () => this.elab ('ast', 'cabs'))
+    $('#ail_ast') .on('click', () => this.elab ('ast', 'ail_ast'))
+    $('#ail') .on('click', () => this.elab ('ast', 'ail'))
     $('#core').on('click', () => this.elab ('pp','core'))
 
     // Compilers
     $('#compile').on('click', () => {
-      this.currentView.newPane.add(new TabAsm(defaultCompiler))
+      this.currentView.add(new TabAsm(defaultCompiler))
     })
 
 
     // Views
     // TODO tabs are not being used
+    /*
     $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
-    $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
+    $('#source_tab') .on('click', () => this.currentView.source.setActive())
     $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
     $('#cabs_tab')   .on('click', () => this.currentView.cabs.setActive())
     $('#ail_tab')    .on('click', () => this.currentView.ail.setActive())
@@ -135,6 +136,7 @@ class UI {
     $('#graph_tab')  .on('click', () => this.currentView.graph.setActive())
     $('#unsplit')    .on('click', () => this.currentView.unsplit())
     $('#refresh')    .on('click', () => this.elab())
+    */
 
     // Settings
     $('#rewrite').on('click', (e) => {
@@ -168,7 +170,7 @@ class UI {
           let tab = new Tab('Help')
           tab.dom.content.addClass('help');
           tab.dom.content.append(data)
-          this.currentView.newPane.add(tab)
+          this.currentView.add(tab)
           tab.setActive()
           this.done()
         }
@@ -241,8 +243,51 @@ class UI {
 
   step () {
     this.request('Step', (data) => {
+      this.currentView.data.steps = []
       this.currentView.update(data)
       this.currentView.highlight()
+
+      let steps = this.currentView.data.steps;
+      steps.reverse();
+      let nodes = []
+      for (let i = 0; i < steps.length; i++)
+        nodes.push({id: i, label: steps[i]})
+
+      let edges = []
+      for (let i = 0; i < steps.length; i++) {
+        if (steps[i+1]) {
+          edges.push({from: i, to: (i+1)})
+        }
+      }
+
+
+      /*
+  var nodes = new vis.DataSet([
+    {id: 1, label: 'Node 1'},
+    {id: 2, label: 'Node 2'},
+    {id: 3, label: 'Node 3'},
+    {id: 4, label: 'Node 4'},
+    {id: 5, label: 'Node 5'}
+  ]);
+
+  // create an array with edges
+  var edges = new vis.DataSet([
+    {from: 1, to: 3},
+    {from: 1, to: 2},
+    {from: 2, to: 4},
+    {from: 2, to: 5},
+    {from: 3, to: 3}
+  ]);
+  */
+
+  // create a network
+  let g = {
+    nodes: new vis.DataSet(nodes),
+    edges: new vis.DataSet(edges),
+    lastId: nodes[nodes.length-1].id
+  };
+
+      /*
       let g = "digraph D { ";
       let steps = this.currentView.data.steps;
       for (let i = steps.length-1; i >= 0; i--) {
@@ -255,9 +300,9 @@ class UI {
         }
         g += "a" + i
       }
-      g += ";}"
+      g += ";}"*/
       this.currentView.graph.setValue(g)
-      if (data.console != "")
+      if (data.console && data.console != "")
         this.currentView.console.setValue(data.console)
     })
   }
@@ -401,4 +446,5 @@ $.get('buffer.c').done((data) => {
 }).fail(() => {
   console.log('Failing when trying to download "buffer.c"')
 })
+
 
