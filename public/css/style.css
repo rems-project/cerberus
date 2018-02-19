@@ -258,7 +258,7 @@ html, body {
   font-size: 13px !important;
 }
 
-.pane .CodeMirror {
+.CodeMirror {
   height: 100%;
   border: 1px solid #eee;
 }

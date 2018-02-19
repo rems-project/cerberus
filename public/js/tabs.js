@@ -85,18 +85,76 @@ class TabGraph extends Tab {
     this.dom.graph.children('#plus').on('click', () => {
       this.svg.panzoom('zoom');
     })
+
+    let options = {
+      edges: {arrows: {to: true}},
+      layout: {hierarchical: {
+        enabled: true,
+        levelSeparation: 70
+      }},
+      physics: { stabilization: {
+          enabled: true 
+        }}
+    }
+    let container = this.dom.graph.children('.svg')[0]
+    this.nodes = vis.DataSet([])
+    this.edges = vis.DataSet([])
+    this.network = new vis.Network(container, {nodes: this.nodes, edges: this.edges}, options);
   }
 
   setValue(data) {
     // Remove previous one
-    if (this.svg)
-      this.svg.remove()
+    //if (this.svg)
+    //  this.svg.remove()
 
     // Add to the container
     //this.dot = json_to_dot(data)
-    this.dom.graph.children('.svg').append(Viz(data))
-    this.svg = this.dom.graph.find('svg')
-    this.svg.panzoom()
+
+      // create an array with nodes
+    /*
+  var nodes = new vis.DataSet([
+    {id: 1, label: 'Node 1'},
+    {id: 2, label: 'Node 2'},
+    {id: 3, label: 'Node 3'},
+    {id: 4, label: 'Node 4'},
+    {id: 5, label: 'Node 5'}
+  ]);
+
+  // create an array with edges
+  var edges = new vis.DataSet([
+    {from: 1, to: 3},
+    {from: 1, to: 2},
+    {from: 2, to: 4},
+    {from: 2, to: 5},
+    {from: 3, to: 3}
+  ]);
+  */
+
+  // create a network
+  //var container = this.dom.graph.children('.svg')[0]
+  //var data = {
+  //  nodes: nodes,
+  //  edges: edges
+  //};
+
+
+    //let network = new vis.Network(container, data, options);
+
+    //network.focus(data.lastId)
+    /*
+    network.moveTo({
+      position: {x:0, y:0},
+      scale: 1.0,
+      offset: {x:50, y:50}
+    })
+    network.redraw()
+    */
+    //this.network.setData(data)
+    nodes.add({id:newId, label:"I'm new!"});
+    
+    //this.dom.graph.children('.svg').append(Viz(data))
+    //this.svg = this.dom.graph.find('svg')
+    //this.svg.panzoom()
 
     // Set active
     this.setActive()
