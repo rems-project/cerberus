@@ -346,10 +346,8 @@ struct
       `Assoc [("PEis_signed", serialise pe)]
     | PEis_unsigned pe ->
       `Assoc [("PEis_unsigned", serialise pe)]
-    | PEstd (std, pe) ->
-      `Assoc [("PEstd", `List [StringJSON.serialise std; serialise pe])]
   and serialise = function
-    | Pexpr (_, pe) -> serialise_pe pe
+    | Pexpr (_, _, pe) -> serialise_pe pe
   and serialise_field (cid, pe) =
     `List [CabsIdJSON.serialise cid; serialise pe]
   and serialise_pat (pat, pe) =

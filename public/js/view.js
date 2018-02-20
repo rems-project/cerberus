@@ -2,15 +2,24 @@
 
 class View {
   constructor (title, data) {
-    let source = new TabSource(title, data)
-
     this.tabs = []
     this.title  = title
-    this.source = source
-    this.tabs.push(source)
+    this.source = new TabSource(title, data)
+    this.source.setActive() // TODO: see if i'm using active
+    this.tabs.push(this.source)
+
+    // GUI
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
+    this.initLayout()
 
+    // State
+    this.setStateEmpty()
+    this.isHighlighted = false;
+    this.dirty = true;
+  }
+
+  initLayout() {
     let config = {
       settings:{
           hasHeaders: true,
@@ -37,55 +46,12 @@ class View {
           maximise: 'Maximise',
           minimise: 'Minimise'
       },
-      content: [{
-        type: 'row',
-        content: [{
-          type: 'component',
-          title: title,
-          componentName: 'source',
-          isClosable: false
-        }]
-      }]
+      content: []
     }
     this.layout = new GoldenLayout (config, this.dom);
-
-    // Activate source tab
-    this.source.setActive()
-
-    // Empty data
-    this.data = {
-      pp: {
-        cabs: "",
-        ail:  "",
-        core: ""
-      },
-      ast: {
-        cabs: "",
-        ail:  "",
-        core: ""
-      },
-      locs: [],
-      stdout: "",
-      stderr: "",
-      steps: [],
-      console: ""
-    }
-
-    this.content = {}
-
-    this.isHighlighted = false;
-    this.dirty = true;
-
-    // WARN: GoldLayout does not support arrow functions when registering
-    // a component
-    this.layout.registerComponent('source',
-      function (container, state) {
-        $(container.getElement()).append(source.dom.content)
-      }
-    )
     this.layout.registerComponent('tab',
       function (container, state) {
-        $(container.getElement()).append(state.tab.dom.content)
+        $(container.getElement()).append(state.tab.dom)
       }
     )
     this.layout.on('itemDestroyed', (c) => {
@@ -99,7 +65,62 @@ class View {
         }
       }
     })
+    this.layout.on( 'tabCreated', function( tabHeader ){
+      if (tabHeader.contentItem.isComponent) {
+        let tab = tabHeader.contentItem.config.componentState.tab
+        tabHeader.element.on('mousedown', function () {
+          tab.refresh()
+        })
+      }
+    })
     this.layout.init()
+  }
+
+  setStateEmpty() {
+    this.state = {
+      status: 'failure',
+      pp: {
+        cabs: '',
+        ail:  '',
+        core: ''
+      },
+      ast: {
+        cabs: '',
+        ail:  '',
+        core: ''
+      },
+      locs: [],
+      steps: [],
+      result: '',
+      console: ''
+    }
+  }
+
+  makeGrid() {
+    let core = new TabCore()
+    this.tabs.push(core)
+
+    let execution = new TabExecution()
+    this.tabs.push(execution)
+
+    let console = new TabConsole()
+    this.tabs.push(console)
+
+    let grid = {
+      type: 'row',
+      content: [{
+        type: 'column',
+        content: [
+          this.source.component(), {
+            type: 'stack',
+            content: [
+              console.component(),
+              execution.component()
+            ]}
+        ]},
+        core.component()
+      ]}
+    this.layout.root.addChild(grid)
   }
 
   getValue() {
@@ -109,60 +130,15 @@ class View {
   add (tab) {
     this.tabs.push(tab)
     tab.alive = true
-    this.layout.root.contentItems[ 0 ].addChild({
+    let content = (this.layout.root.contentItems.length > 0) ?
+      this.layout.root.contentItems[0] : this.layout.root
+    content.addChild({
       type: 'component',
       componentName: 'tab',
       title: tab.title,
       componentState: { tab: tab }
     });
-    tab.addEventListener()
     tab.refresh()
-  }
-
-  get exec() {
-    if (!this._execTab)
-      this._execTab = new TabReadOnly('Execution')
-    this.add(this._execTab)
-    return this._execTab
-  }
-
-  get cabs() {
-    let tab = new TabCabs()
-    this.add(tab)
-    return tab
-  }
-
-  get ail() {
-    let tab = new TabAil()
-    this.add(tab)
-    return tab
-  }
-
-  get ail_ast() {
-    let tab = new TabAil()
-    this.add(tab)
-    return tab
-  }
-
-
-  get core() {
-    let tab = new TabCore()
-    this.add(tab)
-    return tab
-  }
-
-  get console() {
-    if (!this._consoleTab)
-      this._consoleTab = new TabReadOnly('Console')
-    this.add(this._consoleTab)
-    return this._consoleTab;
-  }
-
-  get graph() {
-    if (!this._graphTab)
-      this._graphTab = new TabGraph('Graph')
-    this.add(this._graphTab)
-    return this._graphTab;
   }
 
   forEachTab(f) {
@@ -170,10 +146,40 @@ class View {
       f(this.tabs[i])
   }
 
-  mark(loc) {
-    if (loc) {
-      this.forEachTab((tab) => tab.mark(loc))
+  findTab(aClass) {
+    for (let i = 0; i < this.tabs.length; i++) {
+      if (this.tabs[i] instanceof aClass) {
+        return this.tabs[i]
+      }
     }
+    return null
+  }
+
+  newTab(aClass) {
+    let tab = new aClass(title)
+    this.add(tab)
+    tab.update(this.state)
+    tab.highlight(this.state)
+    return tab
+  }
+
+  getTab(aClass, title) {
+    let tab = this.findTab(aClass)
+    if (tab == null)
+      tab = this.newTab(aClass, title)
+    return tab
+  }
+
+  // Return this first instance (or create a new one)
+  get exec()    { return this.getTab(TabExecution) }
+  get cabs()    { return this.getTab(TabCabs) }
+  get ail()     { return this.getTab(TabAil) }
+  get core()    { return this.getTab(TabCore) }
+  get console() { return this.getTab(TabConsole) }
+  get graph()   { return this.getTab(TabGraph) }
+
+  mark(loc) {
+    if (loc) this.forEachTab((tab) => tab.mark(loc))
   }
 
   clear() {
@@ -193,10 +199,9 @@ class View {
       this.clear()
       return;
     }
-    if (this.isHighlighted||this.dirty)
-      return;
+    if (this.isHighlighted||this.dirty) return;
     this.clear()
-    this.forEachTab((tab) => tab.highlight())
+    this.forEachTab((tab) => tab.highlight(this.state))
     this.isHighlighted = true
   }
 
@@ -208,21 +213,21 @@ class View {
     this.dom.hide()
   }
 
-  update(data) {
-    Object.assign(this.data, data)
-    this.dirty = false
-    this.isHighlighted = false
-    this.forEachTab((tab) => tab.update())
-    this.isHighlighted = false
+  update() {
+    this.forEachTab((tab) => tab.update(this.state))
+    this.highlight()
   }
 
-  newTab(mode, lang) {
-    let tab = this[lang];
-    tab.setValue(this.data[mode][lang])
-    if (ui.colour) tab.highlight()
+  setState (s) {
+    if (s.status == 'failure') this.setStateEmpty()
+    Object.assign(this.state, s) // merge states
+    this.dirty = false
+    this.isHighlighted = false
+    this.update()
   }
 
   refresh () {
+    this.forEachTab((tab) => tab.refresh())
     this.layout.updateSize()
   }
 }

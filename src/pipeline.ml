@@ -10,7 +10,7 @@ let run_pp with_ext doc =
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
   (* TODO(someday): dynamically get the width of the terminal *)
-  PPrint.ToChannel.pretty 1.0 150 oc doc;
+  PPrint.ToChannel.pretty 1.0 80 oc doc;
   if is_fout then
     close_out oc;
   Colour.do_colour := saved
