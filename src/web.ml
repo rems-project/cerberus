@@ -51,7 +51,7 @@ let write_tmp_file content =
 
 let string_of_doc d =
   let buf = Buffer.create 1024 in
-  PPrint.ToBuffer.pretty 1.0 150 buf d;
+  PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
 
 let encode s = B64.encode (Marshal.to_string s [Marshal.Closures])
@@ -178,6 +178,7 @@ let json_of_elaboration (cabs, ail, _, core) =
     |> Location_mark.extract
   in
   `Assoc [
+    ("status", `String "success");
     ("pp", `Assoc [
         ("cabs", `Null);
         ("ail",  json_of_doc (Pp_ail.pp_program ail));
@@ -187,11 +188,14 @@ let json_of_elaboration (cabs, ail, _, core) =
         ("ail",  json_of_doc (Pp_ail_ast.pp_program ail));
         ("core", `Null)]);
     ("locs", locs);
+    ("result", `String "");
+    ("console", `String "");
   ]
 
 let json_of_execution str =
   `Assoc [
-    ("console", `String str);
+    ("status", `String "success");
+    ("result", `String str);
   ]
 
 let json_of_step (steps, str, m, st) =
@@ -202,7 +206,10 @@ let json_of_step (steps, str, m, st) =
   ]
 
 let json_of_fail msg =
-  `Assoc [("stderr",  `String msg)]
+  `Assoc [
+    ("status", `String "failure");
+    ("console",  `String msg)
+  ]
 
 
 (* Server default responses *)
@@ -288,6 +295,7 @@ let respond f = function
 let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
+  hack (fst conf) Smt2.Random;
   Debug.print 2 ("Elaborating: " ^ filename);
   try
     Pipeline.c_frontend conf filename

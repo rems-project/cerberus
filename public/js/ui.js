@@ -7,7 +7,6 @@ class UI {
     this.currentView = null   /* Current displayed view */
 
     this.dom = $('#views');
-    //this.dom.prevWidth = this.dom.width();
 
     window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
@@ -112,31 +111,15 @@ class UI {
     })
 
     // Pretty print elab IRs
-    $('#cabs').on('click', () => this.elab ('ast', 'cabs'))
-    $('#ail_ast') .on('click', () => this.elab ('ast', 'ail_ast'))
-    $('#ail') .on('click', () => this.elab ('ast', 'ail'))
-    $('#core').on('click', () => this.elab ('pp','core'))
+    $('#cabs').on('click', () => this.elab (TabCabs))
+    $('#ail_ast') .on('click', () => this.elab (TabAil)) // TODO
+    $('#ail') .on('click', () => this.elab (TabAil))
+    $('#core').on('click', () => this.elab (TabCore))
 
     // Compilers
     $('#compile').on('click', () => {
       this.currentView.add(new TabAsm(defaultCompiler))
     })
-
-
-    // Views
-    // TODO tabs are not being used
-    /*
-    $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
-    $('#source_tab') .on('click', () => this.currentView.source.setActive())
-    $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
-    $('#cabs_tab')   .on('click', () => this.currentView.cabs.setActive())
-    $('#ail_tab')    .on('click', () => this.currentView.ail.setActive())
-    $('#core_tab')   .on('click', () => this.currentView.core.setActive())
-    $('#console_tab').on('click', () => this.currentView.console.setActive())
-    $('#graph_tab')  .on('click', () => this.currentView.graph.setActive())
-    $('#unsplit')    .on('click', () => this.currentView.unsplit())
-    $('#refresh')    .on('click', () => this.elab())
-    */
 
     // Settings
     $('#rewrite').on('click', (e) => {
@@ -159,7 +142,6 @@ class UI {
       $('#cb_colour_cursor').prop('checked', this.colour_cursor)
     })
 
-
     // Help
     $('#help').on('click', () => {
       this.wait();
@@ -168,8 +150,8 @@ class UI {
         type: 'GET',
         success: (data, status, query) => {
           let tab = new Tab('Help')
-          tab.dom.content.addClass('help');
-          tab.dom.content.append(data)
+          tab.dom.addClass('help');
+          tab.dom.append(data)
           this.currentView.add(tab)
           tab.setActive()
           this.done()
@@ -185,7 +167,7 @@ class UI {
     })
 
     window.setInterval(() => {
-      if (this.auto_refresh) this.update()
+      if (this.auto_refresh) this.elab()
     }, 2000);
 
     $('.cm-std').on('click', (e) => {
@@ -215,6 +197,7 @@ class UI {
   }
 
   request (mode, onSuccess) {
+    let s = this.currentView.state // TODO: remove this
     this.wait()
     $.ajax({
       url:  '/cerberus',
@@ -224,14 +207,11 @@ class UI {
         'action':  mode,
         'source':  this.currentView.getValue(),
         'rewrite': this.rewrite,
-        'steps':   this.currentView.data.steps,
-        'state':   (this.currentView.data.state ? this.currentView.data.state : "")
+        'steps':   this.currentView.state.steps,
+        'state':   (s.state ? s.state : "")
       }),
       success: (data, status, query) => {
         onSuccess(data);
-        // TODO: check success somehow
-        //if (data.console != "")
-        //  this.currentView.console.setValue(data.console)
         this.done()
       }
     }).fail((e) => {
@@ -308,37 +288,16 @@ class UI {
   }
 
   exec (mode) {
-    this.request(mode, (data) => {
-      this.currentView.update(data)
-      this.currentView.highlight()
-      this.currentView.exec.setValue(data.console)
-      if (data.console != "")
-        this.currentView.console.setValue(data.console)
+    this.request(mode, (s) => {
+      this.currentView.exec.setActive()
+      this.currentView.setState(s)
     })
   }
 
-  update() {
-    let view = this.currentView
-    if (view.dirty) {
-      this.request('Elaborate', (data) => {
-        view.update(data);
-        view.source.highlight()
-        view.highlight()
-      })
-    }
-  }
-
-  elab (mode, lang) {
-    let view = this.currentView
-    if (!view.dirty) {
-      if (lang) view.newTab(mode, lang)
-    } else {
-      this.request('Elaborate', (data) => {
-        view.update(data);
-        view.source.highlight()
-        if (lang) view.newTab(mode, lang)
-      })
-    }
+  elab (lang) {
+    if (lang) this.currentView.newTab(lang)
+    if (this.currentView.dirty)
+      this.request('Elaborate', (s) => this.currentView.setState(s))
   }
 
   wait () {
@@ -441,6 +400,7 @@ $.get('pldi_tests.json').done((data) => {
 $.get('buffer.c').done((data) => {
   $(window).ready(() => {
     ui.add(new View('hello.c', data))
+    ui.currentView.makeGrid()
     ui.refresh()
   })
 }).fail(() => {

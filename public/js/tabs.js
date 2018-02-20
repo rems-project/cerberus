@@ -3,32 +3,8 @@
 /* Generic Tab */
 class Tab {
   constructor(title) {
-    this.parent = null
-
-    this.dom         = $('#tab-template').clone().contents()
-    this.dom.content = $('<div class="tab-content"></div>')
-
+    this.dom = $('<div class="tab-content"></div>')
     this.setTitle(title)
-  }
-
-  addEventListener() {
-    this.dom.on('click', () => {
-      this.setActive()
-    })
-
-    this.dom.children('.close').on('click', () => {
-      if (this.parent)
-        this.parent.remove(this)
-    })
-
-    this.dom.on('dragstart', (evt) => {
-      if (ui) ui.currentView.draggedTab = this
-      $('body').addClass('grabbing')
-    })
-
-    this.dom.on('dragend', (evt) => {
-      $('body').removeClass('grabbing')
-    })
   }
 
   setTitle (title) {
@@ -37,30 +13,45 @@ class Tab {
   }
 
   setActive() {
+    // TODO: I don't think I'm using this anymore
+    /*
     if (this.parent) {
       this.parent.clearSelection()
       this.parent.setActiveTab(this)
     }
-    this.dom.addClass('active')
-    this.dom.content.show()
+    //this.dom.addClass('active')
+    this.dom.show()
     this.refresh()
+    */
   }
 
   clearSelection () {
-    this.dom.removeClass('active')
-    this.dom.content.hide()
+    //this.dom.removeClass('active')
+    this.dom.hide()
   }
 
   isSelected () {
-    this.dom.hasClass('active')
+    // TODO
+    //this.dom.hasClass('active')
+  }
+
+  component(content) {
+    return {
+      type: 'component',
+      componentName: 'tab',
+      componentState: { tab: this },
+      title: this.title,
+      isClosable: this.isClosable,
+      content: content
+    }
   }
 
   // Dummy methods to be overwriten
   refresh () {}
   mark (loc) {}
   clear ()   {}
-  update ()  {}
-  highlight() {}
+  update (s)  {}
+  highlight(s) {}
 
 }
 
@@ -70,7 +61,7 @@ class TabGraph extends Tab {
     super(title)
 
     this.dom.graph = $('#graph-template').clone().contents()
-    this.dom.content.append(this.dom.graph)
+    this.dom.append(this.dom.graph)
     this.svg = null
 
     this.dom.graph.children('#minus').on('click', () => {
@@ -97,11 +88,12 @@ class TabGraph extends Tab {
         }}
     }
     let container = this.dom.graph.children('.svg')[0]
-    this.nodes = vis.DataSet([])
-    this.edges = vis.DataSet([])
+    this.nodes = []
+    this.edges = []
     this.network = new vis.Network(container, {nodes: this.nodes, edges: this.edges}, options);
   }
 
+  // TODO: probably delete setValue
   setValue(data) {
     // Remove previous one
     //if (this.svg)
@@ -149,8 +141,8 @@ class TabGraph extends Tab {
     })
     network.redraw()
     */
-    //this.network.setData(data)
-    nodes.add({id:newId, label:"I'm new!"});
+    this.network.setData(data)
+    //this.nodes.add({id:newId, label:"I'm new!"});
     
     //this.dom.graph.children('.svg').append(Viz(data))
     //this.svg = this.dom.graph.find('svg')
@@ -166,9 +158,9 @@ class TabGraph extends Tab {
 class TabEditor extends Tab {
   constructor(title, source) {
     super(title)
-    this.dom.content.addClass('editor')
+    this.dom.addClass('editor')
 
-    this.editor = CodeMirror (this.dom.content[0], {
+    this.editor = CodeMirror (this.dom[0], {
       styleActiveLine: true,
       lineNumbers: true,
       matchBrackets: true,
@@ -205,10 +197,7 @@ class TabEditor extends Tab {
       //console.log('update')
     })
 
-
-
     if (source) this.editor.setValue(source)
-
     this.skipCursorEvent = true
   }
 
@@ -368,9 +357,27 @@ class TabEditor extends Tab {
 
 /* ReadOnly Editor */
 class TabReadOnly extends TabEditor {
-  constructor (title) {
-    super(title)
+  constructor (title, source) {
+    super(title, source)
     this.editor.setOption ('readOnly', true)
+  }
+}
+
+class TabExecution extends TabReadOnly {
+  constructor () {
+    super('Execution')
+  }
+  update (s) {
+    this.setValue(s.result) // TODO: change to execution result
+  }
+}
+
+class TabConsole extends TabReadOnly {
+  constructor () {
+    super('Console')
+  }
+  update (s) {
+    this.setValue(s.console)
   }
 }
 
@@ -378,6 +385,7 @@ class TabReadOnly extends TabEditor {
 class TabSource extends TabEditor {
   constructor(title, source) {
     super(title, source)
+    this.isClosable = false
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
@@ -385,12 +393,10 @@ class TabSource extends TabEditor {
       ui.currentView.dirty = true;
       //ui.currentView.clear()
     })
-    // No close button
-    this.dom.children('.close').hide()
   }
 
   getLocation(from, to) {
-    let locations = ui.currentView.data.locs;
+    let locations = ui.currentView.state.locs;
     for (let i = 0; i < locations.length; i++) {
       let loc = locations[i]
       if ((loc.c.begin.line < from.line ||
@@ -406,11 +412,9 @@ class TabSource extends TabEditor {
     this.editor.markText (loc.c.begin, loc.c.end, {className: getColor(loc.color)})
   }
 
-  highlight() {
-    let locations = ui.currentView.data.locs;
-    for (let i = 0; i < locations.length; i++) {
-      this.mark(locations[i])
-    }
+  highlight(s) {
+    for (let i = 0; i < s.locs.length; i++)
+      this.mark(s.locs[i])
   }
 
   clear() {
@@ -428,8 +432,8 @@ class TabCabs extends TabReadOnly {
     this.editor.setOption('placeholder', '<Cabs elaboration failed...>')
   }
 
-  update() {
-    this.setValue(ui.currentView.data.cabs)
+  update(s) {
+    this.setValue(s.ast.cabs)
   }
 }
 
@@ -478,13 +482,10 @@ class TabAil extends TabReadOnly {
 
   }
 
-  update() {
-    // TODO: this is not right
-    this.setValue(ui.currentView.data.ail)
+  update(s) {
+    this.setValue(s.ast.ail)
   }
 }
-
-
 
 /* Tab Core */
 class TabCore extends TabReadOnly {
@@ -534,7 +535,7 @@ class TabCore extends TabReadOnly {
   }
 
   getLocation(from, to) {
-    let locations = ui.currentView.data.locs
+    let locations = ui.currentView.state.locs
     for (let i = 0; i < locations.length; i ++) {
       let loc = locations[i]
       if (loc.core.begin.line <= from.line && loc.core.end.line >= to.line)
@@ -547,15 +548,13 @@ class TabCore extends TabReadOnly {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
-  highlight() {
-    let locations = ui.currentView.data.locs;
-    for (let i = locations.length - 1; i >= 0; i--) {
-      this.mark(locations[i])
-    }
+  highlight(s) {
+    for (let i = s.locs.length - 1; i >= 0; i--)
+      this.mark(s.locs[i])
   }
 
-  update() {
-    this.setValue(ui.currentView.data.pp.core)
+  update(s) {
+    this.setValue(s.pp.core)
   }
 
 }
@@ -588,8 +587,8 @@ class TabAsm extends TabReadOnly {
     toolbar.append(this.dropdown)
     toolbar.append(this.options)
 
-    this.dom.content.addClass('tab-compiler')
-    this.dom.content.prepend(toolbar)
+    this.dom.addClass('tab-compiler')
+    this.dom.prepend(toolbar)
 
     this.compile(cc)
 
@@ -637,7 +636,7 @@ class TabAsm extends TabReadOnly {
 
   updateLocations() {
     this.locations = {}
-    let locs = ui.currentView.data.locs;
+    let locs = ui.currentView.state.locs;
     for (let i = locs.length - 1; i >= 0; i--) {
       let l = locs[i].c.begin.line+1;
       if (this.locations[l] || !this.lines[l])
@@ -665,11 +664,9 @@ class TabAsm extends TabReadOnly {
     if (l) this.colorLines (l.begin, l.end, l.color)
   }
 
-  highlight() {
-    let locs = ui.currentView.data.locs;
-    for (let i = locs.length - 1; i >= 0; i--) {
-      this.mark(locs[i])
-    }
+  highlight(s) {
+    for (let i = s.locs.length - 1; i >= 0; i--)
+      this.mark(s.locs[i])
   }
 
   compile (cc) {
