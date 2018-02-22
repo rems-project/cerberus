@@ -35,17 +35,6 @@ class Tab {
     //this.dom.hasClass('active')
   }
 
-  component(content) {
-    return {
-      type: 'component',
-      componentName: 'tab',
-      componentState: { tab: this },
-      title: this.title,
-      isClosable: this.isClosable,
-      content: content
-    }
-  }
-
   // Dummy methods to be overwriten
   refresh () {}
   mark (loc) {}
@@ -207,7 +196,7 @@ class TabEditor extends Tab {
 
   setValue(value) {
     this.editor.setValue(value)
-    this.setActive()
+    //this.setActive()
     this.refresh()
   }
 

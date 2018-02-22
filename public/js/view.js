@@ -1,17 +1,42 @@
 'use_strict'
 
+const Tabs = {
+  TabSource,
+  TabCabs,
+  TabAil,
+  TabCore,
+  TabGraph,
+  TabExecution,
+  TabConsole
+}
+
 class View {
   constructor (title, data) {
     this.tabs = []
     this.title  = title
-    this.source = new TabSource(title, data)
-    this.source.setActive() // TODO: see if i'm using active
+
+    let config = null
+    let uri = document.URL.split('#')
+    if (uri && uri.length > 1) {
+      try {
+        config = app(uri[1])
+                .app(decodeURIComponent)
+                .app(JSON.parse)
+                .app(GoldenLayout.unminifyConfig)
+                .return
+      } catch (e) {
+        console.log(e)
+        config = null
+      }
+    }
+    this.source = config ? new TabSource(config.title, config.source)
+                         : new TabSource(title, data)
     this.tabs.push(this.source)
 
     // GUI
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
-    this.initLayout()
+    this.initLayout(config)
 
     // State
     this.setStateEmpty()
@@ -19,58 +44,96 @@ class View {
     this.dirty = true;
   }
 
-  initLayout() {
-    let config = {
-      settings:{
-          hasHeaders: true,
-          constrainDragToContainer: true,
-          reorderEnabled: true,
-          selectionEnabled: false,
-          popoutWholeStack: false,
-          blockedPopoutsThrowError: true,
-          closePopoutsOnUnload: true,
-          showPopoutIcon: false,
-          showMaximiseIcon: true,
-          showCloseIcon: true
-      },
-      dimensions: {
-          borderWidth: 5,
-          minItemHeight: 10,
-          minItemWidth: 10,
-          headerHeight: 20,
-          dragProxyWidth: 300,
-          dragProxyHeight: 200
-      },
-      labels: {
-          close: 'Close',
-          maximise: 'Maximise',
-          minimise: 'Minimise'
-      },
-      content: []
-    }
-    this.layout = new GoldenLayout (config, this.dom);
-    this.layout.registerComponent('tab',
-      function (container, state) {
-        $(container.getElement()).append(state.tab.dom)
+  initLayout(config) {
+    function component(title) {
+      return {
+        type: 'component',
+        componentName: 'tab',
+        componentState: { tab: ('Tab'+title) },
+        title: title
       }
-    )
+    }
+    if (config == null) {
+      config = {
+        settings:{
+            hasHeaders: true,
+            constrainDragToContainer: true,
+            reorderEnabled: true,
+            selectionEnabled: false,
+            popoutWholeStack: false,
+            blockedPopoutsThrowError: true,
+            closePopoutsOnUnload: true,
+            showPopoutIcon: false,
+            showMaximiseIcon: true,
+            showCloseIcon: true
+        },
+        dimensions: {
+            borderWidth: 5,
+            minItemHeight: 10,
+            minItemWidth: 10,
+            headerHeight: 20,
+            dragProxyWidth: 300,
+            dragProxyHeight: 200
+        },
+        labels: {
+            close: 'Close',
+            maximise: 'Maximise',
+            minimise: 'Minimise'
+        },
+        content: [{
+        type: 'row',
+        content: [{
+          type: 'column',
+          content: [{
+            type: 'component',
+            componentName: 'source',
+            title: this.source.title,
+            isClosable: false
+          },{
+            type: 'stack',
+            content: [
+              component('Console'),
+              component('Execution')
+            ]}
+          ]},
+          component('Core')
+        ]}]
+      }
+    }
+    let self = this // WARN: Golden Layout does not work with arrow function
+    this.layout = new GoldenLayout (config, this.dom);
+    this.layout.registerComponent('source', function (container, state) {
+      container.parent.tabcontent = self.source // Attach tab to contentItem
+      container.getElement().append(self.source.dom)
+      self.source.refresh()
+    })
+    this.layout.registerComponent('tab', function (container, state) {
+      let tab  = new Tabs[state.tab]
+      self.tabs.push(tab)
+      container.parent.tabcontent = tab // Attach tab to contentItem
+      container.getElement().append(tab.dom)
+      if (state.update) {
+        tab.update(self.state)
+        tab.highlight(self.state)
+        delete state.update // WARN: update should be null in initialisation
+        container.setState(state)
+      }
+    })
     this.layout.on('itemDestroyed', (c) => {
       if (c.componentName == 'tab') {
-        let tab = c.config.componentState.tab
         for (let i = 0; i < this.tabs.length; i++) {
-          if (this.tabs[i] === tab) {
+          if (this.tabs[i] === c.tabcontent) {
             this.tabs.splice(i, 1)
             break
           }
         }
       }
     })
-    this.layout.on( 'tabCreated', function( tabHeader ){
-      if (tabHeader.contentItem.isComponent) {
-        let tab = tabHeader.contentItem.config.componentState.tab
-        tabHeader.element.on('mousedown', function () {
-          tab.refresh()
-        })
+    this.layout.on( 'tabCreated', (header) => {
+      if (header.contentItem.isComponent) {
+        let tab = header.contentItem.tabcontent
+        header.element.on('mousedown', () => tab.refresh())
+        tab.setActive = () => triggerClick(header.element[0])
       }
     })
     this.layout.init()
@@ -96,49 +159,8 @@ class View {
     }
   }
 
-  makeGrid() {
-    let core = new TabCore()
-    this.tabs.push(core)
-
-    let execution = new TabExecution()
-    this.tabs.push(execution)
-
-    let console = new TabConsole()
-    this.tabs.push(console)
-
-    let grid = {
-      type: 'row',
-      content: [{
-        type: 'column',
-        content: [
-          this.source.component(), {
-            type: 'stack',
-            content: [
-              console.component(),
-              execution.component()
-            ]}
-        ]},
-        core.component()
-      ]}
-    this.layout.root.addChild(grid)
-  }
-
   getValue() {
     return this.source.getValue()
-  }
-
-  add (tab) {
-    this.tabs.push(tab)
-    tab.alive = true
-    let content = (this.layout.root.contentItems.length > 0) ?
-      this.layout.root.contentItems[0] : this.layout.root
-    content.addChild({
-      type: 'component',
-      componentName: 'tab',
-      title: tab.title,
-      componentState: { tab: tab }
-    });
-    tab.refresh()
   }
 
   forEachTab(f) {
@@ -146,37 +168,50 @@ class View {
       f(this.tabs[i])
   }
 
-  findTab(aClass) {
+  findTab(title) {
     for (let i = 0; i < this.tabs.length; i++) {
-      if (this.tabs[i] instanceof aClass) {
+      if (this.tabs[i] instanceof Tabs['Tab'+title]) {
         return this.tabs[i]
       }
     }
     return null
   }
 
-  newTab(aClass) {
-    let tab = new aClass(title)
-    this.add(tab)
-    tab.update(this.state)
-    tab.highlight(this.state)
-    return tab
+  newTab(title) {
+    this.layout.root.contentItems[0].addChild({
+      type: 'component',
+      componentName: 'tab',
+      title: title,
+      componentState: {
+        tab: ('Tab'+title),
+        update: true
+      }
+    })
+    this.refresh()
   }
 
-  getTab(aClass, title) {
-    let tab = this.findTab(aClass)
-    if (tab == null)
-      tab = this.newTab(aClass, title)
-    return tab
+  getPermanentLink() {
+    let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
+    miniConfig.title = this.source.title
+    miniConfig.source = this.source.getValue()
+    return encodeURIComponent(JSON.stringify(miniConfig))
   }
 
   // Return this first instance (or create a new one)
-  get exec()    { return this.getTab(TabExecution) }
-  get cabs()    { return this.getTab(TabCabs) }
-  get ail()     { return this.getTab(TabAil) }
-  get core()    { return this.getTab(TabCore) }
-  get console() { return this.getTab(TabConsole) }
-  get graph()   { return this.getTab(TabGraph) }
+  getTab(title) {
+    let tab = this.findTab(title)
+    if (tab == null) {
+      this.newTab(aClass, title)
+      tab = this.findTab(title)
+    }
+    return tab
+  }
+  get exec()    { return this.getTab('Execution') }
+  get cabs()    { return this.getTab('Cabs') }
+  get ail()     { return this.getTab('Ail') }
+  get core()    { return this.getTab('Core') }
+  get console() { return this.getTab('Console') }
+  get graph()   { return this.getTab('Graph') }
 
   mark(loc) {
     if (loc) this.forEachTab((tab) => tab.mark(loc))
@@ -219,7 +254,10 @@ class View {
   }
 
   setState (s) {
-    if (s.status == 'failure') this.setStateEmpty()
+    if (s.status == 'failure') {
+      this.setStateEmpty()
+      this.console.setActive()
+    }
     Object.assign(this.state, s) // merge states
     this.dirty = false
     this.isHighlighted = false
