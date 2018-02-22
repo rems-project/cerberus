@@ -11,6 +11,148 @@ module type CustomSort =
   end
 *)
 
+(* TODO: make sorts once only and keep in state *)
+
+(* COPIED FROM src/ocaml_defacto.ml *)
+let mk_ctor ctx str =
+  Datatype.mk_constructor_s ctx str (Symbol.mk_string ctx ("is_" ^ str)) [] [] [] 
+
+let integerBaseTypeSort ctx = Datatype.mk_sort_s ctx "IntegerBaseType"
+      [ mk_ctor ctx "ichar_ibty"
+      ; mk_ctor ctx "short_ibty"
+      ; mk_ctor ctx "int_ibty"
+      ; mk_ctor ctx "long_ibty"
+      ; mk_ctor ctx "long_long_ibty"
+      ; Datatype.mk_constructor_s ctx "intN_t_ibty" (Symbol.mk_string ctx "is_intN_t_ibty")
+          [Symbol.mk_string ctx "intN_size"] [Some (Arithmetic.Integer.mk_sort ctx)]
+          [0(*TODO: no idea with I'm doing*)]
+      ; mk_ctor ctx "intmax_t_ibty"
+      ; mk_ctor ctx "intptr_t_ibty" ]
+
+let integerTypeSort ctx =
+  Datatype.mk_sort_s ctx "IntegerType"
+    [ mk_ctor ctx "char_ity"
+    ; mk_ctor ctx "bool_ity"
+    ; Datatype.mk_constructor_s ctx "Signed_ity" (Symbol.mk_string ctx "is_Signed_ity")
+        [Symbol.mk_string ctx "_Signed_ity"] [Some (integerBaseTypeSort ctx)]
+        [0(*TODO: no idea with I'm doing*)]
+    ; Datatype.mk_constructor_s ctx "Unsigned_ity" (Symbol.mk_string ctx "is_Unsigned_ity")
+        [Symbol.mk_string ctx "_Unsigned_ity"] [Some (integerBaseTypeSort ctx)]
+        [0(*TODO: no idea with I'm doing*)]
+    ; mk_ctor ctx "size_t_ity"
+    ; mk_ctor ctx "ptrdiff_t_ity" ]
+
+let basicTypeSort ctx =
+  Datatype.mk_sort_s ctx "BasicType"
+    [ Datatype.mk_constructor_s ctx "Integer_bty" (Symbol.mk_string ctx "is_Integer_bty")
+        [Symbol.mk_string ctx "_Integer_bty"] [Some (integerTypeSort ctx)]
+        [0(*TODO: no idea with I'm doing*)]
+    ; Datatype.mk_constructor_s ctx "Floating"
+        (Symbol.mk_string ctx "is_Floating") [] [] []
+    ] 
+
+(* TODO: Function, Struct, Union, Builtin *)
+let ctypeSort ctx = 
+  Datatype.mk_sort_s ctx "Ctype"
+    [ mk_ctor ctx "void_ty"
+    ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
+        [Symbol.mk_string ctx "_Basic_ty"] [Some (basicTypeSort ctx)]
+        [0(*TODO: no idea with I'm doing*)]
+    ; Datatype.mk_constructor_s ctx "Array_ty" (Symbol.mk_string ctx "is_Array_ty")
+        [Symbol.mk_string ctx "elem_Array_ty"; Symbol.mk_string ctx "size_Array_ty"]
+        [None; Some (Arithmetic.Integer.mk_sort ctx)]
+        [0; 0(*TODO: no idea with I'm doing*)]
+    ; Datatype.mk_constructor_s ctx "Pointer_ty" (Symbol.mk_string ctx "is_Pointer_ty")
+        [Symbol.mk_string ctx "_Pointer_ty"] [None]
+        [0(*TODO: no idea with I'm doing*)] ]
+
+let integerBaseType_to_expr ibty ctx =
+  let fdecls = Datatype.get_constructors (integerBaseTypeSort ctx) in
+  AilTypes.(match ibty with
+    | Ichar ->
+        Expr.mk_app ctx (List.nth fdecls 0) []
+    | Short ->
+        Expr.mk_app ctx (List.nth fdecls 1) []
+    | Int_ ->
+        Expr.mk_app ctx (List.nth fdecls 2) []
+    | Long ->
+        Expr.mk_app ctx (List.nth fdecls 3) []
+    | LongLong ->
+        Expr.mk_app ctx (List.nth fdecls 4) []
+    | IntN_t n ->
+        Expr.mk_app ctx (List.nth fdecls 5) [Arithmetic.Integer.mk_numeral_i ctx n]
+    | Int_leastN_t _ ->
+        assert false
+    | Int_fastN_t _ ->
+        assert false
+    | Intmax_t ->
+        Expr.mk_app ctx (List.nth fdecls 6) []
+    | Intptr_t ->
+        Expr.mk_app ctx (List.nth fdecls 7) []
+  )
+
+let integerType_to_expr (ity: AilTypes.integerType) ctx =
+  let fdecls = Datatype.get_constructors (integerTypeSort ctx) in
+  AilTypes.(match ity with
+    | Char ->
+        Expr.mk_app ctx (List.nth fdecls 0) []
+    | Bool ->
+        Expr.mk_app ctx (List.nth fdecls 1) []
+    | Signed ibty ->
+        Expr.mk_app ctx (List.nth fdecls 2) [integerBaseType_to_expr ibty ctx]
+    | Unsigned ibty ->
+        Expr.mk_app ctx (List.nth fdecls 3) [integerBaseType_to_expr ibty ctx]
+    | IBuiltin str ->
+        assert false
+    | Enum _ ->
+        assert false
+    | Size_t ->
+        Expr.mk_app ctx (List.nth fdecls 4) []
+    | Ptrdiff_t ->
+        Expr.mk_app ctx (List.nth fdecls 5) []
+)
+let basicType_to_expr (bty: AilTypes.basicType) ctx =
+  let fdecls = Datatype.get_constructors (basicTypeSort ctx) in
+  AilTypes.(match bty with
+    | Integer ity ->
+        Expr.mk_app ctx (List.nth fdecls 0) [integerType_to_expr ity ctx]
+    | Floating _ ->
+        assert false;
+      (* TODO: this is probably wrong *)
+        Expr.mk_app ctx (List.nth fdecls 1) []
+      (*  failwith "Smt.basicType_to_expr, Floating" *)
+)
+
+let rec ctype_to_expr ty ctx =
+  let fdecls = Datatype.get_constructors (ctypeSort ctx) in
+  Core_ctype.(
+    match ty with
+      | Void0 ->
+        Expr.mk_app ctx (List.nth fdecls 0) []
+      | Basic0 bty ->
+        Expr.mk_app ctx (List.nth fdecls 1) [basicType_to_expr bty ctx]
+      | Array0 (_, None) ->
+          (* Ail type error *)
+          assert false
+      | Array0 (elem_ty, Some n) ->
+        Expr.mk_app ctx (List.nth fdecls 2)
+            [ctype_to_expr elem_ty ctx; Arithmetic.Integer.mk_numeral_i ctx (Nat_big_num.to_int n)]
+      | Pointer0 (_, ref_ty) ->
+        Expr.mk_app ctx (List.nth fdecls 3)
+            [ctype_to_expr ref_ty ctx]
+      | Function0 _ ->
+          assert false
+      | Atomic0 _ ->
+          assert false
+      | Struct0 tag_sym ->
+          assert false
+      | Union0 _ ->
+          assert false
+      | Builtin0 _ ->
+          assert false
+  )
+ 
+
 module type AddressType =
   sig
     type addr

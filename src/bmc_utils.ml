@@ -81,3 +81,15 @@ let mk_sym (ctx:context) = Symbol.mk_string ctx
 
 (* ========== Core Symbols ========== *)
 let symbol_to_int (Symbol(i, _): Sym.sym) : int = i
+
+let symbol_to_string (sym: ksym) =
+  match sym with
+  | Symbol (num, Some str) -> 
+      ((string_of_int num) ^ "_" ^ str)
+  | Symbol (num, None) ->
+      ((string_of_int num) ^ "_" ^ "a")
+
+let symbol_to_z3 (ctx: context) (sym: ksym) =
+  mk_sym ctx (symbol_to_string sym)
+
+
