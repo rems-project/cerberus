@@ -1,5 +1,25 @@
 'use_strict'
 
+// Common combinators in JavaScript
+
+const I = x => x;
+const K = x => y => x;
+const A = f => x => f(x);
+const T = x => f => f(x);
+const W = f => x => f(x)(x);
+const C = f => y => x => f(x)(y);
+const B = f => g => x => f(g(x));
+const S = f => g => x => f(x)(g(x));
+const P = f => g => x => y => f(g(x))(g(y));
+const Y = f => (g => g(g))(g => f(x => g(g)(x)));
+
+function app (x) {
+  return {
+    app: (f) => app(f(x)),
+    return: x
+  }
+}
+
 function fadeOut(tooltip) {
     function remove(node) {
       var p = node && node.parentNode;
@@ -191,6 +211,14 @@ function json_to_dot(data) {
 
 function clone(data) {
   return JSON.parse(JSON.stringify(data))
+}
+
+function triggerClick(elem) {
+  var clickEvent = document.createEvent ('MouseEvents');
+  clickEvent.initEvent ('mousedown', true, true);
+  elem.dispatchEvent (clickEvent);
+  clickEvent.initEvent ('mouseup', true, true);
+  elem.dispatchEvent (clickEvent);
 }
 
 /* Extend jQuery */

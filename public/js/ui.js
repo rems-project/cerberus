@@ -12,7 +12,7 @@ class UI {
     window.onresize = () => this.refresh()
 
     // UI settings
-    this.rewrite = true
+    this.rewrite = false
     this.auto_refresh = true
     this.colour = true
     this.colour_cursor = true
@@ -111,14 +111,25 @@ class UI {
     })
 
     // Pretty print elab IRs
-    $('#cabs').on('click', () => this.elab (TabCabs))
-    $('#ail_ast') .on('click', () => this.elab (TabAil)) // TODO
-    $('#ail') .on('click', () => this.elab (TabAil))
-    $('#core').on('click', () => this.elab (TabCore))
+    $('#cabs').on('click', () => this.elab ('Cabs'))
+    $('#ail_ast') .on('click', () => this.elab ('Ail')) // TODO
+    $('#ail') .on('click', () => this.elab ('Ail'))
+    $('#core').on('click', () => this.elab ('Core'))
 
     // Compilers
     $('#compile').on('click', () => {
       this.currentView.add(new TabAsm(defaultCompiler))
+    })
+
+    $('#clipboard').on('click', () => {
+      $('#permalink').select()
+      document.execCommand('Copy')
+    })
+
+    // Permanent Link
+    $('#permalink-button').on('mouseover', () => {
+      $('#permalink').val(document.URL.split('#', 1)
+        +'#'+this.currentView.getPermanentLink())
     })
 
     // Settings
@@ -399,8 +410,7 @@ $.get('pldi_tests.json').done((data) => {
 // Get default buffer
 $.get('buffer.c').done((data) => {
   $(window).ready(() => {
-    ui.add(new View('hello.c', data))
-    ui.currentView.makeGrid()
+    ui.add(new View('example.c', data))
     ui.refresh()
   })
 }).fail(() => {
