@@ -38,6 +38,13 @@ void f() {
 
   or dealing with more complex loads and stores, or concurrency model, or _bounded_ model checking, or....
 
+
+2018-02-22:  ivmin not really working, or the simple alias analysis
+
+ going to get that really working, and a bit more beautiul
+
+ talked about provenance and concurrency - the latter probably more interesting
+
 *)
 
 
