@@ -1,189 +1,220 @@
 'use_strict'
 
+const Tabs = {
+  TabSource,
+  TabCabs,
+  TabAil,
+  TabCore,
+  TabGraph,
+  TabExecution,
+  TabConsole
+}
+
 class View {
   constructor (title, data) {
-    // Dom
-    this.panes = []
-    this.dom = $('<div class="view"></div>')
-
-    // Create source tab
+    this.tabs = []
     this.title  = title
-    this.source = new TabSource(title, data)
 
-    // Create an active pane
-    this.activePane = new Pane()
-    this.activePane.add(this.source)
-    this.add(this.activePane)
-
-    // Activate source tab
-    this.source.setActive()
-
-    // Global view variables
-    this.draggedTab = null
-
-    // Empty data
-    this.data = {
-      cabs: "",
-      ail:  "",
-      core: "",
-      locs: [],
-      stdout: "",
-      stderr: ""
+    let config = null
+    let uri = document.URL.split('#')
+    if (uri && uri.length > 1) {
+      try {
+        config = app(uri[1])
+                .app(decodeURIComponent)
+                .app(JSON.parse)
+                .app(GoldenLayout.unminifyConfig)
+                .return
+      } catch (e) {
+        console.log(e)
+        config = null
+      }
     }
+    this.source = config ? new TabSource(config.title, config.source)
+                         : new TabSource(title, data)
+    this.tabs.push(this.source)
 
-    this.content = {}
+    // GUI
+    this.dom = $('<div class="view"></div>')
+    $('#views').append(this.dom)
+    this.initLayout(config)
 
+    // State
+    this.setStateEmpty()
     this.isHighlighted = false;
     this.dirty = true;
   }
 
-  setActivePane(pane) {
-    if (this.activePane)
-      this.activePane.setInactive()
-    this.activePane = pane
+  initLayout(config) {
+    function component(title) {
+      return {
+        type: 'component',
+        componentName: 'tab',
+        componentState: { tab: ('Tab'+title) },
+        title: title
+      }
+    }
+    if (config == null) {
+      config = {
+        settings:{
+            hasHeaders: true,
+            constrainDragToContainer: true,
+            reorderEnabled: true,
+            selectionEnabled: false,
+            popoutWholeStack: false,
+            blockedPopoutsThrowError: true,
+            closePopoutsOnUnload: true,
+            showPopoutIcon: false,
+            showMaximiseIcon: true,
+            showCloseIcon: true
+        },
+        dimensions: {
+            borderWidth: 5,
+            minItemHeight: 10,
+            minItemWidth: 10,
+            headerHeight: 20,
+            dragProxyWidth: 300,
+            dragProxyHeight: 200
+        },
+        labels: {
+            close: 'Close',
+            maximise: 'Maximise',
+            minimise: 'Minimise'
+        },
+        content: [{
+        type: 'row',
+        content: [{
+          type: 'column',
+          content: [{
+            type: 'component',
+            componentName: 'source',
+            title: this.source.title,
+            isClosable: false
+          },{
+            type: 'stack',
+            content: [
+              component('Console'),
+              component('Execution')
+            ]}
+          ]},
+          component('Core')
+        ]}]
+      }
+    }
+    let self = this // WARN: Golden Layout does not work with arrow function
+    this.layout = new GoldenLayout (config, this.dom);
+    this.layout.registerComponent('source', function (container, state) {
+      container.parent.tabcontent = self.source // Attach tab to contentItem
+      container.getElement().append(self.source.dom)
+      self.source.refresh()
+    })
+    this.layout.registerComponent('tab', function (container, state) {
+      let tab  = new Tabs[state.tab]
+      self.tabs.push(tab)
+      container.parent.tabcontent = tab // Attach tab to contentItem
+      container.getElement().append(tab.dom)
+      if (state.update) {
+        tab.update(self.state)
+        tab.highlight(self.state)
+        delete state.update // WARN: update should be null in initialisation
+        container.setState(state)
+      }
+    })
+    this.layout.on('itemDestroyed', (c) => {
+      if (c.componentName == 'tab') {
+        for (let i = 0; i < this.tabs.length; i++) {
+          if (this.tabs[i] === c.tabcontent) {
+            this.tabs.splice(i, 1)
+            break
+          }
+        }
+      }
+    })
+    this.layout.on( 'tabCreated', (header) => {
+      if (header.contentItem.isComponent) {
+        let tab = header.contentItem.tabcontent
+        header.element.on('mousedown', () => tab.refresh())
+        tab.setActive = () => triggerClick(header.element[0])
+      }
+    })
+    this.layout.init()
+  }
+
+  setStateEmpty() {
+    this.state = {
+      status: 'failure',
+      pp: {
+        cabs: '',
+        ail:  '',
+        core: ''
+      },
+      ast: {
+        cabs: '',
+        ail:  '',
+        core: ''
+      },
+      locs: [],
+      steps: [],
+      result: '',
+      console: ''
+    }
   }
 
   getValue() {
     return this.source.getValue()
   }
 
-  get firstPane () {
-    if (this.panes.length > 0)
-      return this.panes[0]
-    let pane = new Pane()
-    this.add(pane)
-    this.setup()
-    return pane
-  }
-
-  get newPane () {
-    let pane = new Pane()
-    this.add(pane)
-    return pane
-  }
-
-  add (pane) {
-    if (this.panes.length > 0) {
-      $('<div class="pane-separator vertical"></div>').appendTo(this.dom)
-    }
-    this.panes.push(pane)
-    this.dom.append(pane.dom)
-    pane.parent = this
-    pane.refresh()
-    this.setup()
-  }
-
-  remove (pane) {
-    let sep = null
-    if (this.panes[0] === pane)
-      sep = pane.dom.next('.pane-separator')
-    else
-      sep = pane.dom.prev('.pane-separator')
-    sep.remove()
-    pane.dom.remove()
-
-    for (let i = 0; i < this.panes.length; i++) {
-      if (this.panes[i] === pane) {
-        this.panes.splice(i, 1)
-      }
-    }
-    this.setup()
-  }
-
-  getSource() {
-    if (!this.source.parent)
-      this.newPane.add(this.source)
-    return this.source;
-  }
-
-  get exec() {
-    if (!this._execTab)
-      this._execTab = new TabReadOnly('Execution')
-    if (!this._execTab.parent)
-      this.newPane.add(this._execTab)
-    return this._execTab
-  }
-
-  get cabs() {
-    let tab = new TabCabs()
-    this.newPane.add(tab)
-    return tab
-  }
-
-  get ail() {
-    let tab = new TabAil()
-    this.newPane.add(tab)
-    return tab
-  }
-
-  get ail_ast() {
-    let tab = new TabAil()
-    this.newPane.add(tab)
-    return tab
-  }
-
-
-  get core() {
-    let tab = new TabCore()
-    this.newPane.add(tab)
-    return tab
-  }
-
-  get console() {
-    if (!this._consoleTab)
-      this._consoleTab = new TabReadOnly('Console')
-    if (!this._consoleTab.parent)
-      this.newPane.add(this._consoleTab)
-    return this._consoleTab;
-  }
-
-  get graph() {
-    if (!this._graphTab)
-      this._graphTab = new TabGraph('Graph')
-    if (!this._graphTab.parent)
-      this.newPane.add(this._graphTab)
-    return this._graphTab;
-  }
-
-  setup () {
-    let w = window.innerWidth/this.panes.length + 'px'
-    for (let i = 0; i < this.panes.length; i++) {
-      this.panes[i].dom.width(w)
-    }
-    $('.pane-separator').on('mousedown', e => this.onresize(e))
-  }
-
-  unsplit() {
-    let tabs = []
-    for (let i = 1; i < this.panes.length; i++) {
-      let pane = this.panes[i]
-      for (let j = 0; j < pane.tabs.length; j++) {
-        tabs.push(pane.tabs[j]);
-      }
-    }
-    for (let i = 0; i < tabs.length; i++) {
-      let tab = tabs[i]
-      tab.parent.remove(tab)
-      this.firstPane.add(tab)
-      tab.setActive()
-      tab.addEventListener()
-      tab.refresh()
-    }
-    for (let i = 1; i < this.panes.length; i++) {
-      this.remove(this.panes[i])
-    }
-  }
-
   forEachTab(f) {
-    for (let i = 0; i < this.panes.length; i++)
-      for (let j = 0; j < this.panes[i].tabs.length; j++)
-        f(this.panes[i].tabs[j])
+    for (let i = 0; i < this.tabs.length; i++)
+      f(this.tabs[i])
   }
+
+  findTab(title) {
+    for (let i = 0; i < this.tabs.length; i++) {
+      if (this.tabs[i] instanceof Tabs['Tab'+title]) {
+        return this.tabs[i]
+      }
+    }
+    return null
+  }
+
+  newTab(title) {
+    this.layout.root.contentItems[0].addChild({
+      type: 'component',
+      componentName: 'tab',
+      title: title,
+      componentState: {
+        tab: ('Tab'+title),
+        update: true
+      }
+    })
+    this.refresh()
+  }
+
+  getPermanentLink() {
+    let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
+    miniConfig.title = this.source.title
+    miniConfig.source = this.source.getValue()
+    return encodeURIComponent(JSON.stringify(miniConfig))
+  }
+
+  // Return this first instance (or create a new one)
+  getTab(title) {
+    let tab = this.findTab(title)
+    if (tab == null) {
+      this.newTab(aClass, title)
+      tab = this.findTab(title)
+    }
+    return tab
+  }
+  get exec()    { return this.getTab('Execution') }
+  get cabs()    { return this.getTab('Cabs') }
+  get ail()     { return this.getTab('Ail') }
+  get core()    { return this.getTab('Core') }
+  get console() { return this.getTab('Console') }
+  get graph()   { return this.getTab('Graph') }
 
   mark(loc) {
-    if (loc) {
-      this.forEachTab((tab) => tab.mark(loc))
-    }
+    if (loc) this.forEachTab((tab) => tab.mark(loc))
   }
 
   clear() {
@@ -203,10 +234,9 @@ class View {
       this.clear()
       return;
     }
-    if (this.isHighlighted||this.dirty)
-      return;
+    if (this.isHighlighted||this.dirty) return;
     this.clear()
-    this.forEachTab((tab) => tab.highlight())
+    this.forEachTab((tab) => tab.highlight(this.state))
     this.isHighlighted = true
   }
 
@@ -218,119 +248,24 @@ class View {
     this.dom.hide()
   }
 
-  update(data) {
+  update() {
+    this.forEachTab((tab) => tab.update(this.state))
+    this.highlight()
+  }
+
+  setState (s) {
+    if (s.status == 'failure') {
+      this.setStateEmpty()
+      this.console.setActive()
+    }
+    Object.assign(this.state, s) // merge states
     this.dirty = false
     this.isHighlighted = false
-    this.data = data
-    this.forEachTab((tab) => tab.update())
-    this.isHighlighted = false
+    this.update()
   }
-
-  newTab(mode) {
-    let tab = this[mode];
-    tab.setValue(this.data[mode])
-    if (ui.colour) tab.highlight()
-  }
-
 
   refresh () {
-    let factor = window.innerWidth / window.prevWidth
-    for (let i = 0; i < this.panes.length; i++) {
-      let w = parseFloat(this.panes[i].dom[0].style.width.slice(0, -2))
-      this.panes[i].dom[0].style.width = (w * factor)+'px'
-      this.panes[i].refresh();
-    }
-    window.prevWidth = window.innerWidth
+    this.forEachTab((tab) => tab.refresh())
+    this.layout.updateSize()
   }
-
-/*
-  onresize (evt) {
-    let x0 = evt.clientX
-    let sep = $(evt.currentTarget)
-    let prevPanes = sep.prevAll('.pane')
-    let prevPanesWidth = []
-    for (let i = 0; i < prevPanes.length; i++)
-      prevPanesWidth.push(parseInt(prevPanes[i].style.width.slice(0, -2)))
-    let nextPanes = sep.nextAll('.pane')
-    let nextPanesWidth = []
-    for (let i = 0; i < nextPanes.length; i++)
-      nextPanesWidth.push(parseInt(nextPanes[i].style.width.slice(0, -2)))
-    let minX = 60;
-    let maxX = window.innerWidth-60;
-
-    function resize (evt) {
-      if (minX < evt.clientX && evt.clientX < maxX) {
-        let xn = x0;
-        for (let i = 0; i < prevPanes.length; i++) {
-          let delta = evt.clientX - xn;
-          if (prevPanesWidth[i]+delta >= 60) {
-            prevPanes[i].style.width = (prevPanesWidth[i]+delta)+'px'
-            break;
-          } else {
-            prevPanes[i].style.width = '60px'
-            xn -= (prevPanesWidth[i]-60+3)
-          }
-        }
-        xn = x0;
-        for (let i = 0; i < nextPanes.length; i++) {
-          console.log("pane " + i + ": " + nextPanes[i].style.width);
-          let delta = evt.clientX - xn;
-          if (nextPanesWidth[i]-delta >= 60) {
-            nextPanes[i].style.width = (nextPanesWidth[i]-delta)+'px'
-            break;
-          } else {
-            nextPanes[i].style.width = '60px'
-            xn += 63;
-          }
-          console.log("delta: " + delta)
-          console.log("after pane " + i + ": " + nextPanes[i].style.width);
-        }
-      }
-    }
-
-    function stop (evt) {
-      sep.removeClass('resize')
-      $('div').each((i, e) => e.style.pointerEvents = '')
-      $(document).off('mousemove');
-      $(document).off('mouseup');
-    }
-
-    $(sep).addClass('resize')
-    $('div').each((i, e) => e.style.pointerEvents = 'none')
-    $(document).on('mousemove', e => resize(e));
-    $(document).on('mouseup', e => stop(e));
-  }
-*/
-
-  onresize (evt) {
-    let x0 = evt.clientX
-    let sep = $(evt.currentTarget)
-    let pane = sep.prev()
-    let paneWidth = pane.width()
-    let nextPane = sep.next()
-    let nextPaneWidth = nextPane.width()
-    let minX = pane.position().left + 60
-    let maxX = nextPane.position().left + nextPaneWidth - 60
-
-    function resize (evt) {
-      if (minX < evt.clientX && evt.clientX < maxX) {
-        let delta = evt.clientX - x0
-        pane.width(paneWidth+delta)
-        nextPane.width(nextPaneWidth-delta)
-      }
-    }
-
-    function stop (evt) {
-      sep.removeClass('resize')
-      $('div').each((i, e) => e.style.pointerEvents = '')
-      $(document).off('mousemove');
-      $(document).off('mouseup');
-    }
-
-    $(sep).addClass('resize')
-    $('div').each((i, e) => e.style.pointerEvents = 'none')
-    $(document).on('mousemove', e => resize(e));
-    $(document).on('mouseup', e => stop(e));
-  }
-
 }

@@ -78,7 +78,6 @@ let rec precedence = function
   | PEis_integer _
   | PEis_signed _
   | PEis_unsigned _ -> None
-  | PEstd (_, Pexpr (_, pe)) -> precedence pe
 
 let rec precedence_expr = function
   | Epure _
@@ -363,7 +362,7 @@ let rec pp_pattern = function
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_pexpr pe =
-  let rec pp prec (Pexpr (_, pe)) =
+  let rec pp prec (Pexpr (_, _, pe)) =
     let prec' = precedence pe in
     let pp z = P.group (pp prec' z) in
     (if compare_precedence prec' prec then fun z -> z else P.parens)
@@ -463,8 +462,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
-        | PEstd (_, pe) ->
-            !^ "{-PEstd-}" ^^^ pp pe
+(*        | PEstd (_, pe) ->
+            !^ "{-PEstd-}" ^^^ pp pe *)
     end
   in pp None pe
 
@@ -496,12 +495,12 @@ let rec pp_expr expr =
       fun doc ->
         List.fold_left (fun acc annot_elem ->
           match annot_elem with
-            | EA_loc loc ->
+            | Aloc loc ->
                 if show_location then
                   !^"{-#"^^ !^(location_to_string loc)^^ !^"#-}" ^^ acc ^^ !^"{-#ELOC#-}"
                 else 
                   acc
-            | EA_std str ->
+            | Astd str ->
                 if show_std then
                   !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
                 else

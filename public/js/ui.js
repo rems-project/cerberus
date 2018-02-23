@@ -7,13 +7,12 @@ class UI {
     this.currentView = null   /* Current displayed view */
 
     this.dom = $('#views');
-    //this.dom.prevWidth = this.dom.width();
 
     window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
 
     // UI settings
-    this.rewrite = true
+    this.rewrite = false
     this.auto_refresh = true
     this.colour = true
     this.colour_cursor = true
@@ -99,8 +98,9 @@ class UI {
 
     // Run (Execute)
     $('#run').on('click', () => {})
-    $('#random').on('click', () => this.exec ('random'))
-    $('#exhaustive').on('click', () => this.exec ('exhaustive'))
+    $('#step').on('click', () => this.step ())
+    $('#random').on('click', () => this.exec ('Random'))
+    $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
 
     $('#random_concrete').on('click', () => this.exec ('random_concrete'))
     $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
@@ -111,29 +111,26 @@ class UI {
     })
 
     // Pretty print elab IRs
-    $('#cabs').on('click', () => this.elab ('cabs'))
-    $('#ail_ast') .on('click', () => this.elab ('ail_ast'))
-    $('#ail') .on('click', () => this.elab ('ail'))
-    $('#core').on('click', () => this.elab ('core'))
+    $('#cabs').on('click', () => this.elab ('Cabs'))
+    $('#ail_ast') .on('click', () => this.elab ('Ail')) // TODO
+    $('#ail') .on('click', () => this.elab ('Ail'))
+    $('#core').on('click', () => this.elab ('Core'))
 
     // Compilers
     $('#compile').on('click', () => {
-      this.currentView.newPane.add(new TabAsm(defaultCompiler))
+      this.currentView.add(new TabAsm(defaultCompiler))
     })
 
+    $('#clipboard').on('click', () => {
+      $('#permalink').select()
+      document.execCommand('Copy')
+    })
 
-    // Views
-    // TODO tabs are not being used
-    $('#new_pane')   .on('click', () => this.currentView.add(new Pane()))
-    $('#source_tab') .on('click', () => this.currentView.getSource().setActive())
-    $('#exec_tab')   .on('click', () => this.currentView.exec.setActive())
-    $('#cabs_tab')   .on('click', () => this.currentView.cabs.setActive())
-    $('#ail_tab')    .on('click', () => this.currentView.ail.setActive())
-    $('#core_tab')   .on('click', () => this.currentView.core.setActive())
-    $('#console_tab').on('click', () => this.currentView.console.setActive())
-    $('#graph_tab')  .on('click', () => this.currentView.graph.setActive())
-    $('#unsplit')    .on('click', () => this.currentView.unsplit())
-    $('#refresh')    .on('click', () => this.elab())
+    // Permanent Link
+    $('#permalink-button').on('mouseover', () => {
+      $('#permalink').val(document.URL.split('#', 1)
+        +'#'+this.currentView.getPermanentLink())
+    })
 
     // Settings
     $('#rewrite').on('click', (e) => {
@@ -156,7 +153,6 @@ class UI {
       $('#cb_colour_cursor').prop('checked', this.colour_cursor)
     })
 
-
     // Help
     $('#help').on('click', () => {
       this.wait();
@@ -165,9 +161,9 @@ class UI {
         type: 'GET',
         success: (data, status, query) => {
           let tab = new Tab('Help')
-          tab.dom.content.addClass('help');
-          tab.dom.content.append(data)
-          this.currentView.newPane.add(tab)
+          tab.dom.addClass('help');
+          tab.dom.append(data)
+          this.currentView.add(tab)
           tab.setActive()
           this.done()
         }
@@ -182,7 +178,7 @@ class UI {
     })
 
     window.setInterval(() => {
-      if (this.auto_refresh) this.update()
+      if (this.auto_refresh) this.elab()
     }, 2000);
 
     $('.cm-std').on('click', (e) => {
@@ -212,16 +208,21 @@ class UI {
   }
 
   request (mode, onSuccess) {
+    let s = this.currentView.state // TODO: remove this
     this.wait()
     $.ajax({
-      url:  '/'+mode,
+      url:  '/cerberus',
       type: 'POST',
       headers: {Accept: 'application/json'},
-      data: /* JSON.stringify ({"value":*/ this.currentView.getValue(), //}),
+      data: JSON.stringify ({
+        'action':  mode,
+        'source':  this.currentView.getValue(),
+        'rewrite': this.rewrite,
+        'steps':   this.currentView.state.steps,
+        'state':   (s.state ? s.state : "")
+      }),
       success: (data, status, query) => {
         onSuccess(data);
-        if (data.stderr != "")
-          this.currentView.console.setValue(data.stderr)
         this.done()
       }
     }).fail((e) => {
@@ -231,38 +232,83 @@ class UI {
     })
   }
 
-  exec (mode) {
-    this.request(mode, (data) => {
+  step () {
+    this.request('Step', (data) => {
+      this.currentView.data.steps = []
       this.currentView.update(data)
       this.currentView.highlight()
-      this.currentView.exec.setValue(data.stdout)
-      if (data.stderr != "")
-        this.currentView.console.setValue(data.stderr)
+
+      let steps = this.currentView.data.steps;
+      steps.reverse();
+      let nodes = []
+      for (let i = 0; i < steps.length; i++)
+        nodes.push({id: i, label: steps[i]})
+
+      let edges = []
+      for (let i = 0; i < steps.length; i++) {
+        if (steps[i+1]) {
+          edges.push({from: i, to: (i+1)})
+        }
+      }
+
+
+      /*
+  var nodes = new vis.DataSet([
+    {id: 1, label: 'Node 1'},
+    {id: 2, label: 'Node 2'},
+    {id: 3, label: 'Node 3'},
+    {id: 4, label: 'Node 4'},
+    {id: 5, label: 'Node 5'}
+  ]);
+
+  // create an array with edges
+  var edges = new vis.DataSet([
+    {from: 1, to: 3},
+    {from: 1, to: 2},
+    {from: 2, to: 4},
+    {from: 2, to: 5},
+    {from: 3, to: 3}
+  ]);
+  */
+
+  // create a network
+  let g = {
+    nodes: new vis.DataSet(nodes),
+    edges: new vis.DataSet(edges),
+    lastId: nodes[nodes.length-1].id
+  };
+
+      /*
+      let g = "digraph D { ";
+      let steps = this.currentView.data.steps;
+      for (let i = steps.length-1; i >= 0; i--) {
+        g += "a" + i + " [label=\"" + steps[i] + "\"];";
+      }
+
+      for (let i = steps.length-1; i >= 0; i--) {
+        if (i != steps.length-1) {
+          g += " -> ";
+        }
+        g += "a" + i
+      }
+      g += ";}"*/
+      this.currentView.graph.setValue(g)
+      if (data.console && data.console != "")
+        this.currentView.console.setValue(data.console)
     })
   }
 
-  update() {
-    let view = this.currentView
-    if (view.dirty) {
-      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
-        view.update(data);
-        view.source.highlight()
-        view.highlight()
-      })
-    }
+  exec (mode) {
+    this.request(mode, (s) => {
+      this.currentView.exec.setActive()
+      this.currentView.setState(s)
+    })
   }
 
   elab (lang) {
-    let view = this.currentView
-    if (!view.dirty) {
-      if (lang) view.newTab(lang)
-    } else {
-      this.request(this.rewrite ? "elab_rewrite" : "elab", (data) => {
-        view.update(data);
-        view.source.highlight()
-        if (lang) view.newTab(lang)
-      })
-    }
+    if (lang) this.currentView.newTab(lang)
+    if (this.currentView.dirty)
+      this.request('Elaborate', (s) => this.currentView.setState(s))
   }
 
   wait () {
@@ -364,10 +410,11 @@ $.get('pldi_tests.json').done((data) => {
 // Get default buffer
 $.get('buffer.c').done((data) => {
   $(window).ready(() => {
-    ui.add(new View('hello.c', data))
+    ui.add(new View('example.c', data))
     ui.refresh()
   })
 }).fail(() => {
   console.log('Failing when trying to download "buffer.c"')
 })
+
 

@@ -43,10 +43,26 @@ let write_tmp_file content =
     let oc  = open_out tmp in
     output_string oc content;
     close_out oc;
+    Debug.print 8 ("Contents written at: " ^ tmp);
     tmp
   with _ ->
     Debug.warn "Error when writing the contents in disk.";
     failwith "write_tmp_file"
+
+let string_of_doc d =
+  let buf = Buffer.create 1024 in
+  PPrint.ToBuffer.pretty 1.0 80 buf d;
+  Buffer.contents buf
+
+let encode s = B64.encode (Marshal.to_string s [Marshal.Closures])
+let decode s = Marshal.from_string (B64.decode s) 0
+
+let option_case b f = function
+  | None -> b
+  | Some x -> f x
+
+let option_string f s =
+  if s = "" then None else Some (f s)
 
 (* Initialise pipeline *)
 
@@ -78,21 +94,79 @@ let setup_cerb_conf cerb_debug_level cpp_cmd impl_filename =
     core_impl=           load_core_impl core_stdlib impl_filename;
   }
 
-(* Result *)
+(* Incoming messages *)
 
+type action =
+  | NoAction
+  | Elaborate
+  | Random
+  | Exhaustive
+  | Step
 
-let string_of_doc d =
-  let buf = Buffer.create 1024 in
-  PPrint.ToBuffer.pretty 1.0 150 buf d;
-  Buffer.contents buf
+type state = ((Driver.driver_result, Driver.driver_error,
+               Ocaml_mem.integer_value Mem_common.mem_constraint,
+               Driver.driver_state) Nondeterminism.ndM
+             * Driver.driver_state)
 
-let success (res, cabs, ail, _, core) =
-  let open Yojson in
-  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
-  let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
+type incoming_msg =
+  { action:  action;
+    source:  string;
+    rewrite: bool;
+    state:   state option;
+    steps:   string list;  (* steps taken *)
+  }
+
+let parse_incoming_json msg =
+  let empty = { action=  NoAction;
+                source=  "";
+                state=   None;
+                rewrite= true;
+                steps=   [];
+              }
+  in
+  let action_from_string = function
+    | "Elaborate"  -> Elaborate
+    | "Random"     -> Random
+    | "Exhaustive" -> Exhaustive
+    | "Step"       -> Step
+    | s -> failwith ("unknown action " ^ s)
+  in
+  let parse_string = function
+    | `String s -> s
+    | _ -> failwith "expecting a string"
+  in
+  let parse_bool = function
+    | `Bool b -> b
+    | _ -> failwith "expecting a bool"
+  in
+  let parse_list f = function
+    | `List xs -> List.map f xs
+    | _ -> failwith "expecting a list"
+  in
+  let parse_assoc msg (k, v) =
+    match k with
+    | "action"  -> { msg with action= action_from_string (parse_string v) }
+    | "source"  -> { msg with source= parse_string v }
+    | "rewrite" -> { msg with rewrite= parse_bool v }
+    | "state"   -> { msg with state= option_string decode (parse_string v) }
+    | "steps"   -> { msg with steps= parse_list parse_string v }
+    | key ->
+      Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
+      msg (* ignore unknown key *)
+  in
+  let rec parse msg = function
+    | `Assoc xs -> List.fold_left parse_assoc msg xs
+    | `List xs -> List.fold_left parse msg xs
+    | _ -> failwith "wrong message format"
+  in
+  parse empty msg
+
+(* Outgoing messages *)
+
+let json_of_elaboration (cabs, ail, _, core) =
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
   let json_of_doc d = `String (elim_paragraph_sym (string_of_doc d)) in
-  let pp_core =
+  let (core, locs) =
     let module Param_pp_core = Pp_core.Make (struct
         let show_std = true
         let show_location = true
@@ -101,32 +175,42 @@ let success (res, cabs, ail, _, core) =
     Colour.do_colour := false;
     Param_pp_core.pp_file core
     |> string_of_doc
+    |> Location_mark.extract
   in
-  print_endline (Yojson.to_string (Core_json.FileJSON.serialise core));
-  let (core_str, locs) = Location_mark.extract pp_core in
   `Assoc [
-    ("cabs",    json_of_doc (Pp_cabs.pp_translation_unit false false cabs));
-    ("ail",     json_of_doc (Pp_ail.pp_program ail));
-    ("ail_ast", json_of_doc (Pp_ail_ast.pp_program ail));
-    ("core",    `String (elim_paragraph_sym core_str));
-    ("locs",    locs);
-    ("stdout",  `String res);
-    ("stderr",  `Null);
-    ("test",    Core_json.FileJSON.serialise core);
-  ] |> Yojson.to_string |> respond
+    ("status", `String "success");
+    ("pp", `Assoc [
+        ("cabs", `Null);
+        ("ail",  json_of_doc (Pp_ail.pp_program ail));
+        ("core", `String core)]);
+    ("ast", `Assoc [
+        ("cabs", json_of_doc (Pp_cabs.pp_translation_unit false false cabs));
+        ("ail",  json_of_doc (Pp_ail_ast.pp_program ail));
+        ("core", `Null)]);
+    ("locs", locs);
+    ("result", `String "");
+    ("console", `String "");
+  ]
 
-let failure msg =
-  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
-  let respond str = (Server.respond_string ~flush:true ~headers) `OK str () in
+let json_of_execution str =
   `Assoc [
-    ("cabs",    `Null);
-    ("ail",     `Null);
-    ("ail_ast", `Null);
-    ("core",    `Null);
-    ("locs",    `Null);
-    ("stdout",  `Null);
-    ("stderr",  `String msg);
-  ] |> Yojson.to_string |> respond
+    ("status", `String "success");
+    ("result", `String str);
+  ]
+
+let json_of_step (steps, str, m, st) =
+  `Assoc [
+    ("state",   `String (encode (m, st)));
+    ("mem",     Ocaml_mem.serialise_mem_state st.Driver.layout_state);
+    ("steps",   `List (List.map (fun s -> `String s) (str::steps)));
+  ]
+
+let json_of_fail msg =
+  `Assoc [
+    ("status", `String "failure");
+    ("console",  `String msg)
+  ]
+
 
 (* Server default responses *)
 
@@ -150,6 +234,21 @@ let not_allowed meth path =
        </body></html>"
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
+
+(* TESTING *)
+
+
+let init_step (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args =
+  Random.self_init ();
+  
+  (* changing the annotations type from unit to core_run_annotation *)
+  let file = Core_run_aux.convert_file file in
+  let initial_dr_st = Driver.initial_driver_state sym_supply file in
+  
+  (* computing the value (or values if exhaustive) *)
+  (Driver.drive false false sym_supply file args, initial_dr_st)
+
+
 
 (* Cerberus actions *)
 
@@ -181,51 +280,127 @@ let hack conf mode =
   }
 
 
-let run ~filename ~conf (action: [`Elaborate | `Execute]) (mode: Smt2.execution_mode) =
+let respond_json json =
+  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
+  (Server.respond_string ~flush:true ~headers) `OK (Yojson.to_string json) ()
+
+let failure s = respond_json (json_of_fail s)
+
+let respond f = function
+  | Exception.Result r ->
+    respond_json (f r)
+  | Exception.Exception err ->
+    failure (Pp_errors.to_string err)
+
+let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  let elaborate () =
-    Debug.print 2 ("Elaborating: " ^ filename);
-    try
-      Pipeline.c_frontend conf filename
-      >>= function
-      | (Some cabs, Some ail, sym_suppl, core) ->
-        Pipeline.core_passes conf ~filename core
-        >>= fun (core', _) -> return ("", cabs, ail, sym_suppl, core')
-      | _ ->
-        Exception.throw (Location_ocaml.unknown,
-                         Errors.OTHER "fatal failure core pass")
-    with
-    | e -> Debug.warn_exception "Exception raised during elaboration." e; raise e
+  hack (fst conf) Smt2.Random;
+  Debug.print 2 ("Elaborating: " ^ filename);
+  try
+    Pipeline.c_frontend conf filename
+    >>= function
+    | (Some cabs, Some ail, sym_suppl, core) ->
+      Pipeline.core_passes conf ~filename core
+      >>= fun (core', _) ->
+      return (cabs, ail, sym_suppl, core')
+    | _ ->
+      Exception.throw (Location_ocaml.unknown,
+                       Errors.OTHER "fatal failure core pass")
+  with
+  | e -> Debug.warn_exception "Exception raised during elaboration." e; raise e
+
+let execute ~conf ~filename (mode: Smt2.execution_mode) =
+  let return = Exception.except_return in
+  let (>>=)  = Exception.except_bind in
+  hack (fst conf) mode;
+  let string_of_mode = function
+    | Smt2.Random -> "random"
+    | Smt2.Exhaustive -> "exhaustive"
   in
-  let execute () =
-    hack (fst conf) mode;
-    let string_of_mode = function
-      | Smt2.Random -> "random"
-      | Smt2.Exhaustive -> "exhaustive"
-    in
-    Debug.print 2 ("Executing in " ^ string_of_mode mode ^ " mode: " ^ filename);
-    try
-      elaborate ()
-      >>= fun (_, cabs, ail, sym_suppl, core) ->
-      Pipeline.interp_backend dummy_io sym_suppl core [] true false false mode
-      >>= function
-      | Either.Left res ->
-        return (String.concat "\n" res, cabs, ail, sym_suppl, core)
-      | Either.Right res ->
-        return (string_of_int res, cabs, ail, sym_suppl, core)
-    with
-    | e -> Debug.warn_exception "Exception raised during execution." e; raise e
+  Debug.print 2 ("Executing in " ^ string_of_mode mode ^ " mode: " ^ filename);
+  try
+    elaborate ~conf ~filename
+    >>= fun (cabs, ail, sym_suppl, core) ->
+    Pipeline.interp_backend dummy_io sym_suppl core [] true false false mode
+    >>= function
+    | Either.Left res ->
+      return (String.concat "\n" res)
+    | Either.Right res ->
+      return (string_of_int res)
+  with
+  | e -> Debug.warn_exception "Exception raised during execution." e; raise e
+
+
+let execute_step (msg : incoming_msg) ~conf ~filename =
+  hack (fst conf) Smt2.Random;
+  let step_init () =
+    let return = Exception.except_return in
+    let (>>=)  = Exception.except_bind in
+    elaborate ~conf ~filename
+    >>= fun (_, _, sym_suppl, core) ->
+    let core' = Core_run_aux.convert_file core in
+    let st0   = Driver.initial_driver_state sym_suppl core' in
+    return (Driver.drive false false sym_suppl core' [], st0)
   in
-  let respond = function
-    | Exception.Result res ->
-      success res
-    | Exception.Exception (_, err) ->
-      failure (Pp_errors.short_message err)
-  in
-  match action with
-  | `Elaborate -> elaborate () |> respond
-  | `Execute -> execute () |> respond
+  try
+    match msg.state with
+    | None ->
+      begin match step_init () with
+        | Exception.Result (m, st) ->
+          json_of_step (msg.steps, "init", m, st)
+        | Exception.Exception err ->
+          json_of_fail (Pp_errors.to_string err)
+      end
+    | Some (ND m, st) ->
+      match m st with
+      | (NDactive a, st') ->
+        let str_v = String_core.string_of_value a.Driver.dres_core_value in
+        let res =
+          "Defined {value: \"" ^ str_v ^ "\", stdout: \""
+          ^ String.escaped a.Driver.dres_stdout
+          ^ "\", blocked: \""
+          ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
+        in
+        json_of_execution res
+      | (NDkilled r, st') ->
+        json_of_execution ("killed")
+      | (NDbranch (str, _, m1, m2), st') ->
+        json_of_step (msg.steps, str, m2, st')
+      | (NDguard (str, _, m), st') ->
+        json_of_step (msg.steps, str, m, st')
+      | (NDnd (str, (_,m)::ms), st') ->
+        json_of_step (msg.steps, str, m, st')
+      | (NDstep ((str,m)::ms), st') ->
+        json_of_step (msg.steps, str, m, st')
+      | _ -> failwith ""
+  with
+  | e -> Debug.warn_exception "Exception raised during execution." e; raise e
+
+
+let update_conf (conf, io_helpers) msg =
+  let new_conf = { conf with Pipeline.rewrite_core= msg.rewrite }
+  in (new_conf, io_helpers)
+
+let cerberus ~conf content =
+  let msg      = parse_incoming_json (Yojson.Basic.from_string content) in
+  let filename = write_tmp_file msg.source in
+  let conf     = update_conf conf msg in
+  match msg.action with
+  | NoAction   ->
+    failure "no action"
+  | Elaborate  ->
+    elaborate ~conf ~filename
+    |> respond json_of_elaboration
+  | Random     ->
+    execute ~conf ~filename Smt2.Random
+    |> respond json_of_execution
+  | Exhaustive ->
+    execute ~conf ~filename Smt2.Exhaustive
+    |> respond json_of_execution
+  | Step ->
+    execute_step msg ~conf ~filename
+    |> respond_json
 
 (* GET and POST *)
 
@@ -253,15 +428,14 @@ let get ~docroot uri path =
 let post ~docroot ~conf uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
-    Debug.print 8 ("POST content " ^ content);
-    let filename = write_tmp_file content in
-    Debug.print 8 ("Contents written at: " ^ filename);
+    Debug.print 8 ("POST data " ^ content);
     match path with
-    | "/elab_rewrite"
-    | "/elab" -> run ~filename ~conf `Elaborate Smt2.Random
-    | "/random" -> run ~filename ~conf `Execute Smt2.Random
-    | "/exhaustive" -> run ~filename ~conf `Execute Smt2.Exhaustive
-    | _ -> forbidden path
+    | "/cerberus" -> cerberus ~conf content
+    | _ ->
+      (* Ignore POST, fallback to GET *)
+      Debug.warn ("Unknown post action " ^ path);
+      Debug.warn ("Fallback to GET");
+      get ~docroot uri path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
     forbidden path

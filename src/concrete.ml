@@ -1380,6 +1380,33 @@ let combine_prov prov1 prov2 =
     | `List [cid; mv] -> (CabsIdJSON.parse cid, parse_mem_value mv)
     | _ -> throw "Concrete.mem_value"
 
+  let serialise_map f m =
+    let serialise_entry (k, v) =
+      `List [BigIntJSON.serialise k; f v]
+    in
+    `List (List.map serialise_entry (IntMap.bindings m))
+
+  let serialise_allocation alloc =
+    `Assoc [
+      ("base", BigIntJSON.serialise alloc.base);
+      ("size", BigIntJSON.serialise alloc.size);
+    ]
+
+  let serialise_byte (p, c_opt) =
+    let serialised_char = match c_opt with
+      | None -> `Null
+      | Some c -> `String (String.make 1 c)
+    in `List [serialise_prov p; serialised_char]
+
+  let serialise_mem_state st =
+    `Assoc [
+      ("next_alloc_id", BigIntJSON.serialise st.next_alloc_id);
+      ("allocations",   serialise_map serialise_allocation st.allocations);
+      ("next_address",  BigIntJSON.serialise st.next_address);
+      ("bytemap",       serialise_map serialise_byte st.bytemap)
+    ]
+
+
 end
 
 include Concrete

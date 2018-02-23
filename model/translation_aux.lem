@@ -43,7 +43,7 @@ let mk_stdcall stdlib fname =
   match mk_stdcall_aux (function ((Symbol _ (Just z)), _) -> z = fname | _ -> false end) (Map_extra.toList stdlib) with
     | Just (f, Core.Fun bTy params _) ->
         fun pes ->
-          Core.Pexpr () (Core.PEcall (Core.Sym f) pes)
+          Core.Pexpr [] () (Core.PEcall (Core.Sym f) pes)
     | _ ->
         error $ "[Translate_effect.E.mk_stdcall] `" ^ fname ^ "' is not a Core standard function."
  end
@@ -312,7 +312,7 @@ type translation_stdlib = <|
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
 let mk_translation_stdlib (ailnames, stdlib_fun_map) =
   let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
-  let mk_call str pes = Core.Pexpr () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
+  let mk_call str pes = Core.Pexpr [] () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   <| ailnames=                           ailnames
    ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
    ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]

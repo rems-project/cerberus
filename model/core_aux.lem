@@ -13,7 +13,7 @@ module ND = Nondeterminism
 
 
 val strip: forall 'ty 'sym. generic_pexpr 'ty 'sym -> pexpr_ 'ty 'sym
-let strip (Pexpr _ pexpr_) =
+let strip (Pexpr _ _ pexpr_) =
   pexpr_
 
 val strip_expr: forall 'a 'bty 'sym. generic_expr 'a 'bty 'sym -> generic_expr_ 'a 'bty 'sym
@@ -264,7 +264,7 @@ let mk_unspecified_pat pat =
 (* Core pexpr builders  ***************************************************** *)
 val mk_sym_pe: Symbol.sym -> pexpr
 let mk_sym_pe sym =
-  Pexpr () (PEsym sym)
+  Pexpr [] () (PEsym sym)
 
 (* TODO: mk_impl_pe *)
 
@@ -272,53 +272,53 @@ let mk_sym_pe sym =
 
 val mk_integer_pe: integer -> pexpr
 let mk_integer_pe n =
-  Pexpr () (PEval (Vobject (OVinteger (Mem.integer_ival n))))
+  Pexpr [] () (PEval (Vobject (OVinteger (Mem.integer_ival n))))
 
 val mk_floating_value_pe: Mem.floating_value -> pexpr
 let mk_floating_value_pe fval =
-  Pexpr () (PEval (Vobject (OVfloating fval)))
+  Pexpr [] () (PEval (Vobject (OVfloating fval)))
 
 val mk_nullptr_pe: Core_ctype.ctype -> pexpr
 let mk_nullptr_pe ref_ty =
-  Pexpr () (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
+  Pexpr [] () (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
 
 val mk_cfunction_pe: Symbol.sym -> pexpr
 let mk_cfunction_pe fsym =
-  Pexpr () (PEval (Vobject (OVcfunction (Sym fsym))))
+  Pexpr [] () (PEval (Vobject (OVcfunction (Sym fsym))))
 
 val mk_specified_pe: pexpr -> pexpr
 let mk_specified_pe pe =
-    Pexpr () (PEctor Cspecified [pe])
+    Pexpr [] () (PEctor Cspecified [pe])
 
 val mk_unspecified_pe: Core_ctype.ctype -> pexpr
 let mk_unspecified_pe ty =
-  Pexpr () (PEval (Vloaded (LVunspecified ty)))
+  Pexpr [] () (PEval (Vloaded (LVunspecified ty)))
 
 val mk_array_pe: list pexpr -> pexpr
 let mk_array_pe pes =
-  Pexpr () (PEctor Carray pes)
+  Pexpr [] () (PEctor Carray pes)
 
 val mk_unit_pe: pexpr
 let mk_unit_pe =
-  Pexpr () (PEval Vunit)
+  Pexpr [] () (PEval Vunit)
 
 val mk_boolean_pe: bool -> pexpr
 let mk_boolean_pe b =
-  Pexpr () (PEval (if b then Vtrue else Vfalse))
+  Pexpr [] () (PEval (if b then Vtrue else Vfalse))
 
 (* TODO: PEval Vtrue, Vfalse *)
 
 val mk_ail_ctype_pe: AilTypes.ctype -> pexpr
 let mk_ail_ctype_pe ty =
-  Pexpr () (PEval (Vctype (proj_ctype ty)))
+  Pexpr [] () (PEval (Vctype (proj_ctype ty)))
 
 val mk_ctype_pe: ctype -> pexpr
 let mk_ctype_pe ty =
-  Pexpr () (PEval (Vctype ty))
+  Pexpr [] () (PEval (Vctype ty))
 
 val     mk_list_pe: list pexpr -> pexpr
 let rec mk_list_pe pes =
-  Pexpr () match pes with
+  Pexpr [] () match pes with
     | [] ->
         PEctor (Cnil ()) []
     | pe :: pes' ->
@@ -327,81 +327,81 @@ let rec mk_list_pe pes =
 
 val mk_tuple_pe: list pexpr -> pexpr
 let mk_tuple_pe pes =
-  Pexpr () (PEctor Ctuple pes)
+  Pexpr [] () (PEctor Ctuple pes)
 
 val mk_ivmax_pe: pexpr -> pexpr
 let mk_ivmax_pe pe =
-  Pexpr () (PEctor Civmax [pe])
+  Pexpr [] () (PEctor Civmax [pe])
 
 val mk_ivmin_pe: pexpr -> pexpr
 let mk_ivmin_pe pe =
-  Pexpr () (PEctor Civmin [pe])
+  Pexpr [] () (PEctor Civmin [pe])
 
 val mk_sizeof_pe: pexpr -> pexpr
 let mk_sizeof_pe pe =
-  Pexpr () (PEctor Civsizeof [pe])
+  Pexpr [] () (PEctor Civsizeof [pe])
 
 val mk_alignof_pe: pexpr -> pexpr
 let mk_alignof_pe pe =
-  Pexpr () (PEctor Civalignof [pe])
+  Pexpr [] () (PEctor Civalignof [pe])
 
 (* TODO: PEconstrained *)
 
 val mk_undef_pe: Undefined.undefined_behaviour -> pexpr
 let mk_undef_pe ub =
-  Pexpr () (PEundef ub)
+  Pexpr [] () (PEundef ub)
 
 val mk_error_pe: string -> pexpr -> pexpr
 let mk_error_pe str pe =
-  Pexpr () (PEerror str pe)
+  Pexpr [] () (PEerror str pe)
 
 val mk_not_pe: pexpr -> pexpr
 let mk_not_pe pe =
-  Pexpr () (PEnot pe)
+  Pexpr [] () (PEnot pe)
 
 val mk_op_pe: binop -> pexpr -> pexpr -> pexpr
 let mk_op_pe bop pe1 pe2 =
-  Pexpr () (PEop bop pe1 pe2)
+  Pexpr [] () (PEop bop pe1 pe2)
 
 val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
 let mk_let_pe pat pe1 pe2 =
-  Pexpr () (PElet pat pe1 pe2)
+  Pexpr [] () (PElet pat pe1 pe2)
 
 val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
 let mk_if_pe pe1 pe2 pe3 =
-  Pexpr () (PEif pe1 pe2 pe3)
+  Pexpr [] () (PEif pe1 pe2 pe3)
 
 val mk_array_shift: pexpr -> ctype -> pexpr -> pexpr
 let mk_array_shift pe1 ty pe2 =
-  Pexpr () (PEarray_shift pe1 ty pe2)
+  Pexpr [] () (PEarray_shift pe1 ty pe2)
 
 val mk_member_shift_pe: pexpr -> Symbol.sym -> Cabs.cabs_identifier -> pexpr
 let mk_member_shift_pe pe1 tag_sym member_ident =
-  Pexpr () (PEmember_shift pe1 tag_sym member_ident)
+  Pexpr [] () (PEmember_shift pe1 tag_sym member_ident)
 
 val mk_case_pe: pexpr -> list (pattern * pexpr) -> pexpr
 let mk_case_pe pe pat_pes =
-  Pexpr () (PEcase pe pat_pes)
+  Pexpr [] () (PEcase pe pat_pes)
 
 val mk_neg_pe: pexpr -> pexpr
 let mk_neg_pe pe =
-  Pexpr () (PEop OpSub (mk_integer_pe 0) pe)
+  Pexpr [] () (PEop OpSub (mk_integer_pe 0) pe)
 
 val mk_struct_pe: Symbol.sym -> list (Cabs.cabs_identifier * pexpr) -> pexpr
 let mk_struct_pe tag_sym xs =
-  Pexpr () (PEstruct tag_sym xs)
+  Pexpr [] () (PEstruct tag_sym xs)
 
 val mk_union_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
 let mk_union_pe tag_sym memb_ident pe =
-  Pexpr () (PEunion tag_sym memb_ident pe)
+  Pexpr [] () (PEunion tag_sym memb_ident pe)
 
 val mk_value_pe: value -> pexpr
 let mk_value_pe cval =
-  Pexpr () (PEval cval)
+  Pexpr [] () (PEval cval)
 
 val mk_std_pe: string -> pexpr -> pexpr
-let mk_std_pe std pe =
-  Pexpr () (PEstd std pe)
+let mk_std_pe std (Pexpr annot bty pe_) =
+  Pexpr ((Astd std)::annot) bty pe_
 
 val mk_std_undef_pe: string -> Undefined.undefined_behaviour -> pexpr
 let mk_std_undef_pe std ub =
@@ -414,7 +414,7 @@ let mk_std_pair_pe std (pe1, pe2) =
 
 val mk_call_pe: name -> list pexpr -> pexpr
 let mk_call_pe nm pes =
-  Pexpr () (PEcall nm pes)
+  Pexpr [] () (PEcall nm pes)
 
 
 
@@ -442,15 +442,15 @@ val integer_decode_pe:     pexpr -> pexpr -> pexpr
 *)
 
 let bitwise_complement_pe pe1 pe2 =
-  Pexpr () (PEctor CivCOMPL [pe1; pe2])
+  Pexpr [] () (PEctor CivCOMPL [pe1; pe2])
 (*
-  Pexpr () (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
 *)
 (*
 let integer_encode_pe pe1 pe2 =
-  Pexpr () (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
 let integer_decode_pe pe1 pe2 =
-  Pexpr () (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
 *)
 
 (* Some aliases for positive actions *)
@@ -516,7 +516,7 @@ let rec zeros_aux tagDefs ty =
 val zeros: core_tag_definitions -> ctype -> pexpr
 let zeros tagDefs ty =
   (* TODO: yucky *)
-  Pexpr ()
+  Pexpr [] ()
 (*
     (PEval (Vobject (snd $ objectValueFromMemValue (zeros_aux ty))))
 *)
@@ -744,7 +744,7 @@ let rec flatten_constrained_value v =
 
 val valueFromPexpr: pexpr -> maybe value
 let valueFromPexpr = function
-  | Pexpr () (PEval cval) ->
+  | Pexpr [] () (PEval cval) ->
       Just ((*flatten_constrained_value*) cval)
   | _ ->
       Nothing
@@ -763,9 +763,9 @@ let rec valueFromPexprs pes =
 val valueOrPEconstrainedFromPexpr: pexpr -> maybe (either value pexpr)
 let valueOrPEconstrainedFromPexpr pe =
   match pe with
-    | Pexpr () (PEval cval) ->
+    | Pexpr [] () (PEval cval) ->
         Just (Left cval)
-    | Pexpr () (PEconstrained _) ->
+    | Pexpr [] () (PEconstrained _) ->
         Just (Right pe)
     | _ ->
         Nothing
@@ -777,8 +777,8 @@ let rec valueOrPEconstrainedFromPexprs pes =
       (i+1, match (valueOrPEconstrainedFromPexpr pe, acc) with
         | (Just (Left cval), Just (Left cvals)) ->
             Just (Left (cval :: cvals))
-        | (Just (Right (Pexpr () (PEconstrained xs) as pe)), Just (Left cvals)) ->
-            Just (Right ((i, xs), pe :: (List.map (fun v -> Pexpr () (PEval v)) cvals)))
+        | (Just (Right (Pexpr [] () (PEconstrained xs) as pe)), Just (Left cvals)) ->
+            Just (Right ((i, xs), pe :: (List.map (fun v -> Pexpr [] () (PEval v)) cvals)))
         | (Just (Right pe), Just (Right (i_xs, pes))) ->
             Just (Right (i_xs, pe :: pes))
         | _ ->
@@ -819,8 +819,8 @@ let rec in_pattern sym pat =
 
 
 val     subst_sym_pexpr: Symbol.sym -> value -> pexpr -> pexpr
-let rec subst_sym_pexpr sym cval (Pexpr annot pexpr_) =
-  Pexpr annot match pexpr_ with
+let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
+  Pexpr annot bty match pexpr_ with
     | PEsym sym' ->
         if sym = sym' then PEval cval else pexpr_
     | PEimpl _ ->
@@ -866,8 +866,6 @@ let rec subst_sym_pexpr sym cval (Pexpr annot pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
-    | PEstd str pe ->
-        PEstd str (subst_sym_pexpr sym cval pe)
 end
 
 
@@ -1059,8 +1057,8 @@ let rec subst_pattern_val pat cval expr =
 (* substitute in an expression a symbolic name with a (pure) expression *)
 (* NOTE: this is usually unsound to use if pe' doesn't evaluate to a defined value or generates memory constraints *)
 val     unsafe_subst_sym_pexpr: Symbol.sym -> pexpr -> pexpr -> pexpr
-let rec unsafe_subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
-  Pexpr annot match pe_ with
+let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_) =
+  Pexpr annot bty match pe_ with
     | PEsym sym' ->
         if sym = sym' then pe_' else pe_
     | PEimpl _ ->
@@ -1106,8 +1104,6 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot pe_' as pe') (Pexpr _ pe_) =
         PEis_signed (unsafe_subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_subst_sym_pexpr sym pe' pe)
-    | PEstd s pe ->
-        PEstd s (unsafe_subst_sym_pexpr sym pe' pe)
 end
 
 
@@ -1222,37 +1218,37 @@ let rec unsafe_subst_pattern pat pe' expr =
         expr
     | (CaseBase (Just sym, _), _) ->
         unsafe_subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil ()) [], Pexpr _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         expr
-    | (CaseCtor (Cnil _) [], Pexpr _ (PEctor (Cnil _) [])) ->
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
         (* empty list (pure expr) *)
         expr
-    | (CaseCtor Ccons [pat1; pat2], Pexpr () (PEval (Vlist bTy_elem (cval::cvals)))) ->
+    | (CaseCtor Ccons [pat1; pat2], Pexpr [] () (PEval (Vlist bTy_elem (cval::cvals)))) ->
         (* populated list (value) *)
         subst_pattern_val pat1 cval $
           subst_pattern_val pat2 (Vlist bTy_elem cvals) expr
-    | (CaseCtor Ccons [pat1; pat2], Pexpr _ (PEctor Ccons [pe1; pe2])) ->
+    | (CaseCtor Ccons [pat1; pat2], Pexpr _ _ (PEctor Ccons [pe1; pe2])) ->
         (* populated list (pure expr) *)
         unsafe_subst_pattern pat1 pe1 $
           unsafe_subst_pattern pat2 pe2 expr
-    | (CaseCtor Ctuple pats', Pexpr () (PEval (Vtuple cvals))) ->
+    | (CaseCtor Ctuple pats', Pexpr [] () (PEval (Vtuple cvals))) ->
         List.foldr (fun (pat', cval) acc ->
           subst_pattern_val pat' cval acc
         ) expr (List.zip pats' cvals)
-    | (CaseCtor Ctuple pats', Pexpr _ (PEctor Ctuple pes)) ->
+    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes)) ->
         List.foldr (fun (pat', pe) acc ->
           unsafe_subst_pattern pat' pe acc
         ) expr (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cloaded [pat'], Pexpr () (PEval (Vloaded (LVspecified oval)))) ->
+    | (CaseCtor Cloaded [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
         subst_pattern_val pat' (Vobject oval) expr
-    | (CaseCtor Cspecified [pat'], Pexpr () (PEctor Cspecified [pe''])) ->
+    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
         unsafe_subst_pattern pat' pe'' expr
-    | (CaseCtor Cunspecified [pat'], Pexpr () (PEval (Vloaded (LVunspecified ty)))) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEval (Vloaded (LVunspecified ty)))) ->
         subst_pattern_val pat' (Vctype ty) expr
-    | (CaseCtor Cunspecified [pat'], Pexpr () (PEctor Cunspecified [pe''])) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEctor Cunspecified [pe''])) ->
         unsafe_subst_pattern pat' pe'' expr
     | (CaseCtor ctor pats, _) ->
         let str_ctor = match ctor with
@@ -1305,15 +1301,15 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing (* TODO: should turn this into Vunit ? *)
     | Elet pat pe1 e2 ->
         match to_pure e2 with
-          | Just (Pexpr bTy _ as pe2) ->
-              Just (Pexpr bTy (PElet pat pe1 pe2))
+          | Just (Pexpr annot bTy _ as pe2) ->
+              Just (Pexpr annot bTy (PElet pat pe1 pe2))
           | _ ->
               Nothing
         end
     | Eif pe1 e2 e3 ->
         match (to_pure e2, to_pure e3) with
-          | (Just (Pexpr bTy _ as pe2), Just pe3) ->
-              Just (Pexpr bTy (PEif pe1 pe2 pe3))
+          | (Just (Pexpr annot bTy _ as pe2), Just pe3) ->
+              Just (Pexpr annot bTy (PEif pe1 pe2 pe3))
           | _ ->
               Nothing
         end
@@ -1326,7 +1322,7 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
     | Eunseq es ->
         match to_pures es with
           | Just pes ->
-              Just (Pexpr () (PEctor Ctuple pes))
+              Just (Pexpr [] () (PEctor Ctuple pes))
           | Nothing ->
               Nothing
         end
@@ -1370,8 +1366,8 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
     | Ecase pe pat_es ->
        let (pats, es) = List.unzip pat_es in
         match to_pures es with
-          | Just ((Pexpr bTy _ :: _) as pes) ->
-              Just (Pexpr bTy (PEcase pe (List.zip pats pes)))
+          | Just ((Pexpr annot bTy _ :: _) as pes) ->
+              Just (Pexpr annot bTy (PEcase pe (List.zip pats pes)))
           | _ ->
             Nothing
         end
@@ -1440,9 +1436,9 @@ let rec subst_wait tid v (Expr annot expr_) =
        if tid = tid' then
          match v with
            | Vunit ->
-               Epure (Pexpr () (PEval Vunit))
+               Epure (Pexpr [] () (PEval Vunit))
            | _ ->
-               Epure (Pexpr () (PEval v))
+               Epure (Pexpr [] () (PEval v))
          end
        else
          Ewait tid'
@@ -2000,19 +1996,19 @@ let mk_let_e pat pe e =
 
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =
-  Expr (EA_loc loc :: annot) expr_
+  Expr (Aloc loc :: annot) expr_
 
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
-  Expr (EA_std str :: annot) expr_
+  Expr (Astd str :: annot) expr_
 
-val     get_loc: list expr_annot -> maybe Loc.t
+val     get_loc: list annot -> maybe Loc.t
 let rec get_loc annots =
   match annots with
     | [] ->
         Nothing
-    | (EA_loc loc :: _) ->
+    | (Aloc loc :: _) ->
         Just loc
-    | (EA_std _ :: annots') ->
+    | (Astd _ :: annots') ->
         get_loc annots'
   end

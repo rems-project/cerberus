@@ -105,6 +105,30 @@ struct
     | _ -> throw "Symbol.symbol"
 end
 
+module LocationJSON: (JSON with type t = Location_ocaml.t) =
+struct
+  open Lexing
+  open Location_ocaml
+  type t = Location_ocaml.t
+  let serialise_position p =
+    `List [`String p.pos_fname;
+           `String (string_of_int p.pos_lnum);
+           `String (string_of_int p.pos_bol);
+           `String (string_of_int p.pos_cnum)]
+  let serialise = function
+    | Loc_unknown -> `String "Loc_unknown"
+    | Loc_other str -> `Assoc [("Loc_other", `String str)]
+    | Loc_point p -> `Assoc [("Loc_point", serialise_position p)]
+    | Loc_region (p1, p2, p_opt) ->
+      let p3 = match p_opt with
+        | None   -> `Null
+        | Some p -> serialise_position p
+      in
+      `Assoc [("Loc_point",
+               `List [serialise_position p1; serialise_position p2; p3])]
+  let parse _ = failwith "location"
+end
+
 module SymPrefixJSON: (JSON with type t = Symbol.prefix) =
 struct
   open Symbol
