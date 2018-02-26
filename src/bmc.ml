@@ -7,8 +7,8 @@
  *    - normalize core file
  *)
 
+open Global_ocaml
 open Core
-
 open Core_ctype
 open Lem_pervasives
 open Z3
@@ -728,10 +728,20 @@ let rec bmc_pexpr (state: bmc_state)
         let (maybe_pe3, s3) = bmc_pexpr ({state with vcs = []}) pe3 in
         begin
           match (maybe_pe1, maybe_pe2, maybe_pe3) with
+          | (None, _, _)  (* fall through *)
+          | (Some _, None, None) ->
+              None, ({s1 with vcs = (Boolean.mk_false s3.ctx) :: s1.vcs}) 
+          | (Some a, Some b, None) ->
+              let vc_guard = a in
+              let new_vc = s1.vcs @ s2.vcs in
+              Some b, ({s1 with vcs = vc_guard :: new_vc})
+          | (Some a, None, Some b) ->
+              let vc_guard = Boolean.mk_not s3.ctx a in
+              let new_vc = s1.vcs @ s2.vcs in
+              Some b, ({s1 with vcs = vc_guard :: new_vc})
           | (Some a, Some b, Some c) ->
               let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs a) in
               Some (Boolean.mk_ite s3.ctx a b c), ({s1 with vcs = new_vc})
-          | _ -> assert false (* TODO *)
         end
     | PEis_scalar _ ->
         assert false
@@ -1151,6 +1161,8 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   Printf.printf "Checking sat\n";
   check_solver (initial_state.solver)
 
+let (>>=) = Exception.except_bind
+
 let run_bmc (core_file : 'a file) 
             (sym_supply: ksym_supply)    = 
   (* TODO: state monad with sym_supply *)
@@ -1164,6 +1176,17 @@ let run_bmc (core_file : 'a file)
 
   print_string "EXIT: NORMALIZING FILE\n";
 
+  print_string "Typechecking file\n";
+  Core_typing.typecheck_program norm_file >>= fun typed_core ->
+    Exception.except_return (
+      bmc_file typed_core norm_supply;
+
+      print_string "EXIT: BMC PIPELINE \n"
+    )
+    (*
+      bmc_file (Core_sequentialise.sequentialise file typed_core ) norm_supply; 
+      *)
+
   (*
   let (normalized_file, supply1) = normalize_file core_file sym_supply in
   pp_file normalized_file;
@@ -1174,4 +1197,3 @@ let run_bmc (core_file : 'a file)
   
   (*bmc_file core_file sym_supply; *)
 
-  print_string "EXIT: BMC PIPELINE \n"
