@@ -121,7 +121,13 @@ let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
 
 let check_solver (solver: Solver.solver) =
   begin
-  if (Solver.check solver []) != SATISFIABLE then
+  let status = Solver.check solver [] in
+  Printf.printf "Status: %s\n" (Solver.string_of_status status);
+  begin
+  if status = UNKNOWN then
+    Printf.printf "Unknown: %s\n" (Solver.get_reason_unknown solver)
+  end;
+  if status != SATISFIABLE then
     Printf.printf "NOT SAT :) \n"
   else
     begin 
@@ -159,9 +165,19 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | Carray ->
       assert false(* C array *)
   | Civmax ->
-      assert false (* max integer value *)
+      assert false
+      (*
+      let mk_decl = z3_ivmax state.ctx in
+      FuncDecl.apply mk_decl pes
+      *)
   | Civmin ->
-      assert false (* min integer value *)
+      assert false
+      (*
+      Printf.printf "TODO: Ivmin is not properly defined for all types\n";
+
+      let mk_decl = z3_ivmin state.ctx in
+      FuncDecl.apply mk_decl pes
+      *)
   | Civsizeof ->
       assert false (* sizeof value *)
   | Civalignof ->
@@ -251,6 +267,13 @@ let initial_bmc_state (supply : ksym_supply) : bmc_state =
 
     vcs = []
   }
+
+(*
+let add_func_constraints (st : bmc_state) =
+  Solver.add st.solver (sizeof_ibty_goals st.ctx) ;
+  Solver.add st.solver (ivmin_goals st.ctx) 
+*)
+
 let integer_value_to_z3 (ctx: context) ival =
   let maybe_ival = eval_integer_value ival in
   match maybe_ival with
@@ -270,6 +293,24 @@ let object_value_to_z3 (ctx: context) = function
       assert false
 
 let ctype_to_z3 (ctx: context) (ctype: ctype0) =
+  let _ =  (* TODO: safeguard for unimplemented stuff *)
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 (Integer i) ->
+        begin
+        match i with
+        | Char -> assert false
+        | Bool -> ()
+        | Signed ibty -> 
+          begin
+          match ibty with
+          | Int_ -> ()
+          | _ -> assert false 
+          end
+        | _ -> assert false
+        end
+    | _ -> assert false
+  in
   ctype_to_expr ctype ctx
 
 
@@ -588,6 +629,7 @@ let rec bmc_pexpr (state: bmc_state)
         let ret = ctor_to_z3 state ctor z3_pelist sort in
         Some ret,  state
     | PEcase (pe, ((pat1, pe1):: (pat2, pe2):: [])) -> 
+        Printf.printf "TODO: PEcase";
         (* TODO: special case for now. c1 else c2 *)
         let (Pexpr(pe_type, pe_)) = pe in
         let (maybe_pe, st) = bmc_pexpr state pe in 
@@ -976,6 +1018,7 @@ let rec bmc_expr (state: bmc_state)
   | Eaction paction ->
       bmc_paction state paction
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
+      Printf.printf "TODO: Ecase";
       let (Pexpr(pe_type, pe_)) = pe in
       let (maybe_pe, st) = bmc_pexpr state pe in 
       let (eq_expr, st_eq) = 
@@ -1095,20 +1138,40 @@ let bmc_fun_map (state: bmc_state)
 
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   let initial_state = initial_bmc_state supply in
+  (*
+  add_func_constraints initial_state;
+  Printf.printf "Initial solver: \n %s \n" (Solver.to_string (initial_state.solver));
+  check_solver (initial_state.solver);
+  *)
+
+  Printf.printf "Begin BMC\n";
   let _ = bmc_fun_map initial_state file.funs in
   (* TODO globals *)
   Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (initial_state.solver));
   Printf.printf "Checking sat\n";
   check_solver (initial_state.solver)
 
-let run_bmc (core_file : 'a typed_file) 
+let run_bmc (core_file : 'a file) 
             (sym_supply: ksym_supply)    = 
+  (* TODO: state monad with sym_supply *)
   print_string "ENTER: BMC PIPELINE \n";
   pp_file core_file;
+
+
+  print_string "ENTER: NORMALIZING FILE\n";
+  let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
+  pp_file norm_file;
+
+  print_string "EXIT: NORMALIZING FILE\n";
+
+  (*
   let (normalized_file, supply1) = normalize_file core_file sym_supply in
   pp_file normalized_file;
 
   print_string "Done normalization\n";
   bmc_file normalized_file supply1; 
+  *)
+  
+  (*bmc_file core_file sym_supply; *)
 
   print_string "EXIT: BMC PIPELINE \n"

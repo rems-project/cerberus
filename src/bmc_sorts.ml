@@ -51,7 +51,6 @@ let basicTypeSort ctx =
         (Symbol.mk_string ctx "is_Floating") [] [] []
     ] 
 
-(* TODO: Function, Struct, Union, Builtin *)
 let ctypeSort ctx = 
   Datatype.mk_sort_s ctx "Ctype"
     [ mk_ctor ctx "void_ty"
@@ -151,7 +150,7 @@ let rec ctype_to_expr ty ctx =
       | Builtin0 _ ->
           assert false
   )
- 
+
 
 module type AddressType =
   sig
@@ -292,3 +291,143 @@ end
 module LoadedInteger = LoadedSort (struct let cot = OTy_integer end)
 
 module LoadedPointer = LoadedSort (struct let cot = OTy_pointer end)
+
+(* ============== Function declarations (and definitions?) *)
+
+(*
+let z3_sizeof_ibty ctx =
+  FuncDecl.mk_func_decl ctx
+  (mk_sym ctx "sizeof_ibty") 
+  [ integerBaseTypeSort ctx ] (* Sort list *)
+  (Integer.mk_sort ctx) (* Ret sort *)
+
+let sizeof_ibty ibty = 
+  match Ocaml_implementation.Impl.sizeof_ity (Signed ibty) with
+  | Some x -> x
+  | None -> assert false
+
+let ivmin_ocaml ibty = 
+  match Ocaml_implementation.Impl.sizeof_ity (Signed ibty) with
+  | Some x -> - (1 lsl (x-1))
+  | None -> assert false
+
+let ivmax_ocaml ibty = 
+  match Ocaml_implementation.Impl.sizeof_ity (Signed ibty) with
+  | Some x -> (1 lsl (x-1)) - 1
+  | None -> assert false
+
+
+
+let sizeof_ibty_goals ctx =
+  let sizeof_ibty_decl = z3_sizeof_ibty ctx in
+  let ibty_recs = Datatype.get_recognizers (integerBaseTypeSort ctx) in
+  let names = [ mk_sym ctx "ty" ] in
+  let types = [ integerBaseTypeSort ctx ] in
+  let var =  Quantifier.mk_bound ctx 0 (List.nth types 0) in
+  let quantifiers = 
+  [
+    (* Forall ty: ibty, is_Int_ (ty) =>  sizeof_ibty (ty) == ... *)
+    Quantifier.mk_forall ctx 
+      types  names (* ty: ibty *)
+      (Boolean.mk_implies ctx 
+          (Expr.mk_app ctx (List.nth ibty_recs 2) [ var ]) 
+          (Boolean.mk_eq ctx 
+              (Expr.mk_app ctx sizeof_ibty_decl [ var ])
+              (Integer.mk_numeral_i ctx (sizeof_ibty (Int_) ))
+          )
+      ) None [] [] None None 
+  ] in
+  let stuff = Quantifier.get_bound_variable_names (List.hd quantifiers) in
+  Printf.printf "TEST %s\n" (Symbol.to_string (List.hd stuff));
+
+  List.map (fun q -> Quantifier.expr_of_quantifier q) quantifiers
+
+let z3_ivmin ctx =
+  FuncDecl.mk_func_decl ctx 
+    (mk_sym ctx "Ivmin") 
+    [ ctypeSort ctx ] (* Sort list *)
+    (Integer.mk_sort ctx) (* Ret sort *)
+
+let z3_ivmax ctx =
+  FuncDecl.mk_func_decl ctx 
+    (mk_sym ctx "Ivmax") 
+    [ ctypeSort ctx ] (* Sort list *)
+    (Integer.mk_sort ctx) (* Ret sort *)
+
+
+let ivmin_goals ctx =
+  let ctype_recs = Datatype.get_recognizers (ctypeSort ctx) in
+  let ctype_accessors = Datatype.get_accessors (ctypeSort ctx) in
+  let basic_recs = Datatype.get_recognizers (basicTypeSort ctx) in
+  let basic_accessors = Datatype.get_accessors (basicTypeSort ctx) in
+  let integer_recs = Datatype.get_recognizers (integerTypeSort ctx) in
+  let integer_accessors = Datatype.get_accessors (integerTypeSort ctx) in
+
+  (* TODO: define isBasic, is etc *)
+  let isBasic = List.nth ctype_recs 1 in
+  let isInteger = List.nth basic_recs 0 in
+  let get_basic = List.hd (List.nth ctype_accessors 1) in
+  let isSigned = List.nth integer_recs 2 in
+  let getInteger = List.hd(List.nth basic_accessors 0) in
+  let getSigned = List.hd (List.nth integer_accessors 2) in
+  let isInt_ = List.nth (Datatype.get_recognizers (integerBaseTypeSort
+  ctx)) 2 in
+  let get_signed x = 
+    Expr.mk_app ctx getSigned [Expr.mk_app ctx getInteger 
+          [(Expr.mk_app ctx get_basic [x])]] in
+
+  let isSignedIntegerInt x =  
+      (Boolean.mk_and ctx 
+            [ Expr.mk_app ctx isBasic [ x ];
+              Expr.mk_app ctx isInteger  (* is integer *)
+                              [Expr.mk_app ctx get_basic [ x ]];
+              Expr.mk_app ctx isSigned 
+                              [Expr.mk_app ctx getInteger 
+                                  [(Expr.mk_app ctx get_basic [ x ])]];
+              Expr.mk_app ctx isInt_  [get_signed x]
+            ]
+      )
+  in
+
+  (*
+  let get_min sz_expr = 
+    mk_unary_minus ctx 
+        (mk_power ctx (Integer.mk_numeral_i ctx 2) 
+                      (mk_sub ctx [sz_expr; Integer.mk_numeral_i ctx 1]) )
+  in
+  let get_max sz_expr = 
+    mk_sub ctx [
+        (mk_power ctx (Integer.mk_numeral_i ctx 2) 
+                      (mk_sub ctx [sz_expr; Integer.mk_numeral_i ctx 1])) ;
+        Integer.mk_numeral_i ctx 1 ]
+  in
+  *)
+
+  let ivmin_decl = z3_ivmin ctx in
+  let ivmax_decl = z3_ivmax ctx in
+  let names = [ mk_sym ctx "ty" ] in
+  let types = [ ctypeSort ctx ] in
+  let var =  Quantifier.mk_bound ctx 0 (List.nth types 0) in
+  let quantifiers = 
+  [
+    (*isBasic, isInteger, bool => *)
+
+    (*isBasic, isInteger, signed x=> *) 
+    (* TODO: HORRIBLE *)
+    Quantifier.mk_forall ctx
+      types names
+      (Boolean.mk_implies ctx
+        (isSignedIntegerInt var)
+        (Boolean.mk_and ctx 
+            [Boolean.mk_eq ctx (Expr.mk_app ctx ivmin_decl [ var ]) 
+                                (Integer.mk_numeral_i ctx (ivmin_ocaml Int_));
+             Boolean.mk_eq ctx (Expr.mk_app ctx ivmax_decl [ var ]) 
+                                (Integer.mk_numeral_i ctx (ivmax_ocaml Int_))
+            ]
+      
+      )) None [] [] None None
+  ] in
+
+  List.map (fun q -> Quantifier.expr_of_quantifier q) quantifiers
+
+*)
