@@ -158,14 +158,11 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
       assert (List.length pes = Tuple.get_num_fields sort);
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl pes
-
   | Carray ->
       assert false(* C array *)
   | Civmax ->
-      assert (List.length pes = 1);
       assert false
   | Civmin ->
-      assert (List.length pes = 1);
       assert false
   | Civsizeof ->
       assert false (* sizeof value *)
@@ -193,7 +190,13 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
           )
         else 
           assert false
-  | Cunspecified (* unspecified value *)
+  | Cunspecified (* unspecified value *) ->
+      if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
+        LoadedInteger.mk_unspec state.ctx 
+      else if (Sort.equal sort (LoadedPointer.mk_sort state.ctx)) then
+        LoadedPointer.mk_unspec state.ctx 
+      else
+        assert false
   | Cfvfromint (* cast integer to floating value *)
   | Civfromfloat (* cast floating to integer value *) ->
       assert false
@@ -296,11 +299,12 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
         match i with
         | Char -> assert false
         | Bool -> ()
+        | Unsigned ibty (* Fall through *)
         | Signed ibty -> 
           begin
           match ibty with
-          | Int_ -> ()
-          | _ -> assert false 
+          | Ichar | Short | Int_ | Long | LongLong | Intmax_t | Intptr_t -> ()
+          | _ -> assert false
           end
         | _ -> assert false
         end
@@ -345,9 +349,9 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpSub -> Arithmetic.mk_sub ctx [ pe1; pe2 ]
   | OpMul -> Arithmetic.mk_mul ctx [ pe1; pe2 ]
   | OpDiv -> Arithmetic.mk_div ctx pe1 pe2
-  | OpRem_t 
-  | OpRem_f 
-  | OpExp -> assert false;
+  | OpRem_t -> assert false
+  | OpRem_f -> Integer.mk_mod ctx pe1 pe2 (* TODO: Flooring remainder? *)
+  | OpExp -> assert false
   | OpEq -> Boolean.mk_eq ctx pe1 pe2   
   | OpLt -> Arithmetic.mk_lt ctx pe1 pe2
   | OpLe -> Arithmetic.mk_le ctx pe1 pe2 
@@ -706,7 +710,17 @@ let rec bmc_pexpr (state: bmc_state)
         (* TODO: range check *)
         Printf.printf ("TODO: catch_exceptional_condition\n");
         bmc_pexpr state pe 
-    | PEcall _ -> assert false
+    | PEcall (Sym sym, _) -> 
+        assert false
+
+    | PEcall _ -> 
+        Printf.printf ("TODO: implementation_constant treated as undef: ");
+        pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
+        print_string"\n";
+        let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
+        let new_state = {state with vcs = new_vcs} in
+        None, new_state
+
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
         let z3_sort = cbt_to_z3 state pat_type in
