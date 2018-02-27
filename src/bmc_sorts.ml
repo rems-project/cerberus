@@ -51,19 +51,34 @@ let basicTypeSort ctx =
         (Symbol.mk_string ctx "is_Floating") [] [] []
     ] 
 
+let tmpSort ctx = 
+  Datatype.mk_sort_s ctx "Ctype"
+  [ mk_ctor ctx "void_ty"
+  ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
+      [Symbol.mk_string ctx "_Basic_ty"] [Some (basicTypeSort ctx)]
+      [0(*TODO: no idea with I'm doing*)]
+    ; Datatype.mk_constructor_s ctx "Pointer_ty" (Symbol.mk_string ctx "is_Pointer_ty")
+        [] []
+        []]
+
+
 let ctypeSort ctx = 
   Datatype.mk_sort_s ctx "Ctype"
     [ mk_ctor ctx "void_ty"
     ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
         [Symbol.mk_string ctx "_Basic_ty"] [Some (basicTypeSort ctx)]
         [0(*TODO: no idea with I'm doing*)]
+    (* TODO: This doesn't work when making tuple. Probably b/c of None *)
+        (*
     ; Datatype.mk_constructor_s ctx "Array_ty" (Symbol.mk_string ctx "is_Array_ty")
         [Symbol.mk_string ctx "elem_Array_ty"; Symbol.mk_string ctx "size_Array_ty"]
         [None; Some (Arithmetic.Integer.mk_sort ctx)]
         [0; 0(*TODO: no idea with I'm doing*)]
     ; Datatype.mk_constructor_s ctx "Pointer_ty" (Symbol.mk_string ctx "is_Pointer_ty")
         [Symbol.mk_string ctx "_Pointer_ty"] [None]
-        [0(*TODO: no idea with I'm doing*)] ]
+        [0(*TODO: no idea with I'm doing*)] 
+    *)
+    ]
 
 let integerBaseType_to_expr ibty ctx =
   let fdecls = Datatype.get_constructors (integerBaseTypeSort ctx) in
@@ -134,11 +149,17 @@ let rec ctype_to_expr ty ctx =
           (* Ail type error *)
           assert false
       | Array0 (elem_ty, Some n) ->
+          assert false
+          (*)
         Expr.mk_app ctx (List.nth fdecls 2)
             [ctype_to_expr elem_ty ctx; Arithmetic.Integer.mk_numeral_i ctx (Nat_big_num.to_int n)]
+*)
       | Pointer0 (_, ref_ty) ->
+          assert false
+          (*
         Expr.mk_app ctx (List.nth fdecls 3)
             [ctype_to_expr ref_ty ctx]
+          *)
       | Function0 _ ->
           assert false
       | Atomic0 _ ->

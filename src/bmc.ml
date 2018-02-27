@@ -93,11 +93,9 @@ type bmc_state = {
   vcs         : Expr.expr list;
 }
 
-type bmc_ret = 
-  (* BmcAddress of kbmc_address *)
-  | BmcZ3Expr  of Expr.expr option
-  | BmcTODO
-  | BmcNone
+(* TODO: get rid of this. unnecessary *)
+type bmc_ret = Expr.expr option
+
 
 (* PPrinters *)
 
@@ -105,7 +103,7 @@ type bmc_ret =
 let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
   Pmap.mapi (fun k v-> (Printf.printf "%d -> " k;
             List.iter(fun s -> Printf.printf "%s " (Address.to_string s)) v)) map
-            *)
+*)
 
 let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
   Printf.printf "HEAP\n";
@@ -157,7 +155,6 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | Ccons -> 
       assert false
   | Ctuple ->
-      (* sort should be a tuple sort *)
       assert (List.length pes = Tuple.get_num_fields sort);
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl pes
@@ -165,19 +162,11 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | Carray ->
       assert false(* C array *)
   | Civmax ->
+      assert (List.length pes = 1);
       assert false
-      (*
-      let mk_decl = z3_ivmax state.ctx in
-      FuncDecl.apply mk_decl pes
-      *)
   | Civmin ->
+      assert (List.length pes = 1);
       assert false
-      (*
-      Printf.printf "TODO: Ivmin is not properly defined for all types\n";
-
-      let mk_decl = z3_ivmin state.ctx in
-      FuncDecl.apply mk_decl pes
-      *)
   | Civsizeof ->
       assert false (* sizeof value *)
   | Civalignof ->
@@ -192,6 +181,7 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
       assert false (* bitwise XOR *) 
   | Cspecified ->
       assert (List.length pes = 1);
+
       let expr = List.hd pes in
         (* TODO: Do generically... *)
         if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
@@ -209,7 +199,7 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
       assert false
 
 (* core_base_type to z3 sort *)
-let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Z3.Sort.sort =
+let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Sort.sort =
   let ctx = state.ctx in
   match cbt with
    | BTy_unit  -> 
@@ -218,23 +208,28 @@ let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Z3.Sort.sort =
         Boolean.mk_sort ctx
    | BTy_ctype -> 
         (* TODO *)
-       ctypeSort ctx
+        ctypeSort ctx
    | BTy_list _ -> assert false
-   | BTy_tuple (cbt_list) ->
-        let (new_sym, supply1) = Sym.fresh (!(state.sym_supply)) in
-        state.sym_supply := supply1;
+   | BTy_tuple cbt_list ->
+       (*
+       let tmp = Tuple.mk_sort ctx (mk_sym ctx "(ctype)") [(mk_sym ctx "#1")]
+       [(tmpSort ctx)] in
+
+       Printf.printf "XX %s\n" (Sort.to_string tmp);
+       Printf.printf "XX %d\n" (Tuple.get_num_fields tmp);
+       assert false
+       *)
         let sort_to_string = fun t -> pp_to_string
                               (Pp_core.Basic.pp_core_base_type t) in
         let sort_name = sort_to_string cbt in
         let sort_symbol = mk_sym state.ctx sort_name in
 
         let sym_list = List.mapi 
-            (fun i v -> mk_sym state.ctx 
+            (fun i _ -> mk_sym state.ctx 
                   ( "#" ^ (string_of_int i)))
-            (*      ((sort_to_string v) ^ "_" ^ (string_of_int i))) *)
             cbt_list in
         let sort_list = List.map (fun t -> cbt_to_z3 state t) cbt_list in
-        Tuple.mk_sort ctx sort_symbol sym_list sort_list
+        Tuple.mk_sort ctx sort_symbol sym_list sort_list 
    | BTy_object obj_type ->
        core_object_type_to_z3_sort ctx obj_type
    | BTy_loaded obj_type ->
@@ -365,7 +360,7 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
 let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
                (ty : core_base_type) (bmc_expr : bmc_ret) =
   match m_sym with
-  | None -> Boolean.mk_true state.ctx, state (* Do nothing *)
+  | None -> Boolean.mk_true state.ctx (* Do nothing *)
   | Some sym -> 
       let sym_id = symbol_to_int sym in
       let pat_sym = symbol_to_z3 state.ctx sym in
@@ -373,6 +368,7 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
       begin
       match ty with
       | BTy_unit -> assert false
+      | BTy_ctype (* Fall through *)
       | BTy_boolean -> 
           (* TODO: duplicated code *)
           let sort = cbt_to_z3 state ty in
@@ -380,23 +376,25 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
           state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
           begin
           match bmc_expr with
-          | BmcZ3Expr (Some expr) ->
-              (Boolean.mk_eq state.ctx expr_pat expr), state
+          | Some expr ->
+              (Boolean.mk_eq state.ctx expr_pat expr)
           | _ -> assert false
           end
-      | BTy_ctype -> assert false
-      | BTy_list _ -> assert false
       | BTy_tuple ty_list -> 
+          assert false
+          (*
           (* TODO: duplicate *)
           begin
           match bmc_expr with
-          | BmcZ3Expr (Some expr) ->
+          | Some expr ->
               let sort = cbt_to_z3 state ty in
               let expr_pat = Expr.mk_const state.ctx pat_sym sort in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
-              (Boolean.mk_eq state.ctx expr_pat expr), state
+              (Boolean.mk_eq state.ctx expr_pat expr)
           | _ -> assert false
           end
+          *)
+      | BTy_list _ -> assert false
       | BTy_object OTy_pointer -> 
           (* Pointer equality *)
           begin
@@ -431,7 +429,7 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                                       state.ptr_map)})
 *)
               *)
-          | BmcZ3Expr (Some expr) ->
+          | Some expr ->
               assert (Sort.equal (Expr.get_sort expr) 
                                  (PointerSort.mk_sort state.ctx));
               (*
@@ -454,18 +452,17 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
               Boolean.mk_eq state.ctx 
                 (PointerSort.get_addr state.ctx expr_pat)
                 (PointerSort.get_addr state.ctx expr)   
-              , state
           | _ -> assert false
           end
       | BTy_object _ -> 
           (* TODO: duplicated *)
           begin
           match bmc_expr with
-          | BmcZ3Expr (Some expr) ->
+          | Some expr ->
               let sort = cbt_to_z3 state ty in
               let expr_pat = Expr.mk_const state.ctx pat_sym sort in
               state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
-              (Boolean.mk_eq state.ctx expr_pat expr), state
+              (Boolean.mk_eq state.ctx expr_pat expr)
           | _ -> assert false
           end
       | BTy_loaded cot ->
@@ -477,12 +474,11 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
                                       (!(state.sym_table));
           begin
           match bmc_expr with
-          | BmcZ3Expr None -> Boolean.mk_true state.ctx, state
-          | BmcZ3Expr (Some expr) ->
+          | None -> Boolean.mk_true state.ctx
+          | Some expr ->
               begin
-              (Boolean.mk_eq state.ctx expr_pat expr), state
+              (Boolean.mk_eq state.ctx expr_pat expr)
               end
-          | _ -> assert false
           end
         end
 
@@ -500,19 +496,27 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
           begin
           match ty with
           | BTy_tuple ty_list -> 
-              assert (List.length ty_list = List.length patlist);
-              let z3_sort = cbt_to_z3 state ty in
+              (* let z3_sort = cbt_to_z3 state ty in *)
+              let expr = ( match bmc_expr with 
+                          | Some expr -> expr
+                          | _ -> assert false) in
+              let exprList = Expr.get_args expr in
+              assert (Expr.get_num_args expr = List.length patlist);
+              Printf.printf "Args: %d\n" (Expr.get_num_args expr);
+
+              let zipped = List.combine ty_list patlist in
+              Boolean.mk_and state.ctx 
+                (List.mapi (fun i (ty, pat) -> 
+                  mk_eq_pattern state pat ty 
+                  (Some (List.nth exprList i))) zipped
+                )
+
+              (* TODO: get rid of fold *)
+            
+              (*
               let indices = List.mapi (fun i v -> i) ty_list in
               let zipped = List.combine ty_list patlist in
               let fields = Tuple.get_field_decls z3_sort in
-              let expr = (
-                match bmc_expr with
-                | BmcZ3Expr (Some expr) -> expr
-                | _ -> assert false 
-              ) in
-              let get_field i = 
-                FuncDecl.apply (List.nth fields i) [ expr ] in
-
               assert (List.length fields = List.length patlist);
 
               List.fold_left2 (fun (exp, s) (ty, pat) i ->
@@ -520,6 +524,7 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
                               (BmcZ3Expr (Some (get_field i))) in
                 (Boolean.mk_and s'.ctx [e; exp], s')
               ) (Boolean.mk_and state.ctx [], state) zipped indices;
+              *)
           | _ -> assert false
           end
       | Carray (* C array *)
@@ -540,18 +545,18 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
                 match patlist with
                 | (CaseBase(maybe_sym, BTy_object OTy_integer):: []) -> 
                     let expr = (match bmc_expr with
-                      | BmcZ3Expr (Some expr) -> expr
+                      | Some expr -> expr
                       | _ -> assert false ) in
                     (* Guard by ensuring expr is constructed with loaded *)
                     let is_loaded = LoadedInteger.is_loaded state.ctx expr in
                     let loaded_value = LoadedInteger.get_loaded_value state.ctx expr
 
                     in     
-                    let (eq_expr, st1) = mk_eq_expr state maybe_sym
+                    let eq_expr = mk_eq_expr state maybe_sym
                                          (BTy_object OTy_integer) 
-                                         (BmcZ3Expr (Some loaded_value)) in
+                                         (Some loaded_value) in
                     let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr in
-                    (guarded, st1)
+                    (guarded )
                 | _ -> assert false
                 end
           | BTy_loaded OTy_pointer -> 
@@ -560,18 +565,18 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
                 | (CaseBase(maybe_sym, BTy_object OTy_pointer):: []) -> 
                     (* TODO: duplicated code *)
                     let expr = (match bmc_expr with
-                      | BmcZ3Expr (Some expr) -> expr
+                      | Some expr -> expr
                       | _ -> assert false ) in
                     let is_loaded = LoadedPointer.is_loaded state.ctx expr in
 
                     let loaded_value = LoadedPointer.get_loaded_value state.ctx expr
                     in
-                    let (eq_expr, st1) = mk_eq_expr state maybe_sym
+                    let (eq_expr) = mk_eq_expr state maybe_sym
                                          (BTy_object OTy_pointer) 
-                                         (BmcZ3Expr (Some loaded_value)) in
+                                         (Some loaded_value) in
                     let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr
                     in
-                    (guarded, st1)
+                    (guarded )
                 | _ -> assert false
                 end
 
@@ -593,7 +598,8 @@ let concat_vcs (state: bmc_state)
 
 
 let rec bmc_pexpr (state: bmc_state) 
-                  (Pexpr(bTy, pe) as pexpr : typed_pexpr) =
+                  (Pexpr(bTy, pe) as pexpr : typed_pexpr) : 
+                    Expr.expr option * bmc_state =
   let (z_pe, state') = match pe with
     | PEsym sym ->
         pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
@@ -620,30 +626,42 @@ let rec bmc_pexpr (state: bmc_state)
     | PEctor (ctor, pelist) -> 
         let sort = cbt_to_z3 state bTy in
         (* TODO: state needs to be propagated *) 
-        let z3_pelist = List.map (fun pe -> 
-          match (bmc_pexpr state pe) with
-          | (None, _) -> assert false
-          | (Some x, _) -> x 
-          ) pelist in
+        (* BMC each expression *)
+        let z3_pelist_tmp = List.map (fun pe -> bmc_pexpr state pe) pelist in
+        let new_vcs = List.concat (List.map (fun (_, st) -> st.vcs) z3_pelist_tmp) in
+        begin
+        if ((List.exists (fun (a, _) -> match a with 
+          | None -> true     
+          | _ -> false)) z3_pelist_tmp)
+        then
 
-        let ret = ctor_to_z3 state ctor z3_pelist sort in
-        Some ret,  state
+          (* TODO: extra vcs are unnecessary, for debugging *)
+          None, ({state with vcs = ((Boolean.mk_false state.ctx) :: state.vcs)})
+        else
+          begin
+            let z3_pelist = List.map (fun (a, _) -> match a with
+                | None -> assert false
+                | Some x -> x) z3_pelist_tmp in  
+            let ret = ctor_to_z3 state ctor z3_pelist sort in
+            Some ret,  state
+          end
+        end
     | PEcase (pe, ((pat1, pe1):: (pat2, pe2):: [])) -> 
         Printf.printf "TODO: PEcase";
         (* TODO: special case for now. c1 else c2 *)
         let (Pexpr(pe_type, pe_)) = pe in
         let (maybe_pe, st) = bmc_pexpr state pe in 
-        let (eq_expr, st_eq) = 
-            mk_eq_pattern st pat1 pe_type (BmcZ3Expr maybe_pe) in
+        let (eq_expr) = 
+            mk_eq_pattern st pat1 pe_type (maybe_pe) in
         let (maybe_pe1, st1) = bmc_pexpr ({state with vcs = []}) pe1 in
         let (maybe_pe2, st2) = bmc_pexpr ({state with vcs = []}) pe2 in
         Solver.add state.solver [ eq_expr ];
         begin
         match (maybe_pe, maybe_pe1, maybe_pe2) with
         | (Some a, Some b, Some c) -> 
-            let new_vc = st_eq.vcs @ 
+            let new_vc = st.vcs @ 
                          (concat_vcs state st1.vcs st2.vcs eq_expr) in
-            Some (Boolean.mk_ite st.ctx eq_expr b c), ({st_eq with vcs = new_vc})
+            Some (Boolean.mk_ite st.ctx eq_expr b c), ({st with vcs = new_vc})
         | _ -> assert false
         end
     | PEcase _ -> 
@@ -700,7 +718,6 @@ let rec bmc_pexpr (state: bmc_state)
         state1.sym_table := Pmap.add (symbol_to_int sym) expr_pat 
                                      (!(state1.sym_table));
 
-
         begin
           match maybe_pe1 with
           | Some pe -> 
@@ -712,16 +729,27 @@ let rec bmc_pexpr (state: bmc_state)
         let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
         maybe_pe2, state2
     | PElet (CaseBase(None, pat_ty), pe1, pe2) ->
-        Printf.printf "TODO: call mk_eq_expr\n";
-        assert false
+        let (maybe_pe1, state1) = bmc_pexpr state pe1 in
+        let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
+        maybe_pe2, state2
+       
     | PElet (CaseCtor(ctor, patList), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
+        
+        pp_to_stdout (Pp_core.Basic.pp_pexpr pe1);
+        Printf.printf "PElet\n";
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
-        let (eq_expr, state2) = 
+
+        Printf.printf "PElet1\n";
+        let (eq_expr) = 
           mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
-                     pat_type (BmcZ3Expr maybe_pe1) in
-        Solver.add state2.solver [ eq_expr ];
-        bmc_pexpr state2 pe2
+                     pat_type maybe_pe1 in
+
+        Printf.printf "PElet2\n";
+        Solver.add state1.solver [ eq_expr ];
+
+        Printf.printf "PElet3\n";
+        bmc_pexpr state1 pe2
     | PEif (pe1, pe2, pe3) ->
         let (maybe_pe1, s1) = bmc_pexpr state pe1 in
         let (maybe_pe2, s2) = bmc_pexpr ({state with vcs = []}) pe2 in
@@ -730,6 +758,7 @@ let rec bmc_pexpr (state: bmc_state)
           match (maybe_pe1, maybe_pe2, maybe_pe3) with
           | (None, _, _)  (* fall through *)
           | (Some _, None, None) ->
+              (* Extra vcs for debugging *)
               None, ({s1 with vcs = (Boolean.mk_false s3.ctx) :: s1.vcs}) 
           | (Some a, Some b, None) ->
               let vc_guard = a in
@@ -737,7 +766,7 @@ let rec bmc_pexpr (state: bmc_state)
               Some b, ({s1 with vcs = vc_guard :: new_vc})
           | (Some a, None, Some b) ->
               let vc_guard = Boolean.mk_not s3.ctx a in
-              let new_vc = s1.vcs @ s2.vcs in
+              let new_vc = s1.vcs @ s3.vcs in
               Some b, ({s1 with vcs = vc_guard :: new_vc})
           | (Some a, Some b, Some c) ->
               let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs a) in
@@ -807,15 +836,15 @@ let bmc_paction (state: bmc_state)
       (* Try: create a new pointer and return it instead *)
       let new_ptr = PointerSort.mk_ptr state.ctx 
                     (Address.mk_expr state.ctx addr) in
-      BmcZ3Expr (Some new_ptr), ({state with heap = new_heap})
+      Some new_ptr, ({state with heap = new_heap})
 
   | Create _ -> assert false
   | Alloc0 _ ->
       assert false
   | Kill _ ->
       (* TODO *)
-      Printf.printf "TODO: KILL\n";
-      BmcNone, state
+      Printf.printf "TODO: KILL unit\n";
+      None, state
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
     (* Fall through *)
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), p_value, _) ->
@@ -831,10 +860,8 @@ let bmc_paction (state: bmc_state)
        *)
       let sort = ctype_to_sort state ty in 
 
-      Printf.printf "HERE\n";  
       let (maybe_value, state1) = bmc_pexpr state p_value in
       
-      Printf.printf "HERE2\n";  
       let value = match maybe_value with | None -> assert false | Some x -> x in
       let sym_id = symbol_to_int sym in
       let z3_sym = match (Pmap.lookup sym_id (!(state.sym_table))) with
@@ -874,43 +901,8 @@ let bmc_paction (state: bmc_state)
         )
       in
       let new_heap = Pmap.fold update (!(state.addr_map)) state.heap in
-      BmcNone, ({state1 with heap = new_heap})
+      None, ({state1 with heap = new_heap})
        
-      (*
-      (* Look up symbol in ptr_map *)
-      (* Look up address in addr_map *)
-      Printf.printf "TODO: check\n";
-      let addr = 
-        match Pmap.lookup (symbol_to_int sym) (state.ptr_map) with
-        | Some (addr :: []) -> addr (* TODO: assume singleton address *)
-        | _ -> assert false
-      in   
-      (* Generate new seq variable *)
-      let bmc_address =
-        match Pmap.lookup addr (!(state.addr_map)) with
-        | Some x -> x
-        | None -> assert false
-      in
-      let new_sym = mk_next_seq_symbol state.ctx bmc_address in
-      let seq_num = get_last_seqnum state.ctx bmc_address in
-      (* Add to history *)
-      (* TODO: Type is wrong *)
-      let Pexpr(typ, _) = p_value in
-      let z3_sort = cbt_to_z3 state typ in
-      let expr_pat = Expr.mk_const state.ctx new_sym z3_sort in
-      bmc_address.hist := Pmap.add seq_num expr_pat (!(bmc_address.hist));
-
-      (* Update heap *)
-      let new_heap = Pmap.add addr expr_pat state.heap in
-      let (expr_value, state1) = bmc_pexpr state p_value in
-      begin
-      match expr_value with
-      | None -> assert false
-      | Some v -> Solver.add state1.solver 
-                  [ Boolean.mk_eq state1.ctx expr_pat v]
-      end;
-      BmcNone,  {state1 with heap = new_heap}
-      *)
   | Store0 _ -> assert false
   | Load0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), _) -> 
       (* Overview: for each address, look up value in the heap.
@@ -959,22 +951,8 @@ let bmc_paction (state: bmc_state)
        Printf.printf "HERE 1 %s\n" (Expr.to_string ret);
        Printf.printf "HERE 2 %s\n" (Expr.to_string new_vc);
        *)
-       BmcZ3Expr (Some ret_value), ({state with vcs = (new_vc) :: state.vcs})
+       Some ret_value, ({state with vcs = (new_vc) :: state.vcs})
 
-      (*
-      let sym_id = symbol_to_int sym in
-      let addr = 
-        match Pmap.lookup sym_id state.ptr_map with
-        | Some (addr :: []) -> addr
-        | _ -> assert false
-      in
-      let heap_value = 
-        match Pmap.lookup addr state.heap with
-        | Some x -> x
-        | None -> assert false
-      in
-      BmcZ3Expr (Some heap_value), state
-      *)
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
@@ -1019,10 +997,10 @@ let rec bmc_expr (state: bmc_state)
   let (z_e, state') = match expr_ with
   | Epure pe ->
       let (maybe_ret1, state1)  = bmc_pexpr state pe in
-      BmcZ3Expr (maybe_ret1), state1
+      maybe_ret1, state1
   | Ememop (PtrValidForDeref, _) ->
       Printf.printf "TODO: Ememop PtrValidForDeref: currently always true\n";
-      BmcZ3Expr (Some (Boolean.mk_true state.ctx)), state
+      Some (Boolean.mk_true state.ctx), state
   | Ememop _ ->
       assert false
   | Eaction paction ->
@@ -1031,8 +1009,8 @@ let rec bmc_expr (state: bmc_state)
       Printf.printf "TODO: Ecase";
       let (Pexpr(pe_type, pe_)) = pe in
       let (maybe_pe, st) = bmc_pexpr state pe in 
-      let (eq_expr, st_eq) = 
-            mk_eq_pattern st pat1 pe_type (BmcZ3Expr maybe_pe) in
+      let (eq_expr) = 
+            mk_eq_pattern st pat1 pe_type maybe_pe in
       let (bmc_e1, st1) = bmc_expr state e1 in
       let (bmc_e2, st2) = bmc_expr state e2 in
       Solver.add state.solver [ eq_expr ];
@@ -1040,15 +1018,15 @@ let rec bmc_expr (state: bmc_state)
 
       begin
         match (bmc_e1, bmc_e2) with
-        | (BmcNone, BmcNone) -> 
-            let new_vc = st_eq.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
+        | (None, None) -> 
+            let new_vc = st.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
             let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
-            BmcNone, ({st with vcs = new_vc; heap = new_heap})
-        | (BmcZ3Expr (Some a1), BmcZ3Expr (Some a2)) -> 
-            let new_vc = st_eq.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
+            None, ({st with vcs = new_vc; heap = new_heap})
+        | (Some a1, Some a2) -> 
+            let new_vc = st.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
             let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
             
-            BmcZ3Expr (Some (Boolean.mk_ite st.ctx eq_expr a1 a2)),
+            Some (Boolean.mk_ite st.ctx eq_expr a1 a2),
             ({st with heap = new_heap; vcs = new_vc})
         | _ -> (Printf.printf "TODO: Do ECase properly\n"; assert false)
       end
@@ -1057,7 +1035,9 @@ let rec bmc_expr (state: bmc_state)
       Printf.printf "TODO: Do ECase properly \n"; 
       assert false
   | Eskip -> 
-      BmcNone, state 
+      (* TODO: Unit *)
+      Printf.printf "TODO: unit\n";
+      None, state 
   | Eproc _ -> assert false
   | Eccall _  -> assert false
   | Eunseq _ -> assert false
@@ -1069,7 +1049,8 @@ let rec bmc_expr (state: bmc_state)
       Printf.printf "TODO ND sequencing: currrently treated as undef\n";
       let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
       let new_state = {state with vcs = new_vcs} in
-      BmcNone, new_state
+      Printf.printf "TODO: unit\n";
+      None, new_state
   | Erun _
   | Epar _
   | Ewait _ -> assert false
@@ -1082,19 +1063,19 @@ let rec bmc_expr (state: bmc_state)
       let ret = 
         (* TODO: special cased *)
         match (maybe_pe, bmc_e1, bmc_e2) with
-        | (Some pexpr, BmcNone, BmcNone) -> 
+        | (Some pexpr, None, None) -> 
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
           let new_heap = merge_heaps st st1.heap st2.heap pexpr in
 
           (* Return state conditional upon which store occurred *)
           (* TODO: record which addresses each state may have changed *) 
           (* TODO: ptr_map *)
-          BmcNone, ({st with heap = new_heap; vcs = new_vc})
-        | (Some pexpr, BmcZ3Expr (Some e1), BmcZ3Expr (Some e2)) -> 
+          None, ({st with heap = new_heap; vcs = new_vc})
+        | (Some pexpr, Some e1, Some e2) -> 
             (* TODO: duplicated *)
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
           let new_heap = merge_heaps st st1.heap st2.heap pexpr in
-          BmcZ3Expr (Some (Boolean.mk_ite state.ctx pexpr e1 e2)),
+          Some (Boolean.mk_ite state.ctx pexpr e1 e2),
             ({st with heap = new_heap; vcs = new_vc})
         | _ -> assert false
       in 
@@ -1104,19 +1085,19 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Ewseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr, state2) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
-      Solver.add state2.solver [ eq_expr ];
-      bmc_expr state2 e2
+      let (eq_expr) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      Solver.add state1.solver [ eq_expr ];
+      bmc_expr state1 e2
   | Ewseq _ -> assert false
   | Esseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr, state2) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
-      Solver.add state2.solver [ eq_expr ];
-      bmc_expr state2 e2
+      let (eq_expr ) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      Solver.add state1.solver [ eq_expr ];
+      bmc_expr state1 e2
   | Esseq _  ->
       assert false
   | Esave _  ->
-      BmcNone, state
+      assert false
   in 
     (z_e, state')
 
@@ -1168,7 +1149,6 @@ let run_bmc (core_file : 'a file)
   (* TODO: state monad with sym_supply *)
   print_string "ENTER: BMC PIPELINE \n";
   pp_file core_file;
-
 
   print_string "ENTER: NORMALIZING FILE\n";
   let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
