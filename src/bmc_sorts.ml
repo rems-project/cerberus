@@ -270,16 +270,24 @@ struct
   let unspec_ctor (ctx: context) = 
     Datatype.mk_constructor_s ctx (unspec_name ctx)
                               (mk_sym ctx ("is"^ (unspec_name ctx)))
-                              [] [] []           
+                              [mk_sym ctx ("getType")] 
+                              [Some (ctypeSort ctx)] [0]           
   let loaded_ctor (ctx: context) = 
     Datatype.mk_constructor_s ctx (loaded_name ctx)
                               (mk_sym ctx ("is" ^ (loaded_name ctx)))
-                              [mk_sym ctx (oty_name ctx)] [Some (obj_sort ctx)] [0]
+                              [mk_sym ctx ("get_" ^ oty_name ctx)] 
+                              [Some (obj_sort ctx)] [0]
                                 
   (* ---- end private *)
   let mk_sort (ctx: context) = 
     Datatype.mk_sort_s ctx (sort_name ctx) 
         [unspec_ctor ctx; loaded_ctor ctx]
+
+  let is_unspec (ctx: context) (expr: Expr.expr) =
+    let sort = mk_sort ctx in
+    let recognizers = Datatype.get_recognizers sort in
+    let func_decl = List.nth recognizers 0 in
+    Expr.mk_app ctx func_decl [ expr ]
 
   let is_loaded (ctx: context) (expr: Expr.expr) =
     let sort = mk_sort ctx in
@@ -287,17 +295,25 @@ struct
     let func_decl = List.nth recognizers 1 in
     Expr.mk_app ctx func_decl [ expr ]
 
+ let get_unspec_value (ctx: context) (expr: Expr.expr) =
+    let sort = mk_sort ctx in
+    let accessors = Datatype.get_accessors sort in
+    let func_decl = List.hd (List.nth accessors 0) in
+    Expr.mk_app ctx func_decl [ expr ]
+
+
   let get_loaded_value (ctx: context) (expr: Expr.expr) =
     let sort = mk_sort ctx in
     let accessors = Datatype.get_accessors sort in
     let func_decl = List.hd (List.nth accessors 1) in
     Expr.mk_app ctx func_decl [ expr ]
+
   
-  let mk_unspec (ctx: context) : Expr.expr =
+  let mk_unspec (ctx: context) (expr: Expr.expr) : Expr.expr =
     let sort = mk_sort ctx in
     let constructors = Datatype.get_constructors sort in
     let func_decl = List.nth constructors 0 in
-    Expr.mk_app ctx func_decl [ ]
+    Expr.mk_app ctx func_decl [ expr ]
 
   let mk_loaded (ctx: context) (expr: Expr.expr) =
     let sort = mk_sort ctx in

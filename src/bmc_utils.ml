@@ -93,3 +93,9 @@ let symbol_to_z3 (ctx: context) (sym: ksym) =
   mk_sym ctx (symbol_to_string sym)
 
 
+let rec list_take k l = 
+  if k > 0 then 
+    match l with
+    | [] -> assert false
+    | x :: xs -> x :: (list_take (k-1) xs)
+  else []

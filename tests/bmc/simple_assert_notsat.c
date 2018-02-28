@@ -1,4 +1,4 @@
 int main(void) {
-  int x = 1;
-  assert (x == 1);
+  int x = 999;
+  assert (x == 999);
 }

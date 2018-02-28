@@ -193,6 +193,8 @@ let core_ivminmax (v : pexpr) =
   let pe_max_signed_int = pe_of_sz (max_signed_int) in 
   let pe_min_signed_int = pe_of_sz (min_signed_int) in 
 
+  print_string "TODO: currently using min_integer_range \n";
+
   let cond_signed_int = Pexpr((), PEop(OpEq, v, pe_ty_signed_int)) in
   let pe_error = Pexpr((), PEerror("TODO: IVmax/min cases", v))
   in

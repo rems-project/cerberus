@@ -191,10 +191,14 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
         else 
           assert false
   | Cunspecified (* unspecified value *) ->
+      assert (List.length pes = 1);
+
+      let expr = List.hd pes in
+
       if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
-        LoadedInteger.mk_unspec state.ctx 
+        LoadedInteger.mk_unspec state.ctx expr
       else if (Sort.equal sort (LoadedPointer.mk_sort state.ctx)) then
-        LoadedPointer.mk_unspec state.ctx 
+        LoadedPointer.mk_unspec state.ctx expr
       else
         assert false
   | Cfvfromint (* cast integer to floating value *)
@@ -214,14 +218,6 @@ let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Sort.sort =
         ctypeSort ctx
    | BTy_list _ -> assert false
    | BTy_tuple cbt_list ->
-       (*
-       let tmp = Tuple.mk_sort ctx (mk_sym ctx "(ctype)") [(mk_sym ctx "#1")]
-       [(tmpSort ctx)] in
-
-       Printf.printf "XX %s\n" (Sort.to_string tmp);
-       Printf.printf "XX %d\n" (Tuple.get_num_fields tmp);
-       assert false
-       *)
         let sort_to_string = fun t -> pp_to_string
                               (Pp_core.Basic.pp_core_base_type t) in
         let sort_name = sort_to_string cbt in
@@ -336,11 +332,13 @@ let rec value_to_z3 (ctx: context) (cval: value) (typ: core_base_type) =
             LoadedInteger.mk_loaded ctx iexpr
           | _ -> assert false
           end
-      | LVunspecified _ -> 
-          (* TODO *)
+      | LVunspecified ctyp -> 
+          (* TODO*)
           begin
           match typ with
-          | BTy_loaded OTy_integer -> LoadedInteger.mk_unspec ctx
+          | BTy_loaded OTy_integer -> 
+              let ctyp_expr = ctype_to_z3 ctx ctyp in
+              LoadedInteger.mk_unspec ctx ctyp_expr
           | _ -> assert false 
           end
 
@@ -486,111 +484,94 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
           end
         end
 
+let rec pattern_match (state: bmc_state) (pattern: typed_pattern)
+                      (bmc_expr: bmc_ret) =
+  let expr = (match bmc_expr with | Some expr -> expr | None -> assert false) in
+  match pattern with
+  | CaseBase(maybe_sym, typ) ->
+      Boolean.mk_true state.ctx
+  | CaseCtor(Ctuple, patlist) ->
+      assert (Expr.get_num_args expr = List.length patlist);
+      let exprList = Expr.get_args expr in
+      let patConditions = List.mapi 
+          (fun i pat -> pattern_match state pat (Some (List.nth exprList i )))
+          patlist in
+      Boolean.mk_and state.ctx patConditions
+  | CaseCtor(Cspecified, [CaseBase(maybe_sym, BTy_object OTy_integer)]) ->
+      LoadedInteger.is_loaded state.ctx expr 
+  | CaseCtor(Cspecified, [CaseBase(maybe_sym, BTy_object OTy_pointer)]) ->
+      LoadedPointer.is_loaded state.ctx expr
+  | CaseCtor(Cunspecified, _) -> 
+      (* TODO: terrible... *)
+      if (Sort.equal (Expr.get_sort expr) 
+                     (LoadedInteger.mk_sort state.ctx)) then
+        LoadedInteger.is_unspec state.ctx expr
+      else if (Sort.equal (Expr.get_sort expr) 
+                          (LoadedPointer.mk_sort state.ctx)) then
+        LoadedPointer.is_unspec state.ctx expr
+      else
+        assert false
+  | _ -> 
+      assert false
+
 let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
-                      (ty: core_base_type) (bmc_expr: bmc_ret) =
+                      (bmc_expr: bmc_ret) =
+  let expr = (match bmc_expr with 
+              | Some expr -> expr | _ -> assert false) in
   match pattern with
   | CaseBase(maybe_sym, typ) ->
       mk_eq_expr state maybe_sym typ bmc_expr
-  | CaseCtor(ctor, patlist) -> 
-      match ctor with
-      | Cnil _
-      | Ccons -> 
-          assert false
-      | Ctuple ->
-          begin
-          match ty with
-          | BTy_tuple ty_list -> 
-              (* let z3_sort = cbt_to_z3 state ty in *)
-              let expr = ( match bmc_expr with 
-                          | Some expr -> expr
-                          | _ -> assert false) in
-              let exprList = Expr.get_args expr in
-              assert (Expr.get_num_args expr = List.length patlist);
-              Printf.printf "Args: %d\n" (Expr.get_num_args expr);
+  | CaseCtor(Ctuple, patlist) -> 
+      (* TODO: make ty_list *)
+      let exprList = Expr.get_args expr in
+      assert (Expr.get_num_args expr = List.length patlist);
+      let zipped = List.combine exprList patlist in
+      Boolean.mk_and state.ctx 
+        (List.mapi (fun i (exp, pat) -> 
+          mk_eq_pattern state pat 
+          (Some (exp))) zipped
+        )
+  | CaseCtor(Cspecified, patlist) -> 
+      begin
+        match patlist with
+        | ([CaseBase(maybe_sym, BTy_object OTy_integer)]) -> 
+            (* Guard by ensuring expr is constructed with loaded *)
+            let is_loaded = LoadedInteger.is_loaded state.ctx expr in
+            let loaded_value = LoadedInteger.get_loaded_value state.ctx expr in     
+            let eq_expr = mk_eq_expr state maybe_sym
+                                 (BTy_object OTy_integer) 
+                                 (Some loaded_value) in
+            Boolean.mk_and state.ctx [is_loaded; eq_expr]
+        | ([(CaseBase(maybe_sym, BTy_object OTy_pointer))])-> 
+            (* TODO: duplicated code *)
+            let is_loaded = LoadedPointer.is_loaded state.ctx expr in
+            let loaded_value = LoadedPointer.get_loaded_value state.ctx expr
+            in
+            let (eq_expr) = mk_eq_expr state maybe_sym
+                                 (BTy_object OTy_pointer) 
+                                 (Some loaded_value) in
+            Boolean.mk_and state.ctx [is_loaded; eq_expr]
+        | _ -> assert false
+    end
+  | CaseCtor(Cunspecified, [CaseBase(maybe_sym, _)]) ->
+      (* TODO: terrible... *)
+      if (Sort.equal (Expr.get_sort expr) 
+                     (LoadedInteger.mk_sort state.ctx)) then
+        let is_unspec = LoadedInteger.is_unspec state.ctx expr in
+        let unspec_value = LoadedInteger.get_unspec_value state.ctx expr in
+        let eq_expr = mk_eq_expr state maybe_sym BTy_ctype (Some unspec_value) in
+        Boolean.mk_and state.ctx [is_unspec; eq_expr]
+      else if (Sort.equal (Expr.get_sort expr) 
+                          (LoadedPointer.mk_sort state.ctx)) then
+        let is_unspec = LoadedPointer.is_unspec state.ctx expr in
+        let unspec_value = LoadedPointer.get_unspec_value state.ctx expr in
+        let eq_expr = mk_eq_expr state maybe_sym BTy_ctype (Some unspec_value) in
+        Boolean.mk_and state.ctx [is_unspec; eq_expr]
+      else
+        assert false
+  | _ -> assert false
 
-              let zipped = List.combine ty_list patlist in
-              Boolean.mk_and state.ctx 
-                (List.mapi (fun i (ty, pat) -> 
-                  mk_eq_pattern state pat ty 
-                  (Some (List.nth exprList i))) zipped
-                )
-
-              (* TODO: get rid of fold *)
-            
-              (*
-              let indices = List.mapi (fun i v -> i) ty_list in
-              let zipped = List.combine ty_list patlist in
-              let fields = Tuple.get_field_decls z3_sort in
-              assert (List.length fields = List.length patlist);
-
-              List.fold_left2 (fun (exp, s) (ty, pat) i ->
-                let (e, s') = mk_eq_pattern s pat ty 
-                              (BmcZ3Expr (Some (get_field i))) in
-                (Boolean.mk_and s'.ctx [e; exp], s')
-              ) (Boolean.mk_and state.ctx [], state) zipped indices;
-              *)
-          | _ -> assert false
-          end
-      | Carray (* C array *)
-      | Civmax (* max integer value *)
-      | Civmin (* min integer value *)
-      | Civsizeof (* sizeof value *)
-      | Civalignof (* alignof value *)
-      | CivCOMPL (* bitwise complement *)
-      | CivAND (* bitwise AND *)
-      | CivOR (* bitwise OR *)
-      | CivXOR -> assert false (* bitwise XOR *)
-      | Cspecified -> (* non-unspecified loaded value *)
-          begin
-            match ty with
-            | BTy_loaded OTy_integer -> 
-                (* TODO: duplicated code *)
-                begin
-                match patlist with
-                | (CaseBase(maybe_sym, BTy_object OTy_integer):: []) -> 
-                    let expr = (match bmc_expr with
-                      | Some expr -> expr
-                      | _ -> assert false ) in
-                    (* Guard by ensuring expr is constructed with loaded *)
-                    let is_loaded = LoadedInteger.is_loaded state.ctx expr in
-                    let loaded_value = LoadedInteger.get_loaded_value state.ctx expr
-
-                    in     
-                    let eq_expr = mk_eq_expr state maybe_sym
-                                         (BTy_object OTy_integer) 
-                                         (Some loaded_value) in
-                    let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr in
-                    (guarded )
-                | _ -> assert false
-                end
-          | BTy_loaded OTy_pointer -> 
-                begin
-                match patlist with
-                | (CaseBase(maybe_sym, BTy_object OTy_pointer):: []) -> 
-                    (* TODO: duplicated code *)
-                    let expr = (match bmc_expr with
-                      | Some expr -> expr
-                      | _ -> assert false ) in
-                    let is_loaded = LoadedPointer.is_loaded state.ctx expr in
-
-                    let loaded_value = LoadedPointer.get_loaded_value state.ctx expr
-                    in
-                    let (eq_expr) = mk_eq_expr state maybe_sym
-                                         (BTy_object OTy_pointer) 
-                                         (Some loaded_value) in
-                    let guarded = Boolean.mk_implies state.ctx is_loaded eq_expr
-                    in
-                    (guarded )
-                | _ -> assert false
-                end
-
-          | _ -> assert false
-        end
-      | Cunspecified (* unspecified value *)
-      | Cfvfromint (* cast integer to floating value *)
-      | Civfromfloat (* cast floating to integer value *) ->
-          assert false
-
+(* TODO: mk_and for vcs for readability *)
 let concat_vcs (state: bmc_state)
                (vc1: Expr.expr list)
                (vc2: Expr.expr list)
@@ -629,48 +610,156 @@ let rec bmc_pexpr (state: bmc_state)
         None, new_state
     | PEctor (ctor, pelist) -> 
         let sort = cbt_to_z3 state bTy in
-        (* TODO: state needs to be propagated *) 
+        (* TODO: state needs to be propagated. Currently assume PEs don't change  state except vcs *) 
         (* BMC each expression *)
-        let z3_pelist_tmp = List.map (fun pe -> bmc_pexpr state pe) pelist in
+        let empty_vc_state = ({state with vcs = []}) in
+
+        let z3_pelist_tmp = List.map (fun pe -> bmc_pexpr empty_vc_state pe) pelist in
         let new_vcs = List.concat (List.map (fun (_, st) -> st.vcs) z3_pelist_tmp) in
+
+        let final_vcs = state.vcs @ new_vcs in
+
         begin
         if ((List.exists (fun (a, _) -> match a with 
           | None -> true     
           | _ -> false)) z3_pelist_tmp)
         then
-
           (* TODO: extra vcs are unnecessary, for debugging *)
-          None, ({state with vcs = ((Boolean.mk_false state.ctx) :: state.vcs)})
+          None, ({state with vcs = ((Boolean.mk_false state.ctx) :: final_vcs)})
         else
           begin
             let z3_pelist = List.map (fun (a, _) -> match a with
                 | None -> assert false
-                | Some x -> x) z3_pelist_tmp in  
-            let ret = ctor_to_z3 state ctor z3_pelist sort in
-            Some ret,  state
+                | Some x -> x) z3_pelist_tmp in
+            let new_state = ({state with vcs = final_vcs})  in
+            let ret = ctor_to_z3 new_state ctor z3_pelist sort in
+            Some ret, new_state 
           end
         end
+  (*
     | PEcase (pe, ((pat1, pe1):: (pat2, pe2):: [])) -> 
         Printf.printf "TODO: PEcase";
         (* TODO: special case for now. c1 else c2 *)
         let (Pexpr(pe_type, pe_)) = pe in
         let (maybe_pe, st) = bmc_pexpr state pe in 
-        let (eq_expr) = 
-            mk_eq_pattern st pat1 pe_type (maybe_pe) in
+
+        let eq_expr = 
+            mk_eq_pattern st pat1 maybe_pe in
         let (maybe_pe1, st1) = bmc_pexpr ({state with vcs = []}) pe1 in
+
         let (maybe_pe2, st2) = bmc_pexpr ({state with vcs = []}) pe2 in
-        Solver.add state.solver [ eq_expr ];
+
+        (* Solver.add state.solver [ eq_expr ];  *)
         begin
         match (maybe_pe, maybe_pe1, maybe_pe2) with
         | (Some a, Some b, Some c) -> 
             let new_vc = st.vcs @ 
                          (concat_vcs state st1.vcs st2.vcs eq_expr) in
-            Some (Boolean.mk_ite st.ctx eq_expr b c), ({st with vcs = new_vc})
-        | _ -> assert false
+            Some (Boolean.mk_ite st.ctx eq_expr b c), 
+                ({st with vcs = new_vc})
+        | (None, _, _) 
+        | (_, None, None) -> 
+            None, ({st with vcs = (Boolean.mk_false st.ctx) :: st.vcs})
+        | (Some a, None, Some c) ->
+            let vc_guard = Boolean.mk_not st.ctx eq_expr in
+            let new_vc = st.vcs @ st2.vcs in
+            Some c, ({st with vcs = vc_guard :: new_vc})
+        | (Some a, Some b, None) ->
+            let vc_guard = eq_expr in
+            let new_vc = st.vcs @ st1.vcs in
+            Some b, ({st with vcs = vc_guard :: new_vc})
         end
-    | PEcase _ -> 
-        Printf.printf "TODO: Properly handle PEcase\n";
-        assert false
+*)
+    | PEcase (pe, caselist) -> 
+        (* case pe of | pat1 -> e1 | pat2 -> e2 | pat3 -> e3 | _ ->
+          * error("incomplete pattern matching") 
+          *
+          * pe -> z3 expr
+          * convert each pat to condition for matching: 
+          * e.g. - if pat = CaseBase(Some sym), true 
+          *      - if pat = _, true (all CaseBase => true)
+          *      - if pat = Specified(x): isSpecified pe
+          *      - if pat = (a, b): true b/c  type? (TODO)
+          *
+          * Then convert each pat to an equality with pe
+          *
+          * BMC each e* with empty vcs
+          *
+          * Make guards with Boolean.mk_ite 
+          * *)
+        let (maybe_pe, st1) = bmc_pexpr state pe in
+        begin
+        match maybe_pe with 
+        | None -> None, st1
+        | Some pe_z3 ->
+            let pattern_guards = 
+              List.map (fun (pat, _) -> pattern_match st1 pat maybe_pe) caselist in 
+            let complete_guard = Boolean.mk_or st1.ctx pattern_guards in
+            (* 
+            Printf.printf "Complete: %s\n" (Expr.to_string complete_guard);
+            *)
+            Solver.add st1.solver [ complete_guard ];
+
+            let combined_pat_guards = 
+              List.mapi (fun i expr -> 
+                Boolean.mk_and st1.ctx 
+                [ Boolean.mk_not st1.ctx (Boolean.mk_or st1.ctx (list_take i pattern_guards))
+                ; expr 
+                ]
+                ) pattern_guards in
+
+            (*
+            List.iter (fun e -> Printf.printf "%s\n" (Expr.to_string e))
+                  combined_pat_guards;
+            *)
+            let expr_eqs = List.map (fun (pat, _) -> mk_eq_pattern st1 pat maybe_pe) caselist in
+
+            (* Match case i => expr_eq i holds *)
+            let impl_eqs = List.map2 
+              (fun guard eq -> Boolean.mk_implies state.ctx guard eq) 
+              combined_pat_guards expr_eqs in
+
+            Solver.add st1.solver impl_eqs;
+
+            (* Now need to combine verification conditions: 
+             * st1.vcs @... guarded by case match *)
+            let cases_z3 = List.map 
+                (fun (_, e) -> bmc_pexpr ({st1 with vcs = []}) e) caselist in
+            let cases_vcs = (List.map (fun (e, s) -> Boolean.mk_and state.ctx s.vcs) cases_z3) in
+            let new_vcs = 
+              st1.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc) combined_pat_guards cases_vcs) in
+            (* TODO: correctness? *)
+            let ret_state = {st1 with vcs = new_vcs} in
+            (*
+            List.iter (fun e -> Printf.printf "%s\n" (Expr.to_string e))
+                  new_vcs;
+            *)
+
+            (* Now make ite, careful with cases where expressions are None *)
+            let zipped = List.combine combined_pat_guards (List.map (fun (e, _) -> e) cases_z3) in
+            let filtered = List.filter (fun (_, e) ->
+              match e with | None -> false | _ -> true) zipped in
+            let rev_filtered = List.rev_map (fun (guard, e) ->
+              match e with | None -> assert false | Some x -> (guard, x)) filtered in
+
+            Printf.printf "Length: %d\n" (List.length rev_filtered); 
+            begin
+            match List.length rev_filtered with
+            | 0 -> None, ret_state 
+            | 1 -> 
+                let (_, e) = List.hd rev_filtered in
+                Some e, ret_state
+            | _ -> 
+                let (_, last) = List.hd rev_filtered in
+                Printf.printf "LAST: %s\n" (Expr.to_string last); 
+                let ite = List.fold_left (fun prev (guard, e) ->
+                  Boolean.mk_ite state.ctx guard e prev
+                ) last (List.tl rev_filtered) in
+
+                Printf.printf "ITE %s\n" (Expr.to_string ite);
+                Some ite, ret_state
+            end
+        end
     | PEarray_shift _ -> assert false
     | PEmember_shift _ -> assert false
     | PEnot pe1 -> 
@@ -751,19 +840,16 @@ let rec bmc_pexpr (state: bmc_state)
         let (Pexpr(pat_type, _)) = pe1 in
         
         pp_to_stdout (Pp_core.Basic.pp_pexpr pe1);
-        Printf.printf "PElet\n";
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
 
-        Printf.printf "PElet1\n";
         let (eq_expr) = 
           mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
-                     pat_type maybe_pe1 in
+                     maybe_pe1 in
 
-        Printf.printf "PElet2\n";
         Solver.add state1.solver [ eq_expr ];
 
-        Printf.printf "PElet3\n";
-        bmc_pexpr state1 pe2
+        let (maybe_pe2, state2) = bmc_pexpr state1 pe2 in
+        maybe_pe2, state2
     | PEif (pe1, pe2, pe3) ->
         let (maybe_pe1, s1) = bmc_pexpr state pe1 in
         let (maybe_pe2, s2) = bmc_pexpr ({state with vcs = []}) pe2 in
@@ -777,11 +863,11 @@ let rec bmc_pexpr (state: bmc_state)
           | (Some a, Some b, None) ->
               let vc_guard = a in
               let new_vc = s1.vcs @ s2.vcs in
-              Some b, ({s1 with vcs = vc_guard :: new_vc})
+              Some b, ({s1 with vcs = (vc_guard :: new_vc)})
           | (Some a, None, Some b) ->
               let vc_guard = Boolean.mk_not s3.ctx a in
               let new_vc = s1.vcs @ s3.vcs in
-              Some b, ({s1 with vcs = vc_guard :: new_vc})
+              Some b, ({s1 with vcs = (vc_guard :: new_vc)})
           | (Some a, Some b, Some c) ->
               let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs a) in
               Some (Boolean.mk_ite s3.ctx a b c), ({s1 with vcs = new_vc})
@@ -858,7 +944,7 @@ let bmc_paction (state: bmc_state)
   | Kill _ ->
       (* TODO *)
       Printf.printf "TODO: KILL unit\n";
-      None, state
+      Some (UnitSort.mk_unit state.ctx), state
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
     (* Fall through *)
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), p_value, _) ->
@@ -915,7 +1001,7 @@ let bmc_paction (state: bmc_state)
         )
       in
       let new_heap = Pmap.fold update (!(state.addr_map)) state.heap in
-      None, ({state1 with heap = new_heap})
+      Some (UnitSort.mk_unit state.ctx), ({state1 with heap = new_heap})
        
   | Store0 _ -> assert false
   | Load0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), _) -> 
@@ -1019,12 +1105,13 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Eaction paction ->
       bmc_paction state paction
+
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
       Printf.printf "TODO: Ecase";
       let (Pexpr(pe_type, pe_)) = pe in
       let (maybe_pe, st) = bmc_pexpr state pe in 
       let (eq_expr) = 
-            mk_eq_pattern st pat1 pe_type maybe_pe in
+            mk_eq_pattern st pat1 maybe_pe in
       let (bmc_e1, st1) = bmc_expr state e1 in
       let (bmc_e2, st2) = bmc_expr state e2 in
       Solver.add state.solver [ eq_expr ];
@@ -1050,8 +1137,7 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Eskip -> 
       (* TODO: Unit *)
-      Printf.printf "TODO: unit\n";
-      None, state 
+      Some (UnitSort.mk_unit state.ctx), state 
   | Eproc _ -> assert false
   | Eccall _  -> assert false
   | Eunseq _ -> assert false
@@ -1099,19 +1185,28 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Ewseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      let (eq_expr) = mk_eq_pattern state1 (CaseBase(sym, typ)) ret_e1 in
       Solver.add state1.solver [ eq_expr ];
       bmc_expr state1 e2
-  | Ewseq _ -> assert false
+  | Ewseq (CaseCtor(ctor, patList), e1, e2) -> 
+      Printf.printf "TODO: Ewseq\n";
+      let (ret_e1, state1) = bmc_expr state e1 in
+      let (eq_expr) = mk_eq_pattern state1 (CaseCtor(ctor, patList)) ret_e1 in
+
+      Solver.add state1.solver [ eq_expr ];
+
+      bmc_expr state1 e2
+      
   | Esseq (CaseBase(sym, typ), e1, e2) ->
       let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr ) = mk_eq_pattern state1 (CaseBase(sym, typ)) typ ret_e1 in
+      let (eq_expr ) = mk_eq_pattern state1 (CaseBase(sym, typ)) ret_e1 in
       Solver.add state1.solver [ eq_expr ];
       bmc_expr state1 e2
   | Esseq _  ->
       assert false
   | Esave _  ->
-      assert false
+      print_string "TODO: Esave, currently ignored\n";
+      Some (UnitSort.mk_unit state.ctx), state
   in 
     (z_e, state')
 
@@ -1166,14 +1261,17 @@ let run_bmc (core_file : 'a file)
 
   print_string "ENTER: NORMALIZING FILE\n";
   let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
-  pp_file norm_file;
 
   print_string "EXIT: NORMALIZING FILE\n";
+
 
   print_string "Typechecking file\n";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
     Exception.except_return (
-      bmc_file typed_core norm_supply;
+      let seq_file = Core_sequentialise.sequentialise_file typed_core in
+      pp_file seq_file;
+
+      bmc_file seq_file norm_supply;
 
       print_string "EXIT: BMC PIPELINE \n"
     )
