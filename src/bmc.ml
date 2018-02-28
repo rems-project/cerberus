@@ -587,8 +587,10 @@ let rec bmc_pexpr (state: bmc_state)
                     Expr.expr option * bmc_state =
   let (z_pe, state') = match pe with
     | PEsym sym ->
+        (*
         pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
         Printf.printf "\n";
+        *)
         let sym_expr = 
           match Pmap.lookup (symbol_to_int sym) (!(state.sym_table)) with
           | Some z -> z
@@ -695,9 +697,7 @@ let rec bmc_pexpr (state: bmc_state)
             let pattern_guards = 
               List.map (fun (pat, _) -> pattern_match st1 pat maybe_pe) caselist in 
             let complete_guard = Boolean.mk_or st1.ctx pattern_guards in
-            (* 
-            Printf.printf "Complete: %s\n" (Expr.to_string complete_guard);
-            *)
+
             Solver.add st1.solver [ complete_guard ];
 
             let combined_pat_guards = 
@@ -727,7 +727,8 @@ let rec bmc_pexpr (state: bmc_state)
                 (fun (_, e) -> bmc_pexpr ({st1 with vcs = []}) e) caselist in
             let cases_vcs = (List.map (fun (e, s) -> Boolean.mk_and state.ctx s.vcs) cases_z3) in
             let new_vcs = 
-              st1.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc) combined_pat_guards cases_vcs) in
+              (st1.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc)
+              combined_pat_guards cases_vcs)) in
             (* TODO: correctness? *)
             let ret_state = {st1 with vcs = new_vcs} in
             (*
@@ -742,7 +743,6 @@ let rec bmc_pexpr (state: bmc_state)
             let rev_filtered = List.rev_map (fun (guard, e) ->
               match e with | None -> assert false | Some x -> (guard, x)) filtered in
 
-            Printf.printf "Length: %d\n" (List.length rev_filtered); 
             begin
             match List.length rev_filtered with
             | 0 -> None, ret_state 
@@ -751,12 +751,10 @@ let rec bmc_pexpr (state: bmc_state)
                 Some e, ret_state
             | _ -> 
                 let (_, last) = List.hd rev_filtered in
-                Printf.printf "LAST: %s\n" (Expr.to_string last); 
                 let ite = List.fold_left (fun prev (guard, e) ->
                   Boolean.mk_ite state.ctx guard e prev
                 ) last (List.tl rev_filtered) in
 
-                Printf.printf "ITE %s\n" (Expr.to_string ite);
                 Some ite, ret_state
             end
         end
@@ -794,11 +792,13 @@ let rec bmc_pexpr (state: bmc_state)
         bmc_pexpr state pe 
 
     | PEcall (Sym (Symbol(_, Some "catch_exceptional_condition")), (typ :: pe :: [])) -> 
-        assert false;
+        assert false
+        (*
         (* TODO: special case conv_loaded_int *)
         (* TODO: range check *)
         Printf.printf ("TODO: catch_exceptional_condition\n");
         bmc_pexpr state pe 
+        *)
     | PEcall (Sym sym, _) -> 
         assert false
 
@@ -839,7 +839,6 @@ let rec bmc_pexpr (state: bmc_state)
     | PElet (CaseCtor(ctor, patList), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
         
-        pp_to_stdout (Pp_core.Basic.pp_pexpr pe1);
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
 
         let (eq_expr) = 
@@ -1039,11 +1038,9 @@ let bmc_paction (state: bmc_state)
           else 
             (expr_list, addr_list)
        ) in
-       Printf.printf "ENTER\n";
        let (expr_eqs, addr_eqs) = Pmap.fold iterate (!(state.addr_map)) 
                                         ([], []) in
        
-       Printf.printf "EXIT\n";
        let ret = Boolean.mk_and state.ctx expr_eqs in
        let new_vc = Boolean.mk_or state.ctx addr_eqs in
        Solver.add state.solver [ ret ];
@@ -1108,32 +1105,63 @@ let rec bmc_expr (state: bmc_state)
 
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
       Printf.printf "TODO: Ecase";
-      let (Pexpr(pe_type, pe_)) = pe in
-      let (maybe_pe, st) = bmc_pexpr state pe in 
-      let (eq_expr) = 
-            mk_eq_pattern st pat1 maybe_pe in
-      let (bmc_e1, st1) = bmc_expr state e1 in
-      let (bmc_e2, st2) = bmc_expr state e2 in
-      Solver.add state.solver [ eq_expr ];
-      (* Similar to Eif*)
+      (* TODO... painful... special case for now, copied from more general PEcase code. merging heap stuff. *)
+      let caselist = [(pat1, e1); (pat2, e2)] in
+      let (maybe_pe, st)  = bmc_pexpr state pe in
+      let pattern_guards = List.map 
+          (fun (pat, _) -> pattern_match st pat maybe_pe) caselist in 
+      let complete_guard = Boolean.mk_or st.ctx pattern_guards in
+
+      Solver.add st.solver [ complete_guard ];
+
+      let combined_pat_guards = 
+        List.mapi (fun i expr -> 
+          Boolean.mk_and st.ctx 
+          [ Boolean.mk_not st.ctx (Boolean.mk_or st.ctx (list_take i pattern_guards))
+          ; expr 
+          ]
+          ) pattern_guards in
+
+
+      (* Length = 2 *)
+      let expr_eqs = List.map (fun (pat, _) -> mk_eq_pattern st pat maybe_pe) caselist in
+      let impl_eqs = List.map2 
+        (fun guard eq -> Boolean.mk_implies state.ctx guard eq) 
+        combined_pat_guards expr_eqs in
+
+      Solver.add st.solver impl_eqs;
+
+      let cases_z3 = List.map 
+        (fun (_, e) -> bmc_expr ({st with vcs = []}) e) caselist in
+      let cases_vcs = (List.map (fun (e, s) -> Boolean.mk_and state.ctx s.vcs) cases_z3) in
+      let new_vcs = (st.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc) combined_pat_guards cases_vcs)) in
+
+      let guard = List.hd combined_pat_guards in
+
+      let ((bmc_e1, st1),(bmc_e2, st2)) = match cases_z3 with
+        | [x; y] -> (x, y)
+        | _ -> assert false
+      in
 
       begin
         match (bmc_e1, bmc_e2) with
         | (None, None) -> 
-            let new_vc = st.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
-            let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
-            None, ({st with vcs = new_vc; heap = new_heap})
+            let new_heap = merge_heaps st st1.heap st2.heap guard in
+            None, ({st with vcs = new_vcs; heap = new_heap})
         | (Some a1, Some a2) -> 
-            let new_vc = st.vcs @ (concat_vcs st st1.vcs st2.vcs eq_expr) in
-            let new_heap = merge_heaps st st1.heap st2.heap eq_expr in
+            let new_heap = merge_heaps st st1.heap st2.heap guard in
             
-            Some (Boolean.mk_ite st.ctx eq_expr a1 a2),
-            ({st with heap = new_heap; vcs = new_vc})
-        | _ -> (Printf.printf "TODO: Do ECase properly\n"; assert false)
+            Some (Boolean.mk_ite st.ctx guard a1 a2),
+            ({st with heap = new_heap; vcs = new_vcs})
+        | (Some a1, None) -> 
+            Printf.printf "TODOa: Do Ecase properly\n";
+            Some a1, ({st with heap = st1.heap; vcs = new_vcs})
+        | (None, Some a2) ->
+            (Printf.printf "TODOb: Do ECase properly\n"; assert false)
       end
 
   | Ecase _ ->  
-      Printf.printf "TODO: Do ECase properly \n"; 
+      Printf.printf "TODO2: Do ECase properly \n"; 
       assert false
   | Eskip -> 
       (* TODO: Unit *)
@@ -1146,12 +1174,15 @@ let rec bmc_expr (state: bmc_state)
       (* TODO: bound ignored *)
       bmc_expr state e1 
   | End elist ->
+     
+
       Printf.printf "TODO ND sequencing: currrently treated as undef\n";
       let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
       let new_state = {state with vcs = new_vcs} in
-      Printf.printf "TODO: unit\n";
       None, new_state
-  | Erun _
+  | Erun _ ->
+      Printf.printf "TODO: Erun\n";
+      Some (UnitSort.mk_unit state.ctx), state
   | Epar _
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 

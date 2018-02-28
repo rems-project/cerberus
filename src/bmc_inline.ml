@@ -182,6 +182,42 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
       end
 
 (* =================== REWRITE STUFF ================= *)
+let impl : implementation = {
+  binary_mode = Two'sComplement;
+  signed = (function 
+            | Char -> true
+            | Signed _ -> true
+            | Unsigned _ -> false
+            | _ -> assert false);
+  precision= (fun i -> match Ocaml_implementation.Impl.sizeof_ity i with
+              | Some x -> x * 8
+              | None -> assert false );
+  size_t = Unsigned Long;
+  ptrdiff_t0 = Signed Long
+          }
+
+let integer_range impl ity =  
+  let prec = (impl.precision ity) in
+  if impl.signed ity then
+    let prec_minus_one = prec - 1 in
+    (match impl.binary_mode with
+(*
+    | Two'sComplement   -> make_range (~(2 ** (prec - 1)))
+                                      ((2 ** (prec - 1)) - 1)
+    | One'sComplement   -> make_range (~((2 ** (prec - 1)) + 1))
+                                      ((2 ** (prec - 1)) - 1)
+    | SignPlusMagnitude -> make_range (~((2 ** (prec - 1)) + 1))
+                                      ((2 ** (prec - 1)) - 1)
+*)
+    | Two'sComplement   -> 
+        (Nat_big_num.of_int (-(1 lsl (prec_minus_one))), 
+        (Nat_big_num.of_int ((1 lsl prec_minus_one) - 1)))
+    | _ -> assert false
+    )
+  else
+    (Nat_big_num.of_int 0, Nat_big_num.of_int ((1 lsl prec) - 1))
+
+
 (* TODO: get values from Implementation.ml *)
 let core_ivminmax (v : pexpr) =
   let pe_of_ity ity = Pexpr((), PEval(Vctype (Basic0 (Integer (ity)))))
@@ -189,7 +225,7 @@ let core_ivminmax (v : pexpr) =
   in
 
   let pe_ty_signed_int = pe_of_ity (Signed Int_) in
-  let (min_signed_int, max_signed_int) = min_integer_range (Signed Int_) in
+  let (min_signed_int, max_signed_int) = integer_range impl (Signed Int_) in
   let pe_max_signed_int = pe_of_sz (max_signed_int) in 
   let pe_min_signed_int = pe_of_sz (min_signed_int) in 
 
