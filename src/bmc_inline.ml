@@ -16,9 +16,6 @@ type 'a bmc_inline_state = {
   file       : 'a file;
 }
 
-let sym_cmp = (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)
-
-
 
   (* TODO: do rewrite in separate pass. Flag for debugging right now *)
 let rec inline_pexpr (st: 'a bmc_inline_state) 
@@ -111,7 +108,7 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Epure pe ->
         Epure (inline_pexpr st pe)
     | Ememop (op, pelist) ->
-        assert false
+        Ememop(op, List.map (inline_pexpr st) pelist)
     | Eaction (Paction(p, Action(loc, a, Store0(pe1, pe2, pe3, mem)))) ->
         let pe1' = inline_pexpr st pe1 in
         let pe2' = inline_pexpr st pe2 in
@@ -229,8 +226,6 @@ let core_ivminmax (v : pexpr) =
   let pe_max_signed_int = pe_of_sz (max_signed_int) in 
   let pe_min_signed_int = pe_of_sz (min_signed_int) in 
 
-  print_string "TODO: currently using min_integer_range \n";
-
   let cond_signed_int = Pexpr((), PEop(OpEq, v, pe_ty_signed_int)) in
   let pe_error = Pexpr((), PEerror("TODO: IVmax/min cases", v))
   in
@@ -329,7 +324,7 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Epure pe ->
         Epure (rewrite_pexpr st pe)
     | Ememop (op, pelist) ->
-        assert false
+        Ememop(op, List.map (rewrite_pexpr st) pelist)
     | Eaction (Paction(p, Action(loc, a, Store0(pe1, pe2, pe3, mem)))) ->
         let pe1' = rewrite_pexpr st pe1 in
         let pe2' = rewrite_pexpr st pe2 in

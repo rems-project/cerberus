@@ -17,8 +17,10 @@ open Z3.Arithmetic
 open Mem
 open Ocaml_mem
 open Bmc_utils
+open Bmc_inline
 open Bmc_normalize
 open Bmc_sorts
+open Bmc_analysis
 
 open Ocaml_implementation
 open Pp_core
@@ -26,7 +28,9 @@ open Pp_core
 
 type ksym_table = (int, Expr.expr) Pmap.map
 
-(* Pointer state: 
+(* (The below is old and no longer used )
+ *
+ * Pointer state: 
  * For every variable of Core type pointer, 
  *    - Map it to set of addresses it refers to
  *    - int (core symbol) -> PointerState = Set of addresses
@@ -93,9 +97,6 @@ type bmc_state = {
   vcs         : Expr.expr list;
 }
 
-(* TODO: get rid of this. unnecessary *)
-type bmc_ret = Expr.expr option
-
 
 (* PPrinters *)
 
@@ -110,9 +111,6 @@ let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
   Pmap.iter (fun k v-> (Printf.printf "E: %s -> %s\n" 
                   (Address.to_string k) (Expr.to_string v))) heap ;
   Printf.printf "END_HEAP\n"
-
-
-
 
 
 (* ========== BMC ========== *)
@@ -360,7 +358,7 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
 
 
 let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
-               (ty : core_base_type) (bmc_expr : bmc_ret) =
+               (ty : core_base_type) (bmc_expr : Expr.expr option) =
   match m_sym with
   | None -> Boolean.mk_true state.ctx (* Do nothing *)
   | Some sym -> 
@@ -485,7 +483,7 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
         end
 
 let rec pattern_match (state: bmc_state) (pattern: typed_pattern)
-                      (bmc_expr: bmc_ret) =
+                      (bmc_expr: Expr.expr option) =
   let expr = (match bmc_expr with | Some expr -> expr | None -> assert false) in
   match pattern with
   | CaseBase(maybe_sym, typ) ->
@@ -515,7 +513,7 @@ let rec pattern_match (state: bmc_state) (pattern: typed_pattern)
       assert false
 
 let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
-                      (bmc_expr: bmc_ret) =
+                      (bmc_expr: Expr.expr option) =
   let expr = (match bmc_expr with 
               | Some expr -> expr | _ -> assert false) in
   match pattern with
@@ -778,30 +776,9 @@ let rec bmc_pexpr (state: bmc_state)
         end
     | PEstruct _
     | PEunion _ -> assert false
-    | PEcall (Sym (Symbol(_, Some "conv_loaded_int")), (typ :: pe :: [])) -> 
-        assert false;
-        (* TODO: special case conv_loaded_int *)
-        (* TODO: range check *)
-        Printf.printf "TODO: conv_loaded_int\n";
-        bmc_pexpr state pe 
-    | PEcall (Sym (Symbol(_, Some "conv_int")), (typ :: pe :: [])) -> 
-        assert false;
-        (* TODO: special case conv_loaded_int *)
-        (* TODO: range check *)
-        Printf.printf "TODO: conv_int\n";
-        bmc_pexpr state pe 
-
-    | PEcall (Sym (Symbol(_, Some "catch_exceptional_condition")), (typ :: pe :: [])) -> 
+    | PEcall(Sym sym, _) ->
+        Printf.printf "TODO: inline function calls\n";
         assert false
-        (*
-        (* TODO: special case conv_loaded_int *)
-        (* TODO: range check *)
-        Printf.printf ("TODO: catch_exceptional_condition\n");
-        bmc_pexpr state pe 
-        *)
-    | PEcall (Sym sym, _) -> 
-        assert false
-
     | PEcall _ -> 
         Printf.printf ("TODO: implementation_constant treated as undef: ");
         pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
@@ -837,8 +814,6 @@ let rec bmc_pexpr (state: bmc_state)
         maybe_pe2, state2
        
     | PElet (CaseCtor(ctor, patList), pe1, pe2) ->
-        let (Pexpr(pat_type, _)) = pe1 in
-        
         let (maybe_pe1, state1) = bmc_pexpr state pe1 in
 
         let (eq_expr) = 
@@ -1174,8 +1149,6 @@ let rec bmc_expr (state: bmc_state)
       (* TODO: bound ignored *)
       bmc_expr state e1 
   | End elist ->
-     
-
       Printf.printf "TODO ND sequencing: currrently treated as undef\n";
       let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
       let new_state = {state with vcs = new_vcs} in
@@ -1191,9 +1164,12 @@ let rec bmc_expr (state: bmc_state)
       let (bmc_e2, st2) = bmc_expr ({st with vcs = []}) e2 in
 
       Printf.printf "TODO: only heap/vcs are updated after Eif\n";
+      
       let ret = 
-        (* TODO: special cased *)
+        (* TODO: special cased; inconsistent with PEif *)
         match (maybe_pe, bmc_e1, bmc_e2) with
+        | (None, _, _) ->
+            None, st
         | (Some pexpr, None, None) -> 
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
           let new_heap = merge_heaps st st1.heap st2.heap pexpr in
@@ -1208,7 +1184,14 @@ let rec bmc_expr (state: bmc_state)
           let new_heap = merge_heaps st st1.heap st2.heap pexpr in
           Some (Boolean.mk_ite state.ctx pexpr e1 e2),
             ({st with heap = new_heap; vcs = new_vc})
-        | _ -> assert false
+        | (Some pexpr, Some e1, None) -> 
+          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
+          let new_heap = st1.heap in
+            Some e1, ({st with heap = new_heap; vcs = new_vc})
+        | (Some pexpr, None, Some e2) -> 
+          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
+          let new_heap = st2.heap in
+            Some e2, ({st with heap = new_heap; vcs = new_vc})
       in 
       ret    
   | Elet _ -> assert false
@@ -1241,7 +1224,7 @@ let rec bmc_expr (state: bmc_state)
   in 
     (z_e, state')
 
-
+(*
 (* TODO: only handles one function *)
 let bmc_fun_map (state: bmc_state)
                 (funs: ('a, 'b typed_fun_map_decl) Pmap.map) =
@@ -1265,22 +1248,58 @@ let bmc_fun_map (state: bmc_state)
         in
         Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] 
   ) funs
+*)
 
 
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   let initial_state = initial_bmc_state supply in
+  match file.main with
+  | None -> failwith "ERROR: file does not have a main"
+  | Some main_sym ->
+      let (_, state1) = (
+        match Pmap.lookup main_sym file.funs with
+        | Some (Proc(ty, params, e)) ->
+            let analysis_state = {
+              ptr_map = ref (Pmap.empty sym_cmp);
+              addr_gen = ref 0;
+              addr_set = ref (AddressSet.empty);
+              addr_map = ref (Pmap.empty Pervasives.compare)
+            } in
+            let _ = analyse_expr analysis_state e in
+            print_ptr_map !(analysis_state.ptr_map);
+            print_addr_map !(analysis_state.addr_map);
+            bmc_expr initial_state e
+        | Some (Fun(ty, params, pe)) ->
+            bmc_pexpr initial_state pe 
+        | _ -> assert false
+      ) in
+      Printf.printf "-----CONSTRAINTS ONLY\n";
+      check_solver state1.solver;
+      Printf.printf "-----WITH VCS \n";
+      let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
+                             state1.vcs
+      in
+      Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] ;
+
+      Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (initial_state.solver));
+      Printf.printf "Checking sat\n";
+      check_solver (initial_state.solver)
+
   (*
   add_func_constraints initial_state;
   Printf.printf "Initial solver: \n %s \n" (Solver.to_string (initial_state.solver));
   check_solver (initial_state.solver);
   *)
 
+  (*
   Printf.printf "Begin BMC\n";
   let _ = bmc_fun_map initial_state file.funs in
   (* TODO globals *)
   Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (initial_state.solver));
   Printf.printf "Checking sat\n";
   check_solver (initial_state.solver)
+
+  *)
 
 let (>>=) = Exception.except_bind
 
@@ -1306,17 +1325,4 @@ let run_bmc (core_file : 'a file)
 
       print_string "EXIT: BMC PIPELINE \n"
     )
-    (*
-      bmc_file (Core_sequentialise.sequentialise file typed_core ) norm_supply; 
-      *)
-
-  (*
-  let (normalized_file, supply1) = normalize_file core_file sym_supply in
-  pp_file normalized_file;
-
-  print_string "Done normalization\n";
-  bmc_file normalized_file supply1; 
-  *)
-  
-  (*bmc_file core_file sym_supply; *)
 
