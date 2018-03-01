@@ -29,6 +29,10 @@ end
 
 (* Util *)
 
+let diff xs ys = List.filter (fun x -> not (List.mem x ys)) xs
+
+let concatMap f xs = List.concat (List.map f xs)
+
 let timeout d f =
   let try_with () =
     Lwt.pick [
@@ -63,6 +67,16 @@ let option_case b f = function
 
 let option_string f s =
   if s = "" then None else Some (f s)
+
+let option_json f = function
+  | `Null      -> None
+  | `String "" -> None
+  | x          -> Some (f x)
+
+
+let the = function
+  | None -> failwith "the: none case"
+  | Some x -> x
 
 (* Initialise pipeline *)
 
@@ -108,20 +122,75 @@ type state = ((Driver.driver_result, Driver.driver_error,
                Driver.driver_state) Nondeterminism.ndM
              * Driver.driver_state)
 
+type exec_tree =
+  | Branch of (string * string) * exec_tree list
+  | Leaf of (string * string) * state (* id and label *)
+
+let json_of_exec_tree t =
+  let mk_node i s = `Assoc [("id", `String i); ("label", `String s)] in
+  let mk_edge p c = `Assoc [("from", `String p); ("to", `String c)] in
+  let mk_pair p i s = (mk_node i s, mk_edge p i) in
+  let mk_tree ns es = `Assoc [("nodes", `List ns); ("edges", `List es)] in
+  let rec mk p = function
+    | Branch ((i, s), t) -> mk_pair p i s :: concatMap (mk i) t
+    | Leaf ((i, s), _) -> [mk_pair p i s]
+  in match t with
+  | Branch ((p, s), ts) ->
+    let (ns, es) = List.split (concatMap (mk p) ts) in
+    mk_tree (mk_node p s :: ns) es
+  | Leaf ((i, s), _) -> mk_tree [mk_node i s] []
+
+let parse_exec_tree t =
+  let parse_node = function
+    | `Assoc [("id", `String i); ("label", `String l); ("state", `String s)] ->
+      (i, (l, option_string decode s))
+    | `Assoc [("id", `String i); ("label", `String s)] ->
+      (i, (s, None))
+    | _ -> failwith "execution node tree format unknown"
+  in
+  let parse_edge = function
+   | `Assoc [("from", `String p); ("to", `String c)] -> (p, c)
+   | _ -> failwith "execution edge tree formal unknown"
+  in
+  let find_all x =
+    List.fold_left (fun acc (p, c) -> if x = p then c::acc else acc) []
+  in
+  let root es =
+    let (ps, cs) = List.split es in
+    match diff ps cs with
+    | [x] -> x
+    | [] -> failwith "no root"
+    | _  -> failwith "multiple roots"
+  in
+  let rec mk_tree ns es p =
+    try
+      let (l, s) = List.assoc p ns in
+      match find_all p es with
+      | [] -> Leaf ((p, l), the s)
+      | cs -> Branch ((p, l), List.map (mk_tree ns es) cs)
+    with _ -> failwith "node does not exist"
+  in
+  match t with
+  | `Assoc [("nodes", `List ns); ("edges", `List es)] ->
+    let ns' = List.map parse_node ns in
+    let es' = List.map parse_edge es in
+    mk_tree ns' es' (root es')
+  | _ -> failwith "exec tree format unknown"
+
 type incoming_msg =
   { action:  action;
     source:  string;
     rewrite: bool;
-    state:   state option;
-    steps:   string list;  (* steps taken *)
+    exec:    exec_tree option;
+    next:    string;
   }
 
 let parse_incoming_json msg =
   let empty = { action=  NoAction;
                 source=  "";
-                state=   None;
+                exec=    None;
                 rewrite= true;
-                steps=   [];
+                next=    "";
               }
   in
   let action_from_string = function
@@ -139,17 +208,13 @@ let parse_incoming_json msg =
     | `Bool b -> b
     | _ -> failwith "expecting a bool"
   in
-  let parse_list f = function
-    | `List xs -> List.map f xs
-    | _ -> failwith "expecting a list"
-  in
   let parse_assoc msg (k, v) =
     match k with
     | "action"  -> { msg with action= action_from_string (parse_string v) }
     | "source"  -> { msg with source= parse_string v }
     | "rewrite" -> { msg with rewrite= parse_bool v }
-    | "state"   -> { msg with state= option_string decode (parse_string v) }
-    | "steps"   -> { msg with steps= parse_list parse_string v }
+    | "exec"    -> { msg with exec= option_json parse_exec_tree v }
+    | "next"    -> { msg with next= parse_string v }
     | key ->
       Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
       msg (* ignore unknown key *)
@@ -198,11 +263,9 @@ let json_of_execution str =
     ("result", `String str);
   ]
 
-let json_of_step (steps, str, m, st) =
+let json_of_step t =
   `Assoc [
-    ("state",   `String (encode (m, st)));
-    ("mem",     Ocaml_mem.serialise_mem_state st.Driver.layout_state);
-    ("steps",   `List (List.map (fun s -> `String s) (str::steps)));
+    ("exec", json_of_exec_tree t)
   ]
 
 let json_of_fail msg =
@@ -234,21 +297,6 @@ let not_allowed meth path =
        </body></html>"
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
-
-(* TESTING *)
-
-
-let init_step (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args =
-  Random.self_init ();
-  
-  (* changing the annotations type from unit to core_run_annotation *)
-  let file = Core_run_aux.convert_file file in
-  let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  
-  (* computing the value (or values if exhaustive) *)
-  (Driver.drive false false sym_supply file args, initial_dr_st)
-
-
 
 (* Cerberus actions *)
 
@@ -332,6 +380,7 @@ let execute ~conf ~filename (mode: Smt2.execution_mode) =
   | e -> Debug.warn_exception "Exception raised during execution." e; raise e
 
 
+let ident = ref (-1)
 let execute_step (msg : incoming_msg) ~conf ~filename =
   hack (fst conf) Smt2.Random;
   let step_init () =
@@ -343,16 +392,24 @@ let execute_step (msg : incoming_msg) ~conf ~filename =
     let st0   = Driver.initial_driver_state sym_suppl core' in
     return (Driver.drive false false sym_suppl core' [], st0)
   in
+  let new_id () =
+    ident := !ident + 1;
+    string_of_int !ident
+  in
+  let mk_leaf l m st = Leaf ((new_id(), l), (m, st)) in
   try
-    match msg.state with
+    match msg.exec with
     | None ->
       begin match step_init () with
         | Exception.Result (m, st) ->
-          json_of_step (msg.steps, "init", m, st)
+          json_of_step (mk_leaf "init" m st)
         | Exception.Exception err ->
           json_of_fail (Pp_errors.to_string err)
       end
-    | Some (ND m, st) ->
+    | Some t ->
+        
+        
+        (ND m, st) ->
       match m st with
       | (NDactive a, st') ->
         let str_v = String_core.string_of_value a.Driver.dres_core_value in
