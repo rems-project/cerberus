@@ -67,6 +67,7 @@ class UI {
       let filename = ""
 
       let tab = this.activePane.activeTab
+      // TODO: this probably needs to go
       if (tab instanceof TabGraph) {
         data = tab.dot
         filename = tab.srcTab ? tab.srcTab.title + '.dot' : tab.title
@@ -98,9 +99,10 @@ class UI {
 
     // Run (Execute)
     $('#run').on('click', () => {})
-    $('#step').on('click', () => this.step ())
+    $('#step').on('click', () => this.step ()) // TODO: delete this
     $('#random').on('click', () => this.exec ('Random'))
     $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
+    $('#interactive').on('click', () => this.interactive())
 
     $('#random_concrete').on('click', () => this.exec ('random_concrete'))
     $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
@@ -218,8 +220,7 @@ class UI {
         'action':  mode,
         'source':  this.currentView.getValue(),
         'rewrite': this.rewrite,
-        'steps':   this.currentView.state.steps,
-        'state':   (s.state ? s.state : "")
+        'interactive': this.currentView.state.interactive,
       }),
       success: (data, status, query) => {
         onSuccess(data);
@@ -232,83 +233,29 @@ class UI {
     })
   }
 
-  step () {
+  // Begin interactive mode
+  interactive() {
+    // Clean relevant part of the state
+    //this.currentView.state.steps = []
+    //this.currentView.state.state = ""
+    this.currentView.state.interactive = null
     this.request('Step', (data) => {
-      this.currentView.data.steps = []
-      this.currentView.update(data)
-      this.currentView.highlight()
-
-      let steps = this.currentView.data.steps;
-      steps.reverse();
-      let nodes = []
-      for (let i = 0; i < steps.length; i++)
-        nodes.push({id: i, label: steps[i]})
-
-      let edges = []
-      for (let i = 0; i < steps.length; i++) {
-        if (steps[i+1]) {
-          edges.push({from: i, to: (i+1)})
-        }
-      }
-
-
-      /*
-  var nodes = new vis.DataSet([
-    {id: 1, label: 'Node 1'},
-    {id: 2, label: 'Node 2'},
-    {id: 3, label: 'Node 3'},
-    {id: 4, label: 'Node 4'},
-    {id: 5, label: 'Node 5'}
-  ]);
-
-  // create an array with edges
-  var edges = new vis.DataSet([
-    {from: 1, to: 3},
-    {from: 1, to: 2},
-    {from: 2, to: 4},
-    {from: 2, to: 5},
-    {from: 3, to: 3}
-  ]);
-  */
-
-  // create a network
-  let g = {
-    nodes: new vis.DataSet(nodes),
-    edges: new vis.DataSet(edges),
-    lastId: nodes[nodes.length-1].id
-  };
-
-      /*
-      let g = "digraph D { ";
-      let steps = this.currentView.data.steps;
-      for (let i = steps.length-1; i >= 0; i--) {
-        g += "a" + i + " [label=\"" + steps[i] + "\"];";
-      }
-
-      for (let i = steps.length-1; i >= 0; i--) {
-        if (i != steps.length-1) {
-          g += " -> ";
-        }
-        g += "a" + i
-      }
-      g += ";}"*/
-      this.currentView.graph.setValue(g)
-      if (data.console && data.console != "")
-        this.currentView.console.setValue(data.console)
+      this.currentView.mergeState(data)
+      this.currentView.startInteractive()
     })
   }
 
   exec (mode) {
     this.request(mode, (s) => {
       this.currentView.exec.setActive()
-      this.currentView.setState(s)
+      this.currentView.mergeState(s)
     })
   }
 
   elab (lang) {
     if (lang) this.currentView.newTab(lang)
     if (this.currentView.dirty)
-      this.request('Elaborate', (s) => this.currentView.setState(s))
+      this.request('Elaborate', (s) => this.currentView.mergeState(s))
   }
 
   wait () {

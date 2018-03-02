@@ -4,17 +4,15 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <title>Cerberus</title>
 
+  <script type="text/javascript" src="lib/vis.js"></script>
   <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
-  <!--<script type="text/javascript" src="lib/jquery.panzoom.min.js"></script>-->
   <script type="text/javascript" src="lib/codemirror.js"></script>
   <script type="text/javascript" src="lib/panels.js"></script>
   <script type="text/javascript" src="lib/placeholder.js"></script>
-  <script type="text/javascript" src="lib/viz.js"></script>
   <script type="text/javascript" src="lib/clike.js"></script>
   <script type="text/javascript" src="js/core.js"></script>
   <script type="text/javascript" src="js/ast.js"></script>
   <script type="text/javascript" src="lib/gas.js"></script>
-  <script type="text/javascript" src="lib/vis.js"></script>
 
   <script type="text/javascript" src="lib/goldenlayout.min.js"></script>
   <link type="text/css" rel="stylesheet" href="css/goldenlayout-base.css" />
@@ -65,12 +63,12 @@
           <div class="dropdown">
             <a href="#" class="dropbtn dropdown-toggle" id="run">Execute</a>
             <div class="dropdown-content">
-              <a href="#" id="step">Step</a>
-              <a href="#" id="random">Random (Symbolic)</a>
-              <a href="#" id="exhaustive">Exhaustive (Symbolic)</a>
+              <a href="#" id="random">Random</a>
+              <a href="#" id="exhaustive">Exhaustive</a>
+              <!--
               <a href="#" id="random_concrete">Random (Concrete)</a>
-              <a href="#" id="exhaustive_concrete">Exhaustive (Concrete)</a>
-              <!-- <a href="#" id="interactive">Interactive</a> -->
+              <a href="#" id="exhaustive_concrete">Exhaustive (Concrete)</a>-->
+              <a href="#" id="interactive">Interactive</a>
             </div>
           </div>
         </li>
@@ -139,11 +137,13 @@
     </div>
   </template>
 
-  <template id="graph-template">
+  <template id="interactive-template">
     <div class="graph" align="right">
+      <button id="restart">restart</button>
+      <!--
       <button id="minus">-</button>
-      <button id="reset">reset</button>
-      <button id="plus">+</button>
+      <button id="fit">fit</button>
+      <button id="plus">+</button>-->
       <div align="center" class="svg"></div>
     </div>
   </template>

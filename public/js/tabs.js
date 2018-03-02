@@ -1,5 +1,44 @@
 'use_strict'
 
+
+vis.Network.prototype.setData2 = function (data) {
+  function cmp(n1, n2) { return n1.id == n2.id }
+  for (let i = 0; i < data.nodes.length; i++) {
+
+  }
+  /*
+  // reset the physics engine.
+  //this.body.emitter.emit("resetPhysics");
+  this.body.emitter.emit("_resetData");
+
+  // unselect all to ensure no selections from old data are carried over.
+  this.selectionHandler.unselectAll();
+
+  if (data && data.dot && (data.nodes || data.edges)) {
+    throw new SyntaxError('Data must contain either parameter "dot" or ' +
+      ' parameter pair "nodes" and "edges", but not both.');
+  }
+
+  // set options
+  this.setOptions(data && data.options);
+  // set all data
+  this.nodesHandler.setData(data && data.nodes, true);
+  this.edgesHandler.setData(data && data.edges, true);
+
+  // emit change in data
+  this.body.emitter.emit("_dataChanged");
+
+  // emit data loaded
+  this.body.emitter.emit("_dataLoaded");
+
+  this.redraw()
+  */
+
+  // find a stable position or start animating to a stable position
+  //this.body.emitter.emit("initPhysics");
+};
+
+
 /* Generic Tab */
 class Tab {
   constructor(title) {
@@ -12,30 +51,8 @@ class Tab {
     this.dom.children('.title').text(title)
   }
 
-  setActive() {
-    // TODO: I don't think I'm using this anymore
-    /*
-    if (this.parent) {
-      this.parent.clearSelection()
-      this.parent.setActiveTab(this)
-    }
-    //this.dom.addClass('active')
-    this.dom.show()
-    this.refresh()
-    */
-  }
-
-  clearSelection () {
-    //this.dom.removeClass('active')
-    this.dom.hide()
-  }
-
-  isSelected () {
-    // TODO
-    //this.dom.hasClass('active')
-  }
-
   // Dummy methods to be overwriten
+  setActive() {}
   refresh () {}
   mark (loc) {}
   clear ()   {}
@@ -44,102 +61,264 @@ class Tab {
 
 }
 
-/* Tab with SVG graph */
-class TabGraph extends Tab {
+class TabInteractive extends Tab {
   constructor(title) {
     super(title)
 
-    this.dom.graph = $('#graph-template').clone().contents()
-    this.dom.append(this.dom.graph)
-    this.svg = null
+    this.dom.content = $('#interactive-template').clone().contents()
+    this.dom.append(this.dom.content)
 
-    this.dom.graph.children('#minus').on('click', () => {
-      this.svg.panzoom('zoom', true)
-    })
-
-    this.dom.graph.children('#reset').on('click', () => {
-      this.svg.panzoom('resetZoom')
-      this.svg.panzoom('resetPan')
-    })
-
-    this.dom.graph.children('#plus').on('click', () => {
-      this.svg.panzoom('zoom');
-    })
-
+    // Setup Graph Network
     let options = {
-      edges: {arrows: {to: true}},
-      layout: {hierarchical: {
-        enabled: true,
-        levelSeparation: 70
-      }},
-      physics: { stabilization: {
-          enabled: true 
-        }}
+      nodes: {
+        shape: 'box',
+        shapeProperties: {
+          borderRadius: 6
+        },
+        fixed: true
+      },
+      edges: {
+        arrows: {to: true}
+      },
+      groups: {
+        leaf: {
+          color: 'rgb(0, 255, 140)'
+        }
+      },
+      layout: {
+        hierarchical: {
+          enabled: true,
+          levelSeparation: 70,
+          nodeSpacing: 200
+        }
+      },
+      interaction: {
+        dragNode: false,
+        navigationButtons: true
+      }
     }
-    let container = this.dom.graph.children('.svg')[0]
-    this.nodes = []
-    this.edges = []
-    this.network = new vis.Network(container, {nodes: this.nodes, edges: this.edges}, options);
+    this.nodes = new vis.DataSet([])
+    this.edges = new vis.DataSet([])
+    let graph = {nodes: this.nodes, edges: this.edges }
+    let container = this.dom.content.children('.svg')[0]
+    this.network = new vis.Network(container, graph, options);
+
+    this.dom.find('#minus').on('click', () => {
+      this.network.moveTo({
+        scale: 0.9 * this.network.getScale()
+      })
+    })
+
+    this.dom.find('#plus').on('click', () => {
+      this.network.moveTo({
+        scale: 1.1 * this.network.getScale()
+      })
+    })
+
+    this.dom.find('#fit').on('click', () => {
+      this.network.fit()
+    })
+
+    this.dom.children('#restart').on('click', () => {
+      this.nodes = new vis.DataSet([])
+      this.edges = new vis.DataSet([])
+      this.network.setData({nodes: this.nodes, edges: this.edges})
+      this.request('Step', (data) => {
+        ui.currentView.mergeState(data)
+        ui.currentView.initialise(ui.currentView.state)
+      })
+    })
+    this.network.on('click', (arg) => {
+      // if one node is selected
+      if (arg && arg.nodes && arg.nodes.length == 1) {
+        let active = this.nodes.get(arg.nodes[0])
+        if (active) {
+          if (active.group == 'leaf') {
+            // do a step
+            let parents = this.network.getConnectedNodes(active.id, ['from'])
+            assert(parents.length == 1) // Only one parent per node
+            ui.currentView.state.interactive = {
+              state: active.state,
+              active: parents[0]
+            }
+            ui.request('Step', (data) => {
+              //ui.currentView.mergeState(data)
+              this.attachTree(active.id, data.interactive.steps)
+              console.log(data)
+            })
+          } else {
+            // show mem and select locations
+          }
+        }
+      }
+      /*
+      let active = getNode(arg.nodes[0])
+      if (!active) return null
+      ui.currentView.clear()
+      if (!active.loc) {
+        ui.currentView.highlight()
+        return
+      }
+      console.log(active)
+      if (active.loc.begin && active.loc.end) {
+        let loc = ui.currentView.source.getLocation(active.loc.begin, active.loc.end)
+        ui.currentView.mark(loc)
+      } else {
+        alert('something wrong')
+      }
+      */
+    })
+    this.network.on('doubleClick', (arg) => {
+      /*
+      console.log(arg.nodes[0])
+      ui.currentView.state.exec.active = arg.nodes[0]
+      ui.request('Step', (data) => {
+        ui.currentView.mergeState(data)
+        console.log(data)
+      })
+      */
+    })
   }
 
-  // TODO: probably delete setValue
-  setValue(data) {
-    // Remove previous one
-    //if (this.svg)
-    //  this.svg.remove()
+  initialise(state) {
+    if (!state.interactive) {
+      console.log ('impossible to initialise interactive mode')
+      return
+    }
+    let steps = state.interactive.steps
+    assert(steps.nodes.length == 1 && steps.nodes.length == 0)
+    // Create init node
+    let init = steps.nodes[0]
+    this.nodes.add({id: init.id, label: init.label})
+    // Create temporary next node
+    let next = {
+      id: init.id + 1,
+      label: 'Next step.',
+      group: 'leaf',
+      state: init.state
+    }
+    this.nodes.add(next)
+    this.edges.add({from: init.id, to: next.id})
+    this.network.redraw()
+    this.network.focus(next.id)
+    this.network.fit()
+  }
 
-    // Add to the container
-    //this.dot = json_to_dot(data)
+  attachTree(pointId, tree) {
+    // Remove current point
+    this.edges.remove(this.network.getConnectedEdges(pointId))
+    this.nodes.remove(pointId)
+    // Add nodes and edges of the new tree
+    let self = this // I hate JS
+    tree.nodes.forEach(function (n) { self.nodes.add(n) })
+    tree.edges.forEach(function (e) { self.edges.add(e) })
+    this.network.focus(tree.nodes[0].id)
+  }
 
-      // create an array with nodes
+  addNode(data) {
+    function in_set(x, xs) {
+      for (let i = 0; i < xs.length; i++)
+        if (xs[i] == x) return true
+      return false
+    }
+    let ids = this.nodes.getIds()
+    let nodes = data.nodes.get()
+    for (let i = 0; i < nodes.length; i++) {
+      if (!in_set(nodes[i].id, ids)) {
+        this.nodes.add(nodes[i])
+      }
+    }
+    this.network.redraw()
+  }
+
+  newNode(label) {
+    let newId = (Math.random() * 1e7).toString(32)
+    this.nodes.add({id: newId, label: label})
+    if (this.lastId) {
+      this.edges.add({from: this.lastId, to: newId})
+    } else {
+      // First element
+    }
+    //this.network.fit([newId])
+    this.addNode({nodes: this.nodes, edges: this.edges})
+    //this.network.fit([newId])
+    this.network.focus(newId)
+    //this.network.redraw()
+    this.lastId = newId
+  }
+
+  update (state) {
+    // WARN: do not use this.network.setData, since it reorganise the graph
+    // and changes the zoom accordingly
+
+    //this.network.setData({nodes: state.exec.nodes, edges: state.exec.edges})
     /*
-  var nodes = new vis.DataSet([
-    {id: 1, label: 'Node 1'},
-    {id: 2, label: 'Node 2'},
-    {id: 3, label: 'Node 3'},
-    {id: 4, label: 'Node 4'},
-    {id: 5, label: 'Node 5'}
-  ]);
+    if (state.exec.nodes.length == this.nodes.length)
+      return // No new node
 
-  // create an array with edges
-  var edges = new vis.DataSet([
-    {from: 1, to: 3},
-    {from: 1, to: 2},
-    {from: 2, to: 4},
-    {from: 2, to: 5},
-    {from: 3, to: 3}
-  ]);
-  */
+    if (state.exec.nodes.length != this.nodes.length + 1) {
+      console.log('something wrong')
+      return
+    }
 
-  // create a network
-  //var container = this.dom.graph.children('.svg')[0]
-  //var data = {
-  //  nodes: nodes,
-  //  edges: edges
-  //};
-
-
-    //let network = new vis.Network(container, data, options);
-
-    //network.focus(data.lastId)
-    /*
-    network.moveTo({
-      position: {x:0, y:0},
-      scale: 1.0,
-      offset: {x:50, y:50}
-    })
-    network.redraw()
+    this.newNode(state.steps[0])
     */
-    this.network.setData(data)
-    //this.nodes.add({id:newId, label:"I'm new!"});
-    
-    //this.dom.graph.children('.svg').append(Viz(data))
-    //this.svg = this.dom.graph.find('svg')
-    //this.svg.panzoom()
+  }
+}
 
-    // Set active
-    this.setActive()
-    this.refresh()
+class TabMemory extends Tab {
+  constructor(title) {
+    super(title)
+
+    this.dom.content = $('#interactive-template').clone().contents()
+    this.dom.append(this.dom.content)
+
+    // Setup Graph Network
+    let options = {
+      nodes: {
+        shape: 'box',
+        shapeProperties: {
+          borderRadius: 6
+        }
+      },
+      edges: {
+        arrows: {to: true}
+      }
+    }
+    this.nodes = new vis.DataSet([])
+    this.edges = new vis.DataSet([])
+    let graph = {nodes: this.nodes, edges: this.edges }
+    let container = this.dom.content.children('.svg')[0]
+    this.network = new vis.Network(container, graph, options);
+
+  }
+
+  getAllocationValue(state, alloc) {
+    let map = state.mem.bytemap
+    if (map[alloc.base]) {
+      let val = ''
+      let base = parseInt(alloc.base)
+      let size = parseInt(alloc.size)
+      for (let i = base; i < base + size; i++) {
+        val = map[i][1] + parseInt(val, 16).toString()
+      }
+      return val
+    }
+    return 'undef'
+  }
+
+  update (state) {
+    /*
+    let nodes = []
+    for (let i = 0, alloc = state.mem.allocations[i];
+          alloc;
+          i++, alloc = state.mem.allocations[i] ) {
+      let label = i+': ' + this.getAllocationValue(state, alloc)
+      nodes.push({id: i, label: label})
+    }
+    let graph = {nodes: nodes, edges: []}
+    this.network.setData(graph)
+    */
   }
 }
 
@@ -391,7 +570,7 @@ class TabSource extends TabEditor {
       if ((loc.c.begin.line < from.line ||
           (loc.c.begin.line == from.line && loc.c.begin.ch <= from.ch))
         && (loc.c.end.line > to.line ||
-          (loc.c.end.line == to.line && loc.c.end.ch > to.ch)))
+          (loc.c.end.line == to.line && loc.c.end.ch >= to.ch)))
         return loc
     }
     return null
@@ -703,4 +882,24 @@ class TabAsm extends TabReadOnly {
     })
   }
 
+}
+
+/* Concrete Tabs Factory */
+const Tabs = {
+  TabSource,
+  TabCabs,
+  TabAil,
+  TabCore,
+  TabExecution,
+  TabInteractive,
+  TabMemory,
+  TabConsole
+}
+
+function createTab(title) {
+  return new Tabs['Tab'+title]()
+}
+
+function instanceOf(tab, title) {
+  return tab instanceof Tabs['Tab'+title]
 }

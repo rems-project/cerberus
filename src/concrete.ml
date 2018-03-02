@@ -1381,10 +1381,9 @@ let combine_prov prov1 prov2 =
     | _ -> throw "Concrete.mem_value"
 
   let serialise_map f m =
-    let serialise_entry (k, v) =
-      `List [BigIntJSON.serialise k; f v]
+    let serialise_entry (k, v) = (Nat_big_num.to_string k, f v)
     in
-    `List (List.map serialise_entry (IntMap.bindings m))
+    `Assoc (List.map serialise_entry (IntMap.bindings m))
 
   let serialise_allocation alloc =
     `Assoc [
@@ -1395,7 +1394,7 @@ let combine_prov prov1 prov2 =
   let serialise_byte (p, c_opt) =
     let serialised_char = match c_opt with
       | None -> `Null
-      | Some c -> `String (String.make 1 c)
+      | Some c -> `Int (Char.code c)
     in `List [serialise_prov p; serialised_char]
 
   let serialise_mem_state st =

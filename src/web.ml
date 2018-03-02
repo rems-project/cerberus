@@ -1,7 +1,7 @@
 open Lwt
 open Cohttp_lwt_unix
 
-open Core_json
+open Json
 
 (* Debugging *)
 
@@ -115,16 +115,24 @@ type state = ((Driver.driver_result, Driver.driver_error,
                Ocaml_mem.integer_value Mem_common.mem_constraint,
                Driver.driver_state) Nondeterminism.ndM
              * Driver.driver_state)
+type mem = Ocaml_mem.mem_state
 
 (* NOTE: the execution tree is a pair of node and edges lists
  * this encoding works better in the client side (js libraries)
  * than functional AST for trees *)
 
-module IntMap = Map.Make(Int32)
-type node_id = Int32.t
+type node_id = int
+type node =
+  | Branch of node_id * string * mem * Location_ocaml.t option
+  | Leaf of node_id * string * state
+type edge =
+  | Edge of node_id * node_id (* from -> to *)
+
+(*
 type node = string * state option (* label and maybe a state *)
 type edge = node_id * node_id (* from -> to *)
-type exec_tree = node IntMap.t * edge list * node_id
+   *)
+type exec_tree = node list * edge list
 
 let json_of_option f = function
   | None -> `Null
@@ -137,71 +145,54 @@ let option_of_json f = function
 
 
 (* get location of first thread *)
-let get_location = function
+
+let get_location st =
+  match st.Driver.core_state.Core_run.thread_states with
+  | (_, (_, ts))::_ -> Some ts.current_loc
+  | _ -> None
+
+let json_of_location = function
+  | Some loc -> Json.LocationJSON.serialise loc
   | None -> `Null
-  | Some (_, st) ->
-    match st.Driver.core_state.Core_run.thread_states with
-    | (_, (_, ts))::_ -> Json.LocationJSON.serialise (ts.current_loc)
-    | _ -> `Null
 
-let json_of_exec_tree ((ns, es, _) : exec_tree) =
-  let json_of_state = json_of_option (fun s -> `String (encode s)) in
-  let json_of_node (i, (l, s)) =
-    `Assoc [("id", `String (Int32.to_string i));
-            ("label", `String l);
-            ("state", json_of_state s);
-            ("loc", get_location s)]
+let json_of_exec_tree ((ns, es) : exec_tree) =
+  let json_of_node = function
+    | Branch (id, lab, mem, loc) ->
+      `Assoc [("id", `Int id);
+              ("label", `String lab);
+              ("mem", Ocaml_mem.serialise_mem_state mem);
+              ("loc", json_of_location loc)]
+    | Leaf (id, lab, st) ->
+      `Assoc [("id", `Int id);
+              ("label", `String lab);
+              ("state", `String (encode st));
+              ("loc", json_of_location (get_location (snd st)));
+              ("group", `String "leaf")]
   in
-  let json_of_edge (p, c) =
-    `Assoc [("from", `String (Int32.to_string p));
-            ("to", `String (Int32.to_string c))]
+  let json_of_edge = function
+    | Edge (p, c) -> `Assoc [("from", `Int p);
+                               ("to", `Int c)]
   in
-  let nodes = `List (List.map json_of_node (IntMap.bindings ns)) in
+  let nodes = `List (List.map json_of_node ns) in
   let edges = `List (List.map json_of_edge es) in
-  `Assoc [("nodes", nodes); ("edges", edges); ("active", `String "0")]
-
-let parse_exec_tree t: exec_tree =
-  let parse_node m = function
-    | `Assoc (("id", `String i)::("label", `String l)::("state", `String s)::_) ->
-      IntMap.add (Int32.of_string i) (l, option_string decode s) m
-    | _ -> failwith "execution node tree format unknown"
-  in
-  let parse_edge = function
-   | `Assoc (("from", `String p)::("to", `String c)::_) ->
-     (Int32.of_string p, Int32.of_string c)
-   | t -> failwith ("execution edge tree format unknown: " ^ Yojson.Basic.to_string t) 
-  in
-  match t with
-  | `Assoc [("nodes", `List ns); ("edges", `List es); ("active", `String act)] ->
-    let nodes = List.fold_left parse_node IntMap.empty ns in
-    let edges = List.map parse_edge es in
-    (nodes, edges, Int32.of_string act)
-  | _ -> failwith ("exec tree format unknown: " ^ Yojson.Basic.to_string t)
+  `Assoc [("nodes", nodes); ("edges", edges)]
 
 (* WARN: fresh new ids *)
-let _fresh_node_id : Int32.t ref = ref Int32.zero
-let new_id () = _fresh_node_id := Int32.succ !_fresh_node_id; !_fresh_node_id
-
-let get_active_state ns act =
-  try
-    IntMap.find act ns |> snd |> the
-  with _ -> (* TODO: delete this *)
-    try
-      IntMap.find !_fresh_node_id ns |> snd |> the
-    with _ -> failwith "no state available in active node"
+let _fresh_node_id : int ref = ref 0
+let new_id () = _fresh_node_id := !_fresh_node_id + 1; !_fresh_node_id
 
 type incoming_msg =
   { action:  action;
     source:  string;
     rewrite: bool;
-    exec:    exec_tree option;
+    interactive: (state * node_id) option; (* active node *)
   }
 
 let parse_incoming_json msg =
-  let empty = { action=  NoAction;
-                source=  "";
-                exec=    None;
-                rewrite= true;
+  let empty = { action=      NoAction;
+                source=      "";
+                rewrite=     true;
+                interactive= None;
               }
   in
   let action_from_string = function
@@ -219,12 +210,16 @@ let parse_incoming_json msg =
     | `Bool b -> b
     | _ -> failwith "expecting a bool"
   in
+  let parse_interactive = function
+    | `Assoc [("state", `String st); ("active", `Int i)] -> (decode st, i)
+    | _ -> failwith "expecting state * integer"
+  in
   let parse_assoc msg (k, v) =
     match k with
     | "action"  -> { msg with action= action_from_string (parse_string v) }
     | "source"  -> { msg with source= parse_string v }
     | "rewrite" -> { msg with rewrite= parse_bool v }
-    | "exec"    -> { msg with exec= option_of_json parse_exec_tree v }
+    | "interactive" -> { msg with interactive=option_of_json parse_interactive v }
     | key ->
       Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
       msg (* ignore unknown key *)
@@ -275,7 +270,19 @@ let json_of_execution str =
 
 let json_of_step t =
   `Assoc [
-    ("exec", json_of_exec_tree t)
+    ("status", `String "stepping");
+    ("interactive", `Assoc [
+        ("steps", json_of_exec_tree t); (* new steps added to the tree *)
+      ])
+  ]
+
+let json_of_finish_step str t =
+  `Assoc [
+    ("status", `String "success");
+    ("result", `String str);
+    ("interactive", `Assoc [
+        ("steps", json_of_exec_tree t); (* new steps added to the tree *)
+      ])
   ]
 
 let json_of_fail msg =
@@ -401,16 +408,27 @@ let execute_step (msg : incoming_msg) ~conf ~filename =
     let st0   = Driver.initial_driver_state sym_suppl core' in
     return (Driver.drive false false sym_suppl core' [], st0)
   in
-  let add_node ns l m st =
-    let i = new_id() in
-    (i, IntMap.add i (l, Some (m, st)) ns)
+  let create_branch lab st (ns, es, previousNode) =
+    let nodeId  = new_id () in
+    let mem     = st.Driver.layout_state in
+    let newNode = Branch (nodeId, lab, mem, get_location st) in
+    let ns' = newNode :: ns in
+    let es' = Edge (previousNode, nodeId) :: es in
+    (ns', es', nodeId)
   in
-  let mk_init_exec_tree m st =
-    (snd (add_node IntMap.empty "init" m st), [], Int32.zero)
+  let create_leafs st ms (ns, es, previousNode) =
+    let (is, ns') = List.fold_left (fun (is, ns) (l, m) ->
+        let i = new_id () in
+        let n = Leaf (i, l, (m, st)) in
+        (i::is, n::ns)
+      ) ([], ns) ms in
+    let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
+    (ns', es', previousNode)
   in
+  let exec_tree (ns, es, _) = (ns, es) in
   try
     let open Nondeterminism in
-    let one_step (ns, es, act_node) = function
+    let one_step step_state = function
       | (NDactive a, st') ->
         let str_v = String_core.string_of_value a.Driver.dres_core_value in
         let res =
@@ -419,55 +437,55 @@ let execute_step (msg : incoming_msg) ~conf ~filename =
           ^ "\", blocked: \""
           ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
         in
-        json_of_execution res
+        create_branch str_v st' step_state
+        |> exec_tree
+        |> json_of_finish_step res
       | (NDkilled r, st') ->
-        json_of_execution ("killed")
+        create_branch "killed" st' step_state
+        |> exec_tree
+        |> json_of_finish_step "killed"
       | (NDbranch (str, _, m1, m2), st') ->
-        let (i1, ns1) = add_node ns  "opt1" m1 st' in
-        let (i2, ns2) = add_node ns1 "opt2" m2 st' in
-        let (i3, ns3) = add_node ns2 str m1 st' in (* TODO: remove states *)
-        let es' = (act_node, i3)::(i3, i1)::(i3, i2)::es in
-        Debug.print 2 "BRANCH";
-        json_of_step (ns3, es', Int32.zero)
+        create_branch str st' step_state
+        |> create_leafs st' [("opt1", m1); ("opt2", m2)]
+        |> exec_tree
+        |> json_of_step
       | (NDguard (str, _, m), st') ->
-        let (i, ns') = add_node ns str m st' in
-        let es' = (act_node, i)::es in
-        Debug.print 2 "GUARD";
-        json_of_step (ns', es', Int32.zero)
+        create_leafs st' [(str, m)] step_state
+        |> exec_tree
+        |> json_of_step
       | (NDnd (str, (_,m)::ms), st') ->
         (* json_of_step (msg.steps, str, m, st') *)
         failwith "Ndnd"
       | (NDstep ms, st') ->
-         let (is, ns') = List.fold_left (fun (is, ns) (str, m) ->
-             let (i, ns') = add_node ns str m st' in
-             (i::is, ns')
-           ) ([], ns) ms in
-        let es' = (List.map (fun i -> (act_node, i)) is)@es in
-        Debug.print 2 "STEP";
-        json_of_step (ns', es', Int32.zero)
+        create_leafs st' ms step_state
+        |> exec_tree
+        |> json_of_step
       | _ -> failwith ""
     in
-    let rec multiple_steps (ns, es, act_node) (ND m, st) =
+    (* if it yields to a single step, continue... *)
+    let rec multiple_steps step_state (ND m, st) =
       match m st with
-      | (NDstep [(str,m)], st') ->
-        let (i, ns') = add_node ns str m st' in
-        let es' = (act_node, i)::es in
+      | (NDstep [(lab, m')], st') ->
+        let step_state' = create_branch lab st' step_state in
         Debug.print 2 "STEP";
-        multiple_steps (ns', es', i) (m, st')
-      | act -> one_step (ns, es, act_node) act
+        multiple_steps step_state' (m', st')
+      | act -> one_step step_state act
     in
-    match msg.exec with
+    match msg.interactive with
     | None ->
       begin match step_init () with
         | Exception.Result (m, st) ->
-          json_of_step (mk_init_exec_tree m st)
+          let initId   = new_id () in
+          let nodeId   = Leaf (initId, "init", (m, st)) in
+          let execTree = ([nodeId], []) in
+          json_of_step execTree
         | Exception.Exception err ->
           json_of_fail (Pp_errors.to_string err)
       end
-    | Some (ns, es, act_node)->
+    | Some ((m, st), act_node)->
       (* TODO: for the moment using big steps *)
-      Debug.print 2 ("Using node: " ^ Int32.to_string act_node);
-      multiple_steps (ns, es, act_node) (get_active_state ns act_node)
+      Debug.print 2 ("Using node: " ^ string_of_int act_node);
+      multiple_steps ([], [], act_node) (m, st)
   with
   | e -> Debug.warn_exception "Exception raised during execution." e; raise e
 
