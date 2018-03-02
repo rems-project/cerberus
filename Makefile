@@ -4,9 +4,9 @@ $(warning "ocamlfind is required to build the executable part of Cerberus")
 endif
 
 # Deal with Z3 package installed by opam
-Z3="Z3"
+Z3=Z3
 ifeq (, $(shell ocamlfind query Z3))
-Z3="z3"
+Z3=z3
 endif
 
 
@@ -125,6 +125,13 @@ ocaml_native:
 
 #cmdliner,
 
+ocaml_defacto:
+	sed -i '' 's/ref `MemConcrete/ref `MemDefacto/' src/prelude.ml
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} \
+		-libs unix,str pipeline.cmo
+	sed -i '' 's/ref `MemDefacto/ref `MemConcrete/' src/prelude.ml
+	cp _build/src/pipeline.cmo defacto
+
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
@@ -142,12 +149,20 @@ ocaml_byte:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,nums,str main_.d.byte; \
+	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str web.native
+	ocamlbuild -j 4 -use-ocamlfind \
+		-pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 \
+		-libs str,dynlink web.native
+
+web.byte: src/web.ml
+	ocamlbuild -j 4 -use-ocamlfind \
+		-pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 \
+		-libs str,dynlink web.byte
+
 
 
 .PHONY: cbuild clink
