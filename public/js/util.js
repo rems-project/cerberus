@@ -13,6 +13,10 @@ const S = f => g => x => f(x)(g(x));
 const P = f => g => x => y => f(g(x))(g(y));
 const Y = f => (g => g(g))(g => f(x => g(g)(x)));
 
+function assert(x) {
+  if (!x) console.log ('assertion failed: ' + x)
+}
+
 function app (x) {
   return {
     app: (f) => app(f(x)),

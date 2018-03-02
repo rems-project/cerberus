@@ -111,21 +111,15 @@ struct
   open Location_ocaml
   type t = Location_ocaml.t
   let serialise_position p =
-    `List [`String p.pos_fname;
-           `String (string_of_int p.pos_lnum);
-           `String (string_of_int p.pos_bol);
-           `String (string_of_int p.pos_cnum)]
+    `Assoc [("line", `Int (p.pos_lnum-1));
+            ("ch", `Int (p.pos_cnum-p.pos_bol))]
   let serialise = function
-    | Loc_unknown -> `String "Loc_unknown"
-    | Loc_other str -> `Assoc [("Loc_other", `String str)]
-    | Loc_point p -> `Assoc [("Loc_point", serialise_position p)]
-    | Loc_region (p1, p2, p_opt) ->
-      let p3 = match p_opt with
-        | None   -> `Null
-        | Some p -> serialise_position p
-      in
-      `Assoc [("Loc_point",
-               `List [serialise_position p1; serialise_position p2; p3])]
+    | Loc_unknown -> `Null
+    | Loc_other str -> `Null
+    | Loc_point p -> serialise_position p
+    | Loc_region (p1, p2, _) ->
+      `Assoc [("begin", serialise_position p1);
+              ("end", serialise_position p2)]
   let parse _ = failwith "location"
 end
 

@@ -45,16 +45,6 @@ size_t strnlen_s(const char *s, size_t maxsize);
 */
 
 
-// TMP
-void* memcpy(void * restrict s1, const void * restrict s2, size_t n)
-{
-  for (int i=0; i < n; i++) {
-    ((unsigned char*)s1)[i] = ((unsigned char*)s2)[i];
-  }
-  return s1;
-}
-
-
 int memcmp(const void *s1, const void *s2, size_t n);
 // THIS IS IMPLEMENTED IN CORE (see memcmp_proxy in std.core)
 /*
@@ -91,12 +81,6 @@ int strcmp (const char *s1, const char *s2)
     s1++, s2++;
   return (*s1 - *s2);
 }
-
-char * strdup (const char *s) {
-	// TODO: this is a dummy implementation!! it is wrong
-	return (char*)s;
-}
-
 
 #else
 #endif

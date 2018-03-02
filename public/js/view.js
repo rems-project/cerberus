@@ -1,15 +1,5 @@
 'use_strict'
 
-const Tabs = {
-  TabSource,
-  TabCabs,
-  TabAil,
-  TabCore,
-  TabGraph,
-  TabExecution,
-  TabConsole
-}
-
 class View {
   constructor (title, data) {
     this.tabs = []
@@ -49,7 +39,7 @@ class View {
       return {
         type: 'component',
         componentName: 'tab',
-        componentState: { tab: ('Tab'+title) },
+        componentState: { tab: title },
         title: title
       }
     }
@@ -108,16 +98,20 @@ class View {
       self.source.refresh()
     })
     this.layout.registerComponent('tab', function (container, state) {
-      let tab  = new Tabs[state.tab]
+      let tab = createTab(state.tab)
       self.tabs.push(tab)
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
+      if (state.initialise) {
+        tab.initialise(self.state)
+        delete state.initiliase
+      }
       if (state.update) {
         tab.update(self.state)
         tab.highlight(self.state)
-        delete state.update // WARN: update should be null in initialisation
-        container.setState(state)
+        delete state.update
       }
+      container.setState(state)
     })
     this.layout.on('itemDestroyed', (c) => {
       if (c.componentName == 'tab') {
@@ -153,7 +147,8 @@ class View {
         core: ''
       },
       locs: [],
-      steps: [],
+      view: [],
+      exec: null,
       result: '',
       console: ''
     }
@@ -170,7 +165,7 @@ class View {
 
   findTab(title) {
     for (let i = 0; i < this.tabs.length; i++) {
-      if (this.tabs[i] instanceof Tabs['Tab'+title]) {
+      if (instanceOf(this.tabs[i], title)) {
         return this.tabs[i]
       }
     }
@@ -183,9 +178,33 @@ class View {
       componentName: 'tab',
       title: title,
       componentState: {
-        tab: ('Tab'+title),
+        tab: title,
         update: true
       }
+    })
+    this.refresh()
+  }
+
+  startInteractive() {
+    this.layout.root.contentItems[0].addChild({
+      type: 'column',
+      content: [{
+        type: 'component',
+        componentName: 'tab',
+        title: 'Interactive',
+        componentState: {
+          tab: 'Interactive',
+          initialise: true
+        }
+      },{
+        type: 'component',
+        componentName: 'tab',
+        title: 'Memory',
+        componentState: {
+          tab: 'Memory',
+          update: true
+        }
+      }]
     })
     this.refresh()
   }
@@ -201,7 +220,7 @@ class View {
   getTab(title) {
     let tab = this.findTab(title)
     if (tab == null) {
-      this.newTab(aClass, title)
+      this.newTab(title)
       tab = this.findTab(title)
     }
     return tab
@@ -211,7 +230,7 @@ class View {
   get ail()     { return this.getTab('Ail') }
   get core()    { return this.getTab('Core') }
   get console() { return this.getTab('Console') }
-  get graph()   { return this.getTab('Graph') }
+  get interactive()   { return this.getTab('Interactive') }
 
   mark(loc) {
     if (loc) this.forEachTab((tab) => tab.mark(loc))
@@ -253,7 +272,7 @@ class View {
     this.highlight()
   }
 
-  setState (s) {
+  mergeState (s) {
     if (s.status == 'failure') {
       this.setStateEmpty()
       this.console.setActive()

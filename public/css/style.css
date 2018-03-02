@@ -397,10 +397,12 @@ code {
   fill: #ffffff;
 }
 
+/* TODO: change this */
 .svg {
   height: 100%;
   border: 1px solid #eee;
   margin: 0px auto;
+  background-color: 'white';
 }
 
 svg {
@@ -409,7 +411,7 @@ svg {
 }
 
 .graph {
-  height: 100%;
+  height: calc(100% - 25px);
   padding-right: 4px;
 }
 
