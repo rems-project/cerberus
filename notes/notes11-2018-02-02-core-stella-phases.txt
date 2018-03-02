@@ -38,6 +38,29 @@ void f() {
 
   or dealing with more complex loads and stores, or concurrency model, or _bounded_ model checking, or....
 
+
+2018-02-22:  ivmin not really working, or the simple alias analysis
+
+ going to get that really working, and a bit more beautiul
+
+ talked about provenance and concurrency - the latter probably more interesting
+
+
+2018-03-01:
+ - tuple problem: went away
+ - ivmin etc.: substituting in core function (that does ifs on
+ ctypes), handwritten from impl file
+ - simple alias analysis: got something crude working
+ - talking with Kayvan about OCaml style - didn't happen yet.  Right after this meeting?
+ - conv_int etc. inlined, and z3 generated from that  (nondet into z3
+ not there yet though) 
+
+ - can't yet run CI tests, because inlining of procedure calls not
+   done yet.  Should be easy. Should then be able to run Csmith
+   tests.    Are there a bunch of useful CBMC tests?   Maybe...
+
+
+
 *)
 
 
