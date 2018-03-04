@@ -16,6 +16,34 @@ type 'a bmc_inline_state = {
   file       : 'a file;
 }
 
+let inline_pecall (st: 'a bmc_inline_state) 
+                  (ty: core_base_type)
+                  (args: (ksym * core_base_type) list)
+                  (fun_exp: pexpr) 
+                  (args_sub : pexpr list)  (* arguments to replace args *)
+                  =
+                  
+  let fresh_sym_list = mk_new_sym_list st.sym_supply args
+  and sym_types = List.map (fun (arg, ty) -> ty) args in
+
+  let patlist = List.map2 (fun sym ty -> CaseBase(Some sym, ty))
+                          fresh_sym_list sym_types in
+
+  (* Map each argument to a new symbol *)
+  let sym_map = List.fold_left2 (
+    fun pmap new_sym (arg, ty) -> Pmap.add arg new_sym pmap)
+    (Pmap.empty sym_cmp) fresh_sym_list args in
+
+  (* State tracking symbol renames *)
+  let rename_state = ({supply = st.sym_supply; 
+                       sym_map = ref (sym_map)}) in
+  let renamed_fun_exp = rename_pexpr rename_state fun_exp in
+
+  (* Note: forgetting type *)
+    Pexpr((), PElet(CaseCtor(Ctuple, patlist),
+                    Pexpr((), PEctor(Ctuple, args_sub)),
+                    renamed_fun_exp)) 
+
 
   (* TODO: do rewrite in separate pass. Flag for debugging right now *)
 let rec inline_pexpr (st: 'a bmc_inline_state) 
@@ -49,6 +77,7 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
           | Some (Fun(ty, args, fun_exp)) -> 
 
               (* Make a new symbol list *)
+              (*
               let fresh_sym_list = mk_new_sym_list st.sym_supply args
               and sym_types = List.map (fun (arg, ty) -> ty) args in
 
@@ -70,6 +99,8 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
                 Pexpr((), PElet(CaseCtor(Ctuple, patlist),
                                 Pexpr((), PEctor(Ctuple, pelist)),
                                 renamed_fun_exp)) in
+              *)
+              let new_pexpr = inline_pecall st ty args fun_exp pelist in
 
               let Pexpr(ty, ret_) = (
                 if st.depth < max_inline_depth then
@@ -80,11 +111,26 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
           | Some _ -> assert false
           | None -> assert false
           end
-    | PEcall _ ->
+    | PEcall (Impl impl, pelist) ->
+        begin
+        match Pmap.lookup impl st.file.impl with
+        | None -> assert false
+        | Some (Def _) -> assert false
+        | Some (IFun (ty, args, fun_expr)) ->
+            let new_pexpr = inline_pecall st ty args fun_expr pelist in
+            let Pexpr(ty, ret_) = (
+              if st.depth < max_inline_depth then
+                inline_pexpr ({st with depth = st.depth + 1}) new_pexpr
+              else
+                new_pexpr
+            ) in ret_
+        end
+        (*
           Printf.printf "TODO: PEcall implementation constant: ";
           pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
           Printf.printf "\n";
           pexpr_
+          *)
 
     | PElet (pat, pe1, pe2) ->
         PElet(pat, inline_pexpr st pe1, inline_pexpr st pe2)
@@ -264,8 +310,6 @@ let core_isunsigned_signed (v : pexpr) =
 
 
 
-
-
 let rec rewrite_pexpr (st: 'a bmc_inline_state) 
                      (Pexpr((), pexpr_) as pexpr : pexpr) =
   let rewritten = match pexpr_ with
@@ -299,14 +343,8 @@ let rec rewrite_pexpr (st: 'a bmc_inline_state)
     | PEstruct _
     | PEunion _ ->
         assert false
-    | PEcall (Sym sym, pelist) ->
-        assert false
     | PEcall _ ->
-          Printf.printf "TODO2: PEcall implementation constant: ";
-          pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
-          Printf.printf "\n";
-          pexpr_
-
+        assert false
     | PElet (pat, pe1, pe2) ->
         PElet(pat, rewrite_pexpr st pe1, rewrite_pexpr st pe2)
     | PEif (pe1, pe2, pe3) ->

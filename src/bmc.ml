@@ -26,6 +26,7 @@ open Ocaml_implementation
 open Pp_core
 (* ========== Type definitions ========== *)
 
+(* TODO: this should really be (ksym, Expr.expr) Pmap.map *)
 type ksym_table = (int, Expr.expr) Pmap.map
 
 (* (The below is old and no longer used )
@@ -203,6 +204,7 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | Civfromfloat (* cast floating to integer value *) ->
       assert false
 
+
 (* core_base_type to z3 sort *)
 let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Sort.sort =
   let ctx = state.ctx in
@@ -239,6 +241,11 @@ let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Sort.sort =
               LoadedPointer.mk_sort ctx
           | _ -> assert false
        end
+
+let add_sym_to_sym_table (state: bmc_state) (sym: ksym) (ty: core_base_type) =
+  let z3_sort = cbt_to_z3 state ty in
+  let z3_sym = Expr.mk_const state.ctx (symbol_to_z3 state.ctx sym) z3_sort in
+  state.sym_table := Pmap.add (symbol_to_int sym) z3_sym !(state.sym_table)
 
 let initial_bmc_state (supply : ksym_supply) : bmc_state = 
   let cfg = [("model", "true"); ("proof", "false")] in
@@ -357,6 +364,9 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpOr -> Boolean.mk_or ctx [ pe1; pe2 ]
 
 
+(* TODO: add symbol to sym table somewhere else!!! 
+ * Also just completely rewrite this function... 
+ * *)
 let mk_eq_expr (state: bmc_state) (m_sym: ksym option) 
                (ty : core_base_type) (bmc_expr : Expr.expr option) =
   match m_sym with
@@ -780,12 +790,15 @@ let rec bmc_pexpr (state: bmc_state)
         Printf.printf "TODO: inline function calls\n";
         assert false
     | PEcall _ -> 
+        assert false
+        (*
         Printf.printf ("TODO: implementation_constant treated as undef: ");
         pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
         print_string"\n";
         let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
         None, new_state
+        *)
 
     | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
         let (Pexpr(pat_type, _)) = pe1 in
@@ -1155,9 +1168,20 @@ let rec bmc_expr (state: bmc_state)
       let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
       let new_state = {state with vcs = new_vcs} in
       None, new_state
+  | Erun (_, Symbol(i, Some s), _) ->
+      Printf.printf "TODO: Erun, special casing ret by ignoring it\n";
+      begin
+      match Str.split (Str.regexp "_") s with
+      | [name; id] ->
+          if (name = "ret") && (int_of_string id = i) then
+            Some (UnitSort.mk_unit state.ctx), state
+          else
+            assert false
+      | _ -> assert false
+      end
+
   | Erun _ ->
-      Printf.printf "TODO: Erun\n";
-      Some (UnitSort.mk_unit state.ctx), state
+      assert false
   | Epar _
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
@@ -1220,9 +1244,22 @@ let rec bmc_expr (state: bmc_state)
       bmc_expr state1 e2
   | Esseq _  ->
       assert false
-  | Esave _  ->
-      print_string "TODO: Esave, currently ignored\n";
-      Some (UnitSort.mk_unit state.ctx), state
+  | Esave ((Symbol (i, Some s), _), _, _)  ->
+      (* Special case ret *)
+      begin
+      match Str.split (Str.regexp "_") s with
+      | [name; id] -> 
+          begin
+            if (name = "ret") && ((int_of_string id) = i) then
+              (print_string "TODO: Esave ret, currently ignored\n";
+               Some (UnitSort.mk_unit state.ctx), state)
+            else 
+              assert false
+          end
+      | _ -> assert false
+      end
+  | Esave _ ->
+      assert false
   in 
     (z_e, state')
 
@@ -1259,19 +1296,33 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   | None -> failwith "ERROR: file does not have a main"
   | Some main_sym ->
       let (_, state1) = (
+        let analysis_state = {
+          ptr_map = ref (Pmap.empty sym_cmp);
+          addr_gen = ref 0;
+          addr_set = ref (AddressSet.empty);
+          addr_map = ref (Pmap.empty Pervasives.compare)
+        } in
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
-            let analysis_state = {
-              ptr_map = ref (Pmap.empty sym_cmp);
-              addr_gen = ref 0;
-              addr_set = ref (AddressSet.empty);
-              addr_map = ref (Pmap.empty Pervasives.compare)
-            } in
+            List.iter (fun (sym, ty) -> 
+              analyse_param analysis_state sym ty) params;
             let _ = analyse_expr analysis_state e in
+
             print_ptr_map !(analysis_state.ptr_map);
             print_addr_map !(analysis_state.addr_map);
+            List.iter (fun (sym, ty) -> 
+              add_sym_to_sym_table initial_state sym ty) params;
+
             bmc_expr initial_state e
         | Some (Fun(ty, params, pe)) ->
+            List.iter (fun (sym, ty) -> 
+              analyse_param analysis_state sym ty) params;
+            let _ = analyse_pexpr analysis_state pe in
+
+            print_ptr_map !(analysis_state.ptr_map);
+            print_addr_map !(analysis_state.addr_map);
+            List.iter (fun (sym, ty) -> 
+              add_sym_to_sym_table initial_state sym ty) params;
             bmc_pexpr initial_state pe 
         | _ -> assert false
       ) in

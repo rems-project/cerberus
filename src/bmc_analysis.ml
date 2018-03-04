@@ -85,7 +85,28 @@ let rec alias_pattern (state: kanalysis_state)
   | CaseCtor(ctor, patList) ->
       List.iter (fun p -> alias_pattern state p set) patList
 
+let mk_new_addr (state: kanalysis_state) = 
+  state.addr_gen := succ (!(state.addr_gen));
+  !(state.addr_gen)
 
+
+(* Analyse function parameters. Namely, if is pointer type, treat it as a create
+ * TODO: check this works properly for C pointer type arguments (treated as
+ * Core pointer type)
+ *)
+let analyse_param (state: kanalysis_state)
+                  (sym: ksym)
+                  (ty: core_base_type) : unit =
+  match Pmap.lookup sym (!(state.ptr_map)) with
+  | Some s -> assert false (* Symbol should not exist yet *)
+  | None ->
+      if is_ptr_type ty then
+        (* TODO: duplicated from Create *)
+        let new_addr = mk_new_addr state in
+        state.addr_set := AddressSet.add new_addr !(state.addr_set);
+        add_set state sym (AddressSet.singleton new_addr)
+      else
+        ()
 
 let rec analyse_pexpr (state: kanalysis_state)
                       (Pexpr(bTy, pexpr_) : typed_pexpr) =
@@ -140,9 +161,6 @@ let rec analyse_pexpr (state: kanalysis_state)
         analyse_pexpr state pe
   in ret 
 
-let mk_new_addr (state: kanalysis_state) = 
-  state.addr_gen := succ (!(state.addr_gen));
-  !(state.addr_gen)
 
 let rec analyse_expr (state: kanalysis_state)
                      (Expr(annot, expr_) : 'a typed_expr) =
