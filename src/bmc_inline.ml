@@ -216,6 +216,7 @@ let integer_range impl ity =
 
 
 (* TODO: get values from Implementation.ml *)
+(* TODO: write this nicer *)
 let core_ivminmax (v : pexpr) =
   let pe_of_ity ity = Pexpr((), PEval(Vctype (Basic0 (Integer (ity)))))
   and pe_of_sz sz = Pexpr((), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival sz))))
@@ -226,12 +227,20 @@ let core_ivminmax (v : pexpr) =
   let pe_max_signed_int = pe_of_sz (max_signed_int) in 
   let pe_min_signed_int = pe_of_sz (min_signed_int) in 
 
+  let pe_ty_unsigned_int = pe_of_ity (Unsigned Int_) in
+  let (min_unsigned_int, max_unsigned_int) = integer_range impl (Unsigned Int_) in
+  let pe_max_unsigned_int = pe_of_sz (max_unsigned_int) in 
+  let pe_min_unsigned_int = pe_of_sz (min_unsigned_int) in 
+
   let cond_signed_int = Pexpr((), PEop(OpEq, v, pe_ty_signed_int)) in
+  let cond_unsigned_int = Pexpr((), PEop(OpEq, v, pe_ty_unsigned_int)) in
   let pe_error = Pexpr((), PEerror("TODO: IVmax/min cases", v))
   in
 
-  PEif(cond_signed_int, pe_min_signed_int, pe_error),
-  PEif(cond_signed_int, pe_max_signed_int, pe_error)
+  PEif(cond_signed_int, pe_min_signed_int, 
+       Pexpr((), PEif(cond_unsigned_int, pe_min_unsigned_int, pe_error))),
+  PEif(cond_signed_int, pe_max_signed_int, 
+       Pexpr((), PEif(cond_unsigned_int, pe_max_unsigned_int, pe_error)))
 
 (* TODO: can't pattern match b/c signed is not a constructor in core ?*)
 (* TODO: IntN_t, Int_leastN_t, Int_fastN_t not included *)

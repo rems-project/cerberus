@@ -872,7 +872,9 @@ let ctype_to_sort (state: bmc_state) ty =
   | Basic0 ty -> 
     begin
     match ty with
-    | Integer (Signed Int_) ->
+    (* TODO: cases for types implemented for ivmin/ivmax *)
+    | Integer (Signed Int_)
+    | Integer (Unsigned Int_) ->
         (* TODO Bit vector? *)
         LoadedInteger.mk_sort state.ctx
     | Integer _ -> assert false
@@ -1318,9 +1320,10 @@ let run_bmc (core_file : 'a file)
   print_string "Typechecking file\n";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
     Exception.except_return (
+
+      print_string "HERE\n";
       let seq_file = Core_sequentialise.sequentialise_file typed_core in
       pp_file seq_file;
-
       bmc_file seq_file norm_supply;
 
       print_string "EXIT: BMC PIPELINE \n"

@@ -24,7 +24,7 @@ type kanalysis_state = {
   (* ctr to generate unique address *)
   addr_gen : k_address ref;
 
-  (* set of all addresses *)
+  (* set of all addresses: not used really *)
   addr_set : AddressSet.t ref;
 
   (* Map from addresses (that store C pointers) to
@@ -84,6 +84,8 @@ let rec alias_pattern (state: kanalysis_state)
   | CaseBase(None, _) -> ()
   | CaseCtor(ctor, patList) ->
       List.iter (fun p -> alias_pattern state p set) patList
+
+
 
 let rec analyse_pexpr (state: kanalysis_state)
                       (Pexpr(bTy, pexpr_) : typed_pexpr) =
