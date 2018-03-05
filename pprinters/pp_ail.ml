@@ -193,7 +193,7 @@ let macro_string_of_integerType = function
      "PTRDIFF"
  | IBuiltin str ->
      (* NOTE: this is hackish, these don't exists in C11 *)
-     String.capitalize str
+     String.capitalize_ascii str
  | Enum sym ->
      (* NOTE: this is hackish, these don't exists in C11 *)
      "ENUM_" ^ Pp_symbol.to_string_pretty sym
@@ -266,8 +266,8 @@ let pp_ctype_aux pp_ident_opt qs ty =
           fun k ->
             pp_qualifiers qs ^^ !^ str ^^ k
     end in
-  let pp_ident =
-    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in
+  (*let pp_ident =
+    match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in*)
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
   (aux 1 qs ty) pp_spaced_ident

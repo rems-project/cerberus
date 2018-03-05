@@ -111,7 +111,7 @@ let cps_transform_expr sym_supply globs bvs e =
     match e_ with
     | Esseq _ -> raise (Unexpected "Sequencing must be associate to the right!")
     | _ -> tr_right bbs pat1 es pat2 ce e
-  and tr_right bbs pat1 es pat2 ce (Expr (_, e_) as e) =
+  and tr_right bbs pat1 es pat2 ce (Expr (_, e_)) =
     let to_basic e = (bbs, ((pat1, e)::es, (pat2, ce))) in
     match e_ with
     | Epure pe            -> to_basic (CpsPure pe)

@@ -246,7 +246,7 @@ and hash = parse
       { Lexing.(
         let n =
           try int_of_string n
-          with Failure "int_of_string" ->
+          with Failure _ ->
             Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
               lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
         in
