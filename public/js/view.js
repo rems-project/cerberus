@@ -1,29 +1,14 @@
 'use_strict'
 
 class View {
-  constructor (title, data) {
+  constructor (title, data, config) {
     this.tabs = []
     this.title  = title
 
-    let config = null
-    let uri = document.URL.split('#')
-    if (uri && uri.length > 1) {
-      try {
-        config = app(uri[1])
-                .app(decodeURIComponent)
-                .app(JSON.parse)
-                .app(GoldenLayout.unminifyConfig)
-                .return
-      } catch (e) {
-        console.log(e)
-        config = null
-      }
-    }
-    this.source = config ? new TabSource(config.title, config.source)
-                         : new TabSource(title, data)
+    this.source = new TabSource(title, data)
     this.tabs.push(this.source)
 
-    // GUI
+    // DOM
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
@@ -102,10 +87,6 @@ class View {
       self.tabs.push(tab)
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
-      if (state.initialise) {
-        tab.initialise(self.state)
-        delete state.initiliase
-      }
       if (state.update) {
         tab.update(self.state)
         tab.highlight(self.state)
@@ -148,19 +129,18 @@ class View {
       },
       locs: [],
       view: [],
-      exec: null,
+      interactive: null,
+      steps: {
+        nodes: new vis.DataSet([]),
+        edges: new vis.DataSet([]),
+        hide_tau: {
+          nodes: new vis.DataSet([]),
+          edges: new vis.DataSet([])
+        }
+      },
       result: '',
       console: ''
     }
-  }
-
-  getValue() {
-    return this.source.getValue()
-  }
-
-  forEachTab(f) {
-    for (let i = 0; i < this.tabs.length; i++)
-      f(this.tabs[i])
   }
 
   findTab(title) {
@@ -186,6 +166,30 @@ class View {
   }
 
   startInteractive() {
+    if (!this.state.interactive.steps) {
+      console.log('impossible initialise interactive mode')
+      return
+    }
+    if (this.state.steps.nodes.length > 0) {
+      console.log('interactive mode already initialised')
+      return
+    }
+    // Create init node
+    let init = this.state.interactive.steps.nodes[0]
+    this.state.steps.nodes.add({id: init.id, label: init.label})
+    // Create temporary next node
+    let next = {
+      id: init.id + 1,
+      label: 'Next step.',
+      group: 'leaf',
+      state: init.state
+    }
+    this.state.steps.nodes.add(next)
+    this.state.steps.edges.add({from: init.id, to: next.id})
+  }
+
+  newInteractiveTab() {
+    this.startInteractive()
     this.layout.root.contentItems[0].addChild({
       type: 'column',
       content: [{
@@ -193,8 +197,7 @@ class View {
         componentName: 'tab',
         title: 'Interactive',
         componentState: {
-          tab: 'Interactive',
-          initialise: true
+          tab: 'Interactive'
         }
       },{
         type: 'component',
@@ -232,30 +235,22 @@ class View {
   get console() { return this.getTab('Console') }
   get interactive()   { return this.getTab('Interactive') }
 
-  mark(loc) {
-    if (loc) this.forEachTab((tab) => tab.mark(loc))
-  }
-
   clear() {
-    this.forEachTab((tab) => tab.clear())
+    this.tabs.forEach((tab) => tab.clear())
   }
 
-  markSelection(loc) {
+  mark(loc) {
     if (!this.dirty && loc) {
       this.isHighlighted = false
       this.clear()
-      this.mark(loc)
+      this.tabs.forEach((tab) => tab.mark(loc))
     }
   }
 
   highlight() {
-    if (!ui.colour) {
-      this.clear()
-      return;
-    }
     if (this.isHighlighted||this.dirty) return;
     this.clear()
-    this.forEachTab((tab) => tab.highlight(this.state))
+    this.tabs.forEach((tab) => tab.highlight(this.state))
     this.isHighlighted = true
   }
 
@@ -268,7 +263,7 @@ class View {
   }
 
   update() {
-    this.forEachTab((tab) => tab.update(this.state))
+    this.tabs.forEach((tab) => tab.update(this.state))
     this.highlight()
   }
 
@@ -284,7 +279,7 @@ class View {
   }
 
   refresh () {
-    this.forEachTab((tab) => tab.refresh())
+    this.tabs.forEach((tab) => tab.refresh())
     this.layout.updateSize()
   }
 }

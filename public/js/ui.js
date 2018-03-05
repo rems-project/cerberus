@@ -2,20 +2,21 @@
 
 class UI {
 
-  constructor () {
+  constructor (settings) {
     this.views = []           /* List of existing views */
     this.currentView = null   /* Current displayed view */
 
     this.dom = $('#views');
-
-    window.prevWidth = window.innerWidth
     window.onresize = () => this.refresh()
 
     // UI settings
-    this.rewrite = false
-    this.auto_refresh = true
-    this.colour = true
-    this.colour_cursor = true
+    assert(settings != null)
+    this.settings = settings
+    $('#cb_concrete').prop('checked', this.settings.concrete)
+    $('#cb_rewrite').prop('checked', this.settings.rewrite)
+    $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
+    $('#cb_colour').prop('checked', this.settings.colour)
+    $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
 
     /*
      * Menu bar event handlers
@@ -99,18 +100,12 @@ class UI {
 
     // Run (Execute)
     $('#run').on('click', () => {})
-    $('#step').on('click', () => this.step ()) // TODO: delete this
     $('#random').on('click', () => this.exec ('Random'))
     $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
     $('#interactive').on('click', () => this.interactive())
 
     $('#random_concrete').on('click', () => this.exec ('random_concrete'))
     $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
-
-    // Create Execution Graph
-    $('#graph').on('click', () => {
-      this.request('graph', (data) => this.currentView.graph.setValue(data))
-    })
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
@@ -123,6 +118,7 @@ class UI {
       this.currentView.add(new TabAsm(defaultCompiler))
     })
 
+    // Permalink
     $('#clipboard').on('click', () => {
       $('#permalink').select()
       document.execCommand('Copy')
@@ -136,23 +132,23 @@ class UI {
 
     // Settings
     $('#rewrite').on('click', (e) => {
-      this.rewrite = !this.rewrite;
-      $('#cb_rewrite').prop('checked', this.rewrite)
+      this.settings.rewrite = !this.settings.rewrite;
+      $('#cb_rewrite').prop('checked', this.settings.rewrite)
       this.currentView.dirty = true;
     })
     $('#auto_refresh').on('click', (e) => {
-      this.auto_refresh = !this.auto_refresh;
-      $('#cb_auto_refresh').prop('checked', this.auto_refresh)
+      this.settings.auto_refresh = !this.settings.auto_refresh;
+      $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
     })
     $('#colour').on('click', (e) => {
-      this.colour = !this.colour
-      this.currentView.highlight()
-      if (!this.colour) this.currentView.isHighlighted = false
-      $('#cb_colour').prop('checked', this.colour)
+      this.settings.colour = !this.settings.colour
+      if (!this.settings.colour) this.currentView.isHighlighted = false
+      $('#cb_colour').prop('checked', this.settings.colour)
+      this.highlight()
     })
     $('#colour_cursor').on('click', (e) => {
-      this.colour_cursor = !this.colour_cursor;
-      $('#cb_colour_cursor').prop('checked', this.colour_cursor)
+      this.settings.colour_cursor = !this.settings.colour_cursor;
+      $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     })
 
     // Help
@@ -179,13 +175,10 @@ class UI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
+    // Update every 2s
     window.setInterval(() => {
-      if (this.auto_refresh) this.elab()
+      if (this.settings.auto_refresh) this.elab()
     }, 2000);
-
-    $('.cm-std').on('click', (e) => {
-      console.log($(e.target).text())
-    })
 
   }
 
@@ -210,7 +203,6 @@ class UI {
   }
 
   request (mode, onSuccess) {
-    let s = this.currentView.state // TODO: remove this
     this.wait()
     $.ajax({
       url:  '/cerberus',
@@ -218,9 +210,9 @@ class UI {
       headers: {Accept: 'application/json'},
       data: JSON.stringify ({
         'action':  mode,
-        'source':  this.currentView.getValue(),
-        'rewrite': this.rewrite,
-        'interactive': this.currentView.state.interactive,
+        'source':  this.source.getValue(),
+        'rewrite': this.settings.rewrite,
+        'interactive': this.state.interactive,
       }),
       success: (data, status, query) => {
         onSuccess(data);
@@ -233,16 +225,10 @@ class UI {
     })
   }
 
-  // Begin interactive mode
-  interactive() {
-    // Clean relevant part of the state
-    //this.currentView.state.steps = []
-    //this.currentView.state.state = ""
-    this.currentView.state.interactive = null
-    this.request('Step', (data) => {
-      this.currentView.mergeState(data)
-      this.currentView.startInteractive()
-    })
+  elab (lang) {
+    if (lang) this.currentView.newTab(lang)
+    if (this.currentView.dirty)
+      this.request('Elaborate', (s) => this.currentView.mergeState(s))
   }
 
   exec (mode) {
@@ -252,11 +238,15 @@ class UI {
     })
   }
 
-  elab (lang) {
-    if (lang) this.currentView.newTab(lang)
-    if (this.currentView.dirty)
-      this.request('Elaborate', (s) => this.currentView.mergeState(s))
+  // start interactive mode
+  interactive() {
+    this.currentView.state.interactive = null
+    this.request('Step', (data) => {
+      this.currentView.mergeState(data)
+      this.currentView.newInteractiveTab()
+    })
   }
+
 
   wait () {
     $('body').addClass('wait')
@@ -270,17 +260,50 @@ class UI {
     if (this.currentView)
       this.currentView.refresh()
   }
+
+  // CurrentView Proxy Methods
+
+  highlight() {
+    if (!this.settings.colour)
+      this.currentView.clear();
+    else
+      this.currentView.highlight()
+  }
+
+  mark(loc) {
+    this.currentView.mark(loc)
+  }
+
+  clear() {
+    this.currentView.clear()
+  }
+
+  get state() {
+    return this.currentView.state
+  }
+
+  get source() {
+    return this.currentView.source
+  }
+
 }
 
 /*
  * UI initialisation
  */
 
-const ui = new UI()
+const ui = new UI({
+  concrete:      true,
+  rewrite:       false,
+  auto_refresh:  true,
+  colour:        true,
+  colour_cursor: true
+})
 const style = createStyle()
-let std             = null
-let defaultCompiler = null
-let compilers       = null
+let std             = null // JSON of standard
+let defaultCompiler = null // Godbolt default compiler
+let compilers       = null // Godbolt compilers
+let config          = null // Permalink configuration
 
 // Get standard
 $.getJSON('std.json').done((res) => std = res).fail(() => {
@@ -354,14 +377,26 @@ $.get('pldi_tests.json').done((data) => {
   }
 })
 
-// Get default buffer
-$.get('buffer.c').done((data) => {
-  $(window).ready(() => {
-    ui.add(new View('example.c', data))
+// Detect if URL is a permalink
+try {
+  let uri = document.URL.split('#')
+  if (uri && uri.length > 1 && uri[1] != "")
+    config = GoldenLayout.unminifyConfig(JSON.parse(decodeURIComponent(uri[1])))
+} catch (e) {
+  console.log(e + ': impossible to parse permalink')
+}
+
+// Add view
+if (config) {
+  ui.add(new View(config.title, config.source, config))
+  ui.refresh()
+} else {
+  $.get('buffer.c').done((source) => {
+    ui.add(new View('example.c', source))
     ui.refresh()
+  }).fail(() => {
+    console.log('Failing when trying to download "buffer.c"')
   })
-}).fail(() => {
-  console.log('Failing when trying to download "buffer.c"')
-})
+}
 
-
+$(window).ready(() => ui.refresh())

@@ -17,6 +17,11 @@ function assert(x) {
   if (!x) console.log ('assertion failed: ' + x)
 }
 
+function option(x, y) {
+  if (x) return x
+  return y
+}
+
 function app (x) {
   return {
     app: (f) => app(f(x)),
