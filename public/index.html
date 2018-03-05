@@ -4,9 +4,20 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <title>Cerberus</title>
 
-  <script type="text/javascript" src="lib/vis.js"></script>
   <script type="text/javascript" src="lib/jquery-3.2.1.min.js"></script>
+
+  <!-- Graphs -->
+  <script type="text/javascript" src="lib/vis.js"></script>
+  <link rel="stylesheet" type="text/css" href="css/vis.min.css" />
+
+  <!-- Layout -->
+  <script type="text/javascript" src="lib/goldenlayout.min.js"></script>
+  <link type="text/css" rel="stylesheet" href="css/goldenlayout-base.css" />
+  <link type="text/css" rel="stylesheet" href="css/goldenlayout-light-theme.css"/>
+
+  <!-- CodeMirros + plugins -->
   <script type="text/javascript" src="lib/codemirror.js"></script>
+  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
   <script type="text/javascript" src="lib/panels.js"></script>
   <script type="text/javascript" src="lib/placeholder.js"></script>
   <script type="text/javascript" src="lib/clike.js"></script>
@@ -14,15 +25,9 @@
   <script type="text/javascript" src="js/ast.js"></script>
   <script type="text/javascript" src="lib/gas.js"></script>
 
-  <script type="text/javascript" src="lib/goldenlayout.min.js"></script>
-  <link type="text/css" rel="stylesheet" href="css/goldenlayout-base.css" />
-  <link type="text/css" rel="stylesheet" href="css/goldenlayout-light-theme.css"/>
-
-  <link rel="stylesheet" type="text/css" href="css/codemirror.css" />
+  <!-- Style -->
   <link rel="stylesheet" type="text/css" href="css/style.css" />
   <link rel="stylesheet" type="text/css" href="css/scheme.css" />
-  <link rel="stylesheet" type="text/css" href="css/vis.min.css" />
-
 </head>
 <body>
   <div id="container">
@@ -65,49 +70,29 @@
             <div class="dropdown-content">
               <a href="#" id="random">Random</a>
               <a href="#" id="exhaustive">Exhaustive</a>
-              <!--
-              <a href="#" id="random_concrete">Random (Concrete)</a>
-              <a href="#" id="exhaustive_concrete">Exhaustive (Concrete)</a>-->
               <a href="#" id="interactive">Interactive</a>
             </div>
           </div>
         </li>
         <li><a href="#" id="compile">Compile</a></li>
-        <!--<li class="border"><a href="#" id="graph">Generate Graph</a></li>-->
         <li>
-        <!--
-          <div class="dropdown">
-            <a href="#" class="dropbtn dropdown-toggle">Interface</a>
-            <div class="dropdown-content">-->
-              <!--
-              <a href="#" id="source_tab">Source</a>
-              <a href="#" id="exec_tab">Execution</a>
-              <a href="#" id="cabs_tab">Cabs</a>
-              <a href="#" id="ail_tab">Ail</a>
-              <a href="#" id="core_tab">Core</a>
-              <a href="#" id="console_tab">Console</a>
-              <a href="#" id="graph_tab">Graph</a>
-              <hr>--><!--
-              <a href="#" id="new_pane">New Pane</a>
-              <a href="#" id="unsplit">Unsplit All</a>
-              <hr>
-              <a href="#" id="refresh">Refresh</a>
-            </div>
-          </div>-->
           <div class="dropdown">
             <a href="#" class="dropbtn dropdown-toggle">Settings</a>
             <div class="dropdown-content">
+              <a href="#" id="concrete">
+                <input id="cb_concrete" type="checkbox">Use Concrete Model
+              </a>
               <a href="#" id="rewrite">
                 <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
               </a>
               <a href="#" id="auto_refresh">
-                <input id="cb_auto_refresh" type="checkbox" checked>Auto Refresh
+                <input id="cb_auto_refresh" type="checkbox">Auto Refresh
               </a>
               <a href="#" id="colour">
-                <input id="cb_colour" type="checkbox" checked>Colour
+                <input id="cb_colour" type="checkbox">Colour
               </a>
               <a href="#" id="colour_cursor">
-                <input id="cb_colour_cursor" type="checkbox" checked>Colour Cursor
+                <input id="cb_colour_cursor" type="checkbox">Colour Cursor
               </a>
             </div>
           </div>
@@ -118,7 +103,7 @@
             <div class="dropdown-content">
               <!--<a href="#" id="short">Short</a>-->
               <a href="#" id="permalink-button">
-                <img id="clipboard" src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAdtJREFUOBGdlE0oBGEYx2fW5uKjkBQXByUROSguxGGjKEeKyxYlNye5SPnK1dIWtz0o4iDKTT4vVilJkaR2D1siB98f4/esMWZnZ6Zd//r1vu/zPO9/nnnfZhRN0zJhEiJg1TuBJchSUpSXulEYhhW4BrM8LPKgFVbNCae5ytOjJPdUVe2yFpFrIOaHUkvug/U6BNmnmXPSYTFYO1Mwk6424B5uwCyVxSxUUzeI6ZeRJCCaMgL6hNghnILt+RFfA1EIMn73yxk5qZzEPk9/dCiI6fEeRsPUzVCemnA+FuO/11SUbnJBOlXlDP+rBTZKQ0IB+CH8b0OO4gSDAYiL7s6YtLm9sl6aPLC5CXZgGaQ70Sd40zbEoJCN/TAGERgCQ2kZYlbHzhkIwzbIV3QLhlI2xMzHLvk8DyAfAlAC82BILkXe3dUYs0Zq5FanoUwnl7GTy3llNCRGcjs+NuUY0eSJfEm9EII7kNdtx+yJMUFiOAJVEMX0Sqc5oUpR5KvogCBkYzQHb5aa+NJDYpNZPSzCsc4Do/ko+lg/wxFMgJ2kOfkL2YtOd+Ec5KxcRU0lvMC4/IZsRbKFxBZIZ5e2RT9BudgKkLOtcTSUWkxrGfxQJGsHyQ/kAgIcX+wbhtLg1dVYfqAAAAAASUVORK5CYII=' style="vertical-align: middle;"/>
+                <img id="clipboard" style="vertical-align: middle;" alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAdtJREFUOBGdlE0oBGEYx2fW5uKjkBQXByUROSguxGGjKEeKyxYlNye5SPnK1dIWtz0o4iDKTT4vVilJkaR2D1siB98f4/esMWZnZ6Zd//r1vu/zPO9/nnnfZhRN0zJhEiJg1TuBJchSUpSXulEYhhW4BrM8LPKgFVbNCae5ytOjJPdUVe2yFpFrIOaHUkvug/U6BNmnmXPSYTFYO1Mwk6424B5uwCyVxSxUUzeI6ZeRJCCaMgL6hNghnILt+RFfA1EIMn73yxk5qZzEPk9/dCiI6fEeRsPUzVCemnA+FuO/11SUbnJBOlXlDP+rBTZKQ0IB+CH8b0OO4gSDAYiL7s6YtLm9sl6aPLC5CXZgGaQ70Sd40zbEoJCN/TAGERgCQ2kZYlbHzhkIwzbIV3QLhlI2xMzHLvk8DyAfAlAC82BILkXe3dUYs0Zq5FanoUwnl7GTy3llNCRGcjs+NuUY0eSJfEm9EII7kNdtx+yJMUFiOAJVEMX0Sqc5oUpR5KvogCBkYzQHb5aa+NJDYpNZPSzCsc4Do/ko+lg/wxFMgJ2kOfkL2YtOd+Ec5KxcRU0lvMC4/IZsRbKFxBZIZ5e2RT9BudgKkLOtcTSUWkxrGfxQJGsHyQ/kAgIcX+wbhtLg1dVYfqAAAAAASUVORK5CYII="/>
                 <input id="permalink" type="text">
               </a>
             </div>
@@ -126,28 +111,9 @@
         <li><a href="#" id="help">Help</a></li>
         <li class="right"><a href="#" id="rems">REMS</a></li>
       </ul>
-    </div>
+    </div><!-- header -->
     <div id="views"></div>
   </div> <!-- container -->
-
-  <template id="tab-template">
-    <div draggable="true" class="tablink active">
-      <button href="#" class="title"></button>
-      <img class="close" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAAIklEQVR4nGNgYGD4z4Ad/Mdg4ODDBXCZRFgCp5EEHQMXBwAQAgz0SVCcggAAAABJRU5ErkJggg=="/>
-    </div>
-  </template>
-
-  <template id="interactive-template">
-    <div class="graph" align="right">
-      <button id="restart">restart</button>
-      <!--
-      <button id="minus">-</button>
-      <button id="fit">fit</button>
-      <button id="plus">+</button>-->
-      <div align="center" class="svg"></div>
-    </div>
-  </template>
-
   <div id="defacto" class="window">
     <div class="header">
       <ul>
@@ -158,7 +124,6 @@
     <div id="defacto_body" class="window_body">
     </div>
   </div>
-
   <div id="pldi" class="window">
     <div class="header">
       <ul>
@@ -172,7 +137,6 @@
 
   <script type="text/javascript" src="js/util.js"></script>
   <script type="text/javascript" src="js/tabs.js"></script>
-  <!--<script type="text/javascript" src="js/panes.js"></script>-->
   <script type="text/javascript" src="js/view.js"></script>
   <script type="text/javascript" src="js/ui.js"></script>
 

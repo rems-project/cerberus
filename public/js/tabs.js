@@ -1,44 +1,5 @@
 'use_strict'
 
-
-vis.Network.prototype.setData2 = function (data) {
-  function cmp(n1, n2) { return n1.id == n2.id }
-  for (let i = 0; i < data.nodes.length; i++) {
-
-  }
-  /*
-  // reset the physics engine.
-  //this.body.emitter.emit("resetPhysics");
-  this.body.emitter.emit("_resetData");
-
-  // unselect all to ensure no selections from old data are carried over.
-  this.selectionHandler.unselectAll();
-
-  if (data && data.dot && (data.nodes || data.edges)) {
-    throw new SyntaxError('Data must contain either parameter "dot" or ' +
-      ' parameter pair "nodes" and "edges", but not both.');
-  }
-
-  // set options
-  this.setOptions(data && data.options);
-  // set all data
-  this.nodesHandler.setData(data && data.nodes, true);
-  this.edgesHandler.setData(data && data.edges, true);
-
-  // emit change in data
-  this.body.emitter.emit("_dataChanged");
-
-  // emit data loaded
-  this.body.emitter.emit("_dataLoaded");
-
-  this.redraw()
-  */
-
-  // find a stable position or start animating to a stable position
-  //this.body.emitter.emit("initPhysics");
-};
-
-
 /* Generic Tab */
 class Tab {
   constructor(title) {
@@ -51,8 +12,7 @@ class Tab {
     this.dom.children('.title').text(title)
   }
 
-  // Dummy methods to be overwriten
-  setActive() {}
+  // Dummy methods to be overwritten
   refresh () {}
   mark (loc) {}
   clear ()   {}
@@ -65,8 +25,15 @@ class TabInteractive extends Tab {
   constructor(title) {
     super(title)
 
-    this.dom.content = $('#interactive-template').clone().contents()
-    this.dom.append(this.dom.content)
+    this.dom.addClass('graph')
+    this.dom.attr('align', 'right')
+
+    let restart = $('<button id="restart">restart</button>')
+    let container = $('<div align="center" class="svg"></div>')
+    this.dom.append(restart)
+    this.dom.append(container)
+
+    this.hide_tau = false
 
     // Setup Graph Network
     let options = {
@@ -93,39 +60,21 @@ class TabInteractive extends Tab {
         }
       },
       interaction: {
-        dragNode: false,
+        dragNodes: false,
         navigationButtons: true
       }
     }
-    this.nodes = new vis.DataSet([])
-    this.edges = new vis.DataSet([])
     let graph = {nodes: this.nodes, edges: this.edges }
-    let container = this.dom.content.children('.svg')[0]
-    this.network = new vis.Network(container, graph, options);
+    this.network = new vis.Network(container[0], graph, options);
 
-    this.dom.find('#minus').on('click', () => {
-      this.network.moveTo({
-        scale: 0.9 * this.network.getScale()
-      })
-    })
-
-    this.dom.find('#plus').on('click', () => {
-      this.network.moveTo({
-        scale: 1.1 * this.network.getScale()
-      })
-    })
-
-    this.dom.find('#fit').on('click', () => {
-      this.network.fit()
-    })
-
-    this.dom.children('#restart').on('click', () => {
-      this.nodes = new vis.DataSet([])
-      this.edges = new vis.DataSet([])
-      this.network.setData({nodes: this.nodes, edges: this.edges})
-      this.request('Step', (data) => {
+    restart.on('click', () => {
+      ui.state.steps.edges.clear()
+      ui.state.steps.nodes.clear()
+      ui.state.interactive = null
+      ui.request('Step', (data) => {
         ui.currentView.mergeState(data)
-        ui.currentView.initialise(ui.currentView.state)
+        ui.currentView.startInteractive()
+        this.network.fit()
       })
     })
     this.network.on('click', (arg) => {
@@ -133,75 +82,40 @@ class TabInteractive extends Tab {
       if (arg && arg.nodes && arg.nodes.length == 1) {
         let active = this.nodes.get(arg.nodes[0])
         if (active) {
-          if (active.group == 'leaf') {
+          if (active.group && active.group == 'leaf') {
             // do a step
             let parents = this.network.getConnectedNodes(active.id, ['from'])
             assert(parents.length == 1) // Only one parent per node
-            ui.currentView.state.interactive = {
+            ui.state.interactive = {
               state: active.state,
               active: parents[0]
             }
             ui.request('Step', (data) => {
-              //ui.currentView.mergeState(data)
               this.attachTree(active.id, data.interactive.steps)
-              console.log(data)
             })
-          } else {
+          } else if (active.loc) {
             // show mem and select locations
+            let loc = ui.source.getLocation(active.loc.begin, active.loc.end)
+            ui.clear()
+            ui.mark(loc)
+          } else {
+            // just clear and highlight everything
+            ui.clear()
+            ui.highlight()
           }
         }
       }
-      /*
-      let active = getNode(arg.nodes[0])
-      if (!active) return null
-      ui.currentView.clear()
-      if (!active.loc) {
-        ui.currentView.highlight()
-        return
-      }
-      console.log(active)
-      if (active.loc.begin && active.loc.end) {
-        let loc = ui.currentView.source.getLocation(active.loc.begin, active.loc.end)
-        ui.currentView.mark(loc)
-      } else {
-        alert('something wrong')
-      }
-      */
-    })
-    this.network.on('doubleClick', (arg) => {
-      /*
-      console.log(arg.nodes[0])
-      ui.currentView.state.exec.active = arg.nodes[0]
-      ui.request('Step', (data) => {
-        ui.currentView.mergeState(data)
-        console.log(data)
-      })
-      */
     })
   }
 
-  initialise(state) {
-    if (!state.interactive) {
-      console.log ('impossible to initialise interactive mode')
-      return
-    }
-    let steps = state.interactive.steps
-    assert(steps.nodes.length == 1 && steps.nodes.length == 0)
-    // Create init node
-    let init = steps.nodes[0]
-    this.nodes.add({id: init.id, label: init.label})
-    // Create temporary next node
-    let next = {
-      id: init.id + 1,
-      label: 'Next step.',
-      group: 'leaf',
-      state: init.state
-    }
-    this.nodes.add(next)
-    this.edges.add({from: init.id, to: next.id})
-    this.network.redraw()
-    this.network.focus(next.id)
-    this.network.fit()
+  get nodes() {
+    return this.hide_tau ? ui.state.steps.hide_tau.nodes
+                         : ui.state.steps.nodes
+  }
+
+  get edges() {
+    return this.hide_tau ? ui.state.steps.hide_tau.edges
+                         : ui.state.steps.edges
   }
 
   attachTree(pointId, tree) {
@@ -215,54 +129,8 @@ class TabInteractive extends Tab {
     this.network.focus(tree.nodes[0].id)
   }
 
-  addNode(data) {
-    function in_set(x, xs) {
-      for (let i = 0; i < xs.length; i++)
-        if (xs[i] == x) return true
-      return false
-    }
-    let ids = this.nodes.getIds()
-    let nodes = data.nodes.get()
-    for (let i = 0; i < nodes.length; i++) {
-      if (!in_set(nodes[i].id, ids)) {
-        this.nodes.add(nodes[i])
-      }
-    }
-    this.network.redraw()
-  }
-
-  newNode(label) {
-    let newId = (Math.random() * 1e7).toString(32)
-    this.nodes.add({id: newId, label: label})
-    if (this.lastId) {
-      this.edges.add({from: this.lastId, to: newId})
-    } else {
-      // First element
-    }
-    //this.network.fit([newId])
-    this.addNode({nodes: this.nodes, edges: this.edges})
-    //this.network.fit([newId])
-    this.network.focus(newId)
-    //this.network.redraw()
-    this.lastId = newId
-  }
-
-  update (state) {
-    // WARN: do not use this.network.setData, since it reorganise the graph
-    // and changes the zoom accordingly
-
-    //this.network.setData({nodes: state.exec.nodes, edges: state.exec.edges})
-    /*
-    if (state.exec.nodes.length == this.nodes.length)
-      return // No new node
-
-    if (state.exec.nodes.length != this.nodes.length + 1) {
-      console.log('something wrong')
-      return
-    }
-
-    this.newNode(state.steps[0])
-    */
+  highlight() {
+    this.network.unselectAll()
   }
 }
 
@@ -270,6 +138,7 @@ class TabMemory extends Tab {
   constructor(title) {
     super(title)
 
+    /*
     this.dom.content = $('#interactive-template').clone().contents()
     this.dom.append(this.dom.content)
 
@@ -291,6 +160,7 @@ class TabMemory extends Tab {
     let container = this.dom.content.children('.svg')[0]
     this.network = new vis.Network(container, graph, options);
 
+    */
   }
 
   getAllocationValue(state, alloc) {
@@ -338,13 +208,13 @@ class TabEditor extends Tab {
     })
 
     this.editor.on('blur', (doc) => {
-      ui.currentView.highlight()
+      ui.highlight()
       this.skipCursorEvent = true
     })
 
     // CodeMirror overwrites 'click' events
     this.editor.on('mousedown', () => {
-      ui.currentView.highlight()
+      ui.highlight()
       this.skipCursorEvent = true
     })
 
@@ -375,7 +245,6 @@ class TabEditor extends Tab {
 
   setValue(value) {
     this.editor.setValue(value)
-    //this.setActive()
     this.refresh()
   }
 
@@ -402,10 +271,10 @@ class TabEditor extends Tab {
       this.skipCursorEvent = false
       return;
     }
-    if (!ui.colour_cursor) return;
+    if (!ui.settings.colour_cursor) return;
     let from = doc.getCursor('from')
     let to   = doc.getCursor('to')
-    ui.currentView.markSelection(this.getLocation(from, to))
+    ui.mark(this.getLocation(from, to))
   }
 
   refresh () {
@@ -876,7 +745,7 @@ class TabAsm extends TabReadOnly {
         }
         this.setValue(value)
         this.updateLocations()
-        if (ui.colour) this.highlight()
+        this.highlight()
         ui.done()
       }
     })
