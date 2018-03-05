@@ -29,11 +29,14 @@ class TabInteractive extends Tab {
     this.dom.attr('align', 'right')
 
     let restart = $('<button id="restart">restart</button>')
-    let container = $('<div align="center" class="svg"></div>')
     this.dom.append(restart)
-    this.dom.append(container)
 
     this.hide_tau = false
+    let hide_tau_btn = $('<button>hide tau steps</button>')
+    this.dom.append(hide_tau_btn)
+
+    let container = $('<div align="center" class="svg"></div>')
+    this.dom.append(container)
 
     // Setup Graph Network
     let options = {
@@ -70,6 +73,8 @@ class TabInteractive extends Tab {
     restart.on('click', () => {
       ui.state.steps.edges.clear()
       ui.state.steps.nodes.clear()
+      ui.state.steps.hide_tau.edges.clear()
+      ui.state.steps.hide_tau.nodes.clear()
       ui.state.interactive = null
       ui.request('Step', (data) => {
         ui.currentView.mergeState(data)
@@ -77,6 +82,16 @@ class TabInteractive extends Tab {
         this.network.fit()
       })
     })
+
+    hide_tau_btn.on('click', () => {
+      this.hide_tau = !this.hide_tau
+      if (this.hide_tau)
+        hide_tau_btn.text('show tau steps')
+      else
+        hide_tau_btn.text('hide tau steps')
+      this.network.setData({nodes: this.nodes, edges: this.edges})
+    })
+
     this.network.on('click', (arg) => {
       // if one node is selected
       if (arg && arg.nodes && arg.nodes.length == 1) {
@@ -84,11 +99,9 @@ class TabInteractive extends Tab {
         if (active) {
           if (active.group && active.group == 'leaf') {
             // do a step
-            let parents = this.network.getConnectedNodes(active.id, ['from'])
-            assert(parents.length == 1) // Only one parent per node
             ui.state.interactive = {
               state: active.state,
-              active: parents[0]
+              active: active.id
             }
             ui.request('Step', (data) => {
               this.attachTree(active.id, data.interactive.steps)
@@ -119,13 +132,52 @@ class TabInteractive extends Tab {
   }
 
   attachTree(pointId, tree) {
-    // Remove current point
-    this.edges.remove(this.network.getConnectedEdges(pointId))
-    this.nodes.remove(pointId)
+    // Get trees
+    let nodes = ui.state.steps.nodes
+    let edges = ui.state.steps.edges
+    let no_tau_nodes = ui.state.steps.hide_tau.nodes
+    let no_tau_edges = ui.state.steps.hide_tau.edges
+    // TODO: this is bad!
+    let is_tau = (nId) => {
+      let n = nodes.get(nId)
+      if (n && n.label.includes("tau"))
+        return !n.label.includes("End")
+      return false
+    }
+    let getParent = (nId) => {
+      let es = edges.get()
+      for (let i = 0; i < es.length; i++) {
+        if (es[i].to == nId)
+          return es[i].from
+      }
+      return null
+    }
+    let getNoTauParent = (nId) => {
+      let fromId = getParent(nId)
+      if (fromId && is_tau(fromId))
+        return getNoTauParent(fromId)
+      return fromId
+    }
+    // Update current point
+    let point = nodes.get(pointId)
+    delete point.group
+    delete point.state
+    nodes.remove(pointId)
+    no_tau_nodes.remove(pointId)
+    nodes.add(point)
+    no_tau_nodes.add(point)
     // Add nodes and edges of the new tree
-    let self = this // I hate JS
-    tree.nodes.forEach(function (n) { self.nodes.add(n) })
-    tree.edges.forEach(function (e) { self.edges.add(e) })
+    tree.nodes.forEach(function (n) {
+      nodes.add(n)
+      if (!is_tau(n.id))
+        no_tau_nodes.add(n)
+    })
+    tree.edges.forEach(function (e) { edges.add(e) })
+    tree.edges.forEach(function (e) {
+      if (!is_tau(e.to))
+        no_tau_edges.add({from: getNoTauParent(e.to), to: e.to})
+    })
+    // Focus
     this.network.focus(tree.nodes[0].id)
   }
 

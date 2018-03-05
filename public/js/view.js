@@ -174,18 +174,10 @@ class View {
       console.log('interactive mode already initialised')
       return
     }
-    // Create init node
+    // Create init nod
     let init = this.state.interactive.steps.nodes[0]
-    this.state.steps.nodes.add({id: init.id, label: init.label})
-    // Create temporary next node
-    let next = {
-      id: init.id + 1,
-      label: 'Next step.',
-      group: 'leaf',
-      state: init.state
-    }
-    this.state.steps.nodes.add(next)
-    this.state.steps.edges.add({from: init.id, to: next.id})
+    this.state.steps.nodes.add(init)
+    this.state.steps.hide_tau.nodes.add(init)
   }
 
   newInteractiveTab() {
