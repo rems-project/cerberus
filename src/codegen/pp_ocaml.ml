@@ -559,24 +559,29 @@ let print_memop globs memop pes =
    | Mem_common.PtrFromInt -> !^"A.ptrvast_ival"
    | Mem_common.PtrValidForDeref -> !^"A.valid_for_deref_ptrval"
    | Mem_common.Memcmp -> !^"A.memcmp"
+   | Mem_common.PtrWellAligned -> !^"A.ptr_well_aligned"
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
-let choose_load_type (Pexpr (_, _, PEval cty)) =
-  match cty with
-  | Vctype (Basic0 (Integer ity)) ->
-    !^"A.load_integer" ^^^ P.parens (print_ail_integer_type ity)
-  | Vctype (Pointer0 (q, cty)) ->
-    !^"A.load_pointer" ^^^ P.parens (print_ail_qualifier q)
-      ^^^ P.parens (print_ctype cty)
-  | Vctype (Array0 (cty, n)) -> 
-    !^"A.load_array"
-      ^^^ P.parens (print_ctype cty)
-      ^^^ P.parens (print_option print_num n)
-  | Vctype (Struct0 s) ->
-    !^"A.load_struct" ^^^ P.parens (print_raw_symbol s)
-  | Vctype (Union0 s) ->
-    !^"A.load_union" ^^^ P.parens (print_raw_symbol s)
-  | _ -> raise (Unsupported "load not implemented")
+let choose_load_type pe =
+  match pe with
+  | (Pexpr (_, _, PEval cty)) ->
+    begin match cty with
+      | Vctype (Basic0 (Integer ity)) ->
+        !^"A.load_integer" ^^^ P.parens (print_ail_integer_type ity)
+      | Vctype (Pointer0 (q, cty)) ->
+        !^"A.load_pointer" ^^^ P.parens (print_ail_qualifier q)
+          ^^^ P.parens (print_ctype cty)
+      | Vctype (Array0 (cty, n)) -> 
+        !^"A.load_array"
+          ^^^ P.parens (print_ctype cty)
+          ^^^ P.parens (print_option print_num n)
+      | Vctype (Struct0 s) ->
+        !^"A.load_struct" ^^^ P.parens (print_raw_symbol s)
+      | Vctype (Union0 s) ->
+        !^"A.load_union" ^^^ P.parens (print_raw_symbol s)
+      | _ -> raise (Unsupported "load not implemented")
+    end
+  | _ -> raise (Unsupported "load type not implemented")
 
 let print_store_array_type = function
   | Basic0 (Integer ity) ->
@@ -586,20 +591,24 @@ let print_store_array_type = function
       ^^^ P.parens (print_ctype cty)
   | _ -> raise (Unsupported "store array not implemented")
 
-let choose_store_type (Pexpr (_, _, PEval cty)) =
-  match cty with
-  | Vctype (Basic0 (Integer ity)) ->
-    !^"A.store_integer" ^^^ P.parens (print_ail_integer_type ity)
-  | Vctype (Pointer0 (q, cty)) ->
-    !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
-      ^^^ P.parens (print_ctype cty)
-  | Vctype (Struct0 s) ->
-    !^"A.store_struct" ^^^ P.parens (print_raw_symbol s)
-  | Vctype (Union0 s) ->
-    !^"A.store_union" ^^^ P.parens (print_raw_symbol s)
-  | Vctype (Array0 (cty, n)) ->
-    print_store_array_type cty
-      ^^^ P.parens (print_option print_num n)
+let choose_store_type pe =
+  match pe with
+  | (Pexpr (_, _, PEval cty)) ->
+    begin match cty with
+      | Vctype (Basic0 (Integer ity)) ->
+        !^"A.store_integer" ^^^ P.parens (print_ail_integer_type ity)
+      | Vctype (Pointer0 (q, cty)) ->
+        !^"A.store_pointer" ^^^ P.parens (print_ail_qualifier q)
+          ^^^ P.parens (print_ctype cty)
+      | Vctype (Struct0 s) ->
+        !^"A.store_struct" ^^^ P.parens (print_raw_symbol s)
+      | Vctype (Union0 s) ->
+        !^"A.store_union" ^^^ P.parens (print_raw_symbol s)
+      | Vctype (Array0 (cty, n)) ->
+        print_store_array_type cty
+          ^^^ P.parens (print_option print_num n)
+      | _ -> raise (Unsupported "store not implemented")
+    end
   | _ -> raise (Unsupported "store not implemented")
 
 let print_action globs act =

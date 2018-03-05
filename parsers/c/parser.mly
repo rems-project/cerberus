@@ -55,7 +55,7 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 %token AUTO BREAK CASE CHAR CONST CONTINUE DEFAULT DO DOUBLE ELSE ENUM EXTERN
   FLOAT FOR GOTO IF INLINE INT LONG REGISTER RESTRICT RETURN SHORT SIGNED SIZEOF
   STATIC STRUCT SWITCH TYPEDEF UNION UNSIGNED VOID VOLATILE WHILE ALIGNAS
-  ALIGNOF ATOMIC BOOL COMPLEX GENERIC IMAGINARY NORETURN STATIC_ASSERT
+  ALIGNOF ATOMIC BOOL COMPLEX GENERIC (* IMAGINARY *) NORETURN STATIC_ASSERT
   THREAD_LOCAL
 
 (* §6.4.2 Identifiers *)
@@ -241,24 +241,6 @@ translation_unit: (* NOTE: this is not present in the standard *)
     { TUnit [] }
 | edecls= external_declaration_list EOF
     { TUnit (List.rev edecls) }
-
-(* Helpers *)
-
-%inline ioption(X):
-| (* nothing *)
-  { None }
-| x=X
-  { Some x }
-
-option(X):
-| o = ioption(X)
-  { o }
-
-list(X):
-| (* nothing *)
-    { [] }
-| x=X xs=list(X)
-    { x::xs }
 
 (* A pair of lists of exactly one A *)
 list_eq1(A, B):

@@ -3,6 +3,14 @@ open Cohttp_lwt_unix
 
 open Json
 
+(* Loading dynamically defacto cerberus *)
+(*
+let () =
+  try
+    Dynlink.loadfile "defacto" (* WARN: linking only works if using byte code *)
+  with Dynlink.Error e -> print_string (Dynlink.error_message e) ;;
+*)
+
 (* Debugging *)
 
 module Debug =

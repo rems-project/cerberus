@@ -29,6 +29,7 @@ tests/csmith/**/LOG
 
 *.native
 *.byte
+defacto
 
 .*
 
