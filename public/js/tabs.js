@@ -17,7 +17,9 @@ class Tab {
   mark (loc) {}
   clear ()   {}
   update (s)  {}
+  updateMemory (s) {}
   highlight(s) {}
+  fit() {}
 
 }
 
@@ -31,8 +33,8 @@ class TabInteractive extends Tab {
     let restart = $('<button id="restart">restart</button>')
     this.dom.append(restart)
 
-    this.hide_tau = false
-    let hide_tau_btn = $('<button>hide tau steps</button>')
+    this.hide_tau = true
+    let hide_tau_btn = $('<button>show tau steps</button>')
     this.dom.append(hide_tau_btn)
 
     let container = $('<div align="center" class="svg"></div>')
@@ -108,9 +110,10 @@ class TabInteractive extends Tab {
             })
           } else if (active.loc) {
             // show mem and select locations
-            let loc = ui.source.getLocation(active.loc.begin, active.loc.end)
             ui.clear()
-            ui.mark(loc)
+            ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
+            if (active.mem)
+              ui.updateMemory(active.mem)
           } else {
             // just clear and highlight everything
             ui.clear()
@@ -167,13 +170,13 @@ class TabInteractive extends Tab {
     nodes.add(point)
     no_tau_nodes.add(point)
     // Add nodes and edges of the new tree
-    tree.nodes.forEach(function (n) {
+    tree.nodes.map(function (n) {
       nodes.add(n)
       if (!is_tau(n.id))
         no_tau_nodes.add(n)
     })
-    tree.edges.forEach(function (e) { edges.add(e) })
-    tree.edges.forEach(function (e) {
+    tree.edges.map(function (e) { edges.add(e) })
+    tree.edges.map(function (e) {
       if (!is_tau(e.to))
         no_tau_edges.add({from: getNoTauParent(e.to), to: e.to})
     })
@@ -181,66 +184,57 @@ class TabInteractive extends Tab {
     this.network.focus(tree.nodes[0].id)
   }
 
+  fit() {
+    this.network.setData({nodes: this.nodes, edges: this.edges})
+    this.network.fit()
+    this.network.redraw()
+  }
+
   highlight() {
     this.network.unselectAll()
   }
+
 }
 
 class TabMemory extends Tab {
   constructor(title) {
     super(title)
 
-    /*
-    this.dom.content = $('#interactive-template').clone().contents()
-    this.dom.append(this.dom.content)
+    this.dom.addClass('graph')
+    this.dom.attr('align', 'right')
+
+    let container = $('<div align="center" class="svg"></div>')
+    this.dom.append(container)
 
     // Setup Graph Network
     let options = {
       nodes: {
         shape: 'box',
         shapeProperties: {
-          borderRadius: 6
+          borderRadius: 3
         }
       },
       edges: {
-        arrows: {to: true}
+        arrows: {to: true},
+        smooth: {
+          forceDirection: "none"
+        }
+      },
+      interaction: {
+        navigationButtons: true
+      },
+      physics: {
+        barnesHut: {
+          springLength: 200
+        }
       }
     }
-    this.nodes = new vis.DataSet([])
-    this.edges = new vis.DataSet([])
-    let graph = {nodes: this.nodes, edges: this.edges }
-    let container = this.dom.content.children('.svg')[0]
-    this.network = new vis.Network(container, graph, options);
-
-    */
+    let graph = {nodes: ui.state.mem.nodes, edges: ui.state.mem.edges }
+    this.network = new vis.Network(container[0], graph, options);
   }
 
-  getAllocationValue(state, alloc) {
-    let map = state.mem.bytemap
-    if (map[alloc.base]) {
-      let val = ''
-      let base = parseInt(alloc.base)
-      let size = parseInt(alloc.size)
-      for (let i = base; i < base + size; i++) {
-        val = map[i][1] + parseInt(val, 16).toString()
-      }
-      return val
-    }
-    return 'undef'
-  }
-
-  update (state) {
-    /*
-    let nodes = []
-    for (let i = 0, alloc = state.mem.allocations[i];
-          alloc;
-          i++, alloc = state.mem.allocations[i] ) {
-      let label = i+': ' + this.getAllocationValue(state, alloc)
-      nodes.push({id: i, label: label})
-    }
-    let graph = {nodes: nodes, edges: []}
-    this.network.setData(graph)
-    */
+  updateMemory (state) {
+    this.network.setData(state.mem)
   }
 }
 
@@ -479,7 +473,7 @@ class TabSource extends TabEditor {
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
     this.editor.on('change', () => {
-      ui.currentView.dirty = true;
+      ui.currentView.state.dirty = true;
       //ui.currentView.clear()
     })
   }

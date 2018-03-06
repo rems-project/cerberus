@@ -127,10 +127,10 @@ ocaml_native:
 
 ocaml_defacto:
 	sed -i '' 's/ref `MemConcrete/ref `MemDefacto/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} \
-		-libs unix,str pipeline.cmo
+	ocamlbuild -j 4 -verbose 1 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} \
+		-libs unix,str pipeline.cmxs
 	sed -i '' 's/ref `MemDefacto/ref `MemConcrete/' src/prelude.ml
-	cp _build/src/pipeline.cmo defacto
+	cp _build/src/pipeline.cmxs defacto
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \

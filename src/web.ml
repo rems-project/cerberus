@@ -3,8 +3,8 @@ open Cohttp_lwt_unix
 
 open Json
 
-(* Loading dynamically defacto cerberus *)
 (*
+(* Loading dynamically defacto cerberus *)
 let () =
   try
     Dynlink.loadfile "defacto" (* WARN: linking only works if using byte code *)
