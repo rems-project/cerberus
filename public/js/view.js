@@ -15,8 +15,6 @@ class View {
 
     // State
     this.setStateEmpty()
-    this.isHighlighted = false;
-    this.dirty = true;
   }
 
   initLayout(config) {
@@ -138,8 +136,14 @@ class View {
           edges: new vis.DataSet([])
         }
       },
+      mem: {
+        nodes: new vis.DataSet([]),
+        edges: new vis.DataSet([])
+      },
       result: '',
-      console: ''
+      console: '',
+      isHighlighted: false,
+      dirty: true
     }
   }
 
@@ -204,6 +208,28 @@ class View {
     this.refresh()
   }
 
+  isInteractiveOpen() {
+    for (let i = 0; i < this.tabs.length; i++) {
+      if (this.tabs[i] instanceof TabInteractive) return true
+    }
+    return false
+  }
+
+  clearInteractive() {
+    this.state.steps.edges.clear()
+    this.state.steps.nodes.clear()
+    this.state.steps.hide_tau.edges.clear()
+    this.state.steps.hide_tau.nodes.clear()
+    this.state.interactive = null
+    if (this.state.status == 'success' && this.isInteractiveOpen()) {
+      ui.request('Step', (data) => {
+        this.mergeState(data)
+        this.startInteractive()
+      })
+    }
+    this.fit()
+  }
+
   getPermanentLink() {
     let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
     miniConfig.title = this.source.title
@@ -228,22 +254,22 @@ class View {
   get interactive()   { return this.getTab('Interactive') }
 
   clear() {
-    this.tabs.forEach((tab) => tab.clear())
+    this.tabs.map((tab) => tab.clear())
   }
 
   mark(loc) {
-    if (!this.dirty && loc) {
-      this.isHighlighted = false
+    if (!this.state.dirty && loc) {
+      this.state.isHighlighted = false
       this.clear()
-      this.tabs.forEach((tab) => tab.mark(loc))
+      this.tabs.map((tab) => tab.mark(loc))
     }
   }
 
   highlight() {
-    if (this.isHighlighted||this.dirty) return;
+    if (this.state.isHighlighted) return;
     this.clear()
-    this.tabs.forEach((tab) => tab.highlight(this.state))
-    this.isHighlighted = true
+    this.tabs.map((tab) => tab.highlight(this.state))
+    this.state.isHighlighted = true
   }
 
   show() {
@@ -254,9 +280,40 @@ class View {
     this.dom.hide()
   }
 
+  fit() {
+    this.tabs.map((tab) => tab.fit())
+  }
+
   update() {
-    this.tabs.forEach((tab) => tab.update(this.state))
+    this.tabs.map((tab) => tab.update(this.state))
     this.highlight()
+  }
+
+  updateMemory(mem) {
+    let nodes = []
+    let edges = []
+    let toHex = (n) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
+    let readValue = (id, base, end) => {
+      let map = mem.bytemap
+      let value = 0
+      if (!map[base]) return 'undef' // undefined value in allocation
+      if (map[base][0].Some) // Has a provenance
+        edges.push({from: id, to: map[base][0].Some})
+      for (let i = base; i < end; i++)
+        if (map[i]) value += map[i][1]
+      return value
+    }
+    Object.keys(mem.allocations).map((k) => {
+      let alloc = mem.allocations[k]
+      let base = parseInt(alloc.base)
+      let end  = parseInt(alloc.base) + parseInt(alloc.size)
+      let value = readValue(k, base, end)
+      let label = 'Region '+k+' ['+toHex(base)+'-'+toHex(end)+']: '+value
+      nodes.push({id: k, label: label})
+    })
+    this.state.mem.nodes = new vis.DataSet(nodes)
+    this.state.mem.edges = new vis.DataSet(edges)
+    this.tabs.map((tab) => tab.updateMemory(this.state))
   }
 
   mergeState (s) {
@@ -265,13 +322,13 @@ class View {
       this.console.setActive()
     }
     Object.assign(this.state, s) // merge states
-    this.dirty = false
-    this.isHighlighted = false
+    this.state.isHighlighted = false
+    this.state.dirty = false
     this.update()
   }
 
   refresh () {
-    this.tabs.forEach((tab) => tab.refresh())
+    this.tabs.map((tab) => tab.refresh())
     this.layout.updateSize()
   }
 }

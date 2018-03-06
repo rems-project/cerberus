@@ -134,7 +134,7 @@ class UI {
     $('#rewrite').on('click', (e) => {
       this.settings.rewrite = !this.settings.rewrite;
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
-      this.currentView.dirty = true;
+      this.currentView.state.dirty = true;
     })
     $('#auto_refresh').on('click', (e) => {
       this.settings.auto_refresh = !this.settings.auto_refresh;
@@ -220,15 +220,20 @@ class UI {
       }
     }).fail((e) => {
       console.log('Failed request!', e)
-      this.currentView.dirty = false
+      this.currentView.state.dirty = false
       this.done()
     })
   }
 
   elab (lang) {
     if (lang) this.currentView.newTab(lang)
-    if (this.currentView.dirty)
-      this.request('Elaborate', (s) => this.currentView.mergeState(s))
+    if (this.currentView.state.dirty) {
+      this.currentView.state.interactive = null
+      this.request('Elaborate', (s) => {
+        this.currentView.mergeState(s)
+        this.currentView.clearInteractive()
+      })
+    }
   }
 
   exec (mode) {
@@ -270,12 +275,20 @@ class UI {
       this.currentView.highlight()
   }
 
+  updateMemory(mem) {
+    this.currentView.updateMemory(mem)
+  }
+
   mark(loc) {
     this.currentView.mark(loc)
   }
 
   clear() {
     this.currentView.clear()
+  }
+
+  fit() {
+    this.currentView.fit()
   }
 
   get state() {
