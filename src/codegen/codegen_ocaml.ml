@@ -26,7 +26,12 @@ let print_tags tags =
     P.parens (print_raw_symbol s ^^ P.comma
               ^^^ print_list id (List.map print_id_pair xs))
   in
-  print_list id (List.map print_tag_pairs tags)
+  let print_tag (s, tag) =
+    match tag with
+    | Tags.StructDef xs -> print_tag_pairs (s, xs)
+    | Tags.UnionDef xs -> print_tag_pairs (s, xs)
+  in
+  print_list id (List.map print_tag (Pmap.bindings_list tags))
 
 let print_foot tags globs main =
   match main with
@@ -78,7 +83,7 @@ let gen filename corestd sym_supply core =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^//^
     print_funs globs cps_core.funs ^//^
-    print_foot (failwith "(Pmap.bindings_list core.tagDefs)") globs core.main
+    print_foot core.tagDefs globs core.main
   in
   let fl_ml = fl ^ ".ml" in
   let oc = open_out fl_ml in

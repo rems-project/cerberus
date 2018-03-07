@@ -1,7 +1,7 @@
 (* Created by Victor Gomes 2017-03-10 *)
 
 open Util
-module M = Mem
+module M = Ocaml_mem
 module T = AilTypes
 module C = Core_ctype
 
@@ -9,8 +9,8 @@ module C = Core_ctype
 exception Undefined of string
 exception Error of string
 
-let (>>=) = M.bind2
-let return = M.return1
+let (>>=) = M.bind
+let return = M.return
 
 (* Keep track of the last memory operation, for error display *)
 type memop = Store | Load | Create | Alloc | None
@@ -127,13 +127,13 @@ let mk_int s = M.integer_ival (Nat_big_num.of_string s)
 
 (* Binary operations wrap *)
 
-let add = M.op_ival M.IntAdd
-let sub = M.op_ival M.IntSub
-let mul = M.op_ival M.IntMul
-let div = M.op_ival M.IntDiv
-let remt = M.op_ival M.IntRem_t
-let remf = M.op_ival M.IntRem_f
-let exp = M.op_ival M.IntExp
+let add = M.op_ival Mem_common.IntAdd
+let sub = M.op_ival Mem_common.IntSub
+let mul = M.op_ival Mem_common.IntMul
+let div = M.op_ival Mem_common.IntDiv
+let remt = M.op_ival Mem_common.IntRem_t
+let remf = M.op_ival Mem_common.IntRem_f
+let exp = M.op_ival Mem_common.IntExp
 
 let eq n m = Option.get (M.eq_ival (Some M.initial_mem_state) n m)
 let lt n m = Option.get (M.lt_ival (Some M.initial_mem_state) n m)
@@ -165,7 +165,7 @@ let alloc pre al n =
 
 let load cty ret e =
   last_memop := Load;
-  M.load cty e >>= return % ret % snd
+  M.load Location_ocaml.unknown cty e >>= return % ret % snd
 
 let load_integer ity =
   load (C.Basic0 (T.Integer ity)) get_integer
@@ -174,7 +174,7 @@ let load_pointer q cty =
   load (C.Pointer0 (q, cty)) get_pointer
 
 let load_array q cty size =
-  load (C.Array0 (q, cty, size)) get_array
+  load (C.Array0 (cty, size)) get_array
 
 let load_struct s =
   load (C.Struct0 s) get_struct
@@ -200,7 +200,7 @@ let store_union s cid =
 
 let store_array_of conv cty size q =
   let array_mval e = M.array_mval (List.map (case_loaded_mval conv) e)
-  in store array_mval (C.Array0 (q, cty, size))
+  in store array_mval (C.Array0 (cty, size))
 
 let store_array_of_int ity =
   store_array_of (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
@@ -222,8 +222,8 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     let terr _ _ = raise (Error "Rt_ocaml.printf: expecting an integer") in
     let n = M.case_mem_value x (terr()) terr (fun _ -> conv cty)
         terr terr (terr()) terr terr
-    in Either.Right (Undefined.Defined
-                       (Core.Vloaded (Core.LVspecified (Core.OVinteger n))))
+    in Nondeterminism.nd_return (Either.Right (Undefined.Defined
+                       (Core.Vloaded (Core.LVspecified (Core.OVinteger n)))))
   in
   Output.printf eval_conv (List.rev (List.map encode xs)) args
   >>= begin function
@@ -253,11 +253,12 @@ let print_batch i res =
 
 let print_err_batch e =
   let err = match e with
-    | Mem_common.MerrUnitialised str -> "MerrUnitialised \"" ^  (str ^ "\"")
+    (*| Mem_common.MerrUnitialised str -> "MerrUnitialised \"" ^  (str ^ "\"")*)
     | Mem_common.MerrInternal str -> "MerrInternal \"" ^  (str ^ "\"")
     | Mem_common.MerrOther str -> "MerrOther \"" ^  (str ^ "\"")
-    | Mem_common.MerrReadFromDead -> "MerrReadFromDead"
+    (*| Mem_common.MerrReadFromDead -> "MerrReadFromDead"*)
     | Mem_common.MerrWIP str -> "Memory WIP: " ^ str
+    | _ -> "memory error"
   in
   Printf.sprintf "Killed {msg: memory layout error (%s seq) ==> %s}" (show_memop !last_memop) err
   |> print_exec 0 
@@ -282,7 +283,7 @@ let dummy_file =
 let quit f =
   try
     let initial_state = Driver.initial_driver_state (UniqueId.new_supply Symbol.instance_Enum_Enum_Symbol_sym_dict) dummy_file in
-    match Smt.runND_exhaustive (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
+    match Smt2.runND Smt2.Random Ocaml_mem.cs_module (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
     | _ -> raise (Error "continuation not raised")
   with
   | Exit x ->
