@@ -106,8 +106,8 @@ let default = Symbol.Symbol (0, Some "cont")
 
 (* CPS transformation *)
 
-let cps_transform_expr sym_supply globs bvs e =
-  let rec tr_left bbs pat1 es pat2 ce (Expr (_, e_)) =
+let cps_transform_expr sym_supply globs bvs core_expr =
+  let rec tr_left bbs pat1 es pat2 ce (Expr (_, e_) as e) =
     match e_ with
     | Esseq _ -> raise (Unexpected "Sequencing must be associate to the right!")
     | _ -> tr_right bbs pat1 es pat2 ce e
@@ -168,11 +168,13 @@ let cps_transform_expr sym_supply globs bvs e =
         raise (Unexpected "Skip expression not allowed.")
       else
         (bbs, ([], (None, ce)))
+    | Ebound (_, e) ->
+      (* WARN: I am not sure if this is the correct semantics of Ebound *)
+      tr_right bbs pat1 es pat2 ce e
     | Ewseq _  -> raise (Unexpected "Weak sequencing expression not allowed.")
     | Eunseq _ -> raise (Unsupported "Unsequencing operations not supported.")
     | Easeq  _ -> raise (Unexpected "Atomic sequencing must be eliminated.")
     | Eindet _ -> raise (Unsupported "elim indet")
-    | Ebound _ -> raise (Unsupported "elim bound")
     | Elet   _ -> raise (Unsupported "Let expressions must be eliminated.")
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
@@ -180,7 +182,7 @@ let cps_transform_expr sym_supply globs bvs e =
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)
   let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit) in
-  tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) e
+  tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) core_expr
 
 
 type cps_fun =

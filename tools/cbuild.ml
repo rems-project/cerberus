@@ -92,6 +92,7 @@ let create_merlin () = create_file ".merlin"
 let create_cbuild () =
   copy cerb_path "ocaml_generated/*.{ml,mli}" src_path;
   copy cerb_path "pprinters/*.{ml,mli}" src_path;
+  copy cerb_path "parsers/core/core_parser_util.ml" src_path;
   copy cerb_path "src/codegen/*.ml" src_path;
   copy cerb_path "src/*.{ml,mli}" src_path;
   copy cerb_path "parsers/coreparser/core_parser_util.ml" src_path;
@@ -99,7 +100,7 @@ let create_cbuild () =
   create_merlin ()
 
 let run_ocamlbuild file =
-  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,zarith,Z3 -libs unix,str %s" file |> run
+  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,lem,Z3 -libs unix,str %s" file |> run
 
 let run_clink files =
   List.fold_left (fun acc f -> acc ^ chop_extension f ^ ".sym ") "" files
