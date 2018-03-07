@@ -59,19 +59,19 @@ end = struct
     ('a, 'err, 'cs, 'st) Nondeterminism.ndM
   
   let return = Nondeterminism.nd_return
-  let (>>=) = Nondeterminism.bind2
+  let (>>=) = Nondeterminism.nd_bind
   let (>>) f g = f >>= (fun _ -> g)
   
-  let read = Nondeterminism.read0
-  let update = Nondeterminism.update0
+  let read = Nondeterminism.nd_read
+  let update = Nondeterminism.nd_update
   let modify f = 
-    Nondeterminism.get0 >>= fun st ->
+    Nondeterminism.nd_get >>= fun st ->
     let (ret, st') = f st in
-    Nondeterminism.put0 st' >>= fun () ->
+    Nondeterminism.nd_put st' >>= fun () ->
     return ret
   
-  let get = Nondeterminism.get0
-  let put = Nondeterminism.put0
+  let get = Nondeterminism.nd_get
+  let put = Nondeterminism.nd_put
   let fail err = Nondeterminism.kill (Other err)
   let mapM _ _ = failwith "TODO: mapM"
   

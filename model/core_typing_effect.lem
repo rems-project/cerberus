@@ -21,23 +21,26 @@ val runM: forall 'a. eff 'a -> Exception.exceptM 'a Errors.error
 let runM m = m
 
 val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
-let fail loc cause =
+let core_typing_effect_fail loc cause =
   Exception (loc, Errors.Core_typing_cause cause)
+let inline fail = core_typing_effect_fail
 
 val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
-let guard pred loc cause =
+let core_typing_effect_guard pred loc cause =
   if pred then
     return ()
   else
     Exception (loc, Errors.Core_typing_cause cause)
+let inline guard = core_typing_effect_guard
 (* BUG in Lem (see issue #197)
       fail loc cause
  *)
 
 val foldlM: forall 'a 'b. ('a -> 'b -> eff 'a) -> 'a -> list 'b -> eff 'a
-let rec foldlM f b = function
+let rec core_typing_effect_foldlM f b = function
   | [] ->
       return b
   | x :: xs ->
-      bind (f b x) (fun z -> foldlM f z xs)
+      bind (f b x) (fun z -> core_typing_effect_foldlM f z xs)
 end
+let inline foldlM = core_typing_effect_foldlM

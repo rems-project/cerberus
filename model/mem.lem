@@ -42,10 +42,10 @@ type memM 'a =
   Nondeterminism.ndM 'a Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
 
 val return: forall 'a. 'a -> memM 'a
-let return = Nondeterminism.return
+let inline return = Nondeterminism.return
 
 val bind: forall 'a 'b. memM 'a -> ('a -> memM 'b) -> memM 'b
-let bind = Nondeterminism.bind
+let inline bind = Nondeterminism.bind
 
 
 (* Memory actions *)

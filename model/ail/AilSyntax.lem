@@ -215,7 +215,7 @@ type sigma 'a = <|
 
 type gamma = Context.context identifier ((storageDuration * bool) * qualifiers * ctype)
 
-type program 'a = maybe identifier * sigma 'a
+type ail_program 'a = maybe identifier * sigma 'a
 
 
 
@@ -320,7 +320,7 @@ val gammaEqual: gamma -> gamma -> bool
 
 val programEqual: forall 'a.
                 ('a -> 'a -> bool)       ->
-                program 'a -> program 'a ->
+                ail_program 'a -> ail_program 'a ->
                 bool
 
 

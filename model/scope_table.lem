@@ -6,7 +6,7 @@ type t 'a_scope 'b_ident 'c_a = list ('a_scope * map 'b_ident 'c_a)
 
 
 val empty: forall 'scope 'ident 'a. t 'scope 'ident 'a
-let empty = []
+let inline empty = []
 
 
 val register: forall 'scope 'ident 'a. MapKeyType 'ident => 'ident -> 'a -> t 'scope 'ident 'a -> t 'scope 'ident 'a

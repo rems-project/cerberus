@@ -981,7 +981,7 @@ let initial_driver_state sym_supply file =
 
 
 val spawn_thread: maybe Cthread.thread_id -> Core_run.thread_state -> driverM Cthread.thread_id
-let spawn_thread parent_tid_opt th_st =
+let driver_spawn_thread parent_tid_opt th_st =
   ND.get >>= fun dr_st ->
   let ((tid, core_st'), run_st') = State.run (
     Core_run.spawn_thread parent_tid_opt th_st dr_st.core_state
@@ -991,12 +991,14 @@ let spawn_thread parent_tid_opt th_st =
     core_run_state= run_st';
   |> >>
   ND.return tid
+let inline spawn_thread = driver_spawn_thread
 
 val update_thread_state: Cthread.thread_id -> Core_run.thread_state -> driverM unit
-let update_thread_state tid th_st =
+let driver_update_thread_state tid th_st =
   ND.update (fun dr_st ->
     <| dr_st with core_state= Core_run.update_thread_state tid th_st dr_st.core_state |>
   )
+let inline update_thread_state = driver_update_thread_state
 
 val get_thread_states: driverM (list (Cthread.thread_id * (maybe Cthread.thread_id * Core_run.thread_state)))
 let get_thread_states =

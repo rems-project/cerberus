@@ -5,8 +5,9 @@ import State State_exception Exception_undefined Undefined
 type stExceptUndefM 'a 'bs 'msg = State_exception.stExceptM (Undefined.t 'a) 'bs 'msg
 
 val return: forall 'a 'b 's 'msg. 'a -> stExceptUndefM 'a 's 'msg
-let return z =
+let stExceptUndef_return z =
   State_exception.return (Undefined.return z)
+let inline return = stExceptUndef_return
 
 val bind: forall 'a 'b 's 'msg. stExceptUndefM 'a 's 'msg         ->
                                 ('a -> stExceptUndefM 'b 's 'msg) ->
@@ -24,12 +25,13 @@ let stExceptUndef_bind m f = fun st ->
   end
 let inline bind = stExceptUndef_bind
 
-val     mapM: forall 'a 'b 's 'msg. ('a -> stExceptUndefM 'b 's 'msg) ->
-                                    list 'a              ->
-                                    stExceptUndefM (list 'b) 's 'msg
-let rec mapM f xs =
+val  mapM: forall 'a 'b 's 'msg. ('a -> stExceptUndefM 'b 's 'msg) ->
+                                  list 'a              ->
+                                  stExceptUndefM (list 'b) 's 'msg
+let stExceptUndef_mapM f xs =
   State_exception.bind (State_exception.mapM f xs)
     (fun us -> State_exception.return $ Undefined.mapM id us)
+let inline mapM = stExceptUndef_mapM
 
 
 val runEU: forall 'a 's 'msg. Exception_undefined.t 'a 'msg -> stExceptUndefM 'a 's 'msg
@@ -64,17 +66,19 @@ let runSE m =
 
 
 val run: forall 'a 's 'msg. stExceptUndefM 'a 's 'msg -> 's -> Exception.exceptM (Undefined.t 'a * 's) 'msg
-let run m st = m st
+let stExceptUndef_run m st = m st
+let inline run = stExceptUndef_run
 
 
 (* NOTE: this is foldl *)
 val     foldM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptUndefM 'a 's 'msg) -> 'a -> list 'b -> stExceptUndefM 'a 's 'msg
-let rec foldM f a = function
+let rec stExceptUndef_foldM f a = function
   | [] ->
       return a
   | x::xs ->
-      bind (f a x) (fun z -> foldM f z xs)
+      bind (f a x) (fun z -> stExceptUndef_foldM f z xs)
 end
+let inline foldM = stExceptUndef_foldM
 
 val     filterM: forall 'a 's 'msg. ('a -> stExceptUndefM bool 's 'msg) -> list 'a -> stExceptUndefM (list 'a) 's 'msg
 let rec filterM pred = function
@@ -103,15 +107,17 @@ let rec replicateM n x =
   sequence (List.replicate n x)
 
 
-val fail: forall 'a 's 'msg. 'msg -> stExceptUndefM 'a 's 'msg
-let fail err =
+val stExceptUndef_fail: forall 'a 's 'msg. 'msg -> stExceptUndefM 'a 's 'msg
+let stExceptUndef_fail err =
   runE (Exception.fail err)
+let inline fail = stExceptUndef_fail
 
 
 
 val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> stExceptUndefM 'a 's 'msg -> stExceptUndefM 'b 's 'msg
-let fmap f m =
+let stExceptUndef_fmap f m =
   bind m (fun z -> return (f z))
+let inline fmap = stExceptUndef_fmap
 
 
 module Operators = struct

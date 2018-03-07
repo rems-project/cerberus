@@ -313,24 +313,27 @@ let rec hoist_negatives expr =
 
 
 module E = struct
-  let return =
+  let core_run_return =
     SEU.return
+  let inline return = core_run_return
   let step_eval_pexprs loc mem_st file pes =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
     SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
-  let step_eval_pexpr loc mem_st file pe =
+  let core_run_step_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
     SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
+  let inline step_eval_pexpr = core_run_step_eval_pexpr
   
-  let eval_pexpr loc mem_st file pe =
+  let core_run_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
     ) in
     SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
+  let inline eval_pexpr = core_run_eval_pexpr
   
   let eval_pexpr2 loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in

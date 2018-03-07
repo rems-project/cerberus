@@ -12,10 +12,12 @@ let count e (Multiset m) =
   Map.findWithDefault e 0 m
 
 val mem: forall 'k. MapKeyType 'k => 'k -> t 'k -> bool
-let mem e m = (count e m > 0)
+let multiset_mem e m = (count e m > 0)
+let inline mem = multiset_mem
 
 val add: forall 'k. MapKeyType 'k => 'k -> t 'k -> t 'k
-let add e (Multiset m) = Multiset $ Map.insert e (1 + count e (Multiset m)) m
+let multiset_add e (Multiset m) = Multiset $ Map.insert e (1 + count e (Multiset m)) m
+let inline add = multiset_add
 
 val from_list: forall 'k. MapKeyType 'k => list 'k -> t 'k
 let from_list ls = foldl (fun m e -> add e m) emp ls

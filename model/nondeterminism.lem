@@ -59,7 +59,7 @@ let nd_return a =
   ND (fun st -> (NDactive a, st))
 let inline return = nd_return
 
-let rec bind (ND m_act) f =
+let rec nd_bind (ND m_act) f =
   ND (fun st ->
     match m_act st with
       | (NDactive z, st') ->
@@ -67,15 +67,16 @@ let rec bind (ND m_act) f =
       | (NDkilled r, st') ->
           (NDkilled r, st')
       | (NDnd debug_str str_ms, st') ->
-          (NDnd debug_str (List.map (fun (str, m) -> (str, bind m f)) str_ms), st')
+          (NDnd debug_str (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
       | (NDguard debug_str cs m_act', st') ->
-          (NDguard debug_str cs (bind m_act' f), st')
+          (NDguard debug_str cs (nd_bind m_act' f), st')
       | (NDbranch debug_str cs m_act1 m_act2, st') ->
-          (NDbranch debug_str cs (bind m_act1 f) (bind m_act2 f), st')
+          (NDbranch debug_str cs (nd_bind m_act1 f) (nd_bind m_act2 f), st')
       | (NDstep str_ms, st') ->
-          (NDstep (List.map (fun (str, m) -> (str, bind m f)) str_ms), st')
+          (NDstep (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
     end
   )
+let inline bind = nd_bind
 
 
 (* State operations *)
@@ -84,18 +85,22 @@ val put: forall 'err 'cs 'st. 'st -> ndM unit 'err 'cs 'st
 val update: forall 'err 'cs 'st. ('st -> 'st) -> ndM unit 'err 'cs 'st
 val read: forall 'a 'err 'cs 'st. ('st -> 'a) -> ndM 'a 'err 'cs 'st
 
-let get =
+let nd_get =
   ND (fun st -> (NDactive st, st))
 
-let put st =
+let nd_put st =
   ND (fun _ -> (NDactive (), st))
 
-let update f =
+let nd_update f =
   ND (fun st -> (NDactive (), f st))
 
-let read f =
+let nd_read f =
   ND (fun st -> (NDactive (f st), st))
 
+let inline get = nd_get
+let inline put = nd_put
+let inline update = nd_update
+let inline read = nd_read
 
 
 
@@ -159,11 +164,13 @@ let inline mapM f = listM (List.map f)
 
 
 (* GENERIC Monad *)
-let sequence_ ms = foldr (fun m1 m2 -> bind m1 (fun _ -> m2)) (return ()) ms
+let nd_sequence_ ms = foldr (fun m1 m2 -> bind m1 (fun _ -> m2)) (return ()) ms
+let inline sequence_ = nd_sequence_
 
 (* GENERIC Monad *)
 val mapM_: forall 'a 'b 'err 'cs 'st. ('a -> ndM 'b 'err 'cs 'st) -> list 'a -> ndM unit 'err 'cs 'st
-let mapM_ f _as = sequence_ (List.map f _as)
+let nd_mapM_ f _as = sequence_ (List.map f _as)
+let inline mapM_ = nd_mapM_
 
 
 (* NOTE: this is foldl *)
@@ -205,15 +212,16 @@ let ifM debug_str cs mThen mElse =
 
 (* NOTE: this seems to only be used by the concurrency *)
 val mem : forall 'a 'err 'cs 'st. Eq 'a => 'a -> ndM 'a 'err 'cs 'st -> bool
-let mem x m =
+let nd_mem x m =
   error "ND2.mem"
+let inline mem = nd_mem
 
 
 
 val guard: forall 'err 'cs 'st. bool -> kill_reason 'err -> ndM unit 'err 'cs 'st
-let guard b reason =
+let nd_guard b reason =
   if b then return () else kill reason
-
+let inline guard = nd_guard
 
 
 let warns_if_no_active_ex m =
@@ -464,9 +472,9 @@ let ifM debug_str cs (ND mThen) (ND mElse) =
 
 (* NOTE: this seems to only be used by the concurrency *)
 val mem : forall 'a 'err 'cs 'st. Eq 'a => 'a -> ndM 'a 'err 'cs 'st -> bool
-let mem x m =
+let nd_mem x m =
   error "ND2.mem"
-
+let inline mem = nd_mem
 
 
 val guard: forall 'err 'cs 'st. bool -> kill_reason 'err -> ndM unit 'err 'cs 'st
