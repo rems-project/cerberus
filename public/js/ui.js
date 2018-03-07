@@ -119,15 +119,17 @@ class UI {
     })
 
     // Permalink
-    $('#clipboard').on('click', () => {
+    $('#clip-img').on('click', () => {
       $('#permalink').select()
       document.execCommand('Copy')
     })
 
     // Permanent Link
     $('#permalink-button').on('mouseover', () => {
-      $('#permalink').val(document.URL.split('#', 1)
-        +'#'+this.currentView.getPermanentLink())
+      let longUrl = document.URL.split('#', 1)
+        +'#'+this.currentView.getEncodedState()
+      $('#permalink').val(longUrl)
+      //shortURL(longUrl)
     })
 
     // Settings
@@ -152,23 +154,7 @@ class UI {
     })
 
     // Help
-    $('#help').on('click', () => {
-      this.wait();
-      $.ajax({
-        url: 'help.html',
-        type: 'GET',
-        success: (data, status, query) => {
-          let tab = new Tab('Help')
-          tab.dom.addClass('help');
-          tab.dom.append(data)
-          this.currentView.add(tab)
-          tab.setActive()
-          this.done()
-        }
-      }).fail(() => {
-        this.done()
-      })
-    })
+    $('#help').on('click', () => this.currentView.newTab('Help'))
 
     // REMS
     $('#rems').on('click', () => {
@@ -185,7 +171,7 @@ class UI {
   setCurrentView(view) {
     if (this.currentView)
       this.currentView.hide()
-    $('#current-view').text(view.title)
+    $('#current-view-title').text(view.title)
     this.currentView = view
     view.show()
   }
@@ -194,7 +180,7 @@ class UI {
     this.views.push(view)
     this.dom.append(view.dom)
 
-    let nav = $('<a href="#">'+view.title+'</a>')
+    let nav = $('<div class="btn">'+view.title+'</div>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
 
@@ -389,6 +375,8 @@ $.get('pldi_tests.json').done((data) => {
     div.append(questions)
   }
 })
+
+console.log(document.URL)
 
 // Detect if URL is a permalink
 try {
