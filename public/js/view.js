@@ -230,7 +230,7 @@ class View {
     this.fit()
   }
 
-  getPermanentLink() {
+  getEncodedState() {
     let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
     miniConfig.title = this.source.title
     miniConfig.source = this.source.getValue()

@@ -1,17 +1,6 @@
 'use_strict'
 
-// Common combinators in JavaScript
-
-const I = x => x;
-const K = x => y => x;
-const A = f => x => f(x);
-const T = x => f => f(x);
-const W = f => x => f(x)(x);
-const C = f => y => x => f(x)(y);
-const B = f => g => x => f(g(x));
-const S = f => g => x => f(x)(g(x));
-const P = f => g => x => y => f(g(x))(g(y));
-const Y = f => (g => g(g))(g => f(x => g(g)(x)));
+let gapikey = 'AIzaSyDYrDNMlaTvfLxNX_cJ8EH_qrLq7aKeFJc'
 
 function assert(x) {
   if (!x) console.log ('assertion failed: ' + x)
@@ -22,11 +11,27 @@ function option(x, y) {
   return y
 }
 
-function app (x) {
-  return {
-    app: (f) => app(f(x)),
-    return: x
-  }
+function shortURL(url) {
+  $.ajax({
+    type: 'POST',
+    url: 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapikey,
+    contentType: 'application/json',
+    data: JSON.stringify ({longUrl: url}),
+    success: (data) => {
+      console.log(data)
+    }
+  })
+}
+
+function longURL(url) {
+  $.ajax({
+    type: 'GET',
+    url: 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapikey
+          +'&shortUrl=http://goo.gl/' + url,
+    success: (data) => {
+      console.log(data)
+    }
+  })
 }
 
 function fadeOut(tooltip) {
@@ -109,113 +114,6 @@ function getSTDSentence(section) {
   }
   content += p['P'+ns[ns.length-1]]
   return content
-}
-
-// TODO: function not being used anymore
-function parseCerberusResult(res) {
-  function countLines(str) {
-    return str.split(/\r\n|\r|\n/).length - 1
-  }
-
-  let bits = res.split(/{-#(\d*:\d*-\d*:\d*:|E...)#-}/g)
-  let core = ""
-  let locs = [], stkLoc = [], stkLine0 = []
-  let l0 = 0, l = 0
-  for (let i = 0; i < bits.length; i++) {
-    if (bits[i] == 'ELOC') {
-      // finish last location
-      let cloc = stkLoc.pop().toString().match(/\d+/g)
-      locs.push({
-        c: {
-          begin: {line: cloc[0]-1, ch: cloc[1]-1},
-          end: {line: cloc[2]-1, ch: cloc[3]-1}
-        },
-        core: {
-          begin: {line: l0, ch: 0},
-          end: {line: l, ch: 0}
-        }
-      })
-      l0 = stkLine0.pop()
-      continue;
-    }
-    if (/\d*:\d*-\d*:\d*:/g.test(bits[i])) {
-      stkLine0.push(l0)
-      stkLoc.push(bits[i])
-      l0 = l
-      continue;
-    }
-    // a bit of core source
-    core += bits[i]
-    l += countLines(bits[i])
-  }
-
-  locs.sort((a, b) => {
-    return (a.core.end.line - a.core.begin.line)
-      < (b.core.end.line - b.core.begin.line) ? 1:-1
-  })
-
-  return {
-    locations: locs,
-    ast: core,
-  }
-}
-
-function json_to_dot(data) {
-  function aux (i, d) {
-    switch (d.label) {
-      case "active":
-        return {
-          index: i+1,
-          nodes: [parseInt(i) + '[label="' + d.arena + '"]'],
-          edges: []
-        }
-      case "killed":
-        return {
-          index: i+1,
-          nodes: [parseInt(i) + '[label="killed"]'],
-          edges: []
-        }
-      case "nd":
-        let nd = { index: i, nodes: [], edges: [] }
-        for (let j = 0; j < d.children.length; j++) {
-          let c = aux(nd.index+1, d.children[j])
-          nd.nodes = nd.nodes.concat(c.nodes)
-          nd.edges = nd.edges.concat(c.edges)
-          nd.edges.push(parseInt(i) + " -> " + parseInt(nd.index+1))
-          nd.index = c.index
-        }
-        nd.nodes.push(parseInt(i) + '[label="nd('+ d.debug + ')"]')
-        return nd
-      case "guard":
-        let c = aux(i+1, d.child)
-        c.nodes.push(parseInt(i) + '[label="guard(' + d.debug + ')"]')
-        c.nodes.push(parseInt(i) + " -> " + parseInt(i+1))
-        return c
-      case "branch":
-        let c1 = aux(i+1, d.child1)
-        let c2 = aux(c1.index+1, d.child2)
-        let ns = c2.nodes.concat(c1.nodes)
-        let es = c2.edges.concat(c1.edges)
-        ns.push(parseInt(i) + '[label="branch(' + d.debug + ')"]')
-        es.push(parseInt(i) + " -> " + parseInt(i+1))
-        es.push(parseInt(i) + " -> " + parseInt(c1.index+1))
-        return {
-          index: c2.index,
-          nodes: ns,
-          edges: es
-        }
-    }
-    alert ('json_to_dot: fatal error')
-  }
-  let x = aux(1, data)
-  let dot = "digraph G {node[shape=box];"
-  for (let i = 0; i < x.nodes.length; i++)
-    dot += x.nodes[i] + ";"
-  for (let i = 0; i < x.edges.length; i++)
-    dot += x.edges[i] + ";"
-  dot += "}"
-
-  return dot
 }
 
 function clone(data) {

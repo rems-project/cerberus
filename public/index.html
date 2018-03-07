@@ -30,95 +30,102 @@
   <link rel="stylesheet" type="text/css" href="css/scheme.css" />
 </head>
 <body>
-  <div id="container">
-    <input id="file-input" type="file" style="display:none;"/>
-    <div class="header">
-      <ul>
-        <li class="border"><div id="title">Cerberus</div></li>
-        <li class="border">
-          <div class="dropdown">
-            <a href="#" id="current-view" class="dropbtn dropdown-toggle"></a>
-            <div id="dropdown-views" class="dropdown-content"></div>
+  <div><input id="file-input" type="file" style="display:none;"/></div>
+  <div class="header">
+    <ul>
+      <li class="border"><div class="title">Cerberus</div></li>
+      <li class="border">
+        <div id="current-view" class="btn dropdown">
+          <span id="current-view-title"></span>
+          <div id="dropdown-views" class="dropdown-content"></div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>File</span>
+          <div class="dropdown-content">
+            <div id="new" class="btn">New empty file</div>
+            <hr>
+            <div id="load_pldi" class="btn">Load PLDI 2018 tests</div>
+            <div id="load_defacto" class="btn">Load defacto tests</div>
+            <div id="load" class="btn">Load from file</div>
           </div>
-        </li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class ="dropbtn dropdown-toggle">File</a>
-            <div class="dropdown-content">
-              <a href="#" id="new">New empty file</a>
-              <hr>
-              <a href="#" id="load_pldi">Load PLDI 2018 tests</a>
-              <a href="#" id="load_defacto">Load defacto tests</a>
-              <a href="#" id="load">Load from file</a>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Elaborate</span>
+          <div class="dropdown-content">
+            <div id="cabs" class="btn">Cabs</div>
+            <div id="ail-ast" class="btn">Ail (AST)</div>
+            <div id="ail" class="btn">Ail</div>
+            <div id="core" class="btn">Core</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Execute</span>
+          <div class="dropdown-content">
+            <div id="random" class="btn">Random</div>
+            <div id="exhaustive" class="btn">Exhaustive</div>
+            <div id="interactive" class="btn">Interactive</div>
+          </div>
+        </div>
+      </li>
+      <li><div id="compile" class="btn">Compile</div></li>
+      <li>
+        <div class="btn dropdown">
+          <span>Settings</span>
+          <div class="dropdown-content">
+            <div id="concrete" class="btn">
+              <input id="cb_concrete" type="checkbox" disabled>Use Concrete Model
+            </div>
+            <div id="rewrite" class="btn">
+              <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+            </div>
+            <div id="auto_refresh" class="btn">
+              <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+            </div>
+            <div id="colour" class="btn">
+              <input id="cb_colour" type="checkbox">Colour
+            </div>
+            <div id="colour_cursor" class="btn">
+              <input id="cb_colour_cursor" type="checkbox">Colour Cursor
             </div>
           </div>
-        </li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class ="dropbtn dropdown-toggle" id="ast">Elaborate</a>
-            <div class="dropdown-content">
-              <a href="#" id="cabs">Cabs</a>
-              <a href="#" id="ail-ast">Ail (AST)</a>
-              <a href="#" id="ail">Ail</a>
-              <a href="#" id="core">Core</a>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Share</span>
+          <div class="dropdown-content">
+            <div id="permalink-button" class="btn">
+              <span id="clip-img"></span>
+              <input id="permalink" type="text">
+              <div class="btn dropdown">
+                <span>Long</span>
+                <div class="dropdown-content">
+                  <div class="btn">Short</div>
+                </div>
+              </div>
             </div>
           </div>
-        </li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class="dropbtn dropdown-toggle" id="run">Execute</a>
-            <div class="dropdown-content">
-              <a href="#" id="random">Random</a>
-              <a href="#" id="exhaustive">Exhaustive</a>
-              <a href="#" id="interactive">Interactive</a>
-            </div>
-          </div>
-        </li>
-        <li><a href="#" id="compile">Compile</a></li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class="dropbtn dropdown-toggle">Settings</a>
-            <div class="dropdown-content">
-              <a href="#" id="concrete">
-                <input id="cb_concrete" type="checkbox" disabled>Use Concrete Model
-              </a>
-              <a href="#" id="rewrite">
-                <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
-              </a>
-              <a href="#" id="auto_refresh">
-                <input id="cb_auto_refresh" type="checkbox">Auto Refresh
-              </a>
-              <a href="#" id="colour">
-                <input id="cb_colour" type="checkbox">Colour
-              </a>
-              <a href="#" id="colour_cursor">
-                <input id="cb_colour_cursor" type="checkbox">Colour Cursor
-              </a>
-            </div>
-          </div>
-        </li>
-        <li>
-          <div class="dropdown">
-            <a href="#" class="dropbtn dropdown-toggle">Share</a>
-            <div class="dropdown-content">
-              <!--<a href="#" id="short">Short</a>-->
-              <a href="#" id="permalink-button">
-                <img id="clipboard" style="vertical-align: middle;" alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAdtJREFUOBGdlE0oBGEYx2fW5uKjkBQXByUROSguxGGjKEeKyxYlNye5SPnK1dIWtz0o4iDKTT4vVilJkaR2D1siB98f4/esMWZnZ6Zd//r1vu/zPO9/nnnfZhRN0zJhEiJg1TuBJchSUpSXulEYhhW4BrM8LPKgFVbNCae5ytOjJPdUVe2yFpFrIOaHUkvug/U6BNmnmXPSYTFYO1Mwk6424B5uwCyVxSxUUzeI6ZeRJCCaMgL6hNghnILt+RFfA1EIMn73yxk5qZzEPk9/dCiI6fEeRsPUzVCemnA+FuO/11SUbnJBOlXlDP+rBTZKQ0IB+CH8b0OO4gSDAYiL7s6YtLm9sl6aPLC5CXZgGaQ70Sd40zbEoJCN/TAGERgCQ2kZYlbHzhkIwzbIV3QLhlI2xMzHLvk8DyAfAlAC82BILkXe3dUYs0Zq5FanoUwnl7GTy3llNCRGcjs+NuUY0eSJfEm9EII7kNdtx+yJMUFiOAJVEMX0Sqc5oUpR5KvogCBkYzQHb5aa+NJDYpNZPSzCsc4Do/ko+lg/wxFMgJ2kOfkL2YtOd+Ec5KxcRU0lvMC4/IZsRbKFxBZIZ5e2RT9BudgKkLOtcTSUWkxrGfxQJGsHyQ/kAgIcX+wbhtLg1dVYfqAAAAAASUVORK5CYII="/>
-                <input id="permalink" type="text">
-              </a>
-            </div>
-          </div>
-        <li><a href="#" id="help">Help</a></li>
-        <li class="right"><a href="#" id="rems">REMS</a></li>
-      </ul>
-    </div><!-- header -->
-    <div id="views"></div>
-  </div> <!-- container -->
+        </div>
+      <li><div id="help" class="btn">Help</div></li>
+      <li class="right"><div id="rems" class="btn">REMS</div></li>
+    </ul>
+  </div><!-- header -->
+
+  <div id="views"></div>
+
   <div id="defacto" class="window">
     <div class="header">
       <ul>
-        <li><a href="#" class="disable-events">Load defacto test...</a></li>
-        <li class="right"><a id="load_defacto_cancel" href="#">Cancel</a></li>
+        <li><div class="title">Load defacto test...</div></li>
+        <li class="right">
+          <div id="load_defacto_cancel" class="btn">Cancel</div>
+        </li>
       </ul>
     </div>
     <div id="defacto_body" class="window_body">
@@ -127,8 +134,10 @@
   <div id="pldi" class="window">
     <div class="header">
       <ul>
-        <li><a href="#" class="disable-events">Load PLDI 2018 test...</a></li>
-        <li class="right"><a id="load_pldi_cancel" href="#">Cancel</a></li>
+        <li><div class="title">Load PLDI 2018 test...</div></li>
+        <li class="right">
+          <div id="load_pldi_cancel" class="btn">Cancel</div>
+        </li>
       </ul>
     </div>
     <div id="pldi_body" class="window_body">

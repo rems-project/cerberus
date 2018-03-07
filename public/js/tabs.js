@@ -23,6 +23,18 @@ class Tab {
 
 }
 
+class TabHelp extends Tab {
+  constructor() {
+    super('Help')
+    this.dom.addClass('help')
+    $.ajax({
+      url: 'help.html',
+      type: 'GET',
+      success: (data) => this.dom.append(data)
+    })
+  }
+}
+
 class TabInteractive extends Tab {
   constructor(title) {
     super(title)
@@ -808,7 +820,8 @@ const Tabs = {
   TabExecution,
   TabInteractive,
   TabMemory,
-  TabConsole
+  TabConsole,
+  TabHelp
 }
 
 function createTab(title) {
