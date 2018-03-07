@@ -624,7 +624,7 @@ let print_action globs act =
     ^^^ P.parens (print_pure_expr globs al)
     ^^^ P.parens (print_pure_expr globs n)
   | Kill e ->
-    !^"M.kill0" ^^ P.parens (print_pure_expr globs e)
+    !^"M.kill" ^^ P.parens (print_pure_expr globs e)
   | Store0 (ty, pe1, pe2, _) ->
     choose_store_type ty
     ^^^ P.parens (print_pure_expr globs pe1)
