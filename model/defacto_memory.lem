@@ -99,14 +99,15 @@ let wip str =
   kill (Other (MerrWIP str))
 
 
-val fail: forall 'a. mem_error -> impl_memM 'a
-let fail err =
+val defacto_fail: forall 'a. mem_error -> impl_memM 'a
+let defacto_fail err =
   match undefinedFromMem_error err with
     | Just ubs ->
         kill (Undef Loc.unknown ubs)
     | Nothing ->
         kill (Other err)
   end
+let inline fail = defacto_fail
 
 val print_debugM: nat -> (unit -> string) -> impl_memM unit
 let print_debugM n msg =
@@ -148,8 +149,8 @@ let allocation_is_dead alloc_id =
 
 
 (* DEBUG, fixing impl: gcc-5 (Homebrew gcc 5.2.0) 5.2.0 *)
-val integer_range: AilTypes.integerType -> integer * integer
-let integer_range = function
+val defacto_integer_range: AilTypes.integerType -> integer * integer
+let defacto_integer_range = function
  | AilTypes.Char ->
      (0-128, 127)
  | AilTypes.Bool ->
@@ -203,6 +204,7 @@ let integer_range = function
  | AilTypes.Ptrdiff_t ->
      (0-2**63, 2**63-1)
 end
+let inline integer_range = defacto_integer_range
 
 
 (* ============================================================================================== *)

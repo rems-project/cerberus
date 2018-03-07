@@ -3367,7 +3367,7 @@ let desugar_and_register_external_declaration edecl =
 
 import Core
 val desugar: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> string -> translation_unit ->
-  Exception.exceptM (UniqueId.supply Symbol.sym * program unit) Errors.error
+  Exception.exceptM (UniqueId.supply Symbol.sym * ail_program unit) Errors.error
 let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff (

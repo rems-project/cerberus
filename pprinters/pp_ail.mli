@@ -68,8 +68,8 @@ let pp_static_assertion (e, lit) =
   pp_keyword "_Static_assert" ^^ P.parens (pp_expression e ^^ P.comma ^^^ pp_stringLiteral lit)
 *)
 
-val pp_program: 'a program -> PPrint.document
-val pp_program_with_annot: GenTypes.genTypeCategory program -> PPrint.document
+val pp_program: 'a ail_program -> PPrint.document
+val pp_program_with_annot: GenTypes.genTypeCategory ail_program -> PPrint.document
 
 (* DEBUG *)
 val pp_genType: GenTypes.genType -> PPrint.document

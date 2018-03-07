@@ -441,5 +441,5 @@ let pp_program p =
   pp_doc_tree (dtree_of_program (fun _ -> P.empty) p)
 
 (* For debugging: prints all the type annotations *)
-let pp_program_with_annot (p: GenTypes.genTypeCategory program) : PPrint.document =
+let pp_program_with_annot (p: GenTypes.genTypeCategory ail_program) : PPrint.document =
   pp_doc_tree (dtree_of_program pp_annot p)

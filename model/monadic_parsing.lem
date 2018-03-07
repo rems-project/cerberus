@@ -9,18 +9,21 @@ let parse (ParserM p) = p
 
 
 val return: forall 'a. 'a -> parserM 'a
-let return a = ParserM (fun cs -> [(a, cs)])
+let parse_return a = ParserM (fun cs -> [(a, cs)])
+let inline return = parse_return
 
 val bind: forall 'a 'b. parserM 'a -> ('a -> parserM 'b) -> parserM 'b
-let bind p f = ParserM (fun cs ->
+let parse_bind p f = ParserM (fun cs ->
   List.concatMap (fun (a, cs') -> parse (f a) cs') (parse p cs)
 )
+let inline bind = parse_bind
 
 val mzero: forall 'a. parserM 'a
 let mzero = ParserM (fun _ -> [])
 
 val mplus: forall 'a. parserM 'a -> parserM 'a -> parserM 'a
-let mplus p1 p2 = ParserM (fun cs -> parse p1 cs ++ parse p2 cs)
+let parse_mplus p1 p2 = ParserM (fun cs -> parse p1 cs ++ parse p2 cs)
+let inline mplus = parse_mplus
 
 val liftM: forall 'a 'b. ('a -> 'b) -> parserM 'a -> parserM 'b
 let liftM f p = ParserM (fun cs ->
@@ -50,7 +53,8 @@ let inline (<|>) p1 p2 =
 
 
 val option: forall 'a. 'a -> parserM 'a -> parserM 'a
-let option x p = p <|> return x
+let parse_option x p = p <|> return x
+let inline option = parse_option
 
 
 val optionMaybe: forall 'a. parserM 'a -> parserM (maybe 'a)
@@ -65,8 +69,9 @@ let sat pred =
 
 
 val char: char -> parserM char
-let char c =
+let parse_char c =
   sat (fun z -> c = z)
+let inline char = parse_char
 
 
 val anyChar: parserM char

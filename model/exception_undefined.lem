@@ -4,11 +4,12 @@ import Exception Undefined
 type t 'a 'msg = Exception.exceptM (Undefined.t 'a) 'msg
 
 val return: forall 'a 'b 'msg. 'a -> t 'a 'msg
-let return z =
+let exception_undef_return z =
   Exception.return (Undefined.return z)
+let inline return = exception_undef_return
 
 val bind: forall 'a 'b 'msg. t 'a 'msg -> ('a -> t 'b 'msg) -> t 'b 'msg
-let bind m f =
+let exception_undef_bind m f =
   match m with
     | Exception.Result (Undefined.Defined z) ->
         f z
@@ -19,15 +20,18 @@ let bind m f =
     | Exception.Exception err ->
         Exception.fail err
   end
+let inline bind = exception_undef_bind
 
 val fail: forall 'a 'msg. 'msg -> t 'a 'msg
-let fail err = Exception.fail err
+let exception_undef_fail err = Exception.fail err
+let inline fail = exception_undef_fail
 
 
-val     mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
-let rec mapM f xs =
+val mapM: forall 'a 'b 'msg. ('a -> t 'b 'msg) -> list 'a -> t (list 'b) 'msg
+let exception_undef_mapM f xs =
   Exception.bind (Exception.mapM f xs)
     (fun us -> Exception.return $ Undefined.mapM id us)
+let inline mapM = exception_undef_mapM
 
 
 module Operators = struct
@@ -38,31 +42,35 @@ end
 
 open Operators
 val sequence: forall 'a 'msg. list (t 'a 'msg) -> t (list 'a) 'msg
-let sequence ms =
+let exception_undef_sequence ms =
   foldr
     (fun m ms' ->
       m   >>= fun x  ->
       ms' >>= fun xs ->
       return (x::xs)
     ) (return []) ms
+let inline sequence = exception_undef_sequence
 
 
 (* NOTE: this is foldl *)
 val     foldM: forall 'a 'b 'msg. ('a -> 'b -> t 'a 'msg) -> 'a -> list 'b -> t 'a 'msg (* GENERIC Monad *)
-let rec foldM f a = function                                                            (* GENERIC Monad *)
+let rec exception_undef_foldM f a = function                                                            (* GENERIC Monad *)
   | [] ->                                                                               (* GENERIC Monad *)
       return a                                                                          (* GENERIC Monad *)
   | x::xs ->                                                                            (* GENERIC Monad *)
-      f a x >>= fun fax -> foldM f fax xs                                               (* GENERIC Monad *)
+      f a x >>= fun fax -> exception_undef_foldM f fax xs                                               (* GENERIC Monad *)
 end
+let inline foldM = exception_undef_foldM
 
 val     foldrM: forall 'a 'b 'msg. ('a -> 'b -> t 'b 'msg) -> 'b -> list 'a -> t 'b 'msg
-let rec foldrM f a l =
+let rec exception_undef_foldrM f a l =
   match l with
     | [] -> return a
-    | x::xs -> foldrM f a xs >>= f x
+    | x::xs -> exception_undef_foldrM f a xs >>= f x
   end
+let inline foldrM = exception_undef_foldrM
 
 
 val fmap: forall 'a 'b 'msg. ('a -> 'b) -> t 'a 'msg -> t 'b 'msg
-let fmap f m = bind m (fun z -> return $ f z)
+let exception_undef_fmap f m = bind m (fun z -> return $ f z)
+let inline fmap = exception_undef_fmap

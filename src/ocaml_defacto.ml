@@ -560,7 +560,7 @@ let initial_mem_state = Defacto_memory.impl_initial_mem_state
 type 'a memM =
   ('a, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
 let return = Defacto_memory.impl_return
-let bind = Nondeterminism.bind2
+let bind = Nondeterminism.nd_bind
 let allocate_static = Defacto_memory.impl_allocate_static
 
 let allocate_dynamic = Defacto_memory.impl_allocate_dynamic

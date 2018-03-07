@@ -2744,7 +2744,7 @@ let collect_visibles stmt =
 
 (* TODO: morally the kills and creates should be unseq() *)
 val mk_run_e: Loc.t -> Symbol.sym -> list Symbol.sym -> list (Symbol.sym * Aty.ctype) -> list C.pexpr -> C.expr unit
-let mk_run_e loc sym visibles_before visibles_after pes =
+let translation_mk_run_e loc sym visibles_before visibles_after pes =
   let killed_syms =
     List.filter (fun sym ->
       Maybe.isNothing (List.lookup sym visibles_after)
@@ -2770,7 +2770,7 @@ let mk_run_e loc sym visibles_before visibles_after pes =
          Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [(*f; *)sym]))
       ) created_sym_tys in
   mk_kills_e (mk_creates_e (Caux.mk_run_e sym ((List.map (fun (sym, _) -> Caux.mk_sym_pe sym) visibles_after) ++ pes)))
-  
+let inline mk_run_e = translation_mk_run_e
 
 
 open Operators
@@ -3178,7 +3178,7 @@ let translate_tag_definitions ctx =
   end) ctx
 
 val translate_program:
-  translation_stdlib -> A.program GenTypes.genTypeCategory ->
+  translation_stdlib -> A.ail_program GenTypes.genTypeCategory ->
   E.elabM (C.core_tag_definitions * list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
 let translate_program stdlib (startup_sym_opt, sigm) =
   let core_tagDefs = translate_tag_definitions sigm.A.tag_definitions in
@@ -3415,7 +3415,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
-    C.impl -> (UniqueId.supply Symbol.sym) * A.program GenTypes.genTypeCategory ->
+    C.impl -> (UniqueId.supply Symbol.sym) * A.ail_program GenTypes.genTypeCategory ->
     (UniqueId.supply Symbol.sym * C.file unit)
 
 let translate (ailnames, stdlib_fun_map) impl (symbol_counter, prog) =

@@ -109,18 +109,25 @@ val read:   forall 'a 's 'msg. ('s -> 'a) -> stExceptM 'a 's 'msg
 val update: forall 's 'msg. ('s -> 's) -> stExceptM unit 's 'msg
 val modify: forall 'a 's 'msg. ('s -> 'a * 's) -> stExceptM 'a 's 'msg
 val eval:   forall 'a 'b 's 'msg. stExceptM 'a 's 'msg -> 's -> Exception.exceptM 'a 'msg
-let read   f = fun s -> Exception.return (f s, s)
-let update f = fun s -> Exception.return ((), f s)
-let modify f = fun s -> Exception.return (f s)
-let eval   m = fun s -> Exception.fmap fst (m s)
+let state_except_read   f = fun s -> Exception.return (f s, s)
+let state_except_update f = fun s -> Exception.return ((), f s)
+let state_except_modify f = fun s -> Exception.return (f s)
+let state_except_eval   m = fun s -> Exception.fmap fst (m s)
+let inline read = state_except_read
+let inline update = state_except_update
+let inline modify = state_except_modify
+let inline eval = state_except_eval
 
 val get: forall 'st 'msg. stExceptM 'st 'st 'msg
 val put: forall 'st 'msg. 'st -> stExceptM unit 'st 'msg
-let get = fun st -> Exception.return (st, st)
-let put st = fun _ -> Exception.return ((), st)
+let state_except_get = fun st -> Exception.return (st, st)
+let state_except_put st = fun _ -> Exception.return ((), st)
+let inline get = state_except_get
+let inline put = state_except_put
 
 val run: forall 'a 's 'msg. stExceptM 'a 's 'msg -> 's -> Exception.exceptM ('a * 's) 'msg
-let run m = fun st -> m st
+let state_except_run m = fun st -> m st
+let inline run = state_except_run
 
 
 val liftException: forall 'a 'state 'msg. Exception.exceptM 'a 'msg -> stExceptM 'a 'state 'msg

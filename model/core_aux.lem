@@ -787,13 +787,14 @@ let rec valueOrPEconstrainedFromPexprs pes =
 
 
 val to_integer: pexpr -> maybe integer
-let to_integer pe =
+let core_aux_to_integer pe =
   match valueFromPexpr pe with
     | Just (Vobject (OVinteger ival)) ->
         Mem_aux.integerFromIntegerValue ival
     | _ ->
         Nothing
   end
+let inline to_integer = core_aux_to_integer
 
 
 

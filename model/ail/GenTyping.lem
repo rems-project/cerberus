@@ -26,7 +26,7 @@ let lookup_tag_definition s sym =
 
 
 val type_of_constant: integerConstant -> genIntegerType
-let type_of_constant iCst =
+let gen_typing_type_of_constant iCst =
   let () = Debug.warn [] (fun () ->
     "GenTyping.type_of_constant is BROKEN, using min ranges is wrong"
   ) in
@@ -136,7 +136,7 @@ let type_of_constant iCst =
     | IConstantMin ity ->
         Concrete ity
 end
-
+let inline type_of_constant = gen_typing_type_of_constant
 
 (* TODO: is only used once, could be inlined *)
 (* STD §6.5.16.1#1 *)
@@ -2056,7 +2056,7 @@ TODO: static asserts
 
 
 (* NOTE: this is the only thing this module exports *)
-val annotate_program: program unit -> E.errorM (program genTypeCategory)
+val annotate_program: ail_program unit -> E.errorM (ail_program genTypeCategory)
 let annotate_program (startup_opt, sigm) =
   match startup_opt with
     | Nothing ->

@@ -224,36 +224,35 @@ type state = <|
 type desugM 'a = State_exception.stExceptM 'a state Errors.error
 
 val return: forall 'a. 'a -> desugM 'a
-let return = State_exception.return
+let inline return = State_exception.return
 
 val bind: forall 'a 'b. desugM 'a -> ('a -> desugM 'b) -> desugM 'b
-let bind = State_exception.bind
+let inline bind = State_exception.bind
 
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
-let fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
+let inline fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
 
 
 
 val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
 val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
-let mapM = State_exception.mapM
-let mapM_ = State_exception.mapM_
+let inline mapM = State_exception.mapM
+let inline mapM_ = State_exception.mapM_
 
-let foldlM = State_exception.foldlM
-let foldrM = State_exception.foldrM
+let inline foldlM = State_exception.foldlM
+let inline foldrM = State_exception.foldrM
 
-let iter = State_exception.iter
+let inline iter = State_exception.iter
 
 val tryWith: forall 'a. Errors.error -> desugM 'a -> desugM 'a
-let tryWith = State_exception.tryWith
-
+let inline tryWith = State_exception.tryWith
 
 val fmap: forall 'a 'b. ('a -> 'b) -> desugM 'a -> desugM 'b
-let fmap = State_exception.fmap
+let inline fmap = State_exception.fmap
 
 val app: forall 'a 'b. desugM ('a -> 'b) -> desugM 'a -> desugM 'b
-let app  = State_exception.app
+let inline app  = State_exception.app
 
 
 let inline (>>=)    = bind
@@ -263,26 +262,28 @@ let inline (<*>)    = app
 
 
 val void: forall 'a. desugM 'a -> desugM unit
-let void m =
+let cabs_to_ail_effect_void m =
   fmap (const ()) m
+let inline void = cabs_to_ail_effect_void
 
 
 val guard: forall 'a. desugM bool -> string -> desugM 'a -> desugM 'a
-let guard m_pred err_msg m =
+let cabs_to_ail_effect_guard m_pred err_msg m =
   m_pred >>= function
     | true  -> m
     | false -> error ("[Cabs_to_ail_effect] failed guard: " ^ err_msg ^ ".")
   end
-
+let inline guard = cabs_to_ail_effect_guard
 
 val liftException: forall 'a. Exception.exceptM 'a Errors.error -> desugM 'a
-let liftException = State_exception.liftException
+let inline liftException = State_exception.liftException
 
 (* ========================================================================== *)
 val current_scope_is: scope -> desugM bool
-let current_scope_is scope =
+let cabs_to_ail_effect_current_scope_is scope =
   (* NOTE: it would be equivalent to use [registered_tag_declarations] *)
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers = scope)
+let inline current_scope_is = cabs_to_ail_effect_current_scope_is
 
 
 val get_scope: desugM scope
@@ -366,13 +367,13 @@ let initial_state n core_eval_stuff = <|
 
 val eval: forall 'a. nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a ->
   Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
-let eval n core_eval_stuff m =
+let cabs_to_ail_effect_eval n core_eval_stuff m =
   State_exception.eval (
     m                                                 >>= fun res    ->
     State_exception.read (fun st -> st.symbol_supply) >>= fun supply ->
     return (supply, res)
     ) (initial_state n core_eval_stuff)
-
+let inline eval = cabs_to_ail_effect_eval
 
 
 
@@ -1284,7 +1285,7 @@ let fetch_object_declaration sym =
 (* TODO: ... *)
 let map_union = Map.(union)
 
-val extract_program: string -> desugM (A.program unit)
+val extract_program: string -> desugM (A.ail_program unit)
 let extract_program startup_str =
   resolve_identifier (CabsIdentifier Loc.unknown startup_str) Namespace_ordinary  >>= function
     | Just (_, (startup_sym, _, _)) -> return (Just startup_sym)
@@ -1384,7 +1385,7 @@ let get_sigma_sofar =
 
 
 val is_incomplete: ATypes.ctype -> desugM bool
-let is_incomplete ty =
+let cabs_to_ail_effect_is_incomplete ty =
   get_tag_definitions >>= fun ident_tagDefs ->
   let (fake_ail_sigma : A.sigma unit) = <|
     A.declarations= [];
@@ -1404,6 +1405,6 @@ let is_incomplete ty =
       ) [] (Map_extra.toList ident_tagDefs);
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
-
+let inline is_incomplete = cabs_to_ail_effect_is_incomplete
 
 

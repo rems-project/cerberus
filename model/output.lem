@@ -123,11 +123,11 @@ let fieldWidth =
 
 
 val precision: parserM precision
-let precision =
+let output_precision =
       (char #'.' >> char #'*' >> return P_asterisk)
   <|> (char #'.' >> decimalInteger >>= fun n -> return $ P_num n)
   <|> (char #'.' >> return (P_num 0))
-
+let inline precision = output_precision
 
 val lengthModifier: parserM length_modifier
 let lengthModifier =
