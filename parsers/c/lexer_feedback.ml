@@ -63,32 +63,32 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
+  | DeclPtr of Cabs.pointer_declarator
   | DeclOther
-
-type declarator =
+and declarator =
   { id:      string;
     sort:    decl_sort;
-    pointer: Cabs.pointer_declarator option;
     direct:  Cabs.direct_declarator;
   }
 
 let identifier decl = decl.id
 
-let cabs_of_declarator d = Cabs.Declarator (d.pointer, d.direct)
+let cabs_of_declarator d =
+  match d.sort with
+  | DeclPtr p -> Cabs.Declarator (Some p, d.direct)
+  | _ -> Cabs.Declarator (None, d.direct)
 
 let cabs_of_declarator_option = function
   | Some d -> Some (cabs_of_declarator d)
   | None -> None
 
 let pointer_decl pdecl d =
-  { d with pointer= Some pdecl;
-           sort=    DeclOther;
+  { d with sort=    DeclPtr pdecl;
   }
 
 let identifier_decl (Cabs.CabsIdentifier(_, str) as i) =
   { id=      str;
     sort=    DeclId;
-    pointer= None;
     direct=  Cabs.DDecl_identifier i;
   }
 
