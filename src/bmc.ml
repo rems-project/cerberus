@@ -857,10 +857,13 @@ let bmc_paction (state: bmc_state)
 
   | Create _ -> assert false
   | Alloc0 _ -> assert false
-  | Kill _ ->
-      (* TODO *)
-      Printf.printf "TODO: KILL unit\n";
-      UnitSort.mk_unit state.ctx, AddressSet.empty, state
+  | Kill pexpr ->
+      let (_, allocs, state) = bmc_pexpr state pexpr in
+      assert (AddressSet.cardinal allocs = 1);
+      let elem = AddressSet.find_first (fun _ -> true) allocs in
+      let new_heap = Pmap.remove elem state.heap in
+      UnitSort.mk_unit state.ctx, 
+          AddressSet.empty, {state with heap = new_heap}
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
     (* Fall through *)
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), p_value, _) ->
@@ -871,7 +874,7 @@ let bmc_paction (state: bmc_state)
          update heap: @a_i
 
          This is extremely naiive and generates equations for every created
-         address. 
+         ^address. 
        *)
       let sort = ctype_to_sort state ty in 
       let ptr_allocs = alias_lookup_sym sym state.alias_state in
