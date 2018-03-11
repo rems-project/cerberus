@@ -1,0 +1,6 @@
+fun main() : integer :=
+  if (2 > 1) then
+    let _: integer = undef(<<UB045a_division_by_zero>>)  in
+    1
+  else
+    let _ : integer = 5 + 3 in 2

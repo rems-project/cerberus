@@ -702,8 +702,8 @@ let rec bmc_pexpr (state: bmc_state)
     | PEarray_shift _ -> assert false
     | PEmember_shift _ -> assert false
     | PEnot pe1 -> 
-        let (z3_pe1, allocs, state1) = bmc_pexpr state pe1 in  
-          (Boolean.mk_not state.ctx z3_pe1), allocs, state1
+        let (z3_pe1, allocs, state) = bmc_pexpr state pe1 in  
+          (Boolean.mk_not state.ctx z3_pe1), allocs, state
     | PEop (bop, pe1, pe2) ->
         let (z3_pe1, alloc1, state1) = bmc_pexpr state pe1 in
         let (z3_pe2, alloc2, state2) = bmc_pexpr state1 pe2 in
@@ -751,9 +751,9 @@ let rec bmc_pexpr (state: bmc_state)
         bmc_pexpr state1 pe2 
     *)
     | PElet (pat, pe1, pe2) ->
-        let (z3_pe1, alloc1, state1) = bmc_pexpr state pe1 in
-        let eq_expr = mk_eq_pattern state1 pat z3_pe1 in
-        Solver.add state1.solver [ eq_expr ];
+        let (z3_pe1, alloc1, state) = bmc_pexpr state pe1 in
+        let eq_expr = mk_eq_pattern state pat z3_pe1 in
+        Solver.add state.solver [ eq_expr ];
 
         alias_pattern state.alias_state pat alloc1;
         bmc_pexpr state pe2
