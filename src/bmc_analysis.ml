@@ -1,4 +1,5 @@
 open Bmc_utils
+open Bmc_sorts
 open Core
 
 (* Context-insensitive analysis... 
@@ -6,8 +7,9 @@ open Core
  * Could easily be smarter if done at same time as conversion to Z3
  *)
 
-type k_address = int
+type k_address = Address.addr
 
+(* TODO: rename to alloc id *)
 module AddressSet = Set.Make( 
   struct
     let compare = Pervasives.compare
@@ -32,8 +34,25 @@ type kanalysis_state = {
   addr_map : ((k_address, AddressSet.t) Pmap.map) ref
 }
 
+let alias_lookup_sym (sym: ksym) (state: kanalysis_state) =
+  match Pmap.lookup sym !(state.ptr_map) with
+  | None -> AddressSet.empty
+  | Some s -> s
+
+let alias_lookup_alloc (alloc_id: k_address) (state: kanalysis_state) =
+  match Pmap.lookup alloc_id !(state.addr_map) with
+  | None -> assert false
+  | Some s -> s
+
+let initial_analysis_state  = fun () ->
+  { ptr_map = ref(Pmap.empty sym_cmp);
+    addr_gen = ref (Address.mk_initial);
+    addr_set = ref (AddressSet.empty);
+    addr_map = ref (Pmap.empty Pervasives.compare)
+  }
+
 let string_of_address_set set =
-  AddressSet.fold (fun v s -> (string_of_int v) ^ " " ^ s) set ""
+  AddressSet.fold (fun v s -> (Address.to_string v) ^ " " ^ s) set ""
 
 let print_ptr_map (ptr_map : (ksym, AddressSet.t) Pmap.map) =
   Printf.printf "PtrMap:\n";
@@ -44,10 +63,10 @@ let print_ptr_map (ptr_map : (ksym, AddressSet.t) Pmap.map) =
   ) ptr_map
 
 let print_addr_map (addr_map : (k_address, AddressSet.t) Pmap.map) =
-  Printf.printf "AddrMap:\n";
+  Printf.printf "AliasAddrMap:\n";
   Pmap.iter (fun k v -> 
     Printf.printf "@%s -> [ %s]\n" 
-        (string_of_int k) 
+        (Address.to_string k) 
         (string_of_address_set v)
   ) addr_map
 
@@ -86,8 +105,12 @@ let rec alias_pattern (state: kanalysis_state)
       List.iter (fun p -> alias_pattern state p set) patList
 
 let mk_new_addr (state: kanalysis_state) = 
+  Address.mk_fresh state.addr_gen
+  (*
   state.addr_gen := succ (!(state.addr_gen));
   !(state.addr_gen)
+*)
+
 
 
 (* Analyse function parameters. Namely, if is pointer type, treat it as a create
@@ -161,6 +184,14 @@ let rec analyse_pexpr (state: kanalysis_state)
         analyse_pexpr state pe
   in ret 
 
+let alias_add_addr (state: kanalysis_state) new_addr ty =
+  state.addr_set := AddressSet.add new_addr !(state.addr_set);
+  if is_ptr_ctype ty then
+    state.addr_map := Pmap.add new_addr AddressSet.empty !(state.addr_map)
+
+let alias_add_to_addr_map (st: kanalysis_state) alloc new_set = 
+  st.addr_map := Pmap.add alloc new_set !(st.addr_map)
+
 
 let rec analyse_expr (state: kanalysis_state)
                      (Expr(annot, expr_) : 'a typed_expr) =
@@ -173,10 +204,7 @@ let rec analyse_expr (state: kanalysis_state)
       assert false
   | Eaction (Paction(_, Action(_, _, Create (_, ty, _)))) ->
       let new_addr = mk_new_addr state in
-      state.addr_set := AddressSet.add new_addr !(state.addr_set);
-      (if is_ptr_ctype ty then
-        state.addr_map := Pmap.add new_addr AddressSet.empty !(state.addr_map)
-      );
+      alias_add_addr state new_addr ty;
 
       AddressSet.singleton new_addr
 

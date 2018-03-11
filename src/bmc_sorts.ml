@@ -173,6 +173,8 @@ let rec ctype_to_expr ty ctx =
   )
 
 
+(* TODO: rename to "alloc id" or something more correct *)
+(* Also abstraction is unnecessary and not maintained throughout code *)
 module type AddressType =
   sig
     type addr
