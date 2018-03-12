@@ -70,6 +70,8 @@ type kbmc_address = {
 
 type kheap = (Address.addr, Expr.expr) Pmap.map
 
+
+(* TODO: sym_table, addr_map, alias_state should not use references *)
 type bmc_state = {
   ctx         : context;
   solver      : Solver.solver;
@@ -261,6 +263,7 @@ let initial_bmc_state (supply : ksym_supply)
     addr_map = ref (Pmap.empty Pervasives.compare);
     heap = Pmap.empty Pervasives.compare;
     alias_state = initial_analysis_state ();
+
 
     vcs = []
   }
@@ -1343,21 +1346,33 @@ let bmc_fun_map (state: bmc_state)
         Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] 
   ) funs
 *)
-let initialise_param ((sym, ty): (ksym * core_base_type)) state =
+
+(* NOTE: special-cased for main b/c types of pointers are unknown otherwise *)
+let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
   add_sym_to_sym_table state sym ty;
   match Pmap.lookup sym !(state.alias_state.ptr_map) with
   | Some s -> assert false (* Symbol should not exist yet *)
   | None ->
+      assert (is_ptr_type ty);
      (* TODO: does not work if arg is a C pointer ? *) 
+      (*
       if is_ptr_type ty then (* duplicated from Create *)
+
+      *)
         begin
           let new_addr = mk_new_addr state.alias_state in
           state.alias_state.addr_set := AddressSet.add new_addr
                               !(state.alias_state.addr_set);
           add_set state.alias_state sym (AddressSet.singleton new_addr);
 
-          (* Create a new bmc address and add it to addr_map *)
-          let sort = cbt_to_z3 state ty in
+          (* Create a new bmc address and add it to addr_map 
+           * The sort needs to be unspecified.
+           *)
+          (*
+          let sort = Sort.mk_uninterpreted_s  state.ctx
+                     ("UnintSort_" ^ (string_of_int new_sort_id)) in
+          *)
+
           let bmc_addr =  mk_bmc_address new_addr sort in
           state.addr_map := Pmap.add new_addr bmc_addr !(state.addr_map);
 
@@ -1367,8 +1382,18 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state =
           let new_heap = Pmap.add new_addr initial_value state.heap in
           ({state with heap = new_heap})
         end
+        (*
     else 
       state
+      *)
+
+let initialise_main_params params state =
+  match params with
+  | [] -> state
+  | [p1; p2] ->
+      let state = initialise_param p1 state (LoadedInteger.mk_sort state.ctx) in
+      initialise_param p2 state (LoadedPointer.mk_sort state.ctx)
+  | _ -> assert false
 
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   match file.main with
@@ -1379,8 +1404,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
             (* Handle parameters *)
-            let state = List.fold_left (fun st param ->
-                initialise_param param st) initial_state params in
+            let state = initialise_main_params params initial_state in
               (*
             let _ = analyse_expr analysis_state e in
 
@@ -1391,8 +1415,11 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
 
+            let state = initialise_main_params params initial_state in
+            (*
             let state = List.fold_left (fun st param ->
                 initialise_param param st) initial_state params in
+      *)
                         (*
             let _ = analyse_pexpr analysis_state pe in
 
