@@ -92,7 +92,7 @@ let symbol_to_string (sym: ksym) =
   | Symbol (num, Some str) -> 
       ((string_of_int num) ^ "_" ^ str)
   | Symbol (num, None) ->
-      ((string_of_int num) ^ "_" ^ "a")
+      ((string_of_int num) ^ "_" ^ "?")
 
 let symbol_to_z3 (ctx: context) (sym: ksym) =
   mk_sym ctx (symbol_to_string sym)

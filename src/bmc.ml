@@ -23,32 +23,35 @@ open Bmc_utils
 
 type ksym_table = (ksym, Expr.expr) Pmap.map
 
-(* (The below is old and no longer used )
- *
+(* 
  * Pointer state: 
  * For every variable of Core type pointer, 
- *    - Map it to set of addresses it refers to
- *    - int (core symbol) -> PointerState = Set of addresses
+ *    - Associate it with a set of allocs it might refer to
  *
- * An address consists of a unique allocation
- *    - fun: is_eq (check if same address)
- *    - map from int to symbol?
- *    - type ? 
+ * Bmc_address:
+ *    - Store allocation id associated with it
+ *    - Sequence ctr and sequence history of expressions stored
+ *    - Z3 Sort (?)
  *
  * For let x: pointer = Create...
- *    - Create a new address
- *    - Don't insert into bmc_state?
- *    - Add it to pointer state
- *    - "x: SMT ptr sort" = address
+ *    - Create a allocation id (storing values of a certain type?)
+ *    - Associate x to allocation {@x}
+ *    - Create a bmc_address, map @x->bmc_address
+ *    - Let x be a z3 expr (Pointer @x)
+ *    - Heap: map x->@x_1 where @x_1 is some unspecified Z3 symbol
  *
  * For let y: pointer = x
- *    - pointer state
+ *    - Associate y with set of allocs x might refer to
  *    - "y : SMT ptr sort" = x (address)
  *
- * For store:
- *    - create fresh var for the address and assign it to a value
+ * For store (p, v)
+ *    - If v is a pointer, update points-to map such that all 
+ *      all allocs in allocs(p) might point to allocs(v)
+ *    - For each alloc in allocs(p), 
+ *      create a fresh sequence variable @p_i 
+ *    - In Z3: addr(p) == @p ? @p_i = v : @p_i = @p_{i-1}
  *
- * For load:
+ * For load (p)
  *    - lookup address variable points to, assign it current value in z3
  *
  * bmc_state:
@@ -73,18 +76,11 @@ type bmc_state = {
   sym_table   : ksym_table ref;
   sym_supply  : ksym_supply ref;
 
-  (*
-  (* Make fresh allocations using Address.mk_fresh *)
-  addr_gen    : Address.addr ref;
-  *)
-
-  (* Map from int -> address *)
+  (* Map from alloc -> address *)
   addr_map    : (Address.addr, kbmc_address) Pmap.map ref;
 
-  (* ------------- *)
-  (* Stuff from alias analysis *)
+  (* Alias analysis stuff *)
   alias_state : kanalysis_state;
-
 
   (* ------------- *)
   
@@ -97,13 +93,6 @@ type bmc_state = {
 
 
 (* PPrinters *)
-
-(*
-let print_ptr_map (map : (int, Address.addr list) Pmap.map) =
-  Pmap.mapi (fun k v-> (Printf.printf "%d -> " k;
-            List.iter(fun s -> Printf.printf "%s " (Address.to_string s)) v)) map
-*)
-
 let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
   Printf.printf "HEAP\n";
   Pmap.iter (fun k v-> (Printf.printf "E: %s -> %s\n" 
@@ -244,20 +233,19 @@ let add_sym_to_sym_table (state: bmc_state) (sym: ksym) (ty: core_base_type) =
   let z3_sym = Expr.mk_const state.ctx (symbol_to_z3 state.ctx sym) z3_sort in
   state.sym_table := Pmap.add sym z3_sym !(state.sym_table)
 
-let bmc_lookup_sym (sym: ksym) (state: bmc_state) : Expr.expr =
-  match Pmap.lookup sym !(state.sym_table) with
+let pmap_lookup_or_fail key pmap =
+  match Pmap.lookup key pmap with
   | None -> assert false
   | Some x -> x
+
+let bmc_lookup_sym (sym: ksym) (state: bmc_state) : Expr.expr =
+  pmap_lookup_or_fail sym !(state.sym_table)
 
 let bmc_lookup_alloc alloc (state: bmc_state) : kbmc_address =
-  match Pmap.lookup alloc !(state.addr_map) with
-  | None -> assert false
-  | Some addr -> addr
+  pmap_lookup_or_fail alloc !(state.addr_map)
 
 let bmc_lookup_addr_in_heap alloc heap =
-  match Pmap.lookup alloc heap with
-  | None -> assert false
-  | Some x -> x
+  pmap_lookup_or_fail alloc heap
 
 
 let initial_bmc_state (supply : ksym_supply) 
@@ -270,12 +258,8 @@ let initial_bmc_state (supply : ksym_supply)
     solver = Solver.mk_solver ctx None;
     sym_table = ref (Pmap.empty sym_cmp);
     sym_supply = ref supply;
-
-    (* addr_gen = ref (Address.mk_initial); *)
     addr_map = ref (Pmap.empty Pervasives.compare);
-
     heap = Pmap.empty Pervasives.compare;
-
     alias_state = initial_analysis_state ();
 
     vcs = []
@@ -398,44 +382,12 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
           let expr_pat = Expr.mk_const state.ctx pat_sym sort in
           state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
           (Boolean.mk_eq state.ctx expr_pat expr)
-          (*
-          begin
-          match bmc_expr with
-          | Some expr ->
-              (Boolean.mk_eq state.ctx expr_pat expr)
-          | _ -> assert false
-          end
-          *)
       | BTy_tuple ty_list -> 
           assert false
-          (*
-          (* TODO: duplicate *)
-          begin
-          match bmc_expr with
-          | Some expr ->
-              let sort = cbt_to_z3 state ty in
-              let expr_pat = Expr.mk_const state.ctx pat_sym sort in
-              state.sym_table := Pmap.add sym_id expr_pat (!(state.sym_table));
-              (Boolean.mk_eq state.ctx expr_pat expr)
-          | _ -> assert false
-          end
-          *)
       | BTy_list _ -> assert false
       | BTy_object OTy_pointer -> 
-          (* Pointer equality *)
-            (*
-          match bmc_expr with
-          | Some expr ->
-              *)
               assert (Sort.equal (Expr.get_sort expr) 
                                  (PointerSort.mk_sort state.ctx));
-              (*
-              let addr_list = 
-                match Pmap.lookup ptr_id state.ptr_map with
-                | Some z -> z
-                | None -> assert false
-              in
-              *)
               (* Create a new symbol for the pattern pointer *)
               let pat_sym = symbol_to_z3 state.ctx sym in
               let expr_pat = 
@@ -448,11 +400,7 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
               Boolean.mk_eq state.ctx 
                 (PointerSort.get_addr state.ctx expr_pat)
                 (PointerSort.get_addr state.ctx expr)   
-          (*
-          | _ -> assert false
-          end
-          *)
-      | BTy_object _ -> 
+       | BTy_object _ -> 
           (* TODO: duplicated *)
               let sort = cbt_to_z3 state ty in
               let expr_pat = Expr.mk_const state.ctx pat_sym sort in
@@ -466,23 +414,11 @@ let mk_eq_expr (state: bmc_state) (m_sym: ksym option)
           state.sym_table := Pmap.add sym expr_pat 
                                       (!(state.sym_table));
           Boolean.mk_eq state.ctx expr_pat expr;
-          (*
-          begin
-          match bmc_expr with
-          | None -> Boolean.mk_true state.ctx
-          | Some expr ->
-              begin
-              (Boolean.mk_eq state.ctx expr_pat expr)
-              end
-          end
-          *)
-        end
+         end
 
 let rec pattern_match (state: bmc_state) (pattern: typed_pattern)
                       (expr: Expr.expr) =
-  (* let expr = (match bmc_expr with | Some expr -> expr | None -> assert false)
-   * in *)
-  match pattern with
+   match pattern with
   | CaseBase(maybe_sym, typ) ->
       Boolean.mk_true state.ctx
   | CaseCtor(Ctuple, patlist) ->
@@ -564,15 +500,23 @@ let rec mk_eq_pattern (state: bmc_state) (pattern: typed_pattern)
         assert false
   | _ -> assert false
 
-(* TODO: mk_and for vcs for readability *)
+(* TODO: rewrite *)
 let concat_vcs (state: bmc_state)
                (vc1: Expr.expr list)
                (vc2: Expr.expr list)
                (guard: Expr.expr) =
-  let new_vc1 = List.map (fun vc -> Boolean.mk_implies state.ctx guard vc) vc1 in
+  let new_vc1 = Boolean.mk_implies state.ctx guard
+                    (Boolean.mk_and state.ctx vc1) in
+  let new_vc2 = Boolean.mk_implies state.ctx 
+                    (Boolean.mk_not state.ctx guard)
+                    (Boolean.mk_and state.ctx vc2) in
+  [new_vc1; new_vc2 ]                  
+   (* 
+    List.map (fun vc -> Boolean.mk_implies state.ctx guard vc) vc1 in
   let new_vc2 = List.map (fun vc -> Boolean.mk_implies state.ctx 
                                         (Boolean.mk_not state.ctx guard) vc) vc2 in
   new_vc1 @ new_vc2
+  *)
 
 
 let rec bmc_pexpr (state: bmc_state) 
@@ -637,43 +581,43 @@ let rec bmc_pexpr (state: bmc_state)
           *
           * Make guards with Boolean.mk_ite 
           * *)
-        let (pe_z3, pe_set, st1) = bmc_pexpr state pe in
+        let (pe_z3, pe_set, state) = bmc_pexpr state pe in
         List.iter (fun (pat1, _) -> 
           alias_pattern state.alias_state pat1 pe_set) caselist;
 
         begin
             let pattern_guards = 
-              List.map (fun (pat, _) -> pattern_match st1 pat pe_z3) caselist in 
-            let complete_guard = Boolean.mk_or st1.ctx pattern_guards in
-            Solver.add st1.solver [ complete_guard ];
+              List.map (fun (pat, _) -> pattern_match state pat pe_z3) caselist in 
+            let complete_guard = Boolean.mk_or state.ctx pattern_guards in
+            Solver.add state.solver [ complete_guard ];
 
             let combined_pat_guards = 
               List.mapi (fun i expr -> 
-                Boolean.mk_and st1.ctx 
-                [ Boolean.mk_not st1.ctx (Boolean.mk_or st1.ctx (list_take i pattern_guards))
+                Boolean.mk_and state.ctx 
+                [ Boolean.mk_not state.ctx (Boolean.mk_or state.ctx (list_take i pattern_guards))
                 ; expr 
                 ]
                 ) pattern_guards in
 
             let expr_eqs = List.map (fun (pat, _) -> 
-              mk_eq_pattern st1 pat pe_z3) caselist in
+              mk_eq_pattern state pat pe_z3) caselist in
 
             (* Match case i => expr_eq i holds *)
             let impl_eqs = List.map2 
               (fun guard eq -> Boolean.mk_implies state.ctx guard eq) 
               combined_pat_guards expr_eqs in
-            Solver.add st1.solver impl_eqs;
+            Solver.add state.solver impl_eqs;
 
             (* Now need to combine verification conditions: 
              * st1.vcs @... guarded by case match *)
             let cases_z3 = List.map 
-                (fun (_, e) -> bmc_pexpr ({st1 with vcs = []}) e) caselist in
+                (fun (_, e) -> bmc_pexpr ({state with vcs = []}) e) caselist in
             let cases_vcs = (List.map (fun (_,_,s) -> Boolean.mk_and state.ctx s.vcs) cases_z3) in
             let new_vcs = 
-              (st1.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc)
+              (state.vcs @ (List.map2 (fun guard vc -> Boolean.mk_implies state.ctx guard vc)
               combined_pat_guards cases_vcs)) in
             (* TODO: correctness? *)
-            let ret_state = {st1 with vcs = new_vcs} in
+            let ret_state = {state with vcs = new_vcs} in
 
             (* Now make ite, careful with cases where expressions are None *)
             let zipped = List.combine combined_pat_guards 
@@ -693,7 +637,7 @@ let rec bmc_pexpr (state: bmc_state)
             | _ -> 
                 let (_, last) = List.hd rev_filtered in
                 let ite = List.fold_left (fun prev (guard, e) ->
-                  Boolean.mk_ite state.ctx guard e prev
+                  Boolean.mk_ite ret_state.ctx guard e prev
                 ) last (List.tl rev_filtered) in
 
                 ite, alloc_ret, ret_state
@@ -848,6 +792,7 @@ let bmc_paction (state: bmc_state)
 
       (* Set it to an initial unspecified value @a_1 *)
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
+      (* TODO: make fresh? *)
       let initial_value = Expr.mk_const state.ctx new_sym sort in
       let new_heap = Pmap.add new_addr initial_value state.heap in
       (* Try: create a new pointer and return it instead *)
@@ -862,6 +807,8 @@ let bmc_paction (state: bmc_state)
       assert (AddressSet.cardinal allocs = 1);
       let elem = AddressSet.find_first (fun _ -> true) allocs in
       let new_heap = Pmap.remove elem state.heap in
+      (* TODO: should really alter analysis_state too *)
+
       UnitSort.mk_unit state.ctx, 
           AddressSet.empty, {state with heap = new_heap}
   | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
@@ -872,9 +819,6 @@ let bmc_paction (state: bmc_state)
          For each possible address, 
          if (get_addr sym == @a) @a_i = p_value; @a_i = (cur value)
          update heap: @a_i
-
-         This is extremely naiive and generates equations for every created
-         ^address. 
        *)
       let sort = ctype_to_sort state ty in 
       let ptr_allocs = alias_lookup_sym sym state.alias_state in
@@ -896,20 +840,28 @@ let bmc_paction (state: bmc_state)
           end
       end;
 
-
-
       (* Now for each alloc in ptr_allocs, 
        * if (get_addr sym == @a) @a_i = p_value; @a_i = (cur_value)
        * update heap: @a_i
        *)
+
+      print_endline "-----STORE ALIAS_RESULTS";
+      print_ptr_map !(state.alias_state.ptr_map);
+      print_addr_map !(state.alias_state.addr_map);
+
+      print_heap state.heap; 
+      print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
+
       let update = (fun alloc heap ->
           let bmc_addr = bmc_lookup_alloc alloc state in
           if (not (Sort.equal (bmc_addr.sort) sort)) then
             assert false (* or return heap *)
           else
             begin
-              let cur_value = bmc_lookup_addr_in_heap alloc heap in
-              
+              match Pmap.lookup alloc state.heap with
+              | None -> (* addr was killed, not an option *)
+                  heap
+              | Some cur_value ->
               (* Create a fresh value *)
               let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
               let new_expr = Expr.mk_const state.ctx new_sym bmc_addr.sort in
@@ -1002,14 +954,17 @@ let bmc_paction (state: bmc_state)
           else
             AddressSet.empty
          end in
-      print_endline "-----ALIAS_RESULTS";
+      print_endline "-----LOAD ALIAS_RESULTS";
       print_ptr_map !(state.alias_state.ptr_map);
       print_addr_map !(state.alias_state.addr_map);
 
       print_heap state.heap; 
       print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
+
        let iterate = (fun alloc (expr_list, addr_list) ->
-          let cur_value = bmc_lookup_addr_in_heap alloc state.heap in
+          match Pmap.lookup alloc state.heap with
+          | None -> (expr_list, addr_list)
+          | Some cur_value ->
           if (Sort.equal (Expr.get_sort cur_value) sort) then
             begin
               let addr_expr = Address.mk_expr state.ctx alloc in
@@ -1067,9 +1022,10 @@ let merge_heap_list (state: bmc_state)
 
 
 (* if guard then heap1 else heap2 for all addresses in alist *)
+(* TODO: genrealize to n heaps with n guards *)
 let merge_heaps (state: bmc_state) 
                 (heap1: kheap) (heap2: kheap) 
-                (guard: Expr.expr) : kheap =
+                (guard1: Expr.expr) (guard2: Expr.expr) : kheap =
   Pmap.merge (
     fun k e1_ e2_ -> 
       let (e1, e2) = match (e1_, e2_) with
@@ -1077,11 +1033,7 @@ let merge_heaps (state: bmc_state)
         | _ -> (Printf.printf "TODO: Merge heaps properly\n"; assert false)
       in
       (* TODO: duplicated code *)
-      let bmc_address = 
-        match Pmap.lookup k (!(state.addr_map)) with
-        | Some x -> x
-        | None -> assert false
-      in
+      let bmc_address = bmc_lookup_alloc k state in
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_address in
       (* TODO: sort should be in bmc_address *)
       assert (Sort.equal (Expr.get_sort e1) (Expr.get_sort e2));
@@ -1091,9 +1043,9 @@ let merge_heaps (state: bmc_state)
      
       (* Add equality *) 
       Solver.add state.solver 
-        [ Boolean.mk_implies state.ctx guard 
+        [ Boolean.mk_implies state.ctx guard1
             (Boolean.mk_eq state.ctx new_expr e1) ;
-          Boolean.mk_implies state.ctx (Boolean.mk_not state.ctx guard)
+          Boolean.mk_implies state.ctx guard2 
             (Boolean.mk_eq state.ctx new_expr e2) 
         ];
       Some new_expr 
@@ -1171,7 +1123,8 @@ let rec bmc_expr (state: bmc_state)
             None, ({st with vcs = new_vcs; heap = new_heap})
         | (Some a1, Some a2) -> 
             *)
-            let new_heap = merge_heaps st st1.heap st2.heap guard in
+            let new_heap = merge_heaps st st1.heap st2.heap guard
+                            (Boolean.mk_not st.ctx guard) in
             
             (Boolean.mk_ite st.ctx guard bmc_e1 bmc_e2),
               alloc_ret,
@@ -1198,12 +1151,35 @@ let rec bmc_expr (state: bmc_state)
   | Ebound (_, e1) ->
       print_endline "TODO: bound in Ebound ignored";
       bmc_expr state e1 
-  | End _ ->
-      (* nondeterministic sequencing: create disjoint choice points
-       * guard verification conditions and heap assignments by choice points
+  | End [e1; e2] ->
+      (* nondet sequencing: special case len(elist)=2 for now 
+       * Guard vcs and heap assignments by choice points
        *
-       * TODO: length elist=2 for now, rewrite later
+       * TODO: generalize to any elist 
+       * (just have to write heap merging function really)
        *)
+      let (bmc_e1, alloc1, st1) = bmc_expr {state with vcs = []} e1 in
+      let (bmc_e2, alloc2, st2) = bmc_expr {state with vcs = []} e2 in
+
+      let bmc_seq1 = Expr.mk_fresh_const state.ctx "seq" 
+                      (Boolean.mk_sort state.ctx) in
+      let bmc_seq2 = Expr.mk_fresh_const state.ctx "seq" 
+                      (Boolean.mk_sort state.ctx) in
+      let seq_xor = Boolean.mk_xor state.ctx bmc_seq1 bmc_seq2  in
+      Solver.add state.solver [ seq_xor ];
+
+      let vc1 = Boolean.mk_implies state.ctx bmc_seq1
+                    (Boolean.mk_and state.ctx st1.vcs)  in
+      let vc2 = Boolean.mk_implies state.ctx bmc_seq2
+                    (Boolean.mk_and state.ctx st2.vcs) in
+      let new_vcs = vc1 :: vc2 :: state.vcs in
+      let new_heap = merge_heaps state st1.heap st2.heap
+                      bmc_seq1 bmc_seq2 in
+      (UnitSort.mk_unit state.ctx, 
+       AddressSet.union alloc1 alloc2,
+       {state with vcs = new_vcs;  heap = new_heap}
+      )
+
       (*
       let bmc_elist = List.map (fun e -> 
         (bmc_expr state e, 
@@ -1224,10 +1200,13 @@ let rec bmc_expr (state: bmc_state)
       Printf.printf "TODO: ND sequencing. Currently only elist of length two\n";
       let bmc_elist = List.mapi (fun i e -> bmc_expr state e) in 
       *)
+      (*
       Printf.printf "TODO ND sequencing: currrently treated as undef\n";
       let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
       let new_state = {state with vcs = new_vcs} in
       (UnitSort.mk_unit state.ctx), AddressSet.empty, new_state
+      *)
+  | End _ -> assert false
   | Erun (_, Symbol(i, Some s), _) ->
       Printf.printf "TODO: Erun, special casing ret by ignoring it\n";
       begin
@@ -1269,7 +1248,8 @@ let rec bmc_expr (state: bmc_state)
             (* TODO: duplicated *)
         *)
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
-          let new_heap = merge_heaps st st1.heap st2.heap bmc_pe in
+          let new_heap = merge_heaps st st1.heap st2.heap 
+                         bmc_pe (Boolean.mk_not st.ctx bmc_pe) in
           (Boolean.mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
             AddressSet.union loc1 loc2,
             ({st with heap = new_heap; vcs = new_vc})
