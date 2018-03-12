@@ -1395,16 +1395,31 @@ let initialise_main_params params state =
       initialise_param p2 state (LoadedPointer.mk_sort state.ctx)
   | _ -> assert false
 
+let initialise_global state sym typ expr : bmc_state =
+  assert (is_ptr_type typ);
+  (* TODO: duplicated from Esseq *)
+  let (ret, loc, state) = bmc_expr state expr in 
+  let pat = CaseBase(Some sym, typ) in
+  alias_pattern state.alias_state pat loc;
+  let eq_expr = mk_eq_pattern state pat ret in
+  Solver.add state.solver [ eq_expr ];
+  state
+
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
+  (* Do globals *)
+  let initial_state = initial_bmc_state supply in
+  let state = List.fold_left (fun st (sym, typ, e) ->
+    initialise_global st sym typ e) initial_state file.globs in 
+
+
   match file.main with
   | None -> failwith "ERROR: file does not have a main"
   | Some main_sym ->
       let (_, _, state1) = (
-        let initial_state = initial_bmc_state supply in
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
             (* Handle parameters *)
-            let state = initialise_main_params params initial_state in
+            let state = initialise_main_params params state in
               (*
             let _ = analyse_expr analysis_state e in
 
@@ -1415,7 +1430,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
 
-            let state = initialise_main_params params initial_state in
+            let state = initialise_main_params params state in
             (*
             let state = List.fold_left (fun st param ->
                 initialise_param param st) initial_state params in

@@ -47,7 +47,7 @@ let inline_pecall (st: 'a bmc_inline_state)
 
   (* TODO: do rewrite in separate pass. Flag for debugging right now *)
 let rec inline_pexpr (st: 'a bmc_inline_state) 
-                     (Pexpr((), pexpr_) as pexpr : pexpr) =
+                     (Pexpr((), pexpr_) : pexpr) =
   let inlined = match pexpr_ with
     | PEsym sym -> pexpr_
     | PEimpl _  -> pexpr_
@@ -172,8 +172,7 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Eskip -> Eskip
     | Eccall( _, _, _) 
     | Eproc( _, _, _)  ->
-        assert false;
-        expr_
+        assert false
     | Eunseq eslist ->
         Eunseq (List.map (inline_expr st) eslist) 
     | Ewseq(pat, e1, e2) ->
@@ -206,6 +205,8 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
           depth = 0;
           file = file;
         }) in
+      let new_globals = List.map (fun (sym, typ, expr) ->
+        (sym, typ, inline_expr initial_state expr)) file.globs in
       begin
       match Pmap.lookup main_sym file.funs with
       | Some (Proc(ty, params, e)) ->
@@ -213,13 +214,15 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
           let new_fun_map = 
             Pmap.add main_sym ((Proc(ty, params,ret ))) file.funs
           in
-          ({file with funs = new_fun_map}), !(initial_state.sym_supply)
+          ({file with funs = new_fun_map; globs = new_globals}), 
+              !(initial_state.sym_supply)
       | Some (Fun(ty, params, pe)) ->
           let ret =  inline_pexpr initial_state pe in
           let new_fun_map = 
             Pmap.add main_sym ((Fun(ty, params,ret ))) file.funs
           in
-          ({file with funs = new_fun_map}), !(initial_state.sym_supply)
+          ({file with funs = new_fun_map; globs = new_globals}), 
+              !(initial_state.sym_supply)
 
       | _ -> assert false
       end
@@ -311,7 +314,7 @@ let core_isunsigned_signed (v : pexpr) =
 
 
 let rec rewrite_pexpr (st: 'a bmc_inline_state) 
-                     (Pexpr((), pexpr_) as pexpr : pexpr) =
+                     (Pexpr((), pexpr_) : pexpr) =
   let rewritten = match pexpr_ with
     | PEsym sym -> pexpr_
     | PEimpl _  -> pexpr_
@@ -389,8 +392,7 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Eskip -> Eskip
     | Eccall( _, _, _) 
     | Eproc( _, _, _)  ->
-        assert false;
-        expr_
+        assert false
     | Eunseq eslist ->
         Eunseq (List.map (rewrite_expr st) eslist) 
     | Ewseq(pat, e1, e2) ->
@@ -414,6 +416,7 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
 
 
 let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
+
   match file.main with
   | None -> 
       print_string "ERROR: file does not have a main\n";
@@ -425,19 +428,26 @@ let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
           file = file;
         }) in
       begin
+
+      let new_globals = List.map (fun (sym, typ, expr) ->
+        (sym, typ, rewrite_expr initial_state expr)) file.globs in
+       
       match Pmap.lookup main_sym file.funs with
       | Some (Proc(ty, params, e)) ->
           let ret = rewrite_expr initial_state e in
           let new_fun_map = 
             Pmap.add main_sym ((Proc(ty, params,ret ))) file.funs
           in
-          ({file with funs = new_fun_map}), !(initial_state.sym_supply)
+          ({file with funs = new_fun_map; globs = new_globals}), 
+              !(initial_state.sym_supply)
+
       | Some (Fun(ty, params, pe)) ->
           let ret =  rewrite_pexpr initial_state pe in
           let new_fun_map = 
             Pmap.add main_sym ((Fun(ty, params,ret ))) file.funs
           in
-          ({file with funs = new_fun_map}), !(initial_state.sym_supply)
+          ({file with funs = new_fun_map; globs = new_globals}), 
+              !(initial_state.sym_supply)
 
       | _ -> assert false
       end
