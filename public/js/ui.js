@@ -115,7 +115,7 @@ class UI {
 
     // Compilers
     $('#compile').on('click', () => {
-      this.currentView.add(new TabAsm(defaultCompiler))
+      this.currentView.newTab('Asm')
     })
 
     // Permalink
