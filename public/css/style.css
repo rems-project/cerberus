@@ -270,22 +270,21 @@ code {
 }
 /*********** Graphs ************/
 
-/* TODO: change this */
-.svg {
-  height: 100%;
-  border: 1px solid #eee;
-  margin: 0px auto;
-  background-color: 'white';
+.toolbar {
+  background-color: #5f5f5f;
+  display: inline-block;
+  width: 100%;
 }
 
-svg {
-  display: block;
-  width: auto;
+.toolbar .btn {
+  display: inline-block;
 }
 
 .graph {
-  height: calc(100% - 25px);
-  padding-right: 4px;
+  height: calc(100% - 28px);
+  border: 1px solid #eee;
+  margin: 0px auto;
+
 }
 
 /* ast-dump style */

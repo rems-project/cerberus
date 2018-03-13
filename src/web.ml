@@ -484,7 +484,7 @@ let execute_step (msg : incoming_msg) ~conf ~filename =
       begin match step_init () with
         | Exception.Result (m, st) ->
           let initId   = new_id () in
-          let nodeId   = Leaf (initId, "init", (m, st)) in
+          let nodeId   = Leaf (initId, "Initial State", (m, st)) in
           let execTree = ([nodeId], []) in
           json_of_step execTree
         | Exception.Exception err ->

@@ -39,17 +39,22 @@ class TabInteractive extends Tab {
   constructor(title) {
     super(title)
 
-    this.dom.addClass('graph')
-    this.dom.attr('align', 'right')
+    let toolbar = $('<div class="toolbar"></div>')
+    toolbar.attr('align', 'right')
 
-    let restart = $('<button id="restart">restart</button>')
-    this.dom.append(restart)
+    this.step = $('<div class="btn">step</div>')
+    toolbar.append(this.step)
 
+    let restart = $('<div class="btn">restart</div>')
+    toolbar.append(restart)
+
+    let hide_tau_btn = $('<div class="btn">show tau steps</button>')
+    toolbar.append(hide_tau_btn)
     this.hide_tau = true
-    let hide_tau_btn = $('<button>show tau steps</button>')
-    this.dom.append(hide_tau_btn)
 
-    let container = $('<div align="center" class="svg"></div>')
+    let container = $('<div align="center" class="graph"></div>')
+
+    this.dom.append(toolbar)
     this.dom.append(container)
 
     // Setup Graph Network
@@ -57,7 +62,18 @@ class TabInteractive extends Tab {
       nodes: {
         shape: 'box',
         shapeProperties: {
-          borderRadius: 6
+          borderRadius: 2
+        },
+        color: {
+          border: '#5f5f5f',
+          background: '#5f5f5f',
+          highlight: {
+            border: '#7f7f7f',
+            background: '#7f7f7f'
+          }
+        },
+        font: {
+          color: '#f1f1f1'
         },
         fixed: true
       },
@@ -66,7 +82,10 @@ class TabInteractive extends Tab {
       },
       groups: {
         leaf: {
-          color: 'rgb(0, 255, 140)'
+          color: {
+            background: '#044777',
+            border: '#044777'
+          }
         }
       },
       layout: {
@@ -77,12 +96,25 @@ class TabInteractive extends Tab {
         }
       },
       interaction: {
-        dragNodes: false,
-        navigationButtons: true
+        navigationButtons: true,
+        //keyboard: true,
+        selectable: true,
+        selectConnectedEdges: false
       }
     }
     let graph = {nodes: this.nodes, edges: this.edges }
     this.network = new vis.Network(container[0], graph, options);
+
+    this.step.on('click', () => {
+      let selection = this.network.getSelection()
+      if (selection.nodes && selection.nodes.length > 0) {
+        this.doStep(this.nodes.get(selection.nodes[0]))
+      }
+      // If initial step
+      let ns = this.nodes.get()
+      if (ns.length == 1)
+        this.doStep(ns[0])
+    })
 
     restart.on('click', () => {
       ui.state.steps.edges.clear()
@@ -111,15 +143,10 @@ class TabInteractive extends Tab {
       if (arg && arg.nodes && arg.nodes.length == 1) {
         let active = this.nodes.get(arg.nodes[0])
         if (active) {
+          this.step.disable(true)
           if (active.group && active.group == 'leaf') {
             // do a step
-            ui.state.interactive = {
-              state: active.state,
-              active: active.id
-            }
-            ui.request('Step', (data) => {
-              this.attachTree(active.id, data.interactive.steps)
-            })
+            this.doStep(active)
           } else if (active.loc) {
             // show mem and select locations
             ui.clear()
@@ -146,8 +173,24 @@ class TabInteractive extends Tab {
                          : ui.state.steps.edges
   }
 
+  doStep(active) {
+    if (active) {
+      // do a step
+      ui.state.interactive = {
+        state: active.state,
+        active: active.id
+      }
+      ui.request('Step', (data) => {
+        this.attachTree(active.id, data.interactive.steps)
+      })
+    } else {
+      console.log('error: node '+active+' unknown')
+    }
+  }
+
   attachTree(pointId, tree) {
     // Get trees
+    let leafNodeId = null
     let nodes = ui.state.steps.nodes
     let edges = ui.state.steps.edges
     let no_tau_nodes = ui.state.steps.hide_tau.nodes
@@ -184,16 +227,24 @@ class TabInteractive extends Tab {
     // Add nodes and edges of the new tree
     tree.nodes.map(function (n) {
       nodes.add(n)
-      if (!is_tau(n.id))
-        no_tau_nodes.add(n)
+      if (!is_tau(n.id)) no_tau_nodes.add(n)
+      if (n.state) leafNodeId = n.id
     })
     tree.edges.map(function (e) { edges.add(e) })
     tree.edges.map(function (e) {
       if (!is_tau(e.to))
         no_tau_edges.add({from: getNoTauParent(e.to), to: e.to})
     })
-    // Focus
-    this.network.focus(tree.nodes[0].id)
+    // If found a leaf
+    if (leafNodeId) {
+      // Focus
+      this.network.focus(leafNodeId)
+      // Select last leaf node
+      this.network.selectNodes([leafNodeId])
+      this.step.disable(false)
+    } else {
+      this.network.focus(tree.nodes[0])
+    }
   }
 
   fit() {
@@ -656,6 +707,8 @@ class TabCore extends TabReadOnly {
 
 class TabAsm extends TabReadOnly {
   constructor(cc) {
+    if (cc == null) cc = defaultCompiler // Global variable
+
     super(cc.name)
 
     this.editor.setOption('placeholder', '<Compilation failed...>')
@@ -663,10 +716,7 @@ class TabAsm extends TabReadOnly {
 
     let toolbar   = $(document.createElement("div"))
 
-    this.dropdownActive = $('<a href="#" class="dropbtn dropdown-toggle">'
-                          + cc.name + '</a>')
-    this.dropdown = $('<div class="dropdown"></div>')
-    this.dropdown.append(this.dropdownActive)
+    this.dropdown = $('<div class="btn dropdown">'+cc.name+'</div>')
     this.dropdown.append(this.createDropdownContent(this))
 
     this.options  = $('<input type="text" placeholder="Compiler options...">')
@@ -687,25 +737,9 @@ class TabAsm extends TabReadOnly {
 
     this.compile(cc)
 
-    //this.thanks = $(document.createElement("div"))
-
-    //let close = $(document.createElement("a"))
-    //close.attr("title", "Remove me!")
-    //close.addClass("remove-panel")
-    //close.text("✖")
-    //CodeMirror.on(close, "click", () => this.thanks.remove())
-
-    //let label = $(document.createElement("span"))
-    //label.text("I'm panel n°" + "blah")
-
-    //this.thanks.append(close)
-    //this.thanks.append(label)
-    //this.editor.addPanel(this.thanks[0], {position: "bottom", stable: true});
-
     this.editor.on('cursorActivity', (doc) => this.markSelection(doc))
 
     this.cc = cc;
-    this.lines = {}
     this.locations = {}
   }
 
@@ -717,7 +751,7 @@ class TabAsm extends TabReadOnly {
       let opt = $('<a href="#">' + cc.name + '</a>')
       opt.on('click', () => {
         this.compile(cc)
-        this.dropdownActive.text(cc.name)
+        this.dropdown.text(cc.name)
         this.setTitle(cc.name)
       })
       dropdown.append(opt)
@@ -729,16 +763,17 @@ class TabAsm extends TabReadOnly {
     this.compile(this.cc)
   }
 
-  updateLocations() {
+  updateLocations(lines) {
     this.locations = {}
     let locs = ui.currentView.state.locs;
     for (let i = locs.length - 1; i >= 0; i--) {
-      let l = locs[i].c.begin.line+1;
-      if (this.locations[l] || !this.lines[l])
-        continue;
-      this.locations[l] = {
-        begin: Math.min(...this.lines[l]),
-        end: Math.max(...this.lines[l]),
+      let l0 = locs[i].c.begin.line+1;
+      if (this.locations[0] || !lines[l0]) continue;
+      let ln = locs[i].c.end.line+1;
+      if (this.locations[ln] || !lines[ln]) continue;
+      this.locations[l0] = {
+        begin: Math.min(...lines[l0]),
+        end:   Math.max(...lines[ln]),
         color: locs[i].color,
         source: locs[i]
       }
@@ -772,7 +807,7 @@ class TabAsm extends TabReadOnly {
       url: 'https://gcc.godbolt.org/api/compiler/'+cc.id+'/compile',
       type: 'POST',
       data: JSON.stringify ({
-        source: ui.currentView.getValue(),
+        source: ui.source.getValue(),
         compiler: cc.id,
         options: {
           userOptions: this.options.val(),
@@ -792,18 +827,19 @@ class TabAsm extends TabReadOnly {
       success: (data, status, query) => {
         console.log(data)
         let value = ''
+        let lines = {}
         for (let i = 0; i < data.asm.length; i ++) {
           let asm = data.asm[i]
-          value += asm.text + '\n'
+          if (asm.text)
+            value += asm.text + '\n'
           if (asm.source && asm.source.line) {
-            if (!this.lines[asm.source.line])
-              this.lines[asm.source.line] = []
-            this.lines[asm.source.line].push(i)
+            if (!lines[asm.source.line]) lines[asm.source.line] = []
+            lines[asm.source.line].push(i)
           }
         }
         this.setValue(value)
-        this.updateLocations()
-        this.highlight()
+        this.updateLocations(lines)
+        this.highlight(ui.state)
         ui.done()
       }
     })
@@ -821,7 +857,8 @@ const Tabs = {
   TabInteractive,
   TabMemory,
   TabConsole,
-  TabHelp
+  TabHelp,
+  TabAsm
 }
 
 function createTab(title) {
