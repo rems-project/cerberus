@@ -118,19 +118,34 @@ class UI {
       this.currentView.newTab('Asm')
     })
 
-    // Permalink
-    $('#clip-img').on('click', () => {
-      $('#permalink').select()
+    // Share
+    let update_share_link = () => {
+      let url = document.URL.split('#', 1)+'#'+this.currentView.getEncodedState()
+      if (this.settings.short_share)
+        shortURL(url, (url) => $('#sharelink').val(url))
+      else
+        $('#sharelink').val(url)
+    }
+    let update_options_share = (short_share) => {
+      if (short_share) {
+        $('#current-share').text('Short')
+        $('#option-share').text('Long')
+      } else {
+        $('#current-share').text('Long')
+        $('#option-share').text('Short')
+      }
+    }
+    update_options_share (this.settings.short_share)
+    $('#option-share').on('click', () => {
+      this.settings.short_share = !this.settings.short_share
+      update_options_share (this.settings.short_share)
+      update_share_link()
+    })
+    $('#sharebtn').on('click', () => {
+      $('#sharelink').select()
       document.execCommand('Copy')
     })
-
-    // Permanent Link
-    $('#permalink-button').on('mouseover', () => {
-      let longUrl = document.URL.split('#', 1)
-        +'#'+this.currentView.getEncodedState()
-      $('#permalink').val(longUrl)
-      //shortURL(longUrl)
-    })
+    $('#share').on('mouseover', update_share_link)
 
     // Settings
     $('#rewrite').on('click', (e) => {
@@ -296,13 +311,19 @@ const ui = new UI({
   rewrite:       false,
   auto_refresh:  true,
   colour:        true,
-  colour_cursor: true
+  colour_cursor: true,
+  short_share:   false
 })
 const style = createStyle()
 let std             = null // JSON of standard
-let defaultCompiler = null // Godbolt default compiler
-let compilers       = null // Godbolt compilers
+let compilers       = []   // Godbolt compilers
 let config          = null // Permalink configuration
+
+// Godbolt default compiler
+let defaultCompiler = {
+  id: 'clang500',
+  name: 'x86-64 clang 5.0.0'
+}
 
 // Get standard
 $.getJSON('std.json').done((res) => std = res).fail(() => {

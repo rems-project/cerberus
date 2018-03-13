@@ -42,13 +42,13 @@ class TabInteractive extends Tab {
     let toolbar = $('<div class="toolbar"></div>')
     toolbar.attr('align', 'right')
 
-    this.step = $('<div class="btn">step</div>')
+    this.step = $('<div class="btn inline">step</div>')
     toolbar.append(this.step)
 
-    let restart = $('<div class="btn">restart</div>')
+    let restart = $('<div class="btn inline">restart</div>')
     toolbar.append(restart)
 
-    let hide_tau_btn = $('<div class="btn">show tau steps</button>')
+    let hide_tau_btn = $('<div class="btn inline">show tau steps</button>')
     toolbar.append(hide_tau_btn)
     this.hide_tau = true
 
@@ -714,12 +714,12 @@ class TabAsm extends TabReadOnly {
     this.editor.setOption('placeholder', '<Compilation failed...>')
     this.editor.setOption('mode', {name: "gas", architecture: "x86"})
 
-    let toolbar   = $(document.createElement("div"))
+    let toolbar   = $('<div class="toolbar flex"></div>')
 
     this.dropdown = $('<div class="btn dropdown">'+cc.name+'</div>')
     this.dropdown.append(this.createDropdownContent(this))
 
-    this.options  = $('<input type="text" placeholder="Compiler options...">')
+    this.options  = $('<input type="text" placeholder="Compiler options..." style="flex-grow: 1;">')
 
     this.options.on('blur', () => {
       this.compile(cc)
@@ -732,7 +732,6 @@ class TabAsm extends TabReadOnly {
     toolbar.append(this.dropdown)
     toolbar.append(this.options)
 
-    this.dom.addClass('tab-compiler')
     this.dom.prepend(toolbar)
 
     this.compile(cc)
@@ -748,7 +747,7 @@ class TabAsm extends TabReadOnly {
     let dropdown = $('<div class="dropdown-content"></div>')
     for (let i = 0; i < compilers.length; i++) {
       let cc  = compilers[i]
-      let opt = $('<a href="#">' + cc.name + '</a>')
+      let opt = $('<div class="btn">' + cc.name + '</div>')
       opt.on('click', () => {
         this.compile(cc)
         this.dropdown.text(cc.name)

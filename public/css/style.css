@@ -20,6 +20,7 @@ body {
 .wait, .wait * { cursor: wait !important; }
 
 #views {
+  /* golden layout does not work with flex */
   height: calc(100% - 28px); /* minus page header height */
 }
 
@@ -59,7 +60,7 @@ body {
   color: #f1f1f1;
   padding: 5px 10px;
   text-decoration: none;
-  cursor: pointer; 
+  cursor: pointer;
 }
 
 .btn:hover {
@@ -89,6 +90,25 @@ body {
   position: absolute;
   z-index: 100;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: 250px;
+  overflow: scroll;
+  /* hack */
+  margin-left: -10px;
+  margin-top: 5px;
+}
+
+.dropdown-content .btn {
+  min-width: 50px;
+}
+
+.dropdown-content-content {
+  background-color: #5f5f5f;
+  display: none;
+  position: absolute;
+  z-index: 150;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: 250px;
+  overflow: scroll;
   /* hack */
   margin-left: -10px;
   margin-top: 5px;
@@ -114,17 +134,27 @@ body {
   margin-left: 0;
 }
 
-.dropdown:hover > .dropdown-content {
+.dropdown:hover .dropdown-content {
   display: block;
 }
 
-#clip-img {
+.dropdown .dropdown:hover .dropdown-content-content {
+  display: block;
+}
+
+#sharebtn {
   vertical-align: middle;
   content:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAdtJREFUOBGdlE0oBGEYx2fW5uKjkBQXByUROSguxGGjKEeKyxYlNye5SPnK1dIWtz0o4iDKTT4vVilJkaR2D1siB98f4/esMWZnZ6Zd//r1vu/zPO9/nnnfZhRN0zJhEiJg1TuBJchSUpSXulEYhhW4BrM8LPKgFVbNCae5ytOjJPdUVe2yFpFrIOaHUkvug/U6BNmnmXPSYTFYO1Mwk6424B5uwCyVxSxUUzeI6ZeRJCCaMgL6hNghnILt+RFfA1EIMn73yxk5qZzEPk9/dCiI6fEeRsPUzVCemnA+FuO/11SUbnJBOlXlDP+rBTZKQ0IB+CH8b0OO4gSDAYiL7s6YtLm9sl6aPLC5CXZgGaQ70Sd40zbEoJCN/TAGERgCQ2kZYlbHzhkIwzbIV3QLhlI2xMzHLvk8DyAfAlAC82BILkXe3dUYs0Zq5FanoUwnl7GTy3llNCRGcjs+NuUY0eSJfEm9EII7kNdtx+yJMUFiOAJVEMX0Sqc5oUpR5KvogCBkYzQHb5aa+NJDYpNZPSzCsc4Do/ko+lg/wxFMgJ2kOfkL2YtOd+Ec5KxcRU0lvMC4/IZsRbKFxBZIZ5e2RT9BudgKkLOtcTSUWkxrGfxQJGsHyQ/kAgIcX+wbhtLg1dVYfqAAAAAASUVORK5CYII=")
 }
 
+#sharebtn:active {
+  transform: scale(0.90);
+}
+
 .tab-content {
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-compiler a {
@@ -141,8 +171,6 @@ body {
 /*********** Panes ************/
 
 .view {
-  display: flex;
-  flex-direction: row;
   height: 100%;
 }
 
@@ -274,17 +302,34 @@ code {
   background-color: #5f5f5f;
   display: inline-block;
   width: 100%;
-}
-
-.toolbar .btn {
-  display: inline-block;
+  overflow: auto;
+  white-space: nowrap;
 }
 
 .graph {
+  /* vis.js doesn't work with flex */
   height: calc(100% - 28px);
-  border: 1px solid #eee;
+  width: 100%;
   margin: 0px auto;
+}
 
+.flex {
+  display: flex;
+}
+
+.grow {
+  flex-grow: 1;
+}
+
+.inline {
+  display: inline-block;
+}
+
+.share {
+  height: 28px;
+  white-space: nowrap;
+  padding-right: 4px;
+  overflow: initial;
 }
 
 /* ast-dump style */

@@ -11,15 +11,13 @@ function option(x, y) {
   return y
 }
 
-function shortURL(url) {
+function shortURL(url, f) {
   $.ajax({
     type: 'POST',
     url: 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapikey,
     contentType: 'application/json',
     data: JSON.stringify ({longUrl: url}),
-    success: (data) => {
-      console.log(data)
-    }
+    success: (data) => f (data.id)
   })
 }
 
