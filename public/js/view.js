@@ -42,8 +42,7 @@ class View {
         },
         dimensions: {
             borderWidth: 5,
-            minItemHeight: 10,
-            minItemWidth: 10,
+            minItemWidth: 150,
             headerHeight: 20,
             dragProxyWidth: 300,
             dragProxyHeight: 200
