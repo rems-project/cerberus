@@ -1,6 +1,14 @@
-'use_strict'
-
 let gapikey = 'AIzaSyDYrDNMlaTvfLxNX_cJ8EH_qrLq7aKeFJc'
+
+$(window).ready(() => {
+  outdatedBrowser({
+    bgColor: '#f25648',
+    color: '#ffffff',
+    lowerThan: 'transform',
+    languagePath: 'outdated.html'
+  })
+  ui.refresh()
+})
 
 function assert(x) {
   if (!x) console.log ('assertion failed: ' + x)
