@@ -40,7 +40,7 @@ val load_core_impl:
 val c_frontend:
   (configuration * io_helpers) -> filename:string ->
   ( Cabs.translation_unit option
-  * (GenTypes.genTypeCategory AilSyntax.program) option
+  * (GenTypes.genTypeCategory AilSyntax.ail_program) option
   * Symbol.sym
   * unit Core.file
   , Location_ocaml.t * Errors.cause) Exception.exceptM
@@ -48,7 +48,7 @@ val c_frontend:
 val core_frontend:
   (configuration * io_helpers) -> filename:string ->
   ( Cabs.translation_unit option
-  * (GenTypes.genTypeCategory AilSyntax.program) option
+  * (GenTypes.genTypeCategory AilSyntax.ail_program) option
   * Symbol.sym
   * unit Core.file
   , Location_ocaml.t * Errors.cause) Exception.exceptM
