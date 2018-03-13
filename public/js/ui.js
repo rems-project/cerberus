@@ -397,8 +397,6 @@ $.get('pldi_tests.json').done((data) => {
   }
 })
 
-console.log(document.URL)
-
 // Detect if URL is a permalink
 try {
   let uri = document.URL.split('#')
@@ -421,4 +419,12 @@ if (config) {
   })
 }
 
-$(window).ready(() => ui.refresh())
+$(window).ready(() => {
+  outdatedBrowser({
+    bgColor: '#f25648',
+    color: '#ffffff',
+    lowerThan: 'transform',
+    languagePath: 'outdated.html'
+  })
+  ui.refresh()
+})
