@@ -7,6 +7,7 @@ module type Implementation = sig
   val sizeof_pointer: int option
   val alignof_pointer: int option
   val sizeof_ity: integerType -> int option
+  val precision_ity: integerType -> int option
   val sizeof_fty: floatingType -> int option
   val alignof_ity: integerType -> int option
   val alignof_fty: floatingType -> int option
@@ -61,6 +62,51 @@ module DefaultImpl: Implementation = struct
     | Size_t
     | Ptrdiff_t ->
         Some 8
+  
+  (* NOTE: the code is bit generic here to allow reusability *)
+  let precision_ity = function
+    | Char ->
+        Some (if char_is_signed then 7 else 8)
+    | Bool ->
+        (* TODO: not sure about this. But an impl is clearly allowed to do
+           that (see footnote 122) *)
+        Some 1
+    | Signed _ as ity ->
+        begin match sizeof_ity ity with
+          | Some n ->
+              Some (8*n-1)
+          | None ->
+              None
+        end
+    | Unsigned _ as ity ->
+        begin match sizeof_ity ity with
+          | Some n ->
+              Some (8*n)
+          | None ->
+              None
+        end
+    | IBuiltin str ->
+        (* TODO *)
+        None
+    | Enum ident ->
+        (* TODO *)
+        None
+    | Size_t ->
+        begin match sizeof_ity Size_t with
+          | Some n ->
+              (* NOTE: this type is unsigned *)
+              Some (8*n)
+          | None ->
+              None
+        end
+    | Ptrdiff_t ->
+        begin match sizeof_ity Ptrdiff_t with
+          | Some n ->
+              (* NOTE: this type is signed *)
+              Some (8*n-1)
+          | None ->
+              None
+        end
   
   let sizeof_fty = function
     | RealFloating Float ->

@@ -815,6 +815,8 @@ and remove_conv_int_action_ act_ =
   match act_ with
     | Create pe1 pe2 pref ->
         Create (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
+    | CreateReadOnly pe1 pe2 pe3 pref ->
+        CreateReadOnly (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
     | Kill pe ->
@@ -1195,6 +1197,169 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
 
 
 
+(* TODO, this is not correct!!
+
+consider:
+
+case sym of Specified _ => e1 | _ => e2
+
+where sym is of type loaded oTy
+
+this could match for e1, but the current code assumes it doesn't and match e2 instead...
+
+
+*)
+let rec simpl_match_pattern pat pe =
+  if not (isAlwaysDefined pe) then
+    Nothing
+  else match (pat, pe) with
+(*
+    | (_, Pexpr _ (PEval cval)) ->
+        List.map (fun (sym, cval) ->
+          (sym, Pexpr (bTy (PEval
+        ) (Caux.match_pattern pat cval)
+*)
+    | (CaseBase (Nothing, _), _) ->
+        Just []
+    | (CaseBase (Just sym, _), _) ->
+        Just [(sym, pe)]
+    | (CaseCtor Cspecified [pat'], Pexpr _ _ (PEctor Cspecified [pe'])) ->
+        simpl_match_pattern pat' pe'
+(*
+    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+        match_pattern pat' (Vctype ty)
+*)
+    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes')) -> 
+        List.foldr (fun (pat', pe') acc ->
+          Maybe.bind acc (fun xs ->
+            Maybe.bind (simpl_match_pattern pat' pe') (fun x ->
+              Just (x++xs)
+            )
+          )
+        ) (Just []) (List.zip pats' pes')
+    | _ ->
+        Nothing
+  end
+
+let rec simpl_select_case unsafe_subst_sym match_pe = function
+  | [] ->
+      Nothing
+  | (pat, e) :: pat_es' ->
+      match simpl_match_pattern pat match_pe with
+        | Nothing ->
+            (* trying the next branch *)
+            simpl_select_case unsafe_subst_sym match_pe pat_es'
+        | Just (sym_pes) ->
+            Just $ List.foldr (fun (sym, pe') acc ->
+              unsafe_subst_sym sym pe' acc
+            ) e sym_pes
+      end
+end
+
+let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
+  let wrap z = Pexpr annot bTy z in
+  match pexpr_ with
+    | PEsym _ ->
+        pexpr
+    | PEimpl _ ->
+        pexpr
+    | PEval _ ->
+        pexpr
+    | PEconstrained _ ->
+        pexpr
+    | PEundef _ ->
+        pexpr
+    | PEerror _ _ ->
+        pexpr
+    | PEctor ctor pes ->
+        wrap $ PEctor ctor (List.map simpl_case_pexpr pes)
+    | PEcase pe pat_pes ->
+        match simpl_select_case Caux.unsafe_subst_sym_pexpr pe pat_pes with
+          | Nothing ->
+              wrap $ PEcase (simpl_case_pexpr pe) (List.map (fun (pat, pe) -> (pat, simpl_case_pexpr pe)) pat_pes)
+          | Just pe' ->
+              simpl_case_pexpr pe'
+        end
+    | PEarray_shift pe1 ty pe2 ->
+        wrap $ PEarray_shift (simpl_case_pexpr pe1) ty (simpl_case_pexpr pe2)
+    | PEmember_shift pe sym ident ->
+        wrap $ PEmember_shift (simpl_case_pexpr pe) sym ident
+    | PEnot pe ->
+        wrap $ PEnot (simpl_case_pexpr pe)
+    | PEop bop pe1 pe2 ->
+        wrap $ PEop bop (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
+    | PEstruct sym ident_pes ->
+        wrap $ PEstruct sym (List.map (fun (ident, pe) -> (ident, simpl_case_pexpr pe)) ident_pes)
+    | PEunion sym ident pe ->
+        wrap $ PEunion sym ident (simpl_case_pexpr pe)
+    | PEcall nm pes ->
+        wrap $ PEcall nm (List.map simpl_case_pexpr pes)
+    | PElet pat pe1 pe2 ->
+        wrap $ PElet pat (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
+    | PEif pe1 pe2 pe3 ->
+        wrap $ PEif (simpl_case_pexpr pe1) (simpl_case_pexpr pe2) (simpl_case_pexpr pe3)
+    | PEis_scalar pe ->
+        wrap $ PEis_scalar (simpl_case_pexpr pe)
+    | PEis_integer pe ->
+        wrap $ PEis_integer (simpl_case_pexpr pe)
+    | PEis_signed pe ->
+        wrap $ PEis_signed (simpl_case_pexpr pe)
+    | PEis_unsigned pe ->
+        wrap $ PEis_unsigned (simpl_case_pexpr pe)
+  end
+
+let rec simpl_case (Expr annot expr_ as expr) =
+  let wrap z = Expr annot z in
+  match expr_ with
+    | Epure pe ->
+        wrap $ Epure (simpl_case_pexpr pe)
+    | Ememop _ _ ->
+        expr
+    | Eaction _ ->
+        expr
+    | Ecase pe pat_es ->
+        match simpl_select_case Caux.unsafe_subst_sym_expr pe pat_es with
+          | Nothing ->
+              wrap $ Ecase (simpl_case_pexpr pe) (List.map (fun (pat, e) -> (pat, simpl_case e)) pat_es)
+          | Just e' ->
+              simpl_case e'
+        end
+    | Elet pat pe1 e2 ->
+        wrap $ Elet pat pe1 (simpl_case e2)
+    | Eif pe1 e2 e3 ->
+        wrap $ Eif pe1 (simpl_case e2) (simpl_case e3)
+    | Eskip ->
+        expr
+    | Eccall _ _ _ ->
+        expr
+    | Eproc _ _ _ ->
+        expr
+    | Eunseq es ->
+        wrap $ Eunseq (List.map simpl_case es)
+    | Ewseq pat e1 e2 ->
+        wrap $ Ewseq pat (simpl_case e1) (simpl_case e2)
+    | Esseq pat e1 e2 ->
+        wrap $ Esseq pat (simpl_case e1) (simpl_case e2)
+    | Easeq _ _ _ ->
+        expr
+    | Eindet i e ->
+        wrap $ Eindet i (simpl_case e)
+    | Ebound i e ->
+        wrap $ Ebound i (simpl_case e)
+    | End es ->
+        wrap $ End (List.map simpl_case es)
+    | Esave sym_bTy xs e ->
+        wrap $ Esave sym_bTy xs (simpl_case e)
+    | Erun _ _ _ ->
+        expr
+    | Epar es ->
+        wrap $ Epar (List.map simpl_case es)
+    | Ewait _ ->
+        expr
+  end
+
+
+
 
 
 
@@ -1216,7 +1381,7 @@ let rewrite_pexpr pexpr =
 
 
 let rewrite_expr expr =
-  (pure_propagation2 -| flatten_seqs) expr
+  ((* simpl_case -| *) pure_propagation2 -| flatten_seqs) expr
 (*
   (pure_propagation2 -| remove_conv_int -| flatten_seqs -|
    (* remove_dead -| remove_seqs -| remove_unseqs -| flatten_seqs -| *) remove_skips -|

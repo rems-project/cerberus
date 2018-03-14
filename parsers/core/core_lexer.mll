@@ -110,6 +110,7 @@ let keywords =
       
       (* for Core.action_ *)
       ("create", T.CREATE);
+      ("create_readonly", T.CREATE_READONLY);
       ("alloc",  T.ALLOC );
       ("kill",   T.KILL  );
       ("store",  T.STORE );

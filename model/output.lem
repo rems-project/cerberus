@@ -597,7 +597,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
     match args with
       | [] ->
           Mem.return $
-            Right (U.undef (Loc.other "Output.aux") [U.UB152_insufficient_arguments_for_format])
+            Right (U.undef (Loc.other "Output.aux") [U.UB153_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
           Mem.load (Loc.other "Output.aux") arg_ty arg_ptr >>= fun (_, mval) ->
           (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
@@ -810,7 +810,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef (Loc.other "printf() %s") [U.UB152_insufficient_arguments_for_format])
+                      Right (U.undef (Loc.other "printf() %s") [U.UB153_insufficient_arguments_for_format])
                     )
                 | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
@@ -845,7 +845,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef (Loc.other "printf() %p") [U.UB152_insufficient_arguments_for_format])
+                Right (U.undef (Loc.other "printf() %p") [U.UB153_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
               Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->

@@ -4,24 +4,27 @@ import Exception
 (* HACK: most of the inlines are only added to prevent Lem's renaming *)
 
 
-type stExceptM 'a 'bs 'msg = 'bs -> Exception.exceptM ('a * 'bs) 'msg
+type stExceptM 'a 'st 'msg =
+  'st -> Exception.exceptM ('a * 'st) 'msg
 
-val return: forall 'a 's 'msg. 'a -> stExceptM 'a 's 'msg
-let inline return a = fun s -> Exception.return (a, s)
+val stExpect_return: forall 'a 's 'msg. 'a -> stExceptM 'a 's 'msg
+val stExpect_bind: forall 'a 'b 's 'msg. stExceptM 'a 's 'msg -> ('a -> stExceptM 'b 's 'msg) -> stExceptM 'b 's 'msg
 
-val bind: forall 'a 'b 's 'msg. stExceptM 'a 's 'msg -> ('a -> stExceptM 'b 's 'msg) -> stExceptM 'b 's 'msg
-let inline bind m f = fun s ->
+let stExpect_return a =
+  fun s -> Exception.return (a, s)
+
+let stExpect_bind m f = fun s ->
   Exception.bind (m s) (fun (a, s') -> (f a) s')
 
 
 (* Reinventing the wheel *)
 val fmap: forall 'a 'b 's 'msg. ('a -> 'b) -> stExceptM 'a 's 'msg -> stExceptM 'b 's 'msg
 val join: forall 'a 's 'msg. stExceptM (stExceptM 'a 's 'msg) 's 'msg -> stExceptM 'a 's 'msg
-let inline fmap f m = bind m (fun z -> return $ f z)
-let inline join mm  = bind mm (fun z -> z)
+let inline fmap f m = stExpect_bind m (fun z -> stExpect_return $ f z)
+let inline join mm  = stExpect_bind mm (fun z -> z)
 
 val app: forall 'a 'b 's 'msg. stExceptM ('a -> 'b) 's 'msg -> stExceptM 'a 's 'msg -> stExceptM 'b 's 'msg
-let inline app  mf m = bind mf (fun f -> fmap f m)
+let inline app  mf m = stExpect_bind mf (fun f -> fmap f m)
 (*
 TODO: UNUSED
 val papp: forall 'a 'b 's 'msg. stExceptM ('a -> 'b) 's 'msg -> 'a -> stExceptM 'b 's 'msg
@@ -29,8 +32,8 @@ let papp mf x = bind mf (fun f -> return (f x))
 *)
 
 module Operators = struct
-  let inline (>>=)    = bind
-  let inline (>>) m f = bind m (fun _ -> f)
+  let inline (>>=)    = stExpect_bind
+  let inline (>>) m f = stExpect_bind m (fun _ -> f)
   let inline (<$>)    = fmap
   let inline (<*>)    = app
 end
@@ -49,18 +52,18 @@ let inline sequence ms =
     (fun m m' ->
       m  >>= fun x  ->
       m' >>= fun xs ->
-      return (x::xs)
-    ) (return []) ms
+      stExpect_return (x::xs)
+    ) (stExpect_return []) ms
 
 let inline listM t xs = sequence (t xs)
 
-val mapM: forall 'a 'b 's 'msg. ('a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM (list 'b) 's 'msg
-let inline mapM f = listM (List.map f)
+val stExpect_mapM: forall 'a 'b 's 'msg. ('a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM (list 'b) 's 'msg
+let stExpect_mapM f = listM (List.map f)
 
 val mapiM: forall 'a 'b 's 'msg. (nat -> 'a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM (list 'b) 's 'msg
 let mapiM f = listM (List.mapi f)
 
-let inline sequence_ ms = foldr (>>) (return ()) ms
+let inline sequence_ ms = foldr (>>) (stExpect_return ()) ms
 val mapM_: forall 'a 'b 's 'msg. ('a -> stExceptM 'b 's 'msg) -> list 'a -> stExceptM unit 's 'msg
 let inline mapM_ f _as = sequence_ (List.map f _as)
 
@@ -68,13 +71,13 @@ let inline mapM_ f _as = sequence_ (List.map f _as)
 
 val     stExcept_foldlM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'a 's 'msg) -> 'a -> list 'b -> stExceptM 'a 's 'msg
 let rec stExcept_foldlM f a = function
-  | []    -> return a
+  | []    -> stExpect_return a
   | b::bs -> f a b >>= fun a' -> stExcept_foldlM f a' bs
 end
 
 val     foldrM: forall 'a 'b 's 'msg. ('a -> 'b -> stExceptM 'b 's 'msg) -> 'b -> list 'a -> stExceptM 'b 's 'msg
 let rec foldrM f a = function
-  | [] -> return a
+  | [] -> stExpect_return a
   | x::xs -> foldrM f a xs >>= f x
 end
 
@@ -85,17 +88,17 @@ let inline iter f l = stExcept_foldlM (fun () a -> f a) () l
 let inline fail msg = fun _ -> Exception.fail msg
 
 let of_option msg = function
-  | Just a  -> return a
+  | Just a  -> stExpect_return a
   | Nothing -> fail msg
 end
 
 let option msg m =
   let f o =
     match o with
-      | Just a  -> return a
+      | Just a  -> stExpect_return a
       | Nothing -> fail msg
     end in
-  bind m f
+  stExpect_bind m f
 
 
 (* hijack the error message of a failing computation *)
@@ -137,3 +140,7 @@ let liftException m =
 
 (* HACK: this is a hack to prevent Lem from generating OCaml code with random renamings *)
 let inline foldlM = stExcept_foldlM
+
+let inline return = stExpect_return
+let inline bind = stExpect_bind
+let inline mapM = stExpect_mapM

@@ -39,6 +39,8 @@ let cerb_builtin_types =
     "pthread_t";
     "trace_attr_t";   "trace_event_id_t";   "trace_event_set_t";
     "trace_id_t";
+(* TODO(KKK): talk to victor *)
+    "max_align_t"
   ]
 
 let current =

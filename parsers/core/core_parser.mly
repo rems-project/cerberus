@@ -579,6 +579,11 @@ and symbolify_action_ = function
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Create (pe1, pe2, pref))
+ | CreateReadOnly (_pe1, _pe2, _pe3, pref) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     Eff.return (CreateReadOnly (pe1, pe2, pe3, pref))
  | Alloc0 (_pe1, _pe2, pref) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -850,7 +855,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE ALLOC STORE LOAD KILL RMW FENCE
+%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL RMW FENCE
 
 (* continuation operators *)
 (* %token SAVE RUN *) (* TODO *)
@@ -1334,6 +1339,8 @@ expr:
 action:
 | CREATE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
     { Create (_pe1, _pe2, Symbol.PrefOther "Core") }
+| CREATE_READONLY LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
+    { CreateReadOnly (_pe1, _pe2, _pe3, Symbol.PrefOther "Core") }
 | ALLOC LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
     { Alloc0 (_pe1, _pe2, Symbol.PrefOther "Core") }
 | KILL _pe= delimited(LPAREN, pexpr, RPAREN)

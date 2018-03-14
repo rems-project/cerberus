@@ -23,8 +23,14 @@ metavar tag {{ lem Symbol.sym }} ::=
 indexvar n, i ::= {{ phantom }}
 
 embed {{ lem
-     (* NOTE: for OTy_cfunction, the types are core object type (instead of ctypes), because in
-        the elaborated Core we have forgotten about the latter since the signature of procedure have core types. *)
+
+(* NOTE(for OTy_cfunction):
+     the arguments are as follow, the return type (set to `Nothing' for void
+     functions; the number of parameters; a flag for whether the function is
+     variadic.
+     Regarding the return type, note that it is a core_object_type (instead of
+     a ctype), because in the elaborated Core we have forgotten about the
+     latter *)
 }}
 grammar
   % Inhabitant of these types may be read and stored from the memory (hence they match C types)
@@ -36,15 +42,53 @@ grammar
     | array ( core_object_type )                                         :: ::  array
     | struct tag                                                         :: ::  struct
     | union tag                                                          :: ::  union
-  
+
+embed {{ lem
+let rec eq_core_object_type oTy1 oTy2 =
+  let ord = function
+    | OTy_integer ->
+        (0: nat)
+    | OTy_floating ->
+        1
+    | OTy_pointer ->
+        2
+    | OTy_cfunction _ _ _ ->
+        3
+    | OTy_array _ ->
+        4
+    | OTy_struct _ ->
+        5
+    | OTy_union _ ->
+        6
+  end in
+  match (oTy1, oTy2) with
+    | (OTy_cfunction ret_oTy_opt1 n1 b1, OTy_cfunction ret_oTy_opt2 n2 b2) ->
+           maybeEqualBy eq_core_object_type ret_oTy_opt1 ret_oTy_opt2
+        && n1 = n2 && b1 = b2
+    | (OTy_array oTy1, OTy_array oTy2) ->
+        eq_core_object_type oTy1 oTy2
+    | (OTy_struct sym1, OTy_struct sym2) ->
+        sym1 = sym2
+    | (OTy_union sym1, OTy_union sym2) ->
+        sym1 = sym2
+    | _ ->
+        ord oTy1 = ord oTy2
+  end
+instance (Eq core_object_type)
+  let (=) = eq_core_object_type
+  let (<>) = fun x y -> not (eq_core_object_type x y)
+end
+}}
+
+grammar
   core_base_type {{ tex \textit{bTy} }} :: 'BTy_' ::= {{ com Core base types}}
     | unit                                :: ::   unit    {{ com unit }}
     | boolean                             :: ::   boolean {{ com boolean }}
-    | Ctype                               :: ::   ctype   {{ com Core type of C type exprs}} {{ tex \ottkw{ctype} }}
+    | ctype                               :: ::   ctype   {{ com Core type of C type exprs}} {{ tex \ottkw{ctype} }}
     | [ core_base_type ]                  :: ::   list    {{ com list }}
     | ( </ core_base_typei // , // i /> ) :: ::   tuple   {{ com tuple }}
-    | core_object_type                    :: ::   object  {{ com specified C object value }}
-    | loaded core_object_type             :: ::   loaded  {{ com possibly unspecified [[core_object_type]] value }} {{ tex [[loaded]]\ [[core_object_type]] }}
+    | core_object_type                    :: ::   object  {{ com C object value }}
+    | loaded core_object_type             :: ::   loaded  {{ com [[core_object_type]] or unspecified }} {{ tex [[loaded]]\ [[core_object_type]] }}
 
 
 % Types discriminate between pure (TyBase) and effectful
@@ -182,17 +226,20 @@ Mem_pointer_value {{ tex ptrval }} :: '' ::= {{ phantom }} {{ lem Mem.pointer_va
 
 % (* Object values (inhabitants of object types, hence values that can be read/stored) *)
 grammar
-generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
+  generic_object_value {{ tex object\_value }}:: 'OV' ::=  {{ auxparam 'sym }} {{ com C object values }} 
    | Mem_integer_value :: :: integer  {{ com integer value }}
    | Mem_floating_value :: :: floating {{ com floating-point value }}
    | Mem_pointer_value :: :: pointer {{ com pointer value }}
    | generic_name  :: :: cfunction {{ com C function pointer }}
 %   | array ( generic_object_value1 , .. , generic_object_valuen ) :: :: array {{ com C array value }}
-   | array ( </ generic_object_valuei // , // i /> ) :: :: array {{ com C array value }}
+   | array ( </ generic_loaded_valuei // , // i /> ) :: :: array {{ com C array value }}
 %   | ( struct tag ) { . Cabs_cabs_identifier1 = Mem_mem_value1 , .. , . Cabs_cabs_identifiern = Mem_mem_valuen } :: :: struct {{ com C struct value }}
    | ( struct tag ) { </ . Cabs_cabs_identifieri = Mem_mem_valuei // , // i /> } :: :: struct {{ com C struct value }}
    | ( union tag ) { . Cabs_cabs_identifier = Mem_mem_value } :: :: union {{ com C union value }}
- 
+
+generic_loaded_value {{ tex loaded\_value }} :: 'LV' ::= {{ auxparam 'sym }} {{ com potentially unspecified C object values }}
+  | Specified ( generic_object_value ) :: :: specified {{ com non-unspecified loaded value }}
+  | Unspecified ( ctype ) :: :: unspecified {{ com unspecified loaded value }}
 
 metavar Mem_mem_constraint {{ tex Mem.mem\_constraint }} {{ lem Mem.mem_constraint2 }} ::= {{ phantom }}   
 metavar ctype {{ lem ctype }} ::= {{ phantom }}   
@@ -203,33 +250,37 @@ list_Mem_mem_constraint {{ tex mcs }} :: '' ::=  {{ phantom }} {{ lem list Mem.m
    | </ Mem_mem_constrainti // , // i /> :: :: list_mem_constraint
 
 generic_value {{ tex value }} :: 'V' ::=  {{ auxparam 'sym }} {{ com Core values }}
-   | Constrained ( list_Mem_mem_constraint1 , generic_value1 ) .. ( list_Mem_mem_constraintn , generic_valuen ) :: X :: constrained
-   | generic_object_value :: :: object {{ com C object value }} 
-   | Specified ( generic_object_value ) :: :: specified {{ com non-unspecified loaded value }}
-   | Unspecified ( ctype ) :: :: unspecified      {{ com unspecified loaded value }} 
-   | Unit :: :: unit                              {{ com unit }}
-   | True :: :: true                              {{ com true }}
-   | False :: :: false                            {{ com false }}
-   | ctype :: :: ctype                            {{ com C type expr as value }}
-   | core_base_type [ generic_value1 , .. , generic_valuen ] :: :: list {{ com list }}
-   | ( generic_value1 , .. , generic_valuen ) :: :: tuple {{ com tuple }}
+   | generic_object_value                                    :: :: object {{ com C object value }} 
+   | generic_loaded_value                                    :: :: loaded {{ com loaded C object value }}
+   | Unit                                                    :: :: unit   {{ com unit }}
+   | True                                                    :: :: true   {{ com true }}
+   | False                                                   :: :: false  {{ com false }}
+   | ctype                                                   :: :: ctype  {{ com C type expr as value }}
+   | core_base_type [ generic_value1 , .. , generic_valuen ] :: :: list   {{ com list }}
+   | ( generic_value1 , .. , generic_valuen )                :: :: tuple  {{ com tuple }}
  
 
 metavar ty {{ tex ty }} {{ lem 'ty }} ::= {{ phantom }}
  
 
 grammar
-generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
-   | Nil ty      :: :: nil         {{ com empty list  }} %  : [bTy] 
-   | Cons        :: :: cons        {{ com cons  }} %  : bTy -> [bTy] -> [bTy] 
-   | Tuple       :: :: tuple       {{ com tuple  }} %  : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
-   | Array       :: :: array       {{ com C array  }} %  : bTy -> ... -> bTy -> array bTy 
-   | Ivmax       :: :: ivmax       {{ com max integer value }} %  : ctype -> integer 
-   | Ivmin       :: :: ivmin       {{ com min integer value  }} %  : ctype -> integer 
-   | Ivsizeof    :: :: ivsizeof    {{ com sizeof value  }} %  : ctype -> integer 
-   | Ivalignof   :: :: ivalignof   {{ com alignof value  }} %  : ctype -> integer 
-   | Specified   :: :: specified   {{ com non-unspecified loaded value  }} %  : objTy -> loaded objTy 
-   | Unspecified :: :: unspecified {{ com unspecified value }} %  : ctype -> loaded (integer|floating|pointer|array|struct|union) 
+generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'bty }}
+   | Nil bty     :: :: nil         {{ com empty list }}                     % : [bTy] 
+   | Cons        :: :: cons        {{ com cons }}                           % : bTy -> [bTy] -> [bTy] 
+   | Tuple       :: :: tuple       {{ com tuple }}                          % : bTy1 -> ... -> bTyN -> (bTy1, ..., bTyN) 
+   | Array       :: :: array       {{ com C array }}                        % : bTy -> ... -> bTy -> array bTy 
+   | Ivmax       :: :: ivmax       {{ com max integer value }}              % : ctype -> integer 
+   | Ivmin       :: :: ivmin       {{ com min integer value }}              % : ctype -> integer 
+   | Ivsizeof    :: :: ivsizeof    {{ com sizeof value }}                   % : ctype -> integer 
+   | Ivalignof   :: :: ivalignof   {{ com alignof value }}                  % : ctype -> integer 
+   | IvCOMPL     :: :: ivCOMPL     {{ com bitwise complement }}             % : ctype -> integer -> integer
+   | IvAND       :: :: ivAND       {{ com bitwise AND }}                    % : ctype -> integer -> integer -> integer
+   | IvOR        :: :: ivOR        {{ com bitwise OR }}                     % : ctype -> integer -> integer -> integer
+   | IvXOR       :: :: ivXOR       {{ com bitwise XOR }}                    % : ctype -> integer -> integer -> integer
+   | Specified   :: :: specified   {{ com non-unspecified loaded value }}   % : objTy -> loaded objTy 
+   | Unspecified :: :: unspecified {{ com unspecified value }}              % : ctype -> loaded (integer|floating|pointer|array|struct|union) 
+   | Fvfromint   :: :: fvfromint   {{ com cast integer to floating value }} % : integer -> floating
+   | Ivfromfloat :: :: ivfromfloat {{ com cast floating to integer value }} % : ctype -> floating -> integer
 
 
 % (*
@@ -237,7 +288,7 @@ generic_ctor {{ tex ctor }} :: 'C' ::= {{ auxparam 'ty }}
 %     list (maybe (sym * core_base_type))
 % *)
 
-maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} %{{ phantom }}
+maybesym :: '' ::= {{ auxparam 'sym }} {{ lem maybe 'sym }} {{ phantom }}
    | _   :: :: Nothing  (+ b = {} +)
    | tyvarsym :: :: Just (+ b = tyvarsym +)
 
@@ -256,7 +307,7 @@ metavar string {{ lem string }}  ::=  {{ phantom }}
 % metavar Mem_memop {{ lem Mem.memop }} {{ tex memop }} ::= {{ phantom }}  
 
 grammar
-pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'ty 'sym }} {{ com Core pure expressions }} 
+pexpr_ {{ tex pe }} :: 'PE' ::=  {{ auxparam 'bty 'sym }} {{ com Core pure expressions }} 
 %   (* names *)
    | tyvarsym                          :: :: sym {{ com Core identifier }}
    | Implementation__implementation_constant :: :: impl {{ com implementation-defined constant }} 
@@ -338,7 +389,7 @@ maybe_Symbol_sym_core_base_type {{ tex  (sym: oTy) }} :: '' ::=  {{ lem maybe (S
    % | ptr_valid_for_deref :: :: PtrValidForDeref
 
 
-generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expressions }} 
+  generic_expr_ {{ tex e_ }} :: 'E' ::= {{ auxparam 'a 'bty 'sym }}  {{ com Core expressions }} 
 %   (* pure expression *)
    | pure ( generic_pexpr ) :: :: pure  {{ com  pure expression }}
 %   (* operations (that either require sequencing or are ND) provide by the memory layout model *)
@@ -353,7 +404,7 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | generic_paction  :: :: action {{ com memory action }}
 
    | case generic_pexpr with </ | generic_patterni => generic_expri // i /> end :: :: case {{ com pattern matching }}
-   | let generic_pattern = generic_pexpr in generic_expr :: :: let (+ bind b(generic_pattern) in generic_expr +) {{ com Core let  }}
+%   | let generic_pattern = generic_pexpr in generic_expr :: :: let (+ bind b(generic_pattern) in generic_expr +) {{ com Core let  }}
    | if generic_pexpr then generic_expr1 else generic_expr2 :: :: if {{ com Core if  }}
    | skip :: :: skip {{ com  skip }}
 
@@ -381,6 +432,10 @@ generic_expr {{ tex e }} :: 'E' ::= {{ auxparam 'a 'ty 'sym }}  {{ com Core expr
    | wait ( Thread_thread_id ) ::  :: wait  %(* TODO: this will need to have a Core type annotation to allow typecheck ... *)
       {{ com wait for thread termination }} 
    | Eloc Loc_t generic_expr :: X :: loc 
+
+%  generic_expr {{ tex e }} :: ::= {{ auxparam 'a 'bty 'sym }}
+%    | generic_expr_
+
 
  %(* the qualification prefixes are for pprint *)
 % WAS generic_action_ in source
@@ -454,8 +509,8 @@ terminals :: 'terminal' ::=
 
 substitutions
 
-single pexpr_ tyvarsym :: subst
-multiple pexpr_ tyvarsym :: msubst
+% single pexpr_ tyvarsym :: subst
+% multiple pexpr_ tyvarsym :: msubst
 
 embed {{ lem 
  

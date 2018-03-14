@@ -1059,28 +1059,38 @@ AilTypesAux.make_composite
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_external_object_declaration sym ((_, _, qs, ty) as decl) =
+val register_external_object_declaration: Loc.t -> A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_external_object_declaration loc sym ((_, _, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
-      "' with qs, ty= " ^ Pp.stringFromAil_ctype qs ty)
+      "' with qs, ty= " ^ Pp.stringFromAil_ctype new_qs new_ty)
   ) >>
   
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
-    | Just decl' ->
-        if decl <> decl' then
+    | Just (_, _, prev_qs, prev_ty) ->
+        (* TODO: what about the storage duration and isRegister?? *)
+        if not (AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)) then
+
+(*
+(ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype)
+*)
+
+
+(*        if decl <> decl' then *)
+          (* TODO: there is also §6.7#4 which requires (nearly) the same an failure is a
+             constraint violation, not UB. Which own should we report ???? *)
           (* STD §6.2.7#2 *)
-          fail Loc.unknown
+          fail loc
             (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
         else
           let () = Debug.print_debug 7 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
-          <| st with external_object_declarations= Map.insert sym decl st.external_object_declarations |>
+          <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
         )
   end
 
@@ -1099,15 +1109,15 @@ let update_external_object_type sym ty =
 
 (* TODO: factorize *)
 val register_internal_object_declaration:
-  A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_internal_object_declaration sym decl =
+  Loc.t -> A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_internal_object_declaration loc sym decl =
   State_exception.read (fun st ->
     Map.lookup sym st.internal_object_declarations
   ) >>= function
     | Just decl' ->
         if decl <> decl' then
           (* STD §6.2.7#2 *)
-          fail Loc.unknown
+          fail loc
             (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
         else
           return ()

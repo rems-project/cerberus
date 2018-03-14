@@ -3,7 +3,7 @@
 
 typedef __cerbty_ptrdiff_t   ptrdiff_t;
 typedef __cerbty_size_t      size_t;
-//TODO: typedef __cerbty_max_align_t max_align_t;
+typedef __cerbty_max_align_t max_align_t;
 
 typedef __cerbty_wchar_t wchar_t;
 
