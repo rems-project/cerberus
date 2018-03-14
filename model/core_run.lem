@@ -391,7 +391,7 @@ type action_request =
                    Cmm.aid * thread_id * Mem.pointer_value * thread_state
 
 type core_step =
-  | Step_action_request of core_runM action_request
+  | Step_action_request of string * core_runM action_request
   | Step_memop_request of Mem_common.memop * list Core.value * thread_id * (Core.value -> thread_state)
   | Step_tau of string * core_runM thread_state
   | Step_eval of string * core_runM thread_state
@@ -445,7 +445,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                 | _ ->
                     match (valueFromPexpr pe1, valueFromPexpr pe2) with
                       | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
-                          Step_action_request (
+                          Step_action_request "CreateRequest" (
                             E.fresh_action_id >>= fun create_aid ->
                             E.return (
                               CreateRequest loc sb_before dd_before asw_before
@@ -520,7 +520,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                                   | (Vobject (OVinteger ival), Vctype ty) ->
                                 match memValueFromValue (Core_ctype.unatomic ty) cval3 with
                                   | Just mem_val ->
-                                      Step_action_request (
+                                      Step_action_request "CreateRequest" (
                                         E.fresh_action_id >>= fun create_aid ->
                                         E.return (
                                           CreateRequest loc sb_before dd_before asw_before
@@ -557,7 +557,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
           | _ ->
               match (valueFromPexpr pe1, valueFromPexpr pe2) with
                 | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-                    Step_action_request (
+                    Step_action_request "AllocRequest" (
                       E.fresh_action_id >>= fun alloc_aid ->
                       E.return (
                         AllocRequest loc sb_before dd_before asw_before
@@ -592,7 +592,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
     | Kill pe ->
         match valueFromPexpr pe with
           | Just (Vobject (OVpointer ptr_val)) ->
-              Step_action_request (
+              Step_action_request "KillRequest" (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
                   KillRequest loc sb_before dd_before asw_before
@@ -664,7 +664,7 @@ KKK
                 | _ ->
                   match memValueFromValue (Core_ctype.unatomic ty) cval with
                     | Just mem_val ->
-                        Step_action_request (
+                        Step_action_request "StoreRequest" (
                           E.fresh_action_id >>= fun store_aid ->
                           E.fresh_symbol    >>= fun val_sym   ->
                           E.return (
@@ -718,7 +718,7 @@ KKK
     | Load pe1 pe2 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val))) ->
-              Step_action_request (
+              Step_action_request "LoadRequest" (
                 E.fresh_action_id >>= fun load_aid ->
                 E.fresh_symbol    >>= fun val_sym  ->
                 E.return (
@@ -754,7 +754,7 @@ KKK
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval_expected, Just cval_desired) ->
               match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
                 | (Just mval_expected, Just mval_desired) ->
-                    Step_action_request (
+                    Step_action_request "RMWRequest" (
                       E.fresh_action_id >>= fun rmw_aid ->
                       E.return (
                         RMWRequest loc sb_before dd_before asw_before
@@ -855,7 +855,7 @@ KKK
         end
 *)
     | Fence mo ->
-        Step_action_request (
+        Step_action_request "FenceRequest" (
           E.fresh_action_id >>= fun fence_aid ->
           E.return (
             FenceRequest loc sb_before dd_before asw_before

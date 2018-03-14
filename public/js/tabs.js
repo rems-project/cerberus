@@ -188,7 +188,23 @@ class TabInteractive extends Tab {
     }
   }
 
+  nodeLabel(str) {
+    if (str == 'Step_eval(first operand of a Create)')
+      return 'Eval first operand of create'
+    if (str == 'Step_eval(Esseq)')
+      return 'Eval strong sequencing'
+    if (str == 'Step_eval(Ewseq)')
+      return 'Eval weak sequencing'
+    if (str == 'Step_eval(Epure)')
+      return 'Eval pure expression'
+    if (str == 'Step_tau(End)')
+      return 'Non deterministic choice'
+    return str
+  }
+
   attachTree(pointId, tree) {
+    // Update tree nodes
+    tree.nodes.map((n) => n.label = this.nodeLabel(n.label))
     // Get trees
     let leafNodeId = null
     let nodes = ui.state.steps.nodes
