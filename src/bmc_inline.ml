@@ -148,7 +148,6 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
         PEstd (str, inline_pexpr st pe)
   in (Pexpr((), inlined))
 
-
 let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
   let inlined = match expr_ with
     | Epure pe ->

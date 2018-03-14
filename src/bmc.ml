@@ -105,14 +105,12 @@ let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
 (* ========== BMC ========== *)
 
 let check_solver (solver: Solver.solver) =
-  begin
   let status = Solver.check solver [] in
   Printf.printf "Status: %s\n" (Solver.string_of_status status);
   begin
   if status = UNKNOWN then
     Printf.printf "Unknown: %s\n" (Solver.get_reason_unknown solver)
-  end;
-  if status != SATISFIABLE then
+  else if status != SATISFIABLE then
     Printf.printf "NOT SAT :) \n"
   else
     begin 
@@ -123,7 +121,8 @@ let check_solver (solver: Solver.solver) =
       | None -> Printf.printf "No model\n"
     ;
     end
-  end
+  end;
+  status
 
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
   (!(bmc_address.seq_ctr))
@@ -514,13 +513,6 @@ let concat_vcs (state: bmc_state)
                     (Boolean.mk_not state.ctx guard)
                     (Boolean.mk_and state.ctx vc2) in
   [new_vc1; new_vc2 ]                  
-   (* 
-    List.map (fun vc -> Boolean.mk_implies state.ctx guard vc) vc1 in
-  let new_vc2 = List.map (fun vc -> Boolean.mk_implies state.ctx 
-                                        (Boolean.mk_not state.ctx guard) vc) vc2 in
-  new_vc1 @ new_vc2
-  *)
-
 
 let rec bmc_pexpr (state: bmc_state) 
                   (Pexpr(bTy, pe) : typed_pexpr) : 
@@ -1338,7 +1330,7 @@ let bmc_fun_map (state: bmc_state)
     | Proc (ty, params, e) ->        
         let (_, state1) = bmc_expr state e in
         Printf.printf "-----CONSTRAINTS ONLY\n";
-        check_solver state1.solver;
+        nheck_solver state1.solver;
         Printf.printf "-----WITH VCS \n";
         let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
                                state1.vcs
@@ -1453,7 +1445,9 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
 
 
       Printf.printf "-----CONSTRAINTS ONLY\n";
-      check_solver state1.solver;
+
+      Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
+      assert (check_solver state1.solver = SATISFIABLE);
       Printf.printf "-----WITH VCS \n";
       let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
                              state1.vcs
@@ -1477,12 +1471,13 @@ let run_bmc (core_file : 'a file)
 
   print_string "EXIT: NORMALIZING FILE\n";
 
+  pp_file norm_file;
 
   print_string "Typechecking file\n";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
     Exception.except_return (
 
-      print_string "HERE\n";
+
       let seq_file = Core_sequentialise.sequentialise_file typed_core in
       pp_file seq_file;
       bmc_file seq_file norm_supply;
