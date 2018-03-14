@@ -1,6 +1,6 @@
 CodeMirror.defineMode("ast", (config, modeConfig) => {
 
-  let whiteCharRE = /[ \t\v\f]/
+  let whiteCharRE = /[ \t\v\f]/;
   var largeRE = /[A-Z]/;
   let idRE = /[a-z_A-Z0-9'\xa1-\uffff]/;
   var digitRE = /\d/;

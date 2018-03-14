@@ -407,24 +407,18 @@ try {
 }
 
 // Add view
-if (config) {
-  ui.add(new View(config.title, config.source, config))
-  ui.refresh()
-} else {
-  $.get('buffer.c').done((source) => {
-    ui.add(new View('example.c', source))
+function onLoad() {
+  if (config) {
+    ui.add(new View(config.title, config.source, config))
     ui.refresh()
-  }).fail(() => {
-    console.log('Failing when trying to download "buffer.c"')
-  })
+  } else {
+    $.get('buffer.c').done((source) => {
+      ui.add(new View('example.c', source))
+      ui.refresh()
+    }).fail(() => {
+      console.log('Failing when trying to download "buffer.c"')
+    })
+  }
 }
 
-$(window).ready(() => {
-  outdatedBrowser({
-    bgColor: '#f25648',
-    color: '#ffffff',
-    lowerThan: 'transform',
-    languagePath: 'outdated.html'
-  })
-  ui.refresh()
-})
+$(window).ready(onLoad)
