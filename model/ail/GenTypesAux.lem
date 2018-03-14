@@ -1,6 +1,6 @@
 open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
-open import GenTypes Implementation
-import AilTypesAux AilTyping
+open import GenTypes
+import AilTypesAux AilTyping Implementation
 
 open import Utils
 
@@ -311,9 +311,9 @@ let rec interpret_genIntegerType impl git : errorM integerType =
   | Concrete ity ->
       return ity
   | SizeT ->
-      return impl.size_t
+      return Size_t
   | PtrdiffT ->
-      return impl.ptrdiff_t
+      return Ptrdiff_t
   | Unknown ic ->
       AilTyping.type_of_constant impl ic
   | Promote git ->
@@ -325,7 +325,7 @@ let rec interpret_genIntegerType impl git : errorM integerType =
       return (AilTypesAux.usual_arithmetic_integer impl ity1 ity2)
   end
 
-val interpret_genBasicType: implementation -> genBasicType -> errorM basicType
+val interpret_genBasicType: Implementation.implementation -> genBasicType -> errorM basicType
 let interpret_genBasicType impl = function
   | GenInteger gity ->
       interpret_genIntegerType impl gity >>= fun ity ->
@@ -334,7 +334,7 @@ let interpret_genBasicType impl = function
       return (Floating fty)
 end
 
-val interpret_genType: implementation -> genType -> errorM ctype
+val interpret_genType: Implementation.implementation -> genType -> errorM ctype
 let interpret_genType impl = function
   | GenVoid ->
       return Void
@@ -357,7 +357,7 @@ let interpret_genType impl = function
       return (Atomic ty)
   end
 
-val interpret_genTypeCategory: implementation -> genTypeCategory -> errorM typeCategory
+val interpret_genTypeCategory: Implementation.implementation -> genTypeCategory -> errorM typeCategory
 let interpret_genTypeCategory impl = function
   | GenRValueType gty ->
       RValueType <$> interpret_genType impl gty

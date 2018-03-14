@@ -106,6 +106,7 @@ type token =
   | INDET
   | BOUND
   | CREATE
+  | CREATE_READONLY
   | ALLOC
   | KILL
   | STORE

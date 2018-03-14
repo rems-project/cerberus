@@ -517,11 +517,11 @@ let action_request_concurrency = function
         update_core_state (Core_run.update_thread_state tid (mk_th_st' ptrval) dr_st.core_state) dr_st
       )
   
-  | Core_run.CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
+  | Core_run.CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty init_opt mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
       (* TODO: hack, hack, hack *)
       ND.log ("CREATE REQUEST (aid: " ^ show aid ^ ")") >> (* DEBUG *)
-      liftMem (Mem.allocate_static tid pref align_ival lvalue_ty) >>= fun ptrval ->
+      liftMem (Mem.allocate_static tid pref align_ival lvalue_ty init_opt) >>= fun ptrval ->
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid (mk_th_st' ptrval) dr_st.core_state) dr_st
       )
@@ -631,9 +631,9 @@ let action_request_sequential = function
         update_core_state (Core_run.update_thread_state tid (mk_th_st' ptrval) dr_st.core_state) dr_st
       )
   
-  | Core_run.CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty mk_th_st' ->
+  | Core_run.CreateRequest loc sb_edges dd_edges asw_edges aid tid pref align_ival lvalue_ty init_opt mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
-      liftMem (Mem.allocate_static tid pref align_ival lvalue_ty) >>= fun ptrval ->
+      liftMem (Mem.allocate_static tid pref align_ival lvalue_ty init_opt) >>= fun ptrval ->
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid (mk_th_st' ptrval) dr_st.core_state) dr_st
       )
@@ -1171,7 +1171,8 @@ TODO: this should be removable, since we already set it in Translation
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argc_sym]) (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argc_sym])
+                            (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int Nothing) (fun ptr_val ->
                   Mem.bind (Mem.store (Loc.other "argc init") Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
@@ -1181,7 +1182,7 @@ TODO: this should be removable, since we already set it in Translation
               (* allocating and initialising the objects pointed to by the elements of argv *)
               ND.foldM (fun ptr_vals (arg_mem_val, arg_ty) ->
                 liftMem (
-                  Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty) (fun ptr_val ->
+                  Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty Nothing) (fun ptr_val ->
                     Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty ptr_val arg_mem_val) (fun _ ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
@@ -1198,7 +1199,7 @@ TODO: this should be removable, since we already set it in Translation
               let argv_mem_val = Mem.array_mval $
                 List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Core_ctype.char]) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty) (fun ptr_val ->
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun ptr_val ->
                   Mem.bind (Mem.store (Loc.other "argv init") argv_ty ptr_val argv_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )

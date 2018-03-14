@@ -39,6 +39,7 @@ type mem_error =
   
   | MerrPtrdiff
   | MerrAccess of Loc.t * access_kind * access_error
+  | MerrWriteOnReadOnly of Loc.t
   
   | MerrIntFromPtr
   
@@ -59,6 +60,8 @@ instance (Show mem_error)
     | MerrAccess loc LoadAccess err ->
         "MerrAccess Load [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
+    | MerrWriteOnReadOnly loc ->
+        "MerrWriteOnReadOnly [" ^ Loc.stringFromLocation loc ^ "]"
     | MerrAccess loc StoreAccess err ->
         "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
@@ -79,6 +82,9 @@ let undefinedFromMem_error = function
       Just [Undefined.UB010_pointer_to_dead_object]
   | MerrIntFromPtr ->
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
+  | MerrWriteOnReadOnly _ ->
+      (* TODO *)
+      Nothing
   | _ ->
       Nothing
 end
