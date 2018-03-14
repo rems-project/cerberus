@@ -312,8 +312,8 @@ let rec drive_core_thread tid =
             ) xs
           ) )
     
-    | Core_run.Step_action_request _ ->
-        ( "Step_action_request"
+    | Core_run.Step_action_request str _ ->
+        ( str
         , ND.return () )
     | Core_run.Step_memop_request _ _ _ _ ->
         ( "Step_memop_request"
@@ -707,7 +707,7 @@ let perform_action_request with_concurrency request_m =
 val     driver: bool -> driverM unit
 let rec driver with_concurrency =
   let process_core_step2 = function
-  | Core_run.Step_action_request request_m ->
+  | Core_run.Step_action_request _ request_m ->
       perform_action_request with_concurrency request_m >>
       driver with_concurrency
   | Core_run.Step_memop_request memop cvals tid mk_th_st ->
