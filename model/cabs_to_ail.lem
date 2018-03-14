@@ -1622,6 +1622,17 @@ STD_ "§6.5.1#2" $
                 E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
               else
                 E.add_used_identifier sym >>
+(*
+TODO: this was prelim work to add type annotations to support identifiers with tentative defs (i.e. type changes throughout the translation unit
+                (* TODO KKK *)
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "TODO(KKK): attempting fetch [" ^ Loc.stringFromLocation loc ^ "]"
+                ) in
+                E.fetch_object_declaration sym >>= fun (_, _, sym_qs, sym_ty) ->
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "TODO(KKK): [" ^ Loc.stringFromLocation loc ^ "]" ^ Pp.stringFromAil_ctype sym_qs sym_ty
+                ) in
+*)
                 E.return (AilEident sym)
           | Nothing ->
               match Builtins.translate_builtin_varnames ident with
@@ -2575,6 +2586,7 @@ let desugar_declaration_base specifs idecltors =
                   check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
+                  let ident_loc = Loc.locOf ident in
                   
                   (* TODO: STD check+quote *)
                   E.get_tag_definitions >>= fun ident_tagDefs ->
@@ -2599,7 +2611,7 @@ let desugar_declaration_base specifs idecltors =
                     E.fail (*TODO*)(Loc.locOf ident) (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
                   else
                     let dur = determinate_storage_duration link specifs.storage_classes in
-                    E.register_internal_object_declaration sym
+                    E.register_internal_object_declaration ident_loc sym
                       (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     mk_desug_init () >>= function
                       | Just (ty', d_e) ->
@@ -2611,7 +2623,7 @@ let desugar_declaration_base specifs idecltors =
                               "ty' is new"
                             ) in
                             (* TODO: tentative *)
-                            E.register_internal_object_declaration sym
+                            E.register_internal_object_declaration ident_loc sym
                               (dur, List.elem SC_register specifs.storage_classes, qs, ty')
                           else
                             E.return ()
@@ -2838,6 +2850,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                   | _ ->
                       E.register_ordinary_identifier ident
                         (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
+                      let ident_loc = Loc.locOf ident in
                       mk_desug_init () >>= function
                         | Just (ty', d_e) ->
                           let dur = determinate_storage_duration link specifs.storage_classes in
@@ -2849,7 +2862,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                               "ty' is new"
                             ) in
                             (* TODO: tentative *)
-                            E.register_internal_object_declaration sym
+                            E.register_internal_object_declaration ident_loc sym
                               (dur, List.elem SC_register specifs.storage_classes, qs, ty')
                           else
                             E.return ()
@@ -3297,7 +3310,7 @@ let desugar_and_register_external_declaration edecl =
                   (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                 
                 let dur = determinate_storage_duration link specifs.storage_classes in
-                E.register_external_object_declaration sym
+                E.register_external_object_declaration (Loc.locOf ident) sym
                   (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                 
                 (* TODO: STD check+quote *)

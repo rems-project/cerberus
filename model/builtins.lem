@@ -467,6 +467,8 @@ let translate_builtin_typenames = function
       Just (ATypes.Builtin "mtx_t")
   | "__cerbty_once_flag" ->
       Just (ATypes.Builtin "once_flag")
+  | "__cerbty_max_align_t" ->
+      Just (ATypes.Builtin "max_align_t")
 (*
   | "__cerbty_sig_atomic_t" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.IBuiltin "sig_atomic_t")))

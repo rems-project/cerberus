@@ -995,6 +995,21 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
         typecheck_export_pexpr loc tagDefs env BTy_ctype                pe2 >>= fun tpe2 ->
         E.return (BTy_object OTy_pointer, Create tpe1 tpe2 pref)
+    | CreateReadOnly pe1 pe2 pe3 pref ->
+        typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+        match pe2 with
+          | Pexpr [] () (PEval (Vctype ty)) ->
+              let tpe2 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+              match core_object_type_of_ctype ty with
+                | Just lvalue_oTy ->
+                    typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                    E.return (BTy_object OTy_pointer, CreateReadOnly tpe1 tpe2 tpe3 pref)
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO "CreateReadOnly, not oTy")
+              end
+          | _ ->
+              E.fail loc (CoreTyping_TODO "CreateReadOnly, non-trivial ctype")
+        end
     | Alloc pe1 pe2 pref ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
@@ -1047,6 +1062,22 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
       typecheck_export_pexpr loc tagDefs env BTy_ctype                pe2 >>= fun tpe2 ->
       E.return (Create tpe1 tpe2 pref)
+  | CreateReadOnly pe1 pe2 pe3 pref ->
+      guard_match loc "create_readonly()" bTy (BTy_object OTy_pointer) >>
+      typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
+      match pe2 with
+        | Pexpr [] () (PEval (Vctype ty)) ->
+            let tpe2 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+            match core_object_type_of_ctype ty with
+              | Just lvalue_oTy ->
+                  typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                  E.return (CreateReadOnly tpe1 tpe2 tpe3 pref)
+              | Nothing ->
+                  E.fail loc (CoreTyping_TODO "CreateReadOnly, not oTy")
+            end
+        | _ ->
+            E.fail loc (CoreTyping_TODO "CreateReadOnly, non-trivial ctype")
+      end
   | Alloc pe1 pe2 pref ->
       guard_match loc "alloc()" bTy (BTy_object OTy_pointer) >>
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->

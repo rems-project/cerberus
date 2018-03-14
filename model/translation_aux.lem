@@ -98,12 +98,11 @@ let conv ty1 ty2 e =
     error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
 *)
 
-open Implementation
 (* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
-val tmp_implementation: implementation
+val tmp_implementation: Implementation.implementation
 let tmp_implementation =
-  make_implementation
-    Two'sComplement
+  Implementation.make_implementation
+    Implementation.Two'sComplement
     ( function
         | Aty.Char       -> true (* Check that *)
 	| Aty.Signed   _ -> true

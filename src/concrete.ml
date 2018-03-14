@@ -328,6 +328,7 @@ module Concrete : Memory = struct
   type allocation = {
     base: address;
     size: N.num;
+    is_readonly: bool;
   }
   
   type mem_state = {
@@ -466,64 +467,6 @@ module Concrete : Memory = struct
       ) device_ranges
     end
   
-  let allocate_static tid pref (IV (_, align)) ty : pointer_value memM =
-(*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
-    let size = N.of_int (sizeof ty) in
-    modify begin fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(
-        let m = modulus st.next_address align in
-        if equal m zero then st.next_address else add st.next_address (sub align m)
-      ) in
-      
-      Debug_ocaml.print_debug 1 [] (fun () ->
-        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-        " --> alloc_id= " ^ N.to_string alloc_id ^
-        ", size= " ^ N.to_string size ^
-        ", addr= " ^ N.to_string addr
-      );
-      ( PV (Prov_some alloc_id, PVconcrete addr)
-      , { st with
-            next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size} st.allocations;
-            next_address= Nat_big_num.add addr size } )
-    end
-  
-  
-  let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
-(*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
-    modify (fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
-      ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
-      , { st with
-            next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size_n} st.allocations;
-            next_address= Nat_big_num.add addr size_n } )
-    )
-  
-  
-  let kill : pointer_value -> unit memM = function
-    | PV (_, PVnull _) ->
-          fail (MerrOther "attempted to kill with a null pointer")
-    | PV (_, PVfunction _) ->
-          fail (MerrOther "attempted to kill with a function pointer")
-    | PV (Prov_none, PVconcrete _) ->
-          fail (MerrOther "attempted to kill with a pointer lacking a provenance")
-    | PV (Prov_device, PVconcrete _) ->
-        (* TODO: should that be an error ?? *)
-        return ()
-    | PV (Prov_some alloc_id, PVconcrete addr) ->
-        is_within_bound alloc_id addr >>= function
-          | false ->
-              fail (MerrOther "attempted to kill with an out-of-bound pointer")
-          | true ->
-              Debug_ocaml.print_debug 1 [] (fun () ->
-                "KILLING alloc_id= " ^ N.to_string alloc_id
-              );
-              update begin fun st ->
-                {st with allocations= IntMap.remove alloc_id st.allocations}
-              end
   
   (* INTERNAL: fetch_bytes *)
   let fetch_bytes base_addr n_bytes =
@@ -645,7 +588,8 @@ module Concrete : Memory = struct
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
       | Atomic0 atom_ty ->
-          failwith "TODO: combine_bytes, Atomic"
+          Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
+          combine_bytes atom_ty bs
       | Struct0 tag_sym ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
 (*
@@ -776,6 +720,81 @@ module Concrete : Memory = struct
           bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
 
   
+  let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
+(*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
+    let size = N.of_int (sizeof ty) in
+    modify begin fun st ->
+      let alloc_id = st.next_alloc_id in
+      let addr = Nat_big_num.(
+        let m = modulus st.next_address align in
+        if equal m zero then st.next_address else add st.next_address (sub align m)
+      ) in
+      
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ N.to_string alloc_id ^
+        ", size= " ^ N.to_string size ^
+        ", addr= " ^ N.to_string addr
+      );
+      
+      match init_opt with
+        | None ->
+            ( PV (Prov_some alloc_id, PVconcrete addr)
+            , { st with
+                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
+                  allocations= IntMap.add alloc_id {base= addr; size= size; is_readonly= false} st.allocations;
+                  next_address= Nat_big_num.add addr size } )
+        | Some mval ->
+            (* TODO: factorise this with do_store inside Concrete.store *)
+            let bs = List.mapi (fun i b ->
+              (Nat_big_num.add addr (Nat_big_num.of_int i), b)
+            ) (explode_bytes mval) in
+            ( PV (Prov_some alloc_id, PVconcrete addr)
+            , { next_alloc_id= Nat_big_num.succ st.next_alloc_id;
+                allocations= IntMap.add alloc_id {base= addr; size= size; is_readonly= true} st.allocations;
+                next_address= Nat_big_num.add addr size;
+                bytemap=
+                  List.fold_left (fun acc (addr, b) ->
+                    IntMap.add addr b acc
+                  ) st.bytemap bs
+              } )
+    end
+  
+  
+  let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
+(*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
+    modify (fun st ->
+      let alloc_id = st.next_alloc_id in
+      let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
+      ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
+      , { st with
+            next_alloc_id= Nat_big_num.succ st.next_alloc_id;
+            allocations= IntMap.add alloc_id {base= addr; size= size_n; is_readonly= false} st.allocations;
+            next_address= Nat_big_num.add addr size_n } )
+    )
+  
+  
+  let kill : pointer_value -> unit memM = function
+    | PV (_, PVnull _) ->
+          fail (MerrOther "attempted to kill with a null pointer")
+    | PV (_, PVfunction _) ->
+          fail (MerrOther "attempted to kill with a function pointer")
+    | PV (Prov_none, PVconcrete _) ->
+          fail (MerrOther "attempted to kill with a pointer lacking a provenance")
+    | PV (Prov_device, PVconcrete _) ->
+        (* TODO: should that be an error ?? *)
+        return ()
+    | PV (Prov_some alloc_id, PVconcrete addr) ->
+        is_within_bound alloc_id addr >>= function
+          | false ->
+              fail (MerrOther "attempted to kill with an out-of-bound pointer")
+          | true ->
+              Debug_ocaml.print_debug 1 [] (fun () ->
+                "KILLING alloc_id= " ^ N.to_string alloc_id
+              );
+              update begin fun st ->
+                {st with allocations= IntMap.remove alloc_id st.allocations}
+              end
   
   let load loc ty (PV (prov, ptrval_)) =
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
@@ -822,7 +841,7 @@ module Concrete : Memory = struct
       Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
-    if not (ctype_equal ty (typeof mval)) then begin
+    if not (ctype_equal (Core_ctype.unatomic ty) (Core_ctype.unatomic (typeof mval))) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"
@@ -863,7 +882,11 @@ module Concrete : Memory = struct
               | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
               | true ->
-                  do_store addr
+                  get_allocation alloc_id >>= fun alloc ->
+                  if alloc.is_readonly then
+                    fail (MerrWriteOnReadOnly loc)
+                  else
+                    do_store addr
             end
   
   let null_ptrval ty =
@@ -969,13 +992,21 @@ module Concrete : Memory = struct
     | PV (Prov_none, _) ->
         false
   
-  let isWellAligned_ptrval ref_ty = function
-    | PV (_, PVnull _) ->
-        return true
-    | PV (_, PVfunction _) ->
-        failwith "TODO (Concrete): isWellAligned_ptrval, PVfunction"
-    | PV (_, PVconcrete addr) ->
-        return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
+  let isWellAligned_ptrval ref_ty ptrval =
+    (* TODO: catch builtin function types *)
+    match Core_ctype.unatomic ref_ty with
+      | Void0
+      | Function0 _ ->
+          fail (MerrOther "called isWellAligned_ptrval on void or a function type")
+      | _ ->
+          begin match ptrval with
+            | PV (_, PVnull _) ->
+                return true
+            | PV (_, PVfunction _) ->
+                fail (MerrOther "called isWellAligned_ptrval on function pointer")
+            | PV (_, PVconcrete addr) ->
+                return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
+          end
   
   let ptrcast_ival _ _ (IV (prov, n)) =
     if not (N.equal n N.zero) then

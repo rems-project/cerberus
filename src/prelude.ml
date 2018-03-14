@@ -8,6 +8,9 @@ type mem_setting =
 
 (* TODO: I hate this. And it doesn't even work ... *)
 let mem_switch: mem_setting ref =
+(*
+  ref `MemDefacto
+ *)
   ref `MemConcrete
 
 (*

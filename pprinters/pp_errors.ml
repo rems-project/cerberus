@@ -295,6 +295,18 @@ let std_ref = function
   | _ ->
       "TODO: pp_errors std_ref"
 
+let string_of_core_run_error = function
+  | Illformed_program str ->
+      "ill-formed program: `" ^ str ^ "'"
+  | Found_empty_stack str ->
+      "found an empty stack: `" ^ str ^ "'"
+  | Reached_end_of_proc ->
+      "reached the end of a procedure"
+  | Unknown_impl ->
+      "unknown implementation constant"
+  | Unresolved_symbol sym ->
+      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
+
 
 let short_message = function
   | Cparser_cause (Cparser_undeclaredIdentifier str) ->
@@ -345,9 +357,17 @@ let short_message = function
 
     | Core_typing_cause cause ->
         core_typing_cause_to_string cause
+
+    | CORE_UNDEF _ ->
+        "TODO(msg) CORE_UNDEF"
+    | PARSER str ->
+        "TODO(msg) PARSER ==> " ^ str
+    | OTHER str ->
+        "TODO(msg) OTHER ==> " ^ str
+    | Core_run_cause err ->
+        "TODO(msg) Core_run_cause ==> " ^ string_of_core_run_error err
     | _ ->
         "TODO ERROR MESSAGE"
-
 
 
 let to_string (loc, err) =
@@ -361,17 +381,3 @@ let to_string (loc, err) =
       | QuoteStd ->
           failwith "TODO: Pp_errors.to_string QuoteStd"
   end
-
-
-
-let string_of_core_run_error = function
-  | Illformed_program str ->
-      "ill-formed program: `" ^ str ^ "'"
-  | Found_empty_stack str ->
-      "found an empty stack: `" ^ str ^ "'"
-  | Reached_end_of_proc ->
-      "reached the end of a procedure"
-  | Unknown_impl ->
-      "unknown implementation constant"
-  | Unresolved_symbol sym ->
-      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
