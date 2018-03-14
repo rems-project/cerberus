@@ -1,6 +1,9 @@
-open import Pervasives Common Utils AilSyntax AilTypes Implementation ErrorMonad TypingError
+open import Pervasives Common Utils AilSyntax AilTypes ErrorMonad TypingError
 import Implementation_
 import Loc Debug
+
+import Implementation
+
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
 let unatomic = function
@@ -421,39 +424,39 @@ let is_incomplete sigm ty =
 
 
 (* ============================================================================================== *)
-val in_integer_range: implementation -> integer -> integerType -> bool
+val in_integer_range: Implementation.implementation -> integer -> integerType -> bool
 let in_integer_range impl n ity =
-  Range.mem n (integer_range impl ity)
+  Range.mem n (Implementation.integer_range impl ity)
 
 val in_min_integer_range: integer -> integerType -> bool
 let in_min_integer_range n ity =
   Range.mem n (Implementation.min_integer_range ity)
 
 
-val le_integer_range: implementation -> integerType -> integerType -> bool
+val le_integer_range: Implementation.implementation -> integerType -> integerType -> bool
 let le_integer_range impl ity1 ity2 =
   if ity1 = ity2 then
     (* reflexive cases *)
     true
   else match (ity1, ity2) with
     | (Char, Signed Ichar) ->
-        impl.signed Char
+        Implementation_.char_is_signed
     | (Char, Signed ibty) ->
-        impl.signed Char || (impl.precision Char) < (impl.precision (Signed ibty))
+        Implementation_.char_is_signed || (Implementation_.precision_ity Char) < (Implementation_.precision_ity (Signed ibty))
     | (Signed Ichar, Char) ->
-        impl.signed Char
+        Implementation_.char_is_signed
     | (Signed ibty, Char) ->
-        impl.signed Char && impl.precision (Signed ibty) = impl.precision Char
+        Implementation_.char_is_signed && Implementation_.precision_ity (Signed ibty) = Implementation_.precision_ity Char
     | (Unsigned Ichar, Char) ->
-        not (impl.signed Char)
+        not Implementation_.char_is_signed
     | (Unsigned ibty, Char) ->
-        not (impl.signed Char) && impl.precision (Unsigned ibty) = impl.precision Char
+        not Implementation_.char_is_signed && Implementation_.precision_ity (Unsigned ibty) = Implementation_.precision_ity Char
     | (Char, Unsigned _) ->
-        not (impl.signed Char)
+        not Implementation_.char_is_signed
     | (Char, Bool) ->
-        not (impl.signed Char) && impl.precision Char = impl.precision Bool
+        not Implementation_.char_is_signed && Implementation_.precision_ity Char = Implementation_.precision_ity Bool
     | (Bool, Char) ->
-        not (impl.signed Char) || (impl.precision Bool) < (impl.precision Char)
+        not Implementation_.char_is_signed || (Implementation_.precision_ity Bool) < (Implementation_.precision_ity Char)
 
     | (Signed Ichar, Signed _) ->
         true
@@ -470,11 +473,11 @@ let le_integer_range impl ity1 ity2 =
     | (Signed Long, Signed LongLong) ->
         true
     | (Signed ibty1, Signed ibty2) ->
-        impl.precision (Signed ibty1) = impl.precision (Signed ibty2)
+        Implementation_.precision_ity (Signed ibty1) = Implementation_.precision_ity (Signed ibty2)
     | (Signed _, Bool) ->
         false
     | (Bool, Signed ibty2) ->
-        (impl.precision Bool) < (impl.precision (Signed ibty2))
+        (Implementation_.precision_ity Bool) < (Implementation_.precision_ity (Signed ibty2))
     
     | (Bool, Unsigned _) ->
         true
@@ -493,9 +496,9 @@ let le_integer_range impl ity1 ity2 =
     | (Unsigned Long, Unsigned LongLong) ->
         true
     | (Unsigned ibty, Bool) ->
-        impl.precision (Unsigned ibty) = impl.precision Bool
+        Implementation_.precision_ity (Unsigned ibty) = Implementation_.precision_ity Bool
     | (Unsigned ibty1, Unsigned ibty2) ->
-        impl.precision (Unsigned ibty1) = impl.precision (Unsigned ibty2)
+        Implementation_.precision_ity (Unsigned ibty1) = Implementation_.precision_ity (Unsigned ibty2)
     
     | (Signed _, Unsigned _) ->
         false
@@ -511,7 +514,7 @@ let le_integer_range impl ity1 ity2 =
     | (Unsigned LongLong, Signed LongLong) ->
         false
     | (Unsigned ibty1, Signed ibty2) ->
-        (impl.precision (Unsigned ibty1)) < (impl.precision (Signed ibty2))
+        (Implementation_.precision_ity (Unsigned ibty1)) < (Implementation_.precision_ity (Signed ibty2))
       
     (* TODO: check *)
     | (IBuiltin str1, IBuiltin str2) ->
@@ -626,7 +629,7 @@ val eq_integer_rank: integerType -> integerType -> bool
 let eq_integer_rank ity1 ity2 =
   ity1 = ity2 || eq_integer_rank_base ity1 ity2
 
-val lt_integer_rank_base: implementation -> integerType -> integerType -> bool
+val lt_integer_rank_base: Implementation.implementation -> integerType -> integerType -> bool
 let lt_integer_rank_base impl ity1 ity2 =
   match (ity1, ity2) with
     (* STD §6.3.1.1#1, bullet 7 *)
@@ -643,12 +646,12 @@ let lt_integer_rank_base impl ity1 ity2 =
         true
     (* STD §6.3.1.1#1, bullet 2 *)
     | (Signed ibty1, Signed ibty2) ->
-        (impl.precision (Signed ibty1)) < (impl.precision (Signed ibty2))
+        (Implementation_.precision_ity (Signed ibty1)) < (Implementation_.precision_ity (Signed ibty2))
     | _ ->
         false
   end
 
-val lt_integer_rank_congruence: implementation -> integerType -> integerType -> bool
+val lt_integer_rank_congruence: Implementation.implementation -> integerType -> integerType -> bool
 let lt_integer_rank_congruence impl ity1 ity2 =
   match (ity1, ity2) with
     | (_, Bool) ->
@@ -787,7 +790,7 @@ let make_corresponding_unsigned = function
 end
 
 
-val integer_promotion: implementation -> integerType -> integerType
+val integer_promotion: Implementation.implementation -> integerType -> integerType
 let integer_promotion impl = function
   | Signed   Int_ ->
       Signed   Int_
@@ -813,7 +816,7 @@ let integer_promotion impl = function
   end
 
 
-val promotion: implementation -> ctype -> maybe ctype
+val promotion: Implementation.implementation -> ctype -> maybe ctype
 let promotion impl = function
   | Basic (Integer ity) ->
       Just (Basic (Integer (integer_promotion impl ity)))
@@ -822,7 +825,7 @@ let promotion impl = function
 end
 
 
-val usual_arithmetic_integer: implementation -> integerType -> integerType -> integerType
+val usual_arithmetic_integer: Implementation.implementation -> integerType -> integerType -> integerType
 let usual_arithmetic_integer impl ity1 ity2 =
   (* TODO: this is not standard, but in cerberus we don't treat (u)intptr_t and size_t as an aliased types *)
   let () = Debug.warn [] (fun () ->
@@ -881,7 +884,7 @@ let usual_arithmetic_integer impl ity1 ity2 =
 
 
 (* TODO *)
-val usual_arithmetic_floating: implementation -> floatingType -> floatingType -> floatingType
+val usual_arithmetic_floating: Implementation.implementation -> floatingType -> floatingType -> floatingType
 let usual_arithmetic_floating impl ty1 ty2 = ty1
 
 

@@ -46,6 +46,7 @@ module type Memory = sig
     -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value      (* alignment constraint *)
     -> Core_ctype.ctype0  (* type of the allocation *)
+    -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM
   
   val allocate_dynamic:

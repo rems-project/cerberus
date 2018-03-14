@@ -38,16 +38,14 @@ let rec core_object_type_of_ctype ty =
              error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
        end
    | Function (_, ret_ty) xs isVariadic ->
+       (* TODO: not sure about this *)
        Just (OTy_cfunction (core_object_type_of_ctype ret_ty) (List.length xs) isVariadic)
 (*
-       match maybe_mapM (core_object_type_of_ctype -| snd) xs with
-         | Just oTys ->
-             Just (OTy_cfunction (core_object_type_of_ctype ty) oTys)
-         | Nothing ->
-             error "Core_aux.core_object_type_of_ctype: Function found a Nothing"
-       end
+   | Pointer _ (Function (_, ret_ty) xs isVariadic) ->
+       error "Called Core_aux.core_object_type_of_ctype on a Pointer to a Function type"
 *)
    | Pointer _ _ ->
+       (* TODO: not sure about the case ref_ty is function type *)
        Just OTy_pointer
    | Atomic ty ->
        core_object_type_of_ctype ty
@@ -456,6 +454,8 @@ let integer_decode_pe pe1 pe2 =
 (* Some aliases for positive actions *)
 let pcreate loc al ty pref =
   Expr [] (Eaction (Paction Pos (Action loc default (Create al ty pref))))
+let pcreate_readonly loc al ty init pref =
+  Expr [] (Eaction (Paction Pos (Action loc default (CreateReadOnly  al ty init pref))))
 let palloc loc al e pref =
   Expr [] (Eaction (Paction Pos (Action loc default (Alloc al e pref))))
 let pkill loc x =
@@ -944,6 +944,8 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
 and subst_sym_action_ sym cval = function
   | Create pe1 pe2 pref ->
       Create (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
+  | CreateReadOnly pe1 pe2 pe3 pref ->
+      CreateReadOnly (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) (subst_sym_pexpr sym cval pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
   | Kill pe ->
@@ -1180,6 +1182,8 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
 and unsafe_subst_sym_action_ a pe' = function
   | Create pe1 pe2 pref ->
       Create (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
+  | CreateReadOnly pe1 pe2 pe3 pref ->
+      CreateReadOnly (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
   | Kill pe ->

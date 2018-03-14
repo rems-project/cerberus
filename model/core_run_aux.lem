@@ -409,6 +409,8 @@ and convert_action_ act_ =
   match act_ with
     | Create pe1 pe2 pref ->
         Create (convert_pexpr pe1) (convert_pexpr pe2) pref
+    | CreateReadOnly pe1 pe2 pe3 pref ->
+        CreateReadOnly (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
     | Kill pe ->

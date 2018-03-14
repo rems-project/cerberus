@@ -387,12 +387,33 @@ let pp_pexpr pe =
             pp_symbol sym
         | PEimpl iCst ->
             pp_impl iCst
+        | PEctor (Cnil _, pes) ->
+            if not (pes <> []) then
+              Debug_ocaml.warn [] (fun () ->
+                "Pp_core found a Cnil with pes <> []"
+              );
+            P.brackets P.empty
+        | PEctor (Ccons, pes) ->
+            let to_list_value =
+              let rec aux acc = function
+                | PEctor (Cnil _, []) ->
+                    Some (List.rev acc)
+                | PEctor (Ccons, [pe1; Pexpr (_, _, pe2_)]) ->
+                      aux (pe1 :: acc) pe2_
+                | _ ->
+                    None
+              in
+              aux [] pe in
+            begin match to_list_value with
+              | Some pes' ->
+                  P.brackets (comma_list pp pes')
+              | None ->
+                  P.separate_map (P.space ^^ P.colon ^^ P.colon ^^ P.space) pp pes
+            end
+        | PEctor (Ctuple, pes) ->
+            P.parens (comma_list pp pes)
         | PEctor (ctor, pes) ->
-            (match ctor with
-              | Ctuple ->
-                  P.parens (comma_list pp pes)
-              | _ ->
-                  pp_ctor ctor ^^ P.parens (comma_list pp pes))
+            pp_ctor ctor ^^ P.parens (comma_list pp pes)
         | PEcase (pe, pat_pes) ->
           pp_keyword "case" ^^^ pp pe ^^^ pp_keyword "of" ^^
           P.nest 2 (
@@ -609,6 +630,8 @@ and pp_action act =
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)
+    | CreateReadOnly (al, ty, init, _) ->
+        pp_keyword "create_readonly" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty ^^ P.comma ^^^ pp_pexpr init)
     | Alloc0 (al, n, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill e ->

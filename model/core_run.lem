@@ -367,7 +367,7 @@ type action_request =
                     (Mem.pointer_value -> thread_state)
   
   | CreateRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                     Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * ctype *
+                     Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * ctype * maybe Mem.mem_value *
                      (Mem.pointer_value -> thread_state)
   
   | LoadRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid * 
@@ -434,47 +434,117 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
   let asw_before = annots.asw_before union asw_before_ in
   match act with
     | Create pe1 pe2 pref ->
-        (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
-        match (pe1, pe2) with
-          | (Pexpr [] () (PEconstrained xs1), Pexpr [] () (PEconstrained xs2)) ->
-              error "Create PEconstrained 1 and 2"
-          | (Pexpr [] () (PEconstrained xs1), _) ->
+        (* TODO: the russian doll pattern matching is because to to slow on tuples *)
+        match pe1 with
+          | Pexpr [] () (PEconstrained xs1) ->
               error "Create PEconstrained 1"
-          | (_, Pexpr [] () (PEconstrained xs2)) ->
-              error "Create PEconstrained 2"
           | _ ->
-              match (valueFromPexpr pe1, valueFromPexpr pe2) with
-                | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
-                    Step_action_request (
-                      E.fresh_action_id >>= fun create_aid ->
-                      E.return (
-                        CreateRequest loc sb_before dd_before asw_before
-                          create_aid current_tid pref ival ty
-                          (fun ptr_val -> <| th_st with
-                              arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
-                              stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
-                          |>)
+              match pe2 with
+                | Pexpr [] () (PEconstrained xs2) ->
+                    error "Create PEconstrained 2"
+                | _ ->
+                    match (valueFromPexpr pe1, valueFromPexpr pe2) with
+                      | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
+                          Step_action_request (
+                            E.fresh_action_id >>= fun create_aid ->
+                            E.return (
+                              CreateRequest loc sb_before dd_before asw_before
+                                create_aid current_tid pref ival ty Nothing
+                                (fun ptr_val -> <| th_st with
+                                    arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
+                                    stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                                |>)
+                                )
+                              )
+                      | (Just _, Just _) ->
+                          Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
+                      | (Nothing, _) ->
+                          Step_eval "first operand of a Create" (
+                            E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
+                            E.return <| th_st with
+                              arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
+                            |>
                           )
-                        )
-                | (Just _, Just _) ->
-                    Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
-                | (Nothing, _) ->
-                    Step_eval "first operand of a Create" (
-                      E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
-                      E.return <| th_st with
-                        arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Create pe1' pe2 pref))))
-                      |>
-                    )
-                | (_, Nothing) ->
-                    Step_eval "second operand of a Create" (
-                      E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
-                      E.return <| th_st with arena=
-                        Expr arena_annots (Eaction (Paction p (Action loc annots (Create pe1 pe2' pref))))
-                      |>
-                    )
+                      | (_, Nothing) ->
+                          Step_eval "second operand of a Create" (
+                            E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
+                            E.return <| th_st with arena=
+                              Expr arena_annots (Eaction (Paction p (Action loc annots (Create pe1 pe2' pref))))
+                            |>
+                          )
+                    end
               end
         end
     
+    | CreateReadOnly pe1 pe2 pe3 pref ->
+      match pe1 with
+        | Pexpr [] () (PEconstrained xs1) ->
+            error "CreateReadOnly PEconstrained 1"
+        | _ ->
+            match pe2 with
+              | Pexpr [] () (PEconstrained xs2) ->
+                  error "CreateReadOnly PEconstrained 2"
+              | _ ->
+                  match pe3 with
+                    | Pexpr [] () (PEconstrained xs3) ->
+                        error "CreateReadOnly PEconstrained 3"
+                    | _ ->
+              match valueFromPexpr pe1 with
+                | Nothing ->
+                    Step_eval "first operand of a CreateReadOnly" (
+                      E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
+                      E.return <| th_st with
+                        arena= Expr arena_annots (Eaction (Paction p (Action loc annots (CreateReadOnly pe1' pe2 pe3 pref))))
+                      |>
+                    )
+                | Just cval1 ->
+                    match valueFromPexpr pe2 with
+                      | Nothing ->
+                          Step_eval "second operand of a CreateReadOnly" (
+                            E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
+                            E.return <| th_st with arena=
+                              Expr arena_annots (Eaction (Paction p (Action loc annots (CreateReadOnly pe1 pe2' pe3 pref))))
+                            |>
+                          )
+                      | Just cval2 ->
+                          match valueFromPexpr pe3 with
+                            | Nothing ->
+                                Step_eval "third operand of a CreateReadOnly" (
+                                  E.wrapped_eval_pexpr2 loc mem_st file pe3 >>= fun pe3' ->
+                                  E.return <| th_st with arena=
+                                    Expr arena_annots (Eaction (Paction p (Action loc annots (CreateReadOnly pe1 pe2 pe3' pref))))
+                                  |>
+                                )
+                            | Just cval3 ->
+                                match (cval1, cval2) with
+                                  | (Vobject (OVinteger ival), Vctype ty) ->
+                                match memValueFromValue (Core_ctype.unatomic ty) cval3 with
+                                  | Just mem_val ->
+                                      Step_action_request (
+                                        E.fresh_action_id >>= fun create_aid ->
+                                        E.return (
+                                          CreateRequest loc sb_before dd_before asw_before
+                                            create_aid current_tid pref ival ty (Just mem_val)
+                                            (fun ptr_val -> <| th_st with
+                                                arena= Expr arena_annots (Epure (Pexpr [] () (PEval (Vobject (OVpointer ptr_val)))));
+                                                stack= add_to_sb_stack {(p, (current_tid, create_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
+                                            |>)
+                                        )
+                                      )
+                                  | Nothing ->
+                                      Step_error ((Loc.stringFromLocation loc) ^ "the value of a create_readonly(" ^
+                                                  Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                                                  ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval3)
+                                end
+                                  | _ ->
+                                      Step_error ("found a create() with ill-typed operands [" ^ Pp.stringFromSymbol_prefix pref ^ "]")
+                                end
+                          end
+                    end
+              end
+                  end
+            end
+      end    
     | Alloc pe1 pe2 pref ->
         (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
         match (pe1, pe2) with

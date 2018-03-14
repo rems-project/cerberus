@@ -7,6 +7,7 @@ import Core_ctype AilTypes
 
 val char_is_signed: bool
 val sizeof_ity: AilTypes.integerType -> maybe nat
+val precision_ity: AilTypes.integerType -> maybe nat
 val sizeof_fty: AilTypes.floatingType -> maybe nat
 val alignof_ity: AilTypes.integerType -> maybe nat
 val alignof_fty: AilTypes.floatingType -> maybe nat
@@ -17,6 +18,7 @@ val typeof_enum: Symbol.sym -> maybe AilTypes.integerType
 
 declare ocaml target_rep function char_is_signed = `Ocaml_implementation.Impl.char_is_signed`
 declare ocaml target_rep function sizeof_ity = `Ocaml_implementation.Impl.sizeof_ity`
+declare ocaml target_rep function precision_ity = `Ocaml_implementation.Impl.precision_ity`
 declare ocaml target_rep function sizeof_fty = `Ocaml_implementation.Impl.sizeof_fty`
 declare ocaml target_rep function alignof_ity = `Ocaml_implementation.Impl.alignof_ity`
 declare ocaml target_rep function alignof_fty = `Ocaml_implementation.Impl.alignof_fty`
