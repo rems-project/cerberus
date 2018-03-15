@@ -1,16 +1,18 @@
+(* DEPRECATED: replaced with bmc_ssa *)
+
 open Core
 open Bmc_utils
-
+(*
 type krename_state = {
   supply : ksym_supply ref;
   sym_map : (ksym, ksym) Pmap.map ref
 }
-
 let rec mk_new_sym_list (supply: ksym_supply ref) (alist) =
   List.map (fun _ -> 
     let (new_sym, new_supply) = Sym.fresh (!(supply)) in
     supply := new_supply;
     new_sym) alist
+
 
 let rec rename_sym (st: krename_state) (sym: ksym) =
   match Pmap.lookup sym (!(st.sym_map)) with
@@ -80,3 +82,6 @@ let rec rename_pexpr (st: krename_state)
     | PEstd (str, pe) ->
         PEstd(str, rename_pexpr st pe)
   in Pexpr(ty, pexpr_')
+
+
+    *)

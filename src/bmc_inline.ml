@@ -1,11 +1,12 @@
 open Core
 
 open Bmc_utils
-open Bmc_renaming
+(* open Bmc_renaming *)
 open Implementation
 open Mem
 
 open AilTypes
+open Bmc_ssa
 
 let max_inline_depth = 3
 
@@ -16,13 +17,18 @@ type 'a bmc_inline_state = {
   file       : 'a file;
 }
 
+let rec mk_new_sym_list (supply: ksym_supply ref) (alist) =
+  List.map (fun _ -> 
+    let (new_sym, new_supply) = Sym.fresh (!(supply)) in
+    supply := new_supply;
+    new_sym) alist
+
 let inline_pecall (st: 'a bmc_inline_state) 
                   (ty: core_base_type)
                   (args: (ksym * core_base_type) list)
                   (fun_exp: pexpr) 
                   (args_sub : pexpr list)  (* arguments to replace args *)
                   =
-                  
   let fresh_sym_list = mk_new_sym_list st.sym_supply args
   and sym_types = List.map (fun (arg, ty) -> ty) args in
 
@@ -35,15 +41,25 @@ let inline_pecall (st: 'a bmc_inline_state)
     (Pmap.empty sym_cmp) fresh_sym_list args in
 
   (* State tracking symbol renames *)
+  let ssa_state : SSA.kssa_state = {
+    supply = !(st.sym_supply);
+    sym_table = sym_map } in
+
+  let (>>=) = SSA.bind in
+  let (renamed_fun_exp, ret_st) = SSA.run ssa_state (ssa_pexpr fun_exp) in
+  st.sym_supply := ret_st.supply;
+
+  (*
   let rename_state = ({supply = st.sym_supply; 
                        sym_map = ref (sym_map)}) in
   let renamed_fun_exp = rename_pexpr rename_state fun_exp in
+*)
 
   (* Note: forgetting type *)
     Pexpr((), PElet(CaseCtor(Ctuple, patlist),
                     Pexpr((), PEctor(Ctuple, args_sub)),
                     renamed_fun_exp)) 
-
+  
 
   (* TODO: do rewrite in separate pass. Flag for debugging right now *)
 let rec inline_pexpr (st: 'a bmc_inline_state) 
@@ -75,31 +91,6 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
           begin
           match Pmap.lookup sym st.file.stdlib with
           | Some (Fun(ty, args, fun_exp)) -> 
-
-              (* Make a new symbol list *)
-              (*
-              let fresh_sym_list = mk_new_sym_list st.sym_supply args
-              and sym_types = List.map (fun (arg, ty) -> ty) args in
-
-              let patlist = List.map2 (fun sym ty -> CaseBase(Some sym, ty))
-                                      fresh_sym_list sym_types in
-
-              (* Map each argument to a new symbol *)
-              let sym_map = List.fold_left2 (
-                fun pmap new_sym (arg, ty) -> Pmap.add arg new_sym pmap)
-                (Pmap.empty sym_cmp) fresh_sym_list args in
-
-              (* State tracking symbol renames *)
-              let rename_state = ({supply = st.sym_supply; 
-                                   sym_map = ref (sym_map)}) in
-              let renamed_fun_exp = rename_pexpr rename_state fun_exp in
-            
-              (* Note: forgetting type *)
-              let new_pexpr = 
-                Pexpr((), PElet(CaseCtor(Ctuple, patlist),
-                                Pexpr((), PEctor(Ctuple, pelist)),
-                                renamed_fun_exp)) in
-              *)
               let new_pexpr = inline_pecall st ty args fun_exp pelist in
 
               let Pexpr(ty, ret_) = (
