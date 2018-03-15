@@ -255,19 +255,20 @@ let integer_range impl ity =
                                       ((2 ** (prec - 1)) - 1)
 *)
     | Two'sComplement   -> 
-        (Nat_big_num.of_int (-(1 lsl (prec_minus_one))), 
-        (Nat_big_num.of_int ((1 lsl prec_minus_one) - 1)))
+        (-(1 lsl (prec_minus_one))), 
+        (((1 lsl prec_minus_one) - 1))
     | _ -> assert false
     )
   else
-    (Nat_big_num.of_int 0, Nat_big_num.of_int ((1 lsl prec) - 1))
+    (0, ((1 lsl prec) - 1))
 
 
 (* TODO: get values from Implementation.ml *)
 (* TODO: write this nicer *)
 let core_ivminmax (v : pexpr) =
   let pe_of_ity ity = Pexpr((), PEval(Vctype (Basic0 (Integer (ity)))))
-  and pe_of_sz sz = Pexpr((), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival sz))))
+  and pe_of_sz sz = Pexpr((), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival
+    (Nat_big_num.of_int sz)))))
   in
 
   let pe_ty_signed_int = pe_of_ity (Signed Int_) in

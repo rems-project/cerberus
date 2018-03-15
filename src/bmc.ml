@@ -741,6 +741,27 @@ let mk_bmc_address (addr : Address.addr) (sort: Sort.sort) =
    sort = sort
   }
 
+let mk_loaded_assertions ctx ty expr =
+  match ty with
+  | Basic0 (Integer ity) ->
+      let (nmin, nmax) = integer_range impl ity in
+
+      let lval = LoadedInteger.get_loaded_value ctx expr in
+      let assertions =
+        Boolean.mk_and ctx 
+        [ mk_ge ctx lval (Integer.mk_numeral_i ctx nmin)
+        ; mk_le ctx lval (Integer.mk_numeral_i ctx nmax)
+        ] in
+      [Boolean.mk_implies ctx
+          (LoadedInteger.is_loaded ctx expr)
+          assertions]
+  | Basic0 _ -> assert false
+  | Pointer0 _ -> 
+      (* TODO: no assertions for pointer type right now... *)
+      []
+  | _ -> assert false
+
+
 let ctype_to_sort (state: bmc_state) ty =
   match ty with
   | Void0 -> assert false
@@ -927,11 +948,24 @@ let bmc_paction (state: bmc_state)
        * Return conjunction
        *)
        let sort = ctype_to_sort state ty in
+
+       
        let z3_sym = bmc_lookup_sym sym state in
        let ret_value = Expr.mk_fresh_const state.ctx
               ("load_" ^ (symbol_to_string sym)) sort in
        assert (Sort.equal (Expr.get_sort z3_sym) 
                           (PointerSort.mk_sort state.ctx));
+
+       (* If specified, assert it is in the range of ty*)
+       (* TODO: check correctness ? *)
+       Solver.add state.solver 
+         (mk_loaded_assertions state.ctx ty ret_value);
+
+       (* TODO: If unspecified, assert the type is ty.
+        *       Not implemented (b/c recursive sorts for pointers 
+        *       Also /hopefully/ not needed anywhere...??
+        *)
+
 
        let ptr_allocs = alias_lookup_sym sym state.alias_state in
        (* Do alias analysis *)
@@ -1372,6 +1406,14 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
           let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
           let initial_value = Expr.mk_const state.ctx new_sym sort in
           let new_heap = Pmap.add new_addr initial_value state.heap in
+
+          (* Assert address of symbol is new_addr *)
+          Solver.add state.solver [ 
+            Boolean.mk_eq  state.ctx
+              (PointerSort.get_addr state.ctx (bmc_lookup_sym sym state))
+              (Address.mk_expr state.ctx new_addr)
+          ];
+
           ({state with heap = new_heap})
         end
         (*

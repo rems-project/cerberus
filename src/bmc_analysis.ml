@@ -208,8 +208,6 @@ let rec analyse_expr (state: kanalysis_state)
 
       AddressSet.singleton new_addr
 
-  | Eaction (Paction(_, Action(_, _, Create _))) ->
-      assert false
   | Eaction (Paction(_, Action(_, _, Store0 (ty, ptr, value, _)))) ->
       (if is_ptr_ctype ty then
         let locs = analyse_pexpr state ptr in

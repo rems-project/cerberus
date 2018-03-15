@@ -51,16 +51,6 @@ let basicTypeSort ctx =
         (Symbol.mk_string ctx "is_Floating") [] [] []
     ] 
 
-let tmpSort ctx = 
-  Datatype.mk_sort_s ctx "Ctype"
-  [ mk_ctor ctx "void_ty"
-  ; Datatype.mk_constructor_s ctx "Basic_ty" (Symbol.mk_string ctx "is_Basic_ty")
-      [Symbol.mk_string ctx "_Basic_ty"] [Some (basicTypeSort ctx)]
-      [0(*TODO: no idea with I'm doing*)]
-    ; Datatype.mk_constructor_s ctx "Pointer_ty" (Symbol.mk_string ctx "is_Pointer_ty")
-        [] []
-        []]
-
 
 let ctypeSort ctx = 
   Datatype.mk_sort_s ctx "Ctype"
