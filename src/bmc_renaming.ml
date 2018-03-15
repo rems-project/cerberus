@@ -82,6 +82,4 @@ let rec rename_pexpr (st: krename_state)
     | PEstd (str, pe) ->
         PEstd(str, rename_pexpr st pe)
   in Pexpr(ty, pexpr_')
-
-
     *)

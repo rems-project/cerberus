@@ -91,7 +91,7 @@ let rec ssa_pattern (pat: pattern) : pattern SSA.eff =
       SSA.mapM ssa_pattern patList >>= fun retList ->
       SSA.return (CaseCtor(ctor, retList)) 
 
-let rec ssa_pexpr (Pexpr((), pexpr_) : pexpr) : 
+let rec ssa_pexpr (Pexpr(annot, (), pexpr_) : pexpr) : 
       pexpr SSA.eff = 
   let (>>=) = SSA.bind in
   (match pexpr_ with
@@ -169,10 +169,12 @@ let rec ssa_pexpr (Pexpr((), pexpr_) : pexpr) :
   | PEis_unsigned pe ->
       ssa_pexpr pe >>= fun ret_pe ->
       SSA.return (PEis_unsigned ret_pe)
+  (*
   | PEstd (str, pe) ->
       ssa_pexpr pe >>= fun ret_pe ->
       SSA.return (PEstd(str, ret_pe))
-  ) >>= fun ret_ -> SSA.return (Pexpr((), ret_))
+  *)
+  ) >>= fun ret_ -> SSA.return (Pexpr(annot,(), ret_))
   
 (* NOTE: Lots of assumptions about what core generated from C looks like *)  
 let rec ssa_expr (Expr(annot, expr_) : 'a expr) : ('a expr) SSA.eff =

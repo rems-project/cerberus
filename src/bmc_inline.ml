@@ -56,14 +56,15 @@ let inline_pecall (st: 'a bmc_inline_state)
 *)
 
   (* Note: forgetting type *)
-    Pexpr((), PElet(CaseCtor(Ctuple, patlist),
-                    Pexpr((), PEctor(Ctuple, args_sub)),
+    (* TODO: annotation correct? *)
+    Pexpr([], (), PElet(CaseCtor(Ctuple, patlist),
+                    Pexpr([], (), PEctor(Ctuple, args_sub)),
                     renamed_fun_exp)) 
   
 
   (* TODO: do rewrite in separate pass. Flag for debugging right now *)
 let rec inline_pexpr (st: 'a bmc_inline_state) 
-                     (Pexpr((), pexpr_) : pexpr) =
+                     (Pexpr(annot,(), pexpr_) : pexpr) =
   let inlined = match pexpr_ with
     | PEsym sym -> pexpr_
     | PEimpl _  -> pexpr_
@@ -93,7 +94,7 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
           | Some (Fun(ty, args, fun_exp)) -> 
               let new_pexpr = inline_pecall st ty args fun_exp pelist in
 
-              let Pexpr(ty, ret_) = (
+              let Pexpr(_, ty, ret_) = (
                 if st.depth < max_inline_depth then
                   inline_pexpr ({st with depth = st.depth + 1}) new_pexpr
                 else
@@ -109,7 +110,7 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
         | Some (Def _) -> assert false
         | Some (IFun (ty, args, fun_expr)) ->
             let new_pexpr = inline_pecall st ty args fun_expr pelist in
-            let Pexpr(ty, ret_) = (
+            let Pexpr(_,ty, ret_) = (
               if st.depth < max_inline_depth then
                 inline_pexpr ({st with depth = st.depth + 1}) new_pexpr
               else
@@ -135,9 +136,11 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
         PEis_signed(inline_pexpr st pe)
     | PEis_unsigned pe ->
         PEis_unsigned (inline_pexpr st pe)
+    (*
     | PEstd (str, pe) ->
         PEstd (str, inline_pexpr st pe)
-  in (Pexpr((), inlined))
+    *)
+  in (Pexpr(annot, (), inlined))
 
 let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
   let inlined = match expr_ with
@@ -257,8 +260,8 @@ let integer_range impl ity =
 (* TODO: get values from Implementation.ml *)
 (* TODO: write this nicer *)
 let core_ivminmax (v : pexpr) =
-  let pe_of_ity ity = Pexpr((), PEval(Vctype (Basic0 (Integer (ity)))))
-  and pe_of_sz sz = Pexpr((), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival
+  let pe_of_ity ity = Pexpr([],(), PEval(Vctype (Basic0 (Integer (ity)))))
+  and pe_of_sz sz = Pexpr([],(), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival
     (Nat_big_num.of_int sz)))))
   in
 
@@ -272,15 +275,15 @@ let core_ivminmax (v : pexpr) =
   let pe_max_unsigned_int = pe_of_sz (max_unsigned_int) in 
   let pe_min_unsigned_int = pe_of_sz (min_unsigned_int) in 
 
-  let cond_signed_int = Pexpr((), PEop(OpEq, v, pe_ty_signed_int)) in
-  let cond_unsigned_int = Pexpr((), PEop(OpEq, v, pe_ty_unsigned_int)) in
-  let pe_error = Pexpr((), PEerror("TODO: IVmax/min cases", v))
+  let cond_signed_int = Pexpr([],(), PEop(OpEq, v, pe_ty_signed_int)) in
+  let cond_unsigned_int = Pexpr([],(), PEop(OpEq, v, pe_ty_unsigned_int)) in
+  let pe_error = Pexpr([],(), PEerror("TODO: IVmax/min cases", v))
   in
 
   PEif(cond_signed_int, pe_min_signed_int, 
-       Pexpr((), PEif(cond_unsigned_int, pe_min_unsigned_int, pe_error))),
+       Pexpr([],(), PEif(cond_unsigned_int, pe_min_unsigned_int, pe_error))),
   PEif(cond_signed_int, pe_max_signed_int, 
-       Pexpr((), PEif(cond_unsigned_int, pe_max_unsigned_int, pe_error)))
+       Pexpr([],(), PEif(cond_unsigned_int, pe_max_unsigned_int, pe_error)))
 
 (* TODO: can't pattern match b/c signed is not a constructor in core ?*)
 (* TODO: IntN_t, Int_leastN_t, Int_fastN_t not included *)
@@ -288,16 +291,16 @@ let core_ivminmax (v : pexpr) =
 let core_isunsigned_signed (v : pexpr) =
   let types = [Ichar; Short; Int_; Long; LongLong; 
                Intmax_t; Intptr_t] in
-  let pe_of_ity ity = Pexpr((), PEval(Vctype (Basic0 (Integer (ity))))) in
+  let pe_of_ity ity = Pexpr([],(), PEval(Vctype (Basic0 (Integer (ity))))) in
 
   let signed_types = List.map (fun ty -> pe_of_ity (Signed ty)) types in
   let unsigned_types = List.map (fun ty -> pe_of_ity (Unsigned ty)) types in
 
-  let eq_pe pe = Pexpr((), PEop(OpEq, v, pe)) in
+  let eq_pe pe = Pexpr([],(), PEop(OpEq, v, pe)) in
 
   let is_equal tys = List.fold_left 
                      (fun pe ty_pe -> 
-                        PEop(OpOr, Pexpr((), pe), eq_pe ty_pe )) 
+                       PEop(OpOr, Pexpr([],(), pe), eq_pe ty_pe )) 
                      (PEval(Vfalse))
                      tys in
   is_equal unsigned_types, is_equal signed_types
@@ -305,7 +308,7 @@ let core_isunsigned_signed (v : pexpr) =
 
 
 let rec rewrite_pexpr (st: 'a bmc_inline_state) 
-                     (Pexpr((), pexpr_) : pexpr) =
+      (Pexpr(annot,(), pexpr_) : pexpr) =
   let rewritten = match pexpr_ with
     | PEsym sym -> pexpr_
     | PEimpl _  -> pexpr_
@@ -354,9 +357,11 @@ let rec rewrite_pexpr (st: 'a bmc_inline_state)
     | PEis_unsigned pe ->
         let (is_unsigned, _) = core_isunsigned_signed (rewrite_pexpr st pe) in
         is_unsigned
+    (*
     | PEstd (str, pe) ->
         PEstd (str, rewrite_pexpr st pe)
-  in (Pexpr((), rewritten))
+*)
+  in (Pexpr(annot,(), rewritten))
 
 
 (* TODO: massive code duplication oops :D *)

@@ -515,7 +515,7 @@ let concat_vcs (state: bmc_state)
   [new_vc1; new_vc2 ]                  
 
 let rec bmc_pexpr (state: bmc_state) 
-                  (Pexpr(bTy, pe) : typed_pexpr) : 
+                  (Pexpr(_, bTy, pe) : typed_pexpr) : 
                     Expr.expr * AddressSet.t * bmc_state =
   match pe with
     | PEsym sym ->
@@ -731,8 +731,10 @@ let rec bmc_pexpr (state: bmc_state)
         assert false
     | PEis_unsigned _ ->
         assert false
+        (*
     | PEstd (_, pe) ->
         bmc_pexpr state pe
+        *)
 
 let mk_bmc_address (addr : Address.addr) (sort: Sort.sort) =
   {addr = addr; 
@@ -791,13 +793,13 @@ let bmc_paction (state: bmc_state)
                 : Expr.expr * AddressSet.t * bmc_state =
   let Action(_, _, action_) = action in
   match action_ with
-  | Create (pe1, Pexpr(BTy_ctype, PEval (Vctype ty)), _) ->
+  | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
       (* TODO: turns all integers into loaded integers *)
       let sort = ctype_to_sort state ty in
 
       (* Make a new memory allocation for alias analysis *)
       let new_addr = mk_new_addr state.alias_state in
-      let typ = Pexpr(BTy_ctype, PEval (Vctype ty)) in 
+      let typ = Pexpr([],BTy_ctype, PEval (Vctype ty)) in 
 
       alias_add_addr state.alias_state new_addr typ;
       let addr_ret = AddressSet.singleton new_addr in
@@ -827,9 +829,7 @@ let bmc_paction (state: bmc_state)
 
       UnitSort.mk_unit state.ctx, 
           AddressSet.empty, {state with heap = new_heap}
-  | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEstd (_, Pexpr(_, PEsym sym))), p_value, _) 
-    (* Fall through *)
-  | Store0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), p_value, _) ->
+  | Store0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), p_value, _) ->
       (* TODO: update comment
        * Overview:
          For each possible address, 
@@ -842,7 +842,7 @@ let bmc_paction (state: bmc_state)
       let z3_sym = bmc_lookup_sym sym state in
       (* If we are storing a C pointer, update points-to map *)
       begin
-        if is_ptr_ctype (Pexpr(BTy_ctype, PEval (Vctype ty))) then
+        if is_ptr_ctype (Pexpr([],BTy_ctype, PEval (Vctype ty))) then
           begin
           assert (not (AddressSet.is_empty ptr_allocs));
           assert (not (AddressSet.is_empty v_allocs));
@@ -940,7 +940,7 @@ let bmc_paction (state: bmc_state)
 *)
        
   | Store0 _ -> assert false
-  | Load0 (Pexpr(BTy_ctype, PEval (Vctype ty)), Pexpr(_, PEsym sym), _) -> 
+  | Load0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), _) -> 
       (* Overview: for each address, look up value in the heap.
        * Generate equation 
           (get_addr sym == addr => heap_value)
@@ -971,7 +971,7 @@ let bmc_paction (state: bmc_state)
        (* Do alias analysis *)
        let ret_alloc = 
          begin
-           if is_ptr_ctype (Pexpr(BTy_ctype, PEval (Vctype ty))) then
+           if is_ptr_ctype (Pexpr([], BTy_ctype, PEval (Vctype ty))) then
              begin
                assert (not (AddressSet.is_empty ptr_allocs));
 

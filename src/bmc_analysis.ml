@@ -78,7 +78,7 @@ let is_ptr_type (bTy: core_base_type) =
 
 let is_ptr_ctype (pe : typed_pexpr) = 
   match pe with
-  | Pexpr(BTy_ctype, PEval (Vctype (Pointer0 _))) -> true
+  | Pexpr(_, BTy_ctype, PEval (Vctype (Pointer0 _))) -> true
   | _ -> false
       
 let add_set (state: kanalysis_state)
@@ -132,7 +132,7 @@ let analyse_param (state: kanalysis_state)
         ()
 
 let rec analyse_pexpr (state: kanalysis_state)
-                      (Pexpr(bTy, pexpr_) : typed_pexpr) =
+                      (Pexpr(_,bTy, pexpr_) : typed_pexpr) =
   let ret = match pexpr_ with
     | PEsym sym -> 
         begin
@@ -179,9 +179,12 @@ let rec analyse_pexpr (state: kanalysis_state)
     | PEis_scalar pe (* fall through *)
     | PEis_integer pe (* fall through *)
     | PEis_signed pe (* fall through *)
-    | PEis_unsigned pe (* fall through *)
+    | PEis_unsigned pe  ->
+      analyse_pexpr state pe
+    (*
     | PEstd (_, pe) ->
         analyse_pexpr state pe
+    *)
   in ret 
 
 let alias_add_addr (state: kanalysis_state) new_addr ty =
