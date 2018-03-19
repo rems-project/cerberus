@@ -715,28 +715,10 @@ let rec bmc_pexpr (state: bmc_state)
         let (z3_pe1, loc1, s1) = bmc_pexpr state pe1 in
         let (z3_pe2, loc2, s2) = bmc_pexpr ({state with vcs = []}) pe2 in
         let (z3_pe3, loc3, s3) = bmc_pexpr ({state with vcs = []}) pe3 in
-        begin
-          (*
-          match (maybe_pe1, maybe_pe2, maybe_pe3) with
-          | (None, _, _)  (* fall through *)
-          | (Some _, None, None) ->
-              (* Extra vcs for debugging *)
-              None, ({s1 with vcs = (Boolean.mk_false s3.ctx) :: s1.vcs}) 
-          | (Some a, Some b, None) ->
-              let vc_guard = a in
-              let new_vc = s1.vcs @ s2.vcs in
-              Some b, ({s1 with vcs = (vc_guard :: new_vc)})
-          | (Some a, None, Some b) ->
-              let vc_guard = Boolean.mk_not s3.ctx a in
-              let new_vc = s1.vcs @ s3.vcs in
-              Some b, ({s1 with vcs = (vc_guard :: new_vc)})
-          | (Some a, Some b, Some c) ->
-          *)
-              let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs z3_pe1) in
-              (Boolean.mk_ite s3.ctx z3_pe1 z3_pe2 z3_pe3), 
-                AddressSet.union loc2 loc3, 
-                ({s1 with vcs = new_vc})
-        end
+        let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs z3_pe1) in
+        (Boolean.mk_ite s3.ctx z3_pe1 z3_pe2 z3_pe3), 
+          AddressSet.union loc2 loc3, 
+          ({s1 with vcs = new_vc})
     | PEis_scalar _ ->
         assert false
     | PEis_integer _ ->
@@ -805,7 +787,6 @@ let ctype_to_sort (state: bmc_state) ty =
 let bmc_paction (state: bmc_state)
                 (Paction(pol, action) : 'a typed_paction) 
                 : Expr.expr * AddressSet.t * bmc_state =
-  let polarity = match pol with | Pos -> "pos" | Neg -> "neg" in
   let Action(_, _, action_) = action in
   match action_ with
   | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
@@ -1136,30 +1117,13 @@ let rec bmc_expr (state: bmc_state)
     
       let new_preexec = merge_preexecs st1.preexec st2.preexec in
 
-      begin
-        (*
-        match (bmc_e1, bmc_e2) with
-        | (None, None) -> 
-            let new_heap = merge_heaps st st1.heap st2.heap guard in
-            None, ({st with vcs = new_vcs; heap = new_heap})
-        | (Some a1, Some a2) -> 
-            *)
-            let new_heap = merge_heaps st st1.heap st2.heap guard
-                            (Boolean.mk_not st.ctx guard) in
-            
-            (Boolean.mk_ite st.ctx guard bmc_e1 bmc_e2),
-              alloc_ret,
-             ({st with heap = new_heap; vcs = new_vcs; 
-                       preexec = new_preexec})
-        (*
-        | (Some a1, None) -> 
-            Printf.printf "TODOa: Do Ecase properly\n";
-            Some a1, ({st with heap = st1.heap; vcs = new_vcs})
-        | (None, Some a2) ->
-            (Printf.printf "TODOb: Do ECase properly\n"; assert false)
-        *)
-      end
-
+      let new_heap = merge_heaps st st1.heap st2.heap guard
+                      (Boolean.mk_not st.ctx guard) in
+      
+      (Boolean.mk_ite st.ctx guard bmc_e1 bmc_e2),
+        alloc_ret,
+       ({st with heap = new_heap; vcs = new_vcs; 
+                 preexec = new_preexec})
   | Ecase _ ->  
       Printf.printf "TODO2: Do ECase properly \n"; 
       assert false
@@ -1180,8 +1144,10 @@ let rec bmc_expr (state: bmc_state)
        * TODO: generalize to any elist 
        * (just have to write heap merging function really)
        *)
-      let (bmc_e1, alloc1, st1) = bmc_expr {state with vcs = []} e1 in
-      let (bmc_e2, alloc2, st2) = bmc_expr {state with vcs = []} e2 in
+      let (bmc_e1, alloc1, st1) = 
+        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e1 in
+      let (bmc_e2, alloc2, st2) = 
+        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e2 in
 
       let bmc_seq1 = Expr.mk_fresh_const state.ctx "seq" 
                       (Boolean.mk_sort state.ctx) in
@@ -1204,32 +1170,6 @@ let rec bmc_expr (state: bmc_state)
                    preexec = new_preexec}
       )
 
-      (*
-      let bmc_elist = List.map (fun e -> 
-        (bmc_expr state e, 
-         Expr.mk_fresh_const state.ctx "seq" (Boolean.mk_sort state.ctx))) in
-      let seq_xor = Boolean.mk_xor state.ctx (List.map (fun (_, seq) -> seq)) in
-
-      (* Assert exactly one sequence occured *)
-      Solver.add state.solver [seq_xor];
-
-      let new_vcs = List.map (fun ((_, st'), guard) -> 
-        Boolean.mk_implies st'.ctx guard (Boolean.mk_and st'.ctx st'.vcs)) in
-
-      let new_heap = 
-      *)
-
-      (* 
-      assert (List.length elist = 2);
-      Printf.printf "TODO: ND sequencing. Currently only elist of length two\n";
-      let bmc_elist = List.mapi (fun i e -> bmc_expr state e) in 
-      *)
-      (*
-      Printf.printf "TODO ND sequencing: currrently treated as undef\n";
-      let new_vcs = (Boolean.mk_false state.ctx) :: state.vcs in
-      let new_state = {state with vcs = new_vcs} in
-      (UnitSort.mk_unit state.ctx), AddressSet.empty, new_state
-      *)
   | End _ -> assert false
   | Erun (_, Symbol(i, Some s), _) ->
       Printf.printf "TODO: Erun, special casing ret by ignoring it\n";
@@ -1256,78 +1196,87 @@ let rec bmc_expr (state: bmc_state)
 
       Printf.printf "TODO: only heap/vcs are updated after Eif\n";
       
-        (*
-      let ret = 
-        (* TODO: special cased; inconsistent with PEif *)
-        match (maybe_pe, bmc_e1, bmc_e2) with
-        | (None, _, _) ->
-            None, st
-        | (Some pexpr, None, None) -> 
-          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
-          let new_heap = merge_heaps st st1.heap st2.heap pexpr in
-
-          (* Return state conditional upon which store occurred *)
-          (* TODO: record which addresses each state may have changed *) 
-          (* TODO: ptr_map *)
-          None, ({st with heap = new_heap; vcs = new_vc})
-        | (Some pexpr, Some e1, Some e2) -> 
-            (* TODO: duplicated *)
-        *)
-          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
-          let new_heap = merge_heaps st st1.heap st2.heap 
-                         bmc_pe (Boolean.mk_not st.ctx bmc_pe) in
-          let new_preexec = merge_preexecs (st.preexec) 
-              (merge_preexecs st1.preexec st2.preexec) in
-          (Boolean.mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
-            AddressSet.union loc1 loc2,
-            ({st with heap = new_heap; vcs = new_vc; preexec = new_preexec})
-        (*
-        | (Some pexpr, Some e1, None) -> 
-          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
-          let new_heap = st1.heap in
-            Some e1, ({st with heap = new_heap; vcs = new_vc})
-        | (Some pexpr, None, Some e2) -> 
-          let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
-          let new_heap = st2.heap in
-            Some e2, ({st with heap = new_heap; vcs = new_vc})
-
-      in 
-      ret    
+      let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
+      let new_heap = merge_heaps st st1.heap st2.heap 
+                     bmc_pe (Boolean.mk_not st.ctx bmc_pe) in
+      let new_preexec = merge_preexecs (st.preexec) 
+          (merge_preexecs st1.preexec st2.preexec) in
+      (*
+      let sb1 = cartesian_product (st.preexec.actions) (st1.preexec.actions) in
+      let sb2 = cartesian_product (st.preexec.actions) (st2.preexec.actions) in
+      let new_preexec = {new_preexec with 
+          sb = Pset.union new_preexec.sb (Pset.union sb1 sb2)} in
       *)
+
+      (Boolean.mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
+        AddressSet.union loc1 loc2,
+        ({st with heap = new_heap; vcs = new_vc; preexec = new_preexec})
   | Elet _ -> assert false
   | Easeq _ ->
       assert false
-  (*
-  | Ewseq (CaseBase(sym, typ), e1, e2) ->
-      let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr) = mk_eq_pattern state1 (CaseBase(sym, typ)) ret_e1 in
-      Solver.add state1.solver [ eq_expr ];
-
-      bmc_expr state1 e2
-  | Ewseq (CaseCtor(ctor, patList), e1, e2) -> 
-      Printf.printf "TODO: Ewseq\n";
-      let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr) = mk_eq_pattern state1 (CaseCtor(ctor, patList)) ret_e1 in
-
-      Solver.add state1.solver [ eq_expr ];
-
-      bmc_expr state1 e2
-      
-  | Esseq (CaseBase(sym, typ), e1, e2) ->
-      let (ret_e1, state1) = bmc_expr state e1 in
-      let (eq_expr ) = mk_eq_pattern state1 (CaseBase(sym, typ)) ret_e1 in
-      Solver.add state1.solver [ eq_expr ];
-      bmc_expr state1 e2
-  | Esseq _  ->
-      assert false
-  *)
-  | Ewseq (pat, e1, e2) (* TODO: Fall through for now *)
-  | Esseq (pat, e1, e2) ->
-      let (ret_e1, loc1, state) = bmc_expr state e1 in
+  | Ewseq (pat, e1, e2) ->
+      let old_preexec = state.preexec in 
+      let (ret_e1, loc1, state) = 
+        bmc_expr {state with preexec = initial_preexec () } e1 in
       alias_pattern state.alias_state pat loc1;
       let eq_expr = mk_eq_pattern state pat ret_e1 in
       Solver.add state.solver [ eq_expr ];
-      bmc_expr state e2
+
+      let (ret_e2, loc2, state2) = 
+        bmc_expr {state with preexec = initial_preexec ()} e2 in
+
+      let (exec1, exec2) = (state.preexec, state2.preexec) in
+
+      (* Sequence all actions in state before those in state2*) 
+      let new_preexec =  merge_preexecs old_preexec 
+                                (merge_preexecs state.preexec state2.preexec) in
+      let new_preexec = {new_preexec with 
+          sb = Pset.union (new_preexec.sb) 
+                          (pos_cartesian_product exec1.actions
+                                                 exec2.actions)} in
+      (*
+      print_endline "Ewseq exec1";
+      print_preexec exec1;
+      print_endline "Ewseq exec2";
+      print_preexec exec2;
+      print_endline "Ewseq new_preexec";
+      print_preexec new_preexec;
+      *)
+
+      (ret_e2, loc2, {state2 with preexec = new_preexec})
+
+
+  | Esseq (pat, e1, e2) ->
+      (* TODO: mostly duplicated code from Ewseq *)
+      let old_preexec = state.preexec in 
+      let (ret_e1, loc1, state) = 
+        bmc_expr {state with preexec = initial_preexec () } e1 in
+      alias_pattern state.alias_state pat loc1;
+      let eq_expr = mk_eq_pattern state pat ret_e1 in
+      Solver.add state.solver [ eq_expr ];
+
+      let (ret_e2, loc2, state2) = 
+        bmc_expr {state with preexec = initial_preexec ()} e2 in
+
+      let (exec1, exec2) = (state.preexec, state2.preexec) in
+
+      (* Sequence all actions in state before those in state2*) 
+      let new_preexec =  merge_preexecs old_preexec 
+                                (merge_preexecs state.preexec state2.preexec) in
+      let new_preexec = {new_preexec with 
+          sb = Pset.union (new_preexec.sb) 
+                          (cartesian_product exec1.actions
+                                             exec2.actions)} in
+      (*
+      print_endline "Esseq exec1";
+      print_preexec exec1;
+      print_endline "Esseq exec2";
+      print_preexec exec2;
+      print_endline "Esseq new_preexec";
+      print_preexec new_preexec;
+      *)
+      (ret_e2, loc2, {state2 with preexec = new_preexec})
+
 
   | Esave ((Symbol (i, Some s), _), _, _)  ->
       (* Special case ret *)

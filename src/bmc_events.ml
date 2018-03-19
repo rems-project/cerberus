@@ -20,6 +20,9 @@ let get_aid (action: bmc_action) = match action with
   | Write (aid, _, _, _, _) ->
       aid
 
+let aid_of_paction (BmcAction(_, a1)) : action_id = 
+  get_aid a1
+
 let paction_cmp (BmcAction(_, a1)) (BmcAction(_, a2)) =
   Pervasives.compare (get_aid a1) (get_aid a2)
 
@@ -76,7 +79,35 @@ let add_action (aid : action_id)
 
 let print_preexec (preexec : preexecution) : unit =
   print_endline "ACTIONS";
-  Pset.iter (fun v -> print_endline (string_of_paction v)) preexec.actions
+  Pset.iter (fun v -> print_endline (string_of_paction v)) preexec.actions;
+  print_endline "REL SB";
+  Pset.iter (fun (a, b) -> Printf.printf "(%d, %d) " a b) preexec.sb;
+  print_endline ""
+
+
+let set_to_list (set : 'a Pset.set) f =
+  Pset.fold (fun el l -> (f el) :: l) set []
+  
+let pos_cartesian_product (s1: (bmc_paction) Pset.set) 
+                          (s2: (bmc_paction) Pset.set) 
+                          : (action_id * action_id) Pset.set =
+  Pset.fold (fun pa1 s_outer -> (
+    match pa1 with
+    | BmcAction(Pos, _) ->
+      Pset.fold (fun pa2 s_inner ->
+        Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner)
+        s2 (s_outer)
+    | _ -> s_outer))
+    s1 (Pset.empty Pervasives.compare)
+
+let cartesian_product (s1: (bmc_paction) Pset.set) 
+                      (s2: (bmc_paction) Pset.set) 
+                      : (action_id * action_id) Pset.set =
+  Pset.fold (fun pa1 s_outer -> (
+    Pset.fold (fun pa2 s_inner ->
+      Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner)
+      s2 (s_outer)
+                      )) s1 (Pset.empty Pervasives.compare)
 
 let merge_preexecs (p1 : preexecution) (p2: preexecution) : preexecution =
   { actions = Pset.union p1.actions p2.actions;

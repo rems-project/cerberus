@@ -283,6 +283,8 @@ let ssa_file (file: 'a file) (sym_supply: ksym_supply) =
             >>= fun () -> ssa_expr e in
 
           let (ret, st) = SSA.run st to_run in
+          print_endline "--RENAME STUFF--";
+          Pmap.iter (fun k v -> Printf.printf "%s -> %s\n" (symbol_to_string k) (symbol_to_string v)) st.sym_table;
           let new_fun_map = 
             Pmap.add main_sym ((Proc(ty, params, ret))) file.funs
           in
