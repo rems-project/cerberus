@@ -4,6 +4,7 @@
 
 open Core
 open Core_ctype
+open Cthread
 open Global_ocaml
 open Lem_pervasives
 open Mem
@@ -14,6 +15,7 @@ open Z3
 open Z3.Arithmetic
 
 open Bmc_analysis
+open Bmc_events
 open Bmc_inline
 open Bmc_normalize
 open Bmc_sorts
@@ -91,6 +93,11 @@ type bmc_state = {
 
   (* TODO: rethink what's a VC and what's a constraint *)
   vcs         : Expr.expr list;
+
+  preexec     : preexecution;
+  aid_supply  : action_id ref;
+  tid_supply  : thread_id ref;
+  tid         : thread_id;
 }
 
 
@@ -133,6 +140,9 @@ let mk_next_seq_symbol (ctx: context) (bmc_address : kbmc_address) =
               (string_of_int (!(bmc_address.seq_ctr)))),
    get_last_seqnum(ctx) (bmc_address))
 
+let mk_next_aid (state: bmc_state) =
+  state.aid_supply := succ !(state.aid_supply);
+  !(state.aid_supply)
 
 let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor) 
                (pes: Expr.expr list) (sort: Sort.sort) =
@@ -264,7 +274,11 @@ let initial_bmc_state (supply : ksym_supply)
     alias_state = initial_analysis_state ();
 
 
-    vcs = []
+    vcs = [];
+    preexec = initial_preexec ();
+    aid_supply = ref 0;
+    tid_supply = ref 0;
+    tid        = 0;
   }
 
 (*
@@ -789,8 +803,9 @@ let ctype_to_sort (state: bmc_state) ty =
   | Builtin0 _ -> assert false
 
 let bmc_paction (state: bmc_state)
-                (Paction(_, action) : 'a typed_paction) 
+                (Paction(pol, action) : 'a typed_paction) 
                 : Expr.expr * AddressSet.t * bmc_state =
+  let polarity = match pol with | Pos -> "pos" | Neg -> "neg" in
   let Action(_, _, action_) = action in
   match action_ with
   | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
@@ -819,6 +834,7 @@ let bmc_paction (state: bmc_state)
       new_ptr, addr_ret, ({state with heap = new_heap})
 
   | Create _ -> assert false
+  | CreateReadOnly _ -> assert false
   | Alloc0 _ -> assert false
   | Kill pexpr ->
       let (_, allocs, state) = bmc_pexpr state pexpr in
@@ -829,17 +845,38 @@ let bmc_paction (state: bmc_state)
 
       UnitSort.mk_unit state.ctx, 
           AddressSet.empty, {state with heap = new_heap}
-  | Store0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), p_value, _) ->
+  | Store0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym),
+  p_value, mem_order) ->
       (* TODO: update comment
        * Overview:
          For each possible address, 
          if (get_addr sym == @a) @a_i = p_value; @a_i = (cur value)
          update heap: @a_i
        *)
+
       let sort = ctype_to_sort state ty in 
       let ptr_allocs = alias_lookup_sym sym state.alias_state in
       let (value, v_allocs, state) = bmc_pexpr state p_value in
+
+      (* Not necessary, just for renaming purposes *)
+      let to_store = Expr.mk_fresh_const state.ctx
+                ("store_" ^ (symbol_to_string sym)) (Expr.get_sort value) in
+      Solver.add state.solver [ Boolean.mk_eq state.ctx value to_store ];
+
       let z3_sym = bmc_lookup_sym sym state in
+      (*
+      print_endline ("STORE " ^ (Expr.to_string z3_sym) ^ 
+                     " " ^ (Expr.to_string to_store) ^
+                     " " ^ polarity);
+      *)
+
+      let action = Write(mk_next_aid state, state.tid, mem_order,
+                         z3_sym, to_store) in
+      let paction = BmcAction(pol, action) in
+
+      print_endline (string_of_paction paction);
+
+
       (* If we are storing a C pointer, update points-to map *)
       begin
         if is_ptr_ctype (Pexpr([],BTy_ctype, PEval (Vctype ty))) then
@@ -861,12 +898,14 @@ let bmc_paction (state: bmc_state)
        * update heap: @a_i
        *)
 
+      (*
       print_endline "-----STORE ALIAS_RESULTS";
       print_ptr_map !(state.alias_state.ptr_map);
       print_addr_map !(state.alias_state.addr_map);
 
       print_heap state.heap; 
       print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
+      *)
 
       let update = (fun alloc heap ->
           let bmc_addr = bmc_lookup_alloc alloc state in
@@ -886,7 +925,7 @@ let bmc_paction (state: bmc_state)
                                 (PointerSort.get_addr state.ctx z3_sym)
                                 (Address.mk_expr state.ctx alloc) in
               (* @a_i = p_value *)
-              let new_eq = Boolean.mk_eq state.ctx new_expr value in
+              let new_eq = Boolean.mk_eq state.ctx new_expr to_store in
               (* @A_i = (cur_value) *)
               let old_eq = Boolean.mk_eq state.ctx new_expr cur_value in
               
@@ -900,47 +939,14 @@ let bmc_paction (state: bmc_state)
         ) in
         let new_heap = AddressSet.fold update ptr_allocs state.heap in
         (UnitSort.mk_unit state.ctx), AddressSet.empty, 
-            {state with heap = new_heap}
-
-(*
-      let update = (fun addr bmc_addr heap ->
-            if (not(Sort.equal (bmc_addr.sort) sort)) then
-              heap
-            else
-              begin
-                let cur_value = match (Pmap.lookup addr heap) with
-                    | None -> assert false
-                    | Some x -> x in
-                (* Create a fresh value *)
-                let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
-                let new_expr = Expr.mk_const state.ctx new_sym bmc_addr.sort in
-                (* get_addr sym == @a *)
-                let addr_eq = Boolean.mk_eq state.ctx 
-                      (PointerSort.get_addr state.ctx z3_sym)
-                      (Address.mk_expr state.ctx addr) in 
-                (* @a_i = p_value *)
-                let new_eq = Boolean.mk_eq state.ctx new_expr value in
-
-                (* @a_i = (cur value) *)
-                let old_eq = Boolean.mk_eq state.ctx new_expr cur_value in
-
-                let ite = Boolean.mk_ite state.ctx addr_eq new_eq old_eq in
-                Solver.add state.solver [ ite ];
-
-                (* Update heap *)
-                let new_heap = Pmap.add addr new_expr heap in
-
-               (* Return new heap *) 
-                new_heap
-              end
-        )
-      in
-      let new_heap = Pmap.fold update (!(state.addr_map)) state.heap in
-      (UnitSort.mk_unit state.ctx), ({state1 with heap = new_heap})
-*)
+            {state with heap = new_heap; 
+                        preexec = add_action (get_aid action) paction
+                                  state.preexec   
+            }
        
   | Store0 _ -> assert false
-  | Load0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), _) -> 
+  | Load0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym),
+  mem_order) -> 
       (* Overview: for each address, look up value in the heap.
        * Generate equation 
           (get_addr sym == addr => heap_value)
@@ -961,12 +967,21 @@ let bmc_paction (state: bmc_state)
        Solver.add state.solver 
          (mk_loaded_assertions state.ctx ty ret_value);
 
+      (*
+       print_endline ("LOAD " ^ (Expr.to_string ret_value) ^
+                      " " ^ polarity);
+      *)
+
+      let action = Read(mk_next_aid state, state.tid, mem_order,
+                         z3_sym, ret_value) in
+      let paction = BmcAction(pol, action) in
+
+      print_endline (string_of_paction paction);
+
        (* TODO: If unspecified, assert the type is ty.
         *       Not implemented (b/c recursive sorts for pointers 
         *       Also /hopefully/ not needed anywhere...??
         *)
-
-
        let ptr_allocs = alias_lookup_sym sym state.alias_state in
        (* Do alias analysis *)
        let ret_alloc = 
@@ -983,12 +998,14 @@ let bmc_paction (state: bmc_state)
           else
             AddressSet.empty
          end in
+       (*
       print_endline "-----LOAD ALIAS_RESULTS";
       print_ptr_map !(state.alias_state.ptr_map);
       print_addr_map !(state.alias_state.addr_map);
 
       print_heap state.heap; 
       print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
+      *)
 
        let iterate = (fun alloc (expr_list, addr_list) ->
           match Pmap.lookup alloc state.heap with
@@ -1010,44 +1027,18 @@ let bmc_paction (state: bmc_state)
        ) in
        let (expr_eqs, addr_eqs) = AddressSet.fold iterate ptr_allocs ([], []) in
 
-        (*
-       let iterate = (fun addr bmc_addr (expr_list, addr_list) ->
-          let cur_value = match (Pmap.lookup addr state.heap) with
-              | None -> assert false
-              | Some x -> x in
-          if (Sort.equal (Expr.get_sort cur_value) sort) then
-            begin
-              let addr_expr = Address.mk_expr state.ctx addr in
-              let addr_eq_expr = Boolean.mk_eq state.ctx
-                  (PointerSort.get_addr state.ctx z3_sym)
-                  addr_expr in
-              let impl_expr = Boolean.mk_implies state.ctx 
-                    addr_eq_expr 
-                    (Boolean.mk_eq state.ctx ret_value cur_value) in
-              (impl_expr :: expr_list, addr_eq_expr :: addr_list)
-            end
-          else 
-            (expr_list, addr_list)
-       ) in
-       let (expr_eqs, addr_eqs) = Pmap.fold iterate (!(state.addr_map)) 
-                                        ([], []) in
-      *)
-       
        let ret = Boolean.mk_and state.ctx expr_eqs in
        let new_vc = Boolean.mk_or state.ctx addr_eqs in
        Solver.add state.solver [ ret ];
-       ret_value, ret_alloc, ({state with vcs = (new_vc) :: state.vcs})
-
+       ret_value, ret_alloc, 
+          ({state with vcs = (new_vc) :: state.vcs;
+                       preexec = add_action (get_aid action) paction
+                                 state.preexec}
+          )
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
       assert false
-(*
-let merge_heap_list (state: bmc_state)
-                    (heaps: kheap list)
-                    (guards: Expr.expr list) : kheap =
-  assert (List.length heaps = List.length guards);
-*)
 
 
 (* if guard then heap1 else heap2 for all addresses in alist *)
@@ -1093,7 +1084,6 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Eaction paction ->
       bmc_paction state paction
-
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
       Printf.printf "TODO: Ecase";
       (* TODO... painful... special case for now, 
@@ -1143,6 +1133,8 @@ let rec bmc_expr (state: bmc_state)
         | [x; y] -> (x, y)
         | _ -> assert false
       in
+    
+      let new_preexec = merge_preexecs st1.preexec st2.preexec in
 
       begin
         (*
@@ -1157,7 +1149,8 @@ let rec bmc_expr (state: bmc_state)
             
             (Boolean.mk_ite st.ctx guard bmc_e1 bmc_e2),
               alloc_ret,
-             ({st with heap = new_heap; vcs = new_vcs})
+             ({st with heap = new_heap; vcs = new_vcs; 
+                       preexec = new_preexec})
         (*
         | (Some a1, None) -> 
             Printf.printf "TODOa: Do Ecase properly\n";
@@ -1204,9 +1197,11 @@ let rec bmc_expr (state: bmc_state)
       let new_vcs = vc1 :: vc2 :: state.vcs in
       let new_heap = merge_heaps state st1.heap st2.heap
                       bmc_seq1 bmc_seq2 in
+      let new_preexec = merge_preexecs st1.preexec st2.preexec in
       (UnitSort.mk_unit state.ctx, 
        AddressSet.union alloc1 alloc2,
-       {state with vcs = new_vcs;  heap = new_heap}
+       {state with vcs = new_vcs;  heap = new_heap;
+                   preexec = new_preexec}
       )
 
       (*
@@ -1254,8 +1249,10 @@ let rec bmc_expr (state: bmc_state)
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
       let (bmc_pe, loc, st) = bmc_pexpr state pe in
-      let (bmc_e1, loc1, st1) = bmc_expr ({st with vcs = []}) e1 in
-      let (bmc_e2, loc2, st2) = bmc_expr ({st with vcs = []}) e2 in
+      let (bmc_e1, loc1, st1) = bmc_expr 
+          ({st with vcs = []; preexec = initial_preexec ()}) e1 in
+      let (bmc_e2, loc2, st2) = bmc_expr 
+          ({st with vcs = []; preexec = initial_preexec () }) e2 in
 
       Printf.printf "TODO: only heap/vcs are updated after Eif\n";
       
@@ -1279,9 +1276,11 @@ let rec bmc_expr (state: bmc_state)
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
           let new_heap = merge_heaps st st1.heap st2.heap 
                          bmc_pe (Boolean.mk_not st.ctx bmc_pe) in
+          let new_preexec = merge_preexecs (st.preexec) 
+              (merge_preexecs st1.preexec st2.preexec) in
           (Boolean.mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
             AddressSet.union loc1 loc2,
-            ({st with heap = new_heap; vcs = new_vc})
+            ({st with heap = new_heap; vcs = new_vc; preexec = new_preexec})
         (*
         | (Some pexpr, Some e1, None) -> 
           let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs pexpr) in
@@ -1486,10 +1485,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_addr_map !(state1.alias_state.addr_map);
 
 
+      print_endline "-----EVENTS";
+      print_preexec state1.preexec;
+
+
       Printf.printf "-----CONSTRAINTS ONLY\n";
 
-      Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
-      assert (check_solver state1.solver = SATISFIABLE);
+      (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
+       * *)
+      assert (Solver.check state1.solver [] = SATISFIABLE);
       Printf.printf "-----WITH VCS \n";
       let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
                              state1.vcs
@@ -1513,7 +1517,7 @@ let run_bmc (core_file : 'a file)
 
   print_string "EXIT: NORMALIZING FILE\n";
 
-  pp_file norm_file;
+  (* pp_file norm_file; *)
 
   print_string "Typechecking file\n";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
@@ -1522,6 +1526,7 @@ let run_bmc (core_file : 'a file)
 
       let seq_file = Core_sequentialise.sequentialise_file typed_core in
       pp_file seq_file;
+      print_endline "START Z3";
       bmc_file seq_file norm_supply;
 
       print_string "EXIT: BMC PIPELINE \n"

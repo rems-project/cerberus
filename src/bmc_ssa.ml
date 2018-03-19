@@ -53,11 +53,7 @@ module SSA = struct
 
   let add_to_sym_table sym1 sym2 : unit eff =
     get >>= fun st -> 
-      (
-             (print_endline ((symbol_to_string sym1) ^ " YY " ^ 
-                             (symbol_to_string sym2)));
       put ({st with sym_table = Pmap.add sym1 sym2 st.sym_table})
-      )
 
   let get_supply : ksym_supply eff =
     get >>= fun st -> return st.supply
@@ -101,12 +97,7 @@ let rec ssa_pexpr (Pexpr(annot, (), pexpr_) : pexpr) :
       match ret_sym with
       | None -> assert false
       | Some x -> 
-          begin
-             (print_endline ((symbol_to_string sym) ^ " XX " ^ 
-                             (symbol_to_string x)));
-
           SSA.return (PEsym x)
-          end
         end
   | PEimpl _  -> assert false
   | PEval _   -> 
