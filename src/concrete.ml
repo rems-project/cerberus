@@ -327,7 +327,8 @@ module Concrete : Memory = struct
   (* INTERNAL: allocation *)
   type allocation = {
     base: address;
-    size: N.num;
+    size: N.num; (*TODO: this is probably unnecessary once we have the type *)
+    ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
     is_readonly: bool;
   }
   
@@ -742,7 +743,7 @@ module Concrete : Memory = struct
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; is_readonly= false} st.allocations;
+                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
             (* TODO: factorise this with do_store inside Concrete.store *)
@@ -751,7 +752,7 @@ module Concrete : Memory = struct
             ) (explode_bytes mval) in
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                allocations= IntMap.add alloc_id {base= addr; size= size; is_readonly= true} st.allocations;
+                allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
                 next_address= Nat_big_num.add addr size;
                 bytemap=
                   List.fold_left (fun acc (addr, b) ->
@@ -769,7 +770,7 @@ module Concrete : Memory = struct
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size_n; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n } )
     )
   
