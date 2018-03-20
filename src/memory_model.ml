@@ -182,14 +182,6 @@ module type Memory = sig
 *)
 
   (* JSON serialisation *)
-  val serialise_pointer_value: pointer_value -> Json.json
-  val parse_pointer_value: Json.json -> pointer_value
-  val serialise_integer_value: integer_value -> Json.json
-  val parse_integer_value: Json.json -> integer_value
-  val serialise_floating_value: floating_value -> Json.json
-  val parse_floating_value: Json.json -> floating_value
-  val serialise_mem_value: mem_value -> Json.json
-  val parse_mem_value: Json.json -> mem_value
   val serialise_mem_state: mem_state -> Json.json
   
   

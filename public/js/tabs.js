@@ -60,7 +60,8 @@ class TabInteractive extends Tab {
     // Setup Graph Network
     let options = {
       nodes: {
-        shape: 'box',
+        shape: 'dot',
+        size: 10,
         shapeProperties: {
           borderRadius: 2
         },
@@ -73,12 +74,17 @@ class TabInteractive extends Tab {
           }
         },
         font: {
-          color: '#f1f1f1'
+          align: 'left'
+          //color: '#f1f1f1'
         },
         fixed: true
       },
       edges: {
-        arrows: {to: true}
+        arrows: {to: true},
+        font: {
+          background: '#ffffff',
+          color: '#5f5f5f',
+        },
       },
       groups: {
         leaf: {
@@ -91,7 +97,7 @@ class TabInteractive extends Tab {
       layout: {
         hierarchical: {
           enabled: true,
-          levelSeparation: 70,
+          levelSeparation: 90,
           nodeSpacing: 200
         }
       },
@@ -279,10 +285,7 @@ class TabMemory extends Tab {
   constructor(title) {
     super(title)
 
-    this.dom.addClass('graph')
-    this.dom.attr('align', 'right')
-
-    let container = $('<div align="center" class="svg"></div>')
+    let container = $('<div align="center" class="graph"></div>')
     this.dom.append(container)
 
     // Setup Graph Network

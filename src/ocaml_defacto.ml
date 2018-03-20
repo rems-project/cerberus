@@ -623,12 +623,4 @@ let sequencePoint = Defacto_memory.impl_sequencePoint
 include Pp_defacto_memory
 
 (* JSON serialisation *)
-let serialise_pointer_value _ = failwith "serialise pointer_value"
-let parse_pointer_value _ = failwith "parse pointer_value"
-let serialise_integer_value _ = failwith "serialise integer_value"
-let parse_integer_value _ = failwith "parse integer_value"
-let serialise_floating_value _ = failwith "serialise floating_value"
-let parse_floating_value _ = failwith "parse floating_value"
-let serialise_mem_value _ = failwith "serialise mem_value"
-let parse_mem_value _ = failwith "parse mem_value"
 let serialise_mem_state _ = failwith "serialise mem_state"
