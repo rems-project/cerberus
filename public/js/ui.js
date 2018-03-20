@@ -89,15 +89,6 @@ class UI {
       $('#defacto').css('visibility', 'hidden')
     })
 
-    // Load pldi tests
-    $('#load_pldi').on('click', () => {
-      $('#pldi').css('visibility', 'visible')
-    })
-
-    $('#load_pldi_cancel').on('click', () => {
-      $('#pldi').css('visibility', 'hidden')
-    })
-
     // Run (Execute)
     $('#run').on('click', () => {})
     $('#random').on('click', () => this.exec ('Random'))
