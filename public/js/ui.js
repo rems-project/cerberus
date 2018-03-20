@@ -360,34 +360,6 @@ $.get('defacto_tests.json').done((data) => {
   }
 })
 
-// Get list of defacto tests
-$.get('pldi_tests.json').done((data) => {
-  let div = $('#pldi_body')
-  for (let i = 0; i < data.length; i++) {
-    let questions = $('<ul class="questions"></ul>')
-    for (let j = 0; j < data[i].questions.length; j++) {
-      let q = data[i].questions[j]
-      let tests = $('<ul class="tests"></ul>')
-      for (let k = 0; q.tests && k < q.tests.length; k++) {
-        let name = q.tests[k]
-        let test = $('<li><a href="#">'+name+'</a></li>')
-        test.on('click', () => {
-          $.get('defacto/'+name).done((data) => {
-            $('#pldi').css('visibility', 'hidden')
-            ui.add(new View(name, data))
-            ui.refresh()
-          })
-        })
-        tests.append(test)
-      }
-      questions.append(q.question)
-      questions.append(tests)
-    }
-    div.append($('<h3>'+data[i].section+'</h3>'))
-    div.append(questions)
-  }
-})
-
 // Detect if URL is a permalink
 try {
   let uri = document.URL.split('#')
