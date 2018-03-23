@@ -1,10 +1,12 @@
 open Memory_model
 
+let () = print_endline "loading Ocaml_mem";;
+
 
 module Mem = (
   val match !Prelude.mem_switch with
-    | `MemDefacto  -> (module Ocaml_defacto : Memory_model.Memory)
-    | `MemConcrete -> (module Concrete : Memory_model.Memory)
+    | MemSymbolic -> (module Ocaml_defacto : Memory_model.Memory)
+    | MemConcrete -> (module Concrete : Memory_model.Memory)
 )
 
 include Mem

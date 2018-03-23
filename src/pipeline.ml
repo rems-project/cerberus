@@ -1,4 +1,24 @@
 open Prelude
+open Instance_manager
+
+(* Load Concrete and Symbolic instances of Cerberus *)
+
+let load_instance fname =
+  let fname = Dynlink.adapt_filename fname in
+  if Sys.file_exists fname then
+    try Dynlink.loadfile fname
+    with
+    | Dynlink.Error err ->
+      error ("Loading memory model: " ^ Dynlink.error_message err);
+  else error "File does not exists"
+
+let () =
+  Prelude.mem_switch := Prelude.MemConcrete;
+  load_instance "./_build/src/memmodel.cma";
+  Prelude.mem_switch := Prelude.MemSymbolic;
+  load_instance "./_build/src/memmodel.cma";;
+
+(* Pipeline *)
 
 let run_pp with_ext doc =
   let (is_fout, oc) =
@@ -299,15 +319,15 @@ let core_passes (conf, io) ~filename core_file =
 
 
 let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experimental_unseq exec_mode =
-  let open Exhaustive_driver in
-  let conf = {concurrency; experimental_unseq; exec_mode=exec_mode } in
+  let module D = Exhaustive_driver in
+  let conf = {D.concurrency; experimental_unseq; exec_mode=exec_mode } in
   (* TODO: temporary hack for the command name *)
   if do_batch then begin
-    let executions = batch_drive sym_suppl core_file ("cmdname" :: args) conf in
+    let executions = D.batch_drive sym_suppl core_file ("cmdname" :: args) conf in
     return (Either.Left executions)
   end else
     let open Core in
-    drive sym_suppl core_file ("cmdname" :: args) conf >>= function
+    D.drive sym_suppl core_file ("cmdname" :: args) conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
           return (Either.Right begin try

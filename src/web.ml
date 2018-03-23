@@ -3,14 +3,6 @@ open Cohttp_lwt_unix
 
 open Json
 
-(*
-(* Loading dynamically defacto cerberus *)
-let () =
-  try
-    Dynlink.loadfile "defacto" (* WARN: linking only works if using byte code *)
-  with Dynlink.Error e -> print_string (Dynlink.error_message e) ;;
-*)
-
 (* Debugging *)
 
 module Debug =
@@ -624,6 +616,8 @@ let port =
   Arg.(value & opt int 8080 & info ["p"; "port"] ~docv:"PORT" ~doc)
 
 let () =
+  let () = Instance_manager.set_model "Concrete" in
+  let () = print_endline (Instance_manager.name ()) in
   let server = Term.(pure setup $ cerb_debug_level $ debug_level
                      $ impl $ cpp_cmd $ port $ docroot) in
   let info = Term.info "web" ~doc:"Web server frontend for Cerberus." in

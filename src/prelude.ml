@@ -3,15 +3,15 @@ let error ?(code = 1) msg =
   exit code
 
 
-type mem_setting =
-  [ `MemDefacto | `MemConcrete ]
+type mem_setting = MemSymbolic | MemConcrete
 
 (* TODO: I hate this. And it doesn't even work ... *)
-let mem_switch: mem_setting ref =
-(*
-  ref `MemDefacto
- *)
-  ref `MemConcrete
+let mem_switch: mem_setting ref = ref MemConcrete
+
+let string_of_mem_switch () =
+  match !mem_switch with
+  | MemSymbolic -> "Symbolic"
+  | MemConcrete -> "Concrete"
 
 (*
 external round_to_float32: float -> float = "round_to_float"
