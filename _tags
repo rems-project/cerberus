@@ -1,4 +1,6 @@
-true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg, color(always)
+# true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg, color(always)
+true: use_menhir, bin_annot, color(always)
+true: -traverse
 
 "src": include
 "src/codegen": include
