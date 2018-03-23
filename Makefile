@@ -125,12 +125,11 @@ ocaml_native:
 
 #cmdliner,
 
-ocaml_defacto:
-	sed -i '' 's/ref `MemConcrete/ref `MemDefacto/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} \
-		-libs unix,str defacto.cmxs
-	sed -i '' 's/ref `MemDefacto/ref `MemConcrete/' src/prelude.ml
-	cp _build/src/defacto.cmxs defacto
+memmodel_byte:
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} memmodel.cma
+
+memmodel_native:
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} memmodel.cmxs
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -154,14 +153,10 @@ ocaml_byte:
 	fi
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind \
-		-pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 \
-		-libs str,dynlink web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.native
 
 web.byte: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind \
-		-pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 \
-		-libs str,dynlink web.byte
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.byte
 
 
 
