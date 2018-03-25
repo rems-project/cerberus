@@ -247,6 +247,7 @@ module UnitSort =
 
   end
 
+
 module LoadedSort (M : sig val cot : core_object_type end) =
 struct
   (* ---- should be private *)
@@ -312,14 +313,47 @@ struct
     let constructors = Datatype.get_constructors sort in
     let func_decl = List.nth constructors 1 in
     Expr.mk_app ctx func_decl [ expr ]
-
-
 end
 
 (* TODO: Functorize *)
 module LoadedInteger = LoadedSort (struct let cot = OTy_integer end)
 
 module LoadedPointer = LoadedSort (struct let cot = OTy_pointer end)
+
+module Loaded = 
+  struct
+    let mk_sort (ctx: context) =
+      Datatype.mk_sort_s ctx ("loaded_ty")
+        [ Datatype.mk_constructor_s ctx 
+            ("Loaded_integer") (mk_sym ctx "is_Loaded_integer") 
+            [ mk_sym ctx "_Loaded_integer"] [Some (LoadedInteger.mk_sort ctx)] [0]
+        ; Datatype.mk_constructor_s ctx 
+            ("Loaded_pointer") (mk_sym ctx "is_Loaded_pointer") 
+            [ mk_sym ctx "_Loaded_pointer"] [Some (LoadedPointer.mk_sort ctx)] [0]
+        ]
+
+    let mk_integer (ctx: context) (expr: Expr.expr) : Expr.expr =
+      let sort = mk_sort ctx in
+      let constructors = Datatype.get_constructors sort in
+      let func_decl = List.nth constructors 0 in
+      Expr.mk_app ctx func_decl [ expr ]
+
+    let mk_pointer (ctx: context) (expr: Expr.expr) : Expr.expr =
+      let sort = mk_sort ctx in
+      let constructors = Datatype.get_constructors sort in
+      let func_decl = List.nth constructors 1 in
+      Expr.mk_app ctx func_decl [ expr ]
+
+    let mk_loaded (ctx: context) (expr: Expr.expr) =
+      if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort ctx)) then
+        mk_integer ctx expr 
+      else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort ctx)) then
+        mk_pointer ctx expr
+      else
+        assert false
+
+  end
+
 
 (* ============== Function declarations (and definitions?) *)
 

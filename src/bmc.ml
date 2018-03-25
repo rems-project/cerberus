@@ -13,6 +13,7 @@ open Ocaml_mem
 open Pp_core
 open Z3
 open Z3.Arithmetic
+open Z3.Boolean
 
 open Bmc_analysis
 open Bmc_events
@@ -20,6 +21,7 @@ open Bmc_inline
 open Bmc_normalize
 open Bmc_sorts
 open Bmc_utils
+
 
 (* ========== Type definitions ========== *)
 
@@ -98,7 +100,10 @@ type bmc_state = {
   aid_supply  : action_id ref;
   tid_supply  : thread_id ref;
   tid         : thread_id;
+
+  (* TODO: Z3 expr for memory equalities *)
 }
+
 
 
 (* PPrinters *)
@@ -130,6 +135,7 @@ let check_solver (solver: Solver.solver) =
     end
   end;
   status
+
 
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
   (!(bmc_address.seq_ctr))
@@ -803,6 +809,8 @@ let bmc_paction (state: bmc_state)
       (* Create a new bmc address and add it to the addr_map *)
       let bmc_addr : kbmc_address = mk_bmc_address new_addr sort in
       state.addr_map :=  Pmap.add new_addr bmc_addr !(state.addr_map);
+      state.alias_state.addr_set := AddressSet.add new_addr
+                                   !(state.alias_state.addr_set);
 
       (* Set it to an initial unspecified value @a_1 *)
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
@@ -1132,7 +1140,8 @@ let rec bmc_expr (state: bmc_state)
       (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
   | Eproc _ -> assert false
   | Eccall _  -> assert false
-  | Eunseq _ -> assert false
+  | Eunseq _ -> 
+      assert false
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
       print_endline "TODO: bound in Ebound ignored";
@@ -1185,7 +1194,8 @@ let rec bmc_expr (state: bmc_state)
 
   | Erun _ ->
       assert false
-  | Epar _
+  | Epar elist -> 
+      assert false
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
       let (bmc_pe, loc, st) = bmc_pexpr state pe in
@@ -1387,6 +1397,349 @@ let initialise_global state sym typ expr : bmc_state =
   Solver.add state.solver [ eq_expr ];
   state
 
+(* TODO: make event a datatype *)
+let preexec_to_z3 (state: bmc_state) =
+  let ctx = state.ctx in
+  let preexec = state.preexec in 
+  (* Make initial events *)
+  let loc_list = AddressSet.fold (fun e ret -> e::ret) 
+                    !(state.alias_state.addr_set) [] in
+  let initial_event_list = List.map (fun loc -> 
+    BmcAction(Pos, 
+              Write(mk_next_aid state, -1, NA,
+                    PointerSort.mk_ptr ctx (Address.mk_expr state.ctx loc), 
+                    LoadedInteger.mk_loaded ctx (Integer.mk_numeral_i ctx  0)))) loc_list in
+
+  let preexec_list = set_to_list preexec.actions (fun x -> x) in
+  let event_list = initial_event_list @ preexec_list in
+
+  let action_id_to_z3_sym aid = mk_sym ctx ("#E_" ^ (string_of_int aid)) in
+  let action_to_z3_sym action = action_id_to_z3_sym (aid_of_paction action) in
+  let event_syms = List.map action_to_z3_sym event_list in
+  let event_sort = Enumeration.mk_sort ctx 
+                      (mk_sym ctx "Event") event_syms in
+  (* map from aid -> z3 expr *)
+  let events = Enumeration.get_consts event_sort in
+  let event_map = List.fold_left2 (fun pmap action expr ->
+    Pmap.add (aid_of_paction action) expr pmap)
+    (Pmap.empty Pervasives.compare) event_list events in
+
+
+  let mk_event_expr : action_id -> Expr.expr = (fun aid ->
+    match Pmap.lookup aid event_map with | Some x -> x | None -> assert false) in
+  let event_expr : bmc_paction -> Expr.expr = (fun action ->
+    mk_event_expr (aid_of_paction action)) in
+
+  let bound_0 = Quantifier.mk_bound ctx 0 event_sort in
+  let bound_1 = Quantifier.mk_bound ctx 1 event_sort in
+  (*
+  (* Distinguish initial events for use in co-well-formed *)
+  let fn_isInitial = FuncDecl.mk_fresh_func_decl ctx
+                      "isInitial" [ event_sort ] (Boolean.mk_sort ctx) in
+  let initial_condition = List.map (fun event -> 
+    mk_eq ctx (event_expr event) bound_0) initial_event_list in
+  let isInitial_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx [event_sort] [mk_sym ctx "e"]
+      (mk_eq ctx (FuncDecl.apply fn_isInitial [bound_0])
+                 (mk_or ctx initial_condition)
+      ) None [] [] None None
+    ) in
+*)
+
+  (* Map each location to the initial event of the location *)
+  let fn_getInitial = FuncDecl.mk_fresh_func_decl ctx
+                        "getInitial" [ Address.mk_sort ctx ] event_sort in
+  let getInitial expr = FuncDecl.apply fn_getInitial [ expr ] in
+  let getInitial_asserts = List.map (fun ie ->
+      mk_eq ctx (getInitial (PointerSort.get_addr ctx (location_of_paction ie)
+      )) 
+                (event_expr ie)
+    ) initial_event_list in
+
+  (* Declare value funcion. 
+   * Assert (symbolic) value of stores and loads
+   *)
+  let fn_getVal = FuncDecl.mk_fresh_func_decl ctx 
+                    "getVal" [ event_sort ] (Loaded.mk_sort ctx) in
+  let val_asserts = List.map (fun action -> 
+    let loaded_value = Loaded.mk_loaded ctx (value_of_paction action) in
+    Boolean.mk_eq ctx (FuncDecl.apply fn_getVal [event_expr action]) 
+                      (loaded_value)) event_list in
+
+  (* Declare address function.
+   * Assert (symbolic) addresses of stores and loads 
+   *)
+  let fn_getAddr = FuncDecl.mk_fresh_func_decl ctx 
+                    "getAddr" [ event_sort ] (Address.mk_sort ctx) in
+  let getAddr expr = FuncDecl.apply fn_getAddr [ expr ] in
+  let addr_asserts = List.map (fun action -> 
+    let addr = PointerSort.get_addr ctx (location_of_paction action) in
+    Boolean.mk_eq ctx (getAddr (event_expr action))
+                      addr) event_list in
+
+
+  (* SB relation 
+   *(declare-fun po (E E) Bool)
+    (assert (forall ((e1 E) (e2 E)) (= (po e1 e2) (
+      or
+      (and (= e1 a) (= e2 b))
+      (and (= e1 c) (= e2 d))
+    ))))
+   *)
+  let fn_sb = FuncDecl.mk_fresh_func_decl ctx 
+                "sb" [ event_sort; event_sort ] (Boolean.mk_sort ctx) in
+  let sb_e1 = Quantifier.mk_bound ctx 1 event_sort in
+  let sb_e2 = Quantifier.mk_bound ctx 0 event_sort in
+  let sb_eqs = Pset.fold (fun (a1, a2) ret ->
+    let (a1_expr, a2_expr) = (mk_event_expr a1, mk_event_expr a2) in
+    let expr = Boolean.mk_and ctx [ Boolean.mk_eq ctx sb_e1 a1_expr
+                                  ; Boolean.mk_eq ctx sb_e2 a2_expr] in
+    expr :: ret) preexec.sb [] in
+  let sb_assert = Quantifier.expr_of_quantifier (
+        Quantifier.mk_forall ctx
+        [event_sort; event_sort] [mk_sym ctx "e1"; mk_sym ctx "e2"]
+        (Boolean.mk_eq ctx (FuncDecl.apply fn_sb [sb_e1; sb_e2])
+                           (Boolean.mk_or ctx sb_eqs))
+        None [] [] None None) in
+
+  (* read/write? *)
+  let event_type = Enumeration.mk_sort ctx (mk_sym ctx "Event_type")
+                   [ mk_sym ctx "Read"
+                   ; mk_sym ctx "Write" ] in
+  let fn_getKind = FuncDecl.mk_fresh_func_decl ctx
+                    "getKind" [ event_sort ] event_type in
+  let read_type = Enumeration.get_const event_type 0 in
+  let write_type = Enumeration.get_const event_type 1 in 
+  let is_read expr = Boolean.mk_eq ctx 
+                          (FuncDecl.apply fn_getKind [expr])
+                          read_type in
+  let is_write expr = Boolean.mk_eq ctx 
+                          (FuncDecl.apply fn_getKind [expr])
+                          write_type in
+
+
+  let type_asserts = List.map (fun (BmcAction(_, action))->
+    let expr = mk_event_expr (get_aid action) in
+    match action with
+    | Read  _ -> is_read expr
+    | Write _ -> is_write expr
+    ) event_list in
+
+  (* Reads from map *)
+  let fn_rf = FuncDecl.mk_fresh_func_decl ctx
+                "rf" [ event_sort ] event_sort in
+  (* Coherence order *)
+  let fn_co = FuncDecl.mk_fresh_func_decl ctx
+                "co" [ event_sort ] (Integer.mk_sort ctx) in
+
+  (* From-read *)
+  let fn_fr = FuncDecl.mk_fresh_func_decl ctx
+                "fr" [ event_sort; event_sort ] (Boolean.mk_sort ctx) in
+
+  (* cc-clock: clock for coherence check  *)
+  let fn_clock = FuncDecl.mk_fresh_func_decl ctx
+                "cc-clock" [ event_sort ] (Integer.mk_sort ctx) in
+
+  (* Reads read-from writes
+   * (forall ((e E)) (=> (read e) (write (rf e))))
+   *)
+  let rf_write_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort] [mk_sym ctx "e"]
+      (Boolean.mk_implies ctx 
+          (is_read bound_0)
+          (is_write (FuncDecl.apply fn_rf [bound_0]))
+      ) None [] [] None None
+    ) in
+
+  (* for each read, it has the value of the event it reads from
+   * and is from the same address (below missing address )
+   * (forall ((e E)) (=> (read e)  (= (val e) (val (rf e))))) 
+   *)
+  let rf_well_formed_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx [event_sort] [mk_sym ctx "e"]
+      (Boolean.mk_implies ctx
+        (is_read bound_0) 
+        (Boolean.mk_and ctx 
+          [ mk_eq ctx (FuncDecl.apply fn_getAddr [bound_0]) 
+                      (FuncDecl.apply fn_getAddr 
+                        [ FuncDecl.apply fn_rf [bound_0] ])
+          ; mk_eq ctx (FuncDecl.apply fn_getVal [bound_0])
+                      (FuncDecl.apply fn_getVal
+                        [ FuncDecl.apply fn_rf [bound_0]])
+          ]
+        )
+      ) None [] [] None None 
+    ) in
+  (* co well-formedness: 
+   * each write is co-after the initial write (of 0?)
+   * (Below is for single address)
+   * (assert (forall ((e E)) (=> (and (write e) (not (= e ix))) (< (co ix) (co e)))))
+  *)
+  let co_well_formed_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx [event_sort] [mk_sym ctx "e"]
+    (mk_implies ctx 
+      (mk_and ctx 
+        [ is_write bound_0
+        ; mk_not ctx (mk_eq ctx bound_0 (getInitial (getAddr bound_0)))
+        ])
+      (mk_lt ctx (FuncDecl.apply fn_co [ getInitial (getAddr bound_0) ])
+                 (FuncDecl.apply fn_co [ bound_0 ]) 
+      )
+    ) None [] [] None None
+  ) in
+  (* assert co of an initial event is 0 for convenience *)
+  let co_initial_asserts = List.map (fun ie ->
+    mk_eq ctx (FuncDecl.apply fn_co [event_expr ie])
+              (Integer.mk_numeral_i ctx 0)) initial_event_list in
+
+
+
+  (* any nonequal writes to the same address e1 and e2 are strictly co-related one way or the other
+   * (below is for single address )
+    (forall 
+       ((e1 E) (e2 E))  
+       (=> (and (write e1) (write e2) (not (= e1 e2))) 
+           (or (< (co e1) (co e2)) (< (co e2) (co e1)))
+       )
+   *)
+  let mo_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx 
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx 
+        (mk_and ctx [ is_write bound_0
+                    ; is_write bound_1
+                    ; mk_not ctx (mk_eq ctx bound_0 bound_1)
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ]
+        )
+        (mk_or ctx [ mk_lt ctx (FuncDecl.apply fn_co [bound_0])
+                               (FuncDecl.apply fn_co [bound_1])
+                   ; mk_lt ctx (FuncDecl.apply fn_co [bound_1])
+                               (FuncDecl.apply fn_co [bound_0])
+                   ]
+        )
+      ) None [] [] None None
+  ) in
+  let clock_initial_asserts = List.map (fun ie ->
+    mk_eq ctx (FuncDecl.apply fn_clock [event_expr ie])
+              (Integer.mk_numeral_i ctx 0)) initial_event_list in
+
+
+  (* po included in cc-clock
+    (assert (forall ((e1 E) (e2 E)) (=> (po e1 e2) (< (cc-clock e1) (cc-clock e2)))))
+  *)
+  let sb_clock_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
+      (mk_implies ctx
+        (FuncDecl.apply fn_sb [bound_0; bound_1])
+        (mk_lt ctx (FuncDecl.apply fn_clock [bound_0])
+                   (FuncDecl.apply fn_clock [bound_1])
+        )
+      ) None [] [] None None
+  ) in
+
+  (* rf included in cc-clock
+  (assert (forall ((e E)) (=> (read e) (< (cc-clock (rf e)) (cc-clock e)))))
+  *)
+  let rf_clock_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort] [mk_sym ctx "e"]
+      (mk_implies ctx
+        (is_read bound_0)
+        (mk_lt ctx (FuncDecl.apply fn_clock [FuncDecl.apply fn_rf [ bound_0 ]])
+                   (FuncDecl.apply fn_clock [bound_0])
+        )
+      ) None [] [] None None
+  ) in
+
+  (* fr definition: (below for single address)
+    (assert (forall ((e1 E) (e2 E))  (=> (and (read e1) (write e2)) (= (fr e1 e2) (< (co (rf e1)) (co e2))))))
+  *)
+  let fr_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
+      (mk_implies ctx
+          (mk_and ctx [ is_read bound_0
+                      ; is_write bound_1
+                      ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                      ]
+          )
+          (mk_eq ctx (FuncDecl.apply fn_fr [bound_0; bound_1])
+            (mk_lt ctx 
+              (FuncDecl.apply fn_co [ FuncDecl.apply fn_rf [bound_0]] )
+              (FuncDecl.apply fn_co [ bound_1 ])
+            ) 
+          )
+      ) None [] [] None None
+  ) in
+
+  (* fr included in cc-clock
+    (assert (forall ((e1 E) (e2 E)) (=> (and (read e1) (write e2) (fr e1 e2)) (< (cc-clock e1) (cc-clock e2)))))
+  *)
+  let fr_clock_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
+      (mk_implies ctx
+          (mk_and ctx [ is_read bound_0
+                      ; is_write bound_1
+                      ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                      ; FuncDecl.apply fn_fr [bound_0; bound_1]
+                      ]
+          )
+          (mk_lt ctx (FuncDecl.apply fn_clock [bound_0])
+                     (FuncDecl.apply fn_clock [bound_1])
+          )
+      ) None [] [] None None
+  ) in
+
+  (* co included in cc-clock
+    (assert (! (forall ((e1 E) (e2 E)) (=> (and (write e1) (write e2) (< (co e1) (co e2))) (< (cc-clock e1) (cc-clock e2)))) :named co-included))
+  *)
+  let co_included_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
+      (mk_implies ctx
+          (mk_and ctx [ is_write bound_0
+                      ; is_write bound_1
+                      ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                      ; mk_lt ctx (FuncDecl.apply fn_co [bound_0])
+                                  (FuncDecl.apply fn_co [bound_1])
+                      ]
+          )
+          (mk_lt ctx (FuncDecl.apply fn_clock [bound_0])
+                     (FuncDecl.apply fn_clock [bound_1])
+          )
+      ) None [] [] None None
+  ) in
+
+  let ret =   val_asserts 
+            @ addr_asserts 
+            @ type_asserts 
+            @ getInitial_asserts
+            @ co_initial_asserts
+            @ clock_initial_asserts
+            @ [ sb_assert 
+              ; rf_write_assert 
+              ; rf_well_formed_assert 
+              ; co_well_formed_assert
+              ; mo_assert 
+              ; sb_clock_assert
+              ; rf_clock_assert
+              ; fr_assert
+              ; fr_clock_assert
+              ; co_included_assert
+              ] in
+  List.iter (fun s -> print_endline (Expr.to_string s)) ret;
+  let tmp_solver = Solver.mk_solver ctx None in
+  Solver.add tmp_solver ret; 
+  check_solver tmp_solver;
+
+  ret
+
+
+
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   (* Do globals *)
   let initial_state = initial_bmc_state supply in
@@ -1437,12 +1790,20 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_endline "-----EVENTS";
       print_preexec state1.preexec;
 
+      print_endline "-----EVENT STUFF";
+      let z3_preexec = preexec_to_z3 state1 in
+
 
       Printf.printf "-----CONSTRAINTS ONLY\n";
 
       (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
        * *)
       assert (Solver.check state1.solver [] = SATISFIABLE);
+      print_endline "-----WITH EVENTS";
+      Solver.add state1.solver z3_preexec;
+      (* TODO: not always true!!! Temporary for now *)
+      assert (check_solver state1.solver = SATISFIABLE);
+
       Printf.printf "-----WITH VCS \n";
       let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
                              state1.vcs
@@ -1458,24 +1819,25 @@ let (>>=) = Exception.except_bind
 let run_bmc (core_file : 'a file) 
             (sym_supply: ksym_supply)    = 
   (* TODO: state monad with sym_supply *)
-  print_string "ENTER: BMC PIPELINE \n";
+  print_endline "ENTER: BMC PIPELINE";
   pp_file core_file;
 
-  print_string "ENTER: NORMALIZING FILE\n";
+  print_endline "ENTER: NORMALIZING FILE";
   let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
 
-  print_string "EXIT: NORMALIZING FILE\n";
+  print_endline "EXIT: NORMALIZING FILE";
 
   (* pp_file norm_file; *)
 
-  print_string "Typechecking file\n";
+  print_endline "Typechecking file";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
     Exception.except_return (
 
-
+      (* Do not sequentialise file *)
       let seq_file = Core_sequentialise.sequentialise_file typed_core in
-      pp_file seq_file;
+      pp_file seq_file; 
       print_endline "START Z3";
+      (* bmc_file seq_file norm_supply; *)
       bmc_file seq_file norm_supply;
 
       print_string "EXIT: BMC PIPELINE \n"

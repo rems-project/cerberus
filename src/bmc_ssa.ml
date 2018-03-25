@@ -223,7 +223,9 @@ let rec ssa_expr (Expr(annot, expr_) : 'a expr) : ('a expr) SSA.eff =
   | Erun (a,sym, pelist) ->
       SSA.mapM ssa_pexpr pelist >>= fun retlist ->
       SSA.return (Erun(a,sym, retlist)) 
-  | Epar _
+  | Epar (elist) ->
+      SSA.mapM ssa_expr elist >>= fun retlist ->
+      SSA.return (Epar(retlist))
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) ->
       ssa_pexpr pe >>= fun ret_pe ->

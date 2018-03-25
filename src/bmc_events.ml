@@ -20,8 +20,26 @@ let get_aid (action: bmc_action) = match action with
   | Write (aid, _, _, _, _) ->
       aid
 
+let get_location (action: bmc_action) : bmc_value = match action with
+  | Read (_, _, _, loc, _)
+  | Write (_, _, _, loc, _) ->
+      loc
+
+let get_value (action: bmc_action) : bmc_value = match action with
+  | Read (_, _, _, _, value)
+  | Write (_, _, _, _, value) ->
+      value
+
+
+
 let aid_of_paction (BmcAction(_, a1)) : action_id = 
   get_aid a1
+
+let value_of_paction (BmcAction(_, a1)) : bmc_value =
+  get_value a1
+
+let location_of_paction (BmcAction(_, a1)) : bmc_location =
+  get_location a1
 
 let paction_cmp (BmcAction(_, a1)) (BmcAction(_, a2)) =
   Pervasives.compare (get_aid a1) (get_aid a2)
@@ -33,7 +51,6 @@ type preexecution = {
   sb : (action_id * action_id) Pset.set
 }
 
-  
 
 let string_of_memory_order = function
   | Cmm_csem.NA      -> "NA"
@@ -87,6 +104,9 @@ let print_preexec (preexec : preexecution) : unit =
 
 let set_to_list (set : 'a Pset.set) f =
   Pset.fold (fun el l -> (f el) :: l) set []
+
+let set_to_list_id (set: 'a Pset.set) =
+  set_to_list set (fun x -> x)
   
 let pos_cartesian_product (s1: (bmc_paction) Pset.set) 
                           (s2: (bmc_paction) Pset.set) 
