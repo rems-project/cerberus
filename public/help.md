@@ -1,6 +1,7 @@
 Cerberus
 ========
 
+Cerberus is a tool for exploring the semantics of C the programming language.
 C remains central to our computing infrastructure but still lacks a clear and
 complete semantics. Programmers lack tools to explore the range of behaviours
 they should expect; compiler development lacks test oracles; and formal
@@ -42,26 +43,68 @@ Getting Started
 
 To use the web version:
 
-* **Upload**: Upload a C file to be use by Cerberus.
+### Loading a program
 
-* **Download**: Download a C source file, a Core file, a .dot file represing the
-execution graph or a log file of executions.
+Load a test program, either by uploading a C file in `File > Load from file` or
+by writing a test program directly. We also have a list of tests that
+illustrate corner cases of the semantics, you can load these in `File > Load
+defacto test`.
 
-* **View**: Create new tabs, split a pane in two or rearrange the tabs into a
-single pane.
+### Elaboration
 
-* **Run**: Execute the C program in *random mode* or *exhaustive mode*.
+Cerberus will immediately try to elaborate the code into Core, a functional
+intermediate representation, and show it in a different tab.  Core is intended
+to be as minimal as possible while remaining a suitable target for the
+elaboration, and with the behaviour of Core programs made as explicit as
+possible. For more discuss about Core, please check [Papers](#papers).
 
-* **Core File**: Create a Core file from the C program. It hightlights the
-elaboration of every C expression into a Core expression. One can also select
-the precise expression to see its elaboration.
+Every C expression is then highlighted with the corresponding Core code of the
+same colour. Move the cursor on an expression to isolate the colour in that
+particular expression.
+The colouring behaviour can be changed on `Settings > Colour` and `Settings >
+Coulour Cursor`.
 
-* **Execution Graph**: Create the execution graph of the program with all
-possible executions.
+![](img/return.png)
 
-* **Help**: Open this help tab.
+![](img/core_return.png)
 
-Papers
+In this little example, Cerberus binds a pure specified value `42` into the
+label `a_81`, then kills the reference `x`, since it is going out of scope,
+converts the value in `a_81` to a `signed int` and finally returns the
+corresponding value.
+
+The interface also allows you to see the abstract syntax tree of all the
+Cerberus pipeline: Cabs (C Abstract) and Ail (Abstract Intermediate Language).
+One can check them in `Elaborate > Cabs` and `Elaborate > Ail`.
+
+![](img/ail.png)
+
+Whenever possible, Ail and Core ASTs may contain _ISO C standard annotations_.
+These justify the type-checking and elaboration. One can readily read the
+relevant part of the standard by clicking on it.
+
+### Execution
+
+Cerberus is a executable semantics.  There are three execution mode in
+Cerberus: `Random`, `Exhaustive` and `Interactive`.The latter is still in
+development. In random mode, Cerberus pseudorandomly explores a single allowed
+execution path, while in exhaustive mode it performs an exhaustive search for
+all allowed executions it can detect undefined behaviours on any allowed
+execution path.
+
+![](img/exec.png)
+
+In our previous example, when running Cerberus in exhaustive mode, two outcomes
+are possible: the conditional at line `3` is randomly evaluated to `true` or
+`false`, since `x` is an `undefined value`.
+
+### Compiling
+
+Cerberus is integrated with Matt Godbolt's [Compiler
+Explorer](https://godbolt.org). One can immediately check the compilation by
+major compilers (Clang/GCC) to different targets (x86/ARM).
+
+<a name="papers"></a> Papers
 ------
 
 * [Into the Depths of C: Elaborating the De Facto
