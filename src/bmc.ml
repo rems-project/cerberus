@@ -116,7 +116,7 @@ let print_heap (heap: (Address.addr, Expr.expr) Pmap.map) =
 
 (* ========== BMC ========== *)
 
-let check_solver (solver: Solver.solver) =
+let check_solver_fun (solver: Solver.solver) (fun_list: FuncDecl.func_decl list) =
   let status = Solver.check solver [] in
   Printf.printf "Status: %s\n" (Solver.string_of_status status);
   begin
@@ -126,16 +126,28 @@ let check_solver (solver: Solver.solver) =
     Printf.printf "NOT SAT :) \n"
   else
     begin 
-    Printf.printf "SAT :( \n";
+    Printf.printf "SAT====MODEL======= :( \n";
     let model = Solver.get_model solver in
       match model with
-      | Some m -> Printf.printf "Model: \n%s\n" (Model.to_string m)
+      | Some m -> 
+          Printf.printf "Model: \n%s\n" (Model.to_string m);
+          print_endline "FUNC_INTERPS";
+          List.iter (fun f ->
+            match Model.get_func_interp m f with
+            | Some interp -> 
+                Printf.printf "Fun: %s\n Interp: %s\n" (FuncDecl.to_string f)
+                                          (Model.FuncInterp.to_string interp);
+            | None -> print_endline ("No interp for: " ^ (FuncDecl.to_string f))
+          ) fun_list
       | None -> Printf.printf "No model\n"
     ;
+    Printf.printf "SAT :( \n";
     end
   end;
   status
 
+let check_solver (solver: Solver.solver) =
+  check_solver_fun solver []
 
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
   (!(bmc_address.seq_ctr))
@@ -1721,9 +1733,19 @@ let preexec_to_z3 (state: bmc_state) =
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
   let tmp_solver = Solver.mk_solver ctx None in
   Solver.add tmp_solver ret; 
-  (* check_solver tmp_solver; *)
-  ret
+  
+  let func_decl_list = [ fn_getAddr
+                       ; fn_getInitial
+                       ; fn_getVal
+                       ; fn_sb
+                       ; fn_rf
+                       ; fn_fr
+                       ; fn_co
+                       ; fn_clock
+                       ] in
 
+  (* check_solver tmp_solver; *)
+  ret, func_decl_list
 
 
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
@@ -1757,9 +1779,9 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_preexec state1.preexec;
 
       print_endline "-----EVENT STUFF";
-      let z3_preexec = 
+      let (z3_preexec, funcdecl_list) = 
         (if Pset.is_empty state1.preexec.actions then 
-            [] (* Guard st sort is well-founded *)
+            [], [] (* Guard st sort is well-founded *)
           else
             preexec_to_z3 state1
         ) in
@@ -1773,7 +1795,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_endline "-----WITH EVENTS";
       Solver.add state1.solver z3_preexec; 
       (* TODO: not always true!!! Temporary for now *)
-      assert (check_solver state1.solver = SATISFIABLE);
+      assert (check_solver_fun state1.solver funcdecl_list= SATISFIABLE);
 
       Printf.printf "-----WITH VCS \n";
       let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
