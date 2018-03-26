@@ -16,8 +16,8 @@
 <h3 id="loading-a-program">Loading a program</h3>
 <p>Load a test program, either by uploading a C file in <code>File &gt; Load from file</code> or by writing a test program directly. We also have a list of tests that illustrate corner cases of the semantics, you can load these in <code>File &gt; Load defacto test</code>.</p>
 <h3 id="elaboration">Elaboration</h3>
-<p>Cerberus will immediately try to elaborate the code into Core, a functional intermediate representation, and show it in a different tab. Core is intended to be as minimal as possible while remaining a suitable target for the elaboration, and with the behaviour of Core programs made as explicit as possible. For more discuss about Core, please check <a href="#papers">Papers</a>.</p>
-<p>Every C expression is then highlighted with the corresponding Core code of the same colour. Move the cursor on an expression to isolate the colour in that particular expression. The colouring behaviour can be changed on <code>Settings &gt; Colour</code> and <code>Settings &gt; Coulour Cursor</code>.</p>
+<p>Cerberus will immediately try to elaborate the code into Core, a functional intermediate representation, and show it in a different tab. Core is intended to be as minimal as possible while remaining a suitable target for the elaboration, and with the behaviour of Core programs made as explicit as possible. For further information about Core, please check <a href="#papers">Papers</a>.</p>
+<p>Every C expression is then highlighted with the corresponding Core code of the same colour. Move the cursor on an expression to isolate the colour in that particular expression. The colouring behaviour can be changed in <code>Settings &gt; Colour</code> and <code>Settings &gt; Coulour Cursor</code>.</p>
 <p><img src="img/return.png" /></p>
 <p><img src="img/core_return.png" /></p>
 <p>In this little example, Cerberus binds a pure specified value <code>42</code> into the label <code>a_81</code>, then kills the reference <code>x</code>, since it is going out of scope, converts the value in <code>a_81</code> to a <code>signed int</code> and finally returns the corresponding value.</p>
@@ -25,7 +25,7 @@
 <p><img src="img/ail.png" /></p>
 <p>Whenever possible, Ail and Core ASTs may contain <em>ISO C standard annotations</em>. These justify the type-checking and elaboration. One can readily read the relevant part of the standard by clicking on it.</p>
 <h3 id="execution">Execution</h3>
-<p>Cerberus is a executable semantics. There are three execution mode in Cerberus: <code>Random</code>, <code>Exhaustive</code> and <code>Interactive</code>.The latter is still in development. In random mode, Cerberus pseudorandomly explores a single allowed execution path, while in exhaustive mode it performs an exhaustive search for all allowed executions it can detect undefined behaviours on any allowed execution path.</p>
+<p>Cerberus is a executable semantics. There are three execution mode in Cerberus: <code>Random</code>, <code>Exhaustive</code> and <code>Interactive</code>.The latter is still in development. In random mode Cerberus pseudorandomly explores a single allowed execution path, while in exhaustive mode it performs an exhaustive search for all allowed executions and can detect undefined behaviours on any allowed execution path.</p>
 <p><img src="img/exec.png" /></p>
 <p>In our previous example, when running Cerberus in exhaustive mode, two outcomes are possible: the conditional at line <code>3</code> is randomly evaluated to <code>true</code> or <code>false</code>, since <code>x</code> is an <code>undefined value</code>.</p>
 <h3 id="compiling">Compiling</h3>
