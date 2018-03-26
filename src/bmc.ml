@@ -796,7 +796,6 @@ let bmc_paction (state: bmc_state)
   let Action(_, _, action_) = action in
   match action_ with
   | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
-      (* TODO: turns all integers into loaded integers *)
       let sort = ctype_to_sort state ty in
 
       (* Make a new memory allocation for alias analysis *)
@@ -817,10 +816,22 @@ let bmc_paction (state: bmc_state)
       (* TODO: make fresh? *)
       let initial_value = Expr.mk_const state.ctx new_sym sort in
       let new_heap = Pmap.add new_addr initial_value state.heap in
+
       (* Try: create a new pointer and return it instead *)
       let new_ptr = PointerSort.mk_ptr state.ctx 
                     (Address.mk_expr state.ctx new_addr) in
-      new_ptr, addr_ret, ({state with heap = new_heap})
+
+      (* Switching to concurrency model: create an initial write action *)
+      let to_store = Expr.mk_fresh_const state.ctx 
+                      ("initial_" ^ (Address.to_string new_addr)) sort in
+      let action = Write(mk_next_aid state, state.tid, NA, new_ptr, to_store) in
+      let paction = BmcAction(Pos, mk_true state.ctx, action) in
+
+      new_ptr, addr_ret, 
+        {state with heap = new_heap;
+                    preexec = add_initial_action (get_aid action) paction
+                              state.preexec
+        }
 
   | Create _ -> assert false
   | CreateReadOnly _ -> assert false
@@ -861,7 +872,7 @@ let bmc_paction (state: bmc_state)
 
       let action = Write(mk_next_aid state, state.tid, mem_order,
                          z3_sym, to_store) in
-      let paction = BmcAction(pol, action) in
+      let paction = BmcAction(pol, mk_true state.ctx, action) in
 
       print_endline (string_of_paction paction);
 
@@ -929,7 +940,7 @@ let bmc_paction (state: bmc_state)
         let new_heap = AddressSet.fold update ptr_allocs state.heap in
         (UnitSort.mk_unit state.ctx), AddressSet.empty, 
             {state with heap = new_heap; 
-                        preexec = add_action (get_aid action) paction
+                        preexec = add_action (get_aid action) paction 
                                   state.preexec   
             }
        
@@ -963,7 +974,7 @@ let bmc_paction (state: bmc_state)
 
       let action = Read(mk_next_aid state, state.tid, mem_order,
                          z3_sym, ret_value) in
-      let paction = BmcAction(pol, action) in
+      let paction = BmcAction(pol, mk_true state.ctx, action) in
 
       print_endline (string_of_paction paction);
 
@@ -1074,7 +1085,6 @@ let rec bmc_expr (state: bmc_state)
   | Eaction paction ->
       bmc_paction state paction
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
-      Printf.printf "TODO: Ecase";
       (* TODO... painful... special case for now, 
        * copied from more general PEcase code. merging heap stuff. *)
       let caselist = [(pat1, e1); (pat2, e2)] in
@@ -1331,53 +1341,49 @@ let bmc_fun_map (state: bmc_state)
   ) funs
 *)
 
-(* NOTE: special-cased for main b/c types of pointers are unknown otherwise *)
+(* NOTE: special-cased for main b/c types of pointers are unknown otherwise 
+ * TODO: currently broken for args
+ * *)
 let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
   add_sym_to_sym_table state sym ty;
   match Pmap.lookup sym !(state.alias_state.ptr_map) with
   | Some s -> assert false (* Symbol should not exist yet *)
   | None ->
       assert (is_ptr_type ty);
-     (* TODO: does not work if arg is a C pointer ? *) 
-      (*
-      if is_ptr_type ty then (* duplicated from Create *)
+      let new_addr = mk_new_addr state.alias_state in
+      state.alias_state.addr_set := AddressSet.add new_addr
+                          !(state.alias_state.addr_set);
+      add_set state.alias_state sym (AddressSet.singleton new_addr);
 
-      *)
-        begin
-          let new_addr = mk_new_addr state.alias_state in
-          state.alias_state.addr_set := AddressSet.add new_addr
-                              !(state.alias_state.addr_set);
-          add_set state.alias_state sym (AddressSet.singleton new_addr);
+      (* Create a new bmc address and add it to addr_map 
+       * The sort needs to be unspecified.
+       *)
+      let bmc_addr =  mk_bmc_address new_addr sort in
+      state.addr_map := Pmap.add new_addr bmc_addr !(state.addr_map);
 
-          (* Create a new bmc address and add it to addr_map 
-           * The sort needs to be unspecified.
-           *)
-          (*
-          let sort = Sort.mk_uninterpreted_s  state.ctx
-                     ("UnintSort_" ^ (string_of_int new_sort_id)) in
-          *)
+      (* Set it to an initial unspecified value @a_1 *)
+      let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
+      let initial_value = Expr.mk_const state.ctx new_sym sort in
+      let new_heap = Pmap.add new_addr initial_value state.heap in
 
-          let bmc_addr =  mk_bmc_address new_addr sort in
-          state.addr_map := Pmap.add new_addr bmc_addr !(state.addr_map);
+      let ptr = bmc_lookup_sym sym state in 
+      (* Concurrency model stuff: add initial write *)
+      let to_store = Expr.mk_fresh_const state.ctx 
+                      ("initial_" ^ (Address.to_string new_addr)) sort in
+      let action = Write(mk_next_aid state, state.tid, NA, ptr, to_store) in
+      let paction = BmcAction(Pos, mk_true state.ctx, action) in
 
-          (* Set it to an initial unspecified value @a_1 *)
-          let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
-          let initial_value = Expr.mk_const state.ctx new_sym sort in
-          let new_heap = Pmap.add new_addr initial_value state.heap in
 
-          (* Assert address of symbol is new_addr *)
-          Solver.add state.solver [ 
-            Boolean.mk_eq  state.ctx
-              (PointerSort.get_addr state.ctx (bmc_lookup_sym sym state))
-              (Address.mk_expr state.ctx new_addr)
-          ];
+      (* Assert address of symbol is new_addr *)
+      Solver.add state.solver [ 
+        Boolean.mk_eq  state.ctx
+          (PointerSort.get_addr state.ctx ptr)
+          (Address.mk_expr state.ctx new_addr)
+      ];
 
-          ({state with heap = new_heap})
-        end
-        (*
-    else 
-      state
-      *)
+      ({state with heap = new_heap;
+                   preexec = add_initial_action (get_aid action) 
+                             paction state.preexec })
 
 let initialise_main_params params state =
   match params with
@@ -1397,20 +1403,15 @@ let initialise_global state sym typ expr : bmc_state =
   Solver.add state.solver [ eq_expr ];
   state
 
-(* TODO: make event a datatype *)
+(* TODO: make event a datatype 
+ * TODO: initial_event should be at point of Create
+ *)
 let preexec_to_z3 (state: bmc_state) =
   let ctx = state.ctx in
   let preexec = state.preexec in 
   (* Make initial events *)
-  let loc_list = AddressSet.fold (fun e ret -> e::ret) 
-                    !(state.alias_state.addr_set) [] in
-  let initial_event_list = List.map (fun loc -> 
-    BmcAction(Pos, 
-              Write(mk_next_aid state, -1, NA,
-                    PointerSort.mk_ptr ctx (Address.mk_expr state.ctx loc), 
-                    LoadedInteger.mk_loaded ctx (Integer.mk_numeral_i ctx  0)))) loc_list in
-
-  let preexec_list = set_to_list preexec.actions (fun x -> x) in
+  let initial_event_list = set_to_list_id preexec.initial_actions  in
+  let preexec_list = set_to_list_id preexec.actions in
   let event_list = initial_event_list @ preexec_list in
 
   let action_id_to_z3_sym aid = mk_sym ctx ("#E_" ^ (string_of_int aid)) in
@@ -1432,27 +1433,13 @@ let preexec_to_z3 (state: bmc_state) =
 
   let bound_0 = Quantifier.mk_bound ctx 0 event_sort in
   let bound_1 = Quantifier.mk_bound ctx 1 event_sort in
-  (*
-  (* Distinguish initial events for use in co-well-formed *)
-  let fn_isInitial = FuncDecl.mk_fresh_func_decl ctx
-                      "isInitial" [ event_sort ] (Boolean.mk_sort ctx) in
-  let initial_condition = List.map (fun event -> 
-    mk_eq ctx (event_expr event) bound_0) initial_event_list in
-  let isInitial_assert = Quantifier.expr_of_quantifier (
-    Quantifier.mk_forall ctx [event_sort] [mk_sym ctx "e"]
-      (mk_eq ctx (FuncDecl.apply fn_isInitial [bound_0])
-                 (mk_or ctx initial_condition)
-      ) None [] [] None None
-    ) in
-*)
 
   (* Map each location to the initial event of the location *)
   let fn_getInitial = FuncDecl.mk_fresh_func_decl ctx
                         "getInitial" [ Address.mk_sort ctx ] event_sort in
   let getInitial expr = FuncDecl.apply fn_getInitial [ expr ] in
   let getInitial_asserts = List.map (fun ie ->
-      mk_eq ctx (getInitial (PointerSort.get_addr ctx (location_of_paction ie)
-      )) 
+      mk_eq ctx (getInitial (PointerSort.get_addr ctx (location_of_paction ie))) 
                 (event_expr ie)
     ) initial_event_list in
 
@@ -1518,7 +1505,7 @@ let preexec_to_z3 (state: bmc_state) =
                           write_type in
 
 
-  let type_asserts = List.map (fun (BmcAction(_, action))->
+  let type_asserts = List.map (fun (BmcAction(_, _, action))->
     let expr = mk_event_expr (get_aid action) in
     match action with
     | Read  _ -> is_read expr
@@ -1734,8 +1721,7 @@ let preexec_to_z3 (state: bmc_state) =
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
   let tmp_solver = Solver.mk_solver ctx None in
   Solver.add tmp_solver ret; 
-  check_solver tmp_solver;
-
+  (* check_solver tmp_solver; *)
   ret
 
 
@@ -1755,29 +1741,10 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         | Some (Proc(ty, params, e)) ->
             (* Handle parameters *)
             let state = initialise_main_params params state in
-              (*
-            let _ = analyse_expr analysis_state e in
-
-            print_ptr_map !(analysis_state.ptr_map);
-            print_addr_map !(analysis_state.addr_map);
-            *)
             bmc_expr state e
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
-
             let state = initialise_main_params params state in
-            (*
-            let state = List.fold_left (fun st param ->
-                initialise_param param st) initial_state params in
-      *)
-                        (*
-            let _ = analyse_pexpr analysis_state pe in
-
-            print_ptr_map !(analysis_state.ptr_map);
-            print_addr_map !(analysis_state.addr_map);
-
-            let initial_state = initial_bmc_state supply analysis_state in
-            *)
             bmc_pexpr state pe 
         | _ -> assert false
       ) in
@@ -1786,12 +1753,16 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_ptr_map !(state1.alias_state.ptr_map);
       print_addr_map !(state1.alias_state.addr_map);
 
-
       print_endline "-----EVENTS";
       print_preexec state1.preexec;
 
       print_endline "-----EVENT STUFF";
-      let z3_preexec = preexec_to_z3 state1 in
+      let z3_preexec = 
+        (if Pset.is_empty state1.preexec.actions then 
+            [] (* Guard st sort is well-founded *)
+          else
+            preexec_to_z3 state1
+        ) in
 
 
       Printf.printf "-----CONSTRAINTS ONLY\n";
@@ -1800,7 +1771,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
        * *)
       assert (Solver.check state1.solver [] = SATISFIABLE);
       print_endline "-----WITH EVENTS";
-      Solver.add state1.solver z3_preexec;
+      Solver.add state1.solver z3_preexec; 
       (* TODO: not always true!!! Temporary for now *)
       assert (check_solver state1.solver = SATISFIABLE);
 
