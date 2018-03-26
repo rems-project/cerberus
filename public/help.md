@@ -56,12 +56,12 @@ Cerberus will immediately try to elaborate the code into Core, a functional
 intermediate representation, and show it in a different tab.  Core is intended
 to be as minimal as possible while remaining a suitable target for the
 elaboration, and with the behaviour of Core programs made as explicit as
-possible. For more discuss about Core, please check [Papers](#papers).
+possible. For further information about Core, please check [Papers](#papers).
 
 Every C expression is then highlighted with the corresponding Core code of the
 same colour. Move the cursor on an expression to isolate the colour in that
 particular expression.
-The colouring behaviour can be changed on `Settings > Colour` and `Settings >
+The colouring behaviour can be changed in `Settings > Colour` and `Settings >
 Coulour Cursor`.
 
 ![](img/return.png)
@@ -87,9 +87,9 @@ relevant part of the standard by clicking on it.
 
 Cerberus is a executable semantics.  There are three execution mode in
 Cerberus: `Random`, `Exhaustive` and `Interactive`.The latter is still in
-development. In random mode, Cerberus pseudorandomly explores a single allowed
+development. In random mode Cerberus pseudorandomly explores a single allowed
 execution path, while in exhaustive mode it performs an exhaustive search for
-all allowed executions it can detect undefined behaviours on any allowed
+all allowed executions and can detect undefined behaviours on any allowed
 execution path.
 
 ![](img/exec.png)
