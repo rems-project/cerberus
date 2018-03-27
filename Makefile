@@ -126,10 +126,10 @@ ocaml_native:
 #cmdliner,
 
 memmodel_byte:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3},yojson memmodel.cma
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3} memmodel.cma
 
 memmodel_native:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3},yojson memmodel.cmxs
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3} memmodel.cmxs
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \

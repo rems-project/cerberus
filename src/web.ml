@@ -71,17 +71,6 @@ let string_of_doc d =
 let encode s = B64.encode (Marshal.to_string s [Marshal.Closures])
 let decode s = Marshal.from_string (B64.decode s) 0
 
-let option_case b f = function
-  | None -> b
-  | Some x -> f x
-
-let option_string f s =
-  if s = "" then None else Some (f s)
-
-let the = function
-  | None -> failwith "the: none case"
-  | Some x -> x
-
 (* Load Concrete and Symbolic instances of Cerberus *)
 
 let load_instance fname =
@@ -129,11 +118,6 @@ type edge = node_id * node_id (* from -> to *)
    *)
 type exec_tree = node list * edge list
 
-let option_of_json f = function
-  | `Null      -> None
-  | `String "" -> None
-  | x          -> Some (f x)
-
 
 (* get location of first thread *)
 
@@ -144,17 +128,13 @@ let get_location st = None
   | _ -> None
 *)
 
-let json_of_location = function
-  | Some loc -> Json.LocationJSON.serialise loc
-  | None -> `Null
-
 let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_node = function
     | Branch (id, lab, mem, loc) ->
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", `Null); (*TODO: Ocaml_mem.serialise_mem_state mem); *)
-              ("loc", json_of_location loc)]
+              ("loc", Json.of_option Json.of_location loc)]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
               ("label", `String lab);
@@ -186,6 +166,11 @@ let parse_incoming_json msg =
                 interactive= None;
               }
   in
+  let parse_option f = function
+    | `Null      -> None
+    | `String "" -> None
+    | x          -> Some (f x)
+  in
   let action_from_string = function
     | "Elaborate"  -> Elaborate
     | "Random"     -> RunRandom
@@ -211,7 +196,7 @@ let parse_incoming_json msg =
     | "source"  -> { msg with source= parse_string v }
     | "rewrite" -> { msg with rewrite= parse_bool v }
     | "model"   -> { msg with model= parse_string v }
-    | "interactive" -> { msg with interactive=option_of_json parse_interactive v }
+    | "interactive" -> { msg with interactive=parse_option parse_interactive v }
     | key ->
       Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
       msg (* ignore unknown key *)
@@ -227,27 +212,19 @@ let parse_incoming_json msg =
 
 let json_of_exec_tree t = failwith ""
 
-let json_of_string s = `String s
-
-let json_of_option f = function
-  | None -> `Null
-  | Some v -> f v
-
-let json_of_opt_string = json_of_option json_of_string
-
 let json_of_result = function
   | Elaboration r ->
     `Assoc [
       ("status", `String "elaboration");
       ("pp", `Assoc [
-          ("cabs", json_of_opt_string r.pp.cabs);
-          ("ail",  json_of_opt_string r.pp.ail);
-          ("core", json_of_opt_string r.pp.core);
+          ("cabs", Json.of_opt_string r.pp.cabs);
+          ("ail",  Json.of_opt_string r.pp.ail);
+          ("core", Json.of_opt_string r.pp.core);
         ]);
       ("ast", `Assoc [
-          ("cabs", json_of_opt_string r.ast.cabs);
-          ("ail",  json_of_opt_string r.ast.ail);
-          ("core", json_of_opt_string r.ast.core);
+          ("cabs", Json.of_opt_string r.ast.cabs);
+          ("ail",  Json.of_opt_string r.ast.ail);
+          ("core", Json.of_opt_string r.ast.core);
         ]);
       ("locs", r.locs);
       ("result", `String "");
@@ -261,7 +238,7 @@ let json_of_result = function
   | Interaction (res, t) ->
     `Assoc [
       ("status", `String "stepping");
-      ("result", json_of_opt_string res);
+      ("result", Json.of_opt_string res);
       ("interactive", `Assoc [
           ("steps", json_of_exec_tree t);
         ]);
