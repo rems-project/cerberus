@@ -23,7 +23,7 @@ type ast_result =
 type elaboration_result =
   { pp: ast_result;
     ast: ast_result;
-    locs: Yojson.json;
+    locs: Json.json;
   }
 
 type result =

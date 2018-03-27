@@ -1,24 +1,4 @@
 open Prelude
-    (*
-open Instance_manager
-
-(* Load Concrete and Symbolic instances of Cerberus *)
-
-let load_instance fname =
-  let fname = Dynlink.adapt_filename fname in
-  if Sys.file_exists fname then
-    try Dynlink.loadfile fname
-    with
-    | Dynlink.Error err ->
-      error ("Loading memory model: " ^ Dynlink.error_message err);
-  else error "File does not exists"
-
-let () =
-  Prelude.mem_switch := Prelude.MemConcrete;
-  load_instance "./_build/src/memmodel.cma";
-  Prelude.mem_switch := Prelude.MemSymbolic;
-  load_instance "./_build/src/memmodel.cma";;
-       *)
 
 (* Pipeline *)
 

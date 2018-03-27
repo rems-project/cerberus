@@ -48,7 +48,7 @@ let json_of_range l =
   in
   `Assoc [("begin", json_of_point l.init); ("end", json_of_point l.final)]
 
-let json_of locs: Yojson.json = `List
+let json_of locs: Json.json = `List
   (List.fold_left (
     fun (jss, i) (cloc, coreloc) ->
       let js = `Assoc [

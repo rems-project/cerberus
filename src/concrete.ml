@@ -1331,10 +1331,8 @@ let combine_prov prov1 prov2 =
 
   (* JSON serialisation *)
 
-  open Json
-
   let serialise_prov = function
-    | Prov_some n -> BigIntJSON.serialise n
+    | Prov_some n -> Json.of_bigint n
     | Prov_none -> `String "Empty"
     | Prov_device -> `String "Device"
 
@@ -1349,9 +1347,9 @@ let combine_prov prov1 prov2 =
   let serialise_allocation alloc =
     let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
     `Assoc [
-      ("base", BigIntJSON.serialise alloc.base);
+      ("base", Json.of_bigint alloc.base);
       ("type", serialise_option serialise_ctype alloc.ty);
-      ("size", BigIntJSON.serialise alloc.size);
+      ("size", Json.of_bigint alloc.size);
     ]
 
   let serialise_byte (p, c_opt) =
@@ -1363,9 +1361,9 @@ let combine_prov prov1 prov2 =
 
   let serialise_mem_state st =
     `Assoc [
-      ("next_alloc_id", BigIntJSON.serialise st.next_alloc_id);
+      ("next_alloc_id", Json.of_bigint st.next_alloc_id);
       ("allocations",   serialise_map serialise_allocation st.allocations);
-      ("next_address",  BigIntJSON.serialise st.next_address);
+      ("next_address",  Json.of_bigint st.next_address);
       ("bytemap",       serialise_map serialise_byte st.bytemap)
     ]
 
