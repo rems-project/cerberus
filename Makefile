@@ -126,10 +126,10 @@ ocaml_native:
 #cmdliner,
 
 memmodel_byte:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} memmodel.cma
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3},yojson memmodel.cma
 
 memmodel_native:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} memmodel.cmxs
+	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3},yojson memmodel.cmxs
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -152,10 +152,10 @@ ocaml_byte:
 	  cp -L main_.d.byte cerberus; \
 	fi
 
-web: src/web.ml
+web: src/web.ml memmodel_native
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.native
 
-web.byte: src/web.ml
+web.byte: src/web.ml memmodel_byte
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.byte
 
 
