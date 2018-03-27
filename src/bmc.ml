@@ -22,6 +22,7 @@ open Bmc_normalize
 open Bmc_sorts
 open Bmc_utils
 
+let initial_tid = -1
 
 (* ========== Type definitions ========== *)
 
@@ -853,7 +854,7 @@ let bmc_paction (state: bmc_state)
       (* Switching to concurrency model: create an initial write action *)
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
-      let action = Write(mk_next_aid state, state.tid, NA, new_ptr, to_store) in
+      let action = Write(mk_next_aid state, initial_tid, NA, new_ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
 
       new_ptr, addr_ret, 
@@ -1450,7 +1451,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
       (* Concurrency model stuff: add initial write *)
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
-      let action = Write(mk_next_aid state, state.tid, NA, ptr, to_store) in
+      let action = Write(mk_next_aid state, initial_tid, NA, ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
 
       (* Assert address of symbol is new_addr *)
@@ -1549,6 +1550,13 @@ let preexec_to_z3 (state: bmc_state) =
   let guard_asserts = List.map (fun action ->
     mk_eq ctx (getGuard (event_expr action)) 
               (guard_of_paction action)) event_list in
+
+  let fn_getThread = FuncDecl.mk_fresh_func_decl ctx
+                      "getThread" [ event_sort ] (Integer.mk_sort ctx) in
+  let getThread expr = FuncDecl.apply fn_getThread [ expr ] in
+  let thread_asserts = List.map (fun action ->
+    mk_eq ctx (getThread (event_expr action)) 
+              (Integer.mk_numeral_i ctx (thread_of_paction action))) event_list in
 
   (* SB relation 
    *(declare-fun po (E E) Bool)
@@ -1801,10 +1809,34 @@ let preexec_to_z3 (state: bmc_state) =
       ) None [] [] None None
   ) in
 
+  (* Unseq race:
+    * forall (e1, e2): 
+    * (distinct and same location and one is write and same
+    * thread and guard => must be sb *)
+  let unseq_race_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx 
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+          (mk_and ctx [ mk_not ctx (mk_eq ctx bound_0 bound_1)
+                      ; mk_eq ctx (getAddr bound_0)  (getAddr bound_1)
+                      ; mk_or ctx [is_write bound_0; is_write bound_1]
+                      ; mk_eq ctx (getThread bound_0) (getThread bound_1)
+                      ; getGuard bound_0
+                      ; getGuard bound_1 
+                      ]
+          )
+          (mk_or ctx [ FuncDecl.apply fn_sb [bound_0; bound_1]
+                     ; FuncDecl.apply fn_sb [bound_1; bound_0]
+                     ]
+          )
+      ) None [] [] None None
+  ) in
+
   let ret =   val_asserts 
             @ addr_asserts 
             @ guard_asserts
             @ type_asserts 
+            @ thread_asserts
             @ getInitial_asserts
             @ co_initial_asserts
             @ clock_initial_asserts
@@ -1818,6 +1850,7 @@ let preexec_to_z3 (state: bmc_state) =
               ; fr_assert
               ; fr_clock_assert
               ; co_included_assert
+              ; unseq_race_assert
               ] in
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
   let tmp_solver = Solver.mk_solver ctx None in
@@ -1827,6 +1860,7 @@ let preexec_to_z3 (state: bmc_state) =
                        ; fn_getInitial
                        ; fn_getVal
                        ; fn_getGuard
+                       ; fn_getThread
                        ; fn_sb
                        ; fn_rf
                        ; fn_fr
@@ -1885,18 +1919,25 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_endline "-----WITH EVENTS";
       Solver.add state1.solver z3_preexec; 
       (* TODO: not always true!!! Temporary for now *)
-      assert (check_solver_fun state1.solver funcdecl_list = SATISFIABLE);
 
-      Printf.printf "-----WITH VCS \n";
-      let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
-                             state1.vcs
-      in
-      (* List.iter (fun e -> print_endline (Expr.to_string e)) not_vcs; *)
-      Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] ;
+      if (check_solver_fun state1.solver funcdecl_list 
+            = SATISFIABLE) then
+        begin
+          Printf.printf "-----WITH VCS \n";
+          let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
+                                 state1.vcs
+          in
+          (* List.iter (fun e -> print_endline (Expr.to_string e)) not_vcs; *)
+          Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] ;
 
-      Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
-      Printf.printf "Checking sat\n";
-      check_solver (state1.solver)
+          Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
+          Printf.printf "Checking sat\n";
+          let status = check_solver (state1.solver) in
+          ()
+        end
+      else
+        (* No valid execution *)
+        print_endline "-----NO VALID EXECUTION IN MEMORY MODEL"
 
 let (>>=) = Exception.except_bind
 

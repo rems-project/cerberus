@@ -21,6 +21,12 @@ let get_aid (action: bmc_action) = match action with
   | Write (aid, _, _, _, _) ->
       aid
 
+let get_thread (action: bmc_action) = match action with
+  | Read (_, tid, _, _, _)
+  | Write (_, tid, _, _, _) ->
+      tid
+
+
 let get_location (action: bmc_action) : bmc_value = match action with
   | Read (_, _, _, loc, _)
   | Write (_, _, _, loc, _) ->
@@ -42,6 +48,10 @@ let location_of_paction (BmcAction(_, _, a1)) : bmc_location =
 
 let guard_of_paction (BmcAction(_, guard, _)) : event_guard =
   guard
+
+let thread_of_paction (BmcAction(_, _, a1)) : thread_id =
+  get_thread a1
+
 
 let paction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
   Pervasives.compare (get_aid a1) (get_aid a2)
