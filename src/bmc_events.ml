@@ -40,6 +40,9 @@ let value_of_paction (BmcAction(_, _, a1)) : bmc_value =
 let location_of_paction (BmcAction(_, _, a1)) : bmc_location =
   get_location a1
 
+let guard_of_paction (BmcAction(_, guard, _)) : event_guard =
+  guard
+
 let paction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
   Pervasives.compare (get_aid a1) (get_aid a2)
 
@@ -52,6 +55,17 @@ type preexecution = {
   sb : (action_id * action_id) Pset.set
 }
 
+let guard_actions (ctx: context)
+                  (guard: event_guard)
+                  (actions: bmc_paction Pset.set) : bmc_paction Pset.set =
+  Pset.map paction_cmp (fun (BmcAction(pol, g, action)) ->
+    BmcAction(pol, Boolean.mk_and ctx [guard; g], action)
+  ) actions
+
+let guard_preexec (ctx: context)
+                  (guard: event_guard)
+                  (preexec: preexecution) : preexecution =
+  {preexec with actions = guard_actions ctx guard preexec.actions }
 
 let string_of_memory_order = function
   | Cmm_csem.NA      -> "NA"
@@ -93,7 +107,7 @@ let initial_preexec () = {
 let add_initial_action (aid: action_id)
                        (action: bmc_paction)
                        (preexec : preexecution) : preexecution =
-  {preexec with initial_actions = Pset.add action preexec.actions;
+  {preexec with initial_actions = Pset.add action preexec.initial_actions;
   }
 
 
@@ -119,7 +133,8 @@ let set_to_list (set : 'a Pset.set) f =
 
 let set_to_list_id (set: 'a Pset.set) =
   set_to_list set (fun x -> x)
-  
+
+(* TODO: switch to Pset.map since this allows type to be changed... *)  
 let pos_cartesian_product (s1: (bmc_paction) Pset.set) 
                           (s2: (bmc_paction) Pset.set) 
                           : (action_id * action_id) Pset.set =
