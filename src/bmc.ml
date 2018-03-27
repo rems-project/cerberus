@@ -222,6 +222,15 @@ let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor)
   | Civfromfloat (* cast floating to integer value *) ->
       assert false
 
+let z3_sortlist_to_tuple (ctx: context)
+                         (sorts: Sort.sort list) : Sort.sort =
+  let sort_to_string = "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
+  let sort_symbol = mk_sym ctx sort_to_string in
+
+  let sym_list = List.mapi 
+      (fun i _ -> mk_sym ctx ( "#" ^ (string_of_int i))) sorts in
+
+  Tuple.mk_sort ctx sort_symbol sym_list sorts 
 
 (* core_base_type to z3 sort *)
 let rec cbt_to_z3 (state: bmc_state) (cbt : core_base_type) : Sort.sort =
@@ -1181,8 +1190,35 @@ let rec bmc_expr (state: bmc_state)
       (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
   | Eproc _ -> assert false
   | Eccall _  -> assert false
-  | Eunseq _ -> 
-      assert false
+  | Eunseq elist -> 
+      (* return tuple of bmc values 
+       * union allocs
+       * merge_preexecs just by union
+       * concatenate vcs
+       *
+       * Assumes cbt is BTy_tuple
+       * Similar to ctor
+       *)
+      let bmc_list = List.map (fun e ->
+        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e
+      ) elist in
+      let expr_list = List.map (fun (expr, _, _) -> expr) bmc_list in
+
+      let sort_list = List.map Expr.get_sort expr_list in
+
+      let sort = z3_sortlist_to_tuple state.ctx sort_list in
+
+      let ret = ctor_to_z3 state Ctuple expr_list sort  in
+      let allocs = List.fold_left (fun set (_, alloc, _) ->
+        AddressSet.union set alloc) AddressSet.empty bmc_list in
+      let new_vcs = List.fold_left (fun vc (_, _, st) ->
+        st.vcs @ vc 
+      ) state.vcs bmc_list in
+      let new_preexec = List.fold_left (fun exec (_, _, st) ->
+        merge_preexecs exec st.preexec 
+      ) state.preexec bmc_list in
+
+      ret, allocs, {state with vcs = new_vcs; preexec = new_preexec}
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
       print_endline "TODO: bound in Ebound ignored";
@@ -1882,11 +1918,12 @@ let run_bmc (core_file : 'a file)
     Exception.except_return (
 
       (* Do not sequentialise file *)
-      let seq_file = Core_sequentialise.sequentialise_file typed_core in
+      (* let seq_file = Core_sequentialise.sequentialise_file typed_core in
       pp_file seq_file; 
+      *)
       print_endline "START Z3";
       (* bmc_file seq_file norm_supply; *)
-      bmc_file seq_file norm_supply;
+      bmc_file typed_core norm_supply;
 
       print_string "EXIT: BMC PIPELINE \n"
     )
