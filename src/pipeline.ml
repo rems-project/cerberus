@@ -1,4 +1,5 @@
 open Prelude
+    (*
 open Instance_manager
 
 (* Load Concrete and Symbolic instances of Cerberus *)
@@ -17,6 +18,7 @@ let () =
   load_instance "./_build/src/memmodel.cma";
   Prelude.mem_switch := Prelude.MemSymbolic;
   load_instance "./_build/src/memmodel.cma";;
+       *)
 
 (* Pipeline *)
 

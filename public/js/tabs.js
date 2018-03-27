@@ -648,6 +648,17 @@ class TabAil extends TabReadOnly {
   }
 
   update(s) {
+    this.setValue(s.pp.ail)
+  }
+}
+
+class TabAil_AST extends TabAil {
+  constructor() {
+    super()
+    this.setTitle('Ail (AST)')
+  }
+
+  update(s) {
     this.setValue(s.ast.ail)
   }
 }
@@ -871,6 +882,7 @@ const Tabs = {
   TabCabs,
   TabAil,
   TabCore,
+  TabAil_AST,
   TabExecution,
   TabInteractive,
   TabMemory,

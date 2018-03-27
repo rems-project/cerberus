@@ -84,6 +84,7 @@ class View {
       self.tabs.push(tab)
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
+      container.setTitle(tab.title)
       if (state.update) {
         tab.update(self.state)
         tab.highlight(self.state)
@@ -235,7 +236,7 @@ class View {
     miniConfig.source = this.source.getValue()
     return encodeURIComponent(JSON.stringify(miniConfig))
   }
-
+  //
   // Return this first instance (or create a new one)
   getTab(title) {
     let tab = this.findTab(title)

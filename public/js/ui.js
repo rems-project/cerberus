@@ -12,7 +12,7 @@ class UI {
     // UI settings
     assert(settings != null)
     this.settings = settings
-    $('#cb_concrete').prop('checked', this.settings.concrete)
+    $('#cb_concrete').prop('checked', this.settings.model == 'Concrete')
     $('#cb_rewrite').prop('checked', this.settings.rewrite)
     $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
     $('#cb_colour').prop('checked', this.settings.colour)
@@ -95,12 +95,9 @@ class UI {
     $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
     $('#interactive').on('click', () => this.interactive())
 
-    $('#random_concrete').on('click', () => this.exec ('random_concrete'))
-    $('#exhaustive_concrete').on('click', () => this.exec ('exhaustive_concrete'))
-
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
-    $('#ail_ast') .on('click', () => this.elab ('Ail')) // TODO
+    $('#ail-ast') .on('click', () => this.elab ('Ail_AST'))
     $('#ail') .on('click', () => this.elab ('Ail'))
     $('#core').on('click', () => this.elab ('Core'))
 
@@ -139,6 +136,11 @@ class UI {
     $('#share').on('mouseover', update_share_link)
 
     // Settings
+    $('#concrete').on('click', (e) => {
+      this.settings.model =
+        (this.settings.model == 'Concrete' ? 'Symbolic' : 'Concrete')
+      $('#cb_concrete').prop('checked', this.settings.model == 'Concrete')
+    })
     $('#rewrite').on('click', (e) => {
       this.settings.rewrite = !this.settings.rewrite;
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
@@ -204,6 +206,7 @@ class UI {
         'action':  mode,
         'source':  this.source.getValue(),
         'rewrite': this.settings.rewrite,
+        'model': this.settings.model,
         'interactive': this.state.interactive,
       }),
       success: (data, status, query) => {
@@ -298,12 +301,12 @@ class UI {
  */
 
 const ui = new UI({
-  concrete:      true,
   rewrite:       false,
   auto_refresh:  true,
   colour:        true,
   colour_cursor: true,
-  short_share:   false
+  short_share:   false,
+  model:         'Concrete'
 })
 const style = createStyle()
 let std             = null // JSON of standard

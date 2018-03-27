@@ -157,6 +157,7 @@ struct
       (Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method)
       (MapJSON.parse se)
 end
+(*
 
 (* Cabs *)
 
@@ -350,3 +351,4 @@ struct
       UnionDef (List.map CCPairJSON.parse xs)
     | _ -> throw "Tags.tag_definition"
 end
+   *)

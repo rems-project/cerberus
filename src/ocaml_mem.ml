@@ -12,6 +12,9 @@ module Mem = (
 include Mem
 
 
+let () = print_endline ("loading " ^ name);;
+
+
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)
 

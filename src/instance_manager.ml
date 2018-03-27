@@ -1,17 +1,46 @@
 open Prelude
 
+(* execution mode *)
+type exec_mode =
+  | Random
+  | Exhaustive
+
+let string_of_exec_mode = function
+  | Random -> "random"
+  | Exhaustive -> "exhaustive"
+
+(* user configuration per instance *)
+type conf =
+  { rewrite: bool;
+  }
+
+type ast_result =
+  { cabs: string option;
+    ail:  string option;
+    core: string option;
+  }
+
+type elaboration_result =
+  { pp: ast_result;
+    ast: ast_result;
+    locs: Yojson.json;
+  }
+
+type result =
+  | Elaboration of elaboration_result
+  | Execution of string
+  | Interaction of string option * string (* result * steps TODO *)
+  | Failure of string
+
 module type Instance = sig
   val name: string
-  val translate: (string, Symbol.sym) Pmap.map
-                    * (unit, unit) Translation.C.generic_fun_map
-                 -> unit Translation.C.generic_impl
-                 -> Symbol.sym UniqueId.supply
-                    * (Symbol.sym option
-                       * GenTypes.genTypeCategory Translation.A.sigma)
-                 -> Symbol.sym * (unit, unit) Core.generic_file
+  val elaborate: conf -> string -> result
+  val execute: conf -> string -> exec_mode -> result
 end
 
-let models : (string * (module Instance)) list ref =
+(* handle multiple instances *)
+
+let instances : (string * (module Instance)) list ref =
   ref []
 
 let current: (unit -> (module Instance)) ref =
@@ -20,18 +49,21 @@ let current: (unit -> (module Instance)) ref =
 let add_model m =
   let s = string_of_mem_switch () in
   print_endline ("linking " ^ s);
-  models := (string_of_mem_switch (), m) :: !models
+  instances := (string_of_mem_switch (), m) :: !instances
 
 let set_model s =
-  match List.assoc_opt s !models with
+  print_endline ("Changing to model " ^ s);
+  match List.assoc_opt s !instances with
   | Some m -> current := fun () -> m
   | None -> failwith ("Unknown model " ^ s)
 
-(* API *)
+(* easy API access *)
 
 let name () =
   let module Model = (val !current()) in Model.name
 
-let translate () =
-  let module Model = (val !current()) in Model.translate
+let elaborate conf fname =
+  let module Model = (val !current()) in Model.elaborate conf fname
 
+let execute conf fname mode =
+  let module Model = (val !current()) in Model.execute conf fname mode
