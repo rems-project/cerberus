@@ -3,40 +3,21 @@
    3. This contrasts with the same test where release/acquire atomics
    are used and the rloads can both read 0. -}
 
-{-
-fun main () : [integer] :=
-  x <- create(_Atomic(signed int));
-  y <- create(_Atomic(signed int));
-  (a1, a2) <- {{{
-      store(_Atomic(signed int), x, 0, seq_cst);
-      store(_Atomic(signed int), y, 1, seq_cst);
-      load(_Atomic(signed int), y, seq_cst)
-  |||
-      store(_Atomic(signed int), y, 0, seq_cst);
-      store(_Atomic(signed int), x, 1, seq_cst);
-      load(_Atomic(signed int), x, seq_cst)
-  }}};
-  kill(x);
-  kill(y);
-  ret a1 + (2 * a2)
--}
 proc main () : eff integer :=
-  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong (a1, a2) = par(
-    let strong _ = store("_Atomic(signed int)", x, 0, seq_cst) in
-    let strong _ = store("_Atomic(signed int)", y, 1, seq_cst) in
-    let strong ret = load("_Atomic(signed int)", y, seq_cst) in
-    return(ret)
-    end end end
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong (_a1 : loaded integer, _a2 : loaded integer) = par(
+    let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(0), seq_cst) in
+    let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(1), seq_cst) in
+    load(!(_Atomic(signed int)), y, seq_cst)
   ,
-    let strong _ = store("_Atomic(signed int)", y, 0, seq_cst) in
-    let strong _ = store("_Atomic(signed int)", x, 1, seq_cst) in
-    let strong ret = load("_Atomic(signed int)", x, seq_cst) in
-    return(ret)
-    end end end
+    let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(0), seq_cst) in
+    let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(1), seq_cst) in
+    load(!(_Atomic(signed int)), x, seq_cst)
   ) in
-  let strong _ = kill(x) in
-  let strong _ = kill(y) in
-  return(a1 + (2 * a2))
-  end end end end end
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  case (_a1, _a2) of
+    | (Specified(a1: integer), Specified(a2: integer)) =>
+        pure(a1 + (2 * a2))
+  end
