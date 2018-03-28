@@ -2,21 +2,10 @@
    The only allowed outcome is therefore 1.
 -}
 
-{-
-fun main () : [integer] :=
-  x <- create(_Atomic(signed int));
-  store(_Atomic(signed int), x, 0, release);
-  store(_Atomic(signed int), x, 1, release);
-  a <- load(_Atomic(signed int), x, acquire);
-  kill(x);
-  ret a
--}
-
-proc main () : eff integer :=
-  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong _ = store("_Atomic(signed int)", x, 0, release) in
-  let strong _ = store("_Atomic(signed int)", x, 1, release) in
-  let strong a = load("_Atomic(signed int)", x, acquire) in
-  let strong _ = kill(x) in
-  return(a)
-  end end end end end
+proc main () : eff loaded integer :=
+  let strong x : pointer        = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit           = store(!(_Atomic(signed int)), x, Specified(0), release) in
+  let strong _ : unit           = store(!(_Atomic(signed int)), x, Specified(1), release) in
+  let strong a : loaded integer = load(!(_Atomic(signed int)), x, acquire) in
+  let strong _ : unit           = kill(x) in
+  pure(a)

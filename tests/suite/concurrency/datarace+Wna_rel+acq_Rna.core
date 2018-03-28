@@ -20,23 +20,19 @@ fun main () : [integer] :=
   kill(y);
   ret b
 -}
-fun main () : [integer] :=
-  let strong x = create(<alignof>("signed int"), "signed int") in
-  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong _ = store("signed int", x, 0) in
-  let strong _ = store("signed int", y, 0) in
-  let strong (_, b) = par(
-    let strong _ = store("signed int", x, 1) in
-    let strong _ = store("_Atomic(signed int)", y, 1, release) in
-    return (unit)
-    end end
+proc main () : eff loaded integer :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit = store(!(signed int), x, Specified(0)) in
+  let strong _ : unit = store(!(signed int), y, Specified(0)) in
+  let strong (_ : unit, b : loaded integer) = par(
+    let strong _ : unit = store(!(signed int), x, Specified(1)) in
+    store(!(_Atomic(signed int)), y, Specified(1), release)
   ,
-    let strong _   = load("_Atomic(signed int)", y, acquire) in
-    let strong ret = load("signed int", x) in
-    return(ret)
-    end end
+    let strong _ : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+    load(!(signed int), x)
   ) in
-  let strong _ = kill(x) in
-  let strong _ = kill(y) in
-  return(b)
-  end end end end end end end
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(b)
+
