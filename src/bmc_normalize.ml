@@ -5,6 +5,24 @@ open Bmc_inline
 open Bmc_renaming
 open Bmc_ssa
 
+let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
+  (* Rename user variables that are repeated *)
+
+  let (f, sym_supply) = ssa_file f sym_supply in
+  print_string "INLINING FUNCTION CALLS\n";
+  let (inlined_file, inlined_supply) = inline_file f sym_supply in
+
+  (* pp_file inlined_file; *)
+  print_string "\n";
+
+  print_string "Rewriting Ivmin/Ivmax/issigned/etc \n";
+
+  let (rewritten_file, rewritten_supply) = 
+    rewrite_file inlined_file inlined_supply in
+
+  (rewritten_file, rewritten_supply)
+
+
 (* ========== Expr normalization ========== *)
 
 (*
@@ -173,22 +191,6 @@ let normalize_fun_map (fun_map: ('a, 'b fun_map_decl) Pmap.map)
 *)
 
 
-let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
-  (* Rename user variables that are repeated *)
-
-  let (f, sym_supply) = ssa_file f sym_supply in
-  print_string "INLINING FUNCTION CALLS\n";
-  let (inlined_file, inlined_supply) = inline_file f sym_supply in
-
-  (* pp_file inlined_file; *)
-  print_string "\n";
-
-  print_string "Rewriting Ivmin/Ivmax/issigned/etc \n";
-
-  let (rewritten_file, rewritten_supply) = 
-    rewrite_file inlined_file inlined_supply in
-
-  (rewritten_file, rewritten_supply)
 
 (*
 let normalize_file (file : 'a typed_file) (sym_supply: ksym_supply) =
