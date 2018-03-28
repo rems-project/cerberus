@@ -98,6 +98,9 @@ type bmc_state = {
   vcs         : Expr.expr list;
 
   preexec     : preexecution;
+  parent_tid  : (thread_id * thread_id)  Pset.set ref;
+  action_map  : (action_id, bmc_paction) Pmap.map ref;
+
   aid_supply  : action_id ref;
   tid_supply  : thread_id ref;
   tid         : thread_id;
@@ -165,6 +168,10 @@ let mk_next_seq_symbol (ctx: context) (bmc_address : kbmc_address) =
 let mk_next_aid (state: bmc_state) =
   state.aid_supply := succ !(state.aid_supply);
   !(state.aid_supply)
+
+let mk_next_tid (state: bmc_state) =
+  state.tid_supply := succ !(state.tid_supply);
+  !(state.tid_supply)
 
 let ctor_to_z3 (state: bmc_state) (ctor: typed_ctor) 
                (pes: Expr.expr list) (sort: Sort.sort) =
@@ -310,6 +317,8 @@ let initial_bmc_state (supply : ksym_supply)
 
     vcs = [];
     preexec = initial_preexec ();
+    action_map = ref (Pmap.empty Pervasives.compare);
+    parent_tid = ref (Pset.empty Pervasives.compare);
     aid_supply = ref 0;
     tid_supply = ref 0;
     tid        = 0;
@@ -856,6 +865,7 @@ let bmc_paction (state: bmc_state)
                       ("initial_" ^ (Address.to_string new_addr)) sort in
       let action = Write(mk_next_aid state, initial_tid, NA, new_ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
+      state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       new_ptr, addr_ret, 
         {state with (* heap = new_heap; *)
@@ -905,6 +915,7 @@ let bmc_paction (state: bmc_state)
       let action = Write(mk_next_aid state, state.tid, mem_order,
                          z3_sym, to_store) in
       let paction = BmcAction(pol, mk_true state.ctx, action) in
+      state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       print_endline (string_of_paction paction);
 
@@ -1010,6 +1021,7 @@ let bmc_paction (state: bmc_state)
       let action = Read(mk_next_aid state, state.tid, mem_order,
                          z3_sym, ret_value) in
       let paction = BmcAction(pol, mk_true state.ctx, action) in
+      state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       print_endline (string_of_paction paction);
 
@@ -1279,7 +1291,32 @@ let rec bmc_expr (state: bmc_state)
   | Erun _ ->
       assert false
   | Epar elist -> 
-      assert false
+      (* TODO: Duplicated code from Eunseq *)
+      let bmc_list = List.map (fun expr ->
+          bmc_expr {state with vcs = []; 
+                               preexec = initial_preexec ();
+                               tid = mk_next_tid state
+                   } expr
+        ) elist in
+      let expr_list = List.map (fun (expr, _, _) -> expr) bmc_list in
+      let sort_list = List.map Expr.get_sort expr_list in
+      let sort = z3_sortlist_to_tuple state.ctx sort_list in
+      let ret = ctor_to_z3 state Ctuple expr_list sort  in
+      let allocs = List.fold_left (fun set (_, alloc, _) ->
+        AddressSet.union set alloc) AddressSet.empty bmc_list in
+      let new_vcs = List.fold_left (fun vc (_, _, st) ->
+        st.vcs @ vc 
+      ) state.vcs bmc_list in
+      let new_preexec = List.fold_left (fun exec (_, _, st) ->
+        merge_preexecs exec st.preexec 
+      ) state.preexec bmc_list in
+
+      List.iter (fun (_, _, st) ->
+        state.parent_tid := 
+            Pset.add (st.tid, state.tid) !(state.parent_tid)
+      ) bmc_list;
+
+      ret, allocs, {state with vcs = new_vcs; preexec = new_preexec}
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
       let (bmc_pe, loc, st) = bmc_pexpr state pe in
@@ -1300,12 +1337,6 @@ let rec bmc_expr (state: bmc_state)
       let preexec2 = guard_preexec st.ctx (mk_not st.ctx bmc_pe) st2.preexec in
       let new_preexec = merge_preexecs (st.preexec) 
           (merge_preexecs preexec1 preexec2) in
-      (*
-      let sb1 = cartesian_product (st.preexec.actions) (st1.preexec.actions) in
-      let sb2 = cartesian_product (st.preexec.actions) (st2.preexec.actions) in
-      let new_preexec = {new_preexec with 
-          sb = Pset.union new_preexec.sb (Pset.union sb1 sb2)} in
-      *)
 
       (Boolean.mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
         AddressSet.union loc1 loc2,
@@ -1329,10 +1360,16 @@ let rec bmc_expr (state: bmc_state)
       (* Sequence all actions in state before those in state2*) 
       let new_preexec =  merge_preexecs old_preexec 
                                 (merge_preexecs state.preexec state2.preexec) in
-      let new_preexec = {new_preexec with 
+      let new_preexec = 
+        {new_preexec with 
           sb = Pset.union (new_preexec.sb) 
                           (pos_cartesian_product exec1.actions
-                                                 exec2.actions)} in
+                                                 exec2.actions);
+          asw = Pset.union (new_preexec.asw)
+                           (asw_product exec1.actions exec2.actions
+                                        !(state.parent_tid)
+                           )
+        } in
       (*
       print_endline "Ewseq exec1";
       print_preexec exec1;
@@ -1362,10 +1399,17 @@ let rec bmc_expr (state: bmc_state)
       (* Sequence all actions in state before those in state2*) 
       let new_preexec =  merge_preexecs old_preexec 
                                 (merge_preexecs state.preexec state2.preexec) in
-      let new_preexec = {new_preexec with 
+      let new_preexec = 
+        {new_preexec with 
           sb = Pset.union (new_preexec.sb) 
                           (cartesian_product exec1.actions
-                                             exec2.actions)} in
+                                             exec2.actions);
+          asw = Pset.union (new_preexec.asw)
+                           (asw_product exec1.actions exec2.actions
+                                        !(state.parent_tid)
+                           )
+
+        } in
       (*
       print_endline "Esseq exec1";
       print_preexec exec1;
@@ -1453,6 +1497,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
                       ("initial_" ^ (Address.to_string new_addr)) sort in
       let action = Write(mk_next_aid state, initial_tid, NA, ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
+      state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       (* Assert address of symbol is new_addr *)
       Solver.add state.solver [ 
@@ -1484,11 +1529,13 @@ let initialise_global state sym typ expr : bmc_state =
   state
 
 (* TODO: make event a datatype 
- * TODO: initial_event should be at point of Create
+ * TODO: do this in a nicer way so it's actually readable...
+ * e.g. generically 
  *)
 let preexec_to_z3 (state: bmc_state) =
   let ctx = state.ctx in
   let preexec = state.preexec in 
+
   (* Make initial events *)
   let initial_event_list = set_to_list_id preexec.initial_actions  in
   let preexec_list = set_to_list_id preexec.actions in
@@ -1504,6 +1551,7 @@ let preexec_to_z3 (state: bmc_state) =
   let event_map = List.fold_left2 (fun pmap action expr ->
     Pmap.add (aid_of_paction action) expr pmap)
     (Pmap.empty Pervasives.compare) event_list events in
+
 
 
   let mk_event_expr : action_id -> Expr.expr = (fun aid ->
@@ -1580,6 +1628,21 @@ let preexec_to_z3 (state: bmc_state) =
         [event_sort; event_sort] [mk_sym ctx "e1"; mk_sym ctx "e2"]
         (Boolean.mk_eq ctx (FuncDecl.apply fn_sb [sb_e1; sb_e2])
                            (Boolean.mk_or ctx sb_eqs))
+        None [] [] None None) in
+
+  (* additional synchronizes-with *)
+  let fn_asw = FuncDecl.mk_fresh_func_decl ctx
+                  "asw" [event_sort; event_sort ] (Boolean.mk_sort ctx) in
+  let asw_eqs = Pset.fold (fun (a1, a2) ret ->
+    let (a1_expr, a2_expr) = (mk_event_expr a1, mk_event_expr a2) in
+    let expr = mk_and ctx [ mk_eq ctx bound_0 a1_expr
+                          ; mk_eq ctx bound_1 a2_expr] in
+    expr :: ret) preexec.asw [] in
+  let asw_assert = Quantifier.expr_of_quantifier (
+        Quantifier.mk_forall ctx
+        [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+        (mk_eq ctx (FuncDecl.apply fn_asw [bound_0; bound_1])
+                   (mk_or ctx asw_eqs))
         None [] [] None None) in
 
   (* read/write? *)
@@ -1679,7 +1742,7 @@ let preexec_to_z3 (state: bmc_state) =
               (Integer.mk_numeral_i ctx 0)) initial_event_list in
 
   (* any nonequal writes to the same address e1 and e2 are strictly co-related one way or the other
-   * (below is for single address )
+   *(below is for single address )
     (forall 
        ((e1 E) (e2 E))  
        (=> (and (write e1) (write e2) (not (= e1 e2))) 
@@ -1809,6 +1872,24 @@ let preexec_to_z3 (state: bmc_state) =
       ) None [] [] None None
   ) in
 
+  (* asw included in cc-clock
+   * TODO: ???
+   *)
+  let asw_clock_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ getGuard bound_0
+                    ; getGuard bound_1
+                    ; FuncDecl.apply fn_asw [bound_0; bound_1]
+                    ]
+        )
+        (mk_lt ctx (FuncDecl.apply fn_clock [bound_0])
+                   (FuncDecl.apply fn_clock [bound_1])
+        )
+      ) None [] [] None None
+  ) in
+
   (* Unseq race:
     * forall (e1, e2): 
     * (distinct and same location and one is write and same
@@ -1841,6 +1922,7 @@ let preexec_to_z3 (state: bmc_state) =
             @ co_initial_asserts
             @ clock_initial_asserts
             @ [ sb_assert 
+              ; asw_assert
               ; rf_write_assert 
               ; rf_well_formed_assert 
               ; co_well_formed_assert
@@ -1850,6 +1932,7 @@ let preexec_to_z3 (state: bmc_state) =
               ; fr_assert
               ; fr_clock_assert
               ; co_included_assert
+              ; asw_clock_assert 
               ; unseq_race_assert
               ] in
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
@@ -1895,6 +1978,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         | _ -> assert false
       ) in
 
+      (* TODO: do properly. Need to make ASW relation correct *)
+      let state1 = {state1 with preexec = 
+        {state1.preexec with asw = 
+          filter_asw state1.preexec.asw
+                     !(state1.parent_tid)
+                     state1.preexec.sb
+                     !(state1.action_map)
+      }} in
+
       print_endline "-----ALIAS_RESULTS";
       print_ptr_map !(state1.alias_state.ptr_map);
       print_addr_map !(state1.alias_state.addr_map);
@@ -1932,7 +2024,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
 
           Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
           Printf.printf "Checking sat\n";
-          let status = check_solver (state1.solver) in
+          let _ = check_solver (state1.solver) in
           ()
         end
       else

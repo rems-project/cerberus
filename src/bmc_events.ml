@@ -62,7 +62,10 @@ type preexecution = {
 
   initial_actions : bmc_paction Pset.set;
 
-  sb : (action_id * action_id) Pset.set
+  sb : (action_id * action_id) Pset.set;
+
+  (* NB: computed as candidate *)
+  asw : (action_id * action_id) Pset.set
 }
 
 let guard_actions (ctx: context)
@@ -112,6 +115,7 @@ let initial_preexec () = {
   actions = Pset.empty (paction_cmp);
   initial_actions = Pset.empty (paction_cmp);
   sb = Pset.empty (Pervasives.compare);
+  asw = Pset.empty (Pervasives.compare)
 }
 
 let add_initial_action (aid: action_id)
@@ -135,6 +139,9 @@ let print_preexec (preexec : preexecution) : unit =
   Pset.iter (fun v -> print_endline (string_of_paction v)) preexec.initial_actions;
   print_endline "REL SB";
   Pset.iter (fun (a, b) -> Printf.printf "(%d, %d) " a b) preexec.sb;
+  print_endline "";
+  print_endline "REL ASW";
+  Pset.iter (fun (a, b) -> Printf.printf "(%d, %d) " a b) preexec.asw;
   print_endline ""
 
 
@@ -152,7 +159,10 @@ let pos_cartesian_product (s1: (bmc_paction) Pset.set)
     match pa1 with
     | BmcAction(Pos, _, _) ->
       Pset.fold (fun pa2 s_inner ->
-        Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner)
+        if (thread_of_paction pa1 = thread_of_paction pa2) then
+          Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner
+        else 
+          s_inner)
         s2 (s_outer)
     | _ -> s_outer))
     s1 (Pset.empty Pervasives.compare)
@@ -162,12 +172,89 @@ let cartesian_product (s1: (bmc_paction) Pset.set)
                       : (action_id * action_id) Pset.set =
   Pset.fold (fun pa1 s_outer -> (
     Pset.fold (fun pa2 s_inner ->
-      Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner)
+      if (thread_of_paction pa1 = thread_of_paction pa2) then
+        Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner
+      else
+        s_inner)
       s2 (s_outer)
                       )) s1 (Pset.empty Pervasives.compare)
+
+
+let asw_product (s1: (bmc_paction) Pset.set)
+                (s2: (bmc_paction) Pset.set)
+                (parent_tid : (thread_id * thread_id) Pset.set) =
+  Pset.fold (fun pa1 s_outer ->
+    Pset.fold (fun pa2 s_inner ->
+      if (thread_of_paction pa1 = thread_of_paction pa2) then
+        s_inner
+      else if (Pset.mem (thread_of_paction pa1, thread_of_paction pa2) parent_tid 
+            || Pset.mem (thread_of_paction pa2, thread_of_paction pa1) parent_tid) then
+        Pset.add (aid_of_paction pa1, aid_of_paction pa2) s_inner
+      else
+        s_inner
+              ) s2 s_outer) s1 (Pset.empty Pervasives.compare)
+(*
+for each candidate (e1, e2):
+  keep = true
+  for each candidate (ea, eb):
+    for e2 == eb:
+      if e2 is a child in both cases:
+        * want maximal of e1, ea
+        (if sb e1 ea: keep = false)
+      else if e2 is a parent in both cases:
+        * want maximal of e1, ea
+        (if sb e1 ea: keep = false)
+    for e1 == ea:
+      if e1 is a parent in both cases:
+        (want minimal of e2, eb)
+        (if sb eb e2: keep = false) 
+      else if e1 is a child in both cases:
+        (want minimal of e2, eb)
+        (if sb eb e2: keep = false) 
+
+*)
+
+(* Need to call for correct asw *)
+let filter_asw (asw : (action_id * action_id) Pset.set)
+               (parent_tid : (thread_id * thread_id) Pset.set) 
+               (sb         : (action_id * action_id) Pset.set) 
+               (actions    : (action_id, bmc_paction) Pmap.map) =
+  let tid_of_aid aid = thread_of_paction (Pmap.find aid actions) in
+
+  Pset.filter ( fun (e1, e2) ->
+    Pset.for_all (fun (ea, eb) ->
+      let snd_test =
+        begin 
+          if e2 <> eb then true
+          else if (Pset.mem (tid_of_aid e2, tid_of_aid e1) parent_tid && 
+                   Pset.mem (tid_of_aid eb, tid_of_aid ea) parent_tid) then
+            (not (Pset.mem (e1, ea) sb))
+          else if (Pset.mem (tid_of_aid e1, tid_of_aid e2) parent_tid && 
+                   Pset.mem (tid_of_aid ea, tid_of_aid eb) parent_tid) then
+            not (Pset.mem (e1, ea) sb)
+          else 
+            true
+        end in
+      let fst_test = 
+        begin 
+          if e1 <> ea then true
+          else if (Pset.mem (tid_of_aid e2, tid_of_aid e1) parent_tid && 
+                   Pset.mem (tid_of_aid eb, tid_of_aid ea) parent_tid) then
+            (not (Pset.mem (eb, e2) sb))
+          else if (Pset.mem (tid_of_aid e1, tid_of_aid e2) parent_tid && 
+                   Pset.mem (tid_of_aid ea, tid_of_aid eb) parent_tid) then
+            not (Pset.mem (eb, e2) sb)
+          else 
+            true
+        end in
+      (fst_test && snd_test)
+    ) asw
+               ) asw
 
 let merge_preexecs (p1 : preexecution) (p2: preexecution) : preexecution =
   { actions = Pset.union p1.actions p2.actions;
     initial_actions = Pset.union p1.initial_actions p2.initial_actions;
-    sb = Pset.union p1.sb p2.sb}
+    sb = Pset.union p1.sb p2.sb;
+    asw = Pset.union p1.asw p2.asw 
+  }
 
