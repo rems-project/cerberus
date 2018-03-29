@@ -176,6 +176,7 @@ module type AddressType =
     val mk_initial: addr
     val to_string: addr -> string
     val mk_expr: context -> addr -> Expr.expr
+    val is_atomic : context -> Expr.expr -> Expr.expr
   end 
 
 module IntAddress : AddressType = 
@@ -187,10 +188,14 @@ module IntAddress : AddressType =
     let mk_initial = 0
     let to_string = string_of_int
     let mk_expr ctx ad = Integer.mk_numeral_i ctx ad
+
+    let fn_isAtomic ctx = FuncDecl.mk_func_decl_s ctx
+                        "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
+
+    let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
   end
 
 module Address = (IntAddress : AddressType)
-
 
 module PointerSort =
   struct
