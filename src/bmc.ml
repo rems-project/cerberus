@@ -1878,7 +1878,7 @@ let preexec_to_z3 (state: bmc_state) =
    * (Below is for single address)
    * (assert (forall ((e E)) (=> (and (write e) (not (= e ix))) (< (co ix) (co e)))))
   *)
-  let co_well_formed_assert = Quantifier.expr_of_quantifier (
+  let mo_well_formed_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx [event_sort] [mk_sym ctx "e"]
     (mk_implies ctx 
       (mk_and ctx 
@@ -1941,6 +1941,7 @@ let preexec_to_z3 (state: bmc_state) =
         (mk_and ctx [ FuncDecl.apply fn_hb [bound_0; bound_1]
                     ; getGuard bound_0
                     ; getGuard bound_1
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
                     ]
         )
         (mk_lt ctx (FuncDecl.apply fn_clock [bound_0])
@@ -1966,6 +1967,7 @@ let preexec_to_z3 (state: bmc_state) =
   (* fr definition: (below for single address)
     (assert (forall ((e1 E) (e2 E))  (=> (and (read e1) (write e2)) (= (fr e1 e2) (< (co (rf e1)) (co e2))))))
   *)
+  (*
   let fr_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
       [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
@@ -1985,7 +1987,8 @@ let preexec_to_z3 (state: bmc_state) =
           )
       ) None [] [] None None
   ) in
-
+  *)
+  (*
   (* fr included in cc-clock
     (assert (forall ((e1 E) (e2 E)) (=> (and (read e1) (write e2) (fr e1 e2)) (< (cc-clock e1) (cc-clock e2)))))
   *)
@@ -2006,6 +2009,7 @@ let preexec_to_z3 (state: bmc_state) =
           )
       ) None [] [] None None
   ) in
+  *)
 
   (* co included in cc-clock
     (assert (! (forall ((e1 E) (e2 E)) (=> (and (write e1) (write e2) (< (co e1) (co e2))) (< (cc-clock e1) (cc-clock e2)))) :named co-included))
@@ -2029,9 +2033,58 @@ let preexec_to_z3 (state: bmc_state) =
       ) None [] [] None None
   ) in
 
+  (* CoRR assert: Two reads ordered by hb may not read two writes that are mo in
+   * the other direction 
+   * forall e1, e2: isRead(e1) && isRead(e2) && hb(e1, e2) => not <mo (rf(e2), rf(e1))
+   *)
+  let coRR_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ is_read bound_0
+                    ; is_read bound_1
+                    ; getGuard bound_0
+                    ; getGuard bound_1
+                    ; FuncDecl.apply fn_hb [bound_0; bound_1]
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ]
+        )
+        (mk_not ctx (mk_lt ctx
+                        (FuncDecl.apply fn_mo [app_rf bound_1])
+                        (FuncDecl.apply fn_mo [app_rf bound_0]) 
+                    )
+        )
+      ) None [] [] None None
+  ) in
+
+  (* CoWR assert: Forbidden to read from write that is hb-hidden by a later
+   * write in modification order (in same address)
+   * forall e1 e2. is_write e1 and is_read e2 and hb(e1,e2) => not <mo (rf(e2)) e1 
+   *)
+  let coWR_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ is_write bound_0
+                    ; is_read bound_1
+                    ; getGuard bound_0
+                    ; getGuard bound_1
+                    ; FuncDecl.apply fn_hb [bound_0; bound_1]
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ]
+        )
+        (mk_not ctx (mk_lt ctx
+                        (FuncDecl.apply fn_mo [app_rf bound_1])
+                        (FuncDecl.apply fn_mo [bound_0])
+                    )
+        )
+      ) None [] [] None None
+  ) in
+
   (* asw included in cc-clock
    * TODO: ???
    *)
+  (*
   let asw_clock_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
       [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
@@ -2046,6 +2099,7 @@ let preexec_to_z3 (state: bmc_state) =
         )
       ) None [] [] None None
   ) in
+  *)
 
   (* Unseq race:
     * forall (e1, e2): 
@@ -2095,9 +2149,11 @@ let preexec_to_z3 (state: bmc_state) =
         (mk_or ctx [ FuncDecl.apply fn_hb [bound_0; bound_1] 
                    ; FuncDecl.apply fn_hb [bound_1; bound_0]
                    ]
+                   
         )
       ) None [] [] None None
   ) in
+
 
   let irr_hb_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
@@ -2105,6 +2161,18 @@ let preexec_to_z3 (state: bmc_state) =
       (mk_not ctx (FuncDecl.apply fn_hb [bound_0; bound_0]))
       None [] [] None None
   ) in
+
+  let irr_rf_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort] [mk_sym ctx "e"]
+      (mk_implies ctx 
+          (mk_and ctx [is_read bound_0; getGuard bound_0])
+          (mk_not ctx (FuncDecl.apply fn_hb [bound_0; app_rf bound_0]))
+      )
+      None [] [] None None
+  ) in
+
+
 
   let ret =   val_asserts 
             @ addr_asserts 
@@ -2118,17 +2186,23 @@ let preexec_to_z3 (state: bmc_state) =
             @ [ sb_assert 
               ; asw_assert 
               ; sw_assert
-              ; fr_assert
+              (*; fr_assert *)
               ; rf_write_assert 
               ; rf_well_formed_assert 
-              ; co_well_formed_assert
-              ; rf_vse_assert
+              ; mo_well_formed_assert
               ; irr_hb_assert
-              (* coherence check *)
+              ; irr_rf_assert
+              ; rf_vse_assert (* NaRF *)
+
+              ; coRR_assert  
+              ; coWR_assert  
+              (* coherence check for CoRW and COWW (acyclic rf, hb, mo 
+               * TODO: check correctness. maybe better to isolate..
+               *)
               ; mo_assert 
               ; hb_clock_assert 
               ; rf_clock_assert
-              ; fr_clock_assert
+              (*; fr_clock_assert *)
               ; mo_included_assert
               (* ; asw_clock_assert  *)
               ; unseq_race_assert 
@@ -2145,7 +2219,7 @@ let preexec_to_z3 (state: bmc_state) =
                        ; fn_getThread
                        ; fn_sb
                        ; fn_rf
-                       ; fn_fr
+                       (* ; fn_fr *)
                        ; fn_mo
                        ; fn_clock
                        ] in
