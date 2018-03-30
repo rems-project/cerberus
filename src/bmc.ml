@@ -1147,6 +1147,7 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Eaction paction ->
       bmc_paction state paction
+  (*
   | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
       (* TODO... special case for now, 
        * copied from more general PEcase code. merging heap stuff. *)
@@ -1207,9 +1208,63 @@ let rec bmc_expr (state: bmc_state)
         alloc_ret,
        ({st with (*heap = new_heap;*) vcs = new_vcs;  
                  preexec = new_preexec})
-  | Ecase _ ->  
-      Printf.printf "TODO2: Do ECase properly \n"; 
-      assert false
+  *)
+  | Ecase (pe, elist) ->  
+      assert (List.length elist > 0);
+      let (bmc_pe, pe_addr, st) = bmc_pexpr state pe in
+
+      (* TODO: unnecessary now ? *)
+      List.iter (fun (pat, _) ->
+        alias_pattern state.alias_state pat pe_addr) elist;
+
+      let pattern_guards = List.map
+        (fun (pat, _) -> pattern_match st pat bmc_pe) elist in
+
+      let complete_guard = mk_or st.ctx pattern_guards in
+      Solver.add st.solver [ complete_guard ];
+
+      let combined_pat_guards = 
+        List.mapi (fun i expr ->
+          mk_and st.ctx
+          [ mk_not st.ctx (mk_or st.ctx (list_take i pattern_guards))
+          ; expr
+          ]
+        ) pattern_guards in
+
+      let expr_eqs = List.map (fun (pat, _) -> 
+          mk_eq_pattern st pat bmc_pe) elist in
+      let impl_eqs = List.map2 
+        (fun guard eq -> mk_implies state.ctx guard eq)
+        combined_pat_guards expr_eqs in
+      Solver.add st.solver impl_eqs;
+
+      let cases_z3 = List.map (fun (_, e) -> 
+        bmc_expr ({st with vcs = []; preexec = initial_preexec ()}) e) elist in
+      let cases_vcs = List.map (fun (_, _, s) -> 
+          mk_and state.ctx s.vcs) cases_z3 in
+      let new_vcs = st.vcs @ (List.map2 (fun guard vc -> 
+          mk_implies state.ctx guard vc
+        ) combined_pat_guards cases_vcs) in
+
+      let alloc_ret = List.fold_left (fun s (_, set, _) ->
+        AddressSet.union s set) AddressSet.empty cases_z3 in
+      let guarded_preexecs = List.map2 (fun guard (_, _, state) ->
+        guard_preexec state.ctx guard state.preexec 
+      ) combined_pat_guards cases_z3 in
+      let new_preexec = List.fold_left (fun p1 p2 ->
+          merge_preexecs p1 p2
+        ) st.preexec guarded_preexecs in
+
+      let sort = Expr.get_sort (let (e, _, _) = List.hd cases_z3 in e ) in
+
+      let ret = List.fold_right2 (fun guard (bmc_e, _, _) rest ->
+        mk_ite st.ctx guard bmc_e rest
+      ) pattern_guards cases_z3 (Expr.mk_fresh_const state.ctx "unmatchedCase"
+      sort) in
+
+      ret, alloc_ret, {st with vcs = new_vcs; preexec = new_preexec}
+
+
   | Eskip -> 
       (* TODO: Unit *)
       (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
@@ -2303,7 +2358,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       else
         (* No valid execution *)
         (
-        print_endline "-----NO VALID EXECUTION IN MEMORY MODEL";
+        print_endline "-----NOT ALL EXECUTIONS ARE VALID IN MEMORY MODEL";
         print_endline "-----RESULT=SAT :("
         )
 
