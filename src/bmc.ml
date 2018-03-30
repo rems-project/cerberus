@@ -1630,8 +1630,6 @@ let preexec_to_z3 (state: bmc_state) =
     Pmap.add (aid_of_paction action) expr pmap)
     (Pmap.empty Pervasives.compare) event_list events in
 
-
-
   let mk_event_expr : action_id -> Expr.expr = (fun aid ->
     match Pmap.lookup aid event_map with | Some x -> x | None -> assert false) in
   let event_expr : bmc_paction -> Expr.expr = (fun action ->
@@ -2008,6 +2006,7 @@ let preexec_to_z3 (state: bmc_state) =
   (* rf included in cc-clock
   (assert (forall ((e E)) (=> (read e) (< (cc-clock (rf e)) (cc-clock e)))))
   *)
+  (*
   let rf_clock_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
       [event_sort] [mk_sym ctx "e"]
@@ -2018,6 +2017,7 @@ let preexec_to_z3 (state: bmc_state) =
         )
       ) None [] [] None None
   ) in
+  *)
 
   (* fr definition: (below for single address)
     (assert (forall ((e1 E) (e2 E))  (=> (and (read e1) (write e2)) (= (fr e1 e2) (< (co (rf e1)) (co e2))))))
@@ -2069,6 +2069,7 @@ let preexec_to_z3 (state: bmc_state) =
   (* co included in cc-clock
     (assert (! (forall ((e1 E) (e2 E)) (=> (and (write e1) (write e2) (< (co e1) (co e2))) (< (cc-clock e1) (cc-clock e2)))) :named co-included))
   *)
+  (*
   let mo_included_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
       [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
@@ -2087,6 +2088,7 @@ let preexec_to_z3 (state: bmc_state) =
           )
       ) None [] [] None None
   ) in
+  *)
 
   (* CoRR assert: Two reads ordered by hb may not read two writes that are mo in
    * the other direction 
@@ -2131,6 +2133,44 @@ let preexec_to_z3 (state: bmc_state) =
         (mk_not ctx (mk_lt ctx
                         (FuncDecl.apply fn_mo [app_rf bound_1])
                         (FuncDecl.apply fn_mo [bound_0])
+                    )
+        )
+      ) None [] [] None None
+  ) in
+
+  (* HB and MO must not disagree *)
+  let coWW_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ is_write bound_0
+                    ; is_write bound_1
+                    ; getGuard bound_0
+                    ; getGuard bound_1
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ; mk_lt ctx (FuncDecl.apply fn_mo [bound_0])
+                                (FuncDecl.apply fn_mo [bound_1])
+                    ]
+        )
+        (mk_not ctx (FuncDecl.apply fn_hb [bound_1; bound_0])
+        )
+      ) None [] [] None None
+  ) in
+  (* Union of RF map, HB, and MO must be acyclic *)
+  let coRW_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ is_read bound_0
+                    ; is_write bound_1
+                    ; getGuard bound_0
+                    ; getGuard bound_1
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ; FuncDecl.apply fn_hb [bound_0; bound_1]
+                    ]
+        )
+        (mk_not ctx (mk_lt ctx (FuncDecl.apply fn_mo [bound_1])
+                               (FuncDecl.apply fn_mo [app_rf bound_0])
                     )
         )
       ) None [] [] None None
@@ -2238,7 +2278,7 @@ let preexec_to_z3 (state: bmc_state) =
             @ getInitial_asserts
             @ mo_initial_asserts
             @ clock_initial_asserts
-            @ [ sb_assert 
+            @ [ sb_assert  
               ; asw_assert 
               ; sw_assert
               (*; fr_assert *)
@@ -2250,15 +2290,17 @@ let preexec_to_z3 (state: bmc_state) =
               ; rf_vse_assert (* NaRF *)
 
               ; coRR_assert  
-              ; coWR_assert  
+              ; coWR_assert
+              ; coWW_assert
+              ; coRW_assert  
               (* coherence check for CoRW and COWW (acyclic rf, hb, mo 
                * TODO: check correctness. maybe better to isolate..
                *)
               ; mo_assert 
               ; hb_clock_assert 
-              ; rf_clock_assert
+              (* ; rf_clock_assert *)
               (*; fr_clock_assert *)
-              ; mo_included_assert
+              (* ; mo_included_assert *)
               (* ; asw_clock_assert  *)
               ; unseq_race_assert 
               (* Comment out hb_assert and data_race_assert if too slow *)
