@@ -290,5 +290,3 @@ let filter_asw (asw : (action_id * action_id) Pset.set)
       (fst_test && snd_test)
     ) asw
                ) asw
-
-
