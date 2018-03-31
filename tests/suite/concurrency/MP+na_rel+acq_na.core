@@ -24,28 +24,25 @@ fun main () : [integer] :=
   kill(y);
   ret a2
 -}
-proc main () : eff integer :=
-  let strong x = create(<alignof>("signed int"), "signed int") in
-  let strong _ = store("signed int", x, 0) in
-  let strong y = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong _ = store("signed int", y, 0) in
-  let strong (_, a2) = par(
-    let strong _ = store("signed int", x, 1) in
-    let strong _ = store("_Atomic(signed int)", y, 1, release) in
-    return (unit)
-    end end
+proc main () : eff loaded integer :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong _ : unit    = store(!(signed int), x, Specified(0)) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit    = store(!(signed int), y, Specified(0)) in
+  let strong (_ : unit, a2 : loaded integer) = par(
+    let strong _ : unit = store(!(signed int), x, Specified(1)) in
+    store(!(_Atomic(signed int)), y, Specified(1), release)
   ,
-    let strong a1 = load("_Atomic(signed int)", y, acquire) in
-    if a1 = 1 then
-      let strong ret = load("signed int", x) in
-      return(ret)
-      end
-    else
-      return (2)
-    end
+    let strong _a1 : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+    case _a1 of
+      | Specified(a1 : integer) =>
+          if a1 = 1 then
+            load(!(signed int), x)
+          else
+            pure(Specified(2))
     end
   ) in
-  let strong _ = kill(x) in
-  let strong _ = kill(y) in
-  return(a2)
-  end end end end end end end
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(a2)
+
