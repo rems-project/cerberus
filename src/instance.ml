@@ -72,7 +72,7 @@ let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack (fst conf) Random;
-  print_endline ("Elaborating: " ^ filename);
+  prerr_endline ("Elaborating: " ^ filename);
   Debug_ocaml.print_debug 2 [] (fun () -> "Elaborating: " ^ filename);
   try
     Pipeline.c_frontend conf filename
@@ -120,6 +120,7 @@ let result_of_elaboration (cabs, ail, _, core) =
         core = None;
       };
       locs= locs;
+      result= "success";
     }
 
 (* execution *)
@@ -242,40 +243,42 @@ let step ~conf ~filename = function
 
 (* instance *)
 
-module Instance : Instance = struct
-  let pipe_conf =
-    let impl = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
-    let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
-                ^ Pipeline.cerb_path ^ "/include/c/libc -I "
-                ^ Pipeline.cerb_path ^ "/include/c/posix"
-    in setup_cerb_conf 0 cpp_cmd impl
+let pipe_conf =
+  let impl = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
+  let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
+              ^ Pipeline.cerb_path ^ "/include/c/libc -I "
+              ^ Pipeline.cerb_path ^ "/include/c/posix"
+  in setup_cerb_conf 0 cpp_cmd impl
 
-  let name =
-    print_endline ("Creating instance of " ^ Prelude.string_of_mem_switch ());
-    Prelude.string_of_mem_switch ()
+let name =
+  Prelude.string_of_mem_switch ()
 
-  let instance_conf conf =
-    let new_conf = { pipe_conf with Pipeline.rewrite_core= conf.rewrite }
-    in (new_conf, dummy_io)
+let instance_conf conf =
+  let new_conf = { pipe_conf with Pipeline.rewrite_core= conf.rewrite }
+  in (new_conf, dummy_io)
 
-  let elaborate user_conf filename =
-    print_endline ("Accessing " ^ name);
-    let conf = instance_conf user_conf in
-    elaborate ~conf ~filename
-    |> respond result_of_elaboration
+let elaborate (user_conf, filename) =
+  prerr_endline ("Accessing " ^ name);
+  let conf = instance_conf user_conf in
+  elaborate ~conf ~filename
+  |> respond result_of_elaboration
 
-  let execute user_conf filename mode =
-    print_endline ("Accessing " ^ name);
-    let conf = instance_conf user_conf in
-    execute ~conf ~filename mode
-    |> respond (fun s -> Execution s)
+let execute (user_conf, filename, mode) =
+  prerr_endline ("Accessing " ^ name);
+  let conf = instance_conf user_conf in
+  execute ~conf ~filename mode
+  |> respond (fun s -> Execution s)
 
-  let step user_conf filename active =
-    print_endline ("Accessing " ^ name);
-    let conf = instance_conf user_conf in
-    step ~conf ~filename active
-end
+let step (user_conf, filename, active) =
+  prerr_endline ("Accessing " ^ name);
+  let conf = instance_conf user_conf in
+  step ~conf ~filename active
 
 let () =
-  print_endline ("Loading " ^ Ocaml_mem.name);
-  Instance_manager.set_model (module Instance)
+  prerr_endline ("Model: " ^ name);
+  let result =
+    match Marshal.from_channel stdin with
+    | `Elaborate args -> elaborate args
+    | `Execute args -> execute args
+    | `Step args -> step args
+  in Marshal.to_channel stdout result [Marshal.Closures]
