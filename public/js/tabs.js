@@ -372,7 +372,7 @@ class TabEditor extends Tab {
   }
 
   setValue(value) {
-    this.editor.setValue(value)
+    if (value) this.editor.setValue(value)
     this.refresh()
   }
 

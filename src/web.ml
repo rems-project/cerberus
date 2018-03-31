@@ -2,14 +2,24 @@ open Lwt
 open Cohttp_lwt_unix
 
 open Json
+open Util
 
 open Instance_manager
 
+
 (* TODO: change this HACK TO INCLUDE Z3 *)
 let () =
+  let module TT: PPrintRenderer.RENDERER = struct
+    type channel = unit
+    type document = unit
+    let pretty _ _ _ _ = ()
+    let compact _ _ = ()
+  end in
   Z3.enable_trace "";
   let _ = Lem_relation.isIrreflexive in
   let _ = Lem_show_extra.stringFromSet in
+  let _ = Either.either_case in
+  let _ = Enum.enumFromTo in
   let _ = Xstring.explode in
   ();;
 
@@ -68,9 +78,6 @@ let string_of_doc d =
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
 
-let encode s = B64.encode (Marshal.to_string s [Marshal.Closures])
-let decode s = Marshal.from_string (B64.decode s) 0
-
 (* Load Concrete and Symbolic instances of Cerberus *)
 
 let load_instance fname =
@@ -82,12 +89,25 @@ let load_instance fname =
        Debug.error ("Loading memory model: " ^ Dynlink.error_message err)
   else Debug.error "File does not exists"
 
+let change_model s =
+  let model_type = function
+    | "Concrete" -> Prelude.MemConcrete
+    | "Symbolic" -> Prelude.MemSymbolic
+    | _ -> failwith "unknown model"
+  in
+  Prelude.mem_switch := model_type s;
+  load_instance "./_build/src/memmodel.cma"
+
 let () =
-  Prelude.mem_switch := Prelude.MemConcrete;
+  (*Dynlink.prohibit ["Ocaml_mem"];*)
+  for i = 1 to 1000 do
+    print_endline ("Loading : " ^ string_of_int i);
+    Prelude.mem_switch := Prelude.MemConcrete;
+    load_instance "./_build/src/memmodel.cma"
+  done;;
+  (*Prelude.mem_switch := Prelude.MemSymbolic;
   load_instance "./_build/src/memmodel.cma";
-  Prelude.mem_switch := Prelude.MemSymbolic;
-  load_instance "./_build/src/memmodel.cma";
-  set_model "Concrete" ;;
+  set_model2 "Concrete" ;;*)
 
 (* Incoming messages *)
 
@@ -97,36 +117,6 @@ type action =
   | RunRandom
   | RunExhaustive
   | Step
-
-type state = (unit * unit)
-type mem = unit
-
-(* NOTE: the execution tree is a pair of node and edges lists
- * this encoding works better in the client side (js libraries)
- * than functional AST for trees *)
-
-type node_id = int
-type node =
-  | Branch of node_id * string * mem * Location_ocaml.t option
-  | Leaf of node_id * string * state
-type edge =
-  | Edge of node_id * node_id (* from -> to *)
-
-(*
-type node = string * state option (* label and maybe a state *)
-type edge = node_id * node_id (* from -> to *)
-   *)
-type exec_tree = node list * edge list
-
-
-(* get location of first thread *)
-
-let get_location st = None
-  (* TODO:
-  match st.Driver.core_state.Core_run.thread_states with
-  | (_, (_, ts))::_ -> Some ts.current_loc
-  | _ -> None
-*)
 
 let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_node = function
@@ -138,8 +128,9 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
               ("label", `String lab);
-              ("state", `String (encode st));
-              ("loc", `Null); (*TODO: json_of_location (get_location (snd st)));*)
+              ("state", `String (B64.encode st));
+              ("loc", `Null);
+                (*TODO: json_of_location (get_location (snd st)));*)
               ("group", `String "leaf")]
   in
   let json_of_edge = function
@@ -155,7 +146,7 @@ type incoming_msg =
     source:  string;
     model:   string;
     rewrite: bool;
-    interactive: (state * node_id) option; (* active node *)
+    interactive: (string * int) option; (* active node *)
   }
 
 let parse_incoming_json msg =
@@ -187,7 +178,7 @@ let parse_incoming_json msg =
     | _ -> failwith "expecting a bool"
   in
   let parse_interactive = function
-    | `Assoc [("state", `String st); ("active", `Int i)] -> (decode st, i)
+    | `Assoc [("state", `String st); ("active", `Int i)] -> (B64.decode st, i)
     | _ -> failwith "expecting state * integer"
   in
   let parse_assoc msg (k, v) =
@@ -210,7 +201,28 @@ let parse_incoming_json msg =
 
 (* Outgoing messages *)
 
-let json_of_exec_tree t = failwith ""
+let json_of_exec_tree ((ns, es) : exec_tree) =
+  let get_location _ = `Null in
+  let json_of_node = function
+    | Branch (id, lab, mem, loc) ->
+      `Assoc [("id", `Int id);
+              ("label", `String lab);
+              ("mem", mem); (* TODO *)
+              ("loc", Json.of_option Json.of_location loc)]
+    | Leaf (id, lab, st) ->
+      `Assoc [("id", `Int id);
+              ("label", `String lab);
+              ("state", `String (B64.encode st));
+              ("loc", (get_location st)); (* TODO *)
+              ("group", `String "leaf")]
+  in
+  let json_of_edge = function
+    | Edge (p, c) -> `Assoc [("from", `Int p);
+                               ("to", `Int c)]
+  in
+  let nodes = `List (List.map json_of_node ns) in
+  let edges = `List (List.map json_of_edge es) in
+  `Assoc [("nodes", nodes); ("edges", edges)]
 
 let json_of_result = function
   | Elaboration r ->
@@ -283,7 +295,7 @@ let cerberus content =
   let filename  = write_tmp_file msg.source in
   let conf      = { Instance_manager.rewrite= msg.rewrite; } in
   let failure s = respond_json @@ json_of_result @@ Failure s in
-  Instance_manager.set_model msg.model;
+  change_model msg.model;
   match msg.action with
   | NoAction   ->
     failure "no action"
@@ -299,12 +311,10 @@ let cerberus content =
     execute conf filename Exhaustive
     |> json_of_result
     |> respond_json
-  | _ -> failwith "unknown action"
-  (*
   | Step ->
-    execute_step msg ~conf ~filename
+    step conf filename msg.interactive
+    |> json_of_result
     |> respond_json
-*)
 
 (* GET and POST *)
 
@@ -371,8 +381,16 @@ let setup cerb_debug_level debug_level impl cpp_cmd port docroot =
     Debug.error_exception "Fatal error:" e;
     Debug.error ("Check port " ^ string_of_int port ^ " access right")
 
-(* Arguments *)
+(* The path to where Cerberus is installed *)
+let cerb_path =
+    try
+      Sys.getenv "CERB_PATH"
+    with Not_found ->
+      Debug.error "expecting the environment variable CERB_PATH \
+                   set to point to the location cerberus.";
+      exit 1
 
+(* Arguments *)
 open Cmdliner
 
 let cerb_debug_level =

@@ -84,12 +84,7 @@ class View {
       self.tabs.push(tab)
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
-      container.setTitle(tab.title)
-      if (state.update) {
-        tab.update(self.state)
-        tab.highlight(self.state)
-        delete state.update
-      }
+      //container.setTitle(tab.title)
       container.setState(state)
     })
     this.layout.on('itemDestroyed', (c) => {
@@ -178,7 +173,7 @@ class View {
       console.log('interactive mode already initialised')
       return
     }
-    // Create init nod
+    // Create initial node
     let init = this.state.interactive.steps.nodes[0]
     this.state.steps.nodes.add(init)
     this.state.steps.hide_tau.nodes.add(init)
@@ -246,11 +241,11 @@ class View {
     }
     return tab
   }
-  get exec()    { return this.getTab('Execution') }
-  get cabs()    { return this.getTab('Cabs') }
-  get ail()     { return this.getTab('Ail') }
-  get core()    { return this.getTab('Core') }
-  get console() { return this.getTab('Console') }
+  get exec()          { return this.getTab('Execution') }
+  get cabs()          { return this.getTab('Cabs') }
+  get ail()           { return this.getTab('Ail') }
+  get core()          { return this.getTab('Core') }
+  get console()       { return this.getTab('Console') }
   get interactive()   { return this.getTab('Interactive') }
 
   clear() {

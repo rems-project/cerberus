@@ -72,6 +72,10 @@ Bimap
 Util
 Exception
 Scope_table
+Symbol
+UniqueId
+Utils
+State
 State_exception
 State_exception_undefined
 Exception_undefined
@@ -109,6 +113,7 @@ Ocaml_implementation
 Decode_ocaml
 Float
 Floating
+Loc
 Location_mark
 Mem_simplify
 Exhaustive_driver
