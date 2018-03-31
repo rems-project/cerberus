@@ -14,13 +14,15 @@ fun main () : [integer] :=
   b <- load(signed int, y);
   ret a + 2 * b + 4 * success
 -}
-fun main () : [integer] :=
-  let strong x = create(<alignof>("_Atomic(signed int)"), "_Atomic(signed int)") in
-  let strong y = create(<alignof>("signed int"), "signed int") in
-  let strong _ = store("_Atomic(signed int)", x, 0) in
-  let strong _ = store("signed int", y, 0) in
-  let strong success = compare_exchange_weak("signed int", x, y, 1, seq_cst, seq_cst) in
-  let strong a = load("_Atomic(signed int)", x) in
-  let strong b = load("signed int", y) in
-  return(a + 2 * b + 4 * success)
-  end end end end end end end
+proc main () : eff integer :=
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong _ : unit    = store(!(_Atomic(signed int)), x, Specified(0)) in
+  let strong _ : unit    = store(!(signed int), y, Specified(0)) in
+  let strong _success : loaded integer = compare_exchange_weak(!(signed int), x, y, 1, seq_cst, seq_cst) in
+  let strong _a : loaded integer       = load(!(_Atomic(signed int)), x) in
+  let strong _b : loaded integer       = load(!(signed int), y) in
+  case (_success, _a, _b) of
+    | (Specified (success: integer), Specified (a: integer), Specified (b: integer)) =>
+        pure(a + 2 * b + 4 * success)
+  end
