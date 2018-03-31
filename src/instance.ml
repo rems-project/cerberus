@@ -60,6 +60,12 @@ let hack conf mode =
     action_graph=       false;
   }
 
+let respond f = function
+  | Exception.Result r ->
+    f r
+  | Exception.Exception err ->
+    Failure (Pp_errors.to_string err)
+
 (* elaboration *)
 
 let elaborate ~conf ~filename =
@@ -141,11 +147,98 @@ let execute ~conf ~filename (mode: exec_mode) =
         "Exception raised during execution." ^ Printexc.to_string e
       ); raise e
 
-let respond f = function
-  | Exception.Result r ->
-    f r
-  | Exception.Exception err ->
-    Failure (Pp_errors.to_string err)
+(* WARN: fresh new ids *)
+let _fresh_node_id : int ref = ref 0
+let new_id () = _fresh_node_id := !_fresh_node_id + 1; !_fresh_node_id
+
+let encode s = Marshal.to_string s [Marshal.Closures]
+let decode s = Marshal.from_string s 0
+
+let rec multiple_steps step_state (Nondeterminism.ND m, st) =
+  let get_location _ = None in (* TODO *)
+  let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
+    let nodeId  = new_id () in
+    let mem     = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+    let newNode = Branch (nodeId, lab, mem, get_location st) in
+    let ns' = newNode :: ns in
+    let es' = Edge (previousNode, nodeId) :: es in
+    (ns', es', nodeId)
+  in
+  let create_leafs st ms (ns, es, previousNode) =
+    let (is, ns') = List.fold_left (fun (is, ns) (l, m) ->
+        let i = new_id () in
+        let n = Leaf (i, l, encode (m, st)) in
+        (i::is, n::ns)
+      ) ([], ns) ms in
+    let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
+    (ns', es', previousNode)
+  in
+  let exec_tree (ns, es, _) = Interaction (None, (ns, es)) in
+  let finish res (ns, es, _) = Interaction (Some res, (ns, es)) in
+  try
+    let open Nondeterminism in
+    let one_step step_state = function
+      | (NDactive a, st') ->
+        let str_v = String_core.string_of_value a.Driver.dres_core_value in
+        let res =
+          "Defined {value: \"" ^ str_v ^ "\", stdout: \""
+          ^ String.escaped a.Driver.dres_stdout
+          ^ "\", blocked: \""
+          ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
+        in
+        create_branch str_v st' step_state
+        |> finish res
+      | (NDkilled r, st') ->
+        create_branch "killed" st' step_state
+        |> finish "killed"
+      | (NDbranch (str, _, m1, m2), st') ->
+        create_branch str st' step_state
+        |> create_leafs st' [("opt1", m1); ("opt2", m2)]
+        |> exec_tree
+      | (NDguard (str, _, m), st') ->
+        create_leafs st' [(str, m)] step_state
+        |> exec_tree
+      | (NDnd (str, (_,m)::ms), st') ->
+        (* json_of_step (msg.steps, str, m, st') *)
+        failwith "Ndnd"
+      | (NDstep ms, st') ->
+        create_leafs st' ms step_state
+        |> exec_tree
+      | _ -> failwith ""
+    in begin match m st with
+      | (NDstep [(lab, m')], st') ->
+        let step_state' = create_branch lab st' step_state in
+        multiple_steps step_state' (m', st')
+      | act -> one_step step_state act
+    end
+  with
+  | e -> Debug_ocaml.warn [] (fun () ->
+      "Exception raised during execution." ^ Printexc.to_string e
+    ); raise e
+
+let step ~conf ~filename = function
+  | None ->
+    let step_init () =
+      let return = Exception.except_return in
+      let (>>=)  = Exception.except_bind in
+      hack (fst conf) Random;
+      elaborate ~conf ~filename
+      >>= fun (_, _, sym_suppl, core) ->
+      let core' = Core_run_aux.convert_file core in
+      let st0   = Driver.initial_driver_state sym_suppl core' in
+      return (Driver.drive false false sym_suppl core' [], st0)
+    in begin match step_init () with
+      | Exception.Result (m, st) ->
+        let initId   = new_id () in
+        let nodeId   = Leaf (initId, "Initial State", encode (m, st)) in
+        Interaction (None, ([nodeId], []))
+      | Exception.Exception err ->
+        Failure (Pp_errors.to_string err)
+    end
+  | Some (marshalled_state, node) ->
+    hack (fst conf) Random;
+    decode marshalled_state
+    |> multiple_steps ([], [], node)
 
 (* instance *)
 
@@ -157,23 +250,32 @@ module Instance : Instance = struct
                 ^ Pipeline.cerb_path ^ "/include/c/posix"
     in setup_cerb_conf 0 cpp_cmd impl
 
-  let name = Ocaml_mem.name
+  let name =
+    print_endline ("Creating instance of " ^ Prelude.string_of_mem_switch ());
+    Prelude.string_of_mem_switch ()
 
   let instance_conf conf =
     let new_conf = { pipe_conf with Pipeline.rewrite_core= conf.rewrite }
     in (new_conf, dummy_io)
 
   let elaborate user_conf filename =
+    print_endline ("Accessing " ^ name);
     let conf = instance_conf user_conf in
     elaborate ~conf ~filename
     |> respond result_of_elaboration
 
   let execute user_conf filename mode =
+    print_endline ("Accessing " ^ name);
     let conf = instance_conf user_conf in
     execute ~conf ~filename mode
     |> respond (fun s -> Execution s)
+
+  let step user_conf filename active =
+    print_endline ("Accessing " ^ name);
+    let conf = instance_conf user_conf in
+    step ~conf ~filename active
 end
 
 let () =
   print_endline ("Loading " ^ Ocaml_mem.name);
-  Instance_manager.add_model (module Instance)
+  Instance_manager.set_model (module Instance)

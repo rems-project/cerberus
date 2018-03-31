@@ -1011,7 +1011,7 @@ module Concrete : Memory = struct
   
   let ptrcast_ival _ _ (IV (prov, n)) =
     if not (N.equal n N.zero) then
-      (* STD §6.3.2.3#5 *)
+      (* STD \<section>6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
@@ -1361,9 +1361,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_mem_state st =
     `Assoc [
-      ("next_alloc_id", Json.of_bigint st.next_alloc_id);
       ("allocations",   serialise_map serialise_allocation st.allocations);
-      ("next_address",  Json.of_bigint st.next_address);
       ("bytemap",       serialise_map serialise_byte st.bytemap)
     ]
 
