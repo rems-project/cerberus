@@ -35,7 +35,6 @@ tests/csmith/**/LOG
 
 cbuild
 clink
-defacto
 cerberus
 cerb.concrete
 cerb.symbolic

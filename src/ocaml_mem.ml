@@ -1,8 +1,5 @@
 open Memory_model
 
-let () = print_endline "loading Ocaml_mem";;
-
-
 module Mem = (
   val match !Prelude.mem_switch with
     | MemSymbolic -> (module Ocaml_defacto : Memory_model.Memory)
@@ -11,14 +8,8 @@ module Mem = (
 
 include Mem
 
-
-let () = print_endline ("loading " ^ name);;
-
-
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)
-
-
 
 let string_of_mem_value mval =
   Pp_utils.to_plain_string begin

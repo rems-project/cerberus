@@ -152,11 +152,19 @@ ocaml_byte:
 	  cp -L main_.d.byte cerberus; \
 	fi
 
-web: src/web.ml memmodel_native
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.native
+instance: src/instance.ml
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},yojson,base64 -libs str,unix instance.native
+	cp -L instance.native cerb.concrete 
+	sed -i '' 's/ref MemConcrete/ref MemSymbolic/' src/prelude.ml
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},yojson,base64 -libs str,unix instance.native
+	sed -i '' 's/ref MemSymbolic/ref MemConcrete/' src/prelude.ml
+	cp -L instance.native cerb.symbolic
 
-web.byte: src/web.ml memmodel_byte
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.byte
+web: src/web.ml instance
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str web.native
+
+web.byte: src/web.ml instance
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.d.byte
 
 
 

@@ -6,23 +6,6 @@ open Util
 
 open Instance_manager
 
-
-(* TODO: change this HACK TO INCLUDE Z3 *)
-let () =
-  let module TT: PPrintRenderer.RENDERER = struct
-    type channel = unit
-    type document = unit
-    let pretty _ _ _ _ = ()
-    let compact _ _ = ()
-  end in
-  Z3.enable_trace "";
-  let _ = Lem_relation.isIrreflexive in
-  let _ = Lem_show_extra.stringFromSet in
-  let _ = Either.either_case in
-  let _ = Enum.enumFromTo in
-  let _ = Xstring.explode in
-  ();;
-
 (* Debugging *)
 
 module Debug =
@@ -78,45 +61,14 @@ let string_of_doc d =
   PPrint.ToBuffer.pretty 1.0 80 buf d;
   Buffer.contents buf
 
-(* Load Concrete and Symbolic instances of Cerberus *)
-
-let load_instance fname =
-  let fname = Dynlink.adapt_filename fname in
-  if Sys.file_exists fname then
-    try Dynlink.loadfile fname
-    with
-    | Dynlink.Error err ->
-       Debug.error ("Loading memory model: " ^ Dynlink.error_message err)
-  else Debug.error "File does not exists"
-
-let change_model s =
-  let model_type = function
-    | "Concrete" -> Prelude.MemConcrete
-    | "Symbolic" -> Prelude.MemSymbolic
-    | _ -> failwith "unknown model"
-  in
-  Prelude.mem_switch := model_type s;
-  load_instance "./_build/src/memmodel.cma"
-
-let () =
-  (*Dynlink.prohibit ["Ocaml_mem"];*)
-  for i = 1 to 1000 do
-    print_endline ("Loading : " ^ string_of_int i);
-    Prelude.mem_switch := Prelude.MemConcrete;
-    load_instance "./_build/src/memmodel.cma"
-  done;;
-  (*Prelude.mem_switch := Prelude.MemSymbolic;
-  load_instance "./_build/src/memmodel.cma";
-  set_model2 "Concrete" ;;*)
-
 (* Incoming messages *)
 
 type action =
-  | NoAction
-  | Elaborate
-  | RunRandom
-  | RunExhaustive
-  | Step
+  [ `Nop
+  | `Elaborate
+  | `Random
+  | `Exhaustive
+  | `Step ]
 
 let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_node = function
@@ -150,7 +102,7 @@ type incoming_msg =
   }
 
 let parse_incoming_json msg =
-  let empty = { action=      NoAction;
+  let empty = { action=      `Nop;
                 source=      "";
                 model=       "Concrete";
                 rewrite=     true;
@@ -163,10 +115,10 @@ let parse_incoming_json msg =
     | x          -> Some (f x)
   in
   let action_from_string = function
-    | "Elaborate"  -> Elaborate
-    | "Random"     -> RunRandom
-    | "Exhaustive" -> RunExhaustive
-    | "Step"       -> Step
+    | "Elaborate"  -> `Elaborate
+    | "Random"     -> `Random
+    | "Exhaustive" -> `Exhaustive
+    | "Step"       -> `Step
     | s -> failwith ("unknown action " ^ s)
   in
   let parse_string = function
@@ -224,6 +176,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let edges = `List (List.map json_of_edge es) in
   `Assoc [("nodes", nodes); ("edges", edges)]
 
+
 let json_of_result = function
   | Elaboration r ->
     `Assoc [
@@ -258,7 +211,7 @@ let json_of_result = function
   | Failure err ->
     `Assoc [
       ("status", `String "failure");
-      ("console", `String "");
+      ("console", `String err);
     ]
 
 (* Server default responses *)
@@ -290,31 +243,36 @@ let respond_json json =
 
 (* Cerberus actions *)
 
+let getmodel = function
+  | "Concrete" -> ("concrete", [| "./cerb.concrete" |])
+  | "Symbolic" -> ("symbolic", [| "./cerb.symbolic" |])
+  | _ -> failwith "unknown model"
+
+let request model req : result Lwt.t =
+  let proc = Lwt_process.open_process ~timeout:2. model in
+  Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
+  Lwt_io.close proc#stdin >>= fun () ->
+  Lwt_io.read_value proc#stdout
+
 let cerberus content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
   let conf      = { Instance_manager.rewrite= msg.rewrite; } in
-  let failure s = respond_json @@ json_of_result @@ Failure s in
-  change_model msg.model;
-  match msg.action with
-  | NoAction   ->
-    failure "no action"
-  | Elaborate  ->
-    elaborate conf filename
-    |> json_of_result
-    |> respond_json
-  | RunRandom     ->
-    execute conf filename Random
-    |> json_of_result
-    |> respond_json
-  | RunExhaustive ->
-    execute conf filename Exhaustive
-    |> json_of_result
-    |> respond_json
-  | Step ->
-    step conf filename msg.interactive
-    |> json_of_result
-    |> respond_json
+  print_endline ("current model " ^ msg.model);
+  let model     = getmodel msg.model in
+  let result =
+    match msg.action with
+    | `Nop   ->
+      return @@ Failure "no action"
+    | `Elaborate  ->
+      request model (`Elaborate (conf, filename))
+    | `Random ->
+      request model (`Execute (conf, filename, Random))
+    | `Exhaustive ->
+      request model (`Execute (conf, filename, Exhaustive))
+    | `Step ->
+      request model (`Step (conf, filename, msg.interactive))
+  in result >>= respond_json % json_of_result
 
 (* GET and POST *)
 
