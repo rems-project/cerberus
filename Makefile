@@ -125,12 +125,6 @@ ocaml_native:
 
 #cmdliner,
 
-memmodel_byte:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3} memmodel.cma
-
-memmodel_native:
-	ocamlbuild -j 4 -use-ocamlfind -pkgs lem,pprint,${Z3} memmodel.cmxs
-
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
@@ -140,7 +134,6 @@ ocaml_profiling:
 	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs landmarks.ppx,landmarks -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
-
 
 ocaml_byte:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -153,20 +146,18 @@ ocaml_byte:
 	fi
 
 instance: src/instance.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},yojson,base64 -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3} -libs str,unix instance.native
 	cp -L instance.native cerb.concrete 
 	sed -i '' 's/ref MemConcrete/ref MemSymbolic/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},yojson,base64 -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3} -libs str,unix instance.native
 	sed -i '' 's/ref MemSymbolic/ref MemConcrete/' src/prelude.ml
 	cp -L instance.native cerb.symbolic
 
 web: src/web.ml instance
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.native
 
 web.byte: src/web.ml instance
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,lem,${Z3},lwt,cohttp,cohttp.lwt,yojson,base64 -libs str,dynlink web.d.byte
-
-
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
 
 .PHONY: cbuild clink
 cbuild:
