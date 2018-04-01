@@ -1,4 +1,4 @@
-open Prelude
+(* API between web server and a cerberus instance *)
 
 (* execution mode *)
 type exec_mode =
@@ -14,9 +14,16 @@ type conf =
   { rewrite: bool;
   }
 
-(* NOTE: the execution tree is a pair of node and edges lists
- * this encoding works better in the client side (js libraries)
- * than functional AST for trees *)
+(* state * node id option *)
+type active_node = (string * int)
+
+type filename = string
+
+(* input: request *)
+type request =
+  [ `Elaborate of conf * filename
+  | `Execute of conf * filename * exec_mode
+  | `Step of conf * filename * active_node ]
 
 type node =
   | Branch of int * string * Json.json * Location_ocaml.t option
@@ -26,6 +33,9 @@ type node =
 type edge =
   | Edge of int * int (* from -> to *)
 
+(* NOTE: the execution tree is a pair of node and edges lists
+ * this encoding works better in the client side (js libraries)
+ * than functional AST for trees *)
 type exec_tree = node list * edge list
 
 type ast_result =
@@ -37,26 +47,13 @@ type ast_result =
 type elaboration_result =
   { pp: ast_result;
     ast: ast_result;
-    locs: Json.json;
+    locs: Json.json; (* TODO: change this to something else than json *)
     result: string;
   }
 
+(* output: result *)
 type result =
   | Elaboration of elaboration_result
-  | Execution of string
-  | Interaction of string option * exec_tree
+  | Execution of string                      (* cerberus result *)
+  | Interaction of string option * exec_tree (* maybe result * execution tree *)
   | Failure of string
-
-type request =
-  [ `Elaborate of conf * string
-  | `Execute of conf * string * exec_mode
-  | `Step of conf * string * (string * int) option ]
-
-(*
-module type Instance = sig
-  val name: string
-  val elaborate: conf -> string -> result
-  val execute: conf -> string -> exec_mode -> result
-  val step: conf -> string -> (string * int) option -> result
-end
-*)

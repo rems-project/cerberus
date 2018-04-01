@@ -1,48 +1,10 @@
 open Lwt
 open Cohttp_lwt_unix
-
+open Instance_api
 open Json
 open Util
 
-open Instance_manager
-
-(* Debugging *)
-
-module Debug =
-struct
-
-  let level = ref 0
-
-  let print n msg =
-    if !level >= n then Printf.printf "[%d]: %s\n%!" n msg
-
-  let warn msg  =
-    if !level > 0 then Printf.printf "\x1b[33m[ WARN  ]: %s\n\x1b[0m%!" msg
-
-  let error msg =
-    Printf.printf "\x1b[31m[ ERROR ]: %s\n\x1b[0m%!" msg
-
-  let warn_exception msg e =
-    warn (msg ^ " " ^ Printexc.to_string e)
-
-  let error_exception msg e =
-    error (msg ^ " " ^ Printexc.to_string e)
-
-end
-
-(* Util *)
-
-let diff xs ys = List.filter (fun x -> not (List.mem x ys)) xs
-
-let concatMap f xs = List.concat (List.map f xs)
-
-let timeout d f =
-  let try_with () =
-    Lwt.pick [
-      Lwt_unix.timeout d;
-      f >|= fun v -> Some v;
-    ]
-  in catch try_with (fun _ -> Lwt.return None)
+(* Misc *)
 
 let write_tmp_file content =
   try
@@ -70,28 +32,12 @@ type action =
   | `Exhaustive
   | `Step ]
 
-let json_of_exec_tree ((ns, es) : exec_tree) =
-  let json_of_node = function
-    | Branch (id, lab, mem, loc) ->
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("mem", `Null); (*TODO: Ocaml_mem.serialise_mem_state mem); *)
-              ("loc", Json.of_option Json.of_location loc)]
-    | Leaf (id, lab, st) ->
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("state", `String (B64.encode st));
-              ("loc", `Null);
-                (*TODO: json_of_location (get_location (snd st)));*)
-              ("group", `String "leaf")]
-  in
-  let json_of_edge = function
-    | Edge (p, c) -> `Assoc [("from", `Int p);
-                               ("to", `Int c)]
-  in
-  let nodes = `List (List.map json_of_node ns) in
-  let edges = `List (List.map json_of_edge es) in
-  `Assoc [("nodes", nodes); ("edges", edges)]
+let string_of_action = function
+  | `Nop        -> "Nop"
+  | `Elaborate  -> "Elaborate"
+  | `Random     -> "Random"
+  | `Exhaustive -> "Exhaustive"
+  | `Step       -> "Step"
 
 type incoming_msg =
   { action:  action;
@@ -243,13 +189,9 @@ let respond_json json =
 
 (* Cerberus actions *)
 
-let getmodel = function
-  | "Concrete" -> ("concrete", [| "./cerb.concrete" |])
-  | "Symbolic" -> ("symbolic", [| "./cerb.symbolic" |])
-  | _ -> failwith "unknown model"
-
 let request model req : result Lwt.t =
-  let proc = Lwt_process.open_process ~timeout:2. model in
+  let cmd = ("", [| "./cerb." ^ String.lowercase_ascii model |]) in
+  let proc = Lwt_process.open_process ~timeout:2. cmd in
   Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
   Lwt_io.close proc#stdin >>= fun () ->
   Lwt_io.read_value proc#stdout
@@ -257,22 +199,16 @@ let request model req : result Lwt.t =
 let cerberus content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
-  let conf      = { Instance_manager.rewrite= msg.rewrite; } in
-  print_endline ("current model " ^ msg.model);
-  let model     = getmodel msg.model in
-  let result =
-    match msg.action with
-    | `Nop   ->
-      return @@ Failure "no action"
-    | `Elaborate  ->
-      request model (`Elaborate (conf, filename))
-    | `Random ->
-      request model (`Execute (conf, filename, Random))
-    | `Exhaustive ->
-      request model (`Execute (conf, filename, Exhaustive))
-    | `Step ->
-      request model (`Step (conf, filename, msg.interactive))
-  in result >>= respond_json % json_of_result
+  let conf      = { rewrite= msg.rewrite; } in
+  let do_action = function
+    | `Nop   -> return @@ Failure "no action"
+    | `Elaborate  -> request msg.model @@ `Elaborate (conf, filename)
+    | `Random -> request msg.model @@ `Execute (conf, filename, Random)
+    | `Exhaustive -> request msg.model @@ `Execute (conf, filename, Exhaustive)
+    | `Step -> request msg.model @@ `Step (conf, filename, msg.interactive)
+  in
+  Debug.print 8 ("Executing action " ^ string_of_action msg.action);
+  do_action msg.action >>= respond_json % json_of_result
 
 (* GET and POST *)
 
@@ -367,8 +303,6 @@ let impl =
   Arg.(value & opt string "gcc_4.9.0_x86_64-apple-darwin10.8.0"
        & info ["impl"] ~docv:"IMPL" ~doc)
 
-(* TODO:*)
-let cerb_path = ""
 let cpp_cmd =
   let default = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
                 ^ cerb_path ^ "/include/c/libc -I "
@@ -393,4 +327,3 @@ let () =
   | `Ok _
   | `Version
   | `Help -> exit 0
-
