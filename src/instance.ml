@@ -1,4 +1,5 @@
-open Instance_manager
+open Util
+open Instance_api
 
 let dummy_io =
   let open Pipeline in
@@ -12,8 +13,12 @@ let dummy_io =
     warn=           skip;
   }
 
-let setup_cerb_conf cerb_debug_level cpp_cmd impl_filename =
+let setup_conf cerb_debug_level user_conf =
   let open Pipeline in
+  let impl    = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
+  let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
+              ^ Pipeline.cerb_path ^ "/include/c/libc -I "
+              ^ Pipeline.cerb_path ^ "/include/c/posix" in
   let core_stdlib = load_core_stdlib ()
   in {
     debug_level=         cerb_debug_level;
@@ -21,11 +26,11 @@ let setup_cerb_conf cerb_debug_level cpp_cmd impl_filename =
     astprints=           [];
     ppflags=             [];
     typecheck_core=      false;
-    rewrite_core=        true;
+    rewrite_core=        user_conf.rewrite;
     sequentialise_core=  true;
     cpp_cmd=             cpp_cmd;
     core_stdlib=         core_stdlib;
-    core_impl=           load_core_impl core_stdlib impl_filename;
+    core_impl=           load_core_impl core_stdlib impl;
   }
 
 (* It would be nice if Smt2 could use polymorphic variant *)
@@ -61,10 +66,8 @@ let hack conf mode =
   }
 
 let respond f = function
-  | Exception.Result r ->
-    f r
-  | Exception.Exception err ->
-    Failure (Pp_errors.to_string err)
+  | Exception.Result r -> f r
+  | Exception.Exception err -> Failure (Pp_errors.to_string err)
 
 (* elaboration *)
 
@@ -73,7 +76,6 @@ let elaborate ~conf ~filename =
   let (>>=)  = Exception.except_bind in
   hack (fst conf) Random;
   prerr_endline ("Elaborating: " ^ filename);
-  Debug_ocaml.print_debug 2 [] (fun () -> "Elaborating: " ^ filename);
   try
     Pipeline.c_frontend conf filename
     >>= function
@@ -86,9 +88,8 @@ let elaborate ~conf ~filename =
                        Errors.OTHER "fatal failure core pass")
   with
   | e ->
-    Debug_ocaml.warn [] (fun () ->
-        "Exception raised during elaboration. " ^ Printexc.to_string e
-      ); raise e
+    Debug.warn ("Exception raised during elaboration. " ^ Printexc.to_string e);
+    raise e
 
 let result_of_elaboration (cabs, ail, _, core) =
   let string_of_doc d =
@@ -129,9 +130,7 @@ let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack (fst conf) mode;
-  Debug_ocaml.print_debug 2 [] (fun () ->
-      "Executing in " ^ string_of_exec_mode mode ^ " mode: " ^ filename
-    );
+  Debug.print 8 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
     >>= fun (cabs, ail, sym_suppl, core) ->
@@ -144,9 +143,8 @@ let execute ~conf ~filename (mode: exec_mode) =
       return (string_of_int res)
   with
   | e ->
-    Debug_ocaml.warn [] (fun () ->
-        "Exception raised during execution." ^ Printexc.to_string e
-      ); raise e
+    Debug.warn ("Exception raised during execution." ^ Printexc.to_string e);
+    raise e
 
 (* WARN: fresh new ids *)
 let _fresh_node_id : int ref = ref 0
@@ -174,8 +172,6 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
     let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
     (ns', es', previousNode)
   in
-  let exec_tree (ns, es, _) = Interaction (None, (ns, es)) in
-  let finish res (ns, es, _) = Interaction (Some res, (ns, es)) in
   try
     let open Nondeterminism in
     let one_step step_state = function
@@ -187,24 +183,22 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
           ^ "\", blocked: \""
           ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
         in
-        create_branch str_v st' step_state
-        |> finish res
+        (Some res, create_branch str_v st' step_state)
       | (NDkilled r, st') ->
-        create_branch "killed" st' step_state
-        |> finish "killed"
+        (Some "killed", create_branch "killed" st' step_state)
       | (NDbranch (str, _, m1, m2), st') ->
         create_branch str st' step_state
         |> create_leafs st' [("opt1", m1); ("opt2", m2)]
-        |> exec_tree
+        |> fun res -> (None, res)
       | (NDguard (str, _, m), st') ->
         create_leafs st' [(str, m)] step_state
-        |> exec_tree
+        |> fun res -> (None, res)
       | (NDnd (str, (_,m)::ms), st') ->
         (* json_of_step (msg.steps, str, m, st') *)
         failwith "Ndnd"
       | (NDstep ms, st') ->
         create_leafs st' ms step_state
-        |> exec_tree
+        |> fun res -> (None, res)
       | _ -> failwith ""
     in begin match m st with
       | (NDstep [(lab, m')], st') ->
@@ -213,72 +207,45 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
       | act -> one_step step_state act
     end
   with
-  | e -> Debug_ocaml.warn [] (fun () ->
-      "Exception raised during execution." ^ Printexc.to_string e
-    ); raise e
+  | e -> Debug.warn ("Exception raised during execution." ^ Printexc.to_string e);
+    raise e
 
-let step ~conf ~filename = function
-  | None ->
-    let step_init () =
-      let return = Exception.except_return in
-      let (>>=)  = Exception.except_bind in
-      hack (fst conf) Random;
-      elaborate ~conf ~filename
-      >>= fun (_, _, sym_suppl, core) ->
-      let core' = Core_run_aux.convert_file core in
-      let st0   = Driver.initial_driver_state sym_suppl core' in
-      return (Driver.drive false false sym_suppl core' [], st0)
-    in begin match step_init () with
-      | Exception.Result (m, st) ->
-        let initId   = new_id () in
-        let nodeId   = Leaf (initId, "Initial State", encode (m, st)) in
-        Interaction (None, ([nodeId], []))
-      | Exception.Exception err ->
-        Failure (Pp_errors.to_string err)
-    end
+let step ~conf ~filename active_node =
+  let return = Exception.except_return in
+  let (>>=)  = Exception.except_bind in
+  match active_node with
+  | None -> (* no active node *)
+    hack (fst conf) Random;
+    elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
+    let core'    = Core_run_aux.convert_file core in
+    let st0      = Driver.initial_driver_state sym_suppl core' in
+    let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
+    let initId   = new_id () in
+    let nodeId   = Leaf (initId, "Initial State", encode (m, st)) in
+    return (None, ([nodeId], [], 0))
   | Some (marshalled_state, node) ->
     hack (fst conf) Random;
     decode marshalled_state
     |> multiple_steps ([], [], node)
+    |> return
 
-(* instance *)
-
-let pipe_conf =
-  let impl = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
-  let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
-              ^ Pipeline.cerb_path ^ "/include/c/libc -I "
-              ^ Pipeline.cerb_path ^ "/include/c/posix"
-  in setup_cerb_conf 0 cpp_cmd impl
-
-let name =
-  Prelude.string_of_mem_switch ()
-
-let instance_conf conf =
-  let new_conf = { pipe_conf with Pipeline.rewrite_core= conf.rewrite }
-  in (new_conf, dummy_io)
-
-let elaborate (user_conf, filename) =
-  prerr_endline ("Accessing " ^ name);
-  let conf = instance_conf user_conf in
-  elaborate ~conf ~filename
-  |> respond result_of_elaboration
-
-let execute (user_conf, filename, mode) =
-  prerr_endline ("Accessing " ^ name);
-  let conf = instance_conf user_conf in
-  execute ~conf ~filename mode
-  |> respond (fun s -> Execution s)
-
-let step (user_conf, filename, active) =
-  prerr_endline ("Accessing " ^ name);
-  let conf = instance_conf user_conf in
-  step ~conf ~filename active
+let result_of_step (res, (ns, es, _)) = Interaction (None, (ns, es))
 
 let () =
-  prerr_endline ("Model: " ^ name);
-  let result =
-    match Marshal.from_channel stdin with
-    | `Elaborate args -> elaborate args
-    | `Execute args -> execute args
-    | `Step args -> step args
+  Debug.print 7 ("Model: " ^ Prelude.string_of_mem_switch ());
+  let do_action = function
+    | `Elaborate (user_conf, filename) ->
+      let conf = (setup_conf 0 user_conf, dummy_io) in
+      elaborate ~conf ~filename
+      |> respond result_of_elaboration
+    | `Execute (user_conf, filename, mode) ->
+      let conf = (setup_conf 0 user_conf, dummy_io) in
+      execute ~conf ~filename mode
+      |> respond (fun s -> Execution s)
+    | `Step (user_conf, filename, active) ->
+      let conf = (setup_conf 0 user_conf, dummy_io) in
+      step ~conf ~filename active
+      |> respond result_of_step
+  in
+  let result = do_action @@ Marshal.from_channel stdin
   in Marshal.to_channel stdout result [Marshal.Closures]

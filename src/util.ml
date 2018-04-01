@@ -28,3 +28,33 @@ end
 
 exception Unsupported of string
 exception Unexpected of string
+
+(* Debugging *)
+
+module Debug =
+struct
+
+  let level = ref 0
+
+  let print n msg =
+    if !level >= n then Printf.fprintf stderr "[%d]: %s\n%!" n msg
+
+  let warn msg  =
+    if !level > 0 then Printf.fprintf stderr "\x1b[33m[ WARN  ]: %s\n\x1b[0m%!" msg
+
+  let error msg =
+    Printf.fprintf stderr "\x1b[31m[ ERROR ]: %s\n\x1b[0m%!" msg
+
+  let warn_exception msg e =
+    warn (msg ^ " " ^ Printexc.to_string e)
+
+  let error_exception msg e =
+    error (msg ^ " " ^ Printexc.to_string e)
+
+end
+
+let diff xs ys = List.filter (fun x -> not (List.mem x ys)) xs
+
+let concatMap f xs = List.concat (List.map f xs)
+
+

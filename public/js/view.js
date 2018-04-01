@@ -137,6 +137,7 @@ class View {
       },
       result: '',
       console: '',
+      lastNodeId: 0,
       isHighlighted: false,
       dirty: true
     }
@@ -177,6 +178,7 @@ class View {
     let init = this.state.interactive.steps.nodes[0]
     this.state.steps.nodes.add(init)
     this.state.steps.hide_tau.nodes.add(init)
+    this.state.lastNodeId = 1
   }
 
   newInteractiveTab() {

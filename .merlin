@@ -1,6 +1,5 @@
 S ocaml_generated
 S src
-S src/web
 S src/codegen
 S pprinters
 S parsers/c
@@ -8,11 +7,10 @@ S parsers/core
 
 B _build/ocaml_generated
 B _build/src
-B _build/src/web
 B _build/src/codegen
 B _build/pprinters
 B _build/parsers/c
 B _build/parsers/core
 
 
-PKG lem cmdliner pprint ounit js_of_ocaml js_of_ocaml.ppx Z3 lwt cohttp cohttp.lwt yojson base64
+PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64
