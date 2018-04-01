@@ -14,8 +14,9 @@ type conf =
   { rewrite: bool;
   }
 
-(* state * node id option *)
-type active_node = (string * int)
+(* last_id * state * node id
+ * last_id is used to feed node id generation in the current instance *)
+type active_node = int * string * int
 
 type filename = string
 

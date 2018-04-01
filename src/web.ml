@@ -44,7 +44,7 @@ type incoming_msg =
     source:  string;
     model:   string;
     rewrite: bool;
-    interactive: (string * int) option; (* active node *)
+    interactive: active_node option;
   }
 
 let parse_incoming_json msg =
@@ -76,7 +76,8 @@ let parse_incoming_json msg =
     | _ -> failwith "expecting a bool"
   in
   let parse_interactive = function
-    | `Assoc [("state", `String st); ("active", `Int i)] -> (B64.decode st, i)
+    | `Assoc [("lastId", `Int n); ("state", `String st); ("active", `Int i);] ->
+        (n, B64.decode st, i)
     | _ -> failwith "expecting state * integer"
   in
   let parse_assoc msg (k, v) =

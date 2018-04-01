@@ -147,8 +147,8 @@ let execute ~conf ~filename (mode: exec_mode) =
     raise e
 
 (* WARN: fresh new ids *)
-let _fresh_node_id : int ref = ref 0
-let new_id () = _fresh_node_id := !_fresh_node_id + 1; !_fresh_node_id
+let last_node_id : int ref = ref 0
+let new_id () = incr last_node_id; !last_node_id
 
 let encode s = Marshal.to_string s [Marshal.Closures]
 let decode s = Marshal.from_string s 0
@@ -223,8 +223,9 @@ let step ~conf ~filename active_node =
     let initId   = new_id () in
     let nodeId   = Leaf (initId, "Initial State", encode (m, st)) in
     return (None, ([nodeId], [], 0))
-  | Some (marshalled_state, node) ->
+  | Some (last_id, marshalled_state, node) ->
     hack (fst conf) Random;
+    last_node_id := last_id;
     decode marshalled_state
     |> multiple_steps ([], [], node)
     |> return

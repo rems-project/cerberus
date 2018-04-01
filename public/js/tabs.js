@@ -183,6 +183,7 @@ class TabInteractive extends Tab {
     if (active) {
       // do a step
       ui.state.interactive = {
+        lastId: ui.state.lastNodeId,
         state: active.state,
         active: active.id
       }
@@ -238,7 +239,7 @@ class TabInteractive extends Tab {
         return getNoTauParent(fromId)
       return fromId
     }
-    // Update current point
+    // Update current point (remove state from it)
     let point = nodes.get(pointId)
     delete point.group
     delete point.state
@@ -267,6 +268,9 @@ class TabInteractive extends Tab {
     } else {
       this.network.focus(tree.nodes[0])
     }
+    // Update last node id
+    // Assume tree node is decreasing order
+    ui.state.lastNodeId = tree.nodes[0].id
   }
 
   fit() {
