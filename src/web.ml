@@ -190,25 +190,27 @@ let respond_json json =
 
 (* Cerberus actions *)
 
-let request model req : result Lwt.t =
-  let cmd = ("", [| "./cerb." ^ String.lowercase_ascii model |]) in
-  let proc = Lwt_process.open_process ~timeout:2. cmd in
-  Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
-  Lwt_io.close proc#stdin >>= fun () ->
-  Lwt_io.read_value proc#stdout
-
-let cerberus content =
+let cerberus ~conf content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
-  let conf      = { rewrite= msg.rewrite; } in
+  let conf      = { conf with rewrite_core= msg.rewrite; } in
+  let timeout   = float_of_int conf.timeout in
+  let request req : result Lwt.t =
+    let instance = "./cerb." ^ String.lowercase_ascii msg.model in
+    let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
+    let proc = Lwt_process.open_process ~timeout cmd in
+    Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
+    Lwt_io.close proc#stdin >>= fun () ->
+    Lwt_io.read_value proc#stdout
+  in
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
-    | `Elaborate  -> request msg.model @@ `Elaborate (conf, filename)
-    | `Random -> request msg.model @@ `Execute (conf, filename, Random)
-    | `Exhaustive -> request msg.model @@ `Execute (conf, filename, Exhaustive)
-    | `Step -> request msg.model @@ `Step (conf, filename, msg.interactive)
+    | `Elaborate  -> request @@ `Elaborate (conf, filename)
+    | `Random -> request @@ `Execute (conf, filename, Random)
+    | `Exhaustive -> request @@ `Execute (conf, filename, Exhaustive)
+    | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
-  Debug.print 8 ("Executing action " ^ string_of_action msg.action);
+  Debug.print 7 ("Executing action " ^ string_of_action msg.action);
   do_action msg.action >>= respond_json % json_of_result
 
 (* GET and POST *)
@@ -234,12 +236,12 @@ let get ~docroot uri path =
     forbidden path
   end
 
-let post ~docroot uri path content =
+let post ~docroot ~conf uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     Debug.print 8 ("POST data " ^ content);
     match path with
-    | "/cerberus" -> cerberus content
+    | "/cerberus" -> cerberus ~conf content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -252,23 +254,24 @@ let post ~docroot uri path content =
 
 (* Main *)
 
-let request ~docroot conn req body =
+let request ~docroot ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
   match meth with
   | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
   | `GET  -> get ~docroot uri path
-  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot uri path
+  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf uri path
   | _     -> not_allowed meth path
 
-let setup cerb_debug_level debug_level impl cpp_cmd port docroot =
+let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try
-    Debug_ocaml.debug_level := cerb_debug_level;
     Debug.level := debug_level;
+    let conf = { rewrite_core = false; cpp_cmd; core_impl;
+                 cerb_debug_level; timeout } in
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
-    Server.make ~callback: (request ~docroot) ()
+    Server.make ~callback: (request ~docroot ~conf) ()
     |> Server.create ~mode:(`TCP (`Port port))
     |> Lwt_main.run
   with
@@ -311,6 +314,10 @@ let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
   Arg.(value & opt string default & info ["cpp"] ~docv:"CMD" ~doc)
 
+let timeout =
+  let doc = "Instance execution timeout in seconds." in
+  Arg.(value & opt int 45 & info ["t"; "timeout"] ~docv:"TIMEOUT" ~doc)
+
 let docroot =
   let doc = "Set public (document root) files locations." in
   Arg.(value & pos 0 string "./public/" & info [] ~docv:"PUBLIC" ~doc)
@@ -320,7 +327,7 @@ let port =
   Arg.(value & opt int 8080 & info ["p"; "port"] ~docv:"PORT" ~doc)
 
 let () =
-  let server = Term.(pure setup $ cerb_debug_level $ debug_level
+  let server = Term.(pure setup $ cerb_debug_level $ debug_level $ timeout
                      $ impl $ cpp_cmd $ port $ docroot) in
   let info = Term.info "web" ~doc:"Web server frontend for Cerberus." in
   match Term.eval (server, info) with
