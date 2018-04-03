@@ -109,6 +109,7 @@ class View {
 
   setStateEmpty() {
     this.state = {
+      title: this.title,
       status: 'failure',
       pp: {
         cabs: '',
@@ -290,31 +291,46 @@ class View {
     let nodes = []
     let edges = []
     let toHex = (n) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    let readValue = (id, base, end) => {
-      let map = mem.bytemap
-      let value = 0
-      if (!map[base]) return 'unspecified' // undefined value in allocation
-      if (map[base].prov) // Has a provenance
-        edges.push({from: id, to: map[base].prov})
-      for (let i = base; i < end; i++)
-        if (map[i]) value += map[i].value
-      return value
-    }
     let is_pointer = (type) => {
       return type.slice(-1) == '*'
     }
-    Object.keys(mem.allocations).map((k) => {
-      let alloc = mem.allocations[k]
-      let base = parseInt(alloc.base)
-      let end  = parseInt(alloc.base) + parseInt(alloc.size)
-      let value = '\n<i>Value:</i> ' + readValue(k, base, end)
-      if (is_pointer(alloc.type)) value = ''
-      let type  = '\n<i>Type:</i> ' + alloc.type
-      let baseL  = '<i>Base address:</i> ' + toHex(base)
-      let size  = '\n<i>Size:</i> ' + alloc.size
-      let label = baseL + type + size + value
-      nodes.push({id: k, label: label})
-    })
+    let updateConcreteMemory = () => {
+      let readValue = (id, base, end) => {
+        let value = 0
+        const map = mem.bytemap
+        if (!map[base]) return 'unspecified' // undefined value in allocation
+        if (map[base].prov) // Has a provenance
+          edges.push({from: id, to: map[base].prov})
+        for (let i = base; i < end; i++)
+          if (map[i]) value += map[i].value
+        return value
+      }
+      Object.keys(mem.allocations).map((k) => {
+        const alloc = mem.allocations[k]
+        const base = parseInt(alloc.base)
+        const end  = parseInt(alloc.base) + parseInt(alloc.size)
+        const value = (is_pointer(alloc.type)) ? ''
+                        : '\n<i>Value:</i> ' + readValue(k, base, end)
+        const type  = '\n<i>Type:</i> ' + alloc.type
+        const title  = '<i>Base address:</i> ' + toHex(base)
+        const size  = '\n<i>Size:</i> ' + alloc.size
+        const label = title + type + size + value
+        nodes.push({id: k, label: label})
+      })
+    }
+    let updateSymbolicMemory = () => {
+      Object.keys(mem).map((k) => {
+        const alloc = mem[k]
+        const type  = '<i>Type:</i> ' + alloc.type
+        const value = '\n<i>Value:</i> ' + alloc.value
+        const label = type + value
+        nodes.push({id: k, label: label})
+      })
+    }
+    if (mem.allocations)
+      updateConcreteMemory()
+    else
+      updateSymbolicMemory()
     this.state.mem.nodes = new vis.DataSet(nodes)
     this.state.mem.edges = new vis.DataSet(edges)
     this.tabs.map((tab) => tab.updateMemory(this.state))

@@ -45,6 +45,9 @@ class TabInteractive extends Tab {
     this.step = $('<div class="btn inline">step</div>')
     toolbar.append(this.step)
 
+    let next = $('<div class="btn inline">next</div>')
+    toolbar.append(next)
+
     let restart = $('<div class="btn inline">restart</div>')
     toolbar.append(restart)
 
@@ -394,7 +397,7 @@ class TabEditor extends Tab {
   }
 
   setValue(value) {
-    if (value) this.editor.setValue(value)
+    if (value !== null) this.editor.setValue(value)
     this.refresh()
   }
 
@@ -564,7 +567,7 @@ class TabConsole extends TabReadOnly {
     super('Console')
   }
   update (s) {
-    this.setValue(s.console)
+    this.setValue(s.console.replace(/[^:]*:/, s.title + ':'))
   }
 }
 
@@ -624,7 +627,7 @@ class TabCabs extends TabReadOnly {
   }
 }
 
-/* Tab Cabs */
+/* Tab Ail */
 class TabAil extends TabReadOnly {
   constructor() {
     super('Ail')

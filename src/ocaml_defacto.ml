@@ -623,4 +623,27 @@ let sequencePoint = Defacto_memory.impl_sequencePoint
 include Pp_defacto_memory
 
 (* JSON serialisation *)
-let serialise_mem_state _ = failwith "serialise mem_state"
+
+let serialise_prov = function
+  | Defacto_memory_types.Prov_some (n, _) -> `Int n
+  | Defacto_memory_types.Prov_none -> `Null
+  | Defacto_memory_types.Prov_device -> `String "Device"
+  | Defacto_memory_types.Prov_wildcard -> `String "Wildcard"
+
+let serialise_mem_value mv =
+  `String (String_defacto_memory.string_of_mem_value mv)
+
+let serialise_storage = function
+  | Defacto_memory.Storage_static (_, ty, mv_opt) ->
+    `Assoc [("type", `String (String_core_ctype.string_of_ctype ty));
+            ("value", Json.of_option serialise_mem_value mv_opt)]
+  | Defacto_memory.Storage_dynamic _ -> `Null
+
+let serialise_map f m =
+  let serialise_entry (k, v) = (string_of_int k, f v)
+  in `Assoc (List.map serialise_entry (Pmap.bindings_list m))
+
+let serialise_mem_state (m:mem_state) =
+  let not_dead x _ = not @@ Pset.mem x m.dead_allocations in
+  let allocs = Pmap.filter not_dead m.allocations in
+  serialise_map serialise_storage allocs
