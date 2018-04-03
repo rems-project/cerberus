@@ -293,19 +293,26 @@ class View {
     let readValue = (id, base, end) => {
       let map = mem.bytemap
       let value = 0
-      if (!map[base]) return 'undef' // undefined value in allocation
-      if (map[base][0].Some) // Has a provenance
-        edges.push({from: id, to: map[base][0].Some})
+      if (!map[base]) return 'unspecified' // undefined value in allocation
+      if (map[base].prov) // Has a provenance
+        edges.push({from: id, to: map[base].prov})
       for (let i = base; i < end; i++)
-        if (map[i]) value += map[i][1]
+        if (map[i]) value += map[i].value
       return value
+    }
+    let is_pointer = (type) => {
+      return type.slice(-1) == '*'
     }
     Object.keys(mem.allocations).map((k) => {
       let alloc = mem.allocations[k]
       let base = parseInt(alloc.base)
       let end  = parseInt(alloc.base) + parseInt(alloc.size)
-      let value = readValue(k, base, end)
-      let label = 'Region '+k+' ['+toHex(base)+'-'+toHex(end)+']: '+value
+      let value = '\n<i>Value:</i> ' + readValue(k, base, end)
+      if (is_pointer(alloc.type)) value = ''
+      let type  = '\n<i>Type:</i> ' + alloc.type
+      let baseL  = '<i>Base address:</i> ' + toHex(base)
+      let size  = '\n<i>Size:</i> ' + alloc.size
+      let label = baseL + type + size + value
       nodes.push({id: k, label: label})
     })
     this.state.mem.nodes = new vis.DataSet(nodes)
