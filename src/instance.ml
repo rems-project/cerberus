@@ -151,6 +151,17 @@ let encode s = Marshal.to_string s [Marshal.Closures]
 let decode s = Marshal.from_string s 0
 
 let rec multiple_steps step_state (Nondeterminism.ND m, st) =
+  let module CS = (val Ocaml_mem.cs_module) in
+  let (>>=) = CS.bind in
+  (* TODO: I probably need to save the cs somewhere *)
+  let check f = function
+    | `UNSAT -> failwith "unsatisfiable"
+    | `SAT -> CS.return @@ f ()
+  in
+  let runCS f = CS.runEff (CS.check_sat >>= check f) in
+  let withCS str cs f =
+    CS.runEff (CS.with_constraints str cs (CS.check_sat >>= check f))
+  in
   let get_location _ = None in (* TODO *)
   let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
     let nodeId  = new_id () in
@@ -173,25 +184,30 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
     let open Nondeterminism in
     let one_step step_state = function
       | (NDactive a, st') ->
-        let str_v = String_core.string_of_value a.Driver.dres_core_value in
-        let res =
-          "Defined {value: \"" ^ str_v ^ "\", stdout: \""
-          ^ String.escaped a.Driver.dres_stdout
-          ^ "\", blocked: \""
-          ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
-        in
-        (Some res, create_branch str_v st' step_state)
+        runCS begin fun () ->
+          let str_v = String_core.string_of_value a.Driver.dres_core_value in
+          let res =
+            "Defined {value: \"" ^ str_v ^ "\", stdout: \""
+            ^ String.escaped a.Driver.dres_stdout
+            ^ "\", blocked: \""
+            ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
+          in
+          (Some res, create_branch str_v st' step_state)
+        end
       | (NDkilled r, st') ->
         (Some "killed", create_branch "killed" st' step_state)
-      | (NDbranch (str, _, m1, m2), st') ->
-        create_branch str st' step_state
-        |> create_leafs st' [("opt1", m1); ("opt2", m2)]
-        |> fun res -> (None, res)
-      | (NDguard (str, _, m), st') ->
-        create_leafs st' [(str, m)] step_state
-        |> fun res -> (None, res)
+      | (NDbranch (str, cs, m1, m2), st') ->
+        withCS str cs begin fun () ->
+          create_branch str st' step_state
+          |> create_leafs st' [("opt1", m1); ("opt2", m2)]
+          |> fun res -> (None, res)
+        end
+      | (NDguard (str, cs, m), st') ->
+        withCS str cs begin fun () ->
+          create_leafs st' [(str, m)] step_state
+          |> fun res -> (None, res)
+        end
       | (NDnd (str, (_,m)::ms), st') ->
-        (* json_of_step (msg.steps, str, m, st') *)
         failwith "Ndnd"
       | (NDstep ms, st') ->
         create_leafs st' ms step_state
@@ -210,6 +226,12 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
 let step ~conf ~filename active_node =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
+  Tags.set_tagDefs begin (* TODO *)
+    Pmap.empty (fun sym1 sym2->Lem_pervasives.ordCompare
+                   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict
+                    Symbol.instance_Basic_classes_Ord_Symbol_sym_dict
+                    sym1 sym2)
+  end;
   match active_node with
   | None -> (* no active node *)
     hack (fst conf) Random;

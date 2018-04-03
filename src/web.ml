@@ -159,8 +159,8 @@ let json_of_result = function
   | Failure err ->
     `Assoc [
       ("status", `String "failure");
-      ("console", `String "");
-      ("result", `Null);
+      ("console", `String err);
+      ("result", `String "");
     ]
 
 (* Server default responses *)

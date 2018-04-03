@@ -1336,10 +1336,6 @@ let combine_prov prov1 prov2 =
     | Prov_none -> `Null
     | Prov_device -> `String "Device"
 
-  let serialise_option f = function
-    | Some n -> f n
-    | None -> `Null
-
   let serialise_map f m =
     let serialise_entry (k, v) = (Nat_big_num.to_string k, f v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
@@ -1348,7 +1344,7 @@ let combine_prov prov1 prov2 =
     let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
     `Assoc [
       ("base", Json.of_bigint alloc.base);
-      ("type", serialise_option serialise_ctype alloc.ty);
+      ("type", Json.of_option serialise_ctype alloc.ty);
       ("size", Json.of_bigint alloc.size);
     ]
 
@@ -1356,7 +1352,7 @@ let combine_prov prov1 prov2 =
     let serialise_char c = `Int (Char.code c) in
     `Assoc[
       ("prov", serialise_prov p);
-      ("value", serialise_option serialise_char c_opt)
+      ("value", Json.of_option serialise_char c_opt)
     ]
 
   let serialise_mem_state st =
