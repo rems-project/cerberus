@@ -97,10 +97,7 @@ type bmc_state = {
   (* Map from address to Z3 symbol representing value *)
   (* heap        : (Address.addr, Expr.expr) Pmap.map; *)
 
-  (* TODO: rethink what's a VC and what's a constraint *)
-  vcs         : Expr.expr list;
 
-  preexec     : preexecution;
   parent_tid  : (thread_id * thread_id)  Pset.set ref;
   action_map  : (action_id, bmc_paction) Pmap.map ref;
 
@@ -108,7 +105,10 @@ type bmc_state = {
   tid_supply  : thread_id ref;
   tid         : thread_id;
 
-  (* TODO: Z3 expr for memory equalities *)
+  (* LOCAL STATE *)
+  preexec     : preexecution;
+  vcs         : Expr.expr list;
+  has_returned : Expr.expr 
 }
 
 (* ========== BMC ========== *)
@@ -318,6 +318,8 @@ let initial_bmc_state (supply : ksym_supply)
     aid_supply = ref 0;
     tid_supply = ref 0;
     tid        = 0;
+
+    has_returned = mk_false ctx
   }
 
 (*
@@ -582,12 +584,18 @@ let rec bmc_pexpr (state: bmc_state)
         assert false
     | PEundef _ ->
         let sort = cbt_to_z3 state bTy in
-        let new_vcs = (mk_false state.ctx) :: state.vcs in
+        let new_vcs = (mk_implies state.ctx 
+                            (mk_not state.ctx state.has_returned) 
+                            (mk_false state.ctx)) 
+                      :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
         Expr.mk_fresh_const state.ctx "undef" sort, AddressSet.empty, new_state 
     | PEerror _ -> 
         let sort = cbt_to_z3 state bTy in
-        let new_vcs = (mk_false state.ctx) :: state.vcs in
+        let new_vcs = (mk_implies state.ctx
+                            (mk_not state.ctx state.has_returned)
+                            (mk_false state.ctx)) 
+                      :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
         Expr.mk_fresh_const state.ctx "error" sort, AddressSet.empty, new_state 
     | PEctor (ctor, pelist) -> 
@@ -1142,74 +1150,12 @@ let rec bmc_expr (state: bmc_state)
   | Epure pe ->
       bmc_pexpr state pe 
   | Ememop (PtrValidForDeref, _) ->
-      Printf.printf "TODO: Ememop PtrValidForDeref: currently always true\n";
+      print_endline "TODO: Ememop PtrValidForDeref: always true";
       mk_true state.ctx, AddressSet.empty, state
   | Ememop _ ->
       assert false
   | Eaction paction ->
       bmc_paction state paction
-  (*
-  | Ecase (pe, ((pat1, e1) :: (pat2, e2) :: [])) -> 
-      (* TODO... special case for now, 
-       * copied from more general PEcase code. merging heap stuff. *)
-      let caselist = [(pat1, e1); (pat2, e2)] in
-      let (maybe_pe, pe_set, st)  = bmc_pexpr state pe in
-
-      (* Alias alloc patterns *)
-      List.iter (fun (pat1, _) -> 
-        alias_pattern state.alias_state pat1 pe_set) caselist;
-
-      let pattern_guards = List.map 
-          (fun (pat, _) -> pattern_match st pat maybe_pe) caselist in 
-      let complete_guard = mk_or st.ctx pattern_guards in
-
-      Solver.add st.solver [ complete_guard ];
-
-      let combined_pat_guards = 
-        List.mapi (fun i expr -> 
-          mk_and st.ctx 
-          [ mk_not st.ctx (mk_or st.ctx (list_take i pattern_guards))
-          ; expr 
-          ]
-          ) pattern_guards in
-
-      (* Length = 2 *)
-      let expr_eqs = List.map (fun (pat, _) -> mk_eq_pattern st pat maybe_pe) caselist in
-      let impl_eqs = List.map2 
-        (fun guard eq -> mk_implies state.ctx guard eq) 
-        combined_pat_guards expr_eqs in
-
-      Solver.add st.solver impl_eqs;
-
-      let cases_z3 = List.map 
-        (fun (_, e) -> bmc_expr ({st with vcs = []}) e) caselist in
-      let cases_vcs = (List.map (fun (e, _, s) -> mk_and state.ctx s.vcs) cases_z3) in
-      let new_vcs = (st.vcs @ (List.map2 (fun guard vc -> mk_implies state.ctx guard vc) combined_pat_guards cases_vcs)) in
-
-      let guard = List.hd combined_pat_guards in
-
-      let alloc_ret = List.fold_left (fun s (_, set, _) ->
-        AddressSet.union s set) AddressSet.empty cases_z3 in
-      
-      let ((bmc_e1, _, st1),(bmc_e2, _, st2)) = match cases_z3 with
-        | [x; y] -> (x, y)
-        | _ -> assert false
-      in
-  
-      (* preexecs *) 
-      let preexec1 = guard_preexec st.ctx guard st1.preexec in
-      let preexec2 = guard_preexec st.ctx (mk_not st.ctx guard) st2.preexec in
-      let new_preexec = merge_preexecs preexec1 preexec2 in
-
-      (*
-      let new_heap = merge_heaps st st1.heap st2.heap guard
-                      (Boolean.mk_not st.ctx guard) in
-      *) 
-      (mk_ite st.ctx guard bmc_e1 bmc_e2),
-        alloc_ret,
-       ({st with (*heap = new_heap;*) vcs = new_vcs;  
-                 preexec = new_preexec})
-  *)
   | Ecase (pe, elist) ->  
       assert (List.length elist > 0);
       let (bmc_pe, pe_addr, st) = bmc_pexpr state pe in
@@ -1247,6 +1193,12 @@ let rec bmc_expr (state: bmc_state)
           mk_implies state.ctx guard vc
         ) combined_pat_guards cases_vcs) in
 
+      let new_has_returned = 
+        mk_or st.ctx 
+          (st.has_returned :: (List.map2 (fun guard (_, _, state) ->
+              mk_and state.ctx [guard ;state.has_returned])
+              combined_pat_guards cases_z3)) in
+
       let alloc_ret = List.fold_left (fun s (_, set, _) ->
         AddressSet.union s set) AddressSet.empty cases_z3 in
       let guarded_preexecs = List.map2 (fun guard (_, _, state) ->
@@ -1257,15 +1209,14 @@ let rec bmc_expr (state: bmc_state)
         ) st.preexec guarded_preexecs in
 
       let sort = Expr.get_sort (let (e, _, _) = List.hd cases_z3 in e ) in
-
       let ret = List.fold_right2 (fun guard (bmc_e, _, _) rest ->
         mk_ite st.ctx guard bmc_e rest
       ) pattern_guards cases_z3 (Expr.mk_fresh_const state.ctx "unmatchedCase"
       sort) in
 
-      ret, alloc_ret, {st with vcs = new_vcs; preexec = new_preexec}
-
-
+      ret, alloc_ret, {st with vcs = new_vcs; 
+                               preexec = new_preexec;
+                               has_returned = new_has_returned}
   | Eskip -> 
       (* TODO: Unit *)
       (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
@@ -1298,11 +1249,15 @@ let rec bmc_expr (state: bmc_state)
       let new_preexec = List.fold_left (fun exec (_, _, st) ->
         merge_preexecs exec st.preexec 
       ) state.preexec bmc_list in
+      let new_has_returned = mk_or state.ctx (state.has_returned:: (List.map 
+        (fun (_, _, st) -> st.has_returned) bmc_list)) in
 
-      ret, allocs, {state with vcs = new_vcs; preexec = new_preexec}
+      ret, allocs, {state with vcs = new_vcs; 
+                               preexec = new_preexec;
+                               has_returned = new_has_returned
+                   }
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
-      print_endline "TODO: bound in Ebound ignored";
       bmc_expr state e1 
   | End [e1; e2] ->
       (* nondet sequencing: special case len(elist)=2 for now 
@@ -1337,10 +1292,19 @@ let rec bmc_expr (state: bmc_state)
       let preexec1 = guard_preexec state.ctx bmc_seq1 st1.preexec in
       let preexec2 = guard_preexec state.ctx bmc_seq2 st2.preexec in
       let new_preexec = merge_preexecs preexec1 preexec2 in
+
+      let new_has_returned = mk_or state.ctx
+        [ state.has_returned 
+        ; mk_implies state.ctx bmc_seq1 st1.has_returned
+        ; mk_implies state.ctx bmc_seq2 st2.has_returned 
+        ] in
+
       (UnitSort.mk_unit state.ctx, 
        AddressSet.union alloc1 alloc2,
        {state with vcs = new_vcs;  (* heap = new_heap; *)
-                   preexec = new_preexec}
+                   preexec = new_preexec;
+                   has_returned = new_has_returned
+       }
       )
 
   | End _ -> assert false
@@ -1350,7 +1314,8 @@ let rec bmc_expr (state: bmc_state)
       match Str.split (Str.regexp "_") s with
       | [name; id] ->
           if (name = "ret") && (int_of_string id = i) then
-            (UnitSort.mk_unit state.ctx), AddressSet.empty, state
+            (UnitSort.mk_unit state.ctx), AddressSet.empty, 
+            { state with has_returned = mk_true state.ctx }
           else
             assert false
       | _ -> assert false
@@ -1360,6 +1325,7 @@ let rec bmc_expr (state: bmc_state)
       assert false
   | Epar elist -> 
       (* TODO: Duplicated code from Eunseq *)
+      (* Assume can not return in Epar? *)
       let bmc_list = List.map (fun expr ->
           bmc_expr {state with vcs = []; 
                                preexec = initial_preexec ();
@@ -1384,7 +1350,14 @@ let rec bmc_expr (state: bmc_state)
             Pset.add (st.tid, state.tid) !(state.parent_tid)
       ) bmc_list;
 
-      ret, allocs, {state with vcs = new_vcs; preexec = new_preexec}
+      let new_has_returned = mk_or state.ctx (state.has_returned ::(
+        List.map (fun (_, _, st) -> st.has_returned) bmc_list
+      )) in 
+
+      ret, allocs, {state with vcs = new_vcs; 
+                               preexec = new_preexec;
+                               has_returned = new_has_returned
+                   }
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
       let (bmc_pe, loc, st) = bmc_pexpr state pe in
@@ -1393,7 +1366,6 @@ let rec bmc_expr (state: bmc_state)
       let (bmc_e2, loc2, st2) = bmc_expr 
           ({st with vcs = []; preexec = initial_preexec () }) e2 in
 
-      print_endline "TODO: only heap/vcs are updated after Eif";
       
       let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
       (*
@@ -1406,9 +1378,18 @@ let rec bmc_expr (state: bmc_state)
       let new_preexec = merge_preexecs (st.preexec) 
           (merge_preexecs preexec1 preexec2) in
 
+      let new_has_returned = mk_or st.ctx 
+          [ st.has_returned
+          ; mk_and st.ctx [bmc_pe ; st1.has_returned]
+          ; mk_and st.ctx [(mk_not st.ctx bmc_pe); st2.has_returned]] in
+
       (mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
         AddressSet.union loc1 loc2,
-        ({st with (* heap = new_heap; *) vcs = new_vc; preexec = new_preexec})
+        {st with (* heap = new_heap; *) vcs = new_vc; 
+                                        preexec = new_preexec;
+                                        has_returned = new_has_returned
+        }
+        
   | Elet _ -> assert false
   | Easeq _ ->
       assert false
@@ -1442,7 +1423,7 @@ let rec bmc_expr (state: bmc_state)
                                                 exec2.actions
                                                 true
                           )
-        } in
+        } in 
 
       (ret_e2, loc2, {state2 with preexec = new_preexec})
 
@@ -1481,14 +1462,6 @@ let rec bmc_expr (state: bmc_state)
 
 
         } in
-      (*
-      print_endline "Esseq exec1";
-      print_preexec exec1;
-      print_endline "Esseq exec2";
-      print_preexec exec2;
-      print_endline "Esseq new_preexec";
-      print_preexec new_preexec;
-      *)
       (ret_e2, loc2, {state2 with preexec = new_preexec})
 
 
@@ -2490,4 +2463,3 @@ let run_bmc (core_file : 'a file)
 
       print_string "EXIT: BMC PIPELINE \n"
     )
-

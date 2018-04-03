@@ -180,7 +180,8 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
         Ebound(i, inline_expr st e)
     | End eslist ->
         End (List.map (inline_expr st) eslist)
-    | Esave( _, _, _) 
+    | Esave( _, _, _) ->
+        expr_
     | Erun( _, _, _) ->
         expr_
     | Epar elist ->
@@ -192,7 +193,7 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
 let inline_file (file: 'a file) (sym_supply: ksym_supply) =
   match file.main with
   | None -> 
-      print_string "ERROR: file does not have a main\n";
+      print_endline "ERROR: file does not have a main";
       assert false
   | Some main_sym ->
       let initial_state : 'a bmc_inline_state = 
