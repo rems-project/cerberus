@@ -146,10 +146,10 @@ ocaml_byte:
 	fi
 
 instance: src/instance.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3} -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.concrete 
 	sed -i '' 's/ref MemConcrete/ref MemSymbolic/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3} -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
 	sed -i '' 's/ref MemSymbolic/ref MemConcrete/' src/prelude.ml
 	cp -L instance.native cerb.symbolic
 

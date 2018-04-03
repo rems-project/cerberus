@@ -13,25 +13,22 @@ let dummy_io =
     warn=           skip;
   }
 
-let setup_conf cerb_debug_level user_conf =
-  let open Pipeline in
-  let impl    = "gcc_4.9.0_x86_64-apple-darwin10.8.0" in
-  let cpp_cmd = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
-              ^ Pipeline.cerb_path ^ "/include/c/libc -I "
-              ^ Pipeline.cerb_path ^ "/include/c/posix" in
-  let core_stdlib = load_core_stdlib ()
-  in {
-    debug_level=         cerb_debug_level;
-    pprints=             [];
-    astprints=           [];
-    ppflags=             [];
-    typecheck_core=      false;
-    rewrite_core=        user_conf.rewrite;
-    sequentialise_core=  true;
-    cpp_cmd=             cpp_cmd;
-    core_stdlib=         core_stdlib;
-    core_impl=           load_core_impl core_stdlib impl;
-  }
+let setup conf =
+  let core_stdlib = Pipeline.load_core_stdlib () in
+  let core_impl   = Pipeline.load_core_impl core_stdlib conf.core_impl in
+  let pipeline_conf =
+    { Pipeline.debug_level=        conf.cerb_debug_level;
+      Pipeline.pprints=            [];
+      Pipeline.astprints=          [];
+      Pipeline.ppflags=            [];
+      Pipeline.typecheck_core=     false;
+      Pipeline.rewrite_core=       conf.rewrite_core;
+      Pipeline.sequentialise_core= true;
+      Pipeline.cpp_cmd=            conf.cpp_cmd;
+      Pipeline.core_stdlib=        core_stdlib;
+      Pipeline.core_impl=          core_impl;
+    }
+  in (pipeline_conf, dummy_io)
 
 (* It would be nice if Smt2 could use polymorphic variant *)
 let to_smt2_mode = function
@@ -75,7 +72,7 @@ let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack (fst conf) Random;
-  prerr_endline ("Elaborating: " ^ filename);
+  Debug.print 7 ("Elaborating: " ^ filename);
   try
     Pipeline.c_frontend conf filename
     >>= function
@@ -130,7 +127,7 @@ let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack (fst conf) mode;
-  Debug.print 8 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
+  Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
     >>= fun (cabs, ail, sym_suppl, core) ->
@@ -232,21 +229,38 @@ let step ~conf ~filename active_node =
 
 let result_of_step (res, (ns, es, _)) = Interaction (None, (ns, es))
 
-let () =
+let instance debug_level =
+  Debug.level := debug_level;
   Debug.print 7 ("Model: " ^ Prelude.string_of_mem_switch ());
   let do_action = function
-    | `Elaborate (user_conf, filename) ->
-      let conf = (setup_conf 0 user_conf, dummy_io) in
-      elaborate ~conf ~filename
+    | `Elaborate (conf, filename) ->
+      elaborate ~conf:(setup conf) ~filename
       |> respond result_of_elaboration
-    | `Execute (user_conf, filename, mode) ->
-      let conf = (setup_conf 0 user_conf, dummy_io) in
-      execute ~conf ~filename mode
+    | `Execute (conf, filename, mode) ->
+      execute ~conf:(setup conf) ~filename mode
       |> respond (fun s -> Execution s)
-    | `Step (user_conf, filename, active) ->
-      let conf = (setup_conf 0 user_conf, dummy_io) in
-      step ~conf ~filename active
+    | `Step (conf, filename, active) ->
+      step ~conf:(setup conf) ~filename active
       |> respond result_of_step
   in
   let result = do_action @@ Marshal.from_channel stdin
   in Marshal.to_channel stdout result [Marshal.Closures]
+
+(* Arguments *)
+
+open Cmdliner
+
+let debug_level =
+  let doc = "Set the debug message level for the instance to $(docv) \
+             (should range over [0-9])." in
+  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+let () =
+  let instance = Term.(pure instance $ debug_level) in
+  let doc  = "Cerberus instance with fixed memory model." in
+  let info = Term.info "Cerberus instance" ~doc in
+  match Term.eval (instance, info) with
+  | `Error _ -> exit 1;
+  | `Ok _
+  | `Version
+  | `Help -> exit 0
