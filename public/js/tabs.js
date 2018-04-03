@@ -153,10 +153,12 @@ class TabInteractive extends Tab {
           if (active.group && active.group == 'leaf') {
             // do a step
             this.doStep(active)
-          } else if (active.loc) {
+          } else if (active.loc || active.mem) {
             // show mem and select locations
-            ui.clear()
-            ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
+            if (active.loc) {
+              ui.clear()
+              ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
+            }
             if (active.mem)
               ui.updateMemory(active.mem)
           } else {
@@ -298,6 +300,19 @@ class TabMemory extends Tab {
         shape: 'box',
         shapeProperties: {
           borderRadius: 3
+        },
+        color: {
+          border: '#5f5f5f',
+          background: '#5f5f5f',
+          highlight: {
+            border: '#7f7f7f',
+            background: '#7f7f7f'
+          }
+        },
+        font: {
+          color: '#f1f1f1',
+          align: 'left',
+          multi: 'html'
         }
       },
       edges: {
@@ -312,6 +327,9 @@ class TabMemory extends Tab {
       physics: {
         barnesHut: {
           springLength: 200
+        },
+        repulsion: {
+          nodeDistance: 150
         }
       }
     }

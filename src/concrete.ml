@@ -1333,7 +1333,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_prov = function
     | Prov_some n -> Json.of_bigint n
-    | Prov_none -> `String "Empty"
+    | Prov_none -> `Null
     | Prov_device -> `String "Device"
 
   let serialise_option f = function

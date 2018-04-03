@@ -139,12 +139,13 @@ let json_of_result = function
           ("core", Json.of_opt_string r.ast.core);
         ]);
       ("locs", r.locs);
-      ("result", `String "");
       ("console", `String "");
+      ("result", `String "");
     ]
   | Execution str ->
     `Assoc [
       ("status", `String "execution");
+      ("console", `String "");
       ("result", `String str);
     ]
   | Interaction (res, t) ->
@@ -158,7 +159,8 @@ let json_of_result = function
   | Failure err ->
     `Assoc [
       ("status", `String "failure");
-      ("console", `String err);
+      ("console", `String "");
+      ("result", `Null);
     ]
 
 (* Server default responses *)
