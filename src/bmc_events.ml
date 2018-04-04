@@ -116,10 +116,10 @@ let string_of_paction (BmcAction(pol, guard, action): bmc_paction) =
   match pol with
   | Pos -> 
       Printf.sprintf "BmcAction(%s, %s, %s)" 
-            "+" (string_of_action action) (Expr.to_string guard)
+            "+" (string_of_action action) (Expr.to_string (Expr.simplify guard None))
   | Neg ->
       Printf.sprintf "BmcAction(%s, %s, %s)" 
-            "-" (string_of_action action) (Expr.to_string guard)
+            "-" (string_of_action action) (Expr.to_string (Expr.simplify guard None))
 
 let initial_preexec () = {
   actions = Pset.empty (paction_cmp);

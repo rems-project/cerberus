@@ -20,6 +20,7 @@ open Bmc_analysis
 open Bmc_events
 open Bmc_inline
 open Bmc_normalize
+open Bmc_saves
 open Bmc_sorts
 open Bmc_utils
 
@@ -106,14 +107,18 @@ type bmc_state = {
   tid         : thread_id;
 
   (* LOCAL STATE *)
-  preexec     : preexecution;
-  vcs         : Expr.expr list;
-  has_returned : Expr.expr 
+  preexec      : preexecution;
+  vcs          : Expr.expr list;
+  has_returned : Expr.expr; 
+  z3_ret       : Expr.expr;
+  ret_asserts  : Expr.expr list;
+  saves        : unit saves_map
 }
 
 (* ========== BMC ========== *)
 
-let check_solver_fun (solver: Solver.solver) (fun_list: FuncDecl.func_decl list) =
+let check_solver_fun (solver: Solver.solver) (fun_list: FuncDecl.func_decl list)
+                     (ret_value: Expr.expr option) =
   let status = Solver.check solver [] in
   Printf.printf "Status: %s\n" (Solver.string_of_status status);
   begin
@@ -138,6 +143,16 @@ let check_solver_fun (solver: Solver.solver) (fun_list: FuncDecl.func_decl list)
                                           (Model.FuncInterp.to_string interp);
             | None -> print_endline ("No interp for: " ^ (FuncDecl.to_string f))
           ) fun_list;
+          begin
+            match ret_value with
+            | None -> ()
+            | Some z3_ret ->
+              print_endline "RET_VALUE";
+              match Model.get_const_interp_e m (z3_ret) with
+              | Some interp ->
+                  Printf.printf "Z3_ret: %s\n" (Expr.to_string interp)
+              | None -> print_endline "No interp for ret."
+          end;
           Printf.printf "SAT :( \n"
       | None -> Printf.printf "No model\n"
     ;
@@ -146,7 +161,7 @@ let check_solver_fun (solver: Solver.solver) (fun_list: FuncDecl.func_decl list)
   status
 
 let check_solver (solver: Solver.solver) =
-  check_solver_fun solver []
+  check_solver_fun solver [] None
 
 (*
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
@@ -319,7 +334,10 @@ let initial_bmc_state (supply : ksym_supply)
     tid_supply = ref 0;
     tid        = 0;
 
-    has_returned = mk_false ctx
+    has_returned = mk_false ctx;
+    z3_ret = Expr.mk_fresh_const ctx "ret_main" (LoadedInteger.mk_sort ctx);
+    ret_asserts = [];
+    saves = Pmap.empty sym_cmp
   }
 
 (*
@@ -885,7 +903,7 @@ let bmc_paction (state: bmc_state)
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
       let action = Write(mk_next_aid state, initial_tid, NA, new_ptr, to_store) in
-      let paction = BmcAction(Pos, mk_true state.ctx, action) in
+      let paction = BmcAction(Pos, mk_not state.ctx state.has_returned, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       new_ptr, addr_ret, 
@@ -929,13 +947,12 @@ let bmc_paction (state: bmc_state)
       let z3_sym = bmc_lookup_sym sym state in
       (*
       print_endline ("STORE " ^ (Expr.to_string z3_sym) ^ 
-                     " " ^ (Expr.to_string to_store) ^
-                     " " ^ polarity);
+                     " " ^ (Expr.to_string to_store));
       *)
 
       let action = Write(mk_next_aid state, state.tid, mem_order,
                          z3_sym, to_store) in
-      let paction = BmcAction(pol, mk_true state.ctx, action) in
+      let paction = BmcAction(pol, mk_not state.ctx state.has_returned, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       print_endline (string_of_paction paction);
@@ -949,7 +966,9 @@ let bmc_paction (state: bmc_state)
           assert (not (AddressSet.is_empty v_allocs));
 
           (* For each potential store location, add v_allocs to addr_map *)
+
           AddressSet.iter (fun loc ->
+            print_string (Address.to_string loc);
             let prev_set = alias_lookup_alloc loc state.alias_state in
             alias_add_to_addr_map state.alias_state 
                   loc (AddressSet.union prev_set v_allocs)
@@ -1041,7 +1060,7 @@ let bmc_paction (state: bmc_state)
 
       let action = Read(mk_next_aid state, state.tid, mem_order,
                          z3_sym, ret_value) in
-      let paction = BmcAction(pol, mk_true state.ctx, action) in
+      let paction = BmcAction(pol, mk_not state.ctx state.has_returned, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       print_endline (string_of_paction paction);
@@ -1186,17 +1205,25 @@ let rec bmc_expr (state: bmc_state)
       Solver.add st.solver impl_eqs;
 
       let cases_z3 = List.map (fun (_, e) -> 
-        bmc_expr ({st with vcs = []; preexec = initial_preexec ()}) e) elist in
+        bmc_expr ({st with vcs = []; 
+                           preexec = initial_preexec ();
+                           ret_asserts = []
+                  }) e) elist in
       let cases_vcs = List.map (fun (_, _, s) -> 
           mk_and state.ctx s.vcs) cases_z3 in
       let new_vcs = st.vcs @ (List.map2 (fun guard vc -> 
           mk_implies state.ctx guard vc
         ) combined_pat_guards cases_vcs) in
+      let new_ret_asserts = st.ret_asserts @ (List.map2 
+        (fun guard (_, _, state) -> 
+          mk_implies state.ctx guard (mk_and state.ctx state.ret_asserts)
+        )
+      ) combined_pat_guards cases_z3 in
 
       let new_has_returned = 
         mk_or st.ctx 
           (st.has_returned :: (List.map2 (fun guard (_, _, state) ->
-              mk_and state.ctx [guard ;state.has_returned])
+              mk_and state.ctx [guard; state.has_returned])
               combined_pat_guards cases_z3)) in
 
       let alloc_ret = List.fold_left (fun s (_, set, _) ->
@@ -1216,7 +1243,9 @@ let rec bmc_expr (state: bmc_state)
 
       ret, alloc_ret, {st with vcs = new_vcs; 
                                preexec = new_preexec;
-                               has_returned = new_has_returned}
+                               has_returned = new_has_returned;
+                               ret_asserts = new_ret_asserts
+                      }
   | Eskip -> 
       (* TODO: Unit *)
       (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
@@ -1232,7 +1261,10 @@ let rec bmc_expr (state: bmc_state)
        * Similar to ctor
        *)
       let bmc_list = List.map (fun e ->
-        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e
+        bmc_expr {state with vcs = []; 
+                             preexec = initial_preexec ();
+                             ret_asserts = []
+                 } e
       ) elist in
       let expr_list = List.map (fun (expr, _, _) -> expr) bmc_list in
 
@@ -1251,10 +1283,13 @@ let rec bmc_expr (state: bmc_state)
       ) state.preexec bmc_list in
       let new_has_returned = mk_or state.ctx (state.has_returned:: (List.map 
         (fun (_, _, st) -> st.has_returned) bmc_list)) in
+      let new_ret_asserts = List.fold_left (fun l (_, _, st) ->
+        st.ret_asserts @ l) state.ret_asserts bmc_list in
 
       ret, allocs, {state with vcs = new_vcs; 
                                preexec = new_preexec;
-                               has_returned = new_has_returned
+                               has_returned = new_has_returned;
+                               ret_asserts = new_ret_asserts
                    }
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
@@ -1267,9 +1302,15 @@ let rec bmc_expr (state: bmc_state)
        * (just have to write heap merging function really)
        *)
       let (bmc_e1, alloc1, st1) = 
-        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e1 in
+        bmc_expr {state with vcs = []; 
+                             preexec = initial_preexec ();
+                             ret_asserts = []
+                 } e1 in
       let (bmc_e2, alloc2, st2) = 
-        bmc_expr {state with vcs = []; preexec = initial_preexec ()} e2 in
+        bmc_expr {state with vcs = []; 
+                             preexec = initial_preexec ();
+                             ret_asserts = []
+                 } e2 in
 
       let bmc_seq1 = Expr.mk_fresh_const state.ctx "seq" 
                       (Boolean.mk_sort state.ctx) in
@@ -1298,24 +1339,55 @@ let rec bmc_expr (state: bmc_state)
         ; mk_implies state.ctx bmc_seq1 st1.has_returned
         ; mk_implies state.ctx bmc_seq2 st2.has_returned 
         ] in
+  
+      let new_ret_asserts =
+           (mk_implies state.ctx bmc_seq1 
+                                 (mk_and state.ctx st1.ret_asserts))
+        :: (mk_implies state.ctx bmc_seq2
+                                 (mk_and state.ctx st2.ret_asserts))
+        :: state.ret_asserts in 
 
       (UnitSort.mk_unit state.ctx, 
        AddressSet.union alloc1 alloc2,
        {state with vcs = new_vcs;  (* heap = new_heap; *)
                    preexec = new_preexec;
-                   has_returned = new_has_returned
+                   has_returned = new_has_returned;
+                   ret_asserts = new_ret_asserts
        }
       )
 
   | End _ -> assert false
-  | Erun (_, Symbol(i, Some s), _) ->
-      Printf.printf "TODO: Erun, special casing ret by ignoring it\n";
+  | Erun (_, Symbol(i, Some s), pelist) ->
+      print_endline "TODO: Erun, special casing ret";
       begin
       match Str.split (Str.regexp "_") s with
       | [name; id] ->
           if (name = "ret") && (int_of_string id = i) then
-            (UnitSort.mk_unit state.ctx), AddressSet.empty, 
-            { state with has_returned = mk_true state.ctx }
+            begin
+              let sym = Sym.Symbol(i, Some s) in
+              let (cbt, symlist, expr) = 
+                (match Pmap.lookup sym state.saves with
+                 | None -> assert false
+                 | Some x -> x) in
+              assert (List.length symlist = List.length pelist);
+              let subMap = List.fold_left2 (fun map sym pe ->
+                Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
+              let to_run = substitute_expr subMap expr in 
+
+              let (ret, aset, state) = bmc_expr state to_run in
+              (*
+              pp_to_stdout (Pp_core.Basic.pp_expr to_run);
+              print_endline "  Erun expr";
+              *)
+              let eq_expr = mk_implies state.ctx
+                (mk_not state.ctx state.has_returned)
+                (mk_eq state.ctx state.z3_ret ret) in
+
+            (UnitSort.mk_unit state.ctx), aset, 
+            { state with has_returned = mk_true state.ctx;
+                         ret_asserts = eq_expr :: state.ret_asserts
+            }
+            end
           else
             assert false
       | _ -> assert false
@@ -1353,18 +1425,27 @@ let rec bmc_expr (state: bmc_state)
       let new_has_returned = mk_or state.ctx (state.has_returned ::(
         List.map (fun (_, _, st) -> st.has_returned) bmc_list
       )) in 
+      let new_ret_asserts = List.fold_left (fun l (_, _, st) ->
+        st.ret_asserts @ l) state.ret_asserts bmc_list in
 
       ret, allocs, {state with vcs = new_vcs; 
                                preexec = new_preexec;
-                               has_returned = new_has_returned
+                               has_returned = new_has_returned;
+                               ret_asserts = new_ret_asserts
                    }
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
       let (bmc_pe, loc, st) = bmc_pexpr state pe in
       let (bmc_e1, loc1, st1) = bmc_expr 
-          ({st with vcs = []; preexec = initial_preexec ()}) e1 in
+          ({st with vcs = []; 
+                    preexec = initial_preexec ();
+                    ret_asserts = []
+           }) e1 in
       let (bmc_e2, loc2, st2) = bmc_expr 
-          ({st with vcs = []; preexec = initial_preexec () }) e2 in
+          ({st with vcs = [];   
+                    preexec = initial_preexec ();
+                    ret_asserts = []
+           }) e2 in
 
       
       let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
@@ -1383,11 +1464,18 @@ let rec bmc_expr (state: bmc_state)
           ; mk_and st.ctx [bmc_pe ; st1.has_returned]
           ; mk_and st.ctx [(mk_not st.ctx bmc_pe); st2.has_returned]] in
 
+      let new_ret_asserts = 
+        (mk_implies st.ctx bmc_pe (mk_and st.ctx st1.ret_asserts))
+        :: (mk_implies st.ctx (mk_not st.ctx bmc_pe) 
+                              (mk_and st.ctx st2.ret_asserts))
+        :: st.ret_asserts in
+
       (mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
         AddressSet.union loc1 loc2,
         {st with (* heap = new_heap; *) vcs = new_vc; 
                                         preexec = new_preexec;
-                                        has_returned = new_has_returned
+                                        has_returned = new_has_returned;
+                                        ret_asserts = new_ret_asserts
         }
         
   | Elet _ -> assert false
@@ -1465,18 +1553,35 @@ let rec bmc_expr (state: bmc_state)
       (ret_e2, loc2, {state2 with preexec = new_preexec})
 
 
-  | Esave ((Symbol (i, Some s), _), _, _)  ->
+  | Esave ((Symbol (i, Some s), _), binding_list, _)  ->
       (* Special case ret *)
+      (* TODO: code duplication from Erun *)
       begin
       match Str.split (Str.regexp "_") s with
       | [name; id] -> 
-          begin
-            if (name = "ret") && ((int_of_string id) = i) then
-               (print_endline "TODO: Esave ret, currently ignored";
-                UnitSort.mk_unit state.ctx, AddressSet.empty, state)
-            else 
-              assert false
-          end
+          if (name = "ret") && ((int_of_string id) = i) then
+            begin
+              let sym = Sym.Symbol(i, Some s) in
+              let (cbt, symlist, expr) = 
+                (match Pmap.lookup sym state.saves with
+                 | None -> assert false
+                 |Some x -> x) in
+              assert (List.length symlist = List.length binding_list);
+              let pelist = List.map (fun(_, (_, pe)) -> pe) binding_list in
+              let subMap = List.fold_left2 (fun map sym pe ->
+                Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
+              let to_run = substitute_expr subMap expr in
+              let (ret, aset, state) = bmc_expr state to_run in
+              let eq_expr = mk_implies state.ctx
+                (mk_not state.ctx state.has_returned)
+                (mk_eq state.ctx state.z3_ret ret) in
+
+              UnitSort.mk_unit state.ctx, AddressSet.empty, 
+                { state with has_returned = mk_true state.ctx;
+                             ret_asserts = eq_expr :: state.ret_asserts }
+            end
+          else 
+            assert false
       | _ -> assert false
       end
   | Esave _ ->
@@ -2368,9 +2473,13 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       let (_, _, state1) = (
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
+            (* Assert return type is an integer st return sort is consistant *)
+            assert (ty = BTy_loaded OTy_integer);
             (* Handle parameters *)
             let state = initialise_main_params params state in
-            bmc_expr state e
+            let esaves = find_save_expr e in
+
+            bmc_expr {state with saves = esaves} e
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
             let state = initialise_main_params params state in
@@ -2386,6 +2495,14 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
                      state1.preexec.sb
                      !(state1.action_map)
       }} in
+      (*
+      print_endline "-----RET_ASSERTS2";
+      List.iter (fun expr ->
+        print_endline (Expr.to_string (Expr.simplify expr None));
+      ) state1.ret_asserts;
+      *)
+      Solver.add state1.solver (List.map (fun e -> Expr.simplify e None) state1.ret_asserts);
+
 
       print_endline "-----ALIAS_RESULTS";
       print_ptr_map !(state1.alias_state.ptr_map);
@@ -2412,7 +2529,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       Solver.add state1.solver z3_preexec; 
       (* TODO: not always true!!! Temporary for now *)
 
-      if (check_solver_fun state1.solver funcdecl_list 
+      if (check_solver_fun state1.solver funcdecl_list (Some state1.z3_ret)
             = SATISFIABLE) then
         begin
           print_endline "-----WITH VCS";

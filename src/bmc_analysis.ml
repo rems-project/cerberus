@@ -42,7 +42,7 @@ let alias_lookup_sym (sym: ksym) (state: kanalysis_state) =
 
 let alias_lookup_alloc (alloc_id: k_address) (state: kanalysis_state) =
   match Pmap.lookup alloc_id !(state.addr_map) with
-  | None -> assert false
+  | None -> AddressSet.empty
   | Some s -> s
 
 let initial_analysis_state  = fun () ->

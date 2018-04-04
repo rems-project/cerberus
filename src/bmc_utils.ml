@@ -86,7 +86,6 @@ let symbol_to_int (Symbol(i, _): Sym.sym) : int = i
 let sym_cmp = (Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)
 
 
-
 let symbol_to_string (sym: ksym) =
   match sym with
   | Symbol (num, Some str) -> 
