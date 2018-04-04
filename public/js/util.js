@@ -1,3 +1,5 @@
+'use strict'
+
 let gapikey = 'AIzaSyDYrDNMlaTvfLxNX_cJ8EH_qrLq7aKeFJc'
 
 function assert(x) {
