@@ -64,8 +64,17 @@ body {
   cursor: pointer;
 }
 
+.btn.disable {
+  color: #aaaaaa;
+  cursor: auto;
+}
+
 .btn:hover {
   background-color: #7f7f7f;
+}
+
+.btn.disable:hover {
+  background-color: #5f5f5f;
 }
 
 .dropdown-content .btn:active {

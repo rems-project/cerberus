@@ -76,8 +76,11 @@ let parse_incoming_json msg =
     | _ -> failwith "expecting a bool"
   in
   let parse_interactive = function
-    | `Assoc [("lastId", `Int n); ("state", `String st); ("active", `Int i);] ->
-        (n, B64.decode st, i)
+    | `Assoc [("lastId",  `Int n);
+              ("state",   `String state);
+              ("active",  `Int i);
+              ("tagDefs", `String tagDefs);
+             ] -> (n, B64.decode state, i, B64.decode tagDefs)
     | _ -> failwith "expecting state * integer"
   in
   let parse_assoc msg (k, v) =
@@ -148,10 +151,11 @@ let json_of_result = function
       ("console", `String "");
       ("result", `String str);
     ]
-  | Interaction (res, t) ->
+  | Interaction (res, tags, t) ->
     `Assoc [
       ("status", `String "stepping");
       ("result", Json.of_opt_string res);
+      ("tagDefs", Json.of_option (fun s -> `String (B64.encode s)) tags);
       ("interactive", `Assoc [
           ("steps", json_of_exec_tree t);
         ]);
@@ -270,7 +274,7 @@ let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try
     Debug.level := debug_level;
     let conf = { rewrite_core = false; cpp_cmd; core_impl;
-                 cerb_debug_level; timeout } in
+                 cerb_debug_level; timeout; tagDefs = "" } in
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
     Server.make ~callback: (request ~docroot ~conf) ()

@@ -16,11 +16,12 @@ type conf =
     core_impl: string;        (* core implementation file *)
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)
     timeout: int;             (* instance execution timeout *)
+    tagDefs: string;          (* marshalled tag defs *)
   }
 
-(* last_id * state * node id
+(* last_id * state * node id * marshalled tagDefs
  * last_id is used to feed node id generation in the current instance *)
-type active_node = int * string * int
+type active_node = int * string * int * string
 
 type filename = string
 
@@ -60,5 +61,6 @@ type elaboration_result =
 type result =
   | Elaboration of elaboration_result
   | Execution of string                      (* cerberus result *)
-  | Interaction of string option * exec_tree (* maybe result * execution tree *)
+  | Interaction of string option * string option * exec_tree
+      (* maybe result * tagDefs * execution tree *)
   | Failure of string
