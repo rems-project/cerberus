@@ -153,15 +153,6 @@ let decode s = Marshal.from_string s 0
 let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
-  (* TODO: I probably need to save the cs somewhere *)
-  let check f = function
-    | `UNSAT -> failwith "unsatisfiable"
-    | `SAT -> CS.return @@ f ()
-  in
-  let runCS f = CS.runEff (CS.check_sat >>= check f) in
-  let withCS str cs f =
-    CS.runEff (CS.with_constraints str cs (CS.check_sat >>= check f))
-  in
   let get_location _ = None in (* TODO *)
   let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
     let nodeId  = new_id () in
@@ -180,11 +171,20 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
     let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
     (ns', es', previousNode)
   in
+  let check st f = function
+    | `UNSAT -> CS.return (Some "unsat", create_branch "unsat" st step_state)
+    | `SAT -> CS.return @@ f ()
+  in
+  let runCS st f = CS.runEff (CS.check_sat >>= check st f) in
+  let withCS str cs st f =
+    CS.runEff (CS.with_constraints str cs (CS.check_sat >>= check st f))
+  in
   try
     let open Nondeterminism in
-    let one_step step_state = function
+    let one_step = function
       | (NDactive a, st') ->
-        runCS begin fun () ->
+        Debug.print 0 "active";
+        runCS st' begin fun () ->
           let str_v = String_core.string_of_value a.Driver.dres_core_value in
           let res =
             "Defined {value: \"" ^ str_v ^ "\", stdout: \""
@@ -197,36 +197,36 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
       | (NDkilled r, st') ->
         (Some "killed", create_branch "killed" st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
-        withCS str cs begin fun () ->
+        withCS str cs st' begin fun () ->
           create_branch str st' step_state
           |> create_leafs st' [("opt1", m1); ("opt2", m2)]
           |> fun res -> (None, res)
         end
       | (NDguard (str, cs, m), st') ->
-        withCS str cs begin fun () ->
+        withCS str cs st' begin fun () ->
           create_leafs st' [(str, m)] step_state
           |> fun res -> (None, res)
         end
+        |> fun s -> Debug.print 0 "finish guard"; s
       | (NDnd (str, (_,m)::ms), st') ->
         failwith "Ndnd"
       | (NDstep ms, st') ->
         create_leafs st' ms step_state
         |> fun res -> (None, res)
-      | _ -> failwith ""
+      | _ -> failwith "one step"
     in begin match m st with
       | (NDstep [(lab, m')], st') ->
         let step_state' = create_branch lab st' step_state in
         multiple_steps step_state' (m', st')
-      | act -> one_step step_state act
+      | act -> one_step act
     end
   with
-  | e -> Debug.warn ("Exception raised during execution." ^ Printexc.to_string e);
+  | e -> Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
     raise e
 
 let step ~conf ~filename active_node =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-
   match active_node with
   | None -> (* no active node *)
     hack (fst conf) Random;
@@ -236,10 +236,11 @@ let step ~conf ~filename active_node =
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     let initId   = new_id () in
     let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
-    let tagDefs  = "" in (* encode @@ Tags.tagDefs in *)
+    let tagDefs  = encode @@ Tags.tagDefs () in
     return (None, Some tagDefs, ([nodeId], []))
   | Some (last_id, marshalled_state, node, tags) ->
-    Tags.set_tagDefs tags;
+    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode tags in
+    Tags.set_tagDefs tagsMap;
     hack (fst conf) Random;
     last_node_id := last_id;
     decode marshalled_state
@@ -251,7 +252,7 @@ let result_of_step (res, tagDefs, (ns, es)) =
 
 let instance debug_level =
   Debug.level := debug_level;
-  Debug.print 7 ("Model: " ^ Prelude.string_of_mem_switch ());
+  Debug.print 7 ("Using model: " ^ Prelude.string_of_mem_switch ());
   let do_action = function
     | `Elaborate (conf, filename) ->
       elaborate ~conf:(setup conf) ~filename
@@ -263,8 +264,27 @@ let instance debug_level =
       step ~conf:(setup conf) ~filename active
       |> respond result_of_step
   in
-  let result = do_action @@ Marshal.from_channel stdin
-  in Marshal.to_channel stdout result [Marshal.Closures]
+  let redirect () =
+    (* NOTE: redirect stdout to stderr copying stdout file descriptor
+     * just in case any module in Cerberus tries to print something *)
+    let stdout' = Unix.dup Unix.stdout in
+    Unix.dup2 Unix.stderr Unix.stdout;
+    stdout'
+  in
+  let recover oc =
+    flush stdout;
+    Unix.dup2 oc Unix.stdout
+  in
+  let send result =
+    Marshal.to_channel stdout result [Marshal.Closures];
+  in
+  try
+    let stdout = redirect () in
+    let result = do_action @@ Marshal.from_channel stdin in
+    recover stdout; send result;
+    Debug.print 7 "Instance has successfully finished."
+  with e ->
+    Debug.error ("Exception raised in instance: " ^ Printexc.to_string e)
 
 (* Arguments *)
 
