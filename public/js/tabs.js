@@ -42,16 +42,16 @@ class TabInteractive extends Tab {
     let toolbar = $('<div class="toolbar"></div>')
     toolbar.attr('align', 'right')
 
-    this.step = $('<div class="btn inline">step</div>')
+    this.step = $('<div class="btn inline">Step</div>')
     toolbar.append(this.step)
 
-    let next = $('<div class="btn inline">next</div>')
-    toolbar.append(next)
+    this.next = $('<div class="btn inline">Next</div>')
+    toolbar.append(this.next)
 
-    let restart = $('<div class="btn inline">restart</div>')
+    let restart = $('<div class="btn inline">Restart</div>')
     toolbar.append(restart)
 
-    let hide_tau_btn = $('<div class="btn inline">show tau steps</button>')
+    let hide_tau_btn = $('<div class="btn inline">Show tau steps</button>')
     toolbar.append(hide_tau_btn)
     this.hide_tau = true
 
@@ -78,7 +78,6 @@ class TabInteractive extends Tab {
         },
         font: {
           align: 'left'
-          //color: '#f1f1f1'
         },
         fixed: true
       },
@@ -93,7 +92,11 @@ class TabInteractive extends Tab {
         leaf: {
           color: {
             background: '#044777',
-            border: '#044777'
+            border: '#044777',
+            highlight: {
+              border: '#7f7f7f',
+              background: '#033777'
+            }
           }
         }
       },
@@ -111,10 +114,12 @@ class TabInteractive extends Tab {
         selectConnectedEdges: false
       }
     }
+
     let graph = {nodes: this.nodes, edges: this.edges }
     this.network = new vis.Network(container[0], graph, options);
+    this.selectLastLeaf()
 
-    this.step.on('click', () => {
+    this.next.on('click', () => {
       let selection = this.network.getSelection()
       if (selection.nodes && selection.nodes.length > 0) {
         this.doStep(this.nodes.get(selection.nodes[0]))
@@ -134,6 +139,7 @@ class TabInteractive extends Tab {
       ui.request('Step', (data) => {
         ui.currentView.mergeState(data)
         ui.currentView.startInteractive()
+        this.selectLastLeaf()
         this.network.fit()
       })
     })
@@ -141,9 +147,9 @@ class TabInteractive extends Tab {
     hide_tau_btn.on('click', () => {
       this.hide_tau = !this.hide_tau
       if (this.hide_tau)
-        hide_tau_btn.text('show tau steps')
+        hide_tau_btn.text('Show tau steps')
       else
-        hide_tau_btn.text('hide tau steps')
+        hide_tau_btn.text('Hide tau steps')
       this.network.setData({nodes: this.nodes, edges: this.edges})
     })
 
@@ -152,7 +158,8 @@ class TabInteractive extends Tab {
       if (arg && arg.nodes && arg.nodes.length == 1) {
         let active = this.nodes.get(arg.nodes[0])
         if (active) {
-          this.step.disable(true)
+          this.step.addClass('disable')
+          this.next.addClass('disable')
           if (active.group && active.group == 'leaf') {
             // do a step
             this.doStep(active)
@@ -174,6 +181,19 @@ class TabInteractive extends Tab {
     })
   }
 
+  selectLastLeaf () {
+    // WARN: nodes are supposed to be in increasing order of ids
+    const nodes = this.nodes.get()
+    let leaf = null
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (nodes[i].state) {
+        leaf = nodes[i].id
+        break
+      }
+    }
+    if (leaf !== null) this.network.selectNodes([leaf])
+  }
+
   get nodes() {
     return this.hide_tau ? ui.state.steps.hide_tau.nodes
                          : ui.state.steps.nodes
@@ -190,7 +210,8 @@ class TabInteractive extends Tab {
       ui.state.interactive = {
         lastId: ui.state.lastNodeId,
         state: active.state,
-        active: active.id
+        active: active.id,
+        tagDefs: ui.state.tagDefs
       }
       ui.request('Step', (data) => {
         this.attachTree(active.id, data.interactive.steps)
@@ -269,7 +290,8 @@ class TabInteractive extends Tab {
       this.network.focus(leafNodeId)
       // Select last leaf node
       this.network.selectNodes([leafNodeId])
-      this.step.disable(false)
+      this.step.removeClass('disable')
+      this.next.removeClass('disable')
     } else {
       this.network.focus(tree.nodes[0])
     }
@@ -280,6 +302,7 @@ class TabInteractive extends Tab {
 
   fit() {
     this.network.setData({nodes: this.nodes, edges: this.edges})
+    this.selectLastLeaf()
     this.network.fit()
     this.network.redraw()
   }

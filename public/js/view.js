@@ -84,7 +84,6 @@ class View {
       self.tabs.push(tab)
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
-      //container.setTitle(tab.title)
       container.setState(state)
     })
     this.layout.on('itemDestroyed', (c) => {
@@ -111,16 +110,8 @@ class View {
     this.state = {
       title: this.title,
       status: 'failure',
-      pp: {
-        cabs: '',
-        ail:  '',
-        core: ''
-      },
-      ast: {
-        cabs: '',
-        ail:  '',
-        core: ''
-      },
+      pp: { cabs: '', ail:  '', core: '' },
+      ast: { cabs: '', ail:  '', core: '' },
       locs: [],
       view: [],
       interactive: null,
@@ -159,8 +150,7 @@ class View {
       componentName: 'tab',
       title: title,
       componentState: {
-        tab: title,
-        update: true
+        tab: title
       }
     })
     this.refresh()
@@ -190,17 +180,12 @@ class View {
         type: 'component',
         componentName: 'tab',
         title: 'Interactive',
-        componentState: {
-          tab: 'Interactive'
-        }
+        componentState: { tab: 'Interactive' }
       },{
         type: 'component',
         componentName: 'tab',
         title: 'Memory',
-        componentState: {
-          tab: 'Memory',
-          update: true
-        }
+        componentState: { tab: 'Memory' }
       }]
     })
     this.refresh()
@@ -234,7 +219,7 @@ class View {
     miniConfig.source = this.source.getValue()
     return encodeURIComponent(JSON.stringify(miniConfig))
   }
-  //
+
   // Return this first instance (or create a new one)
   getTab(title) {
     let tab = this.findTab(title)

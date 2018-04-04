@@ -140,7 +140,7 @@ let execute ~conf ~filename (mode: exec_mode) =
       return (string_of_int res)
   with
   | e ->
-    Debug.warn ("Exception raised during execution." ^ Printexc.to_string e);
+    Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
     raise e
 
 (* WARN: fresh new ids *)
@@ -226,12 +226,7 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
 let step ~conf ~filename active_node =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  Tags.set_tagDefs begin (* TODO *)
-    Pmap.empty (fun sym1 sym2->Lem_pervasives.ordCompare
-                   Symbol.instance_Basic_classes_Eq_Symbol_sym_dict
-                    Symbol.instance_Basic_classes_Ord_Symbol_sym_dict
-                    sym1 sym2)
-  end;
+
   match active_node with
   | None -> (* no active node *)
     hack (fst conf) Random;
@@ -240,16 +235,19 @@ let step ~conf ~filename active_node =
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     let initId   = new_id () in
-    let nodeId   = Leaf (initId, "Initial State", encode (m, st)) in
-    return (None, ([nodeId], [], 0))
-  | Some (last_id, marshalled_state, node) ->
+    let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
+    let tagDefs  = "" in (* encode @@ Tags.tagDefs in *)
+    return (None, Some tagDefs, ([nodeId], []))
+  | Some (last_id, marshalled_state, node, tags) ->
+    Tags.set_tagDefs tags;
     hack (fst conf) Random;
     last_node_id := last_id;
     decode marshalled_state
     |> multiple_steps ([], [], node)
-    |> return
+    |> fun (res, (ns, es, _)) -> return (res, None, (ns, es))
 
-let result_of_step (res, (ns, es, _)) = Interaction (None, (ns, es))
+let result_of_step (res, tagDefs, (ns, es)) =
+  Interaction (None, tagDefs, (ns, es))
 
 let instance debug_level =
   Debug.level := debug_level;
