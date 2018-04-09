@@ -276,11 +276,9 @@ let core_passes (conf, io) ~filename core_file =
       io.pass_message "Core typechecking completed!"
   end >>= fun () ->
   (* TODO: for now assuming a single order comes from indet expressions *)
-   begin
-    if conf.rewrite_core then
-      Core_indet.hackish_order <$> rewrite_core (conf, io) core_file
-    else
-      return core_file
+  Core_indet.hackish_order <$> begin
+    if conf.rewrite_core then rewrite_core (conf, io) core_file
+    else return core_file
   end >>= fun core_file' ->
   (* NOTE: unlike the earlier call, this is typechecking after the rewriting and
      the indet passes *)
