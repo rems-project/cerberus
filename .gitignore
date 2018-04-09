@@ -17,6 +17,7 @@ tests/csmith/tools/ciValidate
 tests/csmith/tools/reValidate
 a.out
 tests/csmith/**/LOG
+trash/**
 
 *.cmx
 *.cmo
