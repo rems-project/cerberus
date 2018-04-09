@@ -16,9 +16,11 @@ open Z3.Arithmetic
 open Z3.Boolean
 
 open Bmc_analysis
+open Bmc_conc_types
 open Bmc_events
 open Bmc_inline
 open Bmc_normalize
+open Bmc_pp_conc
 open Bmc_saves
 open Bmc_sorts
 open Bmc_utils
@@ -122,10 +124,223 @@ type 'a bmc_state = {
   saves        : unit saves_map
 }
 
+type exec_fns = {
+  event_sort  : Sort.sort;
+
+  event_type : Sort.sort; (* read/write *)
+  read_type  : Expr.expr;
+  write_type : Expr.expr;
+
+  memorder_type : Sort.sort;
+  na_order      : Expr.expr;
+  seq_cst_order : Expr.expr;
+  relaxed_order : Expr.expr;
+  release_order : Expr.expr;
+  acquire_order : Expr.expr;
+  consume_order : Expr.expr;
+  acq_rel_order : Expr.expr;
+
+  asw          : FuncDecl.func_decl;
+  mo           : FuncDecl.func_decl;
+  rf           : FuncDecl.func_decl;
+  sb           : FuncDecl.func_decl;
+  sw           : FuncDecl.func_decl;
+
+  (* TODO: generalize this. Location is atomic *)
+  is_atomic    : Expr.expr -> Expr.expr;
+
+  getAddr      : FuncDecl.func_decl;
+  getAid       : FuncDecl.func_decl;
+  getEventType : FuncDecl.func_decl;
+  getGuard     : FuncDecl.func_decl;
+  getMemOrder  : FuncDecl.func_decl;
+  getThread    : FuncDecl.func_decl;
+  getVal       : FuncDecl.func_decl;
+}
+
+let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
+  if (Expr.equal memorder fns.na_order) then
+    NA
+  else if (Expr.equal memorder fns.seq_cst_order) then
+    Seq_cst
+  else if (Expr.equal memorder fns.relaxed_order) then
+    Relaxed
+  else if (Expr.equal memorder fns.release_order) then
+    Release
+  else if (Expr.equal memorder fns.acquire_order) then
+    Acquire
+  else if (Expr.equal memorder fns.consume_order) then
+    Consume
+  else if (Expr.equal memorder fns.acq_rel_order) then
+    Acq_rel
+  else
+    assert false
+
+let cartesian l l' = 
+  List.concat (List.map (fun e -> List.map (fun e' -> (e,e')) l') l)
+
+let lbool_to_bool = function
+  | Z3enums.L_TRUE -> true
+  | Z3enums.L_FALSE -> false
+  | _ -> assert false
+
+let extract_executions (model: Model.model)
+                       (fns : exec_fns) =
+  let apply = FuncDecl.apply in
+  let events = Enumeration.get_consts fns.event_sort in
+
+  let interp expr = 
+    (match Model.eval model expr false with
+     | None -> assert false
+     | Some e -> e) in
+  print_endline "EXTRACTING EXECUTIONS";
+
+  (* Get actions *)
+  let all_actions = 
+    List.map getOptVal
+    (List.filter is_some 
+      (List.map (fun event ->
+        let loc = Integer.get_int (interp (apply fns.getAddr [event])) in
+        let aid = Integer.get_int (interp (apply fns.getAid [event])) in
+        let event_type = interp (apply fns.getEventType [ event]) in
+        let guarded = Boolean.get_bool_value(interp (apply fns.getGuard [event])) in
+        let memorder = get_memorder (interp (apply fns.getMemOrder [event])) fns in
+        let tid = Integer.get_int (interp (apply fns.getThread [event])) in
+        let value = interp(apply fns.getVal [event]) in
+
+        match guarded with 
+        | L_TRUE -> 
+            if (Expr.equal event_type fns.read_type) then
+              Some (Load (aid, tid, memorder, loc, Z3Expr value))
+            else if (Expr.equal event_type fns.write_type) then
+              Some (Store (aid, tid, memorder, loc, Z3Expr value))
+            else
+              assert false
+        | L_FALSE -> None
+        | L_UNDEF -> assert false 
+      ) events)) in
+
+  let action_map : (action_id, action) Pmap.map = 
+    List.fold_left (fun map action ->
+      Pmap.add (aid_of action) action map) 
+      (Pmap.empty Pervasives.compare) all_actions in
+
+  let event_map  : (action_id, Expr.expr) Pmap.map = 
+    List.fold_left (fun map event ->
+      let aid = Integer.get_int (interp (apply fns.getAid [event])) in
+      Pmap.add aid event map
+    ) (Pmap.empty Pervasives.compare) events in
+
+  let location_kinds = List.fold_left (fun map action ->
+    let event = Pmap.find (aid_of action) event_map in
+    let loc = (apply fns.getAddr [event]) in
+    print_endline (Expr.to_string loc);
+    match lbool_to_bool (Boolean.get_bool_value (interp (fns.is_atomic loc))) with
+    | true -> 
+        Pmap.add (getOptVal (loc_of action)) Atomic map
+    | false ->
+        Pmap.add (getOptVal (loc_of action)) Non_Atomic map
+  ) (Pmap.empty Pervasives.compare) all_actions in
+
+  let all_tids = List.fold_left (fun set action ->
+    Pset.add (tid_of action) set
+  ) (Pset.empty Pervasives.compare) all_actions in
+
+  let sb = List.filter (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let is_sb = lbool_to_bool(Boolean.get_bool_value 
+                  (interp (apply fns.sb [event1; event2]))) in
+    (tid_of a1 <> initial_tid) &&
+    (tid_of a2 <> initial_tid) &&
+    is_sb
+  ) (cartesian all_actions all_actions) in
+
+  let asw = List.filter (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let is_asw = lbool_to_bool (Boolean.get_bool_value 
+                  (interp (apply fns.asw [event1; event2]))) in
+    (tid_of a1 <> initial_tid) &&
+    (tid_of a2 <> initial_tid) &&
+    is_asw
+  ) (cartesian all_actions all_actions) in
+
+  let preexecution : pre_execution = 
+    { actions = all_actions
+    ; threads = Pset.elements all_tids
+    ; lk = location_kinds
+    ; sb = sb
+    ; asw = asw
+    } in
+
+  pp_preexecution preexecution;
+
+  let rf = List.map (function | Some x -> x | None -> assert false)
+    (List.filter (function
+     | None -> false
+     | Some (a1, a2) ->
+       match a2 with
+       | Load _ -> true
+       | _ -> false
+  ) (List.map (fun a1 ->
+      let event1 = Pmap.find (aid_of a1) event_map in
+      let event2 = (interp (apply fns.rf [event1])) in
+      let aid2 = Integer.get_int (interp (apply fns.getAid [event2])) in
+      
+      if (Pmap.mem aid2 action_map) then
+        Some (Pmap.find aid2 action_map, a1)
+      else
+        None
+    ) all_actions)) in
+
+  let mo = List.filter (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let mo1    = Integer.get_int (interp (apply fns.mo [event1])) in
+    let mo2    = Integer.get_int (interp (apply fns.mo [event2])) in
+
+    (tid_of a1 <> initial_tid) &&
+    (tid_of a2 <> initial_tid) &&
+    (loc_of a1 = loc_of a2) &&
+    (is_write a1 && is_write a2) &&
+    (mo1 < mo2)
+  ) (cartesian all_actions all_actions) in
+
+  let sw = List.filter (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let is_sw = lbool_to_bool(Boolean.get_bool_value 
+                  (interp (apply fns.sw [event1; event2]))) in
+    (tid_of a1 <> initial_tid) &&
+    (tid_of a2 <> initial_tid) &&
+    is_sw
+  ) (cartesian all_actions all_actions) in
+
+  let witness : execution_witness = 
+    { rf = rf;
+      mo = mo;
+      sw = sw;
+    } in
+  pp_witness witness
+
+
+  (*
+  List.iter (fun event ->
+      print_endline (Expr.to_string event);
+      print_endline (interp (apply fns.getAddr [ event ]));
+      print_endline (interp (apply fns.getAid [ event ]));
+      print_endline (interp (apply fns.getEventType [ event ]));
+      print_endline (interp (apply fns.getGuard [ event ]));
+      print_endline (interp (apply fns.getMemOrder [ event ]));
+      print_endline (interp (apply fns.getThread [ event ]));
+      print_endline (interp (apply fns.getVal [ event ]));
+  ) events; 
+  *)
+
 (* ========== BMC ========== *)
 
 let check_solver_fun (solver: Solver.solver) 
-                     (fun_list: FuncDecl.func_decl list)
                      (ret_value: Expr.expr option) =
   let status = Solver.check solver [] in
   Printf.printf "Status: %s\n" (Solver.string_of_status status);
@@ -143,6 +358,7 @@ let check_solver_fun (solver: Solver.solver)
       match model with
       | Some m -> 
           Printf.printf "Model: \n%s\n" (Model.to_string m);
+          (*
           print_endline "FUNC_INTERPS";
           List.iter (fun f ->
             match Model.get_func_interp m f with
@@ -151,6 +367,7 @@ let check_solver_fun (solver: Solver.solver)
                                           (Model.FuncInterp.to_string interp);
             | None -> print_endline ("No interp for: " ^ (FuncDecl.to_string f))
           ) fun_list;
+          *)
           begin
             match ret_value with
             | None -> ()
@@ -169,7 +386,7 @@ let check_solver_fun (solver: Solver.solver)
   status
 
 let check_solver (solver: Solver.solver) =
-  check_solver_fun solver [] None
+  check_solver_fun solver None
 
 (*
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
@@ -1766,7 +1983,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
       let addr_expr = Address.mk_expr state.ctx new_addr in
-      let addr_is_atomic = Boolean.mk_val state.ctx (false) in
+      let addr_is_atomic = Boolean.mk_val state.ctx false in
 
       Solver.add state.solver 
           [mk_eq state.ctx addr_is_atomic
@@ -1848,6 +2065,9 @@ let preexec_to_z3 (state: 'a bmc_state) =
   (* ====================================== *)
   (* ========== Event accessor decls ====== *)
   (* ====================================== *)
+  (* Get the action_id associated with the event *)
+  let fn_getAid = FuncDecl.mk_fresh_func_decl ctx 
+                    "getAid" [ event_sort ] (Integer.mk_sort ctx) in
   (* Get the load/store value associated with the event *)
   let fn_getVal = FuncDecl.mk_fresh_func_decl ctx 
                     "getVal" [ event_sort ] (Loaded.mk_sort ctx) in
@@ -1945,6 +2165,12 @@ let preexec_to_z3 (state: 'a bmc_state) =
   let getInitial expr = FuncDecl.apply fn_getInitial [ expr ] in
 
   (* ============ Function definitions ============ *)
+  (* aid_asserts *)
+  let aid_asserts = List.map (fun action -> 
+    let aid = aid_of_paction action in
+    mk_eq ctx (FuncDecl.apply fn_getAid [event_expr action])
+                      (Integer.mk_numeral_i ctx aid)) event_list in
+
   (* Map each location to the initial event of the location *)
   let getInitial_asserts = List.map (fun ie ->
       mk_eq ctx (getInitial (PointerSort.get_addr ctx (location_of_paction ie))) 
@@ -2213,6 +2439,7 @@ let preexec_to_z3 (state: 'a bmc_state) =
            (or (< (co e1) (co e2)) (< (co e2) (co e1)))
        )
    *)
+
   let mo_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx 
       [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
@@ -2521,6 +2748,7 @@ let preexec_to_z3 (state: 'a bmc_state) =
   ) in
 
   let ret =   val_asserts 
+            @ aid_asserts
             @ addr_asserts 
             @ guard_asserts
             @ type_asserts 
@@ -2561,6 +2789,41 @@ let preexec_to_z3 (state: 'a bmc_state) =
               ] in
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
 
+  let fns : exec_fns = 
+    { event_sort = event_sort;
+
+      event_type = event_type;
+      read_type = read_type;
+      write_type = write_type;
+
+      memorder_type = memorder_type;
+      na_order = na_order;
+      seq_cst_order = seq_cst_order;
+      relaxed_order = relaxed_order;
+      release_order = release_order;
+      acquire_order = acquire_order;
+      consume_order = consume_order;
+      acq_rel_order = acq_rel_order;
+
+      asw = fn_asw;
+      mo = fn_mo;
+      rf = fn_rf;
+      sb = fn_sb;
+      sw = fn_sw;
+
+      is_atomic = Address.is_atomic ctx;
+
+      getAddr = fn_getAddr;
+      getAid  = fn_getAid;
+      getEventType = fn_getEventType;
+      getGuard = fn_getGuard;
+      getMemOrder = fn_getMemorder;
+      getThread = fn_getThread;
+      getVal    = fn_getVal;
+    } in
+
+
+  (*
   let func_decl_list = [ fn_getAddr
                        ; fn_getInitial
                        ; fn_getVal
@@ -2572,8 +2835,9 @@ let preexec_to_z3 (state: 'a bmc_state) =
                        ; fn_mo
                        ; fn_clock
                        ] in
+  *)
 
-  ret, func_decl_list
+  ret, Some fns 
 
 
 let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
@@ -2628,9 +2892,9 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_preexec state1.preexec;
 
       print_endline "-----EVENT STUFF";
-      let (z3_preexec, funcdecl_list) = 
+      let (z3_preexec, funcDecls) = 
         (if Pset.is_empty state1.preexec.actions then 
-            [], [] (* Guard st sort is well-founded *)
+            [], None (* Guard st sort is well-founded *)
           else
             preexec_to_z3 state1
         ) in
@@ -2642,9 +2906,16 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       print_endline "-----WITH EVENTS";
       Solver.add state1.solver z3_preexec; 
 
-      if (check_solver_fun state1.solver funcdecl_list (Some state1.z3_ret)
+      if (check_solver_fun state1.solver (Some state1.z3_ret)
             = SATISFIABLE) then
         begin
+          let model = (match Solver.get_model state1.solver with
+                       | Some m -> m
+                       | None -> assert false) in
+          match funcDecls with
+          | None -> ();
+          | Some fns -> 
+              extract_executions model fns;
           print_endline "-----WITH VCS";
           let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
                                  state1.vcs

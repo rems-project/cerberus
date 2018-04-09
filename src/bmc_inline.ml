@@ -226,7 +226,8 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
         Proc(ty, params, inline_expr initial_state e)
     | Fun(ty, params, pe) -> 
         Fun(ty, params, inline_pexpr initial_state pe)
-    | _ -> assert false
+    | _ ->
+        fn
   ) file.funs in
   ({file with funs = new_fun_map; 
               globs = new_globals}), 
@@ -495,7 +496,8 @@ let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
         Proc(ty, params, rewrite_expr initial_state e)
     | Fun(ty, params, pe) ->
         Fun(ty, params, rewrite_pexpr initial_state pe)
-    | _ -> assert false
+    | _ -> 
+        fn
   ) file.funs in
   ({file with funs = new_fun_map; 
               globs = new_globals}), 

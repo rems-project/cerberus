@@ -287,7 +287,7 @@ let ssa_fn (fn)
       ssa_pexpr pe >>= fun ret_pe ->
       SSA.return (Fun(ty, ret_params, ret_pe))
   | _ ->
-      assert false
+      SSA.return(fn)
 
 
 let ssa_file (file) (sym_supply: ksym_supply) =
@@ -301,6 +301,7 @@ let ssa_file (file) (sym_supply: ksym_supply) =
     }) in
 
   let to_run = SSA.mapM (fun (sym, fn) ->
+    print_endline (symbol_to_string sym);
     ssa_fn fn >>= fun ret_fn ->
     SSA.return (sym, ret_fn)) (Pmap.bindings_list file.funs) in
 

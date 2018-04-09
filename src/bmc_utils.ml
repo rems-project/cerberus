@@ -104,3 +104,15 @@ let rec list_take k l =
     | x :: xs -> x :: (list_take (k-1) xs)
   else []
 
+(* ========== Helper functions ========== *)
+
+let is_some = function
+  | None -> false
+  | Some _ -> true
+
+let getOptVal = function
+  | None -> assert false 
+  | Some x -> x
+
+
+  
