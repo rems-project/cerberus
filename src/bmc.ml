@@ -1297,19 +1297,30 @@ let rec bmc_expr (state: 'a bmc_state)
   | Eproc _ -> assert false
   | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)), 
                         PEsym sym), arglist)  -> 
+      (* Bmc arglist *) 
+      let bmc_args = List.map (fun pe -> 
+        bmc_pexpr {state with vcs = []} pe) arglist in
+      let vcs = (List.concat (List.map (fun (_, _, st) -> st.vcs) bmc_args)) 
+                @ state.vcs in
+
       let sym_fn = (match Pmap.lookup sym !(state.fn_map) with
         | None -> assert false
         | Some x -> x) in
       begin
         match Pmap.lookup sym_fn state.file.funs with
         | Some (Proc(ty, params, e)) ->
-            (* TODO: temporary *)
-            assert (List.length params = 0);
             begin
             match bmc_normalize_fn (Proc(ty, params, e))
                   state.file !(state.sym_supply) with
             | Proc(ty2, params2, e2), supply ->
+                assert (List.length arglist = List.length params2);
                 state.sym_supply := supply;
+
+                let eq_exprs = List.map2 (fun (sym1, ty) (expr, _, _) ->
+                  mk_eq_expr state (Some sym1) ty expr) params2 bmc_args in
+                Solver.add state.solver eq_exprs;
+
+                (* mk_eq params2 arglist *)
                 let sort = cbt_to_z3 state ty2 in
                 let fresh_state = {state with
                     vcs = [];
@@ -1320,14 +1331,35 @@ let rec bmc_expr (state: 'a bmc_state)
                     ret_asserts = [];
                     saves = find_save_expr e 
                   } in
-
-
                 let (bmc_call, alloc, ret_state) = 
                   bmc_expr fresh_state e2 in
+                let guarded_preexec = guard_preexec state.ctx
+                    (mk_not state.ctx state.has_returned) ret_state.preexec in
+                let new_preexec =
+                  merge_preexecs state.preexec guarded_preexec in 
+                let (exec1, exec2) = (state.preexec, ret_state.preexec) in
+                let new_preexec = 
+                  {new_preexec with
+                    sb = Pset.union (new_preexec.sb)
+                                    (cartesian_product exec1.actions
+                                                       exec2.actions);
+                    asw = Pset.union (new_preexec.asw)
+                                     (asw_product exec1.actions exec2.actions
+                                                  !(state.parent_tid)
+                                      ); 
+                    hb = Pset.union (new_preexec.hb)
+                                    (hb_cartesian_product exec1.actions
+                                                          exec2.actions
+                                                          false
+                                    )
+                  } in
 
                 Solver.add state.solver ret_state.ret_asserts;
                 print_endline "INCOMPLETE";
-                (ret_state.z3_ret, alloc, state)
+                (ret_state.z3_ret, alloc, {state with
+                  vcs = ret_state.vcs @ vcs;
+                  preexec = new_preexec
+                })
                 
             | _ -> assert false
 
