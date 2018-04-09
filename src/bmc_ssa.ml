@@ -75,7 +75,8 @@ let rename_sym (Symbol(_, stropt) as sym: ksym) : ksym SSA.eff =
   SSA.add_to_sym_table sym new_sym >>= fun () ->
   SSA.return new_sym
 
-let rec ssa_pattern (pat: pattern) : pattern SSA.eff =
+let rec ssa_pattern (pat : ('bTy, Symbol.sym) generic_pattern ) 
+        : (('bTy, Symbol.sym) generic_pattern) SSA.eff =
   let (>>=) = SSA.bind in
   match pat with
   | CaseBase(Some sym, typ) ->
@@ -87,8 +88,8 @@ let rec ssa_pattern (pat: pattern) : pattern SSA.eff =
       SSA.mapM ssa_pattern patList >>= fun retList ->
       SSA.return (CaseCtor(ctor, retList)) 
 
-let rec ssa_pexpr (Pexpr(annot, (), pexpr_) : pexpr) : 
-      pexpr SSA.eff = 
+let rec ssa_pexpr (Pexpr(annot, ty, pexpr_))
+      : (('bTy, Symbol.sym) generic_pexpr) SSA.eff = 
   let (>>=) = SSA.bind in
   (match pexpr_ with
   | PEsym sym -> 
@@ -165,10 +166,11 @@ let rec ssa_pexpr (Pexpr(annot, (), pexpr_) : pexpr) :
       ssa_pexpr pe >>= fun ret_pe ->
       SSA.return (PEstd(str, ret_pe))
   *)
-  ) >>= fun ret_ -> SSA.return (Pexpr(annot,(), ret_))
+  ) >>= fun ret_ -> SSA.return (Pexpr(annot,ty, ret_))
   
 (* NOTE: Lots of assumptions about what core generated from C looks like *)  
-let rec ssa_expr (Expr(annot, expr_) : 'a expr) : ('a expr) SSA.eff =
+let rec ssa_expr (Expr(annot, expr_)) 
+                  : (('a, 'bTy, Symbol.sym) generic_expr) SSA.eff =
   let (>>=) = SSA.bind in
   (match expr_ with
   | Epure pe ->
@@ -206,10 +208,13 @@ let rec ssa_expr (Expr(annot, expr_) : 'a expr) : ('a expr) SSA.eff =
       SSA.return (Ecase(ret_pe, retlist))
   | Eskip -> 
       SSA.return expr_
-  | Eproc (a,name, pelist) -> 
+  | Eproc (a, name, pelist) -> 
       SSA.mapM (fun p -> ssa_pexpr p) pelist >>= fun retList ->
       SSA.return (Eproc(a,name, retList))
-  | Eccall _  -> assert false
+  | Eccall (a, pe, arglist) ->
+      ssa_pexpr pe >>= fun ret_pe ->
+      SSA.mapM ssa_pexpr arglist >>= fun retlist ->
+      SSA.return (Eccall(a, ret_pe, retlist))
   | Eunseq elist -> 
       SSA.mapM (fun e -> ssa_expr e) elist >>= fun retlist ->
       SSA.return (Eunseq retlist) 
@@ -258,27 +263,77 @@ let rec ssa_expr (Expr(annot, expr_) : 'a expr) : ('a expr) SSA.eff =
       SSA.return (Esave(label, retlist, ret_e))
   ) >>= fun ret_ -> SSA.return (Expr(annot,ret_))
 
-let ssa_file (file: 'a file) (sym_supply: ksym_supply) =
+let ssa_fn (fn) 
+           : (('bTy, 'a) generic_fun_map_decl) SSA.eff =
   let (>>=) = SSA.bind in
+  match fn with
+  | Proc(ty, params, e) ->
+      SSA.mapM (fun (sym, ty) ->
+        rename_sym sym >>= fun ret_sym ->
+        SSA.return (ret_sym, ty)) params >>= fun ret_params ->
+      ssa_expr e >>= fun ret_e ->
+      SSA.get >>= fun st ->
+      (
+      print_endline "--RENAME STUFF--";
+      Pmap.iter (fun k v -> 
+        Printf.printf "%s -> %s\n" (symbol_to_string k) (symbol_to_string v)) 
+        st.sym_table;
+      SSA.return (Proc(ty, ret_params, ret_e))
+      )
+  | Fun(ty, params, pe) -> 
+      SSA.mapM (fun (sym, ty) -> 
+        rename_sym sym >>= fun ret_sym ->
+        SSA.return (ret_sym, ty)) params >>= fun ret_params -> 
+      ssa_pexpr pe >>= fun ret_pe ->
+      SSA.return (Fun(ty, ret_params, ret_pe))
+  | _ ->
+      assert false
+
+
+let ssa_file (file) (sym_supply: ksym_supply) =
+  let (>>=) = SSA.bind in
+  let table_with_globals = List.fold_left (fun table (sym, _, _) ->
+    Pmap.add sym sym table) (Pmap.empty sym_cmp) file.globs in
+
+  let initial_state : SSA.kssa_state =  
+    ({supply = sym_supply;
+      sym_table = table_with_globals
+    }) in
+
+  let to_run = SSA.mapM (fun (sym, fn) ->
+    ssa_fn fn >>= fun ret_fn ->
+    SSA.return (sym, ret_fn)) (Pmap.bindings_list file.funs) in
+
+  let (retMap, st) = SSA.run initial_state to_run in
+  let new_fun_map = List.fold_left (fun pmap (sym, fn) ->
+    Pmap.add sym fn pmap) (Pmap.empty sym_cmp) retMap in
+  {file with funs = new_fun_map}, st.supply
+
+
+  (*
   match file.main with
   | None -> 
       print_string "ERROR: file does not have a main\n";
       assert false
   | Some main_sym ->
-      let initial_state : SSA.kssa_state =  
-        ({supply = sym_supply;
-          sym_table = Pmap.empty (sym_cmp)
-        }) in
-
+        (*
       let (new_globals, st) = SSA.run initial_state 
         (SSA.mapM (fun (sym, typ, expr) ->
           rename_sym sym >>= fun ret_sym ->
           ssa_expr expr >>= fun ret ->
           SSA.return (ret_sym , typ, ret)) file.globs) in
+      *)
 
       begin
       match Pmap.lookup main_sym file.funs with
-      | Some (Proc(ty, params, e)) ->
+      | Some f ->
+          let (ret, st) =
+            SSA.run initial_state (ssa_fn f) in
+          let new_fun_map = 
+            Pmap.add main_sym ret file.funs in
+          {file with funs = new_fun_map}, st.supply
+            
+          (*
           let to_run = 
             SSA.mapM_ (fun (sym, ty) -> 
               SSA.add_to_sym_table sym sym) params 
@@ -292,17 +347,22 @@ let ssa_file (file: 'a file) (sym_supply: ksym_supply) =
           in
             {file with funs = new_fun_map;
                        globs = new_globals}, st.supply
+                       *)
+      (*
       | Some (Fun(ty, params, pe)) ->
+          print_endline "TODO: switch to ssa_fn";
           let to_run = 
             SSA.mapM_ (fun (sym, ty) -> 
               SSA.add_to_sym_table sym sym) params 
             >>= fun () -> ssa_pexpr pe in
 
-          let (ret, st) = SSA.run st to_run in
+          let (ret, st) = SSA.run initial_state to_run in
           let new_fun_map = 
             Pmap.add main_sym ((Fun(ty, params, ret))) file.funs
           in
-            {file with funs = new_fun_map;
-                       globs = new_globals}, st.supply
+            {file with funs = new_fun_map
+                       (*globs = new_globals *)}, st.supply
+      *)
       | _ -> assert false
       end
+  *)

@@ -5,6 +5,25 @@ open Bmc_inline
 open Bmc_renaming
 open Bmc_ssa
 
+let bmc_normalize_fn 
+           (fn : 'a typed_fun_map_decl) 
+           (file: 'a typed_file)
+           (sym_supply: ksym_supply) =
+  let table_with_globals = List.fold_left (fun table (sym, _, _) ->
+    Pmap.add sym sym table) (Pmap.empty sym_cmp) file.globs in
+
+  let initial_state : SSA.kssa_state = 
+    { supply = sym_supply;
+      sym_table = table_with_globals} in
+  let (fn, st) = SSA.run initial_state (ssa_fn fn) in
+  fn, st.supply
+  (*
+  let (inlined_fn, inlined_supply) = inline_fn fn file st.supply in
+  let (rewritten_fn, rewritten_supply) = rewrite_fn fn file inlined_supply in
+  (rewritten_fn, rewritten_supply)
+*)
+
+
 let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
   (* Rename user variables that are repeated *)
 

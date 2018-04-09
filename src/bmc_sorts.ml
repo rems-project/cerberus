@@ -140,7 +140,7 @@ let rec ctype_to_expr ty ctx =
           assert false
       | Array0 (elem_ty, Some n) ->
           assert false
-          (*)
+          (*
         Expr.mk_app ctx (List.nth fdecls 2)
             [ctype_to_expr elem_ty ctx; Arithmetic.Integer.mk_numeral_i ctx (Nat_big_num.to_int n)]
 *)
@@ -222,6 +222,31 @@ module PointerSort =
 
   end
 
+module CFunctionSort =
+  struct
+    (* TODO: a cfunction is just an identifier *)
+    let mk_sort (ctx: context) = 
+      Datatype.mk_sort_s ctx ("cfunction")
+      [ Datatype.mk_constructor_s ctx ("fun") (mk_sym ctx "isFunction")
+          [ mk_sym ctx "getId" ] [ Some (Integer.mk_sort ctx)] [0]
+      ]
+
+    let mk_cfn (ctx: context) (id: Expr.expr) =
+      let sort = mk_sort ctx in
+      let constructors = Datatype.get_constructors sort in
+      let func_decl = List.nth constructors 0 in
+      Expr.mk_app ctx func_decl [ id ]
+    (*
+    let get_id (ctx: context) (expr: Expr.expr) =
+      let sort = mk_sort ctx in
+      let accessors = Datatype.get_accessors sort in
+      let func_decl = List.hd (List.nth accessors 0) in
+      Expr.mk_app ctx func_decl [ expr ]
+    *)
+
+  end
+
+
 let core_object_type_to_z3_sort (ctx: context) 
                                 (cot: core_object_type) 
                                 : Z3.Sort.sort =
@@ -231,7 +256,8 @@ let core_object_type_to_z3_sort (ctx: context)
    | OTy_floating  -> assert false
    | OTy_pointer -> 
        PointerSort.mk_sort ctx
-   | OTy_cfunction _ -> assert false
+   | OTy_cfunction (cot_opt, numArgs, variadic) -> 
+       CFunctionSort.mk_sort ctx
    | OTy_array _
    | OTy_struct _
    | OTy_union _ ->

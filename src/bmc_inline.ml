@@ -163,9 +163,10 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Eif(pe1, e2, e3) ->
         Eif(inline_pexpr st pe1, inline_expr st e2, inline_expr st e3)
     | Eskip -> Eskip
-    | Eccall( _, _, _) 
-    | Eproc( _, _, _)  ->
+    | Eproc _  ->
         assert false
+    | Eccall( a, pe, arglist) ->
+        Eccall(a, inline_pexpr st pe, List.map (inline_pexpr st) arglist)
     | Eunseq eslist ->
         Eunseq (List.map (inline_expr st) eslist) 
     | Ewseq(pat, e1, e2) ->
@@ -190,7 +191,50 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
         expr_
   in (Expr(annot, inlined))
 
+let inline_fn (fn : ('bTy, 'a) generic_fun_map_decl) 
+              (file)
+              (sym_supply: ksym_supply) 
+              : ('bTy, 'a) generic_fun_map_decl * ksym_supply =
+  let initial_state : 'a bmc_inline_state = 
+    ({sym_supply = ref sym_supply;
+      depth = 0;
+      file = file;
+    }) in
+  match fn with
+  | Proc(ty, params, e) ->
+    let ret = inline_expr initial_state e in
+    Proc(ty, params, ret), !(initial_state.sym_supply)
+
+  | Fun(ty, params, pe) ->
+    let ret =  inline_pexpr initial_state pe in
+    Fun(ty, params, ret), !(initial_state.sym_supply)
+  | _ -> assert false
+
+
+
 let inline_file (file: 'a file) (sym_supply: ksym_supply) =
+  let initial_state : 'a bmc_inline_state = 
+    ({sym_supply = ref sym_supply;
+      depth = 0;
+      file = file;
+    }) in
+  let new_globals = List.map (fun (sym, typ, expr) ->
+      (sym, typ, inline_expr initial_state expr)) file.globs in
+  let new_fun_map = Pmap.map (fun fn ->
+    match fn with
+    | Proc(ty, params, e) ->
+        Proc(ty, params, inline_expr initial_state e)
+    | Fun(ty, params, pe) -> 
+        Fun(ty, params, inline_pexpr initial_state pe)
+    | _ -> assert false
+  ) file.funs in
+  ({file with funs = new_fun_map; 
+              globs = new_globals}), 
+            !(initial_state.sym_supply)
+
+
+
+  (*
   match file.main with
   | None -> 
       print_endline "ERROR: file does not have a main";
@@ -203,6 +247,7 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
         }) in
       let new_globals = List.map (fun (sym, typ, expr) ->
         (sym, typ, inline_expr initial_state expr)) file.globs in
+      (* TODO: use inline_fn *)
       begin
       match Pmap.lookup main_sym file.funs with
       | Some (Proc(ty, params, e)) ->
@@ -222,6 +267,7 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
 
       | _ -> assert false
       end
+  *)
 
 (* =================== REWRITE STUFF ================= *)
 let impl : implementation = {
@@ -389,8 +435,9 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
     | Eif(pe1, e2, e3) ->
         Eif(rewrite_pexpr st pe1, rewrite_expr st e2, rewrite_expr st e3)
     | Eskip -> Eskip
-    | Eccall( _, _, _) 
-    | Eproc( _, _, _)  ->
+    | Eccall (a, pe, arglist) ->
+        Eccall(a, rewrite_pexpr st pe, List.map (rewrite_pexpr st) arglist)
+    | Eproc _ -> 
         assert false
     | Eunseq eslist ->
         Eunseq (List.map (rewrite_expr st) eslist) 
@@ -416,9 +463,47 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
         expr_
   in (Expr(annot, rewritten))
 
+let rewrite_fn (fn: ('bTy, 'a) generic_fun_map_decl) 
+               (file)
+               (sym_supply: ksym_supply) =
+  let initial_state : 'a bmc_inline_state = 
+    ({sym_supply = ref sym_supply;
+      depth = 0;
+      file = file;
+    }) in
+  match fn with
+  | Proc(ty,params, e) ->
+      let ret = rewrite_expr initial_state e in
+      Proc(ty, params, ret), !(initial_state.sym_supply)
+  | Fun(ty, params, pe) ->
+      let ret = rewrite_pexpr initial_state pe in
+      Fun(ty, params, ret), !(initial_state.sym_supply)
+  | _ -> assert false
+
 
 let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
+  let initial_state : 'a bmc_inline_state = 
+  ({sym_supply = ref sym_supply;
+    depth = 0;
+    file = file;
+  }) in
+  let new_globals = List.map (fun (sym, typ, expr) ->
+      (sym, typ, rewrite_expr initial_state expr)) file.globs in
+  let new_fun_map = Pmap.map (fun fn ->
+    match fn with
+    | Proc(ty, params, e) ->
+        Proc(ty, params, rewrite_expr initial_state e)
+    | Fun(ty, params, pe) ->
+        Fun(ty, params, rewrite_pexpr initial_state pe)
+    | _ -> assert false
+  ) file.funs in
+  ({file with funs = new_fun_map; 
+              globs = new_globals}), 
+      !(initial_state.sym_supply)
 
+
+
+  (*
   match file.main with
   | None -> 
       print_string "ERROR: file does not have a main\n";
@@ -453,4 +538,5 @@ let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
 
       | _ -> assert false
       end
+*)
 
