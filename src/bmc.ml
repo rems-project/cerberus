@@ -185,7 +185,8 @@ let lbool_to_bool = function
   | _ -> assert false
 
 let extract_executions (model: Model.model)
-                       (fns : exec_fns) =
+                       (fns : exec_fns) 
+                       (ctx : context) =  
   let apply = FuncDecl.apply in
   let events = Enumeration.get_consts fns.event_sort in
 
@@ -194,6 +195,22 @@ let extract_executions (model: Model.model)
      | None -> assert false
      | Some e -> e) in
   print_endline "EXTRACTING EXECUTIONS";
+
+  let pp_value (value: Expr.expr) =
+    if (Loaded.is_loaded ctx value) then
+      begin
+      match Expr.get_args value with
+      | [v] -> 
+          if (Sort.equal (Expr.get_sort v) (LoadedInteger.mk_sort ctx) &&
+              Expr.is_numeral (List.hd (Expr.get_args v))) then 
+            Expr.to_string (List.hd (Expr.get_args v))
+          else
+            Expr.to_string value
+      | _ -> assert false
+      end
+    else
+      Expr.to_string value 
+  in 
 
   (* Get actions *)
   let all_actions = 
@@ -206,18 +223,19 @@ let extract_executions (model: Model.model)
         let guarded = Boolean.get_bool_value(interp (apply fns.getGuard [event])) in
         let memorder = get_memorder (interp (apply fns.getMemOrder [event])) fns in
         let tid = Integer.get_int (interp (apply fns.getThread [event])) in
-        let value = interp(apply fns.getVal [event]) in
+        let value = pp_value(interp(apply fns.getVal [event])) in
 
-        match guarded with 
-        | L_TRUE -> 
+        match (tid=initial_tid),guarded with 
+        | true, _ -> None
+        | _, L_TRUE -> 
             if (Expr.equal event_type fns.read_type) then
-              Some (Load (aid, tid, memorder, loc, Z3Expr value))
+              Some (Load (aid, tid, memorder, loc, Flexible value))
             else if (Expr.equal event_type fns.write_type) then
-              Some (Store (aid, tid, memorder, loc, Z3Expr value))
+              Some (Store (aid, tid, memorder, loc, Flexible value))
             else
               assert false
-        | L_FALSE -> None
-        | L_UNDEF -> assert false 
+        | _, L_FALSE -> None
+        | _, L_UNDEF -> assert false 
       ) events)) in
 
   let action_map : (action_id, action) Pmap.map = 
@@ -322,21 +340,11 @@ let extract_executions (model: Model.model)
       mo = mo;
       sw = sw;
     } in
-  pp_witness witness
+  pp_witness witness;
 
-
-  (*
-  List.iter (fun event ->
-      print_endline (Expr.to_string event);
-      print_endline (interp (apply fns.getAddr [ event ]));
-      print_endline (interp (apply fns.getAid [ event ]));
-      print_endline (interp (apply fns.getEventType [ event ]));
-      print_endline (interp (apply fns.getGuard [ event ]));
-      print_endline (interp (apply fns.getMemOrder [ event ]));
-      print_endline (interp (apply fns.getThread [ event ]));
-      print_endline (interp (apply fns.getVal [ event ]));
-  ) events; 
-  *)
+  let dot_str = pp_dot () (ppmode_default_web, 
+              (preexecution, Some witness, None)) in
+  save_to_file "tmp.dot" dot_str
 
 (* ========== BMC ========== *)
 
@@ -2915,7 +2923,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
           match funcDecls with
           | None -> ();
           | Some fns -> 
-              extract_executions model fns;
+              extract_executions model fns state1.ctx;
           print_endline "-----WITH VCS";
           let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
                                  state1.vcs

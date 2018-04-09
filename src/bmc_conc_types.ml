@@ -44,6 +44,9 @@ type location_kind =
   | Mutex
 
 type 'a set = 'a list
+type 'a reln = ('a * 'a) list
+
+type action_rel = action reln
 
 type pre_execution =
   {   actions : action set;
@@ -66,7 +69,62 @@ type execution_witness =
      *)
  }
 
+type fault =
+    One of action list
+  | Two of action_rel
+
+type execution_derived_data = {
+  locations: location set;
+  derived_relations: (string * action_rel) list;
+  undefined_behaviour: (string * fault) list;
+} 
+
 type observable_execution = (pre_execution * execution_witness)
+
+(*************************************************** *)
+(*    Pp_stuff functions *)
+(*************************************************** *)
+type layoutmode = 
+| LO_dot
+| LO_neato_par
+| LO_neato_par_init
+| LO_neato_downwards
+
+type ppmode = {
+    fontsize    : int  ;
+    fontname    : string  ;
+    node_height : float;
+    node_width  : float;
+    filled      : bool;
+    xscale      : float;
+    yscale      : float;
+    ranksep     : float;
+    nodesep     : float;
+    penwidth    : float;
+    legend      : string option;
+    layout      : layoutmode;
+    texmode     : bool;
+    thread_ids  : bool;
+} 
+
+let ppmode_default_web = {
+fontsize    = 10;
+fontname    = "Helvetica";
+node_height = 0.2;
+node_width  = 0.9;
+filled      = false;
+xscale      = 1.5;
+yscale      = 0.7;
+ranksep     = 0.2; (* for dot - but it seems to clip-below at 0.2, for no reason*)
+nodesep     = 0.25;   (* for dot and for self-loops in neato *)
+penwidth    = 1.0;
+legend      = None; (*Some "filename";*)
+layout      = LO_dot;
+texmode     = false;
+thread_ids  = false
+}
+
+  
 
 (*************************************************** *)
 (*    Projection functions *)

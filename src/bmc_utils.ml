@@ -115,4 +115,8 @@ let getOptVal = function
   | Some x -> x
 
 
+let save_to_file file str =
+  let channel = open_out file in
+  output_string channel str;
+  close_out channel
   
