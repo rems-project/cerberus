@@ -65,7 +65,8 @@ class View {
             type: 'stack',
             content: [
               component('Console'),
-              component('Execution')
+              component('Execution'),
+              component('Memory')
             ]}
           ]},
           component('Core')
@@ -116,6 +117,11 @@ class View {
       locs: [],
       view: [],
       interactive: null,
+      graph: {
+        nodes: new vis.DataSet([]),
+        edges: new vis.DataSet([])
+      },
+      // TODO: clear steps
       steps: {
         nodes: new vis.DataSet([]),
         edges: new vis.DataSet([]),
@@ -162,14 +168,19 @@ class View {
       console.log('impossible initialise interactive mode')
       return
     }
-    if (this.state.steps.nodes.length > 0) {
+    if (this.state.graph.nodes.length > 0) {
       console.log('interactive mode already initialised')
       return
     }
     // Create initial node
     let init = this.state.interactive.steps.nodes[0]
-    this.state.steps.nodes.add(init)
-    this.state.steps.hide_tau.nodes.add(init)
+    init.isVisible = true
+    init.isLeaf = true
+    init.isTau = false
+    this.state.graph.nodes.clear()
+    this.state.graph.edges.clear()
+    this.state.graph.nodes.add(init)
+    //this.state.steps.hide_tau.nodes.add(init)
     this.state.lastNodeId = 1
   }
 
@@ -182,11 +193,6 @@ class View {
         componentName: 'tab',
         title: 'Interactive',
         componentState: { tab: 'Interactive' }
-      },{
-        type: 'component',
-        componentName: 'tab',
-        title: 'Memory',
-        componentState: { tab: 'Memory' }
       }]
     })
     this.refresh()
@@ -200,10 +206,8 @@ class View {
   }
 
   clearInteractive() {
-    this.state.steps.edges.clear()
-    this.state.steps.nodes.clear()
-    this.state.steps.hide_tau.edges.clear()
-    this.state.steps.hide_tau.nodes.clear()
+    this.state.graph.edges.clear()
+    this.state.graph.nodes.clear()
     this.state.interactive = null
     if (this.state.status == 'success' && this.isInteractiveOpen()) {
       ui.request('Step', (data) => {
@@ -273,6 +277,11 @@ class View {
     this.highlight()
   }
 
+  refresh () {
+    this.tabs.map((tab) => tab.refresh())
+    this.layout.updateSize()
+  }
+
   updateMemory(mem) {
     let nodes = []
     let edges = []
@@ -322,6 +331,79 @@ class View {
     this.tabs.map((tab) => tab.updateMemory(this.state))
   }
 
+  updateTree(pointId, tree) {
+    // Give a better label to the node (TODO)
+    const nodeLabel = (str) => {
+      if (str == 'Step_eval(first operand of a Create)')
+        return 'Eval first operand of create'
+      if (str == 'Step_eval(Esseq)')
+        return 'Eval strong sequencing'
+      if (str == 'Step_eval(Ewseq)')
+        return 'Eval weak sequencing'
+      if (str == 'Step_eval(Epure)')
+        return 'Eval pure expression'
+      if (str == 'Step_tau(End)')
+        return 'Non deterministic choice'
+      return str
+    }
+
+    // Check node is a tau transition
+    const isTau = (n) => n.label.includes("tau") && !n.label.includes("End")
+
+    const isTauById = (nId) => isTau(graph.nodes.get(nId))
+
+    // Return immediate edge parent
+    const getIncommingEdge = (nId) => graph.edges.get().find((n) => n.to == nId)
+
+    // Search for a no tau parent
+    const getNoTauParent = (nId) => {
+      const e = getIncommingEdge(nId)
+      if (e == null)
+        error('Could not find incomming edge!')
+      if (isTauById(e.from))
+        return getNoTauParent(e.from)
+      return e.from
+    }
+
+    const graph = this.state.graph
+    let lastLeafNodeId = null
+
+    // Update tree nodes labels
+    tree.nodes.map((n) => n.label = nodeLabel(n.label))
+
+    // Update current point to become branch
+    const point = graph.nodes.get(pointId)
+    point.group = 'branch'
+    point.state = null
+    graph.nodes.update(point)
+
+    // Add nodes
+    tree.nodes.map((n) => {
+      n.isTau = isTau(n)
+      n.isVisible = true
+      graph.nodes.add(n)
+      if (n.group == 'leaf') lastLeafNodeId = n.id
+    })
+
+    // Edges are added twice (for tau transitions)
+    tree.edges.map((e) => {
+      e.isTau = true
+      graph.edges.add(e)
+    })
+    tree.edges.map((e) => {
+      const n = graph.nodes.get(e.to)
+      if (!n.isTau)
+        graph.edges.add({from: getNoTauParent(e.to), to: e.to, isTau: false})
+    })
+
+    // Update any instance of interactive
+    this.tabs.map((tab) => tab.updateGraph(graph))
+
+    // WARN: Assume tree node is decreasing order
+    // This is a seed to the server
+    this.state.lastNodeId = tree.nodes[0].id
+  }
+
   mergeState (s) {
     if (s.status == 'failure') {
       this.setStateEmpty()
@@ -333,8 +415,4 @@ class View {
     this.update()
   }
 
-  refresh () {
-    this.tabs.map((tab) => tab.refresh())
-    this.layout.updateSize()
-  }
 }

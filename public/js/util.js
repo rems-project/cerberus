@@ -11,6 +11,10 @@ function option(x, y) {
   return y
 }
 
+function error(str) {
+  throw new Error(str)
+}
+
 function shortURL(url, f) {
   $.ajax({
     type: 'POST',

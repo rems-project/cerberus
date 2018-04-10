@@ -215,7 +215,7 @@ class UI {
       }
     }).fail((e) => {
       console.log('Failed request!', e)
-      this.currentView.state.dirty = false
+      this.state.dirty = false
       this.done()
     })
   }
@@ -247,6 +247,22 @@ class UI {
     })
   }
 
+  // step interactive mode
+  step(active) {
+    if (active) {
+      this.state.interactive = {
+        lastId: this.state.lastNodeId,
+        state: active.state,
+        active: active.id,
+        tagDefs: this.state.tagDefs
+      }
+      ui.request('Step', (data) => {
+        ui.currentView.updateTree(active.id, data.interactive.steps)
+      })
+    } else {
+      console.log('error: node '+active+' unknown')
+    }
+  }
 
   wait () {
     $('body').addClass('wait')
