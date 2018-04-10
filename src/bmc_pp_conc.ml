@@ -73,7 +73,7 @@ let pp_value () = function
   | Flexible s -> s
   | Z3Expr expr -> Expr.to_string expr
 
-let pp_action = function
+let pp_action_long = function
   | Load (aid, tid, memord, loc, cval) ->
     sprintf "%s:Load %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc () loc) 
                                   (pp_memory_order memord) (pp_value () cval)
@@ -91,17 +91,17 @@ let pp_location_kind = function
 let pp_preexecution (preexec: pre_execution) =
   print_endline "===ACTIONS";
   List.iter (fun action ->
-    print_endline (pp_action action)) preexec.actions;
+    print_endline (pp_action_long action)) preexec.actions;
   print_endline "===Threads";
   List.iter (fun tid ->
     Printf.printf "%d " tid) preexec.threads;
   print_endline "===SB";
   List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action a1) (pp_action a2);
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) preexec.sb;
   print_endline "===ASW";
   List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action a1) (pp_action a2);
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) preexec.asw;
   print_endline "===LK";
   Pmap.iter (fun loc kind ->
@@ -112,16 +112,16 @@ let pp_preexecution (preexec: pre_execution) =
 let pp_witness (witness: execution_witness) =
   print_endline "===RF";
   List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action a1) (pp_action a2);
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) witness.rf;
   print_endline "===MO";
   List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action a1) (pp_action a2);
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) witness.mo;
   (*
   print_endline "===SW";
   List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action a1) (pp_action a2);
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) witness.sw;
   *)
 
@@ -263,6 +263,16 @@ and pp_column_head rl () = function
 
 exception NonLinearSB
 
+let partition_faults faults =
+  let (unary,binary) =
+    List.fold_left
+      (fun (un,bin) (nm,fault) -> match fault with
+        | One acts -> ((nm,acts) :: un,bin)
+        | Two rel -> (un,(nm,rel) :: bin))
+      ([],[]) faults in
+  (List.rev unary, List.rev binary)
+
+
 let pp_dot () (m, (preexec, exedo, exddo)) =
               (*(m: ppmode)
               (preexec : pre_execution) 
@@ -384,8 +394,16 @@ let pp_dot () (m, (preexec, exedo, exddo)) =
     let (x',y') = action_position (x,y) in
     sprintf "pos=\"%f,%f!\"" (x' -. 1.25) (y'+. 0.25) in
   
+  let (unary_faults,binary_faults) =
+    match exddo with
+      | None -> ([],[])
+      | Some exdd -> partition_faults exdd.undefined_behaviour in
 
-  (* TODO: undefined behaviour *)
+  let faulty_action_ids =
+    List.concat (List.map (fun (_,acts) -> List.map aid_of acts) unary_faults) in
+
+
+
   let axygeometry = sprintf "[margin=\"0.0,0.0\"][fixedsize=\"true\"][height=\"%f\"][width=\"%f\"]" m.node_height m.node_width in
   let chgeometry = "[margin=\"0.0,0.0\"][fixedsize=\"false\"][height=\"0.15\"][width=\"0.1\"]" in
   let pp_axy () color rank (a,(x,y)) =
@@ -436,7 +454,8 @@ let pp_dot () (m, (preexec, exedo, exddo)) =
     [ ("sb","black", transitive_reduction preexec.sb);
       (*("dd","magenta", transitive_reduction exod.dd);
       ("cd","magenta", transitive_reduction exod.cd); *)
-      ("asw","deeppink4",preexec.asw) ] 
+      (* ("asw","deeppink4",preexec.asw) ]  *)
+    ]
     @
       (match exedo with None -> [] | Some exed ->
         [ ("rf",  "red",   exed.rf);
@@ -468,13 +487,13 @@ let pp_dot () (m, (preexec, exedo, exddo)) =
            (try List.assoc nm colour_scheme with Not_found -> "black"),
            try_to_transitive_reduce rel) in
         List.map colour_and_prepare exdd.derived_relations
-        (*
         @
         let relation_faults =
           List.map
-            (fun (nm, rel) -> ((try List.assoc nm Atomic.short_names with Not_found -> nm), rel))
+            (fun (nm, rel) -> (nm, rel))
+              (* ((try List.assoc nm Atomic.short_names with Not_found -> nm), rel)) *)
             binary_faults in
-        List.map (fun (nm, rel) -> (nm, "darkorange", symmetric_reduction rel)) relation_faults*)
+        List.map (fun (nm, rel) -> (nm, "darkorange", symmetric_reduction rel)) relation_faults
         ) in
   let debug s = () (* print_string s;flush stdout *) in 
   let relayout_downwards columns = 

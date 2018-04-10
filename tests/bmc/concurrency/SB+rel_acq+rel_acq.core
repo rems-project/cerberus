@@ -19,7 +19,7 @@ proc main () : eff integer :=
   let strong _ : unit = kill(y) in
   case (_a1, _a2) of
     | (Specified (a1: integer), Specified (a2: integer)) =>
-        pure ( if ((a1 + 2*a2) = 0) then
+        pure ( if ((a1 + 2*a2) = 2) then
                   undef(<<UB045a_division_by_zero>>) 
                else
                   a1 + 2*a2)

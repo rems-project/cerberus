@@ -1,7 +1,3 @@
-(*
- * TODO: Give an overview of the relevant modules
- *)
-
 open Core
 open Core_ctype
 open Cthread
@@ -15,6 +11,7 @@ open Z3
 open Z3.Arithmetic
 open Z3.Boolean
 
+(* TODO: Clean up modules *)
 open Bmc_analysis
 open Bmc_conc_types
 open Bmc_events
@@ -140,6 +137,7 @@ type exec_fns = {
   acq_rel_order : Expr.expr;
 
   asw          : FuncDecl.func_decl;
+  hb           : FuncDecl.func_decl;
   mo           : FuncDecl.func_decl;
   rf           : FuncDecl.func_decl;
   sb           : FuncDecl.func_decl;
@@ -157,6 +155,10 @@ type exec_fns = {
   getMemOrder  : FuncDecl.func_decl;
   getThread    : FuncDecl.func_decl;
   getVal       : FuncDecl.func_decl;
+
+  (* Race assertions *)
+  unseq_race   : Expr.expr;
+  data_race    : Expr.expr;
 }
 
 type model_execution = {
@@ -247,6 +249,8 @@ let extract_executions (model: Model.model)
         | _, L_UNDEF -> assert false 
       ) events)) in
 
+  let quadratic_actions = cartesian all_actions all_actions in
+
   let action_map : (action_id, action) Pmap.map = 
     List.fold_left (fun map action ->
       Pmap.add (aid_of action) action map) 
@@ -281,7 +285,7 @@ let extract_executions (model: Model.model)
     (tid_of a1 <> g_initial_tid) &&
     (tid_of a2 <> g_initial_tid) &&
     is_sb
-  ) (cartesian all_actions all_actions) in
+  ) (quadratic_actions) in
 
   let asw = List.filter (fun (a1, a2) ->
     let event1 = Pmap.find (aid_of a1) event_map in
@@ -291,7 +295,18 @@ let extract_executions (model: Model.model)
     (tid_of a1 <> g_initial_tid) &&
     (tid_of a2 <> g_initial_tid) &&
     is_asw
-  ) (cartesian all_actions all_actions) in
+  ) (quadratic_actions) in
+
+  let hb = List.filter (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let is_hb = lbool_to_bool(Boolean.get_bool_value 
+                  (interp (apply fns.hb [event1; event2]))) in
+    (tid_of a1 <> g_initial_tid) &&
+    (tid_of a2 <> g_initial_tid) &&
+    is_hb
+  ) (quadratic_actions) in
+
 
   let preexecution : pre_execution = 
     { actions = all_actions
@@ -335,7 +350,7 @@ let extract_executions (model: Model.model)
     (is_atomic) &&
     (is_write a1 && is_write a2) &&
     (mo1 < mo2)
-  ) (cartesian all_actions all_actions) in
+  ) (quadratic_actions) in
 
   let sw = List.filter (fun (a1, a2) ->
     let event1 = Pmap.find (aid_of a1) event_map in
@@ -345,7 +360,7 @@ let extract_executions (model: Model.model)
     (tid_of a1 <> g_initial_tid) &&
     (tid_of a2 <> g_initial_tid) &&
     is_sw
-  ) (cartesian all_actions all_actions) in
+  ) (quadratic_actions) in
 
   let witness : execution_witness = 
     { rf = rf;
@@ -367,12 +382,42 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     mk_lt ctx (apply fns.mo [event1]) (apply fns.mo [event2]) 
   ) mo) in
+  
+  (* unsequenced race *)
+  let unsequenced_race = List.filter (fun (a1, a2) ->
+    (a1 <> a2) &&
+    (loc_of a1 = loc_of a2) &&
+    (is_write a1 || is_write a2) &&
+    (tid_of a1 = tid_of a2) &&
+    (tid_of a1 <> g_initial_tid) &&
+    (not (List.exists (fun (x,y) -> 
+      (x = a1 && y = a2) || (x = a2 && y = a1)) sb))
+  ) quadratic_actions in
+
+  let data_race = List.filter (fun (a1,a2) ->
+    (a1 <> a2) &&
+    (loc_of a1 = loc_of a2) &&
+    (is_write a1 || is_write a2) &&
+    (tid_of a1 <> tid_of a2) &&
+    (not (is_atomic_action a1 && is_atomic_action a2)) &&
+    (not (List.exists (fun(x,y) ->
+      (x = a1 && y = a2) || (x = a2 && y = a1)) hb))
+  ) quadratic_actions in
+
+  (*
+  print_endline "UNSEQUENCED_RACE";
+  List.iter (fun (a1, a2) ->
+    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
+  ) unsequenced_race;
+  *)
 
   let derived_data = {
     derived_relations = [
-      ("sw", sw)
+      ("sw", sw);
+(*      ("hb", hb) *)
     ];
-    undefined_behaviour = []
+    undefined_behaviour = [("ur", Two unsequenced_race)
+                          ;("dr", Two data_race)]
     } in
   (*
   let dot_str = pp_dot () (ppmode_default_web, 
@@ -405,7 +450,17 @@ let get_all_executions (solver : Solver.solver)
       ret
   in 
   let execs = aux solver [] in
-  Printf.printf "Num consistent executions: %d\n" (List.length execs);
+  let race_free = List.fold_left (fun acc exec ->
+    if (List.for_all (fun (_, p) ->
+            match p with
+            | One _ -> true
+            | Two [] -> true
+            | _ -> false) exec.derived_data.undefined_behaviour) then
+        acc + 1
+    else acc) 0 execs in
+
+  Printf.printf "# of consistent executions: %d\n" (List.length execs);
+  Printf.printf "# race free: %d\n" (race_free);
   
   List.iteri (fun i exec ->
     let dot_str = pp_dot () (ppmode_default_web,
@@ -2774,6 +2829,12 @@ let preexec_to_z3 (state: 'a bmc_state) =
                       ; mk_eq ctx (getThread bound_0) (getThread bound_1)
                       ; getGuard bound_0
                       ; getGuard bound_1 
+                      ; mk_not ctx 
+                          (mk_and ctx [mk_eq ctx bound_0 
+                                                 (getInitial (getAddr bound_0))
+                                      ;mk_eq ctx bound_1
+                                                 (getInitial (getAddr bound_1))
+                                      ])
                       ]
           )
           (mk_or ctx [ FuncDecl.apply fn_sb [bound_0; bound_1]
@@ -2784,10 +2845,11 @@ let preexec_to_z3 (state: 'a bmc_state) =
   ) in
 
   (* Data race:
-    * forall (e1, e2)
-    * (distinct and same location and one is write and not same thread and both
-    * are non-atomic =>
-    * must be related by happens before
+   * forall (e1, e2)
+   * distinct and same location and one is write and not same thread and i
+   * (not both are atomic = either is non-atomic)
+   * =>
+   * must be related by happens before
    *)
   let data_race_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
@@ -2864,10 +2926,12 @@ let preexec_to_z3 (state: 'a bmc_state) =
               (*; fr_clock_assert *)
               (* ; mo_included_assert *)
               (* ; asw_clock_assert  *)
-              ; unseq_race_assert 
               (* Comment out hb_assert and data_race_assert if too slow *)
               ; hb_assert 
+              (*
               ; data_race_assert 
+              ; unseq_race_assert 
+              *)
               ] in
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
 
@@ -2888,10 +2952,11 @@ let preexec_to_z3 (state: 'a bmc_state) =
       acq_rel_order = acq_rel_order;
 
       asw = fn_asw;
-      mo = fn_mo;
-      rf = fn_rf;
-      sb = fn_sb;
-      sw = fn_sw;
+      hb  = fn_hb;
+      mo  = fn_mo;
+      rf  = fn_rf;
+      sb  = fn_sb;
+      sw  = fn_sw;
 
       is_atomic = Address.is_atomic ctx;
 
@@ -2902,6 +2967,9 @@ let preexec_to_z3 (state: 'a bmc_state) =
       getMemOrder = fn_getMemorder;
       getThread = fn_getThread;
       getVal    = fn_getVal;
+
+      unseq_race = unseq_race_assert;
+      data_race = data_race_assert;
     } in
 
   ret, Some fns 
@@ -2994,20 +3062,34 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
           | Some fns -> 
               extract_executions model fns state1.ctx;
           *)
-          match funcDecls with
-          | None -> print_endline "No memory actions";
-          | Some fns ->
-            get_all_executions state1.solver fns state1.ctx None;
-          print_endline "-----WITH VCS";
-          let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
-                                 state1.vcs
-          in
-          Solver.add state1.solver [ mk_or state1.ctx not_vcs ] ;
+          let check_vcs = (match funcDecls with
+            | None -> print_endline "No memory actions"; true
+            | Some fns ->
+                get_all_executions state1.solver fns state1.ctx None;
+                print_endline "-----WITH RACE CHECKS";
+                Solver.add state1.solver [fns.unseq_race; fns.data_race];
+                if (Solver.check state1.solver [] = SATISFIABLE) then
+                  (print_endline "All consistent executions are race free.";
+                   true)
+                else
+                  (print_endline "Not all consistent executions are race free.";
+                   print_endline "-----RESULT=SAT :(";
+                   false
+                  )
+          ) in
 
-          Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
-          print_endline "Checking sat";
-          let _ = check_solver (state1.solver) in
-          ()
+          match check_vcs with
+          | true ->
+            print_endline "-----WITH VCS";
+            let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
+                                   state1.vcs
+            in
+            Solver.add state1.solver [ mk_or state1.ctx not_vcs ] ;
+            Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));
+            print_endline "Checking sat";
+            let _ = check_solver (state1.solver) in
+            ()
+          | false -> ()
         end
       else
         (* No valid execution *)
