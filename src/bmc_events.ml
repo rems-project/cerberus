@@ -233,26 +233,6 @@ let same_thread_filter (rel : (action_id * action_id) Pset.set)
   Pset.filter (fun (e1, e2) ->
     thread_of_paction (Pmap.find e1 actions) = thread_of_paction (Pmap.find e2 actions)
   ) rel
-(*
-for each candidate (e1, e2):
-  keep = true
-  for each candidate (ea, eb):
-    for e2 == eb:
-      if e2 is a child in both cases:
-        * want maximal of e1, ea
-        (if sb e1 ea: keep = false)
-      else if e2 is a parent in both cases:
-        * want maximal of e1, ea
-        (if sb e1 ea: keep = false)
-    for e1 == ea:
-      if e1 is a parent in both cases:
-        (want minimal of e2, eb)
-        (if sb eb e2: keep = false) 
-      else if e1 is a child in both cases:
-        (want minimal of e2, eb)
-        (if sb eb e2: keep = false) 
-
-*)
 
 (* Need to call for correct asw *)
 let filter_asw (asw : (action_id * action_id) Pset.set)

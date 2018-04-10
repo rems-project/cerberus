@@ -1,3 +1,42 @@
+(* Adapted from cppmem model exploration tool *)
+(*========================================================================*)
+(*                                                                        *)
+(*             cppmem model exploration tool                              *)
+(*                                                                        *)
+(*                    Mark Batty                                          *)
+(*                    Scott Owens                                         *)
+(*                    Jean Pichon                                         *)
+(*                    Susmit Sarkar                                       *)
+(*                    Peter Sewell                                        *)
+(*                                                                        *)
+(*  This file is copyright 2011, 2012 by the above authors.               *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*  notice, this list of conditions and the following disclaimer.         *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*  notice, this list of conditions and the following disclaimer in the   *)
+(*  documentation and/or other materials provided with the distribution.  *)
+(*  3. The names of the authors may not be used to endorse or promote     *)
+(*  products derived from this software without specific prior written    *)
+(*  permission.                                                           *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHORS ``AS IS'' AND ANY EXPRESS    *)
+(*  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED     *)
+(*  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE    *)
+(*  ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY       *)
+(*  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL    *)
+(*  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE     *)
+(*  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS         *)
+(*  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHE   *)
+(*  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR       *)
+(*  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN   *)
+(*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
+(*========================================================================*)
+
+
 open Z3
 
 type aid = int
@@ -52,32 +91,32 @@ type pre_execution =
   {   actions : action set;
       threads : tid set;
       lk      : (location, location_kind) Pmap.map; 
-      sb      : (action * action) set ;
-      asw     : (action * action) set ; 
+      sb      : action_rel ;
+      asw     : action_rel ; 
 (*      dd      : (action * action) set ; *)
+(*      cd      : (action * action) set ; *)
   }
 
 type execution_witness =
-  {  rf      : (action * action) set;
-     mo      : (action * action) set;
-     sw      : (action * action) set;
+  {  rf      : action_rel;
+     mo      : action_rel;
      (*
      sc      : (action * action) set;
      lo      : (action * action) set;
      ao      : (action * action) set;
      tot     : (action * action) set;
      *)
- }
+  }
 
 type fault =
     One of action list
   | Two of action_rel
 
 type execution_derived_data = {
-  locations: location set;
-  derived_relations: (string * action_rel) list;
-  undefined_behaviour: (string * fault) list;
-} 
+  derived_relations : (string * action_rel) list; 
+  undefined_behaviour : (string * fault) list;
+}
+
 
 type observable_execution = (pre_execution * execution_witness)
 
@@ -108,20 +147,20 @@ type ppmode = {
 } 
 
 let ppmode_default_web = {
-fontsize    = 10;
-fontname    = "Helvetica";
-node_height = 0.2;
-node_width  = 0.9;
-filled      = false;
-xscale      = 1.5;
-yscale      = 0.7;
-ranksep     = 0.2; (* for dot - but it seems to clip-below at 0.2, for no reason*)
-nodesep     = 0.25;   (* for dot and for self-loops in neato *)
-penwidth    = 1.0;
-legend      = None; (*Some "filename";*)
-layout      = LO_dot;
-texmode     = false;
-thread_ids  = false
+  fontsize    = 10;
+  fontname    = "Helvetica";
+  node_height = 0.2;
+  node_width  = 0.9;
+  filled      = false;
+  xscale      = 1.5;
+  yscale      = 0.7;
+  ranksep     = 0.2; (* for dot - but it seems to clip-below at 0.2, for no reason*)
+  nodesep     = 0.25;   (* for dot and for self-loops in neato *)
+  penwidth    = 1.0;
+  legend      = None; (*Some "filename";*)
+  layout      = LO_neato_par_init;
+  texmode     = false;
+  thread_ids  = false
 }
 
   

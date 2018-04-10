@@ -13,4 +13,3 @@ int main() {
         z2 = atomic_load_explicit(&y, memory_order_acquire); }  }-};
   return z1 + (2 * z2);
 }
-

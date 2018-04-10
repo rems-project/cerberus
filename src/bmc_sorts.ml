@@ -383,6 +383,9 @@ module Loaded =
       else
         assert false
 
+    let is_loaded (ctx: context) (expr: Expr.expr) : bool =
+      Sort.equal (mk_sort ctx) (Expr.get_sort expr)
+
   end
 
 

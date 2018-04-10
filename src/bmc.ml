@@ -18,14 +18,13 @@ open Z3.Boolean
 open Bmc_analysis
 open Bmc_conc_types
 open Bmc_events
+open Bmc_globals
 open Bmc_inline
 open Bmc_normalize
 open Bmc_pp_conc
 open Bmc_saves
 open Bmc_sorts
 open Bmc_utils
-
-let initial_tid = -1
 
 (* ========== Type definitions ========== *)
 
@@ -146,6 +145,8 @@ type exec_fns = {
   sb           : FuncDecl.func_decl;
   sw           : FuncDecl.func_decl;
 
+  (* hb, isAcq, isRel, clock, getInitial *)
+
   (* TODO: generalize this. Location is atomic *)
   is_atomic    : Expr.expr -> Expr.expr;
 
@@ -158,6 +159,14 @@ type exec_fns = {
   getVal       : FuncDecl.func_decl;
 }
 
+type model_execution = {
+  preexecution : pre_execution;
+  witness      : execution_witness;
+  derived_data : execution_derived_data;
+  
+  z3_asserts   : Expr.expr;
+
+}
 let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
   if (Expr.equal memorder fns.na_order) then
     NA
@@ -225,7 +234,7 @@ let extract_executions (model: Model.model)
         let tid = Integer.get_int (interp (apply fns.getThread [event])) in
         let value = pp_value(interp(apply fns.getVal [event])) in
 
-        match (tid=initial_tid),guarded with 
+        match (tid=g_initial_tid),guarded with 
         | true, _ -> None
         | _, L_TRUE -> 
             if (Expr.equal event_type fns.read_type) then
@@ -269,8 +278,8 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     let is_sb = lbool_to_bool(Boolean.get_bool_value 
                   (interp (apply fns.sb [event1; event2]))) in
-    (tid_of a1 <> initial_tid) &&
-    (tid_of a2 <> initial_tid) &&
+    (tid_of a1 <> g_initial_tid) &&
+    (tid_of a2 <> g_initial_tid) &&
     is_sb
   ) (cartesian all_actions all_actions) in
 
@@ -279,8 +288,8 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     let is_asw = lbool_to_bool (Boolean.get_bool_value 
                   (interp (apply fns.asw [event1; event2]))) in
-    (tid_of a1 <> initial_tid) &&
-    (tid_of a2 <> initial_tid) &&
+    (tid_of a1 <> g_initial_tid) &&
+    (tid_of a2 <> g_initial_tid) &&
     is_asw
   ) (cartesian all_actions all_actions) in
 
@@ -294,7 +303,7 @@ let extract_executions (model: Model.model)
 
   pp_preexecution preexecution;
 
-  let rf = List.map (function | Some x -> x | None -> assert false)
+  let rf = List.map getOptVal
     (List.filter (function
      | None -> false
      | Some (a1, a2) ->
@@ -317,10 +326,13 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     let mo1    = Integer.get_int (interp (apply fns.mo [event1])) in
     let mo2    = Integer.get_int (interp (apply fns.mo [event2])) in
+    let is_atomic = (match Pmap.find (getOptVal(loc_of a1)) location_kinds with
+                     | Atomic -> true | _ -> false) in
 
-    (tid_of a1 <> initial_tid) &&
-    (tid_of a2 <> initial_tid) &&
+    (tid_of a1 <> g_initial_tid) &&
+    (tid_of a2 <> g_initial_tid) &&
     (loc_of a1 = loc_of a2) &&
+    (is_atomic) &&
     (is_write a1 && is_write a2) &&
     (mo1 < mo2)
   ) (cartesian all_actions all_actions) in
@@ -330,21 +342,82 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     let is_sw = lbool_to_bool(Boolean.get_bool_value 
                   (interp (apply fns.sw [event1; event2]))) in
-    (tid_of a1 <> initial_tid) &&
-    (tid_of a2 <> initial_tid) &&
+    (tid_of a1 <> g_initial_tid) &&
+    (tid_of a2 <> g_initial_tid) &&
     is_sw
   ) (cartesian all_actions all_actions) in
 
   let witness : execution_witness = 
     { rf = rf;
       mo = mo;
-      sw = sw;
     } in
   pp_witness witness;
 
+  let guard_assert = mk_and ctx (List.map (fun event ->
+    let guarded = (interp (apply fns.getGuard[event])) in
+    mk_eq ctx (apply fns.getGuard[event]) guarded
+  ) events) in
+  let rf_assert = mk_and ctx (List.map (fun (a1,a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    mk_eq ctx (apply fns.rf [event2]) (event1) 
+  ) rf) in
+  let mo_assert = mk_and ctx (List.map (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    mk_lt ctx (apply fns.mo [event1]) (apply fns.mo [event2]) 
+  ) mo) in
+
+  let derived_data = {
+    derived_relations = [
+      ("sw", sw)
+    ];
+    undefined_behaviour = []
+    } in
+  (*
   let dot_str = pp_dot () (ppmode_default_web, 
               (preexecution, Some witness, None)) in
-  save_to_file "tmp.dot" dot_str
+  save_to_file g_dot_file dot_str;
+  *)
+
+  let ret : model_execution =
+    { preexecution = preexecution;
+      witness = witness;
+      derived_data = derived_data;
+      z3_asserts = mk_and ctx [guard_assert; rf_assert; mo_assert]
+    } in
+  ret
+
+let get_all_executions (solver : Solver.solver)
+                       (fns    : exec_fns)
+                       (ctx    : context)
+                       (retOpt : Expr.expr option) =
+  Solver.push solver;
+
+  let rec aux solver ret =
+    if Solver.check solver [] = SATISFIABLE then
+      let model = getOptVal (Solver.get_model solver) in
+      let execution = extract_executions model fns ctx in
+      (* Assert not *)
+      Solver.add solver [mk_not ctx execution.z3_asserts];
+      aux solver (execution :: ret)
+    else
+      ret
+  in 
+  let execs = aux solver [] in
+  Printf.printf "Num consistent executions: %d\n" (List.length execs);
+  
+  List.iteri (fun i exec ->
+    let dot_str = pp_dot () (ppmode_default_web,
+                      (exec.preexecution, Some exec.witness, 
+                       Some (exec.derived_data))) in
+    let filename = Printf.sprintf "%s_%d.dot" g_dot_file i in
+    save_to_file filename dot_str;
+  ) execs;
+
+  Solver.pop solver 1
+
+
 
 (* ========== BMC ========== *)
 
@@ -1172,7 +1245,7 @@ let bmc_paction (state: 'a bmc_state)
       (* Switching to concurrency model: create an initial write action *)
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
-      let action = Write(mk_next_aid state, initial_tid, NA, new_ptr, to_store) in
+      let action = Write(mk_next_aid state, g_initial_tid, NA, new_ptr, to_store) in
       let paction = BmcAction(Pos, mk_not state.ctx state.has_returned, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
@@ -1986,7 +2059,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
       (* Concurrency model stuff: add initial write *)
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
-      let action = Write(mk_next_aid state, initial_tid, NA, ptr, to_store) in
+      let action = Write(mk_next_aid state, g_initial_tid, NA, ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
@@ -2137,6 +2210,7 @@ let preexec_to_z3 (state: 'a bmc_state) =
   let fn_asw = FuncDecl.mk_fresh_func_decl ctx
                   "asw" [event_sort; event_sort ] (Boolean.mk_sort ctx) in
   (* HB: happens-before; (sb | sw)+ *)
+
   let fn_hb = FuncDecl.mk_fresh_func_decl ctx
                 "hb" [event_sort; event_sort] (Boolean.mk_sort ctx) in
 
@@ -2161,7 +2235,7 @@ let preexec_to_z3 (state: 'a bmc_state) =
   *)
   (* cc-clock: clock; used to be for coherence check. Now to track hb  *)
   let fn_clock = FuncDecl.mk_fresh_func_decl ctx
-                "cc-clock" [ event_sort ] (Integer.mk_sort ctx) in
+                "hb-clock" [ event_sort ] (Integer.mk_sort ctx) in
   (* synchronizes with; asw or[rel] ; [A && W] ; rf; [R && A]; [acq] 
    *)
   let fn_sw = FuncDecl.mk_fresh_func_decl ctx
@@ -2216,9 +2290,9 @@ let preexec_to_z3 (state: 'a bmc_state) =
     expr :: ret) preexec.sb [] in
   let init_notInit e1 e2 = 
     mk_and ctx [ mk_eq ctx (getThread e1) 
-                           (Integer.mk_numeral_i ctx initial_tid)
+                           (Integer.mk_numeral_i ctx g_initial_tid)
                ; mk_not ctx (mk_eq ctx (getThread e2) 
-                                       (Integer.mk_numeral_i ctx initial_tid ))
+                                       (Integer.mk_numeral_i ctx g_initial_tid ))
                ] in
   let sb_assert = Quantifier.expr_of_quantifier (
       Quantifier.mk_forall ctx
@@ -2830,21 +2904,6 @@ let preexec_to_z3 (state: 'a bmc_state) =
       getVal    = fn_getVal;
     } in
 
-
-  (*
-  let func_decl_list = [ fn_getAddr
-                       ; fn_getInitial
-                       ; fn_getVal
-                       ; fn_getGuard
-                       ; fn_getThread
-                       ; fn_sb
-                       ; fn_rf
-                       (* ; fn_fr *)
-                       ; fn_mo
-                       ; fn_clock
-                       ] in
-  *)
-
   ret, Some fns 
 
 
@@ -2861,15 +2920,25 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       let (_, _, state1) = (
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
-            (* Assert return type is an integer st return sort is consistant *)
-            assert (ty = BTy_loaded OTy_integer);
             (* Handle parameters *)
             let state = initialise_main_params params state in
             let esaves = find_save_expr e in
 
-            bmc_expr {state with saves = esaves} e
+            if (ty = BTy_loaded OTy_integer) then
+              bmc_expr {state with saves = esaves} e
+            else if (ty = BTy_object OTy_integer)  then
+              bmc_expr 
+                {state with 
+                    saves = esaves;
+                    z3_ret = Expr.mk_fresh_const state.ctx
+                               "ret_main" (Integer.mk_sort state.ctx) } e
+            else
+              assert false
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
+            print_endline "Fun disabled for now; check return consistent";
+            assert false;
+
             let state = initialise_main_params params state in
             bmc_pexpr state pe 
         | _ -> assert false
@@ -2907,7 +2976,6 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             preexec_to_z3 state1
         ) in
 
-
       print_endline "-----CONSTRAINTS ONLY";
       assert (Solver.check state1.solver [] = SATISFIABLE);
 
@@ -2917,6 +2985,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       if (check_solver_fun state1.solver (Some state1.z3_ret)
             = SATISFIABLE) then
         begin
+          (*
           let model = (match Solver.get_model state1.solver with
                        | Some m -> m
                        | None -> assert false) in
@@ -2924,11 +2993,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
           | None -> ();
           | Some fns -> 
               extract_executions model fns state1.ctx;
+          *)
+          match funcDecls with
+          | None -> print_endline "No memory actions";
+          | Some fns ->
+            get_all_executions state1.solver fns state1.ctx None;
           print_endline "-----WITH VCS";
           let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
                                  state1.vcs
           in
-          (* List.iter (fun e -> print_endline (Expr.to_string e)) not_vcs; *)
           Solver.add state1.solver [ mk_or state1.ctx not_vcs ] ;
 
           Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string (state1.solver));

@@ -1,14 +1,12 @@
 open Core
 
 open Bmc_utils
-(* open Bmc_renaming *)
+open Bmc_globals
 open Implementation
 open Mem
 
 open AilTypes
 open Bmc_ssa
-
-let max_inline_depth = 3
 
 (* TODO: do properly *)
 type 'a bmc_inline_state = {
@@ -93,9 +91,8 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
           match Pmap.lookup sym st.file.stdlib with
           | Some (Fun(ty, args, fun_exp)) -> 
               let new_pexpr = inline_pecall st ty args fun_exp pelist in
-
               let Pexpr(_, ty, ret_) = (
-                if st.depth < max_inline_depth then
+                if st.depth < g_max_inline_depth then
                   inline_pexpr ({st with depth = st.depth + 1}) new_pexpr
                 else
                   new_pexpr
@@ -111,7 +108,7 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
         | Some (IFun (ty, args, fun_expr)) ->
             let new_pexpr = inline_pecall st ty args fun_expr pelist in
             let Pexpr(_,ty, ret_) = (
-              if st.depth < max_inline_depth then
+              if st.depth < g_max_inline_depth then
                 inline_pexpr ({st with depth = st.depth + 1}) new_pexpr
               else
                 new_pexpr
