@@ -18,6 +18,7 @@ class Tab {
   clear ()   {}
   update (s)  {}
   updateMemory (s) {}
+  updateGraph(g) {}
   highlight(s) {}
   fit() {}
 
@@ -98,6 +99,16 @@ class TabInteractive extends Tab {
               background: '#033777'
             }
           }
+        },
+        branch: {
+          color: {
+            border: '#5f5f5f',
+            background: '#5f5f5f',
+            highlight: {
+              border: '#7f7f7f',
+              background: '#7f7f7f'
+            }
+          }
         }
       },
       layout: {
@@ -115,32 +126,38 @@ class TabInteractive extends Tab {
       }
     }
 
-    let graph = {nodes: this.nodes, edges: this.edges }
-    this.network = new vis.Network(container[0], graph, options);
+    this.graph = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) }
+    this.graph.update = (newNodes, newEdges) => {
+      this.graph.nodes.update(newNodes)
+      this.graph.edges.update(newEdges)
+    }
+    this.graph.clear = () => {
+      this.graph.nodes.clear()
+      this.graph.edges.clear()
+    }
+
+    this.network = new vis.Network(container[0], this.graph, options)
+
+    this.updateGraph(ui.state.graph)
     this.selectLastLeaf()
 
     this.next.on('click', () => {
       let selection = this.network.getSelection()
       if (selection.nodes && selection.nodes.length > 0) {
-        this.doStep(this.nodes.get(selection.nodes[0]))
+        ui.step(this.nodes.get(selection.nodes[0]))
       }
       // If initial step
       let ns = this.nodes.get()
       if (ns.length == 1)
-        this.doStep(ns[0])
+        ui.step(ns[0])
     })
 
     restart.on('click', () => {
-      ui.state.steps.edges.clear()
-      ui.state.steps.nodes.clear()
-      ui.state.steps.hide_tau.edges.clear()
-      ui.state.steps.hide_tau.nodes.clear()
+      this.graph.clear()
       ui.state.interactive = null
       ui.request('Step', (data) => {
         ui.currentView.mergeState(data)
         ui.currentView.startInteractive()
-        this.selectLastLeaf()
-        this.network.fit()
       })
     })
 
@@ -150,19 +167,20 @@ class TabInteractive extends Tab {
         hide_tau_btn.text('Show tau steps')
       else
         hide_tau_btn.text('Hide tau steps')
-      this.network.setData({nodes: this.nodes, edges: this.edges})
+      this.graph.clear()
+      this.updateGraph(ui.state.graph)
     })
 
     this.network.on('click', (arg) => {
       // if one node is selected
       if (arg && arg.nodes && arg.nodes.length == 1) {
-        let active = this.nodes.get(arg.nodes[0])
+        let active = this.graph.nodes.get(arg.nodes[0])
         if (active) {
           this.step.addClass('disable')
           this.next.addClass('disable')
           if (active.group && active.group == 'leaf') {
             // do a step
-            this.doStep(active)
+            ui.step(active)
           } else if (active.loc || active.mem) {
             // show mem and select locations
             if (active.loc) {
@@ -181,127 +199,25 @@ class TabInteractive extends Tab {
     })
   }
 
+  updateGraph(graph) {
+    const nodeFilter = this.hide_tau ? n => n.isVisible && !n.isTau
+                                     : n => n.isVisible
+    const edgeFilter = e => e.isTau == !this.hide_tau
+    const nodes = graph.nodes.get().filter(nodeFilter)
+    const edges = graph.edges.get().filter(edgeFilter)
+    this.graph.update(nodes, edges)
+    this.selectLastLeaf()
+  }
+
   selectLastLeaf () {
-    // WARN: nodes are supposed to be in increasing order of ids
-    const nodes = this.nodes.get()
-    let leaf = null
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      if (nodes[i].state) {
-        leaf = nodes[i].id
-        break
-      }
-    }
-    if (leaf !== null) this.network.selectNodes([leaf])
-  }
-
-  get nodes() {
-    return this.hide_tau ? ui.state.steps.hide_tau.nodes
-                         : ui.state.steps.nodes
-  }
-
-  get edges() {
-    return this.hide_tau ? ui.state.steps.hide_tau.edges
-                         : ui.state.steps.edges
-  }
-
-  doStep(active) {
-    if (active) {
-      // do a step
-      ui.state.interactive = {
-        lastId: ui.state.lastNodeId,
-        state: active.state,
-        active: active.id,
-        tagDefs: ui.state.tagDefs
-      }
-      ui.request('Step', (data) => {
-        this.attachTree(active.id, data.interactive.steps)
-      })
-    } else {
-      console.log('error: node '+active+' unknown')
-    }
-  }
-
-  nodeLabel(str) {
-    if (str == 'Step_eval(first operand of a Create)')
-      return 'Eval first operand of create'
-    if (str == 'Step_eval(Esseq)')
-      return 'Eval strong sequencing'
-    if (str == 'Step_eval(Ewseq)')
-      return 'Eval weak sequencing'
-    if (str == 'Step_eval(Epure)')
-      return 'Eval pure expression'
-    if (str == 'Step_tau(End)')
-      return 'Non deterministic choice'
-    return str
-  }
-
-  attachTree(pointId, tree) {
-    // Update tree nodes
-    tree.nodes.map((n) => n.label = this.nodeLabel(n.label))
-    // Get trees
-    let leafNodeId = null
-    let nodes = ui.state.steps.nodes
-    let edges = ui.state.steps.edges
-    let no_tau_nodes = ui.state.steps.hide_tau.nodes
-    let no_tau_edges = ui.state.steps.hide_tau.edges
-    // TODO: this is bad!
-    let is_tau = (nId) => {
-      let n = nodes.get(nId)
-      if (n && n.label.includes("tau"))
-        return !n.label.includes("End")
-      return false
-    }
-    let getParent = (nId) => {
-      let es = edges.get()
-      for (let i = 0; i < es.length; i++) {
-        if (es[i].to == nId)
-          return es[i].from
-      }
-      return null
-    }
-    let getNoTauParent = (nId) => {
-      let fromId = getParent(nId)
-      if (fromId && is_tau(fromId))
-        return getNoTauParent(fromId)
-      return fromId
-    }
-    // Update current point (remove state from it)
-    let point = nodes.get(pointId)
-    delete point.group
-    delete point.state
-    nodes.remove(pointId)
-    no_tau_nodes.remove(pointId)
-    nodes.add(point)
-    no_tau_nodes.add(point)
-    // Add nodes and edges of the new tree
-    tree.nodes.map(function (n) {
-      nodes.add(n)
-      if (!is_tau(n.id)) no_tau_nodes.add(n)
-      if (n.state) leafNodeId = n.id
-    })
-    tree.edges.map(function (e) { edges.add(e) })
-    tree.edges.map(function (e) {
-      if (!is_tau(e.to))
-        no_tau_edges.add({from: getNoTauParent(e.to), to: e.to})
-    })
-    // If found a leaf
-    if (leafNodeId) {
-      // Focus
-      this.network.focus(leafNodeId)
-      // Select last leaf node
-      this.network.selectNodes([leafNodeId])
-      this.step.removeClass('disable')
-      this.next.removeClass('disable')
-    } else {
-      this.network.focus(tree.nodes[0])
-    }
-    // Update last node id
-    // Assume tree node is decreasing order
-    ui.state.lastNodeId = tree.nodes[0].id
+    const nodes = this.graph.nodes.get().filter(n => n.group == 'leaf')
+    const lastLeaf = nodes[nodes.length-1]
+    if (lastLeaf !== null) this.network.selectNodes([lastLeaf.id])
   }
 
   fit() {
-    this.network.setData({nodes: this.nodes, edges: this.edges})
+    this.graph.clear()
+    this.updateGraph(ui.state.graph)
     this.selectLastLeaf()
     this.network.fit()
     this.network.redraw()
@@ -359,8 +275,8 @@ class TabMemory extends Tab {
         }
       }
     }
-    let graph = {nodes: ui.state.mem.nodes, edges: ui.state.mem.edges }
-    this.network = new vis.Network(container[0], graph, options);
+    //let graph = {nodes: ui.state.mem.nodes, edges: ui.state.mem.edges }
+    //this.network = new vis.Network(container[0], graph, options);
   }
 
   updateMemory (state) {
