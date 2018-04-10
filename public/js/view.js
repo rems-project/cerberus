@@ -85,6 +85,7 @@ class View {
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
       container.setState(state)
+      if (ui.currentView) tab.update(ui.state)
     })
     this.layout.on('itemDestroyed', (c) => {
       if (c.componentName == 'tab') {
