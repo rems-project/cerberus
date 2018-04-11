@@ -1,5 +1,22 @@
 'use_strict'
 
+class Graph {
+  constructor (nodes, edges) {
+    this.nodes = new vis.DataSet(nodes)
+    this.edges = new vis.DataSet(edges)
+  }
+
+  clear() {
+    this.nodes.clear()
+    this.edges.clear()
+  }
+
+  update(newNodes, newEdges) {
+    this.nodes.update(newNodes)
+    this.edges.update(newEdges)
+  }
+}
+
 class View {
   constructor (title, data, config) {
     this.tabs = []
@@ -8,13 +25,13 @@ class View {
     this.source = new TabSource(title, data)
     this.tabs.push(this.source)
 
+    // State
+    this.setStateEmpty()
+
     // DOM
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
-
-    // State
-    this.setStateEmpty()
   }
 
   initLayout(config) {
@@ -86,7 +103,8 @@ class View {
       container.parent.tabcontent = tab // Attach tab to contentItem
       container.getElement().append(tab.dom)
       container.setState(state)
-      if (ui.currentView) tab.update(ui.state)
+      tab.update(self.state)
+      tab.highlight(self.state)
     })
     this.layout.on('itemDestroyed', (c) => {
       if (c.componentName == 'tab') {
@@ -110,35 +128,19 @@ class View {
 
   setStateEmpty() {
     this.state = {
-      title: this.title,
-      status: 'failure',
-      pp: { cabs: '', ail:  '', core: '' },
-      ast: { cabs: '', ail:  '', core: '' },
-      locs: [],
-      view: [],
-      interactive: null,
-      graph: {
-        nodes: new vis.DataSet([]),
-        edges: new vis.DataSet([])
-      },
-      // TODO: clear steps
-      steps: {
-        nodes: new vis.DataSet([]),
-        edges: new vis.DataSet([]),
-        hide_tau: {
-          nodes: new vis.DataSet([]),
-          edges: new vis.DataSet([])
-        }
-      },
-      mem: {
-        nodes: new vis.DataSet([]),
-        edges: new vis.DataSet([])
-      },
-      result: '',
-      console: '',
-      lastNodeId: 0,
-      isHighlighted: false,
-      dirty: true
+      title: this.title,                      // Title of current view
+      status: 'failure',                      // State of last request
+      pp: { cabs: '', ail:  '', core: '' },   // Pretty versions
+      ast: { cabs: '', ail:  '', core: '' },  // AST versions
+      locs: [],                               // Location info
+      graph: new Graph(),                     // Execution graph
+      mem: new Graph(),                       // Memory graph
+      result: '',                             // Execution result
+      console: '',                            // Cerberus error
+      lastNodeId: 0,                          // Last node seed to Cerb counter
+      tagDefs: null,                          // Current TagDefs (interactive)
+      isHighlighted: false,                   // Is currently hightlighted?
+      dirty: true                             // Should update core?
     }
   }
 
@@ -156,36 +158,29 @@ class View {
       type: 'component',
       componentName: 'tab',
       title: title,
-      componentState: {
-        tab: title
-      }
+      componentState: { tab: title }
     })
     this.refresh()
   }
 
-  startInteractive() {
-    if (!this.state.interactive.steps) {
+  startInteractive(steps) {
+    if (steps.nodes.length != 1) {
       console.log('impossible initialise interactive mode')
       return
     }
-    if (this.state.graph.nodes.length > 0) {
-      console.log('interactive mode already initialised')
-      return
-    }
     // Create initial node
-    let init = this.state.interactive.steps.nodes[0]
+    let init = steps.nodes[0]
     init.isVisible = true
     init.isLeaf = true
     init.isTau = false
-    this.state.graph.nodes.clear()
-    this.state.graph.edges.clear()
+    this.state.graph.clear()
     this.state.graph.nodes.add(init)
-    //this.state.steps.hide_tau.nodes.add(init)
     this.state.lastNodeId = 1
+    // Update interactive tabs
+    this.tabs.map(tab => tab.updateGraph(this.state.graph))
   }
 
-  newInteractiveTab() {
-    this.startInteractive()
+  newInteractiveTab(steps) {
     this.layout.root.contentItems[0].addChild({
       type: 'column',
       content: [{
@@ -196,6 +191,7 @@ class View {
       }]
     })
     this.refresh()
+    this.startInteractive(steps)
   }
 
   isInteractiveOpen() {
@@ -206,132 +202,17 @@ class View {
   }
 
   clearInteractive() {
-    this.state.graph.edges.clear()
-    this.state.graph.nodes.clear()
-    this.state.interactive = null
+    this.state.graph.clear()
     if (this.state.status == 'success' && this.isInteractiveOpen()) {
       ui.request('Step', (data) => {
-        this.mergeState(data)
-        this.startInteractive()
+        this.mergeState(data.state)
+        this.startInteractive(data.steps)
       })
     }
     this.fit()
   }
 
-  getEncodedState() {
-    let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
-    miniConfig.title = this.source.title
-    miniConfig.source = this.source.getValue()
-    return encodeURIComponent(JSON.stringify(miniConfig))
-  }
-
-  // Return this first instance (or create a new one)
-  getTab(title) {
-    let tab = this.findTab(title)
-    if (tab == null) {
-      this.newTab(title)
-      tab = this.findTab(title)
-    }
-    return tab
-  }
-  get exec()          { return this.getTab('Execution') }
-  get cabs()          { return this.getTab('Cabs') }
-  get ail()           { return this.getTab('Ail') }
-  get core()          { return this.getTab('Core') }
-  get console()       { return this.getTab('Console') }
-  get interactive()   { return this.getTab('Interactive') }
-
-  clear() {
-    this.tabs.map((tab) => tab.clear())
-  }
-
-  mark(loc) {
-    if (!this.state.dirty && loc) {
-      this.state.isHighlighted = false
-      this.clear()
-      this.tabs.map((tab) => tab.mark(loc))
-    }
-  }
-
-  highlight() {
-    if (this.state.isHighlighted) return;
-    this.clear()
-    this.tabs.map((tab) => tab.highlight(this.state))
-    this.state.isHighlighted = true
-  }
-
-  show() {
-    this.dom.show()
-  }
-
-  hide() {
-    this.dom.hide()
-  }
-
-  fit() {
-    this.tabs.map((tab) => tab.fit())
-  }
-
-  update() {
-    this.tabs.map((tab) => tab.update(this.state))
-    this.highlight()
-  }
-
-  refresh () {
-    this.tabs.map((tab) => tab.refresh())
-    this.layout.updateSize()
-  }
-
-  updateMemory(mem) {
-    let nodes = []
-    let edges = []
-    let toHex = (n) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    let is_pointer = (type) => {
-      return type.slice(-1) == '*'
-    }
-    let updateConcreteMemory = () => {
-      let readValue = (id, base, end) => {
-        let value = 0
-        const map = mem.bytemap
-        if (!map[base]) return 'unspecified' // undefined value in allocation
-        if (map[base].prov) // Has a provenance
-          edges.push({from: id, to: map[base].prov})
-        for (let i = base; i < end; i++)
-          if (map[i]) value += map[i].value
-        return value
-      }
-      Object.keys(mem.allocations).map((k) => {
-        const alloc = mem.allocations[k]
-        const base = parseInt(alloc.base)
-        const end  = parseInt(alloc.base) + parseInt(alloc.size)
-        const value = (is_pointer(alloc.type)) ? ''
-                        : '\n<i>Value:</i> ' + readValue(k, base, end)
-        const type  = '\n<i>Type:</i> ' + alloc.type
-        const title  = '<i>Base address:</i> ' + toHex(base)
-        const size  = '\n<i>Size:</i> ' + alloc.size
-        const label = title + type + size + value
-        nodes.push({id: k, label: label})
-      })
-    }
-    let updateSymbolicMemory = () => {
-      Object.keys(mem).map((k) => {
-        const alloc = mem[k]
-        const type  = '<i>Type:</i> ' + alloc.type
-        const value = '\n<i>Value:</i> ' + alloc.value
-        const label = type + value
-        nodes.push({id: k, label: label})
-      })
-    }
-    if (mem.allocations)
-      updateConcreteMemory()
-    else
-      updateSymbolicMemory()
-    this.state.mem.nodes = new vis.DataSet(nodes)
-    this.state.mem.edges = new vis.DataSet(edges)
-    this.tabs.map((tab) => tab.updateMemory(this.state))
-  }
-
-  updateTree(pointId, tree) {
+  updateInteractive(pointId, tree) {
     // Give a better label to the node (TODO)
     const nodeLabel = (str) => {
       if (str == 'Step_eval(first operand of a Create)')
@@ -404,15 +285,128 @@ class View {
     this.state.lastNodeId = tree.nodes[0].id
   }
 
+  getEncodedState() {
+    let miniConfig = GoldenLayout.minifyConfig(this.layout.toConfig())
+    miniConfig.title = this.source.title
+    miniConfig.source = this.source.getValue()
+    return encodeURIComponent(JSON.stringify(miniConfig))
+  }
+
+  // Return this first instance (or create a new one)
+  getTab(title) {
+    let tab = this.findTab(title)
+    if (tab == null) {
+      this.newTab(title)
+      tab = this.findTab(title)
+    }
+    return tab
+  }
+  get exec()          { return this.getTab('Execution') }
+  get cabs()          { return this.getTab('Cabs') }
+  get ail()           { return this.getTab('Ail') }
+  get core()          { return this.getTab('Core') }
+  get console()       { return this.getTab('Console') }
+  get interactive()   { return this.getTab('Interactive') }
+
+  clear() {
+    this.tabs.map((tab) => tab.clear())
+  }
+
+  mark(loc) {
+    if (!this.state.dirty && loc) {
+      this.state.isHighlighted = false
+      this.clear()
+      this.tabs.map((tab) => tab.mark(loc))
+    }
+  }
+
+  highlight() {
+    if (this.state.isHighlighted) return;
+    this.clear()
+    this.tabs.map((tab) => tab.highlight(this.state))
+    this.state.isHighlighted = true
+  }
+
+  show() {
+    this.dom.show()
+  }
+
+  hide() {
+    this.dom.hide()
+  }
+
+  fit() {
+    this.tabs.map((tab) => tab.fit())
+  }
+
+  update() {
+    this.tabs.map((tab) => tab.update(this.state))
+    this.highlight()
+  }
+
+  refresh () {
+    this.tabs.map((tab) => tab.refresh())
+    this.layout.updateSize()
+  }
+
+  updateMemory(mem) {
+    const nodes = []
+    const edges = []
+    const toHex = (n) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
+    const isPointer = (type) => {
+      return type.slice(-1) == '*'
+    }
+    const updateConcreteMemory = () => {
+      let readValue = (id, base, end) => {
+        let value = 0
+        const map = mem.bytemap
+        if (!map[base]) return 'unspecified' // undefined value in allocation
+        if (map[base].prov) // Has a provenance
+          edges.push({from: id, to: map[base].prov})
+        for (let i = base; i < end; i++)
+          if (map[i]) value += map[i].value
+        return value
+      }
+      Object.keys(mem.allocations).map((k) => {
+        const alloc = mem.allocations[k]
+        const base = parseInt(alloc.base)
+        const end  = parseInt(alloc.base) + parseInt(alloc.size)
+        const value = (isPointer(alloc.type)) ? ''
+                        : '\n<i>Value:</i> ' + readValue(k, base, end)
+        const type  = '\n<i>Type:</i> ' + alloc.type
+        const title  = '<i>Base address:</i> ' + toHex(base)
+        const size  = '\n<i>Size:</i> ' + alloc.size
+        const label = title + type + size + value
+        nodes.push({id: k, label: label})
+      })
+    }
+    const updateSymbolicMemory = () => {
+      Object.keys(mem).map((k) => {
+        const alloc = mem[k]
+        const type  = '<i>Type:</i> ' + alloc.type
+        const value = '\n<i>Value:</i> ' + alloc.value
+        const label = type + value
+        nodes.push({id: k, label: label})
+      })
+    }
+    if (mem.allocations)
+      updateConcreteMemory()
+    else
+      updateSymbolicMemory()
+    // Save in case another memory tab is open
+    this.state.mem = new Graph(nodes, edges)
+    this.tabs.map((tab) => tab.updateMemory(this.state.mem))
+  }
+
   mergeState (s) {
     if (s.status == 'failure') {
       this.setStateEmpty()
       this.console.setActive()
     }
+    if (s.tagDefs == null) s.tagDefs = this.state.tagDefs // avoid lose info
     Object.assign(this.state, s) // merge states
     this.state.isHighlighted = false
     this.state.dirty = false
-    this.update()
   }
 
 }

@@ -13,14 +13,14 @@ class Tab {
   }
 
   // Dummy methods to be overwritten
-  refresh () {}
-  mark (loc) {}
-  clear ()   {}
-  update (s)  {}
-  updateMemory (s) {}
-  updateGraph(g) {}
-  highlight(s) {}
-  fit() {}
+  refresh () {}         // Called when size or visibility of HTML changes
+  mark (loc) {}         // Mark elements according with location loc
+  highlight(s) {}       // Hightlight the entire file
+  clear ()   {}         // Clear all marking and highlights
+  update (s)  {}        // Update value (receives current state)
+  updateMemory (m) {}   // (only for memory tab) Update current memory
+  updateGraph(g) {}     // (only for interactive tab) Update execution graph
+  fit() {}              // TODO: PROBABLY SHOULD DELETE THIS
 
 }
 
@@ -52,9 +52,9 @@ class TabInteractive extends Tab {
     let restart = $('<div class="btn inline">Restart</div>')
     toolbar.append(restart)
 
-    let hide_tau_btn = $('<div class="btn inline">Show tau steps</button>')
-    toolbar.append(hide_tau_btn)
-    this.hide_tau = true
+    let hideTauBtn = $('<div class="btn inline">Show tau steps</button>')
+    toolbar.append(hideTauBtn)
+    this.hideTau = true
 
     let container = $('<div align="center" class="graph"></div>')
 
@@ -120,26 +120,13 @@ class TabInteractive extends Tab {
       },
       interaction: {
         navigationButtons: true,
-        //keyboard: true,
         selectable: true,
         selectConnectedEdges: false
       }
     }
 
-    this.graph = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) }
-    this.graph.update = (newNodes, newEdges) => {
-      this.graph.nodes.update(newNodes)
-      this.graph.edges.update(newEdges)
-    }
-    this.graph.clear = () => {
-      this.graph.nodes.clear()
-      this.graph.edges.clear()
-    }
-
+    this.graph = new Graph()
     this.network = new vis.Network(container[0], this.graph, options)
-
-    this.updateGraph(ui.state.graph)
-    this.selectLastLeaf()
 
     this.next.on('click', () => {
       let selection = this.network.getSelection()
@@ -154,19 +141,18 @@ class TabInteractive extends Tab {
 
     restart.on('click', () => {
       this.graph.clear()
-      ui.state.interactive = null
       ui.request('Step', (data) => {
-        ui.currentView.mergeState(data)
-        ui.currentView.startInteractive()
+        ui.currentView.mergeState(data.state)
+        ui.currentView.startInteractive(data.steps)
       })
     })
 
-    hide_tau_btn.on('click', () => {
-      this.hide_tau = !this.hide_tau
-      if (this.hide_tau)
-        hide_tau_btn.text('Show tau steps')
+    hideTauBtn.on('click', () => {
+      this.hideTau = !this.hideTau
+      if (this.hideTau)
+        hideTauBtn.text('Show tau steps')
       else
-        hide_tau_btn.text('Hide tau steps')
+        hideTauBtn.text('Hide tau steps')
       this.graph.clear()
       this.updateGraph(ui.state.graph)
     })
@@ -200,9 +186,9 @@ class TabInteractive extends Tab {
   }
 
   updateGraph(graph) {
-    const nodeFilter = this.hide_tau ? n => n.isVisible && !n.isTau
-                                     : n => n.isVisible
-    const edgeFilter = e => e.isTau == !this.hide_tau
+    const nodeFilter = this.hideTau ? n => n.isVisible && !n.isTau
+                                    : n => n.isVisible
+    const edgeFilter = e => e.isTau == !this.hideTau
     const nodes = graph.nodes.get().filter(nodeFilter)
     const edges = graph.edges.get().filter(edgeFilter)
     this.graph.update(nodes, edges)
@@ -212,19 +198,29 @@ class TabInteractive extends Tab {
   selectLastLeaf () {
     const nodes = this.graph.nodes.get().filter(n => n.group == 'leaf')
     const lastLeaf = nodes[nodes.length-1]
-    if (lastLeaf !== null) this.network.selectNodes([lastLeaf.id])
+    if (lastLeaf != null) {
+      this.network.focus(lastLeaf.id)
+      this.network.selectNodes([lastLeaf.id])
+      this.network.redraw()
+    }
   }
 
   fit() {
+    /*
     this.graph.clear()
     this.updateGraph(ui.state.graph)
     this.selectLastLeaf()
-    this.network.fit()
+    */
     this.network.redraw()
+    this.network.fit()
   }
 
   highlight() {
     this.network.unselectAll()
+  }
+
+  refresh() {
+    this.network.redraw()
   }
 
 }
@@ -275,12 +271,11 @@ class TabMemory extends Tab {
         }
       }
     }
-    //let graph = {nodes: ui.state.mem.nodes, edges: ui.state.mem.edges }
-    //this.network = new vis.Network(container[0], graph, options);
+    this.network = new vis.Network(container[0], new Graph(), options);
   }
 
-  updateMemory (state) {
-    this.network.setData(state.mem)
+  updateMemory (mem) {
+    this.network.setData(mem)
   }
 }
 

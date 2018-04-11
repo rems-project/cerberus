@@ -196,7 +196,7 @@ class UI {
     this.currentView.source.refresh()
   }
 
-  request (mode, onSuccess) {
+  request (mode, onSuccess, interactive) {
     this.wait()
     $.ajax({
       url:  '/cerberus',
@@ -207,7 +207,7 @@ class UI {
         'source':  this.source.getValue(),
         'rewrite': this.settings.rewrite,
         'model': this.settings.model,
-        'interactive': this.state.interactive,
+        'interactive': interactive
       }),
       success: (data, status, query) => {
         onSuccess(data);
@@ -223,9 +223,9 @@ class UI {
   elab (lang) {
     if (lang) this.currentView.newTab(lang)
     if (this.currentView.state.dirty) {
-      this.currentView.state.interactive = null
       this.request('Elaborate', (s) => {
         this.currentView.mergeState(s)
+        this.currentView.update()
         this.currentView.clearInteractive()
       })
     }
@@ -235,29 +235,29 @@ class UI {
     this.request(mode, (s) => {
       this.currentView.exec.setActive()
       this.currentView.mergeState(s)
+      this.currentView.update()
     })
   }
 
   // start interactive mode
   interactive() {
-    this.currentView.state.interactive = null
     this.request('Step', (data) => {
-      this.currentView.mergeState(data)
-      this.currentView.newInteractiveTab()
+      this.currentView.mergeState(data.state)
+      this.currentView.newInteractiveTab(data.steps)
     })
   }
 
   // step interactive mode
   step(active) {
     if (active) {
-      this.state.interactive = {
+      this.request('Step', (data) => {
+        this.currentView.mergeState(data.state)
+        this.currentView.updateInteractive(active.id, data.steps)
+      }, {
         lastId: this.state.lastNodeId,
         state: active.state,
         active: active.id,
         tagDefs: this.state.tagDefs
-      }
-      ui.request('Step', (data) => {
-        ui.currentView.updateTree(active.id, data.interactive.steps)
       })
     } else {
       console.log('error: node '+active+' unknown')
@@ -343,10 +343,10 @@ $.getJSON('std.json').done((res) => std = res).fail(() => {
 // Get list of compilers
 $.ajax({
   headers: {Accept: 'application/json'},
-  url: 'https://gcc.godbolt.org/api/compilers',
+  url: 'https://gcc.godbolt.org/api/compilers/c',
   type: 'GET',
   success: (data, status, query) => {
-    defaultCompiler = $.grep(data, (e) => e.id == 'clang500')[0]
+    defaultCompiler = $.grep(data, (e) => e.id == 'cclang500')[0]
     compilers       = data
   }
 })

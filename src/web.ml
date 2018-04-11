@@ -154,12 +154,12 @@ let json_of_result = function
     ]
   | Interaction (res, tags, t) ->
     `Assoc [
-      ("status", `String "stepping");
-      ("result", Json.of_opt_string res);
-      ("tagDefs", Json.of_option (fun s -> `String (B64.encode s)) tags);
-      ("interactive", `Assoc [
-          ("steps", json_of_exec_tree t);
-        ]);
+      ("steps", json_of_exec_tree t);
+      ("state", `Assoc [
+        ("status", `String "stepping");
+        ("result", Json.of_opt_string res);
+        ("tagDefs", Json.of_option (fun s -> `String (B64.encode s)) tags)
+      ]);
     ]
   | Failure err ->
     `Assoc [
