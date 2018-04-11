@@ -4,7 +4,6 @@ open Bmc_utils
 
 type 'a saves_map = (ksym, core_base_type * ksym list * 'a typed_expr) Pmap.map
 
-
 let print_saves_map (map: 'a saves_map) = 
   print_endline "SAVES_MAP";
   Pmap.iter (fun k (cbt, sym_list, expr) -> 

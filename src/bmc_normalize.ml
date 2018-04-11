@@ -28,6 +28,7 @@ let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
   (* Rename user variables that are repeated *)
 
   let (f, sym_supply) = ssa_file f sym_supply in
+
   print_string "INLINING FUNCTION CALLS\n";
   let (inlined_file, inlined_supply) = inline_file f sym_supply in
 

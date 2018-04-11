@@ -404,10 +404,6 @@ let rec rewrite_pexpr (st: 'a bmc_inline_state)
     | PEis_unsigned pe ->
         let (is_unsigned, _) = core_isunsigned_signed (rewrite_pexpr st pe) in
         is_unsigned
-    (*
-    | PEstd (str, pe) ->
-        PEstd (str, rewrite_pexpr st pe)
-*)
   in (Pexpr(annot,(), rewritten))
 
 
