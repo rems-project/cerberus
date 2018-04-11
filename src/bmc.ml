@@ -103,7 +103,6 @@ type 'a bmc_state = {
   (* Map from address to Z3 symbol representing value *)
   (* heap        : (Address.addr, Expr.expr) Pmap.map; *)
 
-
   parent_tid  : (thread_id * thread_id)  Pset.set ref;
   action_map  : (action_id, bmc_paction) Pmap.map ref;
 
@@ -117,7 +116,9 @@ type 'a bmc_state = {
   has_returned : Expr.expr; 
   z3_ret       : Expr.expr;
   ret_asserts  : Expr.expr list;
-  saves        : unit saves_map
+  saves        : unit saves_map;
+
+  depth        : int
 }
 
 type exec_fns = {
@@ -168,6 +169,7 @@ type model_execution = {
   
   z3_asserts   : Expr.expr;
 
+  retOpt       : Expr.expr option;
 }
 let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
   if (Expr.equal memorder fns.na_order) then
@@ -197,7 +199,8 @@ let lbool_to_bool = function
 
 let extract_executions (model: Model.model)
                        (fns : exec_fns) 
-                       (ctx : context) =  
+                       (ctx : context) 
+                       (retOpt: Expr.expr option) =  
   let apply = FuncDecl.apply in
   let events = Enumeration.get_consts fns.event_sort in
 
@@ -425,11 +428,16 @@ let extract_executions (model: Model.model)
   save_to_file g_dot_file dot_str;
   *)
 
+  let retValueO = match retOpt with
+    | None -> None
+    | Some ret -> Some (interp ret) in
+
   let ret : model_execution =
     { preexecution = preexecution;
       witness = witness;
       derived_data = derived_data;
-      z3_asserts = mk_and ctx [guard_assert; rf_assert; mo_assert]
+      z3_asserts = mk_and ctx [guard_assert; rf_assert; mo_assert];
+      retOpt = retValueO
     } in
   ret
 
@@ -442,7 +450,7 @@ let get_all_executions (solver : Solver.solver)
   let rec aux solver ret =
     if Solver.check solver [] = SATISFIABLE then
       let model = getOptVal (Solver.get_model solver) in
-      let execution = extract_executions model fns ctx in
+      let execution = extract_executions model fns ctx retOpt in
       (* Assert not *)
       Solver.add solver [mk_not ctx execution.z3_asserts];
       aux solver (execution :: ret)
@@ -461,6 +469,15 @@ let get_all_executions (solver : Solver.solver)
 
   Printf.printf "# of consistent executions: %d\n" (List.length execs);
   Printf.printf "# race free: %d\n" (race_free);
+  match retOpt with
+  | None -> ();
+  | Some _ ->
+    List.iter (fun exec ->
+      match exec.retOpt with
+      | None -> ()
+      | Some x -> print_string ((Expr.to_string x) ^ " ");
+      ) execs;
+  print_endline "";
   
   List.iteri (fun i exec ->
     let dot_str = pp_dot () (ppmode_default_web,
@@ -701,7 +718,8 @@ let initial_bmc_state (supply : ksym_supply)
     has_returned = mk_false ctx;
     z3_ret = Expr.mk_fresh_const ctx "ret_main" (LoadedInteger.mk_sort ctx);
     ret_asserts = [];
-    saves = Pmap.empty sym_cmp
+    saves = Pmap.empty sym_cmp;
+    depth = 0
   }
 
 (*
@@ -1892,7 +1910,7 @@ let rec bmc_expr (state: 'a bmc_state)
             Pset.add (st.tid, state.tid) !(state.parent_tid)
       ) bmc_list;
 
-      let new_has_returned = mk_or state.ctx (state.has_returned ::(
+      let new_has_returned = mk_or state.ctx (state.has_returned::(
         List.map (fun (_, _, st) -> st.has_returned) bmc_list
       )) in 
       let new_ret_asserts = List.fold_left (fun l (_, _, st) ->
@@ -2386,10 +2404,16 @@ let preexec_to_z3 (state: 'a bmc_state) =
     Quantifier.mk_forall ctx
       [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
       (mk_eq ctx (FuncDecl.apply fn_hb [bound_0; bound_1])
-                 (mk_or ctx [ FuncDecl.apply fn_sb [bound_0; bound_1]
-                            ; FuncDecl.apply fn_sw [bound_0; bound_1]
-                            ; hb_exists
-                            ]
+                 (mk_and ctx 
+                   [
+                    (*getGuard bound_0
+                    ;getGuard bound_1 
+                    *)
+                    mk_or ctx [ FuncDecl.apply fn_sb [bound_0; bound_1]
+                              ; FuncDecl.apply fn_sw [bound_0; bound_1]
+                              ; hb_exists
+                              ]
+                   ]
                  )
       ) None [] [] None None
     ) in
@@ -3053,19 +3077,11 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
       if (check_solver_fun state1.solver (Some state1.z3_ret)
             = SATISFIABLE) then
         begin
-          (*
-          let model = (match Solver.get_model state1.solver with
-                       | Some m -> m
-                       | None -> assert false) in
-          match funcDecls with
-          | None -> ();
-          | Some fns -> 
-              extract_executions model fns state1.ctx;
-          *)
           let check_vcs = (match funcDecls with
             | None -> print_endline "No memory actions"; true
             | Some fns ->
-                get_all_executions state1.solver fns state1.ctx None;
+                get_all_executions state1.solver fns state1.ctx 
+                                   (Some state1.z3_ret);
                 print_endline "-----WITH RACE CHECKS";
                 Solver.add state1.solver [fns.unseq_race; fns.data_race];
                 if (Solver.check state1.solver [] = SATISFIABLE) then
