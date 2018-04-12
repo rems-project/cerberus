@@ -58,7 +58,7 @@ val core_passes:
   (unit Core.file * unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val interp_backend:
-  io_helpers -> Symbol.sym -> unit Core.file ->
+  io_helpers -> Symbol.sym -> 'a Core.file ->
   args:(string list) -> do_batch:bool -> concurrency:bool -> experimental_unseq:bool ->
 (* TODO: we would be using poly variants if it weren't for Lem... *)
 (*  [`Interactive | `Exhaustive | `Random] -> *)

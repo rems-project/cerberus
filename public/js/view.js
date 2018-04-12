@@ -233,8 +233,8 @@ class View {
 
     const isTauById = (nId) => isTau(graph.nodes.get(nId))
 
-    // Return immediate edge parent
-    const getIncommingEdge = (nId) => graph.edges.get().find((n) => n.to == nId)
+    // Return immediate edge upward
+    const getIncommingEdge = (nId) => graph.edges.get().find(n => n.to == nId)
 
     // Search for a no tau parent
     const getNoTauParent = (nId) => {
@@ -261,7 +261,7 @@ class View {
     // Add nodes
     tree.nodes.map((n) => {
       n.isTau = isTau(n)
-      n.isVisible = true
+      n.isVisible = pointToId == n.id
       graph.nodes.add(n)
       if (n.group == 'leaf') lastLeafNodeId = n.id
     })
