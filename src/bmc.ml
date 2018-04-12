@@ -117,8 +117,13 @@ type 'a bmc_state = {
   z3_ret       : Expr.expr;
   ret_asserts  : Expr.expr list;
   saves        : unit saves_map;
-
   depth        : int
+}
+
+type 'a bmc_ret = {
+  expr : Expr.expr;
+  allocs : AddressSet.t;
+  state : 'a bmc_state
 }
 
 type exec_fns = {
@@ -407,13 +412,6 @@ let extract_executions (model: Model.model)
       (x = a1 && y = a2) || (x = a2 && y = a1)) hb))
   ) quadratic_actions in
 
-  (*
-  print_endline "UNSEQUENCED_RACE";
-  List.iter (fun (a1, a2) ->
-    Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
-  ) unsequenced_race;
-  *)
-
   let derived_data = {
     derived_relations = [
       ("sw", sw);
@@ -511,16 +509,6 @@ let check_solver_fun (solver: Solver.solver)
       match model with
       | Some m -> 
           Printf.printf "Model: \n%s\n" (Model.to_string m);
-          (*
-          print_endline "FUNC_INTERPS";
-          List.iter (fun f ->
-            match Model.get_func_interp m f with
-            | Some interp -> 
-                Printf.printf "Fun: %s\n Interp: %s\n" (FuncDecl.to_string f)
-                                          (Model.FuncInterp.to_string interp);
-            | None -> print_endline ("No interp for: " ^ (FuncDecl.to_string f))
-          ) fun_list;
-          *)
           begin
             match ret_value with
             | None -> ()
@@ -540,6 +528,10 @@ let check_solver_fun (solver: Solver.solver)
 
 let check_solver (solver: Solver.solver) =
   check_solver_fun solver None
+
+let expr_is_sort (expr: Expr.expr) (sort: Sort.sort) 
+                 : bool =
+  Sort.equal (Expr.get_sort expr) sort
 
 (*
 let get_last_seqnum (ctx: context) (bmc_address : kbmc_address) =
@@ -562,7 +554,7 @@ let mk_next_tid (state: 'a bmc_state) =
   state.tid_supply := succ !(state.tid_supply);
   !(state.tid_supply)
 
-let ctor_to_z3 (state: 'a bmc_state) (ctor: typed_ctor) 
+let ctor_to_z3 (ctx: context) (ctor: typed_ctor) 
                (pes: Expr.expr list) (sort: Sort.sort) =
   match ctor with
   | Cnil _ (* empty list *)
@@ -592,27 +584,21 @@ let ctor_to_z3 (state: 'a bmc_state) (ctor: typed_ctor)
       assert false (* bitwise XOR *) 
   | Cspecified ->
       assert (List.length pes = 1);
-
       let expr = List.hd pes in
         (* TODO: Do generically... *)
-        if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
-          LoadedInteger.mk_loaded state.ctx expr
-        else if (Sort.equal sort (LoadedPointer.mk_sort state.ctx)) then
-          (
-          Printf.printf "TODO: pointers\n";
-          LoadedPointer.mk_loaded state.ctx expr 
-          )
+        if (Sort.equal sort (LoadedInteger.mk_sort ctx)) then
+          LoadedInteger.mk_loaded ctx expr
+        else if (Sort.equal sort (LoadedPointer.mk_sort ctx)) then
+          LoadedPointer.mk_loaded ctx expr 
         else 
           assert false
   | Cunspecified (* unspecified value *) ->
       assert (List.length pes = 1);
-
       let expr = List.hd pes in
-
-      if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
-        LoadedInteger.mk_unspec state.ctx expr
-      else if (Sort.equal sort (LoadedPointer.mk_sort state.ctx)) then
-        LoadedPointer.mk_unspec state.ctx expr
+      if (Sort.equal sort (LoadedInteger.mk_sort ctx)) then
+        LoadedInteger.mk_unspec ctx expr
+      else if (Sort.equal sort (LoadedPointer.mk_sort ctx)) then
+        LoadedPointer.mk_unspec ctx expr
       else
         assert false
   | Cfvfromint (* cast integer to floating value *)
@@ -623,35 +609,31 @@ let z3_sortlist_to_tuple (ctx: context)
                          (sorts: Sort.sort list) : Sort.sort =
   let sort_to_string = "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
   let sort_symbol = mk_sym ctx sort_to_string in
-
   let sym_list = List.mapi 
       (fun i _ -> mk_sym ctx ( "#" ^ (string_of_int i))) sorts in
-
   Tuple.mk_sort ctx sort_symbol sym_list sorts 
 
 (* core_base_type to z3 sort *)
-let rec cbt_to_z3 (state: 'a bmc_state) (cbt : core_base_type) : Sort.sort =
-  let ctx = state.ctx in
+let rec cbt_to_z3 (ctx: context) (cbt : core_base_type) : Sort.sort =
   match cbt with
    | BTy_unit  -> 
         UnitSort.mk_sort ctx
    | BTy_boolean ->
         Boolean.mk_sort ctx
    | BTy_ctype -> 
-        (* TODO *)
         ctypeSort ctx
    | BTy_list _ -> assert false
    | BTy_tuple cbt_list ->
         let sort_to_string = fun t -> pp_to_string
                               (Pp_core.Basic.pp_core_base_type t) in
         let sort_name = sort_to_string cbt in
-        let sort_symbol = mk_sym state.ctx sort_name in
+        let sort_symbol = mk_sym ctx sort_name in
 
         let sym_list = List.mapi 
-            (fun i _ -> mk_sym state.ctx 
+            (fun i _ -> mk_sym ctx 
                   ( "#" ^ (string_of_int i)))
             cbt_list in
-        let sort_list = List.map (fun t -> cbt_to_z3 state t) cbt_list in
+        let sort_list = List.map (fun t -> cbt_to_z3 ctx t) cbt_list in
         Tuple.mk_sort ctx sort_symbol sym_list sort_list 
    | BTy_object obj_type ->
        core_object_type_to_z3_sort ctx obj_type
@@ -667,7 +649,7 @@ let rec cbt_to_z3 (state: 'a bmc_state) (cbt : core_base_type) : Sort.sort =
        end
 
 let add_sym_to_sym_table (state: 'a bmc_state) (sym: ksym) (ty: core_base_type) =
-  let z3_sort = cbt_to_z3 state ty in
+  let z3_sort = cbt_to_z3 state.ctx ty in
   let z3_sym = Expr.mk_const state.ctx (symbol_to_z3 state.ctx sym) z3_sort in
   state.sym_table := Pmap.add sym z3_sym !(state.sym_table)
 
@@ -722,12 +704,6 @@ let initial_bmc_state (supply : ksym_supply)
     depth = 0
   }
 
-(*
-let add_func_constraints (st : bmc_state) =
-  Solver.add st.solver (sizeof_ibty_goals st.ctx) ;
-  Solver.add st.solver (ivmin_goals st.ctx) 
-*)
-
 let integer_value_to_z3 (ctx: context) ival =
   let maybe_ival = eval_integer_value ival in
   match maybe_ival with
@@ -741,10 +717,6 @@ let object_value_to_z3 (ctx: context) = function
   | OVpointer _ ->
       assert false
   | OVcfunction (Sym sym)->
-      (*
-      let tmp = symbol_to_int sym in
-      print_endline ("XX" ^ (string_of_int tmp));
-      *)
       CFunctionSort.mk_cfn ctx (Integer.mk_numeral_i ctx (symbol_to_int sym))
   | OVcfunction _ ->
      assert false 
@@ -782,7 +754,7 @@ let rec value_to_z3 (ctx: context) (cval: value) (typ: core_base_type) =
   | Vunit -> UnitSort.mk_unit ctx
   | Vtrue -> mk_true ctx
   | Vfalse -> mk_false ctx
-  | Vlist (_, cvals) ->
+  | Vlist _ ->
       assert false;
   | Vtuple cvals ->
       assert false
@@ -828,7 +800,6 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
 
 
 (* TODO: add symbol to sym table somewhere else!!! 
- * Also just completely rewrite this function... 
  * *)
 let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option) 
                (ty : core_base_type) (expr: Expr.expr) =
@@ -836,42 +807,19 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
   | None -> mk_true state.ctx (* Do nothing *)
   | Some sym -> 
       let pat_sym = symbol_to_z3 state.ctx sym in
-      (* TODO: case on bmc_expr instead *)
+      let sort = cbt_to_z3 state.ctx ty in
+      let expr_pat = Expr.mk_const state.ctx pat_sym sort in
+      state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
       begin
       match ty with
       | BTy_unit -> assert false
       | BTy_ctype (* Fall through *)
       | BTy_boolean -> 
-          (* TODO: duplicated code *)
-          let sort = cbt_to_z3 state ty in
-          let expr_pat = Expr.mk_const state.ctx pat_sym sort in
-          state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
-          (mk_eq state.ctx expr_pat expr)
-      | BTy_tuple ty_list -> 
+          mk_eq state.ctx expr_pat expr
+      | BTy_tuple _ -> 
           assert false
       | BTy_list _ -> assert false
-      (*
-      | BTy_object OTy_pointer -> 
-              assert (Sort.equal (Expr.get_sort expr) 
-                                 (PointerSort.mk_sort state.ctx));
-              (* Create a new symbol for the pattern pointer *)
-              let pat_sym = symbol_to_z3 state.ctx sym in
-              let expr_pat = 
-                  Expr.mk_const state.ctx pat_sym (PointerSort.mk_sort state.ctx)
-              in
-              (* Add to sym table *)
-              state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
-
-              (* Assert that get_addr expr_pat == get_addr expr *)
-              mk_eq state.ctx 
-                (PointerSort.get_addr state.ctx expr_pat)
-                (PointerSort.get_addr state.ctx expr)   
-       *)
-       | BTy_object obj_type -> 
-          (* TODO: duplicated *)
-              let sort = cbt_to_z3 state ty in
-              let expr_pat = Expr.mk_const state.ctx pat_sym sort in
-              state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
+      | BTy_object obj_type -> 
               begin
               match obj_type with
               | OTy_pointer ->
@@ -899,58 +847,50 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
                   assert false
               end
       | BTy_loaded cot ->
-          (* TODO duplicated code: should case on bmc_expr instead maybe *)
-          let pat_symbol = symbol_to_z3 state.ctx sym in
-          let z3_sort = cbt_to_z3 state ty in
-          let expr_pat = Expr.mk_const state.ctx pat_symbol z3_sort in
-          state.sym_table := Pmap.add sym expr_pat 
-                                      (!(state.sym_table));
           mk_eq state.ctx expr_pat expr
-         end
+      end
 
-let rec pattern_match (state: 'a bmc_state) (pattern: typed_pattern)
+(* Return a Z3 boolean expr representing condition for pattern match *)
+let rec pattern_match (ctx: context) 
+                      (pattern: typed_pattern)
                       (expr: Expr.expr) =
    match pattern with
-  | CaseBase(maybe_sym, typ) ->
-      mk_true state.ctx
+  | CaseBase(_, _) ->
+      mk_true ctx
   | CaseCtor(Ctuple, patlist) ->
       assert (Expr.get_num_args expr = List.length patlist);
       let exprList = Expr.get_args expr in
-      let patConditions = List.mapi 
-          (fun i pat -> pattern_match state pat ((List.nth exprList i )))
-          patlist in
-      mk_and state.ctx patConditions
+      let patConditions = 
+        List.map2 (fun expr pat -> pattern_match ctx pat expr) 
+                  exprList patlist in
+      mk_and ctx patConditions
   | CaseCtor(Cspecified, [CaseBase(maybe_sym, BTy_object OTy_integer)]) ->
-      LoadedInteger.is_loaded state.ctx expr 
+      LoadedInteger.is_loaded ctx expr 
   | CaseCtor(Cspecified, [CaseBase(maybe_sym, BTy_object OTy_pointer)]) ->
-      LoadedPointer.is_loaded state.ctx expr
+      LoadedPointer.is_loaded ctx expr
   | CaseCtor(Cunspecified, _) -> 
-      (* TODO: terrible... *)
-      if (Sort.equal (Expr.get_sort expr) 
-                     (LoadedInteger.mk_sort state.ctx)) then
-        LoadedInteger.is_unspec state.ctx expr
-      else if (Sort.equal (Expr.get_sort expr) 
-                          (LoadedPointer.mk_sort state.ctx)) then
-        LoadedPointer.is_unspec state.ctx expr
+      if (expr_is_sort expr (LoadedInteger.mk_sort ctx)) then
+        LoadedInteger.is_unspec ctx expr
+      else if (expr_is_sort expr (LoadedPointer.mk_sort ctx)) then
+        LoadedPointer.is_unspec ctx expr
       else
         assert false
   | _ -> 
       assert false
 
-let rec mk_eq_pattern (state: 'a bmc_state) (pattern: typed_pattern)
+let rec mk_eq_pattern (state: 'a bmc_state) 
+                      (pattern: typed_pattern)
                       (expr: Expr.expr) =
   match pattern with
   | CaseBase(maybe_sym, typ) ->
       mk_eq_expr state maybe_sym typ expr 
   | CaseCtor(Ctuple, patlist) -> 
-      (* TODO: make ty_list *)
       let exprList = Expr.get_args expr in
       assert (Expr.get_num_args expr = List.length patlist);
-      let zipped = List.combine exprList patlist in
       mk_and state.ctx 
-        (List.mapi (fun i (exp, pat) -> 
-          mk_eq_pattern state pat 
-          ((exp))) zipped
+        (List.map2 
+           (fun exp pat -> mk_eq_pattern state pat exp)
+           exprList patlist 
         )
   | CaseCtor(Cspecified, patlist) -> 
       begin
@@ -993,71 +933,81 @@ let rec mk_eq_pattern (state: 'a bmc_state) (pattern: typed_pattern)
   | _ -> assert false
 
 (* TODO: rewrite *)
-let concat_vcs (state: 'a bmc_state)
+let concat_vcs (ctx: context)
                (vc1: Expr.expr list)
                (vc2: Expr.expr list)
                (guard: Expr.expr) =
-  let new_vc1 = mk_implies state.ctx guard
-                    (mk_and state.ctx vc1) in
-  let new_vc2 = mk_implies state.ctx 
-                    (mk_not state.ctx guard)
-                    (mk_and state.ctx vc2) in
+  let new_vc1 = mk_implies ctx guard
+                    (mk_and ctx vc1) in
+  let new_vc2 = mk_implies ctx 
+                    (mk_not ctx guard)
+                    (mk_and ctx vc2) in
   [new_vc1; new_vc2 ]                  
 
 let rec bmc_pexpr (state: 'a bmc_state) 
                   (Pexpr(_, bTy, pe) : typed_pexpr) : 
-                    Expr.expr * AddressSet.t * 'a bmc_state =
+                    'a bmc_ret = 
   match pe with
     | PEsym sym ->
         let sym_expr = bmc_lookup_sym sym state in
         let allocs = alias_lookup_sym sym state.alias_state in
-        sym_expr, allocs, state
+        { expr   = sym_expr
+        ; allocs = allocs
+        ; state  = state
+        }
     | PEimpl _ -> assert false
     | PEval cval ->
-        (value_to_z3 state.ctx cval bTy), AddressSet.empty, state
-    | PEconstrained _ ->
-        assert false
+        { expr = value_to_z3 state.ctx cval bTy
+        ; allocs = AddressSet.empty
+        ; state = state
+        }
+    | PEconstrained _ -> assert false
     | PEundef _ ->
-        let sort = cbt_to_z3 state bTy in
+        let sort = cbt_to_z3 state.ctx bTy in
         let new_vcs = (mk_implies state.ctx 
                             (mk_not state.ctx state.has_returned) 
                             (mk_false state.ctx)) 
                       :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
-        Expr.mk_fresh_const state.ctx "undef" sort, AddressSet.empty, new_state 
+        { expr = Expr.mk_fresh_const state.ctx "undef" sort
+        ; allocs = AddressSet.empty
+        ; state = new_state
+        }
     | PEerror _ -> 
-        let sort = cbt_to_z3 state bTy in
+        let sort = cbt_to_z3 state.ctx bTy in
         let new_vcs = (mk_implies state.ctx
                             (mk_not state.ctx state.has_returned)
                             (mk_false state.ctx)) 
                       :: state.vcs in
         let new_state = {state with vcs = new_vcs} in
-        Expr.mk_fresh_const state.ctx "error" sort, AddressSet.empty, new_state 
+        { expr = Expr.mk_fresh_const state.ctx "error" sort
+        ; allocs = AddressSet.empty
+        ; state = new_state
+        }
     | PEctor (ctor, pelist) -> 
-        let sort = cbt_to_z3 state bTy in
-        (* TODO: state needs to be propagated. 
-         * Currently assume PEs don't change  state except vcs *) 
+        let sort = cbt_to_z3 state.ctx bTy in
         (* BMC each expression *)
         let empty_vc_state = ({state with vcs = []}) in
         let z3_pelist_tmp = List.map 
             (fun pe -> bmc_pexpr empty_vc_state pe) pelist in
         let new_vcs = List.concat 
-            (List.map (fun (_, _, st) -> st.vcs) z3_pelist_tmp) in
+            (List.map (fun res -> res.state.vcs) z3_pelist_tmp) in
         let final_vcs = state.vcs @ new_vcs in
 
-        let z3_pelist = List.map (fun (a, _, _) -> a) z3_pelist_tmp in
+        let z3_pelist = List.map (fun res -> res.expr) z3_pelist_tmp in
         let new_state = ({state with vcs = final_vcs})  in
-        let ret = ctor_to_z3 new_state ctor z3_pelist sort in
+        let ret = ctor_to_z3 state.ctx ctor z3_pelist sort in
 
         (* Union allocs *)
-        let allocs = List.fold_left (fun s (_, allocs, _) ->
-          AddressSet.union s allocs) AddressSet.empty z3_pelist_tmp in
-
-        ret, allocs, new_state 
+        let allocs = List.fold_left (fun s res ->
+          AddressSet.union s res.allocs) AddressSet.empty z3_pelist_tmp in
+        { expr = ret
+        ; allocs = allocs
+        ; state = new_state
+        }
 
     | PEcase (pe, caselist) -> 
         (* case pe of | pat1 -> e1 | pat2 -> e2 | pat3 -> e3 | _ ->
-          * error("incomplete pattern matching") 
           *
           * pe -> z3 expr
           * convert each pat to condition for matching: 
@@ -1067,151 +1017,116 @@ let rec bmc_pexpr (state: 'a bmc_state)
           *      - if pat = (a, b): true b/c  type? (TODO)
           *
           * Then convert each pat to an equality with pe
-          *
           * BMC each e* with empty vcs
-          *
           * Make guards with Boolean.mk_ite 
           * *)
-        let (pe_z3, pe_set, state) = bmc_pexpr state pe in
+        let res_pe = bmc_pexpr state pe in
+        let (pe_z3, pe_set, state) = (res_pe.expr, res_pe.allocs, res_pe.state) in
+
         List.iter (fun (pat1, _) -> 
           alias_pattern state.alias_state pat1 pe_set) caselist;
 
+        let pattern_guards = 
+          List.map (fun (pat, _) -> pattern_match state.ctx pat pe_z3) caselist in 
+        let complete_guard = mk_or state.ctx pattern_guards in
+        Solver.add state.solver [ complete_guard ];
+
+        let combined_pat_guards = 
+          List.mapi (fun i expr -> 
+            mk_and state.ctx 
+            [ mk_not state.ctx (mk_or state.ctx (list_take i pattern_guards))
+            ; expr 
+            ]
+            ) pattern_guards in
+
+        let expr_eqs = List.map (fun (pat, _) -> 
+          mk_eq_pattern state pat pe_z3) caselist in
+
+        (* Match case i => expr_eq i holds *)
+        let impl_eqs = List.map2 
+          (fun guard eq -> mk_implies state.ctx guard eq) 
+          combined_pat_guards expr_eqs in
+        Solver.add state.solver impl_eqs;
+
+        (* Now need to combine verification conditions: 
+         * st1.vcs @... guarded by case match *)
+        let cases_z3 = List.map 
+            (fun (_, e) -> bmc_pexpr ({state with vcs = []}) e) caselist in
+        let cases_vcs = (List.map (fun res -> mk_and state.ctx res.state.vcs) cases_z3) in
+        let new_vcs = 
+          (state.vcs @ (List.map2 (fun guard vc -> mk_implies state.ctx guard vc)
+          combined_pat_guards cases_vcs)) in
+        (* TODO: correctness? *)
+        let ret_state = {state with vcs = new_vcs} in
+
+        (* Now make ite, careful with cases where expressions are None *)
+        let zipped = List.combine combined_pat_guards 
+                    (List.map (fun res -> res.expr) cases_z3) in
+        let rev_filtered = List.rev zipped in
+
+        (* Alloc ids *)
+        let alloc_ret = List.fold_left (fun s res ->
+          AddressSet.union s res.allocs) AddressSet.empty cases_z3 in
+
         begin
-            let pattern_guards = 
-              List.map (fun (pat, _) -> pattern_match state pat pe_z3) caselist in 
-            let complete_guard = mk_or state.ctx pattern_guards in
-            Solver.add state.solver [ complete_guard ];
-
-            let combined_pat_guards = 
-              List.mapi (fun i expr -> 
-                mk_and state.ctx 
-                [ mk_not state.ctx (mk_or state.ctx (list_take i pattern_guards))
-                ; expr 
-                ]
-                ) pattern_guards in
-
-            let expr_eqs = List.map (fun (pat, _) -> 
-              mk_eq_pattern state pat pe_z3) caselist in
-
-            (* Match case i => expr_eq i holds *)
-            let impl_eqs = List.map2 
-              (fun guard eq -> mk_implies state.ctx guard eq) 
-              combined_pat_guards expr_eqs in
-            Solver.add state.solver impl_eqs;
-
-            (* Now need to combine verification conditions: 
-             * st1.vcs @... guarded by case match *)
-            let cases_z3 = List.map 
-                (fun (_, e) -> bmc_pexpr ({state with vcs = []}) e) caselist in
-            let cases_vcs = (List.map (fun (_,_,s) -> mk_and state.ctx s.vcs) cases_z3) in
-            let new_vcs = 
-              (state.vcs @ (List.map2 (fun guard vc -> mk_implies state.ctx guard vc)
-              combined_pat_guards cases_vcs)) in
-            (* TODO: correctness? *)
-            let ret_state = {state with vcs = new_vcs} in
-
-            (* Now make ite, careful with cases where expressions are None *)
-            let zipped = List.combine combined_pat_guards 
-                        (List.map (fun (e, _, _) -> e) cases_z3) in
-            let rev_filtered = List.rev zipped in
-
-            (* Alloc ids *)
-            let alloc_ret = List.fold_left (fun s (_, set, _) ->
-              AddressSet.union s set) AddressSet.empty cases_z3 in
-
-            begin
-            match List.length rev_filtered with
-            | 0 -> assert false
-            | 1 -> 
-                let (_, e) = List.hd rev_filtered in
-                e, alloc_ret, ret_state
-            | _ -> 
-                let (_, last) = List.hd rev_filtered in
-                let ite = List.fold_left (fun prev (guard, e) ->
-                  mk_ite ret_state.ctx guard e prev
-                ) last (List.tl rev_filtered) in
-
-                ite, alloc_ret, ret_state
-            end
+        match List.length rev_filtered with
+        | 0 -> assert false
+        | 1 -> 
+            let (_, e) = List.hd rev_filtered in
+            { expr = e
+            ; allocs = alloc_ret
+            ; state = ret_state
+            }
+        | _ -> 
+            let (_, last) = List.hd rev_filtered in
+            let ite = List.fold_left (fun prev (guard, e) ->
+              mk_ite ret_state.ctx guard e prev
+            ) last (List.tl rev_filtered) in
+            { expr = ite
+            ; allocs = alloc_ret
+            ; state = ret_state 
+            }
         end
     | PEarray_shift _ -> assert false
     | PEmember_shift _ -> assert false
     | PEnot pe1 -> 
-        let (z3_pe1, allocs, state) = bmc_pexpr state pe1 in  
-          (mk_not state.ctx z3_pe1), allocs, state
+        let res = bmc_pexpr state pe1 in  
+        { res with expr = mk_not state.ctx res.expr }
     | PEop (bop, pe1, pe2) ->
-        let (z3_pe1, alloc1, state1) = bmc_pexpr state pe1 in
-        let (z3_pe2, alloc2, state2) = bmc_pexpr state1 pe2 in
-        binop_to_constraints state2.ctx z3_pe1 z3_pe2 bop, 
-            AddressSet.union alloc1 alloc2, 
-            state2
+        let res1 = bmc_pexpr state pe1 in
+        let res2 = bmc_pexpr res1.state pe2 in
+        { expr = binop_to_constraints state.ctx res1.expr res2.expr bop
+        ; allocs = AddressSet.union res1.allocs res2.allocs
+        ; state = res2.state
+        }
     | PEstruct _
     | PEunion _ -> assert false
     | PEcall(Sym sym, _) ->
         assert false
     | PEcall _ -> 
         assert false
-    (*
-    | PElet (CaseBase(Some sym, pat_ty), pe1, pe2) ->
-        (* TODO: switch to mk_eq_pattern *)
-        let (Pexpr(pat_type, _)) = pe1 in
-        let z3_sort = cbt_to_z3 state pat_type in
-
-        let (z3_pe1, alloc1, state1) = bmc_pexpr state pe1 in
-        (* Add new symbol to sym_table *)
-        let pat_symbol = symbol_to_z3 state.ctx sym in
-        let expr_pat = Expr.mk_const (state.ctx) pat_symbol z3_sort in
-        state1.sym_table := Pmap.add sym expr_pat 
-                                     (!(state1.sym_table));
-
-        Solver.add (state1.solver) 
-                            [ Boolean.mk_eq (state1.ctx) expr_pat z3_pe1 ];
-
-
-        bmc_pexpr state1 pe2 
-    | PElet (CaseBase(None, pat_ty), pe1, pe2) ->
-        let (z3_pe1, state1) = bmc_pexpr state pe1 in
-        bmc_pexpr state1 pe2
-       
-    | PElet (CaseCtor(ctor, patList), pe1, pe2) ->
-        let (z3_pe1, state1) = bmc_pexpr state pe1 in
-
-        let (eq_expr) = 
-          mk_eq_pattern state1 (CaseCtor(ctor, patList)) 
-                     z3_pe1 in
-
-        Solver.add state1.solver [ eq_expr ];
-
-        bmc_pexpr state1 pe2 
-    *)
     | PElet (pat, pe1, pe2) ->
-        let (z3_pe1, alloc1, state) = bmc_pexpr state pe1 in
-        let eq_expr = mk_eq_pattern state pat z3_pe1 in
-        Solver.add state.solver [ eq_expr ];
-
-        alias_pattern state.alias_state pat alloc1;
+        let res1 = bmc_pexpr state pe1 in
+        let eq_expr = mk_eq_pattern res1.state pat res1.expr in
+        Solver.add res1.state.solver [ eq_expr ];
+        alias_pattern res1.state.alias_state pat res1.allocs;
         bmc_pexpr state pe2
 
     | PEif (pe1, pe2, pe3) ->
-        let (z3_pe1, loc1, s1) = bmc_pexpr state pe1 in
-        let (z3_pe2, loc2, s2) = bmc_pexpr ({state with vcs = []}) pe2 in
-        let (z3_pe3, loc3, s3) = bmc_pexpr ({state with vcs = []}) pe3 in
-        let new_vc = s1.vcs @ (concat_vcs state s2.vcs s3.vcs z3_pe1) in
-        (mk_ite s3.ctx z3_pe1 z3_pe2 z3_pe3), 
-          AddressSet.union loc2 loc3, 
-          ({s1 with vcs = new_vc})
-    | PEis_scalar _ ->
-        assert false
-    | PEis_integer _ ->
-        assert false
-    | PEis_signed _ ->
-        assert false
+        let res1 = bmc_pexpr state pe1 in
+        let res2 = bmc_pexpr ({state with vcs = []}) pe2 in
+        let res3 = bmc_pexpr ({state with vcs = []}) pe3 in
+        let new_vc = res1.state.vcs @ (concat_vcs state.ctx res2.state.vcs
+                                       res3.state.vcs res1.expr) in
+        { expr = mk_ite state.ctx res1.expr res2.expr res3.expr
+        ; allocs = AddressSet.union res2.allocs res3.allocs
+        ; state = {res1.state with vcs = new_vc}
+        }
+    | PEis_scalar _ 
+    | PEis_integer _ 
+    | PEis_signed _ 
     | PEis_unsigned _ ->
         assert false
-        (*
-    | PEstd (_, pe) ->
-        bmc_pexpr state pe
-        *)
 
 let mk_bmc_address (addr : Address.addr) (sort: Sort.sort) =
   {addr = addr; 
@@ -1258,7 +1173,7 @@ let rec ctype_to_sort (state: 'a bmc_state) ty =
     | Integer (Unsigned Int_) ->
         LoadedInteger.mk_sort state.ctx
     | Integer _ -> assert false
-    | Floating fTy -> assert false
+    | Floating _ -> assert false
     end
   | Array0 _ -> assert false
   | Function0 _ -> assert false
@@ -1278,7 +1193,7 @@ let ctype_is_atomic ty =
 
 let bmc_paction (state: 'a bmc_state)
                 (Paction(pol, action) : 'a typed_paction) 
-                : Expr.expr * AddressSet.t * 'a bmc_state =
+                : 'a bmc_ret =
   let Action(_, _, action_) = action in
   match action_ with
   | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
@@ -1322,26 +1237,29 @@ let bmc_paction (state: 'a bmc_state)
       let paction = BmcAction(Pos, mk_not state.ctx state.has_returned, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
-      new_ptr, addr_ret, 
-        {state with (* heap = new_heap; *)
-                    preexec = add_initial_action (get_aid action) paction
-                              state.preexec
-        }
+      { expr = new_ptr
+      ; allocs = addr_ret
+      ; state = {state with (* heap = new_heap; *)
+                             preexec = add_initial_action (get_aid action) paction
+                                       state.preexec
+                }
+      }
 
   | Create _ -> assert false
   | CreateReadOnly _ -> assert false
   | Alloc0 _ -> assert false
   | Kill pexpr ->
-      let (_, allocs, state) = bmc_pexpr state pexpr in
+      let res = bmc_pexpr state pexpr in
       (*
       assert (AddressSet.cardinal allocs = 1);
       let elem = AddressSet.find_first (fun _ -> true) allocs in
       let new_heap = Pmap.remove elem state.heap in
       *)
       (* TODO: should really alter analysis_state too *)
-
-      UnitSort.mk_unit state.ctx, 
-          AddressSet.empty, state (* with heap = new_heap *)
+      { expr = UnitSort.mk_unit state.ctx
+      ; allocs = AddressSet.empty
+      ; state = res.state (* with heap = new heap *)
+      }
   | Store0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym),
   p_value, mem_order) ->
       (* TODO: update comment
@@ -1353,18 +1271,17 @@ let bmc_paction (state: 'a bmc_state)
 
       (* let sort = ctype_to_sort state ty in  *)
       let ptr_allocs = alias_lookup_sym sym state.alias_state in
-      let (value, v_allocs, state) = bmc_pexpr state p_value in
+      let res_value = bmc_pexpr state p_value in
+      (* (value, v_allocs, state) = bmc_pexpr state p_value in
+      *)
 
       (* Not necessary, just for renaming purposes *)
       let to_store = Expr.mk_fresh_const state.ctx
-                ("store_" ^ (symbol_to_string sym)) (Expr.get_sort value) in
-      Solver.add state.solver [ mk_eq state.ctx value to_store ];
+                ("store_" ^ (symbol_to_string sym)) 
+                (Expr.get_sort res_value.expr) in
+      Solver.add state.solver [ mk_eq state.ctx res_value.expr to_store ];
 
       let z3_sym = bmc_lookup_sym sym state in
-      (*
-      print_endline ("STORE " ^ (Expr.to_string z3_sym) ^ 
-                     " " ^ (Expr.to_string to_store));
-      *)
 
       let action = Write(mk_next_aid state, state.tid, mem_order,
                          z3_sym, to_store) in
@@ -1379,7 +1296,7 @@ let bmc_paction (state: 'a bmc_state)
         if is_ptr_ctype (Pexpr([],BTy_ctype, PEval (Vctype ty))) then
           begin
           assert (not (AddressSet.is_empty ptr_allocs));
-          assert (not (AddressSet.is_empty v_allocs));
+          assert (not (AddressSet.is_empty res_value.allocs));
 
           (* For each potential store location, add v_allocs to addr_map *)
 
@@ -1387,7 +1304,7 @@ let bmc_paction (state: 'a bmc_state)
             print_string (Address.to_string loc);
             let prev_set = alias_lookup_alloc loc state.alias_state in
             alias_add_to_addr_map state.alias_state 
-                  loc (AddressSet.union prev_set v_allocs)
+                  loc (AddressSet.union prev_set res_value.allocs)
           ) ptr_allocs
           end
       end;
@@ -1440,11 +1357,12 @@ let bmc_paction (state: 'a bmc_state)
         ) in
         let new_heap = AddressSet.fold update ptr_allocs state.heap in
         *)
-        (UnitSort.mk_unit state.ctx), AddressSet.empty, 
-            {state with (* heap = new_heap;  *)
-                        preexec = add_action (get_aid action) paction 
-                                  state.preexec   
-            }
+      { expr = UnitSort.mk_unit state.ctx
+      ; allocs = AddressSet.empty
+      ; state = {res_value.state with preexec = add_action (get_aid action) paction
+                                                state.preexec
+                }
+      }
        
   | Store0 _ -> assert false
   | Load0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym),
@@ -1468,11 +1386,6 @@ let bmc_paction (state: 'a bmc_state)
        (* TODO: check correctness ? *)
        Solver.add state.solver 
          (mk_loaded_assertions state.ctx ty ret_value);
-
-      (*
-       print_endline ("LOAD " ^ (Expr.to_string ret_value) ^
-                      " " ^ polarity);
-      *)
 
       let action = Read(mk_next_aid state, state.tid, mem_order,
                          z3_sym, ret_value) in
@@ -1536,11 +1449,19 @@ let bmc_paction (state: 'a bmc_state)
        print_endline "TODO: commmented out heap sequencing stuff";
        (* Solver.add state.solver [ ret ]; *)
        *)
+      { expr = ret_value
+      ; allocs = ret_alloc
+      ; state = {state with preexec = add_action (get_aid action) paction state.preexec
+        }
+
+      }
+      (*
        ret_value, ret_alloc, 
           ({state with (*vcs = (new_vc) :: state.vcs; *)
                        preexec = add_action (get_aid action) paction
                                  state.preexec}
           )
+      *)
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
@@ -1580,91 +1501,98 @@ let merge_heaps (state: bmc_state)
 *)
 let rec bmc_expr (state: 'a bmc_state) 
                  (Expr(annot, expr_) : 'a typed_expr)
-                 : Expr.expr * AddressSet.t * 'a bmc_state =
+                 : 'a bmc_ret =
   match expr_ with
   | Epure pe ->
       bmc_pexpr state pe 
   | Ememop (PtrValidForDeref, _) ->
       print_endline "TODO: Ememop PtrValidForDeref: always true";
-      mk_true state.ctx, AddressSet.empty, state
+      { expr = mk_true state.ctx
+      ; allocs = AddressSet.empty
+      ; state = state
+      }
   | Ememop _ ->
       assert false
   | Eaction paction ->
       bmc_paction state paction
   | Ecase (pe, elist) ->  
       assert (List.length elist > 0);
-      let (bmc_pe, pe_addr, st) = bmc_pexpr state pe in
+      (* let (bmc_pe, pe_addr, st) = bmc_pexpr state pe in *)
+      let res_pe = bmc_pexpr state pe in
 
-      (* TODO: unnecessary now ? *)
       List.iter (fun (pat, _) ->
-        alias_pattern state.alias_state pat pe_addr) elist;
+        alias_pattern state.alias_state pat res_pe.allocs) elist;
 
       let pattern_guards = List.map
-        (fun (pat, _) -> pattern_match st pat bmc_pe) elist in
+        (fun (pat, _) -> pattern_match state.ctx pat res_pe.expr) elist in
 
-      let complete_guard = mk_or st.ctx pattern_guards in
-      Solver.add st.solver [ complete_guard ];
+      let complete_guard = mk_or state.ctx pattern_guards in
+      Solver.add state.solver [ complete_guard ];
 
       let combined_pat_guards = 
         List.mapi (fun i expr ->
-          mk_and st.ctx
-          [ mk_not st.ctx (mk_or st.ctx (list_take i pattern_guards))
+          mk_and state.ctx
+          [ mk_not state.ctx (mk_or state.ctx (list_take i pattern_guards))
           ; expr
           ]
         ) pattern_guards in
 
       let expr_eqs = List.map (fun (pat, _) -> 
-          mk_eq_pattern st pat bmc_pe) elist in
+          mk_eq_pattern state pat res_pe.expr) elist in
       let impl_eqs = List.map2 
         (fun guard eq -> mk_implies state.ctx guard eq)
         combined_pat_guards expr_eqs in
-      Solver.add st.solver impl_eqs;
+      Solver.add state.solver impl_eqs;
 
       let cases_z3 = List.map (fun (_, e) -> 
-        bmc_expr ({st with vcs = []; 
-                           preexec = initial_preexec ();
-                           ret_asserts = []
+        bmc_expr ({res_pe.state with vcs = []; 
+                                     preexec = initial_preexec ();
+                                     ret_asserts = []
                   }) e) elist in
-      let cases_vcs = List.map (fun (_, _, s) -> 
-          mk_and state.ctx s.vcs) cases_z3 in
-      let new_vcs = st.vcs @ (List.map2 (fun guard vc -> 
+      let cases_vcs = List.map (fun res -> 
+          mk_and state.ctx res.state.vcs) cases_z3 in
+      let new_vcs = res_pe.state.vcs @ (List.map2 (fun guard vc -> 
           mk_implies state.ctx guard vc
         ) combined_pat_guards cases_vcs) in
-      let new_ret_asserts = st.ret_asserts @ (List.map2 
-        (fun guard (_, _, state) -> 
-          mk_implies state.ctx guard (mk_and state.ctx state.ret_asserts)
+      let new_ret_asserts = res_pe.state.ret_asserts @ (List.map2 
+        (fun guard res -> 
+          mk_implies state.ctx guard (mk_and state.ctx res.state.ret_asserts)
         )
       ) combined_pat_guards cases_z3 in
 
       let new_has_returned = 
-        mk_or st.ctx 
-          (st.has_returned :: (List.map2 (fun guard (_, _, state) ->
-              mk_and state.ctx [guard; state.has_returned])
+        mk_or state.ctx 
+          (res_pe.state.has_returned :: (List.map2 (fun guard res ->
+              mk_and state.ctx [guard; res.state.has_returned])
               combined_pat_guards cases_z3)) in
 
-      let alloc_ret = List.fold_left (fun s (_, set, _) ->
-        AddressSet.union s set) AddressSet.empty cases_z3 in
-      let guarded_preexecs = List.map2 (fun guard (_, _, state) ->
-        guard_preexec state.ctx guard state.preexec 
+      let alloc_ret = List.fold_left (fun s res ->
+        AddressSet.union s res.allocs) AddressSet.empty cases_z3 in
+      let guarded_preexecs = List.map2 (fun guard res ->
+        guard_preexec state.ctx guard res.state.preexec 
       ) combined_pat_guards cases_z3 in
       let new_preexec = List.fold_left (fun p1 p2 ->
           merge_preexecs p1 p2
-        ) st.preexec guarded_preexecs in
+        ) res_pe.state.preexec guarded_preexecs in
 
-      let sort = Expr.get_sort (let (e, _, _) = List.hd cases_z3 in e ) in
-      let ret = List.fold_right2 (fun guard (bmc_e, _, _) rest ->
-        mk_ite st.ctx guard bmc_e rest
+      let sort = Expr.get_sort (let res = List.hd cases_z3 in res.expr) in
+      let ret = List.fold_right2 (fun guard res rest ->
+        mk_ite state.ctx guard res.expr rest
       ) pattern_guards cases_z3 (Expr.mk_fresh_const state.ctx "unmatchedCase"
       sort) in
 
-      ret, alloc_ret, {st with vcs = new_vcs; 
-                               preexec = new_preexec;
-                               has_returned = new_has_returned;
-                               ret_asserts = new_ret_asserts
-                      }
+      { expr = ret
+      ; allocs = alloc_ret
+      ; state = {res_pe.state with vcs = new_vcs; 
+                                   preexec = new_preexec;
+                                   has_returned = new_has_returned;
+                                   ret_asserts = new_ret_asserts
+                }
+      }
   | Eskip -> 
-      (* TODO: Unit *)
-      (UnitSort.mk_unit state.ctx), AddressSet.empty, state 
+      { expr = UnitSort.mk_unit state.ctx
+      ; allocs = AddressSet.empty
+      ; state = state}
   | Eproc _ -> assert false
   | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)), 
                         PEsym sym), arglist)  ->
@@ -1677,29 +1605,30 @@ let rec bmc_expr (state: 'a bmc_state)
       | Some (Proc(ty, params, e)) -> 
          begin
            if (state.depth >= g_max_function_depth) then
-             let sort = cbt_to_z3 state ty in
+             let sort = cbt_to_z3 state.ctx ty in
              let new_vcs = (mk_implies state.ctx
                 (mk_not state.ctx state.has_returned)
                 (mk_false state.ctx)) :: state.vcs in
              let new_state = {state with vcs = new_vcs} in
-             Expr.mk_fresh_const state.ctx "ccallBound" sort,
-               AddressSet.empty,
-               new_state
+             { expr = Expr.mk_fresh_const state.ctx "ccallBound" sort
+             ; allocs = AddressSet.empty
+             ; state = new_state
+             }
            else
              begin
                let bmc_args = List.map (fun pe -> 
                  bmc_pexpr {state with vcs = []} pe) arglist in
                let vcs = (List.concat (
-                 List.map (fun (_, _, st) -> st.vcs) bmc_args)) @ state.vcs in 
+                 List.map (fun res -> res.state.vcs) bmc_args)) @ state.vcs in 
                match bmc_normalize_fn (Proc(ty, params, e)) state.file
                                       !(state.sym_supply) with
                | Proc(ty2, params2, e2),supply ->
                   assert (List.length arglist = List.length params2);
                   state.sym_supply := supply;
-                  let eq_exprs = List.map2 (fun (sym1, ty) (expr, _, _) ->
-                    mk_eq_expr state (Some sym1) ty expr) params2 bmc_args in
+                  let eq_exprs = List.map2 (fun (sym1, ty) res ->
+                    mk_eq_expr state (Some sym1) ty res.expr) params2 bmc_args in
                   Solver.add state.solver eq_exprs;
-                  let sort = cbt_to_z3 state ty2 in
+                  let sort = cbt_to_z3 state.ctx ty2 in
                   let fresh_state = {state with
                       vcs = [];
                       preexec = initial_preexec ();
@@ -1710,13 +1639,16 @@ let rec bmc_expr (state: 'a bmc_state)
                       saves = find_save_expr e ;
                       depth = state.depth + 1
                     } in
-                  let (bmc_call, alloc, ret_state) = 
+                  let res_call = bmc_expr fresh_state e2 in
+                  (*
+                  (bmc_call, alloc, ret_state) = 
                     bmc_expr fresh_state e2 in
+                  *)
                   let guarded_preexec = guard_preexec state.ctx
-                      (mk_not state.ctx state.has_returned) ret_state.preexec in
+                      (mk_not state.ctx state.has_returned) res_call.state.preexec in
                   let new_preexec =
                     merge_preexecs state.preexec guarded_preexec in 
-                  let (exec1, exec2) = (state.preexec, ret_state.preexec) in
+                  let (exec1, exec2) = (state.preexec, res_call.state.preexec) in
                   let new_preexec = 
                     {new_preexec with
                       sb = Pset.union (new_preexec.sb)
@@ -1733,11 +1665,13 @@ let rec bmc_expr (state: 'a bmc_state)
                                       )
                     } in
 
-                  Solver.add state.solver ret_state.ret_asserts;
-                  (ret_state.z3_ret, alloc, {state with
-                    vcs = ret_state.vcs @ vcs;
-                    preexec = new_preexec
-                  })
+                  Solver.add state.solver res_call.state.ret_asserts;
+                  { expr = res_call.state.z3_ret
+                  ; allocs = res_call.allocs
+                  ; state = { state with vcs = res_call.state.vcs @ vcs;
+                                         preexec = new_preexec
+                            } 
+                  }
                | _ -> assert false
              end
          end 
@@ -1759,31 +1693,32 @@ let rec bmc_expr (state: 'a bmc_state)
                              ret_asserts = []
                  } e
       ) elist in
-      let expr_list = List.map (fun (expr, _, _) -> expr) bmc_list in
-
+      let expr_list = List.map (fun res -> res.expr) bmc_list in
       let sort_list = List.map Expr.get_sort expr_list in
 
       let sort = z3_sortlist_to_tuple state.ctx sort_list in
 
-      let ret = ctor_to_z3 state Ctuple expr_list sort  in
-      let allocs = List.fold_left (fun set (_, alloc, _) ->
-        AddressSet.union set alloc) AddressSet.empty bmc_list in
-      let new_vcs = List.fold_left (fun vc (_, _, st) ->
-        st.vcs @ vc 
+      let ret = ctor_to_z3 state.ctx Ctuple expr_list sort  in
+      let allocs = List.fold_left (fun set res ->
+        AddressSet.union set res.allocs) AddressSet.empty bmc_list in
+      let new_vcs = List.fold_left (fun vc res ->
+        res.state.vcs @ vc 
       ) state.vcs bmc_list in
-      let new_preexec = List.fold_left (fun exec (_, _, st) ->
-        merge_preexecs exec st.preexec 
+      let new_preexec = List.fold_left (fun exec res ->
+        merge_preexecs exec res.state.preexec 
       ) state.preexec bmc_list in
       let new_has_returned = mk_or state.ctx (state.has_returned:: (List.map 
-        (fun (_, _, st) -> st.has_returned) bmc_list)) in
-      let new_ret_asserts = List.fold_left (fun l (_, _, st) ->
-        st.ret_asserts @ l) state.ret_asserts bmc_list in
-
-      ret, allocs, {state with vcs = new_vcs; 
+        (fun res -> res.state.has_returned) bmc_list)) in
+      let new_ret_asserts = List.fold_left (fun l res ->
+        res.state.ret_asserts @ l) state.ret_asserts bmc_list in
+      { expr = ret
+      ; allocs = allocs
+      ; state = {state with vcs = new_vcs; 
                                preexec = new_preexec;
                                has_returned = new_has_returned;
                                ret_asserts = new_ret_asserts
-                   }
+                }
+      }
   | Eindet _ -> assert false
   | Ebound (_, e1) ->
       bmc_expr state e1 
@@ -1794,12 +1729,12 @@ let rec bmc_expr (state: 'a bmc_state)
        * TODO: generalize to any elist 
        * (just have to write heap merging function really)
        *)
-      let (bmc_e1, alloc1, st1) = 
+      let res1 = 
         bmc_expr {state with vcs = []; 
                              preexec = initial_preexec ();
                              ret_asserts = []
                  } e1 in
-      let (bmc_e2, alloc2, st2) = 
+      let res2 = 
         bmc_expr {state with vcs = []; 
                              preexec = initial_preexec ();
                              ret_asserts = []
@@ -1813,9 +1748,9 @@ let rec bmc_expr (state: 'a bmc_state)
       Solver.add state.solver [ seq_xor ];
 
       let vc1 = mk_implies state.ctx bmc_seq1
-                    (mk_and state.ctx st1.vcs)  in
+                    (mk_and state.ctx res1.state.vcs)  in
       let vc2 = mk_implies state.ctx bmc_seq2
-                    (mk_and state.ctx st2.vcs) in
+                    (mk_and state.ctx res2.state.vcs) in
       let new_vcs = vc1 :: vc2 :: state.vcs in
       (*
       let new_heap = merge_heaps state st1.heap st2.heap
@@ -1823,31 +1758,30 @@ let rec bmc_expr (state: 'a bmc_state)
       *)
 
       (* preexecs *)
-      let preexec1 = guard_preexec state.ctx bmc_seq1 st1.preexec in
-      let preexec2 = guard_preexec state.ctx bmc_seq2 st2.preexec in
+      let preexec1 = guard_preexec state.ctx bmc_seq1 res1.state.preexec in
+      let preexec2 = guard_preexec state.ctx bmc_seq2 res2.state.preexec in
       let new_preexec = merge_preexecs preexec1 preexec2 in
 
       let new_has_returned = mk_or state.ctx
         [ state.has_returned 
-        ; mk_implies state.ctx bmc_seq1 st1.has_returned
-        ; mk_implies state.ctx bmc_seq2 st2.has_returned 
+        ; mk_implies state.ctx bmc_seq1 res1.state.has_returned
+        ; mk_implies state.ctx bmc_seq2 res2.state.has_returned 
         ] in
   
       let new_ret_asserts =
            (mk_implies state.ctx bmc_seq1 
-                                 (mk_and state.ctx st1.ret_asserts))
+                                 (mk_and state.ctx res1.state.ret_asserts))
         :: (mk_implies state.ctx bmc_seq2
-                                 (mk_and state.ctx st2.ret_asserts))
+                                 (mk_and state.ctx res2.state.ret_asserts))
         :: state.ret_asserts in 
-
-      (UnitSort.mk_unit state.ctx, 
-       AddressSet.union alloc1 alloc2,
-       {state with vcs = new_vcs;  (* heap = new_heap; *)
-                   preexec = new_preexec;
-                   has_returned = new_has_returned;
-                   ret_asserts = new_ret_asserts
-       }
-      )
+      { expr = UnitSort.mk_unit state.ctx
+      ; allocs = AddressSet.union res1.allocs res2.allocs
+      ; state = {state with vcs = new_vcs;  (* heap = new_heap; *)
+                            preexec = new_preexec;
+                            has_returned = new_has_returned;
+                           ret_asserts = new_ret_asserts
+                }
+      }
 
   | End _ -> assert false
   | Erun (_, Symbol(i, Some s), pelist) ->
@@ -1867,14 +1801,16 @@ let rec bmc_expr (state: 'a bmc_state)
                 Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
               let to_run = substitute_expr subMap expr in 
 
-              let (ret, aset, state) = bmc_expr state to_run in
+              let res_run = bmc_expr state to_run in
+              (* (ret, aset, state) = bmc_expr state to_run in *)
               let eq_expr = mk_implies state.ctx
-                (mk_not state.ctx state.has_returned)
-                (mk_eq state.ctx state.z3_ret ret) in
-
-            (UnitSort.mk_unit state.ctx), aset, 
-            { state with has_returned = mk_true state.ctx;
-                         ret_asserts = eq_expr :: state.ret_asserts
+                (mk_not state.ctx res_run.state.has_returned)
+                (mk_eq state.ctx res_run.state.z3_ret res_run.expr) in
+            { expr = UnitSort.mk_unit state.ctx
+            ; allocs = res_run.allocs
+            ; state = {res_run.state with has_returned = mk_true state.ctx;
+                                          ret_asserts = eq_expr :: res_run.state.ret_asserts
+                      }
             }
             end
           else
@@ -1893,99 +1829,103 @@ let rec bmc_expr (state: 'a bmc_state)
                                tid = mk_next_tid state
                    } expr
         ) elist in
-      let expr_list = List.map (fun (expr, _, _) -> expr) bmc_list in
+      let expr_list = List.map (fun res -> res.expr) bmc_list in
       let sort_list = List.map Expr.get_sort expr_list in
       let sort = z3_sortlist_to_tuple state.ctx sort_list in
-      let ret = ctor_to_z3 state Ctuple expr_list sort  in
-      let allocs = List.fold_left (fun set (_, alloc, _) ->
-        AddressSet.union set alloc) AddressSet.empty bmc_list in
-      let new_vcs = List.fold_left (fun vc (_, _, st) ->
-        st.vcs @ vc 
+      let ret = ctor_to_z3 state.ctx Ctuple expr_list sort  in
+      let allocs = List.fold_left (fun set res ->
+        AddressSet.union set res.allocs) AddressSet.empty bmc_list in
+      let new_vcs = List.fold_left (fun vc res ->
+        res.state.vcs @ vc 
       ) state.vcs bmc_list in
-      let new_preexec = List.fold_left (fun exec (_, _, st) ->
-        merge_preexecs exec st.preexec 
+      let new_preexec = List.fold_left (fun exec res ->
+        merge_preexecs exec res.state.preexec 
       ) state.preexec bmc_list in
 
-      List.iter (fun (_, _, st) ->
+      List.iter (fun res ->
         state.parent_tid := 
-            Pset.add (st.tid, state.tid) !(state.parent_tid)
+            Pset.add (res.state.tid, state.tid) !(state.parent_tid)
       ) bmc_list;
 
       let new_has_returned = mk_or state.ctx (state.has_returned::(
-        List.map (fun (_, _, st) -> st.has_returned) bmc_list
+        List.map (fun res -> res.state.has_returned) bmc_list
       )) in 
-      let new_ret_asserts = List.fold_left (fun l (_, _, st) ->
-        st.ret_asserts @ l) state.ret_asserts bmc_list in
+      let new_ret_asserts = List.fold_left (fun l res ->
+        res.state.ret_asserts @ l) state.ret_asserts bmc_list in
 
-      ret, allocs, {state with vcs = new_vcs; 
-                               preexec = new_preexec;
-                               has_returned = new_has_returned;
-                               ret_asserts = new_ret_asserts
-                   }
+      { expr = ret
+      ; allocs = allocs
+      ; state = {state with vcs = new_vcs; 
+                            preexec = new_preexec;
+                            has_returned = new_has_returned;
+                            ret_asserts = new_ret_asserts
+                }
+      }
   | Ewait _ -> assert false
   | Eif (pe, e1, e2) -> 
-      let (bmc_pe, loc, st) = bmc_pexpr state pe in
-      let (bmc_e1, loc1, st1) = bmc_expr 
-          ({st with vcs = []; 
-                    preexec = initial_preexec ();
-                    ret_asserts = []
+      let res_pe = bmc_pexpr state pe in
+      let res_e1 = bmc_expr 
+          ({res_pe.state with vcs = []; 
+                              preexec = initial_preexec ();
+                              ret_asserts = []
            }) e1 in
-      let (bmc_e2, loc2, st2) = bmc_expr 
-          ({st with vcs = [];   
-                    preexec = initial_preexec ();
-                    ret_asserts = []
+      let res_e2 = bmc_expr 
+          ({res_pe.state with vcs = [];   
+                              preexec = initial_preexec ();
+                              ret_asserts = []
            }) e2 in
-
       
-      let new_vc = st.vcs @ (concat_vcs state st1.vcs st2.vcs bmc_pe) in
+      let new_vc = res_pe.state.vcs @ 
+                  (concat_vcs state.ctx res_e1.state.vcs res_e2.state.vcs 
+                              res_pe.expr) in
       (*
       let new_heap = merge_heaps st st1.heap st2.heap 
                      bmc_pe (Boolean.mk_not st.ctx bmc_pe) in
       *)
 
-      let preexec1 = guard_preexec st.ctx bmc_pe st1.preexec in
-      let preexec2 = guard_preexec st.ctx (mk_not st.ctx bmc_pe) st2.preexec in
-      let new_preexec = merge_preexecs (st.preexec) 
+      let preexec1 = guard_preexec state.ctx res_pe.expr res_e1.state.preexec in
+      let preexec2 = guard_preexec state.ctx (mk_not state.ctx res_pe.expr) res_e2.state.preexec in
+      let new_preexec = merge_preexecs (res_pe.state.preexec) 
           (merge_preexecs preexec1 preexec2) in
 
-      let new_has_returned = mk_or st.ctx 
-          [ st.has_returned
-          ; mk_and st.ctx [bmc_pe ; st1.has_returned]
-          ; mk_and st.ctx [(mk_not st.ctx bmc_pe); st2.has_returned]] in
+      let new_has_returned = mk_or state.ctx 
+          [ res_pe.state.has_returned
+          ; mk_and state.ctx [res_pe.expr; res_e1.state.has_returned]
+          ; mk_and state.ctx [(mk_not state.ctx res_pe.expr); res_e2.state.has_returned]] in
 
       let new_ret_asserts = 
-        (mk_implies st.ctx bmc_pe (mk_and st.ctx st1.ret_asserts))
-        :: (mk_implies st.ctx (mk_not st.ctx bmc_pe) 
-                              (mk_and st.ctx st2.ret_asserts))
-        :: st.ret_asserts in
-
-      (mk_ite state.ctx bmc_pe bmc_e1 bmc_e2),
-        AddressSet.union loc1 loc2,
-        {st with (* heap = new_heap; *) vcs = new_vc; 
-                                        preexec = new_preexec;
-                                        has_returned = new_has_returned;
-                                        ret_asserts = new_ret_asserts
-        }
+        (mk_implies state.ctx res_pe.expr (mk_and state.ctx res_e1.state.ret_asserts))
+        :: (mk_implies state.ctx (mk_not state.ctx res_pe.expr) 
+                              (mk_and state.ctx res_e2.state.ret_asserts))
+        :: res_pe.state.ret_asserts in
+      { expr = mk_ite state.ctx res_pe.expr res_e1.expr res_e2.expr
+      ; allocs = AddressSet.union res_e1.allocs res_e2.allocs
+      ; state = {res_pe.state with (* heap = new_heap; *)
+                          vcs = new_vc;
+                          preexec = new_preexec;
+                          has_returned = new_has_returned;
+                          ret_asserts = new_ret_asserts
+                }
+      }
         
   | Elet _ -> assert false
   | Easeq _ ->
       assert false
   | Ewseq (pat, e1, e2) ->
       let old_preexec = state.preexec in 
-      let (ret_e1, loc1, state) = 
-        bmc_expr {state with preexec = initial_preexec () } e1 in
-      alias_pattern state.alias_state pat loc1;
-      let eq_expr = mk_eq_pattern state pat ret_e1 in
+      let bmc_e1 = bmc_expr {state with preexec = initial_preexec () } e1 in
+      alias_pattern state.alias_state pat bmc_e1.allocs;
+      let eq_expr = mk_eq_pattern state pat bmc_e1.expr in
       Solver.add state.solver [ eq_expr ];
 
-      let (ret_e2, loc2, state2) = 
-        bmc_expr {state with preexec = initial_preexec ()} e2 in
+      let bmc_e2 = 
+        bmc_expr {bmc_e1.state with preexec = initial_preexec ()} e2 in
 
-      let (exec1, exec2) = (state.preexec, state2.preexec) in
+      let (exec1, exec2) = (bmc_e1.state.preexec, bmc_e2.state.preexec) in
 
       (* Sequence all actions in state before those in state2*) 
       let new_preexec =  merge_preexecs old_preexec 
-                                (merge_preexecs state.preexec state2.preexec) in
+                                (merge_preexecs exec1 exec2) in 
       let new_preexec = 
         {new_preexec with 
           sb = Pset.union (new_preexec.sb) 
@@ -1993,7 +1933,7 @@ let rec bmc_expr (state: 'a bmc_state)
                                                  exec2.actions);
           asw = Pset.union (new_preexec.asw)
                            (asw_product exec1.actions exec2.actions
-                                        !(state.parent_tid)
+                                        !(bmc_e1.state.parent_tid)
                            );
           hb = Pset.union (new_preexec.hb)
                           (hb_cartesian_product exec1.actions
@@ -2001,27 +1941,28 @@ let rec bmc_expr (state: 'a bmc_state)
                                                 true
                           )
         } in 
-
-      (ret_e2, loc2, {state2 with preexec = new_preexec})
+      { expr = bmc_e2.expr
+      ; allocs = bmc_e2.allocs
+      ; state = {bmc_e2.state with preexec = new_preexec}
+      }
 
 
   | Esseq (pat, e1, e2) ->
       (* TODO: mostly duplicated code from Ewseq *)
       let old_preexec = state.preexec in 
-      let (ret_e1, loc1, state) = 
-        bmc_expr {state with preexec = initial_preexec () } e1 in
-      alias_pattern state.alias_state pat loc1;
-      let eq_expr = mk_eq_pattern state pat ret_e1 in
+      let bmc_e1 = bmc_expr {state with preexec = initial_preexec () } e1 in
+      alias_pattern state.alias_state pat bmc_e1.allocs ;
+      let eq_expr = mk_eq_pattern state pat bmc_e1.expr in
       Solver.add state.solver [ eq_expr ];
 
-      let (ret_e2, loc2, state2) = 
-        bmc_expr {state with preexec = initial_preexec ()} e2 in
+      let bmc_e2 = 
+        bmc_expr {bmc_e1.state with preexec = initial_preexec ()} e2 in
 
-      let (exec1, exec2) = (state.preexec, state2.preexec) in
+      let (exec1, exec2) = (bmc_e1.state.preexec, bmc_e2.state.preexec) in
 
       (* Sequence all actions in state before those in state2*) 
       let new_preexec =  merge_preexecs old_preexec 
-                                (merge_preexecs state.preexec state2.preexec) in
+                                (merge_preexecs exec1 exec2) in
       let new_preexec = 
         {new_preexec with 
           sb = Pset.union (new_preexec.sb) 
@@ -2029,7 +1970,7 @@ let rec bmc_expr (state: 'a bmc_state)
                                              exec2.actions);
           asw = Pset.union (new_preexec.asw)
                            (asw_product exec1.actions exec2.actions
-                                        !(state.parent_tid)
+                                        !(bmc_e1.state.parent_tid)
                            );
           hb = Pset.union (new_preexec.hb)
                           (hb_cartesian_product exec1.actions
@@ -2039,7 +1980,9 @@ let rec bmc_expr (state: 'a bmc_state)
 
 
         } in
-      (ret_e2, loc2, {state2 with preexec = new_preexec})
+      { expr = bmc_e2.expr
+      ; allocs = bmc_e2.allocs
+      ; state = {bmc_e2.state with preexec = new_preexec}}
 
 
   | Esave ((Symbol (i, Some s), _), binding_list, _)  ->
@@ -2060,14 +2003,18 @@ let rec bmc_expr (state: 'a bmc_state)
               let subMap = List.fold_left2 (fun map sym pe ->
                 Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
               let to_run = substitute_expr subMap expr in
-              let (ret, aset, state) = bmc_expr state to_run in
+              let bmc_run = bmc_expr state to_run in
               let eq_expr = mk_implies state.ctx
-                (mk_not state.ctx state.has_returned)
-                (mk_eq state.ctx state.z3_ret ret) in
+                (mk_not state.ctx bmc_run.state.has_returned)
+                (mk_eq state.ctx bmc_run.state.z3_ret bmc_run.expr) in
 
-              UnitSort.mk_unit state.ctx, AddressSet.empty, 
-                { state with has_returned = mk_true state.ctx;
-                             ret_asserts = eq_expr :: state.ret_asserts }
+              { expr = UnitSort.mk_unit state.ctx
+              ; allocs = AddressSet.empty
+              ; state = { bmc_run.state with 
+                            has_returned = mk_true state.ctx;
+                            ret_asserts = eq_expr :: bmc_run.state.ret_asserts
+                        }
+              }
             end
           else 
             assert false
@@ -2075,32 +2022,6 @@ let rec bmc_expr (state: 'a bmc_state)
       end
   | Esave _ ->
       assert false
-
-(*
-(* TODO: only handles one function *)
-let bmc_fun_map (state: bmc_state)
-                (funs: ('a, 'b typed_fun_map_decl) Pmap.map) =
-  Pmap.map (function
-    | Fun (ty, params, pe) ->
-        (* TODO: return vcs *)
-        let (_, state1) = bmc_pexpr state pe in
-        let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
-                               state1.vcs 
-        in
-        Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ]
-    | ProcDecl (ty, params) ->
-        assert false
-    | Proc (ty, params, e) ->        
-        let (_, state1) = bmc_expr state e in
-        Printf.printf "-----CONSTRAINTS ONLY\n";
-        nheck_solver state1.solver;
-        Printf.printf "-----WITH VCS \n";
-        let not_vcs = List.map (fun a -> (Boolean.mk_not state1.ctx a))
-                               state1.vcs
-        in
-        Solver.add state1.solver [ Boolean.mk_or state1.ctx not_vcs ] 
-  ) funs
-*)
 
 (* NOTE: special-cased for main b/c types of pointers are unknown otherwise 
  * TODO: currently broken for args
@@ -2151,7 +2072,6 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
           (addr_expr)
       ];
 
-
       {state with (* heap = new_heap; *)
                   preexec = add_initial_action (get_aid action) 
                             paction state.preexec}
@@ -2166,13 +2086,14 @@ let initialise_main_params params state =
 
 let initialise_global state sym typ expr : 'a bmc_state =
   assert (is_ptr_type typ);
+  print_endline "TODO: sb global preexec";
   (* TODO: duplicated from Esseq *)
-  let (ret, loc, state) = bmc_expr state expr in 
+  let res = bmc_expr state expr in 
   let pat = CaseBase(Some sym, typ) in
-  alias_pattern state.alias_state pat loc;
-  let eq_expr = mk_eq_pattern state pat ret in
+  alias_pattern state.alias_state pat res.allocs;
+  let eq_expr = mk_eq_pattern state pat res.expr in
   Solver.add state.solver [ eq_expr ];
-  state
+  res.state
 
 (* TODO: make event a datatype 
  * TODO: do this in a nicer way so it's actually readable...
@@ -3010,7 +2931,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   match file.main with
   | None -> failwith "ERROR: file does not have a main"
   | Some main_sym ->
-      let (_, _, state1) = (
+      let result = (
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(ty, params, e)) ->
             (* Handle parameters *)
@@ -3039,6 +2960,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             bmc_pexpr state pe 
         | _ -> assert false
       ) in
+      let state1 = result.state in
 
       (* TODO: do properly. Need to make ASW relation correct *)
       let state1 = {state1 with preexec = 
@@ -3048,12 +2970,6 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
                      state1.preexec.sb
                      !(state1.action_map)
       }} in
-      (*
-      print_endline "-----RET_ASSERTS2";
-      List.iter (fun expr ->
-        print_endline (Expr.to_string (Expr.simplify expr None));
-      ) state1.ret_asserts;
-      *)
       Solver.add state1.solver (List.map (fun e -> Expr.simplify e None) state1.ret_asserts);
 
 
