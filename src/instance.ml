@@ -78,7 +78,7 @@ let elaborate ~conf ~filename =
     >>= function
     | (Some cabs, Some ail, sym_suppl, core) ->
       Pipeline.core_passes conf ~filename core
-      >>= fun (core', _) ->
+      >>= fun (_, core') ->
       return (cabs, ail, sym_suppl, core')
     | _ ->
       Exception.throw (Location_ocaml.unknown,
@@ -131,8 +131,8 @@ let execute ~conf ~filename (mode: exec_mode) =
   try
     elaborate ~conf ~filename
     >>= fun (cabs, ail, sym_suppl, core) ->
-    Pipeline.interp_backend dummy_io sym_suppl core [] true false false
-      (to_smt2_mode mode)
+    Pipeline.interp_backend dummy_io sym_suppl (Core_run_aux.convert_file core)
+      [] true false false (to_smt2_mode mode)
     >>= function
     | Either.Left res ->
       return (String.concat "\n" res)
