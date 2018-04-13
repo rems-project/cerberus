@@ -170,6 +170,11 @@ class UI {
     // Help
     $('#help').on('click', () => this.currentView.newTab('Help'))
 
+    // ISO C
+    $('#isoC').on('click', () => {
+      window.open('http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf')
+    })
+
     // REMS
     $('#rems').on('click', () => {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
