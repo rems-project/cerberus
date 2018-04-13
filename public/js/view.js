@@ -6,9 +6,47 @@ class Graph {
     this.edges = new vis.DataSet(edges)
   }
 
+  getParentById(nId) {
+    const parentId = this.edges.get().find(n => n.to == nId).from
+    return this.nodes.get(parentId)
+  }
+
+  children(nId) {
+    return this.edges.get().filter(n => n.from == nId && !n.isTau).map(n => n.to)
+  }
+
+  tauChildren(nId) {
+    return this.edges.get().filter(n => n.from == nId && n.isTau).map(n => n.to)
+  }
+
+  getChildById(nId) {
+    const childId = this.edges.get().find(n => n.from == nId).to
+    return this.nodes.get(childId)
+  }
+
   clear() {
     this.nodes.clear()
     this.edges.clear()
+  }
+
+  // Set visible all tau nodes descendent from active until first non-tau
+  setChildrenVisible (nId) {
+    const setTauChildrenVisible = (nId) => {
+      const tauChildren = this.tauChildren(nId).map(nId => this.nodes.get(nId)).map(child => {
+        child.isVisible = true
+        setTauChildrenVisible(child.id)
+        return child
+      })
+      return tauChildren
+    }
+    const tauChildren = setTauChildrenVisible(nId).flatten()
+    const children = this.children(nId).map(nId => this.nodes.get(nId)).map(child => {
+      child.isVisible = true
+      if (this.children(child.id).length > 0)
+        child.group = 'leaf'
+      return child
+    })
+    this.nodes.update(children.concat(tauChildren))
   }
 
   update(newNodes, newEdges) {
@@ -212,7 +250,7 @@ class View {
     this.fit()
   }
 
-  updateInteractive(pointId, tree) {
+  updateInteractive(activeId, tree) {
     // Give a better label to the node (TODO)
     const nodeLabel = (str) => {
       if (str == 'Step_eval(first operand of a Create)')
@@ -253,15 +291,15 @@ class View {
     tree.nodes.map((n) => n.label = nodeLabel(n.label))
 
     // Update current point to become branch
-    const point = graph.nodes.get(pointId)
-    point.group = 'branch'
-    point.state = null
-    graph.nodes.update(point)
+    const active = graph.nodes.get(activeId)
+    active.group = 'branch'
+    active.state = null
+    graph.nodes.update(active)
 
     // Add nodes
     tree.nodes.map((n) => {
       n.isTau = isTau(n)
-      n.isVisible = pointToId == n.id
+      n.isVisible = false
       graph.nodes.add(n)
       if (n.group == 'leaf') lastLeafNodeId = n.id
     })
@@ -276,6 +314,9 @@ class View {
       if (!n.isTau)
         graph.edges.add({from: getNoTauParent(e.to), to: e.to, isTau: false})
     })
+
+    // Set visible all tau nodes descendent from active until first non-tau
+    graph.setChildrenVisible(activeId)
 
     // Update any instance of interactive
     this.tabs.map((tab) => tab.updateGraph(graph))

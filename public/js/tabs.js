@@ -43,14 +43,14 @@ class TabInteractive extends Tab {
     let toolbar = $('<div class="toolbar"></div>')
     toolbar.attr('align', 'right')
 
-    this.step = $('<div class="btn inline">Step</div>')
-    toolbar.append(this.step)
+    this.stepBtn = $('<div class="btn inline">Step</div>')
+    toolbar.append(this.stepBtn)
 
-    this.next = $('<div class="btn inline">Next</div>')
-    toolbar.append(this.next)
+    this.nextBtn = $('<div class="btn inline">Next</div>')
+    toolbar.append(this.nextBtn)
 
-    let restart = $('<div class="btn inline">Restart</div>')
-    toolbar.append(restart)
+    let restartBtn = $('<div class="btn inline">Restart</div>')
+    toolbar.append(restartBtn)
 
     let hideTauBtn = $('<div class="btn inline">Show tau steps</button>')
     toolbar.append(hideTauBtn)
@@ -127,19 +127,16 @@ class TabInteractive extends Tab {
 
     this.graph = new Graph()
     this.network = new vis.Network(container[0], this.graph, options)
-
-    this.next.on('click', () => {
-      let selection = this.network.getSelection()
-      if (selection.nodes && selection.nodes.length > 0) {
-        ui.step(this.nodes.get(selection.nodes[0]))
-      }
-      // If initial step
-      let ns = this.nodes.get()
-      if (ns.length == 1)
-        ui.step(ns[0])
+    
+    this.stepBtn.on('click', () => {
+      this.step(this.getSelectedNode())
     })
 
-    restart.on('click', () => {
+    this.nextBtn.on('click', () => {
+      this.step(this.getSelectedNode())
+    })
+
+    restartBtn.on('click', () => {
       this.graph.clear()
       ui.request('Step', (data) => {
         ui.currentView.mergeState(data.state)
@@ -162,11 +159,11 @@ class TabInteractive extends Tab {
       if (arg && arg.nodes && arg.nodes.length == 1) {
         let active = this.graph.nodes.get(arg.nodes[0])
         if (active) {
-          this.step.addClass('disable')
-          this.next.addClass('disable')
+          this.stepBtn.addClass('disable')
+          this.nextBtn.addClass('disable')
           if (active.group && active.group == 'leaf') {
             // do a step
-            ui.step(active)
+            this.step(active)
           } else if (active.loc || active.mem) {
             // show mem and select locations
             if (active.loc) {
@@ -185,6 +182,17 @@ class TabInteractive extends Tab {
     })
   }
 
+  step(active) {
+    if (ui.state.graph.children(active.id).length == 0)
+      ui.step(active)
+    else {
+      active.group = 'branch'
+      ui.state.graph.nodes.update(active)
+      ui.state.graph.setChildrenVisible(active.id)
+      this.updateGraph(ui.state.graph)
+    }
+  }
+
   updateGraph(graph) {
     const nodeFilter = this.hideTau ? n => n.isVisible && !n.isTau
                                     : n => n.isVisible
@@ -193,6 +201,14 @@ class TabInteractive extends Tab {
     const edges = graph.edges.get().filter(edgeFilter)
     this.graph.update(nodes, edges)
     this.selectLastLeaf()
+  }
+
+  getSelectedNode () {
+    const selection = this.network.getSelection()
+    if (selection.nodes && selection.nodes.length > 0) {
+      return this.graph.nodes.get(selection.nodes[0])
+    }
+    return null
   }
 
   selectLastLeaf () {
@@ -767,7 +783,6 @@ class TabAsm extends TabReadOnly {
       }
     }
   }
-
 
   getLocation(from, to) {
     for (let i = 0; i < this.locations.length; i++) {
