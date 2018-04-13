@@ -139,3 +139,7 @@ jQuery.fn.extend({
     });
   }
 });
+
+Array.prototype.flatten = function() {
+  this.reduce((acc, val) => acc.concat(val), [])
+}
