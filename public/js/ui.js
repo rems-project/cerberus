@@ -14,6 +14,7 @@ class UI {
     this.settings = settings
     $('#cb_concrete').prop('checked', this.settings.model == 'Concrete')
     $('#cb_rewrite').prop('checked', this.settings.rewrite)
+    $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
     $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
     $('#cb_colour').prop('checked', this.settings.colour)
     $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
@@ -146,6 +147,11 @@ class UI {
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
       this.currentView.state.dirty = true;
     })
+    $('#sequentialise').on('click', (e) => {
+      this.settings.sequentialise = !this.settings.sequentialise;
+      $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
+      this.currentView.state.dirty = true;
+    })
     $('#auto_refresh').on('click', (e) => {
       this.settings.auto_refresh = !this.settings.auto_refresh;
       $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
@@ -206,6 +212,7 @@ class UI {
         'action':  mode,
         'source':  this.source.getValue(),
         'rewrite': this.settings.rewrite,
+        'sequentialise': this.settings.sequentialise,
         'model': this.settings.model,
         'interactive': interactive
       }),
@@ -318,6 +325,7 @@ class UI {
 
 const ui = new UI({
   rewrite:       false,
+  sequentialise: true,
   auto_refresh:  true,
   colour:        true,
   colour_cursor: true,

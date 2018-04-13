@@ -44,15 +44,17 @@ type incoming_msg =
     source:  string;
     model:   string;
     rewrite: bool;
+    sequentialise: bool;
     interactive: active_node option;
   }
 
 let parse_incoming_json msg =
-  let empty = { action=      `Nop;
-                source=      "";
-                model=       "Concrete";
-                rewrite=     true;
-                interactive= None;
+  let empty = { action=         `Nop;
+                source=         "";
+                model=          "Concrete";
+                rewrite=        true;
+                sequentialise=  true;
+                interactive=    None;
               }
   in
   let parse_option f = function
@@ -88,6 +90,7 @@ let parse_incoming_json msg =
     | "action"  -> { msg with action= action_from_string (parse_string v) }
     | "source"  -> { msg with source= parse_string v }
     | "rewrite" -> { msg with rewrite= parse_bool v }
+    | "sequentialise" -> { msg with sequentialise= parse_bool v }
     | "model"   -> { msg with model= parse_string v }
     | "interactive" -> { msg with interactive=parse_option parse_interactive v }
     | key ->
@@ -200,7 +203,10 @@ let respond_json json =
 let cerberus ~conf content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
-  let conf      = { conf with rewrite_core= msg.rewrite; } in
+  let conf      = { conf with rewrite_core= msg.rewrite;
+                              sequentialise_core = msg.sequentialise
+                  }
+  in
   let timeout   = float_of_int conf.timeout in
   let request req : result Lwt.t =
     let instance = "./cerb." ^ String.lowercase_ascii msg.model in
@@ -274,8 +280,12 @@ let request ~docroot ~conf conn req body =
 let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try
     Debug.level := debug_level;
-    let conf = { rewrite_core = false; cpp_cmd; core_impl;
-                 cerb_debug_level; timeout; tagDefs = "" } in
+    let conf = { rewrite_core = false;
+                 sequentialise_core = false;
+                 tagDefs = "";
+                 cpp_cmd; core_impl; cerb_debug_level; timeout;
+               }
+    in
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
     Server.make ~callback: (request ~docroot ~conf) ()
