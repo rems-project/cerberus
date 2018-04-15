@@ -51,6 +51,7 @@
           <div class="dropdown-content">
             <div id="new" class="btn">New empty file</div>
             <hr>
+            <div id="load_demo" class="btn">Load demo tests</div>
             <div id="load_defacto" class="btn">Load defacto tests</div>
             <div id="load" class="btn">Load from file</div>
           </div>
@@ -125,10 +126,31 @@
 
   <div id="views"></div>
 
+  <div id="demo" class="window">
+    <div class="header">
+      <ul>
+        <li><div class="title">Load demo tests...</div></li>
+        <li class="right">
+          <div id="load_demo_cancel" class="btn">Cancel</div>
+        </li>
+      </ul>
+    </div>
+    <div class="window_body" style="width: 40em; height: 30em;">
+      <ul class="tests">
+        <li><a href="#" onclick="javascript:ui.demo('provenance_basic_global_xy.c')">provenance_basic_global_xy.c</a></li>
+        <li><a href="#" onclick="javascript:ui.demo('provenance_roundtrip_via_intptr_t.c')">provenance_roundtrip_via_intptr_t.c</a></li>
+        <li><a href="#" onclick="javascript:ui.demo('pointer_offset_from_subtraction_1_global.c')">pointer_offset_from_subtraction_1_global.c</a></li>
+        <li><a href="#" onclick="javascript:ui.demo('provenance_tag_bits_via_uintptr_t_1.c')">provenance_tag_bits_via_uintptr_t_1.c</a></li>
+        <li><a href="#" onclick="javascript:ui.demo('pointer_copy_user_ctrlflow_bitwise.c')">pointer_copy_user_ctrlflow_bitwise.c</a></li>
+        <li><a href="#" onclick="javascript:ui.demo('unspecified_value_struct_copy.c')">unspecified_value_struct_copy.c</a></li>
+      </ul>
+    </div>
+  </div>
+
   <div id="defacto" class="window">
     <div class="header">
       <ul>
-        <li><div class="title">Load defacto test...</div></li>
+        <li><div class="title">Load defacto tests...</div></li>
         <li class="right">
           <div id="load_defacto_cancel" class="btn">Cancel</div>
         </li>
