@@ -508,7 +508,39 @@ class TabExecution extends TabReadOnly {
     super('Execution')
   }
   update (s) {
-    this.setValue(s.result) // TODO: change to execution result
+    if (s == "") {
+      this.setValue("")
+      return
+    }
+
+    const values = s.result.split(/\nEND EXEC\[\d*\]\nBEGIN EXEC\[\d*\]\n/g)
+      .map(s => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
+      .sort()
+
+    let result = ""
+    let current = null
+    let cnt = 0
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] != current) {
+        if (cnt > 0) {
+          result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+          result += current
+          result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+        }
+        current = values[i]
+        cnt = 1;
+      } else {
+        cnt++
+      }
+    }
+    if (cnt > 0) {
+      let i = values.length
+      result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      result += current
+      result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      cnt = 1;
+    } 
+    this.setValue(result)
   }
 }
 
