@@ -242,7 +242,7 @@ let get ~docroot uri path =
   let try_with () =
     Debug.print 9 ("GET " ^ path);
     match path with
-    | "/" -> Server.respond_file "public/index.html" ()
+    | "/" -> Server.respond_file (docroot ^ "/index.html") ()
     | _   -> get_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "GET" e;

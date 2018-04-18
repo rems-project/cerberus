@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Cerberus</title>
+</head>
+<body>
+  <div><input id="file-input" type="file" style="display:none;"/></div>
+  <div class="header">
+    <ul>
+      <li class="border"><div class="title">Cerberus</div></li>
+      <li class="border">
+        <div id="current-view" class="btn dropdown">
+          <span id="current-view-title"></span>
+          <div id="dropdown-views" class="dropdown-content"></div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>File</span>
+          <div class="dropdown-content">
+            <div id="new" class="btn">New empty file</div>
+            <hr>
+            <div id="load_demo" class="btn">Load demo tests</div>
+            <div id="load_defacto" class="btn">Load defacto tests</div>
+            <div id="load" class="btn">Load from file</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Elaborate</span>
+          <div class="dropdown-content">
+            <div id="cabs" class="btn">Cabs</div>
+            <div id="ail-ast" class="btn">Ail (AST)</div>
+            <div id="ail" class="btn">Ail</div>
+            <div id="core" class="btn">Core</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Execute</span>
+          <div class="dropdown-content">
+            <div id="random" class="btn">Random (45s timeout)</div>
+            <div id="exhaustive" class="btn">Exhaustive (45s timeout)</div>
+            <div id="interactive" class="btn">Interactive (experimental)</div>
+          </div>
+        </div>
+      </li>
+      <li><div id="compile" class="btn">Compile</div></li>
+      <li>
+        <div class="btn dropdown">
+          <span>Settings</span>
+          <div class="dropdown-content">
+            <div id="concrete" class="btn">
+              <input id="cb_concrete" type="checkbox">Use Concrete Model
+            </div>
+            <div id="rewrite" class="btn">
+              <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+            </div>
+            <div id="sequentialise" class="btn">
+              <input id="cb_sequentialise" type="checkbox">Sequentialise
+            </div>
+            <div id="auto_refresh" class="btn">
+              <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+            </div>
+            <div id="colour" class="btn">
+              <input id="cb_colour" type="checkbox">Colour All
+            </div>
+            <div id="colour_cursor" class="btn">
+              <input id="cb_colour_cursor" type="checkbox">Colour Cursor
+            </div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="btn dropdown">
+          <span>Share</span>
+          <div id="share" class="dropdown-content share">
+            <div class="btn dropdown">
+              <span id="current-share"></span>
+              <div class="dropdown-content-content">
+                <div id="option-share" class="btn"></div>
+              </div>
+            </div>
+            <input id="sharelink" type="text">
+            <span id="sharebtn"></span>
+          </div>
+        </div>
+      <li><div id="isoC" class="btn">ISO C</div></li>
+      <li><div id="help" class="btn">Help</div></li>
+      <li class="right"><div id="rems" class="btn">REMS</div></li>
+    </ul>
+  </div><!-- header -->
+  <div id="views"></div>
+  <div id="defacto" class="window">
+    <div class="header">
+      <ul>
+        <li><div class="title">Load defacto tests...</div></li>
+        <li class="right">
+          <div id="load_defacto_cancel" class="btn">Cancel</div>
+        </li>
+      </ul>
+    </div>
+    <div id="defacto_body" class="window_body">
+    </div>
+  </div>
+  <script src="bundle.js"></script>
+</body>
+</html>
