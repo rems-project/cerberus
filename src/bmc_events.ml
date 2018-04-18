@@ -72,9 +72,10 @@ type preexecution = {
 
   (* NB: computed as candidate asw only. Can be calculated from hb maybe *)
   asw : (action_id * action_id) Pset.set;
-
+  (*
   (* TODO: testing computing hb directly *)
   hb  : (action_id * action_id) Pset.set
+  *)
 }
 
 let guard_actions (ctx: context)
@@ -126,7 +127,9 @@ let initial_preexec () = {
   initial_actions = Pset.empty (paction_cmp);
   sb = Pset.empty (Pervasives.compare);
   asw = Pset.empty (Pervasives.compare);
+  (*
   hb = Pset.empty Pervasives.compare
+  *)
 }
 
 let add_initial_action (aid: action_id)
@@ -153,10 +156,12 @@ let print_preexec (preexec : preexecution) : unit =
   print_endline "";
   print_endline "REL ASW";
   Pset.iter (fun (a, b) -> Printf.printf "(%d, %d) " a b) preexec.asw;
-  print_endline "";
+  print_endline ""
+  (*
   print_endline "REL HB";
   Pset.iter (fun (a, b) -> Printf.printf "(%d, %d) " a b) preexec.hb;
   print_endline ""
+  *)
 
 
 let set_to_list (set: 'a Pset.set) =
@@ -167,12 +172,13 @@ let merge_preexecs (p1 : preexecution) (p2: preexecution) : preexecution =
     initial_actions = Pset.union p1.initial_actions p2.initial_actions;
     sb = Pset.union p1.sb p2.sb;
     asw = Pset.union p1.asw p2.asw;
-    hb = Pset.union p1.hb p2.hb
+    (* hb = Pset.union p1.hb p2.hb *)
   }
 
 (* ==========================
  * TODO: ALL EXPERIMENTAL STUFF BELOW
  *)
+(*
 let hb_cartesian_product (s1: bmc_paction Pset.set)
                          (s2: bmc_paction Pset.set)
                          (pos_only : bool) =
@@ -184,6 +190,7 @@ let hb_cartesian_product (s1: bmc_paction Pset.set)
     | BmcAction(Pos, _, _) ->  do_product
     | _ -> if pos_only then s_outer else do_product
   )) s1 (Pset.empty Pervasives.compare)
+*)
 
 let pos_cartesian_product (s1: (bmc_paction) Pset.set) 
                           (s2: (bmc_paction) Pset.set) 

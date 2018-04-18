@@ -3,3 +3,5 @@ let g_max_inline_depth = 3
 let g_dot_file = "dot_graph"
 
 let g_max_function_depth = 1
+
+let g_sequentialise = false  
