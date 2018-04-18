@@ -62,7 +62,9 @@ type cvalue =
   | Flexible of flexsym
   | Z3Expr of Expr.expr
 
-type location = int
+type location = 
+  | ConcreteLoc of int
+  | SymbolicLoc of string
 
 type lock_outcome =
     Locked

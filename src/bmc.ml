@@ -86,8 +86,12 @@ type 'a bmc_state = {
   sym_table   : ksym_table ref;
   sym_supply  : ksym_supply ref;
 
+
   (* Map from alloc -> address *)
   addr_map    : (Address.addr, kbmc_address) Pmap.map ref;
+
+  (* TODO: hack for outputting source symbols for locations *)
+  src_ptr_map : (int, ksym) Pmap.map ref;
 
   (* Alias analysis stuff *)
   alias_state : kanalysis_state;
@@ -207,7 +211,8 @@ let lbool_to_bool = function
 let extract_executions (model: Model.model)
                        (fns : exec_fns) 
                        (ctx : context) 
-                       (retOpt: Expr.expr option) =  
+                       (retOpt: Expr.expr option) 
+                       (src_ptr_map : (int, ksym) Pmap.map) =  
   let apply = FuncDecl.apply in
   let events = Enumeration.get_consts fns.event_sort in
 
@@ -246,13 +251,18 @@ let extract_executions (model: Model.model)
         let tid = Integer.get_int (interp (apply fns.getThread [event])) in
         let value = pp_value(interp(apply fns.getVal [event])) in
 
+        let loc_val = match Pmap.lookup loc src_ptr_map with
+          | None -> ConcreteLoc loc
+          | Some (Symbol(_, Some str)) -> SymbolicLoc str
+          | Some _ -> ConcreteLoc loc in
+
         match (tid=g_initial_tid),guarded with 
         | true, _ -> None
         | _, L_TRUE -> 
             if (Expr.equal event_type fns.read_type) then
-              Some (Load (aid, tid, memorder, loc, Flexible value))
+              Some (Load (aid, tid, memorder, loc_val, Flexible value))
             else if (Expr.equal event_type fns.write_type) then
-              Some (Store (aid, tid, memorder, loc, Flexible value))
+              Some (Store (aid, tid, memorder, loc_val, Flexible value))
             else
               assert false
         | _, L_FALSE -> None
@@ -443,13 +453,15 @@ let extract_executions (model: Model.model)
 let get_all_executions (solver : Solver.solver)
                        (fns    : exec_fns)
                        (ctx    : context)
-                       (retOpt : Expr.expr option) =
+                       (retOpt : Expr.expr option) 
+                       (src_ptr_map : (int, ksym) Pmap.map)
+                       =
   Solver.push solver;
 
   let rec aux solver ret =
     if Solver.check solver [] = SATISFIABLE then
       let model = getOptVal (Solver.get_model solver) in
-      let execution = extract_executions model fns ctx retOpt in
+      let execution = extract_executions model fns ctx retOpt src_ptr_map in
       (* Assert not *)
       Solver.add solver [mk_not ctx execution.z3_asserts];
       aux solver (execution :: ret)
@@ -680,6 +692,7 @@ let initial_bmc_state (supply : ksym_supply)
     sym_table = ref (Pmap.empty sym_cmp);
     sym_supply = ref supply;
     addr_map = ref (Pmap.empty Pervasives.compare);
+    src_ptr_map = ref (Pmap.empty Pervasives.compare);
     (* heap = Pmap.empty Pervasives.compare; *)
     alias_state = initial_analysis_state ();
 
@@ -802,6 +815,7 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
       let sort = cbt_to_z3 state.ctx ty in
       let expr_pat = Expr.mk_const state.ctx pat_sym sort in
       state.sym_table := Pmap.add sym expr_pat (!(state.sym_table));
+
       begin
       match ty with
       | BTy_unit -> assert false
@@ -817,6 +831,21 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
               | OTy_pointer ->
                   assert (Sort.equal (Expr.get_sort expr) 
                                      (PointerSort.mk_sort state.ctx));
+                  (* Hack to map source code symbol -> location *)
+                  let addr_expr = 
+                    Expr.simplify (PointerSort.get_addr state.ctx expr) None in
+                  if (Expr.is_numeral addr_expr) then
+                    begin
+                      let addr = Integer.get_int addr_expr in
+                      let src_sym = match Pmap.lookup addr !(state.src_ptr_map) with
+                      | None -> sym
+                      | Some s -> s
+                      in
+                      state.src_ptr_map := Pmap.add addr src_sym
+                                           !(state.src_ptr_map)
+                    end;
+                  
+                  (* TODO: hack to assign locations to symbols in program *)
                   mk_eq state.ctx
                     (PointerSort.get_addr state.ctx expr_pat)
                     (PointerSort.get_addr state.ctx expr)
@@ -3086,7 +3115,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             | None -> print_endline "No memory actions"; true
             | Some fns ->
                 get_all_executions state1.solver fns state1.ctx 
-                                   (Some result.expr);
+                                   (Some result.expr) !(state.src_ptr_map);
                 print_endline "-----WITH RACE CHECKS";
                 Solver.add state1.solver [fns.unseq_race; fns.data_race];
                 if (Solver.check state1.solver [] = SATISFIABLE) then

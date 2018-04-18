@@ -62,7 +62,9 @@ let pp_memory_order_enum3 m () =
 
 let pp_tid = string_of_int
 let pp_aid = string_of_int
-let pp_loc () = string_of_int
+let pp_loc () = function
+  | ConcreteLoc l -> string_of_int l
+  | SymbolicLoc l -> l
 
 let pp_thread_id () tid =
   pp_tid tid
@@ -105,7 +107,7 @@ let pp_preexecution (preexec: pre_execution) =
   ) preexec.asw;
   print_endline "===LK";
   Pmap.iter (fun loc kind ->
-    Printf.printf "@%d -> %s\n" loc (pp_location_kind kind)
+    Printf.printf "@%s -> %s\n" (pp_loc () loc) (pp_location_kind kind)
   ) preexec.lk
 
 
