@@ -1,0 +1,37 @@
+{
+  "name": "Cerberus",
+  "version": "1.0.0",
+  "description": "Cerberus UI",
+  "private": true,
+  "scripts": {
+    "start": "webpack --config webpack.config.js -w",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rems-project/cerberus-private"
+  },
+  "homepage": "https://www.cl.cam.ac.uk/~pes20/cerberus/",
+  "keywords": [],
+  "author": "Victor Gomes",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/codemirror": "0.0.56",
+    "@types/jquery": "^3.3.1",
+    "@types/lodash": "^4.14.107",
+    "@types/vis": "^4.21.3",
+    "css-loader": "^0.28.11",
+    "style-loader": "^0.20.3",
+    "ts-loader": "^4.2.0",
+    "typescript": "^2.8.1",
+    "webpack": "^4.6.0",
+    "webpack-cli": "^2.0.14"
+  },
+  "dependencies": {
+    "codemirror": "^5.36.0",
+    "golden-layout": "^1.5.9",
+    "jquery": "^3.3.1",
+    "lodash": "^4.17.5",
+    "vis": "^4.21.0"
+  }
+}
