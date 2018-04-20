@@ -1,10 +1,10 @@
-import $ from "jquery"
-import GoldenLayout from "golden-layout"
-import _ from "lodash"
+import $ from 'jquery'
+import _ from 'lodash'
+import GoldenLayout from 'golden-layout'
 import Common from './common'
-import { Tab, TabSource, TabCore, TabInteractive, createTab, instanceOf } from "./tabs"
-import Util from "./util"
-import View from "./view"
+import Util from './util'
+import View from './view'
+import Tabs from './tabs'
 
 /** UI Settings */
 interface Settings {
@@ -17,21 +17,32 @@ interface Settings {
   model: Common.Model
 }
 
-export class UI {
+class CerberusUI {
   /** List of existing views */
-  views: View[]
+  private views: View[]
   /** Current displayed view */
-  currentView?: View
+  private currentView?: View
   /** Contains the div where views are located */
-  dom: JQuery<HTMLElement>
+  private dom: JQuery<HTMLElement>
   /** UI settings */
-  settings: Settings
+  private settings: Settings
+  /** C11 Standard in JSON */
+  private std: any
+  /** Godbolt default compiler */
+  defaultCompiler: Common.Compiler
+  /** List of compilers */
+  compilers?: Common.Compiler []
 
   constructor (settings: Settings) {
     this.views = []          
 
     this.dom = $('#views');
     window.onresize = () => this.refresh()
+
+    this.defaultCompiler = {
+      id: 'clang500',
+      name: 'x86-64 clang 5.0.0'
+    }
 
     // UI settings
     this.settings = settings
@@ -84,9 +95,8 @@ export class UI {
     })
 
     // Run (Execute)
-    $('#run').on('click', () => {})
-    $('#random').on('click', () => this.exec ('Random'))
-    $('#exhaustive').on('click', () => this.exec ('Exhaustive'))
+    $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
+    $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
     $('#interactive').on('click', () => this.interactive())
 
     // Pretty print elab IRs
@@ -140,22 +150,23 @@ export class UI {
     $('#rewrite').on('click', (e) => {
       this.settings.rewrite = !this.settings.rewrite;
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
-      this.getView().state.dirty = true;
+      this.getView().emit('dirty')
     })
     $('#sequentialise').on('click', (e) => {
       this.settings.sequentialise = !this.settings.sequentialise;
       $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
-      this.getView().state.dirty = true;
+      this.getView().emit('dirty')
     })
     $('#auto_refresh').on('click', (e) => {
       this.settings.auto_refresh = !this.settings.auto_refresh;
       $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
     })
     $('#colour').on('click', (e) => {
+      const view = this.getView()
       this.settings.colour = !this.settings.colour
-      if (!this.settings.colour) this.getState().isHighlighted = false
       $('#cb_colour').prop('checked', this.settings.colour)
-      this.highlight()
+      view.emit('clear')
+      view.emit('highlight')
     })
     $('#colour_cursor').on('click', (e) => {
       this.settings.colour_cursor = !this.settings.colour_cursor;
@@ -180,14 +191,89 @@ export class UI {
       if (this.settings.auto_refresh) this.elab()
     }, 2000);
 
+    // Get standard
+    $.getJSON('std.json').done((res) => this.std = res).fail(() => {
+      console.log('Failing when trying to download "std.json"')
+    })
+
+    // Get list of compilers
+    $.ajax({
+      headers: {Accept: 'application/json'},
+      url: 'https://gcc.godbolt.org/api/compilers/c',
+      type: 'GET',
+      success: (data, status, query) => {
+        this.defaultCompiler = $.grep(data, (e: Common.Compiler) => e.id == 'cclang500')[0]
+        this.compilers       = data
+      }
+    })
   }
 
-  setCurrentView(view: View) {
+  private setCurrentView(view: View) {
     if (this.currentView)
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
     view.show()
+  }
+
+  private elab (lang?: string) {
+    const view = this.getView()
+    if (lang) view.newTab(lang)
+    if (view.isDirty()) {
+      this.request(Common.Elaborate(), (s: Common.State) => {
+        view.mergeState(s)
+        view.emit('update')
+        view.emit('highlight')
+        view.clearInteractive()
+      })
+    }
+  }
+
+  private exec (mode: Common.ExecutionMode) {
+    this.request(Common.Execute(mode), (s: Common.State) => {
+      const view = this.getView()
+      const exec = view.getExec()
+      if (exec) exec.setActive()
+      view.mergeState(s)
+      view.emit('updateExecution')
+    })
+  }
+
+  // start interactive mode
+  private interactive() {
+    this.request(Common.Step(), (data: any) => {
+      const view = this.getView()
+      view.mergeState(data.state)
+      view.newInteractiveTab(data.steps)
+    })
+  }
+
+  // step interactive mode
+  private step(active: any) {
+    if (active) {
+      let view = this.getView()
+      this.request(Common.Step(), (data: any) => {
+        view.mergeState(data.state)
+        view.updateInteractive(active.id, data.steps)
+      }, {
+        lastId: view.getState().lastNodeId,
+        state: active.state,
+        active: active.id,
+        tagDefs: view.getState().tagDefs
+      })
+    } else {
+      console.log('error: node '+active+' unknown')
+    }
+  }
+
+  private getView(): Readonly<View> {
+    if (this.currentView)
+      return this.currentView
+    throw new Error("Panic: no view")
+  }
+
+  getSettings(): Readonly<Settings> {
+    return this.settings
   }
 
   add (view: View) {
@@ -199,142 +285,85 @@ export class UI {
     nav.on('click', () => this.setCurrentView(view))
 
     this.setCurrentView(view)
-    this.getSource().refresh()
+    view.getSource().refresh()
   }
 
-  request (mode: string, onSuccess: Function, interactive?: any) {
-    this.wait()
+  request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
+    const view = this.getView()
+    Util.wait()
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
       headers: {Accept: 'application/json'},
       data: JSON.stringify ({
-        'action':  mode,
-        'source':  this.getSource().getValue(),
+        'action':  Common.string_of_action(action),
+        'source':  view.getSource().getValue(),
         'rewrite': this.settings.rewrite,
         'sequentialise': this.settings.sequentialise,
-        'model': this.settings.model,
+        'model': Common.string_of_model(this.settings.model),
         'interactive': interactive
       }),
       success: (data, status, query) => {
         onSuccess(data);
-        this.done()
+        Util.done()
       }
     }).fail((e) => {
       console.log('Failed request!', e)
-      this.getState().dirty = false
-      this.done()
+      // TODO: this looks wrong
+      this.settings.auto_refresh = false
+      Util.done()
     })
   }
 
-  elab (lang?: string) {
-    const view = this.getView()
-    if (lang) this.getView().newTab(lang)
-    if (this.getState().dirty) {
-      this.request('Elaborate', (s: any) => {
-        view.mergeState(s)
-        view.update()
-        view.clearInteractive()
-      })
+  getSTDSection (section: string) {
+    if (!this.std) return
+    const locs = section.match(/\d(\.\d)*(#\d)?/)
+    if (!locs) return
+    let loc = locs[0].split(/#/)
+    let ns = loc[0].match(/\d+/g)
+    if (!ns) return
+    let title = '§'
+    let p = this.std
+    let content = ""
+    for (let i = 0; i < ns.length; i++) {
+      p = p[ns[i]]
+      title += ns[i] + '.'
+      if (p['title'])
+        content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
     }
-  }
-
-  exec (mode: string) {
-    this.request(mode, (s: any) => {
-      let exec = this.getView().getExec()
-      //if (exec) exec.setActive()
-      this.getView().mergeState(s)
-      this.getView().update()
-    })
-  }
-
-  // start interactive mode
-  interactive() {
-    this.request('Step', (data: any) => {
-      this.getView().mergeState(data.state)
-      this.getView().newInteractiveTab(data.steps)
-    })
-  }
-
-  // step interactive mode
-  step(active: any) {
-    if (active) {
-      this.request('Step', (data: any) => {
-        this.getView().mergeState(data.state)
-        this.getView().updateInteractive(active.id, data.steps)
-      }, {
-        lastId: this.getState().lastNodeId,
-        state: active.state,
-        active: active.id,
-        tagDefs: this.getState().tagDefs
-      })
+    // if has a paragraph
+    if (loc[1] && p['P'+loc[1]]) {
+      title = title.slice(0,-1) + '#' + loc[1]
+      content += p['P'+loc[1]]
     } else {
-      console.log('error: node '+active+' unknown')
+      let j = 1
+      while (p['P'+j]) {
+        content += p['P'+j] + '</br>'
+        j++
+      }
     }
-  }
-
-  wait () {
-    $('body').addClass('wait')
-  }
-
-  done () {
-    $('body').removeClass('wait')
-  }
-
-  getView(): View {
-    if (this.currentView)
-      return this.currentView
-    throw new Error("Panic: no view")
+    let div = $('<div class="std">'+content+'</div>')
+    // Create footnotes
+    div.append('<hr/>')
+    div.children('foot').each(function(i) {
+      let n = '['+(i+1)+']'
+      $(this).replaceWith(n)
+      div.append('<div style="margin-top: 5px;">'+n+'. '+ $(this).html()+'</div>')
+    })
+    div.append('<br>')
+    return {title: title, data: div}
   }
 
   refresh() {
     this.getView().refresh()
   }
 
-  // CurrentView Proxy Methods
-
-  highlight() {
-    if (!this.settings.colour)
-      this.getView().clear();
-    else
-      this.getView().highlight()
-  }
-
-  updateMemory(mem:any) {
-    this.getView().updateMemory(mem)
-  }
-
-  mark(loc:any) {
-    this.getView().mark(loc)
-  }
-
-  clear() {
-    this.getView().clear()
-  }
-
-  fit() {
-    this.getView().fit()
-  }
-
-  getState() {
-    return this.getView().state
-  }
-
-  getSource() {
-    return this.getView().source
-  }
 }
 
 /*
  * UI initialisation
  */
-
-interface Compiler {
-  id: string
-  name: string
-}
-
-const ui = new UI({
+const UI = new CerberusUI ({
   rewrite:       false,
   sequentialise: true,
   auto_refresh:  true,
@@ -343,32 +372,7 @@ const ui = new UI({
   short_share:   false,
   model:         Common.Model.Concrete
 })
-const style = Util.createStyle()
-let std             = null // JSON of standard
-let compilers       = []   // Godbolt compilers
 let config: any     = null // Permalink configuration
-
-// Godbolt default compiler
-let defaultCompiler: Compiler = {
-  id: 'clang500',
-  name: 'x86-64 clang 5.0.0'
-}
-
-// Get standard
-$.getJSON('std.json').done((res) => std = res).fail(() => {
-  console.log('Failing when trying to download "std.json"')
-})
-
-// Get list of compilers
-$.ajax({
-  headers: {Accept: 'application/json'},
-  url: 'https://gcc.godbolt.org/api/compilers/c',
-  type: 'GET',
-  success: (data, status, query) => {
-    defaultCompiler = $.grep(data, (e: Compiler) => e.id == 'cclang500')[0]
-    compilers       = data
-  }
-})
 
 // Get list of defacto tests
 $.get('defacto_tests.json').done((data) => {
@@ -384,8 +388,8 @@ $.get('defacto_tests.json').done((data) => {
         test.on('click', () => {
           $.get('defacto/'+name).done((data) => {
             $('#defacto').css('visibility', 'hidden')
-            ui.add(new View(name, data))
-            ui.refresh()
+            UI.add(new View(name, data))
+            UI.refresh()
           })
         })
         tests.append(test)
@@ -412,8 +416,8 @@ $.get('defacto_tests.json').done((data) => {
         test.on('click', () => {
           $.get('defacto/'+name).done((data) => {
             $('#defacto').css('visibility', 'hidden')
-            ui.add(new View(name, data))
-            ui.refresh()
+            UI.add(new View(name, data))
+            UI.refresh()
           })
         })
         tests.append(test)
@@ -425,8 +429,6 @@ $.get('defacto_tests.json').done((data) => {
     div.append(questions)
   }
 })
-
-
 
 // Detect if URL is a permalink
 try {
@@ -440,15 +442,16 @@ try {
 // Add view
 export function onLoad() {
   if (config) {
-    ui.add(new View(config.title, config.source, config))
-    ui.refresh()
+    UI.add(new View(config.title, config.source, config))
+    UI.refresh()
   } else {
     $.get('buffer.c').done((source) => {
-      ui.add(new View('example.c', source))
-      ui.refresh()
+      UI.add(new View('example.c', source))
+      UI.refresh()
     }).fail(() => {
       console.log('Failing when trying to download "buffer.c"')
     })
   }
 }
 
+export default UI

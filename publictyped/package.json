@@ -4,7 +4,9 @@
   "description": "Cerberus UI",
   "private": true,
   "scripts": {
-    "start": "webpack --config webpack.config.js -w",
+    "start": "webpack --config dev.config.js -w",
+    "build": "webpack --config dev.config.js",
+    "deploy": "webpack --config prod.config.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -25,13 +27,15 @@
     "ts-loader": "^4.2.0",
     "typescript": "^2.8.1",
     "webpack": "^4.6.0",
-    "webpack-cli": "^2.0.14"
+    "webpack-cli": "^2.0.14",
+    "webpack-merge": "^4.1.2"
   },
   "dependencies": {
     "codemirror": "^5.36.0",
     "golden-layout": "^1.5.9",
     "jquery": "^3.3.1",
     "lodash": "^4.17.5",
+    "npm": "^5.8.0",
     "vis": "^4.21.0"
   }
 }
