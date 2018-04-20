@@ -5,14 +5,20 @@ import CodeMirror from 'codemirror'
 import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
+import UI from './ui'
+import { EventEmitter } from 'golden-layout';
 
-/* Generic Tab */
-export class Tab {
+namespace Tabs {
+
+/* Generic  */
+export abstract class Tab {
   title: string | undefined
   dom: JQuery<HTMLElement>
+  ee: Common.EventEmitter
 
-  constructor(title: string) {
+  constructor(title: string, ee: Common.EventEmitter) {
     this.dom = $('<div class="tab-content"></div>')
+    this.ee = ee
     this.setTitle(title)
   }
 
@@ -23,32 +29,17 @@ export class Tab {
 
   /** Called when size or visibility of HTML changes */
   refresh () {}
-  
-  /** Mark elements according with location loc */
-  mark (loc: [number]) {}
-
-  /** Hightlight the entire file */
-  highlight(s: any) {}
-
-  /** Clear all marking and highlights */
-  clear () {}
 
   /** Update value (receives current state) */
-  update (s: any) {}
-
-  /** (only for memory tab) Update current memory */
-  updateMemory (m: any) {}
-
-  /** (only for interactive tab) Update execution graph */
-  updateGraph(g: any) {}
+  update(s: Readonly<Common.State>) {}
   
-  /** TODO: PROBABLY SHOULD DELETE THIS */
-  fit() {}
+  /** Implemented by GoldenLayout when tab content is attached to it */
+  setActive () {}
 }
 
-export class TabHelp extends Tab {
-  constructor() {
-    super('Help')
+export class Help extends Tab {
+  constructor(ee: Common.EventEmitter) {
+    super('Help', ee)
     this.dom.addClass('help')
     $.ajax({
       url: 'help.html',
@@ -58,7 +49,7 @@ export class TabHelp extends Tab {
   }
 }
 
-export class TabInteractive extends Tab {
+export class Interactive extends Tab {
   // UI
   stepBtn: JQuery<HTMLElement>
   nextBtn: JQuery<HTMLElement>
@@ -67,8 +58,8 @@ export class TabInteractive extends Tab {
   graph: Graph
   network: vis.Network
 
-  constructor(title: string) {
-    super(title)
+  constructor(ee: Common.EventEmitter) {
+    super('Interactive', ee)
 
     let toolbar = $('<div class="toolbar"></div>')
     toolbar.attr('align', 'right')
@@ -218,14 +209,13 @@ export class TabInteractive extends Tab {
               ui.updateMemory(active.mem)
           } else {
             // just clear and highlight everything
-      //@ts-ignore
-            ui.clear()
-      //@ts-ignore
-            ui.highlight()
+            ee.emit('clear')
+            ee.emit('highlight')
           }
         }
       }
     })
+    ee.on('highlight', this, this.highlight)
   }
 
   step(active: Node | undefined) {
@@ -291,11 +281,11 @@ export class TabInteractive extends Tab {
 
 }
 
-class TabMemory extends Tab {
+class Memory extends Tab {
   network: vis.Network
 
-  constructor(title: string) {
-    super(title)
+  constructor(ee: Common.EventEmitter) {
+    super('Memory', ee)
 
     let container = $('<div align="center" class="graph"></div>')
     this.dom.append(container)
@@ -349,19 +339,20 @@ class TabMemory extends Tab {
   }
 }
 
-/* Tab with CodeMirror editor */
-class TabEditor extends Tab {
-  editor: CodeMirror.Editor
-  skipCursorEvent: boolean
+/*  with CodeMirror editor */
+abstract class Editor extends Tab {
+  protected editor: CodeMirror.Editor
+  protected tooltip?: HTMLElement
+  private skipCursorEvent: boolean
 
-  constructor(title: string, source?: string) {
-    super(title)
+  constructor(title: string, source: string, ee: Common.EventEmitter) {
+    super(title, ee)
     this.dom.addClass('editor')
 
-    const config: CodeMirror.EditorConfiguration = {
-      /*styleActiveLine: true,*/
+    const config = <CodeMirror.EditorConfiguration> {
+      styleActiveLine: true,
       lineNumbers: true,
-      /*matchBrackets: true,*/
+      matchBrackets: true,
       tabSize: 2,
       smartIndent: true,
       lineWrapping: true
@@ -370,22 +361,19 @@ class TabEditor extends Tab {
     this.editor = CodeMirror (this.dom[0], config)
 
     this.editor.on('blur', (doc) => {
-      //@ts-ignore
-      ui.highlight()
+      this.ee.emit('highlight')
       this.skipCursorEvent = true
     })
 
     // CodeMirror overwrites 'click' events
     this.editor.on('mousedown', () => {
-      //@ts-ignore
-      ui.highlight()
+      this.ee.emit('highlight')
       this.skipCursorEvent = true
     })
 
-    this.editor.on('dblclick', (doc) => {
+    this.editor.on('dblclick', (ed) => {
       this.skipCursorEvent = false
-      //@ts-ignore
-      this.markSelection(doc)
+      this.markSelection(ed.getDoc())
     })
 
     this.editor.on('viewportChange', (doc) => {
@@ -402,6 +390,8 @@ class TabEditor extends Tab {
 
     if (source) this.editor.setValue(source)
     this.skipCursorEvent = true
+    ee.on('clear', this, this.clear)
+    ee.on('refresh', this, this.refresh)
   }
 
   getValue() {
@@ -417,20 +407,22 @@ class TabEditor extends Tab {
     this.setValue(this.getValue()+value)
   }
 
-  // TODO!!!
-  colorLines(i:any, e:any, color: string) {
+  colorLines(i: number, e: number, color: string | number) {
     for (let k = i; k <= e; k++) {
       this.editor.removeLineClass(k, 'background')
       this.editor.addLineClass(k, 'background', 'color'+color)
     }
   }
 
-  // TODO !!!
   clear() {
-    //@ts-ignore
-    this.editor.eachLine((line:any) => {
+    this.editor.getDoc().eachLine((line: CodeMirror.LineHandle) => {
       this.editor.removeLineClass(line, 'background')
     })
+  }
+
+  getLocation(from: Common.Point, to: Common.Point) {
+    // TO BE OVERWRITTEN
+    return undefined
   }
 
   markSelection(doc: CodeMirror.Doc) {
@@ -439,31 +431,31 @@ class TabEditor extends Tab {
       this.skipCursorEvent = false
       return;
     }
-    //@ts-ignore
-    if (!ui.settings.colour_cursor) return;
-    let from = doc.getCursor('from')
-    let to   = doc.getCursor('to')
-    //@ts-ignore
-    ui.mark(this.getLocation(from, to))
+    const from = doc.getCursor('from')
+    const to   = doc.getCursor('to')
+    const loc  = this.getLocation(from, to)
+    if (loc) {
+      this.ee.emit('clear')
+      this.ee.emit('mark', loc)
+    }
   }
 
   refresh () {
     this.editor.refresh()
   }
 
-  /*
-  showTooltip(content: string) {
-    function elt(tagname: string, cls: string, ...args: Node []) {
+  showTooltip(content: HTMLElement) {
+    function elt(tagname: string, cls: string, ...args: any []) {
       let e = document.createElement(tagname);
       if (cls) e.className = cls;
-      for (let i = 2; i < args.length; ++i) {
+      for (let i = 0; i < args.length; ++i) {
         let elt = args[i];
         if (typeof elt == "string") elt = document.createTextNode(elt);
         e.appendChild(elt);
       }
       return e;
     }
-    function makeTooltip(x: string, y: string, content: string) {
+    function makeTooltip(x: number, y: number, content: HTMLElement) {
       let node = elt("div", "tooltip", content);
       node.style.left = x + "px";
       node.style.top = y + "px";
@@ -486,54 +478,45 @@ class TabEditor extends Tab {
         }
         node.style.maxHeight = maxHeight + "px"
       }
-
       return node;
     }
 
-    function clear() {
-      if (tip.parentNode) fadeOut(tip)
-      this.tooltip = null
-      clearActivity()
-    }
-
-    let where = this.editor.cursorCoords()
+    let where = this.editor.cursorCoords(true)
+    //@ts-ignore WARN: CodeMirror.d.ts is missing .right
     let tip = makeTooltip(where.right + 1, where.bottom, content)
-    let mouseOnTip = false
     let cmIsBlur = false
 
     CodeMirror.on(tip, "mousemove", () => {
       console.log('on move');
-      mouseOnTip = true;
     })
 
-    CodeMirror.on(tip, "mousedown", (e) => {
+    CodeMirror.on(tip, "mousedown", (e: MouseEvent) => {
       let x0 = e.clientX
       let y0 = e.clientY
       let pos = $(tip).position()
-      function moveTip(e) {
+      function moveTip(e: MouseEvent): void {
         let dx = e.clientX - x0
         let dy = e.clientY - y0
         tip.style.cursor = 'move'
         tip.style.left = (dx + pos.left) + "px";
         tip.style.top = (dy + pos.top) + "px";
       }
-      function stop(e) {
+      function stop(e: MouseEvent): void {
         tip.style.cursor = 'auto'
         $(document).off('mousemove')
         $(document).off('mouseup')
       }
       tip.style.cursor = 'move'
-      $(document).on('mousemove', e => moveTip(e));
-      $(document).on('mouseup', e => stop(e));
+      $(document).on('mousemove', (e: any) => moveTip(e));
+      $(document).on('mouseup', (e: any) => stop(e));
     })
 
-    function onEditorActivity(cm, f) {
+    function onEditorActivity(cm: CodeMirror.Editor, f: (_: CodeMirror.Editor) => void) {
       cm.on("cursorActivity", f)
       cm.on("scroll", f)
       cm.on("blur", () => {
         console.log('blur');
         cmIsBlur = true
-        if (!mouseOnTip) f()
       })
       cm.on("setDoc", f)
       return function() {
@@ -545,48 +528,42 @@ class TabEditor extends Tab {
     }
 
     let clearActivity = onEditorActivity(this.editor, () => {
-      if (tip.parentNode) fadeOut(tip)
-      this.tooltip = null
+      if (tip.parentNode) Util.fadeOut(tip)
+      this.tooltip = undefined
       clearActivity()
     })
 
-    CodeMirror.on(tip, "mouseout", (e) => {
-      if (!CodeMirror.contains(tip, e.relatedTarget || e.toElement)) {
-        console.log('outside');
-        mouseOnTip = false;
-      }
+    CodeMirror.on(tip, "mouseout", (e: MouseEvent) => {
       if (cmIsBlur) this.editor.focus()
-
     })
 
     this.tooltip = tip
   }
-    */
 }
 
 /* ReadOnly Editor */
-class TabReadOnly extends TabEditor {
-  constructor (title: string, source?: string) {
-    super(title, source)
+abstract class ReadOnly extends Editor {
+  constructor (title: string, source: string, ee: Common.EventEmitter) {
+    super(title, source, ee)
     this.editor.setOption ('readOnly', true)
   }
 }
 
-class TabExecution extends TabReadOnly {
-  constructor () {
-    super('Execution')
+export class Execution extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Execution', '', ee)
+    ee.on('update', this, this.update)
+    ee.on('updateExecution', this, this.update)
   }
-  // TODO!!!
-  update (s: any) {
-    if (s == "") {
-      this.setValue("")
+
+  update (s: Common.State) {
+    if (s.result == '') {
+      this.setValue('')
       return
     }
-
     const values = s.result.split(/\nEND EXEC\[\d*\]\nBEGIN EXEC\[\d*\]\n/g)
       .map((s: string) => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
       .sort()
-
     let result = ""
     let current = null
     let cnt = 0
@@ -614,57 +591,59 @@ class TabExecution extends TabReadOnly {
   }
 }
 
-class TabConsole extends TabReadOnly {
-  constructor () {
-    super('Console')
+class Console extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Console', '', ee)
+    ee.on('update', this, this.update)
   }
-  // TODO
-  update (s: any) {
+
+  update(s:Common.State) {
     this.setValue(s.console.replace(/[^:]*:/, s.title + ':'))
   }
 }
 
-/* Tab C source */
-export class TabSource extends TabEditor {
-  isClosable: boolean
+/*  C source */
+export class Source extends Editor {
+  private isClosable: boolean
 
-  constructor(title: string, source: string) {
-    super(title, source)
+  constructor(title: string, source: string, ee: Common.EventEmitter) {
+    super(title, source, ee)
     this.isClosable = false
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (ed) => this.markSelection(ed.getDoc()))
 
     this.editor.on('change', () => {
-      //@ts-ignore
-      ui.currentView.state.dirty = true;
-      //ui.currentView.clear()
+      ee.emit('dirty')
+      ee.emit('clear')
+    })
+    ee.on('highlight', this, this.highlight)
+    ee.on('mark', this, (l: any) => this.mark(l))
+    ee.on('clear', this, this.clear)
+  }
+
+  getLocation(from: Common.Point, to: Common.Point) {
+    return this.ee.once((s: Readonly<Common.State>) => {
+      let locations = s.locs;
+      for (let i = 0; i < locations.length; i++) {
+        let loc = locations[i]
+        if ((loc.c.begin.line < from.line ||
+            (loc.c.begin.line == from.line && loc.c.begin.ch <= from.ch))
+          && (loc.c.end.line > to.line ||
+            (loc.c.end.line == to.line && loc.c.end.ch >= to.ch)))
+          return loc
+      }
+      return null
     })
   }
 
-  // TODO !!!
-  getLocation(from: any, to: any) {
-      //@ts-ignore
-    let locations = ui.currentView.state.locs;
-    for (let i = 0; i < locations.length; i++) {
-      let loc = locations[i]
-      if ((loc.c.begin.line < from.line ||
-          (loc.c.begin.line == from.line && loc.c.begin.ch <= from.ch))
-        && (loc.c.end.line > to.line ||
-          (loc.c.end.line == to.line && loc.c.end.ch >= to.ch)))
-        return loc
-    }
-    return null
-  }
-
-  mark(loc: any) {
+  mark(loc: Common.Locations) {
     let options: CodeMirror.TextMarkerOptions = {
       className: Util.getColor(loc.color)
     }
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
-  // TODO !!!
-  highlight(s: any) {
+  highlight(s: Common.State) {
     for (let i = 0; i < s.locs.length; i++)
       this.mark(s.locs[i])
   }
@@ -676,26 +655,23 @@ export class TabSource extends TabEditor {
   }
 }
 
-/* Tab Cabs */
-class TabCabs extends TabReadOnly {
-  constructor() {
-    super('Cabs')
+/*  Cabs */
+class Cabs extends ReadOnly {
+  constructor(ee: Common.EventEmitter) {
+    super('Cabs', '', ee)
     this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Cabs elaboration failed...>')
+    ee.on('update', this, this.update)
   }
-
-  // TODO !!!
-  update(s: any) {
+  update(s:Common.State) {
     this.setValue(s.ast.cabs)
   }
 }
 
-/* Tab Ail */
-class TabAil extends TabReadOnly {
-  tooltip: any
-
-  constructor() {
-    super('Ail')
+/*  Ail */
+class Ail extends ReadOnly {
+  constructor(ee: Common.EventEmitter) {
+    super('Ail', '', ee)
     this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Ail elaboration failed...>')
 
@@ -704,65 +680,62 @@ class TabAil extends TabReadOnly {
         const rx_word: string = "\" "
         let ch = stream.peek()
         let word = ""
-
         if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return null
         }
-
         while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
           stream.next()
         }
-
-        let re = /\[\d(\.\d)*(#\d)?\]/
+        let re = /(\[|;)\d(\.\d)*(#\d)?(\]?)/
         if (re.test(word))
           return "std"
       }
     }, { opaque: true, priority: 1000 }
     )
 
-    this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
+    this.editor.getWrapperElement().addEventListener('mousedown', (e: MouseEvent) => {
       if (!e.target) return
-      let edom = $(e.target);
-      if (edom.hasClass('cm-std')) {
-    //@ts-ignore
-        if (this.tooltip && e.target.tooltipVisible) {
-          // TODO
-          //fadeOut(this.tooltip)
-          //e.target.tooltipVisible = false
+      const unsafeTarget = e.target as any
+      if ($(e.target).hasClass('cm-std')) {
+        if (this.tooltip && unsafeTarget.tooltipVisible) {
+          Util.fadeOut(this.tooltip)
+          unsafeTarget.tooltipVisible = false
         } else {
-          // TODO
-          //this.showTooltip(getSTDSection(e.target.textContent).data[0]);
-          //e.target.tooltipVisible = true;
+          const stdSection = UI.getSTDSection(unsafeTarget.textContent)
+          if (stdSection) {
+            this.showTooltip(stdSection.data[0])
+            unsafeTarget.tooltipVisible = true;
+          }
         }
       }
     })
 
+    ee.on('update', this, this.update)
   }
 
-  // TODO
-  update(s: any) {
+  update(s:Common.State) {
     this.setValue(s.pp.ail)
   }
 }
 
-class TabAil_AST extends TabAil {
-  constructor() {
-    super()
+class Ail_AST extends Ail {
+  constructor(ee:Common.EventEmitter) {
+    super(ee)
     this.setTitle('Ail (AST)')
+    ee.on('update', this, this.update)
   }
 
-  // TODO
-  update(s: any) {
+  update(s:Common.State) {
     this.setValue(s.ast.ail)
   }
 }
 
-/* Tab Core */
-export class TabCore extends TabReadOnly {
-  constructor () {
-    super('Core')
+/*  Core */
+export class Core extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Core', '', ee)
 
     this.editor.setOption('mode', 'text/x-core')
     this.editor.setOption('placeholder', '<Core elaboration failed...>')
@@ -773,17 +746,14 @@ export class TabCore extends TabReadOnly {
         const rx_word = "\" "
         let ch = stream.peek()
         let word = ""
-
         if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return null
         }
-
         while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
           stream.next()
         }
-
         let re = /{-#\d(\.\d)*(#\d)?/
         if (re.test(word))
           return "std"
@@ -791,163 +761,117 @@ export class TabCore extends TabReadOnly {
     }, { opaque: true, priority: 1000 }
     )
 
-    this.editor.getWrapperElement().addEventListener('mousedown', (e) => {
+    this.editor.getWrapperElement().addEventListener('mousedown', (e: MouseEvent) => {
       if (!e.target) return
-      let edom = $(e.target);
-      if (edom.hasClass('cm-std')) {
-        //@ts-ignore
-        if (this.tooltip && e.target.tooltipVisible) {
-          //fadeOut(this.tooltip)
-          //e.target.tooltipVisible = false
+      const unsafeTarget = e.target as any
+      if ($(e.target).hasClass('cm-std')) {
+        if (this.tooltip && unsafeTarget.tooltipVisible) {
+          Util.fadeOut(this.tooltip)
+          unsafeTarget.tooltipVisible = false
         } else {
-          //this.showTooltip(getSTDSection(e.target.textContent).data[0]);
-          //e.target.tooltipVisible = true;
+          const stdSection = UI.getSTDSection(unsafeTarget.textContent)
+          if (stdSection) {
+            this.showTooltip(stdSection.data[0])
+            unsafeTarget.tooltipVisible = true;
+          }
         }
       }
     })
 
+    ee.on('update', this, this.update)
+    ee.on('highlight', this, this.highlight)
+    ee.on('mark', this, this.mark)
   }
 
-  getLocation(from: any, to: any) {
-        //@ts-ignore
-    let locations = ui.currentView.state.locs
-    for (let i = 0; i < locations.length; i ++) {
-      let loc = locations[i]
-      if (loc.core.begin.line <= from.line && loc.core.end.line >= to.line)
-        return loc
-    }
-    return null
-  }
-
-  mark(loc: any) {
-    this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
-  }
-
-  highlight(s: any) {
-    for (let i = s.locs.length - 1; i >= 0; i--)
-      this.mark(s.locs[i])
-  }
-
-  update(s: any) {
+  update(s: Common.State) {
     this.setValue(s.pp.core)
   }
 
+  getLocation(from: Common.Point, to: Common.Point) {
+    return this.ee.once((s: Common.State) => {
+      let locations = s.locs
+      for (let i = 0; i < locations.length; i ++) {
+        let loc = locations[i]
+        if (loc.core.begin.line <= from.line && loc.core.end.line >= to.line)
+          return loc
+      }
+      return null
+    })
+  }
+
+  mark(loc: Common.Locations) {
+    this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
+  }
+
+  highlight(s: Common.State) {
+    for (let i = s.locs.length - 1; i >= 0; i--)
+      this.mark(s.locs[i])
+  }
 }
 
-class TabAsm extends TabReadOnly {
-  dropdown: JQuery<HTMLElement>
-  options: JQuery<HTMLElement>
-  cc: any
-  locations: any
+class Asm extends ReadOnly {
+  private current: JQuery<HTMLElement>
+  private options: JQuery<HTMLElement>
+  private cc: Common.Compiler
+  private source?: Readonly<string>
+  locations: any // TODO
 
-  constructor(cc?: any) {
-    //@ts-ignore  :w
-    if (cc == null) cc = defaultCompiler // Global variable
+  constructor(ee: Common.EventEmitter, cc?: any) {
+    if (cc == null) cc = UI.defaultCompiler // Global variable
 
-    super(cc.name)
+    super(cc.name, '', ee)
 
     this.editor.setOption('placeholder', '<Compilation failed...>')
     this.editor.setOption('mode', {name: "gas", architecture: "x86"})
 
     let toolbar   = $('<div class="toolbar flex"></div>')
 
-    this.dropdown = $('<div class="btn dropdown">'+cc.name+'</div>')
-        //@ts-ignore
-    this.dropdown.append(this.createDropdownContent(this))
+    this.current = $('<span>'+cc.name+'</span>')
+    const dropdown = $('<div class="btn dropdown"></div>')
+    dropdown.append(this.current)
+    dropdown.append(this.createDropdownContent())
 
     this.options  = $('<input type="text" placeholder="Compiler options..." style="flex-grow: 1;">')
 
+    /*
     this.options.on('blur', () => {
       this.compile(cc)
     })
     this.options.on('keypress', (e) => {
       if (e.which == 13) // Enter
         this.compile(cc)
-    })
+    })*/
 
-    toolbar.append(this.dropdown)
+    toolbar.append(dropdown)
     toolbar.append(this.options)
 
     this.dom.prepend(toolbar)
-
-    this.compile(cc)
 
     this.editor.on('cursorActivity', (ed) => this.markSelection(ed.getDoc()))
 
     this.cc = cc;
     this.locations = {}
+
+    ee.on('update', this, this.update)
+    ee.on('highlight', this, this.highlight)
+    ee.on('mark', this, this.mark)
   }
 
-  createDropdownContent()
-  {
-    let dropdown = $('<div class="dropdown-content"></div>')
-    //@ts-ignore
-    for (let i = 0; i < compilers.length; i++) {
-    //@ts-ignore
-      let cc  = compilers[i]
-      let opt = $('<div class="btn">' + cc.name + '</div>')
-      opt.on('click', () => {
-        this.compile(cc)
-        this.dropdown.text(cc.name)
-        this.setTitle(cc.name)
-      })
-      dropdown.append(opt)
-    }
-    return dropdown
+  update(s: Common.State) {
+    this.source = s.source()
+    this.compile()
   }
 
-  update() {
-    this.compile(this.cc)
-  }
-
-  updateLocations(lines: any) {
-    this.locations = {}
-    //@ts-ignore
-    let locs = ui.currentView.state.locs;
-    for (let i = locs.length - 1; i >= 0; i--) {
-      let l0 = locs[i].c.begin.line+1;
-      if (this.locations[0] || !lines[l0]) continue;
-      let ln = locs[i].c.end.line+1;
-      if (this.locations[ln] || !lines[ln]) continue;
-      this.locations[l0] = {
-        begin: Math.min(...lines[l0]),
-        end:   Math.max(...lines[ln]),
-        color: locs[i].color,
-        source: locs[i]
-      }
-    }
-  }
-
-  getLocation(from: any, to: any) {
-    for (let i = 0; i < this.locations.length; i++) {
-      if (this.locations[i].begin <= from.line && this.locations[i].end >= to.line)
-        return this.locations[i].source
-    }
-    return null
-  }
-
-  mark(loc: any) {
-    let l = this.locations[loc.c.begin.line+1]
-    if (l) this.colorLines (l.begin, l.end, l.color)
-  }
-
-  highlight(s: any) {
-    for (let i = s.locs.length - 1; i >= 0; i--)
-      this.mark(s.locs[i])
-  }
-
-  compile (cc: any) {
-    //@ts-ignore
-    ui.wait()
+  compile() {
+    Util.wait()
     $.ajax({
       headers: {Accept: 'application/json'},
       contentType: "application/json; charset=utf-8",
-      url: 'https://gcc.godbolt.org/api/compiler/'+cc.id+'/compile',
+      url: 'https://gcc.godbolt.org/api/compiler/'+this.cc.id+'/compile',
       type: 'POST',
       data: JSON.stringify ({
-        //@ts-ignore
-        source: ui.source.getValue(),
-        compiler: cc.id,
+        source: this.source,
+        compiler: this.cc.id,
         options: {
           userOptions: this.options.val(),
           compilerOptions: {},
@@ -966,51 +890,96 @@ class TabAsm extends TabReadOnly {
       success: (data, status, query) => {
         console.log(data)
         let value = ''
-        let lines = {}
+        let lines: any = {}
         for (let i = 0; i < data.asm.length; i ++) {
           let asm = data.asm[i]
           if (asm.text)
             value += asm.text + '\n'
           if (asm.source && asm.source.line) {
-    //@ts-ignore
             if (!lines[asm.source.line]) lines[asm.source.line] = []
-    //@ts-ignore
             lines[asm.source.line].push(i)
           }
         }
         this.setValue(value)
         this.updateLocations(lines)
-    //@ts-ignore
-        this.highlight(ui.state)
-    //@ts-ignore
-        ui.done()
+        if (UI.getSettings().colour)
+          this.ee.once((s: Readonly<Common.State>) => this.highlight(s))
+        Util.done()
       }
     })
   }
 
+  createDropdownContent() {
+    const dropdown = $('<div class="dropdown-content"></div>')
+    const compilers = UI.compilers
+    if (!compilers) return dropdown
+    for (let i = 0; i < compilers.length; i++) {
+      const cc  = compilers[i]
+      const opt = $('<div class="btn">' + cc.name + '</div>')
+      opt.on('click', () => {
+        this.cc = cc
+        this.current.text(cc.name)
+        this.compile()
+      })
+      dropdown.append(opt)
+    }
+    return dropdown
+  }
+
+  updateLocations(lines: any) {
+    this.ee.once((s: Readonly<Common.State>) => {
+      this.locations = {}
+      let locs = s.locs;
+      for (let i = locs.length - 1; i >= 0; i--) {
+        let l0 = locs[i].c.begin.line+1;
+        if (this.locations[0] || !lines[l0]) continue;
+        let ln = locs[i].c.end.line+1;
+        if (this.locations[ln] || !lines[ln]) continue;
+        this.locations[l0] = {
+          begin: Math.min(...lines[l0]),
+          end:   Math.max(...lines[ln]),
+          color: locs[i].color,
+          source: locs[i]
+        }
+      }
+    })
+  }
+
+  getLocation(from: Common.Point, to: Common.Point) {
+    for (let i = 0; i < this.locations.length; i++) {
+      if (this.locations[i].begin <= from.line && this.locations[i].end >= to.line)
+        return this.locations[i].source
+    }
+    return null
+  }
+
+  mark(loc: Common.Locations) {
+    let l = this.locations[loc.c.begin.line+1]
+    if (l) this.colorLines (l.begin, l.end, l.color)
+  }
+
+  highlight(s: Common.State) {
+    for (let i = s.locs.length - 1; i >= 0; i--)
+      this.mark(s.locs[i])
+  }
 }
 
 /* Concrete Tabs Factory */
-const Tabs = {
-  TabSource,
-  TabCabs,
-  TabAil,
-  TabCore,
-  TabAil_AST,
-  TabExecution,
-  TabInteractive,
-  TabMemory,
-  TabConsole,
-  TabHelp,
-  TabAsm
+const Tabs: any = {
+  Source, Cabs, Ail, Core, Ail_AST,
+  Execution, Console,
+  Interactive, Memory,
+  Help, Asm
 }
 
-export function createTab(title: string): Tab {
-    //@ts-ignore
-  return new Tabs['Tab'+title]()
+export function create(title: string, ee: Common.EventEmitter): Tab {
+  return new Tabs[title](ee)
 }
 
 export function instanceOf(tab: Tab, title: string) {
-    //@ts-ignore
-  return tab instanceof Tabs['Tab'+title]
+  return tab instanceof Tabs[title]
 }
+
+}
+
+export default Tabs

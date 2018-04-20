@@ -2,42 +2,63 @@ import $ from "jquery"
 import GoldenLayout from "golden-layout"
 import _ from "lodash"
 import { Node, Edge, Graph } from "./graph"
-import { Tab, TabSource, TabInteractive, createTab, instanceOf } from "./tabs"
+import Tabs from "./tabs"
 import Util from "./util"
 import Common from './common'
+import UI from './ui'
 
 type bytes = string
 
 export default class View {
-  public tabs: Tab[]
   title: string
-
-
-  // NOT SURE ABOUT !
-  layout!: GoldenLayout;
-  source: TabSource
-  state!: Common.State;
-
   dom: JQuery<HTMLElement>
+
+  public tabs: Tabs.Tab[]
+
+  private source: Tabs.Source
+
+  /** Golden Layout */
+  private layout!: GoldenLayout;
+
+  /** Private state */
+  private state!: Common.State;
+
+  /** Highlight has already been performed */
+  private isHighlighted: boolean
+
+  /** Source has been modified */
+  private dirty: boolean
+
+  /** Events */
+  private events: { [eventName:string]: [any, Function][]; }
+
+  /** Event Emitter */
+  private ee: Common.EventEmitter
 
   constructor (title: string, data: string, config?: GoldenLayout.Config) {
     this.tabs = []
-
+    this.events = {}
+    this.ee = {
+      on: (e, l, f) => this.on(e, l, f),
+      off: (f) => this.off(f),
+      once: (f => f(this.state)),
+      emit: (e, ...args) => this.emit (e, ...args)
+    }
+    this.dirty = true
+    this.on('dirty', this, () => this.dirty = true)
     this.title  = title
-
-    this.source = new TabSource(title, data)
-    this.tabs.push(this.source)
-
-    // State
+    this.isHighlighted = false
     this.setStateEmpty()
 
-    // DOM
+    this.source = new Tabs.Source(title, data, this.ee)
+    this.tabs.push(this.source)
+
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
   }
 
-  initLayout(config?: GoldenLayout.Config) {
+  private initLayout(config?: GoldenLayout.Config) {
     function component(title: string) {
       return {
         type: 'component',
@@ -93,41 +114,43 @@ export default class View {
         ]}]
       }
     }
+    interface ContentItem extends GoldenLayout.ContentItem {
+      componentName: string
+      content: Tabs.Tab
+    }
     let self = this // WARN: Golden Layout does not work with arrow function
     this.layout = new GoldenLayout (config, this.dom);
     this.layout.registerComponent('source', function (container: GoldenLayout.Container, state: any) {
-      //@ts-ignore
-      container.parent.tabcontent = self.source // Attach tab to contentItem
+      (container.parent as ContentItem).content = self.source
       container.getElement().append(self.source.dom)
       self.source.refresh()
     })
     this.layout.registerComponent('tab', function (container: GoldenLayout.Container, state: any) {
-      let tab = createTab(state.tab)
-      self.tabs.push(tab)
-      //@ts-ignore
-      container.parent.tabcontent = tab // Attach tab to contentItem
+      const tab = Tabs.create(state.tab, self.ee)
+      self.tabs.push(tab);
+      (container.parent as ContentItem).content = tab
       container.getElement().append(tab.dom)
       container.setState(state)
       tab.update(self.state)
-      tab.highlight(self.state)
+      tab.refresh()
+      const unsafeTab: any = tab
+      if (unsafeTab.highlight && UI.getSettings().colour)
+        unsafeTab.highlight(self.state)
     })
-    this.layout.on('itemDestroyed', (c: GoldenLayout.ContentItem) => {
-      //@ts-ignore
+    this.layout.on('itemDestroyed', (c: ContentItem) => {
       if (c.componentName == 'tab') {
         for (let i = 0; i < this.tabs.length; i++) {
-      //@ts-ignore
-          if (this.tabs[i] === c.tabcontent) {
+          if (this.tabs[i] === c.content) {
             this.tabs.splice(i, 1)
             break
           }
         }
+        this.off(c.content)
       }
     })
-      //@ts-ignore
-    this.layout.on( 'tabCreated', (header) => {
-      //@ts-ignore
+    this.layout.on( 'tabCreated', (header: GoldenLayout.Tab) => {
       if (header.contentItem.isComponent) {
-        let tab = header.contentItem.tabcontent
+        let tab = (header.contentItem as ContentItem).content
         header.element.on('mousedown', () => tab.refresh())
         tab.setActive = () => Util.triggerClick(header.element[0])
       }
@@ -135,9 +158,10 @@ export default class View {
     this.layout.init()
   }
 
-  setStateEmpty() {
+  private setStateEmpty() {
     this.state = {
-      title: this.title,
+      title: () => this.title,
+      source: () => this.source.getValue(),
       status: 'failure',
       pp: { cabs: '', ail:  '', core: '' },
       ast: { cabs: '', ail:  '', core: '' },
@@ -148,14 +172,13 @@ export default class View {
       console: '',
       lastNodeId: 0,
       tagDefs: undefined,
-      isHighlighted: false,
       dirty: true
     }
   }
 
   findTab(title: string) {
     for (let i = 0; i < this.tabs.length; i++) {
-      if (instanceOf(this.tabs[i], title)) {
+      if (Tabs.instanceOf(this.tabs[i], title)) {
         return this.tabs[i]
       }
     }
@@ -186,7 +209,7 @@ export default class View {
     this.state.graph.nodes.add(init)
     this.state.lastNodeId = 1
     // Update interactive tabs
-    this.tabs.map(tab => tab.updateGraph(this.state.graph))
+    // TODO: this.tabs.map(tab => tab.updateGraph(this.state.graph))
   }
 
   newInteractiveTab(steps: any) {
@@ -205,7 +228,7 @@ export default class View {
 
   isInteractiveOpen() {
     for (let i = 0; i < this.tabs.length; i++) {
-      if (this.tabs[i] instanceof TabInteractive) return true
+      if (this.tabs[i] instanceof Tabs.Interactive) return true
     }
     return false
   }
@@ -213,13 +236,12 @@ export default class View {
   clearInteractive() {
     this.state.graph.clear()
     if (this.state.status == 'success' && this.isInteractiveOpen()) {
-      //@ts-ignore
-      ui.request('Step', (data) => {
+      UI.request(Common.Step(), (data: any) => {
         this.mergeState(data.state)
         this.startInteractive(data.steps)
       })
     }
-    this.fit()
+    this.ee.emit('fit')
   }
 
   // TODO: this is wrong, this tree is not a graph
@@ -250,10 +272,8 @@ export default class View {
     // Search for a no tau parent
     const getNoTauParent: (_:Common.ID) => Common.ID | undefined = (nId: Common.ID) => {
       const e = getIncommingEdge(nId)
-      if (!e || !e.from) {
-        Util.error('Could not find incomming edge!')
-        return
-      }
+      if (!e || !e.from)
+        throw new Error('Could not find incomming edge!')
       if (isTauById(e.from))
         return getNoTauParent(e.from)
       return e.from
@@ -294,7 +314,7 @@ export default class View {
     graph.setChildrenVisible(activeId)
 
     // Update any instance of interactive
-    this.tabs.map((tab) => tab.updateGraph(graph))
+    //TODO: this.tabs.map((tab) => tab.updateGraph(graph))
 
     // WARN: Assume tree node is decreasing order
     // This is a seed to the server
@@ -314,34 +334,21 @@ export default class View {
     let tab = this.findTab(title)
     if (tab == null) {
       this.newTab(title)
-      tab = this.findTab(title)
+      tab = <Tabs.Tab>this.findTab(title)
     }
     return tab
   }
-  getExec()          { return this.getTab('Execution') }
-  getCabs()          { return this.getTab('Cabs') }
-  getAil()           { return this.getTab('Ail') }
-  getCore()          { return this.getTab('Core') }
-  getConsole()       { return this.getTab('Console') }
-  getInteractive()   { return this.getTab('Interactive') }
 
-  clear() {
-    this.tabs.map((tab) => tab.clear())
+  getSource(): Readonly<Tabs.Source> {
+    return this.source
   }
 
-  mark(loc: any) {
-    if (!this.state.dirty && loc) {
-      this.state.isHighlighted = false
-      this.clear()
-      this.tabs.map((tab) => tab.mark(loc))
-    }
+  getExec() {
+    return this.getTab('Execution')
   }
 
-  highlight() {
-    if (this.state.isHighlighted) return;
-    this.clear()
-    this.tabs.map((tab) => tab.highlight(this.state))
-    this.state.isHighlighted = true
+  getConsole() {
+    return this.getTab('Console')
   }
 
   show() {
@@ -350,15 +357,6 @@ export default class View {
 
   hide() {
     this.dom.hide()
-  }
-
-  fit() {
-    this.tabs.map((tab) => tab.fit())
-  }
-
-  update() {
-    this.tabs.map((tab) => tab.update(this.state))
-    this.highlight()
   }
 
   refresh () {
@@ -420,19 +418,69 @@ export default class View {
       updateSymbolicMemory()
     // Save in case another memory tab is open
     this.state.mem = new Graph(nodes, edges)
-    this.tabs.map((tab) => tab.updateMemory(this.state.mem))
+    // TODO: this.tabs.map((tab) => tab.updateMemory(this.state.mem))
+  }
+
+  isDirty(): Readonly<boolean> {
+    return this.dirty
+  }
+
+  getState(): Readonly<Common.State> {
+    return this.state
   }
 
   mergeState (s: Common.State) {
     if (s.status == 'failure') {
       this.setStateEmpty()
-        //@ts-ignore
-      this.console.setActive()
+      this.getConsole().setActive()
     }
-    if (s.tagDefs == null) s.tagDefs = this.state.tagDefs // avoid lose info
-    _.assign(this.state, s) // merge states
-    this.state.isHighlighted = false
-    this.state.dirty = false
+    // avoid lose info
+    if (s.tagDefs == null) s.tagDefs = this.state.tagDefs 
+    // merge
+    _.assign(this.state, s)
+    this.isHighlighted = false
+    this.dirty = false
+    return this.state
+  }
+
+  on(e: string, l: any, f: Function) {
+    let listeners = this.events[e]
+    if (!listeners) {
+      listeners = []
+      this.events[e] = listeners
+    }
+    listeners.push([l, f])
+  }
+
+  off(e_l: any) {
+    if (typeof e_l === 'string') { // If an event name
+      this.events[e_l] = []
+    } else { // If a listener (unsubscribe all)
+      for (const e in this.events) {
+        this.events[e] = this.events[e].filter(listener => listener[0] !== e_l)
+      }
+    }
+  }
+
+  emit(e: string, ...args: any[]) {
+    const settings = UI.getSettings()
+    switch (e) {
+      case 'highlight':
+        if (this.isHighlighted || !settings.colour || this.dirty) return
+        this.isHighlighted = true
+        break;
+      case 'clear':
+        this.isHighlighted = false
+        break;
+      case 'mark':
+        if (!settings.colour_cursor || this.dirty) return
+        break;
+    }
+    console.log(e)
+    const listeners = this.events[e]
+    args.push(this.state)
+    if (listeners)
+      listeners.map(listener => listener[1].apply(listener[0], args))
   }
 
 }

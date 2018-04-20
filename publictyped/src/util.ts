@@ -9,10 +9,6 @@ export function option(x: any, y: any) {
   return y
 }
 
-export function error(str: string): any {
-  throw new Error(str)
-}
-
 export function shortURL(url: string, f: (_:string) => void) {
   $.ajax({
     type: 'POST',
@@ -34,9 +30,16 @@ export function longURL(url: string) {
   })
 }
 
-/*
-function fadeOut(tooltip) {
-    function remove(node) {
+export function wait () {
+  $('body').addClass('wait')
+}
+
+export function done () {
+  $('body').removeClass('wait')
+}
+
+export function fadeOut(tooltip: HTMLElement) {
+    function remove(node: HTMLElement) {
       var p = node && node.parentNode;
       if (p) p.removeChild(node);
     }
@@ -45,8 +48,8 @@ function fadeOut(tooltip) {
   }
 
 // WARNING: Unused function
-function generateColor(style) {
-  function basicColor (mix) {
+function generateColor(style: HTMLElement) {
+  function basicColor (mix: number) {
     return Math.floor((Math.floor(Math.random()*256)+mix)/2)
   }
   let r = basicColor(255)
@@ -57,7 +60,6 @@ function generateColor(style) {
     '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
   return className
 }
-*/
 
 export function getColor(i: number): string {
   return 'color' + (i % 100)
@@ -70,44 +72,9 @@ export function createStyle() {
   return style
 }
 
-/*
-function getSTDSection(std, section) {
-  let loc = section.match(/\d(\.\d)*(#\d)?/)[0].split(/#/)
-  let ns = loc[0].match(/\d+/g)
-  let title = '§'
-  let p = std
-  let content = ""
-  for (let i = 0; i < ns.length; i++) {
-    p = p[ns[i]]
-    title += ns[i] + '.'
-    if (p['title'])
-      content += '<h3>'+ns[i]+'. '+p['title']+'</h3>'
-  }
-  // if has a paragraph
-  if (loc[1] && p['P'+loc[1]]) {
-    title = title.slice(0,-1) + '#' + loc[1]
-    content += p['P'+loc[1]]
-  } else {
-    let j = 1
-    while (p['P'+j]) {
-      content += p['P'+j] + '</br>'
-      j++
-    }
-  }
-  let div = $('<div class="std">'+content+'</div>')
-  // Create footnotes
-  div.append('<hr/>')
-  div.children('foot').each(function(i) {
-    let n = '['+(i+1)+']'
-    $(this).replaceWith(n)
-    div.append('<div style="margin-top: 5px;">'+n+'. '+ $(this).html()+'</div>')
-  })
-  div.append('<br>')
-  return {title: title, data: div}
-}
-
-function getSTDSentence(std, section) {
+function getSTDSentence(std: any, section: string) {
   let ns = section.match(/\d+/g)
+  if (!ns) return
   let title = '§'
   let p = std
   let content = ""
@@ -118,11 +85,6 @@ function getSTDSentence(std, section) {
   return content
 }
 
-function clone(data) {
-  return JSON.parse(JSON.stringify(data))
-}
-*/
-
 export function triggerClick(elem: HTMLElement): void {
   var clickEvent = document.createEvent ('MouseEvents');
   clickEvent.initEvent ('mousedown', true, true);
@@ -130,18 +92,6 @@ export function triggerClick(elem: HTMLElement): void {
   clickEvent.initEvent ('mouseup', true, true);
   elem.dispatchEvent (clickEvent);
 }
-
-/* Extend jQuery */
-$.fn.extend({
-  disable: function(state: boolean) {
-    //@ts-ignore
-    return this.each(function() {
-    //@ts-ignore
-      var $this = $(this);
-      $this.prop('disabled', state);
-    });
-  }
-});
 
 } // end namespace
 
