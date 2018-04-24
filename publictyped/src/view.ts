@@ -7,7 +7,12 @@ import Util from "./util"
 import Common from './common'
 import UI from './ui'
 
-type bytes = string
+/*
+I could use some ideas of Redux here. Have View to be a state and functions
+to dispatch an action (or event)
+and functions to subscribe to an action and receives the state
+not sure...
+*/
 
 export default class View {
   title: string
@@ -39,7 +44,7 @@ export default class View {
     this.tabs = []
     this.events = {}
     this.ee = {
-      on: (e, l, f) => this.on(e, l, f),
+      on: (e: any, l: any, f: Function) => this.on(e, l, f),
       off: (f) => this.off(f),
       once: (f => f(this.state)),
       emit: (e, ...args) => this.emit (e, ...args)
@@ -222,26 +227,26 @@ export default class View {
         componentState: { tab: 'Interactive' }
       }]
     })
-    this.refresh()
+    //this.refresh() I DON'T THINK I NEED THIS REFRESH
     this.startInteractive(steps)
   }
 
-  isInteractiveOpen() {
+  private isInteractiveOpen() {
     for (let i = 0; i < this.tabs.length; i++) {
       if (this.tabs[i] instanceof Tabs.Interactive) return true
     }
     return false
   }
 
-  clearInteractive() {
+  resetInteractive() {
     this.state.graph.clear()
     if (this.state.status == 'success' && this.isInteractiveOpen()) {
       UI.request(Common.Step(), (data: any) => {
-        this.mergeState(data.state)
+        this.updateState(data.state)
         this.startInteractive(data.steps)
       })
     }
-    this.ee.emit('fit')
+    //this.ee.emit('fit')
   }
 
   // TODO: this is wrong, this tree is not a graph
@@ -280,7 +285,7 @@ export default class View {
     }
 
     const graph = this.state.graph
-    let lastLeafNodeId = null
+    //let lastLeafNodeId = null
 
     // Update tree nodes labels
     tree.nodes.map((n) => n.label = nodeLabel(n.label))
@@ -296,7 +301,7 @@ export default class View {
       n.isTau = isTau(n)
       n.isVisible = false
       graph.nodes.add(n)
-      if (n.group == 'leaf') lastLeafNodeId = n.id
+      //if (n.group == 'leaf') lastLeafNodeId = n.id
     })
 
     // Edges are added twice (for tau transitions)
@@ -429,21 +434,34 @@ export default class View {
     return this.state
   }
 
-  mergeState (s: Common.State) {
-    if (s.status == 'failure') {
-      this.setStateEmpty()
-      this.getConsole().setActive()
+  updateState(res: Common.ResultRequest) {
+    switch (res.status) {
+      case 'elaboration':
+        this.state.pp = res.pp
+        this.state.ast = res.pp
+        this.state.locs = res.locs
+        this.state.console = ''
+        break
+      case 'execution':
+        this.state.result = res.result
+        this.state.console = ''
+        break
+      case 'stepping':
+        this.state.result = res.result // TODO: not sure about this
+        if (res.tagDefs) this.state.tagDefs = res.tagDefs
+        this.state.console = ''
+        break
+      case 'failure':
+        this.setStateEmpty()
+        this.state.console = res.console
+        this.getConsole().setActive()
+        break
     }
-    // avoid lose info
-    if (s.tagDefs == null) s.tagDefs = this.state.tagDefs 
-    // merge
-    _.assign(this.state, s)
     this.isHighlighted = false
     this.dirty = false
-    return this.state
   }
 
-  on(e: string, l: any, f: Function) {
+  on(e: Common.Event, l: any, f: Function) {
     let listeners = this.events[e]
     if (!listeners) {
       listeners = []

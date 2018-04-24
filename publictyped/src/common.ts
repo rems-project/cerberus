@@ -26,6 +26,8 @@ namespace Common {
           case ExecutionMode.Exhaustive:
             return 'Exhaustive'
         }
+        // TODO: how do I tell the type checker that this is unreachable?
+        return 'Random'
       case 'step':
         return 'Step'
     }
@@ -94,11 +96,28 @@ namespace Common {
     dirty: boolean
   }
 
+  export type ResultRequest =
+    { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
+    { status: 'execution', console: string, result: string} |
+    { status: 'stepping', result: string, tagDefs?: bytes} |
+    { status: 'failure', console: string, result: string }
+
+  export type Event =
+    'update' |            // Update tab values
+    'updateExecution' |   // Update execution result
+    'mark' |              // Mark location
+    'clear' |             // Clear all markings
+    'highlight' |         // Highlight the entire file
+    'dirty'               // Fired when file has changed
+
   export interface EventEmitter {
-    on: (e: string, l: any, f: Function) => void
-    off: (l: any) => void 
-    once: (f: ((s: Readonly<Common.State>) => any)) => any
-    emit: (e:string, ...args: any[]) => void
+    on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
+    on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
+    on (eventName: 'dirty', self:any, f: () => void): void
+    on (eventName: Event, self: any, f: ((s:Readonly<State>) => void)): void
+    off (self: any): void 
+    once (f: ((s: Readonly<State>) => any)): any
+    emit (eventName: Event, ...args: any[]): void
   }
 
   export interface Compiler {

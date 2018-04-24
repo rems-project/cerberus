@@ -48,6 +48,7 @@ export function fadeOut(tooltip: HTMLElement) {
   }
 
 // WARNING: Unused function
+// @ts-ignore
 function generateColor(style: HTMLElement) {
   function basicColor (mix: number) {
     return Math.floor((Math.floor(Math.random()*256)+mix)/2)
@@ -72,10 +73,12 @@ export function createStyle() {
   return style
 }
 
+// WARNING: Unused function
+// @ts-ignore
 function getSTDSentence(std: any, section: string) {
   let ns = section.match(/\d+/g)
   if (!ns) return
-  let title = '§'
+  //let title = '§'
   let p = std
   let content = ""
   for (let i = 0; i < ns.length - 1; i++) {
