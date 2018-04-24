@@ -1232,7 +1232,7 @@ let combine_prov prov1 prov2 =
       | FloatAdd ->
           fval1 +. fval2
       | FloatSub ->
-          fval1 +. fval2
+          fval1 -. fval2
       | FloatMul ->
           fval1 *. fval2
       | FloatDiv ->
