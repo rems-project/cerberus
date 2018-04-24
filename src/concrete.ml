@@ -584,7 +584,8 @@ module Concrete : Memory = struct
           let prov = combine_provenances provs in
           (begin match extract_unspec bs1' with
             | Some cs ->
-                MVpointer (ref_ty, PV (prov, PVconcrete (int64_of_bytes false cs)))
+                let n = int64_of_bytes false cs in
+                MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
             | None ->
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
@@ -1039,8 +1040,10 @@ module Concrete : Memory = struct
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     PV (prov, match ptrval_ with
       | PVnull _ ->
-          Debug_ocaml.print_debug 1 [] (fun () -> "TODO(check): array_shift_ptrval, PVnull");
-          PVconcrete offset
+          (* TODO: this seems to be undefined in ISO C *)
+          (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
+          (* PVconcrete offset *)
+          failwith "TODO(shift a null pointer should be undefined behaviour)"
       | PVfunction _ ->
           failwith "Concrete.array_shift_ptrval, PVfunction"
       | PVconcrete addr ->
