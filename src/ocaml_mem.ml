@@ -4,6 +4,7 @@ module Mem = (
   val match !Prelude.mem_switch with
     | MemSymbolic -> (module Ocaml_defacto : Memory_model.Memory)
     | MemConcrete -> (module Concrete : Memory_model.Memory)
+    | MemCpp -> (module Cpp_mem_model : Memory_model.Memory)
 )
 
 include Mem
