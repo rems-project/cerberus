@@ -200,7 +200,15 @@ let respond_json json =
 
 (* Cerberus actions *)
 
-let cerberus ~conf content =
+let log_ip act = function
+  | Conduit_lwt_unix.TCP tcp ->
+    let log = open_out_gen [Open_text;Open_append;Open_creat] 0o660 "request.log" in
+    output_string log @@ Ipaddr.to_string tcp.ip^": "^string_of_action act^"\n";
+    close_out log
+  | _ -> ()
+
+
+let cerberus ~conf ~flow content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
@@ -216,6 +224,7 @@ let cerberus ~conf content =
     Lwt_io.close proc#stdin >>= fun () ->
     Lwt_io.read_value proc#stdout
   in
+  log_ip msg.action flow;
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
     | `Elaborate  -> request @@ `Elaborate (conf, filename)
@@ -249,12 +258,12 @@ let get ~docroot uri path =
     forbidden path
   end
 
-let post ~docroot ~conf uri path content =
+let post ~docroot ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     Debug.print 8 ("POST data " ^ content);
     match path with
-    | "/cerberus" -> cerberus ~conf content
+    | "/cerberus" -> cerberus ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -267,14 +276,14 @@ let post ~docroot ~conf uri path content =
 
 (* Main *)
 
-let request ~docroot ~conf conn req body =
+let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
   match meth with
   | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
   | `GET  -> get ~docroot uri path
-  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf uri path
+  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path
   | _     -> not_allowed meth path
 
 let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
