@@ -1,13 +1,11 @@
 import $ from 'jquery'
-import _ from 'lodash'
 import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
 import View from './view'
-import Tabs from './tabs'
 
 /** UI Settings */
-interface Settings {
+export interface Settings {
   rewrite: boolean,
   sequentialise: boolean,
   auto_refresh: boolean,
@@ -17,7 +15,7 @@ interface Settings {
   model: Common.Model
 }
 
-class CerberusUI {
+export class CerberusUI {
   /** List of existing views */
   private views: View[]
   /** Current displayed view */
@@ -92,6 +90,15 @@ class CerberusUI {
 
     $('#load_demo_cancel').on('click', () => {
       $('#demo').css('visibility', 'hidden')
+    })
+
+    $('#demo .tests a').on('click', (e) => {
+      const name = e.target.textContent + '.c'
+      $.get('demo/'+name).done((data) => {
+        $('#demo').css('visibility', 'hidden')
+        this.add(new View(name, data))
+        this.refresh()
+      })
     })
 
     // Run (Execute)
@@ -173,8 +180,14 @@ class CerberusUI {
       $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     })
 
+    // Preferences
+    $('#preferences').on('click', () => this.getView().newTab('Preferences'))
+
     // Help
     $('#help').on('click', () => this.getView().newTab('Help'))
+
+    // Implementation Defined Choices
+    $('#implementation').on('click', () => this.getView().newTab('Implementation'))
 
     // ISO C
     $('#isoC').on('click', () => {
@@ -220,21 +233,21 @@ class CerberusUI {
     const view = this.getView()
     if (lang) view.newTab(lang)
     if (view.isDirty()) {
-      this.request(Common.Elaborate(), (s: Common.State) => {
-        view.mergeState(s)
+      this.request(Common.Elaborate(), (res: Common.ResultRequest) => {
+        view.updateState(res)
         view.emit('update')
         view.emit('highlight')
-        view.clearInteractive()
+        view.resetInteractive()
       })
     }
   }
 
   private exec (mode: Common.ExecutionMode) {
-    this.request(Common.Execute(mode), (s: Common.State) => {
+    this.request(Common.Execute(mode), (res: Common.ResultRequest) => {
       const view = this.getView()
       const exec = view.getExec()
       if (exec) exec.setActive()
-      view.mergeState(s)
+      view.updateState(res)
       view.emit('updateExecution')
     })
   }
@@ -243,17 +256,18 @@ class CerberusUI {
   private interactive() {
     this.request(Common.Step(), (data: any) => {
       const view = this.getView()
-      view.mergeState(data.state)
+      view.updateState(data.state)
       view.newInteractiveTab(data.steps)
     })
   }
 
   // step interactive mode
-  private step(active: any) {
+  //@ts-ignore TODO
+  private step(active: any): void {
     if (active) {
       let view = this.getView()
       this.request(Common.Step(), (data: any) => {
-        view.mergeState(data.state)
+        view.updateState(data.state)
         view.updateInteractive(active.id, data.steps)
       }, {
         lastId: view.getState().lastNodeId,
@@ -375,34 +389,6 @@ const UI = new CerberusUI ({
 let config: any     = null // Permalink configuration
 
 // Get list of defacto tests
-$.get('defacto_tests.json').done((data) => {
-  let div = $('#defacto_body')
-  for (let i = 0; i < data.length; i++) {
-    let questions = $('<ul class="questions"></ul>')
-    for (let j = 0; j < data[i].questions.length; j++) {
-      let q = data[i].questions[j]
-      let tests = $('<ul class="tests"></ul>')
-      for (let k = 0; q.tests && k < q.tests.length; k++) {
-        let name = q.tests[k]
-        let test = $('<li><a href="#">'+name+'</a></li>')
-        test.on('click', () => {
-          $.get('defacto/'+name).done((data) => {
-            $('#defacto').css('visibility', 'hidden')
-            UI.add(new View(name, data))
-            UI.refresh()
-          })
-        })
-        tests.append(test)
-      }
-      questions.append(q.question)
-      questions.append(tests)
-    }
-    div.append($('<h3>'+data[i].section+'</h3>'))
-    div.append(questions)
-  }
-})
-
-// Get list demo examples
 $.get('defacto_tests.json').done((data) => {
   let div = $('#defacto_body')
   for (let i = 0; i < data.length; i++) {
