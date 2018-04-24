@@ -8,23 +8,29 @@
   <div><input id="file-input" type="file" style="display:none;"/></div>
   <div class="header">
     <ul>
-      <li class="border"><div class="title">Cerberus</div></li>
       <li class="border">
-        <div id="current-view" class="btn dropdown">
-          <span id="current-view-title"></span>
-          <div id="dropdown-views" class="dropdown-content"></div>
-        </div>
-      </li>
-      <li>
         <div class="btn dropdown">
-          <span>File</span>
+          <span>Cerberus</span>
           <div class="dropdown-content">
             <div id="new" class="btn">New empty file</div>
             <hr>
             <div id="load_demo" class="btn">Load demo tests</div>
             <div id="load_defacto" class="btn">Load defacto tests</div>
             <div id="load" class="btn">Load from file</div>
+            <hr>
+            <div id="preferences" class="btn">Preferences (experimental)</div>
+            <hr>
+            <div id="isoC" class="btn">C11 International Standard</div>
+            <div id="implementation" class="btn">Implementation defined choices</div>
+            <hr>
+            <div id="help" class="btn">Help</div>
           </div>
+        </div>
+      </li>
+      <li class="border">
+        <div id="current-view" class="btn dropdown">
+          <span id="current-view-title"></span>
+          <div id="dropdown-views" class="dropdown-content"></div>
         </div>
       </li>
       <li>
@@ -88,12 +94,29 @@
             <span id="sharebtn"></span>
           </div>
         </div>
-      <li><div id="isoC" class="btn">ISO C</div></li>
-      <li><div id="help" class="btn">Help</div></li>
       <li class="right"><div id="rems" class="btn">REMS</div></li>
     </ul>
   </div><!-- header -->
   <div id="views"></div>
+  <div id="demo" class="window">
+    <div class="header">
+      <ul>
+        <li><div class="title">Load demo tests...</div></li>
+        <li class="right">
+          <div id="load_demo_cancel" class="btn">Cancel</div>
+        </li>
+      </ul>
+    </div>
+    <div class="window_body" style="width: 40em; height: 30em;">
+      <h3 stype="margin-left: 2em;">LLVM Euro Dev Meeting 2018</h3>
+      <ul class="tests">
+        <li><a href="#">Demo 1</a></li>
+        <li><a href="#">Demo 2</a></li>
+        <li><a href="#">Demo 3</a></li>
+        <li><a href="#">Demo 4</a></li>
+      </ul>
+    </div>
+  </div>
   <div id="defacto" class="window">
     <div class="header">
       <ul>

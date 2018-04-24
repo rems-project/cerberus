@@ -1,7 +1,7 @@
 import _ from 'lodash'
 import vis from 'vis'
 
-type ID = string | number
+export type ID = string | number
 
 export interface Node extends vis.Node {
   id: ID
@@ -30,6 +30,7 @@ export class Graph {
     const edgeToParent = _.find(this.edges.get(), e => e.to == nID)
     if (edgeToParent && edgeToParent.from) 
       return this.nodes.get(edgeToParent.from)
+    return undefined
   }
 
   children(nID: ID): ID [] {
@@ -44,6 +45,7 @@ export class Graph {
     const edgeToChild = _.find(this.edges.get(), e => e.from == nID)
     if (edgeToChild && edgeToChild.to)
       return this.nodes.get(edgeToChild.to)
+    return undefined
   }
 
   clear() {

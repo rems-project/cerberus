@@ -87,7 +87,11 @@ body {
 
 .header hr {
   display: block;
+  border: 0;
+  height: 1px;
   margin: 0;
+  color: #fff;
+  background-color: #fff;
 }
 
 .dropdown {
@@ -289,7 +293,7 @@ code {
   margin-top:10px;
 }
 
-.help {
+.page {
   background-color:white;
   height: 100%;
   overflow: auto;
@@ -297,7 +301,7 @@ code {
   padding: 15px;
 }
 
-.help #TOC {
+.page #TOC {
   border: 1px solid darkgray;
   background: whitesmoke;
   float: right;
@@ -306,6 +310,21 @@ code {
   margin-left: 1em;
   margin-bottom: 1em;
 }
+
+.page h2 {
+  margin-bottom: 0;
+}
+
+.page ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+.page input {
+  margin-right: 1em;
+}
+
 /*********** Graphs ************/
 
 .toolbar {

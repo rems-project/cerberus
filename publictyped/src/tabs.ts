@@ -6,7 +6,6 @@ import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
 import UI from './ui'
-import { EventEmitter } from 'golden-layout';
 
 namespace Tabs {
 
@@ -40,9 +39,21 @@ export abstract class Tab {
 export class Help extends Tab {
   constructor(ee: Common.EventEmitter) {
     super('Help', ee)
-    this.dom.addClass('help')
+    this.dom.addClass('page')
     $.ajax({
       url: 'help.html',
+      type: 'GET',
+      success: (data) => this.dom.append(data)
+    })
+  }
+}
+
+export class Preferences extends Tab {
+  constructor (ee: Common.EventEmitter) {
+    super('Prefernces', ee)
+    this.dom.addClass('page') // maybe change this
+    $.ajax({
+      url: 'preferences.html',
       type: 'GET',
       success: (data) => this.dom.append(data)
     })
@@ -249,6 +260,7 @@ export class Interactive extends Tab {
     const selection = this.network.getSelection()
     if (selection.nodes && selection.nodes.length > 0)
       return this.graph.nodes.get(selection.nodes[0])
+    return undefined
   }
 
   selectLastLeaf () {
@@ -340,7 +352,7 @@ class Memory extends Tab {
 }
 
 /*  with CodeMirror editor */
-abstract class Editor extends Tab {
+export abstract class Editor extends Tab {
   protected editor: CodeMirror.Editor
   protected tooltip?: HTMLElement
   private skipCursorEvent: boolean
@@ -391,7 +403,6 @@ abstract class Editor extends Tab {
     if (source) this.editor.setValue(source)
     this.skipCursorEvent = true
     ee.on('clear', this, this.clear)
-    ee.on('refresh', this, this.refresh)
   }
 
   getValue() {
@@ -542,10 +553,23 @@ abstract class Editor extends Tab {
 }
 
 /* ReadOnly Editor */
-abstract class ReadOnly extends Editor {
+export abstract class ReadOnly extends Editor {
   constructor (title: string, source: string, ee: Common.EventEmitter) {
     super(title, source, ee)
     this.editor.setOption ('readOnly', true)
+  }
+}
+
+export class Implementation extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Implementation Defined', '', ee)
+    this.editor.setOption('placeholder', '<Download failed...>')
+    this.editor.setOption('mode', {name: "ocaml"})
+    $.ajax({
+      url: 'assets/ocaml_implementation.ml',
+      type: 'GET',
+      success: (data) => this.setValue(data)
+    })
   }
 }
 
@@ -556,7 +580,7 @@ export class Execution extends ReadOnly {
     ee.on('updateExecution', this, this.update)
   }
 
-  update (s: Common.State) {
+  update (s: Common.State) : void {
     if (s.result == '') {
       this.setValue('')
       return
@@ -604,11 +628,8 @@ class Console extends ReadOnly {
 
 /*  C source */
 export class Source extends Editor {
-  private isClosable: boolean
-
   constructor(title: string, source: string, ee: Common.EventEmitter) {
     super(title, source, ee)
-    this.isClosable = false
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (ed) => this.markSelection(ed.getDoc()))
 
@@ -682,7 +703,7 @@ class Ail extends ReadOnly {
         let word = ""
         if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
-          return null
+          return undefined
         }
         while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
@@ -691,6 +712,7 @@ class Ail extends ReadOnly {
         let re = /(\[|;)\d(\.\d)*(#\d)?(\]?)/
         if (re.test(word))
           return "std"
+        return undefined
       }
     }, { opaque: true, priority: 1000 }
     )
@@ -748,7 +770,7 @@ export class Core extends ReadOnly {
         let word = ""
         if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
-          return null
+          return undefined 
         }
         while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
@@ -757,6 +779,7 @@ export class Core extends ReadOnly {
         let re = /{-#\d(\.\d)*(#\d)?/
         if (re.test(word))
           return "std"
+        return undefined
       }
     }, { opaque: true, priority: 1000 }
     )
@@ -832,15 +855,13 @@ class Asm extends ReadOnly {
     dropdown.append(this.createDropdownContent())
 
     this.options  = $('<input type="text" placeholder="Compiler options..." style="flex-grow: 1;">')
-
-    /*
     this.options.on('blur', () => {
-      this.compile(cc)
+      this.compile()
     })
     this.options.on('keypress', (e) => {
       if (e.which == 13) // Enter
-        this.compile(cc)
-    })*/
+        this.compile()
+    })
 
     toolbar.append(dropdown)
     toolbar.append(this.options)
@@ -888,7 +909,6 @@ class Asm extends ReadOnly {
         }
       }),
       success: (data, status, query) => {
-        console.log(data)
         let value = ''
         let lines: any = {}
         for (let i = 0; i < data.asm.length; i ++) {
@@ -905,7 +925,10 @@ class Asm extends ReadOnly {
         if (UI.getSettings().colour)
           this.ee.once((s: Readonly<Common.State>) => this.highlight(s))
         Util.done()
-      }
+      },
+    }).fail(() => {
+        this.setValue('')
+        Util.done()
     })
   }
 
@@ -967,9 +990,9 @@ class Asm extends ReadOnly {
 /* Concrete Tabs Factory */
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
-  Execution, Console,
+  Execution, Console, Asm,
   Interactive, Memory,
-  Help, Asm
+  Preferences, Implementation, Help
 }
 
 export function create(title: string, ee: Common.EventEmitter): Tab {

@@ -44,4 +44,4 @@ web.byte
 public/include
 publictyped/node_modules
 publictyped/dist/*.bundle.js
-public/js/cerberus.js
+publictyped/dist/src/*

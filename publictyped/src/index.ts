@@ -8,6 +8,8 @@ import './js/gas.js'
 import './js/clike.js'
 import './js/ast.js'
 import './js/core.js'
+import './js/ocaml.js'
+import './js/placeholder.js'
 import { onLoad } from './ui'
 
 $(window).ready(onLoad)
