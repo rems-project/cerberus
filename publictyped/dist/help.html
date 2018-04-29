@@ -1,23 +1,24 @@
 <h1 id="cerberus">Cerberus</h1>
 <p>Cerberus is a tool for exploring the semantics of C the programming language. C remains central to our computing infrastructure but still lacks a clear and complete semantics. Programmers lack tools to explore the range of behaviours they should expect; compiler development lacks test oracles; and formal verification and analysis must make (explicitly or implicitly) many choices about the specific C they target. The ISO standards for C have been developed over many years but they remain unclear in some important respects, and in some areas there are differences between the properties of C that are relied on by the corpus of systems code in production, the properties that compiler implementers aim to provide, and the properties of C as it is specified in ISO C11.</p>
-<p>The Cerberus project is developing a semantic model for a substantial fragment of C. It has several distinctive features:</p>
+<p>The <a href="http://www.cl.cam.ac.uk/users/pes20/cerberus">Cerberus project</a> is developing a semantic model for a substantial fragment of C. More details, including academic and ISO WG14 papers, are available on the project web page. Cerberus has several distinctive features:</p>
 <ul>
-<li>Where the ISO C11 standard is clear and corresponds with practice, Cerberus aims to follow that.</li>
-<li>Where there are differences, chiefly in the <em>memory layout model</em> (the behaviour of pointers, pointer arithmetic, uninitialised values, etc.), we aim to clarify the de facto standards and understand how the ISO standard could be reconciled with them.</li>
-<li>Cerberus precisely defines a range of allowed behaviour, not just that of some specific implementation.</li>
-<li>It is executable, to explore all behaviours or single paths of small test programs.</li>
-<li>It is designed to be integrated with an operational model for C11 concurrency, with a mechanised proof of equivalence to the axiomatic C11 model of Batty et al.</li>
-<li>Its thread-local semantics is factored via an elaboration into a simpler Core language, to make it readable and conceptually and mathematically tractable; the dynamic semantics of Core can be linked with our sequential memory layout model or with that operational concurrency model.</li>
-<li>Its front-end is written from scratch to closely follow the C11 standard, including a parser that follows the C11 standard grammar, and a typechecker.</li>
+<li><p>Where the ISO C11 standard is clear and corresponds with practice, Cerberus aims to follow that.</p></li>
+<li><p>Where there are differences, chiefly in the <em>memory layout model</em> (the behaviour of pointers, pointer arithmetic, uninitialised values, etc.), we aim to clarify the de facto standards, understand how the ISO standard could be reconciled with them, and provide options that capture both.</p></li>
+<li><p>Cerberus precisely defines a range of allowed behaviour, not just that of some specific implementation, with a combination of loose (but precise) specification, e.g. for evaluation order, and parameterisation (e.g. for integer type sizes).</p></li>
+<li><p>Cerberus is executable as a test oracle, to explore either all behaviours or single paths of small test programs. It should be able to identify all undefined behaviours for these except nonterminating loops. It can thus be used as a reference for discussion and for understanding the standard. It should also be usable as an oracle for compiler testing. It is not an analysis tool for production C code.</p></li>
+<li><p>The semantics is factored via an elaboration into a simpler Core language, to make it readable and conceptually and mathematically tractable; the dynamic semantics of Core can be linked with various sequential memory object models. We currently have two such models: a symbolic model, in which allocation addresses are maintained symbolically and execution accumulates constraints on them (with Z3), and a concrete model, using a specific allocator.</p></li>
+<li><p>Its front-end is written from scratch to closely follow the C11 standard, including a parser that follows the C11 standard grammar, and a typechecker.</p></li>
+<li><p>It is designed to be integrated - though this is not currently maintained or supported - with an operational model for C11 concurrency, which has a mechanised proof of equivalence to the axiomatic C11 model of Batty et al.</p></li>
+<li><p>We intend to make Cerberus open-source in due course.</p></li>
 </ul>
 <p>This is a step towards a clear, consistent, and unambiguous semantics for C.</p>
-<h2 id="getting-started">Getting Started</h2>
-<p>To use the web version:</p>
+<p>Caveats: Our model covers many features of C, both syntactic and semantic, but to keep the problem manageable we exclude some important aspects. We do not currently attempt to cover preprocessor features, C11 character-set features, floating-point and complex types (beyond simple float constants), user-defined variadic functions (we do cover <code>printf</code>), bitfields, <code>volatile</code>, <code>restrict</code>, generic selection, <code>register</code>, flexible array members, some exotic initialisation forms, signals, <code>longjmp</code>, multiple translation units, most of the standard library, or concurrency. We focus on the C commonly used for mainstream systems programming without effective types, with <code>-fno-strict-aliasing</code>. We are not trying to cover every conceivable C implementation, or those on exotic architectures. Our semantics is intended as a source semantics for C. For an intermediate language, e.g. LLVM, there are related but distinct goals. Our implementation and web tool are intended to explore the behaviour of small test cases, which is already challenging, not as a bug-finding tool for production C code, which would need considerably higher performance and coverage. Finally, while we have done significant testing and validation, more would always be desirable; Cerberus is work in progress, not a completely finished system.</p>
+<h2 id="getting-started-with-the-web-interface">Getting started with the web interface</h2>
 <h3 id="loading-a-program">Loading a program</h3>
 <p>Load a test program, either by uploading a C file in <code>File &gt; Load from file</code> or by writing a test program directly. We also have a list of tests that illustrate corner cases of the semantics, you can load these in <code>File &gt; Load defacto test</code>.</p>
 <h3 id="elaboration">Elaboration</h3>
 <p>Cerberus will immediately try to elaborate the code into Core, a functional intermediate representation, and show it in a different tab. Core is intended to be as minimal as possible while remaining a suitable target for the elaboration, and with the behaviour of Core programs made as explicit as possible. For further information about Core, please check <a href="#papers">Papers</a>.</p>
-<p>Every C expression is then highlighted with the corresponding Core code of the same colour. Move the cursor on an expression to isolate the colour in that particular expression. The colouring behaviour can be changed in <code>Settings &gt; Colour</code> and <code>Settings &gt; Coulour Cursor</code>.</p>
+<p>Every C expression is then highlighted with the corresponding Core code of the same colour. Move the cursor on an expression to isolate the colour in that particular expression. The colouring behaviour can be changed in <code>Settings &gt; Colour</code> and <code>Settings &gt; Colour Cursor</code>.</p>
 <p><img src="img/return.png" /></p>
 <p><img src="img/core_return.png" /></p>
 <p>In this little example, Cerberus binds a pure specified value <code>42</code> into the label <code>a_81</code>, then kills the reference <code>x</code>, since it is going out of scope, converts the value in <code>a_81</code> to a <code>signed int</code> and finally returns the corresponding value.</p>
@@ -30,10 +31,6 @@
 <p>In our previous example, when running Cerberus in exhaustive mode, two outcomes are possible: the conditional at line <code>3</code> is randomly evaluated to <code>true</code> or <code>false</code>, since <code>x</code> is an <code>undefined value</code>.</p>
 <h3 id="compiling">Compiling</h3>
 <p>Cerberus is integrated with Matt Godbolt’s <a href="https://godbolt.org">Compiler Explorer</a>. One can immediately check the compilation by major compilers (Clang/GCC) to different targets (x86/ARM).</p>
-<h2 id="papers"><a name="papers"></a> Papers</h2>
-<ul>
-<li><a href="http://www.cl.cam.ac.uk/~km569/into_the_depths_of_C.pdf">Into the Depths of C: Elaborating the De Facto Standards</a>. Kayvan Memarian, Justus Matthiesen, James Lingard, Kyndylan Nienhuis, David Chisnall, Robert N. M. Watson, and Peter Sewell. In Proc. <a href="http://conf.researchr.org/home/pldi-2016">37th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI’16)</a>. Distinguished paper award.</li>
-</ul>
 <h2 id="people">People</h2>
 <p>Contributors:</p>
 <ul>
