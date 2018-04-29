@@ -415,7 +415,7 @@ $.get('defacto_tests.json').done((data) => {
 
 
 /*
- * UI initialisation
+ * UI start up
  */
 
 type StartupMode =
@@ -507,12 +507,6 @@ function getStartupMode(): StartupMode {
   }
 }
 
-const mode = getStartupMode()
-const UI = new CerberusUI(mode.settings)
-
-// provenance_basic_global_yx.c
-// http://localhost:8080/?provenance_basic_global_yx.c&rewrite=false&sequentialise=false&model=Symbolic
-
 function defaultStart() {
   $.get('buffer.c').done((source) => {
     UI.addView('example.c', source)
@@ -542,4 +536,6 @@ export function onLoad() {
   }
 }
 
+const mode = getStartupMode()
+const UI = new CerberusUI(mode.settings)
 export default UI
