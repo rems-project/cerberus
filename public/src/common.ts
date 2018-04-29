@@ -45,10 +45,20 @@ namespace Common {
   export function string_of_model(m: Model) {
     switch (m) {
       case Model.Concrete:
-        return "Concrete"
+        return 'Concrete'
       case Model.Symbolic:
-        return "Symbolic"
+        return 'Symbolic'
     }
+  }
+
+  export function model_of_string(m:string) {
+    switch(m) {
+      case 'Concrete':
+        return Model.Concrete
+      case 'Symbolic':
+        return Model.Symbolic
+    }
+    throw `Model ${m} does not exist.`
   }
 
   export interface InteractiveRequest {

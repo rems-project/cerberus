@@ -23,7 +23,7 @@ export class CerberusUI {
   /** Contains the div where views are located */
   private dom: JQuery<HTMLElement>
   /** UI settings */
-  public settings: Settings
+  private settings: Settings
   /** C11 Standard in JSON */
   private std: any
   /** Godbolt default compiler */
@@ -292,11 +292,7 @@ export class CerberusUI {
     throw new Error("Panic: no view")
   }
 
-  getSettings(): Readonly<Settings> {
-    return this.settings
-  }
-
-  add (view: View) {
+  private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
 
@@ -306,6 +302,15 @@ export class CerberusUI {
 
     this.setCurrentView(view)
     view.getSource().refresh()
+  }
+
+  getSettings(): Readonly<Settings> {
+    return this.settings
+  }
+
+  addView(title: string, source: string, config?: any) {
+    this.add(new View(title, source, config))
+    this.refresh()
   }
 
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
@@ -380,27 +385,7 @@ export class CerberusUI {
 
 }
 
-/*
- * UI initialisation
- */
-const UI = new CerberusUI ({
-  rewrite:       false,
-  sequentialise: true,
-  auto_refresh:  true,
-  colour:        true,
-  colour_cursor: true,
-  short_share:   false,
-  model:         Common.Model.Concrete
-})
-
-type StartupMode =
-  { kind: 'default' } |
-  { kind: 'permalink', config: any } |
-  { kind: 'fixedlink', file: string } // TODO: maybe add settings
-
-let mode : StartupMode = { kind: 'default' }
-
-
+// TODO: move this to a widget
 // Get list of defacto tests
 $.get('defacto_tests.json').done((data) => {
   let div = $('#defacto_body')
@@ -415,8 +400,7 @@ $.get('defacto_tests.json').done((data) => {
         test.on('click', () => {
           $.get('defacto/'+name).done((data) => {
             $('#defacto').css('visibility', 'hidden')
-            UI.add(new View(name, data))
-            UI.refresh()
+            UI.addView(name, data)
           })
         })
         tests.append(test)
@@ -429,94 +413,132 @@ $.get('defacto_tests.json').done((data) => {
   }
 })
 
-// Detect if URL is a permalink
-try {
-  if (mode.kind === 'default') {
-    const uri = document.URL.split('#')
-    if (uri && uri.length > 1 && uri[1] != "") {
+
+/*
+ * UI initialisation
+ */
+
+type StartupMode =
+  { kind: 'default', settings: Settings } |
+  { kind: 'permalink', config: any, settings: Settings } |
+  { kind: 'fixedlink', file: string, settings: Settings }
+
+function getDefaultSettings(): Settings {
+    return { rewrite: false,
+             sequentialise: true,
+             auto_refresh: true,
+             colour: true,
+             colour_cursor: true,
+             short_share: false,
+             model: Common.Model.Concrete
+           }
+}
+
+function getStartupMode(): StartupMode {
+  function parsedFixedArguments(args: string []): [string, Settings] {
+    let file: string | undefined
+    const settings = getDefaultSettings()
+    function updateSettings(param: string, value: string) {
+      const toBool = (b: string) => b === 'true'
+      switch(param) {
+        case 'rewrite':
+          settings.rewrite = toBool(value)
+          break
+        case 'sequentialise':
+          settings.sequentialise = toBool(value)
+          break
+        case 'auto_refresh':
+          settings.auto_refresh = toBool(value)
+          break
+        case 'color':
+        case 'colour':
+          settings.colour = toBool(value)
+          break
+        case 'color_cursor':
+        case 'colour_cursor':
+          settings.colour_cursor = toBool(value)
+          break
+        case 'short_share':
+          settings.short_share = toBool(value)
+          break
+        case 'model':
+          settings.model = Common.model_of_string(value)
+          break
+        default:
+          throw `Unknown argument ${param}`
+      }
+    }
+    args.map(arg => {
+      const params = arg.split('=')
+      if (params[0] && params[1]) {
+        updateSettings(params[0], params[1])
+      } else {
+        file = params[0]
+      }
+    })
+    if (file !== undefined)
+      return [file, settings]
+    throw 'Missing filename in fixed link'
+  }
+  try {
+    // First try a permanent link
+    let uri = document.URL.split('#')
+    if (uri && uri.length == 2 && uri[1] !== '') {
       const config = GoldenLayout.unminifyConfig(JSON.parse(decodeURIComponent(uri[1])))
-      mode = { kind: 'permalink',
-              config: config
+      return { kind: 'permalink',
+              config: config,
+              settings: getDefaultSettings()
             }
     }
+    // Try fixed links
+    uri = document.URL.split('?')
+    if (uri && uri.length == 2 && uri[1] !== '') {
+      const [file, settings] = parsedFixedArguments(uri[1].split('&'))
+      return { kind: 'fixedlink',
+              file: file,
+              settings: settings
+            }
+    }
+    // Default
+    return { kind: 'default', settings: getDefaultSettings() }
+  } catch (e) {
+    console.log(`Startup error: ${e}`)
+    return { kind: 'default', settings: getDefaultSettings() }
   }
-} catch (e) {
-  console.log(e + ': impossible to parse permalink')
 }
+
+const mode = getStartupMode()
+const UI = new CerberusUI(mode.settings)
 
 // provenance_basic_global_yx.c
 // http://localhost:8080/?provenance_basic_global_yx.c&rewrite=false&sequentialise=false&model=Symbolic
 
-// Detect if it is a fixedlink
-try {
-  if (mode.kind === 'default') {
-    const uri = document.URL.split('?')
-    if (uri && uri.length > 1 && uri[1] != "") {
-      const args = uri[1].split('&')
-      let title: string = ''
-      args.map((arg) => {
-        const param = arg.split('=')
-        const toBool = (b: string) => b === 'true'
-        if (param[0] && param[1]) {
-          // TODO: do not change ui directly
-          // Set the options in the UI
-          switch(param[0]) {
-            case 'sequentialise':
-              UI.settings.sequentialise = toBool(param[1])
-              break
-            case 'rewrite':
-              UI.settings.rewrite = toBool(param[1])
-              break
-            case 'model':
-              switch (param[1]) {
-                case 'concrete':
-                  UI.settings.model = Common.Model.Concrete
-                  break
-                case 'symbolic':
-                  UI.settings.model = Common.Model.Symbolic
-                  break
-              }
-              break
-          }
-        } else {
-          title = param[0]
-        }
-      })
-      if (title !== '') {
-        mode = { kind: 'fixedlink', file: title}
-      }
-    }
-  }
-} catch (e) {
-  console.log(e + ': no file')
+function defaultStart() {
+  $.get('buffer.c').done((source) => {
+    UI.addView('example.c', source)
+  }).fail(() => {
+    console.log('Error when trying to download "buffer.c"... Using an empty file.')
+    UI.addView('example.c', '')
+  })
 }
 
-// Detect if 
-
-// Add view
 export function onLoad() {
   switch (mode.kind) {
     case 'default':
-      $.get('buffer.c').done((source) => {
-        UI.add(new View('example.c', source))
-        UI.refresh()
-      }).fail(() => {
-        console.log('Failing when trying to download "buffer.c"')
-      })
-      break;
+      defaultStart()
+      break
     case 'permalink':
-      UI.add(new View(mode.config.title, mode.config.source, mode.config))
-      UI.refresh()
-      break;
+      UI.addView(mode.config.title, mode.config.source, mode.config)
+      break
     case 'fixedlink':
-      const file = mode.file
-      $.get(file).done((source) => {
-        UI.add(new View(file, source))
-        UI.refresh()
+      $.get(mode.file).done((source) => {
+        UI.addView(mode.file, source)
       }).fail(() => {
-        console.log(`Failing when trying to download ${file}`)
+        console.log(`Error when trying to download ${mode.file}`)
+        alert(`Error downloading ${mode.file}...`)
+        defaultStart()
       })
-      break;
+      break
   }
 }
 
