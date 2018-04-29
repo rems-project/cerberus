@@ -94,7 +94,7 @@ export class CerberusUI {
 
     $('#demo .tests a').on('click', (e) => {
       const name = e.target.textContent + '.c'
-      $.get('demo/'+name).done((data) => {
+      Util.get('demo/'+name, (data: string) => {
         $('#demo').css('visibility', 'hidden')
         this.add(new View(name, data))
         this.refresh()
@@ -315,7 +315,7 @@ export class CerberusUI {
 
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
     const view = this.getView()
-    Util.wait()
+    Util.Cursor.wait()
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
@@ -330,13 +330,13 @@ export class CerberusUI {
       }),
       success: (data, status, query) => {
         onSuccess(data);
-        Util.done()
+        Util.Cursor.done()
       }
     }).fail((e) => {
       console.log('Failed request!', e)
       // TODO: this looks wrong
       this.settings.auto_refresh = false
-      Util.done()
+      Util.Cursor.done()
     })
   }
 
@@ -387,7 +387,7 @@ export class CerberusUI {
 
 // TODO: move this to a widget
 // Get list of defacto tests
-$.get('defacto_tests.json').done((data) => {
+Util.get('defacto_tests.json', (data: any) => {
   let div = $('#defacto_body')
   for (let i = 0; i < data.length; i++) {
     let questions = $('<ul class="questions"></ul>')
@@ -508,9 +508,9 @@ function getStartupMode(): StartupMode {
 }
 
 function defaultStart() {
-  $.get('buffer.c').done((source) => {
+  Util.get('buffer.c', (source: string) => {
     UI.addView('example.c', source)
-  }).fail(() => {
+  }, () => {
     console.log('Error when trying to download "buffer.c"... Using an empty file.')
     UI.addView('example.c', '')
   })
@@ -525,9 +525,9 @@ export function onLoad() {
       UI.addView(mode.config.title, mode.config.source, mode.config)
       break
     case 'fixedlink':
-      $.get(mode.file).done((source) => {
+      Util.get(mode.file, (source: string) => {
         UI.addView(mode.file, source)
-      }).fail(() => {
+      }, () => {
         console.log(`Error when trying to download ${mode.file}`)
         alert(`Error downloading ${mode.file}...`)
         defaultStart()
