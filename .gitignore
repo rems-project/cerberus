@@ -43,6 +43,6 @@ cerb.symbolic
 web.byte
 public/include
 public/node_modules
-public/dist/*.bundle.js
+public/dist/*.bundle.*
 public/dist/src/*
 request.log

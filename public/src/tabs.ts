@@ -884,7 +884,7 @@ class Asm extends ReadOnly {
   }
 
   compile() {
-    Util.wait()
+    Util.Cursor.wait()
     $.ajax({
       headers: {Accept: 'application/json'},
       contentType: "application/json; charset=utf-8",
@@ -924,11 +924,11 @@ class Asm extends ReadOnly {
         this.updateLocations(lines)
         if (UI.getSettings().colour)
           this.ee.once((s: Readonly<Common.State>) => this.highlight(s))
-        Util.done()
+        Util.Cursor.done()
       },
     }).fail(() => {
         this.setValue('')
-        Util.done()
+        Util.Cursor.done()
     })
   }
 
