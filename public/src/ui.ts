@@ -23,7 +23,7 @@ export class CerberusUI {
   /** Contains the div where views are located */
   private dom: JQuery<HTMLElement>
   /** UI settings */
-  private settings: Settings
+  public settings: Settings
   /** C11 Standard in JSON */
   private std: any
   /** Godbolt default compiler */
@@ -386,7 +386,14 @@ const UI = new CerberusUI ({
   short_share:   false,
   model:         Common.Model.Concrete
 })
-let config: any     = null // Permalink configuration
+
+type StartupMode =
+  { kind: 'default' } |
+  { kind: 'permalink', config: any } |
+  { kind: 'fixedlink', file: string } // TODO: maybe add settings
+
+let mode : StartupMode = { kind: 'default' }
+
 
 // Get list of defacto tests
 $.get('defacto_tests.json').done((data) => {
@@ -418,25 +425,92 @@ $.get('defacto_tests.json').done((data) => {
 
 // Detect if URL is a permalink
 try {
-  let uri = document.URL.split('#')
-  if (uri && uri.length > 1 && uri[1] != "")
-    config = GoldenLayout.unminifyConfig(JSON.parse(decodeURIComponent(uri[1])))
+  if (mode.kind === 'default') {
+    const uri = document.URL.split('#')
+    if (uri && uri.length > 1 && uri[1] != "") {
+      const config = GoldenLayout.unminifyConfig(JSON.parse(decodeURIComponent(uri[1])))
+      mode = { kind: 'permalink',
+              config: config
+            }
+    }
+  }
 } catch (e) {
   console.log(e + ': impossible to parse permalink')
 }
 
+// provenance_basic_global_yx.c
+// http://localhost:8080/?provenance_basic_global_yx.c&rewrite=false&sequentialise=false&model=Symbolic
+
+// Detect if it is a fixedlink
+try {
+  if (mode.kind === 'default') {
+    const uri = document.URL.split('?')
+    if (uri && uri.length > 1 && uri[1] != "") {
+      const args = uri[1].split('&')
+      let title: string = ''
+      args.map((arg) => {
+        const param = arg.split('=')
+        const toBool = (b: string) => b === 'true'
+        if (param[0] && param[1]) {
+          // TODO: do not change ui directly
+          // Set the options in the UI
+          switch(param[0]) {
+            case 'sequentialise':
+              UI.settings.sequentialise = toBool(param[1])
+              break
+            case 'rewrite':
+              UI.settings.rewrite = toBool(param[1])
+              break
+            case 'model':
+              switch (param[1]) {
+                case 'concrete':
+                  UI.settings.model = Common.Model.Concrete
+                  break
+                case 'symbolic':
+                  UI.settings.model = Common.Model.Symbolic
+                  break
+              }
+              break
+          }
+        } else {
+          title = param[0]
+        }
+      })
+      if (title !== '') {
+        mode = { kind: 'fixedlink', file: title}
+      }
+    }
+  }
+} catch (e) {
+  console.log(e + ': no file')
+}
+
+// Detect if 
+
 // Add view
 export function onLoad() {
-  if (config) {
-    UI.add(new View(config.title, config.source, config))
-    UI.refresh()
-  } else {
-    $.get('buffer.c').done((source) => {
-      UI.add(new View('example.c', source))
+  switch (mode.kind) {
+    case 'default':
+      $.get('buffer.c').done((source) => {
+        UI.add(new View('example.c', source))
+        UI.refresh()
+      }).fail(() => {
+        console.log('Failing when trying to download "buffer.c"')
+      })
+      break;
+    case 'permalink':
+      UI.add(new View(mode.config.title, mode.config.source, mode.config))
       UI.refresh()
-    }).fail(() => {
-      console.log('Failing when trying to download "buffer.c"')
-    })
+      break;
+    case 'fixedlink':
+      const file = mode.file
+      $.get(file).done((source) => {
+        UI.add(new View(file, source))
+        UI.refresh()
+      }).fail(() => {
+        console.log(`Failing when trying to download ${file}`)
+      })
+      break;
   }
 }
 
