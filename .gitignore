@@ -42,7 +42,7 @@ cerb.symbolic
 
 web.byte
 public/include
-publictyped/node_modules
-publictyped/dist/*.bundle.js
-publictyped/dist/src/*
+public/node_modules
+public/dist/*.bundle.js
+public/dist/src/*
 request.log
