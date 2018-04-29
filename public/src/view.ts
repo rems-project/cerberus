@@ -438,7 +438,7 @@ export default class View {
     switch (res.status) {
       case 'elaboration':
         this.state.pp = res.pp
-        this.state.ast = res.pp
+        this.state.ast = res.ast
         this.state.locs = res.locs
         this.state.console = ''
         break
