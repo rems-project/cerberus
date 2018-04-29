@@ -1,2 +1,6 @@
 help.html: help.md
-	pandoc $^ > $@
+	pandoc --toc --self-contained $^ > $@
+
+clean:
+	rm -rf *~
+	rm -rf help.html

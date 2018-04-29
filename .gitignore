@@ -45,3 +45,4 @@ public/include
 publictyped/node_modules
 publictyped/dist/*.bundle.js
 publictyped/dist/src/*
+request.log
