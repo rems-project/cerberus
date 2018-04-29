@@ -121,7 +121,8 @@ export class CerberusUI {
     // Share
     let update_share_link = () => {
       if (!this.currentView) return
-      let url = document.URL.split('#', 1)+'#'+this.currentView.getEncodedState()
+      const url = 'http://www.cl.cam.ac.uk/~pes20/cerberus/server/#'
+                + this.currentView.getEncodedState()
       if (this.settings.short_share)
         Util.shortURL(url, (url: string) => $('#sharelink').val(url))
       else
@@ -197,6 +198,11 @@ export class CerberusUI {
     // REMS
     $('#rems').on('click', () => {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
+    })
+
+    // About
+    $('#about').on('click', () => {
+      window.open('https://www.cl.cam.ac.uk/~pes20/cerberus/')
     })
 
     // Update every 2s
