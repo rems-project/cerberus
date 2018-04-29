@@ -30,12 +30,32 @@ export function longURL(url: string) {
   })
 }
 
-export function wait () {
-  $('body').addClass('wait')
+export namespace Cursor {
+  let waitCounter = 0
+  export function wait () {
+    if (waitCounter == 0)
+      $('body').addClass('wait')
+    waitCounter++
+  }
+
+  export function done () {
+    if (waitCounter > 0)
+      waitCounter--
+    if (waitCounter == 0)
+      $('body').removeClass('wait')
+  }
 }
 
-export function done () {
-  $('body').removeClass('wait')
+export function get(url: string, done: Function, fail?: Function) {
+  Cursor.wait()
+  $.get(url).done(data => {
+    done(data)
+    Cursor.done()
+  }).fail(() => {
+    console.log(`Error downloading ${url}.`)
+    if (fail) fail()
+    Cursor.done()
+  })
 }
 
 export function fadeOut(tooltip: HTMLElement) {
