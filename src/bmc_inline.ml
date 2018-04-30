@@ -268,7 +268,7 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
   *)
 
 (* =================== REWRITE STUFF ================= *)
-let impl : implementation = {
+let impl : Implementation.implementation = {
   binary_mode = Two'sComplement;
   signed = (function 
             | Char -> true

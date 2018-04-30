@@ -185,7 +185,7 @@ let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
   if (Expr.equal memorder fns.na_order) then
     NA
   else if (Expr.equal memorder fns.seq_cst_order) then
-    Seq_cst
+    (assert false; Seq_cst)
   else if (Expr.equal memorder fns.relaxed_order) then
     Relaxed
   else if (Expr.equal memorder fns.release_order) then
@@ -193,9 +193,9 @@ let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
   else if (Expr.equal memorder fns.acquire_order) then
     Acquire
   else if (Expr.equal memorder fns.consume_order) then
-    Consume
+    (assert false; Consume)
   else if (Expr.equal memorder fns.acq_rel_order) then
-    Acq_rel
+    (assert false; Acq_rel)
   else
     assert false
 
@@ -502,6 +502,16 @@ let get_all_executions (solver : Solver.solver)
 
 
 (* ========== BMC ========== *)
+
+let print_heap (heap : (Address.addr, Expr.expr) Pmap.map) = 
+  print_endline "HEAP";
+  Pmap.iter (fun k v -> 
+    Printf.printf "%s -> %s \n" 
+        (Address.to_string k) 
+        (Expr.to_string v)
+  ) heap;
+  print_endline ""
+
 
 let check_solver_fun (solver: Solver.solver) 
                      (ret_value: Expr.expr option) =
@@ -1215,6 +1225,15 @@ let rec mk_loaded_assertions ctx ty expr =
       mk_loaded_assertions ctx ctype expr
   | _ -> assert false
 
+(* TODO: currently ignores unspecified type *)
+let get_assert_unspecified (sort: Sort.sort) ty ctx expr =
+  let typ = ctype_to_expr ty ctx in
+  if (Sort.equal (LoadedInteger.mk_sort ctx) sort) then
+    mk_eq ctx expr (LoadedInteger.mk_unspec ctx typ)
+  else if (Sort.equal (LoadedPointer.mk_sort ctx) sort) then
+    mk_eq ctx expr (LoadedPointer.mk_unspec ctx typ)
+  else 
+    assert false
 
 let rec ctype_to_sort (state: 'a bmc_state) ty =
   match ty with
@@ -1272,6 +1291,8 @@ let bmc_paction (state: 'a bmc_state)
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
       let initial_value = Expr.mk_const state.ctx new_sym sort in
       let new_heap = Pmap.add new_addr initial_value state.heap in
+      let unspec_assert = get_assert_unspecified sort ty state.ctx initial_value in
+      Solver.add state.solver [unspec_assert];
 
       (* Try: create a new pointer and return it instead *)
       let addr_expr = Address.mk_expr state.ctx new_addr in
@@ -1289,6 +1310,10 @@ let bmc_paction (state: 'a bmc_state)
       let action = Write(mk_next_aid state, g_initial_tid, NA, new_ptr, to_store) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
+      let unspec_assert_2 = get_assert_unspecified sort ty state.ctx to_store in
+      Solver.add state.solver [unspec_assert_2];
+
+
 
       { expr = new_ptr
       ; allocs = addr_ret
@@ -1379,7 +1404,14 @@ let bmc_paction (state: 'a bmc_state)
       let update = (fun alloc heap ->
           let bmc_addr = bmc_lookup_alloc alloc state in
           if (not (Sort.equal (bmc_addr.sort) sort)) then
-            assert false (* or return heap *)
+            begin
+              heap
+              (*
+              print_endline (Sort.to_string bmc_addr.sort);
+              print_endline (Sort.to_string sort);
+              assert false (* or return heap *)
+              *)
+            end
           else
             begin
               match Pmap.lookup alloc state.heap with
@@ -1466,7 +1498,7 @@ let bmc_paction (state: 'a bmc_state)
           else
             AddressSet.empty
          end in
-       (*
+      (*
       print_endline "-----LOAD ALIAS_RESULTS";
       print_ptr_map !(state.alias_state.ptr_map);
       print_addr_map !(state.alias_state.addr_map);
@@ -1474,6 +1506,7 @@ let bmc_paction (state: 'a bmc_state)
       print_heap state.heap; 
       print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
       *)
+
        let iterate = (fun alloc (expr_list, addr_list) ->
           match Pmap.lookup alloc state.heap with
           | None -> (expr_list, addr_list)
@@ -2166,18 +2199,30 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
       let bmc_addr =  mk_bmc_address new_addr sort in
       state.addr_map := Pmap.add new_addr bmc_addr !(state.addr_map);
 
-      (*
       (* Set it to an initial unspecified value @a_1 *)
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
       let initial_value = Expr.mk_const state.ctx new_sym sort in
       let new_heap = Pmap.add new_addr initial_value state.heap in
-      *)
 
       let ptr = bmc_lookup_sym sym state in 
+
       (* Concurrency model stuff: add initial write *)
+      (*
       let to_store = Expr.mk_fresh_const state.ctx 
                       ("initial_" ^ (Address.to_string new_addr)) sort in
+
       let action = Write(mk_next_aid state, g_initial_tid, NA, ptr, to_store) in
+*)
+      (* TODO: assert specified ? *)
+      if (Sort.equal sort (LoadedInteger.mk_sort state.ctx)) then
+        Solver.add state.solver 
+                   [LoadedInteger.is_loaded state.ctx initial_value]
+      else
+        print_endline "TODO: no constraint on args that aren't integers"
+      ;
+
+      let action = Write(mk_next_aid state, 
+                         g_initial_tid, NA, ptr, initial_value) in
       let paction = BmcAction(Pos, mk_true state.ctx, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
@@ -2200,7 +2245,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
       ; preexec = add_initial_action (get_aid action) paction (initial_preexec ()) 
       ; ret_asserts = []
       ; returned = mk_false state.ctx
-      ; state
+      ; state = {state with heap = new_heap}
       }
 
 let initialise_main_params params state =
@@ -3184,6 +3229,8 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
              * (state1.solver)); *)
             print_endline "Checking sat";
             let _ = check_solver (state1.solver) in
+            let stats = Solver.get_statistics state1.solver in
+            print_endline (Statistics.to_string stats);
             ()
           | false -> ()
         end
