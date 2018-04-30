@@ -462,8 +462,8 @@ let order (f: Core.file unit) =
   
   
   Exception.return [(1, <| f with Core.funs= Map.map (function
-    | Core.Proc ty args e ->
-        Core.Proc ty args (indet_hack e)
+    | Core.Proc loc ty args e ->
+        Core.Proc loc ty args (indet_hack e)
     | z ->
         z
   end) f.Core.funs |>)]
@@ -482,8 +482,8 @@ let order (f: Core.file unit) =
 val hackish_order: Core.file unit -> Core.file unit
 let hackish_order file =
   <| file with Core.funs= Map.map (function
-    | Core.Proc ty args e -> 
-        Core.Proc ty args (indet_hack e)
+    | Core.Proc loc ty args e -> 
+        Core.Proc loc ty args (indet_hack e)
     | z ->
         z
   end) file.Core.funs |>

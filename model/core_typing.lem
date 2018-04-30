@@ -1417,7 +1417,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
         | ProcDecl bTy bTys ->
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
-        | Proc bTy sym_bTys _ ->
+        | Proc _ bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.stdlib $
     Map_extra.fold (fun iCst decl acc ->
@@ -1440,10 +1440,10 @@ let typecheck_program file =
             Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown file.tagDefs env' bTy pe
         | ProcDecl bTy bTys ->
             E.return (ProcDecl bTy bTys)
-        | Proc bTy sym_bTys e ->
+        | Proc loc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc bTy sym_bTys <$> typecheck_expr Loc.unknown file.tagDefs env' bTy e
+            Proc loc bTy sym_bTys <$> typecheck_expr Loc.unknown file.tagDefs env' bTy e
       end) file.stdlib >>= fun stdlib' ->
     
     (* Typechecking of the impl constants *)
@@ -1470,7 +1470,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
         | ProcDecl bTy bTys ->
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
-        | Proc bTy sym_bTys _ ->
+        | Proc _ bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
     (* and typechecking them *)
@@ -1481,10 +1481,10 @@ let typecheck_program file =
             Fun bTy sym_bTys <$> typecheck_export_pexpr Loc.unknown file.tagDefs env' bTy pe
         | ProcDecl bTy bTys ->
             E.return (ProcDecl bTy bTys)
-        | Proc bTy sym_bTys e ->
+        | Proc loc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
-            Proc bTy sym_bTys <$> typecheck_expr Loc.unknown file.tagDefs env' bTy e
+            Proc loc bTy sym_bTys <$> typecheck_expr Loc.unknown file.tagDefs env' bTy e
       end) file.funs >>= fun funs' ->
     
     E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= List.reverse rev_globs'; funs= funs' |>

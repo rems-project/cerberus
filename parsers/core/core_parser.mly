@@ -683,7 +683,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
                 ) [] _sym_bTys    >>= fun sym_bTys ->
                 symbolify_expr _e >>= fun e        ->
                 close_scope >>
-                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Proc (bTy, sym_bTys, e)) fun_map_acc)
+                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Proc (Location_ocaml.Loc_unknown, bTy, sym_bTys, e)) fun_map_acc)
             | None ->
                 assert false
           )
@@ -751,7 +751,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
                 | None ->
                     Eff.return ()
               end >>
-              Eff.return (Pmap.add decl_sym (Proc (bTy, sym_bTys, e)) fun_map_acc)
+              Eff.return (Pmap.add decl_sym (Proc (Location_ocaml.Loc_unknown, bTy, sym_bTys, e)) fun_map_acc)
           | None ->
               assert false
         )

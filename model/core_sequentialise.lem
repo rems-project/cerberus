@@ -71,8 +71,8 @@ let rec sequentialise_expr (Expr annot expr_) =
 val sequentialise_file: typed_file unit -> typed_file unit
 let sequentialise_file file =
   <| file with funs= Map.map (function
-       | Proc bTy params e ->
-           Proc bTy params (sequentialise_expr e)
+       | Proc loc bTy params e ->
+           Proc loc bTy params (sequentialise_expr e)
        | ProcDecl bTy params ->
            ProcDecl bTy params
        | Fun bTy params pe ->

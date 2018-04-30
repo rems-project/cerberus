@@ -1774,8 +1774,8 @@ let unsafe_subst_sym_fun_map sym pe' funs =
         Fun ty params (unsafe_subst_sym_pexpr sym pe' pe)
     | ProcDecl ty params ->
         ProcDecl ty params
-    | Proc ty params e ->
-        Proc ty params (unsafe_subst_sym_expr sym pe' e)
+    | Proc loc ty params e ->
+        Proc loc ty params (unsafe_subst_sym_expr sym pe' e)
   end) funs
 
 
