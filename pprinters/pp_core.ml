@@ -13,6 +13,7 @@ sig
   val show_std: bool
   val show_location: bool
   val show_proc_decl: bool
+  val show_proc_from_header: bool
 end
 
 module type PP_CORE =
@@ -712,7 +713,10 @@ let pp_fun_map funs =
         if show_proc_decl then
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
         else P.empty
-      | Proc (_, bTy, params, e) ->
+      | Proc (loc, bTy, params, e) ->
+        if not show_proc_from_header && not (Location_ocaml.from_c_file loc) then
+          P.empty
+        else
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
@@ -810,10 +814,12 @@ module Basic = Make (struct
   let show_std = false
   let show_location = false
   let show_proc_decl = false
+  let show_proc_from_header = false
 end)
 
 module All = Make (struct
   let show_std = true
   let show_location = true
   let show_proc_decl = true
+  let show_proc_from_header = true
 end)

@@ -5,6 +5,7 @@ sig
   val show_std: bool
   val show_location: bool
   val show_proc_decl: bool
+  val show_proc_from_header: bool
 end
 
 module type PP_CORE =

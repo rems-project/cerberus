@@ -101,6 +101,7 @@ let result_of_elaboration (cabs, ail, _, core) =
         let show_std = true
         let show_location = true
         let show_proc_decl = false
+        let show_proc_from_header = false
       end) in
     Colour.do_colour := false;
     Param_pp_core.pp_file core
