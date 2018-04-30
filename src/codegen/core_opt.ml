@@ -56,7 +56,7 @@ let rec elim_let = function
 *)
 
 let runf opt = function
-  | Proc (bty, param, e) -> Proc (bty, param, opt e)
+  | Proc (loc, bty, param, e) -> Proc (loc, bty, param, opt e)
   | f -> f
 
 let run opt core =

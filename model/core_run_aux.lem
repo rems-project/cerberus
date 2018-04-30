@@ -451,8 +451,8 @@ let convert_file file =
         Fun bTy params (convert_pexpr pe)
     | ProcDecl bTy params ->
         ProcDecl bTy params
-    | Proc bTy params e ->
-        Proc bTy params (convert_expr e)
+    | Proc loc bTy params e ->
+        Proc loc bTy params (convert_expr e)
   end in
 
  <|

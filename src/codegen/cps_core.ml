@@ -192,7 +192,7 @@ type cps_fun =
 
 let cps_transform_fun sym_supply globs = function
   | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
-  | Proc (bty, params, e) ->
+  | Proc (_, bty, params, e) ->
     let (bbs, bbody) =
       cps_transform_expr sym_supply globs (List.map fst params) e
     in CpsProc (bty, params, bbs, bbody)

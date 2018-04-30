@@ -33,11 +33,11 @@ val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
 let call_proc file psym cvals =
   let bTy_params_body_opt =
     match Map.lookup psym file.stdlib with
-      | Just (Proc bTy params body) ->
+      | Just (Proc _ bTy params body) ->
           Just (bTy, params, body)
       | _ ->
           match Map.lookup psym file.funs with
-            | Just (Proc bTy params body) ->
+            | Just (Proc _ bTy params body) ->
                 Just (bTy, params, body)
             | _ ->
                 Nothing

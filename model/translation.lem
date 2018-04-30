@@ -3322,7 +3322,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (C.ProcDecl ret_bTy (List.map (fun _ -> C.BTy_object C.OTy_pointer) params))
                       facc )
             
-            | Just (_, param_syms, stmt) ->
+            | Just (loc, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
 
@@ -3401,7 +3401,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 E.return
                   (gacc,
                    Map.insert sym
-                     (C.Proc (ret_bTy (* C.BTy_loaded (if AilTypesAux.is_pointer return_ty then C.OTy_pointer else C.OTy_integer)*))
+                     (C.Proc loc (ret_bTy (* C.BTy_loaded (if AilTypesAux.is_pointer return_ty then C.OTy_pointer else C.OTy_integer)*))
                              (List.map (fun sym -> (sym, C.BTy_object C.OTy_pointer)) param_syms)
                              (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_body core_return)
                      ) facc)
