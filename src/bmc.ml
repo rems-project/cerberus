@@ -724,7 +724,7 @@ let integer_value_to_z3 (ctx: context) ival =
   let maybe_ival = eval_integer_value ival in
   match maybe_ival with
   | None -> assert false
-  | Some i -> Integer.mk_numeral_i ctx (Nat_big_num.to_int i)
+  | Some i -> Integer.mk_numeral_s ctx (Nat_big_num.to_string i)
 
 
 let object_value_to_z3 (ctx: context) = function
@@ -1206,13 +1206,17 @@ let rec mk_loaded_assertions ctx ty expr =
   match ty with
   | Basic0 (Integer ity) ->
       let (nmin, nmax) = integer_range impl ity in
+      Printf.printf "XX %d %d\n" nmin nmax;
 
       let lval = LoadedInteger.get_loaded_value ctx expr in
+      print_endline (Expr.to_string lval);
+
       let assertions =
         mk_and ctx 
-        [ mk_ge ctx lval (Integer.mk_numeral_i ctx nmin)
-        ; mk_le ctx lval (Integer.mk_numeral_i ctx nmax)
+        [ mk_ge ctx lval (Integer.mk_numeral_s ctx (string_of_int nmin))
+        ; mk_le ctx lval (Integer.mk_numeral_s ctx (string_of_int nmax))
         ] in
+      print_endline (Expr.to_string assertions);
       [mk_implies ctx
           (LoadedInteger.is_loaded ctx expr)
           assertions]
@@ -1903,8 +1907,10 @@ let rec bmc_expr (state: 'a bmc_state)
         ;  (mk_implies state.ctx bmc_seq2
                                  (mk_and state.ctx res2.ret_asserts))
         ] in
+      (* Works only because of xor and special casing *)
+      let ret_expr = mk_ite state.ctx bmc_seq1 res1.expr res2.expr in
 
-      { expr = UnitSort.mk_unit state.ctx
+      { expr = ret_expr
       ; allocs = AddressSet.union res1.allocs res2.allocs
       ; vcs = new_vcs
       ; preexec = new_preexec
@@ -3189,6 +3195,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         ) in
 
       print_endline "-----CONSTRAINTS ONLY";
+      print_endline (Solver.to_string state1.solver);
       assert (Solver.check state1.solver [] = SATISFIABLE);
 
       if not g_sequentialise then
