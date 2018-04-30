@@ -269,6 +269,7 @@ let core_passes (conf, io) ~filename core_file =
     let show_std = List.mem Annot conf.ppflags
     let show_location = List.mem Annot conf.ppflags
     let show_proc_decl = false
+    let show_proc_from_header = false
   end) in
   whenM conf.typecheck_core begin
     fun () ->
