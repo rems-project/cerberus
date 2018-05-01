@@ -16,13 +16,8 @@
       tests:
         - provenance_equality_global_yx.c
         - provenance_equality_global_xy.c
+        - provenance_equality_global_fn_yx.c
         - provenance_equality_global_fn_xy.c
-        - provenance_equality_global_cu_xy_a.c
-        - provenance_equality_global_cu_xy_b.c
-        - provenance_equality_auto_yx.c
-        - provenance_equality_auto_fn_yx.c
-        - provenance_equality_auto_cu_yx_a.c
-        - provenance_equality_auto_cu_yx_b.c
     - question: >
         Q3. Can one make a usable pointer via casts to intptr t and back?
       tests:
@@ -38,11 +33,7 @@
         and integer arithmetic?
       tests:
         - provenance_basic_using_intptr_t_global_yx.c
-        - provenance_basic_using_intptr_t_global_xy_offset64.c
-        - provenance_basic_using_intptr_t_auto_yx.c
-        - provenance_basic_using_intptr_t_auto_yx_ offset-16.c
-        - provenance_basic_using_intptr_t_auto_xy.c
-        - provenance_basic_using_intptr_t_malloc_offset_8.c
+        - provenance_basic_using_intptr_t_global_xy.c
 - section: Pointers involving multiple provenance
   questions:
     - question: >
@@ -68,7 +59,7 @@
         Q9. Can one make a usable offset between two separately allocated
         objects by inter-object subtraction (using either pointer or integer
         arithmetic), to make a usable pointer to the second by adding the
-        offset to thefirst?
+        offset to the first?
       tests:
         - pointer_offset_from_subtraction_1_global.c
         - pointer_offset_from_subtraction_1_auto.c
