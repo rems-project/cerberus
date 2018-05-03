@@ -200,11 +200,21 @@ let respond_json json =
 
 (* Cerberus actions *)
 
-let log_ip act = function
+let log_request msg flow =
+  match flow with
   | Conduit_lwt_unix.TCP tcp ->
-    let log = open_out_gen [Open_text;Open_append;Open_creat] 0o660 "request.log" in
-    output_string log @@ Ipaddr.to_string tcp.ip^": "^string_of_action act^"\n";
-    close_out log
+    let open Unix in
+    let tm = gmtime @@ time () in
+    let oc = open_out_gen [Open_text;Open_append;Open_creat] 0o666
+        "./public/dist/request.log"
+    in Printf.fprintf oc "%s %d/%d/%d %d:%d:%d %s:%s \"%s\"\n"
+      (Ipaddr.to_string tcp.ip)
+      tm.tm_mday (tm.tm_mon+1) (tm.tm_year+1900)
+      (tm.tm_hour+1) tm.tm_min tm.tm_sec
+      (string_of_action msg.action)
+      (msg.model)
+      (String.escaped msg.source)
+    ; close_out oc
   | _ -> ()
 
 
@@ -224,7 +234,7 @@ let cerberus ~conf ~flow content =
     Lwt_io.close proc#stdin >>= fun () ->
     Lwt_io.read_value proc#stdout
   in
-  log_ip msg.action flow;
+  log_request msg flow;
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
     | `Elaborate  -> request @@ `Elaborate (conf, filename)
