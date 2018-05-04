@@ -88,26 +88,39 @@ let elaborate ~conf ~filename =
     Debug.warn ("Exception raised during elaboration. " ^ Printexc.to_string e);
     raise e
 
-let result_of_elaboration (cabs, ail, _, core) =
-  let string_of_doc d =
-    let buf = Buffer.create 1024 in
-    PPrint.ToBuffer.pretty 1.0 80 buf d;
-    Buffer.contents buf
+let string_of_doc d =
+  let buf = Buffer.create 1024 in
+  Colour.do_colour := false;
+  PPrint.ToBuffer.pretty 1.0 80 buf d;
+  Buffer.contents buf
+
+let pp_core core =
+  let locs = ref [] in
+  let point_of_pos pos = Lexing.(pos.pos_lnum-1, pos.pos_cnum-pos.pos_bol) in
+  let range_of_loc = function
+    | Location_ocaml.Loc_region (pos1, pos2, _) ->
+      Some (point_of_pos pos1, point_of_pos pos2)
+    | Location_ocaml.Loc_point pos ->
+      Some (point_of_pos pos, (0, 0))
+    | _ -> None
   in
+  let module PP = Pp_core.Make (struct
+      let show_std = true
+      let show_include = false
+      let handle_location c_loc core_range =
+        match range_of_loc c_loc with
+        | Some c_range ->
+          locs := (c_range, core_range)::!locs
+        | None -> ()
+    end) in
+  let core' = string_of_doc @@ PP.pp_file core in
+  (core', !locs)
+
+let result_of_elaboration (cabs, ail, _, core) =
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
   let mk_elab d = Some (elim_paragraph_sym @@ string_of_doc d) in
-  let (core, locs) =
-    let module Param_pp_core = Pp_core.Make (struct
-        let show_std = true
-        let show_location = true
-        let show_proc_decl = false
-        let show_proc_from_header = false
-      end) in
-    Colour.do_colour := false;
-    Param_pp_core.pp_file core
-    |> string_of_doc
-    |> Location_mark.extract
-  in Elaboration
+  let (core, locs) = pp_core core in
+  Elaboration
     { pp= {
         cabs= None;
         ail=  mk_elab @@ Pp_ail.pp_program ail;

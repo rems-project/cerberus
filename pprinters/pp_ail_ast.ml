@@ -362,7 +362,7 @@ let pp_storageDuration = function
   | Automatic -> pp_type_keyword "automatic"
   | Allocated -> pp_type_keyword "allocated"
 
-let dtree_of_declaration (i, decl) =
+let dtree_of_declaration (i, (_, decl)) =
   let pp_storage (sd, isRegister) =
     pp_storageDuration sd ^^
     (if isRegister then P.space ^^ pp_type_keyword "register" else P.empty)

@@ -192,7 +192,7 @@ type state = <|
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations:        map A.identifier (bool * ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
+  function_declarations:        map A.identifier (bool * Loc.t * ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
   external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
@@ -1019,7 +1019,7 @@ let register_function_declaration loc sym is_proto decl =
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just (prev_has_proto, prev_decl) ->
+    | Just (prev_has_proto, _, prev_decl) ->
         let () = Debug.print_debug 1 [] (fun () ->
           "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
         ) in
@@ -1053,7 +1053,7 @@ AilTypesAux.make_composite
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
            string_of_decl decl) in
-          <| st with function_declarations= Map.insert sym (is_proto, decl) st.function_declarations |>
+          <| st with function_declarations= Map.insert sym (is_proto, loc, decl) st.function_declarations |>
         )
   end
 
@@ -1308,13 +1308,14 @@ let extract_program startup_str =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, (ret_qs_ty, params, isVariadic, isInline, isNoreturn)) ->
-            A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn
+          Map.map (fun (hasProto, loc, (ret_qs_ty, params, isVariadic, isInline, isNoreturn)) ->
+            (loc, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
           Map.map (fun (dur, isRegister, qs, ty) ->
-            A.Decl_object (dur, isRegister) qs ty
+            (* TODO: correct location *)
+            (Loc.unknown, A.Decl_object (dur, isRegister) qs ty)
           ) st.external_object_declarations
         end
     ) in
@@ -1363,13 +1364,14 @@ let get_sigma_sofar =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, (ty, params, isVariadic, isInline, isNoreturn)) ->
-            A.Decl_function hasProto ty params isVariadic isInline isNoreturn
+          Map.map (fun (hasProto, loc, (ty, params, isVariadic, isInline, isNoreturn)) ->
+            (loc, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
           Map.map (fun (dur, isRegister, qs, ty) ->
-            A.Decl_object ((dur, isRegister)) qs ty
+            (* TODO: do location properly *)
+            (Loc.unknown, A.Decl_object ((dur, isRegister)) qs ty)
           ) st.external_object_declarations
         end
     ) in

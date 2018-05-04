@@ -2,10 +2,12 @@ open Core
 
 module type CONFIG =
 sig
+  (* Show ISO STD marks *)
   val show_std: bool
-  val show_location: bool
-  val show_proc_decl: bool
-  val show_proc_from_header: bool
+  (* Show function from #include -- actually from .h files *)
+  val show_include: bool
+  (* handle_location c_loc core_range *)
+  val handle_location: Location_ocaml.t -> PPrint.range -> unit
 end
 
 module type PP_CORE =

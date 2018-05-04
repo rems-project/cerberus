@@ -1142,7 +1142,7 @@ TODO: this should be removable, since we already set it in Translation
         match decl with
           | Core.Fun  _ params pe ->
               ND.return (params, Core.Expr [] (Core.Epure pe))
-          | Core.ProcDecl _ _ ->
+          | Core.ProcDecl _ _ _ ->
               ND.kill (ND.Other (DErr_other "the startup function has no definition"))
           | Core.Proc _ _ params e ->
               ND.return (params, e)

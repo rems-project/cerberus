@@ -672,12 +672,12 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
-          | (Nothing, Just (Decl_object (_, isRegister) qs ty)) ->
+          | (Nothing, Just (_, Decl_object (_, isRegister) qs ty)) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
-          | (Nothing, Just (Decl_function has_proto (ret_qs, ret_ty) params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
+          | (Nothing, Just (_, Decl_function has_proto (ret_qs, ret_ty) params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
               (* TODO: is_inline, is_Noreturn *)
               (* NOTE: here sym is a 'function designator', hence it has function type. BUT
                  other part of the typechecker MUST perform the 'function_coercion' as described in
@@ -1941,10 +1941,10 @@ let annotate_sigma sigm =
   (* TODO: morally we want a "mapP_" here *)
   (* Checking that declarations are well-formed *)
   Context.mapP identifierEqual (fun _ -> function
-    | (Decl_object dur_opt qs ty as decl) ->
+    | (_, (Decl_object dur_opt qs ty as decl)) ->
         wf_lvalue sigm qs ty >>
         E.return decl
-    | (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl) ->
+    | (_, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
         wf_type sigm (Function hasProto ret_ty params isVariadic) >>
         E.return decl
@@ -1954,7 +1954,7 @@ let annotate_sigma sigm =
   (* Typechecking of external objects that have a definition *)
   Context.mapP identifierEqual (fun ident e ->
     match Context.lookup identifierEqual sigm.declarations ident with
-      | Just (Decl_object _ _ (* qs *) ty) ->
+      | Just (_, Decl_object _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
           annotate_definition_aux sigm Context.empty (ty, e)
       | _ ->
@@ -1965,7 +1965,7 @@ let annotate_sigma sigm =
   (* Typechecking of functions that have a definition *)
   Context.mapP identifierEqual (fun ident (loc, param_idents, s) ->
     match Context.lookup identifierEqual sigm.declarations ident with
-      | Just (Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+      | Just (_, Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
           (* TODO: qualifiers *)
           let () = Debug.warn [] (fun () ->
             "(unsure) annotate_sigma doesn't look at [ret_qs]"
@@ -2064,7 +2064,7 @@ let annotate_program (startup_opt, sigm) =
         E.return (startup_opt, sigm')
     | Just startup ->
         match Context.lookup identifierEqual sigm.declarations startup with
-          | Just (Decl_function hasProto (ret_qs, ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+          | Just (_, Decl_function hasProto (ret_qs, ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
               
               (* §5.1.2.2.1 *)
               (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)

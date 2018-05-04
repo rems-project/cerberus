@@ -130,6 +130,23 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let edges = `List (List.map json_of_edge es) in
   `Assoc [("nodes", nodes); ("edges", edges)]
 
+let json_of_range (p1, p2) =
+  let json_of_point (x, y) =
+    `Assoc [("line", `Int x); ("ch", `Int y)]
+  in
+  `Assoc [("begin", json_of_point p1); ("end", json_of_point p2)]
+
+let json_of_locs locs = `List
+  (List.fold_left (
+    fun (jss, i) (cloc, coreloc) ->
+      let js = `Assoc [
+          ("c", json_of_range cloc);
+          ("core", json_of_range coreloc);
+          ("color", `Int i);
+        ]
+      in (js::jss, i+1)
+  ) ([], 1) locs (*(sort locs)*)
+  |> fst)
 
 let json_of_result = function
   | Elaboration r ->
@@ -145,7 +162,7 @@ let json_of_result = function
           ("ail",  Json.of_opt_string r.ast.ail);
           ("core", Json.of_opt_string r.ast.core);
         ]);
-      ("locs", r.locs);
+      ("locs", json_of_locs r.locs);
       ("console", `String "");
       ("result", `String "");
     ]

@@ -701,7 +701,7 @@ let pp_program_aux pp_annot (startup, sigm) =
         P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
   end ^^
   
-  P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, decl) ->
+  P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, decl)) ->
     match decl with
       | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)

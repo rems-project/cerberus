@@ -51,10 +51,13 @@ type ast_result =
     core: string option;
   }
 
+type point = int * int
+type range = point * point
+
 type elaboration_result =
   { pp: ast_result;
     ast: ast_result;
-    locs: Json.json; (* TODO: change this to something else than json *)
+    locs: (range * range) list;
     result: string;
   }
 
