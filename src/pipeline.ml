@@ -265,12 +265,6 @@ let rewrite_core (conf, io) core_file =
 
 let core_passes (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
-  let module Param_pp_core = Pp_core.Make(struct
-    let show_std = List.mem Annot conf.ppflags
-    let show_location = List.mem Annot conf.ppflags
-    let show_proc_decl = false
-    let show_proc_from_header = false
-  end) in
   whenM conf.typecheck_core begin
     fun () ->
       Core_typing.typecheck_program core_file >>= fun _ ->
@@ -295,7 +289,7 @@ let core_passes (conf, io) ~filename core_file =
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
     fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Param_pp_core.pp_file typed_core_file'')
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file typed_core_file'')
   end >>= fun () -> return (core_file', typed_core_file'')
 
 

@@ -203,7 +203,7 @@ end
 
 
 type sigma 'a = <|
-  declarations: Context.context identifier declaration;
+  declarations: Context.context identifier (Loc.t * declaration);
   object_definitions: Context.context identifier (expression 'a);
   (* the list of identifiers are the parameter names used in the body *)
   function_definitions: Context.context identifier (Loc.t * list identifier * statement 'a);

@@ -449,8 +449,8 @@ let convert_file file =
   let convert_fun_map_decl = function
     | Fun bTy params pe ->
         Fun bTy params (convert_pexpr pe)
-    | ProcDecl bTy params ->
-        ProcDecl bTy params
+    | ProcDecl loc bTy params ->
+        ProcDecl loc bTy params
     | Proc loc bTy params e ->
         Proc loc bTy params (convert_expr e)
   end in

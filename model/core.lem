@@ -310,7 +310,7 @@ type generic_impl 'bty = map Implementation_.implementation_constant (generic_im
 
 type generic_fun_map_decl 'bty 'a =
   | Fun      of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym
-  | ProcDecl of core_base_type * list core_base_type
+  | ProcDecl of Loc.t * core_base_type * list core_base_type
   | Proc     of Loc.t * core_base_type * list (Symbol.sym * core_base_type) * generic_expr 'a 'bty Symbol.sym
 
 type generic_fun_map 'bty 'a = map Symbol.sym (generic_fun_map_decl 'bty 'a)

@@ -11,9 +11,8 @@ open Pp_prelude
 module type CONFIG =
 sig
   val show_std: bool
-  val show_location: bool
-  val show_proc_decl: bool
-  val show_proc_from_header: bool
+  val show_include: bool
+  val handle_location: Location_ocaml.t -> P.range -> unit
 end
 
 module type PP_CORE =
@@ -510,7 +509,7 @@ let location_to_string loc =
 let rec pp_expr expr =
   let rec pp is_semi prec (Expr (annot, e)) =
     let prec' = precedence_expr e in
-    let pp_ z = pp true prec' z in (* TODO: this is sad *)
+    let pp_ z = pp true prec' z in  (* TODO: this is sad *)
     let pp  z = pp false prec' z in
     
     begin
@@ -518,10 +517,7 @@ let rec pp_expr expr =
         List.fold_left (fun acc annot_elem ->
           match annot_elem with
             | Aloc loc ->
-                if show_location then
-                  !^"{-#"^^ !^(location_to_string loc)^^ !^"#-}" ^^ acc ^^ !^"{-#ELOC#-}"
-                else 
-                  acc
+                P.range (handle_location loc) acc
             | Astd str ->
                 if show_std then
                   !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
@@ -702,6 +698,9 @@ let pp_params params =
   P.parens (comma_list pp_argument params)
 
 let pp_fun_map funs =
+  let pp_cond loc d =
+    if show_include || Location_ocaml.from_c_file loc then d else P.empty
+  in
   Pmap.fold (fun sym decl acc ->
     acc ^^
     match decl with
@@ -709,14 +708,11 @@ let pp_fun_map funs =
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
-      | ProcDecl (bTy, bTys) ->
-        if show_proc_decl then
+      | ProcDecl (loc, bTy, bTys) ->
+          pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
-        else P.empty
       | Proc (loc, bTy, params, e) ->
-        if not show_proc_from_header && not (Location_ocaml.from_c_file loc) then
-          P.empty
-        else
+          pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
@@ -812,14 +808,12 @@ end
 
 module Basic = Make (struct
   let show_std = false
-  let show_location = false
-  let show_proc_decl = false
-  let show_proc_from_header = false
+  let show_include = false
+  let handle_location _ _ = ()
 end)
 
 module All = Make (struct
   let show_std = true
-  let show_location = true
-  let show_proc_decl = true
-  let show_proc_from_header = true
+  let show_include = true
+  let handle_location _ _ = ()
 end)

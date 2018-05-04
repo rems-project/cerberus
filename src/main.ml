@@ -247,9 +247,9 @@ let pipeline filename args =
 
   let module Param_pp_core = Pp_core.Make(struct
     let show_std = List.mem Annot !!cerb_conf.ppflags
-    let show_location = List.mem Annot !!cerb_conf.ppflags
-    let show_proc_decl = false
-    let show_proc_from_header = false
+    (*let show_location = List.mem Annot !!cerb_conf.ppflags -- TODO! *)
+    let show_include = false
+    let handle_location _ _ = ()
   end) in
   
   let f = Input.file filename in
