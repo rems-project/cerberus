@@ -538,4 +538,7 @@ export function onLoad() {
 
 const mode = getStartupMode()
 const UI = new CerberusUI(mode.settings)
+
+//@ts-ignore 
+window.UI = UI
 export default UI
