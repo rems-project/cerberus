@@ -861,10 +861,14 @@ let pp_annot gtc doc =
     | GenRValueType gty ->
         P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
 
+let filter_external_decl (id, sigma) =
+  let pred (_, (loc, _)) = Location_ocaml.from_c_file loc in
+  (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
-
-let pp_program p =
-  pp_program_aux (fun _ doc -> doc) p
+let pp_program do_colour show_include ail_prog =
+  Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
+  let filtered_ail_prog = if show_include then ail_prog else filter_external_decl ail_prog in
+  pp_program_aux (fun _ doc -> doc) filtered_ail_prog
 
 (* For debugging: prints all the type annotations *)
 let pp_program_with_annot =
