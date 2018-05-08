@@ -178,8 +178,9 @@ let rec inline_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
         Ebound(i, inline_expr st e)
     | End eslist ->
         End (List.map (inline_expr st) eslist)
-    | Esave( _, _, _) ->
-        expr_
+    | Esave( label, letlist, e) ->
+        (* TODO: letlist not inlined *)
+        Esave(label, letlist, inline_expr st e)
     | Erun( a, sym, pelist) ->
         Erun(a, sym, List.map (inline_pexpr st) pelist)
     | Epar elist ->
@@ -447,8 +448,8 @@ let rec rewrite_expr (st: 'a bmc_inline_state) (Expr(annot, expr_) : 'b expr) =
         Ebound(i, rewrite_expr st e)
     | End eslist ->
         End (List.map (rewrite_expr st) eslist)
-    | Esave( _, _, _) ->
-        expr_
+    | Esave( label, letlist, e) ->
+        Esave(label, letlist, rewrite_expr st e)
     | Erun( a, sym, pelist)  ->
         Erun(a, sym, List.map (rewrite_pexpr st) pelist)
     | Epar (elist) ->

@@ -104,8 +104,8 @@ let rec ssa_pexpr (Pexpr(annot, ty, pexpr_))
         begin
       match ret_sym with
       | None -> 
-          print_endline (symbol_to_string sym); 
-          assert false
+          print_endline ("SSA-TODO: " ^ (symbol_to_string sym)); 
+          SSA.return (PEsym sym)
       | Some x -> 
           SSA.return (PEsym x)
         end

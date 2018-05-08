@@ -1,5 +1,6 @@
 open Core
 open Core_ctype
+open Core_aux
 open Cthread
 open Global_ocaml
 open Lem_pervasives
@@ -21,6 +22,7 @@ open Bmc_normalize
 open Bmc_pp_conc
 open Bmc_saves
 open Bmc_sorts
+open Bmc_ssa
 open Bmc_utils
 
 (* ========== Type definitions ========== *)
@@ -114,6 +116,9 @@ type 'a bmc_state = {
   aid_supply  : action_id ref;
   tid_supply  : thread_id ref;
   tid         : thread_id;
+
+  (* Expr being checked *)
+  proc_expr   : ('a typed_expr) option;
 
   (* LOCAL STATE *)
   z3_ret       : Expr.expr;
@@ -715,6 +720,8 @@ let initial_bmc_state (supply : ksym_supply)
     tid_supply = ref 0;
     tid        = 0;
 
+    proc_expr = None;
+
     z3_ret = Expr.mk_fresh_const ctx "ret_main" (LoadedInteger.mk_sort ctx);
     saves = Pmap.empty sym_cmp;
     depth = 0
@@ -764,6 +771,7 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
         ctype
     | Atomic0 ty -> 
         ty
+    | _ -> assert false
   in
   ctype_to_expr ty ctx
 
@@ -1774,7 +1782,8 @@ let rec bmc_expr (state: 'a bmc_state)
                       z3_ret = Expr.mk_fresh_const state.ctx  
                                   ("ret_" ^ (symbol_to_string sym_fn)) sort;
                       saves = find_save_expr e ;
-                      depth = state.depth + 1
+                      depth = state.depth + 1;
+                      proc_expr = Some e;
                     } in
                   let res_call = bmc_expr fresh_state e2 in
                   (*
@@ -1920,6 +1929,81 @@ let rec bmc_expr (state: 'a bmc_state)
 
   | End _ -> assert false
   | Erun (_, Symbol(i, Some s), pelist) ->
+      let label = Sym.Symbol(i, Some s) in
+      let proc_expr = getOptVal state.proc_expr in
+      let is_ret = (match Str.split (Str.regexp "_") s with
+        | [name; id] -> 
+            (name = "ret" && (int_of_string id) = i)
+      ) in
+      (* TODO: overload of depth *)
+      if (state.depth >= g_max_loop_depth && not is_ret) then
+         { expr = UnitSort.mk_unit state.ctx
+         ; allocs = AddressSet.empty
+         ; vcs = [ mk_false state.ctx ]
+         ; preexec = initial_preexec ()
+         ; ret_asserts = []
+         ; returned = mk_false state.ctx
+         ; state = state
+         }
+      else
+
+      begin
+      match find_labeled_continuation label proc_expr with
+      | None -> assert false
+      | Some (sym_list, expr) -> 
+          (* Substitute pelist for sym_list *)
+          assert (List.length sym_list = List.length pelist);
+          print_endline "1956";
+          pp_to_stdout (Pp_core.Basic.pp_expr expr);
+
+          (* Rename everything except sym_list *)
+          let table_with_globals = List.fold_left (fun table (sym, _, _ ) ->
+            Pmap.add sym sym table) (Pmap.empty sym_cmp) state.file.globs in
+          let table_with_args = List.fold_left (fun table sym ->
+            Pmap.add sym sym table) table_with_globals sym_list in 
+          let ssa_state : SSA.kssa_state = 
+            { supply = !(state.sym_supply)
+            ; sym_table = table_with_args
+            } in
+          let (expr_ssa, st) = SSA.run ssa_state (ssa_expr expr) in
+          state.sym_supply := st.supply;
+          pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa);
+          
+          let subMap = List.fold_left2 (fun map sym pe ->
+            Pmap.add sym pe map) (Pmap.empty sym_cmp) sym_list pelist in
+          let to_run = substitute_expr subMap expr_ssa in
+          (* 
+          let table_with_globals = List.fold_left (fun table (sym, _, _) ->
+            Pmap.add sym sym table) subMap state.file.globs in 
+          *)
+
+          print_endline "CHECK HERE";
+          pp_to_stdout (Pp_core.Basic.pp_expr to_run);
+          print_endline "END CHECK HERE";
+          let res_run = bmc_expr {state with depth = state.depth + 1} to_run in
+          print_endline (Expr.to_string res_run.expr);
+          let eq_expr = mk_implies state.ctx
+            (mk_not state.ctx res_run.returned)
+            (mk_eq state.ctx res_run.state.z3_ret res_run.expr) in
+          { expr = UnitSort.mk_unit state.ctx
+          ; allocs = res_run.allocs
+          ; vcs = res_run.vcs
+          ; preexec = res_run.preexec 
+          ; ret_asserts = eq_expr :: res_run.ret_asserts 
+          ; returned = mk_true state.ctx
+          ; state = res_run.state
+          }
+          (*
+        List.iter (fun sym -> 
+          print_endline ("X " ^ (symbol_to_string sym))) sym_list;
+        print_endline "EXPR";
+        pp_to_stdout (Pp_core.Basic.pp_expr expr);
+        print_endline "";
+        *)
+
+      end
+
+      (*
       print_endline "TODO: Erun, special casing ret";
       begin
       match Str.split (Str.regexp "_") s with
@@ -1934,13 +2018,17 @@ let rec bmc_expr (state: 'a bmc_state)
               assert (List.length symlist = List.length pelist);
               let subMap = List.fold_left2 (fun map sym pe ->
                 Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
+              print_endline "ERUN";
+              pp_to_stdout (Pp_core.Basic.pp_expr expr);
               let to_run = substitute_expr subMap expr in 
+              pp_to_stdout (Pp_core.Basic.pp_expr to_run);
 
               let res_run = bmc_expr state to_run in
               (* (ret, aset, state) = bmc_expr state to_run in *)
               let eq_expr = mk_implies state.ctx
                 (mk_not state.ctx res_run.returned)
                 (mk_eq state.ctx res_run.state.z3_ret res_run.expr) in
+              print_endline ("STUFF " ^ (Expr.to_string eq_expr));
             { expr = UnitSort.mk_unit state.ctx
             ; allocs = res_run.allocs
             ; vcs = res_run.vcs
@@ -1954,6 +2042,7 @@ let rec bmc_expr (state: 'a bmc_state)
             assert false
       | _ -> assert false
       end
+*)
 
   | Erun _ ->
       assert false
@@ -2145,7 +2234,59 @@ let rec bmc_expr (state: 'a bmc_state)
       ; state = bmc_e2.state
       }
 
-  | Esave ((Symbol (i, Some s), _), binding_list, _)  ->
+  | Esave ((Symbol (i, Some s), _), binding_list, e)  ->
+      let subMap = List.fold_left (fun map (sym, (_, pe)) ->
+        Pmap.add sym pe map) (Pmap.empty sym_cmp) binding_list in
+      pp_to_stdout (Pp_core.Basic.pp_expr e);
+      let to_run = substitute_expr subMap e in
+      (*
+      print_endline "TO RUN";
+      pp_to_stdout (Pp_core.Basic.pp_expr to_run);
+      let sym = Sym.Symbol(i, Some s) in
+      let (cbt, symlist, expr) = 
+        (match Pmap.lookup sym state.saves with
+         | None -> assert false
+         |Some x -> x) in
+
+      print_endline "TEST";
+      pp_to_stdout (Pp_core.Basic.pp_expr expr);
+      print_endline "END TEST";
+      *)
+
+      let bmc_run = bmc_expr state to_run in
+
+      let is_ret = (match Str.split (Str.regexp "_") s with
+        | [name; id] -> 
+            (name = "ret" && (int_of_string id) = i)
+      ) in
+      if is_ret then
+        begin
+        print_endline ("TMP2" ^ (Expr.to_string bmc_run.expr));
+        let eq_expr = mk_implies state.ctx
+          (mk_not state.ctx bmc_run.returned)
+          (mk_eq state.ctx bmc_run.state.z3_ret bmc_run.expr) in
+        { expr = bmc_run.expr
+        ; allocs = AddressSet.empty
+        ; vcs = bmc_run.vcs
+        ; preexec = bmc_run.preexec
+        ; ret_asserts = eq_expr :: bmc_run.ret_asserts
+        ; returned = mk_true state.ctx
+        ; state = bmc_run.state
+        }
+        end
+      else
+        begin
+        print_endline ("TMP" ^ (Expr.to_string bmc_run.expr));
+        { expr = bmc_run.expr
+        ; allocs = bmc_run.allocs
+        ; vcs = bmc_run.vcs
+        ; preexec = bmc_run.preexec
+        ; ret_asserts = bmc_run.ret_asserts
+        ; returned = bmc_run.returned
+        ; state = bmc_run.state
+        }
+        end
+      (*
       (* Special case ret *)
       (* TODO: code duplication from Erun *)
       begin
@@ -2180,7 +2321,8 @@ let rec bmc_expr (state: 'a bmc_state)
           else 
             assert false
       | _ -> assert false
-      end
+
+            *)
   | Esave _ ->
       assert false
 
@@ -3119,15 +3261,31 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             print_endline "SAVES";  
             print_saves_map esaves;
 
+            Pmap.iter (fun k (cbt, sym_list, expr) ->
+              print_endline(symbol_to_string k);
+              match find_labeled_continuation k e with
+              | None -> assert false
+              | Some (cont, lconts') ->
+                  List.iter (fun sym -> 
+                    print_endline ("X " ^ (symbol_to_string sym))) cont;
+                  print_endline "EXPR";
+                  pp_to_stdout (Pp_core.Basic.pp_expr lconts');
+                  print_endline ""
+            ) esaves;
+
+
             let result = 
               if (ty = BTy_loaded OTy_integer) then
-                bmc_expr {state with saves = esaves} e
+                bmc_expr {state with saves = esaves;
+                          proc_expr = Some e} e
               else if (ty = BTy_object OTy_integer)  then
                 bmc_expr 
                   {state with 
                       saves = esaves;
                       z3_ret = Expr.mk_fresh_const state.ctx
-                                 "ret_main" (Integer.mk_sort state.ctx) } e
+                                 "ret_main" (Integer.mk_sort state.ctx);
+                      proc_expr = Some e 
+                  } e
               else
                 assert false in
             let (exec1, exec2) = (preexecs, result.preexec) in
@@ -3149,12 +3307,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
                                     )
                     *)
                   } in
+            (* TODO: this was added for a reason... *)
+            (*
             let result_expr = 
               if (expr_is_sort result.expr (UnitSort.mk_sort state.ctx)) then
                 result.state.z3_ret
               else
                 result.expr in
-            { expr = result_expr
+            *)
+            { expr = result.state.z3_ret
             ; allocs = result.allocs
             ; vcs = result.vcs (* TODO: globals *)
             ; preexec = new_preexec
@@ -3203,7 +3364,6 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         ) in
 
       print_endline "-----CONSTRAINTS ONLY";
-      (* print_endline (Solver.to_string state1.solver); *)
       assert (Solver.check state1.solver [] = SATISFIABLE);
 
       if not g_sequentialise then
@@ -3250,7 +3410,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
 
-            (* print_endline (Solver.to_string state1.solver); *)
+            (* print_endline (Solver.to_string state1.solver);  *)
             print_endline "Checking sat";
 
             let _ = check_solver (state1.solver) in

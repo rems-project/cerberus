@@ -74,7 +74,9 @@ let rec substitute_pexpr (map: substitute_map)
         begin
         match Pmap.lookup sym map with
         | Some (Pexpr(_, _, pe)) -> pe 
-        | None -> assert false (* TODO: special cases for returns only *)
+        | None -> 
+            (* TODO: check correctness *)
+            PEsym sym
         end
     | PEimpl _ -> pexpr_
     | PEval _ -> pexpr_
@@ -169,8 +171,15 @@ let rec substitute_expr (map: substitute_map)
         Ebound(i, substitute_expr map e)
     | End elist ->
         End (List.map (substitute_expr map) elist) 
-    | Esave _ 
-    | Erun _ 
+    | Esave (label, letlist, e) ->
+        Esave(label, 
+              List.map (fun (sym, (ty, pe)) -> 
+                          (sym, (ty, substitute_pexpr map pe)))
+                       letlist,
+              substitute_expr map e
+        )
+    | Erun (a, sym, pelist) ->
+        Erun(a, sym, List.map (substitute_pexpr map) pelist)
     | Epar _
     | Ewait _ ->
         assert false
