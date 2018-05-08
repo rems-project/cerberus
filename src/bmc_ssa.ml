@@ -58,6 +58,13 @@ module SSA = struct
   let get_supply : ksym_supply eff =
     get >>= fun st -> return st.supply
 
+  let get_sym_table : ((ksym, ksym) Pmap.map) eff = 
+    get >>= fun st -> return st.sym_table
+
+  let update_sym_table new_table : unit eff =
+    get >>= fun st -> 
+      put ({st with sym_table = new_table})
+
   let update_supply new_supply : unit eff =
     get >>= fun st ->
       put ({st with supply = new_supply})
@@ -96,7 +103,9 @@ let rec ssa_pexpr (Pexpr(annot, ty, pexpr_))
       SSA.lookup_sym sym >>= fun ret_sym ->
         begin
       match ret_sym with
-      | None -> assert false
+      | None -> 
+          print_endline (symbol_to_string sym); 
+          assert false
       | Some x -> 
           SSA.return (PEsym x)
         end
@@ -122,7 +131,10 @@ let rec ssa_pexpr (Pexpr(annot, ty, pexpr_))
                   ssa_pexpr pe >>= fun pe' ->
                   SSA.return (pat', pe')) caselist  >>= fun retlist ->
       SSA.return (PEcase(ret_pe, retlist))
-  | PEarray_shift _
+  | PEarray_shift (pe1, ty, pe2) ->
+      ssa_pexpr pe1 >>= fun ret_pe1 ->
+      ssa_pexpr pe2 >>= fun ret_pe2 ->
+      SSA.return (PEarray_shift(ret_pe1, ty, ret_pe2))
   | PEmember_shift _ ->
       assert false
   | PEnot pe ->
@@ -176,11 +188,9 @@ let rec ssa_expr (Expr(annot, expr_))
   | Epure pe ->
       ssa_pexpr pe >>= fun ret ->
       SSA.return (Epure ret)
-  | Ememop (PtrValidForDeref, pelist) ->
+  | Ememop (memop, pelist) ->
       SSA.mapM ssa_pexpr pelist >>= fun retlist ->
-      SSA.return (Ememop(PtrValidForDeref, retlist))
-  | Ememop _ ->
-      assert false
+      SSA.return (Ememop(memop, retlist))
   | Eaction (Paction(p, Action(loc, a, Create _))) ->
       SSA.return expr_
   | Eaction (Paction(p, Action(loc, a, Store0 (pe1, ptr, value, mem)))) ->
@@ -252,6 +262,21 @@ let rec ssa_expr (Expr(annot, expr_))
       ssa_expr e2 >>= fun ret_e2 ->
       SSA.return (Esseq (ret_pat, ret_e1, ret_e2))
   | Esave (label, letlist, e)  ->
+      SSA.get_sym_table >>= fun table ->
+      SSA.mapM (fun (sym, (ty, pe)) ->
+        match sym with
+        | Sym.Symbol(_, stropt) ->
+          ssa_pexpr pe >>= fun ret_pe ->
+          SSA.get_fresh_sym stropt >>= fun new_sym ->
+          SSA.add_to_sym_table sym new_sym >>= fun () ->
+          SSA.return (new_sym, (ty, ret_pe))
+        | _ -> assert false
+          ) letlist >>= fun retlist ->
+      ssa_expr e >>= fun ret_e ->
+      SSA.update_sym_table table >>= fun () ->
+      SSA.return (Esave(label, retlist, ret_e))
+
+      (* Core overloads symbols
       SSA.mapM (fun (sym, (ty, pe)) -> 
         match sym with
         | Sym.Symbol(_, stropt) ->
@@ -261,6 +286,7 @@ let rec ssa_expr (Expr(annot, expr_))
           SSA.return (new_sym, (ty, ret_pe))) letlist >>= fun retlist ->
       ssa_expr e >>= fun ret_e ->
       SSA.return (Esave(label, retlist, ret_e))
+      *)
   ) >>= fun ret_ -> SSA.return (Expr(annot,ret_))
 
 let ssa_fn (fn) 

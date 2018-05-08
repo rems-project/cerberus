@@ -743,10 +743,11 @@ let object_value_to_z3 (ctx: context) = function
       assert false
 
 let ctype_to_z3 (ctx: context) (ctype: ctype0) =
-  let _ =  (* TODO: safeguard for unimplemented stuff *)
+  let ty =  (* TODO: safeguard for unimplemented stuff *)
     match ctype with
     | Void0 -> assert false
     | Basic0 (Integer i) ->
+        let _ = 
         begin
         match i with
         | Char -> assert false
@@ -759,10 +760,12 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
           | _ -> assert false
           end
         | _ -> assert false
-        end
-    | _ -> assert false
+        end in
+        ctype
+    | Atomic0 ty -> 
+        ty
   in
-  ctype_to_expr ctype ctx
+  ctype_to_expr ty ctx
 
 
 let rec value_to_z3 (ctx: context) (cval: value) (typ: core_base_type) =
@@ -803,7 +806,7 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpSub -> Arithmetic.mk_sub ctx [ pe1; pe2 ]
   | OpMul -> Arithmetic.mk_mul ctx [ pe1; pe2 ]
   | OpDiv -> Arithmetic.mk_div ctx pe1 pe2
-  | OpRem_t -> assert false
+  | OpRem_t -> Integer.mk_mod ctx pe1 pe2
   | OpRem_f -> Integer.mk_mod ctx pe1 pe2 (* TODO: Flooring remainder? *)
   | OpExp -> assert false
   | OpEq -> mk_eq ctx pe1 pe2   
@@ -1206,17 +1209,13 @@ let rec mk_loaded_assertions ctx ty expr =
   match ty with
   | Basic0 (Integer ity) ->
       let (nmin, nmax) = integer_range impl ity in
-      Printf.printf "XX %d %d\n" nmin nmax;
 
       let lval = LoadedInteger.get_loaded_value ctx expr in
-      print_endline (Expr.to_string lval);
-
       let assertions =
         mk_and ctx 
         [ mk_ge ctx lval (Integer.mk_numeral_s ctx (string_of_int nmin))
         ; mk_le ctx lval (Integer.mk_numeral_s ctx (string_of_int nmax))
         ] in
-      print_endline (Expr.to_string assertions);
       [mk_implies ctx
           (LoadedInteger.is_loaded ctx expr)
           assertions]
@@ -1231,7 +1230,7 @@ let rec mk_loaded_assertions ctx ty expr =
 
 (* TODO: currently ignores unspecified type *)
 let get_assert_unspecified (sort: Sort.sort) ty ctx expr =
-  let typ = ctype_to_expr ty ctx in
+  let typ = ctype_to_z3 ctx ty in
   if (Sort.equal (LoadedInteger.mk_sort ctx) sort) then
     mk_eq ctx expr (LoadedInteger.mk_unspec ctx typ)
   else if (Sort.equal (LoadedPointer.mk_sort ctx) sort) then
@@ -2604,6 +2603,7 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
   (* Reads read-from writes
    * (forall ((e E)) (=> (read e) (write (rf e))))
    *)
+  (*
   let rf_write_assert = Quantifier.expr_of_quantifier (
     Quantifier.mk_forall ctx
       [event_sort] [mk_sym ctx "e"]
@@ -2612,6 +2612,9 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
           (is_write (FuncDecl.apply fn_rf [bound_0]))
       ) None [] [] None None
     ) in
+*)
+
+  (* TODO: add this to well_formed assert! *)
 
   (* for each read, it has the value of the event it reads from
    * and is from the same address (below missing address) 
@@ -2630,6 +2633,7 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
                       (FuncDecl.apply fn_getVal
                         [ FuncDecl.apply fn_rf [bound_0]])
           ; getGuard (FuncDecl.apply fn_rf [bound_0])
+          ; is_write (FuncDecl.apply fn_rf [bound_0])
           ]
         )
       ) None [] [] None None 
@@ -3028,7 +3032,7 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
               ; isAcq_assert
               ; isRel_assert
               (*; fr_assert *)
-              ; rf_write_assert 
+              (* ; rf_write_assert  *)
               ; rf_well_formed_assert 
               ; mo_well_formed_assert
               ; irr_hb_assert
@@ -3160,8 +3164,12 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             }
         | Some (Fun(ty, params, pe)) ->
             (* Handle parameters *)
+            (*
             print_endline "Fun disabled for now; check return consistent";
             assert false;
+            *)
+
+            print_endline "Fun should be disabled.";
 
             let _, state = initialise_main_params params state in
             bmc_pexpr state pe 
@@ -3195,7 +3203,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         ) in
 
       print_endline "-----CONSTRAINTS ONLY";
-      print_endline (Solver.to_string state1.solver);
+      (* print_endline (Solver.to_string state1.solver); *)
       assert (Solver.check state1.solver [] = SATISFIABLE);
 
       if not g_sequentialise then
@@ -3228,13 +3236,23 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
           match check_vcs with
           | true ->
             print_endline "-----WITH VCS";
-            let not_vcs = List.map (fun a -> (mk_not state1.ctx a))
-                                   result.vcs
+
+            let not_vcs = List.map 
+              (fun a -> Expr.simplify (mk_not state1.ctx a) None)
+              result.vcs
             in
+            Solver.assert_and_track 
+              state1.solver (mk_or state1.ctx not_vcs)
+              (Expr.mk_fresh_const state1.ctx "not_vcs" 
+                                   (Boolean.mk_sort state1.ctx));
+              
             Solver.add state1.solver [ mk_or state1.ctx not_vcs ] ;
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
+
+            (* print_endline (Solver.to_string state1.solver); *)
             print_endline "Checking sat";
+
             let _ = check_solver (state1.solver) in
             let stats = Solver.get_statistics state1.solver in
             print_endline (Statistics.to_string stats);

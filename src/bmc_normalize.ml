@@ -29,6 +29,17 @@ let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
 
   let (f, sym_supply) = ssa_file f sym_supply in
 
+  let (>>=) = Exception.except_bind in
+
+  (*
+  pp_file f;
+  print_endline "HERE";
+  match Core_typing.typecheck_program f  with
+   | Result _ -> assert false
+   | Exception s -> assert false
+  ;
+  *)
+
   print_string "INLINING FUNCTION CALLS\n";
   let (inlined_file, inlined_supply) = inline_file f sym_supply in
 
