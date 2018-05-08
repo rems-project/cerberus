@@ -23,7 +23,7 @@ default:
 	@if (command -v opam >/dev/null 2>&1); then \
 	  echo "Please install the following packages with opam: cmdliner, pprint"; \
 	else \
-	  make -f ../Makefile.dependencies cmdliner pprint z3; \
+	  make -f ../Makefile.dependencies pprint z3; \
 	fi
 #  make cmdliner pprint zarith
 
@@ -44,7 +44,7 @@ pprint:
 	    echo DOWNLOADING $(PPRINT_SOURCE) ; \
 	    git clone $(PRINT_SOURCE) $(PPRINT_PATH); \
 	  fi; \
-	  make -C $(PPRINT_PATH) install;
+	  make -C $(PPRINT_PATH) reinstall;
 
 #zarith:
 #	@if ! (ocamlfind query zarith >/dev/null 2>&1); then \
