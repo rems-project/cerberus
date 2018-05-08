@@ -652,14 +652,16 @@ let dtree_of_external_declaration = function
   | EDecl_decl decl ->
       Dnode (pp_decl_ctor "EDecl_decl", [dtree_of_declaration decl])
 
-let filter_external_decl edecls =
-  let f acc decl =
-    match decl with
-    | EDecl_func _ -> decl::acc
-    | _ -> acc
-  in List.rev (List.fold_left f [] edecls)
+let filter_external_decl =
+  let pred = function
+    | EDecl_func (FunDef (loc, _, _, _))
+    | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
+    | EDecl_decl (Declaration_base (_, InitDecl(loc, _, _)::_)) ->
+      Location_ocaml.from_c_file loc
+    | EDecl_decl (Declaration_base (_, [])) -> true
+  in List.filter pred
 
-let pp_translation_unit show_ext_decl do_colour (TUnit edecls) =
+let pp_translation_unit show_include do_colour (TUnit edecls) =
   Colour.do_colour := do_colour && Unix.isatty Unix.stdout;
-  let filtered_edecls = if show_ext_decl then edecls else filter_external_decl edecls in
+  let filtered_edecls = if show_include then edecls else filter_external_decl edecls in
   pp_doc_tree (Dnode (pp_decl_ctor "TUnit", List.map dtree_of_external_declaration filtered_edecls)) ^^ P.hardline

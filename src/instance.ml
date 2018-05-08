@@ -123,12 +123,12 @@ let result_of_elaboration (cabs, ail, _, core) =
   Elaboration
     { pp= {
         cabs= None;
-        ail=  mk_elab @@ Pp_ail.pp_program ail;
+        ail=  mk_elab @@ Pp_ail.pp_program false false ail;
         core= Some (elim_paragraph_sym core)
       };
       ast= {
         cabs= mk_elab @@ Pp_cabs.pp_translation_unit false false cabs;
-        ail=  mk_elab @@ Pp_ail_ast.pp_program ail;
+        ail=  mk_elab @@ Pp_ail_ast.pp_program false false ail;
         core = None;
       };
       locs= locs;
