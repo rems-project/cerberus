@@ -42,7 +42,7 @@ pprint:
 	  echo "INSTALLING pprint"; \
 	  if [ ! -d $(PPRINT_PATH) ] ; then \
 	    echo DOWNLOADING $(PPRINT_SOURCE) ; \
-	    git clone $(PRINT_SOURCE) $(PPRINT_PATH); \
+	    git clone $(PPRINT_SOURCE) $(PPRINT_PATH); \
 	  fi; \
 	  make -C $(PPRINT_PATH) reinstall;
 
