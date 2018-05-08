@@ -23,8 +23,8 @@ default:
 	@if (command -v opam >/dev/null 2>&1); then \
 	  echo "Please install the following packages with opam: cmdliner, pprint"; \
 	else \
-		mkdir -p dependencies
-		cd dependencies
+	  mkdir -p dependencies
+	  cd dependencies
 	  make -f ../Makefile.dependencies cmdliner pprint z3; \
 	fi
 #  make cmdliner pprint zarith
