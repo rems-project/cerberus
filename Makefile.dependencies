@@ -45,7 +45,7 @@ pprint:
 	  echo "INSTALLING pprint"; \
 	  if [ ! -d $(PPRINT_PATH) ] ; then \
 	    echo DOWNLOADING $(PPRINT_SOURCE) ; \
-	    git clone $(PRINT_SOURCE) $(PPRINT_PATH) \
+	    git clone $(PRINT_SOURCE) $(PPRINT_PATH); \
 	  fi; \
 	  if [ ! `command -v ocamlfind` ]; then \
 	    mv $(PPRINT_PATH)/Makefile $(PPRINT_PATH)/Makefile_ ; \
