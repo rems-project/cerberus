@@ -127,7 +127,7 @@ let c_frontend f =
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
       if !Debug_ocaml.debug_level > 4 then
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program -| snd)
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program true true -| snd)
       else
         Exception.except_fmap (fun z -> z)
     end
@@ -140,7 +140,7 @@ let c_frontend f =
       if !Debug_ocaml.debug_level > 4 then
         Exception.except_fmap (fun z -> z)
       else
-        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program in
+        let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program true true in
         pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail -| snd)
     end
     |> set_progress "AILTY" 12
