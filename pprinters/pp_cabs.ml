@@ -657,7 +657,7 @@ let filter_external_decl =
     | EDecl_func (FunDef (loc, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
     | EDecl_decl (Declaration_base (_, InitDecl(loc, _, _)::_)) ->
-      Location_ocaml.from_c_file loc
+      Location_ocaml.from_main_file loc
     | EDecl_decl (Declaration_base (_, [])) -> true
   in List.filter pred
 

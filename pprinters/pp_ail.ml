@@ -862,7 +862,7 @@ let pp_annot gtc doc =
         P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _)) = Location_ocaml.from_c_file loc in
+  let pred (_, (loc, _)) = Location_ocaml.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 let pp_program do_colour show_include ail_prog =

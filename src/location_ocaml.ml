@@ -38,11 +38,13 @@ let with_cursor_from loc1 loc2 =
     | Loc_region (begin_loc, end_loc, _) ->
         Loc_region (begin_loc, end_loc, cursor_opt)
 
-let from_c_file = function
+let from_main_file = function
   | Loc_unknown
   | Loc_other _ -> false
   | Loc_point pos
-  | Loc_region (pos, _, _) -> Filename.extension pos.pos_fname = ".c"
+  | Loc_region (pos, _, _) ->
+    let ext = Filename.extension pos.pos_fname in
+    ext = ".c" || ext = ".core"
 
 let location_to_string loc =
   let string_of_pos pos =
