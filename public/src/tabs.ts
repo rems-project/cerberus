@@ -164,8 +164,8 @@ export class Interactive extends Tab {
     this.graph = new Graph()
     this.network = new vis.Network(container[0], this.graph, options)
     
-    this.stepBtn.on('click', () => ee.emit('step', this.getSelectedNode()))
-    this.nextBtn.on('click', () => ee.emit('step', this.getSelectedNode()))
+    this.stepBtn.on('click', () => this.step(this.getSelectedNode()))
+    this.nextBtn.on('click', () => this.step(this.getSelectedNode()))
     restartBtn.on('click', () => ee.emit('resetInteractive'))
 
     hideTauBtn.on('click', () => {
@@ -180,31 +180,21 @@ export class Interactive extends Tab {
 
     this.network.on('click', (arg: any) => {
       if (!arg || !arg.nodes) return
+      this.stepBtn.addClass('disable')
+      this.nextBtn.addClass('disable')
       const nodes = arg.nodes as Common.ID []
-      // if one node is selected
       if (nodes.length == 1) {
         let active = this.graph.nodes.get(nodes[0])
         if (active) {
-          this.stepBtn.addClass('disable')
-          this.nextBtn.addClass('disable')
           if (active.group && active.group == 'leaf') {
-            // do a step
             ee.emit('step', active)
-          } else if (active.loc || active.mem) {
-            // show mem and select locations
+          } else {
             if (active.loc) {
               ee.emit('clear')
               //TODO: ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
               console.log('mark active node location')
             }
-            if (active.mem) {
-              //TODO ui.updateMemory(active.mem)
-              console.log('update active node memory')
-            }
-          } else {
-            // just clear and highlight everything
-            ee.emit('clear')
-            ee.emit('highlight')
+            ee.emit('setMemory', active.mem)
           }
         }
       }
@@ -212,6 +202,13 @@ export class Interactive extends Tab {
     ee.on('highlight', this, this.highlight)
     ee.on('clearGraph', this, () => this.graph.clear())
     ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s.graph))
+  }
+
+  step(active: Node | undefined) {
+    if (!active) return
+    this.stepBtn.addClass('disable')
+    this.nextBtn.addClass('disable')
+    this.ee.emit('step', active)
   }
 
   updateGraph(graph: Graph) {
@@ -235,9 +232,12 @@ export class Interactive extends Tab {
     const nodes = this.graph.nodes.get().filter(n => n.group == 'leaf')
     const lastLeaf = nodes[nodes.length-1]
     if (lastLeaf != null) {
+      this.stepBtn.removeClass('disable')
+      this.nextBtn.removeClass('disable')
       this.network.focus(lastLeaf.id)
       this.network.selectNodes([lastLeaf.id])
       this.network.redraw()
+      this.ee.emit('setMemory', lastLeaf.mem)
     }
   }
 
@@ -302,10 +302,7 @@ class Memory extends Tab {
       }
     }
     this.network = new vis.Network(container[0], new Graph(), options);
-  }
-
-  updateMemory (mem: any) {
-    this.network.setData(mem)
+    ee.on('updateMemory', this, (s:Common.State) => this.network.setData(s.mem))
   }
 }
 
