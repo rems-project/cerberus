@@ -1,7 +1,7 @@
-import { Graph } from './graph'
+import { Node, Edge, Graph } from './graph'
 
 namespace Common {
-  export type bytes = string | undefined
+  export type Bytes = string | undefined
 
   export type ID = string | number
 
@@ -62,10 +62,10 @@ namespace Common {
   }
 
   export interface InteractiveRequest {
-    lastId: number,
-    state: bytes,
+    lastId: ID,
+    state: Bytes,
     active: ID,
-    tagDefs: bytes
+    tagDefs: Bytes
   }
 
   export interface IR {
@@ -93,7 +93,6 @@ namespace Common {
   export interface State {
     title: () => Readonly<string>
     source: () => Readonly<string>
-    status: string
     pp: IR
     ast: IR
     locs: Locations[]
@@ -101,20 +100,31 @@ namespace Common {
     mem: Graph
     result: string
     console: string
-    lastNodeId: number
-    tagDefs?: bytes
+    lastNodeId: ID 
+    tagDefs?: Bytes
     dirty: boolean
+  }
+
+  export interface ResultTree {
+    nodes: Node []
+    edges: Edge []
   }
 
   export type ResultRequest =
     { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
     { status: 'execution', console: string, result: string} |
-    { status: 'stepping', result: string, tagDefs?: bytes} |
+    { status: 'stepping', result: string, tagDefs?: Bytes} |
     { status: 'failure', console: string, result: string }
+
+  export type ResultStep = { state: ResultRequest, steps: ResultTree }
 
   export type Event =
     'update' |            // Update tab values
     'updateExecution' |   // Update execution result
+    'clearGraph'  |       // Clear step graph
+    'updateGraph' |       // Update step graph
+    'resetInteractive' |  // Reset interactive mode
+    'step' |              // Step interactive mode
     'mark' |              // Mark location
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
@@ -123,7 +133,8 @@ namespace Common {
   export interface EventEmitter {
     on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
-    on (eventName: 'dirty', self:any, f: () => void): void
+    on (eventName: 'dirty', self: any, f: () => void): void
+    on (eventName: 'step', self: any, f: (active: Node) => void): void
     on (eventName: Event, self: any, f: ((s:Readonly<State>) => void)): void
     off (self: any): void 
     once (f: ((s: Readonly<State>) => any)): any

@@ -5,7 +5,7 @@ export type ID = string | number
 
 export interface Node extends vis.Node {
   id: ID
-  state: string | null
+  state: string | undefined
   isVisible: boolean
   isTau: boolean
   loc: any
@@ -70,7 +70,7 @@ export class Graph {
         child.group = 'leaf'
       return child
     })
-    this.nodes.update(children.concat(tauChildren))
+    this.nodes.update(_.sortedUniqBy(children.concat(tauChildren), (e) => e.id))
   }
 
   update(newNodes: Node[], newEdges: Edge[]) {

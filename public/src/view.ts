@@ -7,13 +7,6 @@ import Util from "./util"
 import Common from './common'
 import UI from './ui'
 
-/*
-I could use some ideas of Redux here. Have View to be a state and functions
-to dispatch an action (or event)
-and functions to subscribe to an action and receives the state
-not sure...
-*/
-
 export default class View {
   title: string
   dom: JQuery<HTMLElement>
@@ -61,6 +54,9 @@ export default class View {
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
+
+    this.on('step', this, this.step)
+    this.on('resetInteractive', this, this.resetInteractive)
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -167,7 +163,6 @@ export default class View {
     this.state = {
       title: () => this.title,
       source: () => this.source.getValue(),
-      status: 'failure',
       pp: { cabs: '', ail:  '', core: '' },
       ast: { cabs: '', ail:  '', core: '' },
       locs: [],
@@ -200,7 +195,8 @@ export default class View {
     this.refresh()
   }
 
-  startInteractive(steps: any) {
+  /** Start interactive tabs (with the first state Init) */
+  startInteractive(steps: Common.ResultTree) {
     if (steps.nodes.length != 1) {
       console.log('impossible initialise interactive mode')
       return
@@ -208,16 +204,17 @@ export default class View {
     // Create initial node
     let init = steps.nodes[0]
     init.isVisible = true
-    init.isLeaf = true
     init.isTau = false
     this.state.graph.clear()
     this.state.graph.nodes.add(init)
     this.state.lastNodeId = 1
     // Update interactive tabs
-    // TODO: this.tabs.map(tab => tab.updateGraph(this.state.graph))
+    this.emit('updateGraph')
   }
 
-  newInteractiveTab(steps: any) {
+  /** Create a new interactive tab and update its graph */
+  newInteractiveTab(steps: Common.ResultTree) {
+    let start = !this.isInteractiveOpen()
     this.layout.root.contentItems[0].addChild({
       type: 'column',
       content: [{
@@ -227,10 +224,13 @@ export default class View {
         componentState: { tab: 'Interactive' }
       }]
     })
-    //this.refresh() I DON'T THINK I NEED THIS REFRESH
-    this.startInteractive(steps)
+    if (start)
+      this.startInteractive(steps)
+    else
+      this.emit('updateGraph')
   }
 
+  /** Check if there are interactive tabs opened */
   private isInteractiveOpen() {
     for (let i = 0; i < this.tabs.length; i++) {
       if (this.tabs[i] instanceof Tabs.Interactive) return true
@@ -238,19 +238,20 @@ export default class View {
     return false
   }
 
+  /** Restart interactive mode in all the tabs */
   resetInteractive() {
     this.state.graph.clear()
-    if (this.state.status == 'success' && this.isInteractiveOpen()) {
-      UI.request(Common.Step(), (data: any) => {
+    this.emit('clearGraph')
+    if (this.isInteractiveOpen()) {
+      UI.request(Common.Step(), (data: Common.ResultStep) => {
         this.updateState(data.state)
         this.startInteractive(data.steps)
       })
     }
-    //this.ee.emit('fit')
   }
 
-  // TODO: this is wrong, this tree is not a graph
-  updateInteractive(activeId: Common.ID, tree: Graph) {
+  /** Update interactive state mode and raise event to update graphs */
+  updateInteractive(activeId: Common.ID, tree: Common.ResultTree) {
     // Give a better label to the node (TODO)
     const nodeLabel = (str: string) => {
       if (str == 'Step_eval(first operand of a Create)')
@@ -265,15 +266,11 @@ export default class View {
         return 'Non deterministic choice'
       return str
     }
-
     // Check node is a tau transition
     const isTau = (n: Node) => _.includes(n.label, "tau") && !_.includes(n.label, "End")
-
     const isTauById = (nId: Common.ID) => isTau(graph.nodes.get(nId))
-
     // Return immediate edge upward
     const getIncommingEdge = (nId: Common.ID) => _.find(graph.edges.get(), n => n.to == nId)
-
     // Search for a no tau parent
     const getNoTauParent: (_:Common.ID) => Common.ID | undefined = (nId: Common.ID) => {
       const e = getIncommingEdge(nId)
@@ -283,27 +280,20 @@ export default class View {
         return getNoTauParent(e.from)
       return e.from
     }
-
     const graph = this.state.graph
-    //let lastLeafNodeId = null
-
     // Update tree nodes labels
     tree.nodes.map((n) => n.label = nodeLabel(n.label))
-
     // Update current point to become branch
     const active = graph.nodes.get(activeId)
     active.group = 'branch'
-    active.state = null
+    delete active.state
     graph.nodes.update(active)
-
     // Add nodes
     tree.nodes.map((n) => {
       n.isTau = isTau(n)
       n.isVisible = false
       graph.nodes.add(n)
-      //if (n.group == 'leaf') lastLeafNodeId = n.id
     })
-
     // Edges are added twice (for tau transitions)
     tree.edges.map((e) => {
       e.isTau = true
@@ -314,17 +304,26 @@ export default class View {
       if (!n.isTau)
         graph.edges.add({from: getNoTauParent(e.to), to: e.to, isTau: false})
     })
-
     // Set visible all tau nodes descendent from active until first non-tau
     graph.setChildrenVisible(activeId)
-
     // Update any instance of interactive
-    //TODO: this.tabs.map((tab) => tab.updateGraph(graph))
-
+    this.emit('updateGraph')
     // WARN: Assume tree node is decreasing order
     // This is a seed to the server
-    //@ts-ignore
     this.state.lastNodeId = tree.nodes[0].id
+  }
+
+  /** Execute a step (it might call the server to update interactive state) */
+  step(active: Node | undefined) {
+    if (!active) return
+    if (this.state.graph.children(active.id).length == 0)
+      UI.step(active)
+    else {
+      active.group = 'branch'
+      this.state.graph.nodes.update(active)
+      this.state.graph.setChildrenVisible(active.id)
+      this.emit('updateGraph')
+    }
   }
 
   getEncodedState() {
