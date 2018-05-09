@@ -929,8 +929,8 @@ let mk_file decls =
 %token BANG LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
 
 (* SEMICOLON has higher priority than IN *)
-%right SEMICOLON
 %nonassoc IN
+%right SEMICOLON
 
 
 
