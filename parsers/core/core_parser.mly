@@ -60,11 +60,13 @@ let rec mk_list_pat = function
 
 
 type symbolify_state = {
+  labels: (Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map;
   sym_scopes: ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) list;
   ailnames: (string, Symbol.sym) Pmap.map
 }
 
 let initial_symbolify_state = {
+  labels= Pmap.empty Core_parser_util._sym_compare;
   sym_scopes= [Pmap.map (fun sym -> (sym, Location_ocaml.unknown)) M.std];
   ailnames= Pmap.empty Pervasives.compare;
 }
@@ -152,7 +154,6 @@ end = struct
 end
 
 let (>>=)    = Eff.bind
-let (>>) m f = Eff.bind m (fun _ -> f)
 let (<$>)    = Eff.fmap
 let (<*>)    = Eff.app
 
@@ -163,7 +164,7 @@ let register_ailname str sym =
 
 let open_scope : unit Eff.t =
   Eff.get >>= fun st ->
-  Eff.put {st with sym_scopes= Pmap.empty Core_parser_util._sym_compare :: st.sym_scopes} >>
+  Eff.put {st with sym_scopes= Pmap.empty Core_parser_util._sym_compare :: st.sym_scopes} >>= fun () ->
   Eff.return ()
   
 let close_scope : ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map) Eff.t =
@@ -172,13 +173,13 @@ let close_scope : ((Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.m
     | [] ->
         failwith "Core_parser.close_scope: found open scope"
     | scope :: scopes ->
-        Eff.put {st with sym_scopes= scopes} >>
+        Eff.put {st with sym_scopes= scopes} >>= fun () ->
         Eff.return scope
 
 let under_scope (m: 'a Eff.t) : 'a Eff.t =
-  open_scope >>
+  open_scope >>= fun () ->
   m >>= fun ret ->
-  close_scope >>
+  close_scope >>= fun _ ->
   Eff.return ret
 
 
@@ -194,7 +195,7 @@ let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
             failwith "Core_parser.register_sym: found open scope"
         | scope::scopes ->
             Pmap.add _sym (sym, Loc_region (start_p, end_p, None)) scope :: scopes
-  } >>
+  } >>= fun () ->
   Eff.return sym
 
 let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
@@ -216,6 +217,21 @@ let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
         ) in
         aux scopes
   )
+
+
+let register_label ((_, (start_p, end_p)) as _sym) : unit Eff.t =
+  let loc = Loc_region (start_p, end_p, None) in
+  Eff.get >>= fun st ->
+  let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
+  M.sym_counter := !M.sym_counter + 1;
+  Eff.put {st with
+    labels= Pmap.add _sym (sym, loc) st.labels
+  }
+
+let lookup_label _sym: ((Symbol.sym * Location_ocaml.t) option) Eff.t =
+  Eff.get >>= fun st ->
+  Eff.return (Pmap.lookup _sym st.labels)
+
 
 let symbolify_name = function
  | Sym _sym ->
@@ -462,11 +478,11 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr ([], (), PEcall (nm, pes)))
     | PElet (_pat, _pe1, _pe2) ->
         symbolify_pexpr _pe1   >>= fun pe1 ->
-        open_scope             >>
-        symbolify_pattern _pat >>= fun pat ->
-        symbolify_pexpr _pe2   >>= fun pe2  ->
-        close_scope >>
-        Eff.return (Caux.mk_let_pe pat pe1 pe2)
+        under_scope begin
+          symbolify_pattern _pat >>= fun pat ->
+          symbolify_pexpr _pe2   >>= fun pe2 ->
+          Eff.return (Caux.mk_let_pe pat pe1 pe2)
+        end
     | PEif (_pe1, _pe2, _pe3) ->
         Core_aux.mk_if_pe
           <$> symbolify_pexpr _pe1
@@ -564,10 +580,34 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
    | End _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (End es)
-   | Esave _ ->
-       failwith "WIP: Core_parser.symbolify_expr, Esave"
-   | Erun _ ->
-       failwith "WIP: Core_parser.symbolify_expr, Erun"
+   | Esave ((_sym, bTy), _xs, _e) ->
+       (* NOTE: the scope of Esave symbols is the whole function and these are
+          therefore registered in a preliminary pass *)
+       lookup_label _sym >>= begin function
+         | None ->
+             Eff.fail (Unresolved_symbol _sym)
+         | Some (sym, _) ->
+             under_scope begin
+               Eff.mapM (fun (_sym, (bTy, _pe)) ->
+                 symbolify_pexpr _pe >>= fun pe  ->
+                 Eff.return (_sym, (bTy, pe))
+               ) _xs >>= fun _xs' ->
+               Eff.mapM (fun (_sym, (bTy, pe)) ->
+                 register_sym _sym   >>= fun sym ->
+                 Eff.return (sym, (bTy, pe))
+               ) _xs' >>= fun xs ->
+               symbolify_expr _e >>= fun e ->
+               Eff.return (Esave ((sym, bTy), xs, e))
+             end
+       end
+   | Erun ((), _sym, _pes) ->
+       lookup_label _sym >>= begin function
+         | None ->
+             Eff.fail (Unresolved_symbol _sym)
+         | Some (sym, _) ->
+             Eff.mapM symbolify_pexpr _pes >>= fun pes ->
+             Eff.return (Erun ((), sym, pes))
+       end
    | Epar _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
@@ -615,10 +655,62 @@ and symbolify_paction = function
      Eff.return (Paction (p, Action (loc, (), act_)))
 
 
+let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
+  match expr_ with
+    | Esave ((_sym, _), _, _e) ->
+        lookup_sym _sym >>= (function
+          | Some (_, loc) ->
+                Eff.fail (Multiple_declaration (loc, _sym))
+          | None ->
+              register_label _sym >>= fun () ->
+              register_labels _e
+        )
+    | Epure _
+    | Ememop _
+    | Eaction _
+    | Eskip
+    | Eccall _
+    | Eproc _
+    | Easeq _
+    | Erun _
+    | Ewait _ ->
+        Eff.return ()
+    | Ecase (_, _pat_es) ->
+        Eff.mapM_ (fun (_, _e) ->
+          register_labels _e
+        ) _pat_es
+    | Elet (_, _, _e2) ->
+        register_labels _e2
+    | Eif (_, _e2, _e3) ->
+        register_labels _e2 >>= fun () ->
+        register_labels _e3
+    | Eunseq _es ->
+        (* TODO: there shouldn't be any Esave/Erun inside an Eunseq *)
+        Eff.mapM_ register_labels _es
+    | Ewseq (_, _e1, _e2) ->
+        register_labels _e1 >>= fun () ->
+        register_labels _e2
+    | Esseq (_, _e1, _e2) ->
+        register_labels _e1 >>= fun () ->
+        register_labels _e2
+    | Eindet (_, _e)
+    | Ebound (_, _e) ->
+        register_labels _e
+    | End _es
+    | Epar _es ->
+        Eff.mapM_ register_labels _es
+
+let with_labels _e m =
+  register_labels _e >>= fun () ->
+  m >>= fun ret ->
+  Eff.get >>= fun st ->
+  Eff.put { st with labels= Pmap.empty Core_parser_util._sym_compare } >>= fun () ->
+  Eff.return ret
+
 
 let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map) either) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
-  open_scope >>
+  open_scope >>= fun () ->
   Eff.foldrM (fun decl acc ->
     match decl with
       | Glob_decl (_sym, _, _)
@@ -662,31 +754,33 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
           lookup_sym _sym >>= (function
             | Some (decl_sym, _) ->
-                open_scope >>
+                open_scope >>= fun () ->
                 Eff.foldrM (fun (_sym, bTy) acc ->
                   register_sym _sym >>= fun sym ->
                   Eff.return ((sym, bTy) :: acc)
                 ) [] _sym_bTys      >>= fun sym_bTys ->
                 symbolify_pexpr _pe >>= fun pe ->
-                close_scope >>
+                close_scope >>= fun _ ->
                 Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc)
             | None ->
                 assert false
           )
       | Proc_decl (_sym, _, (bTy, _sym_bTys, _e)) ->
-          lookup_sym _sym >>= (function
-            | Some (decl_sym, _) ->
-                open_scope >>
-                Eff.foldrM (fun (_sym, bTy) acc ->
-                  register_sym _sym >>= fun sym ->
-                  Eff.return ((sym, bTy) :: acc)
-                ) [] _sym_bTys    >>= fun sym_bTys ->
-                symbolify_expr _e >>= fun e        ->
-                close_scope >>
-                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Proc (Location_ocaml.Loc_unknown, bTy, sym_bTys, e)) fun_map_acc)
+          with_labels _e begin
+            lookup_sym _sym >>= function
+              | Some (decl_sym, decl_loc) ->
+                  open_scope >>= fun () ->
+                  Eff.foldrM (fun (_sym, bTy) acc ->
+                    register_sym _sym >>= fun sym ->
+                    Eff.return ((sym, bTy) :: acc)
+                  ) [] _sym_bTys    >>= fun sym_bTys ->
+                  symbolify_expr _e >>= fun e        ->
+                  close_scope >>= fun _ ->
+                  Eff.return ( impl_acc, globs_acc
+                             , Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc )
             | None ->
                 assert false
-          )
+          end
   ) (Pmap.empty iCst_compare, [], Pmap.empty sym_compare) decls >>= fun (impl, globs, fun_map) ->
   if not (Pmap.is_empty impl) &&  globs = [] && Pmap.is_empty fun_map then
     Eff.return (Left impl)
@@ -701,7 +795,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
 
 let symbolify_std decls : (unit Core.fun_map) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
-  open_scope >>
+  open_scope >>= fun () ->
   Eff.mapM_ (function
     | Glob_decl (_sym, _, _)
     | Fun_decl (_sym, _)
@@ -715,7 +809,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
         )
     | _ ->
         Eff.return ()
-  ) decls >>
+  ) decls >>= fun () ->
   Eff.foldrM (fun decl fun_map_acc -> match decl with
     | Def_decl _ 
     | IFun_decl _
@@ -724,34 +818,34 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
         lookup_sym _sym >>= (function
           | Some (decl_sym, _) ->
-              open_scope >>
+              open_scope >>= fun () ->
               Eff.foldrM (fun (_sym, bTy) acc ->
                 register_sym _sym >>= fun sym ->
                 Eff.return ((sym, bTy) :: acc)
               ) [] _sym_bTys      >>= fun sym_bTys ->
               symbolify_pexpr _pe >>= fun pe       ->
-              close_scope >>
+              close_scope >>= fun _ ->
               Eff.return (Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc)
           | None ->
               assert false
         )
     | Proc_decl (_sym, attrs, (bTy, _sym_bTys, _e)) ->
         lookup_sym _sym >>= (function
-          | Some (decl_sym, _) ->
-              open_scope >>
+          | Some (decl_sym, decl_loc) ->
+              open_scope >>= fun () ->
               Eff.foldrM (fun (_sym, bTy) acc ->
                 register_sym _sym >>= fun sym ->
                 Eff.return ((sym, bTy) :: acc)
               ) [] _sym_bTys    >>= fun sym_bTys ->
               symbolify_expr _e >>= fun e        ->
-              close_scope >>
+              close_scope >>= fun _ ->
               begin match hasAilname attrs with
                 | Some str ->
                     register_ailname str decl_sym
                 | None ->
                     Eff.return ()
-              end >>
-              Eff.return (Pmap.add decl_sym (Proc (Location_ocaml.Loc_unknown, bTy, sym_bTys, e)) fun_map_acc)
+              end >>= fun _ ->
+              Eff.return (Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc)
           | None ->
               assert false
         )
@@ -858,7 +952,7 @@ let mk_file decls =
 %token CREATE CREATE_READONLY ALLOC STORE LOAD KILL RMW FENCE
 
 (* continuation operators *)
-(* %token SAVE RUN *) (* TODO *)
+%token SAVE RUN
 
 (* binder patterns *)
 %token UNDERSCORE
@@ -1319,15 +1413,16 @@ expr:
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , Ebound (Nat_big_num.to_int n, _e) ) }
-(*
-| SAVE _sym= SYM LPAREN RPAREN IN _e= expr
+| SAVE _sym= SYM COLON bTy= core_base_type
+       _xs= delimited(LPAREN,
+              separated_list(COMMA,
+                separated_pair(SYM, COLON, separated_pair(core_base_type, COLON_EQ, pexpr))),
+            RPAREN) IN _e= expr
     { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
-           , Esave2 () ) }
-
-
-  | Esave of ksym * list (Symbol.t * ctype) * generic_expr 'a 'ty 'sym
-  | Erun of 'a * ksym * list (Symbol.t * generic_pexpr 'ty 'sym)
-  *)
+           , Esave ((_sym, bTy), _xs, _e) ) }
+| RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
+    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+           , Erun ((), _sym, _pes) ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
     { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
            , End _es ) }
