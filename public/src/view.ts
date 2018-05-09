@@ -57,6 +57,7 @@ export default class View {
 
     this.on('step', this, this.step)
     this.on('resetInteractive', this, this.resetInteractive)
+    this.on('setMemory', this, this.setMemory)
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -314,8 +315,7 @@ export default class View {
   }
 
   /** Execute a step (it might call the server to update interactive state) */
-  step(active: Node | undefined) {
-    if (!active) return
+  step(active: Node) {
     if (this.state.graph.children(active.id).length == 0)
       UI.step(active)
     else {
@@ -355,6 +355,10 @@ export default class View {
     return this.getTab('Console')
   }
 
+  getMemory() {
+    return this.getTab('Memory')
+  }
+
   show() {
     this.dom.show()
   }
@@ -368,7 +372,8 @@ export default class View {
     this.layout.updateSize()
   }
 
-  updateMemory(mem: Graph) {
+  setMemory(mem: any) {
+    if (mem === undefined) mem = {allocations: {}}
     const nodes: Node[] = []
     const edges: Edge[] = []
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
@@ -422,7 +427,8 @@ export default class View {
       updateSymbolicMemory()
     // Save in case another memory tab is open
     this.state.mem = new Graph(nodes, edges)
-    // TODO: this.tabs.map((tab) => tab.updateMemory(this.state.mem))
+    this.getMemory().setActive()
+    this.emit('updateMemory')
   }
 
   isDirty(): Readonly<boolean> {
