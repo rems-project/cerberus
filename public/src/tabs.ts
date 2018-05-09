@@ -164,25 +164,9 @@ export class Interactive extends Tab {
     this.graph = new Graph()
     this.network = new vis.Network(container[0], this.graph, options)
     
-    this.stepBtn.on('click', () => {
-      this.step(this.getSelectedNode())
-    })
-
-    this.nextBtn.on('click', () => {
-      this.step(this.getSelectedNode())
-    })
-
-    restartBtn.on('click', () => {
-      this.graph.clear()
-      // TODO
-      //@ts-ignore
-      ui.request('Step', (data) => {
-      //@ts-ignore
-        ui.currentView.mergeState(data.state)
-      //@ts-ignore
-        ui.currentView.startInteractive(data.steps)
-      })
-    })
+    this.stepBtn.on('click', () => ee.emit('step', this.getSelectedNode()))
+    this.nextBtn.on('click', () => ee.emit('step', this.getSelectedNode()))
+    restartBtn.on('click', () => ee.emit('resetInteractive'))
 
     hideTauBtn.on('click', () => {
       this.hideTau = !this.hideTau
@@ -191,8 +175,7 @@ export class Interactive extends Tab {
       else
         hideTauBtn.text('Hide tau steps')
       this.graph.clear()
-      //@ts-ignore
-      this.updateGraph(ui.state.graph)
+      ee.once((s: Common.State) => this.updateGraph(s.graph))
     })
 
     this.network.on('click', (arg: any) => {
@@ -206,18 +189,18 @@ export class Interactive extends Tab {
           this.nextBtn.addClass('disable')
           if (active.group && active.group == 'leaf') {
             // do a step
-            this.step(active)
+            ee.emit('step', active)
           } else if (active.loc || active.mem) {
             // show mem and select locations
             if (active.loc) {
-      //@ts-ignore
-              ui.clear()
-      //@ts-ignore
-              ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
+              ee.emit('clear')
+              //TODO: ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
+              console.log('mark active node location')
             }
-            if (active.mem)
-      //@ts-ignore
-              ui.updateMemory(active.mem)
+            if (active.mem) {
+              //TODO ui.updateMemory(active.mem)
+              console.log('update active node memory')
+            }
           } else {
             // just clear and highlight everything
             ee.emit('clear')
@@ -227,23 +210,8 @@ export class Interactive extends Tab {
       }
     })
     ee.on('highlight', this, this.highlight)
-  }
-
-  step(active: Node | undefined) {
-    if (!active) return
-      //@ts-ignore
-    if (ui.state.graph.children(active.id).length == 0)
-      //@ts-ignore
-      ui.step(active)
-    else {
-      active.group = 'branch'
-      //@ts-ignore
-      ui.state.graph.nodes.update(active)
-      //@ts-ignore
-      ui.state.graph.setChildrenVisible(active.id)
-      //@ts-ignore
-      this.updateGraph(ui.state.graph)
-    }
+    ee.on('clearGraph', this, () => this.graph.clear())
+    ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s.graph))
   }
 
   updateGraph(graph: Graph) {
@@ -271,16 +239,6 @@ export class Interactive extends Tab {
       this.network.selectNodes([lastLeaf.id])
       this.network.redraw()
     }
-  }
-
-  fit() {
-    /*
-    this.graph.clear()
-    this.updateGraph(ui.state.graph)
-    this.selectLastLeaf()
-    */
-    this.network.redraw()
-    this.network.fit()
   }
 
   highlight() {

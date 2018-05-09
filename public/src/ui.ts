@@ -104,7 +104,7 @@ export class CerberusUI {
     // Run (Execute)
     $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
-    $('#interactive').on('click', () => this.interactive())
+    $('#interactive').on('click', () => this.startInteractive())
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
@@ -258,32 +258,12 @@ export class CerberusUI {
     })
   }
 
-  // start interactive mode
-  private interactive() {
-    this.request(Common.Step(), (data: any) => {
+  private startInteractive() {
+    this.request(Common.Step(), (data: Common.ResultStep) => {
       const view = this.getView()
       view.updateState(data.state)
       view.newInteractiveTab(data.steps)
     })
-  }
-
-  // step interactive mode
-  //@ts-ignore TODO
-  private step(active: any): void {
-    if (active) {
-      let view = this.getView()
-      this.request(Common.Step(), (data: any) => {
-        view.updateState(data.state)
-        view.updateInteractive(active.id, data.steps)
-      }, {
-        lastId: view.getState().lastNodeId,
-        state: active.state,
-        active: active.id,
-        tagDefs: view.getState().tagDefs
-      })
-    } else {
-      console.log('error: node '+active+' unknown')
-    }
   }
 
   private getView(): Readonly<View> {
@@ -311,6 +291,23 @@ export class CerberusUI {
   addView(title: string, source: string, config?: any) {
     this.add(new View(title, source, config))
     this.refresh()
+  }
+
+  public step(active: {id: Common.ID, state: Common.Bytes}): void {
+    if (active) {
+      let view = this.getView()
+      this.request(Common.Step(), (data: Common.ResultStep) => {
+        view.updateState(data.state)
+        view.updateInteractive(active.id, data.steps)
+      }, {
+        lastId: view.getState().lastNodeId,
+        state: active.state,
+        active: active.id,
+        tagDefs: view.getState().tagDefs
+      })
+    } else {
+      console.log('error: node '+active+' unknown')
+    }
   }
 
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
@@ -414,9 +411,7 @@ Util.get('defacto_tests.json', (data: any) => {
 })
 
 
-/*
- * UI start up
- */
+/** UI start up */
 
 type StartupMode =
   { kind: 'default', settings: Settings } |
