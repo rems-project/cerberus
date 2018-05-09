@@ -699,7 +699,7 @@ let pp_params params =
 
 let pp_fun_map funs =
   let pp_cond loc d =
-    if show_include || Location_ocaml.from_c_file loc then d else P.empty
+    if show_include || Location_ocaml.from_main_file loc then d else P.empty
   in
   Pmap.fold (fun sym decl acc ->
     acc ^^
