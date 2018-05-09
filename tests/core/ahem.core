@@ -1,0 +1,53 @@
+-- functional factorial
+fun pure_fact(n: integer) : integer :=
+  if n <= 1 then
+    1
+  else
+    n * pure_fact(n-1)
+
+-- imperative factorial
+proc imp_fact(n_ptr: pointer) : eff loaded integer :=
+  let strong Specified(_n: integer) = load(!(signed int), n_ptr) in
+  
+  let strong i_ptr : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  store(!(signed int), i_ptr, Specified(_n)) ;
+  
+  let strong acc_ptr : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  store(!(signed int), acc_ptr, Specified(1)) ;
+  
+  save loop: integer (i_ptr: pointer := i_ptr, acc_ptr: pointer := acc_ptr) in
+    let strong Specified (n: integer) = load(!(signed int), i_ptr) in
+    let strong Specified (acc: integer) = load(!(signed int), acc_ptr) in
+    if n > 1 then
+      store(!(signed int), acc_ptr, Specified(acc * n)) ;
+      store(!(signed int), i_ptr, Specified(n-1)) ;
+      run loop(i_ptr, acc_ptr)
+    else
+      skip ;
+  load(!(signed int), acc_ptr)
+
+-- initializing an array of char to zeros the efficient way (tm)
+proc init_to_zero(ptr: pointer, size: integer) : eff unit :=
+  if size <= 0 then
+    skip
+  else
+    -- calling imp_fact like an C function, so we need to call through temporary objects
+    let strong tmp_ptr: pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+    store(!(signed int), tmp_ptr, Specified(size)) ;
+    let strong Specified(z: integer) = ccall(Cfunction(imp_fact), tmp_ptr) in
+    store(!(char), array_shift(ptr, !(char), size - 1), Specified(z - pure_fact(size))) ;
+    pcall(init_to_zero, ptr, size-1)
+
+-- turning a C array of char into a Core array
+proc to_list(ptr: pointer, size: integer, acc: [integer]) : eff [integer] :=
+  if size = 0 then
+    pure(acc)
+  else
+    let strong Specified (c: integer) = load(!(char), array_shift(ptr, !(char), 0)) in
+    pcall(to_list, array_shift(ptr, !(char), 1), size - 1, c :: acc)
+
+--
+proc main (): eff [integer] :=
+  let strong arr_ptr: pointer = create(Ivalignof(!(char[8])), !(char[8])) in
+  pcall(init_to_zero, arr_ptr, 8) ;
+  pcall(to_list, arr_ptr, 8, [])
