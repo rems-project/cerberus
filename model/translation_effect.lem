@@ -11,6 +11,7 @@ include State
 
 type elab_state = <|
   symbol_supply:   UniqueId.supply Symbol.sym; (* counter for Core's symbolic names (all of them) *)
+  core_uid_supply: UniqueId.supply nat; (* UID supply for core expressions *)
   
   visible_objects_types: map Symbol.sym AilTypes.ctype;
   visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
@@ -25,6 +26,7 @@ type elabM 'a = stateM 'a elab_state
 val elab_init: UniqueId.supply Symbol.sym -> elab_state
 let elab_init suppl = <|
   symbol_supply=   suppl;
+  core_uid_supply= UniqueId.new_supply;
   visible_objects_types= Map.empty;
   visible_objects= [[]];
   string_literals= [];

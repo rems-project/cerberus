@@ -1952,8 +1952,6 @@ let isConstrainedValue cval =
   end
 *)
 
-
-
 val mk_pure_e: pexpr -> expr unit
 let mk_pure_e pe =
   Expr [] (Epure pe)
@@ -2016,4 +2014,20 @@ let rec get_loc annots =
         Just loc
     | (Astd _ :: annots') ->
         get_loc annots'
+    | (Auid _ :: annots') ->
+        get_loc annots'
   end
+
+val     get_uid: list annot -> maybe nat
+let rec get_uid annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc _ :: annots') ->
+        get_uid annots'
+    | (Astd _ :: annots') ->
+        get_uid annots'
+    | (Auid uid :: _) ->
+        Just uid
+  end
+
