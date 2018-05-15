@@ -141,7 +141,9 @@ namespace Common {
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
     off (self: any): void 
     once (f: ((s: Readonly<State>) => any)): any
-    emit (eventName: Event, ...args: any[]): void
+    emit (eventName: 'clear'): void
+    emit (eventName: 'mark'): void
+    emit (eventName: Event, ...args: any[]): void // TODO: take any any out!!
   }
 
   export interface Compiler {

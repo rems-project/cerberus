@@ -237,6 +237,11 @@ export class Interactive extends Tab {
       this.network.focus(lastLeaf.id)
       this.network.selectNodes([lastLeaf.id])
       this.network.redraw()
+      console.log(lastLeaf.loc)
+      if (lastLeaf.loc) {
+        this.ee.emit('clear')
+        this.ee.emit('mark', {c: lastLeaf.loc, core: {begin: {line: 0}, end: {line: 0}}, color: 1})
+      }
       this.ee.emit('setMemory', lastLeaf.mem)
     }
   }

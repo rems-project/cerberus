@@ -167,7 +167,11 @@ let decode s = Marshal.from_string s 0
 let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
-  let get_location _ = None in (* TODO *)
+  let get_location st =
+    match st.Driver.core_state.Core_run.thread_states with
+    | (_, (_, ts))::_ -> Some (ts.Core_run.current_loc, 0)
+    | _ -> None
+  in
   let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
     let nodeId  = new_id () in
     let mem     = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
