@@ -128,6 +128,7 @@ namespace Common {
     'resetInteractive' |  // Reset interactive mode
     'step' |              // Step interactive mode
     'mark' |              // Mark location
+    'markError' |         // Mark error location
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
     'dirty'               // Fired when file has changed
@@ -135,6 +136,7 @@ namespace Common {
   export interface EventEmitter {
     on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
+    on (eventName: 'markError', self: any, f: (line: number) => void): void
     on (eventName: 'dirty', self: any, f: () => void): void
     on (eventName: 'step', self: any, f: (active: Node) => void): void
     on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
