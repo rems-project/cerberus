@@ -577,7 +577,7 @@ class Console extends ReadOnly {
   }
 
   update(s:Common.State) {
-    this.setValue(s.console.replace(/[^:]*:/, s.title + ':'))
+    this.setValue(s.console.replace(/[^:]*:/, s.title() + ':'))
   }
 }
 
