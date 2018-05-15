@@ -32,9 +32,12 @@ type request =
   | `Execute of conf * filename * exec_mode
   | `Step of conf * filename * active_node ]
 
+type point = int * int
+type range = point * point
+
 type node =
-  | Branch of int * string * Json.json * Location_ocaml.t option
-      (* id * label * serialised memory * location *)
+  | Branch of int * string * Json.json * (Location_ocaml.t * int) option
+      (* id * label * serialised memory * (c location * core location) *)
   | Leaf of int * string * string (* id * label * marshalled state *)
 
 type edge =
@@ -50,9 +53,6 @@ type ast_result =
     ail:  string option;
     core: string option;
   }
-
-type point = int * int
-type range = point * point
 
 type elaboration_result =
   { pp: ast_result;

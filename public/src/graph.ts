@@ -3,12 +3,18 @@ import vis from 'vis'
 
 export type ID = string | number
 
+export interface Locations {
+  c: Range
+  core: Range
+  color: number
+}
+
 export interface Node extends vis.Node {
   id: ID
   state: string | undefined
   isVisible: boolean
   isTau: boolean
-  loc: any
+  loc: Locations
   mem: any
   label: string
 }

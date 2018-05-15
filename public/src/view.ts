@@ -37,10 +37,10 @@ export default class View {
     this.tabs = []
     this.events = {}
     this.ee = {
-      on: (e: any, l: any, f: Function) => this.on(e, l, f),
+      on: (e: Common.Event, l: any, f: Function) => this.on(e, l, f),
       off: (f) => this.off(f),
       once: (f => f(this.state)),
-      emit: (e, ...args) => this.emit (e, ...args)
+      emit: (e: Common.Event, ...args: any[]) => this.emit (e, ...args)
     }
     this.dirty = true
     this.on('dirty', this, () => this.dirty = true)

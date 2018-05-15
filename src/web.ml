@@ -113,7 +113,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", mem); (* TODO *)
-              ("loc", Json.of_option Json.of_location loc);
+              ("loc", Json.of_option (fun (l, _) -> Json.of_location l) loc);
               ("group", `String "branch")]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
