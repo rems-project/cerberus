@@ -582,7 +582,13 @@ class Console extends ReadOnly {
   }
 
   update(s:Common.State) {
-    this.setValue(s.console.replace(/[^:]*:/, s.title() + ':'))
+    const vs = s.console.split(':')
+    if (vs.length > 2) {
+      this.ee.emit('markError', parseInt(vs[1]))
+      this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
+    } else {
+      this.setValue(s.console)
+    }
   }
 }
 
@@ -590,6 +596,7 @@ class Console extends ReadOnly {
 export class Source extends Editor {
   constructor(title: string, source: string, ee: Common.EventEmitter) {
     super(title, source, ee)
+    this.editor.setOption('gutters', ['error'])
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (ed) => this.markSelection(ed.getDoc()))
 
@@ -599,6 +606,7 @@ export class Source extends Editor {
     })
     ee.on('highlight', this, this.highlight)
     ee.on('mark', this, (l: any) => this.mark(l))
+    ee.on('markError', this, (l: number) => this.markError(l))
     ee.on('clear', this, this.clear)
   }
 
@@ -624,6 +632,10 @@ export class Source extends Editor {
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
+  markError(l: number) {
+    this.editor.setGutterMarker(l-1, 'error', $('<div class="syntax-error">✖</div>')[0])
+  }
+
   highlight(s: Common.State) {
     for (let i = 0; i < s.locs.length; i++)
       this.mark(s.locs[i])
@@ -631,6 +643,7 @@ export class Source extends Editor {
 
   clear() {
     let marks = this.editor.getDoc().getAllMarks()
+    this.editor.clearGutter('error')
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
   }
