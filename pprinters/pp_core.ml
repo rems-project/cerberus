@@ -523,6 +523,9 @@ let rec pp_expr expr =
                   !^"{-#" ^^ !^ str ^^ !^"#-}" ^^ P.hardline ^^ acc
                 else
                   acc
+            | Auid uid ->
+              print_endline (string_of_int uid);
+                acc
         ) doc annot
     end
     begin
