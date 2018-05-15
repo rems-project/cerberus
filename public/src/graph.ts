@@ -33,12 +33,23 @@ export class Graph {
     return undefined
   }
 
+  isTau(nID: ID): boolean {
+    return this.nodes.get(nID).isTau
+  }
+
   children(nID: ID): ID [] {
-    return this.edges.get().filter(n => n.from == nID && !n.isTau).map(n => n.to)
+    return this.edges.get().filter(e => e.from == nID && !e.isTau).map(e => e.to)
   }
 
   tauChildren(nID: ID): ID [] {
-    return this.edges.get().filter(n => n.from == nID && n.isTau).map(n => n.to)
+    return this.edges.get().filter(e => e.from == nID && this.isTau(e.to)).map(e => e.to)
+  }
+
+  tauChildrenTransClosure(nID: ID): ID [] {
+    const immediateTauChildren = this.tauChildren(nID)
+    const transitiveTauChildren =
+      _.flatten(immediateTauChildren.map(nID => this.tauChildrenTransClosure(nID)))
+    return _.union(immediateTauChildren, transitiveTauChildren)
   }
 
   getChildByID(nID: ID): Node | undefined {
@@ -55,22 +66,17 @@ export class Graph {
 
   // Set visible all tau nodes descendent from active until first non-tau
   setChildrenVisible (nID: ID) {
-    const setTauChildrenVisible = (nID: ID) => {
-      const tauChildren = this.tauChildren(nID).map((nID: ID) => this.nodes.get(nID)).map(child => {
-        child.isVisible = true
-        setTauChildrenVisible(child.id)
-        return child
-      })
-      return tauChildren
-    }
-    const tauChildren = _.flatten(setTauChildrenVisible(nID))
+    const tauChildren = this.tauChildrenTransClosure(nID).map(nID => this.nodes.get(nID)).map(child => {
+      child.isVisible = true
+      return child
+    })
     const children = this.children(nID).map(nID => this.nodes.get(nID)).map(child => {
       child.isVisible = true
       if (this.children(child.id).length > 0)
         child.group = 'leaf'
       return child
     })
-    this.nodes.update(_.sortedUniqBy(children.concat(tauChildren), (e) => e.id))
+    this.nodes.update(_.sortedUniqBy(_.union(children, tauChildren), (e) => e.id))
   }
 
   update(newNodes: Node[], newEdges: Edge[]) {
