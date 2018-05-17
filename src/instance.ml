@@ -170,7 +170,7 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   let (>>=) = CS.bind in
   let get_location st =
     match st.Driver.core_state.Core_run.thread_states with
-    | (_, (_, ts))::_ -> Some (ts.Core_run.current_loc, 0)
+    | (_, (_, ts))::_ -> Some (ts.Core_run.current_loc, ts.Core_run.current_uid)
     | _ -> None
   in
   let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =

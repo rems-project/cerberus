@@ -36,8 +36,8 @@ type point = int * int
 type range = point * point
 
 type node =
-  | Branch of int * string * Json.json * (Location_ocaml.t * int) option
-      (* id * label * serialised memory * (c location * core location) *)
+  | Branch of int * string * Json.json * (Location_ocaml.t * string option) option
+      (* id * label * serialised memory * (c location * uid) *)
   | Leaf of int * string * string (* id * label * marshalled state *)
 
 type edge =

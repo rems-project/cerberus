@@ -131,6 +131,7 @@ namespace Common {
     'step' |              // Step interactive mode
     'mark' |              // Mark location
     'markError' |         // Mark error location
+    'markInteractive' |   // Mark when interactive mode
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
     'dirty'               // Fired when file has changed
@@ -142,6 +143,7 @@ namespace Common {
     on (eventName: 'dirty', self: any, f: () => void): void
     on (eventName: 'step', self: any, f: (active: Node) => void): void
     on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
+    on (eventName: 'markInteractive', self: any, f: ((l:any, s: Readonly<State>) => void)): void
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
     off (self: any): void 
     once (f: ((s: Readonly<State>) => any)): any
