@@ -102,6 +102,7 @@ namespace Common {
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
+    ranges?: any
     dirty: boolean
   }
 
@@ -113,7 +114,8 @@ namespace Common {
   export type ResultRequest =
     { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
     { status: 'execution', console: string, result: string} |
-    { status: 'stepping', result: string, tagDefs?: Bytes} |
+    { status: 'interactive', tagDefs: Bytes, ranges: any} |
+    { status: 'stepping', result: string} |
     { status: 'failure', console: string, result: string }
 
   export type ResultStep = { state: ResultRequest, steps: ResultTree }

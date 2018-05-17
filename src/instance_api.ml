@@ -64,7 +64,7 @@ type elaboration_result =
 (* output: result *)
 type result =
   | Elaboration of elaboration_result
-  | Execution of string                      (* cerberus result *)
-  | Interaction of string option * string option * exec_tree
-      (* maybe result * tagDefs * execution tree *)
+  | Execution of string               (* cerberus result *)
+  | Interactive of string * (string * PPrint.range) list * exec_tree (* tagDefs * range list * execution tree *)
+  | Step of string option * exec_tree (* maybe result * execution tree *)
   | Failure of string

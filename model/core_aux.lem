@@ -2098,10 +2098,22 @@ let rec set_uid_e uid n (Expr annots e_) =
   | Ewait thid -> Ewait thid
   end
 
-let set_uid uid fun_decl =
-  match fun_decl with
+val string_of_symbol: Symbol.sym -> string
+declare ocaml target_rep function string_of_symbol = `Pp_symbol.to_string_pretty`
+
+let set_uid_fun fname cfun =
+  match cfun with
   | Fun bty args pe -> Fun bty args pe
   | ProcDecl loc ret_bty args_bty -> ProcDecl loc ret_bty args_bty
-  | Proc loc bty args e -> Proc loc bty args (set_uid_e "_" 1 e) (* TODO: add the proc name *)
+  | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
   end
 
+let set_uid file =
+ <|
+  main=    file.main;
+  tagDefs= file.tagDefs;
+  stdlib=  file.stdlib;
+  impl=    file.impl;
+  globs=   file.globs; (* TODO *)
+  funs=    Map.mapi set_uid_fun file.funs;
+ |>
