@@ -524,7 +524,7 @@ let rec pp_expr expr =
                 else
                   acc
             | Auid uid ->
-              print_endline (string_of_int uid);
+                print_endline uid;
                 acc
         ) doc annot
     end

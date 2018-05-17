@@ -1,7 +1,7 @@
 (* TODO: for now everything is mapped to nonatomics. The translation to atomics
          still needs to be defined *)
 
-open import Pervasives Utils Loc String_extra
+open import Pervasives Utils Loc String_extra Num
 
 import State Translation_effect Loc
 open import Translation_aux
@@ -3472,7 +3472,6 @@ in
   E.return (cglobs, cfuns)
 *)
 
-
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
@@ -3494,5 +3493,5 @@ let translate (ailnames, stdlib_fun_map) impl (symbol_counter, prog) =
     C.stdlib= stdlib_fun_map;
     C.impl= impl;
     C.globs= cglobs;
-    C.funs= cfuns
+    C.funs= Map.mapi Caux.set_uid cfuns
   |>)
