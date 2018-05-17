@@ -76,9 +76,10 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
     | PEcase (pe, caselist) ->
         PEcase(inline_pexpr st pe, 
                List.map (fun (pat, pe) -> (pat, inline_pexpr st pe)) caselist)
-    | PEarray_shift _
-    | PEmember_shift _ ->
-        assert false
+    | PEarray_shift (pe1, ty, pe2) ->
+        PEarray_shift(inline_pexpr st pe1, ty, inline_pexpr st pe2)
+    | PEmember_shift (pe, sym, id) ->
+        PEmember_shift(inline_pexpr st pe, sym, id)
     | PEnot pe ->
         PEnot(inline_pexpr st pe)
     | PEop (binop, pe1, pe2) ->
@@ -323,15 +324,23 @@ let core_ivminmax (v : pexpr) =
   let pe_max_unsigned_int = pe_of_sz (max_unsigned_int) in 
   let pe_min_unsigned_int = pe_of_sz (min_unsigned_int) in 
 
+  let pe_ty_char = pe_of_ity (Char) in
+  let (min_char, max_char) = integer_range impl (Char) in
+  let pe_max_char = pe_of_sz (max_char) in
+  let pe_min_char = pe_of_sz (min_char) in
+
   let cond_signed_int = Pexpr([],(), PEop(OpEq, v, pe_ty_signed_int)) in
   let cond_unsigned_int = Pexpr([],(), PEop(OpEq, v, pe_ty_unsigned_int)) in
+  let cond_char = Pexpr([],(), PEop(OpEq, v, pe_ty_char)) in
   let pe_error = Pexpr([],(), PEerror("TODO: IVmax/min cases", v))
   in
 
   PEif(cond_signed_int, pe_min_signed_int, 
-       Pexpr([],(), PEif(cond_unsigned_int, pe_min_unsigned_int, pe_error))),
+       Pexpr([],(), PEif(cond_unsigned_int, pe_min_unsigned_int, 
+       Pexpr([], (), PEif(cond_char, pe_min_char, pe_error))))),
   PEif(cond_signed_int, pe_max_signed_int, 
-       Pexpr([],(), PEif(cond_unsigned_int, pe_max_unsigned_int, pe_error)))
+       Pexpr([],(), PEif(cond_unsigned_int, pe_max_unsigned_int, 
+       Pexpr([], (), PEif(cond_char, pe_max_char, pe_error)))))
 
 (* TODO: can't pattern match b/c signed is not a constructor in core ?*)
 (* TODO: IntN_t, Int_leastN_t, Int_fastN_t not included *)
@@ -378,9 +387,10 @@ let rec rewrite_pexpr (st: 'a bmc_inline_state)
     | PEcase (pe, caselist) ->
         PEcase(rewrite_pexpr st pe, 
                List.map (fun (pat, pe) -> (pat, rewrite_pexpr st pe)) caselist)
-    | PEarray_shift _
-    | PEmember_shift _ ->
-        assert false
+    | PEarray_shift (pe1, ty, pe2) ->
+        PEarray_shift(rewrite_pexpr st pe1, ty, rewrite_pexpr st pe2)
+    | PEmember_shift (pe, sym, id) ->
+        PEmember_shift(rewrite_pexpr st pe, sym, id)
     | PEnot pe ->
         PEnot(rewrite_pexpr st pe)
     | PEop (binop, pe1, pe2) ->

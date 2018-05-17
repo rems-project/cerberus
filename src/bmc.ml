@@ -3,6 +3,7 @@ open Core_ctype
 open Core_aux
 open Cthread
 open Global_ocaml
+open Defacto_memory_types
 open Lem_pervasives
 open Mem
 open Ocaml_implementation
@@ -12,7 +13,6 @@ open Z3
 open Z3.Arithmetic
 open Z3.Boolean
 
-(* TODO: Clean up modules *)
 open Bmc_analysis
 open Bmc_conc_types
 open Bmc_events
@@ -29,7 +29,7 @@ open Bmc_utils
 
 type ksym_table = (ksym, Expr.expr) Pmap.map
 
-(* NB: all heap stuff is deprecated and replaced w/ memory model graph 
+(* NB: heap stuff for sequential only; else memory model graph 
  *
  * Pointer state: 
  * For every variable of Core type pointer, 
@@ -242,6 +242,7 @@ let extract_executions (model: Model.model)
       Expr.to_string value 
   in 
 
+
   (* Get actions *)
   let all_actions = 
     List.map getOptVal
@@ -274,6 +275,8 @@ let extract_executions (model: Model.model)
       ) events)) in
 
   let quadratic_actions = cartesian all_actions all_actions in
+
+  print_endline "LOL";
 
   let action_map : (action_id, action) Pmap.map = 
     List.fold_left (fun map action ->
@@ -736,7 +739,15 @@ let integer_value_to_z3 (ctx: context) ival =
 
 let object_value_to_z3 (ctx: context) = function
   | OVinteger ival -> integer_value_to_z3 ctx ival
-  | OVfloating _
+  | OVfloating _ ->
+      assert false
+  | OVpointer x ->
+      if (Ocaml_mem.validForDeref_ptrval x) then
+        assert false
+      else
+        assert false
+ (*      pp_to_stdout (Ocaml_mem.pp_pointer_value x); *)
+
   | OVpointer _ ->
       assert false
   | OVcfunction (Sym sym)->
@@ -757,13 +768,13 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
         let _ = 
         begin
         match i with
-        | Char -> assert false
+        | Char -> () 
         | Bool -> ()
         | Unsigned ibty (* Fall through *)
         | Signed ibty -> 
           begin
           match ibty with
-          | Ichar | Short | Int_ | Long | LongLong | Intmax_t | Intptr_t -> ()
+          | Ichar | Int_ | Short |  Long | LongLong | Intmax_t | Intptr_t -> () 
           | _ -> assert false
           end
         | _ -> assert false
@@ -771,6 +782,9 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
         ctype
     | Atomic0 ty -> 
         ty
+    | Pointer0 _ ->
+        print_endline "TODO: handle pointer ctypes properly";
+        ctype
     | _ -> assert false
   in
   ctype_to_expr ty ctx
@@ -1238,7 +1252,7 @@ let rec mk_loaded_assertions ctx ty expr =
 
 (* TODO: currently ignores unspecified type *)
 let get_assert_unspecified (sort: Sort.sort) ty ctx expr =
-  let typ = ctype_to_z3 ctx ty in
+  let typ = ctype_to_expr ty ctx in
   if (Sort.equal (LoadedInteger.mk_sort ctx) sort) then
     mk_eq ctx expr (LoadedInteger.mk_unspec ctx typ)
   else if (Sort.equal (LoadedPointer.mk_sort ctx) sort) then
@@ -1977,9 +1991,6 @@ let rec bmc_expr (state: 'a bmc_state)
             Pmap.add sym sym table) subMap state.file.globs in 
           *)
 
-          print_endline "CHECK HERE";
-          pp_to_stdout (Pp_core.Basic.pp_expr to_run);
-          print_endline "END CHECK HERE";
           let res_run = bmc_expr {state with depth = state.depth + 1} to_run in
           print_endline (Expr.to_string res_run.expr);
           let eq_expr = mk_implies state.ctx
@@ -1993,6 +2004,7 @@ let rec bmc_expr (state: 'a bmc_state)
           ; returned = mk_true state.ctx
           ; state = res_run.state
           }
+      end
           (*
         List.iter (fun sym -> 
           print_endline ("X " ^ (symbol_to_string sym))) sym_list;
@@ -2001,7 +2013,6 @@ let rec bmc_expr (state: 'a bmc_state)
         print_endline "";
         *)
 
-      end
 
       (*
       print_endline "TODO: Erun, special casing ret";
@@ -2261,7 +2272,6 @@ let rec bmc_expr (state: 'a bmc_state)
       ) in
       if is_ret then
         begin
-        print_endline ("TMP2" ^ (Expr.to_string bmc_run.expr));
         let eq_expr = mk_implies state.ctx
           (mk_not state.ctx bmc_run.returned)
           (mk_eq state.ctx bmc_run.state.z3_ret bmc_run.expr) in
@@ -2276,7 +2286,6 @@ let rec bmc_expr (state: 'a bmc_state)
         end
       else
         begin
-        print_endline ("TMP" ^ (Expr.to_string bmc_run.expr));
         { expr = bmc_run.expr
         ; allocs = bmc_run.allocs
         ; vcs = bmc_run.vcs
@@ -3370,6 +3379,8 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         (print_endline "-----WITH EVENTS";
          Solver.add state1.solver z3_preexec);
 
+      print_endline ("RESULT EXPR: " ^ (Expr.to_string result.expr));
+
       if (check_solver_fun state1.solver (Some result.expr)
             = SATISFIABLE) then
         begin
@@ -3406,11 +3417,12 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
               (Expr.mk_fresh_const state1.ctx "not_vcs" 
                                    (Boolean.mk_sort state1.ctx));
               
-            Solver.add state1.solver [ mk_or state1.ctx not_vcs ] ;
+            (*Solver.add state1.solver 
+              [ Expr.simplify (mk_or state1.ctx not_vcs) None ] ; *)
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
 
-            (* print_endline (Solver.to_string state1.solver);  *)
+            print_endline (Solver.to_string state1.solver);  
             print_endline "Checking sat";
 
             let _ = check_solver (state1.solver) in

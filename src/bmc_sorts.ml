@@ -64,7 +64,10 @@ let ctypeSort ctx =
         [Symbol.mk_string ctx "elem_Array_ty"; Symbol.mk_string ctx "size_Array_ty"]
         [None; Some (Arithmetic.Integer.mk_sort ctx)]
         [0; 0(*TODO: no idea with I'm doing*)]
+    *)
     ; Datatype.mk_constructor_s ctx "Pointer_ty" (Symbol.mk_string ctx "is_Pointer_ty")
+        [] [] []
+        (*
         [Symbol.mk_string ctx "_Pointer_ty"] [None]
         [0(*TODO: no idea with I'm doing*)] 
     *)
@@ -145,11 +148,9 @@ let rec ctype_to_expr ty ctx =
             [ctype_to_expr elem_ty ctx; Arithmetic.Integer.mk_numeral_i ctx (Nat_big_num.to_int n)]
 *)
       | Pointer0 (_, ref_ty) ->
-          assert false
-          (*
-        Expr.mk_app ctx (List.nth fdecls 3)
-            [ctype_to_expr ref_ty ctx]
-          *)
+        Expr.mk_app ctx (List.nth fdecls 2) []
+            (*[ctype_to_expr ref_ty ctx] *)
+
       | Function0 _ ->
           assert false
       | Atomic0 _ ->
@@ -177,7 +178,36 @@ module type AddressType =
     val to_string: addr -> string
     val mk_expr: context -> addr -> Expr.expr
     val is_atomic : context -> Expr.expr -> Expr.expr
-  end 
+  end
+
+module PairAddress : AddressType = 
+  struct
+    type addr = int * int (* alloc_id, index *)
+    let is_eq = (==)
+
+    let mk_fresh st = 
+      let (alloc, _) = !st in
+      st := (succ alloc, 0);
+      (succ alloc, 0)
+
+    let mk_initial = (0,0)
+    let to_string (l1,l2) = Printf.sprintf "(%d,%d)" l1 l2
+
+    let mk_sort (ctx: context) =
+      Tuple.mk_sort ctx (mk_sym ctx "pair_addr")
+      [ mk_sym ctx "alloc"; mk_sym ctx "index"]
+      [ Integer.mk_sort ctx; Integer.mk_sort ctx ]
+
+    let mk_expr ctx (alloc,index) =
+      let mk_decl = Tuple.get_mk_decl (mk_sort ctx) in
+      FuncDecl.apply mk_decl 
+        [Integer.mk_numeral_i ctx alloc; Integer.mk_numeral_i ctx index]
+
+    let fn_isAtomic ctx = FuncDecl.mk_func_decl_s ctx
+                        "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
+
+    let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
+  end
 
 module IntAddress : AddressType = 
   struct
@@ -195,7 +225,8 @@ module IntAddress : AddressType =
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
   end
 
-module Address = (IntAddress : AddressType)
+module Address = (IntAddress : AddressType) 
+(* module Address = (PairAddress : AddressType) *)
 
 module PointerSort =
   struct

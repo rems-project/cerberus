@@ -43,7 +43,7 @@ let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
   print_string "INLINING FUNCTION CALLS\n";
   let (inlined_file, inlined_supply) = inline_file f sym_supply in
 
-  (* pp_file inlined_file; *)
+  pp_file inlined_file; 
   print_string "\n";
 
   print_string "Rewriting Ivmin/Ivmax/issigned/etc \n";
