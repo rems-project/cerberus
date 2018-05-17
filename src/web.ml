@@ -110,10 +110,14 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let get_location _ = `Null in
   let json_of_node = function
     | Branch (id, lab, mem, loc) ->
+      let json_of_loc (loc, uid) =
+        `Assoc [("c", Json.of_location loc);
+                ("core", Json.of_opt_string uid)]
+      in
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", mem); (* TODO *)
-              ("loc", Json.of_option (fun (l, _) -> Json.of_location l) loc);
+              ("loc", Json.of_option json_of_loc loc);
               ("group", `String "branch")]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);

@@ -240,7 +240,7 @@ export class Interactive extends Tab {
       console.log(lastLeaf.loc)
       if (lastLeaf.loc) {
         this.ee.emit('clear')
-        this.ee.emit('mark', {c: lastLeaf.loc, core: {begin: {line: 0}, end: {line: 0}}, color: 1})
+        this.ee.emit('markInteractive', lastLeaf.loc)
       }
       this.ee.emit('setMemory', lastLeaf.mem)
     }
@@ -605,8 +605,9 @@ export class Source extends Editor {
       ee.emit('clear')
     })
     ee.on('highlight', this, this.highlight)
-    ee.on('mark', this, (l: any) => this.mark(l))
-    ee.on('markError', this, (l: number) => this.markError(l))
+    ee.on('mark', this, this.mark)
+    ee.on('markError', this, this.markError)
+    ee.on('markInteractive', this, this.markInteractive)
     ee.on('clear', this, this.clear)
   }
 
@@ -632,6 +633,11 @@ export class Source extends Editor {
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
+  markInteractive(loc: any) {
+    if (loc.c)
+      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: 'color1' })
+  }
+
   markError(l: number) {
     this.editor.setGutterMarker(l-1, 'error', $('<div class="syntax-error">✖</div>')[0])
   }
@@ -642,8 +648,8 @@ export class Source extends Editor {
   }
 
   clear() {
-    let marks = this.editor.getDoc().getAllMarks()
     this.editor.clearGutter('error')
+    let marks = this.editor.getDoc().getAllMarks()
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
   }
@@ -777,6 +783,7 @@ export class Core extends ReadOnly {
     ee.on('update', this, this.update)
     ee.on('highlight', this, this.highlight)
     ee.on('mark', this, this.mark)
+    ee.on('markInteractive', this, this.markInteractive)
   }
 
   update(s: Common.State) {
@@ -799,9 +806,26 @@ export class Core extends ReadOnly {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
+  markInteractive(loc: any, state: Readonly<Common.State>) {
+    if (loc.core && state.ranges) {
+      const range = state.ranges[loc.core]
+      if (range)
+        this.editor.getDoc().markText(range.begin, range.end, { className: 'color1' })
+    }
+  }
+
   highlight(s: Common.State) {
     for (let i = s.locs.length - 1; i >= 0; i--)
       this.mark(s.locs[i])
+  }
+
+  clear() {
+    this.editor.getDoc().eachLine((line: CodeMirror.LineHandle) => {
+      this.editor.removeLineClass(line, 'background')
+    })
+    let marks = this.editor.getDoc().getAllMarks()
+    for (let i = 0; i < marks.length; i++)
+      marks[i].clear()
   }
 }
 
