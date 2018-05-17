@@ -173,13 +173,26 @@ module type AddressType =
 
     (* Given previous addr, make a new one *)
     val mk_fresh: addr ref -> addr
+    val mk_n : addr ref -> int -> addr list
+
     val mk_sort: context -> Sort.sort
     val mk_initial: addr
     val to_string: addr -> string
     val mk_expr: context -> addr -> Expr.expr
     val is_atomic : context -> Expr.expr -> Expr.expr
 
+    val get_alloc_id : addr -> int
+
     val to_addr : Expr.expr -> addr
+
+    val apply_getAllocSize : context -> Expr.expr -> Expr.expr
+
+    val get_alloc : context -> Expr.expr -> Expr.expr
+    val get_index : context -> Expr.expr -> Expr.expr
+
+    val shift_n : context -> Expr.expr -> Expr.expr -> Expr.expr
+
+
   end
 
 module PairAddress : AddressType = 
@@ -191,6 +204,16 @@ module PairAddress : AddressType =
       let (alloc, _) = !st in
       st := (succ alloc, 0);
       (succ alloc, 0)
+
+    let mk_n st n =
+      let (alloc_id, _)= mk_fresh st in 
+      let rec aux m =
+        match m with
+        | 0 -> []
+        | k -> (alloc_id, n-k) :: (aux (k-1)) in
+      aux n
+
+    let get_alloc_id (aid, _) = aid
 
     let mk_initial = (0,0)
     let to_string (l1,l2) = Printf.sprintf "(%d,%d)" l1 l2
@@ -215,6 +238,26 @@ module PairAddress : AddressType =
       | [l1; l2] ->
         (Integer.get_int l1, Integer.get_int l2)
       | _ -> assert false
+
+    let apply_getAllocSize ctx (alloc : Expr.expr) = 
+      let fn = FuncDecl.mk_func_decl_s ctx
+                  "!_allocSize" [Integer.mk_sort ctx] (Integer.mk_sort ctx) in
+      FuncDecl.apply fn [ alloc ]
+
+    let get_alloc ctx expr =
+      let fields = Tuple.get_field_decls (mk_sort ctx) in
+      FuncDecl.apply (List.hd fields) [expr]
+   
+    let get_index ctx expr =  
+      let fields = Tuple.get_field_decls (mk_sort ctx) in
+      FuncDecl.apply (List.nth fields 1) [expr]
+
+    let shift_n ctx addr n =
+      let mk_decl = Tuple.get_mk_decl (mk_sort ctx) in
+      let alloc = get_alloc ctx addr in
+      let index = get_index ctx addr in
+      FuncDecl.apply mk_decl
+        [alloc; Arithmetic.mk_add ctx [index; n]]
   end
 
 module IntAddress : AddressType = 
@@ -224,6 +267,18 @@ module IntAddress : AddressType =
     let mk_fresh st = (let ret = succ !st in (st := ret; ret))
     let mk_sort = Integer.mk_sort
     let mk_initial = 0
+
+    (* what even is tail recursion... *)
+    let mk_n st n =
+      let rec aux m =
+        match n with
+        | 0 -> []
+        | k -> (mk_fresh st) :: (aux (k-1))
+      in
+        List.rev (aux n)
+
+    let get_alloc_id addr = addr
+
     let to_string = string_of_int
     let mk_expr ctx ad = Integer.mk_numeral_i ctx ad
 
@@ -232,6 +287,16 @@ module IntAddress : AddressType =
 
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
     let to_addr expr = Integer.get_int expr
+    let apply_getAllocSize ctx (alloc : Expr.expr) = 
+      let fn = FuncDecl.mk_func_decl_s ctx
+                  "!_getAllocSize" [Integer.mk_sort ctx] (Integer.mk_sort ctx) in
+      FuncDecl.apply fn [ alloc ]
+
+    let get_alloc _ expr = expr
+
+    let shift_n _ _ _ = assert false
+    let get_index _ _ = assert false
+
   end
 
 (* module Address = (IntAddress : AddressType)  *)

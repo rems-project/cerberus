@@ -105,8 +105,11 @@ let rec alias_pattern (state: kanalysis_state)
   | CaseCtor(ctor, patList) ->
       List.iter (fun p -> alias_pattern state p set) patList
 
-let mk_new_addr (state: kanalysis_state) = 
+let mk_new_addr (state: kanalysis_state) =
   Address.mk_fresh state.addr_gen
+
+let mk_new_addr_n (state: kanalysis_state) n = 
+  Address.mk_n state.addr_gen n
   (*
   state.addr_gen := succ (!(state.addr_gen));
   !(state.addr_gen)

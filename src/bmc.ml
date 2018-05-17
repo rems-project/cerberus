@@ -1163,7 +1163,34 @@ let rec bmc_pexpr (state: 'a bmc_state)
             ; state = bmc_pe.state 
             }
         end
-    | PEarray_shift _ -> assert false
+    | PEarray_shift (pe_ptr, ty, pe_index) ->
+        let res1 = bmc_pexpr state pe_ptr in
+        let res2 = bmc_pexpr res1.state pe_index in
+        print_endline (Expr.to_string res1.expr);
+        print_endline (Expr.to_string res2.expr);
+        let addr = PointerSort.get_addr state.ctx res1.expr in
+        let alloc = Address.get_alloc state.ctx 
+          (PointerSort.get_addr state.ctx res1.expr) in
+        print_endline (Expr.to_string alloc);
+        let new_address = Address.shift_n state.ctx addr res2.expr in
+        let index = Address.get_index state.ctx new_address in
+        (* print_endline (string_of_int (AddressSet.cardinal res1.allocs)); *)
+
+        print_endline (Expr.to_string new_address);
+        print_endline (Expr.to_string index);
+
+        let new_vc = 
+          mk_lt state.ctx index (Address.apply_getAllocSize state.ctx alloc) in
+        print_endline (Expr.to_string new_vc);
+
+        { expr = PointerSort.mk_ptr state.ctx new_address
+        ; allocs = res1.allocs
+        ; vcs = new_vc :: (res1.vcs @ res2.vcs)
+        ; preexec = initial_preexec ()
+        ; ret_asserts = []
+        ; returned = mk_false state.ctx
+        ; state = res2.state
+        }
     | PEmember_shift _ -> assert false
     | PEnot pe1 -> 
         let res = bmc_pexpr state pe1 in  
@@ -1260,7 +1287,23 @@ let get_assert_unspecified (sort: Sort.sort) ty ctx expr =
   else 
     assert false
 
-let rec ctype_to_sort (state: 'a bmc_state) ty =
+let rec make_n_list n elem =
+  if n <= 0 then []
+  else elem :: (make_n_list (n-1) elem)
+
+let rec get_typ_list ty = 
+  match ty with
+  | Void0 
+  | Basic0 _ 
+  | Pointer0 _ ->
+      [ ty ] 
+  | Atomic0 ty ->
+      get_typ_list ty
+  | Array0 (Basic0 ty, Some n) ->
+      make_n_list (Nat_big_num.to_int n) (Basic0 ty)
+  | _ -> assert false
+
+let rec ctype_to_sort_list (state: 'a bmc_state) ty =
   match ty with
   | Void0 -> assert false
   | Basic0 ty -> 
@@ -1271,17 +1314,24 @@ let rec ctype_to_sort (state: 'a bmc_state) ty =
      *)
     | Integer (Signed Int_)
     | Integer (Unsigned Int_) ->
-        LoadedInteger.mk_sort state.ctx
+        [ LoadedInteger.mk_sort state.ctx ]
     | Integer _ -> assert false
     | Floating _ -> assert false
     end
-  | Array0 _ -> assert false
+  | Array0 (Basic0 ty, Some n) -> 
+        (* TODO: proof of concept for now *)
+        let typ = ctype_to_sort_list state (Basic0 ty) in
+        assert (List.length typ = 1);
+        make_n_list (Nat_big_num.to_int n) (List.hd typ)
+
+  | Array0 _ -> 
+      assert false
   | Function0 _ -> assert false
   | Pointer0 _ -> 
-      LoadedPointer.mk_sort state.ctx 
+      [ LoadedPointer.mk_sort state.ctx ]
   | Atomic0 ctype -> 
       (* TODO: Not really correct. Ignoring Atomic part of type *)
-      ctype_to_sort state ctype
+      ctype_to_sort_list state ctype
   | Struct0 _ 
   | Union0 _
   | Builtin0 _ -> assert false
@@ -1291,59 +1341,110 @@ let ctype_is_atomic ty =
   | Atomic0 _ -> true
   | _ -> false
 
+
 let bmc_paction (state: 'a bmc_state)
                 (Paction(pol, action) : 'a typed_paction) 
                 : 'a bmc_ret =
   let Action(_, _, action_) = action in
   match action_ with
   | Create (pe1, Pexpr(_,BTy_ctype, PEval (Vctype ty)), _) ->
-      let sort = ctype_to_sort state ty in
+      let sort_list = ctype_to_sort_list state ty in
+      let typ_list = get_typ_list ty in
+      let zipped_sort_typ = List.combine sort_list typ_list in
+
+      let allocation_size = List.length sort_list in
+      assert (allocation_size > 0);
 
       (* Make a new memory allocation for alias analysis *)
-      let new_addr = mk_new_addr state.alias_state in
-      let typ = Pexpr([],BTy_ctype, PEval (Vctype ty)) in 
+      let new_addrs = mk_new_addr_n state.alias_state allocation_size in
+      List.iter (fun x -> print_endline (Address.to_string x)) new_addrs;
 
-      alias_add_addr state.alias_state new_addr typ;
-      let addr_ret = AddressSet.singleton new_addr in
-      
+      let alloc_id = Address.get_alloc_id (List.hd new_addrs) in 
+      Printf.printf "(alloc_id, size): (%d, %d)\n" 
+                    alloc_id allocation_size;
+      let alloc_size_assert = 
+        Address.apply_getAllocSize state.ctx (Integer.mk_numeral_i state.ctx alloc_id) in
+      print_endline (Expr.to_string alloc_size_assert);
+
+      Solver.add state.solver [ mk_eq state.ctx 
+                                      alloc_size_assert
+                                      (Integer.mk_numeral_i state.ctx allocation_size)
+                              ];
+
+      let pexpr_typ_list = List.map (fun ty -> 
+        Pexpr([], BTy_ctype, PEval(Vctype ty))) typ_list in
+
+      (* let typ = Pexpr([],BTy_ctype, PEval (Vctype ty)) in 
+      alias_add_addr state.alias_state new_addr typ; *)
+      List.iter2 (fun addr typ -> alias_add_addr state.alias_state addr typ) 
+                new_addrs pexpr_typ_list;
+
+      let addr_ret = 
+        List.fold_left (fun ret addr -> AddressSet.add addr ret)
+                        AddressSet.empty new_addrs in
+        (* AddressSet.singleton new_addr in *)
+     
+      let addr_is_atomic = Boolean.mk_val state.ctx (ctype_is_atomic ty) in
+
+      let (new_heap, new_preexec) = List.fold_left2 (fun (heap, preexec) addr (sort,typ) ->
+        let bmc_addr : kbmc_address = mk_bmc_address addr sort in
+        state.addr_map := Pmap.add addr bmc_addr !(state.addr_map);
+        state.alias_state.addr_set := 
+          AddressSet.add  addr !(state.alias_state.addr_set);
+
+        let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
+        let initial_value = Expr.mk_const state.ctx new_sym sort in
+        let new_heap = Pmap.add addr initial_value heap in
+        let unspec_assert = get_assert_unspecified sort typ state.ctx
+                              initial_value in
+        Solver.add state.solver [unspec_assert];
+
+        let addr_expr = Address.mk_expr state.ctx addr in
+        let new_ptr = PointerSort.mk_ptr state.ctx addr_expr in
+
+      (* Switching to concurrency model: create an initial write action *)
+        let to_store = Expr.mk_fresh_const state.ctx 
+                        ("initial_" ^ (Address.to_string addr)) sort in
+        let action = Write(mk_next_aid state, g_initial_tid, NA, new_ptr, to_store) in
+        let paction = BmcAction(Pos, mk_true state.ctx, action) in
+        state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
+        let unspec_assert_2 = get_assert_unspecified sort typ state.ctx to_store in
+        Solver.add state.solver [unspec_assert_2];
+
+        Solver.add state.solver 
+            [mk_eq state.ctx addr_is_atomic
+                             (Address.is_atomic state.ctx addr_expr)];
+        (new_heap, add_initial_action (get_aid action) paction preexec)
+      ) (state.heap, initial_preexec ()) new_addrs zipped_sort_typ in
+     
+      (* 
       (* Create a new bmc address and add it to the addr_map *)
       let bmc_addr : kbmc_address = mk_bmc_address new_addr sort in
       state.addr_map :=  Pmap.add new_addr bmc_addr !(state.addr_map);
       state.alias_state.addr_set := AddressSet.add new_addr
                                    !(state.alias_state.addr_set);
+      *)
 
       (* Set it to an initial unspecified value @a_1 *)
+      (*
       let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_addr in
       let initial_value = Expr.mk_const state.ctx new_sym sort in
       let new_heap = Pmap.add new_addr initial_value state.heap in
       let unspec_assert = get_assert_unspecified sort ty state.ctx initial_value in
       Solver.add state.solver [unspec_assert];
+      *)
 
       (* Try: create a new pointer and return it instead *)
-      let addr_expr = Address.mk_expr state.ctx new_addr in
-      let new_ptr = PointerSort.mk_ptr state.ctx  addr_expr in
+      let represent_addr = List.hd new_addrs in
+      print_endline ("HEAD" ^ (Address.to_string represent_addr));
 
-      let addr_is_atomic = Boolean.mk_val state.ctx (ctype_is_atomic ty) in
-
-      Solver.add state.solver 
-          [mk_eq state.ctx addr_is_atomic
-                           (Address.is_atomic state.ctx addr_expr)];
-
-      (* Switching to concurrency model: create an initial write action *)
-      let to_store = Expr.mk_fresh_const state.ctx 
-                      ("initial_" ^ (Address.to_string new_addr)) sort in
-      let action = Write(mk_next_aid state, g_initial_tid, NA, new_ptr, to_store) in
-      let paction = BmcAction(Pos, mk_true state.ctx, action) in
-      state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
-      let unspec_assert_2 = get_assert_unspecified sort ty state.ctx to_store in
-      Solver.add state.solver [unspec_assert_2];
-
-
+      let addr_expr = Address.mk_expr state.ctx represent_addr in
+      let new_ptr = PointerSort.mk_ptr state.ctx addr_expr in
 
       { expr = new_ptr
       ; allocs = addr_ret
       ; vcs = []
-      ; preexec = add_initial_action (get_aid action) paction (initial_preexec ())
+      ; preexec = new_preexec
       ; ret_asserts = []
       ; returned = mk_false state.ctx
       ; state = state_with_heap state new_heap
@@ -1355,7 +1456,8 @@ let bmc_paction (state: 'a bmc_state)
   | Kill pexpr ->
       let res = bmc_pexpr state pexpr in
       (* TODO: for now, assume alias analysis is exact. *)
-      assert (AddressSet.cardinal res.allocs = 1);
+      print_endline "TODO: KILL";
+      (* assert (AddressSet.cardinal res.allocs = 1); *)
       let elem = AddressSet.find_first (fun _ -> true) res.allocs in
       let new_heap = Pmap.remove elem res.state.heap in
 
@@ -1377,7 +1479,9 @@ let bmc_paction (state: 'a bmc_state)
          update heap: @a_i
        *)
 
-      let sort = ctype_to_sort state ty in  
+      let sort_list = ctype_to_sort_list state ty in  
+      assert (List.length sort_list = 1);
+      let sort = List.hd sort_list in
       let ptr_allocs = alias_lookup_sym sym state.alias_state in
       let res_value = bmc_pexpr state p_value in
 
@@ -1483,7 +1587,9 @@ let bmc_paction (state: 'a bmc_state)
          TODO: assert that address is equal to something...
        * Return conjunction
        *)
-       let sort = ctype_to_sort state ty in
+       let sort_list = ctype_to_sort_list state ty in
+       assert (List.length sort_list = 1);
+       let sort = List.hd (sort_list) in
        
        let z3_sym = bmc_lookup_sym sym state in
        let ret_value = Expr.mk_fresh_const state.ctx
@@ -2145,7 +2251,6 @@ let rec bmc_expr (state: 'a bmc_state)
 
       if g_sequentialise then
         print_endline "TODO: returns ignored for ewseq";
-
 
       let bmc_e2 = bmc_expr bmc_e1.state e2 in
 
