@@ -178,6 +178,8 @@ module type AddressType =
     val to_string: addr -> string
     val mk_expr: context -> addr -> Expr.expr
     val is_atomic : context -> Expr.expr -> Expr.expr
+
+    val to_addr : Expr.expr -> addr
   end
 
 module PairAddress : AddressType = 
@@ -207,6 +209,12 @@ module PairAddress : AddressType =
                         "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
 
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
+
+    let to_addr expr = 
+      match Expr.get_args expr with
+      | [l1; l2] ->
+        (Integer.get_int l1, Integer.get_int l2)
+      | _ -> assert false
   end
 
 module IntAddress : AddressType = 
@@ -223,10 +231,11 @@ module IntAddress : AddressType =
                         "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
 
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
+    let to_addr expr = Integer.get_int expr
   end
 
-module Address = (IntAddress : AddressType) 
-(* module Address = (PairAddress : AddressType) *)
+(* module Address = (IntAddress : AddressType)  *)
+module Address = (PairAddress : AddressType) 
 
 module PointerSort =
   struct

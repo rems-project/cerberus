@@ -74,7 +74,6 @@ type kbmc_address = {
   (* If not using memory model *)
   seq_ctr     : int ref;
   hist        : ((int, Expr.expr) Pmap.map) ref
-
 }
 
 type kheap = (Address.addr, Expr.expr) Pmap.map
@@ -94,7 +93,7 @@ type 'a bmc_state = {
   addr_map    : (Address.addr, kbmc_address) Pmap.map ref;
 
   (* TODO: hack for outputting source symbols for locations *)
-  src_ptr_map : (int, ksym) Pmap.map ref;
+  src_ptr_map : (Address.addr, ksym) Pmap.map ref;
 
   (* Alias analysis stuff *)
   alias_state : kanalysis_state;
@@ -216,7 +215,7 @@ let extract_executions (model: Model.model)
                        (fns : exec_fns) 
                        (ctx : context) 
                        (retOpt: Expr.expr option) 
-                       (src_ptr_map : (int, ksym) Pmap.map) =  
+                       (src_ptr_map : (Address.addr, ksym) Pmap.map) =  
   let apply = FuncDecl.apply in
   let events = Enumeration.get_consts fns.event_sort in
 
@@ -248,7 +247,7 @@ let extract_executions (model: Model.model)
     List.map getOptVal
     (List.filter is_some 
       (List.map (fun event ->
-        let loc = Integer.get_int (interp (apply fns.getAddr [event])) in
+        let loc = Address.to_addr (interp (apply fns.getAddr [event])) in
         let aid = Integer.get_int (interp (apply fns.getAid [event])) in
         let event_type = interp (apply fns.getEventType [ event]) in
         let guarded = Boolean.get_bool_value(interp (apply fns.getGuard [event])) in
@@ -257,9 +256,9 @@ let extract_executions (model: Model.model)
         let value = pp_value(interp(apply fns.getVal [event])) in
 
         let loc_val = match Pmap.lookup loc src_ptr_map with
-          | None -> ConcreteLoc loc
+          | None -> SymbolicLoc (Address.to_string loc)
           | Some (Symbol(_, Some str)) -> SymbolicLoc str
-          | Some _ -> ConcreteLoc loc in
+          | Some _ -> SymbolicLoc (Address.to_string loc) in
 
         match (tid=g_initial_tid),guarded with 
         | true, _ -> None
@@ -461,7 +460,7 @@ let get_all_executions (solver : Solver.solver)
                        (fns    : exec_fns)
                        (ctx    : context)
                        (retOpt : Expr.expr option) 
-                       (src_ptr_map : (int, ksym) Pmap.map)
+                       (src_ptr_map : (Address.addr, ksym) Pmap.map)
                        =
   Solver.push solver;
 
@@ -872,7 +871,8 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
                     Expr.simplify (PointerSort.get_addr state.ctx expr) None in
                   if (Expr.is_numeral addr_expr) then
                     begin
-                      let addr = Integer.get_int addr_expr in
+                      (* let addr = Integer.get_int addr_expr in *)
+                      let addr = Address.to_addr expr in
                       let src_sym = match Pmap.lookup addr !(state.src_ptr_map) with
                       | None -> sym
                       | Some s -> s
