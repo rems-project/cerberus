@@ -451,9 +451,13 @@ export default class View {
         this.state.result = res.result
         this.state.console = ''
         break
+      case 'interactive':
+        this.state.tagDefs = res.tagDefs
+        this.state.ranges = res.ranges
+        this.state.console = ''
+        break;
       case 'stepping':
         this.state.result = res.result // TODO: not sure about this
-        if (res.tagDefs) this.state.tagDefs = res.tagDefs
         this.state.console = ''
         break
       case 'failure':

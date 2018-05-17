@@ -13,6 +13,7 @@ sig
   val show_std: bool
   val show_include: bool
   val handle_location: Location_ocaml.t -> P.range -> unit
+  val handle_uid: string -> P.range -> unit
 end
 
 module type PP_CORE =
@@ -524,8 +525,7 @@ let rec pp_expr expr =
                 else
                   acc
             | Auid uid ->
-                print_endline uid;
-                acc
+                P.range (handle_uid uid) acc
         ) doc annot
     end
     begin
@@ -813,10 +813,12 @@ module Basic = Make (struct
   let show_std = false
   let show_include = false
   let handle_location _ _ = ()
+  let handle_uid _ _ = ()
 end)
 
 module All = Make (struct
   let show_std = true
   let show_include = true
   let handle_location _ _ = ()
+  let handle_uid _ _ = ()
 end)

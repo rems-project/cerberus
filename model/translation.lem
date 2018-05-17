@@ -3493,5 +3493,5 @@ let translate (ailnames, stdlib_fun_map) impl (symbol_counter, prog) =
     C.stdlib= stdlib_fun_map;
     C.impl= impl;
     C.globs= cglobs;
-    C.funs= Map.mapi Caux.set_uid cfuns
+    C.funs= cfuns
   |>)

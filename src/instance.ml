@@ -112,6 +112,7 @@ let pp_core core =
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
+      let handle_uid _ _ = ()
     end) in
   let core' = string_of_doc @@ PP.pp_file core in
   (core', !locs)
@@ -242,6 +243,17 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   | e -> Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
     raise e
 
+let create_expr_range_list core =
+  let table = Hashtbl.create 100 in
+  let module PP = Pp_core.Make (struct
+      let show_std = true
+      let show_include = false
+      let handle_location _ _ = ()
+      let handle_uid = Hashtbl.add table
+    end) in
+  ignore (string_of_doc @@ PP.pp_file core);
+  Hashtbl.fold (fun k v acc -> (k, v)::acc) table []
+
 let step ~conf ~filename active_node =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
@@ -249,13 +261,14 @@ let step ~conf ~filename active_node =
   | None -> (* no active node *)
     hack (fst conf) Random;
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
-    let core'    = Core_run_aux.convert_file core in
+    let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
+    let ranges   = create_expr_range_list core' in
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     let initId   = new_id () in
     let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
     let tagDefs  = encode @@ Tags.tagDefs () in
-    return (None, Some tagDefs, ([nodeId], []))
+    return @@ Interactive (tagDefs, ranges, ([nodeId], []))
   | Some (last_id, marshalled_state, node, tags) ->
     let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode tags in
     Tags.set_tagDefs tagsMap;
@@ -263,10 +276,7 @@ let step ~conf ~filename active_node =
     last_node_id := last_id;
     decode marshalled_state
     |> multiple_steps ([], [], node)
-    |> fun (res, (ns, es, _)) -> return (res, None, (ns, es))
-
-let result_of_step (res, tagDefs, (ns, es)) =
-  Interaction (None, tagDefs, (ns, es))
+    |> fun (res, (ns, es, _)) -> return @@ Step (res, (ns, es))
 
 let instance debug_level =
   Debug.level := debug_level;
@@ -280,7 +290,7 @@ let instance debug_level =
       |> respond (fun s -> Execution s)
     | `Step (conf, filename, active) ->
       step ~conf:(setup conf) ~filename active
-      |> respond result_of_step
+      |> respond id
   in
   let redirect () =
     (* NOTE: redirect stdout to stderr copying stdout file descriptor
