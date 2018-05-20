@@ -200,9 +200,9 @@ let inline_fn (fn : ('bTy, 'a) generic_fun_map_decl)
       file = file;
     }) in
   match fn with
-  | Proc(ty, params, e) ->
+  | Proc(loc, ty, params, e) ->
     let ret = inline_expr initial_state e in
-    Proc(ty, params, ret), !(initial_state.sym_supply)
+    Proc(loc, ty, params, ret), !(initial_state.sym_supply)
 
   | Fun(ty, params, pe) ->
     let ret =  inline_pexpr initial_state pe in
@@ -221,8 +221,8 @@ let inline_file (file: 'a file) (sym_supply: ksym_supply) =
       (sym, typ, inline_expr initial_state expr)) file.globs in
   let new_fun_map = Pmap.map (fun fn ->
     match fn with
-    | Proc(ty, params, e) ->
-        Proc(ty, params, inline_expr initial_state e)
+    | Proc(loc, ty, params, e) ->
+        Proc(loc, ty, params, inline_expr initial_state e)
     | Fun(ty, params, pe) -> 
         Fun(ty, params, inline_pexpr initial_state pe)
     | _ ->
@@ -477,9 +477,9 @@ let rewrite_fn (fn: ('bTy, 'a) generic_fun_map_decl)
       file = file;
     }) in
   match fn with
-  | Proc(ty,params, e) ->
+  | Proc(loc, ty,params, e) ->
       let ret = rewrite_expr initial_state e in
-      Proc(ty, params, ret), !(initial_state.sym_supply)
+      Proc(loc, ty, params, ret), !(initial_state.sym_supply)
   | Fun(ty, params, pe) ->
       let ret = rewrite_pexpr initial_state pe in
       Fun(ty, params, ret), !(initial_state.sym_supply)
@@ -496,8 +496,8 @@ let rewrite_file (file: 'a file) (sym_supply: ksym_supply) =
       (sym, typ, rewrite_expr initial_state expr)) file.globs in
   let new_fun_map = Pmap.map (fun fn ->
     match fn with
-    | Proc(ty, params, e) ->
-        Proc(ty, params, rewrite_expr initial_state e)
+    | Proc(loc, ty, params, e) ->
+        Proc(loc, ty, params, rewrite_expr initial_state e)
     | Fun(ty, params, pe) ->
         Fun(ty, params, rewrite_pexpr initial_state pe)
     | _ -> 

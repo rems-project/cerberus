@@ -293,7 +293,7 @@ let ssa_fn (fn)
            : (('bTy, 'a) generic_fun_map_decl) SSA.eff =
   let (>>=) = SSA.bind in
   match fn with
-  | Proc(ty, params, e) ->
+  | Proc(loc, ty, params, e) ->
       SSA.mapM (fun (sym, ty) ->
         rename_sym sym >>= fun ret_sym ->
         SSA.return (ret_sym, ty)) params >>= fun ret_params ->
@@ -304,7 +304,7 @@ let ssa_fn (fn)
       Pmap.iter (fun k v -> 
         Printf.printf "%s -> %s\n" (symbol_to_string k) (symbol_to_string v)) 
         st.sym_table;
-      SSA.return (Proc(ty, ret_params, ret_e))
+      SSA.return (Proc(loc, ty, ret_params, ret_e))
       )
   | Fun(ty, params, pe) -> 
       SSA.mapM (fun (sym, ty) -> 

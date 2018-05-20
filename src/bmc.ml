@@ -1893,7 +1893,7 @@ let rec bmc_expr (state: 'a bmc_state)
       | None -> assert false
       | Some (Fun _) -> assert false
       | Some (ProcDecl _) -> assert false
-      | Some (Proc(ty, params, e)) -> 
+      | Some (Proc(loc, ty, params, e)) -> 
          begin
            if (state.depth >= g_max_function_depth) then
              let sort = cbt_to_z3 state.ctx ty in
@@ -1916,9 +1916,9 @@ let rec bmc_expr (state: 'a bmc_state)
                  bmc_pexpr state pe) arglist in
                let vcs = (List.concat (
                  List.map (fun res -> res.vcs) bmc_args)) in 
-               match bmc_normalize_fn (Proc(ty, params, e)) state.file
+               match bmc_normalize_fn (Proc(loc, ty, params, e)) state.file
                                       !(state.sym_supply) with
-               | Proc(ty2, params2, e2), supply ->
+               | Proc(_, ty2, params2, e2), supply ->
                   assert (List.length arglist = List.length params2);
                   state.sym_supply := supply;
                   let eq_exprs = List.map2 (fun (sym1, ty) res ->
@@ -2100,7 +2100,8 @@ let rec bmc_expr (state: 'a bmc_state)
       else
 
       begin
-      match find_labeled_continuation label proc_expr with
+      match find_labeled_continuation
+      Sym.instance_Basic_classes_Eq_Symbol_sym_dict label proc_expr with
       | None -> assert false
       | Some (sym_list, expr) -> 
           (* Substitute pelist for sym_list *)
@@ -3454,7 +3455,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
   | Some main_sym ->
       let result = (
         match Pmap.lookup main_sym file.funs with
-        | Some (Proc(ty, params, e)) ->
+        | Some (Proc(_, ty, params, e)) ->
             (* Handle parameters *)
             print_endline "TODO: sequence globals preexecs!";
             let preexecs, state = initialise_main_params params state in
@@ -3464,7 +3465,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
 
             Pmap.iter (fun k (cbt, sym_list, expr) ->
               print_endline(symbol_to_string k);
-              match find_labeled_continuation k e with
+              match find_labeled_continuation Sym.instance_Basic_classes_Eq_Symbol_sym_dict k e with
               | None -> assert false
               | Some (cont, lconts') ->
                   List.iter (fun sym -> 
