@@ -120,12 +120,10 @@ let pp_witness (witness: execution_witness) =
   List.iter (fun (a1, a2) ->
     Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
   ) witness.mo;
-  (*
-  print_endline "===SW";
+  print_endline "===SC";
   List.iter (fun (a1, a2) ->
     Printf.printf "(%s,%s)\n" (pp_action_long a1) (pp_action_long a2);
-  ) witness.sw;
-  *)
+  ) witness.sc;
 
 type column_head = 
   | CH_tid of tid
@@ -461,7 +459,7 @@ let pp_dot () (m, (preexec, exedo, exddo)) =
     @
       (match exedo with None -> [] | Some exed ->
         [ ("rf",  "red",   exed.rf);
-          (* ("sc",  "orange", transitive_reduction exed.sc); *)
+          ("sc",  "orange", transitive_reduction exed.sc); 
           ("mo",  "blue",  transitive_reduction exed.mo);
           (* ("lo",  "gray54", transitive_reduction exed.lo);
           ("ao",  "black", exed.ao);

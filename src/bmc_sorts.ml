@@ -183,6 +183,7 @@ module type AddressType =
 
     val get_alloc_id : addr -> int
 
+    val is_raw_addr : Expr.expr -> bool
     val to_addr : Expr.expr -> addr
 
     val apply_getAllocSize : context -> Expr.expr -> Expr.expr
@@ -233,10 +234,16 @@ module PairAddress : AddressType =
 
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
 
+    let is_raw_addr expr = 
+      match Expr.get_args expr with
+      | [a; b] ->
+          Expr.is_numeral a && Expr.is_numeral b
+      | _ -> false
+
     let to_addr expr = 
       match Expr.get_args expr with
-      | [l1; l2] ->
-        (Integer.get_int l1, Integer.get_int l2)
+      | [a; b] ->
+        (Integer.get_int a, Integer.get_int b)
       | _ -> assert false
 
     let apply_getAllocSize ctx (alloc : Expr.expr) = 
@@ -286,6 +293,7 @@ module IntAddress : AddressType =
                         "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
 
     let is_atomic ctx expr = FuncDecl.apply (fn_isAtomic ctx) [expr]
+    let is_raw_addr expr = Expr.is_numeral expr
     let to_addr expr = Integer.get_int expr
     let apply_getAllocSize ctx (alloc : Expr.expr) = 
       let fn = FuncDecl.mk_func_decl_s ctx

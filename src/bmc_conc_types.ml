@@ -102,8 +102,8 @@ type pre_execution =
 type execution_witness =
   {  rf      : action_rel;
      mo      : action_rel;
+     sc      : action_rel;
      (*
-     sc      : (action * action) set;
      lo      : (action * action) set;
      ao      : (action * action) set;
      tot     : (action * action) set;
@@ -300,3 +300,13 @@ let is_release a =
   (Pset.from_list Pervasives.compare [Release;Acq_rel;Seq_cst])
     | _                 -> false
     ))
+
+let is_seq_cst a:bool=    
+ ((match a with
+      Load( _, _, mo1, _, _)  -> mo1 = Seq_cst
+    | Store( _, _, mo1, _, _) -> mo1 = Seq_cst
+    | RMW( _, _, mo1, _, _, _) -> mo1 = Seq_cst
+    | Fence( _, _, mo1)     -> mo1 = Seq_cst
+    | _                -> false
+    ))
+

@@ -157,6 +157,8 @@ type exec_fns = {
   rf           : FuncDecl.func_decl;
   sb           : FuncDecl.func_decl;
   sw           : FuncDecl.func_decl;
+  fr           : FuncDecl.func_decl;
+  sc           : FuncDecl.func_decl;
 
   (* hb, isAcq, isRel, clock, getInitial *)
 
@@ -189,7 +191,7 @@ let get_memorder (memorder : Expr.expr) (fns : exec_fns) =
   if (Expr.equal memorder fns.na_order) then
     NA
   else if (Expr.equal memorder fns.seq_cst_order) then
-    (assert false; Seq_cst)
+    Seq_cst
   else if (Expr.equal memorder fns.relaxed_order) then
     Relaxed
   else if (Expr.equal memorder fns.release_order) then
@@ -224,6 +226,11 @@ let extract_executions (model: Model.model)
      | None -> assert false
      | Some e -> e) in
   print_endline "EXTRACTING EXECUTIONS";
+
+  print_endline "SRC_PTR_MAP";
+  Pmap.iter (fun k v ->
+    Printf.printf "%s -> %s\n" (Address.to_string k) (symbol_to_string v)
+  ) src_ptr_map;
 
   let pp_value (value: Expr.expr) =
     if (Loaded.is_loaded ctx value) then
@@ -274,8 +281,6 @@ let extract_executions (model: Model.model)
       ) events)) in
 
   let quadratic_actions = cartesian all_actions all_actions in
-
-  print_endline "LOL";
 
   let action_map : (action_id, action) Pmap.map = 
     List.fold_left (fun map action ->
@@ -377,6 +382,18 @@ let extract_executions (model: Model.model)
     (mo1 < mo2)
   ) (quadratic_actions) in
 
+  let sc = List.filter (fun (a1,a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    let sc1 = Integer.get_int (interp (apply fns.sc [event1])) in
+    let sc2 = Integer.get_int (interp (apply fns.sc [event2])) in
+    let is_sc1 = is_seq_cst a1 in
+    let is_sc2 = is_seq_cst a2 in
+
+    is_sc1 && is_sc2 &&
+    (sc1 < sc2) 
+  ) (quadratic_actions) in
+
   let sw = List.filter (fun (a1, a2) ->
     let event1 = Pmap.find (aid_of a1) event_map in
     let event2 = Pmap.find (aid_of a2) event_map in
@@ -390,6 +407,7 @@ let extract_executions (model: Model.model)
   let witness : execution_witness = 
     { rf = rf;
       mo = mo;
+      sc = sc;
     } in
   pp_witness witness;
 
@@ -407,6 +425,11 @@ let extract_executions (model: Model.model)
     let event2 = Pmap.find (aid_of a2) event_map in
     mk_lt ctx (apply fns.mo [event1]) (apply fns.mo [event2]) 
   ) mo) in
+  let sc_assert = mk_and ctx (List.map (fun (a1, a2) ->
+    let event1 = Pmap.find (aid_of a1) event_map in
+    let event2 = Pmap.find (aid_of a2) event_map in
+    mk_lt ctx (apply fns.sc [event1]) (apply fns.sc [event2])
+  ) sc) in
   
   (* unsequenced race *)
   let unsequenced_race = List.filter (fun (a1, a2) ->
@@ -432,7 +455,7 @@ let extract_executions (model: Model.model)
   let derived_data = {
     derived_relations = [
       ("sw", sw);
-(*      ("hb", hb)  *)
+(*      ("hb", hb)   *)
     ];
     undefined_behaviour = [("ur", Two unsequenced_race)
                           ;("dr", Two data_race)]
@@ -446,6 +469,13 @@ let extract_executions (model: Model.model)
   let retValueO = match retOpt with
     | None -> None
     | Some ret -> Some (interp ret) in
+  
+  let z3_asserts = 
+    if g_sc_unique then 
+      mk_and ctx [guard_assert; rf_assert; mo_assert; sc_assert]
+    else
+      mk_and ctx [guard_assert; rf_assert; mo_assert]
+  in
 
   let ret : model_execution =
     { preexecution = preexecution;
@@ -866,13 +896,15 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
               | OTy_pointer ->
                   assert (Sort.equal (Expr.get_sort expr) 
                                      (PointerSort.mk_sort state.ctx));
+
                   (* Hack to map source code symbol -> location *)
                   let addr_expr = 
                     Expr.simplify (PointerSort.get_addr state.ctx expr) None in
-                  if (Expr.is_numeral addr_expr) then
+                  
+                  if (Address.is_raw_addr addr_expr) then
                     begin
                       (* let addr = Integer.get_int addr_expr in *)
-                      let addr = Address.to_addr expr in
+                      let addr = Address.to_addr addr_expr in
                       let src_sym = match Pmap.lookup addr !(state.src_ptr_map) with
                       | None -> sym
                       | Some s -> s
@@ -2638,9 +2670,14 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
   let fn_asw = FuncDecl.mk_fresh_func_decl ctx
                   "asw" [event_sort; event_sort ] (Boolean.mk_sort ctx) in
   (* HB: happens-before; (sb | sw)+ *)
-
   let fn_hb = FuncDecl.mk_fresh_func_decl ctx
                 "hb" [event_sort; event_sort] (Boolean.mk_sort ctx) in
+  let app_hb e1 e2 = FuncDecl.apply fn_hb [e1; e2] in
+
+  (* fr: (R.W): rf^-1; mo) *)
+  let fn_fr = FuncDecl.mk_fresh_func_decl ctx
+                "fr" [event_sort; event_sort] (Boolean.mk_sort ctx) in
+  let app_fr e1 e2 = FuncDecl.apply fn_fr [e1; e2] in
 
   (* events that behave like acquire: ACQ or AR or (SC and R) *)
   let fn_isAcq = FuncDecl.mk_fresh_func_decl ctx
@@ -2656,11 +2693,13 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
   (* Modification order *)
   let fn_mo = FuncDecl.mk_fresh_func_decl ctx
                 "mo" [ event_sort ] (Integer.mk_sort ctx) in
-  (* From-read *)
-  (*
-  let fn_fr = FuncDecl.mk_fresh_func_decl ctx
-                "fr" [ event_sort; event_sort ] (Boolean.mk_sort ctx) in
-  *)
+  let app_mo expr = FuncDecl.apply fn_mo [expr] in
+
+  (* SC *)
+  let fn_sc = FuncDecl.mk_fresh_func_decl ctx
+                "sc" [ event_sort ] (Integer.mk_sort ctx) in
+  let app_sc expr = FuncDecl.apply fn_sc [expr] in
+   
   (* cc-clock: clock; used to be for coherence check. Now to track hb  *)
   let fn_clock = FuncDecl.mk_fresh_func_decl ctx
                 "hb-clock" [ event_sort ] (Integer.mk_sort ctx) in
@@ -2769,6 +2808,23 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
                  )
       ) None [] [] None None
     ) in
+
+  (* forall (r, w). mo(rf(r)) < mo(w)) *)
+  let fr_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      ( mk_eq ctx (FuncDecl.apply fn_fr [bound_0; bound_1])
+                  (mk_and ctx
+                    [ is_read bound_0   ; is_write bound_1
+                    ; getGuard bound_0  ; getGuard bound_1
+                    ; Address.is_atomic ctx (getAddr bound_0)
+                    ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+                    ; mk_lt ctx (app_mo (app_rf bound_0)) (app_mo bound_1)
+                    ] 
+                  )
+      ) None [] [] None None
+  ) in
+
   (*
   (* TODO: computed hb = (sb | (I x not I) | sw)+
    *)
@@ -2869,6 +2925,57 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
       ) None [] [] None None
     ) in
 *)
+
+  let sc_well_formed_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx 
+      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+      (mk_implies ctx
+        (mk_and ctx [ getGuard bound_0
+                    ; getGuard bound_1
+                    ; mk_not ctx (mk_eq ctx bound_0 bound_1)
+                    ; is_memorder seq_cst_order bound_0
+                    ; is_memorder seq_cst_order bound_1
+                    ]
+        )
+        (mk_not ctx (mk_eq ctx (app_sc bound_0) (app_sc bound_1))
+        )
+      ) None [] [] None None
+  ) in
+
+  (* Helper guarded assertions *)
+  let hb_in_sc = app_hb bound_0 bound_1 in
+  let fr_in_sc = 
+    mk_and ctx [ is_read bound_0
+               ; is_write bound_1
+               ; app_fr bound_0 bound_1
+               ] in
+  let mo_in_sc = 
+    mk_and ctx [ is_write bound_0
+               ; is_write bound_1
+               ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
+               ; Address.is_atomic ctx (getAddr bound_0)
+               ; mk_lt ctx (app_mo bound_0) (app_mo bound_1)
+               ] in
+
+  let sc_assert = Quantifier.expr_of_quantifier (
+    Quantifier.mk_forall ctx
+    [ event_sort; event_sort ] [mk_sym ctx "e2"; mk_sym ctx "e1"]
+    (mk_implies ctx 
+      ( mk_and ctx [ mk_not ctx (mk_eq ctx bound_0 bound_1)
+                   ; is_memorder seq_cst_order bound_0
+                   ; is_memorder seq_cst_order bound_1
+                   ; getGuard bound_0
+                   ; getGuard bound_1
+                   ; mk_or ctx [ hb_in_sc
+                               ; fr_in_sc
+                               ; mo_in_sc
+                               ]
+                   ]
+      )
+      ( mk_lt ctx (app_sc bound_0) (app_sc bound_1)
+      )
+    ) None [] [] None None
+  ) in
 
   (* TODO: add this to well_formed assert! *)
 
@@ -3019,30 +3126,6 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
   ) in
   *)
 
-  (* fr definition: (below for single address)
-    (assert (forall ((e1 E) (e2 E))  (=> (and (read e1) (write e2)) (= (fr e1 e2) (< (co (rf e1)) (co e2))))))
-  *)
-  (*
-  let fr_assert = Quantifier.expr_of_quantifier (
-    Quantifier.mk_forall ctx
-      [event_sort; event_sort] [mk_sym ctx "e2"; mk_sym ctx "e1" ]
-      (mk_implies ctx
-          (mk_and ctx [ is_read bound_0
-                      ; is_write bound_1
-                      ; getGuard bound_0
-                      ; getGuard bound_1
-                      ; mk_eq ctx (getAddr bound_0) (getAddr bound_1)
-                      ]
-          )
-          (mk_eq ctx (FuncDecl.apply fn_fr [bound_0; bound_1])
-            (mk_lt ctx 
-              (FuncDecl.apply fn_mo [ FuncDecl.apply fn_rf [bound_0]] )
-              (FuncDecl.apply fn_mo [ bound_1 ])
-            ) 
-          )
-      ) None [] [] None None
-  ) in
-  *)
   (*
   (* fr included in cc-clock
     (assert (forall ((e1 E) (e2 E)) (=> (and (read e1) (write e2) (fr e1 e2)) (< (cc-clock e1) (cc-clock e2)))))
@@ -3287,10 +3370,12 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
               ; sw_assert
               ; isAcq_assert
               ; isRel_assert
-              (*; fr_assert *)
+              ; fr_assert 
+              ; sc_assert
               (* ; rf_write_assert  *)
               ; rf_well_formed_assert 
               ; mo_well_formed_assert
+              ; sc_well_formed_assert
               ; irr_hb_assert
               ; irr_rf_assert
               ; rf_vse_assert (* NaRF *)
@@ -3338,6 +3423,8 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
       rf  = fn_rf;
       sb  = fn_sb;
       sw  = fn_sw;
+      fr  = fn_fr;
+      sc  = fn_sc;
 
       is_atomic = Address.is_atomic ctx;
 
