@@ -61,6 +61,16 @@ namespace Common {
     throw `Model ${m} does not exist.`
   }
 
+  export type Memory =
+    { 
+      kind: 'concrete',
+      allocations: {[key: string]: {base: string, type: string, size: string}},
+      bytemap: {[key: string]: { prov: string, value: number }}
+    } | {
+      kind: 'symbolic',
+      allocations: any
+    }
+
   export interface InteractiveRequest {
     lastId: ID,
     state: Bytes,
@@ -114,11 +124,9 @@ namespace Common {
   export type ResultRequest =
     { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
     { status: 'execution', console: string, result: string} |
-    { status: 'interactive', tagDefs: Bytes, ranges: any} |
-    { status: 'stepping', result: string} |
+    { status: 'interactive', tagDefs: Bytes, ranges: any, steps: ResultTree} |
+    { status: 'stepping', result: string, activeId: number, steps: ResultTree} |
     { status: 'failure', console: string, result: string }
-
-  export type ResultStep = { state: ResultRequest, steps: ResultTree }
 
   export type Event =
     'update' |            // Update tab values

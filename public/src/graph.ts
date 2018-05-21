@@ -14,7 +14,7 @@ export interface Node extends vis.Node {
   state: string | undefined
   isVisible: boolean
   isTau: boolean
-  loc: Locations
+  loc: Locations | undefined
   mem: any
   label: string
 }

@@ -179,21 +179,17 @@ let json_of_result = function
   | Interactive (tags, ranges, t) ->
     `Assoc [
       ("steps", json_of_exec_tree t);
-      ("state", `Assoc [
-        ("status", `String "interactive");
-        ("result", `String "");
-        ("ranges", `Assoc
-           (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
-        ("tagDefs", `String (B64.encode tags))
-      ]);
+      ("status", `String "interactive");
+      ("result", `String "");
+      ("ranges", `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
+      ("tagDefs", `String (B64.encode tags));
     ]
-  | Step (res, t) ->
+  | Step (res, activeId, t) ->
     `Assoc [
       ("steps", json_of_exec_tree t);
-      ("state", `Assoc [
-        ("status", `String "stepping");
-        ("result", Json.of_opt_string res);
-      ]);
+      ("activeId", `Int activeId);
+      ("status", `String "stepping");
+      ("result", Json.of_opt_string res);
     ]
   | Failure err ->
     `Assoc [

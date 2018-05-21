@@ -276,7 +276,7 @@ let step ~conf ~filename active_node =
     last_node_id := last_id;
     decode marshalled_state
     |> multiple_steps ([], [], node)
-    |> fun (res, (ns, es, _)) -> return @@ Step (res, (ns, es))
+    |> fun (res, (ns, es, _)) -> return @@ Step (res, node, (ns, es))
 
 let instance debug_level =
   Debug.level := debug_level;
