@@ -189,11 +189,8 @@ export class Interactive extends Tab {
           if (active.group && active.group == 'leaf') {
             ee.emit('step', active)
           } else {
-            if (active.loc) {
-              ee.emit('clear')
-              //TODO: ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
-              console.log('mark active node location')
-            }
+            ee.emit('clear')
+            if (active.loc) ee.emit('markInteractive', active.loc)
             ee.emit('setMemory', active.mem)
           }
         }
@@ -237,11 +234,8 @@ export class Interactive extends Tab {
       this.network.focus(lastLeaf.id)
       this.network.selectNodes([lastLeaf.id])
       this.network.redraw()
-      console.log(lastLeaf.loc)
-      if (lastLeaf.loc) {
-        this.ee.emit('clear')
-        this.ee.emit('markInteractive', lastLeaf.loc)
-      }
+      this.ee.emit('clear')
+      if (lastLeaf.loc) this.ee.emit('markInteractive', lastLeaf.loc)
       this.ee.emit('setMemory', lastLeaf.mem)
     }
   }
@@ -633,9 +627,10 @@ export class Source extends Editor {
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
-  markInteractive(loc: any) {
-    if (loc.c)
-      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: 'color1' })
+  markInteractive(loc: any, state: Readonly<Common.State>) {
+    if (loc.c) {
+      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
+    }
   }
 
   markError(l: number) {
@@ -809,8 +804,8 @@ export class Core extends ReadOnly {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.core && state.ranges) {
       const range = state.ranges[loc.core]
-      if (range)
-        this.editor.getDoc().markText(range.begin, range.end, { className: 'color1' })
+      if (loc.c && range)
+        this.editor.getDoc().markText(range.begin, range.end, { className: Util.getColorByLocC(state, loc.c) })
     }
   }
 
@@ -820,12 +815,12 @@ export class Core extends ReadOnly {
   }
 
   clear() {
-    this.editor.getDoc().eachLine((line: CodeMirror.LineHandle) => {
-      this.editor.removeLineClass(line, 'background')
-    })
     let marks = this.editor.getDoc().getAllMarks()
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
+    this.editor.getDoc().eachLine((line: CodeMirror.LineHandle) => {
+      this.editor.removeLineClass(line, 'background')
+    })
   }
 }
 

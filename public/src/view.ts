@@ -213,40 +213,13 @@ export default class View {
     this.emit('updateGraph')
   }
 
-  /** Create a new interactive tab and update its graph */
-  newInteractiveTab(steps: Common.ResultTree) {
-    let start = !this.isInteractiveOpen()
-    this.layout.root.contentItems[0].addChild({
-      type: 'column',
-      content: [{
-        type: 'component',
-        componentName: 'tab',
-        title: 'Interactive',
-        componentState: { tab: 'Interactive' }
-      }]
-    })
-    if (start)
-      this.startInteractive(steps)
-    else
-      this.emit('updateGraph')
-  }
-
-  /** Check if there are interactive tabs opened */
-  private isInteractiveOpen() {
-    for (let i = 0; i < this.tabs.length; i++) {
-      if (this.tabs[i] instanceof Tabs.Interactive) return true
-    }
-    return false
-  }
-
   /** Restart interactive mode in all the tabs */
   resetInteractive() {
     this.state.graph.clear()
     this.emit('clearGraph')
-    if (this.isInteractiveOpen()) {
-      UI.request(Common.Step(), (data: Common.ResultStep) => {
-        this.updateState(data.state)
-        this.startInteractive(data.steps)
+    if (this.findTab('Interactive')) {
+      UI.request(Common.Step(), (data: Common.ResultRequest) => {
+        this.updateState(data)
       })
     }
   }
@@ -372,59 +345,57 @@ export default class View {
     this.layout.updateSize()
   }
 
-  setMemory(mem: any) {
-    if (mem === undefined) mem = {allocations: {}}
+  // TODO: CHECK IF I REALLY NEED UNDEFINED
+  setMemory(mem: Common.Memory | undefined) {
+    if (mem === undefined) return
     const nodes: Node[] = []
     const edges: Edge[] = []
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const isPointer = (type:string) => {
-      return type.slice(-1) == '*'
-    }
-    const updateConcreteMemory = () => {
-      let readValue = (id:Common.ID, base:any, end:any) => {
-        let value = 0
-        //@ts-ignore
+    const isPointer = (type:string) => type.slice(-1) == '*'
+    const createNode = (id: Common.ID, label: string) : Node => {
+      return {
+        id: id,
+        label: label,
+        state: undefined,
+        isVisible: true,
+        isTau: false,
+        loc: undefined,
+        mem: undefined
+    }}
+    switch(mem.kind) {
+      case 'concrete':
         const map = mem.bytemap
-        if (!map[base]) return 'unspecified' // undefined value in allocation
-        if (map[base].prov) // Has a provenance
-        //@ts-ignore
-          edges.push({from: id, to: map[base].prov})
-        for (let i = base; i < end; i++)
-          if (map[i]) value += map[i].value
-        return value
-      }
-        //@ts-ignore
-      Object.keys(mem.allocations).map((k) => {
-        //@ts-ignore
-        const alloc = mem.allocations[k]
-        const base = parseInt(alloc.base)
-        const end  = parseInt(alloc.base) + parseInt(alloc.size)
-        const value = (isPointer(alloc.type)) ? ''
-                        : '\n<i>Value:</i> ' + readValue(k, base, end)
-        const type  = '\n<i>Type:</i> ' + alloc.type
-        const title  = '<i>Base address:</i> ' + toHex(base)
-        const size  = '\n<i>Size:</i> ' + alloc.size
-        const label = title + type + size + value
-        //@ts-ignore
-        nodes.push({id: k, label: label})
-      })
+        const readValue = (id:Common.ID, base: number, end: number) => {
+          let value = 0
+          if (!map[base]) return 'unspecified' // undefined value in allocation
+          if (map[base].prov) // Has a provenance
+            edges.push({from: id, to: map[base].prov, isTau: false})
+          for (let i = base; i < end; i++)
+            if (map[i]) value += map[i].value
+          return value
+        }
+        Object.keys(mem.allocations).map((k) => {
+          const alloc = mem.allocations[k]
+          const base = parseInt(alloc.base)
+          const end  = parseInt(alloc.base) + parseInt(alloc.size)
+          const value = '\n<i>Value:</i> ' + readValue(k, base, end)
+          const type  = '\n<i>Type:</i> ' + alloc.type
+          const title  = '<i>Base address:</i> ' + toHex(base)
+          const size  = '\n<i>Size:</i> ' + alloc.size
+          const label = title + type + size + (isPointer(alloc.type) ? '' : value)
+          nodes.push(createNode(k, label))
+        })
+        break
+      case 'symbolic':
+        Object.keys(mem.allocations).map((k) => {
+          const alloc = mem.allocations[k]
+          const type  = '<i>Type:</i> ' + alloc.type
+          const value = '\n<i>Value:</i> ' + alloc.value
+          const label = type + value
+          nodes.push(createNode(k, label))
+        })
+        break
     }
-    const updateSymbolicMemory = () => {
-      Object.keys(mem).map((k) => {
-        //@ts-ignore
-        const alloc = mem[k]
-        const type  = '<i>Type:</i> ' + alloc.type
-        const value = '\n<i>Value:</i> ' + alloc.value
-        const label = type + value
-        //@ts-ignore
-        nodes.push({id: k, label: label})
-      })
-    }
-        //@ts-ignore
-    if (mem.allocations)
-      updateConcreteMemory()
-    else
-      updateSymbolicMemory()
     // Save in case another memory tab is open
     this.state.mem = new Graph(nodes, edges)
     this.getMemory().setActive()
@@ -439,6 +410,7 @@ export default class View {
     return this.state
   }
 
+  // TODO: this active id is ugly
   updateState(res: Common.ResultRequest) {
     switch (res.status) {
       case 'elaboration':
@@ -455,10 +427,12 @@ export default class View {
         this.state.tagDefs = res.tagDefs
         this.state.ranges = res.ranges
         this.state.console = ''
+        this.startInteractive(res.steps)
         break;
       case 'stepping':
         this.state.result = res.result // TODO: not sure about this
         this.state.console = ''
+        this.updateInteractive(res.activeId, res.steps)
         break
       case 'failure':
         this.setStateEmpty()
