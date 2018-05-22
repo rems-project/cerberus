@@ -24,7 +24,7 @@ LEM0=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
 	-only_changed_output
  #       -report_default_instance_invocation -only_changed_output 
 
-LEM=$(LEM0) -outdir $(BUILD_DIR) -add_loc_annots
+LEM=$(LEM0) -outdir $(BUILD_DIR) # -add_loc_annots
 
 
 # C11 related stuff
@@ -112,13 +112,20 @@ test:
 new_main:
 	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str main2.native
 
+sb:
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str sb.native
+
+simpl:
+	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str simpl.native
+
+
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.native; \
+	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 ##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native

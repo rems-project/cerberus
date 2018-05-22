@@ -972,6 +972,8 @@ let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
     | (Builtin str1, Builtin str2) ->
         (* TODO: this is too strict *)
         str1 = str2
+    | (Atomic atom_ty1, Atomic atom_ty2) ->
+        are_compatible (no_qualifiers, atom_ty1) (no_qualifiers, atom_ty2)
     | _ ->
         (* TODO: we can't see Enum types here and there is some impl-def stuff *)
         false

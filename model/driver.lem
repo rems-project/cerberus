@@ -753,6 +753,11 @@ let rec driver with_concurrency =
             liftMem (Mem.ge_ptrval ptr_val1 ptr_val2) >>= fun is_ge ->
             ND.return (mk_th_st (if is_ge then Core.Vtrue else Core.Vfalse))
         
+        | (Mem_common.Memcpy, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
+                               Core.Vobject (Core.OVinteger size_ival)]) ->
+            liftMem (Mem.memcpy ptr_val1 ptr_val2 size_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+        
         | (Mem_common.Memcmp, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
                                Core.Vobject (Core.OVinteger size_ival)]) ->
             liftMem (Mem.memcmp ptr_val1 ptr_val2 size_ival) >>= fun res ->

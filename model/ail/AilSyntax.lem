@@ -25,7 +25,11 @@ type integerConstant (*[name = "ic*"]*) =
   | IConstantMax of integerType
   | IConstantMin of integerType
 
-type floatingConstant = string
+type floatingSuffix =
+  | Fsuf_F
+  | Fsuf_L
+
+type floatingConstant = string * maybe floatingSuffix
 
 type characterPrefix =
   | Pref_L
@@ -106,7 +110,9 @@ type expression_ 'a [name = "e*"] =
   
   (* TODO: hackish? *)
   (* TODO: these two don't exist in C (apart from in decl) *)
-  | AilEarray of ctype * list (maybe (expression 'a))
+  (* NOTE: the boolean says whether this array was created from a string literal
+     used to initialise a pointer to an array of character *)
+  | AilEarray of bool * ctype * list (maybe (expression 'a))
   | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
   | AilEunion of identifier * Cabs.cabs_identifier * maybe (expression 'a)
   

@@ -11,6 +11,7 @@ true: -traverse
 "parsers/c": include
 "parsers/core": include
 "dependencies/cmdliner-0.9.7/src": include
+"sandbox": include
 
 # Non-exhaustive patterns raise an error for Lem generated modules
 "ocaml_generated/cmm_op.ml": warn(-8)
@@ -23,3 +24,14 @@ true: warn(+8)
 
 "cmdliner-0.9.7/_build/src": include
 "dependencies/pprint-20140424/src": include
+
+
+"ocaml_generated/cabs_to_ail.ml": coverage
+"ocaml_generated/cabs_to_ail_aux.ml": coverage
+"ocaml_generated/cabs_to_ail_effect.ml": coverage
+"ocaml_generated/translation.ml": coverage
+"ocaml_generated/genTyping.ml": coverage
+"ocaml_generated/core_run.ml": coverage
+"ocaml_generated/driver.ml": coverage
+
+<src/main_.native>: coverage

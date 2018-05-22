@@ -932,7 +932,7 @@ let ub_str_bimap =
 val stringFromUndefined_behaviour: undefined_behaviour -> string
 let stringFromUndefined_behaviour = function
   | DUMMY str ->
-      "DUMMY[" ^ str ^ "]"
+      "DUMMY(" ^ str ^ ")"
   | ub ->
   match Bimap.lookupL ub ub_str_bimap with
     | Just str ->
@@ -955,6 +955,8 @@ val pretty_string_of_undefined_behaviour: undefined_behaviour -> string
 let pretty_string_of_undefined_behaviour = function
   | DUMMY str ->
       "DUMMY undefined behaviour (" ^ str ^ ")"
+  | UB_unspecified_lvalue ->
+      "(defacto) unspecified lvalue"
   | UB005_data_race ->
       "(§5.1.2.4#25) the execution of the program contains a data race."
   | UB008_multiple_linkage ->
@@ -1056,8 +1058,13 @@ let pretty_string_of_undefined_behaviour = function
       "Illtyped_argument_for_format"
   | Invalid_format str ->
       "Invalid_format \"" ^ str ^ "\""
-  | _ ->
-      "Undefined.pretty_TODO"
+  | ub ->
+      match Bimap.lookupL ub ub_str_bimap with
+        | Just str ->
+            "TODO(pretty ub) ==> " ^ str
+        | Nothing ->
+            "TODO(pretty ub) ==> unknown"
+      end
 end
 
 

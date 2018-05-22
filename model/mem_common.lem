@@ -130,6 +130,7 @@ type memop =
   
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
+  | Memcpy
   | Memcmp
 
 
@@ -157,6 +158,8 @@ instance (Show memop)
         "ptrvalidforderef"
     | PtrWellAligned ->
         "ptrwellaligned"
+    | Memcpy ->
+        "memcpy"
     | Memcmp ->
         "memcmp"
   end

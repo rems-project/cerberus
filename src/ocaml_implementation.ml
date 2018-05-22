@@ -58,7 +58,7 @@ module DefaultImpl: Implementation = struct
         None
     | Enum ident ->
         (* TODO *)
-        None
+        Some 4
     | Size_t
     | Ptrdiff_t ->
         Some 8
@@ -90,7 +90,7 @@ module DefaultImpl: Implementation = struct
         None
     | Enum ident ->
         (* TODO *)
-        None
+        Some (8*4-1)
     | Size_t ->
         begin match sizeof_ity Size_t with
           | Some n ->
@@ -146,7 +146,7 @@ module DefaultImpl: Implementation = struct
         None
     | Enum ident ->
         (* TODO *)
-        None
+        Some 4
     | Size_t
     | Ptrdiff_t ->
         Some 8

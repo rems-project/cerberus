@@ -169,6 +169,13 @@ let pp_cabs_integer_suffix = function
 let pp_cabs_integer_constant (str, suff_opt) =
   !^ str ^^ P.optional pp_cabs_integer_suffix suff_opt
 
+let pp_cabs_floating_suffix = function
+  | CabsFloatingSuffix_F -> !^ "f"
+  | CabsFloatingSuffix_L -> !^ "l"
+
+let pp_cabs_floating_constant (str, suff_opt) =
+  !^ str ^^ P.optional pp_cabs_floating_suffix suff_opt
+
 let pp_cabs_character_prefix = function
   | CabsPrefix_L -> !^ "L"
   | CabsPrefix_u -> !^ "u"
@@ -178,12 +185,12 @@ let pp_cabs_character_constant (pref_opt, str) =
   P.optional pp_cabs_character_prefix pref_opt ^^ P.squotes (!^ str)
 
 let pp_cabs_constant = function
-  | CabsInteger_const icst ->
-      pp_stmt_ctor "CabsInteger_const" ^^^ pp_cabs_integer_constant icst
-  | CabsFloating_const str ->
-      pp_stmt_ctor "CabsFloating_const" ^^^ !^ str
-  | CabsCharacter_const ccst ->
-      pp_stmt_ctor "CabsCharacter_const" ^^^ pp_cabs_character_constant ccst
+  | CabsInteger_const iCst ->
+      pp_stmt_ctor "CabsInteger_const" ^^^ pp_cabs_integer_constant iCst
+  | CabsFloating_const fCst ->
+      pp_stmt_ctor "CabsFloating_const" ^^^ pp_cabs_floating_constant fCst
+  | CabsCharacter_const cCst ->
+      pp_stmt_ctor "CabsCharacter_const" ^^^ pp_cabs_character_constant cCst
 
 
 let pp_cabs_encoding_prefix = function

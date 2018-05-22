@@ -201,3 +201,7 @@ type token =
   | MEMOP_OP of Mem_common.memop
   
   | AILNAME
+  
+  | FVFROMINT
+  | IVFROMFLOAT
+  | NULL

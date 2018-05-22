@@ -1,7 +1,7 @@
 open import Pervasives
 open import Utils Cabs
 
-import AilTypes
+import AilSyntax AilTypes
 
 module ATypes = AilTypes
 
@@ -62,3 +62,15 @@ let determinate_storage_duration link scs =
   
   else
     error "determinate_storage_duration"
+
+
+open AilSyntax
+val zeroAil: expression unit
+let zeroAil =
+  AnnotatedExpression () [] Loc.unknown
+    (AilEconst (ConstantInteger (IConstant 0 Octal Nothing)))
+
+val oneAil: expression unit
+let oneAil =
+  AnnotatedExpression () [] Loc.unknown
+    (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))

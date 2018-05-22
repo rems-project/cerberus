@@ -49,7 +49,6 @@ let from_main_file = function
 let location_to_string loc =
   let string_of_pos pos =
     Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
-  
   match loc with
     | Loc_unknown ->
         "unknown location"
@@ -58,5 +57,15 @@ let location_to_string loc =
     | Loc_point pos ->
         string_of_pos pos ^ ":"
     | Loc_region (pos1, pos2, _) ->
-        (* TODO *)
-        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
+        string_of_pos pos1 ^ "-" ^
+        begin if pos1.pos_fname = pos2.pos_fname then
+          ""
+        else
+          pos2.pos_fname
+        end ^
+        begin if pos1.pos_lnum = pos2.pos_lnum then
+          ""
+        else
+          string_of_int pos2.pos_lnum
+        end ^
+        string_of_int (1+pos2.pos_cnum-pos2.pos_bol)

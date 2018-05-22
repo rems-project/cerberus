@@ -231,8 +231,9 @@ let dtree_of_expression pp_annot expr =
           Dnode ( pp_stmt_ctor "AilEgeneric"
                 , (*add_std_annot*) (self e :: List.map dtree_of_generic_association
                                    gas) )
-      | AilEarray (ty, e_opts) ->
-          Dnode ( pp_stmt_ctor "AilEarray" ^^^ P.squotes (pp_ctype empty_qs ty)
+      | AilEarray (is_str, ty, e_opts) ->
+          Dnode ( pp_stmt_ctor "AilEarray" ^^^ (if is_str then !^ (ansi_format [Cyan] "str") ^^ P.space else P.empty) ^^
+                  P.squotes (pp_ctype empty_qs ty)
                 , (*add_std_annot*) (filter_opt_list
                                    (List.map (option None self) e_opts)) )
       | AilEstruct (tag_sym, xs) ->

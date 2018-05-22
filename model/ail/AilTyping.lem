@@ -1,10 +1,10 @@
-open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Implementation
+open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf
 
 open import ErrorMonad TypingError
-
+import Implementation
 
 (* following the table from (§6.4.4.1#5) *)
-val type_of_constant: implementation -> integerConstant -> errorM integerType
+val type_of_constant: Implementation.implementation -> integerConstant -> errorM integerType
 let type_of_constant impl = function
   | IConstant n Decimal Nothing ->
       if in_integer_range impl n (Signed Int_) then

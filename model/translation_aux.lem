@@ -301,17 +301,21 @@ type translation_stdlib = <|
   mkcall_bitwise_OR:                  Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_conv_int:                    Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_conv_loaded_int:             Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_loaded_fvfromint:            Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_loaded_ivfromfloat:          Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
   mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
   mkcall_all_values_representable_in: Aty.ctype -> Aty.ctype -> C.pexpr;
   mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
+  mkproc_loaded_pointer_to_Bool:      C.pexpr -> C.expr unit;
 |>
 
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
 let mk_translation_stdlib (ailnames, stdlib_fun_map) =
   let std_syms = Set_extra.toList (Map.domain stdlib_fun_map) in
   let mk_call str pes = Core.Pexpr [] () (Core.PEcall (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
+  let mk_proc str pes = Core.Expr [] (Core.Eproc () (Core.Sym (fetch_stdlib_symbol std_syms str)) pes) in
   <| ailnames=                           ailnames
    ; mkcall_bitwise_AND=                 fun ty pe1 pe2 -> mk_call "bitwise_AND"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
    ; mkcall_bitwise_XOR=                 fun ty pe1 pe2 -> mk_call "bitwise_XOR"                [Caux.mk_ail_ctype_pe ty; pe1; pe2]
@@ -326,8 +330,50 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
          error "mkcall_conv_loaded_int called on non integer type"
        else
          mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
-   ; mkcall_wrapI=                       fun ty pe      -> mk_call "wrapI"                      [Caux.mk_ail_ctype_pe ty; pe]
-   ; mkcall_ctype_width=                 fun ty         -> mk_call "ctype_width"                [Caux.mk_ail_ctype_pe ty]
-   ; mkcall_is_representable=            fun pe ty      -> mk_call "is_representable"           [pe; Caux.mk_ail_ctype_pe ty]
-   ; mkcall_all_values_representable_in= fun ty1 ty2    -> mk_call "all_values_representable_in" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2]
-   ; mkcall_catch_exceptional_condition= fun ty pe      -> mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe] |>
+   ; mkcall_loaded_fvfromint= fun ty pe ->
+       if not (AilTypesAux.is_floating ty) then
+         error "mkcall_loaded_ivfromfloat called on a non floating type"
+       else
+         mk_call "loaded_fvfromint" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_loaded_ivfromfloat= fun ty pe ->
+       if not (AilTypesAux.is_integer ty) then
+         error "mkcall_loaded_ivfromfloat called on a non integer type"
+       else
+         mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_wrapI= fun ty pe ->
+       mk_call "wrapI" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_ctype_width= fun ty ->
+       mk_call "ctype_width" [Caux.mk_ail_ctype_pe ty]
+   ; mkcall_is_representable= fun pe ty ->
+       let str = if AilTypesAux.is_integer ty then
+         "is_representable_integer"
+       else if AilTypesAux.is_floating ty then
+         "is_representable_floating"
+       else
+         error "Translation_aux.mkcall_is_representable, the type is neither an integer nor a floating" in
+       mk_call str [pe; Caux.mk_ail_ctype_pe ty]
+   ; mkcall_all_values_representable_in= fun ty1 ty2 ->
+       mk_call "all_values_representable_in" [Caux.mk_ail_ctype_pe ty1; Caux.mk_ail_ctype_pe ty2]
+   ; mkcall_catch_exceptional_condition= fun ty pe ->
+       mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkproc_loaded_pointer_to_Bool= fun pe ->
+       mk_proc "loaded_pointer_to_Bool" [pe]
+   |>
+
+
+(* ASSUMES: is_arithmetic ty_src && is_arithmetic ty_dst *)
+val conv_loaded_arith: translation_stdlib -> Aty.ctype -> Aty.ctype -> C.pexpr -> C.pexpr
+let conv_loaded_arith stdlib ty_src ty_dst pe =
+  if AilTypesAux.is_integer ty_src then
+    if AilTypesAux.is_integer ty_dst then
+      stdlib.mkcall_conv_loaded_int ty_dst pe
+    else (* is_floating ty_dst *)
+      stdlib.mkcall_loaded_fvfromint ty_dst pe
+(*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+  else (* is_floating ty_src *)
+    if AilTypesAux.is_integer ty_dst then
+      stdlib.mkcall_loaded_ivfromfloat ty_dst pe
+(*      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
+    else (* is_floating ty_dst *)
+      (* TODO: floating vs floating conversion *)
+      pe
