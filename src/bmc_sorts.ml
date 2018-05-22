@@ -2,6 +2,7 @@ open Z3
 open Z3.Arithmetic
 
 open Bmc_utils
+open Bmc_globals
 open Core
 
 (*
@@ -50,6 +51,19 @@ let basicTypeSort ctx =
     ; Datatype.mk_constructor_s ctx "Floating"
         (Symbol.mk_string ctx "is_Floating") [] [] []
     ] 
+(*
+let ctype_is_signed ctx expr =
+  let ctype_sort = ctypeSort ctx in
+  let integertype_sort = integerTypeSort ctx in
+
+  let isBasicTy_rec = List.nth (Datatype.get_recognizers ctype_sort) 0 in
+  let isBasicTy = Expr.mk_app ctx isBasicTy_rec [expr] in
+
+  let basicTy_fd = Expr.mk_app ctx (Datatype.get_accessors ctype_sort) 0 in
+  let basicTy = Expr.mk_app ctx basicTy_fd [expr] in
+
+  let isSigned_rec = List.nth (Datatype.get_constructors integertype_sort) 2 in
+*)
 
 
 let ctypeSort ctx = 
@@ -378,7 +392,10 @@ let core_object_type_to_z3_sort (ctx: context)
                                 : Z3.Sort.sort =
   match cot with
    | OTy_integer ->
-       Integer.mk_sort ctx
+       if g_bv then
+         BitVector.mk_sort ctx g_max_precision
+       else
+         Integer.mk_sort ctx
    | OTy_floating  -> assert false
    | OTy_pointer -> 
        PointerSort.mk_sort ctx

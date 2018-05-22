@@ -110,7 +110,8 @@ let rec ssa_pexpr (Pexpr(annot, ty, pexpr_))
       | Some x -> 
           SSA.return (PEsym x)
         end
-  | PEimpl _  -> assert false
+  | PEimpl _  -> 
+      SSA.return pexpr_
   | PEval _   -> 
       SSA.return pexpr_ 
   | PEconstrained _ -> assert false

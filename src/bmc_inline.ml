@@ -65,7 +65,14 @@ let rec inline_pexpr (st: 'a bmc_inline_state)
                      (Pexpr(annot,(), pexpr_) : pexpr) =
   let inlined = match pexpr_ with
     | PEsym sym -> pexpr_
-    | PEimpl _  -> pexpr_
+    | PEimpl const  -> 
+        begin
+        match Pmap.lookup const st.file.impl with
+        | Some (Def (_, Pexpr(_, (), pe_))) -> 
+            pe_
+        | _ -> assert false
+        | None -> assert false
+        end
     | PEval _   -> pexpr_
     | PEconstrained _ ->
         assert false
@@ -276,13 +283,19 @@ let impl : Implementation.implementation = {
             | Char -> true
             | Signed _ -> true
             | Unsigned _ -> false
+(*            | Bool -> false *)
             | _ -> assert false);
   precision= (fun i -> match Ocaml_implementation.Impl.sizeof_ity i with
               | Some x -> x * 8
               | None -> assert false );
   size_t = Unsigned Long;
   ptrdiff_t0 = Signed Long
-          }
+
+  }
+
+let sizeof ity = match Ocaml_implementation.Impl.sizeof_ity ity with
+  | Some x -> x
+  | None -> assert false
 
 let integer_range impl ity =  
   let prec = (impl.precision ity) in
@@ -305,6 +318,47 @@ let integer_range impl ity =
   else
     (0, ((1 lsl prec) - 1))
 
+let ibt_list = 
+  if g_all_types then
+    [ Ichar
+    ; Short 
+    ; Int_
+    ; Long
+    ; LongLong 
+    ; Intmax_t
+    ; Intptr_t 
+    ] 
+  else
+    [ Int_ ]
+
+let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list 
+let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list 
+let ity_list =   signed_ibt_list 
+               @ unsigned_ibt_list
+               @ [Char; (* Bool; *) (*Size_t;  Ptrdiff_t *)] 
+
+
+let core_ivsizeof (v : pexpr) =
+  let pe_of_sz sz = 
+    Pexpr([],(), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival
+    (Nat_big_num.of_int sz))))) in
+  let pe_of_ity ity = Pexpr([],(), PEval(Vctype (Basic0 (Integer (ity))))) in
+  let cond_ty_list = List.map (fun ty -> 
+    Pexpr([], (), PEop(OpEq, v, pe_of_ity ty))) ity_list in
+  let sz_list = List.map (fun ty ->
+    pe_of_sz (sizeof ty)) ity_list in
+  let pe_error = PEerror("TODO: sizeof cases", v) in
+
+  List.fold_left2 (fun e2 cond e1 ->
+    PEif(cond, e1, Pexpr([], (), e2))) pe_error cond_ty_list sz_list 
+  (*
+  pp_to_stdout (Pp_core.Basic.pp_pexpr (Pexpr([], (), tmp)));
+  print_endline;
+  tmp
+  *)
+
+
+
 
 (* TODO: get values from Implementation.ml *)
 (* TODO: write this nicer *)
@@ -314,6 +368,20 @@ let core_ivminmax (v : pexpr) =
     (Nat_big_num.of_int sz)))))
   in
 
+  let cond_ty_list = List.map (fun ty -> 
+    Pexpr([], (), PEop(OpEq, v, pe_of_ity ty))) ity_list in
+  let max_min_list = List.map (integer_range impl) ity_list in
+  let max_list = List.map (fun (_, max) -> pe_of_sz max) max_min_list in
+  let min_list = List.map (fun (min, _) -> pe_of_sz min) max_min_list in
+
+  let pe_error = PEerror("TODO: IVmax/min cases", v) in
+
+  List.fold_left2 (fun e2 cond e1 ->
+    PEif(cond, e1, Pexpr([], (), e2))) pe_error cond_ty_list  min_list,
+  List.fold_left2 (fun e2 cond e1 ->
+    PEif(cond, e1, Pexpr([], (), e2))) pe_error cond_ty_list  max_list
+
+  (*
   let pe_ty_signed_int = pe_of_ity (Signed Int_) in
   let (min_signed_int, max_signed_int) = integer_range impl (Signed Int_) in
   let pe_max_signed_int = pe_of_sz (max_signed_int) in 
@@ -332,7 +400,6 @@ let core_ivminmax (v : pexpr) =
   let cond_signed_int = Pexpr([],(), PEop(OpEq, v, pe_ty_signed_int)) in
   let cond_unsigned_int = Pexpr([],(), PEop(OpEq, v, pe_ty_unsigned_int)) in
   let cond_char = Pexpr([],(), PEop(OpEq, v, pe_ty_char)) in
-  let pe_error = Pexpr([],(), PEerror("TODO: IVmax/min cases", v))
   in
 
   PEif(cond_signed_int, pe_min_signed_int, 
@@ -341,13 +408,18 @@ let core_ivminmax (v : pexpr) =
   PEif(cond_signed_int, pe_max_signed_int, 
        Pexpr([],(), PEif(cond_unsigned_int, pe_max_unsigned_int, 
        Pexpr([], (), PEif(cond_char, pe_max_char, pe_error)))))
+  *)
 
 (* TODO: can't pattern match b/c signed is not a constructor in core ?*)
 (* TODO: IntN_t, Int_leastN_t, Int_fastN_t not included *)
 (* Maybe better to implement this in Z3? *)
 let core_isunsigned_signed (v : pexpr) =
-  let types = [Ichar; Short; Int_; Long; LongLong; 
-               Intmax_t; Intptr_t] in
+  let types =
+    if g_all_types then
+          [Ichar; Short; Int_; Long; LongLong; 
+           Intmax_t; Intptr_t] 
+    else
+      [Int_] in
   let pe_of_ity ity = Pexpr([],(), PEval(Vctype (Basic0 (Integer (ity))))) in
 
   let signed_types = List.map (fun ty -> pe_of_ity (Signed ty)) types in
@@ -381,7 +453,8 @@ let rec rewrite_pexpr (st: 'a bmc_inline_state)
     | PEctor (Civmax, [v]) ->
         let (_, max_expr) = core_ivminmax (rewrite_pexpr st v) in
         max_expr
-
+    | PEctor (Civsizeof, [v]) ->
+        core_ivsizeof (rewrite_pexpr st v) 
     | PEctor (ctor, pelist) ->
         PEctor(ctor, List.map (fun pe -> rewrite_pexpr st pe) pelist)
     | PEcase (pe, caselist) ->

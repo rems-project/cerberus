@@ -124,4 +124,10 @@ let save_to_file file str =
   let channel = open_out file in
   output_string channel str;
   close_out channel
-  
+(*
+let time f x =
+  let t = Sys.time() in
+  let fx = f x in
+  Printf.printf "Execution time: %fs\n" (Sys.time() -. t);
+  fx
+*)

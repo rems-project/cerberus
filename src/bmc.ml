@@ -123,7 +123,16 @@ type 'a bmc_state = {
   z3_ret       : Expr.expr;
   saves        : unit saves_map;
   depth        : int
+
+  (* z3_fns       : z3_fns *)
 }
+(*
+type z3_fns = {
+  is_signed    : FuncDecl.func_decl
+  is_unsigned  : FuncDecl.func_decl
+
+}
+*)
 
 type 'a bmc_ret = {
   expr        : Expr.expr;
@@ -736,6 +745,19 @@ let bmc_lookup_alloc alloc (state: 'a bmc_state) : kbmc_address =
 let bmc_lookup_addr_in_heap alloc heap =
   pmap_lookup_or_fail alloc heap
 *)
+(*
+let initial_z3_fns ctx =
+  let z3_fns : z3_fns = 
+    { is_signed = FuncDecl.mk_fresh_func_decl ctx
+                    "isSigned" [ctypeSort ctx] (Boolean.mk_sort ctx)
+    ; is_unsigned = FuncDecl.mk_fresh_func_decl ctx
+                    "isUnsigned" [ctypeSort ctx] (Boolean.mk_sort ctx)
+    } in
+
+  let isSigned_assert = 
+    *)
+
+
 
 let initial_bmc_state (supply : ksym_supply) 
                       (file : 'a typed_file)
@@ -745,10 +767,11 @@ let initial_bmc_state (supply : ksym_supply)
             ] in
 
   let ctx = mk_context cfg in
+  let solver = Solver.mk_solver ctx None in
   {
     ctx = ctx;
     file = file;
-    solver = Solver.mk_solver ctx None;
+    solver = solver;
     sym_table = ref (Pmap.empty sym_cmp);
     sym_supply = ref supply;
     addr_map = ref (Pmap.empty Pervasives.compare);
@@ -775,7 +798,12 @@ let integer_value_to_z3 (ctx: context) ival =
   let maybe_ival = eval_integer_value ival in
   match maybe_ival with
   | None -> assert false
-  | Some i -> Integer.mk_numeral_s ctx (Nat_big_num.to_string i)
+  | Some i -> 
+      if g_bv then
+        BitVector.mk_numeral ctx 
+              (Nat_big_num.to_string i) g_max_precision 
+      else
+        Integer.mk_numeral_s ctx (Nat_big_num.to_string i)
 
 
 let object_value_to_z3 (ctx: context) = function
@@ -864,14 +892,42 @@ let rec value_to_z3 (ctx: context) (cval: value) (typ: core_base_type) =
           | _ -> assert false 
           end
 
-let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = function
+let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) op =
+  if g_bv then
+    begin
+    match op with
+    | OpAdd -> BitVector.mk_add ctx pe1 pe2
+    | OpSub -> BitVector.mk_sub ctx pe1 pe2
+    | OpMul -> BitVector.mk_mul ctx pe1 pe2
+    | OpDiv -> BitVector.mk_sdiv ctx pe1 pe2
+    | OpRem_t -> BitVector.mk_srem ctx pe1 pe2
+    | OpRem_f -> BitVector.mk_srem ctx pe1 pe2
+    | OpExp -> 
+      if (Expr.is_numeral pe1 && (BitVector.get_int pe1 = 2)) then
+        let one = BitVector.mk_numeral ctx "1" g_max_precision in
+        let shifted = BitVector.mk_shl ctx one pe2 in
+        shifted
+      else
+        assert false
+    | OpEq -> mk_eq ctx pe1 pe2   
+    | OpLt -> BitVector.mk_slt ctx pe1 pe2
+    | OpLe -> BitVector.mk_sle ctx pe1 pe2 
+    | OpGt -> BitVector.mk_sgt ctx pe1 pe2
+    | OpGe -> BitVector.mk_sge ctx pe1 pe2
+    | OpAnd -> mk_and ctx [ pe1; pe2 ] 
+    | OpOr -> mk_or ctx [ pe1; pe2 ]
+    end
+  else 
+    begin
+    match op with
   | OpAdd -> Arithmetic.mk_add ctx [ pe1; pe2 ]
   | OpSub -> Arithmetic.mk_sub ctx [ pe1; pe2 ]
   | OpMul -> Arithmetic.mk_mul ctx [ pe1; pe2 ]
   | OpDiv -> Arithmetic.mk_div ctx pe1 pe2
   | OpRem_t -> Integer.mk_mod ctx pe1 pe2
   | OpRem_f -> Integer.mk_mod ctx pe1 pe2 (* TODO: Flooring remainder? *)
-  | OpExp -> assert false
+  | OpExp -> 
+      assert false
   | OpEq -> mk_eq ctx pe1 pe2   
   | OpLt -> Arithmetic.mk_lt ctx pe1 pe2
   | OpLe -> Arithmetic.mk_le ctx pe1 pe2 
@@ -879,6 +935,7 @@ let binop_to_constraints (ctx: context) (pe1: Expr.expr) (pe2: Expr.expr) = func
   | OpGe -> Arithmetic.mk_ge ctx pe1 pe2
   | OpAnd -> mk_and ctx [ pe1; pe2 ] 
   | OpOr -> mk_or ctx [ pe1; pe2 ]
+    end
 
 
 (* TODO: add symbol to sym table somewhere else!!! 
@@ -895,7 +952,8 @@ let mk_eq_expr (state: 'a bmc_state) (m_sym: ksym option)
 
       begin
       match ty with
-      | BTy_unit -> assert false
+      | BTy_unit -> 
+          mk_true state.ctx
       | BTy_ctype (* Fall through *)
       | BTy_boolean -> 
           mk_eq state.ctx expr_pat expr
@@ -1046,7 +1104,7 @@ let concat_vcs (ctx: context)
   [new_vc1; new_vc2 ]                  
 
 let rec bmc_pexpr (state: 'a bmc_state) 
-                  (Pexpr(_, bTy, pe) : typed_pexpr) : 
+                  (Pexpr(_, bTy, pe) as pexpr : typed_pexpr) : 
                     'a bmc_ret = 
   match pe with
     | PEsym sym ->
@@ -1060,7 +1118,8 @@ let rec bmc_pexpr (state: 'a bmc_state)
         ; returned = mk_false state.ctx
         ; state  = state
         }
-    | PEimpl _ -> assert false
+    | PEimpl _ ->
+        assert false
     | PEval cval ->
         { expr = value_to_z3 state.ctx cval bTy
         ; allocs = AddressSet.empty
@@ -1227,10 +1286,8 @@ let rec bmc_pexpr (state: 'a bmc_state)
         *)
 
         let new_vc = 
-          mk_lt state.ctx index (Address.apply_getAllocSize state.ctx alloc) in
-        (*
-        print_endline (Expr.to_string new_vc);
-        *)
+          mk_lt state.ctx index 
+          (Address.apply_getAllocSize state.ctx alloc) in
 
         { expr = PointerSort.mk_ptr state.ctx new_address
         ; allocs = res1.allocs
@@ -1291,8 +1348,10 @@ let rec bmc_pexpr (state: 'a bmc_state)
         ; state = res1.state
         }
     | PEis_scalar _ 
-    | PEis_integer _ 
-    | PEis_signed _ 
+    | PEis_integer _ ->
+        assert false
+    | PEis_signed _ ->
+        assert false 
     | PEis_unsigned _ ->
         assert false
 
@@ -1303,6 +1362,7 @@ let mk_bmc_address (addr : Address.addr) (sort: Sort.sort) =
    sort = sort
   }
 
+(*
 let rec mk_loaded_assertions ctx ty expr =
   match ty with
   | Basic0 (Integer ity) ->
@@ -1325,6 +1385,7 @@ let rec mk_loaded_assertions ctx ty expr =
       (* TODO: not exactly correct *)
       mk_loaded_assertions ctx ctype expr
   | _ -> assert false
+*)
 
 (* TODO: currently ignores unspecified type *)
 let get_assert_unspecified (sort: Sort.sort) ty ctx expr =
@@ -1362,7 +1423,9 @@ let rec ctype_to_sort_list (state: 'a bmc_state) ty =
      *       This is used only as a guard for unimplemented types.
      *)
     | Integer (Signed Int_)
-    | Integer (Unsigned Int_) ->
+    | Integer (Unsigned Int_) 
+    | Integer (Signed Long) 
+    | Integer (Unsigned Long) ->
         [ LoadedInteger.mk_sort state.ctx ]
     | Integer _ -> assert false
     | Floating _ -> assert false
@@ -1650,8 +1713,10 @@ let bmc_paction (state: 'a bmc_state)
 
        (* If specified, assert it is in the range of ty*)
        (* TODO: check correctness ? *)
+                          (*
        Solver.add state.solver 
          (mk_loaded_assertions state.ctx ty ret_value);
+         *)
 
       let action = Read(mk_next_aid state, state.tid, mem_order,
                          z3_sym, ret_value) in
@@ -1799,9 +1864,9 @@ let rec bmc_expr (state: 'a bmc_state)
       bmc_pexpr state pe 
   | Ememop (PtrValidForDeref, [pe]) ->
       let res_pe = bmc_pexpr state pe in
-      bmc_debug_print 2 "TODO: Ememop PtrValidForDeref: just checks for null";
+      bmc_debug_print 2 "TODO: Ememop PtrValidForDeref always true";
 
-      { expr = mk_not state.ctx (PointerSort.is_null state.ctx res_pe.expr)
+      { expr = mk_true state.ctx
       ; vcs = res_pe.vcs
       ; allocs = AddressSet.empty
       ; preexec = initial_preexec ()
@@ -3510,18 +3575,24 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             preexec_to_z3 state1 preexec
         ) in
 
-      bmc_debug_print 1 "-----CONSTRAINTS ONLY";
-      assert (Solver.check state1.solver [] = SATISFIABLE);
+      (*bmc_debug_print 1 "-----CONSTRAINTS ONLY"; *)
+      let t0 = Sys.time () in
+      let check0 = Solver.check state1.solver []  in
+      (*(Solver.to_string state1.solver); *)
+      assert (check0 = SATISFIABLE); 
+      Printf.printf "Time of check0: %fs\n" (Sys.time() -. t0);
 
       if not g_sequentialise then
         (print_endline "-----WITH EVENTS";
          Solver.add state1.solver z3_preexec);
 
       print_endline ("RESULT EXPR: " ^ (Expr.to_string result.expr));
-
+      
+      let t1 = Sys.time () in
       if (check_solver_fun state1.solver (Some result.expr)
             = SATISFIABLE) then
         begin
+          Printf.printf "Time of check1: %fs\n" (Sys.time() -. t1);
           let check_vcs = 
             if not g_sequentialise then
               (match funcDecls with
@@ -3532,7 +3603,10 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
                                          (Some result.expr) !(state.src_ptr_map);
                     print_endline "-----WITH RACE CHECKS";
                     Solver.add state1.solver [fns.unseq_race; fns.data_race];
-                    if (Solver.check state1.solver [] = SATISFIABLE) then
+                    let t2 = Sys.time() in
+                    let check2 = Solver.check state1.solver [] in
+                    Printf.printf "Time of check2: %fs\n" (Sys.time() -. t2);
+                    if (check2 = SATISFIABLE) then
                       (print_endline "All consistent executions are race free.";
                        true)
                     else
@@ -3558,13 +3632,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
               
             (*Solver.add state1.solver 
               [ Expr.simplify (mk_or state1.ctx not_vcs) None ] ; *)
+            bmc_debug_print 1  (Solver.to_string state1.solver);
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
 
             (* print_endline (Solver.to_string state1.solver);   *)
             print_endline "Checking sat";
-
+            let t3 = Sys.time() in
             let _ = check_solver (state1.solver) in
+            Printf.printf "Time of check3: %fs\n" (Sys.time() -. t3);
             if g_print_stats then
               begin
               let stats = Solver.get_statistics state1.solver in
@@ -3584,9 +3660,11 @@ let (>>=) = Exception.except_bind
 
 let run_bmc (core_file : 'a file) 
             (sym_supply: ksym_supply)    = 
+  let t = Sys.time()  in
+
   (* TODO: state monad with sym_supply *)
   bmc_debug_print 1 "ENTER: BMC PIPELINE";
-  if g_print_files then pp_file core_file;
+  if g_print_initial_file then pp_file core_file;
 
   bmc_debug_print 1 "ENTER: NORMALIZING FILE";
   let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
@@ -3612,6 +3690,8 @@ let run_bmc (core_file : 'a file)
       bmc_debug_print 1 "START Z3";
       (* bmc_file seq_file norm_supply; *)
       bmc_file core_to_check norm_supply;
+
+      Printf.printf "Execution time: %fs\n" ((Sys.time()) -. t);
 
       bmc_debug_print 1 "EXIT: BMC PIPELINE "
     )
