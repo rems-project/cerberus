@@ -647,4 +647,5 @@ let serialise_map f m =
 let serialise_mem_state (m:mem_state) =
   let not_dead x _ = not @@ Pset.mem x m.dead_allocations in
   let allocs = Pmap.filter not_dead m.allocations in
-  serialise_map serialise_storage allocs
+  `Assoc [("kind", `String "symbolic");
+          ("allocations", serialise_map serialise_storage allocs)]

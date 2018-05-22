@@ -1,4 +1,5 @@
 import $ from "jquery"
+import Common from "./common"
 
 namespace Util {
 
@@ -84,6 +85,19 @@ function generateColor(style: HTMLElement) {
 
 export function getColor(i: number): string {
   return 'color' + (i % 100)
+}
+
+export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Common.Range>): string {
+  for (let i = 0; i < state.locs.length; i ++) {
+    const loc = state.locs[i].c
+    if ((loc.begin.line < cur.begin.line
+        || (loc.begin.line == cur.begin.line && loc.begin.ch <= cur.begin.ch))
+    && (loc.end.line > cur.end.line)
+        || (loc.end.line == cur.end.line && loc.end.ch >= cur.end.ch)) {
+      return 'color' + state.locs[i].color;
+    }
+  }
+  throw new Error ('getColorByLoC: Location not found!')
 }
 
 export function createStyle() {

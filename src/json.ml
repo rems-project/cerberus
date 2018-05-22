@@ -36,6 +36,6 @@ let of_location l =
             ("ch", `Int (p.pos_cnum-p.pos_bol))]
   in match l with
   | Loc_unknown   -> `Null
-  | Loc_other str -> `String str
+  | Loc_other str -> `Null (* `String str *)
   | Loc_point p   -> of_pos p
   | Loc_region (p1, p2, _) -> `Assoc [("begin", of_pos p1); ("end", of_pos p2)]

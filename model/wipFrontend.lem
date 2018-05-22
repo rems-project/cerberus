@@ -90,6 +90,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
               Core_run.labels= Map.empty;
               Core_run.labels2= Map.empty;
               Core_run.current_loc= loc;
+              Core_run.current_uid= Nothing;
               Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)
             |> init_dr_st.Driver.core_state
           ) init_dr_st.Driver.core_run_state in

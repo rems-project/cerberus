@@ -189,11 +189,8 @@ export class Interactive extends Tab {
           if (active.group && active.group == 'leaf') {
             ee.emit('step', active)
           } else {
-            if (active.loc) {
-              ee.emit('clear')
-              //TODO: ui.mark(ui.source.getLocation(active.loc.begin, active.loc.end))
-              console.log('mark active node location')
-            }
+            ee.emit('clear')
+            if (active.loc) ee.emit('markInteractive', active.loc)
             ee.emit('setMemory', active.mem)
           }
         }
@@ -237,6 +234,8 @@ export class Interactive extends Tab {
       this.network.focus(lastLeaf.id)
       this.network.selectNodes([lastLeaf.id])
       this.network.redraw()
+      this.ee.emit('clear')
+      if (lastLeaf.loc) this.ee.emit('markInteractive', lastLeaf.loc)
       this.ee.emit('setMemory', lastLeaf.mem)
     }
   }
@@ -577,7 +576,13 @@ class Console extends ReadOnly {
   }
 
   update(s:Common.State) {
-    this.setValue(s.console.replace(/[^:]*:/, s.title + ':'))
+    const vs = s.console.split(':')
+    if (vs.length > 2) {
+      this.ee.emit('markError', parseInt(vs[1]))
+      this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
+    } else {
+      this.setValue(s.console)
+    }
   }
 }
 
@@ -585,6 +590,7 @@ class Console extends ReadOnly {
 export class Source extends Editor {
   constructor(title: string, source: string, ee: Common.EventEmitter) {
     super(title, source, ee)
+    this.editor.setOption('gutters', ['error'])
     this.editor.setOption('mode', 'text/x-csrc')
     this.editor.on('cursorActivity', (ed) => this.markSelection(ed.getDoc()))
 
@@ -593,7 +599,9 @@ export class Source extends Editor {
       ee.emit('clear')
     })
     ee.on('highlight', this, this.highlight)
-    ee.on('mark', this, (l: any) => this.mark(l))
+    ee.on('mark', this, this.mark)
+    ee.on('markError', this, this.markError)
+    ee.on('markInteractive', this, this.markInteractive)
     ee.on('clear', this, this.clear)
   }
 
@@ -619,12 +627,23 @@ export class Source extends Editor {
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
+  markInteractive(loc: any, state: Readonly<Common.State>) {
+    if (loc.c) {
+      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
+    }
+  }
+
+  markError(l: number) {
+    this.editor.setGutterMarker(l-1, 'error', $('<div class="syntax-error">✖</div>')[0])
+  }
+
   highlight(s: Common.State) {
     for (let i = 0; i < s.locs.length; i++)
       this.mark(s.locs[i])
   }
 
   clear() {
+    this.editor.clearGutter('error')
     let marks = this.editor.getDoc().getAllMarks()
     for (let i = 0; i < marks.length; i++)
       marks[i].clear()
@@ -759,6 +778,7 @@ export class Core extends ReadOnly {
     ee.on('update', this, this.update)
     ee.on('highlight', this, this.highlight)
     ee.on('mark', this, this.mark)
+    ee.on('markInteractive', this, this.markInteractive)
   }
 
   update(s: Common.State) {
@@ -781,9 +801,26 @@ export class Core extends ReadOnly {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
+  markInteractive(loc: any, state: Readonly<Common.State>) {
+    if (loc.core && state.ranges) {
+      const range = state.ranges[loc.core]
+      if (loc.c && range)
+        this.editor.getDoc().markText(range.begin, range.end, { className: Util.getColorByLocC(state, loc.c) })
+    }
+  }
+
   highlight(s: Common.State) {
     for (let i = s.locs.length - 1; i >= 0; i--)
       this.mark(s.locs[i])
+  }
+
+  clear() {
+    let marks = this.editor.getDoc().getAllMarks()
+    for (let i = 0; i < marks.length; i++)
+      marks[i].clear()
+    this.editor.getDoc().eachLine((line: CodeMirror.LineHandle) => {
+      this.editor.removeLineClass(line, 'background')
+    })
   }
 }
 
