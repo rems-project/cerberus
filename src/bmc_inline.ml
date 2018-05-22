@@ -311,12 +311,24 @@ let integer_range impl ity =
                                       ((2 ** (prec - 1)) - 1)
 *)
     | Two'sComplement   -> 
+        (Nat_big_num.sub (Nat_big_num.of_int 0)
+                         (Nat_big_num.pow_int (Nat_big_num.of_int 2) 
+                                              prec_minus_one)),
+        (Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2)
+                                              prec_minus_one)
+                         (Nat_big_num.of_int 1)
+        )
+        (*
         (-(1 lsl (prec_minus_one))), 
         (((1 lsl prec_minus_one) - 1))
+    *)
     | _ -> assert false
     )
   else
-    (0, ((1 lsl prec) - 1))
+    Nat_big_num.of_int 0, 
+    Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
+                    (Nat_big_num.of_int 1)
+    (* (0, ((1 lsl prec) - 1)) *)
 
 let ibt_list = 
   if g_all_types then
@@ -364,8 +376,8 @@ let core_ivsizeof (v : pexpr) =
 (* TODO: write this nicer *)
 let core_ivminmax (v : pexpr) =
   let pe_of_ity ity = Pexpr([],(), PEval(Vctype (Basic0 (Integer (ity)))))
-  and pe_of_sz sz = Pexpr([],(), PEval(Vobject (OVinteger (Ocaml_mem.integer_ival
-    (Nat_big_num.of_int sz)))))
+  and pe_of_sz sz = Pexpr([],(), PEval(Vobject (OVinteger (
+    Ocaml_mem.integer_ival sz))))
   in
 
   let cond_ty_list = List.map (fun ty -> 
