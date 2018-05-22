@@ -1086,8 +1086,24 @@ let register_external_object_declaration loc sym ((_, _, new_qs, new_ty) as new_
           fail loc
             (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
         else
-          let () = Debug.print_debug 7 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
-          return ()
+          let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
+          (* TODO: check that is ok to use AilTypesAux.make_composite for object types (see comment in AilTypesAux) *)
+          (* TODO: what about qualifiers? *)
+          if AilTypesAux.is_array prev_ty && AilTypesAux.is_array new_ty then
+            match AilTypesAux.make_composite prev_ty new_ty with
+              | Just ty' ->
+                  State_exception.update (fun st ->
+                    <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
+                  )
+              | Nothing ->
+                  let () = Debug.print_debug 0 [] (fun () ->
+                    "prev_ty= " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^ "\n" ^
+                    "new_ty= " ^ Pp.stringFromAil_ctype new_qs new_ty
+                  ) in
+                  error "WIP: register_external_object_declaration, make_composite failed"
+            end
+          else
+            return ()
     | Nothing ->
         State_exception.update (fun st ->
           <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
@@ -1096,6 +1112,11 @@ let register_external_object_declaration loc sym ((_, _, new_qs, new_ty) as new_
 
 val update_external_object_type: A.identifier -> ATypes.ctype -> desugM unit
 let update_external_object_type sym ty =
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "updating external object type of `" ^ show sym ^
+      "' with ty= " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty)
+  ) >>
   State_exception.update (fun st ->
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
@@ -1126,6 +1147,25 @@ let register_internal_object_declaration loc sym decl =
           <| st with internal_object_declarations= Map.insert sym decl st.internal_object_declarations |>
         )
   end
+
+val update_internal_object_type: A.identifier -> ATypes.ctype -> desugM unit
+let update_internal_object_type sym ty =
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "updating internal object type of `" ^ show sym ^
+      "' with ty= " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty)
+  ) >>
+  State_exception.update (fun st ->
+    match Map.lookup sym st.internal_object_declarations with
+      | Nothing ->
+          error "[Cabs_to_ail_effect.update_internal_object_type] called on an unregistered symbol"
+      | Just (dur, is_register, qs, _) ->
+          <| st with internal_object_declarations=
+            Map.insert sym (dur, is_register, qs, ty) st.internal_object_declarations
+          |>
+    end
+  )
+
 
 
 val register_static_assertion: A.expression unit -> A.stringLiteral -> desugM unit
@@ -1284,7 +1324,7 @@ let fetch_object_declaration sym =
     | Just decl ->
         return decl
     | Nothing ->
-        error "TODO: failed to fetch object declaration"
+        error ("TODO: failed to fetch object declaration ==> " ^ show sym)
   end
 
 

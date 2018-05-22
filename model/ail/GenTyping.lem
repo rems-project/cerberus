@@ -379,11 +379,19 @@ let annotate_stringLiteral (pref_opt, strs) =
 val     annotate_constant: constant -> E.errorM (constant * genTypeCategory)
 let rec annotate_constant cst =
   match cst with
-    | ConstantInteger ic ->
-        E.return (ConstantInteger ic, GenRValueType (GenBasic (GenInteger (type_of_constant ic))))
-    | ConstantFloating fc ->
-        (* TODO: ignoring the prefix for now (assuming the absence thereof) *)
-        E.return (ConstantFloating fc, GenRValueType (GenBasic (GenFloating (RealFloating Double))))
+    | ConstantInteger iCst ->
+        E.return (ConstantInteger iCst, GenRValueType (GenBasic (GenInteger (type_of_constant iCst))))
+    | ConstantFloating ((_, suff_opt) as fCst) ->
+        (* STD §6.4.4.2#4 *)
+        let rfty = match suff_opt with
+          | Nothing ->
+              Double
+          | Just Fsuf_F ->
+              Float
+          | Just Fsuf_L ->
+              LongDouble
+        end in
+        E.return (ConstantFloating fCst, GenRValueType (GenBasic (GenFloating (RealFloating rfty))))
     | ConstantCharacter cc ->
         (* TODO: §6.4.4.4#9 *)
         match fst cc with
@@ -568,11 +576,11 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           | _ -> E.fail loc (TError_TODO 24)
         end
     
-    | AilEarray elem_ty e_opts ->
+    | AilEarray is_str elem_ty e_opts ->
         (* TODO: think about it *)
         E.mapM (maybe (E.return Nothing) (fun z -> Just <$> annotate_rvalue z)) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
-        E.return (AilEarray elem_ty $ List.map (maybe Nothing (fun z -> Just (fst z))) xs,
+        E.return (AilEarray is_str elem_ty $ List.map (maybe Nothing (fun z -> Just (fst z))) xs,
                   GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))))
 
 (*
@@ -1093,7 +1101,8 @@ TODO
     | AilEbinary e1 (Arithmetic Add as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-STD_ "§6.5.2.1#1" $
+        (* NOTE: this is also relates to §6.5.2.1#1 *)
+        (* STD §6.5.6#2 *)
         if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
         else if is_pointer_to_complete_object sigm gty2 && is_integer gty1 then
@@ -1101,7 +1110,7 @@ STD_ "§6.5.2.1#1" $
         else if well_typed_binary_arithmetic gty1 Add gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (usual_arithmetic gty1 gty2))
         else
-          E.fail loc (TError_TODO 37)
+          E.fail loc (TError "§6.5.2.1#1")
     
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1308,8 +1317,12 @@ STD_ "§6.5.2.1#1" $
     
     (* TODO: maybe look at the type of inside? *)
     | AilEannot ty e ->
-        annotate_expression ctx e >>= fun (AnnotatedExpression _ _ _ e') ->
-        E.return (e', GenRValueType (inject_type ty))
+        annotate_expression ctx e >>= function
+          | AnnotatedExpression (GenLValueType qs _ isRegister) _ _ e' ->
+              E.return (e', GenLValueType qs ty isRegister)
+          | AnnotatedExpression (GenRValueType _) annots loc e' ->
+              E.return (e', GenRValueType (inject_type ty))
+        end
     
     | AilEva_start e sym ->
         annotate_rvalue e >>= function
@@ -1438,7 +1451,9 @@ and function_decay sigm a_expr =
 
 and perform_decays sigm ctx a_expr =
   let is_literal = match a_expr with
-    | AnnotatedExpression _ _ _ (AilEstr _) ->
+    | AnnotatedExpression _ _ _ (AilEarray true _ _) ->
+        true
+    | AnnotatedExpression _ _ _ (AilEstr _) -> (* TODO: this is probably dead now *)
         true
     | _ ->
         false
@@ -1477,7 +1492,7 @@ and perform_decays sigm ctx a_expr =
               if not (AAux.is_unqualified qs) then
                 Debug.warn [Debug.DB_ail_typing] (fun () -> "(UNSURE) GenTyping.array_decay, qs <> {}")
               else
-              ()
+                ()
             end in
             E.return (
               AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
@@ -1494,11 +1509,26 @@ and perform_decays sigm ctx a_expr =
                 AnnotatedExpression
                   (GenRValueType (GenPointer no_qualifiers (Function hasProto ty params isVariadic)))
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
+            | GenArray elem_ty sz_opt ->
+              match a_expr with
+                | AnnotatedExpression _ _ _ (AilEarray false _ _) ->
+                    (* NOTE: this case doesn't syntactically exist in C, since
+                       array values don't exist *)
+                    a_expr
+                | _ ->
+                    if not (List.elem ctx [CTXarray_init] && is_literal) then
+                      let ty = Array elem_ty sz_opt in
+                      (* STD §6.3.2.1#3 *)
+                      (* performing the array decay *)
+                      AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
+                        std_annots (Loc.locOf a_expr) (AilEarray_decay a_expr)
+                    else
+                      a_expr
+              end
             | _ ->
                 a_expr
           end
         else
-          (* TODO: array decay? *)
           E.return a_expr
   end
 
@@ -1726,7 +1756,8 @@ and annotate_definition_aux sigm gamm (ty, e) =
                E.return a_e
              else
                 error ("TODO(annotate_definition_aux, 3): error message: array object definition, types didn't match ==> " ^
-                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
+                       Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ "[" ^ show n1 ^ "] <-> " ^
+                       Pp.stringFromAil_ctype no_qualifiers elem_ty2 ^ "[" ^ show n2 ^ "]")
          | _ ->
              (* STD §6.7.9#14 *)
              if AAux.is_array_of_character ty then

@@ -247,7 +247,7 @@ let pp_ctype_aux pp_ident_opt qs ty =
       | Array (elem_ty, n_opt) ->
           fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
       | Function (has_proto, (ret_qs, ret_ty), params, isVariadic) ->
-          fun _ -> !^ "WIP"
+          fun _ -> !^ "WIP(Function)"
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
             aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
@@ -435,8 +435,13 @@ let pp_integerConstant = function
       pp_const (macro_string_of_integerType ity ^ "_MIN")
 
 
-let pp_floatingConstant str =
-  !^ str
+let pp_floatingConstant (str, suff_opt) =
+  !^ str ^^
+  begin match suff_opt with
+    | None -> P.empty
+    | Some Fsuf_F -> !^ "f"
+    | Some Fsuf_L -> !^ "l"
+  end
 
 let pp_characterPrefix pref =
   let to_string = function
@@ -522,7 +527,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
-        | AilEarray (ty, e_opts) ->
+        | AilEarray (_, ty, e_opts) ->
             P.braces (comma_list (function Some e -> pp e | None -> !^ "_") e_opts)
         | AilEstruct (tag_sym, xs) ->
             P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)

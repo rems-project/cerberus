@@ -58,8 +58,9 @@ let keywords =
       ("eff", T.EFF);
       
       (* for Core values *)
+      ("NULL",        T.NULL           );
       ("Unit",        T.UNIT_VALUE     );
-      ("True",        T.TRUE   );
+      ("True",        T.TRUE           );
       ("False",       T.FALSE          );
       ("Ivmax",       T.IVMAX          );
       ("Ivmin",       T.IVMIN          );
@@ -74,6 +75,9 @@ let keywords =
 *)
       ("Array",       T.ARRAY          );
       ("Specified",   T.SPECIFIED      );
+
+      ("Fvfromint",   T.FVFROMINT      );
+      ("Ivfromfloat", T.IVFROMFLOAT    );
       
       (* for Core (pure) expressions *)
       ("not",          T.NOT         );
@@ -150,6 +154,7 @@ let keywords =
       ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
       ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
       
+      ("Memcpy", T.MEMOP_OP Mem_common.Memcpy);
       ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
       
       (* for source attributes *)
@@ -185,8 +190,8 @@ let scan_ub lexbuf =
         T.UB ub
     | None ->
         (* TODO: hack *)
-        if id = "<<DUMMY>>" then
-          T.UB (Undefined.DUMMY "parser")
+        if String.sub id 0 8 = "<<DUMMY(" then
+          T.UB (Undefined.DUMMY (String.sub id 8 (String.length id - 11)))
         else
           failwith ("Found an invalid undefined-behaviour: " ^ id)
 
@@ -206,7 +211,7 @@ let lex_comment remainder lexbuf =
 let error_name =
   "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
 let ub_name =
-  "<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>"
+  "<<" ( ['A'-'Z' 'a'-'z' '_' '0'-'9']* | "DUMMY" "(" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ")" )  ">>"
 let impl_name =
   '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
 let symbolic_name =

@@ -1,6 +1,9 @@
-fun is_representable (n: integer, ty: ctype): boolean :=
+fun is_representable_integer (n: integer, ty: ctype): boolean :=
 --  <ctype_min>(ty) <= n /\ n <= <ctype_max>(ty)
   Ivmin(ty) <= n /\ n <= Ivmax(ty)
+
+fun is_representable_floating (f: floating, ty: ctype): boolean :=
+  error(<<<is_representable_floating>>>, Unit)
 
 
 fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
@@ -9,7 +12,7 @@ fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
 
 -- STD §6.5#5
 fun catch_exceptional_condition (ty: ctype, n: integer) : integer :=
-  if is_representable(n, ty) then
+  if is_representable_integer(n, ty) then
     n
   else
     undef(<<UB036_exceptional_condition>>)
@@ -31,7 +34,7 @@ fun conv_int (ty: ctype, n: integer): integer :=
   -- type other than _Bool, if the value can be represented by the new type, it
   -- is unchanged.
   else
-    if is_representable(n, ty) then
+    if is_representable_integer(n, ty) then
       n
   
   -- (STD §6.3.1.3#2) Otherwise, if the new type is unsigned, the value is converted
@@ -60,6 +63,31 @@ fun conv_loaded_int (ty: ctype, _n: loaded integer): loaded integer :=
         Unspecified(ty)
   end
 
+fun loaded_fvfromint (ty: ctype, _n: loaded integer) : loaded floating :=
+  case _n of
+    | Specified(n:integer) =>
+        Specified(Fvfromint(n))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+fun loaded_ivfromfloat (ty: ctype, _f: loaded floating) : loaded integer :=
+  case _f of
+    | Specified(f:floating) =>
+        Specified(Ivfromfloat(ty, f))
+    | Unspecified(_: ctype) =>
+        Unspecified(ty)
+  end
+
+proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
+  case _ptr of
+    | Specified(ptr: pointer) =>
+        let weak is_null: boolean = memop(PtrEq, ptr, NULL(void*)) in
+        pure(Specified(if is_null then 0 else 1))
+    | Unspecified(_: ctype) =>
+        -- TODO: check
+        pure(Unspecified(!(_Bool)))
+  end
 
 
 
@@ -187,7 +215,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
           let strong ret: [integer] = pcall(rev_listFromStr_aux, array_shift(str, !(char), 1), c :: acc) in
           pure(ret)
     | Unspecified(_: ctype) =>
-        pure (undef(<<DUMMY>>)) -- TODO think about that
+        pure (undef(<<DUMMY(rev_listFromStr_aux)>>)) -- TODO think about that
   end
 
 
@@ -211,7 +239,7 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
         let strong ret: loaded integer = pcall(<std_function_printf>, xs, args) in
         pure(ret)
     | Unspecified(_: ctype) =>
-        pure (undef(<<DUMMY>>)) -- TODO think about that
+        pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
   end
 
 
@@ -248,8 +276,22 @@ fun wrapI(ty: ctype, n: integer) : integer :=
       r - dlt
 
 
+proc [ailname= "memcpy"] memcpy_proxy (s1_ptr: pointer, s2_ptr: pointer, n_ptr: pointer) : eff loaded pointer :=
+  let strong _s1: loaded pointer = load(!(void *), s1_ptr) in
+  let strong _s2: loaded pointer = load(!(void *), s2_ptr) in
+  let strong _n:  loaded integer = load(!(size_t), n_ptr)  in
+  case (_s1, _s2, _n) of
+    | (Specified(s1: pointer), Specified(s2: pointer), Specified(n: integer)) =>
+        let strong res: pointer = memop(Memcpy, s1, s2, n) in
+        pure(Specified(res))
+    | _: (loaded pointer, loaded pointer, loaded integer) =>
+        pure(undef(<<DUMMY(memcpy_proxy)>>)) -- TODO check that
+  end
 
 
+{-
+void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
+-}
 
 proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr: pointer) : eff loaded integer :=
   let strong _p: loaded pointer = load(!(void *), p_ptr) in
@@ -259,4 +301,21 @@ proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr
     | (Specified(p: pointer), Specified(q: pointer), Specified(size: integer)) =>
         let strong res: integer = memop(Memcmp, p, q, size) in
         pure(Specified(res))
+    | _: (loaded pointer, loaded pointer, loaded integer) =>
+        pure(undef(<<DUMMY(memcmp_proxy)>>)) -- TODO check that
+  end
+
+
+proc [ailname = "free"] free_proxy (p_ptr: pointer) : eff unit :=
+  let strong _p: loaded pointer = load(!(void *), p_ptr) in
+  case _p of
+    | Specified(p: pointer) =>
+        let weak is_null: boolean = memop(PtrEq, p, NULL(void*)) in
+        if is_null then
+          skip
+        else
+          -- TODO: this is wrong, p was not allocated with alloc(), this should be UB
+          kill(p)
+    | _: loaded pointer =>
+        pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
   end

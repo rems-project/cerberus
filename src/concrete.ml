@@ -110,19 +110,19 @@ let rec offsetsof tag_sym =
 and sizeof = function
   | Void0 | Array0 (_, None) | Function0 _ ->
       assert false
-  | Basic0 (Integer ity) ->
+  | Basic0 (Integer ity) as ty ->
       begin match Impl.sizeof_ity ity with
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype ty)
       end
   | Basic0 (Floating fty) ->
       begin match Impl.sizeof_fty fty with
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith "the concrete memory model requires a complete implementation sizeof FLOAT"
       end
   | Array0 (elem_ty, Some n) ->
       (* TODO: what if too big? *)
@@ -132,7 +132,7 @@ and sizeof = function
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith "the concrete memory model requires a complete implementation sizeof POINTER"
       end
   | Atomic0 atom_ty ->
       sizeof atom_ty
@@ -160,19 +160,19 @@ and sizeof = function
 and alignof = function
   | Void0 ->
       assert false
-  | Basic0 (Integer ity) ->
+  | Basic0 (Integer ity) as ty ->
       begin match Impl.alignof_ity ity with
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith ("the concrete memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype ty)
       end
   | Basic0 (Floating fty) ->
       begin match Impl.alignof_fty fty with
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith "the concrete memory model requires a complete implementation alignof FLOATING"
       end
   | Array0 (_, None) ->
       assert false
@@ -185,7 +185,7 @@ and alignof = function
         | Some n ->
             n
         | None ->
-            failwith "the concrete memory model requires a complete implementation"
+            failwith "the concrete memory model requires a complete implementation alignof POINTER"
       end
   | Atomic0 atom_ty ->
       alignof atom_ty
@@ -367,7 +367,7 @@ module Concrete : Memory = struct
   let pp_pointer_value (PV (_, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
-          !^ "NULL"
+          !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
           !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
       | PVconcrete n ->
@@ -457,9 +457,9 @@ module Concrete : Memory = struct
       | None ->
           fail (MerrOutsideLifetime ("Concrete.get_allocation, alloc_id=" ^ N.to_string alloc_id))
   
-  let is_within_bound alloc_id addr =
+  let is_within_bound alloc_id lvalue_ty addr =
     get_allocation alloc_id >>= fun alloc ->
-    return (N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size))
+    return (N.less_equal alloc.base addr && N.less_equal (N.add addr (N.of_int (sizeof lvalue_ty))) (N.add alloc.base alloc.size))
   
   let is_within_device ty addr =
     return begin
@@ -787,16 +787,16 @@ module Concrete : Memory = struct
         (* TODO: should that be an error ?? *)
         return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-        is_within_bound alloc_id addr >>= function
-          | false ->
-              fail (MerrOther "attempted to kill with an out-of-bound pointer")
-          | true ->
-              Debug_ocaml.print_debug 1 [] (fun () ->
-                "KILLING alloc_id= " ^ N.to_string alloc_id
-              );
-              update begin fun st ->
-                {st with allocations= IntMap.remove alloc_id st.allocations}
-              end
+        get_allocation alloc_id >>= fun alloc ->
+        if N.equal addr alloc.base then begin
+          Debug_ocaml.print_debug 1 [] (fun () ->
+            "KILLING alloc_id= " ^ N.to_string alloc_id
+          );
+          update begin fun st ->
+            {st with allocations= IntMap.remove alloc_id st.allocations}
+          end
+        end else
+          fail (MerrOther "attempted to kill with an invalid pointer")
   
   let load loc ty (PV (prov, ptrval_)) =
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
@@ -825,7 +825,7 @@ module Concrete : Memory = struct
                 do_load addr
           end
       | (Prov_some alloc_id, PVconcrete addr) ->
-          begin is_within_bound alloc_id addr >>= function
+          begin is_within_bound alloc_id ty addr >>= function
             | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
                   "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
@@ -880,7 +880,7 @@ module Concrete : Memory = struct
                   do_store addr
             end
         | (Prov_some alloc_id, PVconcrete addr) ->
-            begin is_within_bound alloc_id addr >>= function
+            begin is_within_bound alloc_id ty addr >>= function
               | false ->
                   fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
               | true ->
@@ -910,12 +910,12 @@ module Concrete : Memory = struct
       | (_, PVfunction _) ->
           return false
       | (PVconcrete addr1, PVconcrete addr2) ->
-          if prov1 <> prov2 then
-            Eff.msum "pointer equality (different provenances)"
-              [ ("true", return true)
-              ; ("false", return false) ]
-          else
+          if prov1 = prov2 then
             return (Nat_big_num.equal addr1 addr2)
+          else
+            Eff.msum "pointer equality"
+              [ ("using provenance", return false)
+              ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
   
   let ne_ptrval ptrval1 ptrval2 =
     eq_ptrval ptrval1 ptrval2 >>= fun b ->
@@ -1042,7 +1042,6 @@ module Concrete : Memory = struct
       | PVnull _ ->
           (* TODO: this seems to be undefined in ISO C *)
           (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-          (* PVconcrete offset *)
           failwith "TODO(shift a null pointer should be undefined behaviour)"
       | PVfunction _ ->
           failwith "Concrete.array_shift_ptrval, PVfunction"
@@ -1089,12 +1088,13 @@ module Concrete : Memory = struct
             | Signed _ ->
                 signed_max
             | Enum _ ->
-                failwith "TODO: max_ival: Enum"
+                (* TODO: hack, assuming like int *)
+                sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
             | IBuiltin _ ->
                 failwith "TODO: max_ival: IBuiltin"
           end
       | None ->
-          failwith "the concrete memory model requires a complete implementation"
+          failwith "the concrete memory model requires a complete implementation MAX"
     end)
   
   let min_ival ity =
@@ -1117,11 +1117,13 @@ module Concrete : Memory = struct
             | Some n ->
                 negate (pow_int (of_int 2) (8*n-1))
             | None ->
-                failwith "the concrete memory model requires a complete implementation"
+                failwith "the concrete memory model requires a complete implementation MIN"
           end
-      | Enum _
+      | Enum _ ->
+          (* TODO: hack, assuming like int *)
+          negate (pow_int (of_int 2) (8*4-1))
       | IBuiltin _ ->
-          failwith "TODO: minv_ival: Enum, Builtin"
+          failwith "TODO: min_ival: Builtin"
     end)
   
 
@@ -1308,6 +1310,21 @@ let combine_prov prov1 prov2 =
   let pp_pretty_pointer_value = pp_pointer_value
   let pp_pretty_integer_value _ = pp_integer_value
   let pp_pretty_mem_value _ = pp_mem_value
+  
+  (* TODO check *)
+  let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
+    let loc = Location_ocaml.other "memcpy" in
+    let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
+    (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
+    (* TODO: copy ptrval2 into ptrval1 *)
+    let rec aux i =
+      if Nat_big_num.less i size_n then
+        load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV (Prov_none, i))) >>= fun (_, mval) ->
+        store loc unsigned_char_ty (array_shift_ptrval ptrval1 unsigned_char_ty (IV (Prov_none, i))) mval >>= fun _ ->
+        aux (Nat_big_num.succ i)
+      else
+        return ptrval1 in
+    aux Nat_big_num.zero
   
   
   (* TODO: validate more, but looks good *)

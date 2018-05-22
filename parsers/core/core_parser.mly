@@ -300,6 +300,8 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr ([], (), PEimpl iCst))
     | PEval (Vobject (OVinteger ival)) ->
         Eff.return (Pexpr ([], (), PEval (Vobject (OVinteger ival))))
+    | PEval (Vobject (OVpointer ptrval)) ->
+        Eff.return (Pexpr ([], (), PEval (Vobject (OVpointer ptrval))))
     | PEval (Vobject (OVcfunction _nm)) ->
         symbolify_name _nm >>= fun nm ->
         Eff.return (Pexpr ([], (), PEval (Vobject (OVcfunction nm))))
@@ -910,7 +912,7 @@ let mk_file decls =
 %token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED
 
 (* Core constant keywords *)
-%token TRUE FALSE UNIT_VALUE
+%token NULL TRUE FALSE UNIT_VALUE
 %token ARRAY_SHIFT (* MEMBER_SHIFT *) (* TODO *)
 %token UNDEF ERROR
 %token<string> CSTRING STRING
@@ -927,6 +929,7 @@ let mk_file decls =
 (* Core sequencing operators *)
 %token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND PURE MEMOP PCALL CCALL
 %token BANG LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
+
 
 (* SEMICOLON has higher priority than IN *)
 %nonassoc IN
@@ -963,6 +966,9 @@ let mk_file decls =
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
 %token ARRAY SPECIFIED UNSPECIFIED
+
+%token FVFROMINT IVFROMFLOAT
+
 
 %token CASE PIPE EQ_GT OF
 
@@ -1236,6 +1242,11 @@ ctor:
     { Cspecified }
 | UNSPECIFIED
     { Cunspecified }
+| FVFROMINT
+    { Cfvfromint }
+| IVFROMFLOAT
+    { Civfromfloat }
+
 
 list_pattern:
 | BRACKETS
@@ -1283,6 +1294,8 @@ value:
 *)
 | n= INT_CONST
     { Vobject (OVinteger (Ocaml_mem.integer_ival n)) }
+| NULL ty= delimited(LPAREN, ctype, RPAREN)
+    { Vobject (OVpointer (Ocaml_mem.null_ptrval ty)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
 | UNIT_VALUE

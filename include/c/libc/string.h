@@ -5,6 +5,7 @@ typedef __cerbty_size_t size_t;
 #define NULL __cerbvar_NULL
 
 void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
+int memcmp(const void *s1, const void *s2, size_t n);
 void *memmove(void *s1, const void *s2, size_t n);
 char *strcpy(char * restrict s1, const char * restrict s2);
 char *strncpy(char * restrict s1, const char * restrict s2, size_t n);
@@ -45,20 +46,6 @@ size_t strnlen_s(const char *s, size_t maxsize);
 */
 
 
-int memcmp(const void *s1, const void *s2, size_t n);
-// THIS IS IMPLEMENTED IN CORE (see memcmp_proxy in std.core)
-/*
-{
-  unsigned char c1, c2;
-  for (int i=0; i < n; i++) {
-    c1 = ((unsigned char*)s1)[i];
-    c2 = ((unsigned char*)s2)[i];
-    if ( c1 != c2 )
-      return (int)(c1 - c2);
-  }
-  return 0;
-}
-*/
 
 char *strcpy (char * restrict s1, const char * restrict s2)
 {

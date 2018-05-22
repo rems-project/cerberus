@@ -167,15 +167,17 @@ let fractional_constant =
     digit_sequence? '.' digit_sequence
   | digit_sequence '.'
 
+(* NOTE: the suffix are added in 'initial' *)
 let hexadecimal_floating_constant =
     hexadecimal_prefix hexadecimal_fractional_constant
-        binary_exponent_part floating_suffix?
+      binary_exponent_part (*floating_suffix?*)
   | hexadecimal_prefix hexadecimal_digit_sequence
-        binary_exponent_part floating_suffix?
+      binary_exponent_part (*floating_suffix?*)
 
+(* NOTE: the suffix are added in 'initial' *)
 let decimal_floating_constant =
-    fractional_constant exponent_part? floating_suffix?
-  | digit_sequence exponent_part floating_suffix?
+    fractional_constant exponent_part? (*floating_suffix?*)
+  | digit_sequence exponent_part (*floating_suffix?*)
 
 let floating_constant =
   decimal_floating_constant | hexadecimal_floating_constant
@@ -296,8 +298,12 @@ and initial = parse
   | (integer_constant as str)
       { CONSTANT (Cabs.CabsInteger_const (str, None)) }
 
-  | floating_constant as str
-      { CONSTANT (Cabs.CabsFloating_const str) }
+  | (floating_constant as str) ('f' | 'F')
+      { CONSTANT (Cabs.CabsFloating_const (str, Some Cabs.CabsFloatingSuffix_F)) }
+  | (floating_constant as str) ('l' | 'L')
+      { CONSTANT (Cabs.CabsFloating_const (str, Some Cabs.CabsFloatingSuffix_L)) }
+  | (floating_constant as str)
+      { CONSTANT (Cabs.CabsFloating_const (str, None)) }
 
   (* NOTE: we decode character constants here *)
   | "'" (character_constant as str) "'"

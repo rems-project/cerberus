@@ -4,6 +4,7 @@ S src/codegen
 S pprinters
 S parsers/c
 S parsers/core
+S sandbox
 
 B _build/ocaml_generated
 B _build/src
@@ -11,6 +12,7 @@ B _build/src/codegen
 B _build/pprinters
 B _build/parsers/c
 B _build/parsers/core
+B _build/sandbox
 
 
 PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64

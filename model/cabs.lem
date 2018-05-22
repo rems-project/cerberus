@@ -54,19 +54,28 @@ type cabs_integer_suffix =
   | CabsSuffix_L
   | CabsSuffix_LL
 
-type cabs_integer_constant = string * maybe cabs_integer_suffix
+type cabs_integer_constant =
+  string * maybe cabs_integer_suffix
+
+type cabs_floating_suffix =
+  | CabsFloatingSuffix_F
+  | CabsFloatingSuffix_L
+
+type cabs_floating_constant =
+  string * maybe cabs_floating_suffix
 
 type cabs_character_prefix =
   | CabsPrefix_L
   | CabsPrefix_u
   | CabsPrefix_U
 
-type cabs_character_constant = maybe cabs_character_prefix * string
+type cabs_character_constant =
+  maybe cabs_character_prefix * string
 
 
 type cabs_constant =
   | CabsInteger_const     of cabs_integer_constant
-  | CabsFloating_const    of string
+  | CabsFloating_const    of cabs_floating_constant
   | CabsCharacter_const   of cabs_character_constant
 
 

@@ -179,10 +179,6 @@ else
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str)))
       
       | (ND.Killed (ND.Other reason), _, st) ->
-(*
-          Debug_ocaml.print_debug 5 [] (fun () ->
-            Printf.sprintf "Execution #%d (KILLED: %s) under constraints:\n=====\n%s\n=====\nBEGIN LOG\n%s\nEND LOG"
-              n reason (Pp_cmm.pp_old_constraints st.ND.eqs) (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log))))
-          ) *) ()
+          print_endline (Colour.(ansi_format [Red] ("OTHER ERROR: " ^ string_of_driver_error reason)))
   ) values;
   Exception.except_return !ret

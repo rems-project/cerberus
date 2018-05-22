@@ -105,7 +105,7 @@ let decode_character_constant = function
   | "#"    -> Nat_big_num.of_int 35
   | "%"    -> Nat_big_num.of_int 37
   | "&"    -> Nat_big_num.of_int 38
-  | "'"    -> Nat_big_num.of_int 39
+  | "\\'"   -> Nat_big_num.of_int 39
   | "("    -> Nat_big_num.of_int 40
   | ")"    -> Nat_big_num.of_int 41
   | "*"    -> Nat_big_num.of_int 42

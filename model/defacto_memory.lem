@@ -566,13 +566,43 @@ let impl_allocate_dynamic tid pref (IV _ align_ival_) ((IV _ size_ival_) as size
 *)
 
 
+(* TODO: wip *)
+let real_address_expression_of_pointer (PV _ ptrval sh) =
+  let ival_ = match ptrval with
+    | PVunspecified ty ->
+        error "real_address_expression_of_pointer, PVunspecified"
+    | PVnull ty ->
+        error "real_address_expression_of_pointer, PVnull"
+    | PVfunction sym ->
+        error "real_address_expression_of_pointer, PVfunction"
+    | PVbase alloc_id pref ->
+        IVaddress alloc_id pref
+    | PVfromint ival_ ->
+        ival_
+  end in
+  IVop IntAdd [ival_; integer_value_baseFromShift_path sh]
+
+
+(* TODO: (for statics) this is not doing the right thing *)
+(* TODO: by calling real_address_expression_of_pointer, this is now correct *)
+val address_expression_of_pointer: impl_pointer_value -> impl_memM integer_value_base
+let address_expression_of_pointer ptr_val =
+  return (real_address_expression_of_pointer ptr_val)
+
+
 let impl_kill (PV _ ptr_val_ sh as ptr_val) =
   print_debugM 5 (fun () -> "KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
-    | Just (alloc_id, _) ->
-        (* TODO: turn the live pointers to this alloc_id into unspec values *)
-        get >>= fun mem_st ->
-        put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
+    | Just (alloc_id, pref) ->
+        address_expression_of_pointer ptr_val >>= fun ptr_ival ->
+        ifM "kill"
+            (mk_iv_constr MC_eq ptr_ival (IVaddress alloc_id pref))
+            begin
+              (* TODO: turn the live pointers to this alloc_id into unspec values *)
+              get >>= fun mem_st ->
+              put <| mem_st with dead_allocations= Set.insert alloc_id mem_st.dead_allocations |>
+            end
+            (fail (MerrOther "trying to kill with an non-initial pointer"))
     | Nothing ->
         fail (MerrOther "trying to kill with an invalid pointer")
   end
@@ -1292,28 +1322,7 @@ let is_one_past_pointer (PV _ ptr_val_ sh) =
         end
   end
 
-(* TODO: wip *)
-let real_address_expression_of_pointer (PV _ ptrval sh) =
-  let ival_ = match ptrval with
-    | PVunspecified ty ->
-        error "real_address_expression_of_pointer, PVunspecified"
-    | PVnull ty ->
-        error "real_address_expression_of_pointer, PVnull"
-    | PVfunction sym ->
-        error "real_address_expression_of_pointer, PVfunction"
-    | PVbase alloc_id pref ->
-        IVaddress alloc_id pref
-    | PVfromint ival_ ->
-        ival_
-  end in
-  IVop IntAdd [ival_; integer_value_baseFromShift_path sh]
 
-
-(* TODO: (for statics) this is not doing the right thing *)
-(* TODO: by calling real_address_expression_of_pointer, this is now correct *)
-val address_expression_of_pointer: impl_pointer_value -> impl_memM integer_value_base
-let address_expression_of_pointer ptr_val =
-  return (real_address_expression_of_pointer ptr_val)
 (*
 let address_expression_of_pointer (PV _ ptr_val_ sh) =
   match ptr_val_ with
@@ -1405,12 +1414,12 @@ let impl_eq_ptrval ptr_val1 ptr_val2 =
               ifFlag Allow_disjoint_alloc_tests
                 (* defacto flag *)
                 begin
-                  if alloc_id1 <> alloc_id2 then
-                    Nondeterminism.msum "pointer equality (different provenances)"
-                      [ ("true", return true)
-                      ; ("false", return false) ]
-                  else
+                  if alloc_id1 = alloc_id2 then
                     do_honest_equality
+                  else
+                    Nondeterminism.msum "pointer equality"
+                      [ ("using provenance", return false)
+                      ; ("ignoring provenance", do_honest_equality) ]
                 end
                 
                 (* STD case *)
@@ -2546,6 +2555,8 @@ let impl_store loc lvalue_ty ptrval mval =
 
 
 
+let impl_memcpy ptr_val1 ptr_val2 size_ival =
+  error "WIP: Symbolic memcpy"
 
 (* BEGIN MEMCMP ================================================================================= *)
 val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
