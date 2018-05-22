@@ -1,5 +1,7 @@
 open Core
 
+open Bmc_globals
+
 
 module Sym = Symbol
 open Z3
@@ -14,6 +16,9 @@ type ksym_supply = ksym UniqueId.supply
 let debug_print level str = 
   Debug_ocaml.print_debug level [] (fun () -> str)
 
+let bmc_debug_print level str =
+  if g_bmc_debug >= level then
+    print_endline str
 
 (* ========== Pprinting ========== *)
 

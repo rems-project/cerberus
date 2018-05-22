@@ -3,6 +3,7 @@
 (* TODO: parametrize on monad *)
 open Core
 open Bmc_utils
+open Bmc_globals
 
 module SSA = struct
   type kssa_state = {
@@ -300,10 +301,13 @@ let ssa_fn (fn)
       ssa_expr e >>= fun ret_e ->
       SSA.get >>= fun st ->
       (
-      print_endline "--RENAME STUFF--";
-      Pmap.iter (fun k v -> 
-        Printf.printf "%s -> %s\n" (symbol_to_string k) (symbol_to_string v)) 
-        st.sym_table;
+      if g_bmc_debug >= 3 then
+        begin
+        print_endline "--RENAME STUFF--";
+        Pmap.iter (fun k v -> 
+          Printf.printf "%s -> %s\n" (symbol_to_string k) (symbol_to_string v)) 
+          st.sym_table;
+        end;
       SSA.return (Proc(loc, ty, ret_params, ret_e))
       )
   | Fun(ty, params, pe) -> 
@@ -327,7 +331,7 @@ let ssa_file (file) (sym_supply: ksym_supply) =
     }) in
 
   let to_run = SSA.mapM (fun (sym, fn) ->
-    print_endline (symbol_to_string sym);
+    bmc_debug_print 2 (symbol_to_string sym);
     ssa_fn fn >>= fun ret_fn ->
     SSA.return (sym, ret_fn)) (Pmap.bindings_list file.funs) in
 

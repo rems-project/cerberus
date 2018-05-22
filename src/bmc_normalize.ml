@@ -1,6 +1,7 @@
 open Core
 
 open Bmc_utils
+open Bmc_globals
 open Bmc_inline
 open Bmc_renaming
 open Bmc_ssa
@@ -39,14 +40,15 @@ let bmc_normalize_file (f: 'a file) (sym_supply : ksym_supply) =
    | Exception s -> assert false
   ;
   *)
-
-  print_string "INLINING FUNCTION CALLS\n";
+  bmc_debug_print 1 "INLINING FUNCTION CALLS";
   let (inlined_file, inlined_supply) = inline_file f sym_supply in
 
-  pp_file inlined_file; 
-  print_string "\n";
+  if g_print_files then
+    (pp_file inlined_file; 
+     print_string "\n"
+    );
 
-  print_string "Rewriting Ivmin/Ivmax/issigned/etc \n";
+  bmc_debug_print 1 "Rewriting Ivmin/Ivmax/issigned/etc \n";
 
   let (rewritten_file, rewritten_supply) = 
     rewrite_file inlined_file inlined_supply in

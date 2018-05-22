@@ -225,12 +225,15 @@ let extract_executions (model: Model.model)
     (match Model.eval model expr false with
      | None -> assert false
      | Some e -> e) in
-  print_endline "EXTRACTING EXECUTIONS";
+  bmc_debug_print 1 "EXTRACTING EXECUTIONS";
 
-  print_endline "SRC_PTR_MAP";
-  Pmap.iter (fun k v ->
-    Printf.printf "%s -> %s\n" (Address.to_string k) (symbol_to_string v)
-  ) src_ptr_map;
+  if g_bmc_debug >= 1 then
+    begin
+    print_endline "SRC_PTR_MAP";
+    Pmap.iter (fun k v ->
+      Printf.printf "%s -> %s\n" (Address.to_string k) (symbol_to_string v)
+    ) src_ptr_map
+    end;
 
   let pp_value (value: Expr.expr) =
     if (Loaded.is_loaded ctx value) then
@@ -296,7 +299,7 @@ let extract_executions (model: Model.model)
   let location_kinds = List.fold_left (fun map action ->
     let event = Pmap.find (aid_of action) event_map in
     let loc = (apply fns.getAddr [event]) in
-    print_endline (Expr.to_string loc);
+    bmc_debug_print 2  (Expr.to_string loc);
     match lbool_to_bool (Boolean.get_bool_value (interp (fns.is_atomic loc))) with
     | true -> 
         Pmap.add (getOptVal (loc_of action)) Atomic map
@@ -346,7 +349,8 @@ let extract_executions (model: Model.model)
     ; asw = asw
     } in
 
-  pp_preexecution preexecution;
+  if g_bmc_debug >= 1 then
+    pp_preexecution preexecution;
 
   let rf = List.map getOptVal
     (List.filter (function
@@ -409,7 +413,8 @@ let extract_executions (model: Model.model)
       mo = mo;
       sc = sc;
     } in
-  pp_witness witness;
+  if g_bmc_debug >= 1 then
+    pp_witness witness;
 
   let guard_assert = mk_and ctx (List.map (fun event ->
     let guarded = (interp (apply fns.getGuard[event])) in
@@ -481,7 +486,7 @@ let extract_executions (model: Model.model)
     { preexecution = preexecution;
       witness = witness;
       derived_data = derived_data;
-      z3_asserts = mk_and ctx [guard_assert; rf_assert; mo_assert];
+      z3_asserts = z3_asserts;
       retOpt = retValueO
     } in
   ret
@@ -525,14 +530,15 @@ let get_all_executions (solver : Solver.solver)
       | Some x -> print_string ((Expr.to_string x) ^ " ");
       ) execs;
   print_endline "";
-  
-  List.iteri (fun i exec ->
-    let dot_str = pp_dot () (ppmode_default_web,
-                      (exec.preexecution, Some exec.witness, 
-                       Some (exec.derived_data))) in
-    let filename = Printf.sprintf "%s_%d.dot" g_dot_file i in
-    save_to_file filename dot_str;
-  ) execs;
+
+  if g_output_to_dot then  
+    List.iteri (fun i exec ->
+      let dot_str = pp_dot () (ppmode_default_web,
+                        (exec.preexecution, Some exec.witness, 
+                         Some (exec.derived_data))) in
+      let filename = Printf.sprintf "%s_%d.dot" g_dot_file i in
+      save_to_file filename dot_str;
+    ) execs;
 
   Solver.pop solver 1
 
@@ -715,10 +721,16 @@ let pmap_lookup_or_fail key pmap =
   | Some x -> x
 
 let bmc_lookup_sym (sym: ksym) (state: 'a bmc_state) : Expr.expr =
-  pmap_lookup_or_fail sym !(state.sym_table)
+  match Pmap.lookup sym !(state.sym_table) with
+  | None -> assert false
+  | Some x -> x
+(*  pmap_lookup_or_fail sym !(state.sym_table) *)
 
 let bmc_lookup_alloc alloc (state: 'a bmc_state) : kbmc_address =
-  pmap_lookup_or_fail alloc !(state.addr_map)
+  match Pmap.lookup alloc !(state.addr_map) with
+  | None -> assert false
+  | Some x -> x
+(*   pmap_lookup_or_fail alloc !(state.addr_map) *)
 
 (*
 let bmc_lookup_addr_in_heap alloc heap =
@@ -775,7 +787,7 @@ let object_value_to_z3 (ctx: context) = function
         assert false
       else
         assert false
- (*      pp_to_stdout (Ocaml_mem.pp_pointer_value x); *)
+        (*PointerSort.mk_null ctx*)
 
   | OVpointer _ ->
       assert false
@@ -812,7 +824,7 @@ let ctype_to_z3 (ctx: context) (ctype: ctype0) =
     | Atomic0 ty -> 
         ty
     | Pointer0 _ ->
-        print_endline "TODO: handle pointer ctypes properly";
+        bmc_debug_print 2 "TODO: handle pointer ctypes properly";
         ctype
     | _ -> assert false
   in
@@ -1198,22 +1210,27 @@ let rec bmc_pexpr (state: 'a bmc_state)
     | PEarray_shift (pe_ptr, ty, pe_index) ->
         let res1 = bmc_pexpr state pe_ptr in
         let res2 = bmc_pexpr res1.state pe_index in
+        (*
         print_endline (Expr.to_string res1.expr);
         print_endline (Expr.to_string res2.expr);
+        *)
         let addr = PointerSort.get_addr state.ctx res1.expr in
         let alloc = Address.get_alloc state.ctx 
           (PointerSort.get_addr state.ctx res1.expr) in
-        print_endline (Expr.to_string alloc);
+        (* cprint_endline (Expr.to_string alloc); *)
         let new_address = Address.shift_n state.ctx addr res2.expr in
         let index = Address.get_index state.ctx new_address in
         (* print_endline (string_of_int (AddressSet.cardinal res1.allocs)); *)
-
+        (*
         print_endline (Expr.to_string new_address);
         print_endline (Expr.to_string index);
+        *)
 
         let new_vc = 
           mk_lt state.ctx index (Address.apply_getAllocSize state.ctx alloc) in
+        (*
         print_endline (Expr.to_string new_vc);
+        *)
 
         { expr = PointerSort.mk_ptr state.ctx new_address
         ; allocs = res1.allocs
@@ -1389,14 +1406,14 @@ let bmc_paction (state: 'a bmc_state)
 
       (* Make a new memory allocation for alias analysis *)
       let new_addrs = mk_new_addr_n state.alias_state allocation_size in
-      List.iter (fun x -> print_endline (Address.to_string x)) new_addrs;
+      List.iter (fun x -> bmc_debug_print 2 (Address.to_string x)) new_addrs;
 
       let alloc_id = Address.get_alloc_id (List.hd new_addrs) in 
-      Printf.printf "(alloc_id, size): (%d, %d)\n" 
-                    alloc_id allocation_size;
+      bmc_debug_print 2 (Printf.sprintf "(alloc_id, size): (%d, %d)\n" 
+                          alloc_id allocation_size);
       let alloc_size_assert = 
         Address.apply_getAllocSize state.ctx (Integer.mk_numeral_i state.ctx alloc_id) in
-      print_endline (Expr.to_string alloc_size_assert);
+      bmc_debug_print 2 (Expr.to_string alloc_size_assert); 
 
       Solver.add state.solver [ mk_eq state.ctx 
                                       alloc_size_assert
@@ -1468,7 +1485,7 @@ let bmc_paction (state: 'a bmc_state)
 
       (* Try: create a new pointer and return it instead *)
       let represent_addr = List.hd new_addrs in
-      print_endline ("HEAD" ^ (Address.to_string represent_addr));
+      bmc_debug_print 3 ("HEAD" ^ (Address.to_string represent_addr));
 
       let addr_expr = Address.mk_expr state.ctx represent_addr in
       let new_ptr = PointerSort.mk_ptr state.ctx addr_expr in
@@ -1488,7 +1505,7 @@ let bmc_paction (state: 'a bmc_state)
   | Kill pexpr ->
       let res = bmc_pexpr state pexpr in
       (* TODO: for now, assume alias analysis is exact. *)
-      print_endline "TODO: KILL";
+      bmc_debug_print 2 "TODO: KILL";
       (* assert (AddressSet.cardinal res.allocs = 1); *)
       let elem = AddressSet.find_first (fun _ -> true) res.allocs in
       let new_heap = Pmap.remove elem res.state.heap in
@@ -1529,18 +1546,20 @@ let bmc_paction (state: 'a bmc_state)
                          z3_sym, to_store) in
       let paction = BmcAction(pol, mk_true state.ctx, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
-      print_endline (string_of_paction paction);
+      bmc_debug_print 2 (string_of_paction paction);
 
       (* If we are storing a C pointer, update points-to map *)
       begin
         if is_ptr_ctype (Pexpr([],BTy_ctype, PEval (Vctype ty))) then
           begin
+          (*
           assert (not (AddressSet.is_empty ptr_allocs));
           assert (not (AddressSet.is_empty res_value.allocs));
+          *)
 
           (* For each potential store location, add v_allocs to addr_map *)
           AddressSet.iter (fun loc ->
-            print_string (Address.to_string loc);
+            bmc_debug_print 2 (Address.to_string loc);
             let prev_set = alias_lookup_alloc loc state.alias_state in
             alias_add_to_addr_map state.alias_state 
                   loc (AddressSet.union prev_set res_value.allocs)
@@ -1622,7 +1641,7 @@ let bmc_paction (state: 'a bmc_state)
        let sort_list = ctype_to_sort_list state ty in
        assert (List.length sort_list = 1);
        let sort = List.hd (sort_list) in
-       
+     
        let z3_sym = bmc_lookup_sym sym state in
        let ret_value = Expr.mk_fresh_const state.ctx
               ("load_" ^ (symbol_to_string sym)) sort in
@@ -1639,7 +1658,7 @@ let bmc_paction (state: 'a bmc_state)
       let paction = BmcAction(pol, mk_true state.ctx, action) in
       state.action_map := Pmap.add (get_aid action) paction !(state.action_map);
 
-      print_endline (string_of_paction paction);
+      bmc_debug_print 2 (string_of_paction paction);
 
        (* TODO: If unspecified, assert the type is ty.
         *       Not implemented (b/c recursive sorts for pointers 
@@ -1692,7 +1711,7 @@ let bmc_paction (state: 'a bmc_state)
 
        let ret = Boolean.mk_and state.ctx expr_eqs in
 
-       print_endline "TODO: new_vc not used";
+       bmc_debug_print 2 "TODO: new_vc not used";
        let new_vc = Boolean.mk_or state.ctx addr_eqs in
 
        if g_sequentialise then
@@ -1707,13 +1726,6 @@ let bmc_paction (state: 'a bmc_state)
       ; state = state
       }
 
-      (*
-       ret_value, ret_alloc, 
-          ({state with (*vcs = (new_vc) :: state.vcs; *)
-                       preexec = add_action (get_aid action) paction
-                                 state.preexec}
-          )
-      *)
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
@@ -1785,15 +1797,17 @@ let rec bmc_expr (state: 'a bmc_state)
   match expr_ with
   | Epure pe ->
       bmc_pexpr state pe 
-  | Ememop (PtrValidForDeref, _) ->
-      print_endline "TODO: Ememop PtrValidForDeref: always true";
-      { expr = mk_true state.ctx
-      ; vcs = []
+  | Ememop (PtrValidForDeref, [pe]) ->
+      let res_pe = bmc_pexpr state pe in
+      bmc_debug_print 2 "TODO: Ememop PtrValidForDeref: just checks for null";
+
+      { expr = mk_not state.ctx (PointerSort.is_null state.ctx res_pe.expr)
+      ; vcs = res_pe.vcs
       ; allocs = AddressSet.empty
       ; preexec = initial_preexec ()
       ; ret_asserts = []
       ; returned = mk_false state.ctx
-      ; state = state
+      ; state = res_pe.state
       }
   | Ememop _ ->
       assert false
@@ -1886,8 +1900,14 @@ let rec bmc_expr (state: 'a bmc_state)
       }
   | Eproc _ -> assert false
   | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)), 
+                        PEval (Vobject (OVcfunction (Sym sym)))), arglist)  
+    (* fall through *)
+  | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)), 
                         PEsym sym), arglist)  ->
-      let sym_fn = Pmap.find sym !(state.fn_map) in
+
+      let sym_fn = match Pmap.lookup sym !(state.fn_map) with
+        | Some x -> x
+        | None -> sym in
       begin
       match Pmap.lookup sym_fn state.file.funs with
       | None -> assert false
@@ -1935,7 +1955,7 @@ let rec bmc_expr (state: 'a bmc_state)
                                   ("ret_" ^ (symbol_to_string sym_fn)) sort;
                       saves = find_save_expr e ;
                       depth = state.depth + 1;
-                      proc_expr = Some e;
+                      proc_expr = Some e2;
                     } in
                   let res_call = bmc_expr fresh_state e2 in
                   (*
@@ -2085,8 +2105,12 @@ let rec bmc_expr (state: 'a bmc_state)
       let proc_expr = getOptVal state.proc_expr in
       let is_ret = (match Str.split (Str.regexp "_") s with
         | [name; id] -> 
-            (name = "ret" && (int_of_string id) = i)
+            name = "ret"
+        | _ -> 
+            bmc_debug_print 2 "TODO: find ret in Erun";
+            false
       ) in
+        
       (* TODO: overload of depth *)
       if (state.depth >= g_max_loop_depth && not is_ret) then
          { expr = UnitSort.mk_unit state.ctx
@@ -2106,8 +2130,7 @@ let rec bmc_expr (state: 'a bmc_state)
       | Some (sym_list, expr) -> 
           (* Substitute pelist for sym_list *)
           assert (List.length sym_list = List.length pelist);
-          print_endline "1956";
-          pp_to_stdout (Pp_core.Basic.pp_expr expr);
+          (* pp_to_stdout (Pp_core.Basic.pp_expr expr); *)
 
           (* Rename everything except sym_list *)
           let table_with_globals = List.fold_left (fun table (sym, _, _ ) ->
@@ -2120,18 +2143,15 @@ let rec bmc_expr (state: 'a bmc_state)
             } in
           let (expr_ssa, st) = SSA.run ssa_state (ssa_expr expr) in
           state.sym_supply := st.supply;
-          pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa);
+          (* pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa); *)
           
           let subMap = List.fold_left2 (fun map sym pe ->
             Pmap.add sym pe map) (Pmap.empty sym_cmp) sym_list pelist in
           let to_run = substitute_expr subMap expr_ssa in
-          (* 
-          let table_with_globals = List.fold_left (fun table (sym, _, _) ->
-            Pmap.add sym sym table) subMap state.file.globs in 
-          *)
 
-          let res_run = bmc_expr {state with depth = state.depth + 1} to_run in
-          print_endline (Expr.to_string res_run.expr);
+          let res_run = bmc_expr {state with depth = state.depth + 1
+                                 } to_run in
+          bmc_debug_print 2 (Expr.to_string res_run.expr);
           let eq_expr = mk_implies state.ctx
             (mk_not state.ctx res_run.returned)
             (mk_eq state.ctx res_run.state.z3_ret res_run.expr) in
@@ -2144,56 +2164,6 @@ let rec bmc_expr (state: 'a bmc_state)
           ; state = res_run.state
           }
       end
-          (*
-        List.iter (fun sym -> 
-          print_endline ("X " ^ (symbol_to_string sym))) sym_list;
-        print_endline "EXPR";
-        pp_to_stdout (Pp_core.Basic.pp_expr expr);
-        print_endline "";
-        *)
-
-
-      (*
-      print_endline "TODO: Erun, special casing ret";
-      begin
-      match Str.split (Str.regexp "_") s with
-      | [name; id] ->
-          if (name = "ret") && (int_of_string id = i) then
-            begin
-              let sym = Sym.Symbol(i, Some s) in
-              let (cbt, symlist, expr) = 
-                (match Pmap.lookup sym state.saves with
-                 | None -> assert false
-                 | Some x -> x) in
-              assert (List.length symlist = List.length pelist);
-              let subMap = List.fold_left2 (fun map sym pe ->
-                Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
-              print_endline "ERUN";
-              pp_to_stdout (Pp_core.Basic.pp_expr expr);
-              let to_run = substitute_expr subMap expr in 
-              pp_to_stdout (Pp_core.Basic.pp_expr to_run);
-
-              let res_run = bmc_expr state to_run in
-              (* (ret, aset, state) = bmc_expr state to_run in *)
-              let eq_expr = mk_implies state.ctx
-                (mk_not state.ctx res_run.returned)
-                (mk_eq state.ctx res_run.state.z3_ret res_run.expr) in
-              print_endline ("STUFF " ^ (Expr.to_string eq_expr));
-            { expr = UnitSort.mk_unit state.ctx
-            ; allocs = res_run.allocs
-            ; vcs = res_run.vcs
-            ; preexec = res_run.preexec 
-            ; ret_asserts = eq_expr :: res_run.ret_asserts 
-            ; returned = mk_true state.ctx
-            ; state = res_run.state
-            }
-            end
-          else
-            assert false
-      | _ -> assert false
-      end
-*)
-
   | Erun _ ->
       assert false
   | Epar elist -> 
@@ -2283,7 +2253,7 @@ let rec bmc_expr (state: 'a bmc_state)
       Solver.add state.solver [ eq_expr ];
 
       if g_sequentialise then
-        print_endline "TODO: returns ignored for ewseq";
+        bmc_debug_print 2 "TODO: returns ignored for ewseq";
 
       let bmc_e2 = bmc_expr bmc_e1.state e2 in
 
@@ -2335,12 +2305,12 @@ let rec bmc_expr (state: 'a bmc_state)
       alias_pattern state.alias_state pat bmc_e1.allocs ;
       let eq_expr = mk_eq_pattern state pat bmc_e1.expr in
       Solver.add state.solver [ eq_expr ];
-
+  
       if g_sequentialise then
-        print_endline "TODO: returns ignored for esseq";
-
+        bmc_debug_print 2 "TODO: returns ignored for esseq";
 
       let bmc_e2 = bmc_expr bmc_e1.state e2 in
+
       let (exec1, exec2) = (bmc_e1.preexec,
                            {bmc_e2.preexec with 
                               actions = guard_actions state.ctx
@@ -2386,7 +2356,7 @@ let rec bmc_expr (state: 'a bmc_state)
   | Esave ((Symbol (i, Some s), _), binding_list, e)  ->
       let subMap = List.fold_left (fun map (sym, (_, pe)) ->
         Pmap.add sym pe map) (Pmap.empty sym_cmp) binding_list in
-      pp_to_stdout (Pp_core.Basic.pp_expr e);
+      (* pp_to_stdout (Pp_core.Basic.pp_expr e); *)
       let to_run = substitute_expr subMap e in
       (*
       print_endline "TO RUN";
@@ -2406,7 +2376,8 @@ let rec bmc_expr (state: 'a bmc_state)
 
       let is_ret = (match Str.split (Str.regexp "_") s with
         | [name; id] -> 
-            (name = "ret" && (int_of_string id) = i)
+            (name = "ret")
+        | _ -> false
       ) in
       if is_ret then
         begin
@@ -2433,43 +2404,6 @@ let rec bmc_expr (state: 'a bmc_state)
         ; state = bmc_run.state
         }
         end
-      (*
-      (* Special case ret *)
-      (* TODO: code duplication from Erun *)
-      begin
-      match Str.split (Str.regexp "_") s with
-      | [name; id] -> 
-          if (name = "ret") && ((int_of_string id) = i) then
-            begin
-              let sym = Sym.Symbol(i, Some s) in
-              let (cbt, symlist, expr) = 
-                (match Pmap.lookup sym state.saves with
-                 | None -> assert false
-                 |Some x -> x) in
-              assert (List.length symlist = List.length binding_list);
-              let pelist = List.map (fun(_, (_, pe)) -> pe) binding_list in
-              let subMap = List.fold_left2 (fun map sym pe ->
-                Pmap.add sym pe map) (Pmap.empty sym_cmp) symlist pelist in
-              let to_run = substitute_expr subMap expr in
-              let bmc_run = bmc_expr state to_run in
-              let eq_expr = mk_implies state.ctx
-                (mk_not state.ctx bmc_run.returned)
-                (mk_eq state.ctx bmc_run.state.z3_ret bmc_run.expr) in
-
-              { expr = UnitSort.mk_unit state.ctx
-              ; allocs = AddressSet.empty
-              ; vcs = bmc_run.vcs
-              ; preexec = bmc_run.preexec
-              ; ret_asserts = eq_expr :: bmc_run.ret_asserts
-              ; returned = mk_true state.ctx
-              ; state = bmc_run.state
-              }
-            end
-          else 
-            assert false
-      | _ -> assert false
-
-            *)
   | Esave _ ->
       assert false
 
@@ -2512,7 +2446,7 @@ let initialise_param ((sym, ty): (ksym * core_base_type)) state sort =
         Solver.add state.solver 
                    [LoadedInteger.is_loaded state.ctx initial_value]
       else
-        print_endline "TODO: no constraint on args that aren't integers"
+        bmc_debug_print 2 "TODO: no constraint on args that aren't integers"
       ;
 
       let action = Write(mk_next_aid state, 
@@ -2553,7 +2487,7 @@ let initialise_main_params params state =
 
 let initialise_global state sym typ expr : 'a bmc_state =
   assert (is_ptr_type typ);
-  print_endline "TODO: sb global preexec";
+  bmc_debug_print 2 "TODO: sb global preexec";
   (* TODO: duplicated from Esseq *)
   let res = bmc_expr state expr in 
   let pat = CaseBase(Some sym, typ) in
@@ -2573,6 +2507,8 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
   let initial_event_list = set_to_list preexec.initial_actions in
   let preexec_list = set_to_list preexec.actions in
   let event_list = initial_event_list @ preexec_list in
+
+  bmc_debug_print 0 (string_of_int (List.length event_list));
 
   let action_id_to_z3_sym aid = mk_sym ctx ("#E_" ^ (string_of_int aid)) in
   let action_to_z3_sym action = action_id_to_z3_sym (aid_of_paction action) in
@@ -3400,7 +3336,9 @@ let preexec_to_z3 (state: 'a bmc_state) (preexec: preexecution) =
               ; unseq_race_assert 
               *)
               ] in
+  (*
   List.iter (fun s -> print_endline (Expr.to_string s)) ret;
+  *)
 
   let fns : exec_fns = 
     { event_sort = event_sort;
@@ -3457,12 +3395,16 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         match Pmap.lookup main_sym file.funs with
         | Some (Proc(_, ty, params, e)) ->
             (* Handle parameters *)
-            print_endline "TODO: sequence globals preexecs!";
+            bmc_debug_print 2 "TODO: sequence globals preexecs!";
             let preexecs, state = initialise_main_params params state in
+            (*
             let esaves = find_save_expr e in
             print_endline "SAVES";  
             print_saves_map esaves;
+            *)
+            let esaves = find_save_expr e in
 
+            (*
             Pmap.iter (fun k (cbt, sym_list, expr) ->
               print_endline(symbol_to_string k);
               match find_labeled_continuation Sym.instance_Basic_classes_Eq_Symbol_sym_dict k e with
@@ -3474,6 +3416,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
                   pp_to_stdout (Pp_core.Basic.pp_expr lconts');
                   print_endline ""
             ) esaves;
+            *)
 
 
             let result = 
@@ -3549,15 +3492,17 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             } in
       Solver.add state1.solver (List.map (fun e -> Expr.simplify e None) result.ret_asserts);
 
-      print_endline "-----ALIAS_RESULTS";
-      print_ptr_map !(state1.alias_state.ptr_map);
-      print_addr_map !(state1.alias_state.addr_map);
+      if g_bmc_debug >= 1 then
+        (print_endline "-----ALIAS_RESULTS";
+         print_ptr_map !(state1.alias_state.ptr_map);
+         print_addr_map !(state1.alias_state.addr_map)
+        );
 
-      if not g_sequentialise then
+      if not g_sequentialise && g_bmc_debug >= 1 then
         (print_endline "-----EVENTS";
          print_preexec preexec);
 
-      print_endline "-----EVENT STUFF";
+      bmc_debug_print 1 "-----EVENT STUFF";
       let (z3_preexec, funcDecls) = 
         (if g_sequentialise || Pset.is_empty preexec.actions then 
             [], None (* Guard st sort is well-founded *)
@@ -3565,7 +3510,7 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             preexec_to_z3 state1 preexec
         ) in
 
-      print_endline "-----CONSTRAINTS ONLY";
+      bmc_debug_print 1 "-----CONSTRAINTS ONLY";
       assert (Solver.check state1.solver [] = SATISFIABLE);
 
       if not g_sequentialise then
@@ -3582,8 +3527,9 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
               (match funcDecls with
                 | None -> print_endline "No memory actions"; true
                 | Some fns ->
-                    get_all_executions state1.solver fns state1.ctx 
-                                       (Some result.expr) !(state.src_ptr_map);
+                    if g_all_execs then
+                      get_all_executions state1.solver fns state1.ctx 
+                                         (Some result.expr) !(state.src_ptr_map);
                     print_endline "-----WITH RACE CHECKS";
                     Solver.add state1.solver [fns.unseq_race; fns.data_race];
                     if (Solver.check state1.solver [] = SATISFIABLE) then
@@ -3615,12 +3561,15 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
 
-            print_endline (Solver.to_string state1.solver);  
+            (* print_endline (Solver.to_string state1.solver);   *)
             print_endline "Checking sat";
 
             let _ = check_solver (state1.solver) in
-            let stats = Solver.get_statistics state1.solver in
-            print_endline (Statistics.to_string stats);
+            if g_print_stats then
+              begin
+              let stats = Solver.get_statistics state1.solver in
+              print_endline (Statistics.to_string stats)
+              end;
             ()
           | false -> ()
         end
@@ -3636,17 +3585,17 @@ let (>>=) = Exception.except_bind
 let run_bmc (core_file : 'a file) 
             (sym_supply: ksym_supply)    = 
   (* TODO: state monad with sym_supply *)
-  print_endline "ENTER: BMC PIPELINE";
-  pp_file core_file;
+  bmc_debug_print 1 "ENTER: BMC PIPELINE";
+  if g_print_files then pp_file core_file;
 
-  print_endline "ENTER: NORMALIZING FILE";
+  bmc_debug_print 1 "ENTER: NORMALIZING FILE";
   let (norm_file, norm_supply) = bmc_normalize_file core_file sym_supply in
 
-  print_endline "EXIT: NORMALIZING FILE";
+  bmc_debug_print 1 "EXIT: NORMALIZING FILE";
 
   (* pp_file norm_file; *)
 
-  print_endline "Typechecking file";
+  bmc_debug_print 1 "Typechecking file";
   Core_typing.typecheck_program norm_file >>= fun typed_core ->
     Exception.except_return (
 
@@ -3658,11 +3607,11 @@ let run_bmc (core_file : 'a file)
         else
           typed_core
       in
-      pp_file core_to_check;
+      if g_print_files then pp_file core_to_check;
 
-      print_endline "START Z3";
+      bmc_debug_print 1 "START Z3";
       (* bmc_file seq_file norm_supply; *)
       bmc_file core_to_check norm_supply;
 
-      print_string "EXIT: BMC PIPELINE \n"
+      bmc_debug_print 1 "EXIT: BMC PIPELINE "
     )
