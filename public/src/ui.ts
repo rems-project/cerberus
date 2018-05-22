@@ -259,11 +259,16 @@ export class CerberusUI {
   }
 
   private startInteractive() {
-    this.request(Common.Step(), (data: Common.ResultStep) => {
-      const view = this.getView()
-      view.updateState(data.state)
-      view.newInteractiveTab(data.steps)
-    })
+    const view = this.getView()
+    const alreadyOpen = view.findTab('Interactive')
+    view.newTab('Interactive')
+    if (alreadyOpen) {
+      view.emit('updateGraph')
+    } else {
+      this.request(Common.Step(), (data: Common.ResultRequest) => {
+        view.updateState(data)
+      })
+    }
   }
 
   private getView(): Readonly<View> {
@@ -296,9 +301,8 @@ export class CerberusUI {
   public step(active: {id: Common.ID, state: Common.Bytes}): void {
     if (active) {
       let view = this.getView()
-      this.request(Common.Step(), (data: Common.ResultStep) => {
-        view.updateState(data.state)
-        view.updateInteractive(active.id, data.steps)
+      this.request(Common.Step(), (data: Common.ResultRequest) => {
+        view.updateState(data)
       }, {
         lastId: view.getState().lastNodeId,
         state: active.state,

@@ -1377,6 +1377,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_mem_state st =
     `Assoc [
+      ("kind",          `String "concrete");
       ("allocations",   serialise_map serialise_allocation st.allocations);
       ("bytemap",       serialise_map serialise_byte st.bytemap)
     ]

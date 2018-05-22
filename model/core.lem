@@ -227,8 +227,9 @@ type sym = Symbol.sym
 type ksym = Symbol.sym
 
 type annot =
-  | Astd of string
-  | Aloc of Loc.t
+  | Astd of string (* ISO C11 Standard Annotation *)
+  | Aloc of Loc.t (* C source location *)
+  | Auid of string (* Unique ID *)
 
 type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym (* Core identifier *)

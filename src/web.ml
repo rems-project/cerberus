@@ -110,10 +110,14 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let get_location _ = `Null in
   let json_of_node = function
     | Branch (id, lab, mem, loc) ->
+      let json_of_loc (loc, uid) =
+        `Assoc [("c", Json.of_location loc);
+                ("core", Json.of_opt_string uid)]
+      in
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", mem); (* TODO *)
-              ("loc", Json.of_option Json.of_location loc);
+              ("loc", Json.of_option json_of_loc loc);
               ("group", `String "branch")]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
@@ -172,14 +176,20 @@ let json_of_result = function
       ("console", `String "");
       ("result", `String str);
     ]
-  | Interaction (res, tags, t) ->
+  | Interactive (tags, ranges, t) ->
     `Assoc [
       ("steps", json_of_exec_tree t);
-      ("state", `Assoc [
-        ("status", `String "stepping");
-        ("result", Json.of_opt_string res);
-        ("tagDefs", Json.of_option (fun s -> `String (B64.encode s)) tags)
-      ]);
+      ("status", `String "interactive");
+      ("result", `String "");
+      ("ranges", `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
+      ("tagDefs", `String (B64.encode tags));
+    ]
+  | Step (res, activeId, t) ->
+    `Assoc [
+      ("steps", json_of_exec_tree t);
+      ("activeId", `Int activeId);
+      ("status", `String "stepping");
+      ("result", Json.of_opt_string res);
     ]
   | Failure err ->
     `Assoc [

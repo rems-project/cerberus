@@ -8,6 +8,8 @@ sig
   val show_include: bool
   (* handle_location c_loc core_range *)
   val handle_location: Location_ocaml.t -> PPrint.range -> unit
+  (* handle_uid uid core_range *)
+  val handle_uid: string -> PPrint.range -> unit
 end
 
 module type PP_CORE =

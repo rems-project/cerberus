@@ -1021,6 +1021,7 @@ let driver_globals with_concurrency sym_supply file =
     Core_run.labels= Map.empty;
     Core_run.labels2= Map.empty;
     Core_run.current_loc= Loc.other "Driver.driver_globals 1";
+    Core_run.current_uid= Nothing;
     Core_run.exec_loc= Core_run.ELoc_globals;
   |> >>= fun tid0 ->
   
@@ -1036,6 +1037,7 @@ let driver_globals with_concurrency sym_supply file =
       Core_run.labels= Map.empty;
       Core_run.labels2= Map.empty;
       Core_run.current_loc= Loc.other "Driver.driver_globals 2";
+      Core_run.current_uid= Nothing;
       Core_run.exec_loc= Core_run.ELoc_globals;
     |> >>= fun () ->
     
@@ -1227,6 +1229,7 @@ TODO: this should be removable, since we already set it in Translation
           Core_run.labels= Map.empty;
           Core_run.labels2= Map.empty;
           Core_run.current_loc= Loc.other "Driver.drive";
+          Core_run.current_uid= Nothing;
           Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
         |> >>
         driver with_concurrency >>

@@ -32,9 +32,12 @@ type request =
   | `Execute of conf * filename * exec_mode
   | `Step of conf * filename * active_node ]
 
+type point = int * int
+type range = point * point
+
 type node =
-  | Branch of int * string * Json.json * Location_ocaml.t option
-      (* id * label * serialised memory * location *)
+  | Branch of int * string * Json.json * (Location_ocaml.t * string option) option
+      (* id * label * serialised memory * (c location * uid) *)
   | Leaf of int * string * string (* id * label * marshalled state *)
 
 type edge =
@@ -51,9 +54,6 @@ type ast_result =
     core: string option;
   }
 
-type point = int * int
-type range = point * point
-
 type elaboration_result =
   { pp: ast_result;
     ast: ast_result;
@@ -64,7 +64,7 @@ type elaboration_result =
 (* output: result *)
 type result =
   | Elaboration of elaboration_result
-  | Execution of string                      (* cerberus result *)
-  | Interaction of string option * string option * exec_tree
-      (* maybe result * tagDefs * execution tree *)
+  | Execution of string               (* cerberus result *)
+  | Interactive of string * (string * PPrint.range) list * exec_tree (* tagDefs * range list * execution tree *)
+  | Step of string option * int * exec_tree (* maybe result * active node id * execution tree *)
   | Failure of string

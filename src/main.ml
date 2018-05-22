@@ -250,6 +250,7 @@ let pipeline filename args =
     (*let show_location = List.mem Annot !!cerb_conf.ppflags -- TODO! *)
     let show_include = false
     let handle_location _ _ = ()
+    let handle_uid _ _ = ()
   end) in
   
   let f = Input.file filename in
