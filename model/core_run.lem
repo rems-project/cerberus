@@ -1131,7 +1131,7 @@ BEFORE EVAL_PEXPR2
                                  error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
                            end) args_cvals in
                            Step_printf2 frmt_chars args_ptrvals (fun n ->
-                             <| th_st with arena= Expr arena_annots (Epure (Caux.mk_integer_pe n)) |>
+                             <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n))) |>
                            )
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
