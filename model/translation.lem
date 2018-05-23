@@ -931,7 +931,7 @@ match AilTypesAux.unatomic ty with
   | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
                                    error "AilEunary PostfixDecr, floating type"
   | Aty.Pointer _ ref_ty ->
-                                   error "AilEunary PostfixDecr, pointer type"
+                                   Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe (0 - 1))
 (*                           Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe 1) *)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr"
