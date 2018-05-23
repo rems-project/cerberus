@@ -327,8 +327,10 @@ module PointerSort =
       Datatype.mk_sort_s ctx ("ptr")
       [ Datatype.mk_constructor_s ctx ("addr") (mk_sym ctx "isPointer")
           [ mk_sym ctx "get_addr" ] [ Some (Address.mk_sort ctx)] [0]
+      (*
       ; Datatype.mk_constructor_s ctx ("null") (mk_sym ctx "isNull")
           [] [] []
+      *)
       ]
 
     let mk_ptr (ctx: context) (addr: Expr.expr) =
@@ -337,6 +339,7 @@ module PointerSort =
       let func_decl = List.nth constructors 0 in
       Expr.mk_app ctx func_decl [ addr ]
 
+    (*
       (* TODO: nonsensical for concurrency model right now *)
     let mk_null ctx =
       let sort = mk_sort ctx in
@@ -349,6 +352,8 @@ module PointerSort =
       let recognizers = Datatype.get_recognizers sort in
       let func_decl = List.nth recognizers 1 in
       Expr.mk_app ctx func_decl [expr]
+
+    *)
 
 
     let mk_addr (ctx: context) (n: Address.addr) =

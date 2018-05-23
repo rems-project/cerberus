@@ -1570,8 +1570,10 @@ let bmc_paction (state: 'a bmc_state)
       (* TODO: for now, assume alias analysis is exact. *)
       bmc_debug_print 2 "TODO: KILL";
       (* assert (AddressSet.cardinal res.allocs = 1); *)
+      (*
       let elem = AddressSet.find_first (fun _ -> true) res.allocs in
       let new_heap = Pmap.remove elem res.state.heap in
+*)
 
       (* TODO: should really alter analysis_state too *)
       { expr = UnitSort.mk_unit state.ctx
@@ -1580,7 +1582,7 @@ let bmc_paction (state: 'a bmc_state)
       ; preexec = res.preexec
       ; ret_asserts = res.ret_asserts
       ; returned = res.returned 
-      ; state = state_with_heap res.state new_heap
+      ; state = res.state (*_with_heap res.state new_heap *)
       }
   | Store0 (Pexpr(_,BTy_ctype, PEval (Vctype ty)), Pexpr(_,_, PEsym sym),
             p_value, mem_order) ->
@@ -1634,15 +1636,16 @@ let bmc_paction (state: 'a bmc_state)
        * if (get_addr sym == @a) @a_i = p_value; @a_i = (cur_value)
        * update heap: @a_i
        *)
+      if g_bmc_debug >= 2 then
+        begin
+        print_endline "-----STORE ALIAS_RESULTS";
+        print_endline (symbol_to_string sym);
+        print_ptr_map !(state.alias_state.ptr_map);
+        print_addr_map !(state.alias_state.addr_map);
 
-      (*
-      print_endline "-----STORE ALIAS_RESULTS";
-      print_ptr_map !(state.alias_state.ptr_map);
-      print_addr_map !(state.alias_state.addr_map);
-
-      print_heap state.heap; 
-      print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
-      *)
+        print_heap state.heap; 
+        print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ")
+        end;
 
       let update = (fun alloc heap ->
           let bmc_addr = bmc_lookup_alloc alloc state in
@@ -1682,6 +1685,10 @@ let bmc_paction (state: 'a bmc_state)
             end
         ) in
         let new_heap = AddressSet.fold update ptr_allocs state.heap in
+        (*
+        print_endline "NEW_HEAP_STORE";
+        print_heap new_heap;
+        *)
 
       { expr = UnitSort.mk_unit state.ctx
       ; allocs = AddressSet.empty
@@ -1745,14 +1752,16 @@ let bmc_paction (state: 'a bmc_state)
           else
             AddressSet.empty
          end in
-      (*
-      print_endline "-----LOAD ALIAS_RESULTS";
-      print_ptr_map !(state.alias_state.ptr_map);
-      print_addr_map !(state.alias_state.addr_map);
+      if g_bmc_debug >= 2 then
+        begin
+        print_endline "-----LOAD ALIAS_RESULTS";
+        print_endline (symbol_to_string sym);
+        print_ptr_map !(state.alias_state.ptr_map);
+        print_addr_map !(state.alias_state.addr_map);
 
-      print_heap state.heap; 
-      print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ");
-      *)
+        print_heap state.heap; 
+        print_endline ((string_of_address_set ptr_allocs) ^ " ZZZZ")
+        end;
 
        let iterate = (fun alloc (expr_list, addr_list) ->
           match Pmap.lookup alloc state.heap with
@@ -1775,6 +1784,8 @@ let bmc_paction (state: 'a bmc_state)
        let (expr_eqs, addr_eqs) = AddressSet.fold iterate ptr_allocs ([], []) in
 
        let ret = Boolean.mk_and state.ctx expr_eqs in
+       bmc_debug_print 2 "LOAD_CONSTRAINTS";
+       bmc_debug_print 2 (Expr.to_string ret);
 
        bmc_debug_print 2 "TODO: new_vc not used";
        let new_vc = Boolean.mk_or state.ctx addr_eqs in
@@ -1799,6 +1810,7 @@ let bmc_paction (state: 'a bmc_state)
 
 (* if guard then heap1 else heap2 for all addresses in alist *)
 (* TODO: genrealize to n heaps with n guards *)
+      (* TODO: kills *)
 let merge_heaps (state: 'a bmc_state) 
                 (base_heap : kheap) 
                 (guarded_heaps : (kheap * Expr.expr) list) : kheap =
@@ -1808,24 +1820,29 @@ let merge_heaps (state: 'a bmc_state)
   List.fold_left (fun ret (heap, guard) ->
     Pmap.merge (fun k e1_ e2_ ->
       match (e1_, e2_) with
-        | None, Some _ -> None 
-        | Some x, None ->None 
+        | None, Some y -> Some y
+        | Some x, None -> Some x 
         | None, None -> assert false
         | Some e1, Some e2 -> 
-          let bmc_address = bmc_lookup_alloc k state in
-          let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_address in
-          assert (Sort.equal (Expr.get_sort e1) (Expr.get_sort e2));
-          let sort = Expr.get_sort e1 in
-          let new_expr = Expr.mk_const state.ctx new_sym sort in
-          bmc_address.hist := Pmap.add seq_num new_expr (!(bmc_address.hist));
-           if g_sequentialise then 
-            Solver.add state.solver 
-              [ Boolean.mk_implies state.ctx (mk_not state.ctx guard)
-                  (Boolean.mk_eq state.ctx new_expr e1) ;
-                Boolean.mk_implies state.ctx guard 
-                  (Boolean.mk_eq state.ctx new_expr e2) 
-              ];
-              Some new_expr 
+            if (Expr.equal e1 e2) then
+              Some e1
+            else
+              begin
+                let bmc_address = bmc_lookup_alloc k state in
+                let (new_sym, seq_num) = mk_next_seq_symbol state.ctx bmc_address in
+                assert (Sort.equal (Expr.get_sort e1) (Expr.get_sort e2));
+                let sort = Expr.get_sort e1 in
+                let new_expr = Expr.mk_const state.ctx new_sym sort in
+                bmc_address.hist := Pmap.add seq_num new_expr (!(bmc_address.hist));
+                 if g_sequentialise then 
+                  Solver.add state.solver 
+                    [ Boolean.mk_implies state.ctx (mk_not state.ctx guard)
+                        (Boolean.mk_eq state.ctx new_expr e1) ;
+                      Boolean.mk_implies state.ctx guard 
+                        (Boolean.mk_eq state.ctx new_expr e2) 
+                    ];
+                    Some new_expr 
+            end
     ) ret heap
   ) base_heap  guarded_heaps
   (*
@@ -2022,44 +2039,25 @@ let rec bmc_expr (state: 'a bmc_state)
                       depth = state.depth + 1;
                       proc_expr = Some e2;
                     } in
-                  let res_call = bmc_expr fresh_state e2 in
                   (*
-                  (bmc_call, alloc, ret_state) = 
-                    bmc_expr fresh_state e2 in
-                  *)
-                  (*
-                  let guarded_preexec = guard_preexec state.ctx
-                      (mk_not state.ctx state.has_returned) res_call.preexec in
-                  *)
-                  (*
-                  let new_preexec =
-                    merge_preexecs state.preexec guarded_preexec in 
-                  let (exec1, exec2) = (state.preexec, res_call.preexec) in
-                  let new_preexec = 
-                    {new_preexec with
-                      sb = Pset.union (new_preexec.sb)
-                                      (cartesian_product exec1.actions
-                                                         exec2.actions);
-                      asw = Pset.union (new_preexec.asw)
-                                       (asw_product exec1.actions exec2.actions
-                                                    !(state.parent_tid)
-                                        ); 
-                      hb = Pset.union (new_preexec.hb)
-                                      (hb_cartesian_product exec1.actions
-                                                            exec2.actions
-                                                            false
-                                      )
-                    } in
+                  print_endline "START";
+                  pp_to_stdout (Pp_core.Basic.pp_expr e2);
                   *)
 
+                  let res_call = bmc_expr fresh_state e2 in
                   Solver.add state.solver res_call.ret_asserts;
+                  (*
+                  print_endline "SAVE"; 
+                  print_heap res_call.state.heap;
+                  *)
+
                   { expr = res_call.state.z3_ret
                   ; allocs = res_call.allocs
                   ; vcs = res_call.vcs @ vcs
                   ; preexec = res_call.preexec
                   ; ret_asserts = []
                   ; returned = mk_false state.ctx
-                  ; state = state
+                  ; state = state_with_heap state res_call.state.heap
                   }
                | _ -> assert false
              end
@@ -2183,7 +2181,7 @@ let rec bmc_expr (state: 'a bmc_state)
          ; vcs = [ mk_false state.ctx ]
          ; preexec = initial_preexec ()
          ; ret_asserts = []
-         ; returned = mk_false state.ctx
+         ; returned = mk_true state.ctx
          ; state = state
          }
       else
@@ -2195,7 +2193,6 @@ let rec bmc_expr (state: 'a bmc_state)
       | Some (sym_list, expr) -> 
           (* Substitute pelist for sym_list *)
           assert (List.length sym_list = List.length pelist);
-          (* pp_to_stdout (Pp_core.Basic.pp_expr expr); *)
 
           (* Rename everything except sym_list *)
           let table_with_globals = List.fold_left (fun table (sym, _, _ ) ->
@@ -2208,7 +2205,7 @@ let rec bmc_expr (state: 'a bmc_state)
             } in
           let (expr_ssa, st) = SSA.run ssa_state (ssa_expr expr) in
           state.sym_supply := st.supply;
-          (* pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa); *)
+          pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa); 
           
           let subMap = List.fold_left2 (fun map sym pe ->
             Pmap.add sym pe map) (Pmap.empty sym_cmp) sym_list pelist in
@@ -2318,7 +2315,7 @@ let rec bmc_expr (state: 'a bmc_state)
       Solver.add state.solver [ eq_expr ];
 
       if g_sequentialise then
-        bmc_debug_print 2 "TODO: returns ignored for ewseq";
+        bmc_debug_print 2 "TODO: returns ignored for ewseq (HEAP)";
 
       let bmc_e2 = bmc_expr bmc_e1.state e2 in
 
@@ -2347,6 +2344,12 @@ let rec bmc_expr (state: 'a bmc_state)
                           )
           *)
         } in
+      let new_heap = merge_heaps state
+                     state.heap
+                    [ (bmc_e1.state.heap, bmc_e1.returned)
+                    ; (bmc_e2.state.heap, mk_not state.ctx bmc_e1.returned)
+                    ] in
+
       let new_vcs = (mk_or state.ctx [ bmc_e1.returned
                                      ; mk_and state.ctx bmc_e2.vcs])
                     :: bmc_e1.vcs
@@ -2355,13 +2358,17 @@ let rec bmc_expr (state: 'a bmc_state)
         mk_implies state.ctx (mk_not state.ctx bmc_e1.returned)
                              ret_assert
       ) bmc_e2.ret_asserts) in
+      (*
+      print_endline "EWSEQ";
+      print_heap new_heap;
+      *)
       { expr = bmc_e2.expr
       ; allocs = bmc_e2.allocs
       ; vcs = new_vcs
       ; preexec = new_preexec
       ; ret_asserts = new_ret_asserts
       ; returned = mk_or state.ctx [bmc_e1.returned; bmc_e2.returned]
-      ; state = bmc_e2.state
+      ; state = state_with_heap bmc_e2.state new_heap 
       }
 
   | Esseq (pat, e1, e2) ->
@@ -2372,7 +2379,7 @@ let rec bmc_expr (state: 'a bmc_state)
       Solver.add state.solver [ eq_expr ];
   
       if g_sequentialise then
-        bmc_debug_print 2 "TODO: returns ignored for esseq";
+        bmc_debug_print 2 "TODO: returns ignored for esseq (HEAP???)";
 
       let bmc_e2 = bmc_expr bmc_e1.state e2 in
 
@@ -2401,6 +2408,15 @@ let rec bmc_expr (state: 'a bmc_state)
                           )
           *)
         } in
+      let new_heap = merge_heaps state
+                     state.heap
+                    [ (bmc_e1.state.heap, bmc_e1.returned)
+                    ; (bmc_e2.state.heap, mk_not state.ctx bmc_e1.returned)
+                    ] in
+      (*           
+      print_endline "ESSEQ";
+      print_heap new_heap;
+      *)
       let new_vcs = (mk_or state.ctx [ bmc_e1.returned
                                      ; mk_and state.ctx bmc_e2.vcs])
                     :: bmc_e1.vcs
@@ -2415,7 +2431,7 @@ let rec bmc_expr (state: 'a bmc_state)
       ; preexec = new_preexec
       ; ret_asserts = new_ret_asserts
       ; returned = mk_or state.ctx [bmc_e1.returned; bmc_e2.returned]
-      ; state = bmc_e2.state
+      ; state = state_with_heap bmc_e2.state new_heap 
       }
 
   | Esave ((Symbol (i, Some s), _), binding_list, e)  ->
@@ -2438,6 +2454,10 @@ let rec bmc_expr (state: 'a bmc_state)
       *)
 
       let bmc_run = bmc_expr state to_run in
+      (*
+      print_endline "SAVE HEAP";
+      print_heap bmc_run.state.heap;
+      *)
 
       let is_ret = (match Str.split (Str.regexp "_") s with
         | [name; id] -> 
@@ -3636,11 +3656,13 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
             (* Printf.printf "\n-- Solver:\n%s\n" (Solver.to_string
              * (state1.solver)); *)
 
-            (* print_endline (Solver.to_string state1.solver);   *)
             print_endline "Checking sat";
             let t3 = Sys.time() in
-            let _ = check_solver (state1.solver) in
+            let state = check_solver state1.solver in
             Printf.printf "Time of check3: %fs\n" (Sys.time() -. t3);
+            if state == SATISFIABLE && g_print_model then
+              let model = getOptVal (Solver.get_model state1.solver) in
+              print_endline (Model.to_string model);
             if g_print_stats then
               begin
               let stats = Solver.get_statistics state1.solver in
