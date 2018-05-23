@@ -106,7 +106,10 @@ int vsscanf_s(const char * restrict s, const char * restrict format, va_list arg
 char *gets_s(char *s, rsize_t n);
 
 
-
+// TEMPORARY HACK
+// TODO: return printf result
+int putchar(int c) { printf("%c", c); return 0; }
+int puts(const char *s) { printf("%s", s); return 0; }
 
 #else
 #endif

@@ -124,7 +124,9 @@ long double fabsl(long double x);
 double hypot(double x, double y);
 float hypotf(float x, float y);
 long double hypotl(long double x, long double y);
+*/
 double pow(double x, double y);
+/*
 float powf(float x, float y);
 long double powl(long double x, long double y);
 double sqrt(double x);
