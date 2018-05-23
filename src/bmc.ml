@@ -1278,20 +1278,34 @@ let rec bmc_pexpr (state: 'a bmc_state)
           (PointerSort.get_addr state.ctx res1.expr) in
         (* cprint_endline (Expr.to_string alloc); *)
         let new_address = Address.shift_n state.ctx addr res2.expr in
+
+        (*
         let index = Address.get_index state.ctx new_address in
         (* print_endline (string_of_int (AddressSet.cardinal res1.allocs)); *)
         (*
         print_endline (Expr.to_string new_address);
         print_endline (Expr.to_string index);
         *)
-
-        let new_vc = 
-          mk_lt state.ctx index 
-          (Address.apply_getAllocSize state.ctx alloc) in
+        let alloc_size_expr = Address.apply_getAllocSize state.ctx alloc in
+        let new_vc =
+          if g_bv then
+            mk_and state.ctx 
+              [ BitVector.mk_slt state.ctx index alloc_size_expr
+              ; BitVector.mk_sge state.ctx index 
+                         (BitVector.mk_numeral state.ctx (string_of_int 0) g_max_precision)
+              ]
+          else
+            mk_and state.ctx
+              [ mk_lt state.ctx index alloc_size_expr
+              ; mk_ge state.ctx index (Integer.mk_numeral_i state.ctx 0)
+              ]
+        in
+        *)
+        (* TODO: validity when checking if can dereference *)
 
         { expr = PointerSort.mk_ptr state.ctx new_address
         ; allocs = res1.allocs
-        ; vcs = new_vc :: (res1.vcs @ res2.vcs)
+        ; vcs = (*new_vc :: *)(res1.vcs @ res2.vcs)
         ; preexec = initial_preexec ()
         ; ret_asserts = []
         ; returned = mk_false state.ctx
@@ -1478,9 +1492,16 @@ let bmc_paction (state: 'a bmc_state)
         Address.apply_getAllocSize state.ctx (Integer.mk_numeral_i state.ctx alloc_id) in
       bmc_debug_print 2 (Expr.to_string alloc_size_assert); 
 
+      let alloc_size_expr = 
+        if g_bv then 
+          BitVector.mk_numeral state.ctx (string_of_int allocation_size) g_max_precision
+        else
+          Integer.mk_numeral_i state.ctx allocation_size
+      in
+
       Solver.add state.solver [ mk_eq state.ctx 
                                       alloc_size_assert
-                                      (Integer.mk_numeral_i state.ctx allocation_size)
+                                      alloc_size_expr
                               ];
 
       let pexpr_typ_list = List.map (fun ty -> 
@@ -1879,17 +1900,35 @@ let rec bmc_expr (state: 'a bmc_state)
   match expr_ with
   | Epure pe ->
       bmc_pexpr state pe 
-  | Ememop (PtrValidForDeref, [pe]) ->
-      let res_pe = bmc_pexpr state pe in
+  | Ememop (PtrValidForDeref, [ptr]) ->
+      let res_ptr = bmc_pexpr state ptr in
       bmc_debug_print 2 "TODO: Ememop PtrValidForDeref always true";
 
-      { expr = mk_true state.ctx
-      ; vcs = res_pe.vcs
+      let addr = PointerSort.get_addr state.ctx res_ptr.expr in
+      let alloc = Address.get_alloc state.ctx  addr in
+      let index = Address.get_index state.ctx addr in
+      let alloc_size_expr = Address.apply_getAllocSize state.ctx alloc in
+      let ret =
+        if g_bv then
+          mk_and state.ctx 
+            [ BitVector.mk_slt state.ctx index alloc_size_expr
+            ; BitVector.mk_sge state.ctx index 
+                       (BitVector.mk_numeral state.ctx (string_of_int 0) g_max_precision)
+            ]
+        else
+          mk_and state.ctx
+            [ mk_lt state.ctx index alloc_size_expr
+            ; mk_ge state.ctx index (Integer.mk_numeral_i state.ctx 0)
+            ]
+      in
+
+      { expr = ret (*mk_true state.ctx *)
+      ; vcs = res_ptr.vcs 
       ; allocs = AddressSet.empty
       ; preexec = initial_preexec ()
       ; ret_asserts = []
       ; returned = mk_false state.ctx
-      ; state = res_pe.state
+      ; state = res_ptr.state
       }
   | Ememop _ ->
       assert false
@@ -2205,7 +2244,7 @@ let rec bmc_expr (state: 'a bmc_state)
             } in
           let (expr_ssa, st) = SSA.run ssa_state (ssa_expr expr) in
           state.sym_supply := st.supply;
-          pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa); 
+          (*pp_to_stdout (Pp_core.Basic.pp_expr expr_ssa);  *)
           
           let subMap = List.fold_left2 (fun map sym pe ->
             Pmap.add sym pe map) (Pmap.empty sym_cmp) sym_list pelist in
@@ -3596,11 +3635,14 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
         ) in
 
       (*bmc_debug_print 1 "-----CONSTRAINTS ONLY"; *)
-      let t0 = Sys.time () in
-      let check0 = Solver.check state1.solver []  in
-      (*(Solver.to_string state1.solver); *)
-      assert (check0 = SATISFIABLE); 
-      Printf.printf "Time of check0: %fs\n" (Sys.time() -. t0);
+      if g_extra_checks then
+        begin
+        let t0 = Sys.time () in
+        let check0 = Solver.check state1.solver []  in
+        (*(Solver.to_string state1.solver); *)
+        assert (check0 = SATISFIABLE); 
+        Printf.printf "Time of check0: %fs\n" (Sys.time() -. t0)
+        end;
 
       if not g_sequentialise then
         (print_endline "-----WITH EVENTS";
@@ -3608,11 +3650,18 @@ let bmc_file (file: 'a typed_file) (supply: ksym_supply) =
 
       print_endline ("RESULT EXPR: " ^ (Expr.to_string result.expr));
       
-      let t1 = Sys.time () in
-      if (check_solver_fun state1.solver (Some result.expr)
-            = SATISFIABLE) then
-        begin
+      let do_vcs = 
+        if g_extra_checks || not g_sequentialise then 
+          let t1 = Sys.time () in
+          let result = check_solver_fun state1.solver (Some result.expr) in
           Printf.printf "Time of check1: %fs\n" (Sys.time() -. t1);
+          result = SATISFIABLE
+        else
+          true
+        in
+
+      if do_vcs then
+        begin
           let check_vcs = 
             if not g_sequentialise then
               (match funcDecls with

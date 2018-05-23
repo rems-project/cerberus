@@ -88,7 +88,8 @@ let rec substitute_pexpr (map: substitute_map)
     | PEcase (pe, caselist) ->
         PEcase(substitute_pexpr map pe,
                List.map (fun (pat, pe) -> (pat, substitute_pexpr map pe)) caselist)
-    | PEarray_shift _
+    | PEarray_shift (pe_ptr, ty, pe_index) ->
+        PEarray_shift(substitute_pexpr map pe_ptr, ty, substitute_pexpr map pe_index)
     | PEmember_shift _ -> 
         assert false
     | PEnot pe ->

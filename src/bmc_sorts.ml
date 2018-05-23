@@ -232,14 +232,25 @@ module PairAddress : AddressType =
     let to_string (l1,l2) = Printf.sprintf "(%d,%d)" l1 l2
 
     let mk_sort (ctx: context) =
-      Tuple.mk_sort ctx (mk_sym ctx "pair_addr")
-      [ mk_sym ctx "alloc"; mk_sym ctx "index"]
-      [ Integer.mk_sort ctx; Integer.mk_sort ctx ]
+      if g_bv then
+        Tuple.mk_sort ctx (mk_sym ctx "pair_addr")
+        [ mk_sym ctx "alloc"; mk_sym ctx "index"]
+        [ Integer.mk_sort ctx; BitVector.mk_sort ctx g_max_precision ]
+      else
+        Tuple.mk_sort ctx (mk_sym ctx "pair_addr")
+        [ mk_sym ctx "alloc"; mk_sym ctx "index"]
+        [ Integer.mk_sort ctx; Integer.mk_sort ctx ]
 
     let mk_expr ctx (alloc,index) =
       let mk_decl = Tuple.get_mk_decl (mk_sort ctx) in
+      let index_expr = 
+        if g_bv then
+          BitVector.mk_numeral ctx (string_of_int index) g_max_precision
+        else
+          Integer.mk_numeral_i ctx index
+      in
       FuncDecl.apply mk_decl 
-        [Integer.mk_numeral_i ctx alloc; Integer.mk_numeral_i ctx index]
+        [Integer.mk_numeral_i ctx alloc; index_expr]
 
     let fn_isAtomic ctx = FuncDecl.mk_func_decl_s ctx
                         "isAtomic" [mk_sort ctx] (Boolean.mk_sort ctx) 
@@ -255,12 +266,17 @@ module PairAddress : AddressType =
     let to_addr expr = 
       match Expr.get_args expr with
       | [a; b] ->
-        (Integer.get_int a, Integer.get_int b)
+          if g_bv then
+            (Integer.get_int a, BitVector.get_int b)
+          else
+            (Integer.get_int a, Integer.get_int b)
       | _ -> assert false
 
     let apply_getAllocSize ctx (alloc : Expr.expr) = 
+      let ret_sort = if g_bv then BitVector.mk_sort ctx g_max_precision
+                             else Integer.mk_sort ctx in
       let fn = FuncDecl.mk_func_decl_s ctx
-                  "!_allocSize" [Integer.mk_sort ctx] (Integer.mk_sort ctx) in
+                  "!_allocSize" [Integer.mk_sort ctx] (ret_sort) in
       FuncDecl.apply fn [ alloc ]
 
     let get_alloc ctx expr =
@@ -275,8 +291,13 @@ module PairAddress : AddressType =
       let mk_decl = Tuple.get_mk_decl (mk_sort ctx) in
       let alloc = get_alloc ctx addr in
       let index = get_index ctx addr in
+      if g_bv then
+        FuncDecl.apply mk_decl
+          [alloc; BitVector.mk_add ctx index n]
+      else
       FuncDecl.apply mk_decl
         [alloc; Arithmetic.mk_add ctx [index; n]]
+
   end
 
 module IntAddress : AddressType = 

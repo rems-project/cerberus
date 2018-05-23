@@ -8,12 +8,12 @@ let g_max_function_depth = 3
 let g_max_loop_depth = 6
 
 (* Loops currently broken *)
-let g_sequentialise = false
+let g_sequentialise = true
 
 let g_print_files = false
 let g_print_initial_file = true
 
-let g_bmc_debug = 7
+let g_bmc_debug = 0
 
 let g_print_stats = false
 
@@ -29,3 +29,5 @@ let g_max_precision = 128 (* 2 * max_precision hack *)
 
 let g_print_model = true
 let g_bv = false
+
+let g_extra_checks = false
