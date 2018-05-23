@@ -69,5 +69,21 @@ int strcmp (const char *s1, const char *s2)
   return (*s1 - *s2);
 }
 
+size_t strlen(const char *s)
+{
+  size_t len = 0;
+  while(*s) len++, s++;
+  return len;
+}
+
+// TODO: is this posix or iso?
+char* strdup(const char *s)
+{
+  size_t len = strlen(s)+1;
+  char *sc = malloc(len);
+  memcpy(sc, s, len);
+  return sc;
+}
+
 #else
 #endif
