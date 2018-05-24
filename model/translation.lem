@@ -166,7 +166,6 @@ let shiftPathFromMember program tag ident =
 *)
 
 
-(* DEAD
 val translate_integerConstant: A.integerConstant -> C.pexpr
 let translate_integerConstant iCst =
   C.Pexpr [] () (C.PEval (C.Vobject (C.OVinteger (
@@ -179,7 +178,6 @@ let translate_integerConstant iCst =
           Mem.min_ival ity
     end
   ))))
-*)
 
 val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_order
 let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
@@ -932,7 +930,6 @@ match AilTypesAux.unatomic ty with
                                    error "AilEunary PostfixDecr, floating type"
   | Aty.Pointer _ ref_ty ->
                                    Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe (0 - 1))
-(*                           Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe 1) *)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr"
 end
@@ -2636,11 +2633,18 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
     | A.AilSreturn _ ->
         St.return stmt_
     | A.AilSswitch e s ->
-        A.AilSswitch e <$> erase_loop_control_aux s
+        with_fresh_labels (erase_loop_control_aux s) >>= fun (_, break_sym, s') ->
+        St.return $
+          A.AilSblock []
+            [ A.AnnotatedStatement loc (A.AilSswitch e (A.AnnotatedStatement loc (A.AilSblock []
+                [ A.AnnotatedStatement loc (A.AilSgoto break_sym); s' ])))
+            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
     | A.AilScase iCst s ->
         A.AilScase iCst <$> erase_loop_control_aux s
     | A.AilSdefault s ->
-        error "WIP: erase_loop_control_aux, AilSdefault"
+        A.AilSdefault <$> erase_loop_control_aux s
+        (* TODO: not sure about this
+        error "WIP: erase_loop_control_aux, AilSdefault" *)
     | A.AilSlabel sym s ->
         A.AilSlabel sym <$> erase_loop_control_aux s
     | A.AilSgoto _ ->
@@ -2992,48 +2996,21 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           )
 
     | A.AilSswitch e s ->
-        translate_expression e >>= fun core_e ->
-        let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (promoted_sym, promoted_sym_pat, promoted_sym_pe) ->
-        
-        (* STD §6.8.4.2#5, sentence 1 *)
-        let promoted_pe =
-          let promoted_ty =
-             fromJust "Translation.translate_stmt2: switch expr promotion"
-               (AilTypesAux.promotion tmp_implementation (ctype_of e)) in
-          Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
-            stdlib.mkcall_conv_loaded_int promoted_ty e_sym_pe
-          ) in
-        
-        E.return $
-          Caux.mk_wseq_e e_sym_pat core_e (
-            Caux.mk_let_e promoted_sym_pat promoted_pe (
-              
-              error "WIP switch elab"
-              
-              
-            )
-          )
-(*
-        
         (* Translate controlling expression *)
         translate_expression e >>= fun core_e ->
-        E.fresh_symbol         >>= fun e_sym  ->
         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
-        let e_pat = Caux.mk_sym_pat e_sym (C.BTy_loaded oTy) in
-
+        E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_pat, e_sym_pe) ->
+        (* Case in specified values *)
+        E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (control_sym, control_pat, control_sym_pe) ->
         (* Integer promotion *)
         (* STD §6.8.4.2#5, sentence 1 *)
-        let pe_pat = Caux.mk_sym_pat e_sym (C.BTy_loaded oTy) in
-        let pe_promoted =
+        (* TODO: check if this is a correct integer promotion *)
+        E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (promoted_sym, promoted_pat, promoted_sym_pe) ->
+        let promoted_pe =
           Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
             stdlib.mkcall_conv_int (fromJust "Translation.translate_stmt2: switch expr promotion"
-              (AilTypesAux.promotion tmp_implementation (ctype_of e)))
-              (Caux.mk_sym_pe e_sym)
+              (AilTypesAux.promotion tmp_implementation (ctype_of e))) control_sym_pe
           ) in
-        
-
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
         let nb_cases = List.length cases.case_csts in
@@ -3041,28 +3018,34 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.fresh_named_symbol "default"                       >>= fun default_sym ->
         let case_labs = List.zip cases.case_csts case_syms in
         translate_cases_block case_labs (Just default_sym) s >>= fun core_s ->
-
         E.get_visible_objects >>= fun visible_syms ->
-
+        let unit_pat = Caux.mk_empty_pat C.BTy_unit in
         (* Build translated switch *)
         (* TODO: not sure if Ewseqs or Esseqs *)
         E.return
-          (Caux.mk_wseq_e e_pat core_e
-          (Caux.mk_wseq_e pe_pat (Caux.mk_pure_e pe_promoted)
-            (List.foldl (fun acc (iC, case_lab) ->
-              Caux.mk_if_e (Caux.mk_op_pe C.OpEq
-                      (Caux.mk_sym_pe e_sym)
-                      (translate_integerConstant iC))
-                (* TODO: not sure if the visible afters are the same *)
-                (mk_run_e loc case_lab visible_syms [] [])
-                acc)
-              (Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
-                (if cases.found_default then
-                  mk_run_e loc default_sym [] [] []
-                 else Caux.mk_skip_e)
-                core_s)
-              case_labs)))
-*)
+          (* Get control expression *)
+          (Caux.mk_sseq_e e_pat core_e
+            (* Check if unspecified *)
+            (Caux.mk_case_e e_sym_pe [
+              (Caux.mk_specified_pat control_pat,
+                (* Do integer promotion *)
+                (Caux.mk_sseq_e promoted_pat (Caux.mk_pure_e promoted_pe)
+                  (* For every case.... *)
+                  (List.foldl (fun acc (iC, case_lab) ->
+                    Caux.mk_sseq_e unit_pat
+                      (* Check if equal to the constant expression *)
+                      (Caux.mk_if_e (Caux.mk_op_pe C.OpEq promoted_sym_pe (translate_integerConstant iC))
+                        (* TODO: not sure if the visible afters are the same *)
+                        (mk_run_e loc case_lab visible_syms [] [])
+                        (Caux.mk_skip_e)
+                      )
+                      acc)
+                    (* default branch *)
+                    (Caux.mk_sseq_e unit_pat (if cases.found_default then mk_run_e loc default_sym [] [] [] else Caux.mk_skip_e) core_s)
+                  case_labs)))
+            ; (* UB if unspecified *)
+              (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype), Caux.mk_pure_e (Caux.mk_undef_exceptional_condition ()))
+            ]))
     
     | A.AilScase iCst s ->
         self s                >>= fun core_s ->
