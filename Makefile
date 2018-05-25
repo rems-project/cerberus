@@ -125,12 +125,9 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
-##	@./tools/colours.sh ocamlbuild -no-hygiene -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native
-
-#cmdliner,
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -138,8 +135,8 @@ ocaml_profiling:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs landmarks.ppx,landmarks -pkgs cmdliner,pprint,zarith -libs unix,nums,str main_.native; \
-	  cp -L main_.native cerberus; \
+	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  cp -L main_.native cerberus-prof; \
 	fi
 
 ocaml_byte:
