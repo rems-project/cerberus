@@ -870,7 +870,15 @@ else
                             , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
 match AilTypesAux.unatomic ty with
   | Aty.Basic (Aty.Integer _) ->
+(*
                               stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))
+*)
+                          (* TODO: check again *)
+                          let core_incr = Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1) in
+      if AilTypesAux.is_signed_integer_type result_ty then
+                          stdlib.mkcall_catch_exceptional_condition result_ty core_incr
+      else (* is unsigned *)
+                          stdlib.mkcall_wrapI result_ty core_incr
   | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
                               error "AilEunary PostfixIncr, floating type"
   | Aty.Pointer _ ref_ty ->
@@ -925,10 +933,16 @@ end
                               , Caux.mk_specified_pe
 match AilTypesAux.unatomic ty with
   | Aty.Basic (Aty.Integer _) ->
-                                  stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1))
+                          (* TODO: check again *)
+                          let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
+      if AilTypesAux.is_signed_integer_type result_ty then
+                          stdlib.mkcall_catch_exceptional_condition result_ty core_decr
+      else (* is unsigned *)
+                          stdlib.mkcall_wrapI result_ty core_decr
   | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
                                    error "AilEunary PostfixDecr, floating type"
   | Aty.Pointer _ ref_ty ->
+                                   (* TODO: check again *)
                                    Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe (0 - 1))
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr"
