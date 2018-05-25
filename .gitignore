@@ -37,6 +37,7 @@ trash/**
 cbuild
 clink
 cerberus
+cerberus-prof
 cerb.concrete
 cerb.symbolic
 
