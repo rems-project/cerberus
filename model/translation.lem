@@ -1983,13 +1983,19 @@ TODO: #9
              associated temporary objects *)
           (* NOTE: combine_params_args does the argument promotion for variadic functions *)
           E.mapM (fun (param_ty, arg_e) ->
-            let param_oTy =
+            let param_bTy =
               C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype param_ty)) in
-            let arg_oTy =
+            let arg_bTy =
               C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of arg_e))) in
+            
+            let _ = Debug.print_debug 1 [] (fun () ->
+              "param_bTy: " ^ Pp.stringFromCore_core_base_type param_bTy ^ "\n" ^
+              "arg_bTy: " ^ Pp.stringFromCore_core_base_type arg_bTy
+            ) in
+            
             let param_ctype_pe = Caux.mk_ail_ctype_pe param_ty in
             self arg_e                                          >>= fun core_arg_e                           ->
-            E.wrapped_fresh_symbol arg_oTy                      >>= fun (_, arg_sym_pat, arg_sym_pe)         ->
+            E.wrapped_fresh_symbol arg_bTy                      >>= fun (_, arg_sym_pat, arg_sym_pe)         ->
             E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, arg_ptr_sym_pat, arg_ptr_sym_pe) ->
             E.return (
               Caux.mk_wseq_e arg_sym_pat core_arg_e (
@@ -2012,7 +2018,6 @@ TODO: #9
               )
             )
           ) (combine_params_args params es) >>= fun core_creates ->
-          
           (* STD (§6.5.2.2#10, sentence 1) says there is sequence "point after the
              evaluations of the function designator and the actual arguments but before
              the actual call." *)
