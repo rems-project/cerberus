@@ -237,8 +237,8 @@ and alignof = function
      failwith "TODO: sizeof Builtin"
 
 
-module Concrete : Memory = struct
-  let name = "I am the concrete memory model"
+module Twin : Memory = struct
+  let name = "I am the twin allocation memory model"
 
   type provenance =
     | Prov_none
@@ -256,7 +256,7 @@ module Concrete : Memory = struct
     | PV of provenance * pointer_value_base
   
   type integer_value =
-    | IV of provenance * Nat_big_num.num
+    | IV of Nat_big_num.num
   
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -298,11 +298,11 @@ module Concrete : Memory = struct
       let rec eval_cs = function
         | MC_empty ->
             true
-        | MC_eq (IV (prov1, n1), IV (prov2, n2)) ->
+        | MC_eq (IV n1, IV n2) ->
             Nat_big_num.equal n1 n2
-        | MC_le (IV (prov1, n1), IV (prov2, n2)) ->
+        | MC_le (IV n1, IV n2) ->
             Nat_big_num.less_equal n1 n2
-        | MC_lt (IV (prov1, n1), IV (prov2, n2)) ->
+        | MC_lt (IV n1, IV n2) ->
             Nat_big_num.less n1 n2
         | MC_in_device _ ->
             failwith "TODO: Concrete, with_constraints: MC_in_device"
@@ -357,30 +357,23 @@ module Concrete : Memory = struct
   let return = Eff.return
   let bind = Eff.(>>=)
   
-  
-  let string_of_provenance = function
-    | Prov_none -> ""
-    | Prov_some alloc_id ->
-        N.to_string alloc_id
-    | Prov_device ->
-        "dev"
-  
+
+
+
+
   (* pretty printing *)
   open PPrint
   open Pp_prelude
-  let pp_pointer_value (PV (prov, ptrval_))=
+  let pp_pointer_value (PV (_, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
           !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
       | PVconcrete n ->
-          !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
-(*
           !^ (Nat_big_num.to_string n)
-*)
   
-  let pp_integer_value (IV (_, n)) =
+  let pp_integer_value (IV n) =
         !^ (Nat_big_num.to_string n)
     
   let pp_integer_value_for_core = pp_integer_value
@@ -428,6 +421,12 @@ module Concrete : Memory = struct
   
   
   
+  let string_of_provenance = function
+    | Prov_none -> ""
+    | Prov_some alloc_id ->
+        N.to_string alloc_id
+    | Prov_device ->
+        "dev"
 
 
 
@@ -471,22 +470,24 @@ module Concrete : Memory = struct
   
   
   (* INTERNAL: fetch_bytes *)
-  let fetch_bytes st base_addr n_bytes =
-    List.map (fun addr ->
-      match IntMap.find_opt addr st.bytemap with
-        | Some b ->
-            b
-        | None ->
-            (Prov_none, None)
-    ) (List.init n_bytes (fun z ->
+  let fetch_bytes base_addr n_bytes =
+    get >>= fun st ->
+    return (
+      List.map (fun addr ->
+        match IntMap.find_opt addr st.bytemap with
+          | Some b ->
+              b
+          | None ->
+              (Prov_none, None)
+      ) (List.init n_bytes (fun z ->
            (* NOTE: the reversal in the offset is to model
               little-endianness *)
 (*           let offset = n_bytes - 1 - z in *)
 (*KKK*)
-         let offset = z in
-         Nat_big_num.(add base_addr (of_int offset))
-       ))
-
+           let offset = z in
+           Nat_big_num.(add base_addr (of_int offset))
+         ))
+    )
   
   let write_bytes base_addr bs =
     get >>= fun st ->
@@ -540,25 +541,18 @@ module Concrete : Memory = struct
           | (Some acc, Some c) ->
               Some (c :: acc)
       ) (Some []) (List.rev xs) in
-    
-    if List.length bs < sizeof ty then
-      failwith "combine_bytes, |bs| < sizeof(ty)";
     match ty with
       | Void0
       | Array0 (_, None)
       | Function0 _ ->
           assert false
       | Basic0 (Integer ity) ->
-(*          Printf.printf "==> %s sz:%d\n" (Pp_utils.to_plain_string (Pp_core_ctype.pp_ctype ty)) (sizeof ty); *)
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-(*          Printf.printf "==> |bs| = %d,  |bs1| = %d,  " (List.length bs) (List.length bs1); *)
           let (provs, bs1') = List.split bs1 in
-(*          Printf.printf "==> |provs| = %d\n" (List.length provs); *)
-          let prov = combine_provenances provs in
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVinteger ( ity
-                          , IV (prov, int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+                          , IV (int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
             | None ->
                 MVunspecified ty
           end , bs2)
@@ -575,7 +569,7 @@ module Concrete : Memory = struct
           end, bs2)
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
-            if n <= 0 then
+            if n < 0 then
               (MVarray acc, cs)
             else
               let (mval, cs') = combine_bytes elem_ty cs in
@@ -670,8 +664,8 @@ module Concrete : Memory = struct
     match mval with
       | MVunspecified ty ->
           List.init (sizeof ty) (fun _ -> (Prov_none, None))
-      | MVinteger (ity, IV (prov, n)) ->
-          List.map (fun z -> (prov, z)) begin
+      | MVinteger (ity, IV n) ->
+          List.map (fun z -> (Prov_none, z)) begin
             bytes_of_int64
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
@@ -725,46 +719,9 @@ module Concrete : Memory = struct
           let size = sizeof (Core_ctype.Union0 tag_sym) in
           let bs = explode_bytes mval in
           bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
+
   
-  
-  (* BEGIN DEBUG *)
-  let dot_of_mem_state st =
-    let get_value alloc =
-      let bs = fetch_bytes st alloc.base (N.to_int alloc.size) in
-      let Some ty = alloc.ty in
-      let (mval, bs') = combine_bytes ty bs in
-      mval
-    in
-    let xs = IntMap.fold (fun alloc_id alloc acc ->
-      Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
-        (N.to_string alloc_id)
-        (N.to_string alloc.base)
-        (N.to_string alloc.size)
-        (Pp_utils.to_plain_string (pp_mem_value (get_value alloc))) :: acc
-    ) st.allocations [] in
-    prerr_endline "digraph G{";
-    List.iter prerr_endline xs;
-    prerr_endline "}"
-(*
-  let dot_of_mem_state st =
-  type allocation = {
-    base: address;
-    size: N.num; (*TODO: this is probably unnecessary once we have the type *)
-    ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
-    is_readonly: bool;
-  }
-  
-  type mem_state = {
-    next_alloc_id: allocation_id;
-    allocations: allocation IntMap.t;
-    next_address: address;
-    bytemap: (provenance * char option) IntMap.t;
-  }
-*)
-  (* END DEBUG *)
-  
-  
-  let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
+  let allocate_static tid pref (IV align) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
     modify begin fun st ->
@@ -803,16 +760,9 @@ module Concrete : Memory = struct
                   ) st.bytemap bs
               } )
     end
-(*
-  (* TODO: DEBUG: *)
-  >>= fun ret ->
-  get >>= fun st ->
-  dot_of_mem_state st;
-  return ret
-*)
   
   
-  let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
+  let allocate_dynamic tid pref (IV  align_n) (IV size_n) =
 (*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
     modify (fun st ->
       let alloc_id = st.next_alloc_id in
@@ -848,14 +798,10 @@ module Concrete : Memory = struct
           fail (MerrOther "attempted to kill with an invalid pointer")
   
   let load loc ty (PV (prov, ptrval_)) =
-    Debug_ocaml.print_debug 3 [] (fun () ->
-      "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
-      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
-    );
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load addr =
       get >>= fun st ->
-      let bs = fetch_bytes st addr (sizeof ty) in
+      fetch_bytes addr (sizeof ty) >>= fun bs ->
       let (mval, bs') = combine_bytes ty bs in
       begin match bs' with
         | [] ->
@@ -891,8 +837,9 @@ module Concrete : Memory = struct
   
   let store loc ty (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
-      "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
-      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+      "ENTERING STORE: ty=" ^
+      String_core_ctype.string_of_ctype ty ^ "@" ^
+      Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
     if not (ctype_equal (Core_ctype.unatomic ty) (Core_ctype.unatomic (typeof mval))) then begin
@@ -942,13 +889,6 @@ module Concrete : Memory = struct
                   else
                     do_store addr
             end
-(*
-  (* TODO: DEBUG: *)
-  >>= fun ret ->
-  get >>= fun st ->
-  dot_of_mem_state st;
-  return ret
-*)
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
@@ -1035,7 +975,7 @@ module Concrete : Memory = struct
               | _ ->
                   diff_ty
               in
-            return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
+            return (IV (N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
           else
             fail MerrPtrdiff
       | _ ->
@@ -1069,23 +1009,19 @@ module Concrete : Memory = struct
                 return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
           end
   
-  let ptrcast_ival _ ref_ty (IV (prov, n)) =
+  let ptrcast_ival _ ref_ty (IV n) =
     if not (N.equal n N.zero) then
       (* STD \<section>6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
-    match prov with
-      | Prov_none ->
-          (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-          if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-            return (PV (Prov_device, PVconcrete n))
-          else if N.equal n N.zero then
-            return (PV (Prov_none, PVnull ref_ty))
-          else
-            return (PV (Prov_none, PVconcrete n))
-      | _ ->
-          return (PV (prov, PVconcrete n))
+    (* TODO!! *)
+    if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+      return (PV (Prov_device, PVconcrete n))
+    else if N.equal n N.zero then
+      return (PV (Prov_none, PVnull ref_ty))
+    else
+      return (PV (Prov_none, PVconcrete n))
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1093,11 +1029,11 @@ module Concrete : Memory = struct
       cabs_ident_equal ident memb_ident in
     match List.find_opt pred xs with
       | Some (_, _, offset) ->
-          IV (Prov_none, N.of_int offset)
+          IV (N.of_int offset)
       | None ->
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
-  let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
+  let array_shift_ptrval (PV (prov, ptrval_)) ty (IV ival) =
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
     PV (prov, match ptrval_ with
       | PVnull _ ->
@@ -1110,7 +1046,7 @@ module Concrete : Memory = struct
           PVconcrete (N.add addr offset))
   
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let IV (_, offset) = offsetof_ival tag_sym memb_ident in
+    let IV offset = offsetof_ival tag_sym memb_ident in
     PV (prov, match ptrval_ with
       | PVnull _ ->
           PVconcrete offset
@@ -1123,11 +1059,11 @@ module Concrete : Memory = struct
     failwith "TODO: concurRead_ival"
   
   let integer_ival n =
-    IV (Prov_none, n)
+    IV n
   
   let max_ival ity =
     let open Nat_big_num in
-    IV (Prov_none, begin match Impl.sizeof_ity ity with
+    IV (begin match Impl.sizeof_ity ity with
       | Some n ->
           let signed_max =
             sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
@@ -1160,7 +1096,7 @@ module Concrete : Memory = struct
   
   let min_ival ity =
     let open Nat_big_num in
-    IV (Prov_none, begin match ity with
+    IV (begin match ity with
       | Char ->
           if Impl.char_is_signed then
             negate (pow_int (of_int 2) (8-1))
@@ -1192,16 +1128,16 @@ module Concrete : Memory = struct
   let intcast_ptrval _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
-          return (IV (prov, Nat_big_num.zero))
+          return (IV Nat_big_num.zero)
       | PVfunction _ ->
           failwith "TODO: intcast_ptrval PVfunction"
       | PVconcrete addr ->
-          let IV (_, ity_max) = max_ival ity in
-          let IV (_, ity_min) = min_ival ity in
+          let IV ity_max = max_ival ity in
+          let IV ity_min = min_ival ity in
           if N.(less addr ity_min || less ity_max addr) then
             fail MerrIntFromPtr
           else
-            return (IV (prov, addr))
+            return (IV addr)
 
 let combine_prov prov1 prov2 =
   match (prov1, prov2) with
@@ -1243,8 +1179,8 @@ let combine_prov prov1 prov2 =
 *)
 
 
-  let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
-    IV (combine_prov prov1 prov2, begin match iop with
+  let op_ival iop (IV n1) (IV n2) =
+    IV (begin match iop with
       | IntAdd ->
           Nat_big_num.add
       | IntSub ->
@@ -1263,23 +1199,23 @@ let combine_prov prov1 prov2 =
     end n1 n2)
   
   let sizeof_ival ty =
-    IV (Prov_none, Nat_big_num.of_int (sizeof ty))
+    IV (Nat_big_num.of_int (sizeof ty))
   let alignof_ival ty =
-    IV (Prov_none, Nat_big_num.of_int (alignof ty))
+    IV (Nat_big_num.of_int (alignof ty))
   
-  let bitwise_complement_ival _ (IV (prov, n)) =
+  let bitwise_complement_ival _ (IV n) =
     (* TODO *)
     (* prerr_endline "Concrete.bitwise_complement ==> HACK"; *)
-    IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
+    IV (Nat_big_num.(sub (negate n) (of_int 1)))
 
-  let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_and n1 n2)
-  let bitwise_or_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_or n1 n2)
-  let bitwise_xor_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
-    IV (combine_prov prov1 prov2, Nat_big_num.bitwise_xor n1 n2)
+  let bitwise_and_ival _ (IV n1) (IV n2) =
+    IV (Nat_big_num.bitwise_and n1 n2)
+  let bitwise_or_ival _ (IV n1) (IV n2) =
+    IV (Nat_big_num.bitwise_or n1 n2)
+  let bitwise_xor_ival _ (IV n1) (IV n2) =
+    IV (Nat_big_num.bitwise_xor n1 n2)
   
-  let case_integer_value (IV (_, n)) f_concrete _ =
+  let case_integer_value (IV n) f_concrete _ =
     f_concrete n
   
   let is_specified_ival ival =
@@ -1313,21 +1249,21 @@ let combine_prov prov1 prov2 =
   let le_fval fval1 fval2 =
     fval1 <= fval2
   
-  let fvfromint (IV (_, n)) =
+  let fvfromint (IV n) =
     Int64.float_of_bits (N.to_int64 n)
   
   let ivfromfloat ity fval =
-    IV (Prov_none, N.of_int64 (Int64.bits_of_float fval))
+    IV (N.of_int64 (Int64.bits_of_float fval))
   
-  let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let eq_ival _ (IV n1) (IV n2) =
     Some (Nat_big_num.equal n1 n2)
-  let lt_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let lt_ival _ (IV n1) (IV n2) =
     Some (Nat_big_num.compare n1 n2 = -1)
-  let le_ival _ (IV (_, n1)) (IV (_, n2)) =
+  let le_ival _ (IV n1) (IV n2) =
     let cmp = Nat_big_num.compare n1 n2 in
     Some (cmp = -1 || cmp = 0)
   
-  let eval_integer_value (IV (_, n)) =
+  let eval_integer_value (IV n) =
     Some n
   
   let unspecified_mval ty =
@@ -1373,15 +1309,15 @@ let combine_prov prov1 prov2 =
   let pp_pretty_mem_value _ = pp_mem_value
   
   (* TODO check *)
-  let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
+  let memcpy ptrval1 ptrval2 (IV size_n) =
     let loc = Location_ocaml.other "memcpy" in
     let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Nat_big_num.less i size_n then
-        load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV (Prov_none, i))) >>= fun (_, mval) ->
-        store loc unsigned_char_ty (array_shift_ptrval ptrval1 unsigned_char_ty (IV (Prov_none, i))) mval >>= fun _ ->
+        load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV i)) >>= fun (_, mval) ->
+        store loc unsigned_char_ty (array_shift_ptrval ptrval1 unsigned_char_ty (IV i)) mval >>= fun _ ->
         aux (Nat_big_num.succ i)
       else
         return ptrval1 in
@@ -1389,15 +1325,15 @@ let combine_prov prov1 prov2 =
   
   
   (* TODO: validate more, but looks good *)
-  let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
+  let memcmp ptrval1 ptrval2 (IV size_n) =
     let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
     let rec get_bytes ptrval acc = function
       | 0 ->
           return (List.rev acc)
       | size ->
           load Location_ocaml.unknown unsigned_char_ty ptrval >>= function
-            | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-                let ptr' = array_shift_ptrval ptrval unsigned_char_ty (IV (Prov_none, Nat_big_num.(succ zero))) in
+            | (_, MVinteger (_, (IV byte_n))) ->
+                let ptr' = array_shift_ptrval ptrval unsigned_char_ty (IV (Nat_big_num.(succ zero))) in
                 get_bytes ptr' (byte_n :: acc) (size-1)
             | _ ->
                 assert false in
@@ -1405,7 +1341,7 @@ let combine_prov prov1 prov2 =
      get_bytes ptrval2 [] (Nat_big_num.to_int size_n) >>= fun bytes2 ->
      
      let open Nat_big_num in
-     return (IV (Prov_none, List.fold_left (fun acc (n1, n2) ->
+     return (IV (List.fold_left (fun acc (n1, n2) ->
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
@@ -1445,4 +1381,4 @@ let combine_prov prov1 prov2 =
 
 end
 
-include Concrete
+include Twin
