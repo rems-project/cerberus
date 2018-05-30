@@ -198,19 +198,3 @@ module type Memory = sig
     * Driver.driver_state ) list
 *)
 end
-
-type mem_type = Concrete | Symbolic
-
-let string_of_mem_type = function
-  | Concrete -> "Concrete"
-  | Symbolic -> "Symbolic"
-
-let mem_impls: (mem_type * (module Memory)) list ref = ref ([])
-
-let add_mem t (m : (module Memory)) =
-  mem_impls := (t, m) :: !mem_impls
-
-let find_mem t =
-  match List.assoc_opt t !mem_impls with
-  | Some m -> m
-  | None -> failwith ("Could not find " ^ string_of_mem_type t ^ " memory model")

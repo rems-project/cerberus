@@ -4,7 +4,8 @@ module Mem = (
   val match !Prelude.mem_switch with
     | `MemSymbolic -> (module Ocaml_defacto : Memory_model.Memory)
     | `MemConcrete -> (module Concrete : Memory_model.Memory)
-    | `MemCpp -> (module Concrete : Memory_model.Memory) (* TODO *)
+    | `MemTwin -> (module Twin : Memory_model.Memory) (* TODO *)
+    | `MemCpp -> failwith "miserably"
 )
 
 include Mem
