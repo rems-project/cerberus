@@ -1010,7 +1010,7 @@ module Concrete : Memory = struct
                 return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
           end
   
-  let ptrcast_ival _ _ (IV (prov, n)) =
+  let ptrcast_ival _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
       (* STD \<section>6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
@@ -1021,6 +1021,8 @@ module Concrete : Memory = struct
           (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
           if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
             return (PV (Prov_device, PVconcrete n))
+          else if N.equal n N.zero then
+            return (PV (Prov_none, PVnull ref_ty))
           else
             return (PV (Prov_none, PVconcrete n))
       | _ ->
