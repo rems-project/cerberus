@@ -2697,8 +2697,8 @@ let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
         St.return ()
     | A.AilSreturn _ ->
         St.return ()
-    | A.AilSswitch _ _ ->
-        St.return ()
+    | A.AilSswitch _ s ->
+        collect_visibles_ s
     | A.AilScase _ s ->
         collect_visibles_ s
     | A.AilSdefault s ->
@@ -3036,12 +3036,12 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                       (* Check if equal to the constant expression *)
                       (Caux.mk_if_e (Caux.mk_op_pe C.OpEq promoted_sym_pe (translate_integerConstant iC))
                         (* TODO: not sure if the visible afters are the same *)
-                        (mk_run_e loc case_lab visible_syms [] [])
+                        (mk_run_e loc case_lab [] [] [])
                         (Caux.mk_skip_e)
                       )
                       acc)
                     (* default branch *)
-                    (Caux.mk_sseq_e unit_pat (if cases.found_default then mk_run_e loc default_sym [] [] [] else Caux.mk_skip_e) core_s)
+                    (Caux.mk_sseq_e unit_pat (if cases.found_default then mk_run_e loc default_sym visible_syms [] [] else Caux.mk_skip_e) core_s)
                   case_labs)))
             ; (* UB if unspecified *)
               (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype), Caux.mk_pure_e (Caux.mk_undef_exceptional_condition ()))
