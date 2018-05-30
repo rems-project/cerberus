@@ -1201,16 +1201,25 @@ TODO: this should be removable, since we already set it in Translation
               (* NOTE: the element argv[argc] is required to be a null pointer
                  by the STD, hence argv has one more element than the number
                  of supplied arguments *)
-              let argv_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
-              let argv_ty = Core_ctype.Array argv_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev))) in
-              let argv_mem_val = Mem.array_mval $
+              let argv_array_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
+              let argv_array_ty = Core_ctype.Array argv_array_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev))) in
+              let argv_array_mem_val = Mem.array_mval $
                 List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Core_ctype.char]) in
               liftMem (
-                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym]) (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun ptr_val ->
-                  Mem.bind (Mem.store (Loc.other "argv init") argv_ty ptr_val argv_mem_val) (fun _ ->
-                    Mem.return ptr_val
-                  )
-                )
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym(*TODO: change the sym?*)])
+                            (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing) (fun array_ptr_val ->
+                Mem.bind (Mem.store (Loc.other "argv array init") argv_array_ty array_ptr_val argv_array_mem_val) (fun _ ->
+                
+                (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
+                   so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
+                let argv_ty = Core_ctype.Pointer AilTypes.no_qualifiers (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) in
+                Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym])
+                            (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun argv_ptr_val ->
+                Mem.bind (Mem.store (Loc.other "argv init") argv_ty argv_ptr_val
+                            (Mem.pointer_mval (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) array_ptr_val)) ( fun _ ->
+
+                Mem.return argv_ptr_val
+                ))))
               ) >>= fun argv_ptr_val ->
               
               ND.return $
