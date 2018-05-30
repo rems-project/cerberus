@@ -357,21 +357,28 @@ module Concrete : Memory = struct
   let return = Eff.return
   let bind = Eff.(>>=)
   
-
-
-
-
+  
+  let string_of_provenance = function
+    | Prov_none -> ""
+    | Prov_some alloc_id ->
+        N.to_string alloc_id
+    | Prov_device ->
+        "dev"
+  
   (* pretty printing *)
   open PPrint
   open Pp_prelude
-  let pp_pointer_value (PV (_, ptrval_))=
+  let pp_pointer_value (PV (prov, ptrval_))=
     match ptrval_ with
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
           !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
       | PVconcrete n ->
+          !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+(*
           !^ (Nat_big_num.to_string n)
+*)
   
   let pp_integer_value (IV (_, n)) =
         !^ (Nat_big_num.to_string n)
@@ -421,12 +428,6 @@ module Concrete : Memory = struct
   
   
   
-  let string_of_provenance = function
-    | Prov_none -> ""
-    | Prov_some alloc_id ->
-        N.to_string alloc_id
-    | Prov_device ->
-        "dev"
 
 
 
@@ -470,24 +471,22 @@ module Concrete : Memory = struct
   
   
   (* INTERNAL: fetch_bytes *)
-  let fetch_bytes base_addr n_bytes =
-    get >>= fun st ->
-    return (
-      List.map (fun addr ->
-        match IntMap.find_opt addr st.bytemap with
-          | Some b ->
-              b
-          | None ->
-              (Prov_none, None)
-      ) (List.init n_bytes (fun z ->
+  let fetch_bytes st base_addr n_bytes =
+    List.map (fun addr ->
+      match IntMap.find_opt addr st.bytemap with
+        | Some b ->
+            b
+        | None ->
+            (Prov_none, None)
+    ) (List.init n_bytes (fun z ->
            (* NOTE: the reversal in the offset is to model
               little-endianness *)
 (*           let offset = n_bytes - 1 - z in *)
 (*KKK*)
-           let offset = z in
-           Nat_big_num.(add base_addr (of_int offset))
-         ))
-    )
+         let offset = z in
+         Nat_big_num.(add base_addr (of_int offset))
+       ))
+
   
   let write_bytes base_addr bs =
     get >>= fun st ->
@@ -541,14 +540,20 @@ module Concrete : Memory = struct
           | (Some acc, Some c) ->
               Some (c :: acc)
       ) (Some []) (List.rev xs) in
+    
+    if List.length bs < sizeof ty then
+      failwith "combine_bytes, |bs| < sizeof(ty)";
     match ty with
       | Void0
       | Array0 (_, None)
       | Function0 _ ->
           assert false
       | Basic0 (Integer ity) ->
+(*          Printf.printf "==> %s sz:%d\n" (Pp_utils.to_plain_string (Pp_core_ctype.pp_ctype ty)) (sizeof ty); *)
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
+(*          Printf.printf "==> |bs| = %d,  |bs1| = %d,  " (List.length bs) (List.length bs1); *)
           let (provs, bs1') = List.split bs1 in
+(*          Printf.printf "==> |provs| = %d\n" (List.length provs); *)
           let prov = combine_provenances provs in
           (begin match extract_unspec bs1' with
             | Some cs ->
@@ -570,7 +575,7 @@ module Concrete : Memory = struct
           end, bs2)
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
-            if n < 0 then
+            if n <= 0 then
               (MVarray acc, cs)
             else
               let (mval, cs') = combine_bytes elem_ty cs in
@@ -720,7 +725,44 @@ module Concrete : Memory = struct
           let size = sizeof (Core_ctype.Union0 tag_sym) in
           let bs = explode_bytes mval in
           bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
-
+  
+  
+  (* BEGIN DEBUG *)
+  let dot_of_mem_state st =
+    let get_value alloc =
+      let bs = fetch_bytes st alloc.base (N.to_int alloc.size) in
+      let Some ty = alloc.ty in
+      let (mval, bs') = combine_bytes ty bs in
+      mval
+    in
+    let xs = IntMap.fold (fun alloc_id alloc acc ->
+      Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
+        (N.to_string alloc_id)
+        (N.to_string alloc.base)
+        (N.to_string alloc.size)
+        (Pp_utils.to_plain_string (pp_mem_value (get_value alloc))) :: acc
+    ) st.allocations [] in
+    prerr_endline "digraph G{";
+    List.iter prerr_endline xs;
+    prerr_endline "}"
+(*
+  let dot_of_mem_state st =
+  type allocation = {
+    base: address;
+    size: N.num; (*TODO: this is probably unnecessary once we have the type *)
+    ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
+    is_readonly: bool;
+  }
+  
+  type mem_state = {
+    next_alloc_id: allocation_id;
+    allocations: allocation IntMap.t;
+    next_address: address;
+    bytemap: (provenance * char option) IntMap.t;
+  }
+*)
+  (* END DEBUG *)
+  
   
   let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
@@ -761,6 +803,13 @@ module Concrete : Memory = struct
                   ) st.bytemap bs
               } )
     end
+(*
+  (* TODO: DEBUG: *)
+  >>= fun ret ->
+  get >>= fun st ->
+  dot_of_mem_state st;
+  return ret
+*)
   
   
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
@@ -799,10 +848,14 @@ module Concrete : Memory = struct
           fail (MerrOther "attempted to kill with an invalid pointer")
   
   let load loc ty (PV (prov, ptrval_)) =
+    Debug_ocaml.print_debug 3 [] (fun () ->
+      "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
+      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
+    );
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load addr =
       get >>= fun st ->
-      fetch_bytes addr (sizeof ty) >>= fun bs ->
+      let bs = fetch_bytes st addr (sizeof ty) in
       let (mval, bs') = combine_bytes ty bs in
       begin match bs' with
         | [] ->
@@ -838,9 +891,8 @@ module Concrete : Memory = struct
   
   let store loc ty (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
-      "ENTERING STORE: ty=" ^
-      String_core_ctype.string_of_ctype ty ^ "@" ^
-      Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
+      "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
+      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
     if not (ctype_equal (Core_ctype.unatomic ty) (Core_ctype.unatomic (typeof mval))) then begin
@@ -890,6 +942,13 @@ module Concrete : Memory = struct
                   else
                     do_store addr
             end
+(*
+  (* TODO: DEBUG: *)
+  >>= fun ret ->
+  get >>= fun st ->
+  dot_of_mem_state st;
+  return ret
+*)
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
