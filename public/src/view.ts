@@ -364,12 +364,16 @@ export default class View {
     }}
     switch(mem.kind) {
       case 'concrete':
+      case 'twin':
         const map = mem.bytemap
         const readValue = (id:Common.ID, base: number, end: number) => {
           let value = 0
           if (!map[base]) return 'unspecified' // undefined value in allocation
-          if (map[base].prov) // Has a provenance
+          if (map[base].prov) { // Has a provenance
+            //@ts-ignore
+            edges.push({from: id, to: map[base].prov, isTau: false, color: {color: 'red'}})
             edges.push({from: id, to: map[base].prov, isTau: false})
+          }
           for (let i = base; i < end; i++)
             if (map[i]) value += map[i].value
           return value

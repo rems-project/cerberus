@@ -227,12 +227,10 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
           |> fun res -> (None, res)
         end
         |> fun s -> Debug.print 0 "finish guard"; s
-      | (NDnd (str, (_,m)::ms), st') ->
-        failwith "Ndnd"
+      | (NDnd (str, ms), st') ->
+        (None, create_leafs st' ms step_state)
       | (NDstep ms, st') ->
-        create_leafs st' ms step_state
-        |> fun res -> (None, res)
-      | _ -> failwith "one step"
+        (None, create_leafs st' ms step_state)
     in begin match m st with
       | (NDstep [(lab, m')], st') ->
         let step_state' = create_branch lab st' step_state in
