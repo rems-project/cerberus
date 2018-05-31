@@ -913,8 +913,7 @@ let apply_shift_path lvalue_ty sh mval =
         ) in
         project_to_lvalue_type lvalue_ty mval
     | _ ->
-      (* foldl *)
-      foldM (fun acc spe ->
+      foldlM (fun acc spe ->
         apply_shift_path_element lvalue_ty spe acc
       ) mval sh (* >>=
         project_to_lvalue_type lvalue *)
@@ -2412,7 +2411,7 @@ let discardOccluded_write_events view_ptrval view_ty wevents =
   address_expression_of_pointer view_ptrval >>= fun view_ptr_ival_ ->
   let min_view_ival_ = view_ptr_ival_ in
   let max_view_ival_ = mk_op_ival_ IntAdd view_ptr_ival_ (mk_op_ival_ IntSub (IVsizeof view_ty) (IVconcrete 1)) in
-  foldM (fun acc wevent ->
+  foldlM (fun acc wevent ->
     ival_footprintFromWrite_event wevent >>= fun (min_wevent_ival_, max_wevent_ival_) ->
     ifM "discardOccluded_write_events"
       (* if the view is outside the footprint of the write event *)
