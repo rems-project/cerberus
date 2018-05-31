@@ -243,6 +243,7 @@ module Twin : Memory = struct
   type provenance =
     | Prov_none
     | Prov_some of Nat_big_num.num
+    | Prov_past of Nat_big_num.num * Nat_big_num.num
     | Prov_device
   
   (* Note: using Z instead of int64 because we need to be able to have
@@ -336,13 +337,16 @@ module Twin : Memory = struct
     next_alloc_id: allocation_id;
     allocations: allocation IntMap.t;
     next_address: address;
+    next_twin_address: address;
     bytemap: (provenance * char option) IntMap.t;
   }
   
+  let max_address = Nat_big_num.of_int 2147483648
   let initial_mem_state = {
     next_alloc_id= Nat_big_num.zero;
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
+    next_twin_address= max_address;
     bytemap= IntMap.empty;
   }
   
@@ -423,10 +427,9 @@ module Twin : Memory = struct
   
   let string_of_provenance = function
     | Prov_none -> ""
-    | Prov_some alloc_id ->
-        N.to_string alloc_id
-    | Prov_device ->
-        "dev"
+    | Prov_some alloc_id -> N.to_string alloc_id
+    | Prov_past (alloc_id1, alloc_id2) -> "(" ^ N.to_string alloc_id1 ^ ", " ^ N.to_string alloc_id2 ^ ")"
+    | Prov_device -> "dev"
 
 
 
@@ -720,61 +723,50 @@ module Twin : Memory = struct
           let bs = explode_bytes mval in
           bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
 
-  
-  let allocate_static tid pref (IV align) ty init_opt : pointer_value memM =
-(*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
-    let size = N.of_int (sizeof ty) in
-    modify begin fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(
-        let m = modulus st.next_address align in
-        if equal m zero then st.next_address else add st.next_address (sub align m)
-      ) in
-      
-      Debug_ocaml.print_debug 1 [] (fun () ->
-        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-        " --> alloc_id= " ^ N.to_string alloc_id ^
-        ", size= " ^ N.to_string size ^
-        ", addr= " ^ N.to_string addr
-      );
-      
-      match init_opt with
-        | None ->
-            ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { st with
-                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
-                  next_address= Nat_big_num.add addr size } )
+  let allocate align size ty init_opt : pointer_value memM =
+    Debug_ocaml.warn [] (fun () ->
+      "MAX ALLOCATION SIZE: " ^ N.to_string max_address
+    );
+    get >>= fun st ->
+    let alloc_id      = st.next_alloc_id in
+    let next_alloc_id = N.succ alloc_id in
+    let delta addr =
+      let m = N.modulus addr align in
+      if N.equal m N.zero then N.zero else N.sub align m
+    in
+    let addr = N.add st.next_address (delta st.next_address) in
+    let twin_addr = N.add st.next_twin_address (delta st.next_twin_address) in
+    let create_alloc addr =
+      let (is_readonly, bytemap) =
+        match init_opt with
+        | None -> (false, st.bytemap)
         | Some mval ->
-            (* TODO: factorise this with do_store inside Concrete.store *)
-            let bs = List.mapi (fun i b ->
-              (Nat_big_num.add addr (Nat_big_num.of_int i), b)
-            ) (explode_bytes mval) in
-            ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
-                next_address= Nat_big_num.add addr size;
-                bytemap=
-                  List.fold_left (fun acc (addr, b) ->
-                    IntMap.add addr b acc
-                  ) st.bytemap bs
-              } )
-    end
-  
-  
-  let allocate_dynamic tid pref (IV  align_n) (IV size_n) =
-(*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
-    modify (fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
-      ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
-      , { st with
-            next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
-            next_address= Nat_big_num.add addr size_n } )
-    )
-  
-  
+          let bs = List.mapi (fun i b -> (N.add addr (N.of_int i), b)) (explode_bytes mval) in
+          (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc) st.bytemap bs)
+      in
+      put { next_alloc_id= next_alloc_id;
+            allocations= IntMap.add alloc_id { base= addr;
+                                               size= size;
+                                               ty= ty;
+                                               is_readonly= is_readonly}
+                st.allocations;
+            next_address= N.add addr size;
+            next_twin_address= N.add twin_addr size;
+            bytemap= bytemap;
+          } >>= fun () ->
+      return (PV (Prov_some alloc_id, PVconcrete addr))
+    in
+    Eff.msum "twin static allocation"
+      [ ("original", create_alloc addr);
+        ("twin", create_alloc twin_addr) ]
+
+  let allocate_static _ _ (IV align) ty init_opt : pointer_value memM =
+    let size = N.of_int (sizeof ty) in
+    allocate align size (Some ty) init_opt
+
+  let allocate_dynamic _ _ (IV align) (IV size) =
+    allocate align size None None
+
   let kill : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
           fail (MerrOther "attempted to kill with a null pointer")
@@ -796,6 +788,8 @@ module Twin : Memory = struct
           end
         end else
           fail (MerrOther "attempted to kill with an invalid pointer")
+    | PV (Prov_past _, PVconcrete _) ->
+          fail (MerrOther "attempted to kill with a pointer with double provenance")
   
   let load loc ty (PV (prov, ptrval_)) =
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
@@ -833,6 +827,8 @@ module Twin : Memory = struct
             | true ->
                 do_load addr
           end
+      | (Prov_past _, _) ->
+         fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
   
   
   let store loc ty (PV (prov, ptrval_)) mval =
@@ -889,6 +885,8 @@ module Twin : Memory = struct
                   else
                     do_store addr
             end
+      | (Prov_past _, _) ->
+         fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
@@ -990,6 +988,8 @@ module Twin : Memory = struct
         true
     | PV (Prov_some _, PVconcrete _) ->
         true
+    | PV (Prov_past _, PVconcrete _) ->
+        true
     | PV (Prov_none, _) ->
         false
   
@@ -1020,8 +1020,17 @@ module Twin : Memory = struct
       return (PV (Prov_device, PVconcrete n))
     else if N.equal n N.zero then
       return (PV (Prov_none, PVnull ref_ty))
-    else
-      return (PV (Prov_none, PVconcrete n))
+    else begin
+      get >>= fun st ->
+      let filtered_allocs = IntMap.filter (fun alloc_id alloc ->
+          N.less_equal alloc.base n && N.less n (N.add alloc.base alloc.size)
+        ) st.allocations in
+      match IntMap.bindings filtered_allocs with
+      | [] -> return (PV (Prov_none, PVconcrete n))
+      | [(i1, _)] -> return (PV (Prov_some i1, PVconcrete n))
+      | [(i1, _); (i2, _)] -> (*TODO*) fail (MerrOther "two possible allocation ids")
+      | _ -> fail (MerrOther "Fatal error: casting integer to pointer with multiple possible allocation ids")
+    end
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1138,46 +1147,6 @@ module Twin : Memory = struct
             fail MerrIntFromPtr
           else
             return (IV addr)
-
-let combine_prov prov1 prov2 =
-  match (prov1, prov2) with
-    | (Prov_none, Prov_none) ->
-        Prov_none
-    | (Prov_none, Prov_some id) ->
-        Prov_some id
-(*
-    | (Prov_none, Prov_wildcard) ->
-        Prov_wildcard
-*)
-    | (Prov_none, Prov_device) ->
-        Prov_device
-    | (Prov_some id, Prov_none) ->
-        Prov_some id
-    | (Prov_some id1, Prov_some id2) ->
-        if id1 = id2 then
-          Prov_some id1
-        else
-          Prov_none
-(*
-    | (Prov_some _, Prov_wildcard) ->
-        Prov_wildcard
-*)
-    | (Prov_some _, Prov_device) ->
-        Prov_device
-    | (Prov_device, Prov_none) ->
-        Prov_device
-    | (Prov_device, Prov_some _) ->
-        Prov_device
-    | (Prov_device, Prov_device) ->
-        Prov_device
-(*
-    | (Prov_device, Prov_wildcard) ->
-        Prov_wildcard
-    
-    | (Prov_wildcard, _) ->
-        Prov_wildcard
-*)
-
 
   let op_ival iop (IV n1) (IV n2) =
     IV (begin match iop with
@@ -1350,6 +1319,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_prov = function
     | Prov_some n -> Json.of_bigint n
+    | Prov_past (n, m) -> `List [Json.of_bigint n; Json.of_bigint m]
     | Prov_none -> `Null
     | Prov_device -> `String "Device"
 
