@@ -76,6 +76,8 @@ size_t strlen(const char *s)
   return len;
 }
 
+#ifdef _STDLIB_H_
+// TODO: this bit depends on malloc
 // TODO: is this posix or iso?
 char* strdup(const char *s)
 {
@@ -84,6 +86,7 @@ char* strdup(const char *s)
   memcpy(sc, s, len);
   return sc;
 }
+#endif
 
 #else
 #endif

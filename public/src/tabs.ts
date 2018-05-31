@@ -296,7 +296,7 @@ class Memory extends Tab {
           springLength: 200
         },
         repulsion: {
-          nodeDistance: 150
+          nodeDistance: 120
         }
       }
     }

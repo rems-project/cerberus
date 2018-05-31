@@ -39,7 +39,8 @@ namespace Common {
 
   export enum Model {
     Concrete,
-    Symbolic
+    Symbolic,
+    Twin
   }
 
   export function string_of_model(m: Model) {
@@ -48,6 +49,8 @@ namespace Common {
         return 'Concrete'
       case Model.Symbolic:
         return 'Symbolic'
+      case Model.Twin:
+        return 'Twin'
     }
   }
 
@@ -57,6 +60,8 @@ namespace Common {
         return Model.Concrete
       case 'Symbolic':
         return Model.Symbolic
+      case 'Twin':
+        return Model.Twin
     }
     throw `Model ${m} does not exist.`
   }
@@ -64,6 +69,10 @@ namespace Common {
   export type Memory =
     { 
       kind: 'concrete',
+      allocations: {[key: string]: {base: string, type: string, size: string}},
+      bytemap: {[key: string]: { prov: string, value: number }}
+    } | {
+      kind: 'twin',
       allocations: {[key: string]: {base: string, type: string, size: string}},
       bytemap: {[key: string]: { prov: string, value: number }}
     } | {
