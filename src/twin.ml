@@ -243,7 +243,7 @@ module Twin : Memory = struct
   type provenance =
     | Prov_none
     | Prov_some of Nat_big_num.num
-    | Prov_past of Nat_big_num.num * Nat_big_num.num
+    | Prov_double of Nat_big_num.num * Nat_big_num.num
     | Prov_device
   
   (* Note: using Z instead of int64 because we need to be able to have
@@ -428,7 +428,7 @@ module Twin : Memory = struct
   let string_of_provenance = function
     | Prov_none -> ""
     | Prov_some alloc_id -> N.to_string alloc_id
-    | Prov_past (alloc_id1, alloc_id2) -> "(" ^ N.to_string alloc_id1 ^ ", " ^ N.to_string alloc_id2 ^ ")"
+    | Prov_double (alloc_id1, alloc_id2) -> "(" ^ N.to_string alloc_id1 ^ ", " ^ N.to_string alloc_id2 ^ ")"
     | Prov_device -> "dev"
 
 
@@ -741,8 +741,11 @@ module Twin : Memory = struct
         match init_opt with
         | None -> (false, st.bytemap)
         | Some mval ->
-          let bs = List.mapi (fun i b -> (N.add addr (N.of_int i), b)) (explode_bytes mval) in
-          (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc) st.bytemap bs)
+          let bs =
+            List.mapi (fun i b -> (N.add addr (N.of_int i),b)) (explode_bytes mval)
+          in
+          (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
+            st.bytemap bs)
       in
       put { next_alloc_id= next_alloc_id;
             allocations= IntMap.add alloc_id { base= addr;
@@ -767,69 +770,74 @@ module Twin : Memory = struct
   let allocate_dynamic _ _ (IV align) (IV size) =
     allocate align size None None
 
-  let kill : pointer_value -> unit memM = function
+  let kill p : unit memM =
+    let do_kill id =
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "KILLING alloc_id= " ^ N.to_string id 
+      );
+      update (fun st -> {st with allocations= IntMap.remove id st.allocations})
+    in
+    match p with
     | PV (_, PVnull _) ->
-          fail (MerrOther "attempted to kill with a null pointer")
+      fail (MerrOther "attempted to kill with a null pointer")
     | PV (_, PVfunction _) ->
-          fail (MerrOther "attempted to kill with a function pointer")
+      fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
-          fail (MerrOther "attempted to kill with a pointer lacking a provenance")
+      fail (MerrOther "attempted to kill with a pointer lacking a provenance")
     | PV (Prov_device, PVconcrete _) ->
-        (* TODO: should that be an error ?? *)
-        return ()
+      (* TODO: should that be an error ?? *)
+      return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-        get_allocation alloc_id >>= fun alloc ->
-        if N.equal addr alloc.base then begin
-          Debug_ocaml.print_debug 1 [] (fun () ->
-            "KILLING alloc_id= " ^ N.to_string alloc_id
-          );
-          update begin fun st ->
-            {st with allocations= IntMap.remove alloc_id st.allocations}
-          end
-        end else
-          fail (MerrOther "attempted to kill with an invalid pointer")
-    | PV (Prov_past _, PVconcrete _) ->
-          fail (MerrOther "attempted to kill with a pointer with double provenance")
+      get_allocation alloc_id >>= fun alloc ->
+      if N.equal addr alloc.base then
+        do_kill alloc_id
+      else
+        fail (MerrOther "attempted to kill with an invalid pointer")
+    | PV (Prov_double (alloc_id1, alloc_id2), PVconcrete addr) ->
+      get_allocation alloc_id1 >>= fun alloc1 ->
+      get_allocation alloc_id2 >>= fun alloc2 ->
+      if N.equal addr alloc1.base then
+        do_kill alloc_id1
+      else if N.equal addr alloc2.base then
+        do_kill alloc_id2
+      else
+        fail (MerrOther "attempted to kill with an invalid pointer")
   
   let load loc ty (PV (prov, ptrval_)) =
-(*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load addr =
       get >>= fun st ->
       fetch_bytes addr (sizeof ty) >>= fun bs ->
       let (mval, bs') = combine_bytes ty bs in
-      begin match bs' with
-        | [] ->
-            return (Footprint, mval)
-        | _ ->
-            fail (MerrWIP "load, bs' <> []")
-      end in
+      match bs' with
+        | [] -> return (Footprint, mval)
+        | _ -> fail (MerrWIP "load, bs' <> []")
+    in
     match (prov, ptrval_) with
-      | (_, PVnull _) ->
-          fail (MerrAccess (loc, LoadAccess, NullPtr))
-      | (_, PVfunction _) ->
-          fail (MerrAccess (loc, LoadAccess, FunctionPtr))
-      | (Prov_none, _) ->
-          fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-      | (Prov_device, PVconcrete addr) ->
-          begin is_within_device ty addr >>= function
-            | false ->
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-            | true ->
-                do_load addr
-          end
-      | (Prov_some alloc_id, PVconcrete addr) ->
-          begin is_within_bound alloc_id ty addr >>= function
-            | false ->
-                Debug_ocaml.print_debug 1 [] (fun () ->
-                  "LOAD out of bound, alloc_id=" ^ N.to_string alloc_id
-                );
-                fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-            | true ->
-                do_load addr
-          end
-      | (Prov_past _, _) ->
-         fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-  
+    | (_, PVnull _) ->
+      fail (MerrAccess (loc, LoadAccess, NullPtr))
+    | (_, PVfunction _) ->
+      fail (MerrAccess (loc, LoadAccess, FunctionPtr))
+    | (Prov_none, _) ->
+      fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+    | (Prov_device, PVconcrete addr) ->
+      begin is_within_device ty addr >>= function
+        | true -> do_load addr
+        | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+      end
+    | (Prov_some alloc_id, PVconcrete addr) ->
+      begin is_within_bound alloc_id ty addr >>= function
+        | true -> do_load addr
+        | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+      end
+    | (Prov_double (alloc_id1, alloc_id2), PVconcrete addr) ->
+       begin is_within_bound alloc_id1 ty addr >>= function
+         | true -> do_load addr
+         | false ->
+           begin is_within_bound alloc_id2 ty addr >>= function
+             | true -> do_load addr
+             | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+           end
+       end
   
   let store loc ty (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
@@ -838,7 +846,8 @@ module Twin : Memory = struct
       Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
-    if not (ctype_equal (Core_ctype.unatomic ty) (Core_ctype.unatomic (typeof mval))) then begin
+    if not (ctype_equal(Core_ctype.unatomic ty)(Core_ctype.unatomic(typeof mval)))
+    then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"
@@ -858,35 +867,43 @@ module Twin : Memory = struct
               IntMap.add addr b acc
             ) st.bytemap bs }
         end >>
-        print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return Footprint in
+        print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc)
+        >>= fun () ->
+        return Footprint
+      in
+      let check_and_do_store alloc_id addr =
+        get_allocation alloc_id >>= fun alloc ->
+        if alloc.is_readonly then
+          fail (MerrWriteOnReadOnly loc)
+        else
+          do_store addr
+      in
       match (prov, ptrval_) with
-        | (_, PVnull _) ->
-            fail (MerrAccess (loc, StoreAccess, NullPtr))
-        | (_, PVfunction _) ->
-            fail (MerrAccess (loc, StoreAccess, FunctionPtr))
-        | (Prov_none, _) ->
-            fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-        | (Prov_device, PVconcrete addr) ->
-            begin is_within_device ty addr >>= function
-              | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-              | true ->
-                  do_store addr
-            end
-        | (Prov_some alloc_id, PVconcrete addr) ->
-            begin is_within_bound alloc_id ty addr >>= function
-              | false ->
-                  fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-              | true ->
-                  get_allocation alloc_id >>= fun alloc ->
-                  if alloc.is_readonly then
-                    fail (MerrWriteOnReadOnly loc)
-                  else
-                    do_store addr
-            end
-      | (Prov_past _, _) ->
-         fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+      | (_, PVnull _) ->
+        fail (MerrAccess (loc, StoreAccess, NullPtr))
+      | (_, PVfunction _) ->
+        fail (MerrAccess (loc, StoreAccess, FunctionPtr))
+      | (Prov_none, _) ->
+        fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+      | (Prov_device, PVconcrete addr) ->
+        begin is_within_device ty addr >>= function
+          | true -> do_store addr
+          | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+        end
+      | (Prov_some alloc_id, PVconcrete addr) ->
+        begin is_within_bound alloc_id ty addr >>= function
+          | true -> check_and_do_store alloc_id addr
+          | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+        end
+      | (Prov_double (alloc_id1, alloc_id2), PVconcrete addr) ->
+        begin is_within_bound alloc_id1 ty addr >>= function
+          | true -> check_and_do_store alloc_id1 addr
+          | false ->
+          begin is_within_bound alloc_id2 ty addr >>= function
+            | true -> check_and_do_store alloc_id2 addr
+            | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+          end
+        end
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
@@ -894,6 +911,7 @@ module Twin : Memory = struct
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
   
+  (* TODO: not sure if I need to consider double provenance here *)
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVnull _, PVnull _) ->
@@ -988,7 +1006,7 @@ module Twin : Memory = struct
         true
     | PV (Prov_some _, PVconcrete _) ->
         true
-    | PV (Prov_past _, PVconcrete _) ->
+    | PV (Prov_double _, PVconcrete _) ->
         true
     | PV (Prov_none, _) ->
         false
@@ -1023,12 +1041,12 @@ module Twin : Memory = struct
     else begin
       get >>= fun st ->
       let filtered_allocs = IntMap.filter (fun alloc_id alloc ->
-          N.less_equal alloc.base n && N.less n (N.add alloc.base alloc.size)
+          N.less_equal alloc.base n && N.less_equal n (N.add alloc.base alloc.size)
         ) st.allocations in
       match IntMap.bindings filtered_allocs with
       | [] -> return (PV (Prov_none, PVconcrete n))
       | [(i1, _)] -> return (PV (Prov_some i1, PVconcrete n))
-      | [(i1, _); (i2, _)] -> (*TODO*) fail (MerrOther "two possible allocation ids")
+      | [(i1, _); (i2, _)] -> return (PV (Prov_double (i1, i2), PVconcrete n))
       | _ -> fail (MerrOther "Fatal error: casting integer to pointer with multiple possible allocation ids")
     end
   
@@ -1319,7 +1337,7 @@ module Twin : Memory = struct
 
   let serialise_prov = function
     | Prov_some n -> Json.of_bigint n
-    | Prov_past (n, m) -> `List [Json.of_bigint n; Json.of_bigint m]
+    | Prov_double (n, m) -> `List [Json.of_bigint n; Json.of_bigint m]
     | Prov_none -> `Null
     | Prov_device -> `String "Device"
 
