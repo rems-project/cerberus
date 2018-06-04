@@ -328,8 +328,6 @@ module Twin : Memory = struct
   (* INTERNAL: allocation *)
   type allocation = {
     base: address;
-    twin: address option; (* INVARIANT: if twin is not None, then alternative
-                             twin execution has not being considered yet *)
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
     is_readonly: bool;
@@ -738,34 +736,32 @@ module Twin : Memory = struct
     in
     let addr = N.add st.next_address (delta st.next_address) in
     let twin_addr = N.add st.next_twin_address (delta st.next_twin_address) in
-    (*let create_alloc addr =*)
-    let (is_readonly, bytemap) =
-      match init_opt with
-      | None -> (false, st.bytemap)
-      | Some mval ->
-        let bs =
-          List.mapi (fun i b -> (N.add addr (N.of_int i),b)) (explode_bytes mval)
-        in
-        (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-          st.bytemap bs)
-    in
-    put { next_alloc_id= next_alloc_id;
-          allocations= IntMap.add alloc_id { base= addr;
-                                             twin= Some twin_addr;
-                                             size= size;
-                                             ty= ty;
-                                             is_readonly= is_readonly}
-              st.allocations;
-          next_address= N.add addr size;
-          next_twin_address= N.add twin_addr size;
-          bytemap= bytemap;
-        } >>= fun () ->
-    return (PV (Prov_some alloc_id, PVconcrete addr))
-        (*
+    let create_alloc addr =
+      let (is_readonly, bytemap) =
+        match init_opt with
+        | None -> (false, st.bytemap)
+        | Some mval ->
+          let bs =
+            List.mapi (fun i b -> (N.add addr (N.of_int i),b)) (explode_bytes mval)
+          in
+          (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
+            st.bytemap bs)
+      in
+      put { next_alloc_id= next_alloc_id;
+            allocations= IntMap.add alloc_id { base= addr;
+                                               size= size;
+                                               ty= ty;
+                                               is_readonly= is_readonly}
+                st.allocations;
+            next_address= N.add addr size;
+            next_twin_address= N.add twin_addr size;
+            bytemap= bytemap;
+          } >>= fun () ->
+      return (PV (Prov_some alloc_id, PVconcrete addr))
     in
     Eff.msum "twin allocation"
       [ ("twin", create_alloc twin_addr);
-        ("original", create_alloc addr) ]*)
+        ("original", create_alloc addr) ]
 
   let allocate_static _ _ (IV align) ty init_opt : pointer_value memM =
     let size = N.of_int (sizeof ty) in
@@ -1048,31 +1044,10 @@ module Twin : Memory = struct
           N.less_equal alloc.base n && N.less_equal n (N.add alloc.base alloc.size)
         ) st.allocations in
       match IntMap.bindings filtered_allocs with
-      | [] ->
-        return (PV (Prov_none, PVconcrete n))
-      | [(i1, _)] ->
-        get_allocation i1 >>= fun alloc ->
-        begin match alloc.twin with
-          | None ->
-            return (PV (Prov_some i1, PVconcrete n))
-          | Some twin_addr ->
-            fail (MerrOther "UB twin allocated address.")
-        end
-      | [(i1, _); (i2, _)] ->
-        get_allocation i1 >>= fun alloc1 ->
-        get_allocation i2 >>= fun alloc2 ->
-        begin match alloc1.twin, alloc2.twin with
-          | None, None ->
-            return (PV (Prov_double (i1, i2), PVconcrete n))
-          | None, Some twin_addr2 ->
-            return (PV (Prov_some i1, PVconcrete n))
-          | Some twin_addr1, None ->
-            return (PV (Prov_some i2, PVconcrete n))
-          | Some _, Some _ ->
-            fail (MerrOther "UB twin allocated address.")
-        end
-      | _ ->
-        fail (MerrOther "Fatal error: casting integer to pointer with multiple possible allocation ids")
+      | [] -> return (PV (Prov_none, PVconcrete n))
+      | [(i1, _)] -> return (PV (Prov_some i1, PVconcrete n))
+      | [(i1, _); (i2, _)] -> return (PV (Prov_double (i1, i2), PVconcrete n))
+      | _ -> fail (MerrOther "Fatal error: casting integer to pointer with multiple possible allocation ids")
     end
   
   let offsetof_ival tag_sym memb_ident =
@@ -1178,84 +1153,18 @@ module Twin : Memory = struct
 
   (* TODO: conversion? *)
   let intcast_ptrval _ ity (PV (prov, ptrval_)) =
-    let iv_from_addr addr =
-      let IV ity_max = max_ival ity in
-      let IV ity_min = min_ival ity in
-      if N.(less addr ity_min || less ity_max addr) then
-        fail MerrIntFromPtr
-      else
-        return (IV addr)
-    in
-    let original alloc_id alloc =
-      (* just clear twin address *)
-      let alloc' = { alloc with twin= None } in
-      update begin fun st ->
-        { st with allocations= IntMap.add alloc_id alloc' st.allocations }
-      end >> iv_from_addr alloc.base
-    in
-    let twin alloc_id alloc twin_addr =
-      (* set twin address *)
-      let alloc' = { alloc with base= twin_addr;
-                                twin= None }
-      in
-      let ty =
-        match alloc.ty with
-        | None ->
-          failwith "intcast_ptrval: expecting allocation to have a type!"
-        | Some ty ->
-          ty
-      in
-      let size = sizeof ty in
-      (* get bytes original allocation *)
-      fetch_bytes alloc.base size >>= fun bs ->
-      update begin fun st ->
-        (* move bytes to twin_addr *)
-        let bs_with_addrs = List.mapi (fun i b ->
-            (N.add twin_addr (N.of_int i), b)
-          ) bs
-        in
-        let twin_bytemap =
-          List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-            st.bytemap bs_with_addrs
-        in
-        (* clear original bytes *)
-        let empty = List.init size
-            (fun i -> (N.add alloc.base (N.of_int i), (Prov_none, None)))
-        in
-        let bytemap =
-          List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-            twin_bytemap empty
-        in
-        { st with allocations= IntMap.add alloc_id alloc' st.allocations;
-                  bytemap= bytemap;
-        }
-      end >> iv_from_addr twin_addr
-    in
     match ptrval_ with
-    | PVnull _ ->
-      return (IV Nat_big_num.zero)
-    | PVfunction _ ->
-      failwith "TODO: intcast_ptrval PVfunction"
-    | PVconcrete addr ->
-      begin match prov with
-        | Prov_none
-        | Prov_double _ (* if casting from a pointer with double provenance,
-                           then all the executions from both provenance have
-                           already being considered *)
-        | Prov_device ->
-          iv_from_addr addr
-        | Prov_some alloc_id ->
-          get_allocation alloc_id >>= fun alloc ->
-          begin match alloc.twin with
-            | None ->
-              iv_from_addr addr
-            | Some twin_addr -> (* consider twin allocation *)
-              msum "twin allocation"
-                [ ("original", original alloc_id alloc);
-                  ("twin",     twin alloc_id alloc twin_addr) ]
-          end
-      end
-
+      | PVnull _ ->
+          return (IV Nat_big_num.zero)
+      | PVfunction _ ->
+          failwith "TODO: intcast_ptrval PVfunction"
+      | PVconcrete addr ->
+          let IV ity_max = max_ival ity in
+          let IV ity_min = min_ival ity in
+          if N.(less addr ity_min || less ity_max addr) then
+            fail MerrIntFromPtr
+          else
+            return (IV addr)
 
   let op_ival iop (IV n1) (IV n2) =
     IV (begin match iop with
