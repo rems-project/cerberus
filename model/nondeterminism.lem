@@ -160,7 +160,8 @@ let inline sequence ms =
 let inline listM t xs = sequence (t xs)
 
 val mapM: forall 'a 'b 'err 'cs 'st. ('a -> ndM 'b 'err 'cs 'st) -> list 'a -> ndM (list 'b) 'err 'cs 'st
-let inline mapM f = listM (List.map f)
+let nd_mapM f = listM (List.map f)
+let inline mapM = nd_mapM
 
 
 (* GENERIC Monad *)
