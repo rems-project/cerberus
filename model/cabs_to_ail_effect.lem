@@ -66,7 +66,7 @@ instance (Show identifier_kind)
     | Kind_member Kind_enum ->
         "enum_member (TODO: this is invalid)"
     | Kind_ordinary OK_enum_constant ->
-        "enum_constrant"
+        "enum_constant"
     | Kind_tag Kind_struct ->
         "struct tag"
     | Kind_tag Kind_union ->
@@ -192,7 +192,10 @@ type state = <|
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations:        map A.identifier (bool * Loc.t * ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool));
+  function_declarations:        map A.identifier ((*hasProto*)bool * Loc.t *
+                                                  ((ATypes.qualifiers * ATypes.ctype) *
+                                                   (list (ATypes.qualifiers * ATypes.ctype * (*isRegister*)bool)) *
+                                                   (*isVariadic*)bool * (*isInline*)bool * (*isNoReturn*)bool));
   external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
@@ -292,47 +295,98 @@ let get_scope =
   State_exception.read (fun st -> Scope_table.current_scope_is st.registered_identifiers)
 
 
-(* TODO: revert this to simply return a a, and add a collect_bindings function *)
+(* TODO: rename *)
 val with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "ENTERING Scope: " ^ string_of_scope scope) in
-    
-    <| st with registered_identifiers=      Scope_table.create_scope scope st.registered_identifiers;
-(*               registered_tag_declarations= Scope_table.create_scope scope st.registered_tag_declarations *) |> 
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "ENTERING Scope: " ^ string_of_scope scope
+    ) in
+    <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
   ) >>
   m >>= fun res ->
   State_exception.modify (fun st ->
-    let (idents_map, ident_table'  ) = Scope_table.destroy_scope st.registered_identifiers      in
-(*    let (_         , tagDecl_table') = Scope_table.destroy_scope st.registered_tag_declarations in *)
-    
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "EXITING Scope: " ^ string_of_scope scope) in
-    
-    (Set_helpers.fold (fun (sym, kind, _) acc ->
-      match kind with
-        | Kind_ordinary (OK_object false) ->
-            match Map.lookup sym st.external_object_declarations with
-              | Just (dur, isRegister, qs, ty) ->
-                  (sym, ((dur, isRegister), qs, ty)) :: acc
-              | Nothing ->
-                  match Map.lookup sym st.internal_object_declarations with
-                    | Just (dur, isRegister, qs, ty) ->
-                        (sym, ((dur, isRegister), qs, ty)) :: acc
-                    | Nothing ->
-                        (* TODO: check *)
-                        acc
-                  end
-            end
-        | _ ->
-            (* TODO: functions *)
-            acc
-      end
-    ) (Map.range idents_map) [],
-    
-    <| st with registered_identifiers=      ident_table';
-(*               registered_tag_declarations= tagDecl_table' *) |>)
+    let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers      in
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "EXITING Scope: " ^ string_of_scope scope
+    ) in
+    ( Set_helpers.fold (fun (sym, kind, _) acc ->
+       match kind with
+         | Kind_ordinary (OK_object false) ->
+             match Map.lookup sym st.external_object_declarations with
+               | Just (dur, isRegister, qs, ty) ->
+                   (sym, ((dur, isRegister), qs, ty)) :: acc
+               | Nothing ->
+                   match Map.lookup sym st.internal_object_declarations with
+                     | Just (dur, isRegister, qs, ty) ->
+                         (sym, ((dur, isRegister), qs, ty)) :: acc
+                     | Nothing ->
+                         (* TODO: check *)
+                         acc
+                   end
+             end
+         | _ ->
+             (* TODO: functions *)
+             acc
+       end) (Map.range idents_map) []
+    ,  <| st with registered_identifiers= ident_table'; |> )
   ) >>= fun bs ->
   return (List.reverse bs, res)
+
+
+(* TODO: rename *)
+val with_scope2: forall 'a. scope -> desugM 'a -> desugM (Map.map (cabs_identifier * namespace) (A.identifier * identifier_kind * maybe linkage) * 'a)
+let with_scope2 scope m =
+  State_exception.update (fun st ->
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "ENTERING Scope: " ^ string_of_scope scope
+    ) in
+    <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
+  ) >>
+  m >>= fun res ->
+  State_exception.modify (fun st ->
+    let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "EXITING Scope: " ^ string_of_scope scope
+    ) in
+    (idents_map, <| st with registered_identifiers= ident_table'; |>)
+  ) >>= fun idents_map ->
+  return (idents_map, res)
+
+let bindings_of_idents_map idents_map =
+  State_exception.read (fun st ->
+    List.reverse begin
+      Set_helpers.fold (fun (sym, kind, _) acc ->
+        match kind with
+          | Kind_ordinary (OK_object _) ->
+              match Map.lookup sym st.external_object_declarations with
+                | Just (dur, isRegister, qs, ty) ->
+                    (sym, ((dur, isRegister), qs, ty)) :: acc
+                | Nothing ->
+                    match Map.lookup sym st.internal_object_declarations with
+                      | Just (dur, isRegister, qs, ty) ->
+                          (sym, ((dur, isRegister), qs, ty)) :: acc
+                      | Nothing ->
+                          (* TODO: check *)
+                          acc
+                    end
+              end
+          | _ ->
+              (* TODO: functions *)
+              acc
+        end) (Map.range idents_map) []
+    end
+  )
+
+(* TODO: this is a massive hack (see desugar_and_register_function_definition). MUST DO BETTER *)
+val hack_inject_idents_map: Map.map (cabs_identifier * namespace) (A.identifier * identifier_kind * maybe linkage) -> desugM unit
+let hack_inject_idents_map idents_map =
+  State_exception.update (fun st ->
+    <| st with registered_identifiers=
+      Map_extra.fold (fun cabs_ident reg acc ->
+        Scope_table.register cabs_ident reg acc
+      ) idents_map st.registered_identifiers; |>
+  )
 
 
 
@@ -589,18 +643,25 @@ let register_identifier_ ident namespace kind link_opt =
 (* Ordinary identifiers are those declared by ordinary declarators (i.e. object
     or functions) or enumeration constants *)
 val resolve_ordinary_identifier:
-  cabs_identifier -> desugM (maybe (scope * either A.identifier (A.identifier * ordinary_kind * linkage)))
-let resolve_ordinary_identifier ident =
+  Loc.t -> cabs_identifier -> desugM (maybe (scope * either A.identifier (A.identifier * ordinary_kind * linkage)))
+let resolve_ordinary_identifier loc ident =
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      "attempting to resolve ordinary identifier `" ^ show ident
+    )
+  ) >>
+  
   State_exception.read (fun st ->
     match Scope_table.resolve (ident, Namespace_ordinary) st.registered_identifiers with
       | Nothing ->
           Nothing
-      | Just (scope, (ident, Kind_ordinary OK_enum_constant, Nothing)) ->
-          Just (scope, Left ident)
-      | Just (scope, (ident, Kind_ordinary kind, Just link)) ->
-          Just (scope, Right (ident, kind, link))
-      | _ ->
-          error "Cabs_to_ail_effect.resolve_ordinary_identifier"
+      | Just (scope, (sym, Kind_ordinary OK_enum_constant, Nothing)) ->
+          Just (scope, Left sym)
+      | Just (scope, (sym, Kind_ordinary kind, Just link)) ->
+          Just (scope, Right (sym, kind, link))
+      | Just (_, (sym, kind, _)) ->
+          error ("Cabs_to_ail_effect.resolve_ordinary_identifier ==> [" ^ Loc.stringFromLocation loc ^ "]" ^ show ident ^
+                 ", found INVALID: " ^ show sym ^ " with kind: " ^ show kind)
     end
   )
 
@@ -751,24 +812,23 @@ let register_tag kind tag_ident_opt =
   maybe
     (freshify (CabsIdentifier (Loc.other "anonymous_tag") "anonymous_tag_"))
     return
-    tag_ident_opt                                                      >>= fun tag_ident ->
-  internal_register_identifier (fun (scope, (sym, _, _)) do_fresh ->
+    tag_ident_opt >>= fun tag_ident ->
+  internal_register_identifier (fun (scope, (sym, prev_kind, _)) do_fresh ->
     current_scope_is scope >>= function
       | true ->
-          return sym
+          if Kind_tag kind = prev_kind then
+            return sym
+          else
+            fail (Loc.locOf tag_ident) (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
       | false ->
           do_fresh
     end
   ) tag_ident Namespace_tag (Kind_tag kind) Nothing
-(*
-  register_identifier_ tag_ident Namespace_tag (Kind_tag kind) Nothing >>= fun tag_sym   ->
-  return tag_sym
-*)
 
 
 val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> desugM unit
 let register_tag_definition loc tag_sym tag_decl =
-  let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG: " ^ show tag_sym) in
+  let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG DEFINITION: " ^ show tag_sym) in
   State_exception.read (fun st ->
     Map.member tag_sym st.tag_definitions
   ) >>= function
@@ -987,7 +1047,10 @@ let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "registering function definition of '" ^ show sym ^ "'") in
+    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      let (_, xs, _) = fdef in
+      "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
+    ) in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
@@ -1010,11 +1073,16 @@ val register_function_declaration:
   Loc.t -> A.identifier -> bool -> ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
 let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
-  let string_of_decl ((ret_qs, ret_ty), params, _, _, _) =
+  let string_of_decl ((ret_qs, ret_ty), params, isVariadic, _, _) =
+    let fun_ty = ATypes.Function is_proto (ret_qs, ret_ty) params isVariadic in
+    Pp.stringFromAil_ctype ATypes.no_qualifiers fun_ty
+  in
+(*
     Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
       fun (qs, ty, isRegister) ->
         (if isRegister then "register " else "") ^ Pp.stringFromAil_ctype qs ty
     ) params ^ ")" in
+*)
   
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
@@ -1051,7 +1119,7 @@ AilTypesAux.make_composite
     | Nothing ->
         State_exception.update (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ "with decl= " ^
+            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
            string_of_decl decl) in
           <| st with function_declarations= Map.insert sym (is_proto, loc, decl) st.function_declarations |>
         )
@@ -1132,6 +1200,13 @@ let update_external_object_type sym ty =
 val register_internal_object_declaration:
   Loc.t -> A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
 let register_internal_object_declaration loc sym decl =
+  return (
+    Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+      let (_, _, new_qs, new_ty) = decl in
+      "attempting to register internal object declaration of `" ^ show sym ^
+      "' with qs, ty= " ^ Pp.stringFromAil_ctype new_qs new_ty)
+  ) >>
+  
   State_exception.read (fun st ->
     Map.lookup sym st.internal_object_declarations
   ) >>= function
@@ -1268,13 +1343,17 @@ let get_used_identifier =
 
 val register_enum_constant: cabs_identifier -> A.expression_ unit -> desugM unit
 let register_enum_constant ident expr =
-  internal_register_identifier (fun (scope, (sym, _, _)) _ ->
+  let () = Debug.print_debug 2 [] (fun () -> 
+    "register_enum_constant: " ^ show ident
+  ) in
+  internal_register_identifier (fun (scope, _) do_fresh ->
     current_scope_is scope >>= function
       | true ->
           (* STD footnote 127 *)
           fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
       | false ->
-          return sym
+          (* a previous registration from a different scope gets shadowed *)
+          do_fresh
     end
   ) ident Namespace_ordinary (Kind_ordinary OK_enum_constant) Nothing >>= fun sym ->
   State_exception.update (fun st ->
