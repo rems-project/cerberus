@@ -529,76 +529,74 @@ let le_integer_range impl ity1 ity2 =
   | (Size_t, Size_t) -> true
   | (Ptrdiff_t, Ptrdiff_t) -> true
   | (Enum _, Enum _) ->
-      error "Enum, Enum"
+      error "WIP le_integer_range: Enum, Enum"
   
   | (Char, Size_t) ->
-      error "Char, Size_t"
+      error "WIP le_integer_range: Char, Size_t"
   | (Char, Ptrdiff_t) ->
-      error "Char, Ptrdiff_t"
+      error "WIP le_integer_range: Char, Ptrdiff_t"
   | (Char, Enum _) ->
-      error "Char, Enum"
+      error "WIP le_integer_range: Char, Enum"
   
   | (Bool, Size_t) ->
-      error "Bool, Size_t"
+      error "WIP le_integer_range: Bool, Size_t"
   | (Bool, Ptrdiff_t) ->
-      error "Bool, Ptrdiff_t"
+      error "WIP le_integer_range: Bool, Ptrdiff_t"
   | (Bool, Enum _) ->
-      error "Bool, Enum"
+      error "WIP le_integer_range: Bool, Enum"
   
   | (Signed _, Size_t) ->
-      error "Signed, Size_t"
+      error "WIP le_integer_range: Signed, Size_t"
   | (Signed _, Ptrdiff_t) ->
-      error "Signed, Ptrdiff_t"
+      error "WIP le_integer_range: Signed, Ptrdiff_t"
   | (Signed _, Enum _) ->
-      error "Signed, Enum"
+      error "WIP le_integer_range: Signed, Enum"
   
   | (Unsigned _, Size_t) ->
-      error "Unsigned, Size_t"
+      error "WIP le_integer_range: Unsigned, Size_t"
   | (Unsigned _, Ptrdiff_t) ->
-      error "Unsigned, Ptrdiff_t"
+      error "WIP le_integer_range: Unsigned, Ptrdiff_t"
   | (Unsigned _, Enum _) ->
-      error "Unsigned, Enum"
+      error "WIP le_integer_range: Unsigned, Enum"
   
   | (Ptrdiff_t, Char) ->
-      error "Ptrdiff_t, Char"
+      error "WIP le_integer_range: Ptrdiff_t, Char"
   | (Ptrdiff_t, Bool) ->
-      error "Ptrdiff_t, Bool"
+      error "WIP le_integer_range: Ptrdiff_t, Bool"
   | (Ptrdiff_t, Signed _) ->
-      error "Ptrdiff_t, Signed"
+      error "WIP le_integer_range: Ptrdiff_t, Signed"
   | (Ptrdiff_t, Unsigned _) ->
-      error "Ptrdiff_t, Unsigned"
+      error "WIP le_integer_range: Ptrdiff_t, Unsigned"
   | (Ptrdiff_t, Enum _) ->
-      error "Ptrdiff_t, Enum"
+      error "WIP le_integer_range: Ptrdiff_t, Enum"
   | (Ptrdiff_t, Size_t) ->
-      error "Ptrdiff_t, Size_t"
+      error "WIP le_integer_range: Ptrdiff_t, Size_t"
   
   | (Size_t, Char) ->
-      error "Size_t, Char"
+      error "WIP le_integer_range: Size_t, Char"
   | (Size_t, Bool) ->
-      error "Size_t, Bool"
+      error "WIP le_integer_range: Size_t, Bool"
   | (Size_t, Signed _) ->
-      error "==> Size_t, Signed"
+      error "WIP le_integer_range: Size_t, Signed"
   | (Size_t, Unsigned _) ->
-      error "Size_t, Unsigned"
+      error "WIP le_integer_range: Size_t, Unsigned"
   | (Size_t, Enum _) ->
-      error "Size_t, Enum"
+      error "WIP le_integer_range: Size_t, Enum"
   | (Size_t, Ptrdiff_t) ->
-      error "Size_t, Ptrdiff_t"
+      error "WIP le_integer_range: Size_t, Ptrdiff_t"
   
   | (Enum _, Char) ->
-      error "Enum, Char"
+      error "WIP le_integer_range: Enum, Char"
   | (Enum _, Bool) ->
-      error "Enum, Bool"
+      error "WIP le_integer_range: Enum, Bool"
   | (Enum _, Signed _) ->
-      error "Enum, Signed"
+      error "WIP le_integer_range: Enum, Signed"
   | (Enum _, Unsigned _) ->
-      error "Enum, Unsigned"
+      error "WIP le_integer_range: Enum, Unsigned"
   | (Enum _, Size_t) ->
-      error "Enum, Size_t"
+      error "WIP le_integer_range: Enum, Size_t"
   | (Enum _, Ptrdiff_t) ->
-      error "Enum, Ptrdiff_t"
-
-
+      error "WIP le_integer_range: Enum, Ptrdiff_t"
   end
 
 
