@@ -525,8 +525,9 @@ let internal_register_identifier if_found ident namespace kind link_opt =
 val register_typedef: cabs_identifier -> ATypes.qualifiers * ATypes.ctype -> desugM unit
 let register_typedef ident (qs, ty) =
   let loc = Loc.locOf ident in
-  let () = Debug.print_debug 8 [Debug.DB_desugaring] (fun () ->
-    "registering typedef identifier: " ^ show ident
+  let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+    "registering typedef identifier: " ^ show ident ^
+    " with (qs, ty) = " ^ Pp.stringFromAil_ctype qs ty
   ) in
   (* if the identifier is already declared we reuse that existing declaration *)
   internal_register_identifier
