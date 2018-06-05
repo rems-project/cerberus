@@ -1335,29 +1335,6 @@ let is_complete_object S ty =
   is_complete S ty && is_object ty
 
 
-(* TODO: check *)
-val unqualify: ctype -> ctype
-let rec unqualify ty =
-  match ty with
-  | Array elem_ty n_opt ->
-      Array (unqualify elem_ty) n_opt
-(*
- | Function ty qs_tys isVariadic ->
-     Function (unqualify ty) (List.map (fun (qs, ty) -> (qs, unqualify ty)) qs_tys) isVariadic
-*)
-  | Pointer _ Void ->
-      Pointer no_qualifiers Void
-  | Pointer _ (Basic bty) ->
-      Pointer no_qualifiers (Basic bty)
-  | Pointer ref_qs ref_ty ->
-      Pointer ref_qs (unqualify ref_ty)
- | Atomic ty' ->
-     Atomic (unqualify ty')
-  | _ ->
-      ty
-end
-
-
 (* Adjustment for function parameter types *)
 val adjust: qualifiers -> ctype -> (qualifiers * ctype)
 let adjust qs = function
@@ -1393,14 +1370,15 @@ let lvalue_conversion S ty =
     | Atomic ty' ->
         return ty'
     | _ ->
-        return (unqualify ty)
+        (* NOTE: since the qualifiers of ty are not passed to this function, we
+           have already "unqualified" the type *)
+        return ty
   end
 
 val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
 let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
-  (* NOte: the "qualified unqualified" part is done by unqualifying *)
   List.any (fun ty' ->
-    are_compatible (no_qualifiers, unqualify ty) (no_qualifiers, unqualify ty')
+    are_compatible (no_qualifiers, ty) (no_qualifiers, ty')
   ) tys
 
 
