@@ -73,7 +73,7 @@ end = struct
   let get = Nondeterminism.nd_get
   let put = Nondeterminism.nd_put
   let fail err = Nondeterminism.kill (Other err)
-  let mapM _ _ = failwith "TODO: mapM"
+  let mapM = Nondeterminism.nd_mapM
   
   let msum str xs =
     Nondeterminism.(
@@ -85,8 +85,8 @@ end
 
 
 module IntMap = Map.Make(struct
-  type t = Nat_big_num.num
-  let compare = Nat_big_num.compare
+  type t = N.num
+  let compare = N.compare
 end)
 
 
@@ -126,7 +126,7 @@ and sizeof = function
       end
   | Array0 (elem_ty, Some n) ->
       (* TODO: what if too big? *)
-      Nat_big_num.to_int n * sizeof elem_ty
+      N.to_int n * sizeof elem_ty
   | Pointer0 _ ->
       begin match Impl.sizeof_pointer with
         | Some n ->
@@ -242,8 +242,8 @@ module Twin : Memory = struct
 
   type provenance =
     | Prov_none
-    | Prov_some of Nat_big_num.num
-    | Prov_double of Nat_big_num.num * Nat_big_num.num
+    | Prov_some of N.num
+    | Prov_double of N.num * N.num
     | Prov_device
   
   (* Note: using Z instead of int64 because we need to be able to have
@@ -251,13 +251,14 @@ module Twin : Memory = struct
   type pointer_value_base =
     | PVnull of ctype0
     | PVfunction of Symbol.sym
-    | PVconcrete of Nat_big_num.num
+    | PVconcrete of N.num       (* a concrete materialised/escaped pointer *)
+    | PVtwin of N.num * N.num   (* it can be one of the two, it acts on the first number when allocation is not escaped *)
   
   type pointer_value =
     | PV of provenance * pointer_value_base
   
   type integer_value =
-    | IV of Nat_big_num.num
+    | IV of N.num
   
   type floating_value =
     (* TODO: hack hack hack ==> OCaml's float are 64bits *)
@@ -300,11 +301,11 @@ module Twin : Memory = struct
         | MC_empty ->
             true
         | MC_eq (IV n1, IV n2) ->
-            Nat_big_num.equal n1 n2
+            N.equal n1 n2
         | MC_le (IV n1, IV n2) ->
-            Nat_big_num.less_equal n1 n2
+            N.less_equal n1 n2
         | MC_lt (IV n1, IV n2) ->
-            Nat_big_num.less n1 n2
+            N.less n1 n2
         | MC_in_device _ ->
             failwith "TODO: Concrete, with_constraints: MC_in_device"
         | MC_or (cs1, cs2) ->
@@ -343,11 +344,11 @@ module Twin : Memory = struct
     bytemap: (provenance * char option) IntMap.t;
   }
   
-  let max_address = Nat_big_num.of_int 2147483648
+  let max_address = N.of_int 2147483648
   let initial_mem_state = {
-    next_alloc_id= Nat_big_num.zero;
+    next_alloc_id= N.zero;
     allocations= IntMap.empty;
-    next_address= Nat_big_num.(succ zero);
+    next_address= N.(succ zero);
     next_twin_address= max_address;
     bytemap= IntMap.empty;
   }
@@ -377,10 +378,12 @@ module Twin : Memory = struct
       | PVfunction sym ->
           !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
       | PVconcrete n ->
-          !^ (Nat_big_num.to_string n)
+          !^ (N.to_string n)
+      | PVtwin (n1, n2) ->
+          !^ (N.to_string n1) ^^^ !^"or" ^^^ !^ (N.to_string n2)
   
   let pp_integer_value (IV n) =
-        !^ (Nat_big_num.to_string n)
+        !^ (N.to_string n)
     
   let pp_integer_value_for_core = pp_integer_value
     
@@ -472,7 +475,44 @@ module Twin : Memory = struct
         N.less_equal min addr && N.less_equal (N.add addr (N.of_int (sizeof ty))) max
       ) device_ranges
     end
-  
+
+  let get_allocations_id_from = function
+    | Prov_none
+    | Prov_device ->
+      []
+    | Prov_some alloc_id ->
+      [alloc_id]
+    | Prov_double (alloc_id1, alloc_id2) ->
+      [alloc_id1; alloc_id2]
+
+
+  let get_allocations_from = function
+    | Prov_none
+    | Prov_device ->
+      return []
+    | Prov_some alloc_id ->
+      get_allocation alloc_id >>= fun alloc ->
+      return [(alloc_id, alloc)]
+    | Prov_double (alloc_id1, alloc_id2) ->
+      get_allocation alloc_id1 >>= fun alloc1 ->
+      get_allocation alloc_id2 >>= fun alloc2 ->
+      return [(alloc_id1, alloc1); (alloc_id2, alloc2)]
+
+  let get_allocations_within addr =
+    get >>= fun st ->
+    let allocs = IntMap.filter (fun alloc_id alloc ->
+        N.less_equal alloc.base addr && N.less_equal addr (N.add alloc.base alloc.size)
+      ) st.allocations in
+    return (IntMap.bindings allocs)
+
+  let has_escaped alloc_id =
+    get_allocation alloc_id >>= fun alloc ->
+    return (alloc.twin = None)
+
+  let get_active_addr addr twin_addr =
+    get_allocations_within addr >>= function
+    | [] -> return twin_addr
+    | _  -> return addr
   
   (* INTERNAL: fetch_bytes *)
   let fetch_bytes base_addr n_bytes =
@@ -490,7 +530,7 @@ module Twin : Memory = struct
 (*           let offset = n_bytes - 1 - z in *)
 (*KKK*)
            let offset = z in
-           Nat_big_num.(add base_addr (of_int offset))
+           N.(add base_addr (of_int offset))
          ))
     )
   
@@ -503,7 +543,7 @@ module Twin : Memory = struct
         IntMap.add addr b acc
       ) st.bytemap begin
           List.init (List.length bs) (fun z ->
-            (Nat_big_num.(add base_addr (of_int z), L.nth bs z))
+            (N.(add base_addr (of_int z), L.nth bs z))
           )
         end
     end
@@ -554,7 +594,7 @@ module Twin : Memory = struct
       | Basic0 (Integer ity) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           let (provs, bs1') = List.split bs1 in
-          (begin match extract_unspec bs1' with
+          return (begin match extract_unspec bs1' with
             | Some cs ->
                 MVinteger ( ity
                           , IV (int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
@@ -565,7 +605,7 @@ module Twin : Memory = struct
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           (* we don't care about provenances for floats *)
           let bs1' = List.map snd bs1 in
-          (begin match extract_unspec bs1' with
+          return (begin match extract_unspec bs1' with
             | Some cs ->
                 MVfloating ( fty
                            , Int64.float_of_bits (N.to_int64 (int64_of_bytes true cs)) )
@@ -575,38 +615,41 @@ module Twin : Memory = struct
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
             if n < 0 then
-              (MVarray acc, cs)
+              return (MVarray acc, cs)
             else
-              let (mval, cs') = combine_bytes elem_ty cs in
+              combine_bytes elem_ty cs >>= fun (mval, cs') ->
               aux (n-1) (mval :: acc) cs'
           in
-          aux (Nat_big_num.to_int n) [] bs
+          aux (N.to_int n) [] bs
       | Pointer0 (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (provs, bs1') = List.split bs1 in
           let prov = combine_provenances provs in
-          (begin match extract_unspec bs1' with
-            | Some cs ->
-                let n = int64_of_bytes false cs in
-                MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
-            | None ->
-                MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
-           end, bs2)
+          let create_pointer p =
+            return (begin match extract_unspec bs1' with
+              | Some cs ->
+                  let n = int64_of_bytes false cs in
+                  MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else p n))
+              | None ->
+                  MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
+              end, bs2)
+          in
+          get_allocations_from prov >>= fun allocs ->
+          begin match allocs with
+            | [(alloc_id, alloc)] ->
+              begin match alloc.twin with
+                | None -> create_pointer (fun n -> PVconcrete n)
+                | Some twin_addr -> create_pointer (fun n -> PVtwin (n, twin_addr))
+              end
+            | _ -> create_pointer (fun n -> PVconcrete n)
+          end
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           combine_bytes atom_ty bs
       | Struct0 tag_sym ->
+        (* TODO: VICTOR struct not working when I moved the function to the monad
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-(*
-          print_string "COMBINE: ";
-          List.iter (fun (_, c_opt) ->
-            match c_opt with
-              | Some c -> print_string (string_of_int (int_of_char c) ^ " ")
-              | None   -> print_string "U "
-          ) bs1;
-          print_newline ();
-*)
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
@@ -614,7 +657,8 @@ module Twin : Memory = struct
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
-          (MVstruct (tag_sym, List.rev rev_xs), bs2)
+          (MVstruct (tag_sym, List.rev rev_xs), bs2) *)
+          failwith "TODO: combine_bytes, struct"
       | Union0 tag_sym ->
           failwith "TODO: combine_bytes, Union (as value)"
       | Builtin0 str ->
@@ -665,22 +709,22 @@ module Twin : Memory = struct
           Union0 tag_sym
   
   (* INTERNAL explode_bytes *)
-  let rec explode_bytes mval : (provenance * char option) list =
+  let rec explode_bytes mval =
     match mval with
       | MVunspecified ty ->
-          List.init (sizeof ty) (fun _ -> (Prov_none, None))
+          return (List.init (sizeof ty) (fun _ -> (Prov_none, None)))
       | MVinteger (ity, IV n) ->
-          List.map (fun z -> (Prov_none, z)) begin
+          return (List.map (fun z -> (Prov_none, z)) begin
             bytes_of_int64
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
-          end
+          end)
       | MVfloating (fty, fval) ->
-          List.map (fun z -> (Prov_none, z)) begin
+          return (List.map (fun z -> (Prov_none, z)) begin
             bytes_of_int64
               true (* TODO: check that *)
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
-          end
+          end)
       | MVpointer (_, PV (prov, ptrval_)) ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
           let ptr_size = match Impl.sizeof_pointer with
@@ -688,7 +732,7 @@ module Twin : Memory = struct
                 failwith "the concrete memory model requires a complete implementation"
             | Some z ->
                 z in
-          begin match ptrval_ with
+          return begin match ptrval_ with
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
@@ -700,13 +744,24 @@ module Twin : Memory = struct
                     false (* we model address as unsigned *)
                     ptr_size addr
                 end
+            | PVtwin (addr, twin_addr) -> (*TODO VICTOR: I need to check which one is active *)
+                List.map (fun z -> (prov, z)) begin
+                  bytes_of_int64
+                    false (* we model address as unsigned *)
+                    ptr_size addr
+                end
           end
       | MVarray mvals ->
           (* TODO: use a fold? *)
-          L.concat (
+        failwith "explode_bytes array"
+        (*
+          return L.concat (
             List.map explode_bytes mvals
           )
+           *)
       | MVstruct (tag_sym, xs) ->
+        failwith "explode_bytes struct"
+        (*
           let (offs, last_off) = offsetsof tag_sym in
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
           snd begin
@@ -720,10 +775,66 @@ module Twin : Memory = struct
             ) (0, []) offs xs
           end @
           List.init final_pad (fun _ -> (Prov_none, None))
+           *)
       | MVunion (tag_sym, memb_ident, mval) ->
+        failwith "explode_bytes union"
+        (*
           let size = sizeof (Core_ctype.Union0 tag_sym) in
           let bs = explode_bytes mval in
           bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
+           *)
+
+  let escape alloc_id =
+    get_allocation alloc_id >>= fun alloc ->
+    let the = function
+      | None -> failwith "escaping: expecting allocation to have a type!"
+      | Some x -> x
+    in
+    match alloc.twin with
+    | None -> failwith "allocation has already escaped"
+    | Some twin_addr ->
+      let original () =
+        (* just clear twin address *)
+        let alloc' = { alloc with twin= None } in
+        update begin fun st ->
+          { st with allocations= IntMap.add alloc_id alloc' st.allocations }
+        end
+      in
+      let twin () =
+        (* set twin address *)
+        let alloc' = { alloc with base= twin_addr;
+                                  twin= None }
+        in
+        let ty = the alloc.ty in
+        let size = sizeof ty in
+        (* get bytes original allocation *)
+        fetch_bytes alloc.base size >>= fun bs ->
+        update begin fun st ->
+          (* move bytes to twin_addr *)
+          let bs_with_addrs = List.mapi (fun i b ->
+              (N.add twin_addr (N.of_int i), b)
+            ) bs
+          in
+          let twin_bytemap =
+            List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
+              st.bytemap bs_with_addrs
+          in
+          (* clear original bytes *)
+          let empty = List.init size
+              (fun i -> (N.add alloc.base (N.of_int i), (Prov_none, None)))
+          in
+          let bytemap =
+            List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
+              twin_bytemap empty
+          in
+          { st with allocations= IntMap.add alloc_id alloc' st.allocations;
+                    bytemap= bytemap;
+          }
+        end
+      in return (original(), twin(), twin_addr)
+
+
+
 
   let allocate align size ty init_opt : pointer_value memM =
     Debug_ocaml.warn [] (fun () ->
@@ -738,17 +849,15 @@ module Twin : Memory = struct
     in
     let addr = N.add st.next_address (delta st.next_address) in
     let twin_addr = N.add st.next_twin_address (delta st.next_twin_address) in
-    (*let create_alloc addr =*)
-    let (is_readonly, bytemap) =
+    let update_bytemap () =
       match init_opt with
-      | None -> (false, st.bytemap)
+      | None -> return (false, st.bytemap)
       | Some mval ->
-        let bs =
-          List.mapi (fun i b -> (N.add addr (N.of_int i),b)) (explode_bytes mval)
-        in
-        (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-          st.bytemap bs)
+        explode_bytes mval >>= fun exp_bs ->
+        let bs = List.mapi (fun i b -> (N.add addr (N.of_int i),b)) exp_bs in
+        return (true, List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc) st.bytemap bs)
     in
+    update_bytemap () >>= fun (is_readonly, bytemap) ->
     put { next_alloc_id= next_alloc_id;
           allocations= IntMap.add alloc_id { base= addr;
                                              twin= Some twin_addr;
@@ -760,12 +869,7 @@ module Twin : Memory = struct
           next_twin_address= N.add twin_addr size;
           bytemap= bytemap;
         } >>= fun () ->
-    return (PV (Prov_some alloc_id, PVconcrete addr))
-        (*
-    in
-    Eff.msum "twin allocation"
-      [ ("twin", create_alloc twin_addr);
-        ("original", create_alloc addr) ]*)
+    return (PV (Prov_some alloc_id, PVtwin (addr, twin_addr)))
 
   let allocate_static _ _ (IV align) ty init_opt : pointer_value memM =
     let size = N.of_int (sizeof ty) in
@@ -786,9 +890,9 @@ module Twin : Memory = struct
       fail (MerrOther "attempted to kill with a null pointer")
     | PV (_, PVfunction _) ->
       fail (MerrOther "attempted to kill with a function pointer")
-    | PV (Prov_none, PVconcrete _) ->
+    | PV (Prov_none,  _) ->
       fail (MerrOther "attempted to kill with a pointer lacking a provenance")
-    | PV (Prov_device, PVconcrete _) ->
+    | PV (Prov_device,  _) ->
       (* TODO: should that be an error ?? *)
       return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
@@ -806,12 +910,33 @@ module Twin : Memory = struct
         do_kill alloc_id2
       else
         fail (MerrOther "attempted to kill with an invalid pointer")
+    | PV (Prov_some alloc_id, PVtwin (addr, twin_addr)) ->
+      get_allocation alloc_id >>= fun alloc ->
+      if N.equal addr alloc.base then
+        do_kill alloc_id
+      else if N.equal twin_addr alloc.base then (* this only happens in the twin execution *)
+        do_kill alloc_id
+      else
+        fail (MerrOther "attempted to kill with an invalid pointer")
+    | PV (Prov_double (alloc_id1, alloc_id2), PVtwin (addr, twin_addr)) ->
+      get_allocation alloc_id1 >>= fun alloc1 ->
+      get_allocation alloc_id2 >>= fun alloc2 ->
+      if N.equal addr alloc1.base then
+        do_kill alloc_id1
+      else if N.equal addr alloc2.base then
+        do_kill alloc_id2
+      else if N.equal twin_addr alloc1.base then
+        do_kill alloc_id1
+      else if N.equal twin_addr alloc2.base then
+        do_kill alloc_id2
+      else
+        fail (MerrOther "attempted to kill with an invalid pointer")
   
   let load loc ty (PV (prov, ptrval_)) =
     let do_load addr =
       get >>= fun st ->
       fetch_bytes addr (sizeof ty) >>= fun bs ->
-      let (mval, bs') = combine_bytes ty bs in
+      combine_bytes ty bs >>= fun (mval, bs') ->
       match bs' with
         | [] -> return (Footprint, mval)
         | _ -> fail (MerrWIP "load, bs' <> []")
@@ -828,20 +953,40 @@ module Twin : Memory = struct
         | true -> do_load addr
         | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
       end
+    | (Prov_device, PVtwin _) ->
+        fail (MerrOther "fatal error: device pointer should not be PVtwin")
     | (Prov_some alloc_id, PVconcrete addr) ->
       begin is_within_bound alloc_id ty addr >>= function
         | true -> do_load addr
         | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
       end
     | (Prov_double (alloc_id1, alloc_id2), PVconcrete addr) ->
-       begin is_within_bound alloc_id1 ty addr >>= function
-         | true -> do_load addr
-         | false ->
-           begin is_within_bound alloc_id2 ty addr >>= function
-             | true -> do_load addr
-             | false -> fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
-           end
-       end
+       is_within_bound alloc_id1 ty addr >>= fun b1 ->
+       is_within_bound alloc_id2 ty addr >>= fun b2 ->
+       if b1 || b2 then
+         do_load addr
+       else
+        fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+    | (Prov_some alloc_id, PVtwin (addr, twin_addr)) ->
+       is_within_bound alloc_id ty addr >>= fun b ->
+       is_within_bound alloc_id ty twin_addr >>= fun twin_b ->
+       if b then
+         do_load addr
+       else if twin_b then
+         do_load twin_addr
+       else
+         fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
+    | (Prov_double (alloc_id1, alloc_id2), PVtwin (addr, twin_addr)) ->
+       is_within_bound alloc_id1 ty addr >>= fun b1 ->
+       is_within_bound alloc_id1 ty twin_addr >>= fun twin_b1 ->
+       is_within_bound alloc_id2 ty addr >>= fun b2 ->
+       is_within_bound alloc_id2 ty twin_addr >>= fun twin_b2 ->
+       if b1 || b2 then
+         do_load addr
+       else if twin_b1 || twin_b2 then
+         do_load twin_addr
+       else
+         fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
   
   let store loc ty (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
@@ -862,9 +1007,8 @@ module Twin : Memory = struct
       fail (MerrOther "store with an ill-typed memory value")
     end else
       let do_store addr =
-        let bs = List.mapi (fun i b ->
-          (Nat_big_num.add addr (Nat_big_num.of_int i), b)
-        ) (explode_bytes mval) in
+        explode_bytes mval >>= fun exp_bs ->
+        let bs = List.mapi (fun i b -> (N.add addr (N.of_int i), b)) exp_bs in
         update begin fun st ->
           { st with bytemap=
             List.fold_left (fun acc (addr, b) ->
@@ -894,20 +1038,46 @@ module Twin : Memory = struct
           | true -> do_store addr
           | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
         end
+      | (Prov_device, PVtwin _) ->
+        fail (MerrOther "fatal error: device pointer should not be PVtwin")
       | (Prov_some alloc_id, PVconcrete addr) ->
         begin is_within_bound alloc_id ty addr >>= function
           | true -> check_and_do_store alloc_id addr
           | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
         end
       | (Prov_double (alloc_id1, alloc_id2), PVconcrete addr) ->
-        begin is_within_bound alloc_id1 ty addr >>= function
-          | true -> check_and_do_store alloc_id1 addr
-          | false ->
-          begin is_within_bound alloc_id2 ty addr >>= function
-            | true -> check_and_do_store alloc_id2 addr
-            | false -> fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
-          end
-        end
+       is_within_bound alloc_id1 ty addr >>= fun b1 ->
+       is_within_bound alloc_id2 ty addr >>= fun b2 ->
+       if b1 then
+         check_and_do_store alloc_id1 addr
+       else if b2 then
+         check_and_do_store alloc_id2 addr
+       else
+         fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+      | (Prov_some alloc_id, PVtwin (addr, twin_addr)) ->
+       is_within_bound alloc_id ty addr >>= fun b ->
+       is_within_bound alloc_id ty twin_addr >>= fun twin_b ->
+       if b then
+         check_and_do_store alloc_id addr
+       else if twin_b then
+         check_and_do_store alloc_id twin_addr
+       else
+         fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
+      | (Prov_double (alloc_id1, alloc_id2), PVtwin (addr, twin_addr)) ->
+       is_within_bound alloc_id1 ty addr >>= fun b1 ->
+       is_within_bound alloc_id1 ty twin_addr >>= fun twin_b1 ->
+       is_within_bound alloc_id2 ty addr >>= fun b2 ->
+       is_within_bound alloc_id2 ty twin_addr >>= fun twin_b2 ->
+       if b1 then
+         check_and_do_store alloc_id1 addr
+       else if b2 then
+         check_and_do_store alloc_id2 addr
+       else if twin_b1 then
+         check_and_do_store alloc_id1 twin_addr
+       else if twin_b2 then
+         check_and_do_store alloc_id2 twin_addr
+       else
+         fail (MerrAccess (loc, StoreAccess, OutOfBoundPtr))
   
   let null_ptrval ty =
     PV (Prov_none, PVnull ty)
@@ -917,59 +1087,102 @@ module Twin : Memory = struct
   
   (* TODO: not sure if I need to consider double provenance here *)
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+    let consider_prov b =
+      if prov1 = prov2 then
+        return b
+      else
+        Eff.msum "pointer equality"
+          [ ("using provenance", return false)
+          ; ("ignoring provenance", return b) ]
+    in
     match (ptrval_1, ptrval_2) with
       | (PVnull _, PVnull _) ->
-          return true
+        return true
       | (PVnull _, _)
       | (_, PVnull _) ->
-          return false
+        return false
       | (PVfunction sym1, PVfunction sym2) ->
-          return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
+        return (Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.Lem_pervasives.isEqual_method sym1 sym2)
       | (PVfunction _, _)
       | (_, PVfunction _) ->
-          return false
+        return false
       | (PVconcrete addr1, PVconcrete addr2) ->
-          if prov1 = prov2 then
-            return (Nat_big_num.equal addr1 addr2)
-          else
-            Eff.msum "pointer equality"
-              [ ("using provenance", return false)
-              ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
-  
+        consider_prov (N.equal addr1 addr2)
+      | (PVconcrete addr1, PVtwin (addr2, twin_addr2)) ->
+        consider_prov (N.equal addr1 addr2 || N.equal addr1 twin_addr2)
+      | (PVtwin (addr1, twin_addr1), PVconcrete addr2) ->
+        consider_prov (N.equal addr1 addr2 || N.equal twin_addr1 addr2)
+      | (PVtwin (addr1, twin_addr1), PVtwin (addr2, twin_addr2)) ->
+        consider_prov (N.equal addr1 addr2 && N.equal twin_addr1 twin_addr2)
+       
   let ne_ptrval ptrval1 ptrval2 =
     eq_ptrval ptrval1 ptrval2 >>= fun b ->
     return (not b)
   
   let lt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+    (* TODO: provenance *)
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          return (Nat_big_num.compare addr1 addr2 == -1)
+          return (N.compare addr1 addr2 == -1)
+      | (PVconcrete addr1, PVtwin (addr2, twin_addr2)) ->
+          begin match get_allocations_id_from prov2 with
+            | [alloc_id] ->
+              begin has_escaped alloc_id >>= function
+                | true ->
+                  get_active_addr addr2 twin_addr2 >>= fun addr2' ->
+                  return (N.compare addr1 addr2' == -1)
+                | false ->
+                  escape alloc_id >>= fun (st, twin_st, _) ->
+                  msum "twin allocation"
+                    [ ("original", st >> return (N.compare addr1 addr2 == -1));
+                      ("twin",     twin_st >> return (N.compare addr1 twin_addr2 == -1)) ]
+              end
+            | _ ->
+                failwith "multiple or null provenance for a PVtwin"
+          end
+      | (PVtwin (addr1, twin_addr1), PVconcrete addr2) ->
+          begin match get_allocations_id_from prov1 with
+            | [alloc_id] ->
+              begin has_escaped alloc_id >>= function
+                | true ->
+                  get_active_addr addr1 twin_addr1 >>= fun addr1' ->
+                  return (N.compare addr1' addr2 == -1)
+                | false ->
+                  escape alloc_id >>= fun (st, twin_st, _) ->
+                  msum "twin allocation"
+                    [ ("original", st >> return (N.compare addr1 addr2 == -1));
+                      ("twin",     twin_st >> return (N.compare twin_addr1 addr2 == -1)) ]
+              end
+            | _ ->
+                failwith "multiple or null provenance for a PVtwin"
+          end
+      | (PVtwin (addr1, twin_addr1), PVtwin (addr2, twin_addr2)) ->
+        return (N.compare addr1 addr2 == -1 && N.compare twin_addr1 twin_addr2 == -1)
       | _ ->
           fail (MerrWIP "lt_ptrval")
   
   let gt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+    (* TODO: provenance *)
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          return (Nat_big_num.compare addr1 addr2 == 1)
+          return (N.compare addr1 addr2 == 1)
       | _ ->
           fail (MerrWIP "gt_ptrval")
   
   let le_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+    (* TODO: provenance *)
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          let cmp = Nat_big_num.compare addr1 addr2 in
+          let cmp = N.compare addr1 addr2 in
           return (cmp = -1 || cmp = 0)
       | _ ->
           fail (MerrWIP "le_ptrval")
   
   let ge_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
+    (* TODO: provenance *)
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          let cmp = Nat_big_num.compare addr1 addr2 in
+          let cmp = N.compare addr1 addr2 in
           return (cmp = 1 || cmp = 0)
       | _ ->
           fail (MerrWIP "ge_ptrval")
@@ -1043,11 +1256,8 @@ module Twin : Memory = struct
     else if N.equal n N.zero then
       return (PV (Prov_none, PVnull ref_ty))
     else begin
-      get >>= fun st ->
-      let filtered_allocs = IntMap.filter (fun alloc_id alloc ->
-          N.less_equal alloc.base n && N.less_equal n (N.add alloc.base alloc.size)
-        ) st.allocations in
-      match IntMap.bindings filtered_allocs with
+      get_allocations_within n >>= fun allocs ->
+      match allocs with
       | [] ->
         return (PV (Prov_none, PVconcrete n))
       | [(i1, _)] ->
@@ -1086,7 +1296,7 @@ module Twin : Memory = struct
           failwith "Concrete.offsetof_ival: invalid memb_ident"
   
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV ival) =
-    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    let offset = (N.(mul (of_int (sizeof ty)) ival)) in
     PV (prov, match ptrval_ with
       | PVnull _ ->
           (* TODO: this seems to be undefined in ISO C *)
@@ -1114,7 +1324,7 @@ module Twin : Memory = struct
     IV n
   
   let max_ival ity =
-    let open Nat_big_num in
+    let open N in
     IV (begin match Impl.sizeof_ity ity with
       | Some n ->
           let signed_max =
@@ -1147,7 +1357,7 @@ module Twin : Memory = struct
     end)
   
   let min_ival ity =
-    let open Nat_big_num in
+    let open N in
     IV (begin match ity with
       | Char ->
           if Impl.char_is_signed then
@@ -1186,54 +1396,9 @@ module Twin : Memory = struct
       else
         return (IV addr)
     in
-    let original alloc_id alloc =
-      (* just clear twin address *)
-      let alloc' = { alloc with twin= None } in
-      update begin fun st ->
-        { st with allocations= IntMap.add alloc_id alloc' st.allocations }
-      end >> iv_from_addr alloc.base
-    in
-    let twin alloc_id alloc twin_addr =
-      (* set twin address *)
-      let alloc' = { alloc with base= twin_addr;
-                                twin= None }
-      in
-      let ty =
-        match alloc.ty with
-        | None ->
-          failwith "intcast_ptrval: expecting allocation to have a type!"
-        | Some ty ->
-          ty
-      in
-      let size = sizeof ty in
-      (* get bytes original allocation *)
-      fetch_bytes alloc.base size >>= fun bs ->
-      update begin fun st ->
-        (* move bytes to twin_addr *)
-        let bs_with_addrs = List.mapi (fun i b ->
-            (N.add twin_addr (N.of_int i), b)
-          ) bs
-        in
-        let twin_bytemap =
-          List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-            st.bytemap bs_with_addrs
-        in
-        (* clear original bytes *)
-        let empty = List.init size
-            (fun i -> (N.add alloc.base (N.of_int i), (Prov_none, None)))
-        in
-        let bytemap =
-          List.fold_left (fun acc (addr, b) -> IntMap.add addr b acc)
-            twin_bytemap empty
-        in
-        { st with allocations= IntMap.add alloc_id alloc' st.allocations;
-                  bytemap= bytemap;
-        }
-      end >> iv_from_addr twin_addr
-    in
     match ptrval_ with
     | PVnull _ ->
-      return (IV Nat_big_num.zero)
+      return (IV N.zero)
     | PVfunction _ ->
       failwith "TODO: intcast_ptrval PVfunction"
     | PVconcrete addr ->
@@ -1245,53 +1410,67 @@ module Twin : Memory = struct
         | Prov_device ->
           iv_from_addr addr
         | Prov_some alloc_id ->
-          get_allocation alloc_id >>= fun alloc ->
-          begin match alloc.twin with
-            | None ->
+          begin has_escaped alloc_id >>= function
+            | true ->
               iv_from_addr addr
-            | Some twin_addr -> (* consider twin allocation *)
-              msum "twin allocation"
-                [ ("original", original alloc_id alloc);
-                  ("twin",     twin alloc_id alloc twin_addr) ]
+            | false ->
+              failwith "intcast_ptrval: PVconcrete should have already been escaped!"
           end
       end
-
+    | PVtwin (addr, twin_addr) ->
+      begin match prov with
+        | Prov_none
+        | Prov_double _ (* if casting from a pointer with double provenance,
+                           then all the executions from both provenance have
+                           already being considered *)
+        | Prov_device ->
+          iv_from_addr addr
+        | Prov_some alloc_id ->
+          begin has_escaped alloc_id >>= function
+            | true -> iv_from_addr addr (* TODO: this is wrong *)
+            | false ->
+              escape alloc_id >>= fun (st, twin_st, _) ->
+                msum "twin allocation"
+                  [ ("original", st >> iv_from_addr addr);
+                    ("twin",     twin_st >> iv_from_addr twin_addr) ]
+          end
+      end
 
   let op_ival iop (IV n1) (IV n2) =
     IV (begin match iop with
       | IntAdd ->
-          Nat_big_num.add
+          N.add
       | IntSub ->
-          Nat_big_num.sub
+          N.sub
       | IntMul ->
-          Nat_big_num.mul
+          N.mul
       | IntDiv ->
-          Nat_big_num.integerDiv_t
+          N.integerDiv_t
       | IntRem_t ->
-          Nat_big_num.integerRem_t
+          N.integerRem_t
       | IntRem_f ->
-          Nat_big_num.integerRem_f
+          N.integerRem_f
       | IntExp ->
           (* TODO: fail properly when y is too big? *)
-          fun x y -> Nat_big_num.pow_int x (Nat_big_num.to_int y)
+          fun x y -> N.pow_int x (N.to_int y)
     end n1 n2)
   
   let sizeof_ival ty =
-    IV (Nat_big_num.of_int (sizeof ty))
+    IV (N.of_int (sizeof ty))
   let alignof_ival ty =
-    IV (Nat_big_num.of_int (alignof ty))
+    IV (N.of_int (alignof ty))
   
   let bitwise_complement_ival _ (IV n) =
     (* TODO *)
     (* prerr_endline "Concrete.bitwise_complement ==> HACK"; *)
-    IV (Nat_big_num.(sub (negate n) (of_int 1)))
+    IV (N.(sub (negate n) (of_int 1)))
 
   let bitwise_and_ival _ (IV n1) (IV n2) =
-    IV (Nat_big_num.bitwise_and n1 n2)
+    IV (N.bitwise_and n1 n2)
   let bitwise_or_ival _ (IV n1) (IV n2) =
-    IV (Nat_big_num.bitwise_or n1 n2)
+    IV (N.bitwise_or n1 n2)
   let bitwise_xor_ival _ (IV n1) (IV n2) =
-    IV (Nat_big_num.bitwise_xor n1 n2)
+    IV (N.bitwise_xor n1 n2)
   
   let case_integer_value (IV n) f_concrete _ =
     f_concrete n
@@ -1334,11 +1513,11 @@ module Twin : Memory = struct
     IV (N.of_int64 (Int64.bits_of_float fval))
   
   let eq_ival _ (IV n1) (IV n2) =
-    Some (Nat_big_num.equal n1 n2)
+    Some (N.equal n1 n2)
   let lt_ival _ (IV n1) (IV n2) =
-    Some (Nat_big_num.compare n1 n2 = -1)
+    Some (N.compare n1 n2 = -1)
   let le_ival _ (IV n1) (IV n2) =
-    let cmp = Nat_big_num.compare n1 n2 in
+    let cmp = N.compare n1 n2 in
     Some (cmp = -1 || cmp = 0)
   
   let eval_integer_value (IV n) =
@@ -1393,13 +1572,13 @@ module Twin : Memory = struct
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
-      if Nat_big_num.less i size_n then
+      if N.less i size_n then
         load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV i)) >>= fun (_, mval) ->
         store loc unsigned_char_ty (array_shift_ptrval ptrval1 unsigned_char_ty (IV i)) mval >>= fun _ ->
-        aux (Nat_big_num.succ i)
+        aux (N.succ i)
       else
         return ptrval1 in
-    aux Nat_big_num.zero
+    aux N.zero
   
   
   (* TODO: validate more, but looks good *)
@@ -1411,16 +1590,16 @@ module Twin : Memory = struct
       | size ->
           load Location_ocaml.unknown unsigned_char_ty ptrval >>= function
             | (_, MVinteger (_, (IV byte_n))) ->
-                let ptr' = array_shift_ptrval ptrval unsigned_char_ty (IV (Nat_big_num.(succ zero))) in
+                let ptr' = array_shift_ptrval ptrval unsigned_char_ty (IV (N.(succ zero))) in
                 get_bytes ptr' (byte_n :: acc) (size-1)
             | _ ->
                 assert false in
-     get_bytes ptrval1 [] (Nat_big_num.to_int size_n) >>= fun bytes1 ->
-     get_bytes ptrval2 [] (Nat_big_num.to_int size_n) >>= fun bytes2 ->
+     get_bytes ptrval1 [] (N.to_int size_n) >>= fun bytes1 ->
+     get_bytes ptrval2 [] (N.to_int size_n) >>= fun bytes2 ->
      
-     let open Nat_big_num in
+     let open N in
      return (IV (List.fold_left (fun acc (n1, n2) ->
-                   if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
+                   if equal acc zero then of_int (N.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
 
@@ -1433,7 +1612,7 @@ module Twin : Memory = struct
     | Prov_device -> `String "Device"
 
   let serialise_map f m =
-    let serialise_entry (k, v) = (Nat_big_num.to_string k, f v)
+    let serialise_entry (k, v) = (N.to_string k, f v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
   let serialise_allocation alloc =
