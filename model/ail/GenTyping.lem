@@ -185,14 +185,6 @@ let well_typed_assignment s ty1 gty2 null2 =
           if    AAux.are_compatible (no_qualifiers, conv_ref_ty1) (no_qualifiers, ref_ty2)
              && AAux.sub_qualifiers ref_qs2 ref_qs1 then
             let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 3") in (* DEBUG *)
-(*
-            let () = Debug.print_debug 0 [] (fun () ->
-              "ref_qs1= " ^ Pp.stringFromAil_qualifiers ref_qs1
-            ) in
-            let () = Debug.print_debug 0 [] (fun () ->
-              "ref_qs2= " ^ Pp.stringFromAil_qualifiers ref_qs2
-            ) in
-*)
             let () = Debug.print_debug 1 [] (fun () ->
               (* TODO !!!! *)
               "FIXME: sub_qualifiers sees the wrong qualifiers (GenTypeCategory RValue seems to be at fault) !!!!"
@@ -213,8 +205,9 @@ let well_typed_assignment s ty1 gty2 null2 =
           
           else
             let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-              "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^ Pp.stringFromAil_human_ctype ref_qs1 conv_ref_ty1 ^
-              ", (ref_qs2, ref_ty2)= " ^ Pp.stringFromAil_human_ctype ref_qs2 ref_ty2
+              "[well_typed_assignment] KO: is_pointer ty1 && gty2 ==> (ref_qs1, conv_ref_ty1)= " ^
+              Pp.stringFromAil_human_ctype ref_qs1 conv_ref_ty1 ^ ", (ref_qs2, ref_ty2)= " ^
+              Pp.stringFromAil_human_ctype ref_qs2 ref_ty2
             ) in (* DEBUG *)
             E.return false
       | _ ->
@@ -1467,10 +1460,7 @@ and perform_decays sigm ctx a_expr =
            && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
           (* STD §6.3.2.1#2 *)
           (* performing the lvalue conversion *)
-          let () = Debug.print_debug 2 [] (fun () ->
-            "TODO(perform_decays): I commented the AAux.unqualify, check if correct and remove for good"
-          ) in
-          let rvalue_ty = AAux.unatomic ((*AAux.unqualify*) ty) in
+          let rvalue_ty = AAux.unatomic ty in
           if AAux.is_incomplete sigm ty then
             (* STD §6.3.2.1#2, sentence 3 *)
             E.fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
@@ -1698,9 +1688,9 @@ and annotate_definition_aux sigm gamm (ty, e) =
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
     if AAux.is_scalar ty then
       (* STD §6.7.9#11, sentence 3 *)
-      let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "HELLLOO: " ^ Pp.stringFromAil_expression e) in
-      annotate_assignee sigm gamm (AAux.unqualify ty) e >>= fun a_e ->
-      E.return a_e
+      (* NOTE: since we are not passing a `qs' with `ty' to annotate_assignee,
+         we are indeed unqualifying the scalar type *)
+      annotate_assignee sigm gamm ty e
       
       (* TODO: "(...) that has automatic storage duration" *)
       (* STD §6.7.9#13 *)
@@ -1730,19 +1720,13 @@ and annotate_definition_aux sigm gamm (ty, e) =
             (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
           | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "TODO(annotate_definition_aux 1): I commented the AAux.unqualify, check if correct and remove for good"
-              ) in
-              if AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) elem_ty1) (no_qualifiers, (*AAux.unqualify*) elem_ty2) then
+              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
          | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
-              let () = Debug.print_debug 2 [] (fun () ->
-                "TODO(annotate_definition_aux 1): I commented the AAux.unqualify, check if correct and remove for good"
-              ) in
-              if AAux.are_compatible (no_qualifiers, (*AAux.unqualify*) elem_ty1) (no_qualifiers, (*AAux.unqualify*) elem_ty2) && n1 = n2 then
+              if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
@@ -1775,8 +1759,8 @@ and annotate_definition_aux sigm gamm (ty, e) =
 val annotate_definition: sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
 let annotate_definition sigm gamm (sym, e) =
   match Context.lookup identifierEqual gamm sym with
-    | Just (_, _, ty) ->
-        annotate_definition_aux sigm gamm (ty, e) >>= fun a_e ->
+    | Just (_, sym_qs, sym_ty) ->
+        annotate_definition_aux sigm gamm (sym_ty, e) >>= fun a_e ->
         E.return (sym, a_e)
     
     | Nothing ->
