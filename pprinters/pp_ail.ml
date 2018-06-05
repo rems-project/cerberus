@@ -87,7 +87,7 @@ let pp_id id = !^ (Pp_symbol.to_string_pretty id)
 let pp_id_obj id = !^ (ansi_format [Yellow] (Pp_symbol.to_string_pretty id))
 let pp_id_label id = !^ (ansi_format [Magenta] (Pp_symbol.to_string_pretty id))
 let pp_id_type id = !^ (ansi_format [Green] (Pp_symbol.to_string_pretty id))
-let pp_id_func id = !^ (ansi_format [Bold; Blue] (Pp_symbol.to_string_pretty id))
+let pp_id_func id = !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty id))
 
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
