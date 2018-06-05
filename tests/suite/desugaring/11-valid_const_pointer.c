@@ -6,20 +6,20 @@ int const * glob2;
 // declare foo as function (void) returning {const} pointer to {} int
 int * const foo(void)
 {
-//  return glob1;
+  return glob1;
 }
 
 // declare bar as function (void) returning {} pointer to {const} int
 int const * bar(void)
 {
-//  return glob2;
+  return glob2;
 }
 
 void baz(int * const p, int const * q) {
-/*
   int * const r = 0;
   int const * s = 0;
   
+  // All of these should typecheck
   *p = 0;
   q = 0;
   *r = 0;
@@ -28,8 +28,5 @@ void baz(int * const p, int const * q) {
   *glob1 = 0;
   glob2 = 0;
   
-*/
   *foo() = 0;
-
-  // All of these should typecheck
 }
