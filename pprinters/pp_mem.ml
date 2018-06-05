@@ -32,6 +32,9 @@ let pp_memop = function
       !^ "PtrWellAligned"
   | Memcmp ->
       !^ "Memcmp"
+  | Memcpy ->
+      !^ "Memcpy"
+
 
 
 (* let pp_pointer_shift = Impl.pp_pointer_shift *)
