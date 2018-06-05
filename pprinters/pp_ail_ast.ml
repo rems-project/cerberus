@@ -98,6 +98,43 @@ let empty_qs =
   ; AilTypes.volatile = false
   }
 
+let rec pp_ctype_human qs ty =
+  let prefix_pp_qs =
+    if AilTypesAux.is_unqualified qs then
+      P.empty
+    else
+      pp_qualifiers_human qs ^^ P.space in
+  match ty with
+    | Void ->
+        prefix_pp_qs ^^ !^ "void"
+    | Basic bty ->
+        prefix_pp_qs ^^ pp_basicType bty
+    | Array (elem_ty, n_opt) ->
+        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
+    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+        (* TODO: warn if [qs] is not empty, this is an invariant violation *)
+        if not (AilTypesAux.is_unqualified qs) then
+          print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
+        
+        !^ (if is_variadic then "variadic function" else "function") ^^^
+        P.parens (
+          comma_list (fun (param_qs, param_ty, isRegister) ->
+            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+              (pp_ctype_human param_qs param_ty)
+          ) params
+        ) ^^^
+        !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
+    | Pointer (ref_qs, ref_ty) ->
+        prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
+    | Atomic atom_ty ->
+        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers ty
+    | Struct tag_sym ->
+        prefix_pp_qs ^^ !^ "struct" ^^^ pp_id tag_sym
+    | Union tag_sym ->
+        prefix_pp_qs ^^ !^ "union" ^^^ pp_id tag_sym
+    | Builtin str ->
+        prefix_pp_qs ^^ P.brackets (!^ "builtin") ^^ !^ str
+
 let pp_ctype qs ty =
   let rec pp_ctype_aux pp_ident_opt qs ty =
     let precOf = function
@@ -370,14 +407,21 @@ let dtree_of_declaration (i, (_, decl)) =
   in
   match decl with
   | Decl_object (msd, qs, cty) ->
-    Dleaf (pp_decl_ctor "Decl_object" ^^^ pp_id i
-           ^^^ P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
+    Dleaf (pp_decl_ctor "Decl_object" ^^^
+           pp_id_obj i  ^^^
+           P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
   | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
-    Dleaf (pp_decl_ctor "Decl_function" ^^^ pp_id i
-           ^^^ (pp_cond is_inline !^"inline"
-                  (pp_cond is_noreturn !^"_Noreturn"
-                     (pp_ctype empty_qs
-                        (Function (has_proto, (qs, cty), params, is_var))))))
+    Dleaf (pp_decl_ctor "Decl_function" ^^^
+           pp_id_func i ^^^
+           Colour.pp_ansi_format [Green] begin
+             P.squotes (
+               (pp_cond is_inline !^"inline"
+               (pp_cond is_noreturn !^"_Noreturn"
+               (pp_ctype_human empty_qs
+                  (Function (has_proto, (qs, cty), params, is_var)))))
+             )
+           end)
+
 
 let dtree_of_tag_definition (i, tag) =
   let dleaf_of_field (i, (qs, ty)) =
