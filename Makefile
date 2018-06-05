@@ -129,6 +129,18 @@ ocaml_native:
 	  cp -L main_.native cerberus; \
 	fi
 
+twin:
+	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
+	else \
+	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
+	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  sed -i '' 's/ref `MemConcrete/ref `MemTwin/' src/prelude.ml; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml; \
+	  cp -L main_.native twin; \
+	fi
+
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
