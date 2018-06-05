@@ -214,7 +214,7 @@ type state = <|
   current_return_type : ATypes.ctype;
   
   is_inside_loop:   bool;
-  is_inside_switch: bool;
+  switch_depth: int;  (* this indicate if the desugaring is inside of a switch *)
   
   
   (* TODO TODO TODO *)
@@ -360,7 +360,7 @@ let initial_state n core_eval_stuff = <|
   current_return_type= ATypes.Void; (* TODO: this is morally wrong *)
   
   is_inside_loop=   false;
-  is_inside_switch= false;
+  switch_depth= 0;
   
   core_eval_stuff= core_eval_stuff;
 |>
@@ -1209,7 +1209,7 @@ let set_current_return_type (ty: ATypes.ctype) : desugM unit =
 (* val is_switch_body: desugM bool *)
 let is_inside_switch: desugM bool =
   State_exception.read (fun st ->
-    st.is_inside_switch
+    st.switch_depth > 0
   )
 
 (* val is_loop_body: desugM bool *)
@@ -1225,9 +1225,9 @@ let perform_inside_switch m =
     | true ->
         m
     | false ->
-        State_exception.update (fun st -> <| st with is_inside_switch= true |>) >>
+        State_exception.update (fun st -> <| st with switch_depth= st.switch_depth + 1 |>) >>
         m >>= fun ret ->
-        State_exception.update (fun st -> <| st with is_inside_switch= false |>) >>
+        State_exception.update (fun st -> <| st with switch_depth= st.switch_depth - 1 |>) >>
         return ret
   end
 
