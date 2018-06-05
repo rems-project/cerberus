@@ -97,7 +97,7 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         is_integer_constant_expression e
     | AilErvalue _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail Loc.unknown Errors.Desugar_impossible
+        E.fail loc Errors.Desugar_impossible
     | AilEarray_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
         E.fail Loc.unknown Errors.Desugar_impossible
@@ -388,7 +388,8 @@ val desugar_init_declarator_BROKEN:
             (unit -> E.desugM (maybe (ATypes.ctype * expression unit))))
 
 val desugar_init_declarator:
-  ATypes.qualifiers -> ATypes.ctype -> list storage_class_specifier -> init_declarator ->
+  bool(* isAtomic *) -> ATypes.qualifiers -> ATypes.ctype ->
+  list storage_class_specifier -> init_declarator ->
   E.desugM (maybe (Loc.t * linkage * identifier * bool * (ATypes.qualifiers * ATypes.ctype) *
             (unit -> E.desugM (maybe (ATypes.ctype * expression unit)))))
 
@@ -937,7 +938,13 @@ let rec desugar_type_specifiers specs =
                     end
             end
           end >>
-          E.register_tag_definition Loc.unknown tag_sym
+          let loc = match tag_ident_opt with
+            | Nothing ->
+                Loc.unknown
+            | Just tag_ident ->
+                Loc.locOf tag_ident
+          end in
+          E.register_tag_definition loc tag_sym
             (def_ctor (isNothing tag_ident_opt) all_membDefs) >>
           E.return (ATypes.no_qualifiers, type_ctor tag_sym) in
         match specs with
@@ -1029,15 +1036,21 @@ let rec desugar_type_specifiers specs =
               (* the C parsing should have failed *)
               E.fail Loc.unknown Errors.Desugar_impossible
           
-          | [TSpec_enum ident_opt (Just enums)] ->
-              E.register_tag E.Kind_enum ident_opt >>= fun tag_sym ->
-              let loc = match ident_opt with
+          | [TSpec_enum tag_ident_opt (Just enums)] ->
+              E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
+              let loc = match tag_ident_opt with
                 | Just ident -> Loc.locOf ident
                 | Nothing    -> Loc.other "TODO_anonymous_enum"
               end in
               register_enumerators loc tag_sym enums >>= fun ns_rev ->
+              let loc = match tag_ident_opt with
+                | Nothing ->
+                    Loc.unknown
+                | Just tag_ident ->
+                    Loc.locOf tag_ident
+              end in
               (* NOTE: this function doesn't care about the order of the integers *)
-              E.register_tag_definition Loc.unknown tag_sym (E.Enum_definition ns_rev) >>
+              E.register_tag_definition loc tag_sym (E.Enum_definition ns_rev) >>
               E.return (ATypes.no_qualifiers, ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)))
           
           (* *)
@@ -1795,13 +1808,14 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
 
 
 
-and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) idecltor =
+and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_specifier) idecltor =
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
   match idecltor with
     | InitDecl loc decltor Nothing ->
         desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
-        let (qs, ty) = mk_qs_ctype base_qs base_ty in
+        let (qs, _ty) = mk_qs_ctype base_qs base_ty in
+        let ty = if isAtomic then ATypes.Atomic _ty else _ty in
         let mk_desug_init =
           fun () -> E.return Nothing in
         (* STD §6.9.2#2, sentence 1 *)
@@ -1829,7 +1843,8 @@ and desugar_init_declarator base_qs base_ty (scs: list storage_class_specifier) 
           E.fail loc (Errors.Desugar_OtherViolation "TODO(find std): typedef can't have a initializer")
         else
           desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
-          let (qs, ty) = mk_qs_ctype base_qs base_ty in
+          let (qs, _ty) = mk_qs_ctype base_qs base_ty in
+          let ty = if isAtomic then ATypes.Atomic _ty else _ty in
           (* TODO: check that we really never have parameter objects here *)
           let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
           (* TODO: I don't like the fact that we are using this function directly here *)
@@ -2697,7 +2712,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun init ->
               check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
-              desugar_init_declarator base_qs base_ty specifs.storage_classes init
+              desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             (* for each [init_declarator] *)
             E.foldrM (fun opt (acc1, acc2) ->
@@ -3028,7 +3043,7 @@ let desugar_and_register_external_declaration edecl =
            (see suite/parsing/declarator_visibility.c) *)
         (* NOTE: `desugar_init_declarator' does register the identifier it finds *)
         E.mapM (fun init ->
-          desugar_init_declarator base_qs base_ty specifs.storage_classes init
+          desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
         ) idecltors >>= fun xs ->
         
         (* for each [init_declarator] *)
@@ -3036,80 +3051,81 @@ let desugar_and_register_external_declaration edecl =
           | Nothing ->
               (* Case of a typedef *)
               E.return ()
-          | Just (ident_loc, link, sym, is_tentative, (qs, _ty), mk_desug_init) ->
-          match (if isAtomic then ATypes.Atomic _ty else _ty) with
-            | ATypes.Function _ return_ty params is_variadic ->
-                E.register_function_declaration ident_loc sym true (
-                  return_ty,
-                  params,
-                  is_variadic,
-                  List.elem FS_inline   specifs.function_specifiers,
-                  List.elem FS_Noreturn specifs.function_specifiers
-                )
-            | ty ->
-                let dur = determinate_storage_duration link specifs.storage_classes in
-                E.register_external_object_declaration ident_loc sym
-                  (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
-                
-                (* TODO: STD check+quote *)
-                E.get_tag_definitions >>= fun ident_tagDefs ->
-                let (fake_ail_sigma : sigma unit) = <|
-                  declarations= [];
-                  object_definitions= [];
-                  function_definitions= [];
-                  static_assertions= [];
-                  tag_definitions=
-                    List.reverse begin
-                      List.foldl (fun acc (ident, tagDef) ->
-                        match tagDef with
-                          | E.Struct_definition _ xs ->
-                              (ident, StructDef xs) :: acc
-                          | E.Union_definition _ xs ->
-                              (ident, UnionDef xs) :: acc
-                          | E.Enum_definition _ ->
-                              acc
-                        end
-                      ) [] (Map_extra.toList ident_tagDefs)
-                    end;
-                |> in
-                
-                mk_desug_init () >>= function
-                  | Just (ty', d_e) ->
-                      let () = Debug.print_debug 1 [] (fun () ->
-                        "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
-                      ) in
-                      begin if ty <> ty' then
-                        let () = Debug.print_debug 1 [] (fun () ->
-                          "ty' is new"
-                        ) in
-                        (* TODO: tentative *)
-                        E.update_external_object_type sym ty'
-                      else
-                        E.return ()
-                      end >>
-                      (* NOTE: it is the type after the initialisation which must be complete *)
-                      if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
-                      else
-                        (* TODO: use ty' *)
-                        (* STD §6.9#3, first sentence *)
-                        E.external_object_is_defined sym >>= function
-                          | true ->
-                              E.fail (*TODO*)Loc.unknown (Errors.Desugar_ExternalObjectRedefinition sym)
-                          | false ->
-                              E.register_external_object_definition sym d_e
-                        end
-                  | Nothing ->
-                      if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                        (* TODO: this is wrong (see tentative definition in the STD) *)
-                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.2#3")
-                      else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                        E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
-                      else
-                        E.return ()
-                end
-          end
-      end) xs
+          | Just (ident_loc, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
+              (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
+              match ty with
+                | ATypes.Function _ return_ty params is_variadic ->
+                    E.register_function_declaration ident_loc sym true (
+                      return_ty,
+                      params,
+                      is_variadic,
+                      List.elem FS_inline   specifs.function_specifiers,
+                      List.elem FS_Noreturn specifs.function_specifiers
+                    )
+                | ty ->
+                    let dur = determinate_storage_duration link specifs.storage_classes in
+                    E.register_external_object_declaration ident_loc sym
+                      (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                    
+                    (* TODO: STD check+quote *)
+                    E.get_tag_definitions >>= fun ident_tagDefs ->
+                    let (fake_ail_sigma : sigma unit) = <|
+                      declarations= [];
+                      object_definitions= [];
+                      function_definitions= [];
+                      static_assertions= [];
+                      tag_definitions=
+                        List.reverse begin
+                          List.foldl (fun acc (ident, tagDef) ->
+                            match tagDef with
+                              | E.Struct_definition _ xs ->
+                                  (ident, StructDef xs) :: acc
+                              | E.Union_definition _ xs ->
+                                  (ident, UnionDef xs) :: acc
+                              | E.Enum_definition _ ->
+                                  acc
+                            end
+                          ) [] (Map_extra.toList ident_tagDefs)
+                        end;
+                    |> in
+                    
+                    mk_desug_init () >>= function
+                      | Just (ty', d_e) ->
+                          let () = Debug.print_debug 1 [] (fun () ->
+                            "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
+                          ) in
+                          begin if ty <> ty' then
+                            let () = Debug.print_debug 1 [] (fun () ->
+                              "ty' is new"
+                            ) in
+                            (* TODO: tentative *)
+                            E.update_external_object_type sym ty'
+                          else
+                            E.return ()
+                          end >>
+                          (* NOTE: it is the type after the initialisation which must be complete *)
+                          if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
+                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
+                          else
+                            (* TODO: use ty' *)
+                            (* STD §6.9#3, first sentence *)
+                            E.external_object_is_defined sym >>= function
+                              | true ->
+                                  E.fail (*TODO*)Loc.unknown (Errors.Desugar_ExternalObjectRedefinition sym)
+                              | false ->
+                                  E.register_external_object_definition sym d_e
+                            end
+                      | Nothing ->
+                          if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
+                            (* TODO: this is wrong (see tentative definition in the STD) *)
+                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.2#3")
+                          else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
+                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
+                          else
+                            E.return ()
+                    end
+              end
+        end) xs
   
     | EDecl_decl (Declaration_static_assert sa_decl) ->
         desugar_and_register_static_assert_declaration sa_decl
