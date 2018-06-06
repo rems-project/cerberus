@@ -177,8 +177,10 @@ declare ocaml target_rep function eval_integer_value = `Ocaml_mem.eval_integer_v
 
 (* Floating value constructors *)
 val zero_fval: floating_value
+val one_fval: floating_value
 val str_fval: string -> floating_value
 declare ocaml target_rep function zero_fval = `Ocaml_mem.zero_fval`
+declare ocaml target_rep function one_fval = `Ocaml_mem.one_fval`
 declare ocaml target_rep function str_fval = `Ocaml_mem.str_fval`
 
 (* Floating value destructors *)

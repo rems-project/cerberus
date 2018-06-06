@@ -603,6 +603,7 @@ let lt_ival = Defacto_memory.impl_lt_ival
 let le_ival = Defacto_memory.impl_le_ival
 let eval_integer_value = Defacto_memory.impl_eval_integer_value
 let zero_fval = Defacto_memory.impl_zero_fval
+let one_fval = Defacto_memory.impl_one_fval
 let str_fval = Defacto_memory.impl_str_fval
 let case_fval = Defacto_memory.impl_case_fval
 let op_fval = Defacto_memory.impl_op_fval

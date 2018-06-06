@@ -1247,6 +1247,10 @@ val impl_zero_fval: impl_floating_value
 let impl_zero_fval =
   FVconcrete (Float.of_int 0)
 
+val impl_one_fval: impl_floating_value
+let impl_one_fval =
+  FVconcrete (Float.of_int 1)
+
 val impl_str_fval: string -> impl_floating_value
 let impl_str_fval str = FVconcrete (Float.of_string str)
 
