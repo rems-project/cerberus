@@ -880,6 +880,7 @@ match AilTypesAux.unatomic ty with
       else (* is unsigned *)
                           stdlib.mkcall_wrapI result_ty core_incr
   | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
+                          (* TODO: not correct semantics for float *)
                           Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
                               (*error "AilEunary PostfixIncr, floating type"*)
   | Aty.Pointer _ ref_ty ->
