@@ -4,9 +4,10 @@ $(warning "ocamlfind is required to build the executable part of Cerberus")
 endif
 
 # Deal with Z3 package installed by opam
-Z3=Z3
-ifeq (, $(shell ocamlfind query Z3))
-Z3=z3
+ifeq ($(shell ocamlfind query -qe -qo Z3; echo $$?), 0)
+Z3="Z3"
+else
+Z3="z3"
 endif
 
 
