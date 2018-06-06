@@ -29,7 +29,7 @@ let quote = function
       "One of the following shall hold:\n— the left operand has atomic, qualified, or unqualified arithmetic type, and the right has arithmetic type;\n— the left operand has an atomic, qualified, or unqualified version of a structure or union type compatible with the type of the right;\n— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) both operands are pointers to qualified or unqualified versions of compatible types, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;\n— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) one operand is a pointer to an object type, and the other is a pointer to a qualified or unqualified version of void, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;\n— the left operand is an atomic, qualified, or unqualified pointer, and the right is a null pointer constant; or\n— the left operand has type atomic, qualified, or unqualified _Bool, and the right is a pointer."
   
   | "§6.7.6.2#1, sentence 4" ->
-      "The element type shall [of an array] not be an incomplete or function type."
+      "The element type [of an array] shall not be an incomplete or function type."
   
   | "§6.7.2.1#3, incomplete or function" ->
       "A structure or union shall not contain a member with incomplete or function type (hence, a structure shall not contain an instance of itself, but may contain a pointer to an instance of itself)"
