@@ -123,6 +123,7 @@ module type Memory = sig
   
   (* Floating value constructors *)
   val zero_fval: floating_value
+  val one_fval: floating_value
   val str_fval: string -> floating_value
   
   (* Floating value destructors *)

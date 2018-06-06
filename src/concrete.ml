@@ -1287,6 +1287,8 @@ let combine_prov prov1 prov2 =
   
   let zero_fval =
     0.0
+  let one_fval =
+    1.0
   let str_fval str =
     float_of_string str
   
