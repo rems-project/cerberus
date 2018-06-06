@@ -54,6 +54,13 @@ char *strcpy (char * restrict s1, const char * restrict s2)
   return (res);
 }
 
+char *strncpy (char * restrict s1, const char * restrict s2, size_t n)
+{
+  char *res = s1;
+  while ((*s1++ = *s2++) && n-- > 0);
+  return (res);
+}
+
 void* memset(void *s, int c, size_t n)
 {
   unsigned char *p = s;
