@@ -1741,7 +1741,7 @@ STD_ "§6.7.1#8" $
 (* TODO: get rid of this function *)
 (* E.desugM (cabs_identifier * ATypes.qualifiers * ATypes.ctype * desugM (unit -> maybe expression unit)) *)
 and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_specifier) idecltor =
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "TODO ==> USING `desugar_init_declarator_BROKEN'"
   ) in
   (* NOTE: this function does NOT check the wf of the storage classes *)

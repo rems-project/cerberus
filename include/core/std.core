@@ -3,7 +3,9 @@ fun is_representable_integer (n: integer, ty: ctype): boolean :=
   Ivmin(ty) <= n /\ n <= Ivmax(ty)
 
 fun is_representable_floating (f: floating, ty: ctype): boolean :=
-  error(<<<is_representable_floating>>>, Unit)
+  -- HACK!
+  True 
+  -- error(<<<is_representable_floating>>>, Unit)
 
 
 fun all_values_representable_in (ty1: ctype, ty2: ctype): boolean :=
@@ -249,7 +251,7 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
   let strong size_: loaded integer = load(!(size_t), size_ptr) in
   case size_ of
     | Specified(size: integer) =>
-        let strong ptr: pointer = alloc(4 {- TODO -}, size) in
+        let strong ptr: pointer = alloc(8 {- TODO -}, size) in
         pure(Specified(ptr))
     | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))

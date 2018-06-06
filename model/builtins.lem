@@ -863,7 +863,7 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_IOLBF" -> Just (A.AilEbuiltin "IOLBF")
     | "__cerbvar_IONBF" -> Just (A.AilEbuiltin "IONBF")
     | "__cerbvar_BUFSIZ" -> Just (A.AilEbuiltin "BUFSIZ")
-    | "__cerbvar_EOF" -> Just (A.AilEbuiltin "EOF")
+    | "__cerbvar_EOF" -> Just (A.AilEbuiltin "EOF", Nothing)
     | "__cerbvar_FOPEN_MAX" -> Just (A.AilEbuiltin "FOPEN_MAX")
     | "__cerbvar_FILENAME_MAX" -> Just (A.AilEbuiltin "FILENAME_MAX")
     | "__cerbvar_L_tmpnam" -> Just (A.AilEbuiltin "L_tmpnam")
@@ -874,8 +874,8 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_stderr" -> Just (A.AilEbuiltin "srderr")
 *)
     | "__cerbvar_stdin" -> Just (A.AilEbuiltin "stdin", Nothing)
+    | "__cerbvar_stdout" -> Just (A.AilEbuiltin "stdout", Nothing)
 (*
-    | "__cerbvar_stdout" -> Just (A.AilEbuiltin "stdout")
     | "__cerbvar_EXIT_FAILURE" -> Just (A.AilEbuiltin "EXIT_FAILURE")
     | "__cerbvar_MB_CUR_MAX" -> Just (A.AilEbuiltin "MB_CUR_MAX")
     | "__cerbvar_EXIT_SUCCESS" -> Just (A.AilEbuiltin "EXIT_SUCCESS")

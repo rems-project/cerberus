@@ -15,7 +15,7 @@ typedef __cerbty_fpos_t fpos_t;
 #define IOLBF        __cerbvar_IOLBF
 #define IONBF        __cerbvar_IONBF
 #define BUFSIZ       __cerbvar_BUFSIZ
-#define EOF          __cerbvar_EOF
+//#define EOF          __cerbvar_EOF
 #define FOPEN_MAX    __cerbvar_FOPEN_MAX
 #define FILENAME_MAX __cerbvar_FILENAME_MAX
 #define L_tmpnam     __cerbvar_L_tmpnam
@@ -25,8 +25,11 @@ typedef __cerbty_fpos_t fpos_t;
 #define TMP_MAX      __cerbvar_TMP_MAX
 #define stderr       __cerbvar_stderr
 #define stdin        __cerbvar_stdin
-#define stdout       __cerbvar_stdout
+//#define stdout       __cerbvar_stdout
 
+// Temporary hack for Toyota tests
+#define EOF          -1
+#define stdout       0
 
 // TEMPORARY HACK
 // #define restrict
