@@ -104,20 +104,23 @@ alldoc.pdf: alldoc.tex
 
 
 smt:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str smt.native
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str smt.native
 
 test:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str test.native
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str test.native
 
 
 new_main:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str main2.native
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str main2.native
 
 sb:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str sb.native
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str sb.native
 
 simpl:
-	./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str simpl.native
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str simpl.native
+
+playground:
+	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str playground.native
 
 
 ocaml_native:
@@ -126,7 +129,7 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 
@@ -137,7 +140,7 @@ twin:
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  sed -i '' 's/ref `MemConcrete/ref `MemTwin/' src/prelude.ml; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml; \
 	  cp -L main_.native twin; \
 	fi
@@ -158,7 +161,7 @@ ocaml_byte:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.d.byte; \
+	  ./tools/colours.sh ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.d.byte; \
 	  cp -L main_.d.byte cerberus; \
 	fi
 
@@ -166,18 +169,18 @@ instance: src/instance.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.concrete 
 	sed -i '' 's/ref `MemConcrete/ref `MemSymbolic/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
+	ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.symbolic
 	sed -i '' 's/ref `MemSymbolic/ref `MemTwin/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
+	ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.twin
 	sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml
 
 web: src/web.ml instance
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.native
+	ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.native
 
 web.byte: src/web.ml instance
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
+	ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
 
 .PHONY: cbuild clink
 cbuild:

@@ -26,12 +26,11 @@ true: warn(+8)
 "dependencies/pprint-20140424/src": include
 
 
-"ocaml_generated/cabs_to_ail.ml": coverage
-"ocaml_generated/cabs_to_ail_aux.ml": coverage
-"ocaml_generated/cabs_to_ail_effect.ml": coverage
-"ocaml_generated/translation.ml": coverage
-"ocaml_generated/genTyping.ml": coverage
-"ocaml_generated/core_run.ml": coverage
-"ocaml_generated/driver.ml": coverage
-
-<src/main_.native>: coverage
+# "ocaml_generated/cabs_to_ail.ml": coverage
+# "ocaml_generated/cabs_to_ail_aux.ml": coverage
+# "ocaml_generated/cabs_to_ail_effect.ml": coverage
+# "ocaml_generated/translation.ml": coverage
+# "ocaml_generated/genTyping.ml": coverage
+# "ocaml_generated/core_run.ml": coverage
+# "ocaml_generated/driver.ml": coverage
+# <src/main_.native>: coverage
