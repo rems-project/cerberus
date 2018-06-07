@@ -700,21 +700,21 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_SCHAR_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Ichar))), Nothing)
     | "__cerbvar_SCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Ichar))), Nothing)
     | "__cerbvar_UCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Ichar))), Nothing)
-    | "__cerbvar_CHAR_MIN" -> Just (A.AilEbuiltin "CHAR_MIN", Nothing)
+    | "__cerbvar_CHAR_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ATypes.Char)), Nothing)
     | "__cerbvar_CHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ATypes.Char)), Nothing)
     | "__cerbvar_MB_LEN_MAX" -> Just (A.AilEbuiltin "MB_LEN_MAX", Nothing)
-    | "__cerbvar_SHRT_MIN" -> Just (A.AilEbuiltin "SHRT_MIN", Nothing)
+    | "__cerbvar_SHRT_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Short))), Nothing)
     | "__cerbvar_SHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Short))), Nothing)
     | "__cerbvar_USHRT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Short))), Nothing)
     | "__cerbvar_INT_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Int_))), Nothing)
     | "__cerbvar_INT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Int_))), Nothing)
     | "__cerbvar_UINT_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Int_))), Nothing)
-    | "__cerbvar_LONG_MIN" -> Just (A.AilEbuiltin "LONG_MIN", Nothing)
+    | "__cerbvar_LONG_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Long))), Nothing)
     | "__cerbvar_LONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Long))), Nothing)
     | "__cerbvar_ULONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Long))), Nothing)
-    | "__cerbvar_LLONG_MIN" -> Just (A.AilEbuiltin "LLONG_MIN", Nothing)
-    | "__cerbvar_LLONG_MAX" -> Just (A.AilEbuiltin "LLONG_MAX", Nothing)
-    | "__cerbvar_ULLONG_MAX" -> Just (A.AilEbuiltin "ULLONG_MAX", Nothing)
+    | "__cerbvar_LLONG_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.LongLong))), Nothing)
+    | "__cerbvar_LLONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.LongLong))), Nothing)
+    | "__cerbvar_ULLONG_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.LongLong))), Nothing)
     | "__cerbvar_SIG_IGN" -> Just (A.AilEbuiltin "SIG_IGN", Nothing)
     | "__cerbvar_SIGILL" -> Just (A.AilEbuiltin "SIGILL", Nothing)
     | "__cerbvar_SIGTERM" -> Just (A.AilEbuiltin "SIGTERM", Nothing)
@@ -899,10 +899,8 @@ let ctype_of_builtin_varname = function
       Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
   | "stdout" ->
       Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
-      
   | "CHAR_BIT" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))
-
   | _ ->
       Nothing
 end
