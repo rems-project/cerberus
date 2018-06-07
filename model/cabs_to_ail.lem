@@ -267,7 +267,7 @@ val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEident sym ->
-        E.fetch_object_declaration sym >>= fun (dur, _, _, _) ->
+        E.fetch_object_declaration sym >>= fun (_, dur, _, _, _) ->
         match dur with
           | ATypes.Static ->
               E.return true
@@ -1538,7 +1538,7 @@ STD_ "§6.5.1#2" $
                 match kind with
                   | E.OK_object _ ->
                       E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>
-                      E.fetch_object_declaration sym >>= fun (_, _, sym_qs, sym_ty) ->
+                      E.fetch_object_declaration sym >>= fun (isTentative, _, _, sym_qs, sym_ty) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
                         AilEident sym
@@ -1700,7 +1700,6 @@ and desugar_generic_association gas =
 (* TODO: rename this function *)
 and check_storage_class_specifiers decl_ctxt scs =
   E.get_scope >>= fun scope ->
-  E.print_debugM 1 (fun () -> "|scs| = " ^ show (List.length scs)) >>= fun () ->
   if    List.length scs > 1
      && not (   List.all (fun z -> z = SC_Thread_local || z = SC_static) scs
              || List.all (fun z -> z = SC_Thread_local || z = SC_extern) scs) then
@@ -2546,7 +2545,7 @@ let desugar_declaration_base specifs idecltors =
                     E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration (Loc.locOf ident) sym true (
                     return_qs_ty,
-                    params,
+                    Just params, (* TODO: KKKK !!!! *)
                     is_variadic,
                     List.elem FS_inline   specifs.function_specifiers,
                     List.elem FS_Noreturn specifs.function_specifiers
@@ -2985,7 +2984,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               
               E.register_function_declaration (Loc.locOf fun_ident) fun_sym false (
                 (return_qs, return_ty),
-                params,
+                Just params, (* TODO: KKKK !!!! *)
                 isVariadic,
                 List.elem FS_inline   specifs.function_specifiers,
                 List.elem FS_Noreturn specifs.function_specifiers
@@ -3051,13 +3050,13 @@ let desugar_and_register_external_declaration edecl =
           | Nothing ->
               (* Case of a typedef *)
               E.return ()
-          | Just (ident_loc, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
+          | Just (ident_loc, link, sym, isTentative, (qs, ty), mk_desug_init) ->
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
                 | ATypes.Function _ return_ty params is_variadic ->
                     E.register_function_declaration ident_loc sym true (
                       return_ty,
-                      params,
+                      Just params, (* TODO: KKKK !!!! *)
                       is_variadic,
                       List.elem FS_inline   specifs.function_specifiers,
                       List.elem FS_Noreturn specifs.function_specifiers
@@ -3065,7 +3064,7 @@ let desugar_and_register_external_declaration edecl =
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration ident_loc sym
-                      (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                      (isTentative, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->

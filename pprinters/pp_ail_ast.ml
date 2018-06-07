@@ -117,6 +117,7 @@ let rec pp_ctype_human qs ty =
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
         !^ (if is_variadic then "variadic function" else "function") ^^^
+        (if has_proto then !^ "with proto " else P.empty) ^^
         P.parens (
           comma_list (fun (param_qs, param_ty, isRegister) ->
             (fun z -> if isRegister then !^ "register" ^^^ z else z)
