@@ -176,6 +176,20 @@ instance (SetType namespace)
     end
 end
 
+type function_declaration =
+  | FDeclPrototype of
+        Loc.t
+      * (ATypes.qualifiers * ATypes.ctype)
+      * list (ATypes.qualifiers * ATypes.ctype * bool)
+      * bool (* isVariadic *)
+      * bool (* isInline *)
+      * bool (* isNoReturn *)
+  | FDeclEmptyParentheses of
+        Loc.t
+      * (ATypes.qualifiers * ATypes.ctype)
+      * bool (* isVariadic *)
+      * bool (* isInline *)
+      * bool (* isNoReturn *)
 
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
@@ -192,11 +206,14 @@ type state = <|
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations:        map A.identifier ((*hasProto*)bool * Loc.t *
-                                                  ((ATypes.qualifiers * ATypes.ctype) *
-                                                   (list (ATypes.qualifiers * ATypes.ctype * (*isRegister*)bool)) *
-                                                   (*isVariadic*)bool * (*isInline*)bool * (*isNoReturn*)bool));
-  external_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
+  function_declarations: map A.identifier (
+    (*hasProto*)bool * Loc.t *
+    ( (ATypes.qualifiers * ATypes.ctype)                     (* qualifier and return type *)
+    * maybe (list (ATypes.qualifiers * ATypes.ctype * bool)) (* Nothing if there was no parameter type list,
+                                                                the boolean is the isRegister flag *)
+    * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
+   );
+  external_object_declarations: map A.identifier  ((* isTentative *)bool * ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
   function_definitions: map A.identifier (Loc.t * list A.identifier * A.statement unit);
@@ -299,7 +316,7 @@ let get_scope =
 val with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let with_scope scope m =
   State_exception.update (fun st ->
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "ENTERING Scope: " ^ string_of_scope scope
     ) in
     <| st with registered_identifiers= Scope_table.create_scope scope st.registered_identifiers; |>
@@ -307,14 +324,14 @@ let with_scope scope m =
   m >>= fun res ->
   State_exception.modify (fun st ->
     let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers      in
-    let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+    let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "EXITING Scope: " ^ string_of_scope scope
     ) in
     ( Set_helpers.fold (fun (sym, kind, _) acc ->
        match kind with
          | Kind_ordinary (OK_object false) ->
              match Map.lookup sym st.external_object_declarations with
-               | Just (dur, isRegister, qs, ty) ->
+               | Just (isTentative, dur, isRegister, qs, ty) ->
                    (sym, ((dur, isRegister), qs, ty)) :: acc
                | Nothing ->
                    match Map.lookup sym st.internal_object_declarations with
@@ -360,7 +377,7 @@ let bindings_of_idents_map idents_map =
         match kind with
           | Kind_ordinary (OK_object _) ->
               match Map.lookup sym st.external_object_declarations with
-                | Just (dur, isRegister, qs, ty) ->
+                | Just (isTentative, dur, isRegister, qs, ty) ->
                     (sym, ((dur, isRegister), qs, ty)) :: acc
                 | Nothing ->
                     match Map.lookup sym st.internal_object_declarations with
@@ -1071,12 +1088,14 @@ let function_is_defined sym =
 
 
 val register_function_declaration:
-  Loc.t -> A.identifier -> bool -> ((ATypes.qualifiers * ATypes.ctype) * (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
+  Loc.t -> A.identifier -> bool -> ((ATypes.qualifiers * ATypes.ctype) * maybe (list (ATypes.qualifiers * ATypes.ctype * bool)) * bool * bool * bool) -> desugM unit
 let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
-  let string_of_decl ((ret_qs, ret_ty), params, isVariadic, _, _) =
-    let fun_ty = ATypes.Function is_proto (ret_qs, ret_ty) params isVariadic in
-    Pp.stringFromAil_ctype ATypes.no_qualifiers fun_ty
+  let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
+    let params' = Maybe.maybe [] id params_opt in
+    let fun_ty = ATypes.Function is_proto (ret_qs, ret_ty) params' isVariadic in
+    Pp.stringFromAil_ctype ATypes.no_qualifiers fun_ty ^
+    (if Maybe.isNothing params_opt then " NO_PARAMS" else "")
   in
 (*
     Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
@@ -1089,12 +1108,41 @@ let register_function_declaration loc sym is_proto decl =
     Map.lookup sym st.function_declarations
   ) >>= function
     | Just (prev_has_proto, _, prev_decl) ->
+(* KKK
         let () = Debug.print_debug 1 [] (fun () ->
           "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
         ) in
+*)
 (*
         let (prev_ret_qs_ty, prev_params, prev_is_variadic, prev_is_inline, prev_is_Noreturn) = prev_decl in
         let (new_ret_qs_ty, new_params, new_is_variadic, new_is_inline, new_is_Noreturn) = decl in
+        
+        let prev_fun_ty = ATypes.Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
+        let new_fun_ty  = ATypes.Function is_proto new_ret_qs_ty new_params new_is_variadic in
+        
+        let () = Debug.print_debug 0 [] (fun () ->
+          "PREVIOUS qs,ty ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers prev_fun_ty
+        ) in
+        let () = Debug.print_debug 0 [] (fun () ->
+          "NEW qs,ty ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers new_fun_ty
+        ) in
+        
+        let () = match AilTypesAux.make_composite prev_fun_ty new_fun_ty with
+          | Just compo_ty ->
+              Debug.print_debug 0 [] (fun () -> "make_composite WORKED: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers compo_ty)
+          | Nothing ->
+              Debug.print_debug 0 [] (fun () -> "make_composite FAILED")
+        end in
+*)
+
+(*
+        (* function () returning void *)
+        let old_ty = ATypes.Function true (ATypes.no_qualifiers, ATypes.Void) [] false in
+        (* function (pointer to function () returning void) returning void *)
+        let new_ty = ATypes.Function true (ATypes.no_qualifiers, ATypes.Void) [(ATypes.no_qualifiers, old_ty, false)] false in
+        
+*)
+(*
         
         let prev_fun_type = Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
         let new_fun_type  = Function new_has_proto new_ret_qs_ty new_params new_is_variadic in
@@ -1116,6 +1164,7 @@ AilTypesAux.make_composite
           fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^
                                                    show sym ^ ", old decl= " ^ string_of_decl prev_decl ^ " --- vs --- " ^ string_of_decl decl))
         else
+          let () = Debug.print_debug 0 [] (fun () -> "HELLO: decl == prev_decl") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
@@ -1128,8 +1177,8 @@ AilTypesAux.make_composite
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: Loc.t -> A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_external_object_declaration loc sym ((_, _, new_qs, new_ty) as new_decl) =
+val register_external_object_declaration: Loc.t -> A.identifier -> (bool * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_external_object_declaration loc sym ((_, _, _, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
@@ -1139,7 +1188,7 @@ let register_external_object_declaration loc sym ((_, _, new_qs, new_ty) as new_
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
-    | Just (_, _, prev_qs, prev_ty) ->
+    | Just (_, _, _, prev_qs, prev_ty) ->
         (* TODO: what about the storage duration and isRegister?? *)
         if not (AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)) then
 
@@ -1190,9 +1239,9 @@ let update_external_object_type sym ty =
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
-      | Just (dur, is_register, qs, _) ->
+      | Just (isTentative, dur, is_register, qs, _) ->
           <| st with external_object_declarations=
-            Map.insert sym (dur, is_register, qs, ty) st.external_object_declarations
+            Map.insert sym (isTentative, dur, is_register, qs, ty) st.external_object_declarations
           |>
     end
   )
@@ -1393,12 +1442,14 @@ let remove_block_scoped_identifiers st xs =
 *)
 
 
-val fetch_object_declaration: A.identifier -> desugM (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
+val fetch_object_declaration: A.identifier -> desugM (bool * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
     let map_union = Map.(union) in
-    map_union st.external_object_declarations st.internal_object_declarations
+    map_union
+      st.external_object_declarations
+      (Map.map (fun (dur, isRegister, qs, ty) -> (false, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   match Map.lookup sym decls with
     | Just decl ->
@@ -1428,12 +1479,19 @@ let extract_program startup_str =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, loc, (ret_qs_ty, params, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+            let () = Debug.print_debug 0 [] (fun () ->
+              "KKK: check + find STD quote"
+            ) in
+            let params = match params_opt with
+              | Nothing -> []
+              | Just z  -> z
+            end in
             (loc, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
-          Map.map (fun (dur, isRegister, qs, ty) ->
+          Map.map (fun (_, dur, isRegister, qs, ty) ->
             (* TODO: correct location *)
             (Loc.unknown, A.Decl_object (dur, isRegister) qs ty)
           ) st.external_object_declarations
@@ -1484,12 +1542,20 @@ let get_sigma_sofar =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, loc, (ty, params, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+            let () = Debug.print_debug 0 [] (fun () ->
+              "KKK: check + find STD quote"
+            ) in
+            (* TODO: is it correct "complete" the params like that ? *)
+            let params = match params_opt with
+              | Nothing -> []
+              | Just z  -> z
+            end in
             (loc, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
-          Map.map (fun (dur, isRegister, qs, ty) ->
+          Map.map (fun (_, dur, isRegister, qs, ty) ->
             (* TODO: do location properly *)
             (Loc.unknown, A.Decl_object ((dur, isRegister)) qs ty)
           ) st.external_object_declarations
