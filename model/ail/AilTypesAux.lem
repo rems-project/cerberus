@@ -627,6 +627,7 @@ val eq_integer_rank: integerType -> integerType -> bool
 let eq_integer_rank ity1 ity2 =
   ity1 = ity2 || eq_integer_rank_base ity1 ity2
 
+(*
 val lt_integer_rank_base: Implementation.implementation -> integerType -> integerType -> bool
 let lt_integer_rank_base impl ity1 ity2 =
   match (ity1, ity2) with
@@ -673,6 +674,7 @@ let lt_integer_rank_congruence impl ity1 ity2 =
     | _ ->
         error "WIP lt_integer_rank_congruence"
   end
+*)
 
 val lt_integer_rank: integerType -> integerType -> bool
 let lt_integer_rank ity1 ity2 =
@@ -741,6 +743,7 @@ let lt_integer_rank ity1 ity2 =
         true
     
     | _ ->
+        (* TODO: this is probably wrong for macro types *)
         false
   end
 
@@ -851,6 +854,33 @@ let usual_arithmetic_integer impl ity1 ity2 =
     | _ ->
         let promoted_ity1 = integer_promotion impl ity1 in
         let promoted_ity2 = integer_promotion impl ity2 in
+        if    (is_signed_ity promoted_ity1 && is_signed_ity promoted_ity2)
+           || (is_unsigned_ity promoted_ity1 && is_unsigned_ity promoted_ity2) then
+          if lt_integer_rank promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            promoted_ity1
+        
+        else if is_unsigned_ity promoted_ity1 && ge_integer_rank promoted_ity1 promoted_ity2 then
+          promoted_ity1
+        else if is_unsigned_ity promoted_ity2 && ge_integer_rank promoted_ity2 promoted_ity1 then
+          promoted_ity2
+        
+        else if is_signed_ity promoted_ity1 then
+          if le_integer_range impl promoted_ity2 promoted_ity1 then
+            promoted_ity1
+          else
+            make_corresponding_unsigned promoted_ity1
+        
+        else (* if is_signed_ity promoted_ity2 then *)
+          if le_integer_range impl promoted_ity1 promoted_ity2 then
+            promoted_ity2
+          else
+            make_corresponding_unsigned promoted_ity2
+
+(*
+        let promoted_ity1 = integer_promotion impl ity1 in
+        let promoted_ity2 = integer_promotion impl ity2 in
         if is_signed_ity promoted_ity1 then
           if is_signed_ity promoted_ity2 then
             if lt_integer_rank promoted_ity2 promoted_ity1 then
@@ -878,6 +908,7 @@ let usual_arithmetic_integer impl ity1 ity2 =
               promoted_ity2
             else
               make_corresponding_unsigned promoted_ity2
+*)
   end
 
 
