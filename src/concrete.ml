@@ -1319,7 +1319,28 @@ let combine_prov prov1 prov2 =
     Int64.float_of_bits (N.to_int64 n)
   
   let ivfromfloat ity fval =
-    IV (Prov_none, N.of_int64 (Int64.bits_of_float fval))
+    (* TODO: hack maybe the elaboration should do that?? *)
+    match ity with
+      | Bool ->
+          IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
+      | _ ->
+          let Some nbits = Impl.sizeof_ity ity in
+          let is_signed = AilTypesAux.is_signed_ity ity in
+          let (min, max) =
+            if is_signed then
+              ( N.negate (N.pow_int (N.of_int 2) (nbits-1))
+              , N.sub (N.pow_int (N.of_int 2) (nbits-1)) N.(succ zero) )
+            else
+              ( N.zero
+              , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
+          let wrapI n =
+            let dlt = N.succ (N.sub max min) in
+            let r = N.integerRem_f n dlt in
+            if N.less_equal r max then
+              r
+            else
+              N.sub r dlt in
+          IV (Prov_none, (wrapI (N.of_int64 (Int64.bits_of_float fval))))
   
   let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
