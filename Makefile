@@ -129,7 +129,8 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild src/cerberus_cstubs.o; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 
@@ -140,6 +141,7 @@ twin:
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  sed -i '' 's/ref `MemConcrete/ref `MemTwin/' src/prelude.ml; \
+	  ocamlbuild src/cerberus_cstubs.o; \
 	  ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml; \
 	  cp -L main_.native twin; \
@@ -151,19 +153,20 @@ ocaml_profiling:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+	  ocamlbuild src/cerberus_cstubs.o; \
 	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus-prof; \
 	fi
 
-ocaml_byte:
-	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
-	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
-	else \
-	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
-	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ./tools/colours.sh ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.d.byte; \
-	  cp -L main_.d.byte cerberus; \
-	fi
+# ocaml_byte:
+# 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+# 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
+# 	else \
+# 	  echo $(BOLD)OCAMLBUILD$(RESET) main.d.byte; \
+# 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
+# 	  ./tools/colours.sh ocamlbuild -j 4 -no-plugin -use-ocamlfind -pkgs lem,cmdliner,pprint,${Z3} -libs unix,str main_.d.byte; \
+# 	  cp -L main_.d.byte cerberus; \
+# 	fi
 
 instance: src/instance.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
