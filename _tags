@@ -34,3 +34,6 @@ true: warn(+8)
 # "ocaml_generated/core_run.ml": coverage
 # "ocaml_generated/driver.ml": coverage
 # <src/main_.native>: coverage
+
+
+<src/main_.native> : link_cstubs
