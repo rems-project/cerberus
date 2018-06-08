@@ -257,8 +257,11 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
         pure(error(<<<malloc_proxy>>>, False))
   end
 
-
-
+-- TODO: this is a hack for GCC torture while signal are not implemented
+proc [ailname = "abort"] abort_proxy() : eff unit :=
+  pure(error(<<<ABORT>>>, Unit))
+proc [ailname = "exit"] exit_proxy(n: integer) : eff unit :=
+  pure(error(<<<EXIT>>>, Unit))
 
 
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
