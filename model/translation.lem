@@ -704,9 +704,19 @@ and translate_expression stdlib (tagDefs : Core.core_tag_definitions) a_expr : E
                   )
 
             | _ ->
-                error ("Translation.usual_arithmetic_conversion ==> ty1= " ^
-                       Pp.stringFromAil_ctype AilTypes.no_qualifiers ty1 ^ ", ty2= " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty2 ^
-                       ", e1= " ^ Pp.stringFromCore_pexpr e1 ^ ", e2= " ^ Pp.stringFromCore_pexpr e2)
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "is_arithmetic ty1: " ^ (if AilTypesAux.is_arithmetic ty1 then "true" else "false")
+                ) in
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "is_arithmetic ty2: " ^ (if AilTypesAux.is_arithmetic ty2 then "true" else "false")
+                ) in
+                let () = Debug.print_debug 0 [] (fun () ->
+                  "ty1: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty1 ^
+                  ", ty2: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty2 ^
+                  ", e1: " ^ Pp.stringFromCore_pexpr e1 ^
+                  ", e2: " ^ Pp.stringFromCore_pexpr e2
+                ) in
+                error "Translation.usual_arithmetic_conversion: not (integer vs integer)"
           end
       end in
   
@@ -1281,7 +1291,7 @@ else (* pointer <-> pointer cast *)
       | A.AilEbinary e1 (A.Arithmetic A.Add) e2 ->
           self e1 >>= fun core_e1 ->
           self e2 >>= fun core_e2 ->
-if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e1) then
+if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
             let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
             let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
             E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (e1_sym  , e1_sym_pat  , e1_sym_pe  ) ->
@@ -1362,7 +1372,7 @@ else
       | A.AilEbinary e1 (A.Arithmetic A.Sub) e2 ->
           self e1 >>= fun core_e1 ->
           self e2 >>= fun core_e2 ->
-if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e1) then
+if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
           let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
           let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
           E.wrapped_fresh_symbol (C.BTy_loaded oTy1) >>= fun (e1_sym, e1_sym_pat, e1_sym_pe)       ->
