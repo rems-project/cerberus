@@ -1,6 +1,0 @@
-GCC Torture (08/06/2018):
-- 1429 tests in total
-- 1244 tests supported (unsupported files automatically removed by using grep)
-- 893 success
-- 351 failure
-
