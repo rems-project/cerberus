@@ -1,7 +1,7 @@
 #include "cerberus.h"
-void test(long double val, int *eval)
+void test(double val, int *eval)
 {
-  long double tmp = 1.0l;
+  double tmp = 1.0l;
   int i = 0;
 
   if (val < 0.0l)
