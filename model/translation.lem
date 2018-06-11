@@ -2183,7 +2183,7 @@ TODO: #9
                       match memb_ty with
                         | Cty.Pointer _ ref_ty ->
                             E.return (
-                              (ident, Caux.mk_nullptr_pe ref_ty) :: acc,
+                              (ident, Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty)) :: acc,
                               mk_core
                             )
                         | (*BISECT-IGNORE*) _ ->

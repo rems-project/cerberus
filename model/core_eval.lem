@@ -583,7 +583,8 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
                 )
               else
               
-              EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^ Pp.stringFromCore_pexpr pexpr ^ " <====> " ^
+              EU.fail $ Illformed_program ("PEctor: one of the operands was ill-typed ==> " ^
+                                           Pp.stringFromCore_pexpr pexpr ^ " <====> " ^
                                            stringFromList Pp.stringFromCore_value cvals)
           | (_, Nothing) ->
               EU.return $ PEctor ctor pes'
@@ -666,13 +667,18 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
                 match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
                   | Core_ctype.StructDef membrs ->
                       let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
-                      let mval = fromJust "Core_Eval, PEstruct 2" (Caux.memValueFromValue memb_ty cval) in
+                      let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
+                                           ", cval: " ^ Pp.stringFromCore_value cval)
+                          (Caux.memValueFromValue memb_ty cval) in
                       (memb_ident, mval)
                   | Core_ctype.UnionDef _ ->
                       error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
                 end
               ) (List.zip idents cvals) in
-              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs))))
+              EU.return (PEval (Vobject (OVstruct tag_sym xs)))
+(*
+KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs))))
+*)
           | Nothing ->
               EU.return (PEstruct tag_sym (List.zip idents pes'))
         end
