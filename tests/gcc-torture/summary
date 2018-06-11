@@ -1,10 +1,10 @@
 Total tests (execute): 1429
 
 UNSUPPORTED: 425
-SUPPORTED: 1001
+SUPPORTED: 999
 
-WORKING: 693 (69.2% of the supported tests)
-NOT WORKING: 308
+WORKING: 693 (69.4% of the supported tests)
+NOT WORKING: 304
 
 Unsupported Features:
 
@@ -20,7 +20,7 @@ Unsupported Features:
 * Integer constant in sizeof: 12
 * Vectors and SIMD: 20
 * VLA: 12
-* GNU extensions: 44
+* GNU extensions: 46
 * Unsupported builtins: 36
 * Zero length array: 1
 * Others: 88
