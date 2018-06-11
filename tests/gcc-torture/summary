@@ -1,18 +1,18 @@
 Total tests (execute): 1429
 
-UNSUPPORTED: 424
-SUPPORTED: 1005
+UNSUPPORTED: 425
+SUPPORTED: 1001
 
-WORKING: 690 (68.6% of the supported tests)
-NOT WORKING: 315
+WORKING: 693 (69.2% of the supported tests)
+NOT WORKING: 308
 
 Unsupported Features:
 
 * Complex Numbers: 22
 * Embedded asm: 62
-* va_start: 65
+* va_start: 66
 * __FUNCTION__: 1
-* wchar: 4
+* wchar: 6
 * bitfield: 40
 * alloca: 11
 * signal: 1
@@ -22,4 +22,5 @@ Unsupported Features:
 * VLA: 12
 * GNU extensions: 44
 * Unsupported builtins: 36
+* Zero length array: 1
 * Others: 88
