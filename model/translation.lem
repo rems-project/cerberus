@@ -942,7 +942,8 @@ match AilTypesAux.unatomic ty with
       else (* is unsigned *)
                           stdlib.mkcall_wrapI result_ty core_decr
   | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
-                                   error "AilEunary PostfixDecr, floating type"
+                          (* TODO: not correct semantics for float *)
+                          Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
   | Aty.Pointer _ ref_ty ->
                                    (* TODO: check again *)
                                    Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe (0 - 1))
