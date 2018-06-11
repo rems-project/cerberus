@@ -83,8 +83,16 @@ size_t strlen(const char *s)
   return len;
 }
 
-// TODO: this bit depends on malloc
-// TODO: is this posix or iso?
+
+char *strchr(const char *s, int n)
+{
+  char c = (char) n;
+  while (*s && (*s != c)) s++;
+  if (*s)
+    return (char*)s;
+  return NULL;
+}
+
 char* strdup(const char *s)
 {
   void *malloc(size_t);

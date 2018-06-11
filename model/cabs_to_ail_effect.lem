@@ -1480,7 +1480,7 @@ let extract_program startup_str =
       map_union
         begin
           Map.map (fun (hasProto, loc, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
             let params = match params_opt with
@@ -1543,7 +1543,7 @@ let get_sigma_sofar =
       map_union
         begin
           Map.map (fun (hasProto, loc, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
             (* TODO: is it correct "complete" the params like that ? *)

@@ -131,6 +131,7 @@ let decode_character_constant = function
   | "~"    -> Nat_big_num.of_int 126
   
   | " "    -> Nat_big_num.of_int 32
+  | "\t"   -> Nat_big_num.of_int 9
   
   (* §5.2.2#2 *)
   | "\\a"   -> Nat_big_num.of_int 7
