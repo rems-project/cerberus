@@ -1,10 +1,10 @@
 Total tests (execute): 1429
 
 UNSUPPORTED: 425
-SUPPORTED: 999
+SUPPORTED: 998
 
-WORKING: 693 (69.4% of the supported tests)
-NOT WORKING: 304
+WORKING: 693
+NOT WORKING: 305
 
 Unsupported Features:
 
@@ -23,4 +23,5 @@ Unsupported Features:
 * GNU extensions: 46
 * Unsupported builtins: 36
 * Zero length array: 1
+* Non C standard functions: 1
 * Others: 88
