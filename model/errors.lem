@@ -7,6 +7,7 @@ type desugar_cause =
   | Desugar_ConstraintViolation of string
   | Desugar_OtherViolation of string
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour (* TODO: maybe only allow the relevant subset of ubs *)
+  | Desugar_UndeclaredIdentifier of string
 (* TODO: move these to Desugar_ConstraintViolation *)
   | Desugar_ExternalObjectRedefinition of identifier (* STD §6.9#3, first sentence *)
   | Desugar_FunctionRedefinition of identifier
@@ -39,6 +40,7 @@ type core_typing_cause =
   | CtorWrongNumber of nat (* expected *) * nat (* found *)
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
   | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
+  | InvalidTag of Symbol.sym
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
   | CoreTyping_TODO of string
   | TooGeneral

@@ -641,15 +641,51 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
-    | PEstruct sym fields ->
-        (* FIXME: fields in struct and union should be checked *)
-        let (ids, pes) = List.unzip fields in
-        Pexpr annot (InferredType_object (OTy_struct sym)) <$>
-          (PEstruct sym <$> (List.zip ids <$> E.mapM (infer_pexpr loc tagDefs env) pes))
-    | PEunion sym id pe ->
-        (* FIXME: fields in struct and union should be checked *)
-        Pexpr annot (InferredType_object (OTy_union sym)) <$>
-          (PEunion sym id <$> infer_pexpr loc tagDefs env pe)
+    | PEstruct tag_sym fields ->
+        match fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.UnionDef _ ->
+              E.fail loc (InvalidTag tag_sym)
+          | Core_ctype.StructDef xs ->
+              E.mapM (fun (ident, pe) ->
+                match List.lookup ident xs with
+                  | Nothing ->
+                      E.fail loc (InvalidMember tag_sym ident)
+                  | Just ty ->
+                      match core_object_type_of_ctype ty with
+                        | Nothing ->
+                            E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
+                                        Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                        | Just oTy ->
+                            typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
+                            E.return (ident, pe')
+                      end
+                end
+              ) fields
+        end >>= fun fields' ->
+        E.return begin
+          Pexpr annot (InferredType_object (OTy_struct tag_sym))
+            (PEstruct tag_sym fields')
+        end
+    | PEunion tag_sym ident pe ->
+        match fromJust "Core_typing.infer_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.StructDef _ ->
+              E.fail loc (InvalidTag tag_sym)
+          | Core_ctype.UnionDef xs ->
+              match List.lookup ident xs with
+                | Nothing ->
+                    E.fail loc (InvalidMember tag_sym ident)
+                | Just ty ->
+                    match core_object_type_of_ctype ty with
+                      | Nothing ->
+                          E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
+                                                       Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                      | Just oTy ->
+                          typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
+                            Pexpr annot (InferredType_object (OTy_union tag_sym)) <$>
+                              (PEunion tag_sym ident <$> typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe)
+                    end
+              end
+        end
     | PEcall nm pes ->
         match Map.lookup nm env.decls with
           | Just (TDfun ret_bTy bTys) ->
@@ -924,13 +960,49 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
           | OpOr ->
               [ (BTy_boolean, BTy_boolean, BTy_boolean) ]
         end
-    | PEstruct sym fields ->
-        guard_match loc "struct()" bTy (BTy_object (OTy_struct sym)) >>
-        let (ids, pes) = List.unzip fields in
-        PEstruct sym <$> (List.zip ids <$> E.mapM (infer_pexpr loc tagDefs env) pes)
-    | PEunion sym id pe ->
-        guard_match loc "union()" bTy (BTy_object (OTy_union sym)) >>
-        (PEunion sym id <$> infer_pexpr loc tagDefs env pe)
+    | PEstruct tag_sym fields ->
+        guard_match loc "struct()" bTy (BTy_object (OTy_struct tag_sym)) >>
+        match fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.UnionDef _ ->
+              E.fail loc (InvalidTag tag_sym)
+          | Core_ctype.StructDef xs ->
+              E.mapM (fun (ident, pe) ->
+                match List.lookup ident xs with
+                  | Nothing ->
+                      E.fail loc (InvalidMember tag_sym ident)
+                  | Just ty ->
+                      match core_object_type_of_ctype ty with
+                        | Nothing ->
+                            E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
+                                        Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                        | Just oTy ->
+                            typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
+                            E.return (ident, pe')
+                      end
+                end
+              ) fields
+        end >>= fun fields' ->
+        E.return (PEstruct tag_sym fields')
+    | PEunion tag_sym ident pe ->
+        guard_match loc "union()" bTy (BTy_object (OTy_union tag_sym)) >>
+        match fromJust "Core_typing.typecheck_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.StructDef _ ->
+              E.fail loc (InvalidTag tag_sym)
+          | Core_ctype.UnionDef xs ->
+              match List.lookup ident xs with
+                | Nothing ->
+                    E.fail loc (InvalidMember tag_sym ident)
+                | Just ty ->
+                    match core_object_type_of_ctype ty with
+                      | Nothing ->
+                          E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
+                                                       Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                      | Just oTy ->
+                          typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
+                          E.return (PEunion tag_sym ident pe')
+                    end
+              end
+        end
     | PEcall nm pes ->
         match Map.lookup nm env.decls with
           | Just (TDfun ret_bTy bTys) ->
