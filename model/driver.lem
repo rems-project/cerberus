@@ -1026,9 +1026,8 @@ let driver_globals with_concurrency sym_supply file =
   |> >>= fun tid0 ->
   
   ND.read (fun dr_st ->
-    (* reversing here, because we then do a fold_left *)
-    List.reverse (dr_st.core_file.Core.globs)
-  ) >>= fun rev_globs ->
+    dr_st.core_file.Core.globs
+  ) >>= fun globs ->
   ND.foldlM (fun to_subst (glob_sym, glob_bTy, expr) ->
     let () = Debug.print_debug 6 [Debug.DB_driver] (fun () ->      (* DEBUG *)
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
@@ -1069,7 +1068,7 @@ let driver_globals with_concurrency sym_supply file =
       | _ ->
           error "ERROR (in Driver, global init didn't evaluate to value)"
     end
-  ) [] rev_globs >>= fun _ ->
+  ) [] globs >>= fun _ ->
   ND.return tid0
 
 

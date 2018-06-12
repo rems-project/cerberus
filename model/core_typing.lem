@@ -763,7 +763,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
           | Just _ ->
               E.fail loc (CoreTyping_TODO "found a fun/proc symbolic in a PEsym")
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "unresolved PEsym")
+              E.fail loc (CoreTyping_TODO ("unresolved PEsym ==> " ^ show sym))
         end
     | PEimpl iCst ->
         match Map.lookup (Impl iCst) env.decls with
@@ -1531,10 +1531,10 @@ let typecheck_program file =
       end) file.impl >>= fun impl' ->
     
     (* Typechecking and registering of the globals *)
-    E.foldlM (fun (env, res_acc) (sym, bTy, e) ->
-      collect_labels env e >>= fun env ->
-      typecheck_expr Loc.unknown file.tagDefs env bTy e >>= fun te ->
-      E.return (insert_tdecl (Sym sym) (TDsym bTy) env, (sym, bTy, te) :: res_acc)
+    E.foldlM (fun (env_acc, res_acc) (sym, bTy, e) ->
+      collect_labels env_acc e >>= fun env_acc' ->
+      typecheck_expr Loc.unknown file.tagDefs env_acc' bTy e >>= fun te ->
+      E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, bTy, te) :: res_acc)
     ) (env, []) file.globs >>= fun (env, rev_globs') ->
     
     (* Registering the program functions *)
