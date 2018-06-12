@@ -606,11 +606,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
           annotate_definition_aux sigm gamm (ty, e) >>= fun a_e ->
-          error "XXX E.return (AilEcompound ty a_e, GenRValue)"
-          
+          E.return (AilEcompound ty a_e, GenLValueType no_qualifiers ty false)
         else
           E.fail loc (TError "AilEcompound")
-(* of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *) *)
     
     | AilEbuiltin str ->
         match Builtins.ctype_of_builtin_varname str with
