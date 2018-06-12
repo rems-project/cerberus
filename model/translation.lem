@@ -3398,8 +3398,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
 *)
 in
       E.return $ (sym, C.BTy_object C.OTy_pointer, expr) :: acc
-  ) (List.reverse globs) xs >>= fun globs' ->
-  E.return (core_tagDefs, (*List.reverse*) globs', cfuns)
+  ) globs (List.reverse xs) >>= fun globs' ->
+  E.return (core_tagDefs, globs', cfuns)
 (*
 
   E.foldlM (fun acc (fun_sym, <| A.fun_return_ty=   ret_ty;

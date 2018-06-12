@@ -769,7 +769,7 @@ let pp_file file =
     P.break 1 ^^ P.break 1 ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
-    List.fold_left pp_glob P.empty (List.rev file.globs) ^^
+    List.fold_left pp_glob P.empty file.globs ^^
     
     !^ "-- Fun map" ^^ P.break 1 ^^
     pp_fun_map file.funs
