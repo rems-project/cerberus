@@ -470,7 +470,7 @@ type annotation_context =
   | CTXother
 
 val     annotate_expression: sigma unit -> gamma -> annotation_context -> expression unit -> E.errorM (expression genTypeCategory)
-let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc expr_) =
+let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc expr_ as expr) =
   let annotate_expression = annotate_expression sigm gamm in
   let annotate_rvalue     = annotate_rvalue sigm gamm     in
   let annotate_assignee   = annotate_assignee sigm gamm   in
@@ -592,6 +592,15 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           (* TODO: maybe this is too strict and we want to relax to only having
              the types compatibles? *)
           if inject_type elem_ty <> gty then
+            let () = Debug.print_debug 0 [] (fun () ->
+              "elem_ty: " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty
+            ) in
+            let () = Debug.print_debug 0 [] (fun () ->
+              "gty: " ^ Pp.stringFromAil_genType gty
+            ) in
+            let () = Debug.print_debug 0 [] (fun () ->
+              "expr: " ^ Pp.stringFromAil_expression expr
+            ) in
             E.fail loc (TError "illtyped element of an AilEarray")
           else
             E.return (Just e')
