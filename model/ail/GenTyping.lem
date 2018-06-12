@@ -533,6 +533,21 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEunary Indirection e ->
         annotate_rvalue e >>= fun (e', gty) ->
         match gty with
+          | GenPointer ref_qs ref_ty ->
+              (* STD §6.5.3.2#4, sentence 2 *)
+              (* STD §6.5.3.2#4, sentence 3 *)
+              if AAux.is_object ref_ty then
+                (* *)
+                E.return (AilEunary Indirection e', GenLValueType ref_qs ref_ty false)
+              else
+                (* TODO: check that it's ok to drop the qualifiers *)
+                E.return (AilEunary Indirection e', GenRValueType (inject_type ref_ty))
+          | _ ->
+              (* STD §6.5.3.2#2 *)
+              E.fail loc (TError_indirection_not_pointer (*TODO: gty *))
+        end
+(* TODO: were was this code coming from, it seems completely wrong???
+        match gty with
           | GenPointer qs (Function has_proto ty params is_variadic) ->
               if AAux.is_unqualified qs
               then E.return (AilEunary Indirection e', GenRValueType (GenPointer qs (Function has_proto ty params is_variadic)))
@@ -542,7 +557,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               then E.return (AilEunary Indirection e', GenLValueType qs ty false)
               else E.fail loc (TError_TODO 19)
           | _ ->
-              E.fail loc (TError_TODO 20)
+              E.fail loc (TError_indirection_not_pointer (*TODO: gty *))
         end
 *)
     
