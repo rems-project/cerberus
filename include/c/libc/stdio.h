@@ -29,7 +29,7 @@ typedef __cerbty_fpos_t fpos_t;
 
 // Temporary hack for Toyota tests
 #define EOF          -1
-#define stdout       0
+#define stdout       (FILE*)0
 
 // TEMPORARY HACK
 // #define restrict
@@ -113,6 +113,8 @@ char *gets_s(char *s, rsize_t n);
 // TODO: return printf result
 int putchar(int c) { return printf("%c", c); }
 int puts(const char *s) { return printf("%s", s); }
+
+int fflush(FILE *stream) { return 0; }
 
 #else
 #endif
