@@ -280,8 +280,8 @@ let dtree_of_expression pp_annot expr =
       | AilEunion (tag_sym, memb_ident, e_opt) ->
           Dnode ( pp_stmt_ctor "AilEunion" ^^^ pp_id tag_sym
                 , (*add_std_annot*) [dtree_of_field (memb_ident, e_opt)] )
-      | AilEcompound (ty, e) ->
-          Dnode ( pp_stmt_ctor "AilEcompound" ^^^ P.squotes (pp_ctype empty_qs ty)
+      | AilEcompound (qs, ty, e) ->
+          Dnode ( pp_stmt_ctor "AilEcompound" ^^^ pp_qualifiers qs ^^^ P.squotes (pp_ctype empty_qs ty)
                 , (*add_std_annot*) [self e] )
       | AilEmemberof (e, ident) ->
           Dnode ( pp_stmt_ctor "AilEmemberof" ^^^ pp_cabs_id ident

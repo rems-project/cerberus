@@ -118,7 +118,7 @@ type expression_ 'a [name = "e*"] =
   
   (* NOTE: the expression obviously need to match the type, and will typically be
            a AilEarray or AilEstruct *)
-  | AilEcompound of ctype * expression 'a
+  | AilEcompound of qualifiers * ctype * expression 'a
   
   
   | AilEmemberof of expression 'a * Cabs.cabs_identifier
