@@ -544,6 +544,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           | _ ->
               E.fail loc (TError_TODO 20)
         end
+*)
     
     | AilEunary (PostfixIncr as uop) e ->
         annotate_expression CTXincr e >>= fun e' ->
@@ -571,29 +572,18 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEarray is_str elem_ty e_opts ->
         (* TODO: think about it *)
-        E.mapM (maybe (E.return Nothing) (fun z -> Just <$> annotate_rvalue z)) e_opts >>= fun xs ->
+        E.mapM (maybe (E.return Nothing) (fun e ->
+          annotate_rvalue e >>= fun (e', gty) ->
+          (* TODO: maybe this is too strict and we want to relax to only having
+             the types compatibles? *)
+          if inject_type elem_ty <> gty then
+            E.fail loc (TError "illtyped element of an AilEarray")
+          else
+            E.return (Just e')
+        )) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
-        E.return (AilEarray is_str elem_ty $ List.map (maybe Nothing (fun z -> Just (fst z))) xs,
-                  GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))))
-
-(*
-        (* TODO: I have pretty much no idea what I'm doing *)
-        E.mapM annotate_rvalue e_opts >>= fun xs ->
-        (* TODO: I guess the equality should be relaxed to compatibility *)
-        if are_all_eq (List.map snd xs) then
-          match xs with
-            | (_, (* gty *)_)::_ ->
-                (* TODO !!!! *)
-                E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray (Basic (Integer Char)) (Just (integerFromNat $ List.length xs))))
-(*
-                E.return (AilEarray $ List.map fst xs, GenRValueType (GenArray gty (Just (integerFromNat $ List.length xs))))
-*)
-            | _ ->
-                error "WIP: GenTyping.annotate_expression', AilEarray"
-          end
-        else
-          E.fail Loc.unknown (TError "TODO[msg]: failed to type an array constant")
-*)
+        E.return ( AilEarray is_str elem_ty xs
+                 , GenRValueType (GenArray elem_ty (Just (integerFromNat $ List.length xs))) )
     
     | AilEstruct tag_sym xs ->
         E.mapM (fun (ident, e_opt) ->
