@@ -614,14 +614,15 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         let () = Debug.warn [Debug.DB_ail_typing] (fun () -> "typing of union constant doesn't check the member is valid for the tag") in
         E.return (AilEunion tag_sym memb_ident a_e_opt, GenRValueType (GenUnion tag_sym))
     
-    | AilEcompound ty e ->
+    | AilEcompound qs ty e ->
         (* STD §6.5.2.5#1 *)
         E.add "§6.5.2.5#1" >>
         if    (AAux.is_complete sigm ty && AAux.is_object ty)
            || (AAux.is_array_unknown_size ty && not (AAux.is_vla ty)) then
           (* TODO: check that *)
           annotate_definition_aux sigm gamm (ty, e) >>= fun a_e ->
-          E.return (AilEcompound ty a_e, GenLValueType no_qualifiers ty false)
+          (* STD §6.5.2.5#4 *)
+          E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
         else
           E.fail loc (TError "AilEcompound")
     

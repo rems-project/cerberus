@@ -535,8 +535,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
               P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
             )
-        | AilEcompound (ty, e) ->
-            P.parens (pp_ctype no_qualifiers ty) ^^ P.braces (pp e)
+        | AilEcompound (qs, ty, e) ->
+            P.parens (pp_ctype qs ty) ^^ P.braces (pp e)
         | AilEbuiltin str ->
             !^ str
         | AilEstr lit ->
