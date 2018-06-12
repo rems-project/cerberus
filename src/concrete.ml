@@ -155,7 +155,7 @@ and sizeof = function
             if x = 0 then max_size else max_size + (max_align - x)
       end
   | Builtin0 str ->
-     failwith "TODO: sizeof Builtin"
+     failwith ("TODO: sizeof Builtin ==> " ^ str)
 
 and alignof = function
   | Void0 ->
@@ -234,7 +234,7 @@ and alignof = function
 *)
       end
   | Builtin0 str ->
-     failwith "TODO: sizeof Builtin"
+     failwith ("TODO: alignof Builtin ==> " ^ str)
 
 
 module Concrete : Memory = struct

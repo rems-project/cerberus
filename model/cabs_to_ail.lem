@@ -2153,10 +2153,19 @@ and wip_desugar_initializer_ loc dur current_ty init =
         | Nothing ->
             (mk_ty (Just (integerFromNat chars_n + 1)), do_wrap char_strs ++ [Just zeroAil])
       end in
+    let conved_chars_array =
+      List.map (function
+        | Nothing ->
+            Nothing
+        | Just z ->
+            Just (
+              AnnotatedExpression () [] loc (AilEcast AilTypes.no_qualifiers elem_ty z)
+            )
+      end) chars_array in
     (* TODO: check *)
     E.return
       ( new_ty
-      , AnnotatedExpression () [] loc (AilEarray true elem_ty chars_array))
+      , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
   
   else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
@@ -2339,11 +2348,21 @@ and wip_desugar_initializer_ loc dur current_ty init =
                     E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
               end
             ) (0, []) desigs_opt_inits >>= fun (_, xs_rev) ->
+            
+            let conved_elems =
+              List.map (function
+                | Nothing ->
+                    Nothing
+                | Just z ->
+                    Just (
+                      AnnotatedExpression () [] loc (AilEcast AilTypes.no_qualifiers elem_ty z)
+                    )
+              end) (List.reverse (Utils.replicate_list (Just implicit) (natFromInteger n - List.length xs_rev) ++ xs_rev)) in
             E.return
               ( ATypes.Array elem_ty (Just n)
               , AnnotatedExpression () [] Loc.unknown(* TODO *)
                   (* TODO: should use ConstantArray when possible *)
-                  (AilEarray false elem_ty (List.reverse (Utils.replicate_list (Just implicit) (natFromInteger n - List.length xs_rev) ++ xs_rev))) )
+                  (AilEarray false elem_ty conved_elems) )
         
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)

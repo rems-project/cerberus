@@ -110,11 +110,11 @@ module DefaultImpl: Implementation = struct
   
   let sizeof_fty = function
     | RealFloating Float ->
-        Some 4
+        Some 8 (* TODO:hack ==> 4 *)
     | RealFloating Double ->
         Some 8
     | RealFloating LongDouble ->
-        Some 16
+        Some 8 (* TODO:hack ==> 16 *)
   
   let alignof_ity = function
     | Char
@@ -154,11 +154,11 @@ module DefaultImpl: Implementation = struct
   
   let alignof_fty = function
     | RealFloating Float ->
-        Some 4
+        Some 8 (* TODO:hack ==> 4 *)
     | RealFloating Double ->
         Some 8
     | RealFloating LongDouble ->
-        Some 16
+        Some 8 (* TODO:hack ==> 16 *)
   
   
   (* INTERNAL *)
