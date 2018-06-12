@@ -201,8 +201,40 @@ let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
 
 
 
-
-
+val     translate_constant: A.constant -> C.pexpr
+let rec translate_constant cst =
+  match cst with
+    | A.ConstantIndeterminate ty ->
+        (* NOTE: we assume the lack of trap representation *)
+        Caux.mk_value_pe (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
+    | A.ConstantNull ->
+        (* TODO: should make the Ail ctor take a ctype? *)
+        Caux.mk_specified_pe (Caux.mk_nullptr_pe Cty.Void)
+    | A.ConstantInteger (A.IConstant n _ _) ->
+        (* TODO: suffix/basis? + check *)
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival n))))
+    | A.ConstantInteger (A.IConstantMax ity) ->
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.max_ival ity))))
+    | A.ConstantInteger (A.IConstantMin ity) ->
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.min_ival ity))))
+    | A.ConstantFloating (str, _) ->
+        (* TODO: suffix *)
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVfloating (Mem.str_fval str))))
+    | A.ConstantCharacter (_, str) ->
+        (* TODO: prefix? *)
+        (* TODO: making an implementation fix here (ASCII) *)
+        Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str)))))
+    | A.ConstantArray (* TODO: csts *) _ ->
+        error "WIP: Translation AilEconst, ConstantArray"
+    | A.ConstantStruct tag_sym xs ->
+        Caux.mk_specified_pe begin
+          Caux.mk_struct_pe tag_sym begin
+            List.map (fun (memb_ident, cst) -> (memb_ident, translate_constant cst)) xs
+          end
+        end
+    | A.ConstantUnion tag_sym memb_ident pe ->
+        Caux.mk_specified_pe (Caux.mk_union_pe tag_sym memb_ident (translate_constant pe))
+  end
 
 
 val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
@@ -2307,37 +2339,7 @@ TODO: #9
             )
       
       | A.AilEconst cst ->
-          E.return $ Caux.mk_pure_e (
-            C.Pexpr [] () match cst with
-              | A.ConstantIndeterminate ty ->
-                  (* NOTE: we assume the lack of trap representation *)
-                  C.PEval (C.Vloaded (C.LVunspecified (Caux.proj_ctype ty)))
-              | A.ConstantNull ->
-                  let () = Debug.print_debug 1 [] (fun () -> "HELLO ConstantNull") in
-                  (* TODO: should make the Ail ctor take a ctype? *)
-                  Caux.strip $ Caux.mk_specified_pe (Caux.mk_nullptr_pe Cty.Void)
-              | A.ConstantInteger (A.IConstant n _ _) ->
-                  (* TODO: suffix/basis? + check *)
-                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival n))))
-              | A.ConstantInteger (A.IConstantMax ity) ->
-                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.max_ival ity))))
-              | A.ConstantInteger (A.IConstantMin ity) ->
-                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.min_ival ity))))
-              | A.ConstantFloating (str, _) ->
-                  (* TODO: suffix *)
-                  C.PEval (C.Vloaded (C.LVspecified (C.OVfloating (Mem.str_fval str))))
-              | A.ConstantCharacter (_, str) ->
-                  (* TODO: prefix? *)
-                  (* TODO: making an implementation fix here (ASCII) *)
-                  C.PEval (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str)))))
-              | A.ConstantArray (* TODO: csts *) _ ->
-                  error "WIP: Translation AilEconst, ConstantArray"
-              | A.ConstantStruct (* TODO: tag_sym xs *) _ _ ->
-                  error "WIP: Translation AilEconst, ConstantStruct"
-              | A.ConstantUnion (* TODO: tag_sym xs *) _ _ _ ->
-                  error "WIP: Translation AilEconst, ConstantUnion"
-            end
-          )
+          E.return (Caux.mk_pure_e (translate_constant cst))
       
       | A.AilEbuiltin str ->
           (* TODO: the redundance with Builtins.lem is wrong *)
