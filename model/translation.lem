@@ -2319,23 +2319,31 @@ TODO: #9
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEmemberof"
           end in
-          
-          E.wrapped_fresh_symbol (*(C.BTy_object oTy)*) (C.BTy_object C.OTy_pointer) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol (if is_lvalue then C.BTy_object C.OTy_pointer else C.BTy_loaded oTy)
+             >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           self e >>= fun core_e ->
-          E.return $
-            C.Expr [C.Astd "§6.5.2.3#3, sentence 2"] (
-              C.Esseq e_sym_pat core_e (
-(*
-               (fun z ->
-                   if is_lvalue then
-                     C.Epure z
-                   else
-                     Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) z Cmm.NA) (* TODO: check MO *)
-               (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
-*)
-                Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+          
+          if not is_lvalue then
+             E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
+             E.return begin
+               Caux.mk_sseq_e e_sym_pat core_e begin
+                 Caux.mk_pure_e begin
+                   Caux.mk_case_pe e_sym_pe
+                     [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                       , Caux.mk_undef_pe (Undefined.DUMMY "Elab, rvalue AilEmemberof (unspec)") ) (* TODO: better undef *) (* TODO: check with P *)
+                     ; ( Caux.mk_specified_pat obj_sym_pat
+                       , Caux.mk_memberof_pe tag_sym ident obj_sym_pe ) ]
+                 end
+               end
+             end
+          else
+            E.return begin
+              C.Expr [C.Astd "§6.5.2.3#3, sentence 2"] (
+                C.Esseq e_sym_pat core_e (
+                  Caux.mk_pure_e (Caux.mk_member_shift_pe e_sym_pe tag_sym ident)
+                )
               )
-            )
+            end
       
       | A.AilEmemberofptr e ident ->
           (* STD §6.5.2.3 *)
@@ -3172,7 +3180,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                 E.return (
                   Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
                     (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
-                      (if AilTypesAux.is_integer ty then stdlib.mkcall_conv_loaded_int ty e_sym_pe else e_sym_pe) Cmm.NA)
+                      (if AilTypesAux.is_arithmetic ty then conv_loaded_arith stdlib (ctype_of e) ty e_sym_pe else e_sym_pe) Cmm.NA)
                 )
           end
 (*
