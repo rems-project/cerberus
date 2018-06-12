@@ -1587,11 +1587,10 @@ STD_ "§6.5.2.1#2, sentence 2" $
         AilEunary PostfixDecr <$> desugar_expression e
     | CabsEcompound tyname inits ->
         desugar_type_name tyname >>= fun (qs, ty) ->
-        (* TODO: qualifier? *) (* TODO check *)
         (* TODO: the storage duration is wrong here, if we are inside the body of a function, it should be automatic *)
         (* NOTE: there is no need to do the check for STD §6.7.9#3 here, because of the ail typing *)
         wip_desugar_initializer_ loc ATypes.Static ty (Init_list inits) >>= fun (ty', d_e) ->
-        E.return (AilEcompound ty' d_e)
+        E.return (AilEcompound qs ty' d_e)
     | CabsEpreincr e ->
 STD_ "§6.5.3.1#2, sentence 3" $
 (*
