@@ -1,4 +1,4 @@
-open import Pervasives AilTypes
+open import Pervasives AilTypes (*GenTypes*)
 import Undefined
 
 type typing_error =
@@ -10,3 +10,16 @@ type typing_error =
 
   | TError_main_return_type
   | TError_main_params of list (qualifiers * ctype * bool)
+  
+  | TError_indirection_not_pointer (* of genType *)
+
+
+let stdquote = function
+  | TError_main_return_type ->
+      Just "§5.1.2.2.1#1, 2nd sentence"
+  | TError_indirection_not_pointer (* _ *) ->
+      (* Constraint violation *)
+      Just "§6.5.3.2#2"
+  | _ ->
+      Nothing
+end
