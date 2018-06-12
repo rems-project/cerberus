@@ -172,6 +172,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         pull_helper self (PEstruct sym) xs
     | PEunion sym cid pe ->
         wrap (PEunion sym cid) pe
+    | PEmemberof tag_sym memb_ident pe ->
+        wrap (PEmemberof tag_sym memb_ident) pe
     | PEcall nm pes ->
         wrap_list (PEcall nm) pes
     | PElet pat pe1 pe2 ->
@@ -551,9 +553,6 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
           | (Civfromfloat, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Vobject (OVfloating fval)]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
-
-          | (Cfvfromtint, Just [Vloaded (LVspecified (OVinteger ival))]) ->
-              EU.return $ PEval (Vloaded (LVspecified (OVfloating (Mem.fvfromint ival))))
           | (Civcast, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Vloaded (LVspecified (OVfloating fval))]) ->
               EU.return $ PEval (Vloaded (LVspecified (OVinteger (Mem.ivfromfloat ity fval))))
           
@@ -696,6 +695,30 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                 end
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
+        end
+    | PEmemberof tag_sym memb_ident pe ->
+        self pe >>= fun pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just (Vobject (OVstruct tag_sym' xs)) ->
+              if tag_sym <> tag_sym' then
+                EU.fail $ Illformed_program ("PEmemberof(struct) ==> mismatched tags: " ^ show tag_sym ^ " vs " ^ show tag_sym')
+              else match List.lookup memb_ident xs with
+                | Nothing ->
+                    EU.fail $ Illformed_program ("PEmemberof ==> invalid member: " ^ show memb_ident)
+                | Just mval ->
+                    EU.return (PEval (snd (Caux.valueFromMemValue mval)))
+              end
+          | Just (Vobject (OVunion tag_sym' memb_ident' mval)) ->
+              if tag_sym <> tag_sym' then
+                EU.fail $ Illformed_program ("PEmemberof(union) ==> mismatched tags: " ^ show tag_sym ^ " vs " ^ show tag_sym')
+              else if memb_ident <> memb_ident' then
+                error "TODO: evaluation of PEmemberof => union puning"
+              else
+                EU.return (PEval (snd (Caux.valueFromMemValue mval)))
+          | Just cval ->
+              EU.fail $ Illformed_program ("PEmemberof ==> " ^ Pp.stringFromCore_value cval)
+          | Nothing ->
+              EU.return (PEmemberof tag_sym memb_ident pe')
         end
     | PEcall nm pes ->
         EU.mapM self pes >>= fun pes' ->

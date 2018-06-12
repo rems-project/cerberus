@@ -338,6 +338,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEstruct sym (List.map (fun (ident, pe) -> (ident, convert_pexpr pe)) ident_pes)
  | PEunion sym ident pe ->
      PEunion sym ident (convert_pexpr pe)
+ | PEmemberof tag_sym memb_ident pe ->
+     PEmemberof tag_sym memb_ident (convert_pexpr pe)
  | PEcall nm pes ->
      PEcall nm (List.map convert_pexpr pes)
  | PElet pat pe1 pe2 ->

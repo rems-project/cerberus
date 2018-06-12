@@ -232,6 +232,9 @@ let rec export_pexpr loc (Pexpr annot infer pexpr_) =
     | PEunion sym memb_ident pe ->
         PEunion sym memb_ident <$>
           export_pexpr loc pe
+    | PEmemberof tag_sym memb_ident pe ->
+        PEmemberof tag_sym memb_ident <$>
+          export_pexpr loc pe
     | PEcall nm pes ->
         PEcall nm <$> E.mapM (export_pexpr loc) pes
     | PElet pat pe1 pe2 ->

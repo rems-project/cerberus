@@ -474,6 +474,8 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         failwith "WIP: PEstruct"
     | PEunion (tag_sym, member_ident, _pe) ->
         failwith "WIP: PEunion"
+    | PEmemberof (tag_sym, member_ident, _pe) ->
+        failwith "WIP: PEmemberof"
     | PEcall (_nm, _pes) ->
         symbolify_name _nm >>= fun nm ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
