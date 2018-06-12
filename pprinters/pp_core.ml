@@ -72,6 +72,7 @@ let rec precedence = function
   | PEnot _
   | PEstruct _
   | PEunion _
+  | PEmemberof _
   | PEcall _
   | PElet _
   | PEif _
@@ -463,6 +464,12 @@ let pp_pexpr pe =
         | PEunion (tag_sym, member_ident, pe) ->
             P.parens (pp_keyword "union" ^^^ pp_symbol tag_sym) ^^ P.braces (
               P.dot ^^ Pp_cabs.pp_cabs_identifier member_ident ^^ P.equals ^^^ pp pe
+            )
+        | PEmemberof (tag_sym, memb_ident, pe) ->
+            pp_keyword "memberof" ^^ P.parens (
+              pp_symbol tag_sym ^^ P.comma ^^^
+              Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
+              pp pe
             )
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
