@@ -1552,7 +1552,9 @@ STD_ "§6.5.1#2" $
                     E.return d_e
                 | Nothing ->
                     E.fail (Loc.locOf ident)
-                      (Errors.Desugar_OtherViolation ("§6.5.1#2, Nothing, Nothing: " ^ str)) (* TODO: check the quote *)
+                      (* TODO: std §6.5.1#2 *)
+                      (* TODO: check the quote *)
+                      (Errors.Desugar_UndeclaredIdentifier (show ident))
               end
         end
     
