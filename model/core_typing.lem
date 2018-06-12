@@ -686,6 +686,27 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
                     end
               end
         end
+    | PEmemberof tag_sym memb_ident pe ->
+        let xs = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.StructDef xs ->
+              xs
+          | Core_ctype.UnionDef xs ->
+              xs
+        end in
+        match List.lookup memb_ident xs with
+          | Nothing ->
+              E.fail loc (InvalidMember tag_sym memb_ident)
+          | Just ty ->
+              match core_object_type_of_ctype ty with
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
+                                                 Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                | Just oTy ->
+                    Pexpr annot (InferredType_loaded oTy) <$>
+                       (PEmemberof tag_sym memb_ident <$>
+                         typecheck_pexpr loc tagDefs env (BTy_object (OTy_struct tag_sym)) pe)
+              end
+        end
     | PEcall nm pes ->
         match Map.lookup nm env.decls with
           | Just (TDfun ret_bTy bTys) ->
@@ -1001,6 +1022,27 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
                           typecheck_pexpr loc tagDefs env (BTy_loaded oTy) pe >>= fun pe' ->
                           E.return (PEunion tag_sym ident pe')
                     end
+              end
+        end
+    | PEmemberof tag_sym memb_ident pe ->
+        let xs = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
+          | Core_ctype.StructDef xs ->
+              xs
+          | Core_ctype.UnionDef xs ->
+              xs
+        end in
+        match List.lookup memb_ident xs with
+          | Nothing ->
+              E.fail loc (InvalidMember tag_sym memb_ident)
+          | Just ty ->
+              match core_object_type_of_ctype ty with
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
+                                                 Pp.stringFromCore_ctype ty ^ "' to a Core object type"))
+                | Just oTy ->
+                    guard_match loc "memberof()" bTy (BTy_loaded oTy) >>= fun () ->
+                    PEmemberof tag_sym memb_ident <$>
+                      typecheck_pexpr loc tagDefs env (BTy_object (OTy_struct tag_sym)) pe
               end
         end
     | PEcall nm pes ->

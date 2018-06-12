@@ -393,6 +393,10 @@ val mk_union_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
 let mk_union_pe tag_sym memb_ident pe =
   Pexpr [] () (PEunion tag_sym memb_ident pe)
 
+val mk_memberof_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
+let mk_memberof_pe tag_sym memb_ident pe =
+  Pexpr [] () (PEmemberof tag_sym memb_ident pe)
+
 val mk_value_pe: value -> pexpr
 let mk_value_pe cval =
   Pexpr [] () (PEval cval)
@@ -853,6 +857,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, subst_sym_pexpr sym cval pe)) xs)
     | PEunion tag_sym ident pe ->
         PEunion tag_sym ident (subst_sym_pexpr sym cval pe)
+    | PEmemberof tag_sym memb_ident pe ->
+        PEmemberof tag_sym memb_ident (subst_sym_pexpr sym cval pe)
     | PEcall nm pes ->
         PEcall nm (List.map (subst_sym_pexpr sym cval) pes)
     | PElet pat pe1 pe2 ->
@@ -1093,6 +1099,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEstruct tag_sym (List.map (fun (ident, pe) -> (ident, unsafe_subst_sym_pexpr sym pe' pe)) xs)
     | PEunion tag_sym ident pe ->
         PEunion tag_sym ident (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEmemberof tag_sym memb_ident pe ->
+        PEmemberof tag_sym memb_ident (unsafe_subst_sym_pexpr sym pe' pe)
     | PEcall nm pes ->
         PEcall nm (List.map (unsafe_subst_sym_pexpr sym pe') pes)
     | PElet pat pe1 pe2 ->
@@ -2055,6 +2063,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEstruct sym fields -> PEstruct sym
                       (List.mapi (fun i (cid, pe) -> (cid, self (i+1) pe)) fields)
   | PEunion sym cid pe -> PEunion sym cid (self 1 pe)
+  | PEmemberof tag_sym memb_ident pe -> PEmemberof tag_sym memb_ident (self 1 pe)
   | PEcall name pes -> PEcall name (selfs pes)
   | PElet pat pe1 pe2 -> PElet pat (self 1 pe1) (self 2 pe2)
   | PEif pe1 pe2 pe3 -> PEif (self 1 pe1) (self 2 pe2) (self 3 pe3)
