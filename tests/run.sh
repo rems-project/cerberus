@@ -3,17 +3,16 @@
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
 
-#cd $CERB_PATH/tests
-
 source tests.sh
 
 mkdir -p tmp
 
 pass=0
 fail=0
-
 JOUTPUT=""
+
 JOUTPUT_FILE="ci_results.xml"
+echo "<testsuites>" > $JOUTPUT_FILE
 
 # Arguments:
 # 1: test case name
@@ -48,36 +47,37 @@ function report {
   echo -e "Test $1: $res"
 }
 
-# Arguments:
-# 1: file name
-# 2: relative path
-function test_exec {
-  ../cerberus --exec --batch $2/$1 > tmp/result 2> tmp/stderr
-  if [ -f $2/expected/$1.expected ]; then
-    cmp --silent tmp/result $2/expected/$1.expected
-  fi
-  report $1 $?
-}
-
-# Arguments:
-# 1: file name
-# 2: relative path
-function test {
-  ../cerberus $2/$1 > tmp/result 2> tmp/stderr
-  report $1 $?
+function create_testsuite {
+  echo "<testsuite name=\"$1\" tests=\"$((pass + fail))\" failures=\"${fail}\" timestamp=\"$(date)\">" >> $JOUTPUT_FILE
+  echo -e ${JOUTPUT} >> $JOUTPUT_FILE
+  echo "</testsuite>" >> $JOUTPUT_FILE
+  pass=0
+  fail=0
+  JOUTPUT=""
 }
 
 # Running parsing tests
 for file in suite/parsing/*.c
 do
-  test $file .
+  ../cerberus $file > tmp/result 2> tmp/stderr
+  report $file $?
 done
+echo "PARSING PASSED: $pass"
+echo "CI FAILED: $fail"
+create_testsuite "parsing"
 
 # Running ci tests
 for file in "${citests[@]}"
 do
-  test_exec $file ci
+  ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
+  if [ -f ci/expected/$1.expected ]; then
+    cmp --silent tmp/result ci/expected/$file.expected
+  fi
+  report $file $?
 done
+echo "CI PASSED: $pass"
+echo "CI FAILED: $fail"
+create_testsuite "ci"
 
 # Running gcc torture
 for file in gcc-torture/breakdown/success/*.c
@@ -86,14 +86,8 @@ do
   grep -E "Specified.0.|EXIT" tmp/result > /dev/null
   report $file $?
 done
+echo "GCC-TORTURE PASSED: $pass"
+echo "GCC-TORTURE FAILED: $fail"
+create_testsuite "gcc-torture"
 
-echo "PASSED: $pass"
-echo "FAILED: $fail"
-
-# JUnit XML output (for Jenkins report)
-echo "<testsuites>" > $JOUTPUT_FILE
-echo "<testsuite name=\"ci\" tests=\"$((pass + fail))\" failures=\"${fail}\" timestamp=\"$(date)\">" >> $JOUTPUT_FILE
-echo -e ${JOUTPUT} >> $JOUTPUT_FILE
-echo "</testsuite>" >> $JOUTPUT_FILE
 echo "</testsuites>" >> $JOUTPUT_FILE
-
