@@ -82,7 +82,8 @@ create_testsuite "ci"
 # Running gcc torture
 for file in gcc-torture/breakdown/success/*.c
 do
-  ../cerberus $file --exec --batch > tmp/result 2> tmp/stderr
+  # Disable -traditional-cpp
+  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec --batch > tmp/result 2> tmp/stderr
   grep -E "Specified.0.|EXIT" tmp/result > /dev/null
   report $file $?
 done

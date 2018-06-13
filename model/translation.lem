@@ -1097,11 +1097,10 @@ else
                            (* (§6.5.7#2) if promoted2 < 0 then undef *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
                              (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
-                           
                            (* ctype_width(result_ty) <= promoted2 *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
-                              (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
+                              (Caux.mk_std_undef_pe "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                            (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.7#4, sentence 2" (
                               Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe))
@@ -1110,12 +1109,12 @@ else
 else
                            Caux.mk_std_pe "§6.5.7#4, sentence 3" $
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted1_sym_pe (Caux.mk_integer_pe 0))
-                             (Caux.mk_undef_exceptional_condition ())
+                             (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB052a_negative_left_shift)
                            (Caux.mk_let_pe (Caux.mk_sym_pat res_sym (C.BTy_object C.OTy_integer))
                              (Caux.mk_op_pe C.OpMul promoted1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe))
                            (Caux.mk_if_pe (stdlib.mkcall_is_representable res_sym_pe result_ty)
                               (Caux.mk_specified_pe res_sym_pe)
-                             (Caux.mk_undef_exceptional_condition ()))))
+                            (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
 )
                            )))) ]
                     )
