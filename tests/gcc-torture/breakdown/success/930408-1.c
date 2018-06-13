@@ -1,6 +1,6 @@
 #include "cerberus.h"
-typedef enum foo E;
 enum foo { e0, e1 };
+typedef enum foo E;
 
 struct {
   E eval;
@@ -12,7 +12,7 @@ p (void)
   abort();
 }
 
-int 
+void
 f (void)
 {
   switch (s.eval)
