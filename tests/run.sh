@@ -79,6 +79,17 @@ echo "CI PASSED: $pass"
 echo "CI FAILED: $fail"
 create_testsuite "ci"
 
+# Running TinyCC tests
+for file in tcc/*.c
+do
+  cerberus --exec $file > tmp/result 2> tmp/stderr
+  cmp --silent tmp/result ${file%.c}.expect
+  report $file $?
+done
+echo "TCC PASSED: $pass"
+echo "TCC FAILED: $fail"
+create_testsuite "tcc"
+
 # Running gcc torture
 for file in gcc-torture/breakdown/success/*.c
 do
