@@ -1,4 +1,5 @@
-#include "cerberus.h"
+#include <stdlib.h>
+#include <stdint.h>
 
 int 
 gt (int a, int b)
