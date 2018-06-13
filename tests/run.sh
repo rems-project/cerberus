@@ -79,6 +79,14 @@ do
   test_exec $file ci
 done
 
+# Running gcc torture
+for file in gcc-torture/breakdown/success/*.c
+do
+  ../cerberus $file --exec --batch > tmp/result 2> tmp/stderr
+  grep -E "Specified.0.|EXIT" tmp/result > /dev/null
+  report $file $?
+done
+
 echo "PASSED: $pass"
 echo "FAILED: $fail"
 
