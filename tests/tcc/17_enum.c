@@ -19,15 +19,16 @@ enum fred
 /* Strict ISO C doesn't allow this kind of forward declaration of
    enums, but GCC accepts it (and gives only pedantic warning), and
    it occurs in the wild.  */
-enum efoo;
-struct Sforward_use {
-    int (*fmember) (enum efoo x);
-};
+// enum efoo;
+// ISO C forbids forward references to 'enum' types
 
-extern enum efoo it_real_fn(void);
 enum efoo {
   ONE,
   TWO,
+};
+enum efoo it_real_fn(void);
+struct Sforward_use {
+    int (*fmember) (enum efoo x);
 };
 struct S2 {
   enum efoo (*f2) (void);

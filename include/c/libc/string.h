@@ -57,7 +57,7 @@ char *strcpy (char * restrict s1, const char * restrict s2)
 char *strncpy (char * restrict s1, const char * restrict s2, size_t n)
 {
   char *res = s1;
-  while ((*s1++ = *s2++) && n-- > 0);
+  while ((*s1++ = *s2++) && --n > 0);
   return (res);
 }
 
@@ -76,6 +76,13 @@ int strcmp (const char *s1, const char *s2)
   return (*s1 - *s2);
 }
 
+int strncmp(const char *s1, const char *s2, size_t n)
+{
+  while ((*s1 && *s1 == *s2) && --n > 0)
+    s1++, s2++;
+  return (*s1 - *s2);
+}
+
 size_t strlen(const char *s)
 {
   size_t len = 0;
@@ -83,6 +90,14 @@ size_t strlen(const char *s)
   return len;
 }
 
+char *strcat(char * restrict s1, const char * restrict s2)
+{
+  while(*s1++);
+  s1--;
+  while(*s2) *s1++ = *s2++;
+  *s1 = '\0';
+  return s1;
+}
 
 char *strchr(const char *s, int n)
 {
@@ -90,6 +105,18 @@ char *strchr(const char *s, int n)
   while (*s && (*s != c)) s++;
   if (*s)
     return (char*)s;
+  return NULL;
+}
+
+char *strrchr(const char *s, int n)
+{
+  char c = (char) n;
+  char *p = (char*) s;
+  while(*p++);
+  p--;
+  while ((p != (char*)s) && (*p != c)) --p;
+  if (*p == c)
+    return p;
   return NULL;
 }
 

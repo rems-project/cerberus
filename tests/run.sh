@@ -27,7 +27,7 @@ function report {
 
   #If the test is about undef
   if [[ $1 == *.undef.c ]]; then
-    cat tmp/result | grep Undefined
+    cat tmp/result | grep -E "Undefined|UNDEFINED"
     res=$?
   fi
 
@@ -82,7 +82,7 @@ create_testsuite "ci"
 # Running TinyCC tests
 for file in tcc/*.c
 do
-  cerberus --exec $file > tmp/result 2> tmp/stderr
+  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec > tmp/result 2> tmp/stderr
   cmp --silent tmp/result ${file%.c}.expect
   report $file $?
 done
