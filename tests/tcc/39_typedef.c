@@ -59,7 +59,8 @@ int set_anon_super(void)
    return 42;
 }
 typedef int sas_type (void);
-extern typeof(set_anon_super) set_anon_super;
+// typeof is not ISO
+//extern typeof(set_anon_super) set_anon_super;
 extern sas_type set_anon_super;
 
 /* vim: set expandtab ts=4 sw=3 sts=3 tw=80 :*/
