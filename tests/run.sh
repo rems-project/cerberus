@@ -40,7 +40,7 @@ function report {
     fail=$((fail+1))
     cat tmp/result tmp/stderr
     JOUTPUT+="\t<testcase name=\"$1\">\n"
-    JOUTPUT+="\t\t<error message=\"fail\">`cat tmp/result tmp/stderr`</error>\n"
+    JOUTPUT+="\t\t<error message=\"fail\">$(cat tmp/result tmp/stderr | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g')</error>\n"
     JOUTPUT+="\t</testcase>\n"
   fi
 
