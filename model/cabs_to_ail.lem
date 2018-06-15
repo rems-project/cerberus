@@ -1910,8 +1910,8 @@ and desugar_struct_declarator struct_decltor =
   match struct_decltor with
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
-    | SDecl_bitfield declor_opt e ->
-        E.fail Loc.unknown (Errors.Desugar_NotyetSupported "SDecl_bitfield")
+    | SDecl_bitfield declor_opt (CabsExpression loc _) ->
+        E.fail loc (Errors.Desugar_NotyetSupported "SDecl_bitfield")
   end
 
 and desugar_enumerator (ident, e_opt) =
