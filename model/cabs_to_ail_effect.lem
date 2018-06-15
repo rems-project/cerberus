@@ -1346,15 +1346,10 @@ let is_inside_loop: desugM bool =
 
 val perform_inside_switch: forall 'a. desugM 'a ->  desugM 'a
 let perform_inside_switch m =
-  is_inside_loop >>= function
-    | true ->
-        m
-    | false ->
-        State_exception.update (fun st -> <| st with switch_depth= st.switch_depth + 1 |>) >>
-        m >>= fun ret ->
-        State_exception.update (fun st -> <| st with switch_depth= st.switch_depth - 1 |>) >>
-        return ret
-  end
+  State_exception.update (fun st -> <| st with switch_depth= st.switch_depth + 1 |>) >>
+  m >>= fun ret ->
+  State_exception.update (fun st -> <| st with switch_depth= st.switch_depth - 1 |>) >>
+  return ret
 
 
 val perform_inside_loop: forall 'a. desugM 'a -> desugM 'a
