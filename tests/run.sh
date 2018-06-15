@@ -27,7 +27,14 @@ function report {
 
   #If the test is about undef
   if [[ $1 == *.undef.c ]]; then
-    cat tmp/result | grep -E "Undefined|UNDEFINED"
+    cat tmp/result tmp/stderr | grep -E "Undefined|UNDEFINED"
+    res=$?
+  fi
+
+  # If the test is about something currently not supported
+  # This can still test the parser
+  if [[ $1 == *.unsup.c ]]; then
+    cat tmp/result tmp/stderr | grep "feature not yet supported"
     res=$?
   fi
 
