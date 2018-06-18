@@ -36,4 +36,4 @@ true: warn(+8)
 # <src/main_.native>: coverage
 
 
-<src/main_.native> : link_cstubs
+<src/*.native> : link_cstubs
