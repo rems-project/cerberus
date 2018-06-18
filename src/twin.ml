@@ -338,6 +338,7 @@ module Twin : Memory = struct
     allocations: allocation IntMap.t;
     next_address: address;
     next_twin_address: address;
+    create_twin_alloc: bool;
     bytemap: (provenance * char option) IntMap.t;
   }
   
@@ -346,6 +347,7 @@ module Twin : Memory = struct
     next_alloc_id= Nat_big_num.zero;
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
+    create_twin_alloc= true;
     next_twin_address= max_address;
     bytemap= IntMap.empty;
   }
@@ -736,7 +738,7 @@ module Twin : Memory = struct
     in
     let addr = N.add st.next_address (delta st.next_address) in
     let twin_addr = N.add st.next_twin_address (delta st.next_twin_address) in
-    let create_alloc addr =
+    let add_alloc create_twin_alloc_flag addr =
       let (is_readonly, bytemap) =
         match init_opt with
         | None -> (false, st.bytemap)
@@ -755,13 +757,17 @@ module Twin : Memory = struct
                 st.allocations;
             next_address= N.add addr size;
             next_twin_address= N.add twin_addr size;
+            create_twin_alloc= create_twin_alloc_flag;
             bytemap= bytemap;
           } >>= fun () ->
       return (PV (Prov_some alloc_id, PVconcrete addr))
     in
-    Eff.msum "twin allocation"
-      [ ("twin", create_alloc twin_addr);
-        ("original", create_alloc addr) ]
+    if st.create_twin_alloc then
+      Eff.msum "twin allocation"
+        [ ("twin", add_alloc true twin_addr);
+          ("original", add_alloc false addr) ]
+    else
+      add_alloc false addr
 
   let allocate_static _ _ (IV align) ty init_opt : pointer_value memM =
     let size = N.of_int (sizeof ty) in
