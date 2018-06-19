@@ -338,8 +338,9 @@ module Twin : Memory = struct
     allocations: allocation IntMap.t;
     next_address: address;
     next_twin_address: address;
-    create_twin_alloc: bool;
-    bytemap: (provenance * char option) IntMap.t;
+    twin_alloc_flag: bool;
+    bytemap: ((provenance * mem_value option) * char option) IntMap.t;
+    (* the mem_value is the original memory value written in that region *)
   }
   
   let max_address = Nat_big_num.of_int 2147483648
@@ -347,7 +348,7 @@ module Twin : Memory = struct
     next_alloc_id= Nat_big_num.zero;
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
-    create_twin_alloc= true;
+    twin_alloc_flag= true;
     next_twin_address= max_address;
     bytemap= IntMap.empty;
   }
@@ -442,7 +443,7 @@ module Twin : Memory = struct
     if !Debug_ocaml.debug_level > 4 then begin
       Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
       get >>= fun st ->
-      IntMap.iter (fun addr (prov, c_opt) ->
+      IntMap.iter (fun addr ((prov, _), c_opt) ->
         Printf.fprintf stderr "@%s ==> %s: %s\n"
           (N.to_string addr)
           (string_of_provenance prov)
@@ -483,7 +484,7 @@ module Twin : Memory = struct
           | Some b ->
               b
           | None ->
-              (Prov_none, None)
+              ((Prov_none, None), None)
       ) (List.init n_bytes (fun z ->
            (* NOTE: the reversal in the offset is to model
               little-endianness *)
@@ -534,8 +535,14 @@ module Twin : Memory = struct
         failwith "combine_provenances ==> empty"
     | prov::xs ->
         if List.for_all (fun z -> z = prov) xs then prov else Prov_none
+
+  let combine_values = function
+    | [] ->
+        failwith "combine_values ==> empty"
+    | mval::xs ->
+        if List.for_all (fun z -> z = mval) xs then Some mval else None
   
-  let rec combine_bytes ty (bs : (provenance * char option) list) =
+  let rec combine_bytes ty (bs : ((provenance * mem_value option) * char option) list) =
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -553,8 +560,8 @@ module Twin : Memory = struct
           assert false
       | Basic0 (Integer ity) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-          let (provs, bs1') = List.split bs1 in
-          (begin match extract_unspec bs1' with
+          let (meta, bs1') = List.split bs1 in
+          return (begin match extract_unspec bs1' with
             | Some cs ->
                 MVinteger ( ity
                           , IV (int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
@@ -565,7 +572,7 @@ module Twin : Memory = struct
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           (* we don't care about provenances for floats *)
           let bs1' = List.map snd bs1 in
-          (begin match extract_unspec bs1' with
+          return (begin match extract_unspec bs1' with
             | Some cs ->
                 MVfloating ( fty
                            , Int64.float_of_bits (N.to_int64 (int64_of_bytes true cs)) )
@@ -575,29 +582,50 @@ module Twin : Memory = struct
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
             if n < 0 then
-              (MVarray acc, cs)
+              return (MVarray acc, cs)
             else
-              let (mval, cs') = combine_bytes elem_ty cs in
+              combine_bytes elem_ty cs >>= fun (mval, cs') ->
+              (*let (mval, cs') = combine_bytes elem_ty cs in *)
               aux (n-1) (mval :: acc) cs'
           in
           aux (Nat_big_num.to_int n) [] bs
       | Pointer0 (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
-          let (provs, bs1') = List.split bs1 in
+          let (meta, bs1') = List.split bs1 in
+          let (provs, mvals) = List.split meta in
           let prov = combine_provenances provs in
-          (begin match extract_unspec bs1' with
+          let mval = combine_values mvals in
+          begin match extract_unspec bs1' with
             | Some cs ->
                 let n = int64_of_bytes false cs in
-                MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                let pvb = if N.equal n N.zero then PVnull ref_ty else PVconcrete n in
+                begin match mval with
+                  | Some _ ->
+                    return (MVpointer (ref_ty, PV (prov, pvb)), bs2)
+                  | None ->
+                    get >>= fun st ->
+                    let filtered_allocs = IntMap.filter (fun alloc_id alloc ->
+                        N.less_equal alloc.base n && N.less_equal n (N.add alloc.base alloc.size)
+                      ) st.allocations in
+                    let prov' = match IntMap.bindings filtered_allocs with
+                      | [] -> Prov_none
+                      | [(i1, _)] -> Prov_some i1
+                      | [(i1, _); (i2, _)] -> Prov_double (i1, i2)
+                      | _ -> failwith "combine_types prov error"
+                    in
+                    return (MVpointer (ref_ty, PV (prov', pvb)), bs2)
+                end
             | None ->
-                MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
-           end, bs2)
+                return (MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty)), bs2)
+          end
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           combine_bytes atom_ty bs
       | Struct0 tag_sym ->
+        (*
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
+           *)
 (*
           print_string "COMBINE: ";
           List.iter (fun (_, c_opt) ->
@@ -607,6 +635,8 @@ module Twin : Memory = struct
           ) bs1;
           print_newline ();
 *)
+          failwith "TODO: combine_bytes, Struct (as value)"
+          (*
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
@@ -614,7 +644,7 @@ module Twin : Memory = struct
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
-          (MVstruct (tag_sym, List.rev rev_xs), bs2)
+          (MVstruct (tag_sym, List.rev rev_xs), bs2)*)
       | Union0 tag_sym ->
           failwith "TODO: combine_bytes, Union (as value)"
       | Builtin0 str ->
@@ -665,18 +695,18 @@ module Twin : Memory = struct
           Union0 tag_sym
   
   (* INTERNAL explode_bytes *)
-  let rec explode_bytes mval : (provenance * char option) list =
+  let rec explode_bytes mval : ((provenance * mem_value option) * char option) list =
     match mval with
       | MVunspecified ty ->
-          List.init (sizeof ty) (fun _ -> (Prov_none, None))
+          List.init (sizeof ty) (fun _ -> ((Prov_none, Some mval), None))
       | MVinteger (ity, IV n) ->
-          List.map (fun z -> (Prov_none, z)) begin
+          List.map (fun z -> ((Prov_none, Some mval), z)) begin
             bytes_of_int64
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
           end
       | MVfloating (fty, fval) ->
-          List.map (fun z -> (Prov_none, z)) begin
+          List.map (fun z -> ((Prov_none, Some mval), z)) begin
             bytes_of_int64
               true (* TODO: check that *)
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
@@ -691,11 +721,11 @@ module Twin : Memory = struct
           begin match ptrval_ with
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
-                List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
+                List.init ptr_size (fun _ -> ((Prov_none, Some mval), Some '\000'))
             | PVfunction _ ->
                 failwith "TODO: explode_bytes, PVfunction"
             | PVconcrete addr ->
-                List.map (fun z -> (prov, z)) begin
+                List.map (fun z -> ((prov, Some mval), z)) begin
                   bytes_of_int64
                     false (* we model address as unsigned *)
                     ptr_size addr
@@ -715,15 +745,15 @@ module Twin : Memory = struct
               let pad = off - last_off in
               ( off + sizeof ty
               , acc @
-                List.init pad (fun _ -> (Prov_none, None)) @
+                List.init pad (fun _ -> ((Prov_none, Some mval), None)) @
                 explode_bytes mval )
             ) (0, []) offs xs
           end @
-          List.init final_pad (fun _ -> (Prov_none, None))
+          List.init final_pad (fun _ -> ((Prov_none, Some mval), None))
       | MVunion (tag_sym, memb_ident, mval) ->
           let size = sizeof (Core_ctype.Union0 tag_sym) in
           let bs = explode_bytes mval in
-          bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
+          bs @ List.init (size - List.length bs) (fun _ -> ((Prov_none, Some mval), None))
 
   let allocate align size ty init_opt : pointer_value memM =
     Debug_ocaml.warn [] (fun () ->
@@ -738,7 +768,7 @@ module Twin : Memory = struct
     in
     let addr = N.add st.next_address (delta st.next_address) in
     let twin_addr = N.add st.next_twin_address (delta st.next_twin_address) in
-    let add_alloc create_twin_alloc_flag addr =
+    let add_alloc twin_alloc_flag_flag addr =
       let (is_readonly, bytemap) =
         match init_opt with
         | None -> (false, st.bytemap)
@@ -757,12 +787,12 @@ module Twin : Memory = struct
                 st.allocations;
             next_address= N.add addr size;
             next_twin_address= N.add twin_addr size;
-            create_twin_alloc= create_twin_alloc_flag;
+            twin_alloc_flag= twin_alloc_flag_flag;
             bytemap= bytemap;
           } >>= fun () ->
       return (PV (Prov_some alloc_id, PVconcrete addr))
     in
-    if st.create_twin_alloc then
+    if st.twin_alloc_flag then
       Eff.msum "twin allocation"
         [ ("twin", add_alloc true twin_addr);
           ("original", add_alloc false addr) ]
@@ -813,9 +843,28 @@ module Twin : Memory = struct
     let do_load addr =
       get >>= fun st ->
       fetch_bytes addr (sizeof ty) >>= fun bs ->
-      let (mval, bs') = combine_bytes ty bs in
+      combine_bytes ty bs >>= fun (mval, bs') ->
+      (*let (mval, bs') = combine_bytes ty bs in*)
       match bs' with
-        | [] -> return (Footprint, mval)
+        | [] ->
+            (*
+          begin match mval with
+          | MVpointer (cty, PV (Prov_none, PVconcrete addr)) ->
+            let get_prov =
+              get >>= fun st ->
+              let filtered_allocs = IntMap.filter (fun alloc_id alloc ->
+                  N.less_equal alloc.base addr && N.less_equal addr (N.add alloc.base alloc.size)
+                ) st.allocations in
+              match IntMap.bindings filtered_allocs with
+              | [] -> return (PV (Prov_none, PVconcrete addr))
+              | [(i1, _)] -> return (PV (Prov_some i1, PVconcrete addr))
+              | [(i1, _); (i2, _)] -> return (PV (Prov_double (i1, i2), PVconcrete addr))
+              | _ -> fail (MerrOther "Fatal error: casting integer to pointer with multiple possible allocation ids")
+            in
+            get_prov >>= fun pv -> return (Footprint, MVpointer (cty, pv))
+          | _ -> *)
+            return (Footprint, mval)
+          (*end*)
         | _ -> fail (MerrWIP "load, bs' <> []")
     in
     match (prov, ptrval_) with
@@ -1361,7 +1410,7 @@ module Twin : Memory = struct
       ("size", Json.of_bigint alloc.size);
     ]
 
-  let serialise_byte (p, c_opt) =
+  let serialise_byte ((p, _), c_opt) =
     let serialise_char c = `Int (Char.code c) in
     `Assoc[
       ("prov", serialise_prov p);
