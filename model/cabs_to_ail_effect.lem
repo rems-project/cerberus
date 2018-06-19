@@ -814,7 +814,7 @@ let register_ordinary_identifier ident kind storage_classes =
             do_fresh
       end
     else if Kind_ordinary kind <> kind' then
-      error "TODO: Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'"
+      fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "TODO: Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'")
     else if Just link <> link_opt' then
       (* STD §6.2.2#7 *)
       fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
