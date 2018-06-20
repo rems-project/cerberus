@@ -21,6 +21,8 @@ instance (Show core_run_error)
         "Unknown_impl"
     | Unresolved_symbol sym ->
         "Unresolved_symbol[" ^ show sym ^ "]"
+    | CoreRun_other str ->
+        "Other[" ^ str ^ "]"
   end
 end
 
@@ -340,6 +342,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEunion sym ident (convert_pexpr pe)
  | PEmemberof tag_sym memb_ident pe ->
      PEmemberof tag_sym memb_ident (convert_pexpr pe)
+ | PEarray_elem pe1 pe2 ->
+     PEarray_elem (convert_pexpr pe1) (convert_pexpr pe2)
  | PEcall nm pes ->
      PEcall nm (List.map convert_pexpr pes)
  | PElet pat pe1 pe2 ->

@@ -174,6 +174,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         wrap (PEunion sym cid) pe
     | PEmemberof tag_sym memb_ident pe ->
         wrap (PEmemberof tag_sym memb_ident) pe
+    | PEarray_elem pe1 pe2 ->
+        wrap_bin PEarray_elem pe1 pe2
     | PEcall nm pes ->
         wrap_list (PEcall nm) pes
     | PElet pat pe1 pe2 ->
@@ -719,6 +721,30 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.fail $ Illformed_program ("PEmemberof ==> " ^ Pp.stringFromCore_value cval)
           | Nothing ->
               EU.return (PEmemberof tag_sym memb_ident pe')
+        end
+    | PEarray_elem pe1 pe2 ->
+        self pe1 >>= fun pe1' ->
+        self pe2 >>= fun pe2' ->
+        match (Caux.valueFromPexpr pe1', Caux.valueFromPexpr pe2') with
+          | (Just (Vobject (OVarray lvals)), Just (Vobject (OVinteger ival))) ->
+              Mem.case_integer_value ival
+                begin fun n ->
+                  (* TODO: what if n is too large *)
+                  match List.index lvals (natFromInteger n) with
+                    | Nothing ->
+                        (* out of bound access *)
+                        Exception.return (Undefined.undef loc [Undefined.DUMMY "TODO: out of bound rvalue array access"])
+                    | Just lval ->
+                        EU.return (PEval (Vloaded lval))
+                  end
+                end
+                begin fun () ->
+                  EU.fail (CoreRun_other "PEarray_elem with a symbolic index integer value")
+                end
+          | (Just _, Just _) ->
+              EU.fail (Illformed_program "PEarray_elem")
+          | _ ->
+              EU.return (PEarray_elem pe1' pe2')
         end
     | PEcall nm pes ->
         EU.mapM self pes >>= fun pes' ->

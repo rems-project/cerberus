@@ -52,6 +52,7 @@ type core_run_error =
   | Reached_end_of_proc
   | Unknown_impl
   | Unresolved_symbol of Symbol.sym (* found an unresolved symbolic name in core_eval *)
+  | CoreRun_other of string
 
 
 

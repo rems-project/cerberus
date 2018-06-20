@@ -1151,10 +1151,10 @@ let ~{coq} make_composite_params params1 params2 =
 
 
 (* following (§6.3.2.1)#3 *)
-val array_coercion: ctype -> ctype
-let array_coercion = function
+val array_coercion: qualifiers -> ctype -> ctype
+let array_coercion qs = function
   | Array elem_ty _ ->
-      Pointer no_qualifiers elem_ty
+      Pointer qs elem_ty
   | ty ->
       ty
 end
@@ -1173,21 +1173,25 @@ val lvalue_convertible: forall 'a. sigma 'a -> ctype -> bool
 let lvalue_convertible S ty =
   not (is_array ty) && is_complete S ty
 
+(*
 (* following (§6.3.2.1)#2 and #3 *)
 val lvalue_coercion: forall 'a. sigma 'a -> ctype -> errorM ctype
 let lvalue_coercion S ty =
   if lvalue_convertible S ty then
     return ty
   else if is_array ty then
-    return (array_coercion ty)
+    (* TODO: no sure about the qualifiers *)
+    return (array_coercion no_qualifiers ty)
   else
     fail Loc.unknown (TError_lvalue_coercion ty)
+*)
 
 (* following (§6.3.2.1)#3 and #4 *)
 val rvalue_coercion: ctype -> ctype
 let rvalue_coercion ty =
   if is_array ty then
-    array_coercion ty
+    (* TODO: not sure about the qualifiers *)
+    array_coercion no_qualifiers ty
   else if is_function ty then
     function_coercion ty
   else

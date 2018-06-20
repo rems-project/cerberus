@@ -78,8 +78,8 @@ let rec core_type_of_expr_ctype ty =
 
 
 let force_core_object_type_of_ctype = function
-  | (*BISECT-IGNORE*) Cty.Pointer _ (Cty.Function (_, ret_ty) xs isVariadic) ->
-      error "Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype"
+  | (*BISECT-IGNORE*) (Cty.Pointer _ (Cty.Function (_, ret_ty) xs isVariadic) as ty) ->
+      error ("Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype ==> " ^ Pp.stringFromCore_ctype ty)
   | ty ->
       match Caux.core_object_type_of_ctype ty with
         | Just oTy ->
@@ -2240,7 +2240,7 @@ TODO: #9
                             stdlib.mkcall_conv_loaded_int memb_ty e_sym_pe
                           else
                             e_sym_pe ) :: acc ,
-                        fun z -> Caux.mk_sseq_e e_sym_pat core_e (mk_core z)
+                        fun z -> Caux.mk_wseq_e e_sym_pat core_e (mk_core z)
                       )
                   end
               | Nothing ->
@@ -2325,7 +2325,7 @@ TODO: #9
           if not is_lvalue then
              E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
              E.return begin
-               Caux.mk_sseq_e e_sym_pat core_e begin
+               Caux.mk_wseq_e e_sym_pat core_e begin
                  Caux.mk_pure_e begin
                    Caux.mk_case_pe e_sym_pe
                      [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
@@ -2537,7 +2537,24 @@ a
                   )
                 )
             | GenTypes.GenRValueType _ ->
-                error "TODO: AilEarray_decay, rvalue"
+                error "TODO: AilEarray_decay (rvalue)"
+(*
+                let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+                self e >>= fun core_e ->
+                E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat  , e_sym_pe  ) ->
+                E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat, obj_sym_pe) ->
+                E.return begin
+                  Caux.mk_wseq_e e_sym_pat core_e begin
+                    Caux.mk_pure_e begin
+                      Caux.mk_case_pe e_sym_pe
+                        [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
+                          , Caux.mk_undef_pe (Undefined.DUMMY "Elab, rvalue AilEarray_decay (unspec)") ) (* TODO: better undef *) (* TODO: check with P *)
+                        ; ( Caux.mk_specified_pat obj_sym_pat
+                          , Caux.mk_array_elem_pe tag_sym ident obj_sym_pe ) ]
+                    end
+                  end
+                end
+*)
           end
       | A.AilEfunction_decay e ->
 (*

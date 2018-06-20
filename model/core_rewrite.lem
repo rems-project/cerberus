@@ -719,6 +719,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEunion sym ident (remove_conv_int_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         PEmemberof tag_sym memb_ident (remove_conv_int_pexpr pe)
+    | PEarray_elem pe1 pe2 ->
+        PEarray_elem (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
     | PEcall nm pes ->
         let pes' = List.map remove_conv_int_pexpr pes in
         match (nm, pes') with
@@ -1029,6 +1031,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe
     | PEmemberof _ _ pe ->
         isAlwaysDefined pe
+    | PEarray_elem pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
     | PEcall _ pes ->
         (* the called function may raise an undef/error *)
         false (* List.all isAlwaysDefined pes *)
@@ -1298,6 +1302,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEunion sym ident (simpl_case_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         wrap $ PEmemberof tag_sym memb_ident (simpl_case_pexpr pe)
+    | PEarray_elem pe1 pe2 ->
+        wrap $ PEarray_elem (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
     | PEcall nm pes ->
         wrap $ PEcall nm (List.map simpl_case_pexpr pes)
     | PElet pat pe1 pe2 ->

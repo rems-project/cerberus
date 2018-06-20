@@ -280,6 +280,8 @@ let string_of_core_run_error = function
       "unknown implementation constant"
   | Unresolved_symbol sym ->
       "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
+  | CoreRun_other str ->
+      "(other): " ^ str
 
 
 let short_message = function

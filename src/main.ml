@@ -432,8 +432,7 @@ let impl =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  (* TODO: use to be "gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime" *)
-  Arg.(value & opt string ("cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
+  Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__ -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let exec =
@@ -511,8 +510,28 @@ let args =
   let doc = "List of arguments for the C program" in
   Arg.(value & opt (list string) [] & info ["args"] ~docv:"ARG1,..." ~doc)
 
+(*
+external round_double_to_float32: float -> float = "round_double_to_float32"
+external bits_of_float32: float -> Int64.t = "bits_of_float32"
+external terminal_size: unit -> (int * int) option = "terminal_size"
+*)
+
 (* entry point *)
 let () =
+(*
+  match terminal_size () with
+    | Some (row, col) ->
+        Printf.printf "==> %d %d\n" row col
+    | None ->
+        print_endline "None"
+*)
+(*
+  Printf.printf "double => 0x%.16Lx\n" (Int64.bits_of_float 1.0);
+  let f' = round_double_to_float32 1.0 in
+  Printf.printf "float  => %f\n" f';
+  Printf.printf "float  => 0x%.16Lx\n" (bits_of_float32 f');
+  
+*)
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise

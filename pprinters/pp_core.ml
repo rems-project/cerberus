@@ -73,6 +73,7 @@ let rec precedence = function
   | PEstruct _
   | PEunion _
   | PEmemberof _
+  | PEarray_elem _
   | PEcall _
   | PElet _
   | PEif _
@@ -470,6 +471,10 @@ let pp_pexpr pe =
               pp_symbol tag_sym ^^ P.comma ^^^
               Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
               pp pe
+            )
+        | PEarray_elem (pe1, pe2) ->
+            pp_keyword "array_elem" ^^ P.parens (
+              pp pe1 ^^ P.comma ^^^ pp pe2
             )
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)

@@ -380,8 +380,11 @@ module Concrete : Memory = struct
           !^ (Nat_big_num.to_string n)
 *)
   
-  let pp_integer_value (IV (_, n)) =
-        !^ (Nat_big_num.to_string n)
+  let pp_integer_value (IV (prov, n)) =
+    if !Debug_ocaml.debug_level > 0 then
+      !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+    else
+      !^ (Nat_big_num.to_string n)
     
   let pp_integer_value_for_core = pp_integer_value
     
@@ -1042,16 +1045,20 @@ module Concrete : Memory = struct
           fail MerrPtrdiff
   
   
-  let validForDeref_ptrval = function
-    | PV (_, PVnull _)
-    | PV (_, PVfunction _) ->
-        false
-    | PV (Prov_device, PVconcrete _) ->
-        true
-    | PV (Prov_some _, PVconcrete _) ->
-        true
-    | PV (Prov_none, _) ->
-        false
+  let validForDeref_ptrval ptrval =
+    Debug_ocaml.print_debug 3 [] (fun () ->
+      "ENTERING validForDeref: " ^ Pp_utils.to_plain_string (pp_pointer_value ptrval)
+    );
+    match ptrval with
+      | PV (_, PVnull _)
+      | PV (_, PVfunction _) ->
+          false
+      | PV (Prov_device, PVconcrete _) ->
+          true
+      | PV (Prov_some _, PVconcrete _) ->
+          true
+      | PV (Prov_none, _) ->
+          false
   
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
@@ -1243,7 +1250,14 @@ let combine_prov prov1 prov2 =
 *)
 
 
-  let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
+  let op_ival iop (IV (prov1, n1) as ival1) (IV (prov2, n2) as ival2) =
+    Debug_ocaml.print_debug 3 [] (fun () ->
+      "OP_IVAL: " ^ Pp_utils.to_plain_string (pp_integer_value ival1) ^
+      " <-> " ^ Pp_utils.to_plain_string (pp_integer_value ival2)
+    );
+    Debug_ocaml.print_debug 3 [] (fun () ->
+      "COMBINE_PROV: " ^ Pp_utils.to_plain_string (pp_integer_value (IV (combine_prov prov1 prov2, Nat_big_num.zero)))
+    );
     IV (combine_prov prov1 prov2, begin match iop with
       | IntAdd ->
           Nat_big_num.add

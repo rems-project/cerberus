@@ -1061,8 +1061,8 @@ let rec desugar_type_specifiers specs =
                     E.return (ATypes.no_qualifiers, ty)
                 | Nothing ->
                     (* TODO: check the namespace *)
-                    E.resolve_identifier ident E.Namespace_ordinary >>= function
-                      | Just (_, (sym, E.Kind_typedef, _)) ->
+                    E.resolve_ordinary_identifier loc ident >>= function
+                      | Just (_, E.OReg_typedef sym) ->
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
                       | Just _ ->
@@ -1278,8 +1278,8 @@ and desugar_direct_abstract_declarator under_array = function
       (* TODO: documentation (the code the same as for desugar_direct_declarator, DDecl_function *)
       maybe (E.return (fun qs ty -> (qs, ty)))
         (desugar_direct_abstract_declarator under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
-      E.with_scope E.Scope_prototype
-        (desugar_parameter_type_list NotFunDef param_tys) >>= fun (_, (params, isVariadic)) ->
+      E.under_scope E.Scope_prototype
+        (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params, isVariadic) ->
       match params with
         | [(Nothing, (qs, ATypes.Void, _))] ->
             if not (AilTypesAux.is_unqualified qs) then
@@ -1333,9 +1333,8 @@ and desugar_direct_declarator fundef under_array = function
         | IsFunDef ->
             desugar_parameter_type_list fundef param_tys
         | NotFunDef ->
-            E.with_scope E.Scope_prototype
-              (desugar_parameter_type_list fundef param_tys) >>= fun (_, ret) ->
-            E.return ret
+            E.under_scope E.Scope_prototype
+              (desugar_parameter_type_list fundef param_tys)
       end >>= fun (_params, isVariadic) ->
       
       let params =
@@ -1523,9 +1522,11 @@ and desugar_expression (CabsExpression loc expr) =
         E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
 STD_ "§6.5.1#2" $
         E.resolve_ordinary_identifier loc ident >>= function
-          | Just (_, Left enum_cst_sym) ->
-              E.resolve_enum_constant enum_cst_sym
-          | Just (_, Right (sym, kind, _)) ->
+          | Just (_, E.OReg_enum_constant sym) ->
+              E.resolve_enum_constant sym
+          | Just (_, E.OReg_typedef _) ->
+              E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+          | Just (_, E.OReg_other sym kind _) ->
               (* I love the fact that it is a footnote that says that undeclared
                  identifiers are syntax errors ... *)
               if not (E.is_object_kind kind || kind = E.OK_function) then
@@ -2173,7 +2174,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
-    let () = Debug.print_debug 0 [] (fun () ->
+    let () = Debug.print_debug 1 [] (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
     ) in
 (*
@@ -2597,8 +2598,14 @@ let desugar_declaration_base specifs idecltors =
                       ) [] (Map_extra.toList ident_tagDefs);
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
-                  E.register_internal_object_declaration ident_loc sym
-                    (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                  match link with
+                    | Linkage_external ->
+                        E.register_external_object_declaration ident_loc sym
+                          (false(*TODO:check*), dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                    | _ ->
+                        E.register_internal_object_declaration ident_loc sym
+                          (dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                  end >>
                   mk_desug_init () >>= function
                     | Just (ty', d_e) ->
                         let () = Debug.print_debug 1 [] (fun () ->
@@ -2617,7 +2624,15 @@ let desugar_declaration_base specifs idecltors =
                         else
                           E.return ()
                         end >>
-                        E.return (ty', (sym, d_e) :: acc)
+                        match dur with
+                          | ATypes.Static ->
+                              E.register_global_object_definition sym d_e >>
+                              E.return (ty', acc)
+                          | ATypes.Thread ->
+                              error "TODO: desugar_declaration_base, Thread duration"
+                          | _ ->
+                              E.return (ty', (sym, d_e) :: acc)
+                        end
                     | Nothing ->
                         E.return (ty, acc)
                   end >>= fun (ty', ret) ->
@@ -2659,9 +2674,19 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
           E.fresh_block_scope >>= fun scope ->
-          E.with_scope scope (
+          E.collect_with_scope scope (
             E.mapM desugar_statement ss
           ) >>= fun (bs, d_ss) ->
+          
+          let bs = List.filter (fun (_, ((dur, _), _, _)) ->
+            match dur with
+              | ATypes.Static ->
+                  false
+              | ATypes.Thread ->
+                  false
+              | _ ->
+                  true
+            end) bs in
           
           (* this is removing unnecessary blocks introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
@@ -2725,7 +2750,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
           (* TODO: this is not really a block scope (...) *)
           E.fresh_block_scope >>= fun scope ->
-          E.with_scope scope (
+          E.under_scope scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
@@ -2804,8 +2829,7 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                   AnnotatedStatement Loc.unknown (AilSdeclaration sym_d_es);
                   AnnotatedStatement Loc.unknown (AilSwhile d_e2 d_s_body)
                 ]
-          ) >>= fun (_, ret) ->
-          E.return ret
+          )
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
           (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
@@ -2971,17 +2995,26 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
       desugar_declarator IsFunDef decltor
     end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
     
+    (* NOTE: as per §6.9.1#2, we perform a dummy instanciation of the type
+       **specified by the declarator portion of the function definition**, which
+       here means `ddecltor' without `specifs' *)
+    match mk_qs_ctype ATypes.no_qualifiers ATypes.Void with
+      | (_, ATypes.Function _ _ _ _) ->
+          E.return ()
+      | _ ->
+          (* STD §6.9.1#2 *)
+          E.fail fundef_loc (Errors.Desugar_ConstraintViolation "§6.9.1#2")
+    end >>
+    
     E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (_, fun_sym) ->
     
-    (E.void -| E.with_scope E.Scope_function) begin
+    E.under_scope E.Scope_function begin
       register_labels stmt >>
       
       E.fresh_block_scope >>= fun funblock_scope ->
-      E.with_scope funblock_scope begin
+      E.under_scope funblock_scope begin
           (* TODO: this is a horrible hack, DO BETTER *)
           E.hack_inject_idents_map idents_map >>
-
-
 (*        desugar_declarator (IsFunDef specifs) decltor >>= fun (fun_ident, mk_qs_ctype) -> *)
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, specs_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
@@ -3014,10 +3047,10 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               desugar_statement stmt >>= fun d_stmt ->
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
-            (* STD §6.9.1#2 *)
-            E.fail fundef_loc (Errors.Desugar_ConstraintViolation "§6.9.1#2")
+            (* This should not be possible due to the earlier check *)
+            error "Cabs_to_ail.desugar_and_register_function_definition, internal error"
         end
-      end >>= fun (_, (loc, fun_sym, d_stmt)) ->
+      end >>= fun (loc, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
@@ -3126,14 +3159,21 @@ let desugar_and_register_external_declaration edecl =
                           if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
                             E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
                           else
-                            (* TODO: use ty' *)
-                            (* STD §6.9#3, first sentence *)
-                            E.external_object_is_defined sym >>= function
+                            E.global_object_is_defined sym >>= function
                               | true ->
-                                  E.fail (*TODO*)Loc.unknown (Errors.Desugar_ExternalObjectRedefinition sym)
+                                  match link with
+                                    | Linkage_internal ->
+                                        (* STD §6.9#3, sentence 1 *)
+                                        E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9#3, sentence 1")
+                                    | Linkage_external ->
+                                        (* STD §6.9#5, sentence 2 *)
+                                        E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB084)
+                                    | Linkage_none ->
+                                        error "[Cabs_to_ail.desugar_and_register_external_declaration] - internal ERROR"
+                                  end
                               | false ->
-                                  E.register_external_object_definition sym d_e
-                            end
+                                  E.register_global_object_definition sym d_e
+                              end
                       | Nothing ->
                           if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
                             (* TODO: this is wrong (see tentative definition in the STD) *)
@@ -3157,7 +3197,7 @@ val desugar: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> s
 let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff (
-    E.with_scope E.Scope_file (
+    E.under_scope E.Scope_file (
       let (base_qs1, base_ty1, ptr_decltor1) =
         ( ATypes.make_qualifiers true false false
         , ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_))
@@ -3226,14 +3266,12 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
       
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str
-    ) >>= fun (_, ret) ->
-    E.return ret
+    )
   ) 
 *)
   E.eval sym_counter core_eval_stuff (
-    E.with_scope E.Scope_file (
+    E.under_scope E.Scope_file (
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str
-    ) >>= fun (_, ret) ->
-    E.return ret
+    )
   )

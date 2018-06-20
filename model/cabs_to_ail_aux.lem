@@ -74,3 +74,15 @@ val oneAil: expression unit
 let oneAil =
   AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
+
+
+let string_of_storageDuration = function
+  | ATypes.Static ->
+      "static"
+  | ATypes.Thread ->
+      "thread"
+  | ATypes.Automatic ->
+      "automatic"
+  | ATypes.Allocated ->
+      "allocated"
+end

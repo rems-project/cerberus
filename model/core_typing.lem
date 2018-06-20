@@ -707,6 +707,16 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
                          typecheck_pexpr loc tagDefs env (BTy_object (OTy_struct tag_sym)) pe)
               end
         end
+    | PEarray_elem pe1 pe2 ->
+        infer_pexpr loc tagDefs env pe1 >>= fun (Pexpr annot infer _ as pe1') ->
+        match infer with
+          | InferredType_object (OTy_array oTy) ->
+              Pexpr annot (InferredType_loaded oTy) <$>
+                (PEarray_elem pe1' <$>
+                  typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2)
+          | _ ->
+              E.fail loc (CoreTyping_TODO "array_elem() expects a first operand with type array(...)")
+        end
     | PEcall nm pes ->
         match Map.lookup nm env.decls with
           | Just (TDfun ret_bTy bTys) ->
@@ -1044,6 +1054,14 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
                     PEmemberof tag_sym memb_ident <$>
                       typecheck_pexpr loc tagDefs env (BTy_object (OTy_struct tag_sym)) pe
               end
+        end
+    | PEarray_elem pe1 pe2 ->
+        match bTy with
+          | BTy_loaded oTy ->
+              PEarray_elem <$> typecheck_pexpr loc tagDefs env (BTy_object (OTy_array oTy)) pe1
+                           <*> typecheck_pexpr loc tagDefs env (BTy_object OTy_integer) pe2
+          | _ ->
+              E.fail loc (CoreTyping_TODO ("found an array_elem() while expecting a: " ^ Pp.stringFromCore_core_base_type bTy))
         end
     | PEcall nm pes ->
         match Map.lookup nm env.decls with

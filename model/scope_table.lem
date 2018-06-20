@@ -86,3 +86,7 @@ let current_scope_is = function
   | _ ->
       error "[Scope_table.current_scope_is] the table is empty."
 end      
+
+val current_depth: forall 'scope 'ident 'a. t 'scope 'ident 'a -> nat
+let current_depth tbl =
+  List.length tbl
