@@ -293,11 +293,12 @@ class Memory extends Tab {
       },
       physics: {
         barnesHut: {
-          springLength: 200
+          springLength: 200,
+          avoidOverlap: 1
         },
-        repulsion: {
-          nodeDistance: 120
-        }
+        //repulsion: {
+        //  nodeDistance: 120
+        //}
       }
     }
     this.network = new vis.Network(container[0], new Graph(), options);
