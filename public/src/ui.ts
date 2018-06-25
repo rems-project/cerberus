@@ -429,7 +429,7 @@ function getDefaultSettings(): Settings {
              colour: true,
              colour_cursor: true,
              short_share: false,
-             model: Common.Model.Twin
+             model: Common.Model.Concrete 
            }
 }
 
