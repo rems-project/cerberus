@@ -351,16 +351,25 @@ export default class View {
     const nodes: Node[] = []
     const edges: Edge[] = []
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const string_of_memvalue = (mval: Common.MemoryValue) : string => {
+    const string_of_memvalue = (id: string, mval: Common.MemoryValue) : string => {
       switch (mval.kind) {
         case 'scalar':
         return mval.value;
         case 'pointer':
-        return '\nprovenance: ' + mval.provenance + '\nvalue: ' + mval.value
+        let palloc = mem.allocations[mval.provenance]
+        if (palloc) {
+          if (mval.value <= palloc.base && mval.value < palloc.base + palloc.size) {
+            edges.push({from: id, to: mval.provenance, isTau: false});
+          } else {
+            //@ts-ignore
+            edges.push({from: id, to: mval.provenance, isTau: false, color: {color: 'red'}});
+          }
+        }
+        return '{\nprovenance: ' + mval.provenance + '\naddress: ' + toHex(parseInt(mval.value)) + '\n}'
         case 'array':
-        return '[\n  ' +  _.join(_.reverse(_.map(mval.value, string_of_memvalue)), ',\n  ') + '\n]'
+        return '[\n  ' +  _.join(_.reverse(_.map(mval.value, (v) => string_of_memvalue(id, v))), ',\n  ') + '\n]'
         case 'struct':
-        return '{\n  ' + _.join(_.map(mval.fields, f => f.tag + ': ' + string_of_memvalue(f.value)), ';\n  ') + ';\n}'
+        return '{\n  ' + _.join(_.map(mval.fields, f => f.tag + ': ' + string_of_memvalue(id, f.value)), ';\n  ') + ';\n}'
         case 'union':
         return '\ntag: ' + mval.tag + '\nvalue: ' + mval.value
       }
@@ -383,7 +392,7 @@ export default class View {
           const id = '<i>Alloc:</i> ' + alloc.id
           const base  = '\n<i>Base address:</i> ' + toHex(parseInt(alloc.base))
           const type  = '\n<i>Type:</i> ' + alloc.type
-          const value = '\n<i>Value:</i> ' + string_of_memvalue(alloc.value)
+          const value = '\n<i>Value:</i> ' + string_of_memvalue(alloc.id, alloc.value)
           const size  = '\n<i>Size:</i> ' + alloc.size
           const label = id + base + type + size + value
           nodes.push(createNode(k, label))
