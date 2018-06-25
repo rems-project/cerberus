@@ -471,9 +471,9 @@ module Concrete : Memory = struct
   
   
   (* INTERNAL: fetch_bytes *)
-  let fetch_bytes st base_addr n_bytes =
+  let fetch_bytes bytemap base_addr n_bytes =
     List.map (fun addr ->
-      match IntMap.find_opt addr st.bytemap with
+      match IntMap.find_opt addr bytemap with
         | Some b ->
             b
         | None ->
@@ -730,7 +730,7 @@ module Concrete : Memory = struct
   (* BEGIN DEBUG *)
   let dot_of_mem_state st =
     let get_value alloc =
-      let bs = fetch_bytes st alloc.base (N.to_int alloc.size) in
+      let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
       let Some ty = alloc.ty in
       let (mval, bs') = combine_bytes ty bs in
       mval
@@ -855,7 +855,7 @@ module Concrete : Memory = struct
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load addr =
       get >>= fun st ->
-      let bs = fetch_bytes st addr (sizeof ty) in
+      let bs = fetch_bytes st.bytemap addr (sizeof ty) in
       let (mval, bs') = combine_bytes ty bs in
       begin match bs' with
         | [] ->
@@ -1435,35 +1435,71 @@ let combine_prov prov1 prov2 =
 
   (* JSON serialisation *)
 
+  let serialise_cabs_id = function
+   | Cabs.CabsIdentifier (_, s) -> `String s
+
   let serialise_prov = function
     | Prov_some n -> Json.of_bigint n
     | Prov_none -> `Null
     | Prov_device -> `String "Device"
 
+  let rec serialise_mem_value mval =
+    let mk_scalar s =
+      `Assoc [("kind", `String "scalar"); ("value", `String s)]
+    in
+    let mk_pointer p s =
+      `Assoc [("kind", `String "pointer"); ("provenance", serialise_prov p); ("value", `String s)]
+    in
+    let mk_array vs =
+      `Assoc [("kind", `String "array"); ("value", `List vs)] in
+    let mk_struct fs =
+      `Assoc [("kind", `String "struct"); ("fields", `List fs)]
+    in
+    let mk_union tag v =
+      `Assoc [("kind", `String "union"); ("tag", tag); ("value", v)]
+    in
+    match mval with
+    | MVunspecified _ ->
+      mk_scalar "unspecified"
+    | MVinteger (_, IV(p, n)) ->
+      mk_scalar (N.to_string n) (*TODO: maybe track provenance *)
+    | MVfloating (_, f) ->
+      mk_scalar (string_of_float f)
+    | MVpointer (_, PV(p, pv)) ->
+      begin match pv with
+        | PVnull _ -> mk_scalar "NULL"
+        | PVconcrete n -> mk_pointer p (N.to_string n)
+        | PVfunction _ -> mk_scalar "POINTER TO FUNCTION"
+      end
+    | MVarray mvals ->
+      mk_array (List.map serialise_mem_value mvals)
+    | MVstruct (tag_sym, xs) ->
+      mk_struct (List.map (fun (mem, mval) ->
+          `Assoc [("tag", serialise_cabs_id mem); ("value", serialise_mem_value mval)]) xs)
+    | MVunion (tag_sym, membr_ident, mval) ->
+      mk_union (serialise_cabs_id membr_ident) (serialise_mem_value mval)
+
   let serialise_map f m =
-    let serialise_entry (k, v) = (Nat_big_num.to_string k, f v)
+    let serialise_entry (k, v) = let e = N.to_string k in (e, f e v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_allocation alloc =
+  let serialise_allocation bytemap id alloc =
     let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
+    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
+    let bs = fetch_bytes bytemap alloc.base (sizeof ty) in
+    let (mval, _) = combine_bytes ty bs in
     `Assoc [
+      ("id", `String id);
       ("base", Json.of_bigint alloc.base);
       ("type", Json.of_option serialise_ctype alloc.ty);
       ("size", Json.of_bigint alloc.size);
-    ]
-
-  let serialise_byte (p, c_opt) =
-    let serialise_char c = `Int (Char.code c) in
-    `Assoc[
-      ("prov", serialise_prov p);
-      ("value", Json.of_option serialise_char c_opt)
+      ("value", serialise_mem_value mval);
     ]
 
   let serialise_mem_state st =
     `Assoc [
       ("kind",          `String "concrete");
-      ("allocations",   serialise_map serialise_allocation st.allocations);
-      ("bytemap",       serialise_map serialise_byte st.bytemap)
+      ("allocations",   serialise_map (serialise_allocation st.bytemap) st.allocations)
     ]
 
 end

@@ -66,15 +66,33 @@ namespace Common {
     throw `Model ${m} does not exist.`
   }
 
+  export type MemoryValue =
+  {
+    kind: 'scalar',
+    value: string
+  } | {
+    kind: 'pointer',
+    provenance: string
+    value: string
+  } | {
+    kind: 'array',
+    value: [MemoryValue]
+  } | {
+    kind: 'struct'
+    fields: [ { tag: string, value: MemoryValue } ]
+  } | {
+    kind: 'union',
+    tag: string,
+    value: MemoryValue
+  }
+
   export type Memory =
     { 
       kind: 'concrete',
-      allocations: {[key: string]: {base: string, type: string, size: string}},
-      bytemap: {[key: string]: { prov: string, value: number }}
+      allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
     } | {
       kind: 'twin',
-      allocations: {[key: string]: {base: string, type: string, size: string}},
-      bytemap: {[key: string]: { prov: string, value: number }}
+      allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
     } | {
       kind: 'symbolic',
       allocations: any

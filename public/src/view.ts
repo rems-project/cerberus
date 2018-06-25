@@ -351,7 +351,20 @@ export default class View {
     const nodes: Node[] = []
     const edges: Edge[] = []
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const isPointer = (type:string) => type.slice(-1) == '*'
+    const string_of_memvalue = (mval: Common.MemoryValue) : string => {
+      switch (mval.kind) {
+        case 'scalar':
+        return mval.value;
+        case 'pointer':
+        return '\nprovenance: ' + mval.provenance + '\nvalue: ' + mval.value
+        case 'array':
+        return '[\n  ' +  _.join(_.reverse(_.map(mval.value, string_of_memvalue)), ',\n  ') + '\n]'
+        case 'struct':
+        return '{\n  ' + _.join(_.map(mval.fields, f => f.tag + ': ' + string_of_memvalue(f.value)), ';\n  ') + ';\n}'
+        case 'union':
+        return '\ntag: ' + mval.tag + '\nvalue: ' + mval.value
+      }
+    }
     const createNode = (id: Common.ID, label: string) : Node => {
       return {
         id: id,
@@ -365,28 +378,14 @@ export default class View {
     switch(mem.kind) {
       case 'concrete':
       case 'twin':
-        const map = mem.bytemap
-        const readValue = (id:Common.ID, base: number, end: number) => {
-          let value = 0
-          if (!map[base]) return 'unspecified' // undefined value in allocation
-          if (map[base].prov) { // Has a provenance
-            //@ts-ignore
-            edges.push({from: id, to: map[base].prov, isTau: false, color: {color: 'red'}})
-            edges.push({from: id, to: map[base].prov, isTau: false})
-          }
-          for (let i = base; i < end; i++)
-            if (map[i]) value += map[i].value
-          return value
-        }
         Object.keys(mem.allocations).map((k) => {
           const alloc = mem.allocations[k]
-          const base = parseInt(alloc.base)
-          const end  = parseInt(alloc.base) + parseInt(alloc.size)
-          const value = '\n<i>Value:</i> ' + readValue(k, base, end)
+          const id = '<i>Alloc:</i> ' + alloc.id
+          const base  = '\n<i>Base address:</i> ' + toHex(parseInt(alloc.base))
           const type  = '\n<i>Type:</i> ' + alloc.type
-          const title  = '<i>Base address:</i> ' + toHex(base)
+          const value = '\n<i>Value:</i> ' + string_of_memvalue(alloc.value)
           const size  = '\n<i>Size:</i> ' + alloc.size
-          const label = title + type + size + (isPointer(alloc.type) ? '' : value)
+          const label = id + base + type + size + value
           nodes.push(createNode(k, label))
         })
         break
