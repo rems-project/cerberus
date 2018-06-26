@@ -34,3 +34,19 @@ success
 
 
 RV-match say pass 99.2% of 726    770 of 776 - discussed in POPL 2012.  Probably more since then. 
+
+
+ABORT
+=====
+
+20010904-1.c and 20010904-2.c: They use _Alignas inside a struct, which is not allowed by the C11 standard. DR444 adds it to the grammar.
+
+20021127-1.c: The test is wrong! It calls a function that simply aborts.
+
+950605-1.c: Incorrect! -1 != 0xFF
+
+pr23467.c: _Alignas inside a struct
+
+
+
+
