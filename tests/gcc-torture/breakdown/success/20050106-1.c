@@ -1,13 +1,11 @@
 #include "cerberus.h"
 /* PR tree-optimization/19283 */
 
-void abort (void);
-
 static inline unsigned short
 foo (unsigned int *p)
 {
   return *p;
-};
+}
 
 unsigned int u;
 

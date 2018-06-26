@@ -13,7 +13,7 @@ struct b {
   struct a d;
 };
 
-int bar (int x, const struct b *__restrict y, struct b *__restrict z)
+void bar (int x, const struct b *__restrict y, struct b *__restrict z)
 {
   if (y->c.v || y->c.w != 250000 || y->d.v || y->d.w != 250000)
     abort();
