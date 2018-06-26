@@ -49,4 +49,9 @@ pr23467.c: _Alignas inside a struct
 
 
 
+PARSING
+=======
+20001024-1.c: change return function type to void
+
+
 

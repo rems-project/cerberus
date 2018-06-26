@@ -1,4 +1,5 @@
 #include "cerberus.h"
+int
 test_store_ccp (int i)
 {
   int *p, a, b, c;
@@ -17,7 +18,7 @@ test_store_ccp (int i)
   return *p + 2;
 }
 
-
+int
 test_store_copy_prop (int i)
 {
   int *p, a, b, c;

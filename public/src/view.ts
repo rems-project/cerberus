@@ -358,7 +358,7 @@ export default class View {
         case 'pointer':
         let palloc = mem.allocations[mval.provenance]
         if (palloc) {
-          if (mval.value <= palloc.base && mval.value < palloc.base + palloc.size) {
+          if (parseInt(palloc.base) <= parseInt(mval.value) && parseInt(mval.value) < parseInt(palloc.base) + parseInt(palloc.size)) {
             edges.push({from: id, to: mval.provenance, isTau: false});
           } else {
             //@ts-ignore

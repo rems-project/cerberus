@@ -11,11 +11,16 @@
 #define float double
 
 
+#define __const           const
+
+#define __restrict
 #define __restrict__
 #define __extension__
 #define __attribute__(a)
 
-#define __INT32_TYPE__    int
+#define __SIZE_TYPE__     size_t
+#define __INT16_TYPE__    int16_t
+#define __INT32_TYPE__    int32_t
 #define __UINT32_TYPE__   unsigned int
 #define __INTPTR_TYPE__   int*
 #define __UINTPTR_TYPE__  unsigned int*
@@ -26,7 +31,6 @@
 #define __inline          inline
 #define __inline__        inline
 #define __alignof__       alignof
-#define __SIZE_TYPE__     size_t
 
 // Hard-coded sizes
 #define __SIZEOF_LONG_LONG__  8

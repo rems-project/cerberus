@@ -5,6 +5,7 @@ typedef struct sreal
   int exp;		/* Exponent.  */
 } sreal;
 
+int
 sreal_compare (sreal *a, sreal *b)
 {
   if (a->exp > b->exp)
