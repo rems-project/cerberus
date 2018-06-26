@@ -1,0 +1,36 @@
+torture
+toyota
+de facto
+tcc
+plum
+
+
+-----------------------------
+
+gcc torture
+
+fail
+
+abort                  19   surprising control-flow path - maybe Cerb bug
+ail-typing             29   Cerb bug - desugaring problem (mostly array init?) - aiming to fix
+desugaring             18   crash during desugaring before producing Ail
+elaboration             3   crash during elaboration
+eval                   32   crash during core evaluation (run without Core typechecking)
+exceptional-condition  15   Cerb reported an UB during execution - need to check
+funct-ptr              11   [DEPRIORITSE] Cerb has an error core_aux.core_object_type_of_ctype...  function pointers not elaborated properly
+ill-formed             14   at runtime core was not well typed
+internal               10   OCaml threw an exception
+missing-std-func        8   sprintf hard to do properly to streams - but can do to memory buffers? 
+parsing                77   think these are all/mostly GNU extensions - some need hand-written prototypes
+stack-overflow         16   just need to run on Linux
+undefined              14   Cerb reported an UB during execution - need to check
+
+success
+
+733 pass in script, but in Jenkins randomly some change (approx 7)
+  pr43629.c is an interesting de facto point - bitwise initialisation - we should talk about those in the paper.
+
+  to make it easier to find, make cerberus announce branches on unspec value.
+
+
+RV-match say pass 99.2% of 726    770 of 776 - discussed in POPL 2012.  Probably more since then. 
