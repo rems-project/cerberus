@@ -5,7 +5,7 @@ typedef struct {
 
 Test1 func2();
 
-int 
+void
 func1 (void)
 {
     Test1 test;

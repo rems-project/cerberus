@@ -64,3 +64,6 @@
 
 #define __BEGIN_DECLS
 #define __END_DECLS
+
+#define __ORDER_LITTLE_ENDIAN__   1
+#define __BYTE_ORDER__            __ORDER_LITTLE_ENDIAN__

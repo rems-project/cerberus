@@ -1324,7 +1324,8 @@ let combine_prov prov1 prov2 =
       | Bool ->
           IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
       | _ ->
-          let Some nbits = Impl.sizeof_ity ity in
+          let Some nbytes = Impl.sizeof_ity ity in
+          let nbits = 8 * nbytes in
           let is_signed = AilTypesAux.is_signed_ity ity in
           let (min, max) =
             if is_signed then
