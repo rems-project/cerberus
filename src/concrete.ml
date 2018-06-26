@@ -1316,7 +1316,7 @@ let combine_prov prov1 prov2 =
     fval1 <= fval2
   
   let fvfromint (IV (_, n)) =
-    Int64.float_of_bits (N.to_int64 n)
+    Int64.to_float (N.to_int64 n)
   
   let ivfromfloat ity fval =
     (* TODO: hack maybe the elaboration should do that?? *)
@@ -1340,7 +1340,7 @@ let combine_prov prov1 prov2 =
               r
             else
               N.sub r dlt in
-          IV (Prov_none, (wrapI (N.of_int64 (Int64.bits_of_float fval))))
+          IV (Prov_none, (wrapI (N.of_int64 (Int64.of_float fval))))
   
   let eq_ival _ (IV (_, n1)) (IV (_, n2)) =
     Some (Nat_big_num.equal n1 n2)
