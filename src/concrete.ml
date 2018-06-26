@@ -576,7 +576,7 @@ module Concrete : Memory = struct
       | Array0 (elem_ty, Some n) ->
           let rec aux n acc cs =
             if n <= 0 then
-              (MVarray acc, cs)
+              (MVarray (List.rev acc), cs)
             else
               let (mval, cs') = combine_bytes elem_ty cs in
               aux (n-1) (mval :: acc) cs'
