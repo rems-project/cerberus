@@ -1,6 +1,7 @@
 #include "cerberus.h"
 typedef struct {int dims[0]; } *A;
 
+int
 f(unsigned long obj)
 {
   unsigned char y = obj >> 24;
@@ -9,7 +10,7 @@ f(unsigned long obj)
   if ((y==0)||(y!=251  ))
     abort();
 
-  if(((int)obj&7)!=7)return;
+  if(((int)obj&7)!=7)return 0;
 
   REST_OF_CODE_JUST_HERE_TO_TRIGGER_THE_BUG:
 

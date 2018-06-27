@@ -1,4 +1,5 @@
 #include "cerberus.h"
+int
 sub (int i, int array[i++])
 {
   return i;

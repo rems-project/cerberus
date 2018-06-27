@@ -7,6 +7,13 @@ struct tag {
 
 int i;
 
+
+int
+func1(int *p) { return(*p); }
+
+void
+foo (char *s) {}
+
 int 
 main (void)
 {
@@ -29,6 +36,3 @@ main (void)
   exit (0);
 }
 
-func1(int *p) { return(*p); }
-
-foo (char *s) {}

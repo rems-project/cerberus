@@ -6,6 +6,7 @@ ptr_t *wm_SPB;
 
 ptr_t mem[100];
 
+void
 f (mr_TR, mr_SPB, mr_HB, reg1, reg2)
      ptr_t *mr_TR;
      ptr_t *mr_SPB;

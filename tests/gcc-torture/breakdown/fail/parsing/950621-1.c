@@ -6,6 +6,7 @@ struct s
   struct s *dummy;
 };
 
+int
 f (struct s *sp)
 {
   return sp && sp->a == -1 && sp->b == -1;

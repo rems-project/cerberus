@@ -1,6 +1,7 @@
 #include "cerberus.h"
 /* { dg-require-effective-target trampolines } */
 
+void
 f (void (*func) ())
 {
   func ();

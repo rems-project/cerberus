@@ -4,7 +4,8 @@ int a = 1;
 extern int b __attribute__((alias ("a")));
 int c = 1;
 extern int d __attribute__((alias ("c")));
-main (int argc)
+int
+main (int argc, char **argv)
 {
   int *p;
   int *q;

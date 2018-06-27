@@ -1,11 +1,13 @@
 #include "cerberus.h"
 long long acc;
 
+void
 addhi (short a)
 {
   acc += (long long) a << 32;
 }
 
+void
 subhi (short a)
 {
   acc -= (long long) a << 32;

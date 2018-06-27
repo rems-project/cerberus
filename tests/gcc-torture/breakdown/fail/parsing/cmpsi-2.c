@@ -3,6 +3,7 @@
 #define F 140
 #define T 13
 
+int
 feq (int x, int y)
 {
   if (x == y)
@@ -11,6 +12,7 @@ feq (int x, int y)
     return F;
 }
 
+int
 fne (int x, int y)
 {
   if (x != y)
@@ -19,6 +21,7 @@ fne (int x, int y)
     return F;
 }
 
+int
 flt (int x, int y)
 {
   if (x < y)
@@ -27,6 +30,7 @@ flt (int x, int y)
     return F;
 }
 
+int
 fge (int x, int y)
 {
   if (x >= y)
@@ -35,6 +39,7 @@ fge (int x, int y)
     return F;
 }
 
+int
 fgt (int x, int y)
 {
   if (x > y)
@@ -43,6 +48,7 @@ fgt (int x, int y)
     return F;
 }
 
+int
 fle (int x, int y)
 {
   if (x <= y)
@@ -51,6 +57,7 @@ fle (int x, int y)
     return F;
 }
 
+int
 fltu (unsigned int x, unsigned int y)
 {
   if (x < y)
@@ -59,6 +66,7 @@ fltu (unsigned int x, unsigned int y)
     return F;
 }
 
+int
 fgeu (unsigned int x, unsigned int y)
 {
   if (x >= y)
@@ -67,6 +75,7 @@ fgeu (unsigned int x, unsigned int y)
     return F;
 }
 
+int
 fgtu (unsigned int x, unsigned int y)
 {
   if (x > y)
@@ -75,6 +84,7 @@ fgtu (unsigned int x, unsigned int y)
     return F;
 }
 
+int
 fleu (unsigned int x, unsigned int y)
 {
   if (x <= y)

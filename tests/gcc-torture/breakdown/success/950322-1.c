@@ -1,4 +1,5 @@
 #include "cerberus.h"
+int
 f (unsigned char *a)
 {
   int i, j;

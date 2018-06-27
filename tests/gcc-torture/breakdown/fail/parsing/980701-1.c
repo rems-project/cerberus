@@ -1,4 +1,5 @@
 #include "cerberus.h"
+int
 ns_name_skip (unsigned char **x, unsigned char *y)
 {
   *x = 0;

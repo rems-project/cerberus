@@ -1,39 +1,47 @@
 #include "cerberus.h"
+int
 div1 (signed char x)
 {
   return x / -1;
 }
 
+int
 div2 (signed short x)
 {
   return x / -1;
 }
 
+int
 div3 (signed char x, signed char y)
 {
   return x / y;
 }
 
+int
 div4 (signed short x, signed short y)
 {
   return x / y;
 }
 
+int
 mod1 (signed char x)
 {
   return x % -1;
 }
 
+int
 mod2 (signed short x)
 {
   return x % -1;
 }
 
+int
 mod3 (signed char x, signed char y)
 {
   return x % y;
 }
 
+int
 mod4 (signed short x, signed short y)
 {
   return x % y;

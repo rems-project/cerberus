@@ -52,7 +52,7 @@
 #define __builtin_isinfl    isinf
 #define __builtin_alloca    alloca
 #define __builtin_malloc    malloc
-#define __builtin_offset    offset
+#define __builtin_offset    offsetof
 #define __builtin_abort     abort
 #define __builtin_printf    printf
 #define __builtin_sprintf   sprintf

@@ -2,6 +2,7 @@
 
 int a[2];
 
+void
 f (int i)
 {
   for (; i < INT_MAX; i++)

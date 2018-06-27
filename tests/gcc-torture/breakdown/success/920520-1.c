@@ -1,4 +1,5 @@
 #include "cerberus.h"
+void
 foo(int *bar)
 {
   *bar = 8;
