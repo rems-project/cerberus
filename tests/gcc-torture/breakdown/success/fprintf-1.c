@@ -6,8 +6,8 @@ int
 main (void)
 {
 #define test(ret, args...) \
-  fprintf (stdout, args); 		\
-  if (fprintf (stdout, args) != ret)	\
+  printf (args); 		\
+  if (printf (args) != ret)	\
     abort ();
   test(5, "hello");
   test(6, "hello\n");

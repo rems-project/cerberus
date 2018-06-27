@@ -4,7 +4,6 @@
    fall-through code, while that register held a pointer used in code at
    the branch target.  */
 
-typedef __INTPTR_TYPE__ intptr_t;
 typedef intptr_t W;
 union u0
 {
