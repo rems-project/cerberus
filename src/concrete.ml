@@ -1316,7 +1316,8 @@ let combine_prov prov1 prov2 =
     fval1 <= fval2
   
   let fvfromint (IV (_, n)) =
-    Int64.to_float (N.to_int64 n)
+    (* NOTE: if n is too big, the float will be truncated *)
+    float_of_string (N.to_string n)
   
   let ivfromfloat ity fval =
     (* TODO: hack maybe the elaboration should do that?? *)
