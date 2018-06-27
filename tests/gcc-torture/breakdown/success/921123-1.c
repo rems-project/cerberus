@@ -1,4 +1,5 @@
 #include "cerberus.h"
+int
 f(short *p)
 {
   short x = *p;

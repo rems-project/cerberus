@@ -1,0 +1,5 @@
+920428-1.c: Issue #52
+lto-tbaa-1.c: Issue #53
+950621-1.c: Issue #54
+alias-4c: Test is incorrect (ABORT)
+980701-1.c: Issue #55

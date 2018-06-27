@@ -22,6 +22,7 @@
 
 #define OFFSET (MAP_LEN/2 - 2 * sizeof (char));
 
+void
 f (int s, char *p)
 {
   int i;

@@ -1,9 +1,10 @@
 #include "cerberus.h"
-void
+int
 fp (double a, int b)
 {
   if (a != 33 || b != 11)
     abort ();
+  return 0;
 }
 
 int 

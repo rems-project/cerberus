@@ -13,6 +13,7 @@ int dn_skipname(unsigned char *ptr, unsigned char *eom) {
 
     if (ns_name_skip(&ptr, eom) == -1)
 	        return (-1);
+    printf("PTR= %p\n", ptr);
     return (ptr - saveptr);
 }
 

@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <float.h>
 
 #define float double
 
@@ -16,6 +17,7 @@
 #define __restrict
 #define __restrict__
 #define __extension__
+#define __attribute(a)
 #define __attribute__(a)
 
 #define __SIZE_TYPE__     size_t
@@ -27,6 +29,7 @@
 #define __WCHAR_TYPE__    char
 #define __INT_LEAST8_TYPE__ char
 #define __UINT_LEAST32_TYPE__ unsigned int
+#define __PTRDIFF_TYPE__  ptrdiff_t
 
 #define __inline          inline
 #define __inline__        inline
@@ -39,10 +42,9 @@
 #undef CHAR_BIT
 #define CHAR_BIT              8
 #define __CHAR_BIT__          CHAR_BIT
-#define __FLT_MIN__           0.0f
 #define __LONG_MAX__          2147483647
-
-
+#define __FLT_MAX__           3.402823e+38
+#define __FLT_MIN__           1.175494e-38
 #define __INT_MAX__           INT_MAX
 #define __SCHAR_MAX__         SCHAR_MAX
 #define __DBL_MANT_DIG__      1
