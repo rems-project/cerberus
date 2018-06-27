@@ -2,7 +2,7 @@
 
 void * a[255];
 
-int 
+void
 f (int m)
 {
   int i;
