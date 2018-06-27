@@ -1,6 +1,6 @@
 #include "cerberus.h"
 static const unsigned char f[] = "\0\377";
-static const unsigned char g[] = "\0ÿ";
+static const unsigned char g[] = "\0?";
 
 int main(void)
 {
