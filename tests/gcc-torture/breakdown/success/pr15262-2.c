@@ -17,6 +17,7 @@ struct B
 
 float X;
 
+int
 foo (struct B b, struct A *q, float *h)
 {
   X += *h;

@@ -4,6 +4,7 @@ typedef union {
   struct { char b3, b2, b1, b0; } c;
 } T;
 
+int
 f (T u)
 {
   ++u.c.b0;

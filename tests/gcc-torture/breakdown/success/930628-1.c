@@ -1,4 +1,5 @@
 #include "cerberus.h"
+void
 f (double x[2], double y[2])
 {
   if (x == y)

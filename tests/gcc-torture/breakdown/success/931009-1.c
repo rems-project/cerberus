@@ -1,12 +1,13 @@
 #include "cerberus.h"
-int 
+void f(void);
+int
 main (void)
 {
   f ();
   exit (0);
 }
 
-static 
+static void
 g (int *out, int size, int lo, int hi)
 {
   int j;
@@ -16,7 +17,7 @@ g (int *out, int size, int lo, int hi)
 }
 
 
-int 
+void
 f (void)
 {
   int a[2];

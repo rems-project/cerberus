@@ -17,19 +17,23 @@ typedef struct {
   float x, y;
 } vector_t;
 
+void
 w(float x, float y) {}
 
+void
 f1(float x, float y)
 {
   if (x != 0 || y != 0)
     abort();
 }
+void
 f2(float x, float y)
 {
   if (x != 1 || y != 1)
     abort();
 }
 
+void
 gitter(int count, vector_t pos[], list_t list, int *nww, vector_t limit[2], float r)
 {
   float d;

@@ -1,10 +1,11 @@
 #include "cerberus.h"
 struct tiny
 {
-  short c;
-  short d;
+  char c;
+  char d;
 };
 
+void
 f (int n, struct tiny x, struct tiny y, struct tiny z, long l)
 {
   if (x.c != 10)

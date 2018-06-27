@@ -10,13 +10,16 @@ struct c {
   float *b;
 } *c;
 int d;
+void
 use_a (struct a *a)
 {
 }
+void
 set_b (int **a)
 {
   *a=&d;
 }
+void
 use_c (struct c *a)
 {
 }

@@ -4,6 +4,7 @@ typedef struct
   unsigned a, b, c, d;
 } t1;
 
+void
 f (t1 *ps)
 {
     ps->a = 10000;

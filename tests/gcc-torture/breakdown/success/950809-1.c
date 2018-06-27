@@ -4,6 +4,7 @@ struct S
   int *sp, fc, *sc, a[2];
 };
 
+void
 f (struct S *x)
 {
   int *t = x->sc;

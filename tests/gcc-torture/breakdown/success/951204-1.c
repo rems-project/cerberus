@@ -1,4 +1,5 @@
 #include "cerberus.h"
+void
 f (char *x)
 {
   *x = 'x';

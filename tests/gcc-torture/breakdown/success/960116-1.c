@@ -1,5 +1,5 @@
 #include "cerberus.h"
-static inline
+static inline int
 p (int *p)
 {
   return !((long) p & 1);

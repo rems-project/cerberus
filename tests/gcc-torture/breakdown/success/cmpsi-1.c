@@ -1,4 +1,8 @@
 #include "cerberus.h"
+void
+dummy (void) {}
+
+int
 f1 (unsigned int x, unsigned int y)
 {
   if (x == 0)
@@ -10,6 +14,7 @@ f1 (unsigned int x, unsigned int y)
   return x;
 }
 
+int
 f2 (unsigned long int x, unsigned long int y)
 {
   if (x == 0)
@@ -20,11 +25,6 @@ f2 (unsigned long int x, unsigned long int y)
     abort ();
   return x;
 }
-
-
-int 
-dummy (void) {}
-
 int 
 main (void)
 {
