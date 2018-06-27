@@ -99,5 +99,6 @@ main (void)
   if (ROL(ll, SHIFT2) != ROL(LL_VALUE, SHIFT2))
     abort ();
 
-  exit (0);
+//  exit (0);
+  return LL_VALUE << 63;
 }
