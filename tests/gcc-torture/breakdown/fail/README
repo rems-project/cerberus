@@ -1,0 +1,204 @@
+
+ABORT
+=====
+
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 20010904-1.c  | _Alignas    | Not allowed inside struct by C11            |
+| 20010904-2.c  | _Alignas    | DR444 adds it to the grammar                |
+| 20021127-1.c  |             | Invalid test                                |
+| 930513-2.c    | BUG         | Issue #42                                   |
+| 950605-1.c    |             | Invalid test                                |
+| 960419-2.c    | BUG         | Issue #35                                   |
+| pr23467.c     | _Alignas    |                                             |
+| pr44555.c     | BUG         | Issue #51                                   |
++---------------+-------------+---------------------------------------------+
+
+PARSING
+=======
+
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 920428-1.c    | BUG         | Issue #52                                   |
+| lto-tbaa-1.c  | BUG         | Issue #53                                   |
+| 950621-1.c    | BUG         | Issue #54                                   |
+| alias-4c      |             | Invalid test                                |
+| 980701-1.c    | BUG         | Issue #55                                   |
+| 20000227-1.c  |             | Invalid test                                |
++---------------+-------------+---------------------------------------------+
+
+
+AIL TYPING
+==========
+
+36 Tests:
+
+20000412-1.c
+20000412-5.c
+20001017-2.c
+20001111-1.c
+20041212-1.c
+20090113-1.c
+20100416-1.c
+20120427-1.c
+20120427-2.c
+920429-1.c
+920501-1.c
+920501-6.c
+921113-1.c
+921208-2.c
+930513-1.c
+930603-3.c
+930608-1.c
+980223.c
+980506-3.c
+980617-1.c
+991201-1.c
+alias-1.c
+const-addr-expr-1.c
+pr21173.c
+pr34456.c
+pr36034-1.c
+pr39100.c
+pr49419.c
+pr54985.c
+pr57130.c
+pr58209.c
+pr67037.c
+pr71626-1.c
+pr79043.c
+string-opt-5.c
+
+Fails with the following errors:
+error: [Ail typing] (§6.5.4#2)
+  "QUOTE NOT FOUND: §6.5.4#2". (§6.5.4#2)
+and
+error: [Ail typing] (§6.5.16.1#1)
+
+FUNC PTR
+========
+
+10 tests:
+
+20011115-1.c
+20021118-2.c
+921110-1.c
+921208-1.c
+930702-1.c
+941014-1.c
+func-ptr-1.c
+pr42231.c
+pr54937.c
+pr68390.c
+
+Fails with the following error:
+cerberus: internal error, uncaught exception:
+          Failure("Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype")
+
+
+EVAL
+====
+
+17 tests:
+
+20020321-1.c
+20020402-2.c
+20021015-1.c
+20031215-1.c
+20050826-2.c
+20051215-1.c
+20071108-1.c
+940115-1.c
+960215-1.c
+980707-1.c
+cerberus.h
+cvt-1.c
+pr22630.c
+pr28778.c
+pr34176.c
+regstack-1.c
+struct-ini-1.c
+
+Fails with the following error:
+cerberus: internal error, uncaught exception:
+          Failure("WIP: Step_error -->  .... )
+
+
+ILL FORMED
+==========
+
+7 tests:
+
+930622-2.c
+conversion.c
+pr33870-1.c
+pr33870.c
+pr43835.c
+pr49886.c
+pr58831.c
+
+Fails with the following error:
+ill-formed program: `[pr58831.c:14:11-12] ill-typed PEop ==> <6>:36 == 0'
+
+
+INTERNAL
+=======
+
+13 tests:
+
+20000605-3.c
+20010518-2.c
+20020402-3.c
+20020810-1.c
+20021118-1.c
+20071029-1.c
+20080117-1.c
+20131127-1.c
+960117-1.c
+980612-1.c
+pr33631.c
+restrict-1.c
+struct-ret-1.c
+
+Fails with the following errors:
+cerberus: internal error, uncaught exception:
+          Invalid_argument("List.fold_left2")
+or
+cerberus: internal error, uncaught exception:
+          Failure("Global.fromJust( ... )
+
+
+UNION AS VALUE:
+==============
+
+921112-1.c
+930208-1.c
+
+Fails with
+cerberus: internal error, uncaught exception:
+          Failure("TODO: combine_bytes, Union (as value)")
+
+
+MISSING STD FUNCTIONS
+=====================
+
+20030626-1.c
+20070201-1.c
+920501-9.c
+960327-1.c
+980605-1.c
+loop-2f.c
+loop-2g.c
+pr78586.c
+pr78622.c
+pr79327.c
+
+Miss either snprintf or fopen
+
+
+DESUGARING
+===========
+
+19 tests
