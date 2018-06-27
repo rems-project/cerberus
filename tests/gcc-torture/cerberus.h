@@ -9,11 +9,11 @@
 #include <math.h>
 #include <float.h>
 
+#ifdef __cerb__
+
 #define float double
 
-
 #define __const           const
-
 #define __restrict
 #define __restrict__
 #define __extension__
@@ -73,3 +73,5 @@
 
 #define __ORDER_LITTLE_ENDIAN__   1
 #define __BYTE_ORDER__            __ORDER_LITTLE_ENDIAN__
+
+#endif
