@@ -98,8 +98,6 @@ fun ctype_width (ty: ctype): integer :=
 
 
 
-{-
-
 -- encode an element of Z into an element of N following the
 -- two's complement encoding
 fun encodeTwos (ty : ctype, n: integer) : integer :=
@@ -111,7 +109,6 @@ fun encodeTwos (ty : ctype, n: integer) : integer :=
     n
   else
     2^width + n
-
 
 
 -- the inverse of the previous function
@@ -136,6 +133,7 @@ fun complementTwos_aux (n: integer, w: integer) : integer :=
 fun complementTwos (ty:ctype, n: integer) : integer :=
   complementTwos_aux(n, ctype_width(ty))
 
+{-
 
 -- bitwise AND
 fun bitwise_AND_aux(n1: integer, n2: integer, w: integer) : integer :=
@@ -190,6 +188,8 @@ fun bitwise_OR (ty: ctype, n1: integer, n2: integer) : integer :=
     let n2_: integer = <Integer.encode>(ty, n2) in
     <Integer.decode>(ty, bitwise_OR_aux(n1_, n2_, ctype_width(ty)))
 
+-}
+
 -- ones_prefix(0, k, width) returns an positive integer whose binary
 -- representation is 1    ...   1 0      ...       0
 --                     k times     width - k times
@@ -202,7 +202,6 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 --  quot n (2^m) + (sum $ map (\i -> 2^(width - 1 - i)) [0..m-1])
 
 
--}
 
 
 

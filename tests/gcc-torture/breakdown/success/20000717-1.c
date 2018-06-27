@@ -6,6 +6,7 @@ bar (int i, trio t)
 {
   if (t.a == t.b || t.a == t.c)
     abort ();
+  return 0;
 }
 
 int

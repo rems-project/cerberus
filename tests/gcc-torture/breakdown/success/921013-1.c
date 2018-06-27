@@ -1,5 +1,5 @@
 #include "cerberus.h"
-int 
+void
 f (int *d, float *x, float *y, int n)
 {
   while(n--){*d++=*x++==*y++;}
