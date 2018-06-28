@@ -1,0 +1,144 @@
+INVALID TESTS
+=============
+
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 20021127-1.c  |             | ABORTS                                      |
+| 950605-1.c    |             | ABORTS                                      |
+| 20000227-1.c  |             | Invalid test                                |
+| align-3.c     |             | alignof applied to a function type          |
++---------------+-------------+---------------------------------------------+
+
+
+TEST WITH UNDEFINED BEHAVIOUR
+=============================
+
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 20020508-2.c  | UB52b       | Shift overflow: sizeof(long long) = 8       |
+| 20020508-3.c  | UB52a       | Shift overflow: sizeof(long long) = 8       |
+| pr40386.c     | UB52a       | shift overflow                              |
+| pr7284-1.c    | UB52b       |                                             |
+| pr79121.c     | UB52a       | Signed left shift                           |
+| pr23047.c     | UB          | -INT_MIN                                    |
+| pr68506.c     | UB          | Integer overflow                            |
+| 20060110-1.c  | UB52b       | Non representable left shift                |
+| 20060110-2.c  | UB52b       | Non representable left shift                |
+| 20080424-1.c  | BUG         | Issue #56 (TODO: not sure)                  |
+| 920612-1.c    | UB          | Signed integer overflow                     |
+| 920730-1.c    | UB          | (unsigned)(INT_MAX+2)                       |
+| 930529-1.c    | UB          | i = (unsigned)~0>>1; i++;                   |
+| 950704-1.c    | UB          | long long overflow                          |
+| 960317-1.c    | UB52a       | Negative left shift                         |
+| 980526-2.c    | UB52b       | 123456 << 22 as int                         |
+| loop-3.c      | UB          | 4 * INT_MAX / 2                             |
+| loop-3b.c     | UB          | (INT_MAX/8*4)*4                             |
+| pr22493-1.c   | UB          | -INT_MIN                                    |
+| pr34099-2.c   | ??          | UNSPEC / 1000                               |
+| pr57124.c     | UB          | Integer overflow                            |
+| pr59387.c     | UB          | Underflow char                              |
++---------------+-------------+---------------------------------------------+
+
+
+FAILURES
+========
+
+OTHERS
+=====
+
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 20010904-1.c  | _Alignas    | Not allowed inside struct by C11            |
+| 20010904-2.c  | _Alignas    | DR444 adds it to the grammar                |
+| 930513-2.c    | BUG         | Issue #42                                   |
+| 960419-2.c    | BUG         | Issue #35                                   |
+| pr23467.c     | _Alignas    |                                             |
+| pr44555.c     | BUG         | Issue #51                                   |
+| 920428-1.c    | BUG         | Issue #52                                   |
+| lto-tbaa-1.c  | BUG         | Issue #53                                   |
+| 950621-1.c    | BUG         | Issue #54                                   |
+| 980701-1.c    | BUG         | Issue #55                                   |
+| 950710-1.c    | BUG         | Ptrdiff (Issue #55)                         |
+| scope-1.c     | BUG         | extern scope                                |
++---------------+-------------+---------------------------------------------+
+
+
+AIL TYPING
+==========
+
+38 Tests:
+
+Fails with the following errors:
+error: [Ail typing] (§6.5.4#2)
+  "QUOTE NOT FOUND: §6.5.4#2". (§6.5.4#2)
+and
+error: [Ail typing] (§6.5.16.1#1)
+
+
+DESUGARING
+===========
+
+30 tests
+
+ILL FORMED
+==========
+
+9 tests:
+
+Fails with the following error:
+ill-formed program: `[pr58831.c:14:11-12] ill-typed PEop ==> <6>:36 == 0'
+
+
+FUNC PTR
+========
+
+15 tests:
+
+Fails with the following error:
+cerberus: internal error, uncaught exception:
+          Failure("Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype")
+
+
+EVAL
+====
+
+21 tests:
+
+Fails with the following error:
+cerberus: internal error, uncaught exception:
+          Failure("WIP: Step_error -->  .... )
+
+
+INTERNAL
+=======
+
+13 tests:
+
+Fails with the following errors:
+cerberus: internal error, uncaught exception:
+          Invalid_argument("List.fold_left2")
+or
+cerberus: internal error, uncaught exception:
+          Failure("Global.fromJust( ... )
+
+
+UNION AS VALUE:
+==============
+
+921112-1.c
+930208-1.c
+
+Fails with
+cerberus: internal error, uncaught exception:
+          Failure("TODO: combine_bytes, Union (as value)")
+
+
+MISSING STD FUNCTIONS
+=====================
+
+11 tests:
+
+Miss either snprintf or fopen
