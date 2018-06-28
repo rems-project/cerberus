@@ -74,4 +74,10 @@
 #define __ORDER_LITTLE_ENDIAN__   1
 #define __BYTE_ORDER__            __ORDER_LITTLE_ENDIAN__
 
+// Hack implementation of fabs
+float fabs(float x)
+{
+  return (float)(int)x;
+}
+
 #endif
