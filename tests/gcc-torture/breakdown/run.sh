@@ -27,4 +27,12 @@ for d in `find . -type d ! -path .`
 do
 	echo $d: $(ls $d/*.c | wc -l)
 done
+cd ..
+echo ""
+echo Unsupported by type:
+cd not_supported
+for d in `find . -type d ! -path .`
+do
+	echo $d: $(ls $d/*.c | wc -l)
+done
 
