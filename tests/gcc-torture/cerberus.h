@@ -96,6 +96,9 @@
 #define __ORDER_LITTLE_ENDIAN__   1
 #define __BYTE_ORDER__            __ORDER_LITTLE_ENDIAN__
 
+#undef  STACK_SIZE
+#define STACK_SIZE          1000
+
 // Hack implementation of fabs
 float fabs(float x)
 {
