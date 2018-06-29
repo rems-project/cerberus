@@ -8,8 +8,9 @@ INVALID TESTS
 | 950605-1.c    |             | ABORTS                                      |
 | 20000227-1.c  |             | Invalid test                                |
 | align-3.c     |             | alignof applied to a function type          |
+| pr71626-1.c   |             | subscripted value is not an array           |
+| pr71626-2.c   |             | same as pr71626-1.c                         |
 +---------------+-------------+---------------------------------------------+
-
 
 TEST WITH UNDEFINED BEHAVIOUR
 =============================
@@ -39,6 +40,12 @@ TEST WITH UNDEFINED BEHAVIOUR
 | pr34099-2.c   | ??          | UNSPEC / 1000                               |
 | pr57124.c     | UB          | Integer overflow                            |
 | pr59387.c     | UB          | Underflow char                              |
+| 20000223-1.c  | UB          | _Alignof(void) (incomplete type)            |
+| 20001111-1.c  | UB          | Assigning 'char *' from 'unsigned int'      |
+| 920501-1.c    | UB          | Calling a void function with arguments      |
+| 921208-2.c    | UB          | Calling a void function with arguments      |
+| alias-1.c     | UB          | Assigning float* to an int*                 |
+| pr79043.c     | UB          | Assigning float* to an int*                 |
 +---------------+-------------+---------------------------------------------+
 
 
@@ -46,6 +53,7 @@ FAILURES
 ========
 
 OTHERS
+
 =====
 
 +---------------+-------------+---------------------------------------------+
@@ -69,14 +77,35 @@ OTHERS
 AIL TYPING
 ==========
 
-38 Tests:
-
-Fails with the following errors:
-error: [Ail typing] (§6.5.4#2)
-  "QUOTE NOT FOUND: §6.5.4#2". (§6.5.4#2)
-and
-error: [Ail typing] (§6.5.16.1#1)
-
++---------------+-------------+---------------------------------------------+
+|    TEST       |    REASON   | DESCRIPTION                                 |
++---------------+-------------+---------------------------------------------+
+| 20000412-1.c  | BUG         | Issue #57                                   |
+| 20000412-5.c  | BUG         | Issue #58                                   |
+| 20001017-2.c  | ??          | implicit cast from signed ptr to unsigned   |
+| 20041212-1.c  | ??          | converts between void ptr and funct ptr     |
+| 20090113-1.c  | BUG         | Issue #58                                   |
+| 20100416-1.c  | BUG         | Issue #58                                   |
+| 20120247-1.c  | BUG         | Issue #58                                   |
+| 20120247-2.c  | BUG         | Issue #58                                   |
+| 920429-1.c    | ??          | assign string literal to unsigned char *    |
+| 920501-6.c    | ??          | implicit cast from signed ptr to unsigned   |
+| 921113-1.c    | BUG         | Issue #58                                   |
+| 930603-3.c    | ??          | implicit cast from signed ptr to unsigned   |
+| 980223.c      | BUG         | Issue #58                                   |
+| 980506-3.c    | ??          | implicit cast from signed ptr to unsigned   |
+| 980617-1.c    | ??          | implicit cast from signed ptr to unsigned   |
+| 991201-1.c    | BUG         | Issue #28                                   |
+| const-addr-e..| BUG         | Issue #58                                   |
+| enum3.c       | ??          | Enum incompatible with int                  |
+| pr34456.c     | BUG         | Issue #58                                   |
+| pr36034-1.c   | BUG         | Issue #58                                   |
+| pr39100.c     | BUG         | Issue #58                                   |
+| pr49419.c     | BUG         | Issue #58                                   |
+| pr54985.c     | BUG         | Issue #58                                   |
+| pr57130.c     | BUG         | Issue #58                                   |
+| string_opt.5  | ??          | Weird pointer arith                         |
++---------------+-------------+---------------------------------------------+
 
 DESUGARING
 ===========
