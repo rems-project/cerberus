@@ -2629,38 +2629,40 @@ let desugar_declaration_base specifs idecltors =
           ) [] idecltors >>= (List.reverse |- E.return)
 
 
-val     desugar_statement: cabs_statement -> E.desugM (statement unit)
-let rec desugar_statement (CabsStatement loc stmt_) =
+
+type stmt_context = <|
+  switch_depth: nat;
+  cont_ident_opt: maybe cabs_identifier; (* Just ..., if inside a loop *)
+|>
+
+let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
+  let self = desugar_statement_aux ctx in
   AnnotatedStatement loc <$>
     match stmt_ with
       | CabsSlabel ident s ->
 	  AilSlabel <$> E.resolve_label ident
-                    <*> desugar_statement s
+                    <*> self s
       
       | CabsScase e s ->
-          E.is_inside_switch >>= function
-            | true ->
-                AilScase <$> (desugar_expression e >>=
-                                evaluate_integer_constant_expression (Loc.locOf e) >>= fun n ->
-                              E.return (IConstant n Decimal Nothing))
-                         <*> desugar_statement s
-            | false ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
-          end
+          if ctx.switch_depth > 0 then
+            AilScase <$> (desugar_expression e >>=
+                          evaluate_integer_constant_expression (Loc.locOf e) >>= fun n ->
+                          E.return (IConstant n Decimal Nothing))
+                     <*> self s
+          else
+            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
       
       | CabsSdefault s ->
-          E.is_inside_switch >>= function
-            | true ->
-                AilSdefault <$> desugar_statement s
-            | false ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
-          end
+          if ctx.switch_depth > 0 then
+            AilSdefault <$> self s
+          else
+            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
           E.fresh_block_scope >>= fun scope ->
           E.with_scope scope (
-            E.mapM desugar_statement ss
+            E.mapM self ss
           ) >>= fun (bs, d_ss) ->
           
           (* this is removing unnecessary blocks introduced by the desugared.
@@ -2703,26 +2705,54 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       | CabsSif e s1 s2_opt ->
           (* TODO: check *)
           AilSif <$> desugar_expression e
-                 <*> desugar_statement s1
-                 <*> maybe (E.return $ AnnotatedStatement Loc.unknown AilSskip) desugar_statement s2_opt
+                 <*> self s1
+                 <*> maybe (E.return $ AnnotatedStatement Loc.unknown AilSskip) self s2_opt
       
       | CabsSswitch e s ->
+          let ctx' = <| ctx with switch_depth= ctx.switch_depth + 1 |> in
           (* TODO: check *)
           AilSswitch <$> desugar_expression e
-                     <*> E.perform_inside_switch (desugar_statement s)
-          
+                     <*> desugar_statement_aux ctx' s
       
       | CabsSwhile e s ->
-          (* TODO: check *)
-          AilSwhile <$> desugar_expression e
-                    <*> E.perform_inside_loop (desugar_statement s)
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          desugar_expression e         >>= fun d_e ->
+          desugar_statement_aux ctx' s >>= fun d_s ->
+          E.return begin
+              AilSwhile d_e begin
+                AnnotatedStatement loc begin
+                  AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip))]
+                end
+              end
+          end
       
       | CabsSdo e s ->
-          (* TODO: check *)
-          AilSdo <$> E.perform_inside_loop (desugar_statement s)
-                 <*> desugar_expression e
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          desugar_expression e         >>= fun d_e ->
+          desugar_statement_aux ctx' s >>= fun d_s ->
+          E.return begin
+              AilSdo begin
+                AnnotatedStatement loc begin
+                  AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip))]
+                end
+              end d_e
+          end
       
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          
           (* TODO: this is not really a block scope (...) *)
           E.fresh_block_scope >>= fun scope ->
           E.with_scope scope (
@@ -2785,66 +2815,86 @@ let rec desugar_statement (CabsStatement loc stmt_) =
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-              E.perform_inside_loop $ desugar_statement s       >>= fun d_s  ->
+              desugar_statement_aux ctx' s                      >>= fun d_s  ->
               match e3_opt with
                 | Just e3 ->
                     desugar_expression e3 >>= fun d_e3 ->
                     let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
                     E.return match d_s with
-                      | AnnotatedStatement loc (AilSblock bindings d_ss) ->
-                          AnnotatedStatement loc (AilSblock bindings (d_ss ++ [d_s_e3]))
+                      | AnnotatedStatement loc' (AilSblock bindings d_ss) ->
+                          AnnotatedStatement loc' (
+                            AilSblock bindings (d_ss ++ [AnnotatedStatement loc (AilSlabel cont_sym d_s_e3)])
+                          )
                       | _ ->
-                          AnnotatedStatement loc (AilSblock [] [d_s; d_s_e3])
+                          AnnotatedStatement loc (
+                            AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym d_s_e3)]
+                          )
                     end
                 | Nothing ->
-                    E.return (AnnotatedStatement loc (AilSblock [] [d_s]))
+                    E.return begin
+                      AnnotatedStatement loc (
+                        AilSblock [] [ d_s
+                                     ; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip)) ]
+                      )
+                    end
               end >>= fun d_s_body ->
               E.return $
                 AilSblock bindings [
-                  AnnotatedStatement Loc.unknown (AilSdeclaration sym_d_es);
-                  AnnotatedStatement Loc.unknown (AilSwhile d_e2 d_s_body)
+                  AnnotatedStatement loc (AilSdeclaration sym_d_es);
+                  AnnotatedStatement loc (AilSwhile d_e2 d_s_body)
                 ]
           ) >>= fun (_, ret) ->
           E.return ret
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
-          (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
-          maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-          E.perform_inside_loop $ desugar_statement s       >>= fun d_s  ->
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
           
-          match (fc_opt, e3_opt) with
-            (*    for (E1;; E3) S ==> { E1; while(1) {E3; S} }
-               or 
-                  for (E1; E2; E3) S ==> { E1; while(E2) {E3; S} }
-             *)
-            | (Just (FC_expr e1), Just e3) ->
-                desugar_expression e1 >>= fun d_e1 ->
+          (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
+          (* for (...; ; ...) ...   ==> { ...; while(1) ... } *)
+          maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
+          desugar_statement_aux ctx' s                      >>= fun d_s  ->
+          match e3_opt with
+            | Nothing ->
+                E.return begin
+                  AnnotatedStatement loc (
+                    AilSlabel cont_sym (AnnotatedStatement loc AilSskip)
+                  )
+                end
+            | Just e3 ->
                 desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e1 = AnnotatedStatement (Loc.locOf e1) $ AilSexpr d_e1 in
-                let d_s_e3 = AnnotatedStatement (Loc.locOf e3) $ AilSexpr d_e3 in
-                
+                E.return begin
+                  AnnotatedStatement loc (
+                    AilSlabel cont_sym (AnnotatedStatement (Loc.locOf e3) (AilSexpr d_e3))
+                  )
+                end
+          end >>= fun d_s_e3 ->
+          match (fc_opt, e3_opt) with
+            | (Just (FC_expr e1), e3_opt) ->
+                (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; cont: E3   } }  *)
+                (* for (E1; E2; ) S   ==> { E1; while(E2) { S'; cont: skip } }  *)
+                desugar_expression e1 >>= fun d_e1 ->
+                let d_s_e1 =
+                  AnnotatedStatement (Loc.locOf e1) (AilSexpr d_e1) in
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
                   | _ ->
-                      AnnotatedStatement Loc.unknown $
-                        AilSblock [] [d_s; d_s_e3]
+                      AnnotatedStatement loc (AilSblock [] [d_s; d_s_e3])
                 end in
-                E.return (AilSblock [] [d_s_e1; AnnotatedStatement loc $ AilSwhile d_e2 d_s_body])
-            
-            | (Just (FC_expr e1), Nothing) ->
-                desugar_expression e1 >>= fun d_e1 ->
-                let d_s_e1 = AnnotatedStatement (Loc.locOf e1) $ AilSexpr d_e1 in
-                E.return (AilSblock [] [d_s_e1; AnnotatedStatement loc $ AilSwhile d_e2 d_s])
-            
+                E.return begin
+                  AilSblock [] [ d_s_e1
+                               ; AnnotatedStatement loc (AilSwhile d_e2 d_s_body) ]
+                end
             | (Just (FC_decl (Declaration_base _ _)), _) ->
                 E.fail loc Errors.Desugar_impossible
-            
-            | (Just (FC_decl (Declaration_static_assert sa_decl)), Just e3) ->
+            | (Just (FC_decl (Declaration_static_assert sa_decl)), e3_opt) ->
+                (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
                 desugar_and_register_static_assert_declaration sa_decl >>
-                desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
-                
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
@@ -2853,15 +2903,9 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                         AilSblock [] [d_s; d_s_e3]
                 end in
                 E.return (AilSwhile d_e2 d_s_body)
-            
-            | (Just (FC_decl (Declaration_static_assert sa_decl)), Nothing) ->
-                desugar_and_register_static_assert_declaration sa_decl >>
-                E.return (AilSwhile d_e2 d_s)
-            
-            | (Nothing, Just e3) ->
-                desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
-                
+            | (Nothing, e3_opt) ->
+                (* for (; E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                (* for (; E2; ) S ==> while(E2) { S'; cont: skip } *)
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
@@ -2870,29 +2914,29 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                         AilSblock [] [d_s; d_s_e3]
                 end in
                 E.return (AilSwhile d_e2 d_s_body)
-            
-            | (Nothing, Nothing) ->
-                E.return (AilSwhile d_e2 d_s)
           end
       
       | CabsSgoto ident ->
           AilSgoto <$> E.resolve_label ident
       
       | CabsScontinue ->
-          E.is_inside_loop >>= function
-            | true ->
-                E.return AilScontinue
-            | false ->
+          match ctx.cont_ident_opt with
+            | Nothing ->
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.2#1")
+            | Just cont_ident ->
+                self (CabsStatement loc (CabsSgoto cont_ident)) >>= fun (AnnotatedStatement _ stmt_) ->
+                E.return stmt_
           end
       
       | CabsSbreak ->
-          E.is_inside_switch >>= fun b1 ->
-          E.is_inside_loop   >>= fun b2 ->
-          if b1 || b2 then
+          if ctx.switch_depth > 0 then
             E.return AilSbreak
-          else
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+          else match ctx.cont_ident_opt with
+            | Just _ ->
+                E.return AilSbreak
+            | Nothing ->
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+          end
       
       | CabsSreturn Nothing ->
           E.get_current_return_type >>= function
@@ -2911,8 +2955,12 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           end
       
       | CabsSpar ss ->
-          AilSpar <$> E.mapM desugar_statement ss
+          AilSpar <$> E.mapM self ss
     end
+
+val desugar_statement: cabs_statement -> E.desugM (statement unit)
+let desugar_statement stmt =
+  desugar_statement_aux <| switch_depth= 0; cont_ident_opt= Nothing |> stmt
 
 
 val     register_labels: cabs_statement -> E.desugM unit
