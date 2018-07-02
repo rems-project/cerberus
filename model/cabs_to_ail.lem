@@ -513,11 +513,11 @@ let desugar_character_constant (pref_opt, str) =
 
 
 
-val     evaluate_integer_constant_expression: Loc.t -> expression unit -> E.desugM integer
-let rec evaluate_integer_constant_expression loc expr =
+val     evaluate_integer_constant_expression: Loc.t -> maybe ATypes.ctype -> expression unit -> E.desugM integer
+let rec evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun  (core_env, sym_suppl) ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sym_suppl expr)
+      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sym_suppl ty_opt expr)
 
 
 
@@ -1194,7 +1194,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
              (* STD §6.7.6.2#1, sentence 2 *)
              (* NOTE: the preceding STD clause is performed by a typecheck done by
                 [WipFrontend.evalIntegerConstantExpression] *)
-             evaluate_integer_constant_expression loc d_e >>= fun n ->
+             evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               if n < 0 then
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, sentence 3")
               else
@@ -1927,7 +1927,9 @@ and desugar_enumerator (ident, e_opt) =
               (* TODO: the integer must also be representable as an int *)
               E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.2#2")
           | true ->
-              evaluate_integer_constant_expression loc d_e >>= fun n ->
+              (* TODO: the type provided to the evaluator should be the integer type
+                 compatible with the enum? *)
+              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               E.return (ident, Just (loc, n))
         end
   end
@@ -2110,7 +2112,18 @@ and wip_desugar_initializer_ loc dur current_ty init =
           E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB081_scalar_initializer_not_single_expression)
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
-    E.return (current_ty, d_e)
+    (* STD §6.7.9#4 *)
+    if dur = ATypes.Static || dur = ATypes.Thread then
+      if AilTypesAux.is_integer current_ty then
+        evaluate_integer_constant_expression loc (Just current_ty) d_e >>= fun n ->
+        E.return begin
+          (current_ty, AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant n Decimal Nothing))))
+        end
+      else
+        (* TODO: floating and pointer *)
+        E.return (current_ty, d_e)
+    else
+      E.return (current_ty, d_e)
   
   else if AilTypesAux.is_array_of_character current_ty && is_string_literal_init init then
     translate_cabs_string_literal <$> match init with
@@ -2275,9 +2288,6 @@ and wip_desugar_initializer_ loc dur current_ty init =
                     | _ ->
                         E.return (current_ty, d_e)
                   end
-(*                evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun cst ->
-                  E.return $
-                    AnnotatedExpression () (AilEconst (ConstantInteger cst))                *)
               | false ->
                   (* NOTE: we don't to check whether d_e is a string literal because the 
                      predicate would have been true. *)
@@ -2324,7 +2334,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
                     desugar_expression desig_e               >>= fun d_desig_e ->
                     is_integer_constant_expression d_desig_e >>= function
                       | true ->
-                          evaluate_integer_constant_expression (Loc.locOf desig_e) d_desig_e >>= fun j                  ->
+                          evaluate_integer_constant_expression (Loc.locOf desig_e) Nothing d_desig_e >>= fun j                  ->
                           wip_desugar_initializer_ loc dur elem_ty init                      >>= fun (elem_ty', d_init) ->
                           (* TODO: use elem_ty' *)
                           (* comparing the specified index with the
@@ -2646,7 +2656,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
       | CabsScase e s ->
           if ctx.switch_depth > 0 then
             AilScase <$> (desugar_expression e >>=
-                          evaluate_integer_constant_expression (Loc.locOf e) >>= fun n ->
+                          evaluate_integer_constant_expression (Loc.locOf e) Nothing >>= fun n ->
                           E.return (IConstant n Decimal Nothing))
                      <*> self s
           else
