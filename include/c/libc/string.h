@@ -129,5 +129,11 @@ char* strdup(const char *s)
   return sc;
 }
 
+// TODO:
+char *strerror(int errnum)
+{
+  return "NOT IMPLEMENTED!";
+}
+
 #else
 #endif
