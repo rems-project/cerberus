@@ -119,7 +119,7 @@ int atoi(const char *nptr)
 
 
 // TODO: temporary hack
-void* calloc(size_t nmemb, size_t size)
+void *calloc(size_t nmemb, size_t size)
 {
   unsigned char *ret;
   ret = malloc(nmemb * size);
@@ -130,6 +130,15 @@ void* calloc(size_t nmemb, size_t size)
     ret[i] = 0;
   
   return ret;
+}
+
+void *realloc(void *ptr, size_t size)
+{
+  void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
+  void *r = malloc(size);
+  if (ptr)
+    memcpy(r, ptr, size);
+  return r;
 }
 
 // TODO: This is based on the standard
