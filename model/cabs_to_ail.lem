@@ -2544,7 +2544,16 @@ and desugar_and_register_static_assert_declaration sa_decl =
   match sa_decl with
    | Static_assert e lit ->
        desugar_expression e >>= fun d_e ->
-       E.register_static_assertion d_e (translate_cabs_string_literal lit)
+       is_integer_constant_expression d_e >>= function
+         | false ->
+             E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB204_illtyped_Static_assert)
+         | true ->
+             evaluate_integer_constant_expression Loc.unknown Nothing d_e >>= fun n ->
+             if n = 0 then
+               E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.10#3 Static_assert(The constant expression shall compare unequal to 0.)")
+             else
+               E.return ()
+         end
   end
 
 
