@@ -12,7 +12,7 @@ module type Implementation = sig
   val alignof_ity: integerType -> int option
   val alignof_fty: floatingType -> int option
   val register_enum: Symbol.sym -> Nat_big_num.num list -> bool
-  val typeof_enum: Symbol.sym -> integerType option
+  val typeof_enum: Symbol.sym -> integerType
 end
 
 
@@ -186,8 +186,11 @@ module DefaultImpl: Implementation = struct
 
   let typeof_enum tag_sym =
     match List.find_opt (fun (z, _) -> sym_eq z tag_sym) !registered_enums with
-      | None        -> None
-      | Some (_, z) -> Some z
+      | None ->
+          failwith ("Ocaml_implementation.typeof_enum: '" ^
+                    Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
+      | Some (_, z) ->
+          z
 end
 
 module Impl = DefaultImpl
