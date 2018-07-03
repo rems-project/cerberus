@@ -1,0 +1,213 @@
+
+=====================================================
+# FOLDER NON FATAL CONSTRAINT VIOLATION
+=====================================================
+# Total tests: 27
+# Total supported: 20
+# Unsupported tests: 7
+
+# Unsupported tests:
+CV-CDI4-good.c: bitfields
+CV-CDT5-good.c: bitfields
+CV-TEG1-good.c: generics
+CV-TEG2-good.c: generics
+CV-TEG3-good.c: generics
+CV-TEAS2-good.c: function pointer
+CV-TSE2-good.c: function pointer
+
+# GOOD ONES:
+PASS: 17 (85%)
+FAIL: 3
+CV-TCANON1-good.c: alignas inside struct
+CV-TSE1-good.c: struct initialisation
+CV-TTE4-good.c: Issue #75
+
+# BAD ONES:
+PASS: 34 (89.5%)
+FAIL: 1
+CV-CTI2-bad-static.c: int a[0]
+
+
+=====================================================
+# FOLDER FATAL CONSTRAINT VIOLATION
+=====================================================
+# Total tests: 40
+# Total supported: 38
+# Unsupported tests: 2
+
+# Unsupported tests:
+CV-CTI3-good.c: bitfields
+CV-TDG9-good.c: variable length array
+
+# GOOD ONES:
+PASS: 38 (100%)
+
+# BAD ONES:
+PASS: 34 (89.5%)
+FAIL: 4
+CV-SSA1-bad-static.c: static assert
+CV-SSA2-bad-static.c: static assert
+CV-TDL3-bad-static.c: extern declaration with incompatible types
+CV-TSE3-bad-static.c: wrong initializer for static object duration
+
+=====================================================
+# FOLDER UNSPECIFIED
+=====================================================
+# Total tests: 9
+# Total supported: 6
+# Unsupported tests: 3
+
+# Unsupported tests:
+USP-IO3-good.c: fwrite
+USP-STDLIB6-good.c: at_quick_exit
+USP-STDLIB3-good.c: atexit
+
+# GOOD ONES:
+PASS: 6 (100%)
+
+# BAD ONES:
+Cerberus correct run the bad tests, since it has
+its own semantics for unspecified values.
+
+=====================================================
+# FOLDER IMPLEMENTATION DEFINED
+=====================================================
+# Total tests: 11
+# Total supported: 7
+# Unsupported tests: 4
+
+# Unsupported tests:
+IMPL-CTI4-good.c: bitfields
+IMPL-EIO5-good.c: pthread
+IMPL-EIO6-good.c: pthread
+IMPL-PTHREAD99-good.c: pthread
+
+# GOOD ONES:
+PASS: 7 (100%)
+
+# BAD ONES:
+Cerberus correct run the bad tests, but does not
+report any errors, since it is implementation-defined.
+
+=====================================================
+# FOLDER POSIX
+=====================================================
+12 tests.
+Out of scope.
+
+=====================================================
+# FOLDER SYNTAX ERROR
+=====================================================
+Only 1 test.
+Cerberus correct run the good and bad tests.
+
+
+=====================================================
+# FOLDER LINT
+=====================================================
+
+# Total tests: 19
+# Total supported 14
+# Unsupported tests: 5
+
+# Unsupported tests:
+L-CEE6-good.c: FILE
+L-CEIE2-good.c: fopen
+L-EXC3-good.c: function pointers
+L-PTHREAD9-good.c: pthreads
+L-UNISTD1-good.c: pthreads
+
+# GOOD ONES
+PASS: 13 (92.8%)
+FAIL: 1
+L-STDLIBE3-good.c: realloc
+
+# BAD ONES
+Out of scope of Cerberus.
+Tests run all the "bad" files without reporting any errors.
+
+=====================================================
+# FOLDER UNDEFINED
+=====================================================
+
+# Total tests: 114
+# Total supported: 75
+# Unsupported tests: 39
+
+# Unsupported tests
+UB-CCV12-good.c: float overflow
+UB-CCV3-good.c: float conversion
+UB-CCV4-good.c: float function `pow`
+UB-CTM1-good.c: variable length array
+UB-ECL3-good.c: restrict
+UB-ECL4-good.c: restrict
+UB-EEA2-good.c: restrict
+UB-EEA3-good.c: restrict
+UB-EEA4-good.c: array with static inside
+UB-EEA5-good.c: array with static inside
+UB-EEC1-good.c: variable length array
+UB-EFNC1-good.c: function pointer
+UB-EFNC2-good.c: function pointer
+UB-EIO4-good.c: volatile
+UB-EIO9-good.c: volatile
+UB-IO1-good.c: fwrite
+UB-IO2-good.c: fwrite
+UB-SETJMP1-good.c: setjmp
+UB-SETJMP2-good.c: setjmp
+UB-SIGNAL1-good.c: signal
+UB-SIGNAL2-good.c: signal
+UB-SIGNAL3-good.c: signal
+UB-SIGNAL4-good.c: signal
+UB-STDARG1-good.c: varargs
+UB-STDARG10-good.c: varargs
+UB-STDARG12-good.c: varargs
+UB-STDARG2-good.c: varargs
+UB-STDARG3-good.c: varargs
+UB-STDARG4-good.c: varargs
+UB-STDARG5-good.c: varargs
+UB-STDARG6-good.c: varargs
+UB-STDARG9-good.c: varargs
+UB-STDIO13-good.c: wchar
+UB-STDIO3-good.c: varargs
+UB-STDIO7-good.c: fopen
+UB-STDIO8-good.c: fopen
+UB-STDIO9-good.c: fopen
+UB-STDLIB4-good.c: atexit (signal)
+UB-STDLIB5-good.c: at_quick_exit (signal)
+
+
+# GOOD ONES
+PASS: 67 (89.3%)
+FAIL: 8
+UB-CB2-good.c
+UB-CDT2-good.c
+UB-CEB3-good.c
+UB-CEB7-good.c
+UB-CEE3-good.c
+UB-EIO7-good.c
+UB-STDLIB1-good.c
+UB-TDG12-good.c
+
+# BAD ONES
+PASS: 58 (77.3%)
+FAIL: 9
+UB-EEA1-bad.c: overlapping storage
+UB-EIO3-bad.c: mutating const object
+UB-EIO7-bad.c: init array (int a[])
+UB-EIO8-bad.c: unsequence effects
+UB-ESR1-bad.c: no return
+UB-STDIO1-bad.c: printf wrong flags
+UB-STDIO10-bad.c: printf wrong flags
+UB-STDIO11-bad.c: printf wrong flags
+UB-STDLIB1-bad.c: realloc string literals
+
+Different semantics according to Cerberus (8)
+UB-CCV7-bad.c: pointer value not representable by integer type short
+UB-CEA1-bad.c: create a pointer outside the bounds of an object
+UB-CEE2-bad.c: unspecified value
+UB-CERL1-bad.c: pointer comparison from different provenance
+UB-CERL2-bad.c: pointer comparison from different provenance
+UB-CERL3-bad.c: pointer comparison from different provenance
+UB-CERL4-bad.c: pointer comparison from different provenance
+UB-CID2-bad.c: unspecified value
+
