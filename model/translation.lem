@@ -2030,6 +2030,7 @@ TODO: #9
              associated temporary objects *)
           (* NOTE: combine_params_args does the argument promotion for variadic functions *)
           E.mapM (fun (param_ty, arg_e) ->
+            (* TODO: Does this function has a prototype? I assume it does, since we know the parameter type *)
             let param_bTy =
               C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype param_ty)) in
             let arg_bTy =
@@ -2055,9 +2056,8 @@ TODO: #9
                           stdlib.mkcall_conv_loaded_int param_ty arg_sym_pe
                         else if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant arg_e then (* TODO: probably not completely right *)
                           Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype param_ty))
-                        else if param_ty = Aty.Basic (Aty.Floating (Aty.RealFloating Aty.Float)) then
-                          (* TODO: convert to double *)
-                           arg_sym_pe
+                        else if AilTypesAux.is_floating param_ty then
+                          conv_loaded_arith stdlib (ctype_of arg_e) param_ty arg_sym_pe
                         else
                           arg_sym_pe in
                       Caux.pstore loc param_ctype_pe arg_ptr_sym_pe conved_init Cmm.NA
@@ -3059,6 +3059,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
               stdlib.mkcall_loaded_ivfromfloat env.return_ty e_sym_pe
             else
               stdlib.mkcall_conv_loaded_int env.return_ty e_sym_pe
+
+          else if AilTypesAux.is_pointer env.return_ty && Aaux.is_null_pointer_constant e then
+            Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype env.return_ty))
           else
             e_sym_pe in
         
