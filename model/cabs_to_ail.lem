@@ -2114,14 +2114,19 @@ and wip_desugar_initializer_ loc dur current_ty init =
     desugar_expression e >>= fun d_e ->
     (* STD §6.7.9#4 *)
     if dur = ATypes.Static || dur = ATypes.Thread then
-      if AilTypesAux.is_integer current_ty then
-        evaluate_integer_constant_expression loc (Just current_ty) d_e >>= fun n ->
-        E.return begin
-          (current_ty, AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant n Decimal Nothing))))
-        end
-      else
-        (* TODO: floating and pointer *)
-        E.return (current_ty, d_e)
+      is_initializer_constant_expression d_e >>= function
+        | false ->
+            E.fail (Loc.locOf d_e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
+        | true ->
+            if AilTypesAux.is_integer current_ty then
+              evaluate_integer_constant_expression loc (Just current_ty) d_e >>= fun n ->
+              E.return begin
+                (current_ty, AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant n Decimal Nothing))))
+              end
+            else
+              (* TODO: floating and pointer *)
+              E.return (current_ty, d_e)
+      end
     else
       E.return (current_ty, d_e)
   
