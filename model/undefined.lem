@@ -670,6 +670,8 @@ type undefined_behaviour =
   (* The towctrans function is called using a different LC_CTYPE category from the one in effect for
      the call to the wctrans function that returned the description (7.30.3.2.1). *)
   | UB203
+  (* The constant expression shall be an integer constant expression. *)
+  | UB204_illtyped_Static_assert
 
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
@@ -1061,6 +1063,8 @@ let pretty_string_of_undefined_behaviour = function
       "(§7.2.1.1#1) found an assert whose argument does not have a scalar type"
   | UB153_insufficient_arguments_for_format ->
       "Insufficient_arguments_for_format"
+  | UB204_illtyped_Static_assert ->
+      "(§6.7.10#3) The constant expression shall be an integer constant expression."
   | Illtyped_argument_for_format ->
       "Illtyped_argument_for_format"
   | Invalid_format str ->
