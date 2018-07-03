@@ -1195,7 +1195,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
              (* NOTE: the preceding STD clause is performed by a typecheck done by
                 [WipFrontend.evalIntegerConstantExpression] *)
              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
-              if n < 0 then
+              if n <= 0 then
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, sentence 3")
               else
                 E.return (fun qs ty -> perform_adjust qs (ATypes.Array ty (Just n)))
