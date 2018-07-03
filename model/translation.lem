@@ -2053,6 +2053,8 @@ TODO: #9
                       let conved_init =
                         if AilTypesAux.is_integer param_ty then
                           stdlib.mkcall_conv_loaded_int param_ty arg_sym_pe
+                        else if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant arg_e then (* TODO: probably not completely right *)
+                          Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype param_ty))
                         else if param_ty = Aty.Basic (Aty.Floating (Aty.RealFloating Aty.Float)) then
                           (* TODO: convert to double *)
                            arg_sym_pe
