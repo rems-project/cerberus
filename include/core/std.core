@@ -279,7 +279,6 @@ fun wrapI(ty: ctype, n: integer) : integer :=
     else
       r - dlt
 
-
 proc [ailname= "memcpy"] memcpy_proxy (s1_ptr: pointer, s2_ptr: pointer, n_ptr: pointer) : eff loaded pointer :=
   let strong _s1: loaded pointer = load(!(void *), s1_ptr) in
   let strong _s2: loaded pointer = load(!(void *), s2_ptr) in
@@ -323,3 +322,18 @@ proc [ailname = "free"] free_proxy (p_ptr: pointer) : eff unit :=
     | _: loaded pointer =>
         pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
   end
+
+proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong align_: loaded integer = load(!(size_t), align_ptr) in
+  let strong size_: loaded integer = load(!(size_t), size_ptr) in
+  case (align_, size_) of
+    | (Specified(align: integer), Specified(size: integer)) =>
+        if size rem_t align = 0 then
+          let strong ptr: pointer = alloc(align, size) in
+          pure(Specified(ptr))
+        else
+          pure(undef(<<DUMMY(align_alloc)>>))
+    | (_: loaded integer, _: loaded integer) =>
+        pure(error(<<<align_alloc_proxy>>>, False))
+  end
+
