@@ -185,8 +185,27 @@ let format =
 (* if the given flags require it, prefix the given result of the conversion with
    a sign or space or convert it to an "alternative form".
    This correspond to the flags: + space # *)
-val expand: flags -> list char -> list char
-let expand fs str =
+val expand: flags -> conversion_specifier -> list char -> list char
+let expand fs cspec str =
+  (* first doing the # flag *)
+  let str =
+    if fs.flag_hash then
+      match cspec with
+        | CS_o ->
+            (* TODO *)
+            str
+        | CS_x ->
+            #'0' :: #'x' :: str
+        | CS_X ->
+            #'0' :: #'X' :: str
+        | _ ->
+            (* NOTE: must be a, A, e, E, f, F, g, or G *)
+            (* NOTE: this is checked earlier *)
+            (* TODO: not doing the right thing for now *)
+            str
+      end
+    else
+      str in
   if isPrefixOf [#'-'] str then
     str
   else if fs.flag_plus then
@@ -876,7 +895,6 @@ let convert eval_conv prec_opt lm_opt cspec args =
 
 
 
-
 val     printf_aux: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
                     list char -> format -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let rec printf_aux eval_conv acc fs ty_ptrvals =
@@ -886,19 +904,30 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
     | (F_conv cp :: fs, ty_ptrvals) ->
         convert eval_conv cp.cp_precision cp.cp_length_modifier cp.cp_conversion_specifier ty_ptrvals >>= function
           | Right (U.Defined (str, ty_ptrvals')) ->
-              let expanded  = expand cp.cp_flags str in
-              let justified = match cp.cp_field_width with
-                | Nothing ->
-                    expanded
-                | Just (FW_num fw) ->
-                    if length expanded < fw then
-                      justify cp.cp_precision cp.cp_conversion_specifier cp.cp_flags fw expanded
-                    else
+              if cp.cp_flags.flag_plus && not (isSignedConversion cp.cp_conversion_specifier) then
+                (* TODO: add a proper UB variant *)
+                Mem.return (Right (U.undef (Loc.other "printf() + flag") [U.DUMMY "+ flag with unsigned conversion"]))
+              (* TODO: CS_F | CS_e | CS_E | CS_g | CS_G | CS_a | CS_A *)
+              else if    cp.cp_flags.flag_hash
+                      && not (List.elem cp.cp_conversion_specifier [CS_o; CS_x; CS_X; CS_f]) then
+                Mem.return (Right (U.undef (Loc.other "printf() # flag") [U.UB157]))
+              else if    cp.cp_flags.flag_zero
+                      && not (List.elem cp.cp_conversion_specifier [CS_di; CS_o; CS_u; CS_x; CS_X; CS_f]) then
+                Mem.return (Right (U.undef (Loc.other "printf() 0 flag") [U.UB157]))
+              else
+                let expanded  = expand cp.cp_flags cp.cp_conversion_specifier str in
+                let justified = match cp.cp_field_width with
+                  | Nothing ->
                       expanded
-                | Just FW_asterisk ->
-                    error "TODO: output.lem 6"
-              end in
-              printf_aux eval_conv (acc ++ justified) fs ty_ptrvals'
+                  | Just (FW_num fw) ->
+                      if length expanded < fw then
+                        justify cp.cp_precision cp.cp_conversion_specifier cp.cp_flags fw expanded
+                      else
+                        expanded
+                  | Just FW_asterisk ->
+                      error "TODO: output.lem 6"
+                end in
+                printf_aux eval_conv (acc ++ justified) fs ty_ptrvals'
           | Right (U.Error loc str) ->
               Mem.return $ Right (U.Error loc str)
           | Right (U.Undef loc ubs) ->
