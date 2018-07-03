@@ -2840,6 +2840,7 @@ open Operators
 
 type translate_stmt_env = <|
   return_ty: Aty.ctype;
+  is_Noreturn: bool;
   
   return_lab  : C.ksym;
   default_lab : maybe C.ksym;
@@ -3035,22 +3036,27 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     
     | A.AilSreturnVoid ->
         E.get_visible_objects >>= fun visible_syms ->
-        E.return $
-          let bTy =
-            if List.length visible_syms < 2 then
-              C.BTy_unit
-            else
-              C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
-          Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
-            (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) visible_syms)
-            (* TODO: check the symbols *)
-            (Caux.mk_run_e env.return_lab [Caux.mk_unit_pe])
+        E.return $ begin
+          if env.is_Noreturn then
+            Caux.mk_pure_e (Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn)
+          else
+            let bTy =
+              if List.length visible_syms < 2 then
+                C.BTy_unit
+              else
+                C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
+            Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
+              (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) visible_syms)
+              (* TODO: check the symbols *)
+              (Caux.mk_run_e env.return_lab [Caux.mk_unit_pe])
+        end
     
     | A.AilSreturn e ->
         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
         translate_expression e                    >>= fun core_e                       ->
         E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
         E.get_visible_objects                     >>= fun visible_syms                 ->
+
         
         (* TODO: typing is not enough (should do like assignments) *)
         let ret_pe =
@@ -3067,10 +3073,15 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         
         (* All the visible objects from the current function need to be killed. *)
         (* TODO: Ebound index *)
-        E.return $
-          Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
-            mk_run_e loc env.return_lab visible_syms [] [ret_pe]
-          )
+
+        E.return $ begin
+          if env.is_Noreturn then
+            Caux.mk_pure_e (Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn)
+          else
+            Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
+              mk_run_e loc env.return_lab visible_syms [] [ret_pe]
+            )
+        end
 
     | A.AilSswitch e s ->
         (* Translate controlling expression *)
@@ -3357,6 +3368,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 (translate_stmt2 stdlib core_tagDefs sym <|
                    return_ty= return_ty;
                    return_lab= ret_label;
+                   is_Noreturn= is_Noreturn;
                    default_lab= Nothing;
                    case_labs= [];
                    loop= Nothing;
@@ -3382,11 +3394,12 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (* STD §5.1.2.2.3#1 sentence 1*)
                       (* TODO: "If the return type is not compatible with int" *)
                       Caux.mk_specified_pe (Caux.mk_integer_pe 0)
+                    else if return_ty = Aty.Void && is_Noreturn then
+                      Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn
                     else if return_ty = Aty.Void then
                       Caux.mk_unit_pe
                     else
-                      (* §6.9.1#12 *)
-                      Caux.mk_undef_pe Undefined.UB088_reached_end_of_function in
+                      Caux.mk_std_undef_pe "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e (ret_label, ret_bTy) [(ret_sym, (ret_bTy, ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
 
