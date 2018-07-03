@@ -2055,12 +2055,10 @@ TODO: #9
                   Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
                     begin
                       let conved_init =
-                        if AilTypesAux.is_integer param_ty then
-                          stdlib.mkcall_conv_loaded_int param_ty arg_sym_pe
+                        if AilTypesAux.is_integer param_ty || AilTypesAux.is_floating param_ty then
+                          conv_loaded_arith stdlib (ctype_of arg_e) param_ty arg_sym_pe
                         else if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant arg_e then (* TODO: probably not completely right *)
                           Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype param_ty))
-                        else if AilTypesAux.is_floating param_ty then
-                          conv_loaded_arith stdlib (ctype_of arg_e) param_ty arg_sym_pe
                         else
                           arg_sym_pe in
                       Caux.pstore loc param_ctype_pe arg_ptr_sym_pe conved_init Cmm.NA
