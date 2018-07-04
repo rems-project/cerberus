@@ -1,0 +1,14 @@
+[ILL-TYPED CORE]
+  960215-1.c
+  cvt-1.c
+  gofast.c
+  postmod-1.c
+  regstack-1.c
+
+
+940115-1.c               Memory WIP: lt_ptrval
+
+20120808-1.c             see issue #78
+980707-1.c               (maybe also issue #78)
+
+pr34176.c

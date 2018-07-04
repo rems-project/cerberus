@@ -1,0 +1,31 @@
+20000314-3.c      LOOKS INVALID
+20050613-1.c      INVALID: zerolen array
+
+
+[feature not yet supported: sizeof (type variant) operator in `integer constant expressions']
+  20111212-1.c              KO
+  20120105-1.c              KO
+  pr43987.c                 KO
+  pr65369.c                 "TODO: integer expression was illtyped" <== means wipFrontend failed
+  strcmp-1.c                KO: ABORT
+  strncmp-1.c               KO: ABORT
+
+
+20170401-1.c      Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'
+pr45070.c         Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'
+
+pr22098-3.c       too eager when checking (§6.7.9#4)
+
+20041218-1.c      TODO:
+                        1. need the static desug branch do be done
+                        2. generates illtyped Core
+
+
+
+
+
+
+
+
+
+
