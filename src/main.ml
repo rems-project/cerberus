@@ -433,7 +433,7 @@ let impl =
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
   (* TODO: use to be "gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime" *)
-  Arg.(value & opt string ("cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
+  Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__ -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let exec =
