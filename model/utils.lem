@@ -16,6 +16,25 @@ declare ocaml target_rep function error = `Debug_ocaml.error`
 declare hol target_rep function error = `ARB`
 
 
+val mkListN: integer -> list integer
+let rec mkListN_aux n (i: integer) acc =
+  if i < n then
+    mkListN_aux n (i+1) (i::acc)
+  else
+    List.reverse acc
+let mkListN n =
+  mkListN_aux n 0 []
+
+val mkListFromTo: integer -> integer -> list integer
+let rec mkListFromTo_aux (i: integer) max acc =
+  if i <= max then
+    mkListFromTo_aux (i+1) max (i::acc)
+  else
+    List.reverse acc
+let mkListFromTo start max =
+  mkListFromTo_aux start max []
+
+
 val     numerote_: forall 'a. nat -> list 'a -> list (nat * 'a)
 let rec numerote_ n l =
   match l with

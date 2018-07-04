@@ -78,7 +78,7 @@ end
 
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
 let rec objectValueFromMemValue mem_val =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "objectValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
@@ -92,7 +92,7 @@ let rec objectValueFromMemValue mem_val =
     (fun sym ident mem_val -> (OTy_union sym, OVunion sym ident mem_val))
 
 and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "loadedValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
@@ -117,7 +117,7 @@ and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
 
 val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "valueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
