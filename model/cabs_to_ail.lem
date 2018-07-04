@@ -453,12 +453,18 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return true
     | AilEconst (ConstantCharacter _) ->
         E.return true
-    | AilEsizeof _ _ ->
-        (* TODO: this is allowed as long as the type is not a VLA (see §6.5.3.4#, sentence 4  *)
-        E.fail loc (Errors.Desugar_NotyetSupported "sizeof (type variant) operator in `integer constant expressions'")
+    | AilEsizeof _ ty ->
+        if AilTypesAux.is_vla ty then
+          (* STD §6.5.3.4#2, sentence 4 *)
+          E.return false
+        else
+          E.return true
     | AilEsizeof_expr _ ->
-        (* TODO: this is allowed as long as the type is not a VLA (see §6.5.3.4#, sentence 4  *)
-        E.fail loc (Errors.Desugar_NotyetSupported "sizeof (expr variant) operator in `integer constant expressions'")
+        if AilTypesAux.is_vla ty then
+          (* STD §6.5.3.4#2, sentence 4 *)
+          E.return false
+        else
+          E.return true
     | AilEalignof _ _ ->
         E.return true
 
