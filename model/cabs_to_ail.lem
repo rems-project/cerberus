@@ -460,10 +460,14 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         else
           E.return true
     | AilEsizeof_expr _ ->
+        (* TODO: this is wrong if the expression is a VLA *)
+        (* but I can't easily ask the Ail typing for now ... *)
+(*
         if AilTypesAux.is_vla ty then
           (* STD §6.5.3.4#2, sentence 4 *)
           E.return false
         else
+*)
           E.return true
     | AilEalignof _ _ ->
         E.return true
