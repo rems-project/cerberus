@@ -1,7 +1,8 @@
 ail-typing                                   4
+compound_assigments                          1
 desugaring                                   12
 desugaring/fancy_initialisers                17
-desugaring/internal_static_declarations      1
+desugaring/internal_global_declarations      2
 eval                                         9
 ill-formed                                   9
 internal                                     13
