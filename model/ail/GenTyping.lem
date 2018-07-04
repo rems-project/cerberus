@@ -1200,6 +1200,10 @@ TODO
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
+          let () = Debug.print_debug 0 [] (fun () ->
+            "gty1: " ^ Pp.stringFromAil_genType gty1 ^
+            " <--> gty2: " ^ Pp.stringFromAil_genType gty2
+          ) in
           E.fail loc (TError_TODO 46)
     
     | AilEsizeof qs ty ->
