@@ -576,6 +576,10 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
     | AilEident _ ->
         E.return is_lvalue
 
+    (* TODO: not sure about this! but I want to include enumerations *)
+    | AilEannot _ e ->
+        is_arithmetic_constant_expression true e
+
     | AilEunary Address e ->
         is_arithmetic_constant_expression true e
     | AilEunary _ e ->
