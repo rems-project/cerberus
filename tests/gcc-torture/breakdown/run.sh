@@ -1,18 +1,22 @@
 #!/bin/bash
 
 SUCCESS=$(git ls-files success/*.c | wc -l)
+LIMBUS=$(git ls-files limbus/*.c | wc -l)
 FAILURE=$(git ls-files fail | grep -E '.c$' | wc -l)
+NOTSTD=$(git ls-files not_std_compliant | grep -E '.c$' | wc -l)
 UNSUPP=$(git ls-files not_supported | grep -E '.c' | wc -l)
 INVALID=$(git ls-files invalid/*.c | wc -l)
 UNDEFINED=$(git ls-files undefined/*.c | wc -l)
 
-VALID_TOTAL=$((SUCCESS+FAILURE))
+VALID_TOTAL=$((SUCCESS+LIMBUS+FAILURE))
 TOTAL=$((VALID_TOTAL+UNSUPP+UNDEFINED+INVALID))
 
-SUCCRATE=$(((SUCCESS*1000)/VALID_TOTAL))
+SUCCRATE=$((((SUCCESS+LIMBUS)*1000)/VALID_TOTAL))
 
 echo Total of tests: $TOTAL
-echo Success: $SUCCESS
+echo Success: $((SUCCESS+LIMBUS))
+echo Limbus \(stack overflow otherwise\): $LIMBUS
+echo Not STD compliant: $NOTSTD
 echo Failure: $FAILURE
 echo Unsupported: $UNSUPP
 echo Undefined: $UNDEFINED
@@ -34,5 +38,13 @@ cd not_supported
 for d in `find . -type d ! -path .`
 do
 	echo $d: $(git ls-files $d/*.c | wc -l)
+done
+cd ..
+echo ""
+echo Not STD compliant by type:
+cd not_std_compliant
+for d in `find . -type d ! -path .`
+do
+	echo $d: $(ls $d/*.c | wc -l)
 done
 
