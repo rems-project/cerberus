@@ -1,18 +1,20 @@
 #!/bin/bash
 
 SUCCESS=$(ls success/*.c | wc -l)
+LIMBUS=$(ls limbus/*.c | wc -l)
 FAILURE=$(ls -R fail | grep -E '\.c' | wc -l)
 UNSUPP=$(ls -R not_supported | grep -E '\.c' | wc -l)
 INVALID=$(ls invalid/*.c | wc -l)
 UNDEFINED=$(ls undefined/*.c | wc -l)
 
-VALID_TOTAL=$((SUCCESS+FAILURE))
+VALID_TOTAL=$((SUCCESS+LIMBUS+FAILURE))
 TOTAL=$((VALID_TOTAL+UNSUPP+UNDEFINED+INVALID))
 
-SUCCRATE=$(((SUCCESS*1000)/VALID_TOTAL))
+SUCCRATE=$((((SUCCESS+LIMBUS)*1000)/VALID_TOTAL))
 
 echo Total of tests: $TOTAL
-echo Success: $SUCCESS
+echo Success: $((SUCCESS+LIMBUS))
+echo Limbus \(stack overflow otherwise\): $LIMBUS
 echo Failure: $FAILURE
 echo Unsupported: $UNSUPP
 echo Undefined: $UNDEFINED
