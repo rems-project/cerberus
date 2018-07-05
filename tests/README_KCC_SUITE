@@ -1,3 +1,11 @@
+TOTAL TESTS: (GOOD): 238
+             (BAD) : 237
+UNSUPPORTED: (GOOD): 72
+             (BAD) : 89
+TOTAL SUPPORTED (GOOD): 166
+                (BAD) : 148
+SUCCESS (GOOD): 158 (95.2%)
+        (BAD) : 141 (95.3%)
 
 =====================================================
 # FOLDER NON FATAL CONSTRAINT VIOLATION
@@ -16,16 +24,13 @@ CV-TEAS2-good.c: function pointer
 CV-TSE2-good.c: function pointer
 
 # GOOD ONES:
-PASS: 17 (85%)
-FAIL: 3
+PASS: 18 (90%)
+FAIL: 2
 CV-TCANON1-good.c: alignas inside struct
 CV-TSE1-good.c: struct initialisation
-CV-TTE4-good.c: Issue #75
 
 # BAD ONES:
-PASS: 34 (89.5%)
-FAIL: 1
-CV-CTI2-bad-static.c: int a[0]
+PASS: 20 (100%)
 
 
 =====================================================
@@ -43,12 +48,9 @@ CV-TDG9-good.c: variable length array
 PASS: 38 (100%)
 
 # BAD ONES:
-PASS: 34 (89.5%)
-FAIL: 4
-CV-SSA1-bad-static.c: static assert
-CV-SSA2-bad-static.c: static assert
+PASS: 37 (97.3%)
+FAIL: 1
 CV-TDL3-bad-static.c: extern declaration with incompatible types
-CV-TSE3-bad-static.c: wrong initializer for static object duration
 
 =====================================================
 # FOLDER UNSPECIFIED
@@ -98,7 +100,7 @@ Out of scope.
 =====================================================
 # FOLDER SYNTAX ERROR
 =====================================================
-Only 1 test.
+Only 2 good tests and 1 bad.
 Cerberus correct run the good and bad tests.
 
 
@@ -130,8 +132,8 @@ Tests run all the "bad" files without reporting any errors.
 # FOLDER UNDEFINED
 =====================================================
 
-# Total tests: 114
-# Total supported: 75
+# Total tests: 118
+# Total supported: 79
 # Unsupported tests: 39
 
 # Unsupported tests
@@ -174,31 +176,26 @@ UB-STDIO8-good.c: fopen
 UB-STDIO9-good.c: fopen
 UB-STDLIB4-good.c: atexit (signal)
 UB-STDLIB5-good.c: at_quick_exit (signal)
+UB-TDG1-bad-static.c: function pointer
 
 
 # GOOD ONES
-PASS: 67 (89.3%)
-FAIL: 8
-UB-CB2-good.c
-UB-CDT2-good.c
-UB-CEB3-good.c
-UB-CEB7-good.c
-UB-CEE3-good.c
-UB-EIO7-good.c
-UB-STDLIB1-good.c
-UB-TDG12-good.c
+PASS: 74 (93.7%)
+FAIL: 5
+UB-CB2-good.c : declaration of function with no arguments
+UB-CDT2-good.c : union as value
+UB-CEB3-good.c : Core_aux.zeros should only be called on complete types
+UB-EIO7-good.c : Core_aux.zeros should only be called on complete types
+UB-TDG12-good.c : Core_aux.zeros should only be called on complete types
 
 # BAD ONES
-PASS: 58 (77.3%)
-FAIL: 9
+PASS: 73 (92.4%)
+FAIL: 6
+UB-CB1-bad.c: conversion from double to int in function call
 UB-EEA1-bad.c: overlapping storage
 UB-EIO3-bad.c: mutating const object
-UB-EIO7-bad.c: init array (int a[])
 UB-EIO8-bad.c: unsequence effects
-UB-ESR1-bad.c: no return
 UB-STDIO1-bad.c: printf wrong flags
-UB-STDIO10-bad.c: printf wrong flags
-UB-STDIO11-bad.c: printf wrong flags
 UB-STDLIB1-bad.c: realloc string literals
 
 Different semantics according to Cerberus (8)
