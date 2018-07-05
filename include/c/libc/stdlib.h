@@ -132,6 +132,7 @@ void *calloc(size_t nmemb, size_t size)
   return ret;
 }
 
+/*
 void *realloc(void *ptr, size_t size)
 {
   void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
@@ -140,6 +141,7 @@ void *realloc(void *ptr, size_t size)
     memcpy(r, ptr, size);
   return r;
 }
+*/
 
 // TODO: This is based on the standard
 static unsigned long int next = 1;

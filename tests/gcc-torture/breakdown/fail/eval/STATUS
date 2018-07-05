@@ -1,9 +1,6 @@
 [ILL-TYPED CORE]
-  960215-1.c
   cvt-1.c
   gofast.c
-  postmod-1.c
-  regstack-1.c
 
 
 940115-1.c               Memory WIP: lt_ptrval

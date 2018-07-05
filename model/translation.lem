@@ -3307,8 +3307,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     )
                 end >>= fun (e_bTy, core_e) ->
                 let core_init_e =
-                  if AilTypesAux.is_integer ty then
-                    stdlib.mkcall_conv_loaded_int ty (Caux.mk_sym_pe e_sym)
+                  if AilTypesAux.is_integer ty || AilTypesAux.is_floating ty then
+                    conv_loaded_arith stdlib (ctype_of expr) ty (Caux.mk_sym_pe e_sym)
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
                     Caux.mk_sym_pe e_sym in
