@@ -1159,7 +1159,7 @@ AilTypesAux.make_composite
           fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^
                                                    show sym ^ ", old decl= " ^ string_of_decl prev_decl ^ " --- vs --- " ^ string_of_decl decl))
         else
-          let () = Debug.print_debug 0 [] (fun () -> "HELLO: decl == prev_decl") in
+          let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->

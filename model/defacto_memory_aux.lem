@@ -167,10 +167,10 @@ let tmp_OR width n1 n2 =
   let nbits = 8 * width in
   let n1_ = encode nbits n1 in
   let n2_ = encode nbits n2 in
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "nbits= " ^ show nbits ^ ", n1 = " ^ show n1 ^ " -- n1_= " ^ show n1_
   ) in
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "nbits= " ^ show nbits ^ ", n2 = " ^ show n2 ^ " -- n2_= " ^ show n2_
   ) in
   decode nbits (tmp_OR_aux nbits n1_ n2_)
