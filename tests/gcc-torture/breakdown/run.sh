@@ -3,6 +3,7 @@
 SUCCESS=$(ls success/*.c | wc -l)
 LIMBUS=$(ls limbus/*.c | wc -l)
 FAILURE=$(ls -R fail | grep -E '\.c' | wc -l)
+NOTSTD=$(ls -R not_std_compliant | grep -E '\.c' | wc -l)
 UNSUPP=$(ls -R not_supported | grep -E '\.c' | wc -l)
 INVALID=$(ls invalid/*.c | wc -l)
 UNDEFINED=$(ls undefined/*.c | wc -l)
@@ -15,6 +16,7 @@ SUCCRATE=$((((SUCCESS+LIMBUS)*1000)/VALID_TOTAL))
 echo Total of tests: $TOTAL
 echo Success: $((SUCCESS+LIMBUS))
 echo Limbus \(stack overflow otherwise\): $LIMBUS
+echo Not STD compliant: $NOTSTD
 echo Failure: $FAILURE
 echo Unsupported: $UNSUPP
 echo Undefined: $UNDEFINED
@@ -33,6 +35,14 @@ cd ..
 echo ""
 echo Unsupported by type:
 cd not_supported
+for d in `find . -type d ! -path .`
+do
+	echo $d: $(ls $d/*.c | wc -l)
+done
+cd ..
+echo ""
+echo Not STD compliant by type:
+cd not_std_compliant
 for d in `find . -type d ! -path .`
 do
 	echo $d: $(ls $d/*.c | wc -l)
