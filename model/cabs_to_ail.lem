@@ -602,7 +602,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
 
     | AilEsizeof _ ty ->
         (* TODO: sizeof expressions whose results are integer constants *)
-        E.return (AilTypesAux.is_vla ty)
+        E.return (not (AilTypesAux.is_vla ty))
     | AilEalignof _ _ ->
         E.return true
     | AilEcast _ ty e ->
@@ -610,7 +610,9 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
           E.return false
         else
           E.print_debugM 1 (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") >>
-          E.return true
+(*          E.return true *)
+          (* TODO: is_lvalue might be wrong depending on the type of e? *)
+          is_arithmetic_constant_expression is_lvalue e
         
     | _ ->
         E.return false
@@ -629,8 +631,6 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
           | _ ->
               E.return false
         end
-
-
 (* The array-subscript [] and member-access . and -> operators, the address & and indirection * unary operators, and pointer casts may be used in the creation of an address constant, but the value of an object shall not be accessed by use of these operators. *)
     | AilEbinary e1 (Arithmetic Add) e2 ->
         (* NOTE: this case corresponds to array-subcript *)
@@ -639,10 +639,18 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
         is_lvalue_to_static_object e2        >>= fun b21 ->
         is_arithmetic_constant_expression false (* TODO check *) e2 >>= fun b22 ->
         E.return (b11 && b22 || b12 && b21)
+    | AilEmemberofptr e memb_ident ->
+        (* TODO: not sure *)
+        is_lvalue_to_static_object e
+    | AilEcast _ ty e ->
+        (* TODO: check *)
+        if not (AilTypesAux.is_pointer ty) then
+          E.return false
+        else
+          is_lvalue_to_static_object e
+
 (* TODO
     | AilEmemberof e ident ->
-        
-    | AilEmemberofptr e ident ->
 *)
     | _ ->
         E.return false
@@ -663,7 +671,12 @@ let is_address_constant a_expr =
     | AnnotatedExpression () _ _ (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
     | AnnotatedExpression () _ _ (AilEcast _ Pointer expr) ->
-        is_integer_constant_expression expr
+        is_lvalue_to_static_object expr >>= function
+          | true ->
+              E.return true
+          | false ->
+              is_integer_constant_expression expr
+        end
     | _ ->
         E.return false
   end
