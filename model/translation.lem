@@ -3181,7 +3181,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.mapM (fun (ptr_sym, e) ->
           E.resolve_object_type ptr_sym >>= fun ty ->
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype ty)) in
-          E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, _, e_sym_pe) ->
+          E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
             | Aty.Pointer _ ref_ty ->
                 if Aaux.is_null_pointer_constant e then
@@ -3197,32 +3197,17 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                     )
             | ty ->
                 (* we are not dealing with a pointer initialisation *)
+(*
                 E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
-                translate_expression e                 >>= fun core_e         ->
                 let e_sym_pe = Caux.mk_sym_pe e_sym in
+*)
+                translate_expression e >>= fun core_e ->
                 E.return (
                   Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
                     (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
                       (if AilTypesAux.is_arithmetic ty then conv_loaded_arith stdlib (ctype_of e) ty e_sym_pe else e_sym_pe) Cmm.NA)
                 )
           end
-(*
-          if AilTypesAux.is_pointer ty then
-            let () = Debug.print_debug 1 "IS A PTR" in
-(*            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>=  *)
-            E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
-            begin
-              if
-            end
-            self e                     >>= fun core_e         ->
-            let e_sym_pe = Caux.mk_sym_pe e_bTy e_sym in
-            E.return (
-              C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e
-                (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_sym) e_sym_pe Cmm.NA)
-            )
-          
-          else
-*)
         ) sym_es >>= fun z ->
         
         (* This pass combines the translated declarations *)

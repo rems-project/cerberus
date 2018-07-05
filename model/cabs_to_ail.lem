@@ -98,7 +98,7 @@ let stringFromInit_path xs =
 (* ====================================================================================================================== *)
 
 (*
-val     elemPathFromCtype_aux3: map identifier E.tag_definition -> (init_path * ATypes.ctype) -> ATypes.ctype -> list (init_path * (init_path * ATypes.ctype))
+val     elemPathFromCtype_aux3: map identifier tag_definition -> (init_path * ATypes.ctype) -> ATypes.ctype -> list (init_path * (init_path * ATypes.ctype))
 *)
 let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
   | ATypes.Void ->
@@ -120,20 +120,22 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
       wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
   | ATypes.Struct tag_sym ->
       match Map.lookup tag_sym tagDefs with
-        | Just (E.Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
-            if isAnonymous then
-              error "elemPathFromCtype3_aux, anonymous Struct"
-            else
-              List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
-                wip tagDefs acc
-                  (Elem_member memb_ident :: path_prefix)
-                  (Elem_member memb_ident :: path_prefix, memb_ty)
-                  memb_ty
-              ) (wip tagDefs acc
-                   (Elem_member first_memb_ident :: path_prefix)
-                   (outer_path, outer_ty) 
-                   first_memb_ty)
-                xs
+        | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+            let () = if isAnonymous then
+              Debug.print_debug 0 [] (fun () ->
+                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
+              wip tagDefs acc
+                (Elem_member memb_ident :: path_prefix)
+                (Elem_member memb_ident :: path_prefix, memb_ty)
+                memb_ty
+            ) (wip tagDefs acc
+                 (Elem_member first_memb_ident :: path_prefix)
+                 (outer_path, outer_ty) 
+                 first_memb_ty)
+              xs
         | _ ->
             error "elemPathFromCtype_aux3, Struct"
       end
@@ -145,33 +147,40 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
 end
 
 let elemPathFromCtype3 tagDefs entity_ty =
-  let (outer_path, outer_ty) = match entity_ty with
-    | ATypes.Array elem_ty _ ->
-        ([Elem_array 0], elem_ty)
-    | ATypes.Struct tag_sym ->
-        match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
-              if isAnonymous then
-                error "elemPathFromCtype3, anonymous Struct"
-              else
-                ([Elem_member first_memb_ident], first_memb_ty)
-          | _ ->
-              error "elemPathFromCtype3, Struct"
-        end
-    | ATypes.Union tag_sym ->
-        error "elemPathFromCtype3, Union"
+  match entity_ty with
+    | ATypes.Array _ Nothing ->
+        error "TODO: elemPathFromCtype3, array with unknown size"
     | _ ->
-        ([], entity_ty)
-  end in
-  let xs = 
-    wip tagDefs
-      []              (* acc *)
-      []              (* current path prefix *)
-      (outer_path, outer_ty) (* current outer path and it's type *)
-      entity_ty in
-  List.map (fun (path, outer_path, ty) ->
-    (List.reverse path, List.reverse outer_path, ty)
-  ) (List.reverse xs)
+        let (outer_path, outer_ty) = match entity_ty with
+          | ATypes.Array elem_ty _ ->
+              ([Elem_array 0], elem_ty)
+          | ATypes.Struct tag_sym ->
+              match Map.lookup tag_sym tagDefs with
+                | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                    let () = if isAnonymous then
+                      Debug.print_debug 0 [] (fun () ->
+                        "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
+                      )
+                    else () in
+                    ([Elem_member first_memb_ident], first_memb_ty)
+                | _ ->
+                    error "elemPathFromCtype3, Struct"
+              end
+          | ATypes.Union tag_sym ->
+              error "elemPathFromCtype3, Union"
+          | _ ->
+              ([], entity_ty)
+        end in
+        let xs =
+          wip tagDefs
+            []              (* acc *)
+            []              (* current path prefix *)
+            (outer_path, outer_ty) (* current outer path and it's type *)
+            entity_ty in
+        List.map (fun (path, outer_path, ty) ->
+          (List.reverse path, List.reverse outer_path, ty)
+        ) (List.reverse xs)
+  end
 
 
 
@@ -186,13 +195,15 @@ let rec cardinalityOfCtype tagDefs = function
       n * cardinalityOfCtype tagDefs elem_ty
   | ATypes.Struct tag_sym ->
       match Map.lookup tag_sym tagDefs with
-        | Just (E.Struct_definition isAnonymous xs) ->
-            if isAnonymous then
-              error "cardinalityOfCtype: Struct isAnonymous"
-            else
-              List.foldl (fun acc (_, (_, memb_ty)) ->
-                cardinalityOfCtype tagDefs memb_ty + acc
-              ) 0 xs
+        | Just (Struct_definition isAnonymous xs) ->
+            let () = if isAnonymous then
+              Debug.print_debug 0 [] (fun () ->
+                "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            List.foldl (fun acc (_, (_, memb_ty)) ->
+              cardinalityOfCtype tagDefs memb_ty + acc
+            ) 0 xs
         |  _ ->
             error "cardinalityOfCtype: Struct"
       end
@@ -231,7 +242,7 @@ let skipTo path elems =
 
 
 
-val     ctypeAtPath: map identifier E.tag_definition -> ATypes.ctype -> init_path -> ATypes.ctype
+val     ctypeAtPath: map identifier tag_definition -> ATypes.ctype -> init_path -> ATypes.ctype
 let rec ctypeAtPath tagDefs ty path =
   match (ty, path) with
     | (_, []) ->
@@ -243,7 +254,7 @@ let rec ctypeAtPath tagDefs ty path =
           ctypeAtPath tagDefs elem_ty path'
     | (ATypes.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition _ xs) ->
+          | Just (Struct_definition _ xs) ->
               match List.lookup memb_ident xs with
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
@@ -255,12 +266,50 @@ let rec ctypeAtPath tagDefs ty path =
         end
     (* TODO: union *)
     | _ ->
-        error "ctypeAtPath: wildcard"
+        error ("ctypeAtPath: wildcard ==> " ^
+               Pp.stringFromAil_ctype ATypes.no_qualifiers ty ^
+               " --- path: " ^ stringFromInit_path path)
+  end
+
+
+let rec innerCtype tagDefs ty =
+  match ty with
+    | ATypes.Void ->
+        error "innerCtype: Void"
+    | ATypes.Basic _ ->
+        ty
+    | ATypes.Array elem_ty _ ->
+        innerCtype tagDefs elem_ty
+    | ATypes.Function _ _ _ _ ->
+        error "innerCtype: Function"
+    | ATypes.Pointer _ _ ->
+        ty
+    | ATypes.Atomic atom_ty ->
+        (* TODO: check *)
+        innerCtype tagDefs atom_ty
+    | ATypes.Struct tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition _ ((_, (_, memb_ty)) :: xs)) ->
+              innerCtype tagDefs memb_ty
+          | _ ->
+              error "innerCtype: Struct"
+        end
+    | ATypes.Union tag_sym ->
+        (* TODO: this may be wrong when called in a Desig context ... *)
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition _ ((_, (_, memb_ty)) :: xs)) ->
+              innerCtype tagDefs memb_ty
+          | _ ->
+              error "innerCtype: Union"
+        end
+    | ATypes.Builtin _ ->
+        ty
   end
 
 
 
-val     outerValidPath: map identifier E.tag_definition -> ATypes.ctype -> list (init_element) -> init_path
+
+val     outerValidPath: map identifier tag_definition -> ATypes.ctype -> list (init_element) -> init_path
 let rec outerValidPath_aux tagDefs ty path acc =
   match (ty, path) with
     | (_, []) ->
@@ -280,7 +329,7 @@ let rec outerValidPath_aux tagDefs ty path acc =
           List.reverse acc
     | (ATypes.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition _ ((first_memb_ident, (_, memb_ty)) :: _)) ->
+          | Just (Struct_definition _ ((first_memb_ident, (_, memb_ty)) :: _)) ->
               if first_memb_ident = memb_ident then
                 match path' with
                   | [] ->
@@ -314,7 +363,7 @@ type init_path = list init_element * ATypes.ctype
 E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATypes.ctype)) =
 *)
 
-val constructValue: map identifier E.tag_definition -> list (init_path * expression unit) -> ATypes.ctype -> expression unit
+val constructValue: map identifier tag_definition -> list (init_path * expression unit) -> ATypes.ctype -> expression unit
 let rec constructValue_aux tagDefs path elems = function
   | ATypes.Array elem_ty Nothing ->
       error "constructValue_aux: Array Nothing"
@@ -328,16 +377,18 @@ let rec constructValue_aux tagDefs path elems = function
       end
   | ATypes.Struct tag_sym ->
       match Map.lookup tag_sym tagDefs with
-        | Just (E.Struct_definition isAnonymous xs) ->
-            if isAnonymous then
-              error "constructValue_aux, anonymous Struct"
-            else
-              let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
-                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
-              ) xs in
-              AnnotatedExpression () [] Loc.unknown begin
-                AilEstruct tag_sym membrs
-              end
+        | Just (Struct_definition isAnonymous xs) ->
+            let () = if isAnonymous then
+              Debug.print_debug 0 [] (fun () ->
+                "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
+              (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
+            ) xs in
+            AnnotatedExpression () [] Loc.unknown begin
+              AilEstruct tag_sym membrs
+            end
         | _ ->
             error "constructValue_aux, Struct"
       end
@@ -345,11 +396,10 @@ let rec constructValue_aux tagDefs path elems = function
       error "TODO: Struct"
   | ATypes.Atomic atom_ty ->
       error "TODO: Atomic"
-  | _ ->
+  | ty ->
       match List.lookup path elems with
         | Nothing ->
-            (* TODO: need "zero" of the right type *)
-            zeroAil
+            mk_zeroInit tagDefs ty
         | Just e ->
             e
       end
@@ -796,7 +846,7 @@ val wip_desugar_initializer_:
   Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.desugM (ATypes.ctype * expression unit)
 
 val static_thread_implicit_initializer:
-  map identifier E.tag_definition -> ATypes.ctype -> constant
+  map identifier tag_definition -> ATypes.ctype -> constant
 
 
 
@@ -1268,9 +1318,9 @@ let rec desugar_type_specifiers specs =
           let (kind_ctor, def_ctor, type_ctor) =
             match struct_or_union with
               | STRUCT ->
-                  (E.Kind_struct, E.Struct_definition, ATypes.Struct)
+                  (E.Kind_struct, Struct_definition, ATypes.Struct)
               | UNION ->
-                  (E.Kind_union, E.Union_definition, ATypes.Union)
+                  (E.Kind_union, Union_definition, ATypes.Union)
             end in
           (* STD §6.7.2.1#8, sentence 1 *)
           (* NOTE: the std say that because we have a 'Just sdecls', a new
@@ -1418,7 +1468,7 @@ let rec desugar_type_specifiers specs =
                     Loc.locOf tag_ident
               end in
               (* NOTE: this function doesn't care about the order of the integers *)
-              E.register_tag_definition loc tag_sym (E.Enum_definition ns_rev) >>
+              E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
               E.return (ATypes.no_qualifiers, ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)))
           
           (* *)
@@ -2414,7 +2464,7 @@ and static_thread_implicit_initializer tagDefs ty =
     
     | ATypes.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition _ xs) ->
+          | Just (Struct_definition _ xs) ->
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
@@ -2426,7 +2476,7 @@ and static_thread_implicit_initializer tagDefs ty =
     
     | ATypes.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Union_definition _ xs) ->
+          | Just (Union_definition _ xs) ->
               let (ident, (_, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
@@ -2502,7 +2552,7 @@ val foo_aux:
 *)
 
 and foo_aux
-  (current_object_ty: ATypes.ctype)
+  (entity_ty: ATypes.ctype)
   (acc: list (init_path * expression unit))
   (elems: list (init_path * init_path * ATypes.ctype))
   (xs: list (maybe (list designator) * initializer_))
@@ -2510,9 +2560,9 @@ and foo_aux
   
   match xs with
     | [] ->
-        let pad = List.map (fun (path, _, _) ->
-          (* TODO: need "zero" of the right type *)
-          (path, zeroAil)
+        E.get_tag_definitions >>= fun tagDefs ->
+        let pad = List.map (fun (path, _, outer_ty) ->
+          (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty))
         ) elems in
         E.return (List.reverse acc ++ pad, [])
     | (Just desigs, init_) :: xs' ->
@@ -2522,32 +2572,61 @@ and foo_aux
               error "foo_aux, TODO: Just desigs ==> backward"
           | Just (elems', skipped_elems) ->
               (* TODO: hackish *)
-              let acc' = List.foldl (fun acc (path, _, _) ->
-                (* TODO: need "zero" of the right type *)
-                (path, zeroAil) :: acc
+              E.get_tag_definitions >>= fun tagDefs ->
+              let acc' = List.foldl (fun acc (path, _, outer_ty) ->
+                (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty)) :: acc
               ) acc skipped_elems in
-              foo_aux current_object_ty acc' elems' ((Nothing, init_) :: xs')
+              foo_aux entity_ty acc' elems' ((Nothing, init_) :: xs')
         end
     | (Nothing, init_) :: xs' ->
         match elems with
           | [] ->
               (* TODO: check this, are we missing anything? *)
-              foo_aux current_object_ty acc elems xs'
+              foo_aux entity_ty acc elems xs'
           | (cursor_path, outer_path, outer_ty) :: elems' ->
               match init_ with
                 | Init_expr e ->
+                    E.get_tag_definitions >>= fun tagDefs ->
                     desugar_expression e >>= fun d_e ->
-                    foo_aux current_object_ty ((cursor_path, d_e) :: acc) elems' xs'
+                    let cursor_ty = innerCtype tagDefs outer_ty in
+                    let d_e' =
+                      if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
+                        A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
+                      else
+                        d_e in
+                    foo_aux entity_ty ((cursor_path, d_e') :: acc) elems' xs'
                 | Init_list ys ->
-                    let () = Debug.print_debug 1 [] (fun () ->
-                      "Init_list, current_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_object_ty ^
-                      ", new current_object type ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty
-                    ) in
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
-                    let elems' = List.drop (natFromInteger outerCard) elems in
-                    foo_aux outer_ty [] (List.take (natFromInteger outerCard) elems) ys >>= fun (foo, _) ->
-                    foo_aux current_object_ty (List.reverse foo ++ acc) elems' xs'
+                    let (inner_elems_, elems') = List.splitAt (natFromInteger outerCard) elems in
+                    
+                    let inner_elems = match inner_elems_ with
+                      | [] ->
+                          error "foo_aux, Init_list, inner_elems = []"
+                      | (path, opath, ty) :: zs ->
+                          let ty' = match ty with
+                            | ATypes.Array elem_ty _ ->
+                                elem_ty
+                            | ATypes.Struct tag_sym ->
+                                match Map.lookup tag_sym tagDefs with
+                                  | Just (Struct_definition isAnonymous ((_, (_, first_memb_ty)) :: _)) ->
+                                      let () = if isAnonymous then
+                                        Debug.print_debug 0 [] (fun () ->
+                                          "foo_aux: this may be WRONG ==> anonymous Struct"
+                                        )
+                                      else () in
+                                      first_memb_ty
+                                  | _ ->
+                                      error "foo_aux: Init_list, Struct"
+                                end
+                            | _ ->
+                                ty
+                          end in
+                          (path, opath, ty') :: zs
+                    end in
+                    
+                    foo_aux outer_ty [] inner_elems ys >>= fun (inner, _) ->
+                    foo_aux entity_ty (List.reverse inner ++ acc) elems' xs'
               end
         end
   end
@@ -2763,7 +2842,25 @@ let () = error "DONE" in
   
   
   
-  else *) match init with
+  else *)
+    match (AilTypesAux.unatomic current_ty, init) with
+      | (ATypes.Struct _, Init_expr e) ->
+          (* TODO: hack *)
+          desugar_expression e >>= fun d_e ->
+          E.return (current_ty, d_e)
+      | _ ->
+          E.get_tag_definitions >>= fun tagDefs ->
+          foo current_ty init >>= fun xs ->
+          E.return (current_ty, constructValue tagDefs xs current_ty)
+    end
+
+
+  
+
+
+(* KKKK: new init
+
+ match init with
   | Init_expr e ->
       (* we ignore the type here because the type checking will catch
          errors later *)
@@ -2917,7 +3014,7 @@ let () = error "DONE" in
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)
             E.resolve_tag_definition tag >>= function
-              | Just (E.Struct_definition isAnonymous ident_tys) ->
+              | Just (Struct_definition isAnonymous ident_tys) ->
                   (* TODO: (for now) only allowing explicit and complete initializer *)
                   if List.all (function
                        | (Just [Desig_member _], Init_expr _) -> true
@@ -3001,7 +3098,7 @@ let () = error "DONE" in
         | ATypes.Union tag ->
             (* TODO: check the STD, the following is mostly improvised... *)
             E.resolve_tag_definition tag >>= function
-              | Just (E.Union_definition isAnonymous ident_tys) ->
+              | Just (Union_definition isAnonymous ident_tys) ->
                   match desigs_opt_inits with
                     | [(Nothing, init')] ->
                         let (first_ident, (_, first_ty)) = match ident_tys with
@@ -3070,6 +3167,7 @@ let () = error "DONE" in
 
       end
 end
+*)
 
 
 
@@ -3144,11 +3242,11 @@ let desugar_declaration_base specifs idecltors =
                     tag_definitions=
                       List.foldl (fun acc (ident, tagDef) ->
                         match tagDef with
-                          | E.Struct_definition _ xs ->
+                          | Struct_definition _ xs ->
                               (ident, StructDef xs) :: acc
-                          | E.Union_definition _ xs ->
+                          | Union_definition _ xs ->
                               (ident, UnionDef xs) :: acc
-                          | E.Enum_definition _ ->
+                          | Enum_definition _ ->
                               acc
                         end
                       ) [] (Map_extra.toList ident_tagDefs);
@@ -3702,11 +3800,11 @@ let desugar_and_register_external_declaration edecl =
                         List.reverse begin
                           List.foldl (fun acc (ident, tagDef) ->
                             match tagDef with
-                              | E.Struct_definition _ xs ->
+                              | Struct_definition _ xs ->
                                   (ident, StructDef xs) :: acc
-                              | E.Union_definition _ xs ->
+                              | Union_definition _ xs ->
                                   (ident, UnionDef xs) :: acc
-                              | E.Enum_definition _ ->
+                              | Enum_definition _ ->
                                   acc
                             end
                           ) [] (Map_extra.toList ident_tagDefs)
