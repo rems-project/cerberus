@@ -3,7 +3,15 @@ open import Utils Cabs
 
 import AilSyntax AilTypes
 
+module A = AilSyntax
 module ATypes = AilTypes
+
+
+type tag_definition =
+  | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
+  | Enum_definition of list integer
+
 
 (* STD §6.2.2#1 *)
 type linkage =
@@ -63,6 +71,52 @@ let determinate_storage_duration link scs =
   else
     error "determinate_storage_duration"
 
+
+val mk_zeroInit: map A.identifier tag_definition -> ATypes.ctype -> A.expression unit
+let rec mk_zeroInit_aux tagDefs ty =
+  match ty with
+    | ATypes.Void ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Void"
+    | ATypes.Basic (ATypes.Integer _) ->
+        A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
+    | ATypes.Basic (ATypes.Floating _) ->
+        A.ConstantFloating ("0.0", Nothing)
+    | ATypes.Array _ Nothing ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Array Nothing"
+    | ATypes.Array elem_ty (Just n) ->
+        A.ConstantArray (*elem_ty*) begin
+          List.replicate (natFromInteger n) (mk_zeroInit_aux tagDefs elem_ty)
+        end
+    | ATypes.Function _ _ _ _ ->
+        error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Function"
+    | ATypes.Pointer _ _ ->
+        A.ConstantNull
+    | ATypes.Atomic atom_ty ->
+        (* TODO: check *)
+        mk_zeroInit_aux tagDefs atom_ty
+    | ATypes.Struct tag_sym ->
+        A.ConstantStruct tag_sym
+          match Map.lookup tag_sym tagDefs with
+            | Just (Struct_definition _ xs) ->
+                List.map (fun (memb_ident, (_, memb_ty)) ->
+                  (memb_ident, mk_zeroInit_aux tagDefs memb_ty)
+                ) xs
+            | _ ->
+                error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Struct"
+          end
+    | ATypes.Union tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition _ ((memb_ident, (_, memb_ty)) :: _)) ->
+              A.ConstantUnion tag_sym memb_ident (mk_zeroInit_aux tagDefs memb_ty)
+          | _ ->
+              error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"
+        end
+    | ATypes.Builtin str ->
+        error ("WIP[Cabs_to_ail.mk_zeroInit_aux], Builtin: " ^ str)
+  end
+let mk_zeroInit tagDefs ty =
+  A.AnnotatedExpression () [] Loc.unknown
+    (A.AilEconst (mk_zeroInit_aux tagDefs ty))
 
 open AilSyntax
 val zeroAil: expression unit
