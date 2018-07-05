@@ -216,7 +216,7 @@ let rec skipTo_aux acc path = function
   | [] ->
       Nothing
   | ((path', _, _) as x) :: xs ->
-      let () = Debug.print_debug 0 [] (fun () ->
+      let () = Debug.print_debug 1 [] (fun () ->
         "path: " ^ stringFromInit_path path ^ " <--> " ^
         "path': " ^ stringFromInit_path path' ^ " === " ^
         (if List.isPrefixOf path path' then "true" else "false")
@@ -2539,7 +2539,7 @@ and foo_aux
                     desugar_expression e >>= fun d_e ->
                     foo_aux current_object_ty ((cursor_path, d_e) :: acc) elems' xs'
                 | Init_list ys ->
-                    let () = Debug.print_debug 0 [] (fun () ->
+                    let () = Debug.print_debug 1 [] (fun () ->
                       "Init_list, current_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_object_ty ^
                       ", new current_object type ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty
                     ) in
@@ -2724,7 +2724,7 @@ let () = error "DONE" in
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
-    let () = Debug.print_debug 0 [] (fun () ->
+    let () = Debug.print_debug 1 [] (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
     ) in
 (*

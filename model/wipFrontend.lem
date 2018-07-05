@@ -177,7 +177,7 @@ let evalIntegerConstantExpression loc std_str core_env symbol_suppl ty_opt expr 
               error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
         end
     | cval ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)

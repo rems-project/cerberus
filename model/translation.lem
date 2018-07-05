@@ -2265,7 +2265,7 @@ TODO: #9
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, obj_sym_pat, obj_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
           self e >>= fun core_e ->
-          let () = Debug.print_debug 0 [] (fun () ->
+          let () = Debug.print_debug 1 [] (fun () ->
              "TODO!!!! the lifetime of block scoped AilEcompound ends with the block (right now there is no kill)"
           ) in
           (* STD §6.5.2.5#3 *)
