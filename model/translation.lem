@@ -547,8 +547,8 @@ else (* both operands have arithmetic or pointer types *)
   E.fresh_symbol >>= fun obj1_sym      ->
   E.fresh_symbol >>= fun obj2_sym      ->
   (* The object type on which the Core operator is going to work on. *)
-  (* By typing it is enough to look at the type of one of the operand (see STD §6.5.9#2) *)
-  let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+  let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
+  let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
   let e1_sym_pe   = Caux.mk_sym_pe e1_sym   in
   let e2_sym_pe   = Caux.mk_sym_pe e2_sym   in
   let obj1_sym_pe = Caux.mk_sym_pe obj1_sym in
@@ -559,8 +559,8 @@ else (* both operands have arithmetic or pointer types *)
   let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   
   E.return $
-    Caux.mk_wseq_e (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy)
-                                      ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy) ]) (Caux.mk_unseq [core_e1; core_e2]) (
+    Caux.mk_wseq_e (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded oTy1)
+                                      ; Caux.mk_sym_pat e2_sym (C.BTy_loaded oTy2) ]) (Caux.mk_unseq [core_e1; core_e2]) (
       
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
   let mk_op_pe = match bop with
@@ -571,13 +571,13 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
       Caux.mk_pure_e (
         C.Pexpr [] () (
           C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-            [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
-                                 ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+            [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy1))
+                                 ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy2)) ],
                let (promoted1_pe, promoted2_pe) = Caux.mk_std_pair_pe "§6.5.9#4, sentence 1" $ usual_arithmetic_conversion (ctype_of e1) (ctype_of e2) obj1_sym_pe obj2_sym_pe in
                Caux.mk_std_pe "§6.5.9#3" $ Caux.mk_if_pe (Caux.mk_std_pe "§6.5.9#4, sentence 3" $ mk_op_pe promoted1_pe promoted2_pe)
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
                  (Caux.mk_specified_pe (Caux.mk_integer_pe 0)))
-            ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
+            ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
                (* TODO: check with Peter *)
                Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
                 )
@@ -586,8 +586,8 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
 else (* both operand have pointer type *)
   (* TODO: should have a case for 6.5.9#5 sentence 3 ? *)
       Caux.mk_case_e (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
-            [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy))
-                                 ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy)) ],
+            [ (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object oTy1))
+                                 ; Caux.mk_specified_pat (Caux.mk_sym_pat obj2_sym (C.BTy_object oTy2)) ],
   let memop = match bop with
     | A.Eq -> Mem_common.PtrEq
     | A.Ne -> Mem_common.PtrNe
@@ -600,7 +600,7 @@ else (* both operand have pointer type *)
                      (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
                    )
                  ) )
-            ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy; C.BTy_loaded oTy]),
+            ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
                (* TODO: check with Peter *)
                Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator (both arith or ptr)"))) ]
             )
@@ -2255,8 +2255,8 @@ else (* is_pointer *)
                              illTypedAil loc "AilEarray, Just null_pointer_constant"
                        end
                      (* TODO: check + std quote *)
-                     else if AilTypesAux.is_integer elem_ty then
-                        stdlib.mkcall_conv_loaded_int elem_ty (Caux.mk_sym_pe e_sym)
+                     else if AilTypesAux.is_arithmetic elem_ty && AilTypesAux.is_arithmetic (ctype_of e) then
+                       conv_loaded_arith stdlib (ctype_of e) elem_ty (Caux.mk_sym_pe e_sym)
                      else
                        (* TODO: other conversions? *)
                        Caux.mk_sym_pe e_sym in 
