@@ -1,0 +1,12 @@
+[last checked on Fri  6 Jul 2018 00:58:20 BST]
+
+all worked except:
+
+cmpdi-1.c               TODO: elemPathFromCtype3, array with unknown size
+cmpsi-2.c               TODO: elemPathFromCtype3, array with unknown size
+
+
+NOTE that these are particularly slow:
+
+920501-2.c
+930921-1.c

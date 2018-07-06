@@ -94,7 +94,9 @@ end
 
 
 
-
+val signedInt_gty: GenTypes.genType
+let signedInt_gty =
+  GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Aty.Signed Aty.Int_)))
 
 
 
@@ -110,13 +112,22 @@ end
    sentence implicitly refers to that of the C binary equality operator.
    This function turns a [e] scalar expression into a [e == 0], so that elaboration
    of the equality operator can be reused *)
-val mkTestExpression: forall 'a. A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
-let mkTestExpression (A.AnnotatedExpression gty annots _ _ as a_expr) =
+
+type test_operator =
+  | TestEq
+  | TestNe
+
+val mkTestExpression: forall 'a. test_operator -> A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
+let mkTestExpression op (A.AnnotatedExpression gty annots _ _ as a_expr) =
   let loc = locOf a_expr in
-  let result_gty =
+  let gtc =
     (* STD §6.5.9#3, sentence 1 *)
-    GenTypes.GenRValueType (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Aty.Signed Aty.Int_)))) in
+    GenTypes.GenRValueType signedInt_gty in
   
+  let bop = match op with
+    | TestEq -> A.Eq
+    | TestNe -> A.Ne
+  end in
   let zero_const =
     if AilTypesAux.is_integer (ctype_of a_expr) then
       A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
@@ -126,12 +137,21 @@ let mkTestExpression (A.AnnotatedExpression gty annots _ _ as a_expr) =
       A.ConstantNull
     else
       (*BISECT-IGNORE*) error "[Translation.mkTestExpression] must be called on scalar expression" in
-  A.AnnotatedExpression result_gty annots loc
-    (A.AilEbinary a_expr A.Eq (A.AnnotatedExpression gty annots loc (A.AilEconst zero_const)))
+  A.AnnotatedExpression gtc annots loc
+    (A.AilEbinary a_expr bop (A.AnnotatedExpression gty annots loc (A.AilEconst zero_const)))
 
 
+val zeroAil_tau: A.expression GenTypes.genTypeCategory
+let zeroAil_tau =
+  A.AnnotatedExpression
+    (GenTypes.GenRValueType signedInt_gty) [] Loc.unknown
+    (A.AilEconst (A.ConstantInteger (A.IConstant 0 A.Octal Nothing)))
 
-
+val oneAil_tau: A.expression GenTypes.genTypeCategory
+let oneAil_tau =
+  A.AnnotatedExpression
+    (GenTypes.GenRValueType signedInt_gty) [] Loc.unknown
+    (A.AilEconst (A.ConstantInteger (A.IConstant 1 A.Decimal Nothing)))
 
 
 (* ========================================================================== *)
@@ -1558,6 +1578,15 @@ else
             result_ty aop e1 e2
       
       | A.AilEbinary e1 A.And e2 ->
+          (* TODO: this is hackish, but on the other hand it factorise code ... *)
+          (* Also it follows the phrasing of the std *)
+          (* Desugaring e1 && e2 ===> (e1 == 0) ? 0 : (e2 != 0) *)
+          self begin
+            A.AnnotatedExpression
+              (GenTypes.GenRValueType signedInt_gty) [] loc
+              (A.AilEcond (mkTestExpression TestEq e1) zeroAil_tau (mkTestExpression TestNe e2))
+          end
+(*
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.And use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
@@ -1602,8 +1631,18 @@ else
                       Caux.mk_pure_e (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ) ]
               )
             )
+*)
       
       | A.AilEbinary e1 A.Or e2 ->
+          (* TODO: this is hackish, but on the other hand it factorise code ... *)
+          (* Also it follows the phrasing of the std *)
+          (* Desugaring e1 || e2 ===> (e1 == 0) ? (e2 != 0) : 0 *)
+          self begin
+            A.AnnotatedExpression
+              (GenTypes.GenRValueType signedInt_gty) [] loc
+              (A.AilEcond (mkTestExpression TestEq e1) (mkTestExpression TestNe e2) oneAil_tau)
+          end
+(*
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.Or use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
@@ -1648,6 +1687,7 @@ else
                     Caux.mk_pure_e (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ) ]
               )
             )
+*)
       
       | A.AilEcond e1 e2 e3 ->
           (* STD §6.5.15 *)
@@ -2137,22 +2177,43 @@ TODO: #9
       | A.AilEassert e ->
           (* TODO: this is temporary *)
           (* TODO: should do something more sensible when the expression is unspecified *)
-          E.fresh_symbol >>= fun e_sym   ->
-          E.fresh_symbol >>= fun obj_sym ->
-          self e         >>= fun core_e  ->
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat    , e_sym_pe    ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat  , obj_sym_pe  ) ->
+          E.wrapped_fresh_symbol C.BTy_boolean      >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+          self e         >>= fun core_e  ->
           E.return $
-            Caux.mk_sseq_e (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
+            Caux.mk_sseq_e e_sym_pat core_e (
+if AilTypesAux.is_arithmetic (ctype_of e) then
+              let zero_pe =
+                if AilTypesAux.is_integer (ctype_of e) then
+                  Caux.mk_integer_pe 0
+                else
+                  Caux.mk_floating_value_pe Mem.zero_fval in
               Caux.mk_pure_e (
-                Caux.mk_case_pe (Caux.mk_sym_pe e_sym)
-                  [ (Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy)),
-                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe obj_sym) (Caux.mk_integer_pe 0))
+                Caux.mk_case_pe e_sym_pe
+                  [ (Caux.mk_specified_pat obj_sym_pat,
+                     Caux.mk_if_pe (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)
                        (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
                       Caux.mk_unit_pe
                      )
                   ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
                      Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe) ]
               )
+else (* is_pointer *)
+              Caux.mk_case_e e_sym_pe
+                [ (Caux.mk_specified_pat obj_sym_pat,
+                   Caux.mk_wseq_e memop_sym_pat
+                     (C.Expr [] (C.Ememop Mem_common.PtrEq [obj_sym_pe; Caux.mk_nullptr_pe Cty.Void]))
+                     begin
+                       Caux.mk_pure_e begin
+                         Caux.mk_if_pe memop_sym_pe
+                           (Caux.mk_error_pe "assert() failure" Caux.mk_unit_pe)
+                           Caux.mk_unit_pe
+                       end
+                     end)
+                ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                   Caux.mk_pure_e (Caux.mk_error_pe "assert() unspecified" Caux.mk_unit_pe)) ]
             )
       | A.AilEoffsetof ty membr_ident ->
           let tag_sym = match ty with
@@ -2944,11 +3005,12 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         )
     
     | A.AilSif e s1 s2 ->
-        E.fresh_symbol                            >>= fun sym_obj ->
-        E.fresh_symbol                            >>= fun sym_e   ->
-        translate_expression (mkTestExpression e) >>= fun core_test ->
-        self s1                                   >>= fun core_s1 ->
-        self s2                                   >>= fun core_s2 ->
+        E.fresh_symbol                   >>= fun sym_obj ->
+        E.fresh_symbol                   >>= fun sym_e   ->
+        translate_expression
+             (mkTestExpression TestEq e) >>= fun core_test ->
+        self s1                          >>= fun core_s1   ->
+        self s2                          >>= fun core_s2   ->
         let oTy = C.OTy_integer in (* this is the type of core_test, not "core_e" *)
 (*
           (* Since [e] must have scalar type, oTy will always be one
@@ -2972,9 +3034,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.fresh_named_symbol "while" >>= fun sym_loop     ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (test_sym, test_sym_pat, test_sym_pe) ->
         E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (case_sym, case_sym_pat, case_sym_pe) ->
-        translate_expression (mkTestExpression e) >>= fun core_test ->
-        self s                                    >>= fun core_s                                ->
-        E.get_visible_objects                     >>= fun visible_syms                          ->
+        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                             ->
+        self s                                              >>= fun core_s                                ->
+        E.get_visible_objects                               >>= fun visible_syms                          ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
@@ -3181,7 +3243,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.mapM (fun (ptr_sym, e) ->
           E.resolve_object_type ptr_sym >>= fun ty ->
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype ty)) in
-          E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, _, e_sym_pe) ->
+          E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
             | Aty.Pointer _ ref_ty ->
                 if Aaux.is_null_pointer_constant e then
@@ -3197,32 +3259,17 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                     )
             | ty ->
                 (* we are not dealing with a pointer initialisation *)
+(*
                 E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
-                translate_expression e                 >>= fun core_e         ->
                 let e_sym_pe = Caux.mk_sym_pe e_sym in
+*)
+                translate_expression e >>= fun core_e ->
                 E.return (
                   Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
                     (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
                       (if AilTypesAux.is_arithmetic ty then conv_loaded_arith stdlib (ctype_of e) ty e_sym_pe else e_sym_pe) Cmm.NA)
                 )
           end
-(*
-          if AilTypesAux.is_pointer ty then
-            let () = Debug.print_debug 1 "IS A PTR" in
-(*            E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>=  *)
-            E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
-            begin
-              if
-            end
-            self e                     >>= fun core_e         ->
-            let e_sym_pe = Caux.mk_sym_pe e_bTy e_sym in
-            E.return (
-              C.Esseq (Caux.mk_sym_pat e_sym e_bTy) core_e
-                (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe (C.BTy_object C.OTy_pointer) ptr_sym) e_sym_pe Cmm.NA)
-            )
-          
-          else
-*)
         ) sym_es >>= fun z ->
         
         (* This pass combines the translated declarations *)

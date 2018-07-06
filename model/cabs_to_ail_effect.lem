@@ -14,12 +14,6 @@ module ATypes = AilTypes
 open import {hol} `pp_ailTheory`
 
 
-type tag_definition =
-  | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
-  | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (ATypes.qualifiers * ATypes.ctype))
-  | Enum_definition of list integer
-
-
 type tag_kind =
   (* TODO: we may be able to merge struct and union *)
   | Kind_struct

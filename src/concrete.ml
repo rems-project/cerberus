@@ -977,6 +977,9 @@ module Concrete : Memory = struct
       | (PVconcrete addr1, PVconcrete addr2) ->
           (* TODO: provenance *)
           return (Nat_big_num.compare addr1 addr2 == -1)
+      | (PVnull _, _)
+      | (_, PVnull _) ->
+          fail (MerrWIP "lt_ptrval ==> one null pointer")
       | _ ->
           fail (MerrWIP "lt_ptrval")
   
