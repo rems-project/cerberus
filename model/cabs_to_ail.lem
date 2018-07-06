@@ -55,6 +55,7 @@ end
 type init_element =
   | Elem_array of integer
   | Elem_member of cabs_identifier
+(*   | Elem_union of cabs_identifier *)
 
 type init_path = list init_element
 
@@ -122,7 +123,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
       match Map.lookup tag_sym tagDefs with
         | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
             let () = if isAnonymous then
-              Debug.print_debug 0 [] (fun () ->
+              Debug.print_debug 1 [] (fun () ->
                 "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
               )
             else () in
@@ -146,23 +147,24 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
       error "elemPathFromCtype_aux3, Builtin"
 end
 
-let elemPathFromCtype3 tagDefs entity_ty =
+val elemPathFromCtype3: bool -> map identifier tag_definition -> ATypes.ctype -> list (init_path * init_path * ATypes.ctype)
+let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
   match entity_ty with
     | ATypes.Array _ Nothing ->
         error "TODO: elemPathFromCtype3, array with unknown size"
     | _ ->
         let (outer_path, outer_ty) = match entity_ty with
           | ATypes.Array elem_ty _ ->
-              ([Elem_array 0], elem_ty)
+              ([Elem_array 0], if is_unknown_size then entity_ty else elem_ty)
           | ATypes.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
                 | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
-                      Debug.print_debug 0 [] (fun () ->
+                      Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
                       )
                     else () in
-                    ([Elem_member first_memb_ident], first_memb_ty)
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
                 | _ ->
                     error "elemPathFromCtype3, Struct"
               end
@@ -182,8 +184,97 @@ let elemPathFromCtype3 tagDefs entity_ty =
         ) (List.reverse xs)
   end
 
+type path_elem =
+  init_path * init_path * ATypes.ctype
 
 
+
+
+let rec skipTo_aux acc path = function
+  | [] ->
+      Nothing
+  | ((path', _, _) as x) :: xs ->
+      let () = Debug.print_debug 1 [] (fun () ->
+        "path: " ^ stringFromInit_path path ^ " <--> " ^
+        "path': " ^ stringFromInit_path path' ^ " === " ^
+        (if List.isPrefixOf path path' then "true" else "false")
+      ) in
+      if List.isPrefixOf path path' then
+        Just (x :: xs, List.reverse acc)
+      else
+        skipTo_aux (x :: acc) path xs
+end
+let skipTo path elems =
+  skipTo_aux [] path elems
+
+
+(*
+
+skipTo cursor_path elems
+
+take1 elem
+
+splitAt
+
+update inner elements
+
+*)
+
+type withElemsM 'a = State.stateM 'a (list path_elem)
+
+val skipToPath: init_path -> withElemsM (list path_elem)
+let skipToPath path =
+  State.bind State.get (fun elems ->
+  match skipTo path elems with
+    | Nothing ->
+        error "WIP: skipToPath"
+    | Just (elems', skipped) ->
+        State.bind (State.put elems') begin fun () ->
+        State.return skipped
+        end
+  end)
+
+
+val getElem: withElemsM (maybe path_elem)
+let getElem =
+  State.bind State.get function
+    |  [] ->
+        State.return Nothing
+    | x::xs ->
+        State.bind (State.put xs) (fun () -> State.return (Just x))
+  end
+
+
+val getElems: integer -> withElemsM (list path_elem)
+let getElems n =
+  State.bind State.get begin fun elems ->
+    let (xs,ys) = List.splitAt (natFromInteger n) elems in
+    State.bind (State.put ys) (fun () -> State.return xs)
+  end
+
+
+
+
+
+
+(*
+type elemPathMaker = <|
+  skipTo: init_path -> maybe ((list path_elem * list path_elem) * elemPathMaker);
+  getElem: unit -> (path_elem * elemPathMaker);
+  getElems: integer -> (list path_elem * elemPathMaker);
+|>
+
+val mk_elemsPathFromCtype: map identifier tag_definition -> ATypes.ctype -> elemPathMaker
+let mk_elemsPathFromCtype tagDefs ty =
+  let elems = elemPathFromCtype3 tagDefs ty in
+  <|
+    skipTo=
+      fun path -> match skipTo path elems with
+        | Nothing -> Nothing
+        | Just 
+      end
+ |>
+*)
 
 
 
@@ -197,7 +288,7 @@ let rec cardinalityOfCtype tagDefs = function
       match Map.lookup tag_sym tagDefs with
         | Just (Struct_definition isAnonymous xs) ->
             let () = if isAnonymous then
-              Debug.print_debug 0 [] (fun () ->
+              Debug.print_debug 1 [] (fun () ->
                 "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
               )
             else () in
@@ -223,22 +314,7 @@ end
 
 
 
-let rec skipTo_aux acc path = function
-  | [] ->
-      Nothing
-  | ((path', _, _) as x) :: xs ->
-      let () = Debug.print_debug 1 [] (fun () ->
-        "path: " ^ stringFromInit_path path ^ " <--> " ^
-        "path': " ^ stringFromInit_path path' ^ " === " ^
-        (if List.isPrefixOf path path' then "true" else "false")
-      ) in
-      if List.isPrefixOf path path' then
-        Just (x :: xs, List.reverse acc)
-      else
-        skipTo_aux (x :: acc) path xs
-end
-let skipTo path elems =
-  skipTo_aux [] path elems
+
 
 
 
@@ -366,6 +442,9 @@ E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATy
 val constructValue: map identifier tag_definition -> list (init_path * expression unit) -> ATypes.ctype -> expression unit
 let rec constructValue_aux tagDefs path elems = function
   | ATypes.Array elem_ty Nothing ->
+      let () = Debug.print_debug 0 [] (fun () ->
+        "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
+      ) in
       error "constructValue_aux: Array Nothing"
   | ATypes.Array elem_ty (Just n) ->
       let es =
@@ -379,7 +458,7 @@ let rec constructValue_aux tagDefs path elems = function
       match Map.lookup tag_sym tagDefs with
         | Just (Struct_definition isAnonymous xs) ->
             let () = if isAnonymous then
-              Debug.print_debug 0 [] (fun () ->
+              Debug.print_debug 1 [] (fun () ->
                 "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
               )
             else () in
@@ -2552,11 +2631,12 @@ val foo_aux:
 *)
 
 and foo_aux
-  (entity_ty: ATypes.ctype)
+(*  (entity_ty: ATypes.ctype) *)
   (acc: list (init_path * expression unit))
   (elems: list (init_path * init_path * ATypes.ctype))
+  (unknown_array: maybe (integer * list (init_path * init_path * ATypes.ctype)))
   (xs: list (maybe (list designator) * initializer_))
-  : E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATypes.ctype)) =
+  : E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATypes.ctype) * maybe integer) =
   
   match xs with
     | [] ->
@@ -2564,7 +2644,11 @@ and foo_aux
         let pad = List.map (fun (path, _, outer_ty) ->
           (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty))
         ) elems in
-        E.return (List.reverse acc ++ pad, [])
+        let n_opt = match unknown_array with
+          | Nothing     -> Nothing
+          | Just (n, _) -> Just n
+        end in
+        E.return (List.reverse acc ++ pad, [], n_opt)
     | (Just desigs, init_) :: xs' ->
         pathFromDesigs desigs >>= fun cursor_path ->
         match skipTo cursor_path elems with
@@ -2576,13 +2660,22 @@ and foo_aux
               let acc' = List.foldl (fun acc (path, _, outer_ty) ->
                 (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty)) :: acc
               ) acc skipped_elems in
-              foo_aux entity_ty acc' elems' ((Nothing, init_) :: xs')
+              foo_aux (*entity_ty*) acc' elems' unknown_array ((Nothing, init_) :: xs')
         end
     | (Nothing, init_) :: xs' ->
         match elems with
           | [] ->
-              (* TODO: check this, are we missing anything? *)
-              foo_aux entity_ty acc elems xs'
+              match unknown_array with
+                | Nothing ->
+                    (* TODO: check this, are we missing anything? *)
+                    foo_aux (*entity_ty*) acc elems unknown_array xs'
+                | Just (i, elems_) ->
+                    let elems =
+                      List.map (fun (path, opath, ty) ->
+                        (Elem_array (i+1) :: path, Elem_array (i+1) :: opath, ty)
+                      ) elems_ in
+                    foo_aux acc elems (Just (i+1, elems_)) xs
+              end
           | (cursor_path, outer_path, outer_ty) :: elems' ->
               match init_ with
                 | Init_expr e ->
@@ -2594,7 +2687,7 @@ and foo_aux
                         A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
                       else
                         d_e in
-                    foo_aux entity_ty ((cursor_path, d_e') :: acc) elems' xs'
+                    foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
                 | Init_list ys ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
@@ -2611,7 +2704,7 @@ and foo_aux
                                 match Map.lookup tag_sym tagDefs with
                                   | Just (Struct_definition isAnonymous ((_, (_, first_memb_ty)) :: _)) ->
                                       let () = if isAnonymous then
-                                        Debug.print_debug 0 [] (fun () ->
+                                        Debug.print_debug 1 [] (fun () ->
                                           "foo_aux: this may be WRONG ==> anonymous Struct"
                                         )
                                       else () in
@@ -2625,26 +2718,58 @@ and foo_aux
                           (path, opath, ty') :: zs
                     end in
                     
-                    foo_aux outer_ty [] inner_elems ys >>= fun (inner, _) ->
-                    foo_aux entity_ty (List.reverse inner ++ acc) elems' xs'
+                    foo_aux (*outer_ty*) [] inner_elems (*unknown_array*)Nothing ys >>= fun (inner, _, _) ->
+                    foo_aux (*entity_ty*) (List.reverse inner ++ acc) elems' unknown_array xs'
               end
         end
   end
 
+(*
+and bar i elems acc xs =
+  let elems' =
+    List.map (fun path ->
+      Elem_array i :: path
+    ) elems in
+  foo_aux [] elems' xs >>= fun (xs', acc2) ->
+  let acc' = acc ++ acc2 in
+  match xs' with
+    | [] ->
+        E.return acc'
+    | _ ->
+        bar (i+1) elems acc' xs'
+  end
+*)
 
 (* val foo: ATypes.ctype -> initializer_ -> E.desugM (list (init_path * maybe (expression unit))) *)
-and foo entity_ty init_ =
+and foo entity_ty init_ : E.desugM (ATypes.ctype * list (init_path * expression unit)) =
   E.get_tag_definitions >>= fun tagDefs ->
-  let elems = elemPathFromCtype3 tagDefs entity_ty in
   match (entity_ty, init_) with
+    | (ATypes.Array elem_ty Nothing, Init_list xs) ->
+        let elems = elemPathFromCtype3 true tagDefs elem_ty in
+        let elems' =
+          List.map (fun (path, opath, ty) ->
+            (Elem_array 0 :: path, Elem_array 0 :: opath, ty)
+          ) elems in
+        foo_aux [] elems' (Just (0, elems)) xs >>= fun (ret, _, n_opt) ->
+        match n_opt with
+          | Nothing ->
+              error "foo: Array Nothing"
+          | Just n ->
+              E.return (ATypes.Array elem_ty (Just (n+1)), ret)
+        end
     | (ATypes.Array _ _, Init_list xs) ->
-        foo_aux entity_ty [] elems xs
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
     | (ATypes.Struct _, Init_list xs) ->
-        foo_aux entity_ty [] elems xs
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
     | _ ->
-        foo_aux entity_ty [] elems [(Nothing, init_)]
-  end >>= fun (xs, _) ->
-  E.return xs
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing [(Nothing, init_)] >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
+  end
 
 
 
@@ -2850,8 +2975,16 @@ let () = error "DONE" in
           E.return (current_ty, d_e)
       | _ ->
           E.get_tag_definitions >>= fun tagDefs ->
-          foo current_ty init >>= fun xs ->
-          E.return (current_ty, constructValue tagDefs xs current_ty)
+          foo current_ty init >>= fun (current_ty', xs) ->
+          
+          let () = Debug.print_debug 1 [] (fun () ->
+            "current_ty': " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_ty' ^
+            ", FOO ==> " ^ stringFromList (fun (path, expr) ->
+              stringFromInit_path path ^
+              " := " ^ Pp.stringFromAil_expression expr
+            ) xs
+          ) in
+          E.return (current_ty', constructValue tagDefs xs current_ty')
     end
 
 
