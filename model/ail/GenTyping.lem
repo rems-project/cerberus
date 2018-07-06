@@ -588,6 +588,17 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEarray is_str elem_ty e_opts ->
         (* TODO: think about it *)
         E.mapM (maybe (E.return Nothing) (fun e ->
+          if AilTypesAux.is_array elem_ty then
+            annotate_rvalue e >>= fun (e', gty) ->
+            let () = Debug.warn [] (fun () ->
+              "TODO!!! Ail's typing is not properly checking AilEarray when elem_ty is an array type"
+            ) in
+            E.return (Just e')
+          else
+            (* STD §6.7.9#11 *)
+            (* TODO: unqualify elem_ty? *)
+            Just <$> annotate_assignee elem_ty e
+(*
           annotate_rvalue e >>= fun (e', gty) ->
           (* TODO: maybe this is too strict and we want to relax to only having
              the types compatibles? *)
@@ -604,6 +615,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             E.fail loc (TError "illtyped element of an AilEarray")
           else
             E.return (Just e')
+*)
         )) e_opts >>= fun xs ->
         (* TODO: checking that the types in [xs] match ty *)
         E.return ( AilEarray is_str elem_ty xs
