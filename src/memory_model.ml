@@ -89,6 +89,7 @@ module type Memory = sig
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
+  val realloc: integer_value -> pointer_value -> integer_value -> pointer_value memM
   
   (* Integer value constructors *)
   val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
@@ -180,7 +181,7 @@ module type Memory = sig
 (*
   val string_of_pointer_value: pointer_value -> string
   val string_of_integer_value: integer_value -> string
-  val string_of_mem_value: mem_value -> string
+  val string_of_mem_value: mem_value -> stri(g
 *)
 
   (* JSON serialisation *)

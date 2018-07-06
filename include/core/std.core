@@ -256,6 +256,18 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
         pure(error(<<<malloc_proxy>>>, False))
   end
 
+proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong size_: loaded integer = load(!(size_t), size_ptr) in
+  let strong old_ptrptr_: loaded integer = load(!(void *), old_ptrptr) in
+  case (size_, old_ptrptr_) of
+    | (Specified(size: integer), Specified(old_ptr: pointer)) =>
+        let strong ptr: pointer = memop(Realloc, 8, old_ptr, size) in
+        pure(Specified(ptr))
+    | (_: loaded integer, _: loaded pointer) =>
+        pure(error(<<<malloc_proxy>>>, False))
+  end
+
+
 -- TODO: this is a hack for GCC torture while signal are not implemented
 proc [ailname = "abort"] abort_proxy() : eff unit :=
   pure(error(<<<ABORT>>>, Unit))

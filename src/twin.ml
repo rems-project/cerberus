@@ -659,6 +659,9 @@ let rec explode_bytes mval : (meta * char option) list =
   let allocate_dynamic _ _ (align) (size) =
     allocate align size None None
 
+  let realloc _ _ _ =
+    failwith "twin: realloc"
+
   let kill p : unit memM =
     let do_kill id =
       Debug_ocaml.print_debug 1 [] (fun () ->

@@ -132,6 +132,7 @@ type memop =
   
   | Memcpy
   | Memcmp
+  | Realloc (* TODO: not sure about this *)
 
 
 instance (Show memop)
@@ -162,6 +163,8 @@ instance (Show memop)
         "memcpy"
     | Memcmp ->
         "memcmp"
+    | Realloc ->
+        "realloc"
   end
 end
 

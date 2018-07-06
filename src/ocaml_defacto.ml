@@ -584,6 +584,7 @@ let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
 let memcpy = Defacto_memory.impl_memcpy
 let memcmp = Defacto_memory.impl_memcmp
+let realloc _ _ _ = failwith "Defacto: realloc!"
 let concurRead_ival = Defacto_memory.impl_concurRead_ival
 let integer_ival = Defacto_memory.impl_integer_ival
 let max_ival = Defacto_memory.impl_max_ival
