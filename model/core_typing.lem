@@ -1269,6 +1269,8 @@ let memop_signature = function
       (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_object OTy_pointer; BTy_object OTy_integer])
   | Mem_common.Memcmp ->
       (BTy_object OTy_integer, [BTy_object OTy_pointer; BTy_object OTy_pointer; BTy_object OTy_integer])
+  | Mem_common.Realloc ->
+      (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer; BTy_object OTy_integer])
 end
 
 

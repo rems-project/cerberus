@@ -803,14 +803,6 @@ module Concrete : Memory = struct
                   ) st.bytemap bs
               } )
     end
-(*
-  (* TODO: DEBUG: *)
-  >>= fun ret ->
-  get >>= fun st ->
-  dot_of_mem_state st;
-  return ret
-*)
-  
   
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
 (*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
@@ -823,7 +815,6 @@ module Concrete : Memory = struct
             allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n } )
     )
-  
   
   let kill : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
@@ -846,6 +837,7 @@ module Concrete : Memory = struct
           end
         end else
           fail (MerrOther "attempted to kill with an invalid pointer")
+
   
   let load loc ty (PV (prov, ptrval_)) =
     Debug_ocaml.print_debug 3 [] (fun () ->
@@ -1434,6 +1426,23 @@ let combine_prov prov1 prov2 =
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
+  let realloc align ptr size : pointer_value memM =
+    match ptr with
+    | PV (Prov_none, PVnull _) ->
+      allocate_dynamic 0 (* tid *) 0 (* pref *) align size
+    | PV (Prov_none, _) ->
+      fail (MerrWIP "realloc no provenance")
+    | PV (Prov_some alloc_id, PVconcrete addr) ->
+      get_allocation alloc_id >>= fun alloc ->
+      if alloc.base = addr then
+        allocate_dynamic 0 (* tis *) 0 (* pref *) align size >>= fun new_ptr ->
+        memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
+        kill ptr >>= fun () ->
+        return new_ptr
+      else
+        fail (MerrWIP "realloc: invalid pointer")
+    | PV _ ->
+      fail (MerrWIP "realloc: invalid pointer")
 
   (* JSON serialisation *)
 
