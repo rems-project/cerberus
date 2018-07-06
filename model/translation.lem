@@ -94,7 +94,9 @@ end
 
 
 
-
+val signedInt_gty: GenTypes.genType
+let signedInt_gty =
+  GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Aty.Signed Aty.Int_)))
 
 
 
@@ -110,13 +112,22 @@ end
    sentence implicitly refers to that of the C binary equality operator.
    This function turns a [e] scalar expression into a [e == 0], so that elaboration
    of the equality operator can be reused *)
-val mkTestExpression: forall 'a. A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
-let mkTestExpression (A.AnnotatedExpression gty annots _ _ as a_expr) =
+
+type test_operator =
+  | TestEq
+  | TestNe
+
+val mkTestExpression: forall 'a. test_operator -> A.expression GenTypes.genTypeCategory -> A.expression GenTypes.genTypeCategory
+let mkTestExpression op (A.AnnotatedExpression gty annots _ _ as a_expr) =
   let loc = locOf a_expr in
-  let result_gty =
+  let gtc =
     (* STD §6.5.9#3, sentence 1 *)
-    GenTypes.GenRValueType (GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Aty.Signed Aty.Int_)))) in
+    GenTypes.GenRValueType signedInt_gty in
   
+  let bop = match op with
+    | TestEq -> A.Eq
+    | TestNe -> A.Ne
+  end in
   let zero_const =
     if AilTypesAux.is_integer (ctype_of a_expr) then
       A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
@@ -126,11 +137,15 @@ let mkTestExpression (A.AnnotatedExpression gty annots _ _ as a_expr) =
       A.ConstantNull
     else
       (*BISECT-IGNORE*) error "[Translation.mkTestExpression] must be called on scalar expression" in
-  A.AnnotatedExpression result_gty annots loc
-    (A.AilEbinary a_expr A.Eq (A.AnnotatedExpression gty annots loc (A.AilEconst zero_const)))
+  A.AnnotatedExpression gtc annots loc
+    (A.AilEbinary a_expr bop (A.AnnotatedExpression gty annots loc (A.AilEconst zero_const)))
 
 
-
+val zeroAil_tau: A.expression GenTypes.genTypeCategory
+let zeroAil_tau =
+  A.AnnotatedExpression
+    (GenTypes.GenRValueType signedInt_gty) [] Loc.unknown
+    (A.AilEconst (A.ConstantInteger (A.IConstant 0 A.Decimal Nothing)))
 
 
 
@@ -1558,6 +1573,15 @@ else
             result_ty aop e1 e2
       
       | A.AilEbinary e1 A.And e2 ->
+          (* TODO: this is hackish, but on the other hand it factorise code ... *)
+          (* Also it follows the phrasing of the std *)
+          (* Desugaring e1 && e2 ===> (e1 == 0) ? 0 : (e2 != 0) *)
+          self begin
+            A.AnnotatedExpression
+              (GenTypes.GenRValueType signedInt_gty) [] loc
+              (A.AilEcond (mkTestExpression TestEq e1) zeroAil_tau (mkTestExpression TestNe e2))
+          end
+(*
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.And use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
@@ -1602,6 +1626,7 @@ else
                       Caux.mk_pure_e (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ) ]
               )
             )
+*)
       
       | A.AilEbinary e1 A.Or e2 ->
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.Or use mkTestExpression") in
@@ -2944,11 +2969,12 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         )
     
     | A.AilSif e s1 s2 ->
-        E.fresh_symbol                            >>= fun sym_obj ->
-        E.fresh_symbol                            >>= fun sym_e   ->
-        translate_expression (mkTestExpression e) >>= fun core_test ->
-        self s1                                   >>= fun core_s1 ->
-        self s2                                   >>= fun core_s2 ->
+        E.fresh_symbol                   >>= fun sym_obj ->
+        E.fresh_symbol                   >>= fun sym_e   ->
+        translate_expression
+             (mkTestExpression TestEq e) >>= fun core_test ->
+        self s1                          >>= fun core_s1   ->
+        self s2                          >>= fun core_s2   ->
         let oTy = C.OTy_integer in (* this is the type of core_test, not "core_e" *)
 (*
           (* Since [e] must have scalar type, oTy will always be one
@@ -2972,9 +2998,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.fresh_named_symbol "while" >>= fun sym_loop     ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (test_sym, test_sym_pat, test_sym_pe) ->
         E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (case_sym, case_sym_pat, case_sym_pe) ->
-        translate_expression (mkTestExpression e) >>= fun core_test ->
-        self s                                    >>= fun core_s                                ->
-        E.get_visible_objects                     >>= fun visible_syms                          ->
+        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                             ->
+        self s                                              >>= fun core_s                                ->
+        E.get_visible_objects                               >>= fun visible_syms                          ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
