@@ -1629,6 +1629,15 @@ else
 *)
       
       | A.AilEbinary e1 A.Or e2 ->
+          (* TODO: this is hackish, but on the other hand it factorise code ... *)
+          (* Also it follows the phrasing of the std *)
+          (* Desugaring e1 || e2 ===> (e1 == 0) ? (e2 != 0) : 0 *)
+          self begin
+            A.AnnotatedExpression
+              (GenTypes.GenRValueType signedInt_gty) [] loc
+              (A.AilEcond (mkTestExpression TestEq e1) (mkTestExpression TestNe e2) zeroAil_tau)
+          end
+(*
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.Or use mkTestExpression") in
           self e1        >>= fun core_e1  ->
           self e2        >>= fun core_e2  ->
@@ -1673,6 +1682,7 @@ else
                     Caux.mk_pure_e (Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ) ]
               )
             )
+*)
       
       | A.AilEcond e1 e2 e3 ->
           (* STD §6.5.15 *)
