@@ -145,8 +145,13 @@ val zeroAil_tau: A.expression GenTypes.genTypeCategory
 let zeroAil_tau =
   A.AnnotatedExpression
     (GenTypes.GenRValueType signedInt_gty) [] Loc.unknown
-    (A.AilEconst (A.ConstantInteger (A.IConstant 0 A.Decimal Nothing)))
+    (A.AilEconst (A.ConstantInteger (A.IConstant 0 A.Octal Nothing)))
 
+val oneAil_tau: A.expression GenTypes.genTypeCategory
+let oneAil_tau =
+  A.AnnotatedExpression
+    (GenTypes.GenRValueType signedInt_gty) [] Loc.unknown
+    (A.AilEconst (A.ConstantInteger (A.IConstant 1 A.Decimal Nothing)))
 
 
 (* ========================================================================== *)
@@ -1635,7 +1640,7 @@ else
           self begin
             A.AnnotatedExpression
               (GenTypes.GenRValueType signedInt_gty) [] loc
-              (A.AilEcond (mkTestExpression TestEq e1) (mkTestExpression TestNe e2) zeroAil_tau)
+              (A.AilEcond (mkTestExpression TestEq e1) (mkTestExpression TestNe e2) oneAil_tau)
           end
 (*
           let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of A.Or use mkTestExpression") in
