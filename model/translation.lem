@@ -3123,11 +3123,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         
         (* TODO: typing is not enough (should do like assignments) *)
         let ret_pe =
-          if AilTypesAux.is_integer env.return_ty then
-            if AilTypesAux.is_floating (ctype_of e) then
-              stdlib.mkcall_loaded_ivfromfloat env.return_ty e_sym_pe
-            else
-              stdlib.mkcall_conv_loaded_int env.return_ty e_sym_pe
+          if AilTypesAux.is_arithmetic env.return_ty && AilTypesAux.is_arithmetic (ctype_of e) then
+             conv_loaded_arith stdlib (ctype_of e) env.return_ty e_sym_pe
 
           else if AilTypesAux.is_pointer env.return_ty && Aaux.is_null_pointer_constant e then
             Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype env.return_ty))
