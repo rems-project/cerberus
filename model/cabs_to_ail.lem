@@ -2856,10 +2856,15 @@ let () = error "DONE" in
             E.fail (Loc.locOf d_e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
         | true ->
             if AilTypesAux.is_integer current_ty then
+(* TODO: bring back the evaluation if possible. But the following code is wrong
+   because the setting the suffix to Nothing regardless of the value of n is wrong. *)
+              E.return (current_ty, d_e)
+(*
               evaluate_integer_constant_expression loc (Just current_ty) d_e >>= fun n ->
               E.return begin
                 (current_ty, AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant n Decimal Nothing))))
               end
+*)
             else
               (* TODO: floating and pointer *)
               E.return (current_ty, d_e)
