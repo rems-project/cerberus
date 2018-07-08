@@ -232,13 +232,20 @@ let well_typed_assignment s ty1 gty2 null2 =
 (* STD §6.5.9#2 *)
 val well_typed_equality: genType -> genType -> bool -> bool -> bool
 let well_typed_equality gty1 gty2 is_null1 is_null2 =
-     is_arithmetic gty1 && is_arithmetic gty2               (* STD §6.5.9#2, item 1 *)
-  || are_pointers_to_compatible_types gty1 gty2             (* STD §6.5.9#2, item 2 *)
+     (* STD §6.5.9#2, item 1 *)
+     is_arithmetic gty1 && is_arithmetic gty2
+     (* STD §6.5.9#2, item 2 *)
+  || are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2
+     (* Defacto extension. TODO: make it a specific flag *)
   || (Global.isDefacto () && is_pointer_to_object gty1 && is_pointer_to_object gty2)
-  || is_pointer_to_void gty1   && is_pointer_to_object gty2 (* STD §6.5.9#2, item 3 *)
-  || is_pointer_to_object gty1 && is_pointer_to_void gty2   (* STD §6.5.9#2, item 3 *)
-  || is_pointer gty1 && is_null2                            (* STD §6.5.9#2, item 4 *)
-  || is_null1        && is_pointer gty2                     (* STD §6.5.9#2, item 4 *)
+     (* STD §6.5.9#2, item 3 *)
+  || is_pointer_to_void gty1 && is_pointer_to_object gty2
+     (* STD §6.5.9#2, item 3 *)
+  || is_pointer_to_object gty1 && is_pointer_to_void gty2
+     (* STD §6.5.9#2, item 4 *)
+  || is_pointer gty1 && is_null2
+     (* STD §6.5.9#2, item 4 *)
+  || is_null1 && is_pointer gty2
 
 
 let well_typed_binary_arithmetic gt1 aop gt2 : bool =
@@ -1148,7 +1155,7 @@ TODO
         if is_scalar gty1 && is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail loc (TError_TODO 39)
+          E.fail loc (TError "§6.5.13#2")
     
     | AilEbinary e1 (Or  as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
@@ -1156,46 +1163,47 @@ TODO
         if is_scalar gty1 && is_scalar gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail loc (TError_TODO 40)
+          E.fail loc (TError "§6.5.14#2")
     
     | AilEbinary e1 (Lt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_compatible_objects gty1 gty2 then
+        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail loc (TError_TODO 41)
+          E.fail loc (TError "§6.5.8#2")
     
     | AilEbinary e1 (Gt as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_compatible_objects gty1 gty2 then
+        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
-        else E.fail loc (TError_TODO 42)
+        else
+          E.fail loc (TError "§6.5.8#2")
     
     | AilEbinary e1 (Le as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_compatible_objects gty1 gty2 then
+        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail loc (TError_TODO 43)
+          E.fail loc (TError "§6.5.8#2")
     
     | AilEbinary e1 (Ge as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_compatible_objects gty1 gty2 then
+        if are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else if is_real gty1 && is_real gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          E.fail loc (TError_TODO 44)
+          E.fail loc (TError "§6.5.8#2")
     
     | AilEbinary e1 (Eq as bop) e2 ->
         (* STD §6.5.9#2 *)
@@ -1214,9 +1222,11 @@ TODO
         else
           let () = Debug.print_debug 0 [] (fun () ->
             "gty1: " ^ Pp.stringFromAil_genType gty1 ^
-            " <--> gty2: " ^ Pp.stringFromAil_genType gty2
+            " <--> gty2: " ^ Pp.stringFromAil_genType gty2 ^
+            " , are_pointers_to_compatible_types: " ^
+            if are_pointers_to_compatible_types gty1 gty2 then "true" else "false"
           ) in
-          E.fail loc (TError_TODO 46)
+          E.fail loc (TError "§6.5.9#2")
     
     | AilEsizeof qs ty ->
         wf_lvalue sigm qs ty >>
