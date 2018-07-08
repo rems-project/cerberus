@@ -1107,8 +1107,13 @@ module Concrete : Memory = struct
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival tag_sym memb_ident in
     PV (prov, match ptrval_ with
-      | PVnull _ ->
-          PVconcrete offset
+      | PVnull ty ->
+          (* TODO: unsure, this might just be undefined (gcc-torture assumes the
+             following behaviour though) *)
+          if N.equal N.zero offset then
+            PVnull ty
+          else
+            PVconcrete offset
       | PVfunction _ ->
           failwith "Concrete.member_shift_ptrval, PVfunction"
       | PVconcrete addr ->
