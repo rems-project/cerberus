@@ -2677,17 +2677,78 @@ and foo_aux
                     foo_aux acc elems (Just (i+1, elems_)) xs
               end
           | (cursor_path, outer_path, outer_ty) :: elems' ->
+              let do_string_literal loc lit =
+                if not (AilTypesAux.is_array_of_character outer_ty) then
+                  E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
+                else
+                  let size = match AilTypesAux.unatomic outer_ty with
+                    | ATypes.Array _ (Just n) ->
+                        natFromInteger n
+                    | _ ->
+                        error "foo_aux: string literal"
+                  end in
+                  match lit with
+                    | (Nothing, strs) ->
+                        let str_xs = List.map (fun str ->
+                          (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, str)))))
+                        ) strs ++ begin
+                          List.replicate (max 1 (size - List.length strs))
+                            (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, "\\0")))))
+                        end in
+                        foo_aux acc elems unknown_array (str_xs ++ xs')
+                    | _ ->
+                        error "TODO(foo_aux): CabsEstring with encoding prefix"
+                  end in
               match init_ with
+                | Init_expr (CabsExpression loc (CabsEstring lit)) ->
+                    do_string_literal loc lit
+                | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit)))] ->
+                    do_string_literal loc lit
                 | Init_expr e ->
                     E.get_tag_definitions >>= fun tagDefs ->
-                    desugar_expression e >>= fun d_e ->
                     let cursor_ty = innerCtype tagDefs outer_ty in
-                    let d_e' =
-                      if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
-                        A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
-                      else
-                        d_e in
-                    foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
+                    desugar_expression e >>= fun d_e ->
+                    let () = Debug.print_debug 1 [] (fun () ->
+                      "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cursor_ty ^
+                      ", outer_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty ^
+                      " ===> " ^ Pp.stringFromAil_expression d_e
+                    ) in
+                    (* TODO: should use Ail typing instead of this *)
+(*
+                    match AilSyntaxAux.strip_expression d_e with
+                      | AnnotatedExpression () _ loc (AilEconst (ConstantStruct e_tag_sym e_xs)) ->
+                          if not (AilTypesAux.is_struct outer_ty) then
+                            error "TODO: error ConstantStruct trying to init a non struct type"
+                          else
+                            error "TODO: Init_expr ConstantStruct"
+                      | AnnotatedExpression () _ loc (AilEconst (ConstantUnion e_tag_sym membr_ident membr_cst)) ->
+                          if not (AilTypesAux.is_union outer_ty) then
+                            error "TODO: error ConstantUnion trying to init a non union type"
+                          else
+                            error "TODO: Init_expr ConstantUnion"
+                      | AnnotatedExpression () _ loc (AilEstruct e_tag_sym e_xs) ->
+                          if not (AilTypesAux.is_struct outer_ty) then
+                            error "TODO: error AilEstruct trying to init a non struct type"
+                          else
+                            error "TODO: Init_expr AilEstruct"
+                      | AnnotatedExpression () _ loc (AilEunion e_tag_sym membr_ident membr_e_opt) ->
+                          if not (AilTypesAux.is_union outer_ty) then
+                            error "TODO: error AilEunion trying to init a non union type"
+                          else
+                            error "TODO: Init_expr AilEunion"
+                      | AnnotatedExpression () _ loc (AilEstr lit) ->
+                            | _ ->
+                                error "TODO: Init_expr AilEstr"
+                          end
+                      | _ ->
+*)
+                          let d_e' =
+                            if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
+                              A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
+                            else
+                              d_e in
+                          foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
+(*                    end *)
                 | Init_list ys ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
