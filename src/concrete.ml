@@ -1440,16 +1440,16 @@ let combine_prov prov1 prov2 =
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
-  let realloc align ptr size : pointer_value memM =
+  let realloc tid align ptr size : pointer_value memM =
     match ptr with
     | PV (Prov_none, PVnull _) ->
-      allocate_dynamic 0 (* tid *) (Symbol.PrefOther "realloc") align size
+      allocate_dynamic tid (Symbol.PrefOther "realloc") align size
     | PV (Prov_none, _) ->
       fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete addr) ->
       get_allocation alloc_id >>= fun alloc ->
       if alloc.base = addr then
-        allocate_dynamic 0 (* tis *) (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+        allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
         memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
         kill ptr >>= fun () ->
         return new_ptr
