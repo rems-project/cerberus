@@ -337,6 +337,8 @@ module Concrete : Memory = struct
     allocations: allocation IntMap.t;
     next_address: address;
     bytemap: (provenance * char option) IntMap.t;
+    
+    dynamic_addrs: Nat_big_num.num list;
   }
   
   let initial_mem_state = {
@@ -344,6 +346,8 @@ module Concrete : Memory = struct
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
     bytemap= IntMap.empty;
+    
+    dynamic_addrs= [];
   }
   
   type footprint =
@@ -448,7 +452,10 @@ module Concrete : Memory = struct
     return ()
     end else
       return ()
-
+  
+  let is_dynamic addr : bool memM =
+    get >>= fun st ->
+    return (List.mem addr st.dynamic_addrs)
   
   let get_allocation alloc_id : allocation memM =
     get >>= fun st ->
@@ -794,13 +801,14 @@ module Concrete : Memory = struct
               (Nat_big_num.add addr (Nat_big_num.of_int i), b)
             ) (explode_bytes mval) in
             ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
-                next_address= Nat_big_num.add addr size;
-                bytemap=
-                  List.fold_left (fun acc (addr, b) ->
-                    IntMap.add addr b acc
-                  ) st.bytemap bs
+            , { st with
+                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
+                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
+                  next_address= Nat_big_num.add addr size;
+                  bytemap=
+                    List.fold_left (fun acc (addr, b) ->
+                      IntMap.add addr b acc
+                    ) st.bytemap bs
               } )
     end
   
@@ -819,7 +827,8 @@ module Concrete : Memory = struct
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
             allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
-            next_address= Nat_big_num.add addr size_n } )
+            next_address= Nat_big_num.add addr size_n;
+            dynamic_addrs= addr :: st.dynamic_addrs })
     )
   
   let kill : pointer_value -> unit memM = function
@@ -1447,14 +1456,19 @@ let combine_prov prov1 prov2 =
     | PV (Prov_none, _) ->
       fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-      get_allocation alloc_id >>= fun alloc ->
-      if alloc.base = addr then
-        allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
-        memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
-        kill ptr >>= fun () ->
-        return new_ptr
-      else
-        fail (MerrWIP "realloc: invalid pointer")
+      is_dynamic addr >>= begin function
+        | false ->
+            fail (MerrUndefinedRealloc)
+        | true ->
+            get_allocation alloc_id >>= fun alloc ->
+            if alloc.base = addr then
+              allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+              memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
+              kill ptr >>= fun () ->
+              return new_ptr
+            else
+              fail (MerrWIP "realloc: invalid pointer")
+      end
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
 
