@@ -57,7 +57,10 @@ char *strcpy (char * restrict s1, const char * restrict s2)
 char *strncpy (char * restrict s1, const char * restrict s2, size_t n)
 {
   char *res = s1;
-  while ((*s1++ = *s2++) && --n > 0);
+  while ((*s1++ = *s2++) && --n > 0)
+    ;
+  while (n && --n > 0)
+    *s1++ = '\0';
   return (res);
 }
 
@@ -103,7 +106,7 @@ char *strchr(const char *s, int n)
 {
   char c = (char) n;
   while (*s && (*s != c)) s++;
-  if (*s)
+  if (*s || !c)
     return (char*)s;
   return NULL;
 }
