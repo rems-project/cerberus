@@ -1,0 +1,723 @@
+20000717-1.c
+8a9
+>   return 0;
+20000717-5.c
+9a10
+>   return 0;
+20001024-1.c
+16c16
+< int bar (int x, const struct b *__restrict y, struct b *__restrict z)
+---
+> void bar (int x, const struct b *__restrict y, struct b *__restrict z)
+20001026-1.c
+26c26
+< static void 
+---
+> static void
+33,34c33
+< int 
+< main (void)
+---
+> int main()
+20010325-1.c
+11c11
+<   if (L"a" "b"[1] != L'b')
+---
+>   if ("a" "b"[1] != 'b')
+20020213-1.c
+29,30c29
+< int 
+< main (void)
+---
+> int main()
+20020413-1.c
+2c2
+< void test(long double val, int *eval)
+---
+> void test(double val, int *eval)
+4c4
+<   long double tmp = 1.0l;
+---
+>   double tmp = 1.0l;
+20021024-1.c
+5d4
+< 
+20030715-1.c
+32,33c32
+< int 
+< main (void)
+---
+> int main ()
+20030718-1.c
+6c6
+< static inline void temp();
+---
+> static void temp();
+20030909-1.c
+2d1
+< 
+20031011-1.c
+8,9c8
+< int 
+< main (void)
+---
+> int main()
+20031214-1.c
+21,22c21,22
+< int 
+< main (void)
+---
+> int
+> main ()
+
+20041019-1.c
+1a2
+> int
+20c21
+< 
+---
+> int
+20050104-1.c
+4d3
+< 
+20050106-1.c
+4d3
+< 
+9c8
+< };
+---
+> }
+20060930-1.c
+6,7c6,7
+< int bar (int, int) __attribute__((noinline));
+< int bar (int a, int b)
+---
+> void bar (int, int) __attribute__((noinline));
+> void bar (int a, int b)
+20120427-1.c
+7a8
+> int
+20120427-2.c
+7a8
+> int
+920202-1.c
+4a5
+> int
+920520-1.c
+1a2
+> void
+920603-1.c
+2c2
+< int 
+---
+> void
+920721-3.c
+2c2
+< static inline fu (unsigned short data)
+---
+> static inline int fu (unsigned short data)
+6c6
+< int 
+---
+> void
+12c12
+< static inline fs (signed short data)
+---
+> static inline int fs (signed short data)
+16c16
+< int 
+---
+> void
+920812-1.c
+2a3
+> int
+921007-1.c
+2,3d1
+< static int 
+< strcmp (void){return-1;}
+921013-1.c
+2c2
+< int 
+---
+> void
+921113-1.c
+19a20
+> void
+21a23
+> void
+26a29
+> void
+32a36
+> void
+921123-1.c
+1a2
+> int
+921124-1.c
+8c8
+< int 
+---
+> void
+921202-1.c
+9a10,23
+> 
+> void
+> foo (char *c, int n, int m){}
+> long
+> mpn_mul_1 (long *p, long *q, long s){return 0;}
+> void
+> mpn_print (long *d, long s){}
+> void
+> mpn_random2 (long *p, long s){}
+> long
+> mpn_cmp (long*p, long*q, long s){return 0;}
+> void
+> exxit (void){exit(0);}
+> 
+41,52d54
+< int 
+< foo (void){}
+< int 
+< mpn_mul_1 (void){}
+< int 
+< mpn_print (void){}
+< int 
+< mpn_random2 (void){}
+< int 
+< mpn_cmp (void){}
+< int 
+< exxit (void){exit(0);}
+930111-1.c
+2,8d1
+< int 
+< main (void)
+< {
+<   if (wwrite((long long) 0) != 123)
+<     abort();
+<   exit(0);
+< }
+24a18,26
+> 
+> int 
+> main (void)
+> {
+>   if (wwrite((long long) 0) != 123)
+>     abort();
+>   exit(0);
+> }
+> 
+930123-1.c
+1a2
+> void
+7,8c8,9
+< int 
+< main (void)
+---
+> int
+> main()
+930408-1.c
+2d1
+< typedef enum foo E;
+3a3
+> typedef enum foo E;
+15c15
+< int 
+---
+> void
+930518-1.c
+4c4
+< int 
+---
+> void
+930527-1.c
+1a2
+> int
+930603-1.c
+7a8,14
+> float 
+> inita (void) { return 3.0; }
+> float 
+> initc (void) { return 4.0; }
+> void
+> f (void) {}
+> 
+11c18
+<   float fx (), inita (), initc (), a, b, c;
+---
+>   float fx (double), inita (), initc (), a, b, c;
+22,27d28
+< float 
+< inita (void) { return 3.0; }
+< float 
+< initc (void) { return 4.0; }
+< int 
+< f (void) {}
+930603-2.c
+4c4
+< int 
+---
+> void
+930614-1.c
+1a2
+> void
+7,8c8,9
+< int 
+< main (void)
+---
+> int
+> main ()
+930916-1.c
+2c2
+< int 
+---
+> void
+931004-1.c
+6a7
+> void
+931004-11.c
+8a9
+> void
+931004-13.c
+9a10
+> void
+931004-3.c
+6a7
+> void
+931004-5.c
+7a8
+> void
+931004-7.c
+6a7
+> void
+931004-9.c
+7a8
+> void
+931009-1.c
+2c2,3
+< int 
+---
+> void f(void);
+> int
+9c10
+< static 
+---
+> static void
+19c20
+< int 
+---
+> void
+931012-1.c
+1a2
+> int
+931017-1.c
+5,11d4
+< main (void)
+< {
+<   f ();
+<   exit (0);
+< }
+< 
+< int 
+53c46
+< int 
+---
+> void 
+58a52,60
+> 
+> int 
+> main (void)
+> {
+>   f ();
+>   exit (0);
+> }
+> 
+> 
+931018-1.c
+4a5,11
+> void 
+> f (unsigned long a)
+> {
+>   if (a != 0xdeadbeefL)
+>     abort();
+> }
+> 
+13,19d19
+< int 
+< f (unsigned long a)
+< {
+<   if (a != 0xdeadbeefL)
+<     abort();
+< }
+< 
+940122-1.c
+5c5
+< int 
+---
+> void
+12c12
+< int 
+---
+> void
+941014-2.c
+11c11
+< f ()
+---
+> f (void)
+941021-1.c
+4c4
+< int 
+---
+> void
+941110-1.c
+1a2
+> int
+11,13c12,13
+< 
+< int 
+< main (void)
+---
+> int
+> main ()
+950322-1.c
+1a2
+> int
+950426-1.c
+9a10,16
+> 
+> int
+> func1(int *p) { return(*p); }
+> 
+> void
+> foo (char *s) {}
+> 
+32,34d38
+< func1(int *p) { return(*p); }
+< 
+< foo (char *s) {}
+950621-1.c
+8a9
+> int
+950809-1.c
+6a7
+> void
+950929-1.c
+2c2
+< int f (char *p) { }
+---
+> void f (char *p) { }
+951115-1.c
+4c4
+< int 
+---
+> void
+10c10
+< int 
+---
+> void
+951204-1.c
+1a2
+> void
+960116-1.c
+2c2
+< static inline
+---
+> static inline int
+960218-1.c
+11c11
+< int 
+---
+> void
+960219-1.c
+1a2
+> void
+960402-1.c
+1a2
+> int
+960521-1.c
+13c13
+< int 
+---
+> void
+960909-1.c
+16c16
+< int 
+---
+> void 
+961122-1.c
+3a4
+> void
+8a10
+> void
+970214-1.c
+3,4c3,4
+< int 
+< main (void)
+---
+> int
+> main ()
+6c6
+<   exit (L'1' != L'1');
+---
+>   exit ('1' != '1');
+970214-2.c
+2,4c2,4
+< #define m(L) (L'1' + (L))
+< int 
+< main (void)
+---
+> #define m(L) ('1' + (L))
+> int
+> main ()
+6c6
+<   exit (m (0) != L'1');
+---
+>   exit (m (0) != '1');
+990128-1.c
+2d1
+< extern int printf (const char *,...);
+990525-2.c
+8c8
+< int 
+---
+> void
+991227-1.c
+6,7c6
+< int 
+< main (void)
+---
+> int main()
+ashldi-1.c
+1a2
+> #include <limits.h>
+200,201c201,202
+< int 
+< main (void)
+---
+> int
+> main()
+cmpsf-1.c
+5a6
+> int
+13a15
+> int
+21a24
+> int
+29a33
+> int
+37a42
+> int
+45a51
+> int
+cmpsi-1.c
+1a2,5
+> void
+> dummy (void) {}
+> 
+> int
+12a17
+> int
+23,27d27
+< 
+< 
+< int 
+< dummy (void) {}
+< 
+compare-1.c
+37a38
+>   return 0;
+47a49
+>   return 0;
+57a60
+>   return 0;
+67a71
+>   return 0;
+77a82
+>   return 0;
+87a93
+>   return 0;
+conversion.c
+69c69
+< int 
+---
+> void 
+164c164
+< int 
+---
+> void 
+268c268
+< int 
+---
+> void 
+430c430
+< int 
+---
+> void 
+divconst-1.c
+6a7
+> void
+divmod-1.c
+1a2
+> int
+6a8
+> int
+11a14
+> int
+16a20
+> int
+21a26
+> int
+26a32
+> int
+31a38
+> int
+36a44
+> int
+gofast.c
+9a10
+> #include <stdio.h>
+49c50
+< int
+---
+> void
+53c54
+<   fprintf (stderr, "Test failed: %s\n", msg);
+---
+>   printf ("Test failed: %s\n", msg);
+56,57c57,58
+< int 
+< main (void)
+---
+> int
+> main()
+ifcvt-onecmpl-abs-1.c
+4c4
+< __attribute__ ((noinline))
+---
+> __attribute__((noinline))
+int-compare.c
+1c1,2
+< #include "cerberus.h"
+---
+> #include <stdlib.h>
+> #include <stdint.h>
+41c42
+< int 
+---
+> void
+loop-12.c
+6c6
+< static int __attribute__ ((pure))
+---
+> static int __attribute__((pure))
+loop-2.c
+4c4
+< int 
+---
+> void
+loop-2b.c
+4a5
+> void
+loop-2d.c
+4c4
+< int 
+---
+> void
+loop-3c.c
+5c5
+< int 
+---
+> void
+lshrdi-1.c
+1a2
+> #include <limits.h>
+200,201c201,202
+< int 
+< main (void)
+---
+> int
+> main()
+mayalias-3.c
+6c6
+< int g(int *a)
+---
+> void g(int *a)
+mod-1.c
+2c2
+< int 
+---
+> void
+packed-1.c
+6c6
+<   short i __attribute__ ((packed));
+---
+>   short i __attribute__((packed));
+9c9
+< int 
+---
+> void
+packed-2.c
+4c4
+< 	unsigned long b __attribute__ ((packed));
+---
+> 	unsigned long b __attribute__((packed));
+pr15262-2.c
+19a20
+> int
+pr15262.c
+38,39c38,39
+< int 
+< main (void)
+---
+> int
+> main ()
+pr19515.c
+8d7
+< 
+pr27671-1.c
+7c7
+< static int __attribute__((noinline))
+---
+> static void __attribute__((noinline))
+pr28403.c
+5c5
+< int __attribute__((noinline))
+---
+> void
+pr34982.c
+3c3
+< static void something();
+---
+> static void something(int i);
+pr42614.c
+2,4d1
+< extern void *malloc(__SIZE_TYPE__);
+< extern void free(void *);
+< 
+24c21
+< static inline void
+---
+> static void
+27c24
+< void
+---
+> static void
+pr53160.c
+18,19c18,19
+< int 
+< main (void)
+---
+> int
+> main ()
+pr55875.c
+3a4
+> int
+9a11
+>   return 0;
+pr56051.c
+18c18
+<   int a2 = x2[0] >= (unsigned long long) (1 << s2);
+---
+>   int a2 = x2[0] >= (unsigned long long) (1ULL << s2);
+25c25
+<   int a3 = x3[0] >= (unsigned long long) (1U << s3);
+---
+>   int a3 = x3[0] >= (unsigned long long) (1ULL << s3);
