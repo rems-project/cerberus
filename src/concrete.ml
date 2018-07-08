@@ -804,11 +804,17 @@ module Concrete : Memory = struct
               } )
     end
   
+
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
-(*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
     modify (fun st ->
       let alloc_id = st.next_alloc_id in
       let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ N.to_string alloc_id ^
+        ", size= " ^ N.to_string size_n ^
+        ", addr= " ^ N.to_string addr
+      );
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
@@ -1437,13 +1443,13 @@ let combine_prov prov1 prov2 =
   let realloc align ptr size : pointer_value memM =
     match ptr with
     | PV (Prov_none, PVnull _) ->
-      allocate_dynamic 0 (* tid *) 0 (* pref *) align size
+      allocate_dynamic 0 (* tid *) (Symbol.PrefOther "realloc") align size
     | PV (Prov_none, _) ->
       fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete addr) ->
       get_allocation alloc_id >>= fun alloc ->
       if alloc.base = addr then
-        allocate_dynamic 0 (* tis *) 0 (* pref *) align size >>= fun new_ptr ->
+        allocate_dynamic 0 (* tis *) (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
         memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
         kill ptr >>= fun () ->
         return new_ptr
