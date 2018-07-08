@@ -34,6 +34,8 @@ let pp_memop = function
       !^ "Memcmp"
   | Memcpy ->
       !^ "Memcpy"
+  | Realloc ->
+      !^ "Realloc"
 
 
 
