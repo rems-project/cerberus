@@ -507,7 +507,7 @@ let print_pure_expr globs pe =
       | PEimpl iCst -> print_impl_name iCst ^^^ P.parens P.space
       | PEval cval -> print_value globs cval
       | PEconstrained _ -> raise (Unexpected "Unexpected contrained expression.")
-      | PEundef ub ->
+      | PEundef (_, ub) ->
         traise ^^^ P.parens (!^"A.Undefined" ^^^ P.dquotes
                                (!^(Undefined.stringFromUndefined_behaviour ub)))
       | PEerror (str, pe) ->

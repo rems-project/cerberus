@@ -421,8 +421,8 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
     | PEconstrained cs ->
         (* list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *) *)
         error "WIP: Core_typing.infer_pexpr, PEconstrained"
-    | PEundef ub ->
-        E.return (Pexpr annot InferredUnknown (PEundef ub))
+    | PEundef loc ub ->
+        E.return (Pexpr annot InferredUnknown (PEundef loc ub))
     | PEerror str pe ->
         infer_pexpr loc tagDefs env pe >>= fun tpe ->
         E.return (Pexpr annot InferredUnknown (PEerror str tpe))
@@ -803,8 +803,8 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
     | PEconstrained cs ->
         (* list (list Mem.mem_constraint2 * (generic_pexpr 'ty 'sym)) (* constrained value *) *)
         error "WIP: Core_typing.typecheck_pexpr, PEconstrained"
-    | PEundef ub ->
-        E.return (PEundef ub)
+    | PEundef loc ub ->
+        E.return (PEundef loc ub)
     | PEerror str pe ->
         PEerror str <$> infer_pexpr loc tagDefs env pe
     | PEctor ctor pes ->

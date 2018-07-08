@@ -317,8 +317,8 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         failwith "WIP: Core parser -> PEval"
     | PEconstrained _ ->
         assert false
-    | PEundef ub ->
-        Eff.return (Pexpr ([], (), PEundef ub))
+    | PEundef (loc, ub) ->
+        Eff.return (Pexpr ([], (), PEundef (loc, ub)))
     | PEerror (str, _pe) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr ([], (), PEerror (str, pe)))
@@ -1322,7 +1322,7 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([], (), PEundef ub) }
+    { Pexpr ([], (), PEundef (Location_ocaml.other "Core parser", ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
     { Pexpr ([], (), PEerror (str, _pe))  }
 | _cval= value

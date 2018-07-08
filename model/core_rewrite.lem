@@ -693,7 +693,7 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
             (constr, remove_conv_int_pexpr pe)
           ) xs
         end
-    | PEundef _ ->
+    | PEundef _ _ ->
         _pe
     | PEerror str pe ->
         PEerror str (remove_conv_int_pexpr pe)
@@ -1007,7 +1007,7 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         true
     | PEconstrained xs ->
         List.all (fun (_, pe) -> isAlwaysDefined pe) xs
-    | PEundef _ ->
+    | PEundef _ _ ->
         false
     | PEerror _ _ ->
         false
@@ -1271,7 +1271,7 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         pexpr
     | PEconstrained _ ->
         pexpr
-    | PEundef _ ->
+    | PEundef _ _ ->
         pexpr
     | PEerror _ _ ->
         pexpr

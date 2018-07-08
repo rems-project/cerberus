@@ -370,7 +370,7 @@ let pp_pexpr pe =
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin
       match pe with
-        | PEundef ub ->
+        | PEundef (_, ub) ->
             pp_keyword "undef" ^^ P.parens (P.angles (P.angles (!^ (
               ansi_format [Magenta] (Undefined.stringFromUndefined_behaviour ub)
             ))))

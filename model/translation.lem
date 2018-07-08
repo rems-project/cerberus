@@ -315,7 +315,7 @@ and prepare_cproc_call program fid es =
 
 
 (* STD §6.5.5 Multiplicative operators *)
-and translate_mul_operator self usual_arithmetic_conversion stdlib result_ty e1 e2 =
+and translate_mul_operator loc self usual_arithmetic_conversion stdlib result_ty e1 e2 =
   let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
   let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
   self e1                                    >>= fun core_e1                               ->
@@ -349,13 +349,13 @@ else
 if AilTypesAux.is_unsigned_integer_type result_ty then
                Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
 else
-               Caux.mk_undef_exceptional_condition ()) ]
+               Caux.mk_undef_exceptional_condition loc) ]
         )
       )
     )
 
 
-and translate_div_mod_operator self usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
+and translate_div_mod_operator loc self usual_arithmetic_conversion stdlib result_ty aop e1 e2 =
   (* STD "§6.5.5" *)
   let oTy1    = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
   let oTy2    = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
@@ -403,20 +403,20 @@ and translate_div_mod_operator self usual_arithmetic_conversion stdlib result_ty
                                    ; Caux.mk_empty_pat (C.BTy_loaded oTy2) ]
                 ,
 if AilTypesAux.is_signed_integer_type result_ty then
-                  Caux.mk_undef_exceptional_condition ()
+                  Caux.mk_undef_exceptional_condition loc
 else
                   Caux.mk_unspecified_pe (Caux.proj_ctype result_ty) )
 
               ; ( Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded oTy1)
                                     ; Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype) ]
-                , Caux.mk_std_undef_pe "§6.5.5#5, sentence 2" ub )
+                , Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub )
 
               ; ( Caux.mk_tuple_pat [ Caux.mk_specified_pat obj1_sym_pat
                                     ; Caux.mk_specified_pat obj2_sym_pat ]
                 , Caux.mk_let_pe conv1_sym_pat promoted1_pe (
                     Caux.mk_let_pe conv2_sym_pat promoted2_pe (
                       Caux.mk_if_pe (Caux.mk_op_pe C.OpEq conv2_sym_pe zero_pe)
-                        (Caux.mk_std_undef_pe "§6.5.5#5, sentence 2" ub)
+                        (Caux.mk_std_undef_pe loc "§6.5.5#5, sentence 2" ub)
                         (* if a/b is representable *)
                         (Caux.mk_if_pe (stdlib.mkcall_is_representable (Caux.mk_op_pe C.OpDiv promoted1_pe conv2_sym_pe) result_ty)
                            begin
@@ -428,7 +428,7 @@ else
                                else
                                  core_pe)
                            end
-                           (Caux.mk_undef_pe Undefined.UB045c_quotient_not_representable))
+                           (Caux.mk_undef_pe loc Undefined.UB045c_quotient_not_representable))
                       )
                     ) ) ]
           )
@@ -535,7 +535,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
     ))
     ; (Caux.mk_empty_pat (C.BTy_loaded C.OTy_pointer),
        (* TODO: check with Peter *)
-       Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY ("Elab. equality operator (ptr vs NULL) ==> " ^ Loc.stringFromLocation loc)))) ]
+       Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY ("Elab. equality operator (ptr vs NULL) ==> " ^ Loc.stringFromLocation loc)))) ]
     )
   )
   
@@ -602,7 +602,7 @@ else (* both operand have pointer type *)
                  ) )
             ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded oTy1; C.BTy_loaded oTy2]),
                (* TODO: check with Peter *)
-               Caux.mk_pure_e (Caux.mk_undef_pe (Undefined.DUMMY "Elab. equality operator (both arith or ptr)"))) ]
+               Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "Elab. equality operator (both arith or ptr)"))) ]
             )
 
 
@@ -1049,12 +1049,12 @@ else
 (*                             Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) obj_sym_pe Cmm.NA *)
                                     C.Expr [] (C.Epure (obj_sym_pe))
                                   end
-                                  (C.Expr [] (C.Epure (Caux.mk_std_undef_pe "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)))
+                                  (C.Expr [] (C.Epure (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value)))
                               )
                             )
                         ) )
                     ; ( C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
-                      , C.Expr [] (C.Epure (Caux.mk_std_undef_pe "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value(*TODO:check*))) )
+                      , C.Expr [] (C.Epure (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value(*TODO:check*))) )
                     ]
                 )
               )
@@ -1099,13 +1099,13 @@ If an invalid value has been assigned to the pointer, the behavior of the unary 
                       C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                         [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
                                              ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
-                           Caux.mk_undef_exceptional_condition ())
+                           Caux.mk_undef_exceptional_condition loc)
                         ; (Caux.mk_tuple_pat [ C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
                                              ; Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer) ],
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
 else
-                           Caux.mk_undef_exceptional_condition ()
+                           Caux.mk_undef_exceptional_condition loc
 )
                           )
                         ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object C.OTy_integer))
@@ -1116,11 +1116,11 @@ else
                              (Caux.mk_std_pe "§6.5.7#3, sentence 1" $ integer_promotion (ctype_of e2) obj2_sym_pe)
                            (* (§6.5.7#2) if promoted2 < 0 then undef *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
-                             (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
+                             (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                            (* ctype_width(result_ty) <= promoted2 *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
-                              (Caux.mk_std_undef_pe "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
+                              (Caux.mk_std_undef_pe loc "§6.5.7#4, sentence 3" Undefined.UB51b_shift_too_large)
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                            (Caux.mk_specified_pe (Caux.mk_std_pe "§6.5.7#4, sentence 2" (
                               Caux.mk_op_pe C.OpRem_t (Caux.mk_op_pe C.OpMul promoted1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe))
@@ -1129,12 +1129,12 @@ else
 else
                            Caux.mk_std_pe "§6.5.7#4, sentence 3" $
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted1_sym_pe (Caux.mk_integer_pe 0))
-                             (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB052a_negative_left_shift)
+                             (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052a_negative_left_shift)
                            (Caux.mk_let_pe (Caux.mk_sym_pat res_sym (C.BTy_object C.OTy_integer))
                              (Caux.mk_op_pe C.OpMul promoted1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe))
                            (Caux.mk_if_pe (stdlib.mkcall_is_representable res_sym_pe result_ty)
                               (Caux.mk_specified_pe res_sym_pe)
-                            (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
+                            (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB052b_non_representable_left_shift))))
 )
                            )))) ]
                     )
@@ -1171,7 +1171,7 @@ else
                       C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                         [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
                                              ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
-                           Caux.mk_undef_exceptional_condition ())
+                           Caux.mk_undef_exceptional_condition loc)
                         ; (Caux.mk_tuple_pat [ C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
                                              ; Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer) ],
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
@@ -1183,12 +1183,12 @@ else
                              (integer_promotion (ctype_of e2) obj2_sym_pe)
                            (* (§6.5.7#2) if promoted2 < 0 then undef *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpLt promoted2_sym_pe (Caux.mk_integer_pe 0))
-                             (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
+                             (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB051a_negative_shift)
                            
                            (* ctype_width(result_ty) <= promoted2 *)
                            (Caux.mk_if_pe (Caux.mk_op_pe C.OpOr (Caux.mk_op_pe C.OpLt (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe)
                                                                 (Caux.mk_op_pe C.OpEq (stdlib.mkcall_ctype_width result_ty) promoted2_sym_pe))
-                              (Caux.mk_std_undef_pe "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
+                              (Caux.mk_std_undef_pe loc "§6.5.7#3, sentence 3" Undefined.UB51b_shift_too_large)
                               (let expr = Caux.mk_op_pe C.OpDiv obj1_sym_pe (Caux.mk_op_pe C.OpExp (Caux.mk_integer_pe 2) promoted2_sym_pe) in
                                Caux.mk_specified_pe $
 if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
@@ -1308,7 +1308,7 @@ else (* pointer <-> pointer cast *)
               let () = Debug.warn [Debug.DB_elaboration] (fun () ->
                 "NOTE: the elaboration does the identity for casts between pointer types (this is different from ISO)"
               ) in
-              let ub_pe = Caux.mk_undef_pe Undefined.UB025_misaligned_pointer_conversion in
+              let ub_pe = Caux.mk_undef_pe loc Undefined.UB025_misaligned_pointer_conversion in
               match AilTypesAux.referenced_type cast_ty with
                 | Just cast_ref_ty ->
   if AilTypesAux.is_void cast_ref_ty || AilTypesAux.is_function cast_ref_ty then
@@ -1330,13 +1330,13 @@ else (* pointer <-> pointer cast *)
             )
       
       | A.AilEbinary e1 (A.Arithmetic A.Mul) e2 ->
-          translate_mul_operator self usual_arithmetic_conversion stdlib
+          translate_mul_operator loc self usual_arithmetic_conversion stdlib
             result_ty e1 e2
       | A.AilEbinary e1 (A.Arithmetic (A.Div as aop)) e2 ->
-          translate_div_mod_operator self usual_arithmetic_conversion stdlib
+          translate_div_mod_operator loc self usual_arithmetic_conversion stdlib
             result_ty aop e1 e2
       | A.AilEbinary e1 (A.Arithmetic (A.Mod as aop)) e2 ->
-          translate_div_mod_operator self usual_arithmetic_conversion stdlib
+          translate_div_mod_operator loc self usual_arithmetic_conversion stdlib
             result_ty aop e1 e2
       
       | A.AilEbinary e1 (A.Arithmetic A.Add) e2 ->
@@ -1374,7 +1374,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
   if AilTypesAux.is_unsigned_integer_type result_ty then
                         Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
   else
-                        Caux.mk_undef_exceptional_condition ()) ]
+                        Caux.mk_undef_exceptional_condition loc) ]
                 )
               )
             )
@@ -1414,7 +1414,7 @@ else
                             Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) integer_obj_sym_pe
                           ) )
                       ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
-                        , Caux.mk_undef_pe (Undefined.DUMMY "unspecified array_shift (addr)") ) ]
+                        , Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)") ) ]
                   )
                 )
               )
@@ -1453,7 +1453,7 @@ if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_o
                            result type of unsigned. Otherwise it is undef, since the addition
                            may overflow *)
   if AilTypesAux.is_signed_integer_type result_ty then
-                        Caux.mk_undef_exceptional_condition ()
+                        Caux.mk_undef_exceptional_condition loc
   else
                         Caux.mk_unspecified_pe (Caux.proj_ctype result_ty) ) ]
                 )
@@ -1488,11 +1488,11 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                           Caux.mk_pure_e begin
                             Caux.mk_if_pe (stdlib.mkcall_is_representable memop_sym_pe Aty.ptrdiff_t)
                               (Caux.mk_specified_pe memop_sym_pe)
-                              (Caux.mk_undef_pe Undefined.UB050_pointers_substraction_not_representable)
+                              (Caux.mk_undef_pe loc Undefined.UB050_pointers_substraction_not_representable)
                           end
                         end )
                   ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_pointer])
-                    , Caux.mk_pure_e (Caux.mk_undef_pe Undefined.UB050_pointers_substraction_not_representable) ) ]
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB050_pointers_substraction_not_representable) ) ]
               )
             )
 
@@ -1533,7 +1533,7 @@ else
                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_neg_pe integer_obj_sym_pe)
                          ))
                         ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
-                          , Caux.mk_undef_pe (Undefined.DUMMY "unspecified array_shift (sub)") ) ]
+                          , Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (sub)") ) ]
                   )
                 )
               )
@@ -1907,7 +1907,7 @@ end
                  [ (Caux.mk_specified_pat object_sym_pat,
                     Caux.pstore loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo)
                  ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                    Caux.mk_pure_e (Caux.mk_undef_pe Undefined.UB_unspecified_lvalue)) ]
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
              end
          end
      
@@ -1930,7 +1930,7 @@ end
                  [ (Caux.mk_specified_pat object_sym_pat,
                     Caux.pload loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe mo)
                  ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                    Caux.mk_pure_e (Caux.mk_undef_pe Undefined.UB_unspecified_lvalue)) ]
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
              end
          end
      
@@ -2040,7 +2040,7 @@ TODO: #9
               begin
                 Caux.mk_if_e (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe 0))
                   (C.Expr [] (C.Eccall default fun_sym_pe []))
-                  (Caux.mk_pure_e (Caux.mk_undef_pe Undefined.UB039))
+                  (Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB039))
               end
       
       | A.AilEcall e es ->
@@ -2130,7 +2130,7 @@ TODO: #9
                         (Caux.mk_std_pe "§6.5.2.2#2" (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))
                       )
                     )
-                  ) (Caux.mk_pure_e (Caux.mk_undef_pe Undefined.UB039))
+                  ) (Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB039))
                     <$> begin
                       if numberOfArguments = 0 then
                         (* If there are no arguments, we don't need all the temporary object creation stuff *)
@@ -2393,7 +2393,7 @@ else (* is_pointer *)
                  Caux.mk_pure_e begin
                    Caux.mk_case_pe e_sym_pe
                      [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                       , Caux.mk_undef_pe (Undefined.DUMMY "Elab, rvalue AilEmemberof (unspec)") ) (* TODO: better undef *) (* TODO: check with P *)
+                       , Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, rvalue AilEmemberof (unspec)") ) (* TODO: better undef *) (* TODO: check with P *)
                      ; ( Caux.mk_specified_pat obj_sym_pat
                        , Caux.mk_memberof_pe tag_sym ident obj_sym_pe ) ]
                  end
@@ -2423,7 +2423,7 @@ else (* is_pointer *)
               C.Esseq e_sym_pat core_e (
                 Caux.mk_pure_e (Caux.mk_case_pe e_sym_pe
                   [ ( Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype)
-                    , Caux.mk_undef_pe (Undefined.DUMMY "Elab, AilEmemberofptr") ) (* TODO: better undef *)
+                    , Caux.mk_undef_pe loc (Undefined.DUMMY "Elab, AilEmemberofptr") ) (* TODO: better undef *)
                   ; ( Caux.mk_specified_pat memb_sym_pat
                     , Caux.mk_member_shift_pe memb_sym_pe tag_sym ident ) ]
                 )
@@ -3101,7 +3101,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.get_visible_objects >>= fun visible_syms ->
         E.return $ begin
           if env.is_Noreturn then
-            Caux.mk_pure_e (Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn)
+            Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
             let bTy =
               if List.length visible_syms < 2 then
@@ -3136,7 +3136,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
 
         E.return $ begin
           if env.is_Noreturn then
-            Caux.mk_pure_e (Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn)
+            Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
             Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
               mk_run_e loc env.return_lab visible_syms [] [ret_pe]
@@ -3195,7 +3195,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                        else Caux.mk_skip_e) core_s)
                   case_labs)))
             ; (* UB if unspecified *)
-              (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype), Caux.mk_pure_e (Caux.mk_undef_exceptional_condition ()))
+              (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype), Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc))
             ]))
     
     | A.AilScase iCst s ->
@@ -3440,11 +3440,11 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (* TODO: "If the return type is not compatible with int" *)
                       Caux.mk_specified_pe (Caux.mk_integer_pe 0)
                     else if return_ty = Aty.Void && is_Noreturn then
-                      Caux.mk_std_undef_pe "§6.7.4#8" Undefined.UB071_noreturn
+                      Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn
                     else if return_ty = Aty.Void then
                       Caux.mk_unit_pe
                     else
-                      Caux.mk_std_undef_pe "§6.9.1#12" Undefined.UB088_reached_end_of_function in
+                      Caux.mk_std_undef_pe loc "§6.9.1#12" Undefined.UB088_reached_end_of_function in
                   Caux.mk_save_e (ret_label, ret_bTy) [(ret_sym, (ret_bTy, ret_pe))]
                     (Caux.mk_pure_e (Caux.mk_sym_pe ret_sym))
 

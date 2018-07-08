@@ -318,8 +318,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEval cval
  | PEconstrained xs ->
      PEconstrained (List.map (fun (constrs, pe) -> (constrs, convert_pexpr pe)) xs)
- | PEundef ub ->
-     PEundef ub
+ | PEundef loc ub ->
+     PEundef loc ub
  | PEerror str pe ->
      PEerror str (convert_pexpr pe)
  | PEctor ctor pes ->

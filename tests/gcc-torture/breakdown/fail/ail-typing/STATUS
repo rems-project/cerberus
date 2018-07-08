@@ -1,2 +1,1 @@
 20000412-1.c         LOST CONST PROBLEM
-const-addr-expr-1.c  DESUG BEING TO EAGER

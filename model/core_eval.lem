@@ -143,7 +143,7 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
                   (cs, pe')::acc
               end
             ) [] xs)
-    | PEundef _ ->
+    | PEundef _ _ ->
         pexpr_
     | PEerror err_str pe ->
         wrap (PEerror err_str) pe
@@ -464,7 +464,7 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
         end
     | PEval cval ->
         EU.return pexpr_
-    | PEundef ub ->
+    | PEundef loc ub ->
         Exception.return (Undefined.undef loc [ub])
     | PEerror str debug_pe ->
         let () = Debug.print_debug 2 [] (fun () -> "PEerror ==> " ^ Pp.stringFromCore_pexpr debug_pe) in
