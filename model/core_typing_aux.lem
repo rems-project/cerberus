@@ -196,8 +196,8 @@ let rec export_pexpr loc (Pexpr annot infer pexpr_) =
           export_pexpr loc pe >>= fun pe' ->
           E.return (cs, pe')
         ) xs
-    | PEundef ub ->
-        E.return (PEundef ub)
+    | PEundef loc ub ->
+        E.return (PEundef loc ub)
     | PEerror str pe ->
         PEerror str <$> export_pexpr loc pe
     | PEctor ctor pes ->
