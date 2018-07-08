@@ -89,7 +89,7 @@ module type Memory = sig
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: integer_value -> pointer_value -> integer_value -> pointer_value memM
+  val realloc: Cthread.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
   
   (* Integer value constructors *)
   val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value

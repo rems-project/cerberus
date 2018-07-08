@@ -122,7 +122,7 @@ declare ocaml target_rep function member_shift_ptrval = `Ocaml_mem.member_shift_
 
 val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value
 val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
-val realloc: integer_value -> pointer_value -> integer_value -> memM pointer_value
+val realloc: Cthread.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
 declare ocaml target_rep function memcpy = `Ocaml_mem.memcpy`
 declare ocaml target_rep function memcmp = `Ocaml_mem.memcmp`
 declare ocaml target_rep function realloc = `Ocaml_mem.realloc`
