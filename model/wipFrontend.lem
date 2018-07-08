@@ -50,13 +50,14 @@ let inline (>>=) = Eff.bind
 
 val evalConstantExpressionAux:
   Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  A.sigma unit ->
   UniqueId.supply Symbol.sym ->
   (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
   maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM C.value Errors.error
 
-let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbol_suppl typing_guard ty_opt expr =
+let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm symbol_suppl typing_guard ty_opt expr =
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
-    GenTyping.annotate_expression empty_sigma [] (*TODO: check*)GenTyping.CTXother in
+    GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother in
   
   let toCore (a_e: A.expression GenTypes.genTypeCategory) : TranslateEff.elabM (Core.expr unit) =
     (* STD §6.6#4 *)
@@ -134,7 +135,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
               ND.return (Driver.finalize "wipFrontend" dr_st')
             )
           ) in
-        let () = Core_ctype_aux.set_tagDefs (Map.empty) in (* TODO: maybe use Cabs_to_ail_effect.get_sigma_sofar *)
+        let () = Core_ctype_aux.set_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) in
         let execs = runND_proxy driver_action dr_st in
         let () = Core_ctype_aux.reset_tagDefs () in
         match execs with
@@ -151,10 +152,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
 
 
 val evalIntegerConstantExpression:
-  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
   UniqueId.supply Symbol.sym -> maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc std_str core_env symbol_suppl ty_opt expr =
+let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt expr =
   let typing_guard gtc =
     let do_fail = Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_notInteger std_str)) in
     match gtc with
@@ -168,7 +169,7 @@ let evalIntegerConstantExpression loc std_str core_env symbol_suppl ty_opt expr 
             do_fail
     end in
   
-  evalConstantExpressionAux loc core_env symbol_suppl typing_guard ty_opt expr >>= function
+  evalConstantExpressionAux loc core_env sigm symbol_suppl typing_guard ty_opt expr >>= function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
         match Mem.eval_integer_value ival with
           | Just n ->
