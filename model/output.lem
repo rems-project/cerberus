@@ -7,6 +7,7 @@ open import {hol} `pp_coreTheory` `pp_memTheory`
 open import Monadic_parsing
 import Errors AilTypesAux Core Core_aux Core_ctype Mem Mem_aux Float
 import Decode
+import AilTypes
 module Cty = Core_ctype
 
 import Undefined
@@ -942,6 +943,7 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
   end
 
 
+(* TODO: return -1, if "encoding error" *)
 
 val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
             list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
@@ -955,237 +957,69 @@ let printf eval_conv frmt args =
   end
 
 
+val     store_chars_in_array: Mem.pointer_value -> list char -> Mem.memM unit
+let rec store_chars_in_array ptrval = function
+  | [] ->
+      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char ptrval
+                  (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0))) begin fun _ ->
+        Mem.return ()
+      end
+  | c::cs ->
+      let c_mval =
+        Mem.integer_value_mval AilTypes.Char
+          (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
+      (* TODO: maybe needs to be unsigned char *)
+      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char ptrval c_mval) begin fun _ ->
+        let ptrval' = Mem.array_shift_ptrval ptrval Cty.char (Mem.integer_ival 1) in
+        store_chars_in_array ptrval' cs
+      end
+end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-
-(* TODO: hack *)
-open Core_ctype
-(*
-import Memory_order
-module Cmm = Memory_order
-*)
-
-
-
-
-(* TODO: this could be refactored, but we are limited by lem's pattern matching I std closeness is more important *)
-(* TODO: the first argument (load) is a bit silly but avoid module cycle *)
-val convert: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-             maybe precision -> conversion_specifier -> list Memory.mem_addr -> E.t (list char * list Memory.mem_addr)
-let convert load p_opt cspec args =
-  match cspec with
-    | CS_di ->
-        (* see (§7.21.6.1#8 d,i) *)
-        let p = match p_opt with
-          | Just (P_num p)    -> p
-          | Just (P_asterisk) -> error "TODO: output.lem 1" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.Int_)))) arg; in
-                if p = 0 && n = 0 then
-                  E.return ([], args')
-                else do E
-                  str <- showNonNegativeWithBasis false 10 (naturalFromInteger $ abs n); in
-                    E.return ((if n < 0 then (fun z -> #'-' :: z) else id) $ replicate (p - length str) #'0' ++ str, args')
-                  end
-              end
-          | _ -> error "found no argument to convert a %d or %i"
-        end
-    
-    | CS_o ->
-        (* see (§7.21.6.1#8 o,u,x,X) *)
-        let p = match p_opt with
-          | Just (P_num p)    -> p
-          | Just (P_asterisk) -> error "TODO: output.lem 2" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
-                if p = 0 && n = 0 then
-                  E.return ([], args')
-                else do E
-                  (* TODO: conversion (n is unsigned int here) *)
-                  str <- showNonNegativeWithBasis false 8 (naturalFromInteger n); in
-                    E.return (replicate (p - length str) #'0' ++ str, args')
-                  end
-              end
-          | _ -> error "found no argument to convert an %o"
-        end
-    
-    | CS_u ->
-        (* see (§7.21.6.1#8 o,u,x,X) *)
-        let p = match p_opt with
-          | Just (P_num p)    -> p
-          | Just (P_asterisk) -> error "TODO: output.lem 3" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
-                if p = 0 && n = 0 then
-                  E.return ([], args')
-                else do E
-                  (* TODO: conversion (n is unsigned int here) *)
-                  str <- showNonNegativeWithBasis false 10 (naturalFromInteger n); in
-                    E.return (replicate (p - length str) #'0' ++ str, args')
-                  end
-              end
-          | _ -> error "found no argument to convert an %u"
-        end
-    
-    | CS_x ->
-        (* see (§7.21.6.1#8 o,u,x,X) *)
-        let p = match p_opt with
-          | Just (P_num p)    -> p
-          | Just (P_asterisk) -> error "TODO: output.lem 4" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
-                if p = 0 && n = 0 then
-                  E.return ([], args')
-                else do E
-                  (* TODO: conversion (n is unsigned int here) *)
-                  str <- showNonNegativeWithBasis false 16 (naturalFromInteger n); in
-                    E.return (replicate (p - length str) #'0' ++ str, args')
-                  end
-              end
-          | _ -> error "found no argument to convert an %x"
-        end
-    
-    | CS_X ->
-        (* see (§7.21.6.1#8 o,u,x,X) *)
-        let p = match p_opt with
-          | Just (P_num p)    -> p
-          | Just (P_asterisk) -> error "TODO: output.lem 5" (* TODO *)
-          | Nothing           -> 1
-        end in
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cint n), _) <- load (Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_)))) arg; in
-                if p = 0 && n = 0 then
-                  E.return ([], args')
-                else do E
-                  (* TODO: conversion (n is unsigned int here) *)
-                  str <- showNonNegativeWithBasis true 16 (naturalFromInteger n); in
-                    E.return (replicate (p - length str) #'0' ++ str, args')
-                  end
-              end
-          | _ -> error "found no argument to convert an %X"
-        end
-    
-    | CS_c ->
-        (* see (§7.21.6.1#8 c) *)
-        error "WIP: CS_c" (* Need to look at lengthModifier *)
-    
-    | CS_s ->
-        (* see (§7.21.6.1#8 s) *)
-        (* TODO: ignoring lengthModifier for now *)
-        match args with
-          | arg :: args' -> do E
-              (Cmm_aux_old.Mbase (Cmm_aux_old.Cstring str), _) <- load (Pointer (Basic (AilTypes.Integer (AilTypes.Char)))) arg; in
-              (* TODO: should fix the lexing of C string instead of hacking here *)
-              E.return (take (length str - 2) $ drop 1 str, args')
-            end
-          | _ -> error "found no argument to convert an %s"
-        end
-    
-    | CS_p ->
-        (* see (§7.21.6.1#8 p) *)
-        error "WIP: CS_p" (* Implementation defined *)
-    
-    | CS_n ->
-        (* see (§7.21.6.1#8 n) *)
-        error "WIP: CS_n"
-    
-    | CS_percent ->
-        (* see (§7.21.6.1#8 %) *)
-        E.return ([#'%'], args)
-  end
-
-
-(* TODO asterisks *)
-val formatted_print_aux: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-                         list char -> format -> list Memory.mem_addr -> E.t (list char)
-let rec formatted_print_aux load acc fs ns =
-  match (fs, ns) with
-    | ([], []) ->
-        E.return acc
-    | (F_text str :: fs, ns) ->
-        formatted_print_aux load (acc ++ str) fs ns
-    | (F_conv cp :: fs, ns) -> do E
-        (str, ns') <- convert load cp.cp_precision cp.cp_conversion_specifier ns; in
-
-          let expanded  = expand cp.cp_flags str in
-          let justified = match cp.cp_field_width with
-            | Nothing ->
-                expanded
-            | Just (FW_num fw) ->
-                if length expanded < fw then
-                  justify cp.cp_precision cp.cp_conversion_specifier cp.cp_flags fw expanded
-                else
-                  expanded
-            | Just FW_asterisk ->
-                error "TODO: output.lem 6"
-          end in
-          formatted_print_aux load (acc ++ justified) fs ns'
-
-(*
-
-TODO: new
-
-          let padded_str = applyFlagsAndPadding (isSignedConversion cp.cp_conversion_specifier) cp.cp_flags cp.cp_field_width str in
-          formatted_print_aux load (acc ++ padded_str) fs ns'
- *)
-        end
-    | _ ->
-        error $ "formatted_print_aux, " ^ string_of_natural (naturalFromNat $ length fs) ^ " conv and " ^
-                       string_of_natural (naturalFromNat $ length ns) ^ " arguments remaining"
-  end
-
-
-val formatted_print: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-                     list char -> list Memory.mem_addr -> E.t (list char)
-let formatted_print load fmrt args =
-  match parse format fmrt with
+(* STD §7.21.6.5 *)
+val snprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
+              Mem.pointer_value -> Mem.integer_value -> list char -> list (Cty.ctype * Mem.pointer_value) ->
+              Mem.memM (either Errors.error (Undefined.t integer))
+let snprintf eval_conv s_ptrval n_ival frmt args =
+  let n = Mem.case_integer_value n_ival
+    (fun n -> n)
+    (fun () -> error "TODO: snprintf(), symbolic value for the size n") in
+  (* TODO: overlap undefined behaviour *)
+  if n = 0 then
+    Mem.return (Right (U.return 0))
+  else match parse format frmt with
     | [(fs, [])] ->
-        formatted_print_aux load [] fs args
+        printf_aux eval_conv [] fs args >>= function
+          | Right (U.Defined cs) ->
+              let cs' = List.take (natFromInteger (n-1)) cs in
+              Mem.bind (store_chars_in_array s_ptrval cs') begin fun () ->
+                Mem.return (Right (U.return (integerFromNat (List.length cs'))))
+              end
+          | _ ->
+              error "TODO: snprintf()"
+        end
     | _ ->
-      error "failed to parse the format"
+        Mem.return $
+          Right (U.undef (Loc.other "snprintf()") [U.Invalid_format (String.toString frmt)])
   end
 
-(* END: actual implementation of printf *)
 
-
-val printf: (ctype -> Memory.mem_addr -> E.t (Cmm_aux_old.cvalue * E.taction_id)) ->
-            list char -> list Memory.mem_addr -> E.t (Core.expr E.taction_id)
-let printf load frmt args =
-  (* TODO: should fix the lexing of C string instead of hacking here *)
-  let frmt = take (length frmt - 2) $ drop 1 frmt in
-  do E
-    str <- formatted_print load frmt args; in
-      let str = String.toString str in
-(*      let ()  = output_string str   in *)
-      E.return $ Core.Eoutput str
-    end
-
-
-
-*)
+(* STD §7.21.6.6 *)
+val sprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
+             Mem.pointer_value -> list char -> list (Cty.ctype * Mem.pointer_value) ->
+             Mem.memM (either Errors.error (Undefined.t integer))
+let sprintf eval_conv s_ptrval frmt args =
+  match parse format frmt with
+    | [(fs, [])] ->
+        printf_aux eval_conv [] fs args >>= function
+          | Right (U.Defined cs) ->
+              Mem.bind (store_chars_in_array s_ptrval cs) begin fun () ->
+                Mem.return (Right (U.return (integerFromNat (List.length cs))))
+              end
+          | _ ->
+              error "TODO: sprintf()"
+        end
+    | _ ->
+        Mem.return $
+          Right (U.undef (Loc.other "sprintf()") [U.Invalid_format (String.toString frmt)])
+  end

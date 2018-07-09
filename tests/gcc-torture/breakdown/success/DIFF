@@ -27,3 +27,19 @@ ADDITIONAL DIFF MADE BY HAND
 
   have been changed from int to void, since they do not have any return
   statement, leading to undefined behaviour without the diff.
+
+
+[920501-9.c]
+  
+  the return types of the function:
+    - print_longlong
+  
+  has been changed from int to void.
+
+
+[960327-1.c]
+  
+  the return types of the function:
+    - f
+  
+  has been changed from int to void.

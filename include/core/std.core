@@ -243,7 +243,30 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
         pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
   end
 
+proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong s_: loaded pointer = load(!(char*), s_ptr) in
+  let strong n_: loaded integer = load(!(size_t), n_ptr) in
+  let strong frmt_ptr_: loaded pointer = load(!(char*), tmp_ptr) in
+  case (s_, n_, frmt_ptr_) of
+    | (Specified(s: pointer), Specified(n: integer), Specified(frmt_ptr: pointer)) =>
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_snprintf>, s, n, xs, args) in
+        pure(ret)
+    | _ : (loaded pointer, loaded integer, loaded pointer) =>
+        pure (undef(<<DUMMY(snprintf_proxy)>>)) -- TODO think about that
+  end
 
+proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong s_: loaded pointer = load(!(char*), s_ptr) in
+  let strong frmt_ptr_: loaded pointer = load(!(char*), tmp_ptr) in
+  case (s_, frmt_ptr_) of
+    | (Specified(s: pointer), Specified(frmt_ptr: pointer)) =>
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_sprintf>, s, xs, args) in
+        pure(ret)
+    | _ : (loaded pointer, loaded pointer) =>
+        pure (undef(<<DUMMY(sprintf_proxy)>>)) -- TODO think about that
+  end
 
 
 proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer :=

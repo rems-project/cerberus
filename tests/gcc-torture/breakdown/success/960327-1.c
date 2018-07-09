@@ -5,7 +5,7 @@ g (void)
   return '\n';
 }
 
-int 
+void 
 f (void)
 {
   char s[] = "abcedfg012345";

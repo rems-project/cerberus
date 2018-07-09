@@ -183,8 +183,10 @@ let decode_character_constant = function
                 else
                   failwith ("decode_character_constant, started like an octal constant, but failed: " ^ str)
         else
-          failwith "decode_character_constant: invalid char constant"
+          failwith ("decode_character_constant: invalid char constant ==> " ^ str)
 
+let escaped_char c =
+  Char.escaped c
 
 let encode_character_constant n =
   (* TODO: fixing the encoding to ASCII for now *)
