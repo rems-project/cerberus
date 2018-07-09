@@ -1,0 +1,58 @@
+open Core
+
+module Sym = Symbol
+open Z3
+
+let g_bmc_debug = 10
+
+(* ========== TYPE ALIASES ============= *)
+
+type sym_ty = Sym.sym
+type sym_supply_ty = sym_ty UniqueId.supply
+
+
+(* ========== Z3 ALIASES ============= *)
+let mk_sym (ctx:context) = Symbol.mk_string ctx
+
+(* ========== Core symbol functions ============= *)
+let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method
+
+let symbol_to_string (sym: sym_ty) =
+  match sym with
+  | Symbol (num, Some str) -> 
+      (str ^ "_" ^ (string_of_int num))
+  | Symbol (num, None) ->
+      ("?_" ^ (string_of_int num))
+
+
+(* ========== Core type functions ============= *)
+let is_core_ptr_bty (bTy: core_base_type) =
+  match bTy with
+  | BTy_object OTy_pointer | BTy_loaded OTy_pointer -> true
+  | _ -> false
+
+(* ========== Debug ========== *)
+let debug_print level str = 
+  Debug_ocaml.print_debug level [] (fun () -> str)
+
+let dprintf = Printf.printf
+
+let bmc_debug_print level str =
+  if g_bmc_debug >= level then
+    print_endline str
+
+
+
+(* ========== Pretty printing ========== *)
+
+let pp_to_stdout (doc: PPrint.document) =
+  PPrint.ToChannel.pretty 1.0 150 (Pervasives.stdout) doc
+
+let pp_to_string (doc: PPrint.document) : string =
+  Pp_utils.to_plain_string doc
+
+let pp_file (core_file: ('a, 'b) generic_file) =
+  let doc = Pp_core.Basic.pp_file core_file in
+  pp_to_stdout doc
+
+
