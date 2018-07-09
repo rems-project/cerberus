@@ -45,7 +45,7 @@ module Eff : sig
     ('a, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
-  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff
+(*  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff *)
   val read: ('st -> 'a) -> ('a, 'err, 'cs, 'st) eff
   val update: ('st -> 'st) -> (unit, 'err, 'cs, 'st) eff
   val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
@@ -60,7 +60,7 @@ end = struct
   
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
-  let (>>) f g = f >>= (fun _ -> g)
+(*  let (>>) f g = f >>= (fun _ -> g) *)
   
   let read = Nondeterminism.nd_read
   let update = Nondeterminism.nd_update
@@ -618,7 +618,7 @@ module Concrete : Memory = struct
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
-            ((memb_ident, mval)::acc_xs, previous_offset + sizeof memb_ty, acc_bs')
+            ((memb_ident, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
@@ -921,7 +921,7 @@ module Concrete : Memory = struct
             List.fold_left (fun acc (addr, b) ->
               IntMap.add addr b acc
             ) st.bytemap bs }
-        end >>
+        end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
         return Footprint in
       match (prov, ptrval_) with
