@@ -4,7 +4,7 @@ open Z3.Arithmetic
 open Z3.Boolean
 
 open Core
-open Ocaml_mem 
+open Ocaml_mem
 open Printf
 
 (* =========== GLOBALS =========== *)
@@ -75,8 +75,8 @@ module BmcM = struct
 
   let sequence ms =
     List.fold_right (
-      fun m m' -> 
-      m  >>= fun x  -> 
+      fun m m' ->
+      m  >>= fun x  ->
       m' >>= fun xs ->
       return (x :: xs)
     ) ms (return [])
@@ -104,14 +104,14 @@ module BmcM = struct
     get >>= fun st ->
       put {st with sym_table = new_table}
 
-  let add_sym_to_sym_table (sym: sym_ty) (expr: Expr.expr) 
+  let add_sym_to_sym_table (sym: sym_ty) (expr: Expr.expr)
                            : unit eff =
     get_sym_table >>= fun sym_table ->
     update_sym_table (Pmap.add sym expr sym_table)
 
 
   (* =========== STATE INIT =========== *)
-  let mk_initial_state (file       : unit typed_file)  
+  let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
                        : bmc_state =
     { file        = file
@@ -126,9 +126,9 @@ let (>>=) = BmcM.bind
 
 (* =========== CUSTOM SORTS =========== *)
 module UnitSort = struct
-  let mk_sort = 
+  let mk_sort =
     Datatype.mk_sort_s g_ctx "unit"
-      [ Datatype.mk_constructor_s g_ctx "unit" 
+      [ Datatype.mk_constructor_s g_ctx "unit"
                                   (Symbol.mk_string g_ctx "isUnit")
                                   [] [] []
       ]
@@ -147,10 +147,10 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
       if g_bv then assert false
       else Integer.mk_sort g_ctx
   | OTy_pointer -> assert false
-  | OTy_floating 
+  | OTy_floating
   | OTy_array _
   | OTy_struct _
-  | OTy_cfunction _ 
+  | OTy_cfunction _
   | OTy_union _ ->
       assert false
 
@@ -232,26 +232,26 @@ let value_to_z3 (value: value)
 let symbol_to_fresh_z3_const (sym: ksym) (sort: Sort.sort) : Expr.expr =
   Expr.mk_fresh_const g_ctx (symbol_to_string sym) sort
 
-let add_sym_to_sym_table (sym: ksym) (ty: core_base_type) 
+let add_sym_to_sym_table (sym: ksym) (ty: core_base_type)
                          : unit BmcM.eff =
   let z3_sort = cbt_to_z3 ty in
   let z3_sym = symbol_to_fresh_z3_const sym z3_sort in
   BmcM.add_sym_to_sym_table sym z3_sym
 
-let initialise_param ((sym, ty) : sym_ty * core_base_type) 
+let initialise_param ((sym, ty) : sym_ty * core_base_type)
                      : unit BmcM.eff =
   assert (not (is_core_ptr_bty ty));
-  dprintf "Initialising param: %s %s\n" 
-          (symbol_to_string sym) 
+  dprintf "Initialising param: %s %s\n"
+          (symbol_to_string sym)
           (pp_to_string (Pp_core.Basic.pp_core_base_type ty));
   (* TODO: do not handle pointers for now.
    *       Pointers: need to do a create maybe. *)
   add_sym_to_sym_table sym ty
 
-let rec add_pattern_to_sym_table (pattern: typed_pattern) 
+let rec add_pattern_to_sym_table (pattern: typed_pattern)
                                  : unit BmcM.eff =
   match pattern with
-  | CaseBase(None, _) -> 
+  | CaseBase(None, _) ->
       BmcM.return () (* Do nothing; wildcard => no symbol *)
   | CaseBase(Some sym, ty) ->
       add_sym_to_sym_table sym ty
@@ -260,15 +260,15 @@ let rec add_pattern_to_sym_table (pattern: typed_pattern)
 
 (* =========== Z3 LET BINDINGS =========== *)
 let mk_let_binding (maybe_sym: sym_ty option)
-                   (expr: Expr.expr) 
+                   (expr: Expr.expr)
                    : Expr.expr BmcM.eff =
   match maybe_sym with
   | None -> BmcM.return (mk_true g_ctx)
-  | Some sym -> 
+  | Some sym ->
       BmcM.lookup_sym sym >>= fun sym_expr ->
       BmcM.return (mk_eq g_ctx sym_expr expr)
 
-let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr) 
+let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
                         : Expr.expr BmcM.eff =
   match pat with
   | CaseBase(maybe_sym, _) ->
@@ -289,24 +289,36 @@ let rec bmc_pexpr (Pexpr(annot, bTy, pe) as pexpr: typed_pexpr) :
   | PEimpl _ ->
       assert false
   | PEval cval ->
-      BmcM.return { expr        = value_to_z3 cval 
-                  ; assume      = []
-                  ; vcs         = [] 
+      BmcM.return { expr   = value_to_z3 cval
+                  ; assume = []
+                  ; vcs    = []
                   }
   | PEconstrained _
-  | PEundef _
-  | PEerror _
+  | PEundef _ ->
+      let sort = cbt_to_z3 bTy in
+      BmcM.return { expr   = Expr.mk_fresh_const g_ctx "undef" sort
+                  ; assume = []
+                  ; vcs    = [ mk_false g_ctx ]
+                  }
+  | PEerror _ ->
+      let sort = cbt_to_z3 bTy in
+      BmcM.return { expr   = Expr.mk_fresh_const g_ctx "error" sort
+                  ; assume = []
+                  ; vcs    = [ mk_false g_ctx ]
+                  }
   | PEctor _
   | PEcase _
   | PEarray_shift _
   | PEmember_shift _
-  | PEmemberof _ 
-  | PEnot _ ->
+  | PEmemberof _  ->
       assert false
+  | PEnot pe ->
+      bmc_pexpr pe >>= fun res ->
+      BmcM.return {res with expr = mk_not g_ctx res.expr}
   | PEop (binop, pe1, pe2) ->
       bmc_pexpr pe1 >>= fun res1 ->
       bmc_pexpr pe2 >>= fun res2 ->
-      BmcM.return { expr   = binop_to_z3 binop res1.expr res2.expr 
+      BmcM.return { expr   = binop_to_z3 binop res1.expr res2.expr
                   ; assume = res1.assume @ res2.assume
                   ; vcs    = res1.vcs @ res2.vcs
                   }
@@ -322,10 +334,22 @@ let rec bmc_pexpr (Pexpr(annot, bTy, pe) as pexpr: typed_pexpr) :
       BmcM.return { expr    = res2.expr
                   ; assume  = let_binding::(res1.assume @ res2.assume)
                   ; vcs     = res1.vcs @ res2.vcs
-                  } 
-  | PEif _
+                  }
+  | PEif (pe_cond, pe1, pe2) ->
+      bmc_pexpr pe_cond       >>= fun res_cond ->
+      bmc_pexpr pe1           >>= fun res1 ->
+      bmc_pexpr pe2           >>= fun res2 ->
+      let new_vcs =
+          (List.map (fun vc -> mk_implies g_ctx res_cond.expr vc) res1.vcs)
+        @ (List.map (fun vc -> mk_implies g_ctx (mk_not g_ctx res_cond.expr) vc)
+                    res2.vcs)
+      in
+      BmcM.return { expr   = mk_ite g_ctx res_cond.expr res1.expr res2.expr
+                  ; assume = res_cond.assume @ res1.assume @ res2.assume
+                  ; vcs    = new_vcs
+                  }
   | PEis_scalar _
-  | PEis_integer _ 
+  | PEis_integer _
   | PEis_signed _
   | PEis_unsigned _ ->
       assert false
@@ -335,13 +359,13 @@ let bmc_file (file              : unit typed_file)
              (sym_supply        : sym_supply_ty)
              (function_to_check : sym_ty) =
   (* Create an initial model checking state *)
-  let initial_state : BmcM.bmc_state = 
+  let initial_state : BmcM.bmc_state =
     BmcM.mk_initial_state file sym_supply in
 
   (* TODO: temporarily assume there are no globals *)
   assert (List.length file.globs = 0);
 
-  let to_run = 
+  let to_run =
     match Pmap.lookup function_to_check file.funs with
     | Some (Proc (_, ty, params, e)) ->
         assert false
@@ -351,7 +375,7 @@ let bmc_file (file              : unit typed_file)
         bmc_pexpr pe
 
     | _ -> failwith "Function to check must be a Core Proc or Fun"
-  in 
+  in
   let (result, new_state) = BmcM.run initial_state to_run in
 
   print_endline "====FINAL BMC_RET";
@@ -367,8 +391,8 @@ let bmc_file (file              : unit typed_file)
     (Expr.mk_fresh_const g_ctx "assume" (Boolean.mk_sort g_ctx));
 
   (* VCs *)
-  Solver.assert_and_track 
-    g_solver 
+  Solver.assert_and_track
+    g_solver
     (Expr.simplify (mk_not g_ctx (mk_and g_ctx result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
 
@@ -377,7 +401,7 @@ let bmc_file (file              : unit typed_file)
 
   match Solver.check g_solver [] with
   | UNKNOWN ->
-      printf "STATUS: unknown. Reason: %s\n" 
+      printf "STATUS: unknown. Reason: %s\n"
              (Solver.get_reason_unknown g_solver)
   | UNSATISFIABLE ->
       print_endline "STATUS: unsatisfiable :)"
@@ -386,25 +410,25 @@ let bmc_file (file              : unit typed_file)
 
 
 (* Main bmc function: typechecks and sequentialises file.
- * The symbol supply is used to ensure fresh symbols when renaming.      
+ * The symbol supply is used to ensure fresh symbols when renaming.
  *)
 let bmc (core_file  : unit file)
-        (sym_supply : sym_supply_ty) = 
+        (sym_supply : sym_supply_ty) =
 
   match Core_typing.typecheck_program core_file with
-    | Result typed_core -> 
+    | Result typed_core ->
         begin
-          let sequentialised_core = 
+          let sequentialised_core =
             Core_sequentialise.sequentialise_file typed_core in
 
           pp_file sequentialised_core;
           bmc_debug_print 1 "START: model checking";
           match sequentialised_core.main with
-          | None -> 
+          | None ->
               (* Currently only check main function *)
               failwith "ERROR: fail does not have a main"
           | Some main_sym ->
               bmc_file sequentialised_core sym_supply main_sym
         end
-    | Exception msg -> 
+    | Exception msg ->
         printf "Typechecking error: %s\n" (Pp_errors.to_string msg)
