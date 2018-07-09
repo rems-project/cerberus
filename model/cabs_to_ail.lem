@@ -2678,43 +2678,16 @@ and foo_aux
                     foo_aux acc elems (Just (i+1, elems_)) xs
               end
           | (cursor_path, outer_path, outer_ty) :: elems' ->
-              let do_string_literal loc lit =
-                if not (AilTypesAux.is_array_of_character outer_ty) then
-                  E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
-                else
-                  let size = match AilTypesAux.unatomic outer_ty with
-                    | ATypes.Array _ (Just n) ->
-                        natFromInteger n
-                    | _ ->
-                        error "foo_aux: string literal"
-                  end in
-                  match lit with
-                    | (Nothing, strs) ->
-                        let str_xs = List.map (fun str ->
-                          (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, str)))))
-                        ) strs ++ begin
-                          List.replicate (max 1 (size - List.length strs))
-                            (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, "\\0")))))
-                        end in
-                        foo_aux acc elems unknown_array (str_xs ++ xs')
-                    | _ ->
-                        error "TODO(foo_aux): CabsEstring with encoding prefix"
-                  end in
-              match init_ with
-                | Init_expr (CabsExpression loc (CabsEstring lit)) ->
-                    do_string_literal loc lit
-                | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit)))] ->
-                    do_string_literal loc lit
-                | Init_expr e ->
-                    E.get_tag_definitions >>= fun tagDefs ->
-                    let cursor_ty = innerCtype tagDefs outer_ty in
-                    desugar_expression e >>= fun d_e ->
-                    let () = Debug.print_debug 1 [] (fun () ->
-                      "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cursor_ty ^
-                      ", outer_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty ^
-                      " ===> " ^ Pp.stringFromAil_expression d_e
-                    ) in
-                    (* TODO: should use Ail typing instead of this *)
+              let do_scalar e =
+                E.get_tag_definitions >>= fun tagDefs ->
+                let cursor_ty = innerCtype tagDefs outer_ty in
+                desugar_expression e >>= fun d_e ->
+                let () = Debug.print_debug 1 [] (fun () ->
+                  "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cursor_ty ^
+                  ", outer_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty ^
+                  " ===> " ^ Pp.stringFromAil_expression d_e
+                ) in
+                (* TODO: should use Ail typing instead of this *)
 (*
                     match AilSyntaxAux.strip_expression d_e with
                       | AnnotatedExpression () _ loc (AilEconst (ConstantStruct e_tag_sym e_xs)) ->
@@ -2743,13 +2716,51 @@ and foo_aux
                           end
                       | _ ->
 *)
-                          let d_e' =
-                            if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
-                              A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
-                            else
-                              d_e in
-                          foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
+                      let d_e' =
+                        if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
+                          A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
+                        else
+                          d_e in
+                      foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
 (*                    end *)
+              in
+
+              let do_string_literal loc lit =
+                if not (AilTypesAux.is_array_of_character outer_ty) then
+                  (* TODO: this is wrong *)
+                  E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
+                else
+                  let size = match AilTypesAux.unatomic outer_ty with
+                    | ATypes.Array _ (Just n) ->
+                        natFromInteger n
+                    | _ ->
+                        error "foo_aux: string literal"
+                  end in
+                  match lit with
+                    | (Nothing, strs) ->
+                        let str_xs = List.map (fun str ->
+                          (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, str)))))
+                        ) strs ++ begin
+                          List.replicate (max 1 (size - List.length strs))
+                            (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, "\\0")))))
+                        end in
+                        foo_aux acc elems unknown_array (str_xs ++ xs')
+                    | _ ->
+                        error "TODO(foo_aux): CabsEstring with encoding prefix"
+                  end in
+              match init_ with
+                | Init_expr (CabsExpression loc (CabsEstring lit) as e) ->
+                    if AilTypesAux.is_scalar outer_ty then
+                      do_scalar e
+                    else
+                      do_string_literal loc lit
+                | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit) as e))] ->
+                    if AilTypesAux.is_scalar outer_ty then
+                      do_scalar e
+                    else
+                      do_string_literal loc lit
+                | Init_expr e ->
+                    do_scalar e
                 | Init_list ys ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in

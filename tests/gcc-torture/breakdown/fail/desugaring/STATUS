@@ -1,12 +1,7 @@
-20111212-1.c                    sizeof(struct ...) fails to evaluate as a constant
-20120105-1.c                    sizeof(struct ...) fails to evaluate as a constant
-pr65369.c                       sizeof(data) fails to evaluate as a constant
-
 20170401-1.c                    Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'
 pr45070.c                       Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'
 
-const-addr-expr-1.c             init of char* with a struct literal
-
+const-addr-expr-1.c             violation of constraint §6.7.9#4
 lto-tbaa-1.c                    violation of constraint §6.7.9#4
 
 pr43987.c                       UB because it casts a char* into a T* (so the alignment is wrong)
