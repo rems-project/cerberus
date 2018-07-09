@@ -299,6 +299,9 @@ let pipeline filename args =
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
+  (* TODO (sl715): invoke model checking routine *)
+  Bmc.bmc rewritten_core_file sym_supply;
+  
   
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
