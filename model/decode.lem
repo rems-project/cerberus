@@ -11,6 +11,8 @@ val decode_character_constant: string -> integer
 declare ocaml target_rep function decode_character_constant = `Decode_ocaml.decode_character_constant`
 declare hol   target_rep function decode_character_constant = `pp_ail$decode_char`
 
+val escaped_char: char -> string
+declare ocaml target_rep function escaped_char = `Decode_ocaml.escaped_char`
 
 val encode_character_constant: integer -> char
 declare ocaml target_rep function encode_character_constant = `Decode_ocaml.encode_character_constant`

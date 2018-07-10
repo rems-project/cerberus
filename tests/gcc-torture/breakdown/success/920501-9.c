@@ -11,7 +11,7 @@ proc4 (void){return -1LL;}
 long long 
 proc5 (void){return 0xaabbccddLL;}
 
-int 
+void 
 print_longlong (long long x, char *buf)
 {
   unsigned long l;
