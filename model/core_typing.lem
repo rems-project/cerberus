@@ -1546,9 +1546,18 @@ let typecheck_program file =
             insert_tdecl (Impl iCst) (TDfun bTy (List.map snd sym_bTys)) acc
       end) file.impl
     (* TODO: do this is a principled way *)
+      (insert_tdecl (Impl (I.StdFunction "snprintf")) (TDproc (BTy_loaded OTy_integer)
+        [ BTy_object OTy_pointer
+        ; BTy_object OTy_integer
+        ; BTy_list (BTy_object OTy_integer)
+        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ])
+      (insert_tdecl (Impl (I.StdFunction "sprintf")) (TDproc (BTy_loaded OTy_integer)
+        [ BTy_object OTy_pointer
+        ; BTy_list (BTy_object OTy_integer)
+        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ])
       (insert_tdecl (Impl (I.StdFunction "printf")) (TDproc (BTy_loaded OTy_integer)
         [ BTy_list (BTy_object OTy_integer)
-        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ]) empty_env) in
+        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ]) empty_env ))) in
     
     (* Then typechecks them *)
     E.mapMapM (fun _ decl ->
