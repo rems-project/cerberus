@@ -398,6 +398,46 @@ let rec drive_core_thread tid =
           ND.mapM_ drive_core_thread th_tids >>
           drive_core_thread tid )
     
+    | Core_run.Step_snprintf s_ptrval n_ival frmt_chars args_ty_ptrvals mk_th_st ->
+        ( "Step_snprintf"
+        , liftMem (Output.snprintf (printf_eval_conv dr_st) s_ptrval n_ival frmt_chars args_ty_ptrvals) >>= function
+            | Left err ->
+                error "TODO(msg): a snprintf() got an error"
+            | Right (Undefined.Defined n) ->
+                ND.update (fun dr_st ->
+                  let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+                  <| dr_st with
+                    core_state= core_st';
+                    dr_step_counter= dr_st.dr_step_counter + 1;
+                  |>
+                ) >>
+                drive_core_thread tid
+            | Right (Undefined.Error loc str) ->
+                ND.kill (ND.Error loc str)
+            | Right (Undefined.Undef loc ubs) ->
+                ND.kill (ND.Undef loc ubs)
+          end )
+    
+    | Core_run.Step_sprintf s_ptrval frmt_chars args_ty_ptrvals mk_th_st ->
+        ( "Step_sprintf"
+        , liftMem (Output.sprintf (printf_eval_conv dr_st) s_ptrval frmt_chars args_ty_ptrvals) >>= function
+            | Left err ->
+                error "TODO(msg): a sprintf() got an error"
+            | Right (Undefined.Defined n) ->
+                ND.update (fun dr_st ->
+                  let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+                  <| dr_st with
+                    core_state= core_st';
+                    dr_step_counter= dr_st.dr_step_counter + 1;
+                  |>
+                ) >>
+                drive_core_thread tid
+            | Right (Undefined.Error loc str) ->
+                ND.kill (ND.Error loc str)
+            | Right (Undefined.Undef loc ubs) ->
+                ND.kill (ND.Undef loc ubs)
+          end )
+    
     | Core_run.Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ( "Step_printf2"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
