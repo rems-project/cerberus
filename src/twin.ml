@@ -803,6 +803,9 @@ let rec explode_bytes mval : (meta * char option) list =
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
 
+  let concrete_ptrval _ _ = failwith "twin: concrete_ptrval"
+  let case_ptrval _ _ _ _ = failwith "twin: case_ptrval"
+
   (* TODO: not sure if I need to consider double provenance here *)
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with

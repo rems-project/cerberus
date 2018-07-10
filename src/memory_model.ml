@@ -64,7 +64,15 @@ module type Memory = sig
   (* Pointer value constructors *)
   val null_ptrval: Core_ctype.ctype0 -> pointer_value
   val fun_ptrval: Symbol.sym -> pointer_value
-  
+
+  (*TODO: revise that, just a hack for codegen*)
+  val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
+  val case_ptrval: pointer_value ->
+    (Core_ctype.ctype0 -> 'a) -> (* null *)
+    (Nat_big_num.num option -> Nat_big_num.num -> 'a) -> (* concrete *)
+    (unit -> 'a) ->
+    'a
+
   (* Operations on pointer values *)
   val eq_ptrval: pointer_value -> pointer_value -> bool memM
   val ne_ptrval: pointer_value -> pointer_value -> bool memM
@@ -90,6 +98,7 @@ module type Memory = sig
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
   val realloc: Cthread.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+
   
   (* Integer value constructors *)
   val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
