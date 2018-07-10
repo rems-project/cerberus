@@ -13,7 +13,7 @@ end
 import GenTypes GenTypesAux
 
 (* Ail typing *)
-import GenTyping ErrorMonad
+import GenTyping ErrorMonad TypingError
 
 (* Elaboration *)
 open import Translation Translation_aux
@@ -183,4 +183,14 @@ let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt 
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
         Eff.fail (loc, Errors.Desugar_cause Errors.Desugar_impossible)
+  end
+
+
+val typecheckAil: A.sigma unit -> A.expression unit -> either (Loc.t * TypingError.typing_error) AilTypes.ctype
+let typecheckAil sigm expr =
+  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother expr) with
+    | Left z ->
+        Left z
+    | Right a_expr ->
+        Right (Translation_aux.ctype_of a_expr)
   end
