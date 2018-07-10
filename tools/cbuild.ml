@@ -34,7 +34,7 @@ let csmith_args =
   sprintf "-I %s -DCSMITH_MINIMAL" csmith_runtime
 
 let cerberus args filename =
-  let cmd = sprintf "cerberus --ocaml %s %s" args filename in
+  let cmd = sprintf "cerberus --ocaml --sequentialise --rewrite %s %s" args filename in
   print_endline cmd;
   Sys.command cmd
 
@@ -80,8 +80,14 @@ let create_file name contents =
   sprintf "echo '%s' > %s/%s" lines cbuild_path name |> run
 
 let create_tags () = create_file "_tags"
-    ["true: -traverse";
-     "\"src\":include"]
+    ["true: -traverse"; "\"src\":include"; "<*.native> : link_cstubs"]
+
+let create_myocamlbuild () = create_file "myocamlbuild.ml"
+    ["open Ocamlbuild_plugin";
+     "let () = dispatch begin function";
+     "| After_rules -> flag_and_dep [\"link\"; \"ocaml\"; \"link_cstubs\"] (A \"src/cerberus_cstubs.o\");";
+     "| _ ->()";
+     "end"]
 
 let create_merlin () = create_file ".merlin"
     ["S .";
@@ -94,13 +100,17 @@ let create_cbuild () =
   copy cerb_path "pprinters/*.{ml,mli}" src_path;
   copy cerb_path "parsers/core/core_parser_util.ml" src_path;
   copy cerb_path "src/codegen/*.ml" src_path;
-  copy cerb_path "src/*.{ml,mli}" src_path;
+  copy cerb_path "src/*.{c,ml,mli}" src_path;
   copy cerb_path "parsers/coreparser/core_parser_util.ml" src_path;
   create_tags ();
+  create_myocamlbuild ();
   create_merlin ()
 
+let compile_c_stub () =
+  sprintf "ocamlbuild src/cerberus_cstubs.o" |> run
+
 let run_ocamlbuild file =
-  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,lem,Z3 -libs unix,str %s" file |> run
+  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,lem,Z3,unix -libs str %s" file |> run
 
 let run_clink files =
   List.fold_left (fun acc f -> acc ^ chop_extension f ^ ".sym ") "" files
@@ -165,6 +175,8 @@ let cbuild c b f basic corestd csmith cargs o rfiles =
   cmdmap (fun file -> copy cur_path file cbuild_path) rfiles;
   (* change directory *)
   Sys.chdir cbuild_path;
+  (* compile c_stub *)
+  compile_c_stub ();
   (* rename unsupported names *)
   let files = List.map rename_ocaml_mod_name rfiles in
   (* get main file *)
