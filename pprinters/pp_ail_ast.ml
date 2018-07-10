@@ -235,7 +235,7 @@ let rec pp_constant = function
       Pp_ail.pp_floatingConstant fc
   | ConstantCharacter cc ->
       Pp_ail.pp_characterConstant cc
- | ConstantArray csts ->
+ | ConstantArray (elem_ty, csts) ->
      P.braces (comma_list pp_constant csts)
  | ConstantStruct (tag_sym, xs) ->
      P.parens (!^ "struct" ^^^ Pp_ail.pp_id tag_sym) ^^ P.braces (

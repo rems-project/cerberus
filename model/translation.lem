@@ -244,8 +244,8 @@ let rec translate_constant cst =
         (* TODO: prefix? *)
         (* TODO: making an implementation fix here (ASCII) *)
         Caux.mk_value_pe (C.Vloaded (C.LVspecified (C.OVinteger (Mem.integer_ival (Decode.decode_character_constant str)))))
-    | A.ConstantArray (* TODO: csts *) _ ->
-        error "WIP: Translation AilEconst, ConstantArray"
+    | A.ConstantArray _ csts ->
+        Caux.mk_specified_pe (Caux.mk_array_pe (List.map translate_constant csts))
     | A.ConstantStruct tag_sym xs ->
         Caux.mk_specified_pe begin
           Caux.mk_struct_pe tag_sym begin
