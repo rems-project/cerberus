@@ -125,8 +125,11 @@ let get_union m =
 
 (* Cast to memory values *)
 
+let case_loaded_mval f = case_loaded f M.unspecified_mval
+
 let mk_int s = M.integer_ival (Nat_big_num.of_string s)
 let mk_float s = M.str_fval s
+let mk_array xs = M.array_mval (List.map (case_loaded_mval (M.integer_value_mval T.Char)) xs)
 
 let mk_pointer alloc_id addr =
   M.concrete_ptrval (Nat_big_num.of_string alloc_id)
@@ -161,15 +164,17 @@ let diff_ptrval p q = M.diff_ptrval p q
 let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 let memcmp p q r = return $ M.memcmp p q r
 let memcpy p q r = return $ M.memcpy p q r
-let realloc x y z w = return $ M.realloc x y z w
+let realloc al p size  = return $ M.realloc 0 al p size
 
 (* Memory actions wrap *)
 
-let case_loaded_mval f = case_loaded f M.unspecified_mval
+let ptr_well_aligned = M.isWellAligned_ptrval
 
-let create pre al ty =
+let create pre al ty x_opt =
   last_memop := Create;
   M.allocate_static 0 pre al ty
+    (Option.case (fun x -> Some (case_loaded_mval id x))
+       (fun () -> None) x_opt)
 
 let alloc pre al n =
   last_memop := Alloc;
@@ -251,6 +256,9 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
     | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
     | Either.Left z -> raise (Error (Pp_errors.to_string z))
   end
+
+let sprintf _ = failwith "No support for sprintf"
+let snprintf _ = failwith "No support for snprintf"
 
 (* Exit *)
 

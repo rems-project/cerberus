@@ -217,7 +217,7 @@ and print_match_ctor arg = function
   | Cnil _       -> P.brackets P.empty
   | Ccons        -> !^"Cons"
   | Ctuple       -> arg
-  | Carray       -> !^"array"
+  | Carray       -> !^"A.array" ^^ P.parens arg
   | Civmax       -> !^"A.ivmax"
   | Civmin       -> !^"A.ivmin"
   | Civsizeof    -> !^"M.sizeof_ival"
@@ -441,8 +441,9 @@ let print_tag pp (cid, pe) =
   P.parens (print_cabs_id cid ^^ P.comma ^^^ pp pe)
 
 let print_ctor pp ctor pes =
-  let pp_args sep = P.parens (P.separate_map sep (fun x -> P.parens (pp x)) pes)
-  in match ctor with
+  let pp_args sep = P.parens (P.separate_map sep (fun x -> P.parens (pp x)) pes) in
+  let pp_array () = P.brackets (P.separate_map P.semi (fun x -> P.parens (pp x)) pes) in
+  match ctor with
   | Cnil _ -> !^"[]"
   | Ccons ->
     (match pes with
@@ -452,7 +453,7 @@ let print_ctor pp ctor pes =
      | _        -> raise (Unexpected "Ccons: more than 2 args")
     )
   | Ctuple       -> pp_args P.comma
-  | Carray       -> !^"array"
+  | Carray       -> !^"A.mk_array" ^^^ pp_array ()
   | Civmax       -> !^"A.ivmax" ^^^ pp_args P.space
   | Civmin       -> !^"A.ivmin" ^^^ pp_args P.space
   | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
@@ -593,6 +594,13 @@ let print_action globs act =
     ^^^ P.parens (print_symbol_prefix pre)
     ^^^ P.parens (print_pure_expr globs al)
     ^^^ P.parens (print_pure_expr globs ty)
+    ^^^ tnone
+  | CreateReadOnly (al, ty, x, pre) ->
+    !^"A.create"
+    ^^^ P.parens (print_symbol_prefix pre)
+    ^^^ P.parens (print_pure_expr globs al)
+    ^^^ P.parens (print_pure_expr globs ty)
+    ^^^ P.parens (tsome ^^ P.parens (print_pure_expr globs x))
   | Alloc0 (al, n, pre) ->
     !^"A.alloc"
     ^^^ P.parens (print_symbol_prefix pre)
