@@ -19,11 +19,18 @@ let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.
 
 let symbol_to_string (sym: sym_ty) =
   match sym with
-  | Symbol (num, Some str) -> 
+  | Symbol (num, Some str) ->
       (str ^ "_" ^ (string_of_int num))
   | Symbol (num, None) ->
       ("?_" ^ (string_of_int num))
 
+let name_cmp = fun nm1 nm2 ->
+  match (nm1, nm2) with
+  | (Sym sym1, Sym sym2) -> sym_cmp sym1 sym2
+  | (Impl impl1, Impl impl2) ->
+      Implementation_.implementation_constant_compare impl1 impl2
+  | (Sym _, Impl _) -> (-1)
+  | (Impl _, Sym _) -> 1
 
 (* ========== Core type functions ============= *)
 let is_core_ptr_bty (bTy: core_base_type) =
@@ -31,8 +38,16 @@ let is_core_ptr_bty (bTy: core_base_type) =
   | BTy_object OTy_pointer | BTy_loaded OTy_pointer -> true
   | _ -> false
 
+(* ========== HELPER FUNCTIONS ============= *)
+let rec list_take k l =
+  if k > 0 then
+    match l with
+    | [] -> assert false
+    | x :: xs -> x :: (list_take (k-1) xs)
+  else []
+
 (* ========== Debug ========== *)
-let debug_print level str = 
+let debug_print level str =
   Debug_ocaml.print_debug level [] (fun () -> str)
 
 let dprintf = Printf.printf
@@ -41,9 +56,12 @@ let bmc_debug_print level str =
   if g_bmc_debug >= level then
     print_endline str
 
-
-
 (* ========== Pretty printing ========== *)
+let name_to_string (name: sym_ty generic_name) =
+  match name with
+  | Sym a  -> symbol_to_string a
+  | Impl i -> Implementation_.string_of_implementation_constant i
+
 
 let pp_to_stdout (doc: PPrint.document) =
   PPrint.ToChannel.pretty 1.0 150 (Pervasives.stdout) doc
