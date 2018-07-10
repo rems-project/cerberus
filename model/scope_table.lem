@@ -85,4 +85,16 @@ let current_scope_is = function
       scope
   | _ ->
       error "[Scope_table.current_scope_is] the table is empty."
-end      
+end
+
+
+val     scope_is_visible: forall 'scope 'ident 'a. Eq 'scope => 'scope -> t 'scope 'ident 'a -> bool
+let rec scope_is_visible sc = function
+  | [] ->
+      false
+  | (sc', _) :: tbl' ->
+      if sc = sc' then
+        true
+      else
+        scope_is_visible sc tbl'
+end
