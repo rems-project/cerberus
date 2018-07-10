@@ -72,6 +72,18 @@ let determinate_storage_duration link scs =
     error "determinate_storage_duration"
 
 
+let string_of_storageDuration = function
+  | ATypes.Static ->
+      "static"
+  | ATypes.Thread ->
+      "thread"
+  | ATypes.Automatic ->
+      "automatic"
+  | ATypes.Allocated ->
+      "allocated"
+end
+
+
 val mk_zeroInit: map A.identifier tag_definition -> ATypes.ctype -> A.expression unit
 let rec mk_zeroInit_aux tagDefs ty =
   match ty with
@@ -84,7 +96,7 @@ let rec mk_zeroInit_aux tagDefs ty =
     | ATypes.Array _ Nothing ->
         error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Array Nothing"
     | ATypes.Array elem_ty (Just n) ->
-        A.ConstantArray (*elem_ty*) begin
+        A.ConstantArray elem_ty begin
           List.replicate (natFromInteger n) (mk_zeroInit_aux tagDefs elem_ty)
         end
     | ATypes.Function _ _ _ _ ->

@@ -66,7 +66,7 @@ type constant [name = "c*"] =
  | ConstantInteger       of integerConstant
  | ConstantFloating      of floatingConstant
  | ConstantCharacter     of characterConstant
- | ConstantArray         of list constant
+ | ConstantArray         of ctype * list constant
  | ConstantStruct        of identifier * list (Cabs.cabs_identifier * constant)
  | ConstantUnion         of identifier * Cabs.cabs_identifier * constant
 
@@ -420,8 +420,8 @@ let rec constantEqual c1 c2 =
         fc1 = fc2
     | (ConstantCharacter cc1, ConstantCharacter cc2) ->
         characterConstantEqual cc1 cc2
-    | (ConstantArray cs1, ConstantArray cs2) ->
-        List.listEqualBy constantEqual cs1 cs2
+    | (ConstantArray ty1 cs1, ConstantArray ty2 cs2) ->
+        ty1 = ty2 && List.listEqualBy constantEqual cs1 cs2
     | (ConstantStruct tag_sym1 xs1, ConstantStruct tag_sym2 xs2) ->
         tag_sym1 = tag_sym2 && List.listEqualBy (pairEqualBy (=) constantEqual) xs1 xs2
     | (ConstantUnion tag_sym1 memb_ident1 cst1, ConstantUnion tag_sym2 memb_ident2 cst2) ->

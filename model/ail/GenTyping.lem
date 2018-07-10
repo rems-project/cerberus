@@ -376,6 +376,74 @@ let annotate_stringLiteral (pref_opt, strs) =
     , GenLValueType no_qualifiers (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1)))) false )
 
 
+val     typecheck_constant: constant -> E.errorM genType
+let rec typecheck_constant cst =
+  match cst with
+    | ConstantInteger iCst ->
+        E.return (GenBasic (GenInteger (type_of_constant iCst)))
+    | ConstantFloating ((_, suff_opt) as fCst) ->
+        (* STD §6.4.4.2#4 *)
+        let rfty = match suff_opt with
+          | Nothing ->
+              Double
+          | Just Fsuf_F ->
+              Float
+          | Just Fsuf_L ->
+              LongDouble
+        end in
+        E.return (GenBasic (GenFloating (RealFloating rfty)))
+    | ConstantCharacter cc ->
+        (* TODO: §6.4.4.4#9 *)
+        match fst cc with
+          | Nothing ->
+              (* §6.4.4.4#10 *)
+              E.return (GenBasic (GenInteger (Concrete (Signed Int_))))
+          | Just Pref_L ->
+              (* §6.4.4.4#11 *)
+              E.return (GenBasic (GenInteger (Concrete (IBuiltin "wchar_t"))))
+          | Just Pref_u ->
+              (* §6.4.4.4#11 *)
+              E.return genChar16_t
+          | Just Pref_U ->
+              (* §6.4.4.4#11 *)
+              E.return genChar32_t
+        end
+    | ConstantArray elem_ty csts ->
+        (* TODO: this is probably too strong *)
+        E.mapM typecheck_constant csts >>= function
+          | [] ->
+              E.fail Loc.unknown (TError "empty array constant")
+          | gtys ->
+              (* TODO !!!! *)
+(*
+              let elem_gty = GenTypes.inject_type elem_ty in
+              if List.any (fun z -> elem_gty <> z) gtys then
+                E.fail Loc.unknown (TError ("an array constant element didn't have the expected type ==> " ^
+                                            "elem_ty: "   ^ Pp.stringFromAil_ctype no_qualifiers elem_ty ^
+                                            " <-> gtys: " ^ stringFromList Pp.stringFromAil_genType gtys))
+              else
+*)
+                E.return (GenArray elem_ty (Just $ integerFromNat (List.length csts)))
+        end
+    | ConstantIndeterminate ty ->
+        E.return (GenTypes.inject_type ty)
+    | ConstantNull ->
+        (* TODO: check *)
+        E.return (GenPointer no_qualifiers Void)
+    | ConstantStruct tag_sym xs ->
+        E.mapM (fun (memb_ident, cst) ->
+          (* TODO: need to check that the members type match ... *)
+          typecheck_constant cst >>= fun gty ->
+          E.return (memb_ident, gty)
+        ) xs >>= fun xs_gtys ->
+        E.return (GenTypes.GenStruct tag_sym)
+    | ConstantUnion tag_sym memb_ident cst ->
+          (* TODO: need to check that the members type match ... *)
+        typecheck_constant cst >>= fun membr_gty ->
+        E.return (GenTypes.GenUnion tag_sym)
+  end
+
+(*
 val     annotate_constant: constant -> E.errorM (constant * genTypeCategory)
 let rec annotate_constant cst =
   match cst with
@@ -409,7 +477,7 @@ let rec annotate_constant cst =
               E.return (ConstantCharacter cc, GenRValueType genChar32_t)
         end
     
-    | ConstantArray csts ->
+    | ConstantArray elem_ty csts ->
         E.mapM annotate_constant csts >>= fun a_csts ->
         (* TODO: this is probably too strong *)
         match a_csts with
@@ -417,8 +485,8 @@ let rec annotate_constant cst =
               E.fail Loc.unknown (TError "empty array constant")
           | (_, genTy)::a_csts' ->
               if List.all (fun (_, genTy') -> genTy = genTy') a_csts' then
-                E.return (ConstantArray (List.map fst a_csts),
-                          GenRValueType (GenArray (* TODO *)Void (Just $ integerFromNat (List.length a_csts))))
+                E.return (ConstantArray elem_ty (List.map fst a_csts),
+                          GenRValueType (GenArray elem_ty (Just $ integerFromNat (List.length a_csts))))
               else
                 E.fail Loc.unknown (TError "array constant elements don't all have the same type")
         end
@@ -436,6 +504,7 @@ let rec annotate_constant cst =
     | ConstantUnion tag_sym memb_ident cst ->
         error "WIP: annotate_constant, ConstantUnion"
   end
+*)
 
 
 (* TODO: temporary *)
@@ -1338,8 +1407,12 @@ TODO
     | AilEconst cst ->
         (* STD §6.5.1#3 *)
         E.add "§6.5.1#3" >>
+(*
         annotate_constant cst >>= fun (cst', gty) ->
         E.return (AilEconst cst', gty)
+*)
+        typecheck_constant cst >>= fun gty ->
+        E.return (AilEconst cst, GenRValueType gty)
     
     (* TODO: check *)
     | AilEstr lit ->
@@ -1484,6 +1557,8 @@ and function_decay sigm a_expr =
 and perform_decays sigm ctx a_expr =
   let is_literal = match a_expr with
     | AnnotatedExpression _ _ _ (AilEarray true _ _) ->
+        true
+    | AnnotatedExpression _ _ _ (AilEconst (ConstantArray _ _)) ->
         true
     | AnnotatedExpression _ _ _ (AilEstr _) -> (* TODO: this is probably dead now *)
         true
@@ -1750,7 +1825,8 @@ and annotate_definition_aux sigm gamm (ty, e) =
       else if AAux.is_array ty then
         (* TODO: check the std. (not that it says anything useful here ...) *)
         let ctx =
-          if AAux.is_array_of_character ty then
+(*          if AAux.is_array_of_character ty then *)
+          if AAux.is_array ty then
             CTXarray_init
           else
             CTXother in
@@ -1787,6 +1863,15 @@ and annotate_definition_aux sigm gamm (ty, e) =
                error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                       Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
              else
+               let () = Debug.print_debug 0 [] (fun () ->
+                 "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
+                 match GenTypes.genTypeCategoryOf a_e with
+                   | GenLValueType qs' ty' _ ->
+                       "lvalue " ^ Pp.stringFromAil_ctype qs' ty'
+                   | GenRValueType gty ->
+                       "rvalue " ^ Pp.stringFromAil_genType gty
+                 end
+               ) in
                error "WIP: annotate_definition, not(is_scalar ty), not array (or had no size)"
         end
       else
