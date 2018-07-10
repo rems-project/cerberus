@@ -2759,7 +2759,32 @@ and foo_aux
                       do_scalar e
                     else
                       do_string_literal loc lit
+(*
+                | Init_expr (CabsExpression loc (CabsEcompound tyname inits)) ->
+                    desugar_type_name tyname >>= fun (qs, ty) ->
+                    (* TODO the check for STD §6.7.9#3 *)
+                    if outer_ty <> ty then
+                      error "TODO(foo_aux): CabsEcompound, outer_ty <> ty"
+                    else
+                      error "TODO(foo_aux): CabsEcompound"
+*)
+
                 | Init_expr e ->
+(*
+                    desugar_expression e >>= fun d_e ->
+                    E.get_sigma_sofar >>= fun sigm ->
+                    match WipFrontend.typecheckAil sigm d_e with
+                      | Left (loc, err) ->
+                          error ("WIP: foo_aux, Init_expr Ail type error ==> " ^ Loc.stringFromLocation loc)
+                      | Right ty ->
+                          if AilTypesAux.is_struct ty then
+                            error "TODO: foo_aux, Init_expr ==> struct"
+                          else if AilTypesAux.is_union ty then
+                            error "TODO: foo_aux, Init_expr ==> struct"
+                          else
+                            do_scalar e
+                    end
+*)
                     do_scalar e
                 | Init_list ys ->
                     E.get_tag_definitions >>= fun tagDefs ->
