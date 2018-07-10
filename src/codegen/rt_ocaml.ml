@@ -31,7 +31,6 @@ let batch =
 (* stdout if in batch mode *)
 let stdout = ref ""
 
-let null_ptr = M.null_ptrval C.Void0
 
 let position fname lnum bol cnum = {
   Lexing.pos_fname = fname;
@@ -58,6 +57,9 @@ let ivcompl = ivctor M.bitwise_complement_ival "ivcompl"
 let ivand   = ivctor M.bitwise_and_ival "ivand"
 let ivor    = ivctor M.bitwise_or_ival "ivor"
 let ivxor   = ivctor M.bitwise_xor_ival "ivxor"
+
+let fvfromint = float_of_int
+let ivfromfloat (_, x) = int_of_float x
 
 (* Ail types *)
 
@@ -124,6 +126,14 @@ let get_union m =
 (* Cast to memory values *)
 
 let mk_int s = M.integer_ival (Nat_big_num.of_string s)
+let mk_float s = M.str_fval s
+
+let mk_pointer alloc_id addr =
+  M.concrete_ptrval (Nat_big_num.of_string alloc_id)
+                    (Nat_big_num.of_string addr)
+
+let mk_null cty = M.null_ptrval cty
+let mk_null_void = mk_null C.Void0
 
 (* Binary operations wrap *)
 
@@ -150,6 +160,8 @@ let le_ptrval p q = M.le_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
 let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 let memcmp p q r = return $ M.memcmp p q r
+let memcpy p q r = return $ M.memcpy p q r
+let realloc x y z w = return $ M.realloc x y z w
 
 (* Memory actions wrap *)
 

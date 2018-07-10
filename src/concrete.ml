@@ -962,6 +962,17 @@ module Concrete : Memory = struct
   
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
+
+  let concrete_ptrval i addr =
+    PV (Prov_some i, PVconcrete addr)
+
+  let case_ptrval pv fnull fconc _ =
+    match pv with
+    | PV (_, PVnull ty) -> fnull ty
+    | PV (Prov_none, PVconcrete addr) -> fconc None addr
+    | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
+    | _ -> failwith "case_ptrval"
+
   
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
