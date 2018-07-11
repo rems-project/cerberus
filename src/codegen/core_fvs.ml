@@ -74,7 +74,7 @@ let fv_act (Paction(_, Action (_, _, act))) fvs =
   match act with
   | Create (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
   | Alloc0 (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
-  | Kill pe -> fv_pe pe fvs
+  | Kill (_, pe) -> fv_pe pe fvs
   | Store0 (pe1, pe2, pe3, _) ->
     fv_pe pe1 fvs |> fv_pe pe2 |> fv_pe pe3
   | Load0 (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2

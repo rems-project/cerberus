@@ -116,6 +116,7 @@ let keywords =
       ("create", T.CREATE);
       ("create_readonly", T.CREATE_READONLY);
       ("alloc",  T.ALLOC );
+      ("free",   T.FREE  );
       ("kill",   T.KILL  );
       ("store",  T.STORE );
       ("load",   T.LOAD  );

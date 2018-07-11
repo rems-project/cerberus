@@ -648,7 +648,7 @@ let action_request_concurrency = function
 *)
       error "WIP: Driver ==> RMWRequest"
 
-  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid is_dynamic ptr_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
       ND.update (fun dr_st ->
         <| dr_st with
@@ -703,9 +703,9 @@ let action_request_sequential = function
         update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
       )
   
-  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid is_dynamic ptr_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
-      liftMem (Mem.kill ptr_val) >>
+      liftMem (Mem.kill loc is_dynamic ptr_val) >>
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
       )

@@ -64,7 +64,7 @@ val allocate_dynamic:
   -> integer_value      (* size *)
   -> memM pointer_value
 
-val kill: pointer_value -> memM unit
+val kill: Loc.t -> bool -> pointer_value -> memM unit
 val load: Loc.t -> Core_ctype.ctype -> pointer_value -> memM (footprint * mem_value)
 val store: Loc.t -> Core_ctype.ctype -> pointer_value -> mem_value -> memM footprint
 
