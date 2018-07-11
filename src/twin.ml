@@ -662,7 +662,7 @@ let rec explode_bytes mval : (meta * char option) list =
   let realloc _ _ _ =
     failwith "twin: realloc"
 
-  let kill p : unit memM =
+  let kill loc is_dyn p : unit memM =
     let do_kill id =
       Debug_ocaml.print_debug 1 [] (fun () ->
         "KILLING alloc_id= " ^ N.to_string id 

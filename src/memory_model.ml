@@ -56,7 +56,7 @@ module type Memory = sig
     -> integer_value     (* size *)
     -> pointer_value memM
   
-  val kill: pointer_value -> unit memM
+  val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
   
   val load: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> (footprint * mem_value) memM
   val store: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> mem_value -> footprint memM

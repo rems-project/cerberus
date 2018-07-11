@@ -263,7 +263,7 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | Create of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
  | CreateReadOnly of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
  | Alloc of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Symbol.prefix
- | Kill of (generic_pexpr 'bty 'sym)
+ | Kill of (* is_dynamic (i.e. free()) *) bool * (generic_pexpr 'bty 'sym)
  | Store of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order
  | Load of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order
  | RMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order

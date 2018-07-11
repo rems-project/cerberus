@@ -606,8 +606,8 @@ let print_action globs act =
     ^^^ P.parens (print_symbol_prefix pre)
     ^^^ P.parens (print_pure_expr globs al)
     ^^^ P.parens (print_pure_expr globs n)
-  | Kill e ->
-    !^"M.kill" ^^ P.parens (print_pure_expr globs e)
+  | Kill (b, e) ->
+    !^"M.kill" ^^ print_bool b ^^^ P.parens (print_pure_expr globs e)
   | Store0 (ty, pe1, pe2, _) ->
     choose_store_type ty
     ^^^ P.parens (print_pure_expr globs pe1)

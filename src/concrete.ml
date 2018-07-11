@@ -338,7 +338,8 @@ module Concrete : Memory = struct
     next_address: address;
     bytemap: (provenance * char option) IntMap.t;
     
-    dynamic_addrs: Nat_big_num.num list;
+    dead_allocations: allocation_id list;
+    dynamic_addrs: address list;
   }
   
   let initial_mem_state = {
@@ -347,6 +348,7 @@ module Concrete : Memory = struct
     next_address= Nat_big_num.(succ zero);
     bytemap= IntMap.empty;
     
+    dead_allocations= [];
     dynamic_addrs= [];
   }
   
@@ -456,6 +458,10 @@ module Concrete : Memory = struct
   let is_dynamic addr : bool memM =
     get >>= fun st ->
     return (List.mem addr st.dynamic_addrs)
+  
+  let is_dead alloc_id : bool memM =
+    get >>= fun st ->
+    return (List.mem alloc_id st.dead_allocations)
   
   let get_allocation alloc_id : allocation memM =
     get >>= fun st ->
@@ -831,9 +837,10 @@ module Concrete : Memory = struct
             dynamic_addrs= addr :: st.dynamic_addrs })
     )
   
-  let kill : pointer_value -> unit memM = function
+  let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
-          fail (MerrOther "attempted to kill with a null pointer")
+        return ()
+(*          fail (MerrOther "attempted to kill with a null pointer") *)
     | PV (_, PVfunction _) ->
           fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
@@ -842,17 +849,36 @@ module Concrete : Memory = struct
         (* TODO: should that be an error ?? *)
         return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-        get_allocation alloc_id >>= fun alloc ->
-        if N.equal addr alloc.base then begin
-          Debug_ocaml.print_debug 1 [] (fun () ->
-            "KILLING alloc_id= " ^ N.to_string alloc_id
-          );
-          update begin fun st ->
-            {st with allocations= IntMap.remove alloc_id st.allocations}
+        begin if is_dyn then
+          (* this kill is dynamic one (i.e. free() or friends) *)
+          is_dynamic addr >>= begin function
+            | false ->
+                fail (MerrUndefinedFree (loc, Free_static_allocation))
+            | true ->
+                return ()
           end
-        end else
-          fail (MerrOther "attempted to kill with an invalid pointer")
-
+        else
+          return ()
+        end >>= fun () ->
+        is_dead alloc_id >>= begin function
+          | true ->
+              if is_dyn then
+                fail (MerrUndefinedFree (loc, Free_dead_allocation))
+              else
+                failwith "Concrete: FREE was called on a dead allocation"
+          | false ->
+              get_allocation alloc_id >>= fun alloc ->
+              if N.equal addr alloc.base then begin
+                Debug_ocaml.print_debug 1 [] (fun () ->
+                  "KILLING alloc_id= " ^ N.to_string alloc_id
+                );
+                update begin fun st ->
+                  {st with dead_allocations= alloc_id :: st.dead_allocations;
+                           allocations= IntMap.remove alloc_id st.allocations}
+                end
+              end else
+                fail (MerrUndefinedFree (loc, Free_out_of_bound))
+        end
   
   let load loc ty (PV (prov, ptrval_)) =
     Debug_ocaml.print_debug 3 [] (fun () ->
@@ -1475,7 +1501,7 @@ let combine_prov prov1 prov2 =
             if alloc.base = addr then
               allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
               memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
-              kill ptr >>= fun () ->
+              kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
               return new_ptr
             else
               fail (MerrWIP "realloc: invalid pointer")

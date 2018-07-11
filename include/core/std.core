@@ -353,7 +353,7 @@ proc [ailname = "free"] free_proxy (p_ptr: pointer) : eff unit :=
           skip
         else
           -- TODO: this is wrong, p was not allocated with alloc(), this should be UB
-          kill(p)
+          free(p)
     | _: loaded pointer =>
         pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
   end
