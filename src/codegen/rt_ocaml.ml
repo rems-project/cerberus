@@ -249,7 +249,8 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
       let output = String.init n (List.nth xs) in
       if batch then stdout := !stdout ^ String.escaped output
       else print_string output;
-      return (M.integer_ival (Nat_big_num.of_int n))
+      return (Specified (M.integer_ival (Nat_big_num.of_int n)))
+      (*return (M.integer_ival (Nat_big_num.of_int n))*)
     | Either.Right (Undefined.Undef (_, xs) ) ->
       raise (Error (String.concat "," 
                       (List.map Undefined.stringFromUndefined_behaviour xs)))
