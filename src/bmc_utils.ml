@@ -10,7 +10,6 @@ let g_bmc_debug = 10
 type sym_ty = Sym.sym
 type sym_supply_ty = sym_ty UniqueId.supply
 
-
 (* ========== Z3 ALIASES ============= *)
 let mk_sym (ctx:context) = Symbol.mk_string ctx
 
@@ -72,5 +71,3 @@ let pp_to_string (doc: PPrint.document) : string =
 let pp_file (core_file: ('a, 'b) generic_file) =
   let doc = Pp_core.Basic.pp_file core_file in
   pp_to_stdout doc
-
-
