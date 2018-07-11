@@ -374,10 +374,22 @@ let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
   | BTy_loaded _            -> assert false
 
+let sorts_to_tuple (sorts: Sort.sort list)
+                   : Sort.sort =
+  let tuple_name =
+    "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
+  let arg_list = List.mapi
+    (fun i _ -> mk_sym g_ctx ("#" ^ (string_of_int i))) sorts in
+  Tuple.mk_sort g_ctx (mk_sym g_ctx tuple_name) arg_list sorts
+
 let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type) =
   match ctor with
+  | Ctuple ->
+      let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
+      let mk_decl = Tuple.get_mk_decl sort in
+      FuncDecl.apply mk_decl exprs
   | Civmax ->
       Expr.mk_app g_ctx ImplFunctions.ivmax exprs
   | Civmin ->
@@ -654,6 +666,11 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
   match pat with
   | CaseBase(maybe_sym, _) ->
       mk_let_binding maybe_sym expr
+  | CaseCtor(Ctuple, patlist) ->
+      assert (Expr.get_num_args expr = List.length patlist);
+      BmcM.mapM (fun (pat, e) -> mk_let_bindings pat e)
+                (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
+      BmcM.return (mk_and g_ctx bindings)
   | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_integer)]) ->
       let is_specified = LoadedInteger.is_specified expr in
       let specified_value = LoadedInteger.get_specified_value expr in
@@ -681,6 +698,13 @@ let rec pattern_match (pattern: typed_pattern)
   match pattern with
   | CaseBase(_,_) ->
       mk_true g_ctx
+  | CaseCtor(Ctuple, patlist) ->
+      assert (Expr.get_num_args expr = List.length patlist);
+      let expr_list = Expr.get_args expr in
+      let match_conditions =
+        List.map2 (fun pat e -> pattern_match pat e)
+                  patlist expr_list in
+      mk_and g_ctx match_conditions
   | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_integer)]) ->
       LoadedInteger.is_specified expr
   | CaseCtor(Cspecified, _) ->
@@ -949,8 +973,9 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
   | Ewait _
   | Eif _
   | Elet _
-  | Easeq _
-  | Ewseq _ -> assert false
+  | Easeq _ ->
+      assert false
+  | Ewseq (pat, e1, e2) (* TODO: fall through for now *)
   | Esseq (pat, e1, e2) ->
       bmc_expr e1                   >>= fun res1 ->
       add_pattern_to_sym_table pat  >>= fun () ->
