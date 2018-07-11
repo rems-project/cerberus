@@ -51,6 +51,10 @@ let pget_expr   (pret: bmc_pret) = pret.expr
 let pget_assume (pret: bmc_pret) = pret.assume
 let pget_vcs    (pret: bmc_pret) = pret.vcs
 
+let eget_expr   (eret: bmc_ret) = eret.expr
+let eget_assume (eret: bmc_ret) = eret.assume
+let eget_vcs    (eret: bmc_ret) = eret.vcs
+
 let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   { expr      = pret.expr
   ; assume    = pret.assume
@@ -465,9 +469,13 @@ let value_to_z3 (value: value)
            LoadedInteger.mk_specified (integer_value_to_z3 ival)
        | _ -> assert false
       end
-  | Vloaded (LVunspecified _) ->
-      assert false
-
+  | Vloaded (LVunspecified ctype) ->
+      begin
+      match ctype with
+      | Basic0 (Integer _) ->
+          LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype)
+      | _ -> assert false
+      end
 
 (* =========== SOME MONAD FUN =========== *)
 
@@ -892,7 +900,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       bmc_pexpr pe1           >>= fun res1 ->
       bmc_pexpr pe2           >>= fun res2 ->
       let new_vcs =
-          (List.map (fun vc -> mk_implies g_ctx res_cond.expr vc) res1.vcs)
+          res_cond.vcs
+        @ (List.map (fun vc -> mk_implies g_ctx res_cond.expr vc) res1.vcs)
         @ (List.map (fun vc -> mk_implies g_ctx (mk_not g_ctx res_cond.expr) vc)
                     res2.vcs)
       in
@@ -920,9 +929,55 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       bmc_pexpr pe >>= fun pres ->
       BmcM.return (bmc_pret_to_ret pres)
   | Ememop _
-  | Eaction _
-  | Ecase _ ->
+  | Eaction _ ->
       assert false
+  | Ecase (pe, caselist) ->
+      (* TODO: code duplication from PEcase *)
+      assert (List.length caselist > 0);
+      bmc_pexpr pe >>= fun res_pe ->
+      let (match_vc, case_guards) =
+        compute_case_guards (List.map fst caselist) res_pe.expr in
+      BmcM.get_sym_table >>= fun old_sym_table ->
+      BmcM.mapM (fun (pat, case_expr) ->
+                  add_pattern_to_sym_table pat    >>= fun () ->
+                  mk_let_bindings pat res_pe.expr >>= fun let_binding ->
+                  bmc_expr case_expr              >>= fun res_case_expr ->
+                  BmcM.update_sym_table old_sym_table >>= fun () ->
+                  BmcM.return (let_binding, res_case_expr)
+                ) caselist >>= fun binding_res_list ->
+      let guarded_let_bindings = List.map2 (
+        fun guard (let_binding, _) -> mk_implies g_ctx guard let_binding)
+        case_guards binding_res_list in
+      let case_assumes : Expr.expr list =
+        List.concat (List.map (fun (_, res) -> eget_assume res)
+                              binding_res_list) in
+      let guarded_vcs = List.map2 (
+        fun guard (_, res) ->
+          mk_implies g_ctx guard (mk_and g_ctx (eget_vcs res)))
+        case_guards binding_res_list in
+      let ite_expr =
+        if List.length caselist = 1 then
+          eget_expr (snd (List.hd binding_res_list))
+        else
+          let rev_list = List.rev (List.map snd binding_res_list) in
+          let rev_case_guards = List.rev case_guards in
+          let last_case_expr = eget_expr (List.hd rev_list) in
+          List.fold_left2 (fun acc guard res ->
+            mk_ite g_ctx guard (eget_expr res) acc)
+            last_case_expr
+            (List.tl rev_case_guards)
+            (List.tl rev_list) in
+      let drop_cont =
+        mk_or g_ctx (List.map2 (fun guard (_, res) ->
+                                    mk_and g_ctx [guard; res.drop_cont])
+                               case_guards binding_res_list) in
+      BmcM.return { expr      = ite_expr
+                  ; assume    =  res_pe.assume
+                               @ guarded_let_bindings
+                               @ case_assumes
+                  ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
+                  ; drop_cont = drop_cont
+                  }
   | Eskip ->
       BmcM.return { expr      = UnitSort.mk_unit
                   ; assume    = []
@@ -939,7 +994,35 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
        *)
       assert (n = 0);
       bmc_expr e1
-  | End _ -> assert false
+  | End elist ->
+      assert (List.length elist > 1);
+      BmcM.mapM bmc_expr elist >>= fun res_elist ->
+      let choice_vars =
+        List.mapi (fun i _ -> Expr.mk_fresh_const g_ctx
+                              ("seq_" ^ (string_of_int i))
+                              (Boolean.mk_sort g_ctx)) elist in
+      (* Assert exactly one choice is taken *)
+      let xor_expr = List.fold_left
+          (fun acc choice -> mk_xor g_ctx acc choice)
+          (mk_false g_ctx) choice_vars in
+      let vcs = List.map2
+          (fun choice res -> mk_implies g_ctx choice
+                                              (mk_and g_ctx (eget_vcs res)))
+          choice_vars res_elist in
+      let drop_cont = mk_or g_ctx
+          (List.map2 (fun choice res -> mk_and g_ctx [choice; res.drop_cont])
+                     choice_vars res_elist) in
+      let ret_expr = List.fold_left2
+          (fun acc choice res -> mk_ite g_ctx choice (eget_expr res) acc)
+          (eget_expr (List.hd res_elist))
+          (List.tl choice_vars)
+          (List.tl res_elist) in
+      BmcM.return { expr      = ret_expr
+                  ; assume    = xor_expr
+                                :: (List.concat (List.map eget_assume res_elist))
+                  ; vcs       = vcs
+                  ; drop_cont = drop_cont
+                  }
   | Erun (_, label, pelist) ->
       BmcM.get_run_depth_table >>= fun run_depth_table ->
       let depth = match Pmap.lookup label run_depth_table with
@@ -970,8 +1053,27 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                     }
       end
   | Epar _
-  | Ewait _
-  | Eif _
+  | Ewait _ ->
+      assert false
+  | Eif (pe, e1, e2) ->
+      bmc_pexpr pe >>= fun res_pe ->
+      bmc_expr  e1 >>= fun res_e1 ->
+      bmc_expr  e2 >>= fun res_e2 ->
+      let vcs =
+          res_pe.vcs
+        @ (List.map (fun vc -> mk_implies g_ctx res_pe.expr vc) res_e1.vcs)
+        @ (List.map (fun vc -> mk_implies g_ctx (mk_not g_ctx res_pe.expr) vc)
+                    res_e2.vcs) in
+      let drop_cont = mk_or g_ctx
+        [ mk_and g_ctx [res_pe.expr             ; res_e1.drop_cont]
+        ; mk_and g_ctx [mk_not g_ctx res_pe.expr; res_e2.drop_cont]
+        ] in
+      BmcM.return { expr      = mk_ite g_ctx res_pe.expr
+                                             res_e1.expr res_e2.expr
+                  ; assume    = res_pe.assume @ res_e1.assume @ res_e2.assume
+                  ; vcs       = vcs
+                  ; drop_cont = drop_cont
+                  }
   | Elet _
   | Easeq _ ->
       assert false
@@ -1027,8 +1129,10 @@ let bmc_file (file              : unit typed_file)
   in
   let (result, new_state) = BmcM.run initial_state to_run in
 
+  (*
   print_endline "====FINAL BMC_RET";
   print_string (pp_bmc_ret result);
+  *)
 
   (* TODO: assert and track based on annotation *)
   (* TODO: multiple expressions or one expression? *)
@@ -1046,8 +1150,10 @@ let bmc_file (file              : unit typed_file)
     (Expr.simplify (mk_not g_ctx (mk_and g_ctx result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
 
+  (*
   print_endline "====FINAL SOLVER";
   print_endline (Solver.to_string g_solver);
+  *)
 
   match Solver.check g_solver [] with
   | UNKNOWN ->
