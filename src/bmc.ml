@@ -18,6 +18,9 @@ open Util
  *  - More complex create types
  *  - Alias analysis
  *  - Alignment
+ *  - PtrValidForDeref
+ *  - Return values
+ *  - Procedure calls
  *)
 
 (* =========== GLOBALS =========== *)
@@ -92,6 +95,26 @@ let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
   if g_bv then assert false
   else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
 
+let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
+                : Expr.expr =
+  if g_bv then assert false
+  else begin
+    match binop with
+    | OpAdd   -> Arithmetic.mk_add g_ctx [arg1; arg2]
+    | OpSub   -> Arithmetic.mk_sub g_ctx [arg1; arg2]
+    | OpMul   -> Arithmetic.mk_mul g_ctx [arg1; arg2]
+    | OpDiv   -> Arithmetic.mk_div g_ctx arg1 arg2
+    | OpRem_t -> assert false
+    | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
+    | OpExp   -> assert false
+    | OpEq    -> mk_eq g_ctx arg1 arg2
+    | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
+    | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
+    | OpGt    -> Arithmetic.mk_gt g_ctx arg1 arg2
+    | OpGe    -> Arithmetic.mk_ge g_ctx arg1 arg2
+    | OpAnd   -> mk_and g_ctx [arg1; arg2]
+    | OpOr    -> mk_or  g_ctx [arg1; arg2]
+  end
 
 (* =========== CUSTOM SORTS =========== *)
 let integer_sort = if g_bv then assert false
@@ -209,15 +232,43 @@ module AddressSort = struct
             [Some integer_sort; Some integer_sort] [0; 0]
       ]
 
-  let alloc_size_decl =
-    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
-
   let mk_expr (alloc_id: Expr.expr) (index: Expr.expr) =
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [alloc_id; index]
 
   let mk_expr_from_addr ((alloc_id, index) : int * int) : Expr.expr =
     mk_expr (int_to_z3 alloc_id) (int_to_z3 index)
+
+  let get_alloc (expr: Expr.expr) : Expr.expr =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 0) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_index (expr: Expr.expr) : Expr.expr =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    let accessors = get_accessors mk_sort in
+    let get_value = List.nth (List.nth accessors 0) 1 in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  (* ======== *)
+  let alloc_size_decl =
+    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
+
+  let valid_index_range (addr: Expr.expr) : Expr.expr =
+    let alloc = get_alloc addr in
+    let index = get_index addr in
+    let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in
+    mk_and g_ctx
+      [ binop_to_z3 OpGe index (int_to_z3 0)
+      ; binop_to_z3 OpLt index alloc_size
+      ]
+
+  let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
+    let alloc = get_alloc addr in
+    let index = get_index addr in
+    mk_expr alloc (binop_to_z3 OpAdd index n)
+
 end
 
 module PointerSort = struct
@@ -306,6 +357,9 @@ end
 
 module LoadedInteger =
   LoadedSort (struct let obj_sort = integer_sort end)
+
+module LoadedPointer =
+  LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
 
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
@@ -469,6 +523,7 @@ let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_tuple cbt_list      -> assert false
   | BTy_object obj_type     -> cot_to_z3 obj_type
   | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
+  | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
   | BTy_loaded _            -> assert false
 
 let sorts_to_tuple (sorts: Sort.sort list)
@@ -495,6 +550,8 @@ let ctor_to_z3 (ctor  : typed_ctor)
       assert (List.length exprs = 1);
       if (bTy = BTy_loaded OTy_integer) then
         LoadedInteger.mk_specified (List.hd exprs)
+      else if (bTy = BTy_loaded OTy_pointer) then
+        LoadedPointer.mk_specified (List.hd exprs)
       else
         assert false
   | Cunspecified ->
@@ -505,27 +562,6 @@ let ctor_to_z3 (ctor  : typed_ctor)
         assert false
   | _ ->
       assert false
-
-let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
-                : Expr.expr =
-  if g_bv then assert false
-  else begin
-    match binop with
-    | OpAdd   -> Arithmetic.mk_add g_ctx [arg1; arg2]
-    | OpSub   -> Arithmetic.mk_sub g_ctx [arg1; arg2]
-    | OpMul   -> Arithmetic.mk_mul g_ctx [arg1; arg2]
-    | OpDiv   -> Arithmetic.mk_div g_ctx arg1 arg2
-    | OpRem_t -> assert false
-    | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
-    | OpExp   -> assert false
-    | OpEq    -> mk_eq g_ctx arg1 arg2
-    | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
-    | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
-    | OpGt    -> Arithmetic.mk_gt g_ctx arg1 arg2
-    | OpGe    -> Arithmetic.mk_ge g_ctx arg1 arg2
-    | OpAnd   -> mk_and g_ctx [arg1; arg2]
-    | OpOr    -> mk_or  g_ctx [arg1; arg2]
-  end
 
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
   (* TODO: check which is the correct ival->big num function *)
@@ -831,16 +867,28 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
       let specified_value = LoadedInteger.get_specified_value expr in
       mk_let_binding sym specified_value >>= fun is_eq_value ->
       BmcM.return (mk_and g_ctx [is_specified; is_eq_value])
+  | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_pointer)]) ->
+      let is_specified = LoadedPointer.is_specified expr in
+      let specified_value = LoadedPointer.get_specified_value expr in
+      mk_let_binding sym specified_value >>= fun is_eq_value ->
+      BmcM.return (mk_and g_ctx [is_specified; is_eq_value])
   | CaseCtor(Cspecified, _) ->
       assert false
   | CaseCtor(Cunspecified, [CaseBase(sym, BTy_ctype)]) ->
-      if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
-        let is_unspecified = LoadedInteger.is_unspecified expr in
-        let unspecified_value = LoadedInteger.get_unspecified_value expr in
-        mk_let_binding sym unspecified_value >>= fun is_eq_value ->
-        BmcM.return (mk_and g_ctx [is_unspecified; is_eq_value])
-      else
-        assert false
+      let (is_unspecified, unspecified_value) =
+        if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
+          let is_unspecified = LoadedInteger.is_unspecified expr in
+          let unspecified_value = LoadedInteger.get_unspecified_value expr in
+          (is_unspecified, unspecified_value)
+        else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
+          let is_unspecified = LoadedPointer.is_unspecified expr in
+          let unspecified_value = LoadedPointer.get_unspecified_value expr in
+          (is_unspecified, unspecified_value)
+        else
+          assert false
+      in
+      mk_let_binding sym unspecified_value >>= fun is_eq_value ->
+      BmcM.return (mk_and g_ctx [is_unspecified; is_eq_value])
   | CaseCtor(Cunspecified, _) ->
       assert false
   | CaseCtor(_, _) ->
@@ -862,11 +910,15 @@ let rec pattern_match (pattern: typed_pattern)
       mk_and g_ctx match_conditions
   | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_integer)]) ->
       LoadedInteger.is_specified expr
+  | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_pointer)]) ->
+      LoadedPointer.is_specified expr
   | CaseCtor(Cspecified, _) ->
       assert false
   | CaseCtor(Cunspecified, [CaseBase(_, BTy_ctype)]) ->
       if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
         LoadedInteger.is_unspecified expr
+      else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
+        LoadedPointer.is_unspecified expr
       else
         assert false
   | _ -> assert false
@@ -944,8 +996,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
         fun guard (let_binding, _) -> mk_implies g_ctx guard let_binding)
         case_guards binding_res_list in
       let case_assumes =
-        List.concat (List.map (fun (_, res) -> res.assume)
-                              binding_res_list) in
+        List.concat (List.map (fun (_, res) -> res.assume) binding_res_list) in
       let guarded_vcs = List.map2 (
         fun guard (_, res) -> mk_implies g_ctx guard (mk_and g_ctx res.vcs))
         case_guards binding_res_list in
@@ -968,7 +1019,16 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                              @ case_assumes
                   ; vcs    = match_vc :: (res_pe.vcs @ guarded_vcs)
                   }
-  | PEarray_shift _
+  | PEarray_shift (ptr, ty, index) ->
+      bmc_pexpr ptr   >>= fun res_ptr ->
+      bmc_pexpr index >>= fun res_index ->
+      let addr     = PointerSort.get_addr res_ptr.expr in
+      let alloc_id = AddressSort.get_alloc addr in
+      let new_addr = AddressSort.shift_index_by_n addr res_index.expr in
+      BmcM.return { expr   = PointerSort.mk_ptr new_addr
+                  ; assume = res_ptr.assume @ res_index.assume
+                  ; vcs    = res_ptr.vcs @ res_index.vcs
+                  }
   | PEmember_shift _
   | PEmemberof _  ->
       assert false
@@ -1199,7 +1259,16 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
   | Epure pe ->
       bmc_pexpr pe >>= fun pres ->
       BmcM.return (bmc_pret_to_ret pres)
-  | Ememop _  ->
+  | Ememop (PtrValidForDeref, [ptr])  ->
+      bmc_pexpr ptr >>= fun res_ptr ->
+      let addr     : Expr.expr = PointerSort.get_addr res_ptr.expr in
+      let range_assert = AddressSort.valid_index_range addr in
+      BmcM.return { expr      = range_assert
+                  ; assume    = res_ptr.assume
+                  ; vcs       = res_ptr.vcs
+                  ; drop_cont = mk_false g_ctx
+                  }
+  | Ememop _ ->
       assert false
   | Eaction paction ->
       bmc_paction paction
