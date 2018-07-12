@@ -23,6 +23,11 @@ let symbol_to_string (sym: sym_ty) =
   | Symbol (num, None) ->
       ("?_" ^ (string_of_int num))
 
+let prefix_to_string (prefix: Sym.prefix) =
+  match prefix with
+  | PrefSource l -> "[" ^ (String.concat "," (List.map symbol_to_string l)) ^ "]"
+  | PrefOther s -> s
+
 let name_cmp = fun nm1 nm2 ->
   match (nm1, nm2) with
   | (Sym sym1, Sym sym2) -> sym_cmp sym1 sym2
@@ -44,6 +49,16 @@ let rec list_take k l =
     | [] -> assert false
     | x :: xs -> x :: (list_take (k-1) xs)
   else []
+
+(* TODO: not tail recursive *)
+let rec repeat_n n elem =
+  if n <= 0 then []
+  else elem :: (repeat_n (n-1) elem)
+
+let range i j =
+  let rec aux n acc =
+    if n < i then acc else aux (n-1) (n :: acc)
+  in aux (j-1) [] ;;
 
 (* ========== Debug ========== *)
 let debug_print level str =

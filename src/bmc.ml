@@ -13,6 +13,8 @@ open Util
 
 (* TODO:
  *  - Maintain symbol table properly
+ *  - Kill ignored; Ebound ignored
+ *  - More complex create types
  *)
 
 (* =========== GLOBALS =========== *)
@@ -61,6 +63,22 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   ; vcs       = pret.vcs
   ; drop_cont = mk_false g_ctx
   }
+
+(* Sort list *)
+type bmcz3sort =
+  | CaseSortBase of Expr.expr * Sort.sort
+  | CaseSortList of bmcz3sort list
+
+let rec bmcz3sort_size (sort: bmcz3sort) =
+  match sort with
+  | CaseSortBase _        -> 1
+  | CaseSortList sortlist ->
+      List.fold_left (fun x y -> x + (bmcz3sort_size y)) 0 sortlist
+
+let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
+  match l with
+  | CaseSortBase (expr, sort) -> [(expr, sort)]
+  | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
 (* =========== CUSTOM SORTS =========== *)
 let integer_sort = if g_bv then assert false
@@ -166,6 +184,45 @@ module CtypeSort = struct
     | _ -> assert false
 end
 
+module AddressSort = struct
+  open Z3.Datatype
+  open Z3.FuncDecl
+
+  let mk_sort =
+    mk_sort_s g_ctx ("Addr")
+      [ mk_constructor_s g_ctx "addr"
+            (mk_sym g_ctx ("_addr"))
+            [mk_sym g_ctx ("get_alloc"); mk_sym g_ctx ("get_index")]
+            [Some integer_sort; Some integer_sort] [0; 0]
+      ]
+
+  let alloc_size_decl =
+    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
+
+  let mk_expr (alloc_id: Expr.expr) (index: Expr.expr) =
+    let ctor = List.nth (get_constructors mk_sort) 0 in
+    Expr.mk_app g_ctx ctor [alloc_id; index]
+end
+
+module PointerSort = struct
+  open Z3.Datatype
+  open Z3.FuncDecl
+
+  let mk_sort =
+    mk_sort_s g_ctx ("Ptr")
+      [ mk_constructor_s g_ctx "ptr"
+            (mk_sym g_ctx "_ptr")
+            [mk_sym g_ctx ("get_addr")]
+            [Some AddressSort.mk_sort] [0]
+      ]
+
+  let mk_ptr (addr: Expr.expr) =
+    let ctor = List.nth (get_constructors mk_sort) 0 in
+    Expr.mk_app g_ctx ctor [addr]
+end
+
+
+
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
 module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
@@ -228,10 +285,21 @@ module LoadedInteger =
   LoadedSort (struct let obj_sort = integer_sort end)
 
 (* =========== Z3 HELPER FUNCTIONS =========== *)
+let int_to_z3 (i: int) : Expr.expr =
+  if g_bv then assert false
+  else Integer.mk_numeral_i g_ctx i
+
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
   if g_bv then assert false
   else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
 
+(* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
+let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
+                        : Expr.expr =
+  if (Sort.equal (LoadedInteger.mk_sort) sort) then
+    LoadedInteger.mk_unspecified ctype
+  else
+    assert false
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 module ImplFunctions = struct
@@ -355,11 +423,18 @@ let pp_bmc_ret (bmc_ret: bmc_ret) =
                           "" bmc_ret.vcs
           )
 
+let rec pp_bmcz3sort (sort: bmcz3sort) =
+  match sort with
+  | CaseSortBase (expr, sort) ->
+      sprintf "(%s,%s)" (Expr.to_string expr) (Sort.to_string sort)
+  | CaseSortList sortlist ->
+      "[" ^ (String.concat "," (List.map pp_bmcz3sort sortlist)) ^ "]"
+
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 let cot_to_z3 (cot: core_object_type) : Sort.sort =
   match cot with
   | OTy_integer -> integer_sort
-  | OTy_pointer -> assert false
+  | OTy_pointer -> PointerSort.mk_sort
   | OTy_floating
   | OTy_array _
   | OTy_struct _
@@ -477,12 +552,35 @@ let value_to_z3 (value: value)
       | _ -> assert false
       end
 
+let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
+                          : bmcz3sort =
+  match ty with
+  | Void0     -> assert false
+  | Basic0(Integer i) ->
+      CaseSortBase (CtypeSort.mk_expr ty, LoadedInteger.mk_sort)
+  | Basic0 _ -> assert false
+  | Array0(Basic0 ty2, Some n) ->
+      (* TODO: Handle more complex arrays later *)
+      let sort = ctype_to_bmcz3sort (Basic0 ty2) in
+      CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
+  | Array0 _ -> assert false
+  | Function0 _
+  | Pointer0 _
+  | Atomic0 _
+  | Struct0 _
+  | Union0 _
+  | Builtin0 _ -> assert false
+
 (* =========== SOME MONAD FUN =========== *)
 
 module BmcM = struct
   type sym_table_ty = (sym_ty, Expr.expr) Pmap.map
   type run_depth_table_ty = (sym_ty, int) Pmap.map
   type func_decl_table_ty = (sym_ty generic_name, FuncDecl.func_decl) Pmap.map
+  type alloc_ty = int
+  type addr_ty = int * int
+  type addr_type_table_ty = (addr_ty, Sort.sort) Pmap.map
+  type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
 
   type bmc_state = {
     file            : unit typed_file;
@@ -497,6 +595,11 @@ module BmcM = struct
 
     (* Map from Core function/impl constant name to Z3 FuncDecl *)
     func_decl_table : func_decl_table_ty;
+
+    (* Allocation and address supplies *)
+    alloc_supply    : alloc_ty;
+    addr_type_table : addr_type_table_ty;
+    memory          : memory_table_ty;
   }
 
   (* =========== MONADIC FUNCTIONS =========== *)
@@ -530,6 +633,7 @@ module BmcM = struct
 
   let sequence_ ms = List.fold_right (>>) ms (return ())
   let mapM  f ms = sequence (List.map f ms)
+  let mapMi f ms = sequence (List.mapi f ms)
   let mapM_ f ms = sequence_ (List.map f ms)
 
   let get : bmc_state eff =
@@ -606,6 +710,18 @@ module BmcM = struct
         update_func_decl_table new_table >>= fun () ->
         return decl
 
+  (* allocation *)
+  let get_new_alloc_and_update_supply : alloc_ty eff =
+    get                    >>= fun st ->
+    return st.alloc_supply >>= fun alloc ->
+    put {st with alloc_supply = alloc + 1} >>= fun () ->
+    return alloc
+
+  (* memory *)
+  let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
+    get >>= fun st ->
+    put {st with memory = Pmap.add addr expr st.memory}
+
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
@@ -618,6 +734,10 @@ module BmcM = struct
 
     ; run_depth_table = Pmap.empty sym_cmp
     ; func_decl_table = Pmap.empty name_cmp
+
+    ; alloc_supply    = 0
+    ; addr_type_table = Pmap.empty Pervasives.compare
+    ; memory          = Pmap.empty Pervasives.compare
     }
 
   (* =========== Pprinters =========== *)
@@ -922,6 +1042,57 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                   ; vcs    = res_pe.vcs
                   }
 
+let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
+                : bmc_ret BmcM.eff =
+  match action_ with
+  | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+      (* TODO: non-basic types? *)
+      let sortlist = ctype_to_bmcz3sort ctype in
+      let flat_sortlist = flatten_bmcz3sort sortlist in
+      let allocation_size = bmcz3sort_size sortlist in
+      BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
+
+      BmcM.mapMi (fun i (ctype_expr, sort) ->
+        (* make new address *)
+        let addr = AddressSort.mk_expr (int_to_z3 alloc_id) (int_to_z3 i) in
+        (* initialise to unspecified *)
+        let seq_var = Expr.mk_fresh_const g_ctx (Expr.to_string addr) sort in
+        let init_unspec =
+          mk_eq g_ctx seq_var (mk_unspecified_expr sort ctype_expr) in
+        (* track in state that mem[addr] = seq_var *)
+        BmcM.update_memory (alloc_id, i) seq_var >>= fun () ->
+        BmcM.return (addr, init_unspec)
+        ) flat_sortlist >>= fun retlist ->
+
+      (* Assert alloc_size(alloc_id) = allocation_size *)
+      let alloc_size_expr =
+        mk_eq g_ctx
+          (Expr.mk_app g_ctx AddressSort.alloc_size_decl [int_to_z3 alloc_id])
+          (int_to_z3 allocation_size) in
+      let assume = alloc_size_expr :: (List.map snd retlist) in
+      BmcM.return { expr      = PointerSort.mk_ptr (fst (List.hd retlist))
+                  ; assume    = assume
+                  ; vcs       = []
+                  ; drop_cont = mk_false g_ctx
+                  }
+  | Create _ -> assert false
+  | CreateReadOnly _
+  | Alloc0 _ ->
+      assert false
+  | Kill pe ->
+      (* TODO: kill currently ignored *)
+      bmc_pexpr pe >>= fun res_pe ->
+      BmcM.return { expr      = UnitSort.mk_unit
+                  ; assume    = res_pe.assume
+                  ; vcs       = res_pe.vcs
+                  ; drop_cont = mk_false g_ctx
+                  }
+  | Store0 _
+  | Load0 _
+  | RMW0 _
+  | Fence0 _ ->
+      assert false
+
 let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  : bmc_ret BmcM.eff =
   match expr_ with
@@ -930,8 +1101,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       BmcM.return (bmc_pret_to_ret pres)
   | Ememop _  ->
       assert false
-  | Eaction _ ->
-      assert false
+  | Eaction paction ->
+      bmc_paction paction
   | Ecase (pe, caselist) ->
       (* TODO: code duplication from PEcase *)
       assert (List.length caselist > 0);
