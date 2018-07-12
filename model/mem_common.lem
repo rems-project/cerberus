@@ -161,6 +161,8 @@ type memop =
   
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
+  | PtrArrayShift (* address -> ctype -> integer -> eff address *)
+  
   | Memcpy
   | Memcmp
   | Realloc (* TODO: not sure about this *)
@@ -196,6 +198,8 @@ instance (Show memop)
         "memcmp"
     | Realloc ->
         "realloc"
+    | PtrArrayShift ->
+        "ptrarrayshift"
   end
 end
 

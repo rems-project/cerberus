@@ -956,7 +956,11 @@ let rec explode_bytes mval : (meta * char option) list =
     | PVnull _ -> PVconcrete offset
     | PVfunction _ -> failwith "Twin.member_shift_ptrval, PVfunction"
     | PVconcrete addr -> PVconcrete (N.add addr offset))
+  
+  let eff_array_shift_ptrval ptrval ty ival =
+    failwith "TODO(twin): eff_array_shift_ptrval"
 
+  
   let concurRead_ival ity sym = failwith "TODO: concurRead_ival"
 
   let integer_ival n = n

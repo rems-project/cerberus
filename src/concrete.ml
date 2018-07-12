@@ -892,7 +892,14 @@ module Concrete : Memory = struct
       let (mval, bs') = combine_bytes ty bs in
       begin match bs' with
         | [] ->
-            return (Footprint, mval)
+            if Switches.(has_switch SW_strict_reads) then
+              match mval with
+                | MVunspecified _ ->
+                    fail (MerrOther "load from uninitialised memory")
+                | _ ->
+                    return (Footprint, mval)
+            else
+              return (Footprint, mval)
         | _ ->
             fail (MerrWIP "load, bs' <> []")
       end in
@@ -1170,6 +1177,33 @@ module Concrete : Memory = struct
           failwith "Concrete.member_shift_ptrval, PVfunction"
       | PVconcrete addr ->
           PVconcrete (N.add addr offset))
+  
+  let eff_array_shift_ptrval ptrval ty (IV (_, ival)) =
+    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    match ptrval with
+      | PV (_, PVnull _) ->
+          (* TODO: this seems to be undefined in ISO C *)
+          (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
+          failwith "TODO(shift a null pointer should be undefined behaviour)"
+      | PV (_, PVfunction _) ->
+          failwith "Concrete.eff_array_shift_ptrval, PVfunction"
+      | PV (Prov_some alloc_id, PVconcrete addr) ->
+          (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
+          let addr' = N.add addr offset in
+          if Switches.(has_switch SW_strict_pointer_arith) then
+            get_allocation alloc_id >>= fun alloc ->
+(*            Printf.printf "addr: %s, (base: %s,  base+size: %s, |ty|: %s" (N.to_string addr); *)
+            if    N.less_equal alloc.base addr'
+               && N.less_equal (N.add addr' (N.of_int (sizeof ty)))
+                               (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+              return (PV (Prov_some alloc_id, PVconcrete addr'))
+            else
+              fail (MerrOther "out-of-bound pointer arithmetic")
+          else
+            return (PV (Prov_some alloc_id, PVconcrete addr'))
+      | PV (prov, PVconcrete addr) ->
+          (* TODO: check *)
+          return (PV (prov, PVconcrete (N.add addr offset)))
   
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"

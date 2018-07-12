@@ -584,6 +584,7 @@ let ptrcast_ival = Defacto_memory.impl_ptrcast_ival
 let intcast_ptrval = Defacto_memory.impl_intcast_ptrval
 let array_shift_ptrval = Defacto_memory.impl_array_shift_ptrval
 let member_shift_ptrval = Defacto_memory.impl_member_shift_ptrval
+let eff_array_shift_ptrval _ _ = failwith "Defacto_memory.impl_array_shift_ptrval"
 let memcpy = Defacto_memory.impl_memcpy
 let memcmp = Defacto_memory.impl_memcmp
 let realloc _ _ _ = failwith "Defacto: realloc!"
