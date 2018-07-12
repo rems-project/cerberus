@@ -43,3 +43,7 @@ ADDITIONAL DIFF MADE BY HAND
     - f
   
   has been changed from int to void.
+
+[960117-1.c]
+  the return keyword was added to the end of function:
+    - get_id

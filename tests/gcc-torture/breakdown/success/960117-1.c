@@ -28,7 +28,7 @@ typedef unsigned short WORD;
 WORD
 get_id (char c)
 {
-  curval.vals.id[0] = c;
+  return curval.vals.id[0] = c;
 }
 
 WORD 

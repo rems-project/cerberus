@@ -1832,6 +1832,17 @@ let get_core_eval_stuff =
   )
 
 
+val get_gamma_sofar: desugM A.gamma
+let get_gamma_sofar =
+  State_exception.read (fun st ->
+    (* TODO: this is putting too much in gamma (i.e. things which are not in the
+       current scope). But since we are dealing with fresh symbols, this
+       shouldn't be observable? *)
+    List.map (fun (sym, (dur, b, qs, ty)) ->
+      (sym, ((dur, b), qs, ty))
+    ) (Map_extra.toList st.internal_object_declarations)
+  )
+
 
 (* Returns what would the Ail sigma be so far *)
 (* TODO: factorise with extract_program *)
