@@ -1,0 +1,10 @@
+LIST OF SEMANTICS SWITCHES
+
+
+1. strict_pointer_arith
+      -> makes out of bound pointer arithmetic UNDEFINED
+      -> CEVEAT: currently doesn't work for ++/-- and struct member offsets
+
+2. strict_reads
+      -> makes reading from uninitialised memory UNDEFINED
+

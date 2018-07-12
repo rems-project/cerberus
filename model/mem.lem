@@ -124,6 +124,10 @@ val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> 
 declare ocaml target_rep function array_shift_ptrval = `Ocaml_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Ocaml_mem.member_shift_ptrval`
 
+(* Effectfull version of pointer shifting constructors *)
+val eff_array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> memM pointer_value
+declare ocaml target_rep function eff_array_shift_ptrval = `Ocaml_mem.eff_array_shift_ptrval`
+
 
 val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value
 val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
