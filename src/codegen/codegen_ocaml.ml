@@ -22,14 +22,14 @@ let print_tags tags =
   let print_id_pair (cid, cty) =
     P.parens (print_cabs_id cid ^^ P.comma ^^^ print_ctype cty)
   in
-  let print_tag_pairs (s, xs) =
-    P.parens (print_raw_symbol s ^^ P.comma
-              ^^^ print_list id (List.map print_id_pair xs))
-  in
   let print_tag (s, tag) =
-    match tag with
-    | Tags.StructDef xs -> print_tag_pairs (s, xs)
-    | Tags.UnionDef xs -> print_tag_pairs (s, xs)
+    P.parens (print_raw_symbol s) ^^ P.comma ^^^
+    begin match tag with
+      | Tags.StructDef xs ->
+        !^"Tags.StructDef" ^^ print_list id (List.map print_id_pair xs)
+      | Tags.UnionDef xs ->
+        !^"Tags.UnionDef" ^^ print_list id (List.map print_id_pair xs)
+    end
   in
   print_list id (List.map print_tag (Pmap.bindings_list tags))
 
@@ -49,7 +49,6 @@ let opt_passes core =
   elim_wseq core
   |> assoc_seq
   |> elim_skip
-(*  |> elim_loc *) (* TODO: K to V, you shouldn't need this anymore since I removed Eloc *)
   |> elim_let
 
 let create_globs name core =
