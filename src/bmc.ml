@@ -13,8 +13,11 @@ open Util
 
 (* TODO:
  *  - Maintain symbol table properly
+ *  - Maintain memory table properly
  *  - Kill ignored; Ebound ignored
  *  - More complex create types
+ *  - Alias analysis
+ *  - Alignment
  *)
 
 (* =========== GLOBALS =========== *)
@@ -79,6 +82,16 @@ let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
   match l with
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
+
+(* =========== Z3 HELPER FUNCTIONS =========== *)
+let int_to_z3 (i: int) : Expr.expr =
+  if g_bv then assert false
+  else Integer.mk_numeral_i g_ctx i
+
+let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
+  if g_bv then assert false
+  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
+
 
 (* =========== CUSTOM SORTS =========== *)
 let integer_sort = if g_bv then assert false
@@ -202,6 +215,9 @@ module AddressSort = struct
   let mk_expr (alloc_id: Expr.expr) (index: Expr.expr) =
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [alloc_id; index]
+
+  let mk_expr_from_addr ((alloc_id, index) : int * int) : Expr.expr =
+    mk_expr (int_to_z3 alloc_id) (int_to_z3 index)
 end
 
 module PointerSort = struct
@@ -219,6 +235,13 @@ module PointerSort = struct
   let mk_ptr (addr: Expr.expr) =
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [addr]
+
+  let get_addr (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 0) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
 end
 
 
@@ -284,14 +307,6 @@ end
 module LoadedInteger =
   LoadedSort (struct let obj_sort = integer_sort end)
 
-(* =========== Z3 HELPER FUNCTIONS =========== *)
-let int_to_z3 (i: int) : Expr.expr =
-  if g_bv then assert false
-  else Integer.mk_numeral_i g_ctx i
-
-let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
-  if g_bv then assert false
-  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
@@ -429,6 +444,9 @@ let rec pp_bmcz3sort (sort: bmcz3sort) =
       sprintf "(%s,%s)" (Expr.to_string expr) (Sort.to_string sort)
   | CaseSortList sortlist ->
       "[" ^ (String.concat "," (List.map pp_bmcz3sort sortlist)) ^ "]"
+
+let pp_addr (addr: int * int) =
+  sprintf "(%d,%d)" (fst addr) (snd addr)
 
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 let cot_to_z3 (cot: core_object_type) : Sort.sort =
@@ -579,7 +597,6 @@ module BmcM = struct
   type func_decl_table_ty = (sym_ty generic_name, FuncDecl.func_decl) Pmap.map
   type alloc_ty = int
   type addr_ty = int * int
-  type addr_type_table_ty = (addr_ty, Sort.sort) Pmap.map
   type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
 
   type bmc_state = {
@@ -598,7 +615,6 @@ module BmcM = struct
 
     (* Allocation and address supplies *)
     alloc_supply    : alloc_ty;
-    addr_type_table : addr_type_table_ty;
     memory          : memory_table_ty;
   }
 
@@ -718,9 +734,21 @@ module BmcM = struct
     return alloc
 
   (* memory *)
+  let get_memory : memory_table_ty eff =
+    get >>= fun st ->
+    return st.memory
+
   let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
     get >>= fun st ->
     put {st with memory = Pmap.add addr expr st.memory}
+
+  let lookup_memory (addr: addr_ty) : Expr.expr eff =
+    get_memory >>= fun memory ->
+    return (Pmap.find addr memory)
+
+  let get_all_addresses : (addr_ty list) eff =
+    get >>= fun st ->
+    return (List.map fst (Pmap.bindings_list st.memory))
 
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
@@ -736,7 +764,6 @@ module BmcM = struct
     ; func_decl_table = Pmap.empty name_cmp
 
     ; alloc_supply    = 0
-    ; addr_type_table = Pmap.empty Pervasives.compare
     ; memory          = Pmap.empty Pervasives.compare
     }
 
@@ -1087,7 +1114,80 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
                   ; vcs       = res_pe.vcs
                   ; drop_cont = mk_false g_ctx
                   }
-  | Store0 _
+  | Store0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
+            to_store, memorder) ->
+      (* TODO: do alias analysis *)
+      (* TODO: check alignment *)
+      BmcM.lookup_sym sym         >>= fun sym_expr ->
+      bmc_pexpr to_store          >>= fun res_to_store ->
+      BmcM.get_memory             >>= fun possible_addresses ->
+      (* BmcM.get_address_type_table >>= fun possible_addresses -> *)
+
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty) in
+      let (ctype_expr, sort) = List.hd flat_sortlist in
+      assert (List.length flat_sortlist = 1);
+
+      BmcM.mapM (fun (addr, expr_in_memory) ->
+        let addr_sort = Expr.get_sort expr_in_memory in
+        if (Sort.equal sort addr_sort) then
+          begin
+          (*BmcM.lookup_memory addr >>= fun expr_in_memory -> *)
+          let addr_expr = AddressSort.mk_expr_from_addr addr  in
+          let new_seq_var =
+            Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) addr_sort in
+          (* new_seq_var is equal to to_store if addr_eq, else old value *)
+          let addr_eq =
+            mk_eq g_ctx (PointerSort.get_addr sym_expr) addr_expr in
+          let new_val = mk_eq g_ctx new_seq_var res_to_store.expr in
+          let old_val = mk_eq g_ctx new_seq_var expr_in_memory in
+          BmcM.update_memory addr new_seq_var >>= fun () ->
+          BmcM.return (Some (addr_expr, mk_ite g_ctx addr_eq new_val old_val))
+          end
+        else
+          BmcM.return None
+        ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
+
+      let filtered =
+        List.map Option.get (List.filter is_some update_list) in
+      assert (List.length filtered > 0);
+
+      BmcM.return { expr      = UnitSort.mk_unit
+                  ; assume    = List.map snd filtered @ res_to_store.assume
+                  ; vcs       = res_to_store.vcs
+                  ; drop_cont = mk_false g_ctx
+                  }
+  | Store0 _ ->
+      assert false
+  | Load0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), memorder) ->
+      BmcM.lookup_sym sym         >>= fun sym_expr ->
+      assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty) in
+      let (ctype_expr, sort) = List.hd flat_sortlist in
+      assert (List.length flat_sortlist = 1);
+
+      let ret_expr =
+        Expr.mk_fresh_const g_ctx ("load_" ^ (symbol_to_string sym)) sort in
+
+      BmcM.get_memory             >>= fun possible_addresses ->
+      (* sym_addr = addr => ret_expr = mem[addr] *)
+      BmcM.mapM (fun (addr, expr_in_memory) ->
+        let addr_sort = Expr.get_sort expr_in_memory in
+        if (Sort.equal sort addr_sort) then
+          let addr_expr = AddressSort.mk_expr_from_addr addr in
+          let addr_eq = mk_eq g_ctx addr_expr (PointerSort.get_addr sym_expr) in
+          let impl_expr =
+            mk_implies g_ctx addr_eq (mk_eq g_ctx ret_expr expr_in_memory) in
+          BmcM.return (Some (impl_expr, addr_eq))
+        else
+          BmcM.return None
+      ) (Pmap.bindings_list possible_addresses) >>= fun retlist ->
+      let filtered = List.map Option.get (List.filter is_some retlist) in
+
+      BmcM.return { expr      = ret_expr
+                  ; assume    = List.map fst filtered
+                  ; vcs       = [mk_or g_ctx (List.map snd filtered)]
+                  ; drop_cont = mk_false g_ctx
+                  }
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
@@ -1139,14 +1239,13 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
             last_case_expr
             (List.tl rev_case_guards)
             (List.tl rev_list) in
+      let assume = res_pe.assume @ guarded_let_bindings @ case_assumes in
       let drop_cont =
         mk_or g_ctx (List.map2 (fun guard (_, res) ->
                                     mk_and g_ctx [guard; res.drop_cont])
                                case_guards binding_res_list) in
       BmcM.return { expr      = ite_expr
-                  ; assume    =  res_pe.assume
-                               @ guarded_let_bindings
-                               @ case_assumes
+                  ; assume    = assume
                   ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
                   ; drop_cont = drop_cont
                   }
@@ -1326,7 +1425,6 @@ let bmc_file (file              : unit typed_file)
     g_solver
     (Expr.simplify (mk_not g_ctx (mk_and g_ctx result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
-
   (*
   print_endline "====FINAL SOLVER";
   print_endline (Solver.to_string g_solver);
@@ -1339,7 +1437,11 @@ let bmc_file (file              : unit typed_file)
   | UNSATISFIABLE ->
       print_endline "STATUS: unsatisfiable :)"
   | SATISFIABLE ->
-      print_endline "STATUS: satisfiable"
+      begin
+      print_endline "STATUS: satisfiable";
+      let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model)
+      end
 
 (* Main bmc function: typechecks and sequentialises file.
  * The symbol supply is used to ensure fresh symbols when renaming.

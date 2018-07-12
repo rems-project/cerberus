@@ -60,6 +60,11 @@ let range i j =
     if n < i then acc else aux (n-1) (n :: acc)
   in aux (j-1) [] ;;
 
+let is_some (opt: 'a option) =
+  match opt with
+  | Some _ -> true
+  | _ -> assert false
+
 (* ========== Debug ========== *)
 let debug_print level str =
   Debug_ocaml.print_debug level [] (fun () -> str)
