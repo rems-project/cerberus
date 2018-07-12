@@ -837,6 +837,33 @@ module Concrete : Memory = struct
             dynamic_addrs= addr :: st.dynamic_addrs })
     )
   
+  (* zap (make unspecified) any pointer in the memory with provenance matching a
+     given allocation id *)
+  let zap_pointers alloc_id =
+    modify (fun st ->
+      let bytemap' = IntMap.fold (fun alloc_id alloc acc ->
+        let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
+        match alloc.ty with
+          | None ->
+              (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
+              acc
+          | Some ty ->
+              begin match combine_bytes ty bs with
+                | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
+                    let bs' = List.init (N.to_int alloc.size) (fun i ->
+                      (Nat_big_num.add alloc.base (Nat_big_num.of_int i), (Prov_none, None))
+                    ) in
+                    List.fold_left (fun acc (addr, b) ->
+                      IntMap.add addr b acc
+                    ) acc bs'
+                | _ ->
+                    (* TODO: check *)
+                    acc
+              end
+      ) st.allocations st.bytemap in
+    ((), { st with bytemap= bytemap' })
+    )
+  
   let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
         if Switches.(has_switch SW_forbid_nullptr_free) then
@@ -877,7 +904,11 @@ module Concrete : Memory = struct
                 update begin fun st ->
                   {st with dead_allocations= alloc_id :: st.dead_allocations;
                            allocations= IntMap.remove alloc_id st.allocations}
-                end
+                end >>= fun () ->
+                if Switches.(has_switch SW_zap_dead_pointers) then
+                  zap_pointers alloc_id
+                else
+                  return ()
               end else
                 fail (MerrUndefinedFree (loc, Free_out_of_bound))
         end
@@ -920,6 +951,12 @@ module Concrete : Memory = struct
                 do_load addr
           end
       | (Prov_some alloc_id, PVconcrete addr) ->
+          is_dead alloc_id >>= begin function
+            | true ->
+                fail (MerrAccess (loc, LoadAccess, DeadPtr))
+            | false ->
+                return ()
+          end >>= fun () ->
           begin is_within_bound alloc_id ty addr >>= function
             | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->

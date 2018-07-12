@@ -10,3 +10,5 @@ LIST OF SEMANTICS SWITCHES
 
 3. forbid_nullptr_free
       -> makes it an error to free() a null pointer (which is otherwise defined by ISO)
+
+4. zap_dead_pointers
