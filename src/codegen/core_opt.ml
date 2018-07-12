@@ -36,24 +36,10 @@ let rec elim_skip = function
   | Expr (_, Esseq (_, e, Expr (_, Eskip))) -> elim_skip e
   | e -> core_expr_map elim_skip e
 
-(* TODO: K to V: you shouldn't need this anymore since I removed Eloc
-(* Eliminates loc expressions. *)
-let rec elim_loc = function
-  | Expr (_, Eloc (_, e)) -> elim_loc e
-  | e -> core_expr_map elim_loc e
-*)
-
 (* Eliminates let expressions. *)
 let rec elim_let = function
   | Expr (annot, Elet (p, pe, e)) -> Expr (annot, Esseq (p, Expr ([], Epure pe), e))
   | e -> core_expr_map elim_let e
-
-(* TODO: K to V: you shouldn't need this anymore since I removed Estd
-(* Eliminates std expressions. *)
-let rec elim_let = function
-  | Expr (_, Estd (s, e)) -> elim_loc e
-  | e -> core_expr_map elim_let e
-*)
 
 let runf opt = function
   | Proc (loc, bty, param, e) -> Proc (loc, bty, param, opt e)
