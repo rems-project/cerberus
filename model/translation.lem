@@ -1,7 +1,7 @@
 (* TODO: for now everything is mapped to nonatomics. The translation to atomics
          still needs to be defined *)
 
-open import Pervasives Utils Loc String_extra Num
+open import Pervasives Utils Global Loc String_extra Num
 
 import State Translation_effect Loc
 open import Translation_aux
@@ -1401,21 +1401,25 @@ else
             let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
             let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
             let integer_obj_sym_pe = Caux.mk_sym_pe integer_obj_sym in
+            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (res_sym, res_sym_pat, res_sym_pe) ->
             E.return $
               C.Expr [C.Astd "§6.5.6"] (
                 C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
                                            ; Caux.mk_sym_pat integer_sym (C.BTy_loaded C.OTy_integer) ]) (Caux.mk_unseq [ptr_core_e; integer_core_e]) (
-                  Caux.mk_pure_e (
-                    Caux.mk_case_pe (Caux.mk_tuple_pe [ptr_sym_pe; integer_sym_pe])
-                      [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
-                                            ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ]
-                        , (* Both operand are specified *)
-                          Caux.mk_specified_pe (
-                            Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) integer_obj_sym_pe
-                          ) )
-                      ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
-                        , Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)") ) ]
-                  )
+                  Caux.mk_case_e (Caux.mk_tuple_pe [ptr_sym_pe; integer_sym_pe])
+                    [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
+                                          ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ]
+                      , (* Both operand are specified *)
+if Global.has_switch Global.SW_strict_pointer_arith then
+                        Caux.mk_wseq_e res_sym_pat
+                          (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_sym_pe]))
+                          (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
+else
+                        Caux.mk_pure_e $ Caux.mk_specified_pe (
+                          Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) integer_obj_sym_pe
+                        ) )
+                    ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
+                      , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)")) ) ]
                 )
               )
       
@@ -2166,7 +2170,7 @@ TODO: #9
                                   C.BTy_tuple (List.replicate (List.length arg_ptr_syms) C.BTy_unit) in
                               Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
                                 (* killing of the temporary objects *)
-                                (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                                (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
                                 (* forwarding the value of call *)
                                 (Caux.mk_pure_e call_sym_pe)
                             end
@@ -2878,7 +2882,7 @@ let translation_mk_run_e loc sym visibles_before visibles_after pes =
   let mk_kills_e =
     Caux.mk_unit_sseq (
       List.map (fun sym ->
-        Caux.pkill loc (Caux.mk_sym_pe sym)
+        Caux.pkill loc false (Caux.mk_sym_pe sym)
       ) killed_syms
     ) in
   
@@ -2974,7 +2978,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
              (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
-            ) (Caux.pkill loc (Caux.mk_sym_pe sym)) core_ss
+            ) (Caux.pkill loc false (Caux.mk_sym_pe sym)) core_ss
           )
     
     | A.AilSblock binds ss ->
@@ -2991,7 +2995,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                    For non-void function however we know (?) that the must be these returns ?? so we could drop the kills here *)
           (* the kill actions for the local variables *)
           let core_kills : list (C.expr unit) =
-            List.map (Caux.pkill loc -| (Caux.mk_sym_pe) -| fst) decls in
+            List.map (Caux.pkill loc false -| (Caux.mk_sym_pe) -| fst) decls in
           E.mapM self ss >>= fun core_ss ->
         
         E.return (
@@ -3109,7 +3113,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
               else
                 C.BTy_tuple (List.replicate (List.length visible_syms) C.BTy_unit) in
             Caux.mk_sseq_e (Caux.mk_empty_pat bTy)
-              (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc (Caux.mk_sym_pe sym)) visible_syms)
+              (Caux.mk_unseq $ List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) visible_syms)
               (* TODO: check the symbols *)
               (Caux.mk_run_e env.return_lab [Caux.mk_unit_pe])
         end
@@ -3239,7 +3243,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         (* This pass translate the declarations *)
         E.mapM (fun (ptr_sym, e) ->
           E.resolve_object_type ptr_sym >>= fun ty ->
-          let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype ty)) in
+          let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
           E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
             | Aty.Pointer _ ref_ty ->

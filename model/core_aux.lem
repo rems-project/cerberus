@@ -462,8 +462,8 @@ let pcreate_readonly loc al ty init pref =
   Expr [] (Eaction (Paction Pos (Action loc default (CreateReadOnly  al ty init pref))))
 let palloc loc al e pref =
   Expr [] (Eaction (Paction Pos (Action loc default (Alloc al e pref))))
-let pkill loc x =
-  Expr [] (Eaction (Paction Pos (Action loc default (Kill x))))
+let pkill loc is_dynamic x =
+  Expr [] (Eaction (Paction Pos (Action loc default (Kill is_dynamic x))))
 let pstore loc ty x n mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Store ty x n mo))))
 let pload loc ty x mo =
@@ -954,8 +954,8 @@ and subst_sym_action_ sym cval = function
       CreateReadOnly (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) (subst_sym_pexpr sym cval pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
-  | Kill pe ->
-      Kill (subst_sym_pexpr sym cval pe)
+  | Kill b pe ->
+      Kill b (subst_sym_pexpr sym cval pe)
   | Store pe1 pe2 pe3 mo ->
       Store (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
         (subst_sym_pexpr sym cval pe3) mo
@@ -1194,8 +1194,8 @@ and unsafe_subst_sym_action_ a pe' = function
       CreateReadOnly (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
-  | Kill pe ->
-      Kill (unsafe_subst_sym_pexpr a pe' pe)
+  | Kill b pe ->
+      Kill b (unsafe_subst_sym_pexpr a pe' pe)
   | Store pe1 pe2 pe3 mo ->
       Store (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
         (unsafe_subst_sym_pexpr a pe' pe3) mo

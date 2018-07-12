@@ -64,7 +64,7 @@ val allocate_dynamic:
   -> integer_value      (* size *)
   -> memM pointer_value
 
-val kill: pointer_value -> memM unit
+val kill: Loc.t -> bool -> pointer_value -> memM unit
 val load: Loc.t -> Core_ctype.ctype -> pointer_value -> memM (footprint * mem_value)
 val store: Loc.t -> Core_ctype.ctype -> pointer_value -> mem_value -> memM footprint
 
@@ -123,6 +123,10 @@ val array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> p
 val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
 declare ocaml target_rep function array_shift_ptrval = `Ocaml_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Ocaml_mem.member_shift_ptrval`
+
+(* Effectfull version of pointer shifting constructors *)
+val eff_array_shift_ptrval:  pointer_value -> Core_ctype.ctype -> integer_value -> memM pointer_value
+declare ocaml target_rep function eff_array_shift_ptrval = `Ocaml_mem.eff_array_shift_ptrval`
 
 
 val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value

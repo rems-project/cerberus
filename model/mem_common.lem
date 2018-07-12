@@ -32,6 +32,20 @@ let stringFromAccess_error = function
       "NoProvPtr"
 end
 
+type free_error =
+  | Free_static_allocation
+  | Free_dead_allocation
+  | Free_out_of_bound
+
+let stringFromFree_error = function
+  | Free_static_allocation ->
+      "Free_static_allocation"
+  | Free_dead_allocation ->
+      "Free_dead_allocation"
+  | Free_out_of_bound ->
+      "Free_out_of_bound"
+end
+
 type mem_error =
   | MerrOutsideLifetime of string (* mem_read_request *)
   | MerrInternal of string
@@ -41,7 +55,7 @@ type mem_error =
   | MerrAccess of Loc.t * access_kind * access_error
   | MerrWriteOnReadOnly of Loc.t
   
-  | MerrUndefinedFree
+  | MerrUndefinedFree of Loc.t * free_error
   | MerrUndefinedRealloc
   
   | MerrIntFromPtr
@@ -68,8 +82,9 @@ instance (Show mem_error)
     | MerrAccess loc StoreAccess err ->
         "MerrAccess Store [" ^ Loc.stringFromLocation loc ^ "] " ^
         stringFromAccess_error err
-    | MerrUndefinedFree ->
-        "MerrUndefinedFree"
+    
+    | MerrUndefinedFree loc err ->
+        "MerrUndefinedFree [" ^ Loc.stringFromLocation loc ^ "] " ^ stringFromFree_error err
     | MerrUndefinedRealloc ->
         "MerrUndefinedRealloc"
     | MerrIntFromPtr ->
@@ -89,10 +104,15 @@ let undefinedFromMem_error = function
       Just [Undefined.UB010_pointer_to_dead_object]
   | MerrIntFromPtr ->
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
-  | MerrUndefinedFree ->
-      Just [Undefined.UB179]
+  | MerrUndefinedFree loc Free_static_allocation ->
+      Just [Undefined.UB179a_static_allocation]
+  | MerrUndefinedFree loc Free_dead_allocation ->
+      Just [Undefined.UB179b_dead_allocation]
+  | MerrUndefinedFree loc Free_out_of_bound ->
+      Nothing (* TODO *)
   | MerrUndefinedRealloc ->
-      Just [Undefined.UB179]
+      (* TODO *)
+      Just [Undefined.UB179a_static_allocation]
   | MerrWriteOnReadOnly _ ->
       (* TODO *)
       Nothing
@@ -141,6 +161,8 @@ type memop =
   
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   
+  | PtrArrayShift (* address -> ctype -> integer -> eff address *)
+  
   | Memcpy
   | Memcmp
   | Realloc (* TODO: not sure about this *)
@@ -176,6 +198,8 @@ instance (Show memop)
         "memcmp"
     | Realloc ->
         "realloc"
+    | PtrArrayShift ->
+        "ptrarrayshift"
   end
 end
 

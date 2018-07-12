@@ -108,6 +108,7 @@ type token =
   | CREATE
   | CREATE_READONLY
   | ALLOC
+  | FREE
   | KILL
   | STORE
   | LOAD
