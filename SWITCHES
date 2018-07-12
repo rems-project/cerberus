@@ -8,3 +8,5 @@ LIST OF SEMANTICS SWITCHES
 2. strict_reads
       -> makes reading from uninitialised memory UNDEFINED
 
+3. forbid_nullptr_free
+      -> makes it an error to free() a null pointer (which is otherwise defined by ISO)

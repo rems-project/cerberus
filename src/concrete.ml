@@ -839,8 +839,10 @@ module Concrete : Memory = struct
   
   let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
-        return ()
-(*          fail (MerrOther "attempted to kill with a null pointer") *)
+        if Switches.(has_switch SW_forbid_nullptr_free) then
+          fail (MerrOther "attempted to kill with a null pointer")
+        else
+          return ()
     | PV (_, PVfunction _) ->
           fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->

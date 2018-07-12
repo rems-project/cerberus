@@ -3,6 +3,8 @@ type cerb_switch =
   | SW_strict_pointer_arith
     (* makes reading from uinitialised memory, Undefined *)
   | SW_strict_reads
+    (* makes it an error to free a NULL pointer (stricter than ISO) *)
+  | SW_forbid_nullptr_free
 
 
 
