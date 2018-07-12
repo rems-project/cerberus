@@ -641,8 +641,8 @@ and pp_action act =
         pp_keyword "create_readonly" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty ^^ P.comma ^^^ pp_pexpr init)
     | Alloc0 (al, n, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
-    | Kill e ->
-        pp_keyword "kill" ^^ P.parens (pp_pexpr e)
+    | Kill (b, e) ->
+        pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_pexpr e)
     | Store0 (ty, e1, e2, mo) ->
        pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->

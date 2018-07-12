@@ -662,7 +662,7 @@ let rec explode_bytes mval : (meta * char option) list =
   let realloc _ _ _ =
     failwith "twin: realloc"
 
-  let kill p : unit memM =
+  let kill loc is_dyn p : unit memM =
     let do_kill id =
       Debug_ocaml.print_debug 1 [] (fun () ->
         "KILLING alloc_id= " ^ N.to_string id 
@@ -956,7 +956,11 @@ let rec explode_bytes mval : (meta * char option) list =
     | PVnull _ -> PVconcrete offset
     | PVfunction _ -> failwith "Twin.member_shift_ptrval, PVfunction"
     | PVconcrete addr -> PVconcrete (N.add addr offset))
+  
+  let eff_array_shift_ptrval ptrval ty ival =
+    failwith "TODO(twin): eff_array_shift_ptrval"
 
+  
   let concurRead_ival ity sym = failwith "TODO: concurRead_ival"
 
   let integer_ival n = n

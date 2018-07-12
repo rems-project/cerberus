@@ -56,7 +56,7 @@ module type Memory = sig
     -> integer_value     (* size *)
     -> pointer_value memM
   
-  val kill: pointer_value -> unit memM
+  val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
   
   val load: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> (footprint * mem_value) memM
   val store: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> mem_value -> footprint memM
@@ -94,6 +94,8 @@ module type Memory = sig
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
+  
+  val eff_array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value memM
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM

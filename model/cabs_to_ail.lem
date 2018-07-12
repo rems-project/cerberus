@@ -141,7 +141,21 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
             error "elemPathFromCtype_aux3, Struct"
       end
   | ATypes.Union tag_sym ->
-      error "elemPathFromCtype_aux3, Union"
+      (* TODO: check *)
+      match Map.lookup tag_sym tagDefs with
+        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
+              )
+            else () in
+            (wip tagDefs acc
+               (Elem_member first_memb_ident :: path_prefix)
+               (outer_path, outer_ty) 
+               first_memb_ty)
+        | _ ->
+            error "elemPathFromCtype_aux3, Union"
+      end
   | ATypes.Builtin _ ->
       (* TODO? *)
       error "elemPathFromCtype_aux3, Builtin"
@@ -169,7 +183,18 @@ let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
                     error "elemPathFromCtype3, Struct"
               end
           | ATypes.Union tag_sym ->
-              error "elemPathFromCtype3, Union"
+              (* TODO: check *)
+              match Map.lookup tag_sym tagDefs with
+                | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                    let () = if isAnonymous then
+                      Debug.print_debug 1 [] (fun () ->
+                        "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
+                      )
+                    else () in
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
+                | _ ->
+                    error "elemPathFromCtype3, Union"
+              end
           | _ ->
               ([], entity_ty)
         end in
@@ -459,20 +484,34 @@ let rec constructValue_aux tagDefs path elems = function
         | Just (Struct_definition isAnonymous xs) ->
             let () = if isAnonymous then
               Debug.print_debug 1 [] (fun () ->
-                "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
+                "constructValue_aux: this may be WRONG ==> anonymous Struct"
               )
             else () in
             let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
               (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
             ) xs in
-            AnnotatedExpression () [] Loc.unknown begin
+            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
               AilEstruct tag_sym membrs
             end
         | _ ->
             error "constructValue_aux, Struct"
       end
   | ATypes.Union tag_sym ->
-      error "TODO: Struct"
+      match Map.lookup tag_sym tagDefs with
+        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs')) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "constructValue_aux: this may be WRONG ==> anonymous Union"
+              )
+            else () in
+            (* TODO: this is only correct if the first member was the one initialised *)
+            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
+              AilEunion tag_sym first_memb_ident
+                (Just (constructValue_aux tagDefs (path ++ [Elem_member first_memb_ident]) elems first_memb_ty))
+            end
+        | _ ->
+            error "constructValue_aux, Union"
+      end
   | ATypes.Atomic atom_ty ->
       error "TODO: Atomic"
   | ty ->
@@ -768,7 +807,10 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
         is_lvalue_to_static_object e2        >>= fun b21 ->
         is_arithmetic_constant_expression false (* TODO check *) e2 >>= fun b22 ->
         E.return (b11 && b22 || b12 && b21)
-    | AilEmemberofptr e memb_ident ->
+    | AilEmemberof e _ ->
+        (* TODO: not sure *)
+        is_lvalue_to_static_object e
+    | AilEmemberofptr e _ ->
         (* TODO: not sure *)
         is_lvalue_to_static_object e
     | AilEcast _ ty e ->
@@ -797,6 +839,14 @@ let is_address_constant a_expr =
     E.return true
   
   else match a_expr with
+    | AnnotatedExpression () _ _ (AilEident sym) ->
+        E.fetch_object_declaration sym >>= fun (_, dur, _, _, ty) ->
+        match dur with
+          | ATypes.Static ->
+              E.return (AilTypesAux.is_array ty)
+          | _ ->
+              E.return false
+        end
     | AnnotatedExpression () _ _ (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
     | AnnotatedExpression () _ _ (AilEcast _ Pointer expr) ->
@@ -2656,7 +2706,7 @@ and foo_aux
         pathFromDesigs desigs >>= fun cursor_path ->
         match skipTo cursor_path elems with
           | Nothing ->
-              error "foo_aux, TODO: Just desigs ==> backward"
+              error "foo_aux, TODO: Just desigs ==> backward (or union desig)"
           | Just (elems', skipped_elems) ->
               (* TODO: hackish *)
               E.get_tag_definitions >>= fun tagDefs ->
@@ -2772,22 +2822,51 @@ and foo_aux
 *)
 
                 | Init_expr e ->
-(*
                     desugar_expression e >>= fun d_e ->
                     E.get_sigma_sofar >>= fun sigm ->
-                    match WipFrontend.typecheckAil sigm d_e with
+                    E.get_gamma_sofar >>= fun gamm ->
+                    match WipFrontend.typecheckAil sigm gamm d_e with
                       | Left (loc, err) ->
                           error ("WIP: foo_aux, Init_expr Ail type error ==> " ^ Loc.stringFromLocation loc)
                       | Right ty ->
                           if AilTypesAux.is_struct ty then
-                            error "TODO: foo_aux, Init_expr ==> struct"
+                            if ty = outer_ty then
+                              let tag_sym = match AilTypesAux.unatomic ty with
+                                | ATypes.Struct tag_sym ->
+                                    tag_sym
+                                | _ ->
+                                    error "INTERNAL ERROR(foo_aux): Init_expr, is_struct -> not Struct"
+                              end in
+                              E.get_tag_definitions >>= fun tagDefs ->
+                              match Map.lookup tag_sym tagDefs with
+                                | Just (Struct_definition isAnonymous membrs) ->
+                                    let () = if isAnonymous then
+                                      Debug.print_debug 1 [] (fun () ->
+                                        "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"
+                                      )
+                                    else () in
+                                    let (elems1, elems2) = List.splitAt (List.length membrs) elems in
+                                    let () = Debug.print_debug 0 [] (fun () ->
+                                      stringFromList (fun (a,b,c) ->
+                                        stringFromInit_path a ^ ", " ^ stringFromInit_path b
+                                      ) elems1
+                                    ) in
+                                    let acc' = List.foldl (fun acc ((path, _, _), (memb_ident, _)) ->
+                                      (path, AnnotatedExpression () []
+                                               (Loc.other "init with struct expr") (AilEmemberof d_e memb_ident)) :: acc
+                                    ) acc (List.zip elems1 membrs) in
+                                    foo_aux acc' elems2 unknown_array xs'
+                                | _ ->
+                                    error "INTERNAL ERROR(foo_aux): Init_expr, is_struct"
+                                end
+                            else
+                              error "TODO: foo_aux, Init_expr ==> struct (not compatible)"
                           else if AilTypesAux.is_union ty then
-                            error "TODO: foo_aux, Init_expr ==> struct"
+                            error "TODO: foo_aux, Init_expr ==> union"
                           else
                             do_scalar e
                     end
-*)
-                    do_scalar e
+(*                    do_scalar e *)
                 | Init_list ys ->
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in

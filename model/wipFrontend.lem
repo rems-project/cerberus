@@ -186,9 +186,9 @@ let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt 
   end
 
 
-val typecheckAil: A.sigma unit -> A.expression unit -> either (Loc.t * TypingError.typing_error) AilTypes.ctype
-let typecheckAil sigm expr =
-  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother expr) with
+val typecheckAil: A.sigma unit -> A.gamma -> A.expression unit -> either (Loc.t * TypingError.typing_error) AilTypes.ctype
+let typecheckAil sigm gamm expr =
+  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm (*TODO: check*)GenTyping.CTXother expr) with
     | Left z ->
         Left z
     | Right a_expr ->

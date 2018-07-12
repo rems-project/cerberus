@@ -1128,9 +1128,9 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
         E.return (BTy_object OTy_pointer, Alloc tpe1 tpe2 pref)
-    | Kill pe ->
+    | Kill b pe ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
-        E.return (BTy_unit, Kill tpe)
+        E.return (BTy_unit, Kill b tpe)
     | Store pe1 pe2 pe3 mo ->
         match pe1 with
           | Pexpr [] () (PEval (Vctype ty)) ->
@@ -1197,10 +1197,10 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_integer) pe2 >>= fun tpe2 ->
       E.return (Alloc tpe1 tpe2 pref)
-  | Kill pe ->
+  | Kill b pe ->
       guard_match loc "kill()" bTy BTy_unit >>
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
-      E.return (Kill tpe)
+      E.return (Kill b tpe)
   | Store pe1 pe2 pe3 mo ->
       guard_match loc "store()" bTy BTy_unit >>
       match pe1 with
@@ -1271,6 +1271,8 @@ let memop_signature = function
       (BTy_object OTy_integer, [BTy_object OTy_pointer; BTy_object OTy_pointer; BTy_object OTy_integer])
   | Mem_common.Realloc ->
       (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_object OTy_pointer; BTy_object OTy_integer])
+  | Mem_common.PtrArrayShift ->
+      (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_ctype; BTy_object OTy_integer])
 end
 
 

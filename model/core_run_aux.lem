@@ -415,8 +415,8 @@ and convert_action_ act_ =
         CreateReadOnly (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
-    | Kill pe ->
-        Kill (convert_pexpr pe)
+    | Kill b pe ->
+        Kill b (convert_pexpr pe)
     | Store pe1 pe2 pe3 mo ->
         Store (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
     | Load pe1 pe2 mo ->
