@@ -928,7 +928,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
   | Epure pe ->
       bmc_pexpr pe >>= fun pres ->
       BmcM.return (bmc_pret_to_ret pres)
-  | Ememop _
+  | Ememop _  ->
+      assert false
   | Eaction _ ->
       assert false
   | Ecase (pe, caselist) ->
@@ -1029,8 +1030,12 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                   | None -> 0
                   | Some i -> i in
       if depth >= g_max_run_depth then
-        assert false (* TODO: treat as PError *)
-
+        (* TODO: flag as special vc? *)
+        BmcM.return { expr      = UnitSort.mk_unit
+                    ; assume    = []
+                    ; vcs       = [mk_false g_ctx]
+                    ; drop_cont = mk_true g_ctx
+                    }
       else begin
         BmcM.get_proc_expr >>= fun proc_expr ->
         let (cont_syms, cont_expr) = Option.get (find_labeled_continuation
@@ -1046,7 +1051,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         bmc_expr cont_to_check >>= fun run_res ->
 
         BmcM.update_run_depth_table run_depth_table >>= fun () ->
-        BmcM.return { expr      = run_res.expr
+        (* TODO: save run value *)
+        BmcM.return { expr      = UnitSort.mk_unit
                     ; assume    = run_res.assume
                     ; vcs       = run_res.vcs
                     ; drop_cont = mk_true g_ctx
