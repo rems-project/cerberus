@@ -1,9 +1,10 @@
 type cerb_switch =
-    (* makes the creation of out-of-bound pointer values, Undefined *)
+    (* makes the creation of out-of-bound pointer values, Undefined (ISO) *)
   | SW_strict_pointer_arith
-    (* makes reading from uinitialised memory, Undefined *)
+    (* makes reading from uinitialised memory, Undefined (ISO) *)
   | SW_strict_reads
-
+    (* makes it an error to free a NULL pointer (stricter than ISO) *)
+  | SW_forbid_nullptr_free
 
 
 let internal_ref =
@@ -26,6 +27,8 @@ let set strs =
         Some SW_strict_pointer_arith
     | "strict_reads" ->
         Some SW_strict_reads
+    | "forbid_nullptr_free" ->
+        Some SW_forbid_nullptr_free
     | _ ->
         None in
   List.iter (fun str ->

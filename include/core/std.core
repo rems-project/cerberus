@@ -348,11 +348,13 @@ proc [ailname = "free"] free_proxy (p_ptr: pointer) : eff unit :=
   let strong _p: loaded pointer = load(!(void *), p_ptr) in
   case _p of
     | Specified(p: pointer) =>
+{-
         let weak is_null: boolean = memop(PtrEq, p, NULL(void*)) in
         if is_null then
           skip
         else
           -- TODO: this is wrong, p was not allocated with alloc(), this should be UB
+-}
           free(p)
     | _: loaded pointer =>
         pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
