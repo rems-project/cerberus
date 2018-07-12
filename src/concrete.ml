@@ -174,9 +174,7 @@ and alignof = function
         | None ->
             failwith "the concrete memory model requires a complete implementation alignof FLOATING"
       end
-  | Array0 (_, None) ->
-      assert false
-  | Array0 (elem_ty, Some n) ->
+  | Array0 (elem_ty, _) ->
       alignof elem_ty
   | Function0 _ ->
       assert false
