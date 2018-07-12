@@ -4,7 +4,7 @@ SUCCESS=$(git ls-files success/*.c | wc -l)
 LIMBUS=$(git ls-files limbus/*.c | wc -l)
 FAILURE=$(git ls-files fail | grep -E '.c$' | wc -l)
 NOTSTD=$(git ls-files not_std_compliant | grep -E '.c$' | wc -l)
-UNSUPP=$(git ls-files not_supported | grep -E '.c' | wc -l)
+UNSUPP=$(git ls-files not_supported | grep -E '.c$' | wc -l)
 INVALID=$(git ls-files invalid/*.c | wc -l)
 UNDEFINED=$(git ls-files undefined/*.c | wc -l)
 
