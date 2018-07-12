@@ -3243,7 +3243,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         (* This pass translate the declarations *)
         E.mapM (fun (ptr_sym, e) ->
           E.resolve_object_type ptr_sym >>= fun ty ->
-          let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype ty)) in
+          let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
           E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
             | Aty.Pointer _ ref_ty ->

@@ -5,6 +5,7 @@ type cerb_switch =
   | SW_strict_reads
     (* makes it an error to free a NULL pointer (stricter than ISO) *)
   | SW_forbid_nullptr_free
+  | SW_zap_dead_pointers
 
 
 let internal_ref =
@@ -29,6 +30,8 @@ let set strs =
         Some SW_strict_reads
     | "forbid_nullptr_free" ->
         Some SW_forbid_nullptr_free
+    | "zap_dead_pointers" ->
+        Some SW_zap_dead_pointers
     | _ ->
         None in
   List.iter (fun str ->

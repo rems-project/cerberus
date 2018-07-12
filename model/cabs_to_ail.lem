@@ -768,7 +768,10 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
         is_lvalue_to_static_object e2        >>= fun b21 ->
         is_arithmetic_constant_expression false (* TODO check *) e2 >>= fun b22 ->
         E.return (b11 && b22 || b12 && b21)
-    | AilEmemberofptr e memb_ident ->
+    | AilEmemberof e _ ->
+        (* TODO: not sure *)
+        is_lvalue_to_static_object e
+    | AilEmemberofptr e _ ->
         (* TODO: not sure *)
         is_lvalue_to_static_object e
     | AilEcast _ ty e ->
@@ -797,6 +800,14 @@ let is_address_constant a_expr =
     E.return true
   
   else match a_expr with
+    | AnnotatedExpression () _ _ (AilEident sym) ->
+        E.fetch_object_declaration sym >>= fun (_, dur, _, _, ty) ->
+        match dur with
+          | ATypes.Static ->
+              E.return (AilTypesAux.is_array ty)
+          | _ ->
+              E.return false
+        end
     | AnnotatedExpression () _ _ (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
     | AnnotatedExpression () _ _ (AilEcast _ Pointer expr) ->
