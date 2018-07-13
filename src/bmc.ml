@@ -21,6 +21,9 @@ open Util
  *  - PtrValidForDeref
  *  - Return values
  *  - Procedure calls
+ *  - Globals
+ *  - Concurrency
+ *  - See if guarding assumptions will reduce solver time
  *)
 
 (* =========== GLOBALS =========== *)
@@ -37,7 +40,7 @@ let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 (* true => use bit vector representation *)
 let g_bv = false
 
-let g_max_run_depth = 2
+let g_max_run_depth = 10
 
 (* =========== TYPES =========== *)
 (* Pure return *)
@@ -420,26 +423,43 @@ module ImplFunctions = struct
   let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
     Core_ctype.Basic0 (Integer ity)
 
-  (* ---- FuncDecls ---- *)
-  let ivmin = mk_fresh_func_decl
-                  g_ctx "ivmin" [CtypeSort.mk_sort] (integer_sort)
+  (* ---- Constants ---- *)
+  (* TODO: massive code duplication *)
+  let ivmin_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+    List.fold_left (fun acc ity ->
+      let ctype = ity_to_ctype ity in
+      let ctype_expr = CtypeSort.mk_expr ctype in
+      let expr = Expr.mk_fresh_const g_ctx
+                    (sprintf "ivmin(%s)" (Expr.to_string ctype_expr))
+                    integer_sort in
+      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
 
-  let ivmax = mk_fresh_func_decl
-                  g_ctx "ivmax" [CtypeSort.mk_sort] (integer_sort)
+  let ivmax_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+    List.fold_left (fun acc ity ->
+      let ctype = ity_to_ctype ity in
+      let ctype_expr = CtypeSort.mk_expr ctype in
+      let expr = Expr.mk_fresh_const g_ctx
+                    (sprintf "ivmax(%s)" (Expr.to_string ctype_expr))
+                    integer_sort in
+      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
 
-  let is_unsigned = mk_fresh_func_decl
-                  g_ctx "is_unsigned"
-                  [CtypeSort.mk_sort] (Boolean.mk_sort g_ctx)
+  let is_unsigned_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+    List.fold_left (fun acc ity ->
+      let ctype = ity_to_ctype ity in
+      let ctype_expr = CtypeSort.mk_expr ctype in
+      let expr = Expr.mk_fresh_const g_ctx
+                    (sprintf "is_unsigned(%s)" (Expr.to_string ctype_expr))
+                    (Boolean.mk_sort g_ctx) in
+      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
 
   (* ---- Assertions ---- *)
   let ivmin_asserts =
     let ivmin_assert (ctype: Core_ctype.ctype0) : Expr.expr =
-      let ctype_expr = CtypeSort.mk_expr ctype in
+      let const = Pmap.find ctype ivmin_map in
       match ctype with
       | Basic0 (Integer ity) ->
           let (min, _) = integer_range impl ity in
-          mk_eq g_ctx (Expr.mk_app g_ctx ivmin [ctype_expr])
-                      (big_num_to_z3 min)
+          mk_eq g_ctx const (big_num_to_z3 min)
       | _ -> assert false
     in
     List.map (fun ity -> ivmin_assert (ity_to_ctype ity))
@@ -447,12 +467,11 @@ module ImplFunctions = struct
 
   let ivmax_asserts =
     let ivmax_assert (ctype: Core_ctype.ctype0) : Expr.expr =
-      let ctype_expr = CtypeSort.mk_expr ctype in
+      let const = Pmap.find ctype ivmax_map in
       match ctype with
       | Basic0 (Integer ity) ->
           let (_, max) = integer_range impl ity in
-          mk_eq g_ctx (Expr.mk_app g_ctx ivmax [ctype_expr])
-                      (big_num_to_z3 max)
+          mk_eq g_ctx const (big_num_to_z3 max)
       | _ -> assert false
     in
     List.map (fun ity -> ivmax_assert (ity_to_ctype ity))
@@ -460,19 +479,16 @@ module ImplFunctions = struct
 
   (* TODO: char; other types *)
   let is_unsigned_asserts =
-    let signed_tys   =
-      List.map (fun ty -> CtypeSort.mk_expr (ity_to_ctype ty))
+    let signed_tys =
+      List.map (fun ty -> Pmap.find (ity_to_ctype ty) is_unsigned_map)
                signed_ibt_list in
     let unsigned_tys =
-      List.map (fun ty -> CtypeSort.mk_expr (ity_to_ctype ty))
+      List.map (fun ty -> Pmap.find (ity_to_ctype ty) is_unsigned_map)
                unsigned_ibt_list in
-    List.map (fun signed_ty ->
-                mk_eq g_ctx (Expr.mk_app g_ctx is_unsigned [signed_ty])
-                           (mk_false g_ctx)) signed_tys
-    @ List.map (fun unsigned_ty ->
-                mk_eq g_ctx (Expr.mk_app g_ctx is_unsigned [unsigned_ty])
-                            (mk_true g_ctx)
-      ) unsigned_tys
+    List.map (fun signed_const ->
+                mk_eq g_ctx signed_const (mk_false g_ctx)) signed_tys
+    @ List.map (fun unsigned_const ->
+                  mk_eq g_ctx unsigned_const (mk_true g_ctx)) unsigned_tys
 
   (* ---- All assertions ---- *)
   let all_asserts =   ivmin_asserts
@@ -543,9 +559,11 @@ let ctor_to_z3 (ctor  : typed_ctor)
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl exprs
   | Civmax ->
-      Expr.mk_app g_ctx ImplFunctions.ivmax exprs
+      (* Handled as special case in bmc_pexpr *)
+      assert false
   | Civmin ->
-      Expr.mk_app g_ctx ImplFunctions.ivmin exprs
+      (* Handled as special case in bmc_pexpr *)
+      assert false
   | Cspecified ->
       assert (List.length exprs = 1);
       if (bTy = BTy_loaded OTy_integer) then
@@ -630,7 +648,6 @@ let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
 module BmcM = struct
   type sym_table_ty = (sym_ty, Expr.expr) Pmap.map
   type run_depth_table_ty = (sym_ty, int) Pmap.map
-  type func_decl_table_ty = (sym_ty generic_name, FuncDecl.func_decl) Pmap.map
   type alloc_ty = int
   type addr_ty = int * int
   type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
@@ -645,9 +662,6 @@ module BmcM = struct
     (* Map from Erun symbol to number of times Erun encountered.
      * Used to control depth of Erun *)
     run_depth_table : (sym_ty, int) Pmap.map;
-
-    (* Map from Core function/impl constant name to Z3 FuncDecl *)
-    func_decl_table : func_decl_table_ty;
 
     (* Allocation and address supplies *)
     alloc_supply    : alloc_ty;
@@ -737,31 +751,6 @@ module BmcM = struct
     get >>= fun st ->
     put {st with run_depth_table = new_table}
 
-  (* func_decl_table *)
-  let get_func_decl_table : func_decl_table_ty eff =
-    get >>= fun st ->
-    return st.func_decl_table
-
-  let update_func_decl_table (new_table: func_decl_table_ty) :  unit eff =
-    get >>= fun st ->
-    put {st with func_decl_table = new_table}
-
-  let get_or_make_func_decl (name         : sym_ty generic_name)
-                            (arg_ty_list  : Sort.sort list)
-                            (ret_ty       : Sort.sort)
-                            : FuncDecl.func_decl eff =
-    get_func_decl_table >>= fun func_table ->
-    match Pmap.lookup name func_table with
-    | Some func -> return func
-    | None ->
-        let decl = FuncDecl.mk_fresh_func_decl g_ctx
-                    (name_to_string name)
-                    (arg_ty_list)
-                    (ret_ty) in
-        let new_table = Pmap.add name decl func_table in
-        update_func_decl_table new_table >>= fun () ->
-        return decl
-
   (* allocation *)
   let get_new_alloc_and_update_supply : alloc_ty eff =
     get                    >>= fun st ->
@@ -797,7 +786,6 @@ module BmcM = struct
     ; sym_table       = Pmap.empty sym_cmp
 
     ; run_depth_table = Pmap.empty sym_cmp
-    ; func_decl_table = Pmap.empty name_cmp
 
     ; alloc_supply    = 0
     ; memory          = Pmap.empty Pervasives.compare
@@ -969,6 +957,16 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                   ; assume = []
                   ; vcs    = [ mk_false g_ctx ]
                   }
+  | PEctor(Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      BmcM.return { expr   = Pmap.find ctype ImplFunctions.ivmin_map
+                  ; assume = []
+                  ; vcs    = []
+                  }
+  | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      BmcM.return { expr   = Pmap.find ctype ImplFunctions.ivmax_map
+                  ; assume = []
+                  ; vcs    = []
+                  }
   | PEctor (ctor, pelist) ->
       BmcM.mapM bmc_pexpr pelist >>= fun res_pelist ->
       BmcM.return { expr   = ctor_to_z3 ctor
@@ -1064,10 +1062,6 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
             | _ -> assert false
             end
       in
-      (* Get Z3 function declaration corresponding to the stdlib function *)
-      BmcM.get_or_make_func_decl
-          name (List.map (fun (_, ty) -> cbt_to_z3 ty) args) (cbt_to_z3 ty)
-          >>= fun func_decl ->
       (* Bmc each argument *)
       BmcM.mapM (fun pe -> bmc_pexpr pe) pelist >>= fun arg_retlist ->
       (* Substitute arguments in function call *)
@@ -1078,16 +1072,24 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       let expr_to_check = substitute_pexpr sub_map fun_expr in
       bmc_pexpr expr_to_check >>= fun ret_call ->
 
-      (* Function call application in Z3 *)
-      let func_call = Expr.mk_app g_ctx func_decl
-                        (List.map (fun ret -> ret.expr) arg_retlist) in
+      let arg_names = List.map (fun ret -> Expr.to_string ret.expr)
+                               arg_retlist in
 
-      (* Assert function call = function body *)
-      let eq_expr = mk_eq g_ctx func_call ret_call.expr in
+      (* Alias for function call for debug purposes.
+       * Using this may increase the time needed by the solver.
+       *)
+      (*
+      let const =
+        Expr.mk_fresh_const g_ctx
+             (sprintf "%s(%s)" (name_to_string name)
+                               (String.concat "," arg_names))
+             (cbt_to_z3 ty) in
+      let eq_expr = mk_eq g_ctx const ret_call.expr in
+      *)
 
-      BmcM.return { expr   = func_call
-                  ; assume = [eq_expr]
-                             @ ret_call.assume
+      BmcM.return { expr   = ret_call.expr (*const*)
+                  ; assume =               (*[eq_expr] @ *)
+                             ret_call.assume
                              @ (List.concat (List.map pget_assume arg_retlist))
                   ; vcs    = ret_call.vcs
                              @ (List.concat (List.map pget_vcs arg_retlist))
@@ -1121,13 +1123,14 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       assert false
   | PEis_signed _ ->
       assert false
-  | PEis_unsigned pe ->
-      bmc_pexpr pe >>= fun res_pe ->
-      BmcM.return { expr   = Expr.mk_app g_ctx ImplFunctions.is_unsigned
-                                               [res_pe.expr]
-                  ; assume = res_pe.assume
-                  ; vcs    = res_pe.vcs
+  | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
+      BmcM.return { expr   = Pmap.find ctype ImplFunctions.is_unsigned_map
+                  ; assume = []
+                  ; vcs = []
                   }
+
+  | PEis_unsigned _ ->
+      assert false
 
 let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
                 : bmc_ret BmcM.eff =
@@ -1482,6 +1485,7 @@ let bmc_file (file              : unit typed_file)
   (* TODO: assert and track based on annotation *)
   (* TODO: multiple expressions or one expression? *)
 
+  print_endline "==== DONE BMC_EXPR ROUTINE ";
   (* Assumptions *)
   Solver.assert_and_track
     g_solver
@@ -1499,6 +1503,7 @@ let bmc_file (file              : unit typed_file)
   print_endline (Solver.to_string g_solver);
   *)
 
+  print_endline "==== CHECKING";
   match Solver.check g_solver [] with
   | UNKNOWN ->
       printf "STATUS: unknown. Reason: %s\n"
