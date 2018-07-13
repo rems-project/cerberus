@@ -81,6 +81,8 @@ let name_to_string (name: sym_ty generic_name) =
   | Sym a  -> symbol_to_string a
   | Impl i -> Implementation_.string_of_implementation_constant i
 
+let print_expr (expr: Expr.expr) =
+  print_endline (Expr.to_string expr)
 
 let pp_to_stdout (doc: PPrint.document) =
   PPrint.ToChannel.pretty 1.0 150 (Pervasives.stdout) doc
@@ -91,3 +93,6 @@ let pp_to_string (doc: PPrint.document) : string =
 let pp_file (core_file: ('a, 'b) generic_file) =
   let doc = Pp_core.Basic.pp_file core_file in
   pp_to_stdout doc
+
+let pp_ctype (ctype: Core_ctype.ctype0) =
+  pp_to_string (Pp_core_ctype.pp_ctype ctype)
