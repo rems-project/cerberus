@@ -80,6 +80,7 @@ type bmc_ret = {
   vcs               : Expr.expr list;
   drop_cont         : Expr.expr; (* drop continuation; e.g. after Erun *)
   mod_addr          : AddrSet.t; (* addresses modified in memory *)
+  ret_cond          : Expr.expr; (* constraints on the returned value *)
 }
 
 type bmc_pret = {
@@ -95,6 +96,7 @@ let pget_vcs    (pret: bmc_pret) = pret.vcs
 let eget_expr   (eret: bmc_ret) = eret.expr
 let eget_assume (eret: bmc_ret) = eret.assume
 let eget_vcs    (eret: bmc_ret) = eret.vcs
+let eget_ret    (eret: bmc_ret) = eret.ret_cond
 
 let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   { expr      = pret.expr
@@ -102,6 +104,7 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   ; vcs       = pret.vcs
   ; drop_cont = mk_false
   ; mod_addr  = AddrSet.empty
+  ; ret_cond  = mk_true
   }
 
 (* Sort list *)
@@ -691,7 +694,6 @@ module BmcM = struct
 
   type bmc_state = {
     file            : unit typed_file;
-    proc_expr       : (unit typed_expr) option;
 
     sym_supply      : sym_supply_ty;
     sym_table       : sym_table_ty;
@@ -703,6 +705,10 @@ module BmcM = struct
     (* Allocation and address supplies *)
     alloc_supply    : alloc_ty;
     memory          : memory_table_ty;
+
+    (* Procedure-local state *)
+    proc_expr       : (unit typed_expr) option;
+    ret_const       : Expr.expr option; (* Expression returned *)
   }
 
   (* =========== MONADIC FUNCTIONS =========== *)
@@ -751,15 +757,6 @@ module BmcM = struct
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
-  (* proc expr *)
-  let get_proc_expr : (unit typed_expr) eff =
-    get >>= fun st ->
-    return (Option.get st.proc_expr)
-
-  let update_proc_expr (proc_expr: unit typed_expr) : unit eff =
-    get >>= fun st ->
-    put {st with proc_expr = Some proc_expr}
-
   (* sym table *)
   let get_sym_table : sym_table_ty eff =
     get >>= fun st ->
@@ -817,12 +814,29 @@ module BmcM = struct
     get >>= fun st ->
     return (List.map fst (Pmap.bindings_list st.memory))
 
+  (* proc expr *)
+  let get_proc_expr : (unit typed_expr) eff =
+    get >>= fun st ->
+    return (Option.get st.proc_expr)
+
+  let update_proc_expr (proc_expr: unit typed_expr) : unit eff =
+    get >>= fun st ->
+    put {st with proc_expr = Some proc_expr}
+
+  (* ret_const*)
+  let get_ret_const : Expr.expr eff =
+    get >>= fun st ->
+    return (Option.get st.ret_const)
+
+  let update_ret_const (expr: Expr.expr) =
+    get >>= fun st ->
+    put {st with ret_const = Some expr}
+
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
                        : bmc_state =
     { file            = file
-    ; proc_expr       = None
 
     ; sym_supply      = sym_supply
     ; sym_table       = Pmap.empty sym_cmp
@@ -831,6 +845,9 @@ module BmcM = struct
 
     ; alloc_supply    = 0
     ; memory          = Pmap.empty Pervasives.compare
+
+    ; proc_expr       = None
+    ; ret_const       = None
     }
 
   (* =========== Manipulating functions ========== *)
@@ -1235,6 +1252,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; vcs       = []
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.of_list (List.map fst retlist)
+             ; ret_cond  = mk_true
              }
   | Create _ -> assert false
   | CreateReadOnly _
@@ -1248,6 +1266,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; vcs       = res_pe.vcs
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
+             ; ret_cond  = mk_true
              }
   | Store0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
             to_store, memorder) ->
@@ -1290,6 +1309,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; vcs       = res_to_store.vcs
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.of_list (List.map fst filtered)
+             ; ret_cond  = mk_true
              }
   | Store0 _ ->
       assert false
@@ -1322,6 +1342,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; vcs       = [mk_or (List.map snd filtered)]
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
+             ; ret_cond  = mk_true
              }
   | Load0 _
   | RMW0 _
@@ -1343,6 +1364,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; vcs       = res_ptr.vcs
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
+             ; ret_cond  = mk_true
              }
   | Ememop _ ->
       assert false
@@ -1366,10 +1388,10 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                   BmcM.update_memory_table old_memory >>= fun () ->
                   return (let_binding, mem, res_case_expr)
                 ) caselist >>= fun res_caselist ->
+      let reslist = List.map (fun (_, _, a) -> a) res_caselist in
       (* Update memory table *)
       let mod_addr = List.fold_right (
-        fun (_, _, res) acc -> AddrSet.union acc res.mod_addr)
-        res_caselist AddrSet.empty in
+        fun res acc -> AddrSet.union acc res.mod_addr) reslist AddrSet.empty in
       let new_memory =
         BmcM.merge_memory old_memory mod_addr
                           (List.map (fun (_, m, _) -> m) res_caselist)
@@ -1379,16 +1401,15 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       let guarded_bindings = List.map2 (
         fun guard (binding, _, _) -> mk_implies guard binding)
         case_guards res_caselist in
-      let case_assumes = List.concat (
-        List.map (fun (_, _, res) -> eget_assume res) res_caselist) in
+      let case_assumes = List.concat (List.map eget_assume reslist) in
       let guarded_vcs = List.map2 (
-        fun guard (_, _, res) -> mk_implies guard (mk_and (eget_vcs res)))
-        case_guards res_caselist in
+        fun guard res -> mk_implies guard (mk_and (eget_vcs res)))
+        case_guards reslist in
       let ite_expr =
         if List.length caselist = 1 then
-          eget_expr (let (_, _, res) = List.hd res_caselist in res)
+          eget_expr (List.hd reslist)
         else
-          let rev_list = List.rev (List.map (fun (_,_,r) -> r) res_caselist) in
+          let rev_list = List.rev reslist in
           let rev_case_guards = List.rev case_guards in
           let last_case_expr = eget_expr (List.hd rev_list) in
           List.fold_left2 (fun acc guard res -> mk_ite guard (eget_expr res) acc)
@@ -1397,13 +1418,16 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                           (List.tl rev_list) in
       let assume = res_pe.assume @ guarded_bindings @ case_assumes in
       let drop_cont = mk_or
-        (List.map2 (fun guard (_, _, res) -> mk_and [guard; res.drop_cont])
-                   case_guards res_caselist) in
+        (List.map2 (fun guard res -> mk_and [guard; res.drop_cont])
+                   case_guards reslist) in
+      let ret_cond_list = List.map2 mk_implies case_guards
+                                               (List.map eget_ret reslist) in
       return { expr      = ite_expr
              ; assume    = assume
              ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
+             ; ret_cond  = mk_and ret_cond_list
              }
   | Eskip ->
       return { expr      = UnitSort.mk_unit
@@ -1411,6 +1435,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; vcs       = []
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
+             ; ret_cond = mk_true
              }
   | Eproc _
   | Eccall _
@@ -1468,6 +1493,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; vcs       = vcs
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
+             ; ret_cond  = mk_and (List.map eget_ret bmc_retlist)
              }
   | Erun (_, label, pelist) ->
       BmcM.get_run_depth_table >>= fun run_depth_table ->
@@ -1481,7 +1507,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                ; vcs       = [mk_false]
                ; drop_cont = mk_true
                ; mod_addr  = AddrSet.empty
-                    }
+               ; ret_cond  = mk_true
+               }
       else begin
         BmcM.get_proc_expr >>= fun proc_expr ->
         let (cont_syms, cont_expr) = Option.get (find_labeled_continuation
@@ -1497,14 +1524,13 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         bmc_expr cont_to_check >>= fun run_res ->
 
         BmcM.update_run_depth_table run_depth_table >>= fun () ->
-        print_endline "XX";
-        print_expr run_res.expr;
-        (* TODO: save run value *)
+        BmcM.get_ret_const                          >>= fun ret_const ->
         return { expr      = UnitSort.mk_unit
                ; assume    = run_res.assume
                ; vcs       = run_res.vcs
                ; drop_cont = mk_true
                ; mod_addr  = run_res.mod_addr
+               ; ret_cond  = mk_eq ret_const run_res.expr
                }
       end
   | Epar _
@@ -1544,6 +1570,10 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; vcs       = vcs
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
+             ; ret_cond  = mk_and
+                           [ mk_implies res_pe.expr          res_e1.ret_cond
+                           ; mk_implies (mk_not res_pe.expr) res_e2.ret_cond
+                           ]
              }
   | Elet _
   | Easeq _ ->
@@ -1563,6 +1593,10 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                            :: res1.vcs
              ; drop_cont = mk_or [res1.drop_cont; res2.drop_cont]
              ; mod_addr  = AddrSet.union res1.mod_addr res2.mod_addr
+             ; ret_cond  = mk_and [ res1.ret_cond
+                                  ; mk_implies (mk_not res1.drop_cont)
+                                               res2.ret_cond
+                                  ]
              }
   | Esave (_, varlist, e) ->
         let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
@@ -1591,7 +1625,10 @@ let bmc_file (file              : unit typed_file)
         (* TODO: handle args to procedure. May be of pointer type *)
         assert (List.length params = 0);
         BmcM.update_proc_expr e >>= fun () ->
-        bmc_expr e
+        BmcM.update_ret_const
+          (Expr.mk_fresh_const g_ctx "ret" (cbt_to_z3 ty)) >>= fun () ->
+        bmc_expr e >>= fun ret ->
+        return ret
 
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
@@ -1602,7 +1639,7 @@ let bmc_file (file              : unit typed_file)
   in
   let (result, new_state) = BmcM.run initial_state to_run in
 
-  print_endline "====FINAL BMC_RET";
+  print_endline "==== FINAL BMC_RET";
   (*print_string (pp_bmc_ret result);*)
 
   (* TODO: assert and track based on annotation *)
@@ -1614,13 +1651,31 @@ let bmc_file (file              : unit typed_file)
     g_solver
     (Expr.simplify (mk_and result.assume) None)
     (Expr.mk_fresh_const g_ctx "assume" (Boolean.mk_sort g_ctx));
+  (* Return conditions *)
+  Solver.assert_and_track
+    g_solver
+    (Expr.simplify result.ret_cond None)
+    (Expr.mk_fresh_const g_ctx "ret_cond" (Boolean.mk_sort g_ctx));
 
-  assert (Solver.check g_solver [] = SATISFIABLE);
+  (* Extract return value *)
+  match Solver.check g_solver [] with
+  | SATISFIABLE ->
+      let final_expr =
+        match new_state.ret_const with
+        | Some expr -> expr
+        | None      -> result.expr in
+      let model = Option.get (Solver.get_model g_solver) in
+      let return_value = Option.get (Model.eval model final_expr false) in
+      printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
+  | _ -> assert false
+  ;
+
   (* VCs *)
   Solver.assert_and_track
     g_solver
     (Expr.simplify (mk_not (mk_and result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
+
   (*
   print_endline "====FINAL SOLVER";
   print_endline (Solver.to_string g_solver);
