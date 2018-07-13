@@ -2,7 +2,6 @@ open Bmc_substitute
 open Bmc_utils
 open Z3
 open Z3.Arithmetic
-open Z3.Boolean
 
 open AilTypes
 open Core
@@ -43,6 +42,17 @@ let g_bv = false
 
 let g_max_run_depth = 10
 let g_sequentialise = true
+
+(* =========== Z3 aliases =========== *)
+let mk_implies = Boolean.mk_implies g_ctx
+let mk_and     = Boolean.mk_and g_ctx
+let mk_not     = Boolean.mk_not g_ctx
+let mk_or      = Boolean.mk_or g_ctx
+let mk_true    = Boolean.mk_true g_ctx
+let mk_false   = Boolean.mk_false g_ctx
+let mk_xor     = Boolean.mk_xor g_ctx
+let mk_eq      = Boolean.mk_eq g_ctx
+let mk_ite     = Boolean.mk_ite g_ctx
 
 (* =========== TYPES =========== *)
 (* Pure return *)
@@ -89,7 +99,7 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   { expr      = pret.expr
   ; assume    = pret.assume
   ; vcs       = pret.vcs
-  ; drop_cont = mk_false g_ctx
+  ; drop_cont = mk_false
   ; mod_addr  = AddrSet.empty
   }
 
@@ -130,13 +140,13 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpRem_t -> assert false
     | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
     | OpExp   -> assert false
-    | OpEq    -> mk_eq g_ctx arg1 arg2
+    | OpEq    -> mk_eq arg1 arg2
     | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
     | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
     | OpGt    -> Arithmetic.mk_gt g_ctx arg1 arg2
     | OpGe    -> Arithmetic.mk_ge g_ctx arg1 arg2
-    | OpAnd   -> mk_and g_ctx [arg1; arg2]
-    | OpOr    -> mk_or  g_ctx [arg1; arg2]
+    | OpAnd   -> mk_and [arg1; arg2]
+    | OpOr    -> mk_or  [arg1; arg2]
   end
 
 (* =========== CUSTOM SORTS =========== *)
@@ -147,15 +157,17 @@ let mk_ctor str =
   Datatype.mk_constructor_s g_ctx str (mk_sym g_ctx ("is_" ^ str)) [] [] []
 
 module UnitSort = struct
+  open Z3.Datatype
+
   let mk_sort =
-    Datatype.mk_sort_s g_ctx "Unit"
-      [ Datatype.mk_constructor_s g_ctx "unit"
-                                  (Symbol.mk_string g_ctx "isUnit")
-                                  [] [] []
+    mk_sort_s g_ctx "Unit"
+      [ mk_constructor_s g_ctx "unit"
+                         (Symbol.mk_string g_ctx "isUnit")
+                         [] [] []
       ]
 
   let mk_unit =
-    let constructors = Datatype.get_constructors mk_sort in
+    let constructors = get_constructors mk_sort in
     Expr.mk_app g_ctx (List.hd constructors) []
 end
 
@@ -282,10 +294,9 @@ module AddressSort = struct
     let alloc = get_alloc addr in
     let index = get_index addr in
     let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in
-    mk_and g_ctx
-      [ binop_to_z3 OpGe index (int_to_z3 0)
-      ; binop_to_z3 OpLt index alloc_size
-      ]
+    mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
+           ; binop_to_z3 OpLt index alloc_size
+           ]
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
     let alloc = get_alloc addr in
@@ -315,10 +326,7 @@ module PointerSort = struct
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 0) in
     Expr.mk_app g_ctx get_value [ expr ]
-
 end
-
-
 
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
@@ -479,7 +487,7 @@ module ImplFunctions = struct
       match ctype with
       | Basic0 (Integer ity) ->
           let (min, _) = integer_range impl ity in
-          mk_eq g_ctx const (big_num_to_z3 min)
+          mk_eq const (big_num_to_z3 min)
       | _ -> assert false
     in
     List.map (fun ity -> ivmin_assert (ity_to_ctype ity))
@@ -491,7 +499,7 @@ module ImplFunctions = struct
       match ctype with
       | Basic0 (Integer ity) ->
           let (_, max) = integer_range impl ity in
-          mk_eq g_ctx const (big_num_to_z3 max)
+          mk_eq const (big_num_to_z3 max)
       | _ -> assert false
     in
     List.map (fun ity -> ivmax_assert (ity_to_ctype ity))
@@ -506,9 +514,9 @@ module ImplFunctions = struct
       List.map (fun ty -> Pmap.find (ity_to_ctype ty) is_unsigned_map)
                unsigned_ibt_list in
     List.map (fun signed_const ->
-                mk_eq g_ctx signed_const (mk_false g_ctx)) signed_tys
+                mk_eq signed_const (mk_false)) signed_tys
     @ List.map (fun unsigned_const ->
-                  mk_eq g_ctx unsigned_const (mk_true g_ctx)) unsigned_tys
+                  mk_eq unsigned_const (mk_true)) unsigned_tys
 
   (* ---- All assertions ---- *)
   let all_asserts =   ivmin_asserts
@@ -562,8 +570,7 @@ let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
   | BTy_loaded _            -> assert false
 
-let sorts_to_tuple (sorts: Sort.sort list)
-                   : Sort.sort =
+let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
   let tuple_name =
     "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
   let arg_list = List.mapi
@@ -624,8 +631,8 @@ let value_to_z3 (value: value)
                 : Expr.expr =
   match value with
   | Vunit        -> UnitSort.mk_unit
-  | Vtrue        -> mk_true g_ctx
-  | Vfalse       -> mk_false g_ctx
+  | Vtrue        -> mk_true
+  | Vfalse       -> mk_false
   | Vlist _      -> assert false
   | Vtuple _     -> assert false
   | Vctype cty   -> CtypeSort.mk_expr cty
@@ -831,8 +838,8 @@ module BmcM = struct
           List.fold_right (fun (table, guard) acc_expr ->
             match Pmap.lookup addr table with
             | None      -> acc_expr
-            | Some expr -> mk_ite g_ctx guard expr acc_expr
-          ) guarded_tables expr_base in
+            | Some expr -> mk_ite guard expr acc_expr
+         ) guarded_tables expr_base in
         (* TODO: create new seq variable? *)
         Pmap.add addr new_expr acc
     ) mod_addr base
@@ -852,7 +859,8 @@ module BmcM = struct
     memory ""
 end
 
-let (>>=) = BmcM.bind
+let (>>=)  = BmcM.bind
+let return = BmcM.return
 
 (* =========== SYMBOL TABLE MAINTENANCE FUNCTIONS =========== *)
 let symbol_to_fresh_z3_const (sym: sym_ty) (sort: Sort.sort) : Expr.expr =
@@ -878,7 +886,7 @@ let rec add_pattern_to_sym_table (pattern: typed_pattern)
                                  : unit BmcM.eff =
   match pattern with
   | CaseBase(None, _) ->
-      BmcM.return () (* Do nothing; wildcard => no symbol *)
+      return () (* Do nothing; wildcard => no symbol *)
   | CaseBase(Some sym, ty) ->
       add_sym_to_sym_table sym ty
   | CaseCtor (ctor, patlist) ->
@@ -889,10 +897,10 @@ let mk_let_binding (maybe_sym: sym_ty option)
                    (expr: Expr.expr)
                    : Expr.expr BmcM.eff =
   match maybe_sym with
-  | None -> BmcM.return (mk_true g_ctx)
+  | None -> return (mk_true)
   | Some sym ->
       BmcM.lookup_sym sym >>= fun sym_expr ->
-      BmcM.return (mk_eq g_ctx sym_expr expr)
+      return (mk_eq sym_expr expr)
 
 let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
                         : Expr.expr BmcM.eff =
@@ -903,17 +911,17 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
       assert (Expr.get_num_args expr = List.length patlist);
       BmcM.mapM (fun (pat, e) -> mk_let_bindings pat e)
                 (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
-      BmcM.return (mk_and g_ctx bindings)
+      return (mk_and bindings)
   | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_integer)]) ->
       let is_specified = LoadedInteger.is_specified expr in
       let specified_value = LoadedInteger.get_specified_value expr in
       mk_let_binding sym specified_value >>= fun is_eq_value ->
-      BmcM.return (mk_and g_ctx [is_specified; is_eq_value])
+      return (mk_and [is_specified; is_eq_value])
   | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_pointer)]) ->
       let is_specified = LoadedPointer.is_specified expr in
       let specified_value = LoadedPointer.get_specified_value expr in
       mk_let_binding sym specified_value >>= fun is_eq_value ->
-      BmcM.return (mk_and g_ctx [is_specified; is_eq_value])
+      return (mk_and [is_specified; is_eq_value])
   | CaseCtor(Cspecified, _) ->
       assert false
   | CaseCtor(Cunspecified, [CaseBase(sym, BTy_ctype)]) ->
@@ -930,7 +938,7 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
           assert false
       in
       mk_let_binding sym unspecified_value >>= fun is_eq_value ->
-      BmcM.return (mk_and g_ctx [is_unspecified; is_eq_value])
+      return (mk_and [is_unspecified; is_eq_value])
   | CaseCtor(Cunspecified, _) ->
       assert false
   | CaseCtor(_, _) ->
@@ -942,14 +950,13 @@ let rec pattern_match (pattern: typed_pattern)
                       : Expr.expr =
   match pattern with
   | CaseBase(_,_) ->
-      mk_true g_ctx
+      mk_true
   | CaseCtor(Ctuple, patlist) ->
       assert (Expr.get_num_args expr = List.length patlist);
       let expr_list = Expr.get_args expr in
       let match_conditions =
-        List.map2 (fun pat e -> pattern_match pat e)
-                  patlist expr_list in
-      mk_and g_ctx match_conditions
+        List.map2 (fun pat e -> pattern_match pat e) patlist expr_list in
+      mk_and match_conditions
   | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_integer)]) ->
       LoadedInteger.is_specified expr
   | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_pointer)]) ->
@@ -973,12 +980,11 @@ let compute_case_guards (patterns: typed_pattern list)
                         : Expr.expr * Expr.expr list =
   let pattern_guards =
     List.map (fun pat -> pattern_match pat to_match) patterns in
-  let case_guards = List.mapi (fun i expr ->
-    mk_and g_ctx
-           [ mk_not g_ctx (mk_or g_ctx (list_take i pattern_guards))
-           ; expr
-           ]) pattern_guards in
-  let vc = mk_or g_ctx pattern_guards in
+  let case_guards = List.mapi (
+      fun i expr ->
+        mk_and [ mk_not (mk_or (list_take i pattern_guards))
+               ; expr]) pattern_guards in
+  let vc = mk_or pattern_guards in
   (vc, case_guards)
 
 (* =========== MODEL CHECKING FUNCTIONS =========== *)
@@ -987,47 +993,46 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
   match pe with
   | PEsym sym ->
       BmcM.lookup_sym sym >>= fun sym_expr ->
-      BmcM.return { expr   = sym_expr
-                  ; assume = []
-                  ; vcs    = []
-                  }
+      return { expr   = sym_expr
+             ; assume = []
+             ; vcs    = []
+             }
   | PEimpl _ ->
       assert false
   | PEval cval ->
-      BmcM.return { expr   = value_to_z3 cval
-                  ; assume = []
-                  ; vcs    = []
-                  }
+      return { expr   = value_to_z3 cval
+             ; assume = []
+             ; vcs    = []
+             }
   | PEconstrained _
   | PEundef _ ->
       let sort = cbt_to_z3 bTy in
-      BmcM.return { expr   = Expr.mk_fresh_const g_ctx "undef" sort
-                  ; assume = []
-                  ; vcs    = [ mk_false g_ctx ]
-                  }
+      return { expr   = Expr.mk_fresh_const g_ctx "undef" sort
+             ; assume = []
+             ; vcs    = [ mk_false ]
+             }
   | PEerror _ ->
       let sort = cbt_to_z3 bTy in
-      BmcM.return { expr   = Expr.mk_fresh_const g_ctx "error" sort
-                  ; assume = []
-                  ; vcs    = [ mk_false g_ctx ]
-                  }
+      return { expr   = Expr.mk_fresh_const g_ctx "error" sort
+             ; assume = []
+             ; vcs    = [ mk_false ]
+             }
   | PEctor(Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-      BmcM.return { expr   = Pmap.find ctype ImplFunctions.ivmin_map
-                  ; assume = []
-                  ; vcs    = []
-                  }
+      return { expr   = Pmap.find ctype ImplFunctions.ivmin_map
+             ; assume = []
+             ; vcs    = []
+             }
   | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-      BmcM.return { expr   = Pmap.find ctype ImplFunctions.ivmax_map
-                  ; assume = []
-                  ; vcs    = []
-                  }
+      return { expr   = Pmap.find ctype ImplFunctions.ivmax_map
+             ; assume = []
+             ; vcs    = []
+             }
   | PEctor (ctor, pelist) ->
       BmcM.mapM bmc_pexpr pelist >>= fun res_pelist ->
-      BmcM.return { expr   = ctor_to_z3 ctor
-                                        (List.map pget_expr res_pelist) bTy
-                  ; assume = List.concat (List.map pget_assume res_pelist)
-                  ; vcs    = List.concat (List.map pget_vcs res_pelist)
-                  }
+      return { expr   = ctor_to_z3 ctor (List.map pget_expr res_pelist) bTy
+             ; assume = List.concat (List.map pget_assume res_pelist)
+             ; vcs    = List.concat (List.map pget_vcs res_pelist)
+             }
   | PEcase (pe, caselist) ->
       assert (List.length caselist > 0);
       bmc_pexpr pe >>= fun res_pe ->
@@ -1042,15 +1047,15 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                   mk_let_bindings pat res_pe.expr >>= fun let_binding ->
                   bmc_pexpr case_pexpr            >>= fun res_case_pexpr ->
                   BmcM.update_sym_table old_sym_table >>= fun () ->
-                  BmcM.return (let_binding, res_case_pexpr)
+                  return (let_binding, res_case_pexpr)
                 ) caselist >>= fun res_caselist ->
-      let guarded_let_bindings = List.map2 (
-        fun guard (let_binding, _) -> mk_implies g_ctx guard let_binding)
+      let guarded_bindings = List.map2 (
+        fun guard (let_binding, _) -> mk_implies guard let_binding)
         case_guards res_caselist in
       let case_assumes =
         List.concat (List.map (fun (_, res) -> res.assume) res_caselist) in
       let guarded_vcs = List.map2 (
-        fun guard (_, res) -> mk_implies g_ctx guard (mk_and g_ctx res.vcs))
+        fun guard (_, res) -> mk_implies guard (mk_and res.vcs))
         case_guards res_caselist in
       let ite_expr =
         if List.length caselist = 1 then
@@ -1059,41 +1064,40 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
           let rev_list = List.rev (List.map snd res_caselist) in
           let rev_case_guards = List.rev case_guards in
           let last_case_expr = pget_expr (List.hd rev_list) in
-          List.fold_left2 (fun acc guard res ->
-            mk_ite g_ctx guard res.expr acc)
-            last_case_expr
-            (List.tl rev_case_guards)
-            (List.tl rev_list)
+          List.fold_left2 (fun acc guard res -> mk_ite guard res.expr acc)
+                          last_case_expr
+                          (List.tl rev_case_guards)
+                          (List.tl rev_list)
       in
-      BmcM.return { expr   = ite_expr
-                  ; assume =   res_pe.assume
-                             @ guarded_let_bindings
-                             @ case_assumes
-                  ; vcs    = match_vc :: (res_pe.vcs @ guarded_vcs)
-                  }
+      return { expr   = ite_expr
+             ; assume =   res_pe.assume
+                          @ guarded_bindings
+                          @ case_assumes
+             ; vcs    = match_vc :: (res_pe.vcs @ guarded_vcs)
+             }
   | PEarray_shift (ptr, ty, index) ->
       bmc_pexpr ptr   >>= fun res_ptr ->
       bmc_pexpr index >>= fun res_index ->
       let addr     = PointerSort.get_addr res_ptr.expr in
       let new_addr = AddressSort.shift_index_by_n addr res_index.expr in
-      BmcM.return { expr   = PointerSort.mk_ptr new_addr
-                  ; assume = res_ptr.assume @ res_index.assume
-                  ; vcs    = res_ptr.vcs @ res_index.vcs
-                  }
+      return { expr   = PointerSort.mk_ptr new_addr
+             ; assume = res_ptr.assume @ res_index.assume
+             ; vcs    = res_ptr.vcs @ res_index.vcs
+             }
   | PEmember_shift _
   | PEmemberof _  ->
       assert false
   | PEnot pe ->
       bmc_pexpr pe >>= fun res ->
-      BmcM.return {res with expr = mk_not g_ctx res.expr}
+      return {res with expr = mk_not res.expr}
   | PEop (binop, pe1, pe2) ->
       (* TODO: symbols added in pe1 visible in pe2 *)
       bmc_pexpr pe1 >>= fun res1 ->
       bmc_pexpr pe2 >>= fun res2 ->
-      BmcM.return { expr   = binop_to_z3 binop res1.expr res2.expr
-                  ; assume = res1.assume @ res2.assume
-                  ; vcs    = res1.vcs @ res2.vcs
-                  }
+      return { expr   = binop_to_z3 binop res1.expr res2.expr
+             ; assume = res1.assume @ res2.assume
+             ; vcs    = res1.vcs @ res2.vcs
+             }
   | PEstruct _
   | PEunion _ ->
       assert false
@@ -1136,25 +1140,25 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              (sprintf "%s(%s)" (name_to_string name)
                                (String.concat "," arg_names))
              (cbt_to_z3 ty) in
-      let eq_expr = mk_eq g_ctx const ret_call.expr in
+      let eq_expr = mk_eq const ret_call.expr in
       *)
 
-      BmcM.return { expr   = ret_call.expr (*const*)
-                  ; assume =               (*[eq_expr] @ *)
-                             ret_call.assume
-                             @ (List.concat (List.map pget_assume arg_retlist))
-                  ; vcs    = ret_call.vcs
-                             @ (List.concat (List.map pget_vcs arg_retlist))
-                  }
+      return { expr   = ret_call.expr (*const*)
+             ; assume =               (*[eq_expr] @ *)
+                           ret_call.assume
+                        @ (List.concat (List.map pget_assume arg_retlist))
+             ; vcs    = ret_call.vcs
+                        @ (List.concat (List.map pget_vcs arg_retlist))
+             }
   | PElet (pat, pe1, pe2) ->
       bmc_pexpr pe1                 >>= fun res1 ->
       add_pattern_to_sym_table pat  >>= fun () ->
       mk_let_bindings pat res1.expr >>= fun let_binding ->
       bmc_pexpr pe2                 >>= fun res2 ->
-      BmcM.return { expr    = res2.expr
-                  ; assume  = let_binding::(res1.assume @ res2.assume)
-                  ; vcs     = res1.vcs @ res2.vcs
-                  }
+      return { expr    = res2.expr
+             ; assume  = let_binding::(res1.assume @ res2.assume)
+             ; vcs     = res1.vcs @ res2.vcs
+             }
   | PEif (pe_cond, pe1, pe2) ->
       (* TODO: symbols added in pe1 visible in pe2 *)
       bmc_pexpr pe_cond       >>= fun res_cond ->
@@ -1162,24 +1166,24 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       bmc_pexpr pe2           >>= fun res2 ->
       let new_vcs =
           res_cond.vcs
-        @ (List.map (fun vc -> mk_implies g_ctx res_cond.expr vc) res1.vcs)
-        @ (List.map (fun vc -> mk_implies g_ctx (mk_not g_ctx res_cond.expr) vc)
+        @ (List.map (fun vc -> mk_implies res_cond.expr vc) res1.vcs)
+        @ (List.map (fun vc -> mk_implies (mk_not res_cond.expr) vc)
                     res2.vcs)
       in
-      BmcM.return { expr   = mk_ite g_ctx res_cond.expr res1.expr res2.expr
-                  ; assume = res_cond.assume @ res1.assume @ res2.assume
-                  ; vcs    = new_vcs
-                  }
+      return { expr   = mk_ite res_cond.expr res1.expr res2.expr
+             ; assume = res_cond.assume @ res1.assume @ res2.assume
+             ; vcs    = new_vcs
+             }
   | PEis_scalar _
   | PEis_integer _ ->
       assert false
   | PEis_signed _ ->
       assert false
   | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
-      BmcM.return { expr   = Pmap.find ctype ImplFunctions.is_unsigned_map
-                  ; assume = []
-                  ; vcs = []
-                  }
+      return { expr   = Pmap.find ctype ImplFunctions.is_unsigned_map
+             ; assume = []
+             ; vcs = []
+             }
 
   | PEis_unsigned _ ->
       assert false
@@ -1202,25 +1206,25 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         let seq_var =
           Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) sort in
         let init_unspec =
-          mk_eq g_ctx seq_var (mk_unspecified_expr sort ctype_expr) in
+          mk_eq seq_var (mk_unspecified_expr sort ctype_expr) in
         (* track in state that mem[addr] = seq_var *)
         BmcM.update_memory (alloc_id, i) seq_var >>= fun () ->
-        BmcM.return (addr, init_unspec)
+        return (addr, init_unspec)
         ) flat_sortlist >>= fun retlist ->
 
       (* Assert alloc_size(alloc_id) = allocation_size *)
       let alloc_size_expr =
-        mk_eq g_ctx
-          (Expr.mk_app g_ctx AddressSort.alloc_size_decl [int_to_z3 alloc_id])
-          (int_to_z3 allocation_size) in
+        mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+                                 [int_to_z3 alloc_id])
+              (int_to_z3 allocation_size) in
       let assume = alloc_size_expr :: (List.map snd retlist) in
       let first_addr = AddressSort.mk_expr_from_addr (fst (List.hd retlist)) in
-      BmcM.return { expr      = PointerSort.mk_ptr first_addr
-                  ; assume    = assume
-                  ; vcs       = []
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.of_list (List.map fst retlist)
-                  }
+      return { expr      = PointerSort.mk_ptr first_addr
+             ; assume    = assume
+             ; vcs       = []
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.of_list (List.map fst retlist)
+             }
   | Create _ -> assert false
   | CreateReadOnly _
   | Alloc0 _ ->
@@ -1228,12 +1232,12 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | Kill pe ->
       (* TODO: kill currently ignored *)
       bmc_pexpr pe >>= fun res_pe ->
-      BmcM.return { expr      = UnitSort.mk_unit
-                  ; assume    = res_pe.assume
-                  ; vcs       = res_pe.vcs
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.empty
-                  }
+      return { expr      = UnitSort.mk_unit
+             ; assume    = res_pe.assume
+             ; vcs       = res_pe.vcs
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             }
   | Store0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
             to_store, memorder) ->
       (* TODO: do alias analysis *)
@@ -1256,27 +1260,26 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
           let new_seq_var =
             Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) addr_sort in
           (* new_seq_var is equal to to_store if addr_eq, else old value *)
-          let addr_eq =
-            mk_eq g_ctx (PointerSort.get_addr sym_expr) addr_expr in
-          let new_val = mk_eq g_ctx new_seq_var res_to_store.expr in
-          let old_val = mk_eq g_ctx new_seq_var expr_in_memory in
+          let addr_eq = mk_eq (PointerSort.get_addr sym_expr) addr_expr in
+          let new_val = mk_eq new_seq_var res_to_store.expr in
+          let old_val = mk_eq new_seq_var expr_in_memory in
           BmcM.update_memory addr new_seq_var >>= fun () ->
-          BmcM.return (Some (addr, mk_ite g_ctx addr_eq new_val old_val))
+          return (Some (addr, mk_ite addr_eq new_val old_val))
           end
         else
-          BmcM.return None
+          return None
         ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
 
       let filtered =
         List.map Option.get (List.filter is_some update_list) in
       assert (List.length filtered > 0);
 
-      BmcM.return { expr      = UnitSort.mk_unit
-                  ; assume    = List.map snd filtered @ res_to_store.assume
-                  ; vcs       = res_to_store.vcs
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.of_list (List.map fst filtered)
-                  }
+      return { expr      = UnitSort.mk_unit
+             ; assume    = List.map snd filtered @ res_to_store.assume
+             ; vcs       = res_to_store.vcs
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.of_list (List.map fst filtered)
+             }
   | Store0 _ ->
       assert false
   | Load0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), memorder) ->
@@ -1295,21 +1298,20 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         let addr_sort = Expr.get_sort expr_in_memory in
         if (Sort.equal sort addr_sort) then
           let addr_expr = AddressSort.mk_expr_from_addr addr in
-          let addr_eq = mk_eq g_ctx addr_expr (PointerSort.get_addr sym_expr) in
-          let impl_expr =
-            mk_implies g_ctx addr_eq (mk_eq g_ctx ret_expr expr_in_memory) in
-          BmcM.return (Some (impl_expr, addr_eq))
+          let addr_eq = mk_eq addr_expr (PointerSort.get_addr sym_expr) in
+          let impl_expr = mk_implies addr_eq (mk_eq ret_expr expr_in_memory) in
+          return (Some (impl_expr, addr_eq))
         else
-          BmcM.return None
+          return None
       ) (Pmap.bindings_list possible_addresses) >>= fun retlist ->
       let filtered = List.map Option.get (List.filter is_some retlist) in
 
-      BmcM.return { expr      = ret_expr
-                  ; assume    = List.map fst filtered
-                  ; vcs       = [mk_or g_ctx (List.map snd filtered)]
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.empty
-                  }
+      return { expr      = ret_expr
+             ; assume    = List.map fst filtered
+             ; vcs       = [mk_or (List.map snd filtered)]
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             }
   | Load0 _
   | RMW0 _
   | Fence0 _ ->
@@ -1320,17 +1322,17 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
   match expr_ with
   | Epure pe ->
       bmc_pexpr pe >>= fun pres ->
-      BmcM.return (bmc_pret_to_ret pres)
+      return (bmc_pret_to_ret pres)
   | Ememop (PtrValidForDeref, [ptr])  ->
       bmc_pexpr ptr >>= fun res_ptr ->
       let addr     : Expr.expr = PointerSort.get_addr res_ptr.expr in
       let range_assert = AddressSort.valid_index_range addr in
-      BmcM.return { expr      = range_assert
-                  ; assume    = res_ptr.assume
-                  ; vcs       = res_ptr.vcs
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.empty
-                  }
+      return { expr      = range_assert
+             ; assume    = res_ptr.assume
+             ; vcs       = res_ptr.vcs
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             }
   | Ememop _ ->
       assert false
   | Eaction paction ->
@@ -1351,7 +1353,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                   BmcM.get_memory                 >>= fun mem ->
                   BmcM.update_sym_table old_sym_table >>= fun () ->
                   BmcM.update_memory_table old_memory >>= fun () ->
-                  BmcM.return (let_binding, mem, res_case_expr)
+                  return (let_binding, mem, res_case_expr)
                 ) caselist >>= fun res_caselist ->
       (* Update memory table *)
       let mod_addr = List.fold_right (
@@ -1363,47 +1365,42 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                           case_guards in
       BmcM.update_memory_table new_memory >>= fun () ->
 
-      let guarded_let_bindings = List.map2 (
-        fun guard (let_binding, _, _) -> mk_implies g_ctx guard let_binding)
+      let guarded_bindings = List.map2 (
+        fun guard (binding, _, _) -> mk_implies guard binding)
         case_guards res_caselist in
-      let case_assumes : Expr.expr list =
-        List.concat (List.map (fun (_, _, res) -> eget_assume res)
-                              res_caselist) in
+      let case_assumes = List.concat (
+        List.map (fun (_, _, res) -> eget_assume res) res_caselist) in
       let guarded_vcs = List.map2 (
-        fun guard (_, _, res) ->
-          mk_implies g_ctx guard (mk_and g_ctx (eget_vcs res)))
+        fun guard (_, _, res) -> mk_implies guard (mk_and (eget_vcs res)))
         case_guards res_caselist in
       let ite_expr =
         if List.length caselist = 1 then
           eget_expr (let (_, _, res) = List.hd res_caselist in res)
         else
-          let rev_list = List.rev (List.map (fun (_, _, r) -> r)
-                                            res_caselist) in
+          let rev_list = List.rev (List.map (fun (_,_,r) -> r) res_caselist) in
           let rev_case_guards = List.rev case_guards in
           let last_case_expr = eget_expr (List.hd rev_list) in
-          List.fold_left2 (fun acc guard res ->
-            mk_ite g_ctx guard (eget_expr res) acc)
-            last_case_expr
-            (List.tl rev_case_guards)
-            (List.tl rev_list) in
-      let assume = res_pe.assume @ guarded_let_bindings @ case_assumes in
-      let drop_cont =
-        mk_or g_ctx (List.map2 (fun guard (_, _, res) ->
-                                    mk_and g_ctx [guard; res.drop_cont])
-                               case_guards res_caselist) in
-      BmcM.return { expr      = ite_expr
-                  ; assume    = assume
-                  ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
-                  ; drop_cont = drop_cont
-                  ; mod_addr  = mod_addr
-                  }
+          List.fold_left2 (fun acc guard res -> mk_ite guard (eget_expr res) acc)
+                          last_case_expr
+                          (List.tl rev_case_guards)
+                          (List.tl rev_list) in
+      let assume = res_pe.assume @ guarded_bindings @ case_assumes in
+      let drop_cont = mk_or
+        (List.map2 (fun guard (_, _, res) -> mk_and [guard; res.drop_cont])
+                   case_guards res_caselist) in
+      return { expr      = ite_expr
+             ; assume    = assume
+             ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
+             ; drop_cont = drop_cont
+             ; mod_addr  = mod_addr
+             }
   | Eskip ->
-      BmcM.return { expr      = UnitSort.mk_unit
-                  ; assume    = []
-                  ; vcs       = []
-                  ; drop_cont = mk_false g_ctx
-                  ; mod_addr  = AddrSet.empty
-                  }
+      return { expr      = UnitSort.mk_unit
+             ; assume    = []
+             ; vcs       = []
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             }
   | Eproc _
   | Eccall _
   | Eunseq _
@@ -1423,14 +1420,14 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         BmcM.get_memory                     >>= fun mem ->
         BmcM.update_sym_table old_sym_table >>= fun () ->
         BmcM.update_memory_table old_memory >>= fun () ->
-        BmcM.return (mem, res_expr)
+        return (mem, res_expr)
       ) elist >>= fun res_elist ->
 
       let bmc_retlist = List.map snd res_elist in
-      let choice_vars =
-        List.mapi (fun i _ -> Expr.mk_fresh_const g_ctx
-                              ("seq_" ^ (string_of_int i))
-                              (Boolean.mk_sort g_ctx)) elist in
+      let choice_vars = List.mapi (
+        fun i _ -> Expr.mk_fresh_const g_ctx
+                        ("seq_" ^ (string_of_int i))
+                        (Boolean.mk_sort g_ctx)) elist in
 
       let mod_addr = List.fold_right (
         fun res acc -> AddrSet.union acc res.mod_addr)
@@ -1442,29 +1439,25 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       BmcM.update_memory_table new_memory >>= fun () ->
 
       (* Assert exactly one choice is taken *)
-      let xor_expr = List.fold_left
-          (fun acc choice -> mk_xor g_ctx acc choice)
-          (mk_false g_ctx) choice_vars in
+      let xor_expr = List.fold_left mk_xor mk_false choice_vars in
       let vcs = List.map2
-          (fun choice res -> mk_implies g_ctx choice
-                                             (mk_and g_ctx (eget_vcs res)))
+          (fun choice res -> mk_implies choice (mk_and (eget_vcs res)))
           choice_vars bmc_retlist in
-      let drop_cont = mk_or g_ctx (List.map2 (
-          fun choice res ->
-              mk_and g_ctx [choice; res.drop_cont])
-                     choice_vars bmc_retlist) in
+      let drop_cont = mk_or (List.map2
+          (fun choice res -> mk_and [choice; res.drop_cont])
+          choice_vars bmc_retlist) in
       let ret_expr = List.fold_left2
-          (fun acc choice res -> mk_ite g_ctx choice (eget_expr res) acc)
+          (fun acc choice res -> mk_ite choice (eget_expr res) acc)
           (eget_expr (List.hd bmc_retlist))
           (List.tl choice_vars)
           (List.tl bmc_retlist) in
-      BmcM.return { expr      = ret_expr
-                  ; assume    = xor_expr
-                                :: (List.concat (List.map eget_assume bmc_retlist))
-                  ; vcs       = vcs
-                  ; drop_cont = drop_cont
-                  ; mod_addr  = mod_addr
-                  }
+      return { expr      = ret_expr
+             ; assume    = xor_expr
+                           :: (List.concat (List.map eget_assume bmc_retlist))
+             ; vcs       = vcs
+             ; drop_cont = drop_cont
+             ; mod_addr  = mod_addr
+             }
   | Erun (_, label, pelist) ->
       BmcM.get_run_depth_table >>= fun run_depth_table ->
       let depth = match Pmap.lookup label run_depth_table with
@@ -1472,11 +1465,11 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                   | Some i -> i in
       if depth >= g_max_run_depth then
         (* TODO: flag as special vc? *)
-        BmcM.return { expr      = UnitSort.mk_unit
-                    ; assume    = []
-                    ; vcs       = [mk_false g_ctx]
-                    ; drop_cont = mk_true g_ctx
-                    ; mod_addr  = AddrSet.empty
+        return { expr      = UnitSort.mk_unit
+               ; assume    = []
+               ; vcs       = [mk_false]
+               ; drop_cont = mk_true
+               ; mod_addr  = AddrSet.empty
                     }
       else begin
         BmcM.get_proc_expr >>= fun proc_expr ->
@@ -1494,12 +1487,12 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
 
         BmcM.update_run_depth_table run_depth_table >>= fun () ->
         (* TODO: save run value *)
-        BmcM.return { expr      = UnitSort.mk_unit
-                    ; assume    = run_res.assume
-                    ; vcs       = run_res.vcs
-                    ; drop_cont = mk_true g_ctx
-                    ; mod_addr  = run_res.mod_addr
-                    }
+        return { expr      = UnitSort.mk_unit
+               ; assume    = run_res.assume
+               ; vcs       = run_res.vcs
+               ; drop_cont = mk_true
+               ; mod_addr  = run_res.mod_addr
+               }
       end
   | Epar _
   | Ewait _ ->
@@ -1521,25 +1514,24 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         BmcM.merge_memory old_memory
                           mod_addr
                           [mem_e1     ; mem_e2]
-                          [res_pe.expr; mk_not g_ctx res_pe.expr] in
+                          [res_pe.expr; mk_not res_pe.expr] in
       BmcM.update_memory_table new_memory >>= fun () ->
 
       let vcs =
           res_pe.vcs
-        @ (List.map (fun vc -> mk_implies g_ctx res_pe.expr vc) res_e1.vcs)
-        @ (List.map (fun vc -> mk_implies g_ctx (mk_not g_ctx res_pe.expr) vc)
+        @ (List.map (fun vc -> mk_implies res_pe.expr vc) res_e1.vcs)
+        @ (List.map (fun vc -> mk_implies (mk_not res_pe.expr) vc)
                     res_e2.vcs) in
-      let drop_cont = mk_or g_ctx
-        [ mk_and g_ctx [res_pe.expr             ; res_e1.drop_cont]
-        ; mk_and g_ctx [mk_not g_ctx res_pe.expr; res_e2.drop_cont]
+      let drop_cont = mk_or
+        [ mk_and [res_pe.expr       ; res_e1.drop_cont]
+        ; mk_and [mk_not res_pe.expr; res_e2.drop_cont]
         ] in
-      BmcM.return { expr      = mk_ite g_ctx res_pe.expr
-                                             res_e1.expr res_e2.expr
-                  ; assume    = res_pe.assume @ res_e1.assume @ res_e2.assume
-                  ; vcs       = vcs
-                  ; drop_cont = drop_cont
-                  ; mod_addr  = mod_addr
-                  }
+      return { expr      = mk_ite res_pe.expr res_e1.expr res_e2.expr
+             ; assume    = res_pe.assume @ res_e1.assume @ res_e2.assume
+             ; vcs       = vcs
+             ; drop_cont = drop_cont
+             ; mod_addr  = mod_addr
+             }
   | Elet _
   | Easeq _ ->
       assert false
@@ -1549,15 +1541,16 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       add_pattern_to_sym_table pat  >>= fun () ->
       mk_let_bindings pat res1.expr >>= fun let_binding ->
       bmc_expr e2                   >>= fun res2 ->
+
+      (* TODO: do we care about properly maintaining the memory table ?*)
       (* TODO: do optimization based on drop_cont *)
-      BmcM.return { expr      = res2.expr
-                  ; assume    = let_binding::(res1.assume @ res2.assume)
-                  ; vcs       = (mk_or g_ctx [ res1.drop_cont
-                                             ; mk_and g_ctx res2.vcs ])
-                                :: res1.vcs
-                  ; drop_cont = mk_or g_ctx [res1.drop_cont; res2.drop_cont]
-                  ; mod_addr  = AddrSet.union res1.mod_addr res2.mod_addr
-                  }
+      return { expr      = res2.expr
+             ; assume    = let_binding::(res1.assume @ res2.assume)
+             ; vcs       = (mk_or [ res1.drop_cont; mk_and res2.vcs ])
+                           :: res1.vcs
+             ; drop_cont = mk_or [res1.drop_cont; res2.drop_cont]
+             ; mod_addr  = AddrSet.union res1.mod_addr res2.mod_addr
+             }
   | Esave (_, varlist, e) ->
         let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
           Pmap.add sym pe map) varlist (Pmap.empty sym_cmp) in
@@ -1590,7 +1583,7 @@ let bmc_file (file              : unit typed_file)
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
         bmc_pexpr pe >>= fun pret ->
-        BmcM.return (bmc_pret_to_ret pret)
+        return (bmc_pret_to_ret pret)
 
     | _ -> failwith "Function to check must be a Core Proc or Fun"
   in
@@ -1608,14 +1601,14 @@ let bmc_file (file              : unit typed_file)
   (* Assumptions *)
   Solver.assert_and_track
     g_solver
-    (Expr.simplify (mk_and g_ctx result.assume) None)
+    (Expr.simplify (mk_and result.assume) None)
     (Expr.mk_fresh_const g_ctx "assume" (Boolean.mk_sort g_ctx));
 
   assert (Solver.check g_solver [] = SATISFIABLE);
   (* VCs *)
   Solver.assert_and_track
     g_solver
-    (Expr.simplify (mk_not g_ctx (mk_and g_ctx result.vcs)) None)
+    (Expr.simplify (mk_not (mk_and result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
   (*
   print_endline "====FINAL SOLVER";
