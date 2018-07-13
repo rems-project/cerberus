@@ -24,6 +24,7 @@ open Util
  *  - Globals
  *  - Concurrency
  *  - See if guarding assumptions will reduce solver time
+ *  - Pointer ctype not translated properly in Z3
  *)
 
 (* =========== GLOBALS =========== *)
@@ -243,15 +244,22 @@ module CtypeSort = struct
     [ mk_ctor "void_ty"
     ; mk_constructor_s g_ctx "basic_ty" (mk_sym g_ctx "is_basic_ty")
         [mk_sym g_ctx "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
+    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym g_ctx "is_ptr_ty")
+        [] [] []
+        (* TODO: recursive data types can not be nested in other types
+         * such as tuple  *)
+        (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
     ]
 
-  let mk_expr (ctype: Core_ctype.ctype0) : Expr.expr =
+  let rec mk_expr (ctype: Core_ctype.ctype0) : Expr.expr =
     let fdecls = get_constructors mk_sort in
     match ctype with
     | Void0  ->
         Expr.mk_app g_ctx (List.nth fdecls 0) []
     | Basic0 bty ->
         Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
+    | Pointer0 (_, ty) ->
+        Expr.mk_app g_ctx (List.nth fdecls 2) []
     | _ -> assert false
 end
 
@@ -398,6 +406,8 @@ let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
                         : Expr.expr =
   if (Sort.equal (LoadedInteger.mk_sort) sort) then
     LoadedInteger.mk_unspecified ctype
+  else if (Sort.equal (LoadedPointer.mk_sort) sort) then
+    LoadedPointer.mk_unspecified ctype
   else
     assert false
 
@@ -663,8 +673,9 @@ let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
       let sort = ctype_to_bmcz3sort (Basic0 ty2) in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
   | Array0 _ -> assert false
-  | Function0 _
-  | Pointer0 _
+  | Function0 _ -> assert false
+  | Pointer0 _ ->
+      CaseSortBase (CtypeSort.mk_expr ty, LoadedPointer.mk_sort)
   | Atomic0 _
   | Struct0 _
   | Union0 _
@@ -1486,6 +1497,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         bmc_expr cont_to_check >>= fun run_res ->
 
         BmcM.update_run_depth_table run_depth_table >>= fun () ->
+        print_endline "XX";
+        print_expr run_res.expr;
         (* TODO: save run value *)
         return { expr      = UnitSort.mk_unit
                ; assume    = run_res.assume
@@ -1589,10 +1602,8 @@ let bmc_file (file              : unit typed_file)
   in
   let (result, new_state) = BmcM.run initial_state to_run in
 
-  (*
   print_endline "====FINAL BMC_RET";
-  print_string (pp_bmc_ret result);
-  *)
+  (*print_string (pp_bmc_ret result);*)
 
   (* TODO: assert and track based on annotation *)
   (* TODO: multiple expressions or one expression? *)

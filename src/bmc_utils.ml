@@ -63,7 +63,7 @@ let range i j =
 let is_some (opt: 'a option) =
   match opt with
   | Some _ -> true
-  | _ -> assert false
+  | _ -> false
 
 (* ========== Debug ========== *)
 let debug_print level str =
