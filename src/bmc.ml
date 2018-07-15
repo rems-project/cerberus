@@ -19,12 +19,12 @@ open Util
  *  - Alias analysis
  *  - Alignment
  *  - PtrValidForDeref
- *  - Return values
  *  - Procedure calls
  *  - Globals
  *  - Concurrency
  *  - See if guarding assumptions will reduce solver time
  *  - Pointer ctype not translated properly in Z3
+ *  - Pure recursive function calls
  *)
 
 (* =========== GLOBALS =========== *)
@@ -40,6 +40,7 @@ let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 
 (* true => use bit vector representation *)
 let g_bv = false
+let g_bv_precision = 32
 
 let g_max_run_depth = 10
 let g_sequentialise = true
@@ -124,17 +125,38 @@ let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
 (* =========== Z3 HELPER FUNCTIONS =========== *)
-let int_to_z3 (i: int) : Expr.expr =
-  if g_bv then assert false
-  else Integer.mk_numeral_i g_ctx i
-
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
-  if g_bv then assert false
+  if g_bv then
+    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
   else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
+
+let int_to_z3 (i: int) : Expr.expr =
+  big_num_to_z3 (Nat_big_num.of_int i)
 
 let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
                 : Expr.expr =
-  if g_bv then assert false
+  if g_bv then
+    begin match binop with
+    | OpAdd   -> BitVector.mk_add  g_ctx arg1 arg2
+    | OpSub   -> BitVector.mk_sub  g_ctx arg1 arg2
+    | OpMul   -> BitVector.mk_mul  g_ctx arg1 arg2
+    | OpDiv   -> BitVector.mk_sdiv g_ctx arg1 arg2
+    | OpRem_t -> assert false
+    | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
+    | OpExp   ->
+        if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
+          let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
+          BitVector.mk_shl g_ctx one arg2
+      else
+        assert false
+    | OpEq    -> mk_eq arg1 arg2
+    | OpLt    -> BitVector.mk_slt g_ctx arg1 arg2
+    | OpLe    -> BitVector.mk_sle g_ctx arg1 arg2
+    | OpGt    -> BitVector.mk_sgt g_ctx arg1 arg2
+    | OpGe    -> BitVector.mk_sge g_ctx arg1 arg2
+    | OpAnd   -> mk_and [ arg1; arg2 ]
+    | OpOr    -> mk_or  [ arg1; arg2 ]
+    end
   else begin
     match binop with
     | OpAdd   -> Arithmetic.mk_add g_ctx [arg1; arg2]
@@ -154,7 +176,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
   end
 
 (* =========== CUSTOM SORTS =========== *)
-let integer_sort = if g_bv then assert false
+let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
                    else Integer.mk_sort g_ctx
 
 let mk_ctor str =
@@ -418,6 +440,8 @@ let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
 module ImplFunctions = struct
   open Z3.FuncDecl
   (* ---- Implementation ---- *)
+  let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
+
   (* TODO: precision of Bool is currently 8... *)
   let impl : Implementation.implementation0 = {
     binary_mode = Two'sComplement;
@@ -427,7 +451,7 @@ module ImplFunctions = struct
                    | Signed _   -> true
                    | Unsigned _ -> false
                    | _          -> assert false);
-    precision   = (fun i -> match Ocaml_implementation.Impl.sizeof_ity i with
+    precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
                    | None   -> assert false );
     size_t0     = Unsigned Long;
@@ -464,35 +488,35 @@ module ImplFunctions = struct
   let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
     Core_ctype.Basic0 (Integer ity)
 
+
+  (* ---- HELPER MAP MAKING FUNCTION ---- *)
+  let mk_ctype_map (name : string)
+                   (types: Core_ctype.ctype0 list)
+                   (sort : Sort.sort)
+                   : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+    List.fold_left (fun acc ctype ->
+      let ctype_expr = CtypeSort.mk_expr ctype in
+      let expr = Expr.mk_fresh_const g_ctx
+                    (sprintf "%s(%S)" name (Expr.to_string ctype_expr))
+                    sort in
+      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) types
   (* ---- Constants ---- *)
+
+
   (* TODO: massive code duplication *)
   let ivmin_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
-    List.fold_left (fun acc ity ->
-      let ctype = ity_to_ctype ity in
-      let ctype_expr = CtypeSort.mk_expr ctype in
-      let expr = Expr.mk_fresh_const g_ctx
-                    (sprintf "ivmin(%s)" (Expr.to_string ctype_expr))
-                    integer_sort in
-      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
+    mk_ctype_map "ivmin" (List.map ity_to_ctype ity_list) integer_sort
 
   let ivmax_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
-    List.fold_left (fun acc ity ->
-      let ctype = ity_to_ctype ity in
-      let ctype_expr = CtypeSort.mk_expr ctype in
-      let expr = Expr.mk_fresh_const g_ctx
-                    (sprintf "ivmax(%s)" (Expr.to_string ctype_expr))
-                    integer_sort in
-      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
+    mk_ctype_map "ivmax" (List.map ity_to_ctype ity_list) integer_sort
+
+
+  let sizeof_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+    mk_ctype_map "sizeof" (List.map ity_to_ctype ity_list) integer_sort
 
   let is_unsigned_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
-    List.fold_left (fun acc ity ->
-      let ctype = ity_to_ctype ity in
-      let ctype_expr = CtypeSort.mk_expr ctype in
-      let expr = Expr.mk_fresh_const g_ctx
-                    (sprintf "is_unsigned(%s)" (Expr.to_string ctype_expr))
-                    (Boolean.mk_sort g_ctx) in
-      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) ity_list
-
+    mk_ctype_map "is_unsigned" (List.map ity_to_ctype ity_list)
+                               (Boolean.mk_sort g_ctx)
   (* ---- Assertions ---- *)
   let ivmin_asserts =
     let ivmin_assert (ctype: Core_ctype.ctype0) : Expr.expr =
@@ -518,6 +542,17 @@ module ImplFunctions = struct
     List.map (fun ity -> ivmax_assert (ity_to_ctype ity))
              ity_list
 
+  let sizeof_asserts =
+    let sizeof_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+      let const = Pmap.find ctype sizeof_map in
+      match ctype with
+      | Basic0 (Integer ity) ->
+          mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
+      | _ -> assert false
+    in
+    List.map (fun ity -> sizeof_assert (ity_to_ctype ity))
+             ity_list
+
   (* TODO: char; other types *)
   let is_unsigned_asserts =
     let signed_tys =
@@ -534,6 +569,7 @@ module ImplFunctions = struct
   (* ---- All assertions ---- *)
   let all_asserts =   ivmin_asserts
                     @ ivmax_asserts
+                    @ sizeof_asserts
                     @ is_unsigned_asserts
 
 end
@@ -602,6 +638,9 @@ let ctor_to_z3 (ctor  : typed_ctor)
       (* Handled as special case in bmc_pexpr *)
       assert false
   | Civmin ->
+      (* Handled as special case in bmc_pexpr *)
+      assert false
+  | Civsizeof ->
       (* Handled as special case in bmc_pexpr *)
       assert false
   | Cspecified ->
@@ -1025,8 +1064,13 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              ; assume = []
              ; vcs    = []
              }
-  | PEimpl _ ->
-      assert false
+  | PEimpl const ->
+      BmcM.get_file >>= fun file ->
+      begin match Pmap.lookup const file.impl with
+      | Some (Def (_, pe)) ->
+          bmc_pexpr pe
+      | _ -> assert false
+      end
   | PEval cval ->
       return { expr   = value_to_z3 cval
              ; assume = []
@@ -1052,6 +1096,11 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              }
   | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
       return { expr   = Pmap.find ctype ImplFunctions.ivmax_map
+             ; assume = []
+             ; vcs    = []
+             }
+  | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      return { expr   = Pmap.find ctype ImplFunctions.sizeof_map
              ; assume = []
              ; vcs    = []
              }
@@ -1132,6 +1181,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
   | PEcall (name, pelist) ->
       BmcM.get_file >>= fun file ->
       (* Get the function called; either from stdlib or impl constants *)
+      (* TODO: pure recursive function calls *)
       let (ty, args, fun_expr) =
         match name with
         | Sym sym ->
@@ -1658,8 +1708,9 @@ let bmc_file (file              : unit typed_file)
     (Expr.mk_fresh_const g_ctx "ret_cond" (Boolean.mk_sort g_ctx));
 
   (* Extract return value *)
-  match Solver.check g_solver [] with
+  (match Solver.check g_solver [] with
   | SATISFIABLE ->
+
       let final_expr =
         match new_state.ret_const with
         | Some expr -> expr
@@ -1667,7 +1718,7 @@ let bmc_file (file              : unit typed_file)
       let model = Option.get (Solver.get_model g_solver) in
       let return_value = Option.get (Model.eval model final_expr false) in
       printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
-  | _ -> assert false
+  | _ -> assert false)
   ;
 
   (* VCs *)
