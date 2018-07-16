@@ -19,11 +19,10 @@ open Util
  *  - Alias analysis
  *  - Alignment
  *  - PtrValidForDeref
- *  - Globals
  *  - See if guarding assumptions will reduce solver time
  *  - Pointer ctype not translated properly in Z3
  *  - C functions are currently just identifiers.
- *  - Structs, 2D arrays
+ *  - Structs; Core Arrays (brace initialized arrays)
  *  - Null pointers
  *
  *  - Concurrency
@@ -80,18 +79,23 @@ module AddrSet = struct
 end
 
 type bmc_ret = {
-  expr              : Expr.expr;
-  assume            : Expr.expr list;
-  vcs               : Expr.expr list;
-  drop_cont         : Expr.expr; (* drop continuation; e.g. after Erun *)
-  mod_addr          : AddrSet.t; (* addresses modified in memory *)
-  ret_cond          : Expr.expr; (* constraints on the returned value *)
+  expr      : Expr.expr;
+  assume    : Expr.expr list;
+  vcs       : Expr.expr list;
+  drop_cont : Expr.expr; (* drop continuation; e.g. after Erun *)
+  mod_addr  : AddrSet.t; (* addresses modified in memory *)
+  ret_cond  : Expr.expr; (* constraints on the returned value *)
 }
 
 type bmc_pret = {
-  expr              : Expr.expr;
-  assume            : Expr.expr list;
-  vcs               : Expr.expr list;
+  expr      : Expr.expr;
+  assume    : Expr.expr list;
+  vcs       : Expr.expr list;
+}
+
+type bmc_gret = {
+  assume    : Expr.expr list;
+  vcs       : Expr.expr list;
 }
 
 let pget_expr   (pret: bmc_pret) = pret.expr
@@ -158,7 +162,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpSub   -> BitVector.mk_sub  g_ctx arg1 arg2
     | OpMul   -> BitVector.mk_mul  g_ctx arg1 arg2
     | OpDiv   -> BitVector.mk_sdiv g_ctx arg1 arg2
-    | OpRem_t -> assert false
+    | OpRem_t -> BitVector.mk_srem g_ctx arg1 arg2
     | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
     | OpExp   ->
         if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
@@ -1182,14 +1186,15 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                   BmcM.update_sym_table old_sym_table >>= fun () ->
                   return (let_binding, res_case_pexpr)
                 ) caselist >>= fun res_caselist ->
+      let reslist : bmc_pret list = List.map snd res_caselist in
       let guarded_bindings = List.map2 (
         fun guard (let_binding, _) -> mk_implies guard let_binding)
         case_guards res_caselist in
       let case_assumes =
-        List.concat (List.map (fun (_, res) -> res.assume) res_caselist) in
+        List.concat (List.map pget_assume reslist) in
       let guarded_vcs = List.map2 (
-        fun guard (_, res) -> mk_implies guard (mk_and res.vcs))
-        case_guards res_caselist in
+        fun guard res -> mk_implies guard (mk_and (pget_vcs res)))
+        case_guards reslist in
       let ite_expr =
         if List.length caselist = 1 then
           pget_expr (snd (List.hd res_caselist))
@@ -1782,6 +1787,23 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         let to_check = substitute_expr sub_map e in
         bmc_expr to_check
 
+(* Assume, Vcs *)
+let bmc_globals globals : bmc_gret BmcM.eff =
+  BmcM.mapM (
+    fun (sym, cbt, expr) ->
+      bmc_expr expr                                      >>= fun ret_expr ->
+      add_pattern_to_sym_table (CaseBase(Some sym, cbt)) >>= fun () ->
+      mk_let_binding (Some sym) ret_expr.expr            >>= fun binding ->
+      return { assume = binding::ret_expr.assume
+             ; vcs    = ret_expr.vcs
+             }
+    ) globals >>= fun ret_globals ->
+    return (List.fold_left (
+      fun acc gret ->
+        { assume = gret.assume @ acc.assume
+        ; vcs    = gret.vcs    @ acc.vcs}
+      ) { assume = []; vcs = []} ret_globals)
+
 let initialise_solver (solver: Solver.solver) =
   print_endline "Initialising solver.";
   Solver.add solver ImplFunctions.all_asserts
@@ -1794,10 +1816,8 @@ let bmc_file (file              : unit typed_file)
     BmcM.mk_initial_state file sym_supply in
   initialise_solver g_solver;
 
-  (* TODO: temporarily assume there are no globals *)
-  assert (List.length file.globs = 0);
-
   let to_run =
+    bmc_globals file.globs >>= fun gret ->
     match Pmap.lookup function_to_check file.funs with
     | Some (Proc (_, ty, params, e)) ->
         (* TODO: handle args to procedure. May be of pointer type *)
@@ -1808,12 +1828,16 @@ let bmc_file (file              : unit typed_file)
         bmc_expr e                      >>= fun ret ->
         let new_ret_cond =
           mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
-        return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]}
-
+        return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
+                       ; assume   = gret.assume @ ret.assume
+                       ; vcs      = gret.vcs    @ ret.vcs
+               }
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
         bmc_pexpr pe >>= fun pret ->
-        return (bmc_pret_to_ret pret)
+        let ret = bmc_pret_to_ret pret in
+        return {ret with assume = gret.assume @ ret.assume
+                       ; vcs    = gret.vcs    @ ret.vcs}
 
     | _ -> failwith "Function to check must be a Core Proc or Fun"
   in
