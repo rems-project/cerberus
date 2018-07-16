@@ -38,6 +38,11 @@ let name_cmp = fun nm1 nm2 ->
   | (Sym _, Impl _) -> (-1)
   | (Impl _, Sym _) -> 1
 
+let cabsid_cmp = fun ident1 ident2 ->
+  let (Cabs.CabsIdentifier(_, str1)) = ident1 in
+  let (Cabs.CabsIdentifier(_, str2)) = ident2 in
+  compare str1 str2
+
 (* ========== Core type functions ============= *)
 let is_core_ptr_bty (bTy: core_base_type) =
   match bTy with
