@@ -19,12 +19,14 @@ open Util
  *  - Alias analysis
  *  - Alignment
  *  - PtrValidForDeref
- *  - Procedure calls
  *  - Globals
- *  - Concurrency
  *  - See if guarding assumptions will reduce solver time
  *  - Pointer ctype not translated properly in Z3
- *  - Pure recursive function calls
+ *  - C functions are currently just identifiers.
+ *  - Structs, 2D arrays
+ *  - Null pointers
+ *
+ *  - Concurrency
  *)
 
 (* =========== GLOBALS =========== *)
@@ -42,7 +44,7 @@ let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 let g_bv = false
 let g_bv_precision = 32
 
-let g_max_run_depth = 10
+let g_max_run_depth = 5
 let g_sequentialise = true
 
 (* =========== Z3 aliases =========== *)
@@ -55,6 +57,8 @@ let mk_false   = Boolean.mk_false g_ctx
 let mk_xor     = Boolean.mk_xor g_ctx
 let mk_eq      = Boolean.mk_eq g_ctx
 let mk_ite     = Boolean.mk_ite g_ctx
+
+let mk_fresh_const = Expr.mk_fresh_const g_ctx
 
 (* =========== TYPES =========== *)
 (* Pure return *)
@@ -124,7 +128,11 @@ let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
+
+let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
+                   else Integer.mk_sort g_ctx
 (* =========== Z3 HELPER FUNCTIONS =========== *)
+
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
   if g_bv then
     BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
@@ -132,6 +140,15 @@ let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
 
 let int_to_z3 (i: int) : Expr.expr =
   big_num_to_z3 (Nat_big_num.of_int i)
+
+let z3num_to_int (expr: Expr.expr) =
+  assert (Sort.equal (Expr.get_sort expr) integer_sort);
+  if g_bv then
+    int_of_string (BitVector.numeral_to_string expr)
+  else
+    (assert (Arithmetic.is_int_numeral expr);
+     Integer.get_int expr)
+
 
 let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
                 : Expr.expr =
@@ -176,9 +193,6 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
   end
 
 (* =========== CUSTOM SORTS =========== *)
-let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
-                   else Integer.mk_sort g_ctx
-
 let mk_ctor str =
   Datatype.mk_constructor_s g_ctx str (mk_sym g_ctx ("is_" ^ str)) [] [] []
 
@@ -425,6 +439,22 @@ module LoadedInteger =
 module LoadedPointer =
   LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
 
+module CFunctionSort = struct
+  open Z3.Datatype
+
+  let mk_sort =
+    mk_sort_s g_ctx "CFunction"
+    [ mk_constructor_s g_ctx "cfun" (mk_sym g_ctx "isCfun")
+        [mk_sym g_ctx "getId"] [Some integer_sort] [0]
+    ]
+
+  let mk_cfun (id: Expr.expr) =
+    let sort = mk_sort in
+    let constructors = get_constructors sort in
+    let func_decl = List.nth constructors 0 in
+    Expr.mk_app g_ctx func_decl [ id ]
+end
+
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
@@ -598,12 +628,13 @@ let pp_addr (addr: int * int) =
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 let cot_to_z3 (cot: core_object_type) : Sort.sort =
   match cot with
-  | OTy_integer -> integer_sort
-  | OTy_pointer -> PointerSort.mk_sort
+  | OTy_integer     -> integer_sort
+  | OTy_pointer     -> PointerSort.mk_sort
   | OTy_floating
   | OTy_array _
-  | OTy_struct _
-  | OTy_cfunction _
+  | OTy_struct _ ->
+      assert false
+  | OTy_cfunction _ -> CFunctionSort.mk_sort (* TODO *)
   | OTy_union _ ->
       assert false
 
@@ -671,8 +702,12 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
   match oval with
   | OVinteger ival -> integer_value_to_z3 ival
   | OVfloating _
-  | OVpointer _
-  | OVcfunction _
+  | OVpointer _ ->
+      assert false
+  | OVcfunction (Sym sym) ->
+      CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym))
+  | OVcfunction _ ->
+      assert false
   | OVarray _
   | OVstruct _
   | OVunion _
@@ -727,7 +762,7 @@ let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
 
 module BmcM = struct
   type sym_table_ty = (sym_ty, Expr.expr) Pmap.map
-  type run_depth_table_ty = (sym_ty, int) Pmap.map
+  type run_depth_table_ty = (name, int) Pmap.map
   type alloc_ty = int
   type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
 
@@ -739,7 +774,7 @@ module BmcM = struct
 
     (* Map from Erun symbol to number of times Erun encountered.
      * Used to control depth of Erun *)
-    run_depth_table : (sym_ty, int) Pmap.map;
+    run_depth_table : run_depth_table_ty;
 
     (* Allocation and address supplies *)
     alloc_supply    : alloc_ty;
@@ -820,10 +855,26 @@ module BmcM = struct
     get >>= fun st ->
     return st.run_depth_table
 
+  let lookup_run_depth (label: name) : int eff =
+    get_run_depth_table >>= fun table ->
+    match Pmap.lookup label table with
+    | None  -> return 0
+    | Some i -> return i
+
   let update_run_depth_table (new_table: run_depth_table_ty)
                              : unit eff =
     get >>= fun st ->
     put {st with run_depth_table = new_table}
+
+  let increment_run_depth (label: name) : unit eff =
+    lookup_run_depth label  >>= fun depth ->
+    get_run_depth_table    >>= fun table ->
+    update_run_depth_table (Pmap.add label (depth+1) table)
+
+  let decrement_run_depth (label: name) : unit eff =
+    lookup_run_depth label >>= fun depth ->
+    get_run_depth_table    >>= fun table ->
+    update_run_depth_table (Pmap.add label (depth-1) table)
 
   (* allocation *)
   let get_new_alloc_and_update_supply : alloc_ty eff =
@@ -880,7 +931,7 @@ module BmcM = struct
     ; sym_supply      = sym_supply
     ; sym_table       = Pmap.empty sym_cmp
 
-    ; run_depth_table = Pmap.empty sym_cmp
+    ; run_depth_table = Pmap.empty name_cmp
 
     ; alloc_supply    = 0
     ; memory          = Pmap.empty Pervasives.compare
@@ -964,10 +1015,15 @@ let mk_let_binding (maybe_sym: sym_ty option)
                    (expr: Expr.expr)
                    : Expr.expr BmcM.eff =
   match maybe_sym with
-  | None -> return (mk_true)
+  | None -> return mk_true
   | Some sym ->
       BmcM.lookup_sym sym >>= fun sym_expr ->
-      return (mk_eq sym_expr expr)
+      (* TODO: hack for C functions... *)
+      if (Sort.equal CFunctionSort.mk_sort (Expr.get_sort expr)) then
+        BmcM.add_sym_to_sym_table sym expr >>= fun () ->
+        return (mk_eq sym_expr expr)
+      else
+        return (mk_eq sym_expr expr)
 
 let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
                         : Expr.expr BmcM.eff =
@@ -1180,8 +1236,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       assert false
   | PEcall (name, pelist) ->
       BmcM.get_file >>= fun file ->
+      BmcM.lookup_run_depth name >>= fun depth ->
       (* Get the function called; either from stdlib or impl constants *)
-      (* TODO: pure recursive function calls *)
       let (ty, args, fun_expr) =
         match name with
         | Sym sym ->
@@ -1197,6 +1253,13 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
             | _ -> assert false
             end
       in
+      if depth >= g_max_run_depth then
+        return { expr   = Expr.mk_fresh_const g_ctx
+                              "call_depth_exceeded" (cbt_to_z3 ty)
+               ; assume = []
+               ; vcs    = [ mk_false ]
+               }
+      else begin
       (* Bmc each argument *)
       BmcM.mapM (fun pe -> bmc_pexpr pe) pelist >>= fun arg_retlist ->
       (* Substitute arguments in function call *)
@@ -1205,7 +1268,11 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
           args pelist (Pmap.empty sym_cmp) in
       (* Bmc the function body *)
       let expr_to_check = substitute_pexpr sub_map fun_expr in
-      bmc_pexpr expr_to_check >>= fun ret_call ->
+      BmcM.increment_run_depth name       >>= fun () ->
+      BmcM.get_sym_table                  >>= fun old_sym_table ->
+      bmc_pexpr expr_to_check             >>= fun ret_call ->
+      BmcM.decrement_run_depth name       >>= fun () ->
+      BmcM.update_sym_table old_sym_table >>= fun () ->
 
       (* Alias for function call for debug purposes.
        * Using this may increase the time needed by the solver. *)
@@ -1228,6 +1295,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              ; vcs    = ret_call.vcs
                         @ (List.concat (List.map pget_vcs arg_retlist))
              }
+      end
   | PElet (pat, pe1, pe2) ->
       bmc_pexpr pe1                 >>= fun res1 ->
       add_pattern_to_sym_table pat  >>= fun () ->
@@ -1487,7 +1555,68 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; mod_addr  = AddrSet.empty
              ; ret_cond = mk_true
              }
-  | Eproc _
+  | Eproc _ ->
+      assert false
+  | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
+                        PEval(Vobject (OVcfunction (Sym sym)))), arglist)
+    (* fall through *)
+  | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
+                        PEsym sym), arglist) ->
+      BmcM.lookup_sym sym >>= fun sym_expr ->
+      BmcM.get_file       >>= fun file ->
+      assert (Expr.get_num_args sym_expr = 1);
+      let sym_id = z3num_to_int (List.hd (Expr.get_args sym_expr)) in
+      let func_sym = Sym.Symbol(sym_id, None) in
+      let (fun_ty, fun_args, fun_expr) =
+        match Pmap.lookup func_sym file.funs with
+        | Some (Proc(_, ty, params, e)) -> (ty, params, e)
+        | _    -> assert false in
+      BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
+      if depth >= g_max_run_depth then
+        return { expr      = Expr.mk_fresh_const g_ctx
+                                 "call_depth_exceeded" (cbt_to_z3 fun_ty)
+               ; assume    = []
+               ; vcs       = [ mk_false ]
+               ; drop_cont = mk_false
+               ; mod_addr  = AddrSet.empty
+               ; ret_cond  = mk_true
+               }
+      else begin
+        BmcM.mapM bmc_pexpr arglist >>= fun arg_retlist ->
+        let sub_map = List.fold_right2
+          ( fun (sym, _) pe table -> Pmap.add sym pe table)
+          fun_args arglist (Pmap.empty sym_cmp) in
+        let expr_to_check = substitute_expr sub_map fun_expr in
+        let new_ret_const =
+          mk_fresh_const (sprintf "ret_%d" sym_id) (cbt_to_z3 fun_ty) in
+        BmcM.get_proc_expr                      >>= fun old_proc_expr ->
+        BmcM.get_ret_const                      >>= fun old_ret_const ->
+        BmcM.get_sym_table                      >>= fun old_sym_table ->
+        BmcM.update_proc_expr expr_to_check     >>= fun () ->
+        BmcM.update_ret_const new_ret_const     >>= fun () ->
+        BmcM.increment_run_depth (Sym func_sym) >>= fun () ->
+        bmc_expr expr_to_check                  >>= fun ret_call ->
+        BmcM.update_ret_const old_ret_const     >>= fun () ->
+        BmcM.update_proc_expr old_proc_expr     >>= fun () ->
+        BmcM.update_sym_table old_sym_table     >>= fun () ->
+        BmcM.decrement_run_depth (Sym func_sym) >>= fun () ->
+
+        let proc_ret_cond =
+          mk_and [mk_implies (mk_not ret_call.drop_cont)
+                             (mk_eq new_ret_const ret_call.expr)
+                 ; ret_call.ret_cond] in
+
+        return { expr      = new_ret_const
+               ; assume    = proc_ret_cond
+                             ::ret_call.assume
+                             @ (List.concat (List.map pget_assume arg_retlist))
+               ; vcs       = ret_call.vcs
+                             @ (List.concat (List.map pget_vcs arg_retlist))
+               ; drop_cont = mk_false
+               ; mod_addr  = ret_call.mod_addr
+               ; ret_cond  = mk_true
+               }
+      end
   | Eccall _
   | Eunseq _
   | Eindet _ -> assert false
@@ -1546,10 +1675,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; ret_cond  = mk_and (List.map eget_ret bmc_retlist)
              }
   | Erun (_, label, pelist) ->
-      BmcM.get_run_depth_table >>= fun run_depth_table ->
-      let depth = match Pmap.lookup label run_depth_table with
-                  | None -> 0
-                  | Some i -> i in
+      BmcM.lookup_run_depth (Sym label) >>= fun depth ->
       if depth >= g_max_run_depth then
         (* TODO: flag as special vc? *)
         return { expr      = UnitSort.mk_unit
@@ -1569,18 +1695,18 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         let sub_map = List.fold_right2 (fun sym pe map -> Pmap.add sym pe map)
                                        cont_syms pelist (Pmap.empty sym_cmp) in
         let cont_to_check = substitute_expr sub_map cont_expr in
-        BmcM.update_run_depth_table
-            (Pmap.add label (depth+1) run_depth_table) >>= fun () ->
-        bmc_expr cont_to_check >>= fun run_res ->
-
-        BmcM.update_run_depth_table run_depth_table >>= fun () ->
-        BmcM.get_ret_const                          >>= fun ret_const ->
+        BmcM.increment_run_depth (Sym label) >>= fun () ->
+        bmc_expr cont_to_check               >>= fun run_res ->
+        BmcM.decrement_run_depth (Sym label) >>= fun () ->
+        BmcM.get_ret_const                   >>= fun ret_const ->
         return { expr      = UnitSort.mk_unit
                ; assume    = run_res.assume
                ; vcs       = run_res.vcs
                ; drop_cont = mk_true
                ; mod_addr  = run_res.mod_addr
-               ; ret_cond  = mk_eq ret_const run_res.expr
+               ; ret_cond  = mk_and [mk_implies (mk_not run_res.drop_cont)
+                                                (mk_eq ret_const run_res.expr)
+                                    ; run_res.ret_cond]
                }
       end
   | Epar _
@@ -1674,11 +1800,13 @@ let bmc_file (file              : unit typed_file)
     | Some (Proc (_, ty, params, e)) ->
         (* TODO: handle args to procedure. May be of pointer type *)
         assert (List.length params = 0);
-        BmcM.update_proc_expr e >>= fun () ->
-        BmcM.update_ret_const
-          (Expr.mk_fresh_const g_ctx "ret" (cbt_to_z3 ty)) >>= fun () ->
-        bmc_expr e >>= fun ret ->
-        return ret
+        let ret_const = mk_fresh_const "ret_main" (cbt_to_z3 ty) in
+        BmcM.update_proc_expr e         >>= fun () ->
+        BmcM.update_ret_const ret_const >>= fun () ->
+        bmc_expr e                      >>= fun ret ->
+        let new_ret_cond =
+          mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
+        return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]}
 
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
@@ -1710,7 +1838,6 @@ let bmc_file (file              : unit typed_file)
   (* Extract return value *)
   (match Solver.check g_solver [] with
   | SATISFIABLE ->
-
       let final_expr =
         match new_state.ret_const with
         | Some expr -> expr
@@ -1727,10 +1854,8 @@ let bmc_file (file              : unit typed_file)
     (Expr.simplify (mk_not (mk_and result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
 
-  (*
   print_endline "====FINAL SOLVER";
   print_endline (Solver.to_string g_solver);
-  *)
 
   print_endline "==== CHECKING";
   match Solver.check g_solver [] with
@@ -1741,15 +1866,13 @@ let bmc_file (file              : unit typed_file)
       print_endline "STATUS: unsatisfiable :)"
   | SATISFIABLE ->
       begin
-      print_endline "STATUS: satisfiable"
-      (*
+      print_endline "STATUS: satisfiable";
       let model = Option.get (Solver.get_model g_solver) in
       print_endline (Model.to_string model)
-      *)
       end
 
 (* Main bmc function: typechecks and sequentialises file.
- * The symbol supply is used to ensure fresh symbols when renaming.
+ e The symbol supply is used to ensure fresh symbols when renaming.
  *)
 let bmc (core_file  : unit file)
         (sym_supply : sym_supply_ty) =
