@@ -23,6 +23,8 @@ let symbol_to_string (sym: sym_ty) =
   | Symbol (num, None) ->
       ("?_" ^ (string_of_int num))
 
+let symbol_to_int (Symbol(num, _): sym_ty) = num
+
 let prefix_to_string (prefix: Sym.prefix) =
   match prefix with
   | PrefSource l -> "[" ^ (String.concat "," (List.map symbol_to_string l)) ^ "]"
