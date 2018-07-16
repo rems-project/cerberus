@@ -96,7 +96,9 @@ let rec substitute_expr (map: substitute_map)
     | Eif(pe1, e2, e3) ->
         Eif(substitute_pexpr map pe1, substitute_expr map e2, substitute_expr map e3)
     | Eskip -> Eskip
-    | Eccall _
+    | Eccall (a, pe, pelist) ->
+        Eccall(a, substitute_pexpr map pe,
+                  List.map (substitute_pexpr map) pelist)
     | Eproc _ ->
         assert false
     | Eunseq elist ->
