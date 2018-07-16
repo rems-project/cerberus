@@ -1817,7 +1817,7 @@ let bmc_file (file              : unit typed_file)
   in
   let (result, new_state) = BmcM.run initial_state to_run in
 
-  print_endline "==== FINAL BMC_RET";
+  (*print_endline "==== FINAL BMC_RET";*)
   (*print_string (pp_bmc_ret result);*)
 
   (* TODO: assert and track based on annotation *)
@@ -1825,10 +1825,13 @@ let bmc_file (file              : unit typed_file)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
   (* Assumptions *)
+  Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
+  (*
   Solver.assert_and_track
     g_solver
     (Expr.simplify (mk_and result.assume) None)
     (Expr.mk_fresh_const g_ctx "assume" (Boolean.mk_sort g_ctx));
+    *)
   (* Return conditions *)
   Solver.assert_and_track
     g_solver
@@ -1854,8 +1857,10 @@ let bmc_file (file              : unit typed_file)
     (Expr.simplify (mk_not (mk_and result.vcs)) None)
     (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
 
+  (*
   print_endline "====FINAL SOLVER";
   print_endline (Solver.to_string g_solver);
+  *)
 
   print_endline "==== CHECKING";
   match Solver.check g_solver [] with
