@@ -410,7 +410,6 @@ module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
     let unspec_ctor = List.nth ctors 1 in
     Expr.mk_app g_ctx unspec_ctor [expr]
 
-
   let is_specified (expr: Expr.expr) =
     assert (Sort.equal (Expr.get_sort expr) mk_sort);
     let recognizers = get_recognizers mk_sort in
@@ -434,7 +433,6 @@ module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 1) in
     Expr.mk_app g_ctx get_value [ expr ]
-
 end
 
 module LoadedInteger =
@@ -445,7 +443,6 @@ module LoadedPointer =
 
 module CFunctionSort = struct
   open Z3.Datatype
-
   let mk_sort =
     mk_sort_s g_ctx "CFunction"
     [ mk_constructor_s g_ctx "cfun" (mk_sym g_ctx "isCfun")
@@ -705,8 +702,9 @@ let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
 let object_value_to_z3 (oval: object_value) : Expr.expr =
   match oval with
   | OVinteger ival -> integer_value_to_z3 ival
-  | OVfloating _
-  | OVpointer _ ->
+  | OVfloating _ ->
+      assert false
+  | OVpointer pv ->
       assert false
   | OVcfunction (Sym sym) ->
       CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym))
@@ -742,23 +740,30 @@ let value_to_z3 (value: value)
       | _ -> assert false
       end
 
-let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
-                          : bmcz3sort =
+let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
+                           (file: unit typed_file)
+                           : bmcz3sort =
   match ty with
   | Void0     -> assert false
   | Basic0(Integer i) ->
       CaseSortBase (CtypeSort.mk_expr ty, LoadedInteger.mk_sort)
   | Basic0 _ -> assert false
   | Array0(ty2, Some n) ->
-      let sort = ctype_to_bmcz3sort ty2 in
+      let sort = ctype_to_bmcz3sort ty2 file in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
   | Array0(_, None) ->
       assert false
   | Function0 _ -> assert false
   | Pointer0 _ ->
       CaseSortBase (CtypeSort.mk_expr ty, LoadedPointer.mk_sort)
-  | Atomic0 _
-  | Struct0 _
+  | Atomic0 _ -> assert false
+  | Struct0 sym ->
+      begin match Pmap.lookup sym file.tagDefs with
+      | Some (StructDef memlist) ->
+          CaseSortList (List.map (fun (_, ty) -> ctype_to_bmcz3sort ty file)
+                                 memlist)
+      | _ -> assert false
+      end
   | Union0 _
   | Builtin0 _ -> assert false
 
@@ -1190,8 +1195,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       let guarded_bindings = List.map2 (
         fun guard (let_binding, _) -> mk_implies guard let_binding)
         case_guards res_caselist in
-      let case_assumes =
-        List.concat (List.map pget_assume reslist) in
+      let case_assumes = List.concat (List.map pget_assume reslist) in
       let guarded_vcs = List.map2 (
         fun guard res -> mk_implies guard (mk_and (pget_vcs res)))
         case_guards reslist in
@@ -1216,7 +1220,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
   | PEarray_shift (ptr, ty, index) ->
       bmc_pexpr ptr   >>= fun res_ptr ->
       bmc_pexpr index >>= fun res_index ->
-      let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty) in
+      BmcM.get_file   >>= fun file ->
+      let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
       let shift_size = binop_to_z3 OpMul res_index.expr (int_to_z3 ty_size) in
       let addr     = PointerSort.get_addr res_ptr.expr in
       let new_addr = AddressSort.shift_index_by_n addr shift_size in
@@ -1224,7 +1229,28 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              ; assume = res_ptr.assume @ res_index.assume
              ; vcs    = res_ptr.vcs @ res_index.vcs
              }
-  | PEmember_shift _
+  | PEmember_shift(ptr, sym, member) ->
+      bmc_pexpr ptr >>= fun res_ptr ->
+      BmcM.get_file >>= fun file ->
+      begin match Pmap.lookup sym file.tagDefs with
+      | Some (StructDef memlist) ->
+          let memsizes = List.map (fun (cid, cbt) ->
+              (cid, bmcz3sort_size (ctype_to_bmcz3sort cbt file))
+            ) memlist in
+          let (shift_size, _) = List.fold_left (
+              fun (acc, skip) (cid, n) ->
+                if cabsid_cmp cid member = 0 || skip then (acc, true)
+                else (acc + n, false)
+          ) (0, false) memsizes in
+          let addr = PointerSort.get_addr res_ptr.expr in
+          let new_addr =
+            AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
+          return { expr   = PointerSort.mk_ptr new_addr
+                 ; assume = res_ptr.assume
+                 ; vcs    = res_ptr.vcs
+                 }
+      | _ -> assert false
+      end
   | PEmemberof _  ->
       assert false
   | PEnot pe ->
@@ -1346,7 +1372,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   match action_ with
   | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
       (* TODO: non-basic types? *)
-      let sortlist = ctype_to_bmcz3sort ctype in
+      BmcM.get_file >>= fun file ->
+      let sortlist = ctype_to_bmcz3sort ctype file in
       let flat_sortlist = flatten_bmcz3sort sortlist in
       let allocation_size = bmcz3sort_size sortlist in
       BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
@@ -1397,12 +1424,13 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
             to_store, memorder) ->
       (* TODO: do alias analysis *)
       (* TODO: check alignment *)
+      BmcM.get_file               >>= fun file ->
       BmcM.lookup_sym sym         >>= fun sym_expr ->
       bmc_pexpr to_store          >>= fun res_to_store ->
       BmcM.get_memory             >>= fun possible_addresses ->
       (* BmcM.get_address_type_table >>= fun possible_addresses -> *)
 
-      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty) in
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
       let (ctype_expr, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
 
@@ -1440,8 +1468,9 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       assert false
   | Load0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_,_, PEsym sym), memorder) ->
       BmcM.lookup_sym sym         >>= fun sym_expr ->
+      BmcM.get_file               >>= fun file ->
       assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
-      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty) in
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
       let (ctype_expr, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
 
