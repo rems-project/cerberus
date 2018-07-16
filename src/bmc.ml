@@ -41,7 +41,7 @@ let g_z3_solver_logic_opt = None        (* Logic used by the solver *)
 let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 
 (* true => use bit vector representation *)
-let g_bv = false
+let g_bv = true
 let g_bv_precision = 32
 
 let g_max_run_depth = 5
@@ -745,11 +745,11 @@ let rec ctype_to_bmcz3sort (ty: Core_ctype.ctype0)
   | Basic0(Integer i) ->
       CaseSortBase (CtypeSort.mk_expr ty, LoadedInteger.mk_sort)
   | Basic0 _ -> assert false
-  | Array0(Basic0 ty2, Some n) ->
-      (* TODO: Handle more complex arrays later *)
-      let sort = ctype_to_bmcz3sort (Basic0 ty2) in
+  | Array0(ty2, Some n) ->
+      let sort = ctype_to_bmcz3sort ty2 in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
-  | Array0 _ -> assert false
+  | Array0(_, None) ->
+      assert false
   | Function0 _ -> assert false
   | Pointer0 _ ->
       CaseSortBase (CtypeSort.mk_expr ty, LoadedPointer.mk_sort)
@@ -1211,8 +1211,10 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
   | PEarray_shift (ptr, ty, index) ->
       bmc_pexpr ptr   >>= fun res_ptr ->
       bmc_pexpr index >>= fun res_index ->
+      let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty) in
+      let shift_size = binop_to_z3 OpMul res_index.expr (int_to_z3 ty_size) in
       let addr     = PointerSort.get_addr res_ptr.expr in
-      let new_addr = AddressSort.shift_index_by_n addr res_index.expr in
+      let new_addr = AddressSort.shift_index_by_n addr shift_size in
       return { expr   = PointerSort.mk_ptr new_addr
              ; assume = res_ptr.assume @ res_index.assume
              ; vcs    = res_ptr.vcs @ res_index.vcs
