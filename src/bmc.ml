@@ -20,10 +20,12 @@ open Util
  *  - Alignment
  *  - PtrValidForDeref
  *  - See if guarding assumptions will reduce solver time
+ *  - Try replacing let_bindings with actual expression
  *  - Pointer ctype not translated properly in Z3
  *  - C functions are currently just identifiers.
  *  - Structs; Core Arrays (brace initialized arrays)
- *  - Null pointers
+ *  - int x[2][2]; x[0][3] not detected as undefined
+ *  - Check arbitrary functions with arguments
  *
  *  - Concurrency
  *)
@@ -43,8 +45,8 @@ let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 let g_bv = true
 let g_bv_precision = 32
 
-let g_max_run_depth = 5
-let g_sequentialise = true
+let g_max_run_depth = 5    (* Maximum function call/run depth per call/run *)
+let g_sequentialise = true (* Sequentialise Core *)
 
 (* =========== Z3 aliases =========== *)
 let mk_implies = Boolean.mk_implies g_ctx
@@ -116,7 +118,7 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   ; ret_cond  = mk_true
   }
 
-(* Sort list *)
+(* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
   | CaseSortBase of Expr.expr * Sort.sort
   | CaseSortList of bmcz3sort list
@@ -135,6 +137,7 @@ let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
 
 let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
                    else Integer.mk_sort g_ctx
+
 (* =========== Z3 HELPER FUNCTIONS =========== *)
 
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
@@ -152,7 +155,6 @@ let z3num_to_int (expr: Expr.expr) =
   else
     (assert (Arithmetic.is_int_numeral expr);
      Integer.get_int expr)
-
 
 let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
                 : Expr.expr =
@@ -366,11 +368,22 @@ module PointerSort = struct
             (mk_sym g_ctx "_ptr")
             [mk_sym g_ctx ("get_addr")]
             [Some AddressSort.mk_sort] [0]
+      ; mk_constructor_s g_ctx "null"
+            (mk_sym g_ctx "is_null")
+            [] [] []
       ]
 
   let mk_ptr (addr: Expr.expr) =
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [addr]
+
+  let mk_null =
+    let ctor = List.nth (get_constructors mk_sort) 1 in
+    Expr.mk_app g_ctx ctor []
+
+  let is_null (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 1 in
+    Expr.mk_app g_ctx recognizer [expr]
 
   let get_addr (expr: Expr.expr) =
     assert (Sort.equal (Expr.get_sort expr) mk_sort);
@@ -441,6 +454,7 @@ module LoadedInteger =
 module LoadedPointer =
   LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
 
+(* TODO: CFunctions are currently just identifiers *)
 module CFunctionSort = struct
   open Z3.Datatype
   let mk_sort =
@@ -456,7 +470,6 @@ module CFunctionSort = struct
     Expr.mk_app g_ctx func_decl [ id ]
 end
 
-
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
                         : Expr.expr =
@@ -468,6 +481,7 @@ let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
     assert false
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
+(* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
 module ImplFunctions = struct
   open Z3.FuncDecl
   (* ---- Implementation ---- *)
@@ -687,6 +701,8 @@ let ctor_to_z3 (ctor  : typed_ctor)
       assert (List.length exprs = 1);
       if (bTy = BTy_loaded OTy_integer) then
         LoadedInteger.mk_unspecified (List.hd exprs)
+      else if (bTy = BTy_loaded OTy_pointer) then
+        LoadedPointer.mk_unspecified (List.hd exprs)
       else
         assert false
   | _ ->
@@ -698,14 +714,14 @@ let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
   | None -> assert false
   | Some i -> big_num_to_z3 i
 
-
 let object_value_to_z3 (oval: object_value) : Expr.expr =
   match oval with
   | OVinteger ival -> integer_value_to_z3 ival
   | OVfloating _ ->
       assert false
   | OVpointer pv ->
-      assert false
+      assert (is_null pv);
+      PointerSort.mk_null
   | OVcfunction (Sym sym) ->
       CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym))
   | OVcfunction _ ->
@@ -776,22 +792,23 @@ module BmcM = struct
   type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
 
   type bmc_state = {
-    file            : unit typed_file;
+    file              : unit typed_file;
 
-    sym_supply      : sym_supply_ty;
-    sym_table       : sym_table_ty;
+    sym_supply        : sym_supply_ty;
+    sym_table         : sym_table_ty;
 
-    (* Map from Erun symbol to number of times Erun encountered.
-     * Used to control depth of Erun *)
-    run_depth_table : run_depth_table_ty;
+    (* Map from Erun/Eccall symbol to number of times encountered.
+     * Used to control depth of potentially recursive Erun/Eccall *)
+    run_depth_table   : run_depth_table_ty;
 
-    (* Allocation and address supplies *)
-    alloc_supply    : alloc_ty;
-    memory          : memory_table_ty;
+    (* Allocation id supply *)
+    alloc_supply      : alloc_ty;
+    (* Map from address to current Z3 expression in ``memory'' *)
+    memory            : memory_table_ty;
 
     (* Procedure-local state *)
-    proc_expr       : (unit typed_expr) option;
-    ret_const       : Expr.expr option; (* Expression returned *)
+    proc_expr         : (unit typed_expr) option; (* Procedure being checked *)
+    ret_const         : Expr.expr option;         (* Expression returned *)
   }
 
   (* =========== MONADIC FUNCTIONS =========== *)
@@ -935,28 +952,30 @@ module BmcM = struct
   let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
                        : bmc_state =
-    { file            = file
+    { file             = file
 
-    ; sym_supply      = sym_supply
-    ; sym_table       = Pmap.empty sym_cmp
+    ; sym_supply       = sym_supply
+    ; sym_table        = Pmap.empty sym_cmp
 
-    ; run_depth_table = Pmap.empty name_cmp
+    ; run_depth_table  = Pmap.empty name_cmp
 
-    ; alloc_supply    = 0
-    ; memory          = Pmap.empty Pervasives.compare
+    ; alloc_supply     = 0
+    ; memory           = Pmap.empty Pervasives.compare
 
-    ; proc_expr       = None
-    ; ret_const       = None
+    ; proc_expr        = None
+    ; ret_const        = None
     }
 
   (* =========== Manipulating functions ========== *)
+
+  (* For each modified address, update base memory using tables
+   * guarded by guards. *)
   let merge_memory (base     : memory_table_ty)
                    (mod_addr : AddrSet.t)
                    (tables   : memory_table_ty list)
                    (guards   : Expr.expr list) =
     let guarded_tables : (memory_table_ty * Expr.expr) list =
       List.combine tables guards in
-    (* for each modified addr... *)
     AddrSet.fold (fun addr acc ->
       match Pmap.lookup addr acc with
       | None -> acc
@@ -1227,7 +1246,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       let new_addr = AddressSort.shift_index_by_n addr shift_size in
       return { expr   = PointerSort.mk_ptr new_addr
              ; assume = res_ptr.assume @ res_index.assume
-             ; vcs    = res_ptr.vcs @ res_index.vcs
+             ; vcs    = (mk_not (PointerSort.is_null res_ptr.expr))
+                        ::res_ptr.vcs @ res_index.vcs
              }
   | PEmember_shift(ptr, sym, member) ->
       bmc_pexpr ptr >>= fun res_ptr ->
@@ -1247,7 +1267,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
             AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
           return { expr   = PointerSort.mk_ptr new_addr
                  ; assume = res_ptr.assume
-                 ; vcs    = res_ptr.vcs
+                 ; vcs    = (mk_not (PointerSort.is_null res_ptr.expr))
+                            ::res_ptr.vcs
                  }
       | _ -> assert false
       end
@@ -1307,23 +1328,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       BmcM.decrement_run_depth name       >>= fun () ->
       BmcM.update_sym_table old_sym_table >>= fun () ->
 
-      (* Alias for function call for debug purposes.
-       * Using this may increase the time needed by the solver. *)
-      (*
-      let arg_names = List.map (fun ret -> Expr.to_string ret.expr)
-                               arg_retlist in
-
-      let const =
-        Expr.mk_fresh_const g_ctx
-             (sprintf "%s(%s)" (name_to_string name)
-                               (String.concat "," arg_names))
-             (cbt_to_z3 ty) in
-      let eq_expr = mk_eq const ret_call.expr in
-      *)
-
-      return { expr   = ret_call.expr (*const*)
-             ; assume =               (*[eq_expr] @ *)
-                           ret_call.assume
+      return { expr   = ret_call.expr
+             ; assume =   ret_call.assume
                         @ (List.concat (List.map pget_assume arg_retlist))
              ; vcs    = ret_call.vcs
                         @ (List.concat (List.map pget_vcs arg_retlist))
@@ -1340,9 +1346,12 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              }
   | PEif (pe_cond, pe1, pe2) ->
       (* TODO: symbols added in pe1 visible in pe2 *)
-      bmc_pexpr pe_cond       >>= fun res_cond ->
-      bmc_pexpr pe1           >>= fun res1 ->
-      bmc_pexpr pe2           >>= fun res2 ->
+      bmc_pexpr pe_cond                   >>= fun res_cond ->
+      BmcM.get_sym_table                  >>= fun old_sym_table ->
+      bmc_pexpr pe1                       >>= fun res1 ->
+      BmcM.update_sym_table old_sym_table >>= fun () ->
+      bmc_pexpr pe2                       >>= fun res2 ->
+      BmcM.update_sym_table old_sym_table >>= fun () ->
       let new_vcs =
           res_cond.vcs
         @ (List.map (fun vc -> mk_implies res_cond.expr vc) res1.vcs)
@@ -1363,7 +1372,6 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              ; assume = []
              ; vcs = []
              }
-
   | PEis_unsigned _ ->
       assert false
 
@@ -1378,6 +1386,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       let allocation_size = bmcz3sort_size sortlist in
       BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
 
+      (* Create allocation_size number of addresses and initialize *)
       BmcM.mapMi (fun i (ctype_expr, sort) ->
         (* make new address *)
         let addr = (alloc_id, i) in
@@ -1428,7 +1437,6 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       BmcM.lookup_sym sym         >>= fun sym_expr ->
       bmc_pexpr to_store          >>= fun res_to_store ->
       BmcM.get_memory             >>= fun possible_addresses ->
-      (* BmcM.get_address_type_table >>= fun possible_addresses -> *)
 
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
       let (ctype_expr, sort) = List.hd flat_sortlist in
@@ -1438,12 +1446,13 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         let addr_sort = Expr.get_sort expr_in_memory in
         if (Sort.equal sort addr_sort) then
           begin
-          (*BmcM.lookup_memory addr >>= fun expr_in_memory -> *)
           let addr_expr = AddressSort.mk_expr_from_addr addr  in
           let new_seq_var =
             Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) addr_sort in
           (* new_seq_var is equal to to_store if addr_eq, else old value *)
-          let addr_eq = mk_eq (PointerSort.get_addr sym_expr) addr_expr in
+          let addr_eq =
+            mk_and [ mk_not (PointerSort.is_null sym_expr)
+                   ; mk_eq (PointerSort.get_addr sym_expr) addr_expr] in
           let new_val = mk_eq new_seq_var res_to_store.expr in
           let old_val = mk_eq new_seq_var expr_in_memory in
           BmcM.update_memory addr new_seq_var >>= fun () ->
@@ -1483,7 +1492,9 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         let addr_sort = Expr.get_sort expr_in_memory in
         if (Sort.equal sort addr_sort) then
           let addr_expr = AddressSort.mk_expr_from_addr addr in
-          let addr_eq = mk_eq addr_expr (PointerSort.get_addr sym_expr) in
+          let addr_eq =
+            mk_and [ mk_not (PointerSort.is_null sym_expr)
+                   ; mk_eq addr_expr (PointerSort.get_addr sym_expr)] in
           let impl_expr = mk_implies addr_eq (mk_eq ret_expr expr_in_memory) in
           return (Some (impl_expr, addr_eq))
         else
@@ -1511,11 +1522,22 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       return (bmc_pret_to_ret pres)
   | Ememop (PtrValidForDeref, [ptr])  ->
       bmc_pexpr ptr >>= fun res_ptr ->
-      let addr     : Expr.expr = PointerSort.get_addr res_ptr.expr in
+      let addr = PointerSort.get_addr res_ptr.expr in
       let range_assert = AddressSort.valid_index_range addr in
-      return { expr      = range_assert
+      return { expr      = mk_and [mk_not (PointerSort.is_null res_ptr.expr)
+                                  ;range_assert]
              ; assume    = res_ptr.assume
              ; vcs       = res_ptr.vcs
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             ; ret_cond  = mk_true
+             }
+  | Ememop (PtrEq, [p1;p2]) ->
+      bmc_pexpr p1 >>= fun res_p1 ->
+      bmc_pexpr p2 >>= fun res_p2 ->
+      return { expr      = mk_eq res_p1.expr res_p2.expr
+             ; assume    = res_p1.assume @ res_p2.assume
+             ; vcs       = res_p1.vcs @ res_p2.vcs
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
              ; ret_cond  = mk_true
@@ -1745,7 +1767,9 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                                     ; run_res.ret_cond]
                }
       end
-  | Epar _
+  | Epar elist ->
+      assert (not g_sequentialise);
+      assert false
   | Ewait _ ->
       assert false
   | Eif (pe, e1, e2) ->
