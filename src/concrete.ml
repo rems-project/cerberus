@@ -45,7 +45,7 @@ module Eff : sig
     ('a, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
-  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff
+(*  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff *)
   val read: ('st -> 'a) -> ('a, 'err, 'cs, 'st) eff
   val update: ('st -> 'st) -> (unit, 'err, 'cs, 'st) eff
   val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
@@ -60,7 +60,7 @@ end = struct
   
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
-  let (>>) f g = f >>= (fun _ -> g)
+(*  let (>>) f g = f >>= (fun _ -> g) *)
   
   let read = Nondeterminism.nd_read
   let update = Nondeterminism.nd_update
@@ -174,9 +174,7 @@ and alignof = function
         | None ->
             failwith "the concrete memory model requires a complete implementation alignof FLOATING"
       end
-  | Array0 (_, None) ->
-      assert false
-  | Array0 (elem_ty, Some n) ->
+  | Array0 (elem_ty, _) ->
       alignof elem_ty
   | Function0 _ ->
       assert false
@@ -337,6 +335,9 @@ module Concrete : Memory = struct
     allocations: allocation IntMap.t;
     next_address: address;
     bytemap: (provenance * char option) IntMap.t;
+    
+    dead_allocations: allocation_id list;
+    dynamic_addrs: address list;
   }
   
   let initial_mem_state = {
@@ -344,6 +345,9 @@ module Concrete : Memory = struct
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
     bytemap= IntMap.empty;
+    
+    dead_allocations= [];
+    dynamic_addrs= [];
   }
   
   type footprint =
@@ -448,7 +452,14 @@ module Concrete : Memory = struct
     return ()
     end else
       return ()
-
+  
+  let is_dynamic addr : bool memM =
+    get >>= fun st ->
+    return (List.mem addr st.dynamic_addrs)
+  
+  let is_dead alloc_id : bool memM =
+    get >>= fun st ->
+    return (List.mem alloc_id st.dead_allocations)
   
   let get_allocation alloc_id : allocation memM =
     get >>= fun st ->
@@ -611,7 +622,7 @@ module Concrete : Memory = struct
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
-            ((memb_ident, mval)::acc_xs, previous_offset + sizeof memb_ty, acc_bs')
+            ((memb_ident, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
@@ -794,40 +805,69 @@ module Concrete : Memory = struct
               (Nat_big_num.add addr (Nat_big_num.of_int i), b)
             ) (explode_bytes mval) in
             ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
-                next_address= Nat_big_num.add addr size;
-                bytemap=
-                  List.fold_left (fun acc (addr, b) ->
-                    IntMap.add addr b acc
-                  ) st.bytemap bs
+            , { st with
+                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
+                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
+                  next_address= Nat_big_num.add addr size;
+                  bytemap=
+                    List.fold_left (fun acc (addr, b) ->
+                      IntMap.add addr b acc
+                    ) st.bytemap bs
               } )
     end
-(*
-  (* TODO: DEBUG: *)
-  >>= fun ret ->
-  get >>= fun st ->
-  dot_of_mem_state st;
-  return ret
-*)
   
-  
+
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
-(*    print_bytemap "ENTERING ALLOC_DYNAMIC" >>= fun () -> *)
     modify (fun st ->
       let alloc_id = st.next_alloc_id in
       let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
+      Debug_ocaml.print_debug 1 [] (fun () ->
+        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        " --> alloc_id= " ^ N.to_string alloc_id ^
+        ", size= " ^ N.to_string size_n ^
+        ", addr= " ^ N.to_string addr
+      );
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
             allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
-            next_address= Nat_big_num.add addr size_n } )
+            next_address= Nat_big_num.add addr size_n;
+            dynamic_addrs= addr :: st.dynamic_addrs })
     )
   
+  (* zap (make unspecified) any pointer in the memory with provenance matching a
+     given allocation id *)
+  let zap_pointers alloc_id =
+    modify (fun st ->
+      let bytemap' = IntMap.fold (fun alloc_id alloc acc ->
+        let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
+        match alloc.ty with
+          | None ->
+              (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
+              acc
+          | Some ty ->
+              begin match combine_bytes ty bs with
+                | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
+                    let bs' = List.init (N.to_int alloc.size) (fun i ->
+                      (Nat_big_num.add alloc.base (Nat_big_num.of_int i), (Prov_none, None))
+                    ) in
+                    List.fold_left (fun acc (addr, b) ->
+                      IntMap.add addr b acc
+                    ) acc bs'
+                | _ ->
+                    (* TODO: check *)
+                    acc
+              end
+      ) st.allocations st.bytemap in
+    ((), { st with bytemap= bytemap' })
+    )
   
-  let kill : pointer_value -> unit memM = function
+  let kill loc is_dyn : pointer_value -> unit memM = function
     | PV (_, PVnull _) ->
+        if Switches.(has_switch SW_forbid_nullptr_free) then
           fail (MerrOther "attempted to kill with a null pointer")
+        else
+          return ()
     | PV (_, PVfunction _) ->
           fail (MerrOther "attempted to kill with a function pointer")
     | PV (Prov_none, PVconcrete _) ->
@@ -836,16 +876,40 @@ module Concrete : Memory = struct
         (* TODO: should that be an error ?? *)
         return ()
     | PV (Prov_some alloc_id, PVconcrete addr) ->
-        get_allocation alloc_id >>= fun alloc ->
-        if N.equal addr alloc.base then begin
-          Debug_ocaml.print_debug 1 [] (fun () ->
-            "KILLING alloc_id= " ^ N.to_string alloc_id
-          );
-          update begin fun st ->
-            {st with allocations= IntMap.remove alloc_id st.allocations}
+        begin if is_dyn then
+          (* this kill is dynamic one (i.e. free() or friends) *)
+          is_dynamic addr >>= begin function
+            | false ->
+                fail (MerrUndefinedFree (loc, Free_static_allocation))
+            | true ->
+                return ()
           end
-        end else
-          fail (MerrOther "attempted to kill with an invalid pointer")
+        else
+          return ()
+        end >>= fun () ->
+        is_dead alloc_id >>= begin function
+          | true ->
+              if is_dyn then
+                fail (MerrUndefinedFree (loc, Free_dead_allocation))
+              else
+                failwith "Concrete: FREE was called on a dead allocation"
+          | false ->
+              get_allocation alloc_id >>= fun alloc ->
+              if N.equal addr alloc.base then begin
+                Debug_ocaml.print_debug 1 [] (fun () ->
+                  "KILLING alloc_id= " ^ N.to_string alloc_id
+                );
+                update begin fun st ->
+                  {st with dead_allocations= alloc_id :: st.dead_allocations;
+                           allocations= IntMap.remove alloc_id st.allocations}
+                end >>= fun () ->
+                if Switches.(has_switch SW_zap_dead_pointers) then
+                  zap_pointers alloc_id
+                else
+                  return ()
+              end else
+                fail (MerrUndefinedFree (loc, Free_out_of_bound))
+        end
   
   let load loc ty (PV (prov, ptrval_)) =
     Debug_ocaml.print_debug 3 [] (fun () ->
@@ -859,7 +923,14 @@ module Concrete : Memory = struct
       let (mval, bs') = combine_bytes ty bs in
       begin match bs' with
         | [] ->
-            return (Footprint, mval)
+            if Switches.(has_switch SW_strict_reads) then
+              match mval with
+                | MVunspecified _ ->
+                    fail (MerrOther "load from uninitialised memory")
+                | _ ->
+                    return (Footprint, mval)
+            else
+              return (Footprint, mval)
         | _ ->
             fail (MerrWIP "load, bs' <> []")
       end in
@@ -878,6 +949,12 @@ module Concrete : Memory = struct
                 do_load addr
           end
       | (Prov_some alloc_id, PVconcrete addr) ->
+          is_dead alloc_id >>= begin function
+            | true ->
+                fail (MerrAccess (loc, LoadAccess, DeadPtr))
+            | false ->
+                return ()
+          end >>= fun () ->
           begin is_within_bound alloc_id ty addr >>= function
             | false ->
                 Debug_ocaml.print_debug 1 [] (fun () ->
@@ -914,7 +991,7 @@ module Concrete : Memory = struct
             List.fold_left (fun acc (addr, b) ->
               IntMap.add addr b acc
             ) st.bytemap bs }
-        end >>
+        end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
         return Footprint in
       match (prov, ptrval_) with
@@ -955,6 +1032,17 @@ module Concrete : Memory = struct
   
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
+
+  let concrete_ptrval i addr =
+    PV (Prov_some i, PVconcrete addr)
+
+  let case_ptrval pv fnull fconc _ =
+    match pv with
+    | PV (_, PVnull ty) -> fnull ty
+    | PV (Prov_none, PVconcrete addr) -> fconc None addr
+    | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
+    | _ -> failwith "case_ptrval"
+
   
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
@@ -985,6 +1073,9 @@ module Concrete : Memory = struct
       | (PVconcrete addr1, PVconcrete addr2) ->
           (* TODO: provenance *)
           return (Nat_big_num.compare addr1 addr2 == -1)
+      | (PVnull _, _)
+      | (_, PVnull _) ->
+          fail (MerrWIP "lt_ptrval ==> one null pointer")
       | _ ->
           fail (MerrWIP "lt_ptrval")
   
@@ -1112,12 +1203,44 @@ module Concrete : Memory = struct
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival tag_sym memb_ident in
     PV (prov, match ptrval_ with
-      | PVnull _ ->
-          PVconcrete offset
+      | PVnull ty ->
+          (* TODO: unsure, this might just be undefined (gcc-torture assumes the
+             following behaviour though) *)
+          if N.equal N.zero offset then
+            PVnull ty
+          else
+            PVconcrete offset
       | PVfunction _ ->
           failwith "Concrete.member_shift_ptrval, PVfunction"
       | PVconcrete addr ->
           PVconcrete (N.add addr offset))
+  
+  let eff_array_shift_ptrval ptrval ty (IV (_, ival)) =
+    let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
+    match ptrval with
+      | PV (_, PVnull _) ->
+          (* TODO: this seems to be undefined in ISO C *)
+          (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
+          failwith "TODO(shift a null pointer should be undefined behaviour)"
+      | PV (_, PVfunction _) ->
+          failwith "Concrete.eff_array_shift_ptrval, PVfunction"
+      | PV (Prov_some alloc_id, PVconcrete addr) ->
+          (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
+          let addr' = N.add addr offset in
+          if Switches.(has_switch SW_strict_pointer_arith) then
+            get_allocation alloc_id >>= fun alloc ->
+(*            Printf.printf "addr: %s, (base: %s,  base+size: %s, |ty|: %s" (N.to_string addr); *)
+            if    N.less_equal alloc.base addr'
+               && N.less_equal (N.add addr' (N.of_int (sizeof ty)))
+                               (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+              return (PV (Prov_some alloc_id, PVconcrete addr'))
+            else
+              fail (MerrOther "out-of-bound pointer arithmetic")
+          else
+            return (PV (Prov_some alloc_id, PVconcrete addr'))
+      | PV (prov, PVconcrete addr) ->
+          (* TODO: check *)
+          return (PV (prov, PVconcrete (N.add addr offset)))
   
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"
@@ -1434,6 +1557,28 @@ let combine_prov prov1 prov2 =
                    if equal acc zero then of_int (Nat_big_num.compare n1 n2) else acc
                  ) zero (List.combine bytes1 bytes2)))
 
+  let realloc tid align ptr size : pointer_value memM =
+    match ptr with
+    | PV (Prov_none, PVnull _) ->
+      allocate_dynamic tid (Symbol.PrefOther "realloc") align size
+    | PV (Prov_none, _) ->
+      fail (MerrWIP "realloc no provenance")
+    | PV (Prov_some alloc_id, PVconcrete addr) ->
+      is_dynamic addr >>= begin function
+        | false ->
+            fail (MerrUndefinedRealloc)
+        | true ->
+            get_allocation alloc_id >>= fun alloc ->
+            if alloc.base = addr then
+              allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+              memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
+              kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
+              return new_ptr
+            else
+              fail (MerrWIP "realloc: invalid pointer")
+      end
+    | PV _ ->
+      fail (MerrWIP "realloc: invalid pointer")
 
   (* JSON serialisation *)
 

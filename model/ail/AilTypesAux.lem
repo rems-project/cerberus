@@ -61,12 +61,7 @@ let rec is_signed_ity ity =
     | IBuiltin _ ->
         error "TODO: AilTypesAux.is_signed_ity, IBuiltin"
     | Enum tag_sym ->
-        match Implementation_.typeof_enum tag_sym with
-          | Just ity ->
-              is_signed_ity ity
-          | Nothing ->
-              error ("AilTypesAux.is_signed_ity: enum tag `" ^ show tag_sym ^ "' was not registered")
-        end
+        is_signed_ity (Implementation_.typeof_enum tag_sym)
     | Size_t ->
         (* STD §7.19#2 *)
         false
@@ -90,12 +85,7 @@ let rec is_unsigned_ity ity =
     | IBuiltin _ ->
         error "TODO: AilTypesAux.is_unsigned_ity, IBuiltin"
     | Enum tag_sym ->
-        match Implementation_.typeof_enum tag_sym with
-          | Just ity ->
-              is_unsigned_ity ity
-          | Nothing ->
-              error ("AilTypesAux.is_signed_ity: enum tag `" ^ show tag_sym ^ "' was not registered")
-        end
+        is_unsigned_ity (Implementation_.typeof_enum tag_sym)
     | Size_t ->
         (* STD §7.19#2 *)
         true
@@ -971,7 +961,17 @@ let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
     | (Void, Void) ->
         true
     | (Basic bty1, Basic bty2) ->
-        bty1 = bty2
+        let (bty1', bty2') = match (bty1, bty2) with
+          | (Integer (Enum tag_sym1), Integer (Enum tag_sym2)) ->
+              (Integer (Implementation_.typeof_enum tag_sym1), Integer (Implementation_.typeof_enum tag_sym2))
+          | (Integer (Enum tag_sym1), _) ->
+              (Integer (Implementation_.typeof_enum tag_sym1), bty2)
+          | (_, Integer (Enum tag_sym2)) ->
+              (bty1, Integer (Implementation_.typeof_enum tag_sym2))
+          | _ ->
+              (bty1, bty2)
+        end in
+        bty1' = bty2'
     | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
         (* STD §6.7.6.2#6 *)
            are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2)

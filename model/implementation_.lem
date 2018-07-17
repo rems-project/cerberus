@@ -13,7 +13,7 @@ val alignof_ity: AilTypes.integerType -> maybe nat
 val alignof_fty: AilTypes.floatingType -> maybe nat
 
 val register_enum: Symbol.sym -> list integer -> bool
-val typeof_enum: Symbol.sym -> maybe AilTypes.integerType
+val typeof_enum: Symbol.sym -> AilTypes.integerType
 
 
 declare ocaml target_rep function char_is_signed = `Ocaml_implementation.Impl.char_is_signed`

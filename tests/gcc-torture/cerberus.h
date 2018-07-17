@@ -59,10 +59,8 @@
 
 // Hard-coded sizes
 #define __SIZEOF_LONG_LONG__  8
-#define __LONG_LONG_MAX__     LLONG_MAX
+#define __LONG_LONG_MAX__     9223372036854775807LL
 #define __SIZEOF_INT__        4
-#undef CHAR_BIT
-#define CHAR_BIT              8
 #define __CHAR_BIT__          CHAR_BIT
 #define __LONG_MAX__          2147483647
 #define __FLT_MAX__           3.402823e+38
@@ -95,6 +93,9 @@
 
 #define __ORDER_LITTLE_ENDIAN__   1
 #define __BYTE_ORDER__            __ORDER_LITTLE_ENDIAN__
+
+#undef  STACK_SIZE
+#define STACK_SIZE          1000
 
 // Hack implementation of fabs
 float fabs(float x)

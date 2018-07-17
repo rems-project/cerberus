@@ -31,7 +31,6 @@ let batch =
 (* stdout if in batch mode *)
 let stdout = ref ""
 
-let null_ptr = M.null_ptrval C.Void0
 
 let position fname lnum bol cnum = {
   Lexing.pos_fname = fname;
@@ -58,6 +57,9 @@ let ivcompl = ivctor M.bitwise_complement_ival "ivcompl"
 let ivand   = ivctor M.bitwise_and_ival "ivand"
 let ivor    = ivctor M.bitwise_or_ival "ivor"
 let ivxor   = ivctor M.bitwise_xor_ival "ivxor"
+
+let fvfromint = float_of_int
+let ivfromfloat (_, x) = int_of_float x
 
 (* Ail types *)
 
@@ -123,7 +125,18 @@ let get_union m =
 
 (* Cast to memory values *)
 
+let case_loaded_mval f = case_loaded f M.unspecified_mval
+
 let mk_int s = M.integer_ival (Nat_big_num.of_string s)
+let mk_float s = M.str_fval s
+let mk_array xs = M.array_mval (List.map (case_loaded_mval (M.integer_value_mval T.Char)) xs)
+
+let mk_pointer alloc_id addr =
+  M.concrete_ptrval (Nat_big_num.of_string alloc_id)
+                    (Nat_big_num.of_string addr)
+
+let mk_null cty = M.null_ptrval cty
+let mk_null_void = mk_null C.Void0
 
 (* Binary operations wrap *)
 
@@ -150,14 +163,18 @@ let le_ptrval p q = M.le_ptrval p q
 let diff_ptrval p q = M.diff_ptrval p q
 let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 let memcmp p q r = return $ M.memcmp p q r
+let memcpy p q r = return $ M.memcpy p q r
+let realloc al p size  = return $ M.realloc 0 al p size
 
 (* Memory actions wrap *)
 
-let case_loaded_mval f = case_loaded f M.unspecified_mval
+let ptr_well_aligned = M.isWellAligned_ptrval
 
-let create pre al ty =
+let create pre al ty x_opt =
   last_memop := Create;
   M.allocate_static 0 pre al ty
+    (Option.case (fun x -> Some (case_loaded_mval id x))
+       (fun () -> None) x_opt)
 
 let alloc pre al n =
   last_memop := Alloc;
@@ -232,13 +249,17 @@ let printf (conv : C.ctype0 -> M.integer_value -> M.integer_value)
       let output = String.init n (List.nth xs) in
       if batch then stdout := !stdout ^ String.escaped output
       else print_string output;
-      return (M.integer_ival (Nat_big_num.of_int n))
+      return (Specified (M.integer_ival (Nat_big_num.of_int n)))
+      (*return (M.integer_ival (Nat_big_num.of_int n))*)
     | Either.Right (Undefined.Undef (_, xs) ) ->
       raise (Error (String.concat "," 
                       (List.map Undefined.stringFromUndefined_behaviour xs)))
     | Either.Right (Undefined.Error (_, m) ) -> raise (Error m)
     | Either.Left z -> raise (Error (Pp_errors.to_string z))
   end
+
+let sprintf _ = failwith "No support for sprintf"
+let snprintf _ = failwith "No support for snprintf"
 
 (* Exit *)
 

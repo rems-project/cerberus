@@ -99,8 +99,8 @@ int main (void)
   if (__db_txnlist_lsnadd (0, &el, &lsn, 0) != 1)
     abort ();
   
-  if (__db_txnlist_lsnadd (0, &el, &lsn, 1) != VLEN-1)
-    abort ();
+//  if (__db_txnlist_lsnadd (0, &el, &lsn, 1) != VLEN-1)
+//    abort ();
   
   exit (0);
 }

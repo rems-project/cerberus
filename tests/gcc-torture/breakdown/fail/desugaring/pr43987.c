@@ -1,4 +1,7 @@
-#include "cerberus.h"
+//#include "cerberus.h"
+#define __attribute__(a)
+_Noreturn void abort(void);
+
 char B[256 * sizeof(void *)];
 typedef void *FILE;
 typedef struct globals {

@@ -1,0 +1,7 @@
+940115-1.c               Memory WIP: lt_ptrval
+
+20120808-1.c             see issue #78
+980707-1.c               (maybe also issue #78)
+
+pr34176.c		 TODO(shift a null pointer should be undefined behaviour)
+

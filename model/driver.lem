@@ -398,6 +398,46 @@ let rec drive_core_thread tid =
           ND.mapM_ drive_core_thread th_tids >>
           drive_core_thread tid )
     
+    | Core_run.Step_snprintf s_ptrval n_ival frmt_chars args_ty_ptrvals mk_th_st ->
+        ( "Step_snprintf"
+        , liftMem (Output.snprintf (printf_eval_conv dr_st) s_ptrval n_ival frmt_chars args_ty_ptrvals) >>= function
+            | Left err ->
+                error "TODO(msg): a snprintf() got an error"
+            | Right (Undefined.Defined n) ->
+                ND.update (fun dr_st ->
+                  let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+                  <| dr_st with
+                    core_state= core_st';
+                    dr_step_counter= dr_st.dr_step_counter + 1;
+                  |>
+                ) >>
+                drive_core_thread tid
+            | Right (Undefined.Error loc str) ->
+                ND.kill (ND.Error loc str)
+            | Right (Undefined.Undef loc ubs) ->
+                ND.kill (ND.Undef loc ubs)
+          end )
+    
+    | Core_run.Step_sprintf s_ptrval frmt_chars args_ty_ptrvals mk_th_st ->
+        ( "Step_sprintf"
+        , liftMem (Output.sprintf (printf_eval_conv dr_st) s_ptrval frmt_chars args_ty_ptrvals) >>= function
+            | Left err ->
+                error "TODO(msg): a sprintf() got an error"
+            | Right (Undefined.Defined n) ->
+                ND.update (fun dr_st ->
+                  let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+                  <| dr_st with
+                    core_state= core_st';
+                    dr_step_counter= dr_st.dr_step_counter + 1;
+                  |>
+                ) >>
+                drive_core_thread tid
+            | Right (Undefined.Error loc str) ->
+                ND.kill (ND.Error loc str)
+            | Right (Undefined.Undef loc ubs) ->
+                ND.kill (ND.Undef loc ubs)
+          end )
+    
     | Core_run.Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
         ( "Step_printf2"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
@@ -608,7 +648,7 @@ let action_request_concurrency = function
 *)
       error "WIP: Driver ==> RMWRequest"
 
-  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid is_dynamic ptr_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
       ND.update (fun dr_st ->
         <| dr_st with
@@ -663,9 +703,9 @@ let action_request_sequential = function
         update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
       )
   
-  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid ptr_val th_st' ->
+  | Core_run.KillRequest loc sb_edges dd_edges asw_edges aid tid is_dynamic ptr_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
-      liftMem (Mem.kill ptr_val) >>
+      liftMem (Mem.kill loc is_dynamic ptr_val) >>
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
       )
@@ -767,6 +807,15 @@ let rec driver with_concurrency =
             liftMem (Mem.isWellAligned_ptrval ref_ty ptrval) >>= fun b ->
             ND.return (mk_th_st (if b then Core.Vtrue else Core.Vfalse))
         
+        | (Mem_common.Realloc, [Core.Vobject (Core.OVinteger align_ival); Core.Vobject (Core.OVpointer old_ptr);
+                               Core.Vobject (Core.OVinteger size_ival)]) ->
+            liftMem (Mem.realloc tid align_ival old_ptr size_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
+        | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
+            liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
         | _ ->
             error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
       end >>= fun th_st' ->

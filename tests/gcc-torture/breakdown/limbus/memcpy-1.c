@@ -1,6 +1,7 @@
 #include "cerberus.h"
 /* { dg-additional-options "-DSTACK_SIZE=[dg-effective-target-value stack_size]" { target { stack_size } } } */
 
+#define STACK_SIZE 1000
 
 #if defined (STACK_SIZE)
 #define MEMCPY_SIZE (STACK_SIZE / 3)

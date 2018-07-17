@@ -693,7 +693,7 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
             (constr, remove_conv_int_pexpr pe)
           ) xs
         end
-    | PEundef _ ->
+    | PEundef _ _ ->
         _pe
     | PEerror str pe ->
         PEerror str (remove_conv_int_pexpr pe)
@@ -821,8 +821,8 @@ and remove_conv_int_action_ act_ =
         CreateReadOnly (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) pref
     | Alloc pe1 pe2 pref ->
         Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
-    | Kill pe ->
-        Kill (remove_conv_int_pexpr pe)
+    | Kill b pe ->
+        Kill b (remove_conv_int_pexpr pe)
     | Store pe1 pe2 pe3 mo ->
         Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->
@@ -846,7 +846,7 @@ let is_create = function
 end
 
 let is_kill = function
-  | Expr _ (Eaction (Paction _ (Action _ _ (Kill _)))) ->
+  | Expr _ (Eaction (Paction _ (Action _ _ (Kill _ _)))) ->
       true
   | _ ->
       false
@@ -1007,7 +1007,7 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         true
     | PEconstrained xs ->
         List.all (fun (_, pe) -> isAlwaysDefined pe) xs
-    | PEundef _ ->
+    | PEundef _ _ ->
         false
     | PEerror _ _ ->
         false
@@ -1271,7 +1271,7 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         pexpr
     | PEconstrained _ ->
         pexpr
-    | PEundef _ ->
+    | PEundef _ _ ->
         pexpr
     | PEerror _ _ ->
         pexpr

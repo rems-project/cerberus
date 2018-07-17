@@ -243,7 +243,30 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
         pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
   end
 
+proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong s_: loaded pointer = load(!(char*), s_ptr) in
+  let strong n_: loaded integer = load(!(size_t), n_ptr) in
+  let strong frmt_ptr_: loaded pointer = load(!(char*), tmp_ptr) in
+  case (s_, n_, frmt_ptr_) of
+    | (Specified(s: pointer), Specified(n: integer), Specified(frmt_ptr: pointer)) =>
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_snprintf>, s, n, xs, args) in
+        pure(ret)
+    | _ : (loaded pointer, loaded integer, loaded pointer) =>
+        pure (undef(<<DUMMY(snprintf_proxy)>>)) -- TODO think about that
+  end
 
+proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
+  let strong s_: loaded pointer = load(!(char*), s_ptr) in
+  let strong frmt_ptr_: loaded pointer = load(!(char*), tmp_ptr) in
+  case (s_, frmt_ptr_) of
+    | (Specified(s: pointer), Specified(frmt_ptr: pointer)) =>
+        let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
+        let strong ret: loaded integer = pcall(<std_function_sprintf>, s, xs, args) in
+        pure(ret)
+    | _ : (loaded pointer, loaded pointer) =>
+        pure (undef(<<DUMMY(sprintf_proxy)>>)) -- TODO think about that
+  end
 
 
 proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer :=
@@ -255,6 +278,18 @@ proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer 
     | Unspecified(_: ctype) =>
         pure(error(<<<malloc_proxy>>>, False))
   end
+
+proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong size_: loaded integer = load(!(size_t), size_ptr) in
+  let strong old_ptrptr_: loaded pointer = load(!(void *), old_ptrptr) in
+  case (size_, old_ptrptr_) of
+    | (Specified(size: integer), Specified(old_ptr: pointer)) =>
+        let strong ptr: pointer = memop(Realloc, 8, old_ptr, size) in
+        pure(Specified(ptr))
+    | (_: loaded integer, _: loaded pointer) =>
+        pure(error(<<<malloc_proxy>>>, False))
+  end
+
 
 -- TODO: this is a hack for GCC torture while signal are not implemented
 proc [ailname = "abort"] abort_proxy() : eff unit :=
@@ -278,7 +313,6 @@ fun wrapI(ty: ctype, n: integer) : integer :=
       r
     else
       r - dlt
-
 
 proc [ailname= "memcpy"] memcpy_proxy (s1_ptr: pointer, s2_ptr: pointer, n_ptr: pointer) : eff loaded pointer :=
   let strong _s1: loaded pointer = load(!(void *), s1_ptr) in
@@ -314,12 +348,29 @@ proc [ailname = "free"] free_proxy (p_ptr: pointer) : eff unit :=
   let strong _p: loaded pointer = load(!(void *), p_ptr) in
   case _p of
     | Specified(p: pointer) =>
+{-
         let weak is_null: boolean = memop(PtrEq, p, NULL(void*)) in
         if is_null then
           skip
         else
           -- TODO: this is wrong, p was not allocated with alloc(), this should be UB
-          kill(p)
+-}
+          free(p)
     | _: loaded pointer =>
         pure(undef(<<DUMMY(kill_proxy_1)>>)) -- TODO check that
   end
+
+proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_ptr: pointer) : eff loaded pointer :=
+  let strong align_: loaded integer = load(!(size_t), align_ptr) in
+  let strong size_: loaded integer = load(!(size_t), size_ptr) in
+  case (align_, size_) of
+    | (Specified(align: integer), Specified(size: integer)) =>
+        if size rem_t align = 0 then
+          let strong ptr: pointer = alloc(align, size) in
+          pure(Specified(ptr))
+        else
+          pure(undef(<<DUMMY(align_alloc)>>))
+    | (_: loaded integer, _: loaded integer) =>
+        pure(error(<<<align_alloc_proxy>>>, False))
+  end
+

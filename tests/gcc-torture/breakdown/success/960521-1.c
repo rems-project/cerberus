@@ -10,7 +10,7 @@ int n;
 #else
 #define BLOCK_SIZE 32768
 #endif
-int 
+void
 foo (void)
 {
   int i;

@@ -696,7 +696,7 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_SCNxFAST64" -> Just (A.AilEbuiltin "SCNxFAST64", Nothing)
     | "__cerbvar_SCNxMAX" -> Just (A.AilEbuiltin "SCNxMAX", Nothing)
     | "__cerbvar_SCNxPTR" -> Just (A.AilEbuiltin "SCNxPTR", Nothing)
-    | "__cerbvar_CHAR_BIT" -> Just (A.AilEbuiltin "CHAR_BIT", Nothing)
+    | "__cerbvar_CHAR_BIT" -> Just (A.AilEconst (A.ConstantInteger (A.IConstant 8 (* TODO *) A.Decimal Nothing)), Nothing)
     | "__cerbvar_SCHAR_MIN" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMin (ATypes.Signed ATypes.Ichar))), Nothing)
     | "__cerbvar_SCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Signed ATypes.Ichar))), Nothing)
     | "__cerbvar_UCHAR_MAX" -> Just (A.AilEconst (A.ConstantInteger (A.IConstantMax (ATypes.Unsigned ATypes.Ichar))), Nothing)

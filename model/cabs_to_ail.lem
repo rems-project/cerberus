@@ -44,6 +44,515 @@ end
 
 
 
+
+
+
+
+
+
+(* KKK initialisation *)
+
+type init_element =
+  | Elem_array of integer
+  | Elem_member of cabs_identifier
+(*   | Elem_union of cabs_identifier *)
+
+type init_path = list init_element
+
+
+let init_elementEqual elem1 elem2 =
+  match (elem1, elem2) with
+    | (Elem_array n1, Elem_array n2) ->
+        n1 = n2
+    | (Elem_member ident1, Elem_member ident2) ->
+        ident1 = ident2
+    | _ ->
+        false
+  end
+
+instance (Eq init_element)
+  let (=) elem1 elem2 =
+    init_elementEqual elem1 elem2
+  let (<>) elem1 elem2 =
+    not (init_elementEqual elem1 elem2)
+end
+
+
+let stringFromInit_element = function
+  | Elem_array n ->
+      "[" ^ show n ^ "]"
+  | Elem_member ident ->
+      "." ^ show ident
+end
+
+let stringFromInit_path xs =
+  String.concat "" (List.map stringFromInit_element xs)
+
+
+
+
+
+
+
+
+
+(* ====================================================================================================================== *)
+
+(*
+val     elemPathFromCtype_aux3: map identifier tag_definition -> (init_path * ATypes.ctype) -> ATypes.ctype -> list (init_path * (init_path * ATypes.ctype))
+*)
+let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
+  | ATypes.Void ->
+      error "elemPathFromCtype_aux3, Void"
+  | ATypes.Function _ _ _ _ ->
+      error "elemPathFromCtype_aux3, Function"
+  | ATypes.Basic _ ->
+      (path_prefix, outer_path, outer_ty) :: acc
+  | ATypes.Pointer _ _ ->
+      (path_prefix, outer_path, outer_ty) :: acc
+  | ATypes.Array _ Nothing ->
+      error "elemPathFromCtype_aux3, Array Nothing"
+  | ATypes.Array elem_ty (Just n) ->
+      List.foldl (fun acc i ->
+        wip tagDefs acc (Elem_array i :: path_prefix) (Elem_array i :: path_prefix, elem_ty) elem_ty
+      ) (wip tagDefs acc (Elem_array 0 :: path_prefix) (outer_path, outer_ty) elem_ty)
+        (Utils.mkListFromTo 1 (n-1))
+  | ATypes.Atomic atom_ty ->
+      wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
+  | ATypes.Struct tag_sym ->
+      match Map.lookup tag_sym tagDefs with
+        | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
+              wip tagDefs acc
+                (Elem_member memb_ident :: path_prefix)
+                (Elem_member memb_ident :: path_prefix, memb_ty)
+                memb_ty
+            ) (wip tagDefs acc
+                 (Elem_member first_memb_ident :: path_prefix)
+                 (outer_path, outer_ty) 
+                 first_memb_ty)
+              xs
+        | _ ->
+            error "elemPathFromCtype_aux3, Struct"
+      end
+  | ATypes.Union tag_sym ->
+      (* TODO: check *)
+      match Map.lookup tag_sym tagDefs with
+        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
+              )
+            else () in
+            (wip tagDefs acc
+               (Elem_member first_memb_ident :: path_prefix)
+               (outer_path, outer_ty) 
+               first_memb_ty)
+        | _ ->
+            error "elemPathFromCtype_aux3, Union"
+      end
+  | ATypes.Builtin _ ->
+      (* TODO? *)
+      error "elemPathFromCtype_aux3, Builtin"
+end
+
+val elemPathFromCtype3: bool -> map identifier tag_definition -> ATypes.ctype -> list (init_path * init_path * ATypes.ctype)
+let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
+  match entity_ty with
+    | ATypes.Array _ Nothing ->
+        error "TODO: elemPathFromCtype3, array with unknown size"
+    | _ ->
+        let (outer_path, outer_ty) = match entity_ty with
+          | ATypes.Array elem_ty _ ->
+              ([Elem_array 0], if is_unknown_size then entity_ty else elem_ty)
+          | ATypes.Struct tag_sym ->
+              match Map.lookup tag_sym tagDefs with
+                | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                    let () = if isAnonymous then
+                      Debug.print_debug 1 [] (fun () ->
+                        "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
+                      )
+                    else () in
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
+                | _ ->
+                    error "elemPathFromCtype3, Struct"
+              end
+          | ATypes.Union tag_sym ->
+              (* TODO: check *)
+              match Map.lookup tag_sym tagDefs with
+                | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                    let () = if isAnonymous then
+                      Debug.print_debug 1 [] (fun () ->
+                        "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
+                      )
+                    else () in
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
+                | _ ->
+                    error "elemPathFromCtype3, Union"
+              end
+          | _ ->
+              ([], entity_ty)
+        end in
+        let xs =
+          wip tagDefs
+            []              (* acc *)
+            []              (* current path prefix *)
+            (outer_path, outer_ty) (* current outer path and it's type *)
+            entity_ty in
+        List.map (fun (path, outer_path, ty) ->
+          (List.reverse path, List.reverse outer_path, ty)
+        ) (List.reverse xs)
+  end
+
+type path_elem =
+  init_path * init_path * ATypes.ctype
+
+
+
+
+let rec skipTo_aux acc path = function
+  | [] ->
+      Nothing
+  | ((path', _, _) as x) :: xs ->
+      let () = Debug.print_debug 1 [] (fun () ->
+        "path: " ^ stringFromInit_path path ^ " <--> " ^
+        "path': " ^ stringFromInit_path path' ^ " === " ^
+        (if List.isPrefixOf path path' then "true" else "false")
+      ) in
+      if List.isPrefixOf path path' then
+        Just (x :: xs, List.reverse acc)
+      else
+        skipTo_aux (x :: acc) path xs
+end
+let skipTo path elems =
+  skipTo_aux [] path elems
+
+
+(*
+
+skipTo cursor_path elems
+
+take1 elem
+
+splitAt
+
+update inner elements
+
+*)
+
+type withElemsM 'a = State.stateM 'a (list path_elem)
+
+val skipToPath: init_path -> withElemsM (list path_elem)
+let skipToPath path =
+  State.bind State.get (fun elems ->
+  match skipTo path elems with
+    | Nothing ->
+        error "WIP: skipToPath"
+    | Just (elems', skipped) ->
+        State.bind (State.put elems') begin fun () ->
+        State.return skipped
+        end
+  end)
+
+
+val getElem: withElemsM (maybe path_elem)
+let getElem =
+  State.bind State.get function
+    |  [] ->
+        State.return Nothing
+    | x::xs ->
+        State.bind (State.put xs) (fun () -> State.return (Just x))
+  end
+
+
+val getElems: integer -> withElemsM (list path_elem)
+let getElems n =
+  State.bind State.get begin fun elems ->
+    let (xs,ys) = List.splitAt (natFromInteger n) elems in
+    State.bind (State.put ys) (fun () -> State.return xs)
+  end
+
+
+
+
+
+
+(*
+type elemPathMaker = <|
+  skipTo: init_path -> maybe ((list path_elem * list path_elem) * elemPathMaker);
+  getElem: unit -> (path_elem * elemPathMaker);
+  getElems: integer -> (list path_elem * elemPathMaker);
+|>
+
+val mk_elemsPathFromCtype: map identifier tag_definition -> ATypes.ctype -> elemPathMaker
+let mk_elemsPathFromCtype tagDefs ty =
+  let elems = elemPathFromCtype3 tagDefs ty in
+  <|
+    skipTo=
+      fun path -> match skipTo path elems with
+        | Nothing -> Nothing
+        | Just 
+      end
+ |>
+*)
+
+
+
+
+let rec cardinalityOfCtype tagDefs = function
+  | ATypes.Array _ Nothing ->
+      error "cardinalityOfCtype: Array Nothing"
+  | ATypes.Array elem_ty (Just n) ->
+      n * cardinalityOfCtype tagDefs elem_ty
+  | ATypes.Struct tag_sym ->
+      match Map.lookup tag_sym tagDefs with
+        | Just (Struct_definition isAnonymous xs) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            List.foldl (fun acc (_, (_, memb_ty)) ->
+              cardinalityOfCtype tagDefs memb_ty + acc
+            ) 0 xs
+        |  _ ->
+            error "cardinalityOfCtype: Struct"
+      end
+  | ATypes.Atomic atom_ty ->
+      cardinalityOfCtype tagDefs atom_ty
+  | _ ->
+      1
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val     ctypeAtPath: map identifier tag_definition -> ATypes.ctype -> init_path -> ATypes.ctype
+let rec ctypeAtPath tagDefs ty path =
+  match (ty, path) with
+    | (_, []) ->
+        ty
+    | (ATypes.Array elem_ty (Just n1), Elem_array n2 :: path') ->
+        if n1 <= n2 then
+          error "ctypeAtPath: array type smaller than path needed"
+        else
+          ctypeAtPath tagDefs elem_ty path'
+    | (ATypes.Struct tag_sym, Elem_member memb_ident :: path') ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition _ xs) ->
+              match List.lookup memb_ident xs with
+                | Nothing ->
+                    error "ctypeAtPath: Struct, invalid member"
+                | Just (_, memb_ty) ->
+                    ctypeAtPath tagDefs memb_ty path'
+              end
+          | _ ->
+              error "ctypeAtPath: Struct"
+        end
+    (* TODO: union *)
+    | _ ->
+        error ("ctypeAtPath: wildcard ==> " ^
+               Pp.stringFromAil_ctype ATypes.no_qualifiers ty ^
+               " --- path: " ^ stringFromInit_path path)
+  end
+
+
+let rec innerCtype tagDefs ty =
+  match ty with
+    | ATypes.Void ->
+        error "innerCtype: Void"
+    | ATypes.Basic _ ->
+        ty
+    | ATypes.Array elem_ty _ ->
+        innerCtype tagDefs elem_ty
+    | ATypes.Function _ _ _ _ ->
+        error "innerCtype: Function"
+    | ATypes.Pointer _ _ ->
+        ty
+    | ATypes.Atomic atom_ty ->
+        (* TODO: check *)
+        innerCtype tagDefs atom_ty
+    | ATypes.Struct tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition _ ((_, (_, memb_ty)) :: xs)) ->
+              innerCtype tagDefs memb_ty
+          | _ ->
+              error "innerCtype: Struct"
+        end
+    | ATypes.Union tag_sym ->
+        (* TODO: this may be wrong when called in a Desig context ... *)
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition _ ((_, (_, memb_ty)) :: xs)) ->
+              innerCtype tagDefs memb_ty
+          | _ ->
+              error "innerCtype: Union"
+        end
+    | ATypes.Builtin _ ->
+        ty
+  end
+
+
+
+
+val     outerValidPath: map identifier tag_definition -> ATypes.ctype -> list (init_element) -> init_path
+let rec outerValidPath_aux tagDefs ty path acc =
+  match (ty, path) with
+    | (_, []) ->
+        List.reverse acc
+    | (ATypes.Array elem_ty _, Elem_array n :: path') ->
+        if n = 0 then
+          
+
+
+          match path' with
+            | [] ->
+                List.reverse (Elem_array n :: acc)
+            | _ ->
+                outerValidPath_aux tagDefs elem_ty path' (Elem_array n :: acc)
+          end
+        else (* n > 0 *)
+          List.reverse acc
+    | (ATypes.Struct tag_sym, Elem_member memb_ident :: path') ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition _ ((first_memb_ident, (_, memb_ty)) :: _)) ->
+              if first_memb_ident = memb_ident then
+                match path' with
+                  | [] ->
+                      List.reverse (Elem_member memb_ident :: acc)
+                  | _ ->
+                      outerValidPath_aux tagDefs memb_ty path' (Elem_member memb_ident :: acc)
+                end
+              else
+                List.reverse acc
+          | _ ->
+              error "outerValidPath: Struct"
+        end
+    (* TODO: union *)
+    | _ ->
+        error "outerValidPath: wildcard"
+  end
+
+let outerValidPath tagDefs ty path =
+  outerValidPath_aux tagDefs ty path []
+
+
+(*
+type init_element =
+  | Elem_array of integer
+  | Elem_member of cabs_identifier
+
+type init_path = list init_element * ATypes.ctype
+*)
+
+(*
+E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATypes.ctype)) =
+*)
+
+val constructValue: map identifier tag_definition -> list (init_path * expression unit) -> ATypes.ctype -> expression unit
+let rec constructValue_aux tagDefs path elems = function
+  | ATypes.Array elem_ty Nothing ->
+      let () = Debug.print_debug 0 [] (fun () ->
+        "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
+      ) in
+      error "constructValue_aux: Array Nothing"
+  | ATypes.Array elem_ty (Just n) ->
+      let es =
+        List.map (fun i ->
+          Just (constructValue_aux tagDefs (path ++ [Elem_array i]) elems elem_ty)
+        ) (Utils.mkListN n) in
+      AnnotatedExpression () [] Loc.unknown begin
+        AilEarray false(*TODO*) elem_ty es
+      end
+  | ATypes.Struct tag_sym ->
+      match Map.lookup tag_sym tagDefs with
+        | Just (Struct_definition isAnonymous xs) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "constructValue_aux: this may be WRONG ==> anonymous Struct"
+              )
+            else () in
+            let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
+              (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
+            ) xs in
+            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
+              AilEstruct tag_sym membrs
+            end
+        | _ ->
+            error "constructValue_aux, Struct"
+      end
+  | ATypes.Union tag_sym ->
+      match Map.lookup tag_sym tagDefs with
+        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs')) ->
+            let () = if isAnonymous then
+              Debug.print_debug 1 [] (fun () ->
+                "constructValue_aux: this may be WRONG ==> anonymous Union"
+              )
+            else () in
+            (* TODO: this is only correct if the first member was the one initialised *)
+            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
+              AilEunion tag_sym first_memb_ident
+                (Just (constructValue_aux tagDefs (path ++ [Elem_member first_memb_ident]) elems first_memb_ty))
+            end
+        | _ ->
+            error "constructValue_aux, Union"
+      end
+  | ATypes.Atomic atom_ty ->
+      error "TODO: Atomic"
+  | ty ->
+      match List.lookup path elems with
+        | Nothing ->
+            mk_zeroInit tagDefs ty
+        | Just e ->
+            e
+      end
+end
+let constructValue tagDefs elems ty =
+  constructValue_aux tagDefs [] elems ty
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (* BEGIN predicates on Ail syntax *)
 (* see §6.6#6 *)
 (* TODO: make the function pure, when complete *)
@@ -112,12 +621,22 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return true
     | AilEconst (ConstantCharacter _) ->
         E.return true
-    | AilEsizeof _ _ ->
-        (* TODO: this is allowed as long as the type is not a VLA (see §6.5.3.4#, sentence 4  *)
-        E.fail loc (Errors.Desugar_NotyetSupported "sizeof (type variant) operator in `integer constant expressions'")
+    | AilEsizeof _ ty ->
+        if AilTypesAux.is_vla ty then
+          (* STD §6.5.3.4#2, sentence 4 *)
+          E.return false
+        else
+          E.return true
     | AilEsizeof_expr _ ->
-        (* TODO: this is allowed as long as the type is not a VLA (see §6.5.3.4#, sentence 4  *)
-        E.fail loc (Errors.Desugar_NotyetSupported "sizeof (expr variant) operator in `integer constant expressions'")
+        (* TODO: this is wrong if the expression is a VLA *)
+        (* but I can't easily ask the Ail typing for now ... *)
+(*
+        if AilTypesAux.is_vla ty then
+          (* STD §6.5.3.4#2, sentence 4 *)
+          E.return false
+        else
+*)
+          E.return true
     | AilEalignof _ _ ->
         E.return true
 
@@ -235,6 +754,10 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
     | AilEident _ ->
         E.return is_lvalue
 
+    (* TODO: not sure about this! but I want to include enumerations *)
+    | AilEannot _ e ->
+        is_arithmetic_constant_expression true e
+
     | AilEunary Address e ->
         is_arithmetic_constant_expression true e
     | AilEunary _ e ->
@@ -247,7 +770,7 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
 
     | AilEsizeof _ ty ->
         (* TODO: sizeof expressions whose results are integer constants *)
-        E.return (AilTypesAux.is_vla ty)
+        E.return (not (AilTypesAux.is_vla ty))
     | AilEalignof _ _ ->
         E.return true
     | AilEcast _ ty e ->
@@ -255,7 +778,9 @@ let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ l
           E.return false
         else
           E.print_debugM 1 (fun () -> "WARNING[Cabs_to_ail.is_arithmetic_constant_expression] AilEcast: annoying ==> need to typecheck e...") >>
-          E.return true
+(*          E.return true *)
+          (* TODO: is_lvalue might be wrong depending on the type of e? *)
+          is_arithmetic_constant_expression is_lvalue e
         
     | _ ->
         E.return false
@@ -274,8 +799,6 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
           | _ ->
               E.return false
         end
-
-
 (* The array-subscript [] and member-access . and -> operators, the address & and indirection * unary operators, and pointer casts may be used in the creation of an address constant, but the value of an object shall not be accessed by use of these operators. *)
     | AilEbinary e1 (Arithmetic Add) e2 ->
         (* NOTE: this case corresponds to array-subcript *)
@@ -284,10 +807,21 @@ let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
         is_lvalue_to_static_object e2        >>= fun b21 ->
         is_arithmetic_constant_expression false (* TODO check *) e2 >>= fun b22 ->
         E.return (b11 && b22 || b12 && b21)
+    | AilEmemberof e _ ->
+        (* TODO: not sure *)
+        is_lvalue_to_static_object e
+    | AilEmemberofptr e _ ->
+        (* TODO: not sure *)
+        is_lvalue_to_static_object e
+    | AilEcast _ ty e ->
+        (* TODO: check *)
+        if not (AilTypesAux.is_pointer ty) then
+          E.return false
+        else
+          is_lvalue_to_static_object e
+
 (* TODO
     | AilEmemberof e ident ->
-        
-    | AilEmemberofptr e ident ->
 *)
     | _ ->
         E.return false
@@ -305,10 +839,23 @@ let is_address_constant a_expr =
     E.return true
   
   else match a_expr with
+    | AnnotatedExpression () _ _ (AilEident sym) ->
+        E.fetch_object_declaration sym >>= fun (_, dur, _, _, ty) ->
+        match dur with
+          | ATypes.Static ->
+              E.return (AilTypesAux.is_array ty)
+          | _ ->
+              E.return false
+        end
     | AnnotatedExpression () _ _ (AilEunary Address expr) ->
         is_lvalue_to_static_object expr
     | AnnotatedExpression () _ _ (AilEcast _ Pointer expr) ->
-        is_integer_constant_expression expr
+        is_lvalue_to_static_object expr >>= function
+          | true ->
+              E.return true
+          | false ->
+              is_integer_constant_expression expr
+        end
     | _ ->
         E.return false
   end
@@ -428,7 +975,7 @@ val wip_desugar_initializer_:
   Loc.t -> ATypes.storageDuration -> ATypes.ctype -> initializer_ -> E.desugM (ATypes.ctype * expression unit)
 
 val static_thread_implicit_initializer:
-  map identifier E.tag_definition -> ATypes.ctype -> constant
+  map identifier tag_definition -> ATypes.ctype -> constant
 
 
 
@@ -513,11 +1060,12 @@ let desugar_character_constant (pref_opt, str) =
 
 
 
-val     evaluate_integer_constant_expression: Loc.t -> expression unit -> E.desugM integer
-let rec evaluate_integer_constant_expression loc expr =
+val     evaluate_integer_constant_expression: Loc.t -> maybe ATypes.ctype -> expression unit -> E.desugM integer
+let rec evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun  (core_env, sym_suppl) ->
+  E.get_sigma_sofar >>= fun sigm ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sym_suppl expr)
+      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sigm sym_suppl ty_opt expr)
 
 
 
@@ -900,9 +1448,9 @@ let rec desugar_type_specifiers specs =
           let (kind_ctor, def_ctor, type_ctor) =
             match struct_or_union with
               | STRUCT ->
-                  (E.Kind_struct, E.Struct_definition, ATypes.Struct)
+                  (E.Kind_struct, Struct_definition, ATypes.Struct)
               | UNION ->
-                  (E.Kind_union, E.Union_definition, ATypes.Union)
+                  (E.Kind_union, Union_definition, ATypes.Union)
             end in
           (* STD §6.7.2.1#8, sentence 1 *)
           (* NOTE: the std say that because we have a 'Just sdecls', a new
@@ -1050,7 +1598,7 @@ let rec desugar_type_specifiers specs =
                     Loc.locOf tag_ident
               end in
               (* NOTE: this function doesn't care about the order of the integers *)
-              E.register_tag_definition loc tag_sym (E.Enum_definition ns_rev) >>
+              E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
               E.return (ATypes.no_qualifiers, ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)))
           
           (* *)
@@ -1061,8 +1609,8 @@ let rec desugar_type_specifiers specs =
                     E.return (ATypes.no_qualifiers, ty)
                 | Nothing ->
                     (* TODO: check the namespace *)
-                    E.resolve_identifier ident E.Namespace_ordinary >>= function
-                      | Just (_, (sym, E.Kind_typedef, _)) ->
+                    E.resolve_ordinary_identifier loc ident >>= function
+                      | Just (_, E.OReg_typedef sym) ->
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
                       | Just _ ->
@@ -1194,8 +1742,8 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
              (* STD §6.7.6.2#1, sentence 2 *)
              (* NOTE: the preceding STD clause is performed by a typecheck done by
                 [WipFrontend.evalIntegerConstantExpression] *)
-             evaluate_integer_constant_expression loc d_e >>= fun n ->
-              if n < 0 then
+             evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
+              if n <= 0 then
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, sentence 3")
               else
                 E.return (fun qs ty -> perform_adjust qs (ATypes.Array ty (Just n)))
@@ -1278,8 +1826,8 @@ and desugar_direct_abstract_declarator under_array = function
       (* TODO: documentation (the code the same as for desugar_direct_declarator, DDecl_function *)
       maybe (E.return (fun qs ty -> (qs, ty)))
         (desugar_direct_abstract_declarator under_array) dabs_decltor_opt >>= fun mk_qs_ctype ->
-      E.with_scope E.Scope_prototype
-        (desugar_parameter_type_list NotFunDef param_tys) >>= fun (_, (params, isVariadic)) ->
+      E.under_scope E.Scope_prototype
+        (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params, isVariadic) ->
       match params with
         | [(Nothing, (qs, ATypes.Void, _))] ->
             if not (AilTypesAux.is_unqualified qs) then
@@ -1333,9 +1881,8 @@ and desugar_direct_declarator fundef under_array = function
         | IsFunDef ->
             desugar_parameter_type_list fundef param_tys
         | NotFunDef ->
-            E.with_scope E.Scope_prototype
-              (desugar_parameter_type_list fundef param_tys) >>= fun (_, ret) ->
-            E.return ret
+            E.under_scope E.Scope_prototype
+              (desugar_parameter_type_list fundef param_tys)
       end >>= fun (_params, isVariadic) ->
       
       let params =
@@ -1523,12 +2070,15 @@ and desugar_expression (CabsExpression loc expr) =
         E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
 STD_ "§6.5.1#2" $
         E.resolve_ordinary_identifier loc ident >>= function
-          | Just (_, Left enum_cst_sym) ->
-              E.resolve_enum_constant enum_cst_sym
-          | Just (_, Right (sym, kind, _)) ->
+          | Just (_, E.OReg_enum_constant sym) ->
+              E.resolve_enum_constant sym
+          | Just (_, E.OReg_typedef _) ->
+              E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+          | Just (scope, E.OReg_other sym kind _) ->
               (* I love the fact that it is a footnote that says that undeclared
                  identifiers are syntax errors ... *)
-              if not (E.is_object_kind kind || kind = E.OK_function) then
+              E.scope_is_visible scope >>= fun is_visible ->
+              if not is_visible || not (E.is_object_kind kind || kind = E.OK_function) then
                 E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
               else
                 E.add_used_identifier sym >>
@@ -1927,7 +2477,9 @@ and desugar_enumerator (ident, e_opt) =
               (* TODO: the integer must also be representable as an int *)
               E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.2#2")
           | true ->
-              evaluate_integer_constant_expression loc d_e >>= fun n ->
+              (* TODO: the type provided to the evaluator should be the integer type
+                 compatible with the enum? *)
+              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               E.return (ident, Just (loc, n))
         end
   end
@@ -2037,14 +2589,14 @@ and static_thread_implicit_initializer tagDefs ty =
     | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
-              ConstantArray (Utils.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
+              ConstantArray elem_ty (Utils.replicate_list (static_thread_implicit_initializer tagDefs elem_ty) (natFromInteger n))
           | Nothing ->
               error "type error, (TODO find quote): subarray with no size"
         end
     
     | ATypes.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Struct_definition _ xs) ->
+          | Just (Struct_definition _ xs) ->
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
@@ -2056,7 +2608,7 @@ and static_thread_implicit_initializer tagDefs ty =
     
     | ATypes.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (E.Union_definition _ xs) ->
+          | Just (Union_definition _ xs) ->
               let (ident, (_, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
@@ -2082,10 +2634,376 @@ and static_thread_implicit_initializer tagDefs ty =
   end
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* KKK: new initializer_ *)
+
+(*val pathFromDesigs: list designator -> E.desugM init_path *)
+and pathFromDesigs_aux acc = function
+  | [] ->
+      E.return (List.reverse acc)
+  | Desig_array e :: xs ->
+      desugar_expression e               >>= fun d_e ->
+      is_integer_constant_expression d_e >>= function
+        | false ->
+            E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+        | true ->
+            evaluate_integer_constant_expression (Loc.locOf e) Nothing d_e >>= fun n ->
+            if n < 0 then
+              error "TODO: pathFromDesigs_aux, n < 0"
+            else
+              pathFromDesigs_aux (Elem_array n :: acc) xs
+      end
+  | Desig_member memb_ident :: xs ->
+      pathFromDesigs_aux (Elem_member memb_ident :: acc) xs
+end
+and pathFromDesigs desigs =
+  pathFromDesigs_aux [] desigs
+
+
+(*
+val foo_aux:
+  list init_path -> initializer_ ->
+  E.desugM (list (init_path * maybe (expression unit)) * list init_path)
+*)
+
+and foo_aux
+(*  (entity_ty: ATypes.ctype) *)
+  (acc: list (init_path * expression unit))
+  (elems: list (init_path * init_path * ATypes.ctype))
+  (unknown_array: maybe (integer * list (init_path * init_path * ATypes.ctype)))
+  (xs: list (maybe (list designator) * initializer_))
+  : E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATypes.ctype) * maybe integer) =
+  
+  match xs with
+    | [] ->
+        E.get_tag_definitions >>= fun tagDefs ->
+        let pad = List.map (fun (path, _, outer_ty) ->
+          (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty))
+        ) elems in
+        let n_opt = match unknown_array with
+          | Nothing     -> Nothing
+          | Just (n, _) -> Just n
+        end in
+        E.return (List.reverse acc ++ pad, [], n_opt)
+    | (Just desigs, init_) :: xs' ->
+        pathFromDesigs desigs >>= fun cursor_path ->
+        match skipTo cursor_path elems with
+          | Nothing ->
+              error "foo_aux, TODO: Just desigs ==> backward (or union desig)"
+          | Just (elems', skipped_elems) ->
+              (* TODO: hackish *)
+              E.get_tag_definitions >>= fun tagDefs ->
+              let acc' = List.foldl (fun acc (path, _, outer_ty) ->
+                (path, mk_zeroInit tagDefs (innerCtype tagDefs outer_ty)) :: acc
+              ) acc skipped_elems in
+              foo_aux (*entity_ty*) acc' elems' unknown_array ((Nothing, init_) :: xs')
+        end
+    | (Nothing, init_) :: xs' ->
+        match elems with
+          | [] ->
+              match unknown_array with
+                | Nothing ->
+                    (* TODO: check this, are we missing anything? *)
+                    foo_aux (*entity_ty*) acc elems unknown_array xs'
+                | Just (i, elems_) ->
+                    let elems =
+                      List.map (fun (path, opath, ty) ->
+                        (Elem_array (i+1) :: path, Elem_array (i+1) :: opath, ty)
+                      ) elems_ in
+                    foo_aux acc elems (Just (i+1, elems_)) xs
+              end
+          | (cursor_path, outer_path, outer_ty) :: elems' ->
+              let do_scalar e =
+                E.get_tag_definitions >>= fun tagDefs ->
+                let cursor_ty = innerCtype tagDefs outer_ty in
+                desugar_expression e >>= fun d_e ->
+                let () = Debug.print_debug 1 [] (fun () ->
+                  "Init_expr, cursor_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cursor_ty ^
+                  ", outer_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty ^
+                  " ===> " ^ Pp.stringFromAil_expression d_e
+                ) in
+                (* TODO: should use Ail typing instead of this *)
+(*
+                    match AilSyntaxAux.strip_expression d_e with
+                      | AnnotatedExpression () _ loc (AilEconst (ConstantStruct e_tag_sym e_xs)) ->
+                          if not (AilTypesAux.is_struct outer_ty) then
+                            error "TODO: error ConstantStruct trying to init a non struct type"
+                          else
+                            error "TODO: Init_expr ConstantStruct"
+                      | AnnotatedExpression () _ loc (AilEconst (ConstantUnion e_tag_sym membr_ident membr_cst)) ->
+                          if not (AilTypesAux.is_union outer_ty) then
+                            error "TODO: error ConstantUnion trying to init a non union type"
+                          else
+                            error "TODO: Init_expr ConstantUnion"
+                      | AnnotatedExpression () _ loc (AilEstruct e_tag_sym e_xs) ->
+                          if not (AilTypesAux.is_struct outer_ty) then
+                            error "TODO: error AilEstruct trying to init a non struct type"
+                          else
+                            error "TODO: Init_expr AilEstruct"
+                      | AnnotatedExpression () _ loc (AilEunion e_tag_sym membr_ident membr_e_opt) ->
+                          if not (AilTypesAux.is_union outer_ty) then
+                            error "TODO: error AilEunion trying to init a non union type"
+                          else
+                            error "TODO: Init_expr AilEunion"
+                      | AnnotatedExpression () _ loc (AilEstr lit) ->
+                            | _ ->
+                                error "TODO: Init_expr AilEstr"
+                          end
+                      | _ ->
+*)
+                      let d_e' =
+                        if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
+                          A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
+                        else
+                          d_e in
+                      foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
+(*                    end *)
+              in
+
+              let do_string_literal loc lit =
+                if not (AilTypesAux.is_array_of_character outer_ty) then
+                  (* TODO: this is wrong *)
+                  E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
+                else
+                  let size = match AilTypesAux.unatomic outer_ty with
+                    | ATypes.Array _ (Just n) ->
+                        natFromInteger n
+                    | _ ->
+                        error "foo_aux: string literal"
+                  end in
+                  match lit with
+                    | (Nothing, strs) ->
+                        let str_xs = List.map (fun str ->
+                          (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, str)))))
+                        ) strs ++ begin
+                          List.replicate (max 1 (size - List.length strs))
+                            (Nothing, Init_expr (CabsExpression loc (CabsEconst (CabsCharacter_const (Nothing, "\\0")))))
+                        end in
+                        foo_aux acc elems unknown_array (str_xs ++ xs')
+                    | _ ->
+                        error "TODO(foo_aux): CabsEstring with encoding prefix"
+                  end in
+              match init_ with
+                | Init_expr (CabsExpression loc (CabsEstring lit) as e) ->
+                    if AilTypesAux.is_scalar outer_ty then
+                      do_scalar e
+                    else
+                      do_string_literal loc lit
+                | Init_list [(Nothing, Init_expr (CabsExpression loc (CabsEstring lit) as e))] ->
+                    if AilTypesAux.is_scalar outer_ty then
+                      do_scalar e
+                    else
+                      do_string_literal loc lit
+(*
+                | Init_expr (CabsExpression loc (CabsEcompound tyname inits)) ->
+                    desugar_type_name tyname >>= fun (qs, ty) ->
+                    (* TODO the check for STD §6.7.9#3 *)
+                    if outer_ty <> ty then
+                      error "TODO(foo_aux): CabsEcompound, outer_ty <> ty"
+                    else
+                      error "TODO(foo_aux): CabsEcompound"
+*)
+
+                | Init_expr e ->
+                    desugar_expression e >>= fun d_e ->
+                    E.get_sigma_sofar >>= fun sigm ->
+                    E.get_gamma_sofar >>= fun gamm ->
+                    match WipFrontend.typecheckAil sigm gamm d_e with
+                      | Left (loc, err) ->
+                          error ("WIP: foo_aux, Init_expr Ail type error ==> " ^ Loc.stringFromLocation loc)
+                      | Right ty ->
+                          if AilTypesAux.is_struct ty then
+                            if ty = outer_ty then
+                              let tag_sym = match AilTypesAux.unatomic ty with
+                                | ATypes.Struct tag_sym ->
+                                    tag_sym
+                                | _ ->
+                                    error "INTERNAL ERROR(foo_aux): Init_expr, is_struct -> not Struct"
+                              end in
+                              E.get_tag_definitions >>= fun tagDefs ->
+                              match Map.lookup tag_sym tagDefs with
+                                | Just (Struct_definition isAnonymous membrs) ->
+                                    let () = if isAnonymous then
+                                      Debug.print_debug 1 [] (fun () ->
+                                        "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"
+                                      )
+                                    else () in
+                                    let (elems1, elems2) = List.splitAt (List.length membrs) elems in
+                                    let () = Debug.print_debug 0 [] (fun () ->
+                                      stringFromList (fun (a,b,c) ->
+                                        stringFromInit_path a ^ ", " ^ stringFromInit_path b
+                                      ) elems1
+                                    ) in
+                                    let acc' = List.foldl (fun acc ((path, _, _), (memb_ident, _)) ->
+                                      (path, AnnotatedExpression () []
+                                               (Loc.other "init with struct expr") (AilEmemberof d_e memb_ident)) :: acc
+                                    ) acc (List.zip elems1 membrs) in
+                                    foo_aux acc' elems2 unknown_array xs'
+                                | _ ->
+                                    error "INTERNAL ERROR(foo_aux): Init_expr, is_struct"
+                                end
+                            else
+                              error "TODO: foo_aux, Init_expr ==> struct (not compatible)"
+                          else if AilTypesAux.is_union ty then
+                            error "TODO: foo_aux, Init_expr ==> union"
+                          else
+                            do_scalar e
+                    end
+(*                    do_scalar e *)
+                | Init_list ys ->
+                    E.get_tag_definitions >>= fun tagDefs ->
+                    let outerCard = cardinalityOfCtype tagDefs outer_ty in
+                    let (inner_elems_, elems') = List.splitAt (natFromInteger outerCard) elems in
+                    
+                    let inner_elems = match inner_elems_ with
+                      | [] ->
+                          error "foo_aux, Init_list, inner_elems = []"
+                      | (path, opath, ty) :: zs ->
+                          let ty' = match ty with
+                            | ATypes.Array elem_ty _ ->
+                                elem_ty
+                            | ATypes.Struct tag_sym ->
+                                match Map.lookup tag_sym tagDefs with
+                                  | Just (Struct_definition isAnonymous ((_, (_, first_memb_ty)) :: _)) ->
+                                      let () = if isAnonymous then
+                                        Debug.print_debug 1 [] (fun () ->
+                                          "foo_aux: this may be WRONG ==> anonymous Struct"
+                                        )
+                                      else () in
+                                      first_memb_ty
+                                  | _ ->
+                                      error "foo_aux: Init_list, Struct"
+                                end
+                            | _ ->
+                                ty
+                          end in
+                          (path, opath, ty') :: zs
+                    end in
+                    
+                    foo_aux (*outer_ty*) [] inner_elems (*unknown_array*)Nothing ys >>= fun (inner, _, _) ->
+                    foo_aux (*entity_ty*) (List.reverse inner ++ acc) elems' unknown_array xs'
+              end
+        end
+  end
+
+(*
+and bar i elems acc xs =
+  let elems' =
+    List.map (fun path ->
+      Elem_array i :: path
+    ) elems in
+  foo_aux [] elems' xs >>= fun (xs', acc2) ->
+  let acc' = acc ++ acc2 in
+  match xs' with
+    | [] ->
+        E.return acc'
+    | _ ->
+        bar (i+1) elems acc' xs'
+  end
+*)
+
+(* val foo: ATypes.ctype -> initializer_ -> E.desugM (list (init_path * maybe (expression unit))) *)
+and foo entity_ty init_ : E.desugM (ATypes.ctype * list (init_path * expression unit)) =
+  E.get_tag_definitions >>= fun tagDefs ->
+  match (entity_ty, init_) with
+    | (ATypes.Array elem_ty Nothing, Init_list xs) ->
+        let elems = elemPathFromCtype3 true tagDefs elem_ty in
+        let elems' =
+          List.map (fun (path, opath, ty) ->
+            (Elem_array 0 :: path, Elem_array 0 :: opath, ty)
+          ) elems in
+        foo_aux [] elems' (Just (0, elems)) xs >>= fun (ret, _, n_opt) ->
+        match n_opt with
+          | Nothing ->
+              error "foo: Array Nothing"
+          | Just n ->
+              E.return (ATypes.Array elem_ty (Just (n+1)), ret)
+        end
+    | (ATypes.Array _ _, Init_list xs) ->
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
+    | (ATypes.Struct _, Init_list xs) ->
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
+    | _ ->
+        let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        foo_aux (*entity_ty*) [] elems Nothing [(Nothing, init_)] >>= fun (ret, _, _) ->
+        E.return (entity_ty, ret)
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (*  wip_desugar_initializer_: storageDuration -> ctype -> initializer_ -> E.desugM ? *)
 
 (* NOTE: the check for STD §6.7.9#3 is done by [desugar_init_declarator] *)
 and wip_desugar_initializer_ loc dur current_ty init =
+(*
+  E.get_tag_definitions >>= fun tagDefs ->
+  foo current_ty init >>= fun xs ->
+  
+  let expr = constructValue tagDefs xs current_ty in
+
+  let () = Debug.print_debug 0 [] (fun () ->
+    "HELLO INITIALIZER_ ==> current_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_ty ^
+(*    "\n desigs ==> " ^ stringFromList stringFromInit_path (elemPathFromCtype_aux tagDefs current_ty) ^ *)
+
+    "\n desigs ==> " ^ stringFromList (fun (path, outer_path, outer_ty) ->
+                         stringFromInit_path path ^ " --> outer: " ^
+                         stringFromInit_path outer_path ^ " (" ^
+                         Pp.stringFromAil_ctype ATypes.no_qualifiers outer_ty ^ ")"
+                       ) (elemPathFromCtype3 tagDefs current_ty) ^
+    "\n FOO ==> " ^ stringFromList (fun (path, expr) ->
+                      stringFromInit_path path ^
+                      " := " ^ Pp.stringFromAil_expression expr
+                    ) xs
+  ) in
+  let () = Debug.print_debug 0 [] (fun () ->
+    "EXPR: " ^ Pp.stringFromAil_expression expr
+  ) in
+
+let () = error "DONE" in
+*)
+
+
   (* YUCK + TODO: move somewhere *)
   let is_string_literal_init = function
     | Init_expr (CabsExpression _ (CabsEstring _)) ->
@@ -2110,7 +3028,28 @@ and wip_desugar_initializer_ loc dur current_ty init =
           E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB081_scalar_initializer_not_single_expression)
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
-    E.return (current_ty, d_e)
+    (* STD §6.7.9#4 *)
+    if dur = ATypes.Static || dur = ATypes.Thread then
+      is_initializer_constant_expression d_e >>= function
+        | false ->
+            E.fail (Loc.locOf d_e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
+        | true ->
+            if AilTypesAux.is_integer current_ty then
+(* TODO: bring back the evaluation if possible. But the following code is wrong
+   because the setting the suffix to Nothing regardless of the value of n is wrong. *)
+              E.return (current_ty, d_e)
+(*
+              evaluate_integer_constant_expression loc (Just current_ty) d_e >>= fun n ->
+              E.return begin
+                (current_ty, AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant n Decimal Nothing))))
+              end
+*)
+            else
+              (* TODO: floating and pointer *)
+              E.return (current_ty, d_e)
+      end
+    else
+      E.return (current_ty, d_e)
   
   else if AilTypesAux.is_array_of_character current_ty && is_string_literal_init init then
     translate_cabs_string_literal <$> match init with
@@ -2173,7 +3112,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
     error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
-    let () = Debug.print_debug 0 [] (fun () ->
+    let () = Debug.print_debug 1 [] (fun () ->
       "TODO[wip_desugar_initializer_]: in the remaining cases (object that has aggregate or union type), init must Init_list, otherwise this UNDEFINED BEHAVIOUR..." 
     ) in
 (*
@@ -2212,7 +3151,33 @@ and wip_desugar_initializer_ loc dur current_ty init =
   
   
   
-  else *) match init with
+  else *)
+    match (AilTypesAux.unatomic current_ty, init) with
+      | (ATypes.Struct _, Init_expr e) ->
+          (* TODO: hack *)
+          desugar_expression e >>= fun d_e ->
+          E.return (current_ty, d_e)
+      | _ ->
+          E.get_tag_definitions >>= fun tagDefs ->
+          foo current_ty init >>= fun (current_ty', xs) ->
+          
+          let () = Debug.print_debug 1 [] (fun () ->
+            "current_ty': " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_ty' ^
+            ", FOO ==> " ^ stringFromList (fun (path, expr) ->
+              stringFromInit_path path ^
+              " := " ^ Pp.stringFromAil_expression expr
+            ) xs
+          ) in
+          E.return (current_ty', constructValue tagDefs xs current_ty')
+    end
+
+
+  
+
+
+(* KKKK: new init
+
+ match init with
   | Init_expr e ->
       (* we ignore the type here because the type checking will catch
          errors later *)
@@ -2275,9 +3240,6 @@ and wip_desugar_initializer_ loc dur current_ty init =
                     | _ ->
                         E.return (current_ty, d_e)
                   end
-(*                evaluate_integer_constant_expression (Loc.locOf e) d_e >>= fun cst ->
-                  E.return $
-                    AnnotatedExpression () (AilEconst (ConstantInteger cst))                *)
               | false ->
                   (* NOTE: we don't to check whether d_e is a string literal because the 
                      predicate would have been true. *)
@@ -2324,7 +3286,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
                     desugar_expression desig_e               >>= fun d_desig_e ->
                     is_integer_constant_expression d_desig_e >>= function
                       | true ->
-                          evaluate_integer_constant_expression (Loc.locOf desig_e) d_desig_e >>= fun j                  ->
+                          evaluate_integer_constant_expression (Loc.locOf desig_e) Nothing d_desig_e >>= fun j                  ->
                           wip_desugar_initializer_ loc dur elem_ty init                      >>= fun (elem_ty', d_init) ->
                           (* TODO: use elem_ty' *)
                           (* comparing the specified index with the
@@ -2369,7 +3331,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
         | ATypes.Struct tag ->
             (* TODO: check the STD!!!!! *)
             E.resolve_tag_definition tag >>= function
-              | Just (E.Struct_definition isAnonymous ident_tys) ->
+              | Just (Struct_definition isAnonymous ident_tys) ->
                   (* TODO: (for now) only allowing explicit and complete initializer *)
                   if List.all (function
                        | (Just [Desig_member _], Init_expr _) -> true
@@ -2453,7 +3415,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
         | ATypes.Union tag ->
             (* TODO: check the STD, the following is mostly improvised... *)
             E.resolve_tag_definition tag >>= function
-              | Just (E.Union_definition isAnonymous ident_tys) ->
+              | Just (Union_definition isAnonymous ident_tys) ->
                   match desigs_opt_inits with
                     | [(Nothing, init')] ->
                         let (first_ident, (_, first_ty)) = match ident_tys with
@@ -2522,6 +3484,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
 
       end
 end
+*)
 
 
 
@@ -2529,7 +3492,16 @@ and desugar_and_register_static_assert_declaration sa_decl =
   match sa_decl with
    | Static_assert e lit ->
        desugar_expression e >>= fun d_e ->
-       E.register_static_assertion d_e (translate_cabs_string_literal lit)
+       is_integer_constant_expression d_e >>= function
+         | false ->
+             E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB204_illtyped_Static_assert)
+         | true ->
+             evaluate_integer_constant_expression Loc.unknown Nothing d_e >>= fun n ->
+             if n = 0 then
+               E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.10#3 Static_assert(The constant expression shall compare unequal to 0.)")
+             else
+               E.return ()
+         end
   end
 
 
@@ -2587,18 +3559,24 @@ let desugar_declaration_base specifs idecltors =
                     tag_definitions=
                       List.foldl (fun acc (ident, tagDef) ->
                         match tagDef with
-                          | E.Struct_definition _ xs ->
+                          | Struct_definition _ xs ->
                               (ident, StructDef xs) :: acc
-                          | E.Union_definition _ xs ->
+                          | Union_definition _ xs ->
                               (ident, UnionDef xs) :: acc
-                          | E.Enum_definition _ ->
+                          | Enum_definition _ ->
                               acc
                         end
                       ) [] (Map_extra.toList ident_tagDefs);
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
-                  E.register_internal_object_declaration ident_loc sym
-                    (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                  match link with
+                    | Linkage_external ->
+                        E.register_external_object_declaration ident_loc sym
+                          (false(*TODO:check*), dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                    | _ ->
+                        E.register_internal_object_declaration ident_loc sym
+                          (dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                  end >>
                   mk_desug_init () >>= function
                     | Just (ty', d_e) ->
                         let () = Debug.print_debug 1 [] (fun () ->
@@ -2617,9 +3595,23 @@ let desugar_declaration_base specifs idecltors =
                         else
                           E.return ()
                         end >>
-                        E.return (ty', (sym, d_e) :: acc)
+                        match dur with
+                          | ATypes.Static ->
+                              E.register_global_object_definition2 ident_loc sym link (E.Definition d_e) >>
+                              E.return (ty', acc)
+                          | ATypes.Thread ->
+                              error "TODO: desugar_declaration_base, Thread duration"
+                          | _ ->
+                              E.return (ty', (sym, d_e) :: acc)
+                        end
                     | Nothing ->
-                        E.return (ty, acc)
+                        if dur = ATypes.Static || dur = ATypes.Thread then
+                          E.get_tag_definitions >>= fun tagDefs ->
+                          (* TODO: not correct for thread? *)
+(*                          E.register_global_object_definition sym (*mk_zeroInit tagDefs ty*) >> *)
+                          E.return (ty, acc)
+                        else
+                          E.return (ty, acc)
                   end >>= fun (ty', ret) ->
                   if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
                     E.fail (*TODO*)(Loc.locOf ident) (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
@@ -2629,39 +3621,51 @@ let desugar_declaration_base specifs idecltors =
           ) [] idecltors >>= (List.reverse |- E.return)
 
 
-val     desugar_statement: cabs_statement -> E.desugM (statement unit)
-let rec desugar_statement (CabsStatement loc stmt_) =
+
+type stmt_context = <|
+  switch_depth: nat;
+  cont_ident_opt: maybe cabs_identifier; (* Just ..., if inside a loop *)
+|>
+
+let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
+  let self = desugar_statement_aux ctx in
   AnnotatedStatement loc <$>
     match stmt_ with
       | CabsSlabel ident s ->
 	  AilSlabel <$> E.resolve_label ident
-                    <*> desugar_statement s
+                    <*> self s
       
       | CabsScase e s ->
-          E.is_inside_switch >>= function
-            | true ->
-                AilScase <$> (desugar_expression e >>=
-                                evaluate_integer_constant_expression (Loc.locOf e) >>= fun n ->
-                              E.return (IConstant n Decimal Nothing))
-                         <*> desugar_statement s
-            | false ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
-          end
+          if ctx.switch_depth > 0 then
+            AilScase <$> (desugar_expression e >>=
+                          evaluate_integer_constant_expression (Loc.locOf e) Nothing >>= fun n ->
+                          E.return (IConstant n Decimal Nothing))
+                     <*> self s
+          else
+            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
       
       | CabsSdefault s ->
-          E.is_inside_switch >>= function
-            | true ->
-                AilSdefault <$> desugar_statement s
-            | false ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
-          end
+          if ctx.switch_depth > 0 then
+            AilSdefault <$> self s
+          else
+            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
           E.fresh_block_scope >>= fun scope ->
-          E.with_scope scope (
-            E.mapM desugar_statement ss
-          ) >>= fun (bs, d_ss) ->
+          E.collect_with_scope scope (
+            E.mapM self ss
+          ) >>= fun (bs_, d_ss) ->
+          
+          let bs = List.filter (fun (_, ((dur, _), _, _)) ->
+            match dur with
+              | ATypes.Static ->
+                  false
+              | ATypes.Thread ->
+                  false
+              | _ ->
+                  true
+            end) bs_ in
           
           (* this is removing unnecessary blocks introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
@@ -2703,29 +3707,57 @@ let rec desugar_statement (CabsStatement loc stmt_) =
       | CabsSif e s1 s2_opt ->
           (* TODO: check *)
           AilSif <$> desugar_expression e
-                 <*> desugar_statement s1
-                 <*> maybe (E.return $ AnnotatedStatement Loc.unknown AilSskip) desugar_statement s2_opt
+                 <*> self s1
+                 <*> maybe (E.return $ AnnotatedStatement Loc.unknown AilSskip) self s2_opt
       
       | CabsSswitch e s ->
+          let ctx' = <| ctx with switch_depth= ctx.switch_depth + 1 |> in
           (* TODO: check *)
           AilSswitch <$> desugar_expression e
-                     <*> E.perform_inside_switch (desugar_statement s)
-          
+                     <*> desugar_statement_aux ctx' s
       
       | CabsSwhile e s ->
-          (* TODO: check *)
-          AilSwhile <$> desugar_expression e
-                    <*> E.perform_inside_loop (desugar_statement s)
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          desugar_expression e         >>= fun d_e ->
+          desugar_statement_aux ctx' s >>= fun d_s ->
+          E.return begin
+              AilSwhile d_e begin
+                AnnotatedStatement loc begin
+                  AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip))]
+                end
+              end
+          end
       
       | CabsSdo e s ->
-          (* TODO: check *)
-          AilSdo <$> E.perform_inside_loop (desugar_statement s)
-                 <*> desugar_expression e
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          desugar_expression e         >>= fun d_e ->
+          desugar_statement_aux ctx' s >>= fun d_s ->
+          E.return begin
+              AilSdo begin
+                AnnotatedStatement loc begin
+                  AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip))]
+                end
+              end d_e
+          end
       
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
+          
           (* TODO: this is not really a block scope (...) *)
           E.fresh_block_scope >>= fun scope ->
-          E.with_scope scope (
+          E.under_scope scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
@@ -2785,66 +3817,85 @@ let rec desugar_statement (CabsStatement loc stmt_) =
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
               (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
               maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-              E.perform_inside_loop $ desugar_statement s       >>= fun d_s  ->
+              desugar_statement_aux ctx' s                      >>= fun d_s  ->
               match e3_opt with
                 | Just e3 ->
                     desugar_expression e3 >>= fun d_e3 ->
                     let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
                     E.return match d_s with
-                      | AnnotatedStatement loc (AilSblock bindings d_ss) ->
-                          AnnotatedStatement loc (AilSblock bindings (d_ss ++ [d_s_e3]))
+                      | AnnotatedStatement loc' (AilSblock bindings d_ss) ->
+                          AnnotatedStatement loc' (
+                            AilSblock bindings (d_ss ++ [AnnotatedStatement loc (AilSlabel cont_sym d_s_e3)])
+                          )
                       | _ ->
-                          AnnotatedStatement loc (AilSblock [] [d_s; d_s_e3])
+                          AnnotatedStatement loc (
+                            AilSblock [] [d_s; AnnotatedStatement loc (AilSlabel cont_sym d_s_e3)]
+                          )
                     end
                 | Nothing ->
-                    E.return (AnnotatedStatement loc (AilSblock [] [d_s]))
+                    E.return begin
+                      AnnotatedStatement loc (
+                        AilSblock [] [ d_s
+                                     ; AnnotatedStatement loc (AilSlabel cont_sym (AnnotatedStatement loc AilSskip)) ]
+                      )
+                    end
               end >>= fun d_s_body ->
               E.return $
                 AilSblock bindings [
-                  AnnotatedStatement Loc.unknown (AilSdeclaration sym_d_es);
-                  AnnotatedStatement Loc.unknown (AilSwhile d_e2 d_s_body)
+                  AnnotatedStatement loc (AilSdeclaration sym_d_es);
+                  AnnotatedStatement loc (AilSwhile d_e2 d_s_body)
                 ]
-          ) >>= fun (_, ret) ->
-          E.return ret
+          )
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
-          (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
-          maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
-          E.perform_inside_loop $ desugar_statement s       >>= fun d_s  ->
+          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.register_label cont_ident >>
+          E.resolve_label cont_ident >>= fun cont_sym ->
+          let ctx' =
+            <| ctx with cont_ident_opt= Just cont_ident |> in
           
-          match (fc_opt, e3_opt) with
-            (*    for (E1;; E3) S ==> { E1; while(1) {E3; S} }
-               or 
-                  for (E1; E2; E3) S ==> { E1; while(E2) {E3; S} }
-             *)
-            | (Just (FC_expr e1), Just e3) ->
-                desugar_expression e1 >>= fun d_e1 ->
+          (* see (§6.8.5.3#2, second sentence) for the Nothing case *)
+          (* for (...; ; ...) ...   ==> { ...; while(1) ... } *)
+          maybe (E.return oneAil) desugar_expression e2_opt >>= fun d_e2 ->
+          desugar_statement_aux ctx' s                      >>= fun d_s  ->
+          match e3_opt with
+            | Nothing ->
+                E.return begin
+                  AnnotatedStatement loc (
+                    AilSlabel cont_sym (AnnotatedStatement loc AilSskip)
+                  )
+                end
+            | Just e3 ->
                 desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e1 = AnnotatedStatement (Loc.locOf e1) $ AilSexpr d_e1 in
-                let d_s_e3 = AnnotatedStatement (Loc.locOf e3) $ AilSexpr d_e3 in
-                
+                E.return begin
+                  AnnotatedStatement loc (
+                    AilSlabel cont_sym (AnnotatedStatement (Loc.locOf e3) (AilSexpr d_e3))
+                  )
+                end
+          end >>= fun d_s_e3 ->
+          match (fc_opt, e3_opt) with
+            | (Just (FC_expr e1), e3_opt) ->
+                (* for (E1; E2; E3) S ==> { E1; while(E2) { S'; cont: E3   } }  *)
+                (* for (E1; E2; ) S   ==> { E1; while(E2) { S'; cont: skip } }  *)
+                desugar_expression e1 >>= fun d_e1 ->
+                let d_s_e1 =
+                  AnnotatedStatement (Loc.locOf e1) (AilSexpr d_e1) in
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
                   | _ ->
-                      AnnotatedStatement Loc.unknown $
-                        AilSblock [] [d_s; d_s_e3]
+                      AnnotatedStatement loc (AilSblock [] [d_s; d_s_e3])
                 end in
-                E.return (AilSblock [] [d_s_e1; AnnotatedStatement loc $ AilSwhile d_e2 d_s_body])
-            
-            | (Just (FC_expr e1), Nothing) ->
-                desugar_expression e1 >>= fun d_e1 ->
-                let d_s_e1 = AnnotatedStatement (Loc.locOf e1) $ AilSexpr d_e1 in
-                E.return (AilSblock [] [d_s_e1; AnnotatedStatement loc $ AilSwhile d_e2 d_s])
-            
+                E.return begin
+                  AilSblock [] [ d_s_e1
+                               ; AnnotatedStatement loc (AilSwhile d_e2 d_s_body) ]
+                end
             | (Just (FC_decl (Declaration_base _ _)), _) ->
                 E.fail loc Errors.Desugar_impossible
-            
-            | (Just (FC_decl (Declaration_static_assert sa_decl)), Just e3) ->
+            | (Just (FC_decl (Declaration_static_assert sa_decl)), e3_opt) ->
+                (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
                 desugar_and_register_static_assert_declaration sa_decl >>
-                desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
-                
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
@@ -2853,15 +3904,9 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                         AilSblock [] [d_s; d_s_e3]
                 end in
                 E.return (AilSwhile d_e2 d_s_body)
-            
-            | (Just (FC_decl (Declaration_static_assert sa_decl)), Nothing) ->
-                desugar_and_register_static_assert_declaration sa_decl >>
-                E.return (AilSwhile d_e2 d_s)
-            
-            | (Nothing, Just e3) ->
-                desugar_expression e3 >>= fun d_e3 ->
-                let d_s_e3 = AnnotatedStatement Loc.unknown $ AilSexpr d_e3 in
-                
+            | (Nothing, e3_opt) ->
+                (* for (; E2; E3) S ==> while(E2) { S'; cont: E3 } *)
+                (* for (; E2; ) S ==> while(E2) { S'; cont: skip } *)
                 let d_s_body = match d_s with
                   | AnnotatedStatement loc (AilSblock bs d_ss) ->
                       AnnotatedStatement loc (AilSblock bs (d_ss ++ [d_s_e3]))
@@ -2870,29 +3915,29 @@ let rec desugar_statement (CabsStatement loc stmt_) =
                         AilSblock [] [d_s; d_s_e3]
                 end in
                 E.return (AilSwhile d_e2 d_s_body)
-            
-            | (Nothing, Nothing) ->
-                E.return (AilSwhile d_e2 d_s)
           end
       
       | CabsSgoto ident ->
           AilSgoto <$> E.resolve_label ident
       
       | CabsScontinue ->
-          E.is_inside_loop >>= function
-            | true ->
-                E.return AilScontinue
-            | false ->
+          match ctx.cont_ident_opt with
+            | Nothing ->
                 E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.2#1")
+            | Just cont_ident ->
+                self (CabsStatement loc (CabsSgoto cont_ident)) >>= fun (AnnotatedStatement _ stmt_) ->
+                E.return stmt_
           end
       
       | CabsSbreak ->
-          E.is_inside_switch >>= fun b1 ->
-          E.is_inside_loop   >>= fun b2 ->
-          if b1 || b2 then
+          if ctx.switch_depth > 0 then
             E.return AilSbreak
-          else
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+          else match ctx.cont_ident_opt with
+            | Just _ ->
+                E.return AilSbreak
+            | Nothing ->
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+          end
       
       | CabsSreturn Nothing ->
           E.get_current_return_type >>= function
@@ -2911,8 +3956,12 @@ let rec desugar_statement (CabsStatement loc stmt_) =
           end
       
       | CabsSpar ss ->
-          AilSpar <$> E.mapM desugar_statement ss
+          AilSpar <$> E.mapM self ss
     end
+
+val desugar_statement: cabs_statement -> E.desugM (statement unit)
+let desugar_statement stmt =
+  desugar_statement_aux <| switch_depth= 0; cont_ident_opt= Nothing |> stmt
 
 
 val     register_labels: cabs_statement -> E.desugM unit
@@ -2971,13 +4020,24 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
       desugar_declarator IsFunDef decltor
     end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
     
+    (* NOTE: as per §6.9.1#2, we perform a dummy instanciation of the type
+       **specified by the declarator portion of the function definition**, which
+       here means `ddecltor' without `specifs' *)
+    match mk_qs_ctype ATypes.no_qualifiers ATypes.Void with
+      | (_, ATypes.Function _ _ _ _) ->
+          E.return ()
+      | _ ->
+          (* STD §6.9.1#2 *)
+          E.fail fundef_loc (Errors.Desugar_ConstraintViolation "§6.9.1#2")
+    end >>
+    
     E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (_, fun_sym) ->
     
-    (E.void -| E.with_scope E.Scope_function) begin
+    E.under_scope E.Scope_function begin
       register_labels stmt >>
       
       E.fresh_block_scope >>= fun funblock_scope ->
-      E.with_scope funblock_scope begin
+      E.under_scope funblock_scope begin
           (* TODO: this is a horrible hack, DO BETTER *)
           E.hack_inject_idents_map idents_map >>
 
@@ -3014,10 +4074,10 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               desugar_statement stmt >>= fun d_stmt ->
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
-            (* STD §6.9.1#2 *)
-            E.fail fundef_loc (Errors.Desugar_ConstraintViolation "§6.9.1#2")
+            (* This should not be possible due to the earlier check *)
+            error "Cabs_to_ail.desugar_and_register_function_definition, internal error"
         end
-      end >>= fun (_, (loc, fun_sym, d_stmt)) ->
+      end >>= fun (loc, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
@@ -3058,7 +4118,7 @@ let desugar_and_register_external_declaration edecl =
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
         let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
         (* TODO: why the two maps? *)
-        (* NOTE: this is (at least) needed to got the scope of typedefs right
+        (* NOTE: this is (at least) needed to get the scope of typedefs right
            (see suite/parsing/declarator_visibility.c) *)
         (* NOTE: `desugar_init_declarator' does register the identifier it finds *)
         E.mapM (fun init ->
@@ -3097,11 +4157,11 @@ let desugar_and_register_external_declaration edecl =
                         List.reverse begin
                           List.foldl (fun acc (ident, tagDef) ->
                             match tagDef with
-                              | E.Struct_definition _ xs ->
+                              | Struct_definition _ xs ->
                                   (ident, StructDef xs) :: acc
-                              | E.Union_definition _ xs ->
+                              | Union_definition _ xs ->
                                   (ident, UnionDef xs) :: acc
-                              | E.Enum_definition _ ->
+                              | Enum_definition _ ->
                                   acc
                             end
                           ) [] (Map_extra.toList ident_tagDefs)
@@ -3126,14 +4186,24 @@ let desugar_and_register_external_declaration edecl =
                           if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
                             E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
                           else
-                            (* TODO: use ty' *)
-                            (* STD §6.9#3, first sentence *)
-                            E.external_object_is_defined sym >>= function
+(* KKK:
+                            E.global_object_is_defined sym >>= function
                               | true ->
-                                  E.fail (*TODO*)Loc.unknown (Errors.Desugar_ExternalObjectRedefinition sym)
+                                  match link with
+                                    | Linkage_internal ->
+                                        (* STD §6.9#3, sentence 1 *)
+                                        E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9#3, sentence 1")
+                                    | Linkage_external ->
+                                        (* STD §6.9#5, sentence 2 *)
+                                        E.fail ident_loc (Errors.Desugar_UndefinedBehaviour Undefined.UB084)
+                                    | Linkage_none ->
+                                        error "[Cabs_to_ail.desugar_and_register_external_declaration] - internal ERROR"
+                                  end
                               | false ->
-                                  E.register_external_object_definition sym d_e
-                            end
+                                  E.register_global_object_definition2 sym (E.ExternalDefinition d_e)
+                              end
+*)
+                                  E.register_global_object_definition2 ident_loc sym link (E.ExternalDefinition d_e)
                       | Nothing ->
                           if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
                             (* TODO: this is wrong (see tentative definition in the STD) *)
@@ -3141,8 +4211,12 @@ let desugar_and_register_external_declaration edecl =
                           else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
                             E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
                           else
-                            E.return ()
-                    end
+                            if dur = ATypes.Static || dur = ATypes.Thread then
+                              E.get_tag_definitions >>= fun tagDefs ->
+                              (* TODO: not correct for thread? *)
+                              E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
+                            else
+                              E.return ()                    end
               end
         end) xs
   
@@ -3157,7 +4231,7 @@ val desugar: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> s
 let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff (
-    E.with_scope E.Scope_file (
+    E.under_scope E.Scope_file (
       let (base_qs1, base_ty1, ptr_decltor1) =
         ( ATypes.make_qualifiers true false false
         , ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_))
@@ -3226,14 +4300,12 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
       
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str
-    ) >>= fun (_, ret) ->
-    E.return ret
+    )
   ) 
 *)
   E.eval sym_counter core_eval_stuff (
-    E.with_scope E.Scope_file (
+    E.under_scope E.Scope_file (
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str
-    ) >>= fun (_, ret) ->
-    E.return ret
+    )
   )

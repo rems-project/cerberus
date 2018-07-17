@@ -1,0 +1,49 @@
+NOTE: all these tests have been preprocessed by running the following command:
+
+  cproto -a -q -E 0
+
+it converts function definitions from the old style to the ANSI C style, e.g.:
+
+  foo(x)
+    int x;
+  { ... }
+
+becomes
+
+  int foo(int x)
+  { ... }
+
+================================================================================
+
+ADDITIONAL DIFF MADE BY HAND
+
+[conversion.c]
+  
+  the return types of the functions:
+    - test_integer_to_float
+    - test_longlong_integer_to_float
+    - test_float_to_integer
+    - test_float_to_longlong_integer
+
+  have been changed from int to void, since they do not have any return
+  statement, leading to undefined behaviour without the diff.
+
+
+[920501-9.c]
+  
+  the return types of the function:
+    - print_longlong
+  
+  has been changed from int to void.
+
+
+[960327-1.c]
+  
+  the return types of the function:
+    - f
+  
+  has been changed from int to void.
+
+[960117-1.c]
+  the return keyword was added to the end of function:
+    - get_id

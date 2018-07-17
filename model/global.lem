@@ -34,8 +34,16 @@ val isDefacto: unit -> bool
 declare ocaml target_rep function isDefacto = `Global_ocaml.isDefacto`
 
 
+type cerb_switch =
+  | SW_strict_pointer_arith
+  | SW_strict_reads
 
 
+declare ocaml target_rep function SW_strict_pointer_arith = `Switches.SW_strict_pointer_arith`
+declare ocaml target_rep function SW_strict_reads = `Switches.SW_strict_reads`
+
+val has_switch: cerb_switch -> bool
+declare ocaml target_rep function has_switch = `Switches.has_switch`
 
 
 

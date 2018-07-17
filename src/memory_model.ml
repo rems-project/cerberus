@@ -56,7 +56,7 @@ module type Memory = sig
     -> integer_value     (* size *)
     -> pointer_value memM
   
-  val kill: pointer_value -> unit memM
+  val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
   
   val load: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> (footprint * mem_value) memM
   val store: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> mem_value -> footprint memM
@@ -64,7 +64,15 @@ module type Memory = sig
   (* Pointer value constructors *)
   val null_ptrval: Core_ctype.ctype0 -> pointer_value
   val fun_ptrval: Symbol.sym -> pointer_value
-  
+
+  (*TODO: revise that, just a hack for codegen*)
+  val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
+  val case_ptrval: pointer_value ->
+    (Core_ctype.ctype0 -> 'a) -> (* null *)
+    (Nat_big_num.num option -> Nat_big_num.num -> 'a) -> (* concrete *)
+    (unit -> 'a) ->
+    'a
+
   (* Operations on pointer values *)
   val eq_ptrval: pointer_value -> pointer_value -> bool memM
   val ne_ptrval: pointer_value -> pointer_value -> bool memM
@@ -87,8 +95,12 @@ module type Memory = sig
   val array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
   
+  val eff_array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value memM
+  
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
+  val realloc: Cthread.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+
   
   (* Integer value constructors *)
   val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
@@ -180,7 +192,7 @@ module type Memory = sig
 (*
   val string_of_pointer_value: pointer_value -> string
   val string_of_integer_value: integer_value -> string
-  val string_of_mem_value: mem_value -> string
+  val string_of_mem_value: mem_value -> stri(g
 *)
 
   (* JSON serialisation *)

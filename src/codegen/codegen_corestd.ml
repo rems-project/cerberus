@@ -14,7 +14,11 @@ let print_head filename =
   !^"module B = Nat_big_num" ^//^
   !^"let (>>=) = M.bind" ^/^
   !^"let rec _std_function_printf cont xs args =\
-     \n  A.printf conv_int xs args >>= fun x -> cont x"
+     \n  A.printf conv_int xs args >>= fun x -> cont x" ^/^
+  !^"and _std_function_sprintf cont _ _ _ =\
+     \n  A.sprintf () >>= fun x -> cont x" ^/^
+  !^"and _std_function_snprintf cont _ _ _ _ =\
+     \n  A.snprintf () >>= fun x -> cont x"
 
 let gen globs impl stdlib =
   let contents =

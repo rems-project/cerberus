@@ -18,6 +18,7 @@ val string_of_integerBaseType: integerBaseType -> string
 
 
 val pp_integerType: integerType -> PPrint.document
+val pp_floatingType: floatingType -> PPrint.document
 
 val pp_basicType: basicType -> PPrint.document
 

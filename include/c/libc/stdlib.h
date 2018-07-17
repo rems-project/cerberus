@@ -119,7 +119,7 @@ int atoi(const char *nptr)
 
 
 // TODO: temporary hack
-void* calloc(size_t nmemb, size_t size)
+void *calloc(size_t nmemb, size_t size)
 {
   unsigned char *ret;
   ret = malloc(nmemb * size);
@@ -132,16 +132,27 @@ void* calloc(size_t nmemb, size_t size)
   return ret;
 }
 
+/*
+void *realloc(void *ptr, size_t size)
+{
+  void *memcpy(void * restrict s1, const void * restrict s2, size_t n);
+  void *r = malloc(size);
+  if (ptr)
+    memcpy(r, ptr, size);
+  return r;
+}
+*/
+
 // TODO: This is based on the standard
-static unsigned long int next = 1;
+static unsigned long int __cerb_next = 1;
 int rand(void)   // RAND_MAX assumed to be 32767
 {
-     next = next * 1103515245 + 12345;
-     return (unsigned int)(next/65536) % 32768;
+  __cerb_next = __cerb_next * 1103515245 + 12345;
+  return (unsigned int)(__cerb_next/65536) % 32768;
 }
 void srand(unsigned int seed)
 {
-     next = seed;
+  __cerb_next = seed;
 }
 
 

@@ -74,7 +74,7 @@ let gen filename corestd sym_supply core =
     (if acc = P.empty then tletrec else acc ^//^ tand) ^^^
     print_eff_function (!^"glob_" ^^ print_symbol sym ^^^ print_symbol default) []
       (print_base_type coreTy) (print_transformed globs bbs bbody)
-    ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.null_ptr"
+    ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"A.mk_null_void"
   in
   if corestd then
     Codegen_corestd.gen globs cps_core.impl cps_core.stdlib;

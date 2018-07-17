@@ -66,7 +66,7 @@ ldnear (long double x, long double y)
   return t == 0 || x / t > 100000000000000000000000000000000.0;
 }
 
-int 
+void 
 test_integer_to_float (void)
 {
   if (u2f(0U) != (float) 0U)				/* 0 */
@@ -161,7 +161,7 @@ sll2ld (long long int s)
   return s;
 }
 
-int 
+void 
 test_longlong_integer_to_float (void)
 {
   if (ull2f(0ULL) != (float) 0ULL)			/* 0 */
@@ -265,7 +265,7 @@ ld2s(long double d)
   return (int) d;
 }
 
-int 
+void 
 test_float_to_integer (void)
 {
   if (f2u(0.0) != 0)
@@ -427,7 +427,7 @@ ld2sll(long double d)
   return (long long int) d;
 }
 
-int 
+void 
 test_float_to_longlong_integer (void)
 {
   if (f2ull(0.0) != 0LL)

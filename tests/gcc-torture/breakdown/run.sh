@@ -1,18 +1,22 @@
 #!/bin/bash
 
-SUCCESS=$(ls success/*.c | wc -l)
-FAILURE=$(ls -R fail | grep -E '\.c' | wc -l)
-UNSUPP=$(ls -R not_supported | grep -E '\.c' | wc -l)
-INVALID=$(ls invalid/*.c | wc -l)
-UNDEFINED=$(ls undefined/*.c | wc -l)
+SUCCESS=$(git ls-files success/*.c | wc -l)
+LIMBUS=$(git ls-files limbus/*.c | wc -l)
+FAILURE=$(git ls-files fail | grep -E '.c$' | wc -l)
+NOTSTD=$(git ls-files not_std_compliant | grep -E '.c$' | wc -l)
+UNSUPP=$(git ls-files not_supported | grep -E '.c$' | wc -l)
+INVALID=$(git ls-files invalid/*.c | wc -l)
+UNDEFINED=$(git ls-files undefined/*.c | wc -l)
 
-VALID_TOTAL=$((SUCCESS+FAILURE))
-TOTAL=$((VALID_TOTAL+UNSUPP+UNDEFINED+INVALID))
+VALID_TOTAL=$((SUCCESS+LIMBUS+FAILURE))
+TOTAL=$((VALID_TOTAL+NOTSTD+UNSUPP+UNDEFINED+INVALID))
 
-SUCCRATE=$(((SUCCESS*1000)/VALID_TOTAL))
+SUCCRATE=$((((SUCCESS+LIMBUS)*1000)/VALID_TOTAL))
 
 echo Total of tests: $TOTAL
-echo Success: $SUCCESS
+echo Success: $((SUCCESS+LIMBUS))
+echo Limbus \(stack overflow otherwise\): $LIMBUS
+echo Not STD compliant: $NOTSTD
 echo Failure: $FAILURE
 echo Unsupported: $UNSUPP
 echo Undefined: $UNDEFINED
@@ -25,12 +29,20 @@ echo Failure by type:
 cd fail
 for d in `find . -type d ! -path .`
 do
-	echo $d: $(ls $d/*.c | wc -l)
+	echo $d: $(git ls-files $d/*.c | wc -l)
 done
 cd ..
 echo ""
 echo Unsupported by type:
 cd not_supported
+for d in `find . -type d ! -path .`
+do
+	echo $d: $(git ls-files $d/*.c | wc -l)
+done
+cd ..
+echo ""
+echo Not STD compliant by type:
+cd not_std_compliant
 for d in `find . -type d ! -path .`
 do
 	echo $d: $(ls $d/*.c | wc -l)

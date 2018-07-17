@@ -317,8 +317,8 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         failwith "WIP: Core parser -> PEval"
     | PEconstrained _ ->
         assert false
-    | PEundef ub ->
-        Eff.return (Pexpr ([], (), PEundef ub))
+    | PEundef (loc, ub) ->
+        Eff.return (Pexpr ([], (), PEundef (loc, ub)))
     | PEerror (str, _pe) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr ([], (), PEerror (str, pe)))
@@ -632,9 +632,9 @@ and symbolify_action_ = function
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (Alloc0 (pe1, pe2, pref))
- | Kill _pe -> 
+ | Kill (b, _pe) -> 
      symbolify_pexpr _pe >>= fun pe ->
-     Eff.return (Kill pe)
+     Eff.return (Kill (b, pe))
  | Store0 (_pe1, _pe2, _pe3, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -954,7 +954,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL RMW FENCE
+%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL FREE RMW FENCE
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1322,7 +1322,7 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([], (), PEundef ub) }
+    { Pexpr ([], (), PEundef (Location_ocaml.other "Core parser", ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
     { Pexpr ([], (), PEerror (str, _pe))  }
 | _cval= value
@@ -1453,8 +1453,10 @@ action:
     { CreateReadOnly (_pe1, _pe2, _pe3, Symbol.PrefOther "Core") }
 | ALLOC LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
     { Alloc0 (_pe1, _pe2, Symbol.PrefOther "Core") }
+| FREE _pe= delimited(LPAREN, pexpr, RPAREN)
+    { Kill (true, _pe) }
 | KILL _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Kill _pe }
+    { Kill (false, _pe) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
     { Store0 (_pe1, _pe2, _pe3, Cmm.NA) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN

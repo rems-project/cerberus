@@ -659,7 +659,10 @@ let rec explode_bytes mval : (meta * char option) list =
   let allocate_dynamic _ _ (align) (size) =
     allocate align size None None
 
-  let kill p : unit memM =
+  let realloc _ _ _ =
+    failwith "twin: realloc"
+
+  let kill loc is_dyn p : unit memM =
     let do_kill id =
       Debug_ocaml.print_debug 1 [] (fun () ->
         "KILLING alloc_id= " ^ N.to_string id 
@@ -799,6 +802,9 @@ let rec explode_bytes mval : (meta * char option) list =
 
   let fun_ptrval sym =
     PV (Prov_none, PVfunction sym)
+
+  let concrete_ptrval _ _ = failwith "twin: concrete_ptrval"
+  let case_ptrval _ _ _ _ = failwith "twin: case_ptrval"
 
   (* TODO: not sure if I need to consider double provenance here *)
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
@@ -950,7 +956,11 @@ let rec explode_bytes mval : (meta * char option) list =
     | PVnull _ -> PVconcrete offset
     | PVfunction _ -> failwith "Twin.member_shift_ptrval, PVfunction"
     | PVconcrete addr -> PVconcrete (N.add addr offset))
+  
+  let eff_array_shift_ptrval ptrval ty ival =
+    failwith "TODO(twin): eff_array_shift_ptrval"
 
+  
   let concurRead_ival ity sym = failwith "TODO: concurRead_ival"
 
   let integer_ival n = n

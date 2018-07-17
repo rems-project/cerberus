@@ -106,11 +106,24 @@ let default = Symbol.Symbol (0, Some "cont")
 
 (* CPS transformation *)
 
+(* Transform Core in CPS Core using sym_supply to create new symbols *)
+(* TODO: do I need the bound variable lists (bvs) ? *)
 let cps_transform_expr sym_supply globs bvs core_expr =
+  (* Transform the left hand side of an esseq *)
+  (* INVARIANT: we consider that Core is associated to the right, so we cannot
+   * find any esseq here! *)
+  (* TODO: I might be able to relax this invariant *)
   let rec tr_left bbs pat1 es pat2 ce (Expr (_, e_) as e) =
     match e_ with
     | Esseq _ -> raise (Unexpected "Sequencing must be associate to the right!")
     | _ -> tr_right bbs pat1 es pat2 ce e
+  (* Transform from right to left (esseq), bottom to top from a Core expression *)
+  (* bbs is an accumulated list of blocks (will become functions)
+   * pat1 is the pattern to enter the current basic block
+   * es  is an accumulated list of basic blocks (actions, will become a basic block)
+   * pat2 is the pattern to leave the current basic block (return value)
+   * ce the control jump from the current basic block (continuation)
+   * (pat1 - es - pat2 - ce) form the current basic block being created *)
   and tr_right bbs pat1 es pat2 ce (Expr (_, e_)) =
     let to_basic e = (bbs, ((pat1, e)::es, (pat2, ce))) in
     match e_ with
@@ -167,7 +180,7 @@ let cps_transform_expr sym_supply globs bvs core_expr =
       if es != [] then
         raise (Unexpected "Skip expression not allowed.")
       else
-        (bbs, ([], (None, ce)))
+        to_basic (CpsPure (Pexpr ([], BTy_unit, PEval Vunit)))
     | Ebound (_, e) ->
       (* WARN: I am not sure if this is the correct semantics of Ebound *)
       tr_right bbs pat1 es pat2 ce e

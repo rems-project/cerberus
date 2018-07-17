@@ -590,7 +590,8 @@ let address_expression_of_pointer ptr_val =
   return (real_address_expression_of_pointer ptr_val)
 
 
-let impl_kill (PV _ ptr_val_ sh as ptr_val) =
+let impl_kill loc is_dynamic (PV _ ptr_val_ sh as ptr_val) =
+  (* TODO: UB if this is a dynamic kill and the pointer wasn't dynamically allocated *)
   print_debugM 5 (fun () -> "KILL with pointer value: " ^ stringFromPointer_value ptr_val) >> (* DEBUG *)
   explicitAllocationIdFromPointer_value_aux ptr_val_ >>= function
     | Just (alloc_id, pref) ->
@@ -896,7 +897,7 @@ let project_to_lvalue_type lvalue_ty mval =
     | _ ->
         (* TODO *)
         (* return mval *)
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "lvalue_ty  ===> " ^ stringFromCore_ctype lvalue_ty ^ 
           "\nmval ===> " ^ stringFromMem_value mval
         ) in
@@ -2266,7 +2267,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                 (* *)
 
 
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "loc          = " ^ Loc.stringFromLocation loc ^ "\n" ^
                   "sh           = " ^ stringFromShift_path sh ^ "\n" ^
                   "current_mval = " ^ stringFromMem_value current_mval

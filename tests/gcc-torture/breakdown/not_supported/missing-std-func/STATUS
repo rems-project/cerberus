@@ -1,0 +1,4 @@
+20030626-2.c        sprintf
+loop-2f.c           filesystem, mmap
+loop-2g.c           filesystem, mmap
+pr79327.c           sprintf, %o not supported

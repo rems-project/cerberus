@@ -1,6 +1,7 @@
 open import Pervasives Utils
 open import UniqueId Symbol
 
+import Pp
 
 import Core 
 module C = Core
@@ -12,7 +13,7 @@ end
 import GenTypes GenTypesAux
 
 (* Ail typing *)
-import GenTyping ErrorMonad
+import GenTyping ErrorMonad TypingError
 
 (* Elaboration *)
 open import Translation Translation_aux
@@ -49,17 +50,45 @@ let inline (>>=) = Eff.bind
 
 val evalConstantExpressionAux:
   Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
+  A.sigma unit ->
   UniqueId.supply Symbol.sym ->
   (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
-  A.expression unit -> Eff.exceptM C.value Errors.error
+  maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM C.value Errors.error
 
-let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbol_suppl typing_guard expr =
+let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm symbol_suppl typing_guard ty_opt expr =
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
-    GenTyping.annotate_expression empty_sigma [] (*TODO: check*)GenTyping.CTXother in
+    GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother in
   
-  let toCore: A.expression GenTypes.genTypeCategory -> TranslateEff.elabM (Core.expr unit) =
-    translate_expression (Translation_aux.mk_translation_stdlib (ailnames, stdlib_fun_map))
-      (Map.empty: C.core_tag_definitions) in
+  let toCore (a_e: A.expression GenTypes.genTypeCategory) : TranslateEff.elabM (Core.expr unit) =
+    (* STD §6.6#4 *)
+    (* NOTE: this constraint requires the evaluated constant to be within the range of expression's type *)
+    let stdlib = Translation_aux.mk_translation_stdlib (ailnames, stdlib_fun_map) in
+    let ty = match ty_opt with
+      | Just ty ->
+          ty
+      | Nothing ->
+          (* TODO/NOTE: this should correspond to constants from array sizes and such *)
+          Translation_aux.ctype_of a_e
+    end in
+    let oTy = force_core_object_type_of_ctype (Core_aux.proj_ctype ty) in
+    TranslateEff.bind (translate_expression stdlib (Map.empty: C.core_tag_definitions) a_e) (fun core_e                       ->
+    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy))                (fun (_, e_sym_pat  , e_sym_pe  ) ->
+    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy))                (fun (_, obj_sym_pat, obj_sym_pe) ->
+    TranslateEff.return begin
+      Core_aux.mk_wseq_e e_sym_pat core_e begin
+        Core_aux.mk_pure_e begin
+          Core_aux.mk_case_pe e_sym_pe
+            [ ( Core_aux.mk_specified_pat obj_sym_pat
+              , Core_aux.mk_if_pe
+                  (stdlib.mkcall_is_representable obj_sym_pe ty)
+                  (Caux.mk_specified_pe obj_sym_pe)
+                  (Core_aux.mk_error_pe "§6.6#4 failed" obj_sym_pe) )
+            ; ( Core_aux.mk_unspecified_pat (Core_aux.mk_empty_pat C.BTy_ctype)
+                (* TODO: this should be dead code? *)
+              , obj_sym_pe (* TODO: check with P *) ) ]
+        end
+      end
+    end))) in
   
   (* typechecks the expression *)
   match ErrorMonad.runErrorMonad (toAilTau expr) with
@@ -106,7 +135,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
               ND.return (Driver.finalize "wipFrontend" dr_st')
             )
           ) in
-        let () = Core_ctype_aux.set_tagDefs (Map.empty) in (* TODO: maybe use Cabs_to_ail_effect.get_sigma_sofar *)
+        let () = Core_ctype_aux.set_tagDefs (Translation.translate_tag_definitions sigm.A.tag_definitions) in
         let execs = runND_proxy driver_action dr_st in
         let () = Core_ctype_aux.reset_tagDefs () in
         match execs with
@@ -114,6 +143,8 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
               Eff.return dres.Driver.dres_core_value
           | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->
               Eff.fail (ub_loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_UB ubs))
+          | [(ND.Killed (ND.Error loc "§6.6#4 failed"), _, _)] ->
+              Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_ConstraintViolation "§6.6#4"))
           | _ ->
               error "TODO error: the driver found less/more than one active execution"
         end
@@ -121,23 +152,24 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) symbo
 
 
 val evalIntegerConstantExpression:
-  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
-  UniqueId.supply Symbol.sym -> A.expression unit -> Eff.exceptM integer Errors.error
+  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
+  UniqueId.supply Symbol.sym -> maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc std_str core_env symbol_suppl expr =
+let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt expr =
   let typing_guard gtc =
     let do_fail = Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_notInteger std_str)) in
     match gtc with
       | GenTypes.GenLValueType _ _ _ ->
           do_fail
       | GenTypes.GenRValueType gTy ->
+          (* TODO: check ty_opt and gTy ? *)
           if GenTypesAux.is_integer gTy then
             Eff.return ()
           else
             do_fail
     end in
   
-  evalConstantExpressionAux loc core_env symbol_suppl typing_guard expr >>= function
+  evalConstantExpressionAux loc core_env sigm symbol_suppl typing_guard ty_opt expr >>= function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
         match Mem.eval_integer_value ival with
           | Just n ->
@@ -145,7 +177,20 @@ let evalIntegerConstantExpression loc std_str core_env symbol_suppl expr =
           | Nothing ->
               error "TODO error: the memory model failed to concretise the integer value (was impl dependent?)"
         end
-    | _ ->
+    | cval ->
+        let () = Debug.print_debug 1 [] (fun () ->
+          "cval: " ^ Pp.stringFromCore_value cval
+        ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
         Eff.fail (loc, Errors.Desugar_cause Errors.Desugar_impossible)
+  end
+
+
+val typecheckAil: A.sigma unit -> A.gamma -> A.expression unit -> either (Loc.t * TypingError.typing_error) AilTypes.ctype
+let typecheckAil sigm gamm expr =
+  match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm (*TODO: check*)GenTyping.CTXother expr) with
+    | Left z ->
+        Left z
+    | Right a_expr ->
+        Right (Translation_aux.ctype_of a_expr)
   end

@@ -6,6 +6,8 @@
    -O2 -fomit-frame-pointer        
    Testcase by David B. Trout     */
 
+#define STACK_SIZE 1000
+
 #if defined(STACK_SIZE) && STACK_SIZE < 16000
 #define ARRAY_SIZE (STACK_SIZE / 2)
 #define STRLEN	   (ARRAY_SIZE - 9)

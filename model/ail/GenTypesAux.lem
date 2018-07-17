@@ -192,13 +192,15 @@ let are_pointers_to_compatible_complete_objects sigm gty1 gty2 =
         false
   end
 
-val are_pointers_to_compatible_objects: genType -> genType -> bool
-let are_pointers_to_compatible_objects gty1 gty2 =
+val are_pointers_to_qualifiedOrUnqualified_compatible_types: genType -> genType -> bool
+let are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 =
+  (* NOTE: because of the "qualified or unqualified" we ignore the qualifiers of
+     the referenced types *)
   match (gty1, gty2) with
-    | (GenPointer ref_qs1 ref_ty1, GenPointer ref_qs2 ref_ty2) ->
+    | (GenPointer _ ref_ty1, GenPointer _ ref_ty2) ->
            AilTypesAux.is_object ref_ty1
         && AilTypesAux.is_object ref_ty2
-        && AilTypesAux.are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+        && AilTypesAux.are_compatible (no_qualifiers, ref_ty1) (no_qualifiers, ref_ty2)
     | _ ->
         false
   end  

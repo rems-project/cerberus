@@ -78,7 +78,7 @@ end
 
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
 let rec objectValueFromMemValue mem_val =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "objectValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
@@ -92,7 +92,7 @@ let rec objectValueFromMemValue mem_val =
     (fun sym ident mem_val -> (OTy_union sym, OVunion sym ident mem_val))
 
 and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "loadedValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
@@ -117,7 +117,7 @@ and loadedValueFromMemValue mem_val : core_object_type * loaded_value =
 
 val     valueFromMemValue: Mem.mem_value -> core_object_type * value
 let rec valueFromMemValue mem_val =
-  let () = Debug.print_debug 1 [] (fun () ->
+  let () = Debug.print_debug 6 [] (fun () ->
     "valueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val
   ) in
   Mem.case_mem_value mem_val
@@ -345,9 +345,9 @@ let mk_alignof_pe pe =
 
 (* TODO: PEconstrained *)
 
-val mk_undef_pe: Undefined.undefined_behaviour -> pexpr
-let mk_undef_pe ub =
-  Pexpr [] () (PEundef ub)
+val mk_undef_pe: Loc.t -> Undefined.undefined_behaviour -> pexpr
+let mk_undef_pe loc ub =
+  Pexpr [] () (PEundef loc ub)
 
 val mk_error_pe: string -> pexpr -> pexpr
 let mk_error_pe str pe =
@@ -405,9 +405,9 @@ val mk_std_pe: string -> pexpr -> pexpr
 let mk_std_pe std (Pexpr annot bty pe_) =
   Pexpr ((Astd std)::annot) bty pe_
 
-val mk_std_undef_pe: string -> Undefined.undefined_behaviour -> pexpr
-let mk_std_undef_pe std ub =
-  mk_std_pe std $ mk_undef_pe ub
+val mk_std_undef_pe: Loc.t -> string -> Undefined.undefined_behaviour -> pexpr
+let mk_std_undef_pe loc std ub =
+  mk_std_pe std $ mk_undef_pe loc ub
 
 val mk_std_pair_pe: string -> pexpr * pexpr -> pexpr * pexpr
 let mk_std_pair_pe std (pe1, pe2) =
@@ -422,9 +422,9 @@ let mk_call_pe nm pes =
 
 (* Some common undef *)
 
-val mk_undef_exceptional_condition: unit -> pexpr
-let mk_undef_exceptional_condition () =
-  mk_std_undef_pe "§6.5#5" Undefined.UB036_exceptional_condition
+val mk_undef_exceptional_condition: Loc.t -> pexpr
+let mk_undef_exceptional_condition loc =
+  mk_std_undef_pe loc "§6.5#5" Undefined.UB036_exceptional_condition
 
 
 
@@ -462,8 +462,8 @@ let pcreate_readonly loc al ty init pref =
   Expr [] (Eaction (Paction Pos (Action loc default (CreateReadOnly  al ty init pref))))
 let palloc loc al e pref =
   Expr [] (Eaction (Paction Pos (Action loc default (Alloc al e pref))))
-let pkill loc x =
-  Expr [] (Eaction (Paction Pos (Action loc default (Kill x))))
+let pkill loc is_dynamic x =
+  Expr [] (Eaction (Paction Pos (Action loc default (Kill is_dynamic x))))
 let pstore loc ty x n mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Store ty x n mo))))
 let pload loc ty x mo =
@@ -835,7 +835,7 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
     | PEconstrained xs ->
         PEconstrained $
           List.map (fun (constrs, pe) -> (constrs, subst_sym_pexpr sym cval pe)) xs
-    | PEundef _ ->
+    | PEundef _ _ ->
         pexpr_
     | PEerror str pe ->
         PEerror str (subst_sym_pexpr sym cval pe)
@@ -954,8 +954,8 @@ and subst_sym_action_ sym cval = function
       CreateReadOnly (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) (subst_sym_pexpr sym cval pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
-  | Kill pe ->
-      Kill (subst_sym_pexpr sym cval pe)
+  | Kill b pe ->
+      Kill b (subst_sym_pexpr sym cval pe)
   | Store pe1 pe2 pe3 mo ->
       Store (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
         (subst_sym_pexpr sym cval pe3) mo
@@ -1077,7 +1077,7 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
     | PEconstrained xs ->
         PEconstrained $
           List.map (fun (constrs, pe) -> (constrs, unsafe_subst_sym_pexpr sym pe' pe)) xs
-    | PEundef _ ->
+    | PEundef _ _ ->
         pe_
     | PEerror str pe ->
         PEerror str (unsafe_subst_sym_pexpr sym pe' pe)
@@ -1194,8 +1194,8 @@ and unsafe_subst_sym_action_ a pe' = function
       CreateReadOnly (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) pref
   | Alloc pe1 pe2 pref ->
       Alloc (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
-  | Kill pe ->
-      Kill (unsafe_subst_sym_pexpr a pe' pe)
+  | Kill b pe ->
+      Kill b (unsafe_subst_sym_pexpr a pe' pe)
   | Store pe1 pe2 pe3 mo ->
       Store (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
         (unsafe_subst_sym_pexpr a pe' pe3) mo
@@ -2051,7 +2051,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEval v -> PEval v
   | PEconstrained cs ->
     PEconstrained (List.mapi (fun i (m, pe) -> (m, self (i+1) pe)) cs)
-  | PEundef undef -> PEundef undef
+  | PEundef loc undef -> PEundef loc undef
   | PEerror err pe -> PEerror err (self 1 pe)
   | PEctor ctor pes -> PEctor ctor (selfs pes)
   | PEcase pe cases -> PEcase (self 0 pe)

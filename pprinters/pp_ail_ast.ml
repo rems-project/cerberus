@@ -3,7 +3,7 @@ open AilTypes
 open GenTypes
 
 open Pp_prelude
-open Pp_ail
+(*open Pp_ail*)
 
 open Pp_ast
 open Colour
@@ -65,52 +65,21 @@ let pp_qualifiers qs =
       pp qs.restrict "restrict" (
         pp qs.volatile "volatile" P.empty))
 
-let rec pp_constant = function
-  | ConstantIndeterminate ty ->
-      (* NOTE: this is not in C11 *)
-      pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
-  | ConstantNull ->
-      pp_const "NULL"
-  | ConstantInteger ic ->
-      pp_integerConstant ic
-  | ConstantFloating fc ->
-      pp_floatingConstant fc
-  | ConstantCharacter cc ->
-      pp_characterConstant cc
- | ConstantArray csts ->
-     P.braces (comma_list pp_constant csts)
- | ConstantStruct (tag_sym, xs) ->
-     P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
-       comma_list (fun (memb_ident, cst) ->
-         P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
-       ) xs
-     )
- | ConstantUnion (tag_sym, memb_ident, cst) ->
-   P.parens (!^ "union" ^^^ pp_id tag_sym)
-   ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
 
-let pp_stringLiteral (pref_opt, strs) =
-  (P.optional pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
-
-let empty_qs =
-  { AilTypes.const    = false
-  ; AilTypes.restrict = false
-  ; AilTypes.volatile = false
-  }
 
 let rec pp_ctype_human qs ty =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
     else
-      pp_qualifiers_human qs ^^ P.space in
+      Pp_ail.pp_qualifiers_human qs ^^ P.space in
   match ty with
     | Void ->
         prefix_pp_qs ^^ !^ "void"
     | Basic bty ->
-        prefix_pp_qs ^^ pp_basicType bty
+        prefix_pp_qs ^^ Pp_ail.pp_basicType bty
     | Array (elem_ty, n_opt) ->
-        !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
+        !^ "array" ^^^ P.optional Pp_ail.pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
     | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
@@ -130,13 +99,68 @@ let rec pp_ctype_human qs ty =
     | Atomic atom_ty ->
         prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers ty
     | Struct tag_sym ->
-        prefix_pp_qs ^^ !^ "struct" ^^^ pp_id tag_sym
+        prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
     | Union tag_sym ->
-        prefix_pp_qs ^^ !^ "union" ^^^ pp_id tag_sym
+        prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id tag_sym
     | Builtin str ->
         prefix_pp_qs ^^ P.brackets (!^ "builtin") ^^ !^ str
 
+
+let rec pp_genIntegerType_raw = function
+ | Concrete ity ->
+     !^ "Concrete" ^^ P.brackets (Pp_ail_raw.pp_integerType_raw ity)
+ | SizeT ->
+     !^ "SizeT"
+ | PtrdiffT ->
+     !^ "PtrdiffT"
+ | Unknown iCst ->
+     !^ "Unknown" ^^ P.brackets (Pp_ail.pp_integerConstant iCst)
+ | Promote gity ->
+     !^ "Promote" ^^ P.brackets (pp_genIntegerType_raw gity)
+ | Usual (gity1, gity2) ->
+     !^ "Usual" ^^ P.brackets (pp_genIntegerType_raw gity1 ^^ P.comma ^^^ pp_genIntegerType_raw gity2)
+
+let pp_genBasicType_raw = function
+ | GenInteger gity ->
+     pp_genIntegerType_raw gity
+ | GenFloating fty ->
+     Pp_ail.pp_floatingType fty
+
+let pp_genType = function
+ | GenVoid ->
+     !^ "void"
+ | GenBasic gbty ->
+     pp_genBasicType_raw gbty
+  | GenArray (ty, None) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "None")
+  | GenArray (ty, Some n) ->
+      !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (Pp_ail.pp_integer n))
+
+     
+ | GenFunction (has_proto, ty, params, is_variadic) ->
+      !^ "GenFunction" ^^ P.brackets (
+        comma_list (fun (qs, ty, isRegister) ->
+          P.parens (pp_ctype_human qs ty ^^
+                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
+        ) params ^^ P.comma ^^ !^ (if is_variadic then "true" else "false")
+       )
+
+ | GenPointer (ref_qs, ref_ty) ->
+     !^ "GenPointer" ^^ P.brackets (pp_ctype_human ref_qs ref_ty)
+  | GenStruct sym ->
+      !^ "GenStruct" ^^ Pp_ail.pp_id sym
+  | GenUnion sym ->
+      !^ "GenUnion" ^^ Pp_ail.pp_id sym
+  | GenAtomic ty ->
+      !^ "GenAtomic" ^^ pp_ctype_human no_qualifiers ty
+  | GenBuiltin str ->
+      !^ "GenBuiltin" ^^ P.brackets (!^ str)
+
+
+
 let pp_ctype qs ty =
+  pp_ctype_human qs ty
+(*
   let rec pp_ctype_aux pp_ident_opt qs ty =
     let precOf = function
       | Void
@@ -195,6 +219,43 @@ let pp_ctype qs ty =
     (aux 1 qs ty) pp_spaced_ident
   in
   pp_ctype_aux None qs ty
+*)
+
+
+
+let rec pp_constant = function
+  | ConstantIndeterminate ty ->
+      (* NOTE: this is not in C11 *)
+      pp_keyword "indet" ^^ P.parens (pp_ctype no_qualifiers ty)
+  | ConstantNull ->
+      pp_const "NULL"
+  | ConstantInteger ic ->
+      Pp_ail.pp_integerConstant ic
+  | ConstantFloating fc ->
+      Pp_ail.pp_floatingConstant fc
+  | ConstantCharacter cc ->
+      Pp_ail.pp_characterConstant cc
+ | ConstantArray (elem_ty, csts) ->
+     P.braces (comma_list pp_constant csts)
+ | ConstantStruct (tag_sym, xs) ->
+     P.parens (!^ "struct" ^^^ Pp_ail.pp_id tag_sym) ^^ P.braces (
+       comma_list (fun (memb_ident, cst) ->
+         P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
+       ) xs
+     )
+ | ConstantUnion (tag_sym, memb_ident, cst) ->
+   P.parens (!^ "union" ^^^ Pp_ail.pp_id tag_sym)
+   ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
+
+let pp_stringLiteral (pref_opt, strs) =
+  (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
+
+let empty_qs =
+  { AilTypes.const    = false
+  ; AilTypes.restrict = false
+  ; AilTypes.volatile = false
+  }
+
 
 let dtree_of_expression pp_annot expr =
   let rec self (AnnotatedExpression (annot, std_annots, loc, expr_)) =
@@ -238,17 +299,17 @@ let dtree_of_expression pp_annot expr =
     in
     begin match expr_ with
       | AilEunary (uop, e) ->
-          Dnode ( pp_stmt_ctor "AilEunary" ^^^ P.squotes (pp_unaryOperator uop)
+          Dnode ( pp_stmt_ctor "AilEunary" ^^^ P.squotes (Pp_ail.pp_unaryOperator uop)
                 , (*add_std_annot*) [self e] )
       | AilEbinary (e1, bop, e2) ->
-          Dnode ( pp_stmt_ctor "AilEbinary" ^^^ P.squotes (pp_binaryOperator bop)
+          Dnode ( pp_stmt_ctor "AilEbinary" ^^^ P.squotes (Pp_ail.pp_binaryOperator bop)
                 , (*add_std_annot*) [self e1; self e2] )
       | AilEassign (e1, e2) ->
           Dnode ( pp_stmt_ctor "AilEassign"
                 , (*add_std_annot*) [self e1; self e2] )
       | AilEcompoundAssign (e1, aop, e2) ->
           Dnode ( pp_stmt_ctor "AilEcompoundAssign"
-                  ^^^ P.squotes (pp_arithmeticOperator aop)
+                  ^^^ P.squotes (Pp_ail.pp_arithmeticOperator aop)
                 , (*add_std_annot*) [self e1; self e2] )
       | AilEcond (e1, e2, e3) ->
           Dnode ( pp_stmt_ctor "AilEcond"
@@ -275,10 +336,10 @@ let dtree_of_expression pp_annot expr =
                 , (*add_std_annot*) (filter_opt_list
                                    (List.map (option None self) e_opts)) )
       | AilEstruct (tag_sym, xs) ->
-          Dnode ( pp_stmt_ctor "AilEstruct" ^^^ pp_id tag_sym
+          Dnode ( pp_stmt_ctor "AilEstruct" ^^^ Pp_ail.pp_id tag_sym
                 , (*add_std_annot*) (List.map dtree_of_field xs) )
       | AilEunion (tag_sym, memb_ident, e_opt) ->
-          Dnode ( pp_stmt_ctor "AilEunion" ^^^ pp_id tag_sym
+          Dnode ( pp_stmt_ctor "AilEunion" ^^^ Pp_ail.pp_id tag_sym
                 , (*add_std_annot*) [dtree_of_field (memb_ident, e_opt)] )
       | AilEcompound (qs, ty, e) ->
           Dnode ( pp_stmt_ctor "AilEcompound" ^^^ pp_qualifiers qs ^^^ P.squotes (pp_ctype empty_qs ty)
@@ -309,7 +370,7 @@ let dtree_of_expression pp_annot expr =
           Dnode ( pp_stmt_ctor "AilEannot" ^^^ P.squotes (pp_ctype empty_qs ty),
                   (*add_std_annot*) [self e] )
       | AilEva_start (e, sym) ->
-          Dnode ( pp_stmt_ctor "AilEva_start" ^^^ pp_id sym
+          Dnode ( pp_stmt_ctor "AilEva_start" ^^^ Pp_ail.pp_id sym
                 , (*add_std_annot*) [self e] )
       | AilEva_arg (e, ty) ->
           Dnode ( pp_stmt_ctor "AilEva_arg" ^^^ P.squotes (pp_ctype empty_qs ty)
@@ -329,8 +390,8 @@ let dtree_of_expression pp_annot expr =
   self expr
 
 let dtree_of_binding (i, ((sd, is_reg), qs, ty)) =
-  Dleaf (pp_id i
-         ^^^ pp_storageDuration sd
+  Dleaf (Pp_ail.pp_id i
+         ^^^ Pp_ail.pp_storageDuration sd
          ^^^ pp_cond is_reg (pp_type_keyword "register")
            (P.squotes (pp_ctype qs ty)))
 
@@ -370,20 +431,20 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
         Dnode ( pp_stmt_ctor "AilSswitch"
               , [dtree_of_expression e; dtree_of_statement s] )
     | AilScase (iCst, s) ->
-        Dnode ( pp_stmt_ctor "AilScase" ^^^ pp_integerConstant iCst
+        Dnode ( pp_stmt_ctor "AilScase" ^^^ Pp_ail.pp_integerConstant iCst
               , [dtree_of_statement s] )
     | AilSdefault s ->
         Dnode ( pp_stmt_ctor "AilSdefault"
               , [dtree_of_statement s] )
     | AilSlabel (sym, s) ->
-        Dnode ( pp_stmt_ctor "AilSlabel" ^^^ pp_id sym
+        Dnode ( pp_stmt_ctor "AilSlabel" ^^^ Pp_ail.pp_id sym
               , [dtree_of_statement s] )
     | AilSgoto sym ->
-        Dleaf ( pp_stmt_ctor "AilSgoto" ^^^ pp_id sym )
+        Dleaf ( pp_stmt_ctor "AilSgoto" ^^^ Pp_ail.pp_id sym )
     | AilSdeclaration xs ->
         Dnode ( pp_stmt_ctor "AilSdeclaration"
               , List.map (fun (sym, e) ->
-                    Dnode (pp_stmt_ctor "Symbol" ^^^ pp_id sym
+                    Dnode (pp_stmt_ctor "Symbol" ^^^ Pp_ail.pp_id sym
                           , [dtree_of_expression e])
                 ) xs )
     | AilSpar ss ->
@@ -392,7 +453,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
 let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
   let param_dtrees =
     [] in
-  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc loc ^^^ pp_id fun_sym
+  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc loc ^^^ Pp_ail.pp_id fun_sym
         , param_dtrees @ [dtree_of_statement pp_annot stmt] )
 
 let pp_storageDuration = function
@@ -409,11 +470,11 @@ let dtree_of_declaration (i, (_, decl)) =
   match decl with
   | Decl_object (msd, qs, cty) ->
     Dleaf (pp_decl_ctor "Decl_object" ^^^
-           pp_id_obj i  ^^^
+           Pp_ail.pp_id_obj i  ^^^
            P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
   | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
     Dleaf (pp_decl_ctor "Decl_function" ^^^
-           pp_id_func i ^^^
+           Pp_ail.pp_id_func i ^^^
            Colour.pp_ansi_format [Green] begin
              P.squotes (
                (pp_cond is_inline !^"inline"
@@ -429,14 +490,14 @@ let dtree_of_tag_definition (i, tag) =
     Dleaf (Pp_cabs.pp_cabs_identifier i ^^^ P.squotes (pp_ctype qs ty))
   in match tag with
   | StructDef fs ->
-    Dnode (pp_ctor "StructDef" ^^^ pp_id i
+    Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i
           , List.map dleaf_of_field fs)
   | UnionDef fs ->
-    Dnode (pp_ctor "UnionDef" ^^^ pp_id i
+    Dnode (pp_ctor "UnionDef" ^^^ Pp_ail.pp_id i
           , List.map dleaf_of_field fs)
 
 let dtree_of_object_definition pp_annot (i, e) =
-  Dnode (pp_ctor "Def_object" ^^^ pp_id i, [dtree_of_expression pp_annot e])
+  Dnode (pp_ctor "Def_object" ^^^ Pp_ail.pp_id i, [dtree_of_expression pp_annot e])
 
 let dtree_of_static_assertions pp_annot (e, lit) =
   Dnode (pp_ctor "Static_assert"
@@ -467,7 +528,7 @@ let pp_annot gtc =
           (* TODO: do the colour turn off in pp_ansi_format *)
           let saved = !Colour.do_colour in
           Colour.do_colour := false;
-          let ret = P.squotes (pp_ctype qs ty) in
+          let ret = P.squotes (pp_ctype_human qs ty) in
           Colour.do_colour := saved;
           ret in
         pp_ansi_format [Green] qs_ty_doc ^^^
