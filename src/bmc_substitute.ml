@@ -62,8 +62,8 @@ let rec substitute_action (map: substitute_map)
     | CreateReadOnly _
     | Alloc0 _ ->
         assert false
-    | Kill pe ->
-        Kill (substitute_pexpr map pe)
+    | Kill (b, pe) ->
+        Kill (b, substitute_pexpr map pe)
     | Store0 (pe1, pe2, pe3, memorder) ->
         Store0(substitute_pexpr map pe1,
                substitute_pexpr map pe2,

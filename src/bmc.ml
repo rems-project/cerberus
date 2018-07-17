@@ -488,7 +488,7 @@ module ImplFunctions = struct
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
 
   (* TODO: precision of Bool is currently 8... *)
-  let impl : Implementation.implementation0 = {
+  let impl : Implementation.implementation = {
     binary_mode = Two'sComplement;
     signed      = (function
                    | Char       -> Ocaml_implementation.Impl.char_is_signed
@@ -499,12 +499,12 @@ module ImplFunctions = struct
     precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
                    | None   -> assert false );
-    size_t0     = Unsigned Long;
-    ptrdiff_t1  = Signed Long
+    size_t      = Unsigned Long;
+    ptrdiff_t0  = Signed Long
   }
 
   (* ---- Helper functions ---- *)
-  let integer_range (impl: Implementation.implementation0)
+  let integer_range (impl: Implementation.implementation)
                     (ity : AilTypes.integerType) =
     let prec = impl.precision ity in
     if impl.signed ity then
@@ -1419,7 +1419,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | CreateReadOnly _
   | Alloc0 _ ->
       assert false
-  | Kill pe ->
+  | Kill (_, pe) ->
       (* TODO: kill currently ignored *)
       bmc_pexpr pe >>= fun res_pe ->
       return { expr      = UnitSort.mk_unit
