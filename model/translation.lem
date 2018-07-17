@@ -1732,7 +1732,8 @@ else
                      ) )
                     (* non-deterministic branching if the test expression had unspecified value *)
                   ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                     C.Expr [] (C.End [core_e2; core_e3]) ) ]
+                     (* C.Expr [] (C.End [core_e2; core_e3]) *)
+                     Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilEcond"))) ]
               end (
               if AilTypesAux.is_integer result_ty then
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty res_sym_pe)
@@ -3030,7 +3031,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                    core_s1 core_s2)
                 (* non-deterministic branching if the test expression had unspecified value *)
               ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                 Caux.mk_nd_e [core_s1; core_s2]) ]
+                 (* Caux.mk_nd_e [core_s1; core_s2] *)
+                 Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSif"))) ]
+
           )
     
     | A.AilSwhile e s ->
@@ -3057,7 +3060,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                      core_s_loop Caux.mk_skip_e)
                   (* non-deterministic branching if the test expression had unspecified value *)
                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                   Caux.mk_nd_e [core_s_loop; Caux.mk_skip_e]) ]
+                 (* Caux.mk_nd_e [core_s_loop; Caux.mk_skip_e] *)
+                 Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSwhile"))) ]
                )
             )
     
@@ -3088,7 +3092,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                          core_loop Caux.mk_skip_e)
                       (* non-deterministic branching if the test expression had unspecified value *)
                     ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                       Caux.mk_nd_e [core_loop; Caux.mk_skip_e]) ]
+                       (* Caux.mk_nd_e [core_loop; Caux.mk_skip_e] *)
+                       Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSdo"))) ]
                    )
               end
           )
