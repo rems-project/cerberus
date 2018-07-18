@@ -1,9 +1,9 @@
+open Bmc_globals
 open Core
 
 module Sym = Symbol
 open Z3
 
-let g_bmc_debug = 10
 
 (* ========== TYPE ALIASES ============= *)
 
@@ -12,6 +12,18 @@ type sym_supply_ty = sym_ty UniqueId.supply
 
 (* ========== Z3 ALIASES ============= *)
 let mk_sym (ctx:context) = Symbol.mk_string ctx
+
+let mk_implies = Boolean.mk_implies g_ctx
+let mk_and     = Boolean.mk_and g_ctx
+let mk_not     = Boolean.mk_not g_ctx
+let mk_or      = Boolean.mk_or g_ctx
+let mk_true    = Boolean.mk_true g_ctx
+let mk_false   = Boolean.mk_false g_ctx
+let mk_xor     = Boolean.mk_xor g_ctx
+let mk_eq      = Boolean.mk_eq g_ctx
+let mk_ite     = Boolean.mk_ite g_ctx
+
+let mk_fresh_const = Expr.mk_fresh_const g_ctx
 
 (* ========== Core symbol functions ============= *)
 let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method

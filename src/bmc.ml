@@ -1,3 +1,5 @@
+open Bmc_conc
+open Bmc_globals
 open Bmc_substitute
 open Bmc_utils
 open Z3
@@ -30,37 +32,6 @@ open Util
  *  - Concurrency
  *)
 
-(* =========== GLOBALS =========== *)
-
-(* Z3 context config *)
-let g_z3_ctx_cfg = [ ("model", "true")  (* Generate model *)
-                   ; ("proof", "false") (* Disable proof generation *)
-                   ]
-let g_ctx = mk_context g_z3_ctx_cfg
-
-let g_z3_solver_logic_opt = None        (* Logic used by the solver *)
-let g_solver      = Solver.mk_solver g_ctx g_z3_solver_logic_opt
-
-(* true => use bit vector representation *)
-let g_bv = true
-let g_bv_precision = 32
-
-let g_max_run_depth = 5    (* Maximum function call/run depth per call/run *)
-let g_sequentialise = true (* Sequentialise Core *)
-
-(* =========== Z3 aliases =========== *)
-let mk_implies = Boolean.mk_implies g_ctx
-let mk_and     = Boolean.mk_and g_ctx
-let mk_not     = Boolean.mk_not g_ctx
-let mk_or      = Boolean.mk_or g_ctx
-let mk_true    = Boolean.mk_true g_ctx
-let mk_false   = Boolean.mk_false g_ctx
-let mk_xor     = Boolean.mk_xor g_ctx
-let mk_eq      = Boolean.mk_eq g_ctx
-let mk_ite     = Boolean.mk_ite g_ctx
-
-let mk_fresh_const = Expr.mk_fresh_const g_ctx
-
 (* =========== TYPES =========== *)
 (* Pure return *)
 
@@ -85,8 +56,9 @@ type bmc_ret = {
   assume    : Expr.expr list;
   vcs       : Expr.expr list;
   drop_cont : Expr.expr; (* drop continuation; e.g. after Erun *)
-  mod_addr  : AddrSet.t; (* addresses modified in memory *)
+  mod_addr  : AddrSet.t; (* addresses modified in memory; sequential mode *)
   ret_cond  : Expr.expr; (* constraints on the returned value *)
+  preexec   : preexec;   (* concurrent mode *)
 }
 
 type bmc_pret = {
@@ -98,16 +70,18 @@ type bmc_pret = {
 type bmc_gret = {
   assume    : Expr.expr list;
   vcs       : Expr.expr list;
+  preexec   : preexec;
 }
 
 let pget_expr   (pret: bmc_pret) = pret.expr
 let pget_assume (pret: bmc_pret) = pret.assume
 let pget_vcs    (pret: bmc_pret) = pret.vcs
 
-let eget_expr   (eret: bmc_ret) = eret.expr
-let eget_assume (eret: bmc_ret) = eret.assume
-let eget_vcs    (eret: bmc_ret) = eret.vcs
-let eget_ret    (eret: bmc_ret) = eret.ret_cond
+let eget_expr    (eret: bmc_ret) = eret.expr
+let eget_assume  (eret: bmc_ret) = eret.assume
+let eget_vcs     (eret: bmc_ret) = eret.vcs
+let eget_ret     (eret: bmc_ret) = eret.ret_cond
+let eget_preexec (eret: bmc_ret) = eret.preexec
 
 let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   { expr      = pret.expr
@@ -116,6 +90,7 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   ; drop_cont = mk_false
   ; mod_addr  = AddrSet.empty
   ; ret_cond  = mk_true
+  ; preexec   = mk_initial_preexec
   }
 
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
@@ -324,7 +299,7 @@ module AddressSort = struct
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [alloc_id; index]
 
-  let mk_expr_from_addr ((alloc_id, index) : int * int) : Expr.expr =
+  let mk_from_addr ((alloc_id, index) : int * int) : Expr.expr =
     mk_expr (int_to_z3 alloc_id) (int_to_z3 index)
 
   let get_alloc (expr: Expr.expr) : Expr.expr =
@@ -488,7 +463,7 @@ module ImplFunctions = struct
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
 
   (* TODO: precision of Bool is currently 8... *)
-  let impl : Implementation.implementation = {
+  let impl : Implementation.implementation0 = {
     binary_mode = Two'sComplement;
     signed      = (function
                    | Char       -> Ocaml_implementation.Impl.char_is_signed
@@ -499,12 +474,12 @@ module ImplFunctions = struct
     precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
                    | None   -> assert false );
-    size_t      = Unsigned Long;
-    ptrdiff_t0  = Signed Long
+    size_t0     = Unsigned Long;
+    ptrdiff_t1  = Signed Long
   }
 
   (* ---- Helper functions ---- *)
-  let integer_range (impl: Implementation.implementation)
+  let integer_range (impl: Implementation.implementation0)
                     (ity : AilTypes.integerType) =
     let prec = impl.precision ity in
     if impl.signed ity then
@@ -786,29 +761,38 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
 (* =========== SOME MONAD FUN =========== *)
 
 module BmcM = struct
-  type sym_table_ty = (sym_ty, Expr.expr) Pmap.map
-  type run_depth_table_ty = (name, int) Pmap.map
-  type alloc_ty = int
-  type memory_table_ty = (addr_ty, Expr.expr) Pmap.map
+  type sym_table = (sym_ty, Expr.expr) Pmap.map
+  type run_depth_table = (name, int) Pmap.map
+  type alloc = int
+  type memory_table = (addr_ty, Expr.expr) Pmap.map
+
+  type thread_id = int
+  type action_id = int
 
   type bmc_state = {
     file              : unit typed_file;
 
     sym_supply        : sym_supply_ty;
-    sym_table         : sym_table_ty;
+    sym_table         : sym_table;
 
     (* Map from Erun/Eccall symbol to number of times encountered.
      * Used to control depth of potentially recursive Erun/Eccall *)
-    run_depth_table   : run_depth_table_ty;
+    run_depth_table   : run_depth_table;
 
     (* Allocation id supply *)
-    alloc_supply      : alloc_ty;
+    alloc_supply      : alloc;
     (* Map from address to current Z3 expression in ``memory'' *)
-    memory            : memory_table_ty;
+    memory            : memory_table;   (* sequential mode *)
 
     (* Procedure-local state *)
     proc_expr         : (unit typed_expr) option; (* Procedure being checked *)
     ret_const         : Expr.expr option;         (* Expression returned *)
+
+    (* Concurrency stuff *)
+    tid        : thread_id;
+
+    tid_supply : thread_id;
+    aid_supply : action_id;
   }
 
   (* =========== MONADIC FUNCTIONS =========== *)
@@ -858,7 +842,7 @@ module BmcM = struct
     get >>= fun st ->
     return st.file
   (* sym table *)
-  let get_sym_table : sym_table_ty eff =
+  let get_sym_table : sym_table eff =
     get >>= fun st ->
     return st.sym_table
 
@@ -866,7 +850,7 @@ module BmcM = struct
     get_sym_table >>= fun sym_table ->
     return (Pmap.find sym sym_table)
 
-  let update_sym_table (new_table: sym_table_ty)
+  let update_sym_table (new_table: sym_table)
                        : unit eff =
     get >>= fun st ->
     put {st with sym_table = new_table}
@@ -877,7 +861,7 @@ module BmcM = struct
     update_sym_table (Pmap.add sym expr sym_table)
 
   (* run depth table *)
-  let get_run_depth_table : run_depth_table_ty eff =
+  let get_run_depth_table : run_depth_table eff =
     get >>= fun st ->
     return st.run_depth_table
 
@@ -887,7 +871,7 @@ module BmcM = struct
     | None  -> return 0
     | Some i -> return i
 
-  let update_run_depth_table (new_table: run_depth_table_ty)
+  let update_run_depth_table (new_table: run_depth_table)
                              : unit eff =
     get >>= fun st ->
     put {st with run_depth_table = new_table}
@@ -903,28 +887,25 @@ module BmcM = struct
     update_run_depth_table (Pmap.add label (depth-1) table)
 
   (* allocation *)
-  let get_new_alloc_and_update_supply : alloc_ty eff =
+  let get_new_alloc_and_update_supply : alloc eff =
     get                    >>= fun st ->
     return st.alloc_supply >>= fun alloc ->
     put {st with alloc_supply = alloc + 1} >>= fun () ->
     return alloc
 
   (* memory *)
-  let get_memory : memory_table_ty eff =
+  let get_memory : memory_table eff =
     get >>= fun st ->
     return st.memory
 
   let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
-    get >>= fun st ->
-    put {st with memory = Pmap.add addr expr st.memory}
+    if g_concurrent_mode then assert false
+    else get >>= fun st ->
+         put {st with memory = Pmap.add addr expr st.memory}
 
-  let update_memory_table (memory: memory_table_ty) : unit eff =
+  let update_memory_table (memory: memory_table) : unit eff =
     get >>= fun st ->
     put {st with memory = memory}
-
-  let lookup_memory (addr: addr_ty) : Expr.expr eff =
-    get_memory >>= fun memory ->
-    return (Pmap.find addr memory)
 
   let get_all_addresses : (addr_ty list) eff =
     get >>= fun st ->
@@ -948,6 +929,17 @@ module BmcM = struct
     get >>= fun st ->
     put {st with ret_const = Some expr}
 
+  (* =========== CONCURRENCY =========== *)
+  let get_tid        : thread_id eff =
+    get >>= fun st ->
+    return st.tid
+
+  let get_fresh_aid  : action_id eff =
+    get                                >>= fun st ->
+    return st.aid_supply               >>= fun ret ->
+    put {st with aid_supply = ret + 1} >>= fun () ->
+    return ret
+
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
@@ -964,17 +956,21 @@ module BmcM = struct
 
     ; proc_expr        = None
     ; ret_const        = None
+
+    ; tid              = 0
+    ; tid_supply       = 1
+    ; aid_supply       = 0
     }
 
   (* =========== Manipulating functions ========== *)
 
   (* For each modified address, update base memory using tables
    * guarded by guards. *)
-  let merge_memory (base     : memory_table_ty)
+  let merge_memory (base     : memory_table)
                    (mod_addr : AddrSet.t)
-                   (tables   : memory_table_ty list)
+                   (tables   : memory_table list)
                    (guards   : Expr.expr list) =
-    let guarded_tables : (memory_table_ty * Expr.expr) list =
+    let guarded_tables : (memory_table * Expr.expr) list =
       List.combine tables guards in
     AddrSet.fold (fun addr acc ->
       match Pmap.lookup addr acc with
@@ -991,7 +987,7 @@ module BmcM = struct
     ) mod_addr base
 
   (* =========== Pprinters =========== *)
-  let pp_sym_table (table: sym_table_ty) =
+  let pp_sym_table (table: sym_table) =
     Pmap.fold (fun sym expr acc ->
       sprintf "%s\n%s -> %s" acc (symbol_to_string sym) (Expr.to_string expr))
       table ""
@@ -999,7 +995,7 @@ module BmcM = struct
   let pp_addr ((x,y): addr_ty) =
     sprintf "(%d,%d)" x y
 
-  let pp_memory (memory: memory_table_ty) =
+  let pp_memory (memory: memory_table) =
     Pmap.fold (fun addr expr acc ->
       sprintf "%s\n%s -> %s" acc (pp_addr addr) (Expr.to_string expr))
     memory ""
@@ -1138,6 +1134,20 @@ let compute_case_guards (patterns: typed_pattern list)
   let vc = mk_or pattern_guards in
   (vc, case_guards)
 
+let mk_guarded_ite (exprs : Expr.expr list)
+                   (guards: Expr.expr list) =
+  assert (List.length exprs = List.length guards);
+  match List.length exprs with
+  | 0 -> assert false
+  | 1 -> List.hd exprs
+  | _ -> let rev_exprs = List.rev exprs in
+         let rev_guards = List.rev guards in
+         let last_case_expr = List.hd rev_exprs in
+         List.fold_left2 (fun acc guard expr -> mk_ite guard expr acc)
+                         last_case_expr
+                         (List.tl rev_guards)
+                         (List.tl rev_exprs)
+
 (* =========== MODEL CHECKING FUNCTIONS =========== *)
 let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
                   bmc_pret BmcM.eff =
@@ -1218,18 +1228,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
       let guarded_vcs = List.map2 (
         fun guard res -> mk_implies guard (mk_and (pget_vcs res)))
         case_guards reslist in
-      let ite_expr =
-        if List.length caselist = 1 then
-          pget_expr (snd (List.hd res_caselist))
-        else
-          let rev_list = List.rev (List.map snd res_caselist) in
-          let rev_case_guards = List.rev case_guards in
-          let last_case_expr = pget_expr (List.hd rev_list) in
-          List.fold_left2 (fun acc guard res -> mk_ite guard res.expr acc)
-                          last_case_expr
-                          (List.tl rev_case_guards)
-                          (List.tl rev_list)
-      in
+      let ite_expr = mk_guarded_ite (List.map pget_expr reslist) case_guards in
       return { expr   = ite_expr
              ; assume =   res_pe.assume
                           @ guarded_bindings
@@ -1375,6 +1374,143 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
   | PEis_unsigned _ ->
       assert false
 
+module Bmc_paction = struct
+  type ret = {
+    assume   : Expr.expr list;
+    vcs      : Expr.expr list;
+    mod_addr : AddrSet.t;
+    preexec  : preexec;
+  }
+
+  let mk_store (ptr: Expr.expr) (value: Expr.expr)
+               (memorder: memory_order) (guard: Expr.expr) (pol: polarity)
+               : (Expr.expr * bmc_action) BmcM.eff =
+    BmcM.get_fresh_aid >>= fun aid ->
+    BmcM.get_tid       >>= fun tid ->
+    let const =
+      mk_fresh_const ("store_" ^ (Expr.to_string ptr)) (Expr.get_sort value) in
+    let binding = mk_eq const value in
+    return (binding,
+            (BmcAction(pol, guard, Store(aid, tid, memorder, ptr, const))))
+
+  let do_concurrent_create (alloc_id: BmcM.alloc)
+                           (sortlist: (Expr.expr * Sort.sort) list)
+                           (pol: polarity)
+                           : ret BmcM.eff  =
+    BmcM.mapMi (fun i (ctype_expr, sort) ->
+      let initial_value = mk_unspecified_expr sort ctype_expr in
+      let ptr = PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id,i)) in
+      mk_store ptr initial_value NA mk_true pol
+    ) sortlist >>= fun retlist -> (* (binding, action) *)
+    return { assume   = List.map fst retlist
+           ; vcs      = []
+           ; mod_addr = AddrSet.empty (* sequential only *)
+           ; preexec  = List.fold_left (fun acc ret ->
+                          add_initial_action (snd ret) acc)
+                          mk_initial_preexec retlist
+           }
+
+  let do_sequential_create (alloc_id: BmcM.alloc)
+                           (sortlist: (Expr.expr * Sort.sort) list)
+                           : ret BmcM.eff =
+    BmcM.mapMi (fun i (ctype_expr, sort) ->
+      let addr = (alloc_id, i) in
+      let initial_value = mk_unspecified_expr sort ctype_expr in
+      let seq_var = mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
+      let init_unspec = mk_eq seq_var initial_value in
+      (* track in state that mem[addr] = seq_var *)
+      BmcM.update_memory addr seq_var >>= fun () ->
+      return (addr, init_unspec)
+    ) sortlist >>= fun retlist ->
+    return { assume    = List.map snd retlist
+           ; vcs       = []
+           ; mod_addr  = AddrSet.of_list (List.map fst retlist)
+           ; preexec   = mk_initial_preexec (* concurrent only *)
+           }
+
+  let do_concurrent_store (ptr     : Expr.expr)
+                          (value   : Expr.expr)
+                          (memorder: memory_order)
+                          (pol     : polarity)
+                          : ret BmcM.eff =
+    mk_store ptr value memorder (mk_not (PointerSort.is_null ptr)) pol
+      >>= fun (binding, bmcaction) ->
+    return { assume    = [ binding ]
+           ; vcs       = []
+           ; mod_addr  = AddrSet.empty (* sequential only *)
+           ; preexec   = add_action bmcaction mk_initial_preexec
+           }
+
+  let do_sequential_store (ptr: Expr.expr) (value: Expr.expr) : ret BmcM.eff =
+    (* TODO: alias analysis *)
+    let sort = Expr.get_sort value in
+    BmcM.get_memory >>= fun possible_addresses ->
+    BmcM.mapM (fun (addr, expr_in_memory) ->
+      let addr_sort = Expr.get_sort expr_in_memory in
+      if (Sort.equal sort addr_sort) then
+        let addr_expr = AddressSort.mk_from_addr addr  in
+        let new_seq_var = mk_fresh_const (Expr.to_string addr_expr) sort in
+        (* new_seq_var is equal to to_store if addr_eq, else old value *)
+        let addr_eq =
+          mk_and [ mk_not (PointerSort.is_null ptr)
+                 ; mk_eq (PointerSort.get_addr ptr) addr_expr] in
+        let new_val = mk_eq new_seq_var value in
+        let old_val = mk_eq new_seq_var expr_in_memory in
+        BmcM.update_memory addr new_seq_var >>= fun () ->
+        return (Some (addr, mk_ite addr_eq new_val old_val))
+      else
+        return None
+      ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
+    let filtered = List.map Option.get (List.filter is_some update_list) in
+    assert (List.length filtered > 0);
+    return { assume    = List.map snd filtered
+           ; vcs       = []
+           ; mod_addr  = AddrSet.of_list (List.map fst filtered)
+           ; preexec   = mk_initial_preexec (* concurent only *)
+           }
+
+  let do_concurrent_load (ptr      : Expr.expr)
+                         (new_const: Expr.expr)
+                         (memorder : memory_order)
+                         (pol      : polarity)
+                         : ret BmcM.eff =
+    BmcM.get_fresh_aid >>= fun aid ->
+    BmcM.get_tid >>= fun tid ->
+    let action = BmcAction(pol, mk_not (PointerSort.is_null ptr),
+                           Load(aid, tid, memorder, ptr, new_const)) in
+    return { assume   = []
+           ; vcs      = []
+           ; mod_addr = AddrSet.empty (* sequential only *)
+           ; preexec  = add_action action mk_initial_preexec
+           }
+
+  let do_sequential_load (ptr      : Expr.expr)
+                         (new_const: Expr.expr)
+                         : ret BmcM.eff =
+    (* TODO: alias analysis *)
+    BmcM.get_memory >>= fun possible_addresses ->
+    let sort = Expr.get_sort new_const in
+    (* sym_addr = addr => ret_expr = mem[addr] *)
+    BmcM.mapM (fun (addr, expr_in_memory) ->
+      let addr_sort = Expr.get_sort expr_in_memory in
+      if (Sort.equal sort addr_sort) then
+        let addr_expr = AddressSort.mk_from_addr addr in
+        let addr_eq =
+          mk_and [ mk_not (PointerSort.is_null ptr)
+                 ; mk_eq addr_expr (PointerSort.get_addr ptr)] in
+        let impl_expr = mk_implies addr_eq (mk_eq new_const expr_in_memory) in
+        return (Some (impl_expr, addr_eq))
+      else
+        return None
+    ) (Pmap.bindings_list possible_addresses) >>= fun retlist ->
+    let filtered = List.map Option.get (List.filter is_some retlist) in
+    return { assume   = List.map fst filtered
+           ; vcs      = [mk_or (List.map snd filtered)]
+           ; mod_addr = AddrSet.empty
+           ; preexec  = mk_initial_preexec (* concurrent only *)
+           }
+end
+
 let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
                 : bmc_ret BmcM.eff =
   match action_ with
@@ -1386,34 +1522,24 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       let allocation_size = bmcz3sort_size sortlist in
       BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
 
-      (* Create allocation_size number of addresses and initialize *)
-      BmcM.mapMi (fun i (ctype_expr, sort) ->
-        (* make new address *)
-        let addr = (alloc_id, i) in
-        let addr_expr = AddressSort.mk_expr_from_addr addr in
-        (* initialise to unspecified *)
-        let seq_var =
-          Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) sort in
-        let init_unspec =
-          mk_eq seq_var (mk_unspecified_expr sort ctype_expr) in
-        (* track in state that mem[addr] = seq_var *)
-        BmcM.update_memory (alloc_id, i) seq_var >>= fun () ->
-        return (addr, init_unspec)
-        ) flat_sortlist >>= fun retlist ->
-
+      let to_run =
+        if g_concurrent_mode
+        then Bmc_paction.do_concurrent_create alloc_id flat_sortlist pol
+        else Bmc_paction.do_sequential_create alloc_id flat_sortlist in
+      to_run >>= fun ret ->
       (* Assert alloc_size(alloc_id) = allocation_size *)
       let alloc_size_expr =
         mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
                                  [int_to_z3 alloc_id])
               (int_to_z3 allocation_size) in
-      let assume = alloc_size_expr :: (List.map snd retlist) in
-      let first_addr = AddressSort.mk_expr_from_addr (fst (List.hd retlist)) in
-      return { expr      = PointerSort.mk_ptr first_addr
-             ; assume    = assume
-             ; vcs       = []
+      return { expr      = PointerSort.mk_ptr
+                            (AddressSort.mk_from_addr (alloc_id, 0))
+             ; assume    = alloc_size_expr :: ret.assume
+             ; vcs       = ret.vcs
              ; drop_cont = mk_false
-             ; mod_addr  = AddrSet.of_list (List.map fst retlist)
+             ; mod_addr  = ret.mod_addr
              ; ret_cond  = mk_true
+             ; preexec   = ret.preexec
              }
   | Create _ -> assert false
   | CreateReadOnly _
@@ -1428,50 +1554,30 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
              ; ret_cond  = mk_true
+             ; preexec   = mk_initial_preexec
              }
   | Store0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
-            to_store, memorder) ->
+            wval, memorder) ->
       (* TODO: do alias analysis *)
       (* TODO: check alignment *)
       BmcM.get_file               >>= fun file ->
       BmcM.lookup_sym sym         >>= fun sym_expr ->
-      bmc_pexpr to_store          >>= fun res_to_store ->
-      BmcM.get_memory             >>= fun possible_addresses ->
-
+      bmc_pexpr wval              >>= fun res_wval ->
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-      let (ctype_expr, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
 
-      BmcM.mapM (fun (addr, expr_in_memory) ->
-        let addr_sort = Expr.get_sort expr_in_memory in
-        if (Sort.equal sort addr_sort) then
-          begin
-          let addr_expr = AddressSort.mk_expr_from_addr addr  in
-          let new_seq_var =
-            Expr.mk_fresh_const g_ctx (Expr.to_string addr_expr) addr_sort in
-          (* new_seq_var is equal to to_store if addr_eq, else old value *)
-          let addr_eq =
-            mk_and [ mk_not (PointerSort.is_null sym_expr)
-                   ; mk_eq (PointerSort.get_addr sym_expr) addr_expr] in
-          let new_val = mk_eq new_seq_var res_to_store.expr in
-          let old_val = mk_eq new_seq_var expr_in_memory in
-          BmcM.update_memory addr new_seq_var >>= fun () ->
-          return (Some (addr, mk_ite addr_eq new_val old_val))
-          end
-        else
-          return None
-        ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
-
-      let filtered =
-        List.map Option.get (List.filter is_some update_list) in
-      assert (List.length filtered > 0);
-
+      let to_run =
+        if g_concurrent_mode
+        then Bmc_paction.do_concurrent_store sym_expr res_wval.expr memorder pol
+        else Bmc_paction.do_sequential_store sym_expr res_wval.expr in
+      to_run >>= fun ret ->
       return { expr      = UnitSort.mk_unit
-             ; assume    = List.map snd filtered @ res_to_store.assume
-             ; vcs       = res_to_store.vcs
+             ; assume    = ret.assume @ res_wval.assume
+             ; vcs       = ret.vcs @ res_wval.vcs
              ; drop_cont = mk_false
-             ; mod_addr  = AddrSet.of_list (List.map fst filtered)
+             ; mod_addr  = ret.mod_addr
              ; ret_cond  = mk_true
+             ; preexec   = ret.preexec
              }
   | Store0 _ ->
       assert false
@@ -1480,34 +1586,22 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       BmcM.get_file               >>= fun file ->
       assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-      let (ctype_expr, sort) = List.hd flat_sortlist in
+      let (_, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
 
-      let ret_expr =
-        Expr.mk_fresh_const g_ctx ("load_" ^ (symbol_to_string sym)) sort in
-
-      BmcM.get_memory             >>= fun possible_addresses ->
-      (* sym_addr = addr => ret_expr = mem[addr] *)
-      BmcM.mapM (fun (addr, expr_in_memory) ->
-        let addr_sort = Expr.get_sort expr_in_memory in
-        if (Sort.equal sort addr_sort) then
-          let addr_expr = AddressSort.mk_expr_from_addr addr in
-          let addr_eq =
-            mk_and [ mk_not (PointerSort.is_null sym_expr)
-                   ; mk_eq addr_expr (PointerSort.get_addr sym_expr)] in
-          let impl_expr = mk_implies addr_eq (mk_eq ret_expr expr_in_memory) in
-          return (Some (impl_expr, addr_eq))
-        else
-          return None
-      ) (Pmap.bindings_list possible_addresses) >>= fun retlist ->
-      let filtered = List.map Option.get (List.filter is_some retlist) in
-
+      let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+      let to_run =
+        if g_concurrent_mode
+        then Bmc_paction.do_concurrent_load sym_expr ret_expr memorder pol
+        else Bmc_paction.do_sequential_load sym_expr ret_expr in
+      to_run >>= fun ret ->
       return { expr      = ret_expr
-             ; assume    = List.map fst filtered
-             ; vcs       = [mk_or (List.map snd filtered)]
+             ; assume    = ret.assume
+             ; vcs       = ret.vcs
              ; drop_cont = mk_false
-             ; mod_addr  = AddrSet.empty
+             ; mod_addr  = ret.mod_addr
              ; ret_cond  = mk_true
+             ; preexec   = ret.preexec
              }
   | Load0 _
   | RMW0 _
@@ -1531,6 +1625,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
              ; ret_cond  = mk_true
+             ; preexec   = mk_initial_preexec
              }
   | Ememop (PtrEq, [p1;p2]) ->
       bmc_pexpr p1 >>= fun res_p1 ->
@@ -1541,6 +1636,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
              ; ret_cond  = mk_true
+             ; preexec   = mk_initial_preexec
              }
   | Ememop _ ->
       assert false
@@ -1565,14 +1661,21 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                   return (let_binding, mem, res_case_expr)
                 ) caselist >>= fun res_caselist ->
       let reslist = List.map (fun (_, _, a) -> a) res_caselist in
-      (* Update memory table *)
-      let mod_addr = List.fold_right (
-        fun res acc -> AddrSet.union acc res.mod_addr) reslist AddrSet.empty in
-      let new_memory =
-        BmcM.merge_memory old_memory mod_addr
-                          (List.map (fun (_, m, _) -> m) res_caselist)
-                          case_guards in
-      BmcM.update_memory_table new_memory >>= fun () ->
+      (* Update memory *)
+      (if g_concurrent_mode then
+         let preexecs = List.map2 guard_preexec case_guards
+                                  (List.map eget_preexec reslist) in
+         return (AddrSet.empty, combine_preexecs preexecs)
+       else
+         let mod_addr = List.fold_right(fun res acc ->
+           AddrSet.union acc res.mod_addr) reslist AddrSet.empty in
+         let new_memory =
+           BmcM.merge_memory old_memory mod_addr
+                             (List.map (fun (_,m,_) -> m) res_caselist)
+                             case_guards in
+         BmcM.update_memory_table new_memory >>= fun () ->
+         return (mod_addr, mk_initial_preexec)
+      ) >>= fun (mod_addr, preexec) ->
 
       let guarded_bindings = List.map2 (
         fun guard (binding, _, _) -> mk_implies guard binding)
@@ -1581,29 +1684,21 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       let guarded_vcs = List.map2 (
         fun guard res -> mk_implies guard (mk_and (eget_vcs res)))
         case_guards reslist in
-      let ite_expr =
-        if List.length caselist = 1 then
-          eget_expr (List.hd reslist)
-        else
-          let rev_list = List.rev reslist in
-          let rev_case_guards = List.rev case_guards in
-          let last_case_expr = eget_expr (List.hd rev_list) in
-          List.fold_left2 (fun acc guard res -> mk_ite guard (eget_expr res) acc)
-                          last_case_expr
-                          (List.tl rev_case_guards)
-                          (List.tl rev_list) in
+      let ite_expr = mk_guarded_ite (List.map eget_expr reslist) case_guards in
       let assume = res_pe.assume @ guarded_bindings @ case_assumes in
       let drop_cont = mk_or
         (List.map2 (fun guard res -> mk_and [guard; res.drop_cont])
                    case_guards reslist) in
-      let ret_cond_list = List.map2 mk_implies case_guards
-                                               (List.map eget_ret reslist) in
+      let ret_cond_list =
+        List.map2 mk_implies case_guards (List.map eget_ret reslist) in
+
       return { expr      = ite_expr
              ; assume    = assume
              ; vcs       = match_vc :: (res_pe.vcs @ guarded_vcs)
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
              ; ret_cond  = mk_and ret_cond_list
+             ; preexec   = preexec
              }
   | Eskip ->
       return { expr      = UnitSort.mk_unit
@@ -1611,7 +1706,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              ; vcs       = []
              ; drop_cont = mk_false
              ; mod_addr  = AddrSet.empty
-             ; ret_cond = mk_true
+             ; ret_cond  = mk_true
+             ; preexec   = mk_initial_preexec
              }
   | Eproc _ ->
       assert false
@@ -1631,13 +1727,14 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         | _    -> assert false in
       BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
       if depth >= g_max_run_depth then
-        return { expr      = Expr.mk_fresh_const g_ctx
-                                 "call_depth_exceeded" (cbt_to_z3 fun_ty)
+        return { expr      = mk_fresh_const "call_depth_exceeded"
+                                            (cbt_to_z3 fun_ty)
                ; assume    = []
                ; vcs       = [ mk_false ]
                ; drop_cont = mk_false
                ; mod_addr  = AddrSet.empty
                ; ret_cond  = mk_true
+               ; preexec   = mk_initial_preexec
                }
       else begin
         BmcM.mapM bmc_pexpr arglist >>= fun arg_retlist ->
@@ -1673,6 +1770,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                ; drop_cont = mk_false
                ; mod_addr  = ret_call.mod_addr
                ; ret_cond  = mk_true
+               ; preexec   = ret_call.preexec
                }
       end
   | Eccall _
@@ -1696,41 +1794,47 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         return (mem, res_expr)
       ) elist >>= fun res_elist ->
 
-      let bmc_retlist = List.map snd res_elist in
+      let bmc_rets = List.map snd res_elist in
       let choice_vars = List.mapi (
-        fun i _ -> Expr.mk_fresh_const g_ctx
-                        ("seq_" ^ (string_of_int i))
-                        (Boolean.mk_sort g_ctx)) elist in
-
-      let mod_addr = List.fold_right (
-        fun res acc -> AddrSet.union acc res.mod_addr)
-        bmc_retlist AddrSet.empty in
-      let new_memory =
-        BmcM.merge_memory old_memory mod_addr
-                          (List.map fst res_elist)
-                          choice_vars in
-      BmcM.update_memory_table new_memory >>= fun () ->
+        fun i _ -> mk_fresh_const ("seq_" ^ (string_of_int i))
+                                  (Boolean.mk_sort g_ctx)) elist in
+      (* memory *)
+      (if g_concurrent_mode then
+        let preexecs = List.map2 guard_preexec
+                                 choice_vars (List.map eget_preexec bmc_rets) in
+        return (AddrSet.empty, combine_preexecs preexecs)
+       else
+         let mod_addr = List.fold_right (
+           fun res acc -> AddrSet.union acc res.mod_addr)
+           bmc_rets AddrSet.empty in
+         let new_memory = BmcM.merge_memory old_memory mod_addr
+                                            (List.map fst res_elist)
+                                            choice_vars in
+         BmcM.update_memory_table new_memory >>= fun () ->
+         return (mod_addr, mk_initial_preexec)
+      ) >>= fun (mod_addr, preexec) ->
 
       (* Assert exactly one choice is taken *)
       let xor_expr = List.fold_left mk_xor mk_false choice_vars in
       let vcs = List.map2
           (fun choice res -> mk_implies choice (mk_and (eget_vcs res)))
-          choice_vars bmc_retlist in
+          choice_vars bmc_rets in
       let drop_cont = mk_or (List.map2
           (fun choice res -> mk_and [choice; res.drop_cont])
-          choice_vars bmc_retlist) in
+          choice_vars bmc_rets) in
       let ret_expr = List.fold_left2
           (fun acc choice res -> mk_ite choice (eget_expr res) acc)
-          (eget_expr (List.hd bmc_retlist))
+          (eget_expr (List.hd bmc_rets))
           (List.tl choice_vars)
-          (List.tl bmc_retlist) in
+          (List.tl bmc_rets) in
       return { expr      = ret_expr
              ; assume    = xor_expr
-                           :: (List.concat (List.map eget_assume bmc_retlist))
+                           :: (List.concat (List.map eget_assume bmc_rets))
              ; vcs       = vcs
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
-             ; ret_cond  = mk_and (List.map eget_ret bmc_retlist)
+             ; ret_cond  = mk_and (List.map eget_ret bmc_rets)
+             ; preexec   = preexec
              }
   | Erun (_, label, pelist) ->
       BmcM.lookup_run_depth (Sym label) >>= fun depth ->
@@ -1742,6 +1846,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                ; drop_cont = mk_true
                ; mod_addr  = AddrSet.empty
                ; ret_cond  = mk_true
+               ; preexec   = mk_initial_preexec
                }
       else begin
         BmcM.get_proc_expr >>= fun proc_expr ->
@@ -1765,6 +1870,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                ; ret_cond  = mk_and [mk_implies (mk_not run_res.drop_cont)
                                                 (mk_eq ret_const run_res.expr)
                                     ; run_res.ret_cond]
+               ; preexec   = run_res.preexec
                }
       end
   | Epar elist ->
@@ -1784,32 +1890,37 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       BmcM.get_memory                     >>= fun mem_e2 ->
       BmcM.update_sym_table old_sym_table >>= fun () ->
 
-      let mod_addr = AddrSet.union res_e1.mod_addr res_e2.mod_addr in
-      let new_memory =
-        BmcM.merge_memory old_memory
-                          mod_addr
-                          [mem_e1     ; mem_e2]
-                          [res_pe.expr; mk_not res_pe.expr] in
-      BmcM.update_memory_table new_memory >>= fun () ->
+      let (guard1, guard2) = (res_pe.expr, mk_not res_pe.expr) in
 
-      let vcs =
-          res_pe.vcs
-        @ (List.map (fun vc -> mk_implies res_pe.expr vc) res_e1.vcs)
-        @ (List.map (fun vc -> mk_implies (mk_not res_pe.expr) vc)
-                    res_e2.vcs) in
-      let drop_cont = mk_or
-        [ mk_and [res_pe.expr       ; res_e1.drop_cont]
-        ; mk_and [mk_not res_pe.expr; res_e2.drop_cont]
-        ] in
-      return { expr      = mk_ite res_pe.expr res_e1.expr res_e2.expr
+      (* memory *)
+      (if g_concurrent_mode then
+         let preexecs = combine_preexecs
+             [ guard_preexec guard1 res_e1.preexec
+             ; guard_preexec guard2 res_e2.preexec ] in
+         return (AddrSet.empty, preexecs)
+       else
+         let mod_addr = AddrSet.union res_e1.mod_addr res_e2.mod_addr in
+         let new_memory = BmcM.merge_memory old_memory mod_addr
+                                           [mem_e1; mem_e2] [guard1; guard2] in
+         BmcM.update_memory_table new_memory >>= fun () ->
+         return (mod_addr, mk_initial_preexec)
+      ) >>= fun (mod_addr, preexec) ->
+
+      let vcs = res_pe.vcs
+              @ (List.map (fun vc -> mk_implies guard1 vc) res_e1.vcs)
+              @ (List.map (fun vc -> mk_implies guard2 vc) res_e2.vcs) in
+      let drop_cont = mk_or [ mk_and [guard1; res_e1.drop_cont]
+                            ; mk_and [guard2; res_e2.drop_cont]
+                            ] in
+      return { expr      = mk_ite guard1 res_e1.expr res_e2.expr
              ; assume    = res_pe.assume @ res_e1.assume @ res_e2.assume
              ; vcs       = vcs
              ; drop_cont = drop_cont
              ; mod_addr  = mod_addr
-             ; ret_cond  = mk_and
-                           [ mk_implies res_pe.expr          res_e1.ret_cond
-                           ; mk_implies (mk_not res_pe.expr) res_e2.ret_cond
-                           ]
+             ; ret_cond  = mk_and [ mk_implies guard1 res_e1.ret_cond
+                                  ; mk_implies guard2 res_e2.ret_cond
+                                  ]
+             ; preexec   = preexec
              }
   | Elet _
   | Easeq _ ->
@@ -1821,18 +1932,27 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       mk_let_bindings pat res1.expr >>= fun let_binding ->
       bmc_expr e2                   >>= fun res2 ->
 
+      let e2_guard = mk_not res1.drop_cont in
+
+      let (mod_addr, preexec) =
+        (if g_concurrent_mode then
+           let preexec = combine_preexecs
+              [ res1.preexec; guard_preexec e2_guard res2.preexec ] in
+           (AddrSet.empty, preexec)
+         else (AddrSet.union res1.mod_addr res2.mod_addr, mk_initial_preexec)
+        ) in
+
       (* TODO: do we care about properly maintaining the memory table ?*)
-      (* TODO: do optimization based on drop_cont *)
       return { expr      = res2.expr
              ; assume    = let_binding::(res1.assume @ res2.assume)
              ; vcs       = (mk_or [ res1.drop_cont; mk_and res2.vcs ])
                            :: res1.vcs
              ; drop_cont = mk_or [res1.drop_cont; res2.drop_cont]
-             ; mod_addr  = AddrSet.union res1.mod_addr res2.mod_addr
+             ; mod_addr  = mod_addr
              ; ret_cond  = mk_and [ res1.ret_cond
-                                  ; mk_implies (mk_not res1.drop_cont)
-                                               res2.ret_cond
+                                  ; mk_implies e2_guard res2.ret_cond
                                   ]
+             ; preexec   = preexec
              }
   | Esave (_, varlist, e) ->
         let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
@@ -1847,15 +1967,18 @@ let bmc_globals globals : bmc_gret BmcM.eff =
       bmc_expr expr                                      >>= fun ret_expr ->
       add_pattern_to_sym_table (CaseBase(Some sym, cbt)) >>= fun () ->
       mk_let_binding (Some sym) ret_expr.expr            >>= fun binding ->
-      return { assume = binding::ret_expr.assume
-             ; vcs    = ret_expr.vcs
+      return { assume  = binding::ret_expr.assume
+             ; vcs     = ret_expr.vcs
+             ; preexec = ret_expr.preexec
              }
     ) globals >>= fun ret_globals ->
-    return (List.fold_left (
+  return (List.fold_left (
       fun acc gret ->
-        { assume = gret.assume @ acc.assume
-        ; vcs    = gret.vcs    @ acc.vcs}
-      ) { assume = []; vcs = []} ret_globals)
+        { assume  = gret.assume @ acc.assume
+        ; vcs     = gret.vcs    @ acc.vcs
+        ; preexec = combine_preexecs [gret.preexec; acc.preexec]
+        }
+      ) { assume = []; vcs = []; preexec = mk_initial_preexec} ret_globals)
 
 let initialise_solver (solver: Solver.solver) =
   print_endline "Initialising solver.";
@@ -1884,14 +2007,16 @@ let bmc_file (file              : unit typed_file)
         return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
                        ; assume   = gret.assume @ ret.assume
                        ; vcs      = gret.vcs    @ ret.vcs
+                       ; preexec = combine_preexecs [gret.preexec; ret.preexec]
                }
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
         bmc_pexpr pe >>= fun pret ->
         let ret = bmc_pret_to_ret pret in
-        return {ret with assume = gret.assume @ ret.assume
-                       ; vcs    = gret.vcs    @ ret.vcs}
-
+        return {ret with assume  = gret.assume @ ret.assume
+                       ; vcs     = gret.vcs    @ ret.vcs
+                       ; preexec = combine_preexecs [gret.preexec; ret.preexec]
+               }
     | _ -> failwith "Function to check must be a Core Proc or Fun"
   in
   let (result, new_state) = BmcM.run initial_state to_run in
@@ -1903,6 +2028,11 @@ let bmc_file (file              : unit typed_file)
   (* TODO: multiple expressions or one expression? *)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
+
+  (*
+  print_endline "==== PREEXECS ";
+  print_endline (pp_preexec result.preexec);
+  *)
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
