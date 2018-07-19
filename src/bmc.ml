@@ -1936,9 +1936,15 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
 
       let (mod_addr, preexec) =
         (if g_concurrent_mode then
-           let preexec = combine_preexecs
-              [ res1.preexec; guard_preexec e2_guard res2.preexec ] in
-           (AddrSet.empty, preexec)
+           let (p1, p2) = (res1.preexec, guard_preexec e2_guard res2.preexec) in
+           let preexec = combine_preexecs [p1;p2] in
+           let to_sequence =
+             match expr_ with
+             | Ewseq _ -> List.filter is_pos_action p1.actions
+             | Esseq _ -> p1.actions
+             | _       -> assert false in
+           let sb = (compute_sb to_sequence p2.actions) @ preexec.sb in
+           (AddrSet.empty, {preexec with sb = sb})
          else (AddrSet.union res1.mod_addr res2.mod_addr, mk_initial_preexec)
         ) in
 
@@ -2029,10 +2035,8 @@ let bmc_file (file              : unit typed_file)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
 
-  (*
   print_endline "==== PREEXECS ";
   print_endline (pp_preexec result.preexec);
-  *)
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
