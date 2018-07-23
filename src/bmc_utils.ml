@@ -12,7 +12,7 @@ type sym_supply_ty = sym_ty UniqueId.supply
 
 
 (* ========== Z3 ALIASES ============= *)
-let mk_sym (ctx:context) = Symbol.mk_string ctx
+let mk_sym = Symbol.mk_string g_ctx
 
 let mk_implies = Boolean.mk_implies g_ctx
 let mk_and     = Boolean.mk_and g_ctx

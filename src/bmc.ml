@@ -175,7 +175,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
 
 (* =========== CUSTOM SORTS =========== *)
 let mk_ctor str =
-  Datatype.mk_constructor_s g_ctx str (mk_sym g_ctx ("is_" ^ str)) [] [] []
+  Datatype.mk_constructor_s g_ctx str (mk_sym ("is_" ^ str)) [] [] []
 
 module UnitSort = struct
   open Z3.Datatype
@@ -223,10 +223,10 @@ module IntegerTypeSort = struct
   let mk_sort = mk_sort_s g_ctx "IntegerType"
     [ mk_ctor "char_ity"
     ; mk_ctor "bool_ity"
-    ; mk_constructor_s g_ctx "signed_ity" (mk_sym g_ctx "is_signed_ity")
-        [mk_sym g_ctx "_signed_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "unsigned_ity" (mk_sym g_ctx "is_unsigned_ity")
-        [mk_sym g_ctx "_unsigned_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
+    ; mk_constructor_s g_ctx "signed_ity" (mk_sym "is_signed_ity")
+        [mk_sym "_signed_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
+    ; mk_constructor_s g_ctx "unsigned_ity" (mk_sym "is_unsigned_ity")
+        [mk_sym "_unsigned_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
     ]
 
   let mk_expr (ity: AilTypes.integerType) =
@@ -246,8 +246,8 @@ end
 module BasicTypeSort = struct
   open Z3.Datatype
   let mk_sort = mk_sort_s g_ctx "BasicType"
-      [ mk_constructor_s g_ctx "integer_bty" (mk_sym g_ctx "is_integer_bty")
-        [mk_sym g_ctx "_integer_bty"] [Some IntegerTypeSort.mk_sort] [0]
+      [ mk_constructor_s g_ctx "integer_bty" (mk_sym "is_integer_bty")
+        [mk_sym "_integer_bty"] [Some IntegerTypeSort.mk_sort] [0]
       ]
 
   let mk_expr (btype: AilTypes.basicType) : Expr.expr =
@@ -262,9 +262,9 @@ module CtypeSort = struct
   open Z3.Datatype
   let mk_sort : Sort.sort = mk_sort_s g_ctx "Ctype"
     [ mk_ctor "void_ty"
-    ; mk_constructor_s g_ctx "basic_ty" (mk_sym g_ctx "is_basic_ty")
-        [mk_sym g_ctx "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym g_ctx "is_ptr_ty")
+    ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
+        [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
+    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
         [] [] []
         (* TODO: recursive data types can not be nested in other types
          * such as tuple  *)
@@ -295,8 +295,8 @@ module AddressSort = struct
   let mk_sort =
     mk_sort_s g_ctx ("Addr")
       [ mk_constructor_s g_ctx "addr"
-            (mk_sym g_ctx ("_addr"))
-            [mk_sym g_ctx ("get_alloc"); mk_sym g_ctx ("get_index")]
+            (mk_sym ("_addr"))
+            [mk_sym ("get_alloc"); mk_sym ("get_index")]
             [Some integer_sort; Some integer_sort] [0; 0]
       ]
 
@@ -345,11 +345,11 @@ module PointerSort = struct
   let mk_sort =
     mk_sort_s g_ctx ("Ptr")
       [ mk_constructor_s g_ctx "ptr"
-            (mk_sym g_ctx "_ptr")
-            [mk_sym g_ctx ("get_addr")]
+            (mk_sym "_ptr")
+            [mk_sym ("get_addr")]
             [Some AddressSort.mk_sort] [0]
       ; mk_constructor_s g_ctx "null"
-            (mk_sym g_ctx "is_null")
+            (mk_sym "is_null")
             [] [] []
       ]
 
@@ -381,13 +381,13 @@ module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
     mk_sort_s g_ctx ("Loaded_" ^ obj_name)
              [ mk_constructor_s g_ctx
                                 ("specified_" ^ obj_name)
-                                (mk_sym g_ctx ("is_specified_" ^ obj_name))
-                                [mk_sym g_ctx ("get_" ^ obj_name)]
+                                (mk_sym ("is_specified_" ^ obj_name))
+                                [mk_sym ("get_" ^ obj_name)]
                                 [Some M.obj_sort] [0]
              ;  mk_constructor_s g_ctx
                                 ("unspecified_" ^ obj_name)
-                                (mk_sym g_ctx ("is_unspecified_" ^ obj_name))
-                                [mk_sym g_ctx ("get_" ^ obj_name)]
+                                (mk_sym ("is_unspecified_" ^ obj_name))
+                                [mk_sym ("get_" ^ obj_name)]
                                 [Some CtypeSort.mk_sort] [0]
              ]
 
@@ -439,8 +439,8 @@ module CFunctionSort = struct
   open Z3.Datatype
   let mk_sort =
     mk_sort_s g_ctx "CFunction"
-    [ mk_constructor_s g_ctx "cfun" (mk_sym g_ctx "isCfun")
-        [mk_sym g_ctx "getId"] [Some integer_sort] [0]
+    [ mk_constructor_s g_ctx "cfun" (mk_sym "isCfun")
+        [mk_sym "getId"] [Some integer_sort] [0]
     ]
 
   let mk_cfun (id: Expr.expr) =
@@ -649,8 +649,8 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
   let tuple_name =
     "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
   let arg_list = List.mapi
-    (fun i _ -> mk_sym g_ctx ("#" ^ (string_of_int i))) sorts in
-  Tuple.mk_sort g_ctx (mk_sym g_ctx tuple_name) arg_list sorts
+    (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
+  Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
 
 let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
