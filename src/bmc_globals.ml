@@ -9,6 +9,8 @@ let g_ctx = mk_context g_z3_ctx_cfg
 let g_z3_solver_logic_opt = None        (* Logic used by the solver *)
 let g_solver              = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 
+let g_macro_finder = true
+
 (* true => use bit vector representation *)
 let g_bv = true
 let g_bv_precision = 32
@@ -16,6 +18,6 @@ let g_bv_precision = 32
 let g_max_run_depth = 5    (* Maximum function call/run depth per call/run *)
 let g_sequentialise = true (* Sequentialise Core *)
 
-let g_concurrent_mode = false
+let g_concurrent_mode = true
 
 let g_bmc_debug = 10

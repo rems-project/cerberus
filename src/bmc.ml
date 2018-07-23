@@ -1,5 +1,6 @@
 open Bmc_conc
 open Bmc_globals
+open Bmc_sorts
 open Bmc_substitute
 open Bmc_utils
 open Z3
@@ -32,9 +33,6 @@ open Util
  *)
 
 (* =========== TYPES =========== *)
-(* Pure return *)
-
-type addr_ty = int * int
 type ctype = Core_ctype.ctype0
 
 (* TODO: use Set.Make *)
@@ -109,346 +107,6 @@ let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
-
-let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
-                   else Integer.mk_sort g_ctx
-
-(* =========== Z3 HELPER FUNCTIONS =========== *)
-
-let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
-  if g_bv then
-    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
-  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
-
-let int_to_z3 (i: int) : Expr.expr =
-  big_num_to_z3 (Nat_big_num.of_int i)
-
-let z3num_to_int (expr: Expr.expr) =
-  assert (Sort.equal (Expr.get_sort expr) integer_sort);
-  if g_bv then
-    int_of_string (BitVector.numeral_to_string expr)
-  else
-    (assert (Arithmetic.is_int_numeral expr);
-     Integer.get_int expr)
-
-let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
-                : Expr.expr =
-  if g_bv then
-    begin match binop with
-    | OpAdd   -> BitVector.mk_add  g_ctx arg1 arg2
-    | OpSub   -> BitVector.mk_sub  g_ctx arg1 arg2
-    | OpMul   -> BitVector.mk_mul  g_ctx arg1 arg2
-    | OpDiv   -> BitVector.mk_sdiv g_ctx arg1 arg2
-    | OpRem_t -> BitVector.mk_srem g_ctx arg1 arg2
-    | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
-    | OpExp   ->
-        if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
-          let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
-          BitVector.mk_shl g_ctx one arg2
-      else
-        assert false
-    | OpEq    -> mk_eq arg1 arg2
-    | OpLt    -> BitVector.mk_slt g_ctx arg1 arg2
-    | OpLe    -> BitVector.mk_sle g_ctx arg1 arg2
-    | OpGt    -> BitVector.mk_sgt g_ctx arg1 arg2
-    | OpGe    -> BitVector.mk_sge g_ctx arg1 arg2
-    | OpAnd   -> mk_and [ arg1; arg2 ]
-    | OpOr    -> mk_or  [ arg1; arg2 ]
-    end
-  else begin
-    match binop with
-    | OpAdd   -> Arithmetic.mk_add g_ctx [arg1; arg2]
-    | OpSub   -> Arithmetic.mk_sub g_ctx [arg1; arg2]
-    | OpMul   -> Arithmetic.mk_mul g_ctx [arg1; arg2]
-    | OpDiv   -> Arithmetic.mk_div g_ctx arg1 arg2
-    | OpRem_t -> assert false
-    | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
-    | OpExp   -> assert false
-    | OpEq    -> mk_eq arg1 arg2
-    | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
-    | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
-    | OpGt    -> Arithmetic.mk_gt g_ctx arg1 arg2
-    | OpGe    -> Arithmetic.mk_ge g_ctx arg1 arg2
-    | OpAnd   -> mk_and [arg1; arg2]
-    | OpOr    -> mk_or  [arg1; arg2]
-  end
-
-(* =========== CUSTOM SORTS =========== *)
-let mk_ctor str =
-  Datatype.mk_constructor_s g_ctx str (mk_sym ("is_" ^ str)) [] [] []
-
-module UnitSort = struct
-  open Z3.Datatype
-
-  let mk_sort =
-    mk_sort_s g_ctx "Unit"
-      [ mk_constructor_s g_ctx "unit"
-                         (Symbol.mk_string g_ctx "isUnit")
-                         [] [] []
-      ]
-
-  let mk_unit =
-    let constructors = get_constructors mk_sort in
-    Expr.mk_app g_ctx (List.hd constructors) []
-end
-
-module IntegerBaseTypeSort = struct
-  open Z3.Datatype
-  let mk_sort = mk_sort_s g_ctx "IntegerBaseType"
-    [ mk_ctor "ichar_ibty"
-    ; mk_ctor "short_ibty"
-    ; mk_ctor "int_ibty"
-    ; mk_ctor "long_ibty"
-    ; mk_ctor "long_long_ibty"
-    ]
-
-  let mk_expr (ibty: AilTypes.integerBaseType) =
-    let fdecls = get_constructors mk_sort in
-    match ibty with
-    | Ichar ->
-        Expr.mk_app g_ctx (List.nth fdecls 0) []
-    | Short ->
-        Expr.mk_app g_ctx (List.nth fdecls 1) []
-    | Int_ ->
-        Expr.mk_app g_ctx (List.nth fdecls 2) []
-    | Long ->
-        Expr.mk_app g_ctx (List.nth fdecls 3) []
-    | LongLong ->
-        Expr.mk_app g_ctx (List.nth fdecls 4) []
-    | _ -> assert false
-end
-
-module IntegerTypeSort = struct
-  open Z3.Datatype
-  let mk_sort = mk_sort_s g_ctx "IntegerType"
-    [ mk_ctor "char_ity"
-    ; mk_ctor "bool_ity"
-    ; mk_constructor_s g_ctx "signed_ity" (mk_sym "is_signed_ity")
-        [mk_sym "_signed_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "unsigned_ity" (mk_sym "is_unsigned_ity")
-        [mk_sym "_unsigned_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
-    ]
-
-  let mk_expr (ity: AilTypes.integerType) =
-    let fdecls = get_constructors mk_sort in
-    match ity with
-    | Char ->
-        Expr.mk_app g_ctx (List.nth fdecls 0) []
-    | Bool ->
-        Expr.mk_app g_ctx (List.nth fdecls 1) []
-    | Signed ibty ->
-        Expr.mk_app g_ctx (List.nth fdecls 2) [IntegerBaseTypeSort.mk_expr ibty]
-    | Unsigned ibty ->
-        Expr.mk_app g_ctx (List.nth fdecls 3) [IntegerBaseTypeSort.mk_expr ibty]
-    | _ -> assert false
-end
-
-module BasicTypeSort = struct
-  open Z3.Datatype
-  let mk_sort = mk_sort_s g_ctx "BasicType"
-      [ mk_constructor_s g_ctx "integer_bty" (mk_sym "is_integer_bty")
-        [mk_sym "_integer_bty"] [Some IntegerTypeSort.mk_sort] [0]
-      ]
-
-  let mk_expr (btype: AilTypes.basicType) : Expr.expr =
-    let fdecls = get_constructors mk_sort in
-    match btype with
-    | Integer ity ->
-        Expr.mk_app g_ctx (List.nth fdecls 0) [IntegerTypeSort.mk_expr ity]
-    | _ -> assert false
-end
-
-module CtypeSort = struct
-  open Z3.Datatype
-  let mk_sort : Sort.sort = mk_sort_s g_ctx "Ctype"
-    [ mk_ctor "void_ty"
-    ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
-        [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
-        [] [] []
-        (* TODO: recursive data types can not be nested in other types
-         * such as tuple  *)
-        (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
-    ]
-
-  let rec mk_expr (ctype: ctype) : Expr.expr =
-    let fdecls = get_constructors mk_sort in
-    match ctype with
-    | Void0  ->
-        Expr.mk_app g_ctx (List.nth fdecls 0) []
-    | Basic0 bty ->
-        Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
-    | Pointer0 (_, ty) ->
-        Expr.mk_app g_ctx (List.nth fdecls 2) []
-    | _ -> assert false
-
-  let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
-    match ctype with
-    | Atomic0 ty -> mk_expr ty
-    | _ -> mk_expr ctype
-end
-
-module AddressSort = struct
-  open Z3.Datatype
-  open Z3.FuncDecl
-
-  let mk_sort =
-    mk_sort_s g_ctx ("Addr")
-      [ mk_constructor_s g_ctx "addr"
-            (mk_sym ("_addr"))
-            [mk_sym ("get_alloc"); mk_sym ("get_index")]
-            [Some integer_sort; Some integer_sort] [0; 0]
-      ]
-
-  let mk_expr (alloc_id: Expr.expr) (index: Expr.expr) =
-    let ctor = List.nth (get_constructors mk_sort) 0 in
-    Expr.mk_app g_ctx ctor [alloc_id; index]
-
-  let mk_from_addr ((alloc_id, index) : int * int) : Expr.expr =
-    mk_expr (int_to_z3 alloc_id) (int_to_z3 index)
-
-  let get_alloc (expr: Expr.expr) : Expr.expr =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 0) in
-    Expr.mk_app g_ctx get_value [ expr ]
-
-  let get_index (expr: Expr.expr) : Expr.expr =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.nth (List.nth accessors 0) 1 in
-    Expr.mk_app g_ctx get_value [ expr ]
-
-  (* ======== *)
-  let alloc_size_decl =
-    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
-
-  let valid_index_range (addr: Expr.expr) : Expr.expr =
-    let alloc = get_alloc addr in
-    let index = get_index addr in
-    let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in
-    mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
-           ; binop_to_z3 OpLt index alloc_size
-           ]
-
-  let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
-    let alloc = get_alloc addr in
-    let index = get_index addr in
-    mk_expr alloc (binop_to_z3 OpAdd index n)
-
-end
-
-module PointerSort = struct
-  open Z3.Datatype
-  open Z3.FuncDecl
-
-  let mk_sort =
-    mk_sort_s g_ctx ("Ptr")
-      [ mk_constructor_s g_ctx "ptr"
-            (mk_sym "_ptr")
-            [mk_sym ("get_addr")]
-            [Some AddressSort.mk_sort] [0]
-      ; mk_constructor_s g_ctx "null"
-            (mk_sym "is_null")
-            [] [] []
-      ]
-
-  let mk_ptr (addr: Expr.expr) =
-    let ctor = List.nth (get_constructors mk_sort) 0 in
-    Expr.mk_app g_ctx ctor [addr]
-
-  let mk_null =
-    let ctor = List.nth (get_constructors mk_sort) 1 in
-    Expr.mk_app g_ctx ctor []
-
-  let is_null (expr: Expr.expr) =
-    let recognizer = List.nth (get_recognizers mk_sort) 1 in
-    Expr.mk_app g_ctx recognizer [expr]
-
-  let get_addr (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 0) in
-    Expr.mk_app g_ctx get_value [ expr ]
-end
-
-(* TODO: should create once using fresh names and reuse.
- * Current scheme may be susceptible to name reuse => bugs. *)
-module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
-  open Z3.Datatype
-  let mk_sort =
-    let obj_name = Sort.to_string M.obj_sort in
-    mk_sort_s g_ctx ("Loaded_" ^ obj_name)
-             [ mk_constructor_s g_ctx
-                                ("specified_" ^ obj_name)
-                                (mk_sym ("is_specified_" ^ obj_name))
-                                [mk_sym ("get_" ^ obj_name)]
-                                [Some M.obj_sort] [0]
-             ;  mk_constructor_s g_ctx
-                                ("unspecified_" ^ obj_name)
-                                (mk_sym ("is_unspecified_" ^ obj_name))
-                                [mk_sym ("get_" ^ obj_name)]
-                                [Some CtypeSort.mk_sort] [0]
-             ]
-
-  let mk_specified (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) M.obj_sort);
-    let ctors = get_constructors mk_sort in
-    let loaded_ctor = List.nth ctors 0 in
-    Expr.mk_app g_ctx loaded_ctor [expr]
-
-  let mk_unspecified (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) CtypeSort.mk_sort);
-    let ctors = get_constructors mk_sort in
-    let unspec_ctor = List.nth ctors 1 in
-    Expr.mk_app g_ctx unspec_ctor [expr]
-
-  let is_specified (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let recognizers = get_recognizers mk_sort in
-    let is_spec = List.nth recognizers 0 in
-    Expr.mk_app g_ctx is_spec [ expr ]
-
-  let is_unspecified (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let recognizers = get_recognizers mk_sort in
-    let is_unspec = List.nth recognizers 1 in
-    Expr.mk_app g_ctx is_unspec [ expr ]
-
-  let get_specified_value (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 0) in
-    Expr.mk_app g_ctx get_value [ expr ]
-
-  let get_unspecified_value (expr: Expr.expr) =
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 1) in
-    Expr.mk_app g_ctx get_value [ expr ]
-end
-
-module LoadedInteger =
-  LoadedSort (struct let obj_sort = integer_sort end)
-
-module LoadedPointer =
-  LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
-
-(* TODO: CFunctions are currently just identifiers *)
-module CFunctionSort = struct
-  open Z3.Datatype
-  let mk_sort =
-    mk_sort_s g_ctx "CFunction"
-    [ mk_constructor_s g_ctx "cfun" (mk_sym "isCfun")
-        [mk_sym "getId"] [Some integer_sort] [0]
-    ]
-
-  let mk_cfun (id: Expr.expr) =
-    let sort = mk_sort in
-    let constructors = get_constructors sort in
-    let func_decl = List.nth constructors 0 in
-    Expr.mk_app g_ctx func_decl [ id ]
-end
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
@@ -2059,7 +1717,10 @@ let bmc_globals globals : bmc_gret BmcM.eff =
 
 let initialise_solver (solver: Solver.solver) =
   print_endline "Initialising solver.";
-  Solver.add solver ImplFunctions.all_asserts
+  Solver.add solver ImplFunctions.all_asserts;
+  let params = Params.mk_params g_ctx in
+  Params.add_bool params (mk_sym "macro_finder") g_macro_finder;
+  Solver.set_parameters solver params
 
 let bmc_file (file              : unit typed_file)
              (sym_supply        : sym_supply_ty)
@@ -2116,10 +1777,8 @@ let bmc_file (file              : unit typed_file)
   (* TODO: multiple expressions or one expression? *)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
-  (*
   print_endline "==== PREEXECS ";
   print_endline (pp_preexec result.preexec);
-  *)
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
@@ -2134,6 +1793,14 @@ let bmc_file (file              : unit typed_file)
     (Expr.simplify result.ret_cond None)
     (Expr.mk_fresh_const g_ctx "ret_cond" (Boolean.mk_sort g_ctx));
 
+
+  if g_concurrent_mode then begin
+    let model = BmcMem.compute_executions result.preexec in
+    Solver.add g_solver model.assertions
+  end else
+    ()
+  ;
+
   (* Extract return value *)
   (match Solver.check g_solver [] with
   | SATISFIABLE ->
@@ -2142,11 +1809,11 @@ let bmc_file (file              : unit typed_file)
         | Some expr -> expr
         | None      -> result.expr in
       let model = Option.get (Solver.get_model g_solver) in
-      if not g_concurrent_mode then
-        let return_value = Option.get (Model.eval model final_expr false) in
-        printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
+      let return_value = Option.get (Model.eval model final_expr false) in
+      printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
   | _ -> assert false)
   ;
+
 
   (* VCs *)
   Solver.assert_and_track
@@ -2169,8 +1836,8 @@ let bmc_file (file              : unit typed_file)
   | SATISFIABLE ->
       begin
       print_endline "STATUS: satisfiable"
-      (*;let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model)*)
+      ;let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model)
       end
 
 (* Main bmc function: typechecks and sequentialises file.
