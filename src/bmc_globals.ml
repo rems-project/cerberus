@@ -15,9 +15,11 @@ let g_macro_finder = true
 let g_bv = true
 let g_bv_precision = 32
 
-let g_max_run_depth = 5    (* Maximum function call/run depth per call/run *)
+let g_max_run_depth = 3    (* Maximum function call/run depth per call/run *)
 let g_sequentialise = true (* Sequentialise Core *)
 
 let g_concurrent_mode = true
 
 let g_bmc_debug = 10
+
+let g_single_threaded = true
