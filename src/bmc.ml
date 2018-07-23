@@ -13,7 +13,6 @@ open Printf
 open Util
 
 (* TODO:
- *  - Maintain symbol table properly
  *  - Maintain memory table properly
  *      - Also creates within branches not preserved.
  *  - Kill ignored; Ebound ignored
@@ -23,7 +22,7 @@ open Util
  *  - PtrValidForDeref
  *  - See if guarding assumptions will reduce solver time
  *  - Try replacing let_bindings with actual expression
- *  - Pointer ctype not translated properly in Z3
+ *  - Atomic and pointer ctype not translated properly in Z3
  *  - C functions are currently just identifiers.
  *  - Structs; Core Arrays (brace initialized arrays)
  *  - int x[2][2]; x[0][3] not detected as undefined
@@ -36,6 +35,7 @@ open Util
 (* Pure return *)
 
 type addr_ty = int * int
+type ctype = Core_ctype.ctype0
 
 (* TODO: use Set.Make *)
 module AddrSet = struct
@@ -95,7 +95,7 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
 
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
-  | CaseSortBase of Expr.expr * Sort.sort
+  | CaseSortBase of ctype * Sort.sort
   | CaseSortList of bmcz3sort list
 
 let rec bmcz3sort_size (sort: bmcz3sort) =
@@ -104,7 +104,7 @@ let rec bmcz3sort_size (sort: bmcz3sort) =
   | CaseSortList sortlist ->
       List.fold_left (fun x y -> x + (bmcz3sort_size y)) 0 sortlist
 
-let rec flatten_bmcz3sort (l: bmcz3sort) : (Expr.expr * Sort.sort) list =
+let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
   match l with
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
@@ -271,7 +271,7 @@ module CtypeSort = struct
         (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
     ]
 
-  let rec mk_expr (ctype: Core_ctype.ctype0) : Expr.expr =
+  let rec mk_expr (ctype: ctype) : Expr.expr =
     let fdecls = get_constructors mk_sort in
     match ctype with
     | Void0  ->
@@ -281,6 +281,11 @@ module CtypeSort = struct
     | Pointer0 (_, ty) ->
         Expr.mk_app g_ctx (List.nth fdecls 2) []
     | _ -> assert false
+
+  let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
+    match ctype with
+    | Atomic0 ty -> mk_expr ty
+    | _ -> mk_expr ctype
 end
 
 module AddressSort = struct
@@ -505,15 +510,15 @@ module ImplFunctions = struct
                @ unsigned_ibt_list
                @ [Char; Bool]
 
-  let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
+  let ity_to_ctype (ity: AilTypes.integerType) : ctype =
     Core_ctype.Basic0 (Integer ity)
 
 
   (* ---- HELPER MAP MAKING FUNCTION ---- *)
   let mk_ctype_map (name : string)
-                   (types: Core_ctype.ctype0 list)
+                   (types: ctype list)
                    (sort : Sort.sort)
-                   : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+                   : (ctype, Expr.expr) Pmap.map =
     List.fold_left (fun acc ctype ->
       let ctype_expr = CtypeSort.mk_expr ctype in
       let expr = Expr.mk_fresh_const g_ctx
@@ -524,22 +529,22 @@ module ImplFunctions = struct
 
 
   (* TODO: massive code duplication *)
-  let ivmin_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let ivmin_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "ivmin" (List.map ity_to_ctype ity_list) integer_sort
 
-  let ivmax_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let ivmax_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "ivmax" (List.map ity_to_ctype ity_list) integer_sort
 
 
-  let sizeof_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let sizeof_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "sizeof" (List.map ity_to_ctype ity_list) integer_sort
 
-  let is_unsigned_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let is_unsigned_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "is_unsigned" (List.map ity_to_ctype ity_list)
                                (Boolean.mk_sort g_ctx)
   (* ---- Assertions ---- *)
   let ivmin_asserts =
-    let ivmin_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let ivmin_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype ivmin_map in
       match ctype with
       | Basic0 (Integer ity) ->
@@ -551,7 +556,7 @@ module ImplFunctions = struct
              ity_list
 
   let ivmax_asserts =
-    let ivmax_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let ivmax_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype ivmax_map in
       match ctype with
       | Basic0 (Integer ity) ->
@@ -563,7 +568,7 @@ module ImplFunctions = struct
              ity_list
 
   let sizeof_asserts =
-    let sizeof_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let sizeof_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype sizeof_map in
       match ctype with
       | Basic0 (Integer ity) ->
@@ -591,7 +596,6 @@ module ImplFunctions = struct
                     @ ivmax_asserts
                     @ sizeof_asserts
                     @ is_unsigned_asserts
-
 end
 
 (* =========== PPRINTERS =========== *)
@@ -607,8 +611,9 @@ let pp_bmc_ret (bmc_ret: bmc_ret) =
 
 let rec pp_bmcz3sort (sort: bmcz3sort) =
   match sort with
-  | CaseSortBase (expr, sort) ->
-      sprintf "(%s,%s)" (Expr.to_string expr) (Sort.to_string sort)
+  | CaseSortBase (ctype, sort) ->
+      sprintf "(%s,%s)" (Expr.to_string (CtypeSort.mk_expr ctype))
+                        (Sort.to_string sort)
   | CaseSortList sortlist ->
       "[" ^ (String.concat "," (List.map pp_bmcz3sort sortlist)) ^ "]"
 
@@ -649,7 +654,7 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
 
 let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
-               (bTy   : core_base_type) =
+               (bTy   : core_base_type option) =
   match ctor with
   | Ctuple ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
@@ -666,17 +671,19 @@ let ctor_to_z3 (ctor  : typed_ctor)
       assert false
   | Cspecified ->
       assert (List.length exprs = 1);
-      if (bTy = BTy_loaded OTy_integer) then
+      assert (is_some bTy);
+      if (Option.get bTy = BTy_loaded OTy_integer) then
         LoadedInteger.mk_specified (List.hd exprs)
-      else if (bTy = BTy_loaded OTy_pointer) then
+      else if (Option.get bTy = BTy_loaded OTy_pointer) then
         LoadedPointer.mk_specified (List.hd exprs)
       else
         assert false
   | Cunspecified ->
       assert (List.length exprs = 1);
-      if (bTy = BTy_loaded OTy_integer) then
+      assert (is_some bTy);
+      if (Option.get bTy = BTy_loaded OTy_integer) then
         LoadedInteger.mk_unspecified (List.hd exprs)
-      else if (bTy = BTy_loaded OTy_pointer) then
+      else if (Option.get bTy = BTy_loaded OTy_pointer) then
         LoadedPointer.mk_unspecified (List.hd exprs)
       else
         assert false
@@ -731,13 +738,13 @@ let value_to_z3 (value: value)
       | _ -> assert false
       end
 
-let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
+let rec ctype_to_bmcz3sort (ty  : ctype)
                            (file: unit typed_file)
                            : bmcz3sort =
   match ty with
   | Void0     -> assert false
   | Basic0(Integer i) ->
-      CaseSortBase (CtypeSort.mk_expr ty, LoadedInteger.mk_sort)
+      CaseSortBase (ty, LoadedInteger.mk_sort)
   | Basic0 _ -> assert false
   | Array0(ty2, Some n) ->
       let sort = ctype_to_bmcz3sort ty2 file in
@@ -746,8 +753,15 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
       assert false
   | Function0 _ -> assert false
   | Pointer0 _ ->
-      CaseSortBase (CtypeSort.mk_expr ty, LoadedPointer.mk_sort)
-  | Atomic0 _ -> assert false
+      CaseSortBase (ty, LoadedPointer.mk_sort)
+  | Atomic0 (Basic0 ty2) ->
+      begin
+      match ctype_to_bmcz3sort (Basic0 ty2) file with
+      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 (Basic0 ty2), sort)
+      | _ -> assert false
+      end
+  | Atomic0 _ ->
+      assert false
   | Struct0 sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef memlist) ->
@@ -766,7 +780,6 @@ module BmcM = struct
   type alloc = int
   type memory_table = (addr_ty, Expr.expr) Pmap.map
 
-  type thread_id = int
   type action_id = int
 
   type bmc_state = {
@@ -789,10 +802,13 @@ module BmcM = struct
     ret_const         : Expr.expr option;         (* Expression returned *)
 
     (* Concurrency stuff *)
-    tid        : thread_id;
+    tid        : tid;
 
-    tid_supply : thread_id;
+    tid_supply : tid;
     aid_supply : action_id;
+
+    addr_ty_table : (addr_ty, ctype) Pmap.map;
+    parent_tids   : (tid, tid) Pmap.map;
   }
 
   (* =========== MONADIC FUNCTIONS =========== *)
@@ -930,15 +946,37 @@ module BmcM = struct
     put {st with ret_const = Some expr}
 
   (* =========== CONCURRENCY =========== *)
-  let get_tid        : thread_id eff =
+  let get_tid        : tid eff =
     get >>= fun st ->
     return st.tid
+
+  let put_tid (tid: tid) : unit eff =
+    get >>= fun st ->
+    put {st with tid = tid}
+
+  let get_fresh_tid  : tid eff =
+    get                                >>= fun st ->
+    return st.tid_supply               >>= fun ret ->
+    put {st with tid_supply = ret + 1} >>= fun () ->
+    return ret
 
   let get_fresh_aid  : action_id eff =
     get                                >>= fun st ->
     return st.aid_supply               >>= fun ret ->
     put {st with aid_supply = ret + 1} >>= fun () ->
     return ret
+
+  let add_addr_type (addr: addr_ty) (ty: ctype) : unit eff =
+    get >>= fun st ->
+    put {st with addr_ty_table = Pmap.add addr ty st.addr_ty_table}
+
+  let get_parent_tids : ((tid, tid) Pmap.map) eff =
+    get >>= fun st ->
+    return st.parent_tids
+
+  let add_parent_tid (child_tid: tid) (parent_tid: tid) : unit eff =
+    get >>= fun st ->
+    put {st with parent_tids = Pmap.add child_tid parent_tid st.parent_tids}
 
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
@@ -960,6 +998,8 @@ module BmcM = struct
     ; tid              = 0
     ; tid_supply       = 1
     ; aid_supply       = 0
+    ; addr_ty_table    = Pmap.empty Pervasives.compare
+    ; parent_tids      = Pmap.empty Pervasives.compare
     }
 
   (* =========== Manipulating functions ========== *)
@@ -1200,7 +1240,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
              }
   | PEctor (ctor, pelist) ->
       BmcM.mapM bmc_pexpr pelist >>= fun res_pelist ->
-      return { expr   = ctor_to_z3 ctor (List.map pget_expr res_pelist) bTy
+      return { expr   = ctor_to_z3 ctor (List.map pget_expr res_pelist)
+                                        (Some bTy)
              ; assume = List.concat (List.map pget_assume res_pelist)
              ; vcs    = List.concat (List.map pget_vcs res_pelist)
              }
@@ -1394,12 +1435,14 @@ module Bmc_paction = struct
             (BmcAction(pol, guard, Store(aid, tid, memorder, ptr, const))))
 
   let do_concurrent_create (alloc_id: BmcM.alloc)
-                           (sortlist: (Expr.expr * Sort.sort) list)
+                           (sortlist: (ctype * Sort.sort) list)
                            (pol: polarity)
                            : ret BmcM.eff  =
-    BmcM.mapMi (fun i (ctype_expr, sort) ->
-      let initial_value = mk_unspecified_expr sort ctype_expr in
-      let ptr = PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id,i)) in
+    BmcM.mapMi (fun i (ctype, sort) ->
+      let initial_value =
+        mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
+      let addr = (alloc_id, i) in
+      let ptr = PointerSort.mk_ptr (AddressSort.mk_from_addr addr) in
       mk_store ptr initial_value NA mk_true pol
     ) sortlist >>= fun retlist -> (* (binding, action) *)
     return { assume   = List.map fst retlist
@@ -1411,11 +1454,12 @@ module Bmc_paction = struct
            }
 
   let do_sequential_create (alloc_id: BmcM.alloc)
-                           (sortlist: (Expr.expr * Sort.sort) list)
+                           (sortlist: (ctype * Sort.sort) list)
                            : ret BmcM.eff =
-    BmcM.mapMi (fun i (ctype_expr, sort) ->
+    BmcM.mapMi (fun i (ctype, sort) ->
       let addr = (alloc_id, i) in
-      let initial_value = mk_unspecified_expr sort ctype_expr in
+      let initial_value =
+        mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
       let seq_var = mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
       let init_unspec = mk_eq seq_var initial_value in
       (* track in state that mem[addr] = seq_var *)
@@ -1874,8 +1918,32 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                }
       end
   | Epar elist ->
-      assert (not g_sequentialise);
-      assert false
+      assert (g_concurrent_mode);
+      BmcM.get_tid       >>= fun old_tid ->
+      BmcM.get_sym_table >>= fun old_sym_table ->
+      BmcM.mapM (fun expr ->
+        BmcM.get_fresh_tid                  >>= fun tid ->
+        BmcM.put_tid tid                    >>= fun () ->
+        bmc_expr expr                       >>= fun res_expr ->
+        BmcM.update_sym_table old_sym_table >>= fun () ->
+        BmcM.add_parent_tid tid old_tid     >>= fun () ->
+        return res_expr
+      ) elist >>= fun res_elist ->
+      BmcM.put_tid old_tid                  >>= fun () ->
+
+      let expr =
+        let exprlist = List.map eget_expr res_elist in
+        ctor_to_z3 Ctuple exprlist None in
+
+      return { expr      = expr
+             ; assume    = List.concat (List.map eget_assume res_elist)
+             ; vcs       = List.concat (List.map eget_vcs res_elist)
+             ; drop_cont = mk_false      (* TODO: Erun within Epar? *)
+             ; mod_addr  = AddrSet.empty (* sequential mode only *)
+                           (* TODO: hack above to check this *)
+             ; ret_cond  = mk_or (List.map eget_ret res_elist)
+             ; preexec   = combine_preexecs (List.map eget_preexec res_elist)
+             }
   | Ewait _ ->
       assert false
   | Eif (pe, e1, e2) ->
@@ -1934,19 +2002,22 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
 
       let e2_guard = mk_not res1.drop_cont in
 
-      let (mod_addr, preexec) =
-        (if g_concurrent_mode then
-           let (p1, p2) = (res1.preexec, guard_preexec e2_guard res2.preexec) in
-           let preexec = combine_preexecs [p1;p2] in
-           let to_sequence =
-             match expr_ with
-             | Ewseq _ -> List.filter is_pos_action p1.actions
-             | Esseq _ -> p1.actions
-             | _       -> assert false in
-           let sb = (compute_sb to_sequence p2.actions) @ preexec.sb in
-           (AddrSet.empty, {preexec with sb = sb})
-         else (AddrSet.union res1.mod_addr res2.mod_addr, mk_initial_preexec)
-        ) in
+      (if g_concurrent_mode then
+         BmcM.get_parent_tids >>= fun parent_tids ->
+         let (p1, p2) = (res1.preexec, guard_preexec e2_guard res2.preexec) in
+         let preexec = combine_preexecs [p1;p2] in
+         let to_sequence =
+           match expr_ with
+           | Ewseq _ -> List.filter is_pos_action p1.actions
+           | Esseq _ -> p1.actions
+           | _       -> assert false in
+         let sb = (compute_sb to_sequence p2.actions) @ preexec.sb in
+         let asw = (compute_asw p1.actions p2.actions p1.sb p2.sb parent_tids)
+                  @ preexec.asw in
+         return (AddrSet.empty, {preexec with sb = sb; asw = asw})
+       else return (AddrSet.union res1.mod_addr res2.mod_addr,
+                    mk_initial_preexec)
+      ) >>= fun (mod_addr, preexec) ->
 
       (* TODO: do we care about properly maintaining the memory table ?*)
       return { expr      = res2.expr
@@ -2008,12 +2079,23 @@ let bmc_file (file              : unit typed_file)
         BmcM.update_proc_expr e         >>= fun () ->
         BmcM.update_ret_const ret_const >>= fun () ->
         bmc_expr e                      >>= fun ret ->
+        BmcM.get_parent_tids            >>= fun parent_tids ->
         let new_ret_cond =
           mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
+        let preexec =
+          let combined = combine_preexecs [gret.preexec; ret.preexec] in
+          let sb = (compute_sb gret.preexec.actions ret.preexec.actions)
+                 @ combined.sb in
+          let asw = compute_asw gret.preexec.actions ret.preexec.actions
+                                gret.preexec.sb      ret.preexec.sb
+                                parent_tids
+                  @ combined.asw in
+          let filtered_asw = filter_asw asw sb in
+          {combined with sb = sb; asw = filtered_asw} in
         return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
                        ; assume   = gret.assume @ ret.assume
                        ; vcs      = gret.vcs    @ ret.vcs
-                       ; preexec = combine_preexecs [gret.preexec; ret.preexec]
+                       ; preexec  = preexec
                }
     | Some (Fun (ty, params, pe)) ->
         BmcM.mapM_ initialise_param params >>= fun () ->
@@ -2021,7 +2103,7 @@ let bmc_file (file              : unit typed_file)
         let ret = bmc_pret_to_ret pret in
         return {ret with assume  = gret.assume @ ret.assume
                        ; vcs     = gret.vcs    @ ret.vcs
-                       ; preexec = combine_preexecs [gret.preexec; ret.preexec]
+                       ; preexec = gret.preexec (* Pure Fun *)
                }
     | _ -> failwith "Function to check must be a Core Proc or Fun"
   in
@@ -2034,9 +2116,10 @@ let bmc_file (file              : unit typed_file)
   (* TODO: multiple expressions or one expression? *)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
-
+  (*
   print_endline "==== PREEXECS ";
   print_endline (pp_preexec result.preexec);
+  *)
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
@@ -2059,8 +2142,9 @@ let bmc_file (file              : unit typed_file)
         | Some expr -> expr
         | None      -> result.expr in
       let model = Option.get (Solver.get_model g_solver) in
-      let return_value = Option.get (Model.eval model final_expr false) in
-      printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
+      if not g_concurrent_mode then
+        let return_value = Option.get (Model.eval model final_expr false) in
+        printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
   | _ -> assert false)
   ;
 
@@ -2084,9 +2168,9 @@ let bmc_file (file              : unit typed_file)
       print_endline "STATUS: unsatisfiable :)"
   | SATISFIABLE ->
       begin
-      print_endline "STATUS: satisfiable";
-      let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model)
+      print_endline "STATUS: satisfiable"
+      (*;let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model)*)
       end
 
 (* Main bmc function: typechecks and sequentialises file.

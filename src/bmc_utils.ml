@@ -10,6 +10,7 @@ open Z3
 type sym_ty = Sym.sym
 type sym_supply_ty = sym_ty UniqueId.supply
 
+
 (* ========== Z3 ALIASES ============= *)
 let mk_sym (ctx:context) = Symbol.mk_string ctx
 
@@ -92,6 +93,13 @@ let is_some (opt: 'a option) =
   match opt with
   | Some _ -> true
   | _ -> false
+
+let cartesian_product (xs: 'a list) (ys: 'b list) : ('a * 'b) list =
+  List.fold_left (fun outer x ->
+    List.fold_left (fun inner y ->
+      (x,y)::inner
+    ) outer ys
+  ) [] xs
 
 (* ========== Debug ========== *)
 let debug_print level str =
