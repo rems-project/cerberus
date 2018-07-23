@@ -31,6 +31,7 @@ let mk_fresh_func_decl = FuncDecl.mk_fresh_func_decl g_ctx
 
 let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
                    else Integer.mk_sort g_ctx
+let boolean_sort = Boolean.mk_sort g_ctx
 
 let z3num_to_int (expr: Expr.expr) =
   assert (Sort.equal (Expr.get_sort expr) integer_sort);

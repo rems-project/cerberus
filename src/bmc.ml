@@ -30,6 +30,7 @@ open Util
  *  - Check arbitrary functions with arguments
  *
  *  - Concurrency
+ *     - Convert lists -> sets/hashtables where appropriate
  *)
 
 (* =========== TYPES =========== *)
@@ -199,7 +200,7 @@ module ImplFunctions = struct
 
   let is_unsigned_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "is_unsigned" (List.map ity_to_ctype ity_list)
-                               (Boolean.mk_sort g_ctx)
+                               boolean_sort
   (* ---- Assertions ---- *)
   let ivmin_asserts =
     let ivmin_assert (ctype: ctype) : Expr.expr =
@@ -294,7 +295,7 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
 let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   match cbt with
   | BTy_unit                -> UnitSort.mk_sort
-  | BTy_boolean             -> Boolean.mk_sort g_ctx
+  | BTy_boolean             -> boolean_sort
   | BTy_ctype               -> CtypeSort.mk_sort
   | BTy_list _              -> assert false
   | BTy_tuple cbt_list      -> assert false
@@ -1100,9 +1101,11 @@ module Bmc_paction = struct
       let initial_value =
         mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
       let addr = (alloc_id, i) in
-      let ptr = PointerSort.mk_ptr (AddressSort.mk_from_addr addr) in
+      let addr_expr = AddressSort.mk_from_addr addr in
+      let ptr = PointerSort.mk_ptr addr_expr in
       mk_store ptr initial_value NA mk_true pol
     ) sortlist >>= fun retlist -> (* (binding, action) *)
+
     return { assume   = List.map fst retlist
            ; vcs      = []
            ; mod_addr = AddrSet.empty (* sequential only *)
@@ -1499,7 +1502,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       let bmc_rets = List.map snd res_elist in
       let choice_vars = List.mapi (
         fun i _ -> mk_fresh_const ("seq_" ^ (string_of_int i))
-                                  (Boolean.mk_sort g_ctx)) elist in
+                                  boolean_sort) elist in
       (* memory *)
       (if g_concurrent_mode then
         let preexecs = List.map2 guard_preexec
@@ -1577,6 +1580,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       end
   | Epar elist ->
       assert (g_concurrent_mode);
+      assert (not g_single_threaded);
       BmcM.get_tid       >>= fun old_tid ->
       BmcM.get_sym_table >>= fun old_sym_table ->
       BmcM.mapM (fun expr ->
@@ -1777,25 +1781,24 @@ let bmc_file (file              : unit typed_file)
   (* TODO: multiple expressions or one expression? *)
 
   print_endline "==== DONE BMC_EXPR ROUTINE ";
-  print_endline "==== PREEXECS ";
-  print_endline (pp_preexec result.preexec);
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
   Solver.assert_and_track
     g_solver
     (Expr.simplify (mk_and result.assume) None)
-    (Expr.mk_fresh_const g_ctx "assume" (Boolean.mk_sort g_ctx));
+    (Expr.mk_fresh_const g_ctx "assume" boolean_sort);
     *)
   (* Return conditions *)
   Solver.assert_and_track
     g_solver
     (Expr.simplify result.ret_cond None)
-    (Expr.mk_fresh_const g_ctx "ret_cond" (Boolean.mk_sort g_ctx));
-
+    (Expr.mk_fresh_const g_ctx "ret_cond" boolean_sort);
 
   if g_concurrent_mode then begin
     let model = BmcMem.compute_executions result.preexec in
+    print_endline "==== PREEXECS ";
+    print_endline (pp_preexec result.preexec);
     Solver.add g_solver model.assertions
   end else
     ()
@@ -1819,7 +1822,7 @@ let bmc_file (file              : unit typed_file)
   Solver.assert_and_track
     g_solver
     (Expr.simplify (mk_not (mk_and result.vcs)) None)
-    (Expr.mk_fresh_const g_ctx "negated_vcs" (Boolean.mk_sort g_ctx));
+    (Expr.mk_fresh_const g_ctx "negated_vcs" boolean_sort);
 
   (*
   print_endline "====FINAL SOLVER";

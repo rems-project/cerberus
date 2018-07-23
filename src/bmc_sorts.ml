@@ -169,7 +169,6 @@ module AddressSort = struct
     let alloc = get_alloc addr in
     let index = get_index addr in
     mk_expr alloc (binop_to_z3 OpAdd index n)
-
 end
 
 module PointerSort = struct
@@ -267,6 +266,29 @@ module LoadedInteger =
 
 module LoadedPointer =
   LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
+
+module Loaded = struct
+  open Z3.Datatype
+
+  let mk_sort  =
+    mk_sort_s g_ctx "Loaded_ty"
+      [ mk_constructor_s g_ctx "loaded_int" (mk_sym "is_loaded_int")
+                         [mk_sym "_loaded_int"]
+                         [Some LoadedInteger.mk_sort] [0]
+      ; mk_constructor_s g_ctx "loaded_ptr" (mk_sym "is_loaded_ptr")
+                         [mk_sym "_loaded_ptr"]
+                         [Some LoadedPointer.mk_sort] [0]
+      ]
+
+  let mk_expr (expr: Expr.expr) =
+    let ctors = get_constructors mk_sort in
+    if (Sort.equal LoadedInteger.mk_sort (Expr.get_sort expr)) then
+      Expr.mk_app g_ctx (List.nth ctors 0) [expr]
+    else if (Sort.equal LoadedPointer.mk_sort (Expr.get_sort expr)) then
+      Expr.mk_app g_ctx (List.nth ctors 1) [expr]
+    else
+      assert false
+end
 
 (* TODO: CFunctions are currently just identifiers *)
 module CFunctionSort = struct
