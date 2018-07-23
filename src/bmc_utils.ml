@@ -3,6 +3,7 @@ open Core
 
 module Sym = Symbol
 open Z3
+open Z3.Arithmetic
 
 
 (* ========== TYPE ALIASES ============= *)
@@ -25,6 +26,71 @@ let mk_eq      = Boolean.mk_eq g_ctx
 let mk_ite     = Boolean.mk_ite g_ctx
 
 let mk_fresh_const = Expr.mk_fresh_const g_ctx
+
+let mk_fresh_func_decl = FuncDecl.mk_fresh_func_decl g_ctx
+
+let integer_sort = if g_bv then BitVector.mk_sort g_ctx g_bv_precision
+                   else Integer.mk_sort g_ctx
+
+let z3num_to_int (expr: Expr.expr) =
+  assert (Sort.equal (Expr.get_sort expr) integer_sort);
+  if g_bv then
+    int_of_string (BitVector.numeral_to_string expr)
+  else
+    (assert (Arithmetic.is_int_numeral expr);
+     Integer.get_int expr)
+
+let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
+                : Expr.expr =
+  if g_bv then
+    begin match binop with
+    | OpAdd   -> BitVector.mk_add  g_ctx arg1 arg2
+    | OpSub   -> BitVector.mk_sub  g_ctx arg1 arg2
+    | OpMul   -> BitVector.mk_mul  g_ctx arg1 arg2
+    | OpDiv   -> BitVector.mk_sdiv g_ctx arg1 arg2
+    | OpRem_t -> BitVector.mk_srem g_ctx arg1 arg2
+    | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
+    | OpExp   ->
+        if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
+          let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
+          BitVector.mk_shl g_ctx one arg2
+      else
+        assert false
+    | OpEq    -> mk_eq arg1 arg2
+    | OpLt    -> BitVector.mk_slt g_ctx arg1 arg2
+    | OpLe    -> BitVector.mk_sle g_ctx arg1 arg2
+    | OpGt    -> BitVector.mk_sgt g_ctx arg1 arg2
+    | OpGe    -> BitVector.mk_sge g_ctx arg1 arg2
+    | OpAnd   -> mk_and [ arg1; arg2 ]
+    | OpOr    -> mk_or  [ arg1; arg2 ]
+    end
+  else begin
+    match binop with
+    | OpAdd   -> Arithmetic.mk_add g_ctx [arg1; arg2]
+    | OpSub   -> Arithmetic.mk_sub g_ctx [arg1; arg2]
+    | OpMul   -> Arithmetic.mk_mul g_ctx [arg1; arg2]
+    | OpDiv   -> Arithmetic.mk_div g_ctx arg1 arg2
+    | OpRem_t -> assert false
+    | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
+    | OpExp   -> assert false
+    | OpEq    -> mk_eq arg1 arg2
+    | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
+    | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
+    | OpGt    -> Arithmetic.mk_gt g_ctx arg1 arg2
+    | OpGe    -> Arithmetic.mk_ge g_ctx arg1 arg2
+    | OpAnd   -> mk_and [arg1; arg2]
+    | OpOr    -> mk_or  [arg1; arg2]
+  end
+
+
+(* =========== Z3 HELPER FUNCTIONS =========== *)
+let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
+  if g_bv then
+    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
+  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
+
+let int_to_z3 (i: int) : Expr.expr =
+  big_num_to_z3 (Nat_big_num.of_int i)
 
 (* ========== Core symbol functions ============= *)
 let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method
