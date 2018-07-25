@@ -169,6 +169,16 @@ module AddressSort = struct
     let alloc = get_alloc addr in
     let index = get_index addr in
     mk_expr alloc (binop_to_z3 OpAdd index n)
+
+  (* ====== Atomic ====== *)
+  let is_atomic_decl =
+    mk_fresh_func_decl g_ctx "is_atomic" [mk_sort] boolean_sort
+
+  let mk_is_atomic (addr: Expr.expr) =
+    Expr.mk_app g_ctx is_atomic_decl [addr]
+
+  let assert_is_atomic (addr: Expr.expr) (is_atomic: Expr.expr) =
+    mk_eq (mk_is_atomic addr) is_atomic
 end
 
 module PointerSort = struct
