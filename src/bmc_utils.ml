@@ -21,6 +21,7 @@ let mk_not     = Boolean.mk_not g_ctx
 let mk_or      = Boolean.mk_or g_ctx
 let mk_true    = Boolean.mk_true g_ctx
 let mk_false   = Boolean.mk_false g_ctx
+let mk_bool    = Boolean.mk_val g_ctx
 let mk_xor     = Boolean.mk_xor g_ctx
 let mk_eq      = Boolean.mk_eq g_ctx
 let mk_ite     = Boolean.mk_ite g_ctx

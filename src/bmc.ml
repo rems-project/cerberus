@@ -848,7 +848,7 @@ let mk_guarded_ite (exprs : Expr.expr list)
                          (List.tl rev_exprs)
 
 (* =========== MODEL CHECKING FUNCTIONS =========== *)
-let rec bmc_pexpr (Pexpr(_, bTy, pe) as pexpr: typed_pexpr) :
+let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
                   bmc_pret BmcM.eff =
   match pe with
   | PEsym sym ->
@@ -1097,16 +1097,22 @@ module Bmc_paction = struct
                            (sortlist: (ctype * Sort.sort) list)
                            (pol: polarity)
                            : ret BmcM.eff  =
+    let is_atomic = (function ctype -> match ctype with
+                     | Core_ctype.Atomic0 _ -> mk_true
+                     | _ -> mk_false) in
     BmcM.mapMi (fun i (ctype, sort) ->
       let initial_value =
         mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
       let addr = (alloc_id, i) in
       let addr_expr = AddressSort.mk_from_addr addr in
       let ptr = PointerSort.mk_ptr addr_expr in
-      mk_store ptr initial_value NA mk_true pol
-    ) sortlist >>= fun retlist -> (* (binding, action) *)
+      let is_atomic =
+        AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
+      mk_store ptr initial_value NA mk_true pol >>= fun (binding, action) ->
+      return ([binding; is_atomic], action)
+    ) sortlist >>= fun retlist ->
 
-    return { assume   = List.map fst retlist
+    return { assume   = List.concat (List.map fst retlist)
            ; vcs      = []
            ; mod_addr = AddrSet.empty (* sequential only *)
            ; preexec  = List.fold_left (fun acc ret ->
@@ -1605,7 +1611,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                            (* TODO: hack above to check this *)
              ; ret_cond  = mk_or (List.map eget_ret res_elist)
              ; preexec   = combine_preexecs (List.map eget_preexec res_elist)
-             }
+        }
   | Ewait _ ->
       assert false
   | Eif (pe, e1, e2) ->
@@ -1812,11 +1818,11 @@ let bmc_file (file              : unit typed_file)
         | Some expr -> expr
         | None      -> result.expr in
       let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model);
       let return_value = Option.get (Model.eval model final_expr false) in
       printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
   | _ -> assert false)
   ;
-
 
   (* VCs *)
   Solver.assert_and_track
