@@ -276,18 +276,114 @@ let pp_preexec (preexec: preexec) =
 
 (* ===== memory model ===== *)
 
-type z3_memory_model = {
-  event_sort : Sort.sort; (* Enum of memory actions *)
-  event_type : Sort.sort; (* Type of memory actions: eg load/store *)
-
-  assertions : Expr.expr list;
-}
 
 module type MemoryModel = sig
+  type z3_memory_model
+  val add_assertions : Solver.solver -> z3_memory_model -> unit
+
   val compute_executions : preexec -> z3_memory_model
+  val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> unit
 end
 
 module C11MemoryModel : MemoryModel = struct
+  type func_decl_ty = string * Sort.sort list * Sort.sort
+
+  type decls = {
+    (* Accessors *)
+    aid     : FuncDecl.func_decl;
+    guard   : FuncDecl.func_decl;
+    etype   : FuncDecl.func_decl;
+    memord  : FuncDecl.func_decl;
+    addr    : FuncDecl.func_decl;
+    rval    : FuncDecl.func_decl;
+    wval    : FuncDecl.func_decl;
+
+    sb      : FuncDecl.func_decl;
+    asw     : FuncDecl.func_decl;
+    mo_clk  : FuncDecl.func_decl;
+
+    rf_inv  : FuncDecl.func_decl;
+
+    rs      : FuncDecl.func_decl;
+    rmw_dag : FuncDecl.func_decl;
+    sw      : FuncDecl.func_decl;
+    hb      : FuncDecl.func_decl;
+  }
+
+  type fn_apps = {
+    getAid    : Expr.expr -> Expr.expr;
+    getGuard  : Expr.expr -> Expr.expr;
+    getEType  : Expr.expr -> Expr.expr;
+    getAddr   : Expr.expr -> Expr.expr;
+    getMemord : Expr.expr -> Expr.expr;
+    getRval   : Expr.expr -> Expr.expr;
+    getWval   : Expr.expr -> Expr.expr;
+
+    isRead    : Expr.expr -> Expr.expr;
+    isWrite   : Expr.expr -> Expr.expr;
+
+    sb        : Expr.expr * Expr.expr -> Expr.expr;
+    asw       : Expr.expr * Expr.expr -> Expr.expr;
+
+    mo_clk   : Expr.expr -> Expr.expr;
+    mo       : Expr.expr * Expr.expr -> Expr.expr;
+    rf_inv   : Expr.expr -> Expr.expr;
+    rf       : Expr.expr * Expr.expr -> Expr.expr;
+
+    rmw_dag  : Expr.expr * Expr.expr -> Expr.expr;
+    rs       : Expr.expr * Expr.expr -> Expr.expr;
+
+    fr       : Expr.expr * Expr.expr -> Expr.expr;
+    eco      : Expr.expr * Expr.expr -> Expr.expr;
+    sw       : Expr.expr * Expr.expr -> Expr.expr;
+    hb       : Expr.expr * Expr.expr -> Expr.expr;
+  }
+
+  type assertions = {
+    aid            : Expr.expr list;
+    guard          : Expr.expr list;
+    etype          : Expr.expr list;
+    addr           : Expr.expr list;
+    memord         : Expr.expr list;
+    rval           : Expr.expr list;
+    wval           : Expr.expr list;
+
+    sb             : Expr.expr list;
+    asw            : Expr.expr list;
+
+    rmw_dag        : Expr.expr list;
+    rs             : Expr.expr list;
+    sw             : Expr.expr list;
+    hb             : Expr.expr list;
+
+    well_formed_rf : Expr.expr list;
+    well_formed_mo : Expr.expr list;
+
+    coherence      : Expr.expr list;
+  }
+
+  type execution = {
+    z3_asserts     : Expr.expr;
+    ret            : Expr.expr;
+  }
+
+  type z3_memory_model = {
+    event_sort : Sort.sort; (* Enum of memory actions *)
+    event_type : Sort.sort; (* Type of memory actions: eg load/store *)
+
+    event_map  : (aid, Expr.expr) Pmap.map;
+    action_map : (aid, action) Pmap.map;
+
+    decls      : decls;
+    fns        : fn_apps;
+    assertions : Expr.expr list;
+
+
+
+  }
+
+  let add_assertions solver model = Solver.add solver model.assertions
+
   (* ==== Helper aliases ==== *)
   let mk_decl = mk_fresh_func_decl
   let apply = FuncDecl.apply
@@ -297,7 +393,7 @@ module C11MemoryModel : MemoryModel = struct
       arglist symlist expr None [] [] None None)
 
   (* ==== Type definitions ==== *)
- let mk_event_sort (actions: bmc_action list) =
+  let mk_event_sort (actions: bmc_action list) =
     Enumeration.mk_sort g_ctx
       (mk_sym "Event")
       (List.map (fun a -> mk_sym (sprintf "#E_%d" (aid_of_bmcaction a)))
@@ -352,31 +448,9 @@ module C11MemoryModel : MemoryModel = struct
     | Acq_rel -> acq_rel_memord
     | Consume -> assert false
 
-  type func_decl_ty = string * Sort.sort list * Sort.sort
-
-  type decls = {
-    (* Accessors *)
-    guard   : FuncDecl.func_decl;
-    etype   : FuncDecl.func_decl;
-    memord  : FuncDecl.func_decl;
-    addr    : FuncDecl.func_decl;
-    rval    : FuncDecl.func_decl;
-    wval    : FuncDecl.func_decl;
-
-    sb      : FuncDecl.func_decl;
-    asw     : FuncDecl.func_decl;
-    mo_clk  : FuncDecl.func_decl;
-
-    rf_inv  : FuncDecl.func_decl;
-
-    rs      : FuncDecl.func_decl;
-    rmw_dag : FuncDecl.func_decl;
-    sw      : FuncDecl.func_decl;
-    hb      : FuncDecl.func_decl;
-  }
-
   let mk_decls (events: Sort.sort) : decls =
-    { guard   = mk_decl "guard"   [events]        boolean_sort
+    { aid     = mk_decl "aid"     [events]        (Integer.mk_sort g_ctx)
+    ; guard   = mk_decl "guard"   [events]        boolean_sort
     ; etype   = mk_decl "etype"   [events]        mk_event_type
     ; addr    = mk_decl "addr"    [events]        AddressSort.mk_sort
     ; memord  = mk_decl "memord"  [events]        mk_memord_type
@@ -394,34 +468,6 @@ module C11MemoryModel : MemoryModel = struct
     ; sw      = mk_decl "sw"      [events;events] boolean_sort
     ; hb      = mk_decl "hb"      [events;events] boolean_sort
     }
-
-  type fn_apps = {
-    getGuard  : Expr.expr -> Expr.expr;
-    getEType  : Expr.expr -> Expr.expr;
-    getAddr   : Expr.expr -> Expr.expr;
-    getMemord : Expr.expr -> Expr.expr;
-    getRval   : Expr.expr -> Expr.expr;
-    getWval   : Expr.expr -> Expr.expr;
-
-    isRead    : Expr.expr -> Expr.expr;
-    isWrite   : Expr.expr -> Expr.expr;
-
-    sb        : Expr.expr * Expr.expr -> Expr.expr;
-    asw       : Expr.expr * Expr.expr -> Expr.expr;
-
-    mo_clk   : Expr.expr -> Expr.expr;
-    mo       : Expr.expr * Expr.expr -> Expr.expr;
-    rf_inv   : Expr.expr -> Expr.expr;
-    rf       : Expr.expr * Expr.expr -> Expr.expr;
-
-    rmw_dag  : Expr.expr * Expr.expr -> Expr.expr;
-    rs       : Expr.expr * Expr.expr -> Expr.expr;
-
-    fr       : Expr.expr * Expr.expr -> Expr.expr;
-    eco      : Expr.expr * Expr.expr -> Expr.expr;
-    sw       : Expr.expr * Expr.expr -> Expr.expr;
-    hb       : Expr.expr * Expr.expr -> Expr.expr;
-  }
 
   let mk_fn_apps (decls: decls) : fn_apps =
     let getGuard  = (fun e -> apply decls.guard  [e]) in
@@ -468,7 +514,8 @@ module C11MemoryModel : MemoryModel = struct
                  ) in
     let sw     = (fun (e1,e2) -> apply decls.sw [e1;e2]) in
 
-    { getGuard  = getGuard
+    { getAid    = (fun e -> apply decls.aid [e])
+    ; getGuard  = getGuard
     ; getEType  = getEtype
     ; getAddr   = getAddr
     ; getMemord = getMemord
@@ -493,28 +540,6 @@ module C11MemoryModel : MemoryModel = struct
     ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2]) (* TODO *)
     }
 
-   type assertions = {
-    guard          : Expr.expr list;
-    etype          : Expr.expr list;
-    addr           : Expr.expr list;
-    memord         : Expr.expr list;
-    rval           : Expr.expr list;
-    wval           : Expr.expr list;
-
-    sb             : Expr.expr list;
-    asw            : Expr.expr list;
-
-    rmw_dag        : Expr.expr list;
-    rs             : Expr.expr list;
-    sw             : Expr.expr list;
-    hb             : Expr.expr list;
-
-    well_formed_rf : Expr.expr list;
-    well_formed_mo : Expr.expr list;
-
-    coherence      : Expr.expr list;
-  }
-
   let compute_executions (exec: preexec) : z3_memory_model =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
@@ -535,19 +560,16 @@ module C11MemoryModel : MemoryModel = struct
     let decls :decls = mk_decls event_sort in
     let fns : fn_apps = mk_fn_apps decls in
 
-    (* ==== Helper functions ==== *)
-    (*
-    let e0 = Quantifier.mk_bound g_ctx 0 event_sort in
-    let e1 = Quantifier.mk_bound g_ctx 1 event_sort in
-    let e2 = Quantifier.mk_bound g_ctx 2 event_sort in
-    *)
-
     (* ==== Define accessors ==== *)
+    let aid_asserts = List.map (fun action ->
+      mk_eq (fns.getAid (z3action action))
+            (Integer.mk_numeral_i g_ctx (aid_of_bmcaction action))
+      ) all_actions in
 
     let guard_asserts = List.map (fun action ->
       mk_eq (fns.getGuard (z3action action))
-            (Expr.simplify (guard_of_bmcaction action) None))
-      all_actions in
+            (Expr.simplify (guard_of_bmcaction action) None)
+      ) all_actions in
 
     let type_asserts = List.map (fun action ->
       mk_eq (fns.getEType (z3action action))
@@ -742,7 +764,16 @@ module C11MemoryModel : MemoryModel = struct
     { event_sort = event_sort
     ; event_type = event_type
 
-    ; assertions = guard_asserts
+    ; event_map  = event_map
+    ; action_map = List.fold_left (fun acc a ->
+                      Pmap.add (aid_of_bmcaction a) (get_action a) acc)
+                      (Pmap.empty Pervasives.compare) all_actions
+
+    ; decls      = decls
+    ; fns        = fns
+
+    ; assertions = aid_asserts
+                 @ guard_asserts
                  @ type_asserts
                  @ addr_asserts
                  @ memord_asserts
@@ -761,6 +792,81 @@ module C11MemoryModel : MemoryModel = struct
 
                  @ coherence
     }
+
+  let extract_execution (model    : Model.model)
+                        (mem      : z3_memory_model)
+                        (ret_value: Expr.expr)
+                        : execution =
+    let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
+    let all_events = Enumeration.get_consts mem.event_sort in
+    let fns = mem.fns in
+
+    let events = List.filter (fun event ->
+      match Boolean.get_bool_value (interp (fns.getGuard event)) with
+      | L_TRUE -> true
+      | _      -> false) all_events in
+
+    let prod_events = cartesian_product events events in
+
+    let rf = List.filter (fun (e1,e2) ->
+      match Boolean.get_bool_value (interp (fns.rf (e1,e2))) with
+      | L_TRUE -> true
+      | _      -> false
+      ) prod_events in
+
+    let mo = List.filter (fun (e1,e2) ->
+      match Boolean.get_bool_value (interp (fns.mo (e1,e2))) with
+      | L_TRUE -> true
+      | _      -> false
+    ) prod_events in
+
+    (* ===== Assert uniqueness of execution ===== *)
+    let guard_asserts = List.map (fun event ->
+         mk_eq (fns.getGuard event) (interp (fns.getGuard event))
+      ) events in
+    let rf_asserts = List.map (fun (e1,e2) ->
+        mk_eq (fns.rf (e1,e2)) mk_true
+      ) rf in
+    let mo_asserts = List.map (fun (e1,e2) ->
+        mk_eq (fns.mo (e1,e2)) mk_true
+      ) mo in
+
+    print_endline "RF";
+    List.iter (fun (e1,e2) ->
+      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
+
+    print_endline "MO";
+    List.iter (fun (e1,e2) ->
+      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
+
+    print_endline "RET_VALUE";
+    let ret = interp ret_value in
+    print_endline (Expr.to_string ret);
+
+    { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; mo_asserts])
+    ; ret = ret
+    }
+
+  let extract_executions (solver   : Solver.solver)
+                         (mem      : z3_memory_model)
+                         (ret_value: Expr.expr)
+                         : unit  =
+    Solver.push solver;
+    let rec aux ret =
+      if Solver.check solver [] = SATISFIABLE then
+        let model = Option.get (Solver.get_model solver) in
+        let execution = extract_execution model mem ret_value in
+        Solver.add solver [mk_not execution.z3_asserts];
+        aux (execution :: ret)
+      else
+        ret
+    in
+    let executions = aux [] in
+    printf "# consistent executions: %d\n" (List.length executions);
+    printf "Return values: %s\n"
+           (String.concat ", " (List.map
+              (fun e -> Expr.to_string e.ret) executions));
+    Solver.pop solver 1
 end
 
 module BmcMem = C11MemoryModel

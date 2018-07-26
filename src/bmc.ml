@@ -1801,27 +1801,27 @@ let bmc_file (file              : unit typed_file)
     (Expr.simplify result.ret_cond None)
     (Expr.mk_fresh_const g_ctx "ret_cond" boolean_sort);
 
-  if g_concurrent_mode then begin
+  let final_expr = match new_state.ret_const with
+                   | Some expr -> expr
+                   | None      -> result.expr in
+
+  (if g_concurrent_mode then begin
     let model = BmcMem.compute_executions result.preexec in
     print_endline "==== PREEXECS ";
     print_endline (pp_preexec result.preexec);
-    Solver.add g_solver model.assertions
+    BmcMem.add_assertions g_solver model;
+    (* Do an initial check *)
+    print_endline "START FIRST CHECK";
+    if Solver.check g_solver [] <> SATISFIABLE then assert false;
+    print_endline "DONE FIRST CHECK";
+    BmcMem.extract_executions g_solver model final_expr
   end else
-    ()
-  ;
-
-  (* Extract return value *)
-  (match Solver.check g_solver [] with
-  | SATISFIABLE ->
-      let final_expr =
-        match new_state.ret_const with
-        | Some expr -> expr
-        | None      -> result.expr in
-      let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model);
-      let return_value = Option.get (Model.eval model final_expr false) in
-      printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
-  | _ -> assert false)
+    match Solver.check g_solver [] with
+    | SATISFIABLE ->
+        let model = Option.get (Solver.get_model g_solver) in
+        let return_value = Option.get (Model.eval model final_expr false) in
+        printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
+    | _ -> assert false)
   ;
 
   (* VCs *)
